@@ -1,0 +1,16 @@
+; Optional: copy to launcher.ini next to SM2VRLauncher.exe. These are defaults; the user's choices in the
+; launcher (saved in settings.ini) win over them.
+
+; Your GitHub repository, owner/name, where releases (update zip + version.json) are published.
+UpdateRepo=YOUR-GITHUB-NAME/sm2-vr
+
+; Look for a new release when the launcher starts (1/0). Nothing installs without pressing Update.
+CheckOnStart=0
+
+; The mod folder, if the launcher does not live inside it (tools\launcher). A launcher inside an install
+; always manages that install.
+; PortRoot=C:\sm2-port
+
+; Keep settings, logs and downloads in "launcher-data" beside the exe instead of %APPDATA%\SM2 VR Launcher.
+; Use it for a second copy (a test build) so it shares nothing with your main one.
+; Portable=1

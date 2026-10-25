@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "name": "SM2 VR",
+  "version": "Version 0.0.1",
+  "version_number": "0.0.1",
+  "tag": "v0.0.1",
+  "release_date": "2026-10-25",
+  "min_game_version": "2.810.0.0",
+  "install_subfolder": "sm2-port",
+  "files": [
+    {
+      "kind": "update",
+      "name": "sm2-vr-0.0.1.zip",
+      "url": "https://github.com/YOUR-GITHUB-NAME/sm2-vr/releases/download/v0.0.1/sm2-vr-0.0.1.zip",
+      "sha256": "b4d3d17d02a8c0c766b8fbf3e3e24f30ea133e5b9af9ff1dfd5388621bb26d34",
+      "size": 755
+    },
+    {
+      "kind": "source",
+      "name": "sm2-full-0.0.1.zip",
+      "url": "https://github.com/YOUR-GITHUB-NAME/sm2-vr/releases/download/v0.0.1/sm2-full-0.0.1.zip",
+      "sha256": "9b645aed2038043d433db9d00a1860afb6b4d3d2cf6c3848eace1bebc2ee68a4",
+      "size": 2986
+    }
+  ],
+  "build": {
+    "script": "tools/build.ps1",
+    "args": [
+      "-Observer"
+    ]
+  },
+  "launch": {
+    "script": "tools/launch-game-vr.ps1",
+    "args": [
+      "-RenderScale",
+      "100",
+      "-OverlayWebs",
+      "-EngineTaa",
+      "-SmallerDesktopView"
+    ]
+  },
+  "changelog_url": "https://github.com/YOUR-GITHUB-NAME/sm2-vr/releases/tag/v0.0.1",
+  "source_url": "https://github.com/YOUR-GITHUB-NAME/sm2-vr",
+  "license": "GPL-3.0",
+  "credits": [
+    {
+      "name": "Ilya Mezerowsky",
+      "role": "Spidy (SpidyVR), the VR mod this is built on",
+      "url": "https://github.com/IlyaMez/SpidyVR",
+      "support": "https://ko-fi.com/ilyamezerowsky"
+    },
+    {
+      "name": "Sebi (sjrl2000)",
+      "role": "SpidyVR Linux (Steam Proton) guide, pull request 7",
+      "url": "https://github.com/sjrl2000"
+    },
+    {
+      "name": "iplusdvr",
+      "role": "SpidyVR pull requests 21, 22 and 23",
+      "url": "https://github.com/iplusdvr"
+    },
+    {
+      "name": "Adrian (AdrianGzzEsc)",
+      "role": "SpidyVR pull request 24",
+      "url": "https://github.com/AdrianGzzEsc"
+    },
+    {
+      "name": "Blazeventura and ANTIOPSVR",
+      "role": "Blaze's Spider-Man for Blade & Sorcery, swinging inspiration",
+      "url": "https://www.nexusmods.com/bladeandsorcery/mods/12564"
+    },
+    {
+      "name": "SM2VR 0.0.27",
+      "role": "Marvel's Spider-Man 2 game addresses used by the port"
+    }
+  ],
+  "internal_build": "38.5"
+}

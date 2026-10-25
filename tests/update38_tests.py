@@ -1,0 +1,193 @@
+# SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
+"""Update 38 (combat): the COMBAT settings' defaults (each the recommended fix, all live), the launcher's
+and the hologram's option tables agree with combat38.hpp, every setting has its export and is read
+(no switch that does nothing), the 37.2 start-up defaults are kept, the COMBAT and LUNGE records parse,
+and the swing Command v6 / Data v4 layouts. Any of these failing fails the build."""
+import pathlib
+import re
+import struct
+import sys
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+import live_settings as ls  # noqa: E402
+import update37_records as rec  # noqa: E402
+
+XR = (ROOT / 'src/game_xr.cpp').read_text(encoding='utf-8', errors='replace')
+SWING = (ROOT / 'src/game_swing.cpp').read_text(encoding='utf-8', errors='replace')
+C38 = (ROOT / 'include/spidy/combat38.hpp').read_text(encoding='utf-8')
+SWING_H = (ROOT / 'include/spidy/game_swing.hpp').read_text(encoding='utf-8')
+LAUNCHER = (ROOT / 'tools/run_game_vr.py').read_text(encoding='utf-8')
+VERSION = (ROOT / 'PORT-VERSION').read_text(encoding='utf-8')
+
+# The C++ option table: {"key", "TITLE", "SHORT", "subtext", count, {"A", "B", ...}}
+OPTION = re.compile(r'\{"(\w+)", "([A-Z ]+)", "([A-Z]+)",\s*"([^"]+)",\s*(\d),\s*\{([^}]*)\}\}')
+EXPORTS = dict(crawl_cap='SpidyCrawlCap', zip_mode='SpidyZipMode', aim_assist='SpidyAimAssist',
+               ball_look='SpidyBallLook', punch_mode='SpidyPunchMode', ring_anchor='SpidyRingAnchor',
+               holo_open='SpidyHoloOpen', wall_tilt='SpidyWallTilt', web_rope='SpidyWebRope',
+               lunge='SpidyLunge', ball_fire='SpidyBallFire',
+               # Update 38.1
+               aim_axis='SpidyAimAxis', ring_layer='SpidyRingLayer', lunge_from='SpidyLungeFrom',
+               lunge_speed='SpidyLungeSpeed', lunge_aim='SpidyLungeAim', punch_angle='SpidyPunchAngle',
+               ball_lead='SpidyBallLead', blood_look='SpidyBloodLook',
+               # Update 38.3
+               look_lock='SpidyLookLock', strike_steer='SpidyStrikeSteer', far_windows='SpidyFarWindowsOption',
+               gadget_hint='SpidyGadgetHint',
+               # Update 38.2
+               melee_anim='SpidyMeleeAnim', gadget_keys='SpidyGadgetKeys', grab_web='SpidyGrabWeb',
+               mirror_look='SpidyMirrorLook', gadget_feel='SpidyGadgetFeel',
+               # Version 0.0.2
+               aim_strength='SpidyAimStrength', ball_hit='SpidyBallHit',
+               # Version 0.0.3
+               rope_grab='SpidyRopeGrab', rope_strength='SpidyRopeStrength', wall_stick='SpidyWallStick',
+               auto_perf='SpidyAutoPerf', perf_target='SpidyPerfTarget', perf_floor='SpidyPerfFloor',
+               perf_status='SpidyPerfStatus',
+               # Version 0.0.4
+               iron_man='SpidyShooterType', mirror_view='SpidyMirrorView',
+               # Version 0.0.5
+               hero_height='SpidyHeroHeight', hero_damage='SpidyHeroDamage',
+               punch_sense='SpidyPunchSense', sfx_volume='SpidySfxVolume', supersonic='SpidySupersonic',
+               supersonic_speed='SpidySupersonicSpeed')
+# Where each setting is read (combat38 option name in C++).
+READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist', ball_look='ballLook',
+               punch_mode='punchMode', ring_anchor='ringAnchor', holo_open='holoOpen', wall_tilt='wallTilt',
+               web_rope='webRope', lunge='lunge', ball_fire='ballFire',
+               aim_axis='aimAxis', ring_layer='ringLayer', lunge_from='lungeFrom', lunge_speed='lungeSpeed',
+               lunge_aim='lungeAim', punch_angle='punchAngle', ball_lead='ballLead', blood_look='bloodLook',
+               melee_anim='meleeAnim', gadget_keys='gadgetKeys', grab_web='grabWeb', mirror_look='mirrorLook',
+               gadget_feel='gadgetFeel', look_lock='lookLock', strike_steer='strikeSteer',
+               far_windows='farWindows', gadget_hint='gadgetHint',  # Update 38.3
+               aim_strength='aimStrength', ball_hit='ballHit',  # Version 0.0.2
+               rope_grab='ropeGrab', rope_strength='ropeStrength', wall_stick='wallStick', auto_perf='autoPerf',
+               perf_target='perfTarget', perf_floor='perfFloor', perf_status='perfStatus',  # Version 0.0.3
+               iron_man='shooterType', mirror_view='mirrorView',  # Version 0.0.4
+               hero_height='heroHeight', hero_damage='heroDamage',
+               punch_sense='punchSense', sfx_volume='sfxVolume', supersonic='supersonic', supersonic_speed='supersonicSpeed')  # Version 0.0.5
+
+
+def cpp_options():
+    out = []
+    for m in OPTION.finditer(C38):
+        names = tuple(re.findall(r'"([^"]+)"', m.group(6)))
+        out.append((m.group(1), m.group(2), m.group(4), int(m.group(5)), names))
+    return out
+
+
+class Defaults(unittest.TestCase):
+    def test_recommended_first(self):
+        """Each default is the recommended fix: value 0 of its option."""
+        for key, value in ls.UPDATE38_DEFAULTS.items():
+            self.assertEqual(ls.export_value(key, value), 0, key)
+
+    def test_keys(self):
+        self.assertEqual(set(ls.UPDATE38_DEFAULTS), set(ls.UPDATE38_KEYS))
+        self.assertEqual(set(ls.UPDATE38_KEYS), set(EXPORTS))
+        self.assertEqual(ls.UPDATE38_DEFAULTS['lunge'], 'game_button')
+        self.assertEqual(ls.UPDATE38_DEFAULTS['zip_mode'], 'spidyvr')
+        self.assertEqual(ls.UPDATE38_DEFAULTS['aim_assist'], 'smart')  # Update 38.2: SMART first
+
+    def test_aim_steer_stays_off_and_372_kept(self):
+        self.assertEqual(ls.UPDATE37_DEFAULTS['aim_steer'], 0)
+        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140})
+        self.assertNotIn('NOT ON', ls.startup_line(dict(ls.STARTUP_ON)))
+
+    def test_sent_at_start_no_restart(self):
+        self.assertIn('for name, value in live_settings.UPDATE38_DEFAULTS.items()', LAUNCHER)
+        self.assertIn('Update 38 COMBAT defaults (all live, no restart)', LAUNCHER)
+
+    def test_version(self):
+        self.assertIn('Update 38', VERSION)
+
+
+class Options(unittest.TestCase):
+    def test_tables_agree(self):
+        cpp = cpp_options()
+        self.assertEqual(len(cpp), len(rec.COMBAT38_ALL_OPTIONS))  # Version 0.0.3: + V003_OPTIONS
+        for (key, title, sub, count, names), (rkey, rnames) in zip(cpp, rec.COMBAT38_ALL_OPTIONS):
+            self.assertEqual(key, rkey)
+            self.assertEqual(names[:count], rnames, key)
+            self.assertEqual(ls.SETTINGS[key][0], (0, count - 1), key)
+            self.assertEqual(ls.export_value(key, rnames[-1].lower().replace(' ', '_')), count - 1, key)
+
+    def test_one_sentence_subtext(self):
+        for key, title, sub, count, names in cpp_options():
+            self.assertTrue(sub.endswith('.'), key)
+            self.assertEqual(sub.count('. '), 0, f'{key}: subtext is more than one sentence')
+            self.assertLessEqual(len(sub), 100, key)
+
+    def test_every_switch_does_something(self):
+        for key, export in EXPORTS.items():
+            self.assertEqual(ls.SETTINGS[key][1], export)
+            self.assertIn(f'DWORD WINAPI {export}(void* v)', XR, export)
+            uses = len(re.findall(rf'c38\(combat38::{READ_AS[key]}\)', XR))
+            self.assertGreaterEqual(uses, 1, f'{key} is never read')
+
+    def test_live_not_restart(self):
+        """All COMBAT settings are live; the hologram cycles them in place."""
+        self.assertIn('combat38Values[o] = (c38(o) + 1) % combat38::optionInfo[o].count', XR)
+
+
+class Records(unittest.TestCase):
+    def test_sizes_match_cpp(self):
+        self.assertIn('static_assert(sizeof(Data) == 768)', C38)  # Update 38.3: version 5
+        self.assertEqual(rec.RECORDS['combat38'][2:], (5, 768))
+        self.assertEqual(rec.RAY_RECORDS['lunge'][3], 64)
+        self.assertIn('static_assert(sizeof(LungeData) == 64)',
+                      (ROOT / 'include/spidy/combat_spidy.hpp').read_text(encoding='utf-8'))
+
+    def test_combat38_parses(self):
+        _, magic, version, size = rec.RECORDS['combat38']
+        raw = bytearray(size)
+        struct.pack_into('<4I', raw, 0, magic, version, size, 1)
+        struct.pack_into('<12I', raw, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0)
+        struct.pack_into('<8Q', raw, 352, 5, 3, 2, 1, 4, 90, 9, 1)
+        struct.pack_into('<6f', raw, 320, 3.5, 7.0, .02, 10.0, .05, 3.0)
+        d = rec.parse_combat38(bytes(raw))
+        self.assertEqual(d['options']['crawl_cap'], 'AUTO')
+        self.assertEqual(d['options']['lunge'], 'SPIDYVR MOVE')
+        self.assertEqual(d['options']['ball_fire'], 'PRESS')
+        self.assertEqual((d['lunges'], d['lunges_landed'], d['lunges_missed'], d['sight_rays']), (5, 3, 2, 90))
+        self.assertEqual(d['scan_hz'], 10.0)
+        self.assertTrue(d['airborne_combat'])
+        lines = rec.console_lines({'combat38': d})
+        self.assertTrue(any(l.startswith('Update 38 SpidyVR: 5 lunges (3 landed, 2 missed)') for l in lines), lines)
+
+    def test_lunge_parses(self):
+        _, magic, version, size = rec.RAY_RECORDS['lunge']
+        raw = bytearray(size)
+        struct.pack_into('<4I', raw, 0, magic, version, size, 1)
+        struct.pack_into('<4Q', raw, 16, 2, 1, 1, 42)
+        struct.pack_into('<2i', raw, 48, 0, 1)
+        d = rec.parse_lunge(bytes(raw))
+        self.assertEqual((d['phase'], d['opened'], d['target'], d['mode']), ('flying', 2, 42, 'SPIDYVR MOVE'))
+
+    def test_vr_module_records_only(self):
+        """The launcher requires every RECORDS export of the VR module: the swing module's lunge record
+        must not be among them (a missing export would stop the launch)."""
+        others = '\n'.join(p.read_text(encoding='utf-8', errors='replace') for p in sorted((ROOT / 'src').glob('*.cpp'))
+                            if p.name != 'game_swing.cpp')
+        for key, (export, *_rest) in rec.RECORDS.items():
+            self.assertRegex(others, rf'\b{export}\b', key)
+        self.assertNotIn('lunge', rec.RECORDS)
+        self.assertIn('spidy::combat_spidy::LungeData SpidyLungeData', SWING)
+        self.assertEqual(set(rec.PARSERS), set(rec.RECORDS))
+
+    def test_lunge_sample_export(self):
+        self.assertIn('DWORD WINAPI SpidyLungeSample(void* out)', SWING)
+        self.assertIn('GetProcAddress', XR)
+        self.assertIn('"SpidyLungeSample"', XR)
+
+
+class SwingLayouts(unittest.TestCase):
+    def test_command_v6_and_v5(self):
+        self.assertIn('commandBytesV5 = 240', SWING_H)
+        self.assertIn('sizeof(Command) == 440', SWING_H)
+        self.assertIn('commandBytesV5', SWING)
+
+    def test_data_v4_unchanged(self):
+        self.assertIn('sizeof(Data) == 272', SWING_H)
+
+
+if __name__ == '__main__':
+    unittest.main()

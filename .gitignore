@@ -1,0 +1,25 @@
+/build/
+/third_party/
+/.research/
+/reports/
+/.vs/
+*.user
+__pycache__/
+/dist/
+# The bHaptics Developer Portal app a local build plays body haptics as (CMakeLists.txt).
+/bhaptics-app.local
+# The phone's songs, in a checkout the launcher's folder (phone_music.hpp).
+/Music/
+# Settings changed during a session (tools/live_settings.py).
+/live.txt
+/live.txt.tmp
+# The wrist hologram's NEXT LAUNCH choice (tools/live_settings.py, Update 15).
+/next-launch.txt
+/next-launch.txt.tmp
+
+# HERO VR launcher (local build output and per-user files)
+tools/launcher/out/
+tools/launcher/launcher-data/
+tools/launcher/launcher.ini
+tools/launcher/SM2VRLauncher.exe
+/test logs/

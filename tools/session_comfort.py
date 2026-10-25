@@ -1,0 +1,111 @@
+# SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
+"""What a game VR session's report says about comfort: the frame rate while immersive and the game's own
+settings that blur, smear or shake the eyes' picture or cost the most frame rate. No Windows calls, so the
+tests run anywhere."""
+import re
+
+
+def play_rate(samples, window=2.0):
+    """New stereo pairs a second while immersive, against the headset's frames a second: medians over
+    `window`-second stretches of consecutive immersive samples (single samples are 0.05 s apart and too coarse).
+    Reused pairs fill the headset frames between new ones; an uneven 2-3 frame cadence is felt as judder."""
+    windows, start, last = [], None, None
+    for s in samples:
+        if s.get('presentation') != 'immersive' or s.get('status') != 3 or 'unique_submitted' not in s:
+            start = last = None
+            continue
+        if start is None:
+            start = last = s
+            continue
+        last = s
+        seconds = s['seconds']-start['seconds']
+        if seconds >= window:
+            windows.append(((s['unique_submitted']-start['unique_submitted'])/seconds,
+                            (s['frames']-start['frames'])/seconds))
+            start = s
+    if not windows:
+        return None
+    new, headset = sorted(w[0] for w in windows), sorted(w[1] for w in windows)
+    median = lambda v: v[len(v)//2]
+    result = dict(windows=len(windows), seconds=round(len(windows)*window, 1), new_pairs_fps=round(median(new), 1),
+                  headset_fps=round(median(headset), 1), lowest_new_pairs_fps=round(new[len(new)//10], 1))
+    result['headset_frames_per_pair'] = round(result['headset_fps']/result['new_pairs_fps'], 2) \
+        if result['new_pairs_fps'] else None
+    return result
+
+
+GAME_SETTING = re.compile(r'\[Settings\]\s+([A-Za-z][A-Za-z0-9 \-]*?): (.*?)\s*$')
+
+
+def game_settings(log):
+    """The game's own graphics settings from its log's [Settings] block (the newest one), by the names the
+    game writes there, e.g. 'Motion Blur': '1.000000'."""
+    found, inside = {}, False
+    for line in log.splitlines():
+        if 'Display + Graphics Settings' in line:
+            inside = not inside
+            if inside:
+                found = {}
+        elif inside and (m := GAME_SETTING.search(line)) and m[2]:
+            found[m[1].strip()] = m[2]
+    return found
+
+
+# Game settings that blur, smear or shake the eyes' picture (comfort), and those that cost the most frame
+# rate, with what to set them to: (name in the game's log, values that call for advice, advice).
+COMFORT_SETTINGS = (
+    ('Motion Blur', lambda v: _number(v) > 0, 'set it to 0: it smears the picture as your head and Spider-Man '
+     'move'),
+    ('Film Grain Strength', lambda v: _number(v) > 0, 'set it to 0: grain shimmers differently in each eye'),
+    ('Chromatic Aberration', lambda v: v == 'On', 'Off: colour fringes at the edges'),
+    ('Vignette', lambda v: v == 'On', 'Off: darkened edges in the lenses'),
+    ('Screen Shake', lambda v: v == 'On', 'Off: shakes your view without your head moving'),
+    ('Lens Flares', lambda v: v == 'On', 'Off: flares drawn as on a camera lens'),
+    ('Ambient Occlusion', lambda v: v not in ('Off', ''), 'try Off: if shadows still seem to slide over '
+     'buildings as you turn your head, this screen-space shading is the likely cause; it also costs frame rate'),
+)
+SPEED_SETTINGS = (
+    ('Shadow Quality', ('Ultra', 'Very High', 'VeryHigh'), 'High (each eye renders its own shadows)'),
+    ('Screen Space Reflections', ('High', 'Very High', 'VeryHigh', 'Ultra'), 'Low or Off'),
+    ('Level of Detail', ('Ultra', 'Very High', 'VeryHigh'), 'High'),
+    ('Crowd Detail', ('Ultra', 'Very High', 'VeryHigh'), 'High or Medium'),
+    ('Hair Quality', ('Ultra', 'Very High', 'VeryHigh'), 'High'),
+)
+
+
+def _number(text):
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def comfort_advice(rate, settings, render_scale=None, timing=None):
+    """Console lines about the session's play frame rate and the game settings to change for comfort."""
+    lines = []
+    if rate:
+        lines.append(f"While immersive the game made {rate['new_pairs_fps']} new pictures a second "
+                     f"(slowest tenth: {rate['lowest_new_pairs_fps']}) for a headset showing {rate['headset_fps']}: "
+                     f"each picture stayed for {rate['headset_frames_per_pair']} headset frames.")
+        if rate['headset_fps'] and rate['new_pairs_fps'] < rate['headset_fps']/2*0.95:
+            if render_scale and render_scale > 100:
+                lines.append(f'The game could not keep up: -RenderScale {render_scale} renders both eyes larger '
+                             'than the headset asks for. Try -RenderScale 100 (or 80) for smoother motion.')
+            else:
+                lines.append('The game kept up with less than half the headset rate, so each picture stays for 2 '
+                             'or 3 headset frames unevenly (judder). Lower the settings below, -RenderScale '
+                             '(e.g. 80), or the headset refresh rate (72 Hz).')
+    copy = (timing or {}).get('pair_to_copy')
+    if copy and copy.get('count'):
+        lines.append(f"From the game's eye pictures to the headset's copy of them: {copy['mean_ms']:.0f} ms on "
+                     f"average, {copy['max_ms']:.0f} ms at most.")
+    advice = [f'{name} ({settings[name]}): {text}' for name, wants, text in COMFORT_SETTINGS
+              if name in settings and wants(settings[name])]
+    if rate and rate['headset_fps'] and rate['new_pairs_fps'] < rate['headset_fps']*0.6:
+        advice += [f'{name} ({settings[name]}): {text}, for frame rate' for name, values, text in SPEED_SETTINGS
+                   if settings.get(name) in values]
+    if advice:
+        lines.append("For comfort, change these in the game's Graphics/Display settings (names as the game's log "
+                     'has them):')
+        lines += ['  '+line for line in advice]
+    return lines

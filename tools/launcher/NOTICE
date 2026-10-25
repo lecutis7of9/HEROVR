@@ -1,0 +1,23 @@
+HERO VR Launcher (internal name: SM2 VR Launcher)
+Copyright (C) 2026 Agent Mulder and the SM2 VR port authors.
+
+Built on Spidy (SpidyVR) by Ilya Mezerowsky, Copyright (C) 2026 Ilya Mezerowsky, GNU GPL version 3.
+  https://github.com/IlyaMez/SpidyVR   Support: https://ko-fi.com/ilyamezerowsky
+SpidyVR contributors credited in the launcher: Sebi (sjrl2000, Linux guide, PR 7), iplusdvr (PRs 21, 22, 23),
+Adrian (AdrianGzzEsc, PR 24), and the rest of the SpidyVR authors.
+Swinging inspiration: Blaze's Spider-Man for Blade & Sorcery by Blazeventura and ANTIOPSVR
+  (https://www.nexusmods.com/bladeandsorcery/mods/12564). None of its code is used.
+The Marvel's Spider-Man 2 port is built off Spidy's Spider-Man (Remastered) mod work; its game addresses come
+from SM2VR 0.0.27.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation, version 3. It is distributed WITHOUT ANY
+WARRANTY; see the GNU General Public License (LICENSE in the mod repository, or
+https://www.gnu.org/licenses/gpl-3.0.html).
+
+The launcher uses only the .NET Framework that ships with Windows. The mod it launches includes third-party
+software listed in the mod's THIRD_PARTY_NOTICES.md (OpenXR SDK, JsonCpp, MinHook with HDE, Dear ImGui,
+Barlow / Comic Neue / Orbitron fonts, bHaptics SDK, Python).
+
+Not affiliated with or endorsed by Insomniac Games, Sony Interactive Entertainment, Marvel or Valve.
+Marvel's Spider-Man 2 is a trademark of its owners.

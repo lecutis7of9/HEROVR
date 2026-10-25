@@ -14,6 +14,8 @@ namespace Sm2VrLauncher
         public string Version;           // "Version 0.0.1" from VERSION / PORT-VERSION inside the zip, or null (an update that does not change it)
         public int Files;
         public bool LooksFull;           // has tools\launch-game-vr.ps1 and tools\build.ps1 and VERSION or PORT-VERSION
+        public bool HasModFiles;         // carries the ready-made mod files (build/windows-ninja/spidy_stereo_probe.dll)
+        public bool ModFilesOnly;        // only the mod files (HERO-VR-x-mod-win64.zip from tools\package.ps1): no VERSION, no build.ps1
     }
 
     /// <summary>The install folder's lock: <folder>\.sm2vr.lock, held open with no sharing while files change or a
@@ -64,6 +66,10 @@ namespace Sm2VrLauncher
         public Action<string, bool> BuildOutput = (s, e) => { };
         public Action<string, int> Progress = (s, pct) => { };    // stage text, -1 = busy
         public CancellationToken Cancel;
+        /// <summary>The manifest being installed (UPDATE NOW), whose "prebuilt" file is used when it is that version's.</summary>
+        public Manifest Release;
+        /// <summary>Downloads a manifest file and checks its SHA-256 (MainForm.DownloadVerified); returns the local path.</summary>
+        public Func<ManifestFile, string> Download;
 
         // ---- Reading a zip -------------------------------------------------------------------------------
 
@@ -103,13 +109,15 @@ namespace Sm2VrLauncher
                 string vLine = firstLine("VERSION"), pLine = firstLine("PORT-VERSION");
                 var mv = ModVersion.FromFiles(vLine, pLine);
                 c.Version = mv != null ? mv.Display : (vLine ?? pLine);
+                c.HasModFiles = has("build/windows-ninja/spidy_stereo_probe.dll");
                 c.LooksFull = (has("VERSION") || has("PORT-VERSION")) && has("tools/launch-game-vr.ps1") && has("tools/build.ps1");
+                c.ModFilesOnly = c.HasModFiles && !has("VERSION") && !has("tools/build.ps1");
             }
             return c;
         }
 
         /// <summary>Expand-Archive -Force: every file in the zip over the install (others untouched).</summary>
-        int Extract(string zipPath, ZipCheck c, string dest)
+        int Extract(string zipPath, ZipCheck c, string dest, string[] skipParts = null)
         {
             int n = 0;
             string full = Path.GetFullPath(dest).TrimEnd(new[] { '\\', '/' }) + Path.DirectorySeparatorChar;
@@ -121,6 +129,7 @@ namespace Sm2VrLauncher
                     Cancel.ThrowIfCancellationRequested();
                     string rel = e.FullName.Replace('\\', '/');
                     if (c.Prefix.Length > 0 && rel.StartsWith(c.Prefix)) rel = rel.Substring(c.Prefix.Length);
+                    if (skipParts != null && skipParts.Any(pt => rel.StartsWith(pt, StringComparison.OrdinalIgnoreCase))) continue;   // installed by ModFiles.Install
                     string to = Path.GetFullPath(Path.Combine(dest, rel.Replace('/', Path.DirectorySeparatorChar)));
                     if (!to.StartsWith(full, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Unsafe path in zip: " + e.FullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(to));
@@ -136,12 +145,107 @@ namespace Sm2VrLauncher
 
         // ---- Building ------------------------------------------------------------------------------------
 
+        /// <summary>Developers only: compiles the mod from source (Visual Studio C++ and git). Players never get here.</summary>
         public int Build()
         {
             // Called inside a transaction (which holds the folder lock).
-            Progress("Building the VR mod (tools\\build.ps1 -Observer)...", -1);
-            Log("Building: tools\\build.ps1 -Observer (a fresh build takes a few minutes).");
-            return PsRunner.RunAndWait(Root, Path.Combine(Root, "tools", "build.ps1"), new[] { "-Observer" }, BuildOutput, Cancel);
+            Progress("Building the VR mod from source (tools\\build.ps1 -Observer)...", -1);
+            Log("Building from source: tools\\build.ps1 -Observer (developer PC; a fresh build takes a few minutes).");
+            return PsRunner.RunAndWait(Root, Path.Combine(Root, "tools", "build.ps1"), BuildArgs(Root), BuildOutput, Cancel);
+        }
+
+        /// <summary>-Observer, and -FromSource when the folder's build.ps1 knows it (from 0.0.5 hotfix 2 it otherwise
+        /// installs the ready-made files when the launcher starts it).</summary>
+        public static string[] BuildArgs(string root)
+        {
+            bool knows = false;
+            try { knows = File.ReadAllText(Path.Combine(root, "tools", "build.ps1")).Contains("FromSource"); } catch { }
+            return knows ? new[] { "-Observer", "-FromSource" } : new[] { "-Observer" };
+        }
+
+        // ---- The ready-made mod files ---------------------------------------------------------------------
+
+        /// <summary>Downloads the installed version's ready-made mod files and installs them (lock held by the caller).
+        /// False when that release has none; throws when they could not be installed.</summary>
+        public bool InstallModFiles()
+        {
+            Progress("Finding the mod files for " + (SystemInfo.PortVersion(Root) ?? "this version") + "...", -1);
+            Manifest m;
+            try { m = ModFiles.ManifestFor(Root, Settings, Release, Log); }
+            catch (System.Net.WebException ex)
+            {
+                var resp = ex.Response as System.Net.HttpWebResponse;
+                if (resp != null && resp.StatusCode == System.Net.HttpStatusCode.NotFound) { Log("This version's release has no version.json."); return false; }
+                throw new Exception("Could not reach GitHub to download the mod files (" + ex.Message + "). Check the internet connection and try again.");
+            }
+            var f = m.File(ModFiles.Kind);
+            if (f == null) { Log(m.Version + "'s release lists no ready-made mod files."); return false; }
+            if (Download == null) throw new InvalidOperationException("No downloader.");
+            string zip = Download(f);
+            Cancel.ThrowIfCancellationRequested();
+            ModFiles.Install(Root, zip, f.Sha256, Log, Progress);
+            return true;
+        }
+
+        /// <summary>The mod files for the version now in the folder: the ones in the zip being installed, else the working
+        /// ones kept when the version did not change, else the release's ready-made files. Never compiles (players have no
+        /// build tools; developers use Build from source).</summary>
+        void PrepareMod(string beforeLong, bool parked, string modZip)
+        {
+            if (modZip != null)
+            {
+                ModFiles.Install(Root, modZip, null, Log, Progress);
+                return;
+            }
+            string nowLong = SystemInfo.PortVersionLong(Root);
+            string parkedDll = Path.Combine(Backups.TxnFolder(Root), "build", "windows-ninja", "spidy_stereo_probe.dll");
+            if (parked && nowLong != null && string.Equals(nowLong, beforeLong, StringComparison.OrdinalIgnoreCase) && File.Exists(parkedDll))
+            {
+                Backups.UnparkBuild(Root, Log);
+                Log("Same mod version (" + nowLong + "): kept its working mod files.");
+                return;
+            }
+            if (InstallModFiles()) return;
+            throw new Exception("The release of " + (nowLong ?? "this version") + " has no ready-made mod files yet, so the mod can't be installed on this PC. " +
+                                "Nothing needs installing on your side: try again later, or use the version you had.");
+        }
+
+        /// <summary>A failed first install leaves no half-installed mod files behind.</summary>
+        void DropNewBuild() { try { string b = Path.Combine(Root, "build"); if (Directory.Exists(b)) Directory.Delete(b, true); } catch { } }
+
+        /// <summary>REPAIR MOD FILES / first start / PLAY VR: (re)installs this version's ready-made mod files. The working
+        /// files are put back if anything fails.</summary>
+        public InstallResult RepairModFiles() { return RepairModFiles(null); }
+
+        /// <summary>Installs the mod files for the version in the folder: from `localZip` (a HERO-VR-x-mod-win64.zip the
+        /// player picked) when given, else downloaded from the release. Nothing but the mod files changes.</summary>
+        public InstallResult RepairModFiles(string localZip)
+        {
+            RequireGameClosed();
+            using (FolderLock.Take(Root, "installing the mod files"))
+            {
+                string v = SystemInfo.PortVersion(Root) ?? "the mod";
+                bool parked = false, hadBuild = Directory.Exists(Path.Combine(Root, "build"));
+                try
+                {
+                    Backups.ParkBuild(Root, Log);
+                    parked = true;
+                    if (localZip != null) ModFiles.Install(Root, localZip, null, Log, Progress);
+                    else if (!InstallModFiles())
+                        throw new Exception("The release of " + v + " has no ready-made mod files yet. Nothing needs installing on your side: try again later.");
+                    Backups.DropParkedBuild(Root);
+                    Progress("Mod files ready: " + v, 100);
+                    return new InstallResult { Ok = true, Version = v, Message = "The mod files for " + v + " are installed. PLAY VR is ready." };
+                }
+                catch (Exception ex)
+                {
+                    string why = ex is OperationCanceledException ? "Cancelled." : ex.Message;
+                    Log("FAILED: " + why);
+                    try { if (parked && !hadBuild) DropNewBuild(); if (parked) Backups.UnparkBuild(Root, Log); } catch (Exception rb) { Log("ROLLBACK PROBLEM: " + rb.Message); }
+                    Progress("Mod files not installed.", 0);
+                    return new InstallResult { Ok = false, Version = v, Message = "Installing the mod files failed: " + why };
+                }
+            }
         }
 
         void RequireGameClosed()
@@ -153,17 +257,20 @@ namespace Sm2VrLauncher
 
         /// <summary>Backs up the current version, applies `change`, builds, checks the version; on any failure
         /// puts back exactly what was there (files and the working build).</summary>
-        InstallResult Transaction(string what, string reason, string expectVersion, Action change, string[] protect)
+        InstallResult Transaction(string what, string reason, string expectVersion, Action change, string[] protect, string modZip = null)
         {
             RequireGameClosed();
             if (!Directory.Exists(Root)) Directory.CreateDirectory(Root);
             using (FolderLock.Take(Root, what))
-                return TransactionLocked(what, reason, expectVersion, change, protect);
+                return TransactionLocked(what, reason, expectVersion, change, protect, modZip);
         }
 
-        InstallResult TransactionLocked(string what, string reason, string expectVersion, Action change, string[] protect)
+        InstallResult TransactionLocked(string what, string reason, string expectVersion, Action change, string[] protect, string modZip)
         {
+            if (Backups.FinishDeferred(Root, Log) > 0)
+                throw new IOException("Some files from the last rollback are still open in another program (see the log). Close it, or restart the PC, and try again. Nothing was changed.");
             string before = SystemInfo.PortVersion(Root) ?? "unknown";
+            string beforeLong = SystemInfo.PortVersionLong(Root);
             Progress("Backing up " + before + "...", -1);
             BackupInfo snap;
             string expectedName = expectVersion == null ? null : Backups.SafeName(expectVersion);
@@ -172,15 +279,15 @@ namespace Sm2VrLauncher
             else
                 snap = Backups.Create(Root, before, reason, Log);
             Backups.WriteMarker(Root, snap.Folder, what);
-            bool parked = false;
+            bool parked = false, hadBuild = Directory.Exists(Path.Combine(Root, "build"));
             try
             {
                 Backups.ParkBuild(Root, Log);
                 parked = true;
                 change();
                 Cancel.ThrowIfCancellationRequested();
-                int code = Build();
-                if (code != 0) throw new Exception("The build failed (exit code " + code + "). The log above shows the first error.");
+                PrepareMod(beforeLong, parked, modZip);
+                Cancel.ThrowIfCancellationRequested();
                 string now = SystemInfo.PortVersion(Root);
                 if (expectVersion != null && !ModVersion.Same(now, expectVersion))
                     throw new Exception("After installing, the mod reads \"" + (now ?? "no version") + "\" (VERSION / PORT-VERSION), not \"" + expectVersion + "\".");
@@ -191,7 +298,7 @@ namespace Sm2VrLauncher
                 Backups.Prune(Root, Settings.KeepBackups, keep.ToArray(), Log);
                 if (snap.Folder.StartsWith(Backups.TxnFolder(Root))) try { Directory.Delete(snap.Folder, true); } catch { }
                 Progress("Done: " + now, 100);
-                return new InstallResult { Ok = true, Version = now, Message = what + " finished: " + now + " is installed and built." };
+                return new InstallResult { Ok = true, Version = now, Message = what + " finished: " + now + " is installed, with its mod files." };
             }
             catch (Exception ex)
             {
@@ -201,12 +308,14 @@ namespace Sm2VrLauncher
                 Progress("Rolling back to " + before + "...", -1);
                 try
                 {
-                    Backups.Restore(Root, snap.Folder, new string[0], true, Log);
+                    int later = Backups.Restore(Root, snap.Folder, new string[0], true, Log, true);
+                    if (parked && !hadBuild) DropNewBuild();
                     if (parked) Backups.UnparkBuild(Root, Log);
                     Backups.ClearMarker(Root);
-                    Log("Rolled back: " + (SystemInfo.PortVersion(Root) ?? before) + " is installed again, with its working build.");
+                    Log("Rolled back: " + (SystemInfo.PortVersion(Root) ?? before) + " is installed again, with its mod files.");
                     Progress("Rolled back to " + before, 0);
-                    return new InstallResult { Ok = false, Version = before, Message = what + " failed: " + why + "\n\nNothing changed: " + before + " and its build were put back." };
+                    return new InstallResult { Ok = false, Version = before, Message = what + " failed: " + why + "\n\nNothing changed: " + before + " and its mod files were put back." +
+                        (later > 0 ? " (" + later + " file" + (later == 1 ? " was" : "s were") + " open in another program; the launcher puts " + (later == 1 ? "it" : "them") + " back the next time it starts.)" : "") };
                 }
                 catch (Exception rb)
                 {
@@ -221,17 +330,23 @@ namespace Sm2VrLauncher
             }
         }
 
-        /// <summary>INSTALL UPDATE / UPDATE NOW: the zip over the install (as Expand-Archive -Force), then a fresh build.</summary>
+        /// <summary>INSTALL UPDATE / UPDATE NOW: the zip over the install (as Expand-Archive -Force), then its mod files (never a build).</summary>
         public InstallResult InstallZip(string zipPath, string reason)
         {
             Progress("Checking the zip...", -1);
             var c = Inspect(zipPath);
             Log("Zip: " + Path.GetFileName(zipPath) + ", " + c.Files + " files" + (c.Version != null ? ", " + c.Version : "") + ".");
+            if (c.ModFilesOnly)
+            {
+                Log("It is the ready-made mod files only: installing them (nothing else changes, nothing to build).");
+                return RepairModFiles(zipPath);
+            }
+            if (c.HasModFiles) Log("It carries the ready-made mod files: installing them from it (nothing to build or download).");
             return Transaction("Installing " + (c.Version ?? Path.GetFileName(zipPath)), reason, c.Version, () =>
             {
-                int n = Extract(zipPath, c, Root);
+                int n = Extract(zipPath, c, Root, c.HasModFiles ? ModFiles.Parts : null);
                 Log("Expanded " + n + " files into " + Root + ".");
-            }, null);
+            }, null, c.HasModFiles ? zipPath : null);
         }
 
         /// <summary>A full package (from an older release) made the install exactly: like a backup restore.</summary>
@@ -245,10 +360,10 @@ namespace Sm2VrLauncher
             {
                 if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
                 Directory.CreateDirectory(tmp);
-                Extract(zipPath, c, tmp);
+                Extract(zipPath, c, tmp, c.HasModFiles ? ModFiles.Parts : null);
                 Backups.Restore(Root, tmp, Settings.PreservePatterns, restoreSettings, Log);
                 try { Directory.Delete(tmp, true); } catch { }
-            }, null);
+            }, null, c.HasModFiles ? zipPath : null);
         }
 
         /// <summary>REVERT: the chosen backup made the install exactly (settings kept unless restoreSettings).</summary>
@@ -272,11 +387,13 @@ namespace Sm2VrLauncher
         InstallResult FinishRollbackLocked(string folder)
         {
             Progress("Finishing an interrupted update's rollback...", -1);
-            Backups.Restore(Root, folder, new string[0], true, Log);
+            Backups.FinishDeferred(Root, Log);
+            int later = Backups.Restore(Root, folder, new string[0], true, Log, true);
             Backups.UnparkBuild(Root, Log);
             Backups.ClearMarker(Root);
             string v = SystemInfo.PortVersion(Root);
-            return new InstallResult { Ok = true, Version = v, Message = "The interrupted update was rolled back: " + v + " is installed again." };
+            return new InstallResult { Ok = true, Version = v, Message = "The interrupted update was rolled back: " + v + " is installed again." +
+                (later > 0 ? " (" + later + " file(s) open in another program are put back the next time the launcher starts.)" : "") };
         }
     }
 }

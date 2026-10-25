@@ -19,18 +19,17 @@ This zip is the full source of mod Version 0.0.5 (build Update 38.9) plus the pr
 - Windows 10 or 11 (64-bit).
 - Marvel's Spider-Man 2 on Steam, **version 2.810.0.0** (Spider-Man2.exe). Other versions are refused on purpose.
 - A PC VR headset and its OpenXR app: Virtual Desktop (tested with Quest 3), Quest Link / Air Link or SteamVR.
-- To build the mod once, you need:
-  - **Visual Studio 2022 or 2026** with the "Desktop development with C++" workload;
-  - **Git for Windows**;
-  - **Python 3.11+** from python.org, with "Add python.exe to PATH" ticked.
+- **Python 3.11+** from python.org, with "Add python.exe to PATH" ticked (it runs the mod's live settings).
+- An internet connection on the first run. You don't need Visual Studio or Git: nothing is compiled on your PC.
 
 ## Install
 1. Right-click the zip, choose **Extract All...**, and extract it to a short path you can write to, for example
    `C:\HERO-VR`. Don't use Program Files or a OneDrive folder.
 2. Double-click **HERO VR Launcher.cmd**. If SmartScreen warns you, click **More info** and then **Run anyway**.
    The launcher is unsigned.
-3. On **Status**, press **Build** once. The first build downloads the libraries (OpenXR SDK, Dear ImGui, bHaptics SDK and
-   MinHook) with git and compiles the mod. It takes a few minutes.
+3. On the first run the launcher downloads the ready-made mod files for 0.0.5 from the GitHub release
+   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.5) and checks them. If that was interrupted,
+   press **Repair** on **Status** (or just PLAY VR, which offers it).
 4. Start your VR app, put the headset on and press **PLAY VR**. The default launch options are:
    `-RenderScale 100 -OverlayWebs -EngineTaa -SmallerDesktopView`.
 

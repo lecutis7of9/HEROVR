@@ -1,5 +1,23 @@
-param([switch]$CoreOnly,[switch]$Observer,[ValidateSet('Debug','Release')][string]$Configuration='Release')
+param([switch]$CoreOnly,[switch]$Observer,[switch]$FromSource,[ValidateSet('Debug','Release')][string]$Configuration='Release')
 $ErrorActionPreference = 'Stop'
+# Hotfix 2: players never compile. Run by a launcher (an older one runs this after every install), this
+# installs the release's ready-made mod files instead (never compiles); -FromSource builds from source.
+if ($env:SM2VR_LAUNCHER -eq '1' -and -not $FromSource -and -not $CoreOnly) {
+    & (Join-Path $PSScriptRoot 'install-prebuilt.ps1')
+    $prebuiltCode = $LASTEXITCODE
+    if ($prebuiltCode -ne 3) { exit $prebuiltCode }
+    [Console]::Error.WriteLine('The ready-made mod files for this version are not on GitHub yet, so there is nothing to install. Nothing was changed and nothing is wrong with your PC: try again later (players never need to build). Developers: tools\build.ps1 -FromSource.')
+    exit 1
+}
+$playerRun = ($env:SM2VR_LAUNCHER -eq '1')
+function Stop-Plain([string]$dev) {
+    if ($playerRun) {
+        [Console]::Error.WriteLine('The ready-made mod files for this version could not be found, and building them from source needs developer tools (git, Visual Studio C++). Nothing is wrong with your PC: press Repair in the launcher, or update the launcher, and it downloads them.')
+        [Console]::Error.WriteLine('(developer detail: ' + $dev + ')')
+        exit 1
+    }
+    throw $dev
+}
 # Update 31 (since 30.1): the update being built, first and in green.
 $portVersionFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'PORT-VERSION'
 $portVersion = if (Test-Path -LiteralPath $portVersionFile) { (Get-Content -LiteralPath $portVersionFile -TotalCount 1).Trim() } else { 'unknown (PORT-VERSION missing)' }
@@ -16,12 +34,12 @@ $missing = @($needed.Keys | Where-Object { -not (Test-Path -LiteralPath (Join-Pa
 $missingTools = @('tools\capture_game_state.py', 'tools\live_settings.py', 'tools\update37_records.py', 'CMakeLists.txt') |
     Where-Object { -not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) $_)) }
 if ($missingTools) {
-    throw "This folder is missing files the zip ships: $($missingTools -join ', '). Unpack the whole Version $publicVersion zip again."
+    Stop-Plain "This folder is missing files the zip ships: $($missingTools -join ', '). Unpack the whole Version $publicVersion zip again."
 }
 if ($missing.Count) {
     Write-Host "Missing third_party: $($missing -join ', '). Fetching them now with tools\bootstrap.ps1 (needs git and the internet)." -ForegroundColor Yellow
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        throw "git is needed to fetch third_party ($($missing -join ', ')). Install Git for Windows, then run tools\build.ps1 again."
+        Stop-Plain "git is needed to fetch third_party ($($missing -join ', ')). Install Git for Windows, then run tools\build.ps1 again."
     }
     if ($Observer) { & (Join-Path $PSScriptRoot 'bootstrap.ps1') -Observer } else { & (Join-Path $PSScriptRoot 'bootstrap.ps1') }
     $still = @($needed.Keys | Where-Object { -not (Test-Path -LiteralPath (Join-Path (Join-Path $tpRoot $_) $needed[$_])) })
@@ -31,8 +49,9 @@ if ($missing.Count) {
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 # vcvars64.bat runs vswhere by name, and its folder is not on every PATH.
 $env:PATH = (Split-Path -Parent $vswhere) + ';' + $env:PATH
+if (-not (Test-Path -LiteralPath $vswhere)) { Stop-Plain 'Visual Studio 2022 or 2026 C++ build tools are required (vswhere.exe not found).' }
 $vs = & $vswhere -version '[17.0,19.0)' -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-if (-not $vs) { throw 'Visual Studio 2022 or 2026 C++ build tools are required (Desktop development with C++).' }
+if (-not $vs) { Stop-Plain 'Visual Studio 2022 or 2026 C++ build tools are required (Desktop development with C++).' }
 $build = if($CoreOnly){'core-ninja'}else{'windows-ninja'}
 $xr = if($CoreOnly){'OFF'}else{'ON'}
 $observerFlag = if($Observer){'ON'}else{'OFF'}

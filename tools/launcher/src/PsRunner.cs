@@ -6,6 +6,7 @@ using System.IO;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace Sm2VrLauncher
@@ -32,7 +33,7 @@ namespace Sm2VrLauncher
                 "try { & " + Ps1Literal(script) + " " + argText + "; if ($LASTEXITCODE) { exit $LASTEXITCODE } else { exit 0 } } " +
                 "catch { [Console]::Error.WriteLine('ERROR: ' + $_.Exception.Message); exit 1 }";
             var psi = new ProcessStartInfo("powershell.exe",
-                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(cmd)));
+                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -OutputFormat Text -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(cmd)));
             psi.WorkingDirectory = workDir;
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
@@ -46,8 +47,11 @@ namespace Sm2VrLauncher
             try
             {
                 proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-                proc.OutputDataReceived += (s, e) => { if (e.Data != null && Output != null) Output(e.Data, false); };
-                proc.ErrorDataReceived += (s, e) => { if (e.Data != null && Output != null) Output(e.Data, true); };
+                // -OutputFormat Text keeps the streams plain; any CLIXML that still arrives ("#< CLIXML <Objs ...>",
+                // Windows PowerShell's serialized Write-Host and error records) is turned back into its text lines.
+                var outText = new Clixml(); var errText = new Clixml();
+                proc.OutputDataReceived += (s, e) => { if (e.Data != null && Output != null) foreach (var l in outText.Feed(e.Data)) Output(l, false); };
+                proc.ErrorDataReceived += (s, e) => { if (e.Data != null && Output != null) foreach (var l in errText.Feed(e.Data)) Output(l, true); };
                 proc.Exited += (s, e) =>
                 {
                     int code = -1;
@@ -161,6 +165,79 @@ namespace Sm2VrLauncher
                 try { using (var p = Process.GetProcessById(id)) p.Kill(); } catch { }
             }
             try { if (Running) proc.Kill(); } catch { }
+        }
+    }
+
+    /// <summary>Turns PowerShell's CLIXML ("#< CLIXML" then &lt;Objs&gt;...&lt;/Objs&gt;) back into the lines it carries;
+    /// any other line passes unchanged. One instance per stream.</summary>
+    sealed class Clixml
+    {
+        StringBuilder buf;
+        static readonly char[] Ws = { ' ', '\t', '\r', '\n' };
+        static readonly Regex Escape = new Regex("_x([0-9A-Fa-f]{4})_");
+
+        public List<string> Feed(string line)
+        {
+            var result = new List<string>();
+            string t = line.TrimStart(Ws);
+            if (buf == null)
+            {
+                if (t.StartsWith("#< CLIXML"))
+                {
+                    t = t.Substring(9).TrimStart(Ws);
+                    if (t.Length == 0) return result;
+                }
+                if (!t.StartsWith("<Objs")) { result.Add(line); return result; }
+                buf = new StringBuilder();
+            }
+            buf.Append(t).Append('\n');
+            if (t.IndexOf("</Objs>", StringComparison.Ordinal) < 0)
+            {
+                if (buf.Length > 4 * 1024 * 1024) { result.AddRange(Decode(buf.ToString())); buf = null; }
+                return result;
+            }
+            string xml = buf.ToString();
+            buf = null;
+            result.AddRange(Decode(xml));
+            return result;
+        }
+
+        static readonly Regex Progress = new Regex("<Obj S=\"progress\".*?</Obj>", RegexOptions.Singleline);
+        static readonly Regex Texts = new Regex("<S S=\"[^\"]*\">(.*?)</S>|<ToString>(.*?)</ToString>", RegexOptions.Singleline);
+
+        /// <summary>The text of each record (stream strings and the ToString of Write-Host/information records);
+        /// progress records are dropped. Regex, not an XML parser: no extra reference assembly.</summary>
+        public static List<string> Decode(string xml)
+        {
+            var lines = new List<string>();
+            string body = Progress.Replace(xml, "");
+            foreach (Match m in Texts.Matches(body))
+            {
+                string v = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+                v = Unescape(System.Net.WebUtility.HtmlDecode(v));
+                foreach (var l in v.Replace("\r\n", "\n").Split(new[] { '\n' }))
+                    if (l.Trim().Length > 0) lines.Add(l.TrimEnd(Ws));
+            }
+            if (lines.Count == 0 && body.IndexOf("<Obj", StringComparison.Ordinal) >= 0) return Plain(body);
+            return lines;
+        }
+
+        static string Unescape(string s)
+        {
+            return Escape.Replace(s, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+        }
+
+        /// <summary>Unreadable XML: the text between its tags, one line each.</summary>
+        static List<string> Plain(string xml)
+        {
+            var lines = new List<string>();
+            foreach (Match m in Regex.Matches(xml, ">([^<]+)<"))
+            {
+                string v = Unescape(System.Net.WebUtility.HtmlDecode(m.Groups[1].Value));
+                foreach (var l in v.Replace("\r\n", "\n").Split(new[] { '\n' }))
+                    if (l.Trim().Length > 0) lines.Add(l.TrimEnd(Ws));
+            }
+            return lines;
         }
     }
 }

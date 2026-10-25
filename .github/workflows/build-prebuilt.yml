@@ -1,0 +1,128 @@
+# Builds the ready-made mod files players install (HERO-VR-<PORT-VERSION>-mod-win64.zip), so no player ever
+# compiles anything. Actions > Build prebuilt mod > Run workflow. The zip, its .sha256 and its size are kept
+# with the run; with "upload" ticked the zip and its .sha256 are also put on the release (--clobber).
+# version.json (the launcher's update manifest, with the zip's sha256 and size) is made and uploaded after.
+name: Build prebuilt mod
+run-name: Prebuilt mod for ${{ inputs.tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release the mod files are for (its native sources must match this branch)
+        required: true
+        default: v0.0.5
+      upload:
+        description: Also upload the zip and its .sha256 to that release (--clobber)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prebuilt-${{ inputs.tag }}
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  prebuilt:
+    if: github.actor == github.repository_owner
+    # tools/build.ps1 needs Visual Studio 2022 with its C++ CMake tools; this image has both (as release.yml).
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Check the mod's sources are the release's
+        run: |
+          $version = (Get-Content PORT-VERSION -TotalCount 1).Trim()
+          if ("v$version" -ne $env:TAG) { throw "PORT-VERSION is $version, not $($env:TAG.TrimStart('v'))." }
+          git fetch --tags --force --quiet
+          $changed = git diff --name-only $env:TAG HEAD -- src include apps assets CMakeLists.txt
+          if ($LASTEXITCODE) { throw "Tag $env:TAG was not found." }
+          if ($changed) { throw "The native sources differ from $($env:TAG): $($changed -join ', ')" }
+          Write-Output "Native sources match $env:TAG. Other changes since the tag:"
+          git diff --stat $env:TAG HEAD
+
+      - name: Fetch the pinned OpenXR SDK, Dear ImGui, the bHaptics SDK and MinHook
+        run: ./tools/bootstrap.ps1 -Observer
+
+      - name: Build and run the C++ tests
+        env:
+          SPIDY_BHAPTICS_APP_ID: ${{ secrets.SPIDY_BHAPTICS_APP_ID }}
+          SPIDY_BHAPTICS_API_KEY: ${{ secrets.SPIDY_BHAPTICS_API_KEY }}
+        run: |
+          Remove-Item Env:SM2VR_LAUNCHER -ErrorAction SilentlyContinue
+          ./tools/build.ps1 -Observer -FromSource
+          if ($LASTEXITCODE) { throw "tools/build.ps1 failed ($LASTEXITCODE)" }
+
+      - name: Run the Python protocol tests
+        run: |
+          foreach ($suite in Get-ChildItem tests -Filter '*_protocol_tests.py') {
+            python -B $suite.FullName
+            if ($LASTEXITCODE) { throw "$($suite.Name) failed" }
+          }
+
+      - name: Compile the launcher with Windows' own .NET Framework compiler and check it
+        run: |
+          ./tools/launcher/build.ps1 -Out out/ci/SM2VRLauncher.exe
+          python -B tools/launcher/tools/check-netfx.py tools/launcher/src
+          if ($LASTEXITCODE) { throw 'check-netfx failed' }
+
+      - name: Package the ready-made mod files
+        id: pkg
+        run: |
+          $version = (Get-Content PORT-VERSION -TotalCount 1).Trim()
+          $name = "HERO-VR-$version-mod"
+          ./tools/package.ps1 -Name $name
+          $zip = "dist/$name-win64.zip"
+          if (-not (Test-Path $zip)) { throw "$zip was not made." }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $z = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $entries = @($z.Entries | ForEach-Object { $_.FullName -replace '\\', '/' })
+            $dlls = @($entries | Where-Object { $_ -like "$name/build/windows-ninja/*.dll" })
+            if (-not $dlls) { throw 'The zip has no modules in build/windows-ninja.' }
+            $pv = $z.Entries | Where-Object { ($_.FullName -replace '\\', '/') -eq "$name/PORT-VERSION" }
+            if (-not $pv) { throw 'The zip has no PORT-VERSION.' }
+            $r = New-Object IO.StreamReader($pv.Open()); $inner = $r.ReadLine().Trim(); $r.Close()
+            if ($inner -ne $version) { throw "The zip says $inner, not $version." }
+            Write-Output "$($entries.Count) entries; modules: $($dlls -join ', ')"
+          } finally { $z.Dispose() }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item $zip).Length
+          "$hash  $name-win64.zip" | Set-Content -NoNewline "$zip.sha256" -Encoding ascii
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "size=$size" >> $env:GITHUB_OUTPUT
+          "### $name-win64.zip`n`nsha256 ``$hash```n`nsize $size bytes" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Keep the zip with this run
+        uses: actions/upload-artifact@v7
+        with:
+          name: prebuilt-mod
+          path: |
+            ${{ steps.pkg.outputs.zip }}
+            ${{ steps.pkg.outputs.zip }}.sha256
+          retention-days: 30
+
+      - name: Upload to the release
+        if: inputs.upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ZIP: ${{ steps.pkg.outputs.zip }}
+        run: |
+          gh release upload $env:TAG $env:ZIP "$env:ZIP.sha256" --clobber
+          if ($LASTEXITCODE) { throw 'Uploading to the release failed.' }

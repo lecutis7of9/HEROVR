@@ -37,7 +37,16 @@ namespace Sm2VrLauncher
             if (SkipTop.Contains(top)) return true;
             if (rel.IndexOf("__pycache__", StringComparison.OrdinalIgnoreCase) >= 0) return true;
             if (rel.IndexOf("launcher-data", StringComparison.OrdinalIgnoreCase) >= 0) return true;   // a portable launcher's own logs and downloads
+            if (IsLauncherLeftover(rel)) return true;
             return false;
+        }
+
+        /// <summary>SM2VRLauncher.exe.old / SM2VRLauncher.exe.123.old: the previous launcher exe moved aside by a self-update,
+        /// possibly still running. Never backed up, restored or deleted by a restore (CleanOldSelf removes it on start).</summary>
+        public static bool IsLauncherLeftover(string rel)
+        {
+            string name = Path.GetFileName(rel.Replace('/', '\\').Replace('\\', Path.DirectorySeparatorChar));
+            return name.StartsWith("SM2VRLauncher", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".old", StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool MatchesAny(string rel, string[] patterns)
@@ -158,32 +167,129 @@ namespace Sm2VrLauncher
 
         /// <summary>Makes the install exactly the backup's files: files not in the backup are removed (except build,
         /// reports, music and the preserved settings), every backed-up file is copied back. Preserved settings files
-        /// keep the user's current copy unless restoreSettings.</summary>
-        public static void Restore(string root, string backupFolder, string[] preserve, bool restoreSettings, Action<string> log)
+        /// keep the user's current copy unless restoreSettings. A file another program holds open is tried again for a
+        /// few seconds, then deferred: saved in the backups' _deferred folder and finished the next time the launcher
+        /// starts (FinishDeferred). The running launcher's own files are left as they are. Returns the deferred count.</summary>
+        public static int Restore(string root, string backupFolder, string[] preserve, bool restoreSettings, Action<string> log, bool deferLocked = false)
         {
             var wanted = new HashSet<string>(InstallFiles(backupFolder).Where(r => !r.Equals("_backup.ini", StringComparison.OrdinalIgnoreCase)), StringComparer.OrdinalIgnoreCase);
-            int removed = 0, copied = 0;
+            int removed = 0, copied = 0, deferred = 0, kept = 0;
             foreach (var rel in InstallFiles(root))
             {
                 if (wanted.Contains(rel)) continue;
                 if (MatchesAny(rel, preserve)) continue;
-                if (IsSelf(Path.Combine(root, rel)) || InSelfFolder(Path.Combine(root, rel))) continue;   // never delete the running launcher's own files
-                File.SetAttributes(Path.Combine(root, rel), FileAttributes.Normal);
-                File.Delete(Path.Combine(root, rel));
-                removed++;
+                string path = Path.Combine(root, rel);
+                if (IsSelf(path) || InSelfFolder(path)) continue;   // never delete the running launcher's own files
+                if (TryIo(rel, () => { File.SetAttributes(path, FileAttributes.Normal); File.Delete(path); })) removed++;
+                else if (deferLocked) { Defer(root, rel, null, log); deferred++; }
+                else throw Locked(rel);
             }
             foreach (var rel in wanted)
             {
-                string to = Path.Combine(root, rel);
+                string to = Path.Combine(root, rel), from = Path.Combine(backupFolder, rel);
                 if (!restoreSettings && MatchesAny(rel, preserve) && File.Exists(to)) continue;
                 Directory.CreateDirectory(Path.GetDirectoryName(to));
-                if (IsSelf(to)) { MoveSelfAside(to); }
-                if (File.Exists(to)) File.SetAttributes(to, FileAttributes.Normal);
-                File.Copy(Path.Combine(backupFolder, rel), to, true);
-                copied++;
+                bool self = IsSelf(to);
+                bool ok = TryIo(rel, () =>
+                {
+                    if (self) MoveSelfAside(to);
+                    if (File.Exists(to)) File.SetAttributes(to, FileAttributes.Normal);
+                    File.Copy(from, to, true);
+                });
+                if (ok) { copied++; continue; }
+                if (self || InSelfFolder(to)) { kept++; log("Kept " + rel + " as it is (the running launcher is using it)."); continue; }
+                if (!deferLocked) throw Locked(rel);
+                Defer(root, rel, from, log); deferred++;
             }
             RemoveEmptyFolders(root);
-            log("Restored " + copied + " files" + (removed > 0 ? ", removed " + removed + " that the version did not have" : "") + ".");
+            log("Restored " + copied + " files" + (removed > 0 ? ", removed " + removed + " that the version did not have" : "") +
+                (deferred > 0 ? "; " + deferred + " in use by another program, finished when the launcher next starts" : "") + ".");
+            return deferred;
+        }
+
+        /// <summary>Runs a file operation, trying again for about 3 s while another program holds the file. False when it
+        /// is still locked (sharing violation or access denied); other errors (disk full, missing backup file) throw.</summary>
+        static bool TryIo(string rel, Action io)
+        {
+            string test = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_LOCKED");   // automated tests only: pretend these are open
+            for (int i = 0; ; i++)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(test) && MatchesAny(rel, test.Split(new[] { ';' })))
+                        throw new IOException("The process cannot access the file '" + rel + "' because it is being used by another process. (test)");
+                    io();
+                    return true;
+                }
+                catch (FileNotFoundException) { throw; }
+                catch (DirectoryNotFoundException) { throw; }
+                catch (Exception ex)
+                {
+                    if (!(ex is IOException) && !(ex is UnauthorizedAccessException)) throw;
+                    if (i >= (string.IsNullOrEmpty(test) ? 15 : 1)) return false;
+                    System.Threading.Thread.Sleep(200);
+                }
+            }
+        }
+
+        static IOException Locked(string rel)
+        {
+            return new IOException(rel + " is open in another program, so it can't be replaced. Close that program (or restart the PC) and try again.");
+        }
+
+        public static string DeferredFolder(string root) { return Path.Combine(BackupRoot(root), "_deferred"); }
+        static string DeferredList(string root) { return Path.Combine(DeferredFolder(root), "deferred.txt"); }
+
+        /// <summary>Remembers one file a restore could not change: copy (the backup's copy is saved) or delete (from == null).</summary>
+        static void Defer(string root, string rel, string from, Action<string> log)
+        {
+            string dir = DeferredFolder(root);
+            Directory.CreateDirectory(dir);
+            if (from != null)
+            {
+                string keep = Path.Combine(dir, "files", rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(keep));
+                File.Copy(from, keep, true);
+            }
+            File.AppendAllText(DeferredList(root), (from != null ? "copy|" : "delete|") + rel + "\r\n", new UTF8Encoding(false));
+            log("In use by another program: " + rel + ". It is put back when the launcher next starts (nothing is lost).");
+        }
+
+        public static bool HasDeferred(string root) { return File.Exists(DeferredList(root)); }
+
+        /// <summary>Finishes the files an earlier rollback deferred. Returns how many are still in use (0 = all done).</summary>
+        public static int FinishDeferred(string root, Action<string> log)
+        {
+            string list = DeferredList(root);
+            if (!File.Exists(list)) return 0;
+            var left = new List<string>();
+            int done = 0;
+            foreach (var line in File.ReadAllLines(list).Where(l => l.Contains("|")).Distinct())
+            {
+                string op = line.Substring(0, line.IndexOf('|')), rel = line.Substring(line.IndexOf('|') + 1);
+                string to = Path.Combine(root, rel), from = Path.Combine(DeferredFolder(root), "files", rel);
+                bool ok;
+                try
+                {
+                    ok = TryIo(rel, () =>
+                    {
+                        if (op == "copy")
+                        {
+                            if (!File.Exists(from)) return;
+                            Directory.CreateDirectory(Path.GetDirectoryName(to));
+                            if (File.Exists(to)) File.SetAttributes(to, FileAttributes.Normal);
+                            File.Copy(from, to, true);
+                        }
+                        else if (File.Exists(to)) { File.SetAttributes(to, FileAttributes.Normal); File.Delete(to); }
+                    });
+                }
+                catch (Exception ex) { log("Could not finish " + rel + ": " + ex.Message); ok = false; }
+                if (ok) done++; else left.Add(line);
+            }
+            if (left.Count == 0) { try { Directory.Delete(DeferredFolder(root), true); } catch { } }
+            else File.WriteAllLines(list, left.ToArray());
+            if (done > 0) log("Finished the last rollback: put back " + done + (done == 1 ? " file that was" : " files that were") + " in use.");
+            return left.Count;
         }
 
         static void RemoveEmptyFolders(string root)

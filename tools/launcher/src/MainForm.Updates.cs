@@ -13,7 +13,7 @@ namespace Sm2VrLauncher
     {
         LogBox buildLog;
         StatusRow upInstalled, upLatest, upDownloads;
-        AccentButton btnCheck, btnUpdateNow, btnInstallZip, btnBuildMod, btnRevert, btnBackups, btnSaveRepo;
+        AccentButton btnCheck, btnUpdateNow, btnInstallZip, btnBuildMod, btnRevert, btnBackups, btnSaveRepo, btnDevBuild;
         ProgressStrip progress;
         TextLabel progressText, backupsNote;
         ToggleRow checkOnStart;
@@ -41,7 +41,7 @@ namespace Sm2VrLauncher
             repoField = Add(card, new Field(), 20, 394, 390, 34);
             repoField.Text = settings.UpdateRepo;
             btnSaveRepo = Add(card, new AccentButton("Save", ButtonKind.Secondary), 420, 394, 100, 34);
-            btnBuildMod = Add(card, new AccentButton("Build mod", ButtonKind.Secondary) { Glyph = "build" }, 20, 442, 160, 40);
+            btnBuildMod = Add(card, new AccentButton("Repair mod", ButtonKind.Secondary) { Glyph = "build" }, 20, 442, 160, 40);
             btnRevert = Add(card, new AccentButton("Revert", ButtonKind.Danger) { Glyph = "revert" }, 190, 442, 160, 40);
             btnBackups = Add(card, new AccentButton("Open backups", ButtonKind.Secondary) { Glyph = "folder" }, 360, 442, 160, 40);
             backupsNote = Add(card, new TextLabel("", Theme.Ui(11.5f), Theme.Sub), 20, 490, 500, 54);
@@ -52,13 +52,17 @@ namespace Sm2VrLauncher
             buildLog = Add(logCard, new LogBox(), 556, 48, 532, 488);
             var copy = Add(logCard, new AccentButton("Copy", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 960, 18, 50, 22);
             var logs = Add(logCard, new AccentButton("Logs", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 1024, 18, 64, 22);
+            // Developers only (Visual Studio C++ and git found): compile the mod from source. Players never see it.
+            btnDevBuild = Add(logCard, new AccentButton("Build from source (dev)", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 760, 18, 190, 22);
+            btnDevBuild.Visible = !preview && ModFiles.DevToolsPresent();
+            btnDevBuild.Click += (s, e) => StartBuild(null);
             copy.Click += (s, e) => { try { Clipboard.SetText(buildLog.AllText.Length > 0 ? buildLog.AllText : " "); } catch { } };
             logs.Click += (s, e) => SystemInfo.OpenFolder(Path.Combine(Settings.Folder, "logs"), null);
 
             btnCheck.Click += (s, e) => { if (job == Job.Update && cancel != null) { cancel.Cancel(); SetProgress("Cancelling...", -1); } else CheckForUpdate(false); };
             btnUpdateNow.Click += (s, e) => UpdateNow();
             btnInstallZip.Click += (s, e) => InstallFromDownloads();
-            btnBuildMod.Click += (s, e) => StartBuild(null);
+            btnBuildMod.Click += (s, e) => RepairMod(null);
             btnRevert.Click += (s, e) => Revert();
             btnBackups.Click += (s, e) => { string b = Backups.BackupRoot(root); Directory.CreateDirectory(b); SystemInfo.OpenFolder(b, null); };
             checkOnStart.Changed += (s, e) => { settings.SetBool("CheckOnStart", checkOnStart.Checked); settings.Save(); };
@@ -74,7 +78,9 @@ namespace Sm2VrLauncher
                 RefreshCredits();
             };
             tip.SetToolTip(btnCheck, "Reads version.json from the latest GitHub release (falls back to the GitHub API)");
-            tip.SetToolTip(btnUpdateNow, "Downloads the update, checks its SHA-256, backs up this version, installs, builds; puts everything back if any step fails");
+            tip.SetToolTip(btnUpdateNow, "Downloads the update, checks its SHA-256, backs up this version, installs it with its ready-made mod files; puts everything back if any step fails");
+            tip.SetToolTip(btnBuildMod, "Downloads this version's ready-made mod files from GitHub again, checks their SHA-256 and reinstalls them. Nothing to compile.");
+            tip.SetToolTip(btnDevBuild, "Developers only: tools\\build.ps1 -Observer -FromSource (needs Visual Studio 2022 C++ and git)");
             tip.SetToolTip(btnRevert, "Go back to an earlier version: from the backups the launcher keeps, or an older GitHub release");
             upLatest.Set(CheckState.Info, settings.RepoConfigured ? "Not checked yet." : "No GitHub repository set yet (below). Update zips in Downloads still work.");
             SetProgress("", 0);
@@ -101,6 +107,7 @@ namespace Sm2VrLauncher
             btnUpdateNow.Text = latest != null && IsNewer(latest) ? "Update to " + ShortVersion(latest.Version) : "Update now";
             btnInstallZip.Enabled = idle && downloadZip != null;
             btnBuildMod.Enabled = idle && (preview || SystemInfo.IsPortRoot(root));
+            if (btnDevBuild != null) btnDevBuild.Enabled = idle && SystemInfo.IsPortRoot(root);
             btnRevert.Enabled = idle;
             btnSaveRepo.Enabled = idle;
         }
@@ -160,11 +167,46 @@ namespace Sm2VrLauncher
             try
             {
                 Manifest.OverrideUrl = settings.Get("UpdateManifestUrl", null);
-                if (!settings.GetBool("CheckOnStart", false) || !CanCheck) return;
-                CheckForUpdate(true, m => { try { OfferUpdate(m); } catch (Exception ex) { Program.LogError(ex); buildLog.Line("Update prompt failed: " + ex.Message, Theme.Bad); } });
+                if (!settings.GetBool("CheckOnStart", false) || !CanCheck) { FirstRunModFiles(); return; }
+                CheckForUpdate(true, m =>
+                {
+                    try { OfferUpdate(m); } catch (Exception ex) { Program.LogError(ex); buildLog.Line("Update prompt failed: " + ex.Message, Theme.Bad); }
+                    FirstRunModFiles();
+                }, error => FirstRunModFiles());
             }
             catch (Exception ex) { Program.LogError(ex); }
         }
+
+        bool quietModFiles;   // the first-start install: a failure goes to the log and the Status sheet, not a pop-up
+
+        /// <summary>First start (or a folder whose mod files are missing): installs the ready-made mod files by itself,
+        /// so PLAY VR is ready without the player doing anything. Never compiles.</summary>
+        void FirstRunModFiles()
+        {
+            try
+            {
+                if (preview || job != Job.None || !SystemInfo.IsPortRoot(root) || ModFiles.Installed(root)) return;
+                if (FolderLock.Busy(root)) return;
+                buildLog.Line("The mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " are not installed yet: downloading the ready-made files from GitHub.", Theme.Info);
+                quietModFiles = true;
+                RepairMod(null, true);
+            }
+            catch (Exception ex) { Program.LogError(ex); }
+        }
+
+        /// <summary>REPAIR MOD / PLAY VR on a folder without mod files: downloads this version's ready-made mod files,
+        /// checks their SHA-256 and installs them. <paramref name="then"/> gets true when they are ready.</summary>
+        void RepairMod(Action<bool> then, bool noConfirm = false)
+        {
+            if (!GuardIdle()) return;
+            if (!SystemInfo.IsPortRoot(root)) { MessageBox.Show(this, "Pick the mod folder first (Status > Mod folder).", LauncherInfo.Title); return; }
+            if (!noConfirm && then == null && MessageBox.Show(this, "Download the ready-made mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " from GitHub again and reinstall them?\n\n" +
+                "Their SHA-256 is checked first; your current files are put back if anything fails.", LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+            modFilesThen = then;
+            RunInstall("Installing the mod files", inst => inst.RepairModFiles());
+        }
+
+        Action<bool> modFilesThen;   // PLAY VR waiting for the mod files
 
         static string UpdateKey(Manifest m) { return (m.VersionNumber ?? m.Version) + "#" + m.LauncherBuild; }
 
@@ -183,7 +225,7 @@ namespace Sm2VrLauncher
                 MessageBox.Show(this, LauncherInfo.Title + " " + m.Version + (m.LauncherBuild > LauncherInfo.Build ? " (launcher build " + m.LauncherBuild + ")" : "") +
                     " is available. You have " + have + ", launcher build " + LauncherInfo.Build + "." + news +
                     "\n\nUpdate now? The launcher backs up your version, downloads the update and checks its SHA-256, installs it, keeps your settings, " +
-                    "builds, and restarts itself. It never touches the game's own files. If anything fails, your current version is put back." +
+                    "installs the ready-made mod files (nothing to compile) and restarts itself. It never touches the game's own files. If anything fails, your current version is put back." +
                     "\n\nYes: update now.    No: skip this version.    Cancel: ask me next time.",
                     LauncherInfo.Title + " - update available", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
             if (r == DialogResult.No) { settings.Set("SkipUpdate", UpdateKey(m)); settings.Save(); buildLog.Line("Skipped " + m.Version + ".", Theme.Dim); return; }
@@ -225,10 +267,11 @@ namespace Sm2VrLauncher
             }
         }
 
-        void CheckForUpdate(bool silent, Action<Manifest> then = null)
+        void CheckForUpdate(bool silent, Action<Manifest> then = null, Action<string> failed = null)
         {
             if (!CanCheck)
             {
+                if (failed != null) failed("no repository");
                 if (!silent) MessageBox.Show(this, "Set the GitHub repository first (owner/name) and press Save.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -247,6 +290,7 @@ namespace Sm2VrLauncher
                     {
                         upLatest.Set(CheckState.Bad, "Could not check: " + error);
                         buildLog.Line("Update check failed: " + error, Theme.Bad);
+                        if (failed != null) failed(error);
                         return;
                     }
                     latest = m;
@@ -340,7 +384,7 @@ namespace Sm2VrLauncher
             var file = m.File("update") ?? m.File("source");
             if (file == null) { MessageBox.Show(this, m.Version + " on GitHub has no update zip attached (sm2-vr-*.zip).", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
             if (!GameVersionAllows(m)) return;
-            if (!noConfirm && MessageBox.Show(this, "Update " + (SystemInfo.PortVersion(root) ?? "the mod") + " to " + m.Version + "?\n\nThe launcher backs up this version first, then downloads, verifies, installs and builds. If anything fails it puts this version back.",
+            if (!noConfirm && MessageBox.Show(this, "Update " + (SystemInfo.PortVersion(root) ?? "the mod") + " to " + m.Version + "?\n\nThe launcher backs up this version first, then downloads, verifies and installs it with its ready-made mod files. If anything fails it puts this version back.",
                 LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
             var ask = AskUnverified();
             whatsNew = m.WhatsNew;
@@ -355,9 +399,9 @@ namespace Sm2VrLauncher
         {
             if (!GuardIdle()) return;
             RefreshDownloads();
-            if (downloadZip == null) { MessageBox.Show(this, "No sm2-vr-*.zip (or older sm2-update-*.zip) was found in " + SystemInfo.Downloads() + ".", LauncherInfo.Title); return; }
+            if (downloadZip == null) { MessageBox.Show(this, "No sm2-vr-*.zip, HERO-VR-*-mod-win64.zip (or older sm2-update-*.zip) was found in " + SystemInfo.Downloads() + ".", LauncherInfo.Title); return; }
             string zip = downloadZip.FullName;
-            if (MessageBox.Show(this, "Install " + downloadZip.Name + " into " + root + " and build?\n\n(Like Expand-Archive -Force; this version is backed up first and put back if anything fails.)",
+            if (MessageBox.Show(this, "Install " + downloadZip.Name + " into " + root + "?\n\n(Like Expand-Archive -Force; this version is backed up first and put back if anything fails.)",
                 LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
             RunInstall("Installing " + downloadZip.Name, inst => inst.InstallZip(zip, "before installing " + Path.GetFileName(zip)));
         }
@@ -409,8 +453,11 @@ namespace Sm2VrLauncher
                 Root = root, Settings = settings, Cancel = cancel.Token,
                 Log = l => buildLog.Line(l, l.StartsWith("FAILED") || l.StartsWith("ROLLBACK") ? Theme.Bad : l.StartsWith("WARNING") ? Theme.Warn : Theme.Silver),
                 BuildOutput = (l, e) => buildLog.Line(l, e && !l.StartsWith("WARNING") ? Theme.Bad : LogBox.ColorFor(l)),
-                Progress = (t, pct) => SetProgress(t, pct)
+                Progress = (t, pct) => SetProgress(t, pct),
+                Release = latest
             };
+            var askMod = AskUnverified();
+            inst.Download = f => DownloadVerified(f, inst, askMod);
             var th = new Thread(() =>
             {
                 InstallResult r;
@@ -427,6 +474,10 @@ namespace Sm2VrLauncher
                     if (latest != null && !IsNewer(latest)) { updatePill.Visible = false; upLatest.Set(CheckState.Ok, latest.Version + ": you are up to date."); }
                     UpdatePlayState();
                     bool quiet = autoUpdate; autoUpdate = false;
+                    bool quietMod = quietModFiles; quietModFiles = false;
+                    var thenMod = modFilesThen; modFilesThen = null;
+                    if (thenMod != null) { if (!r.Ok) MessageBox.Show(this, r.Message, LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Error); thenMod(r.Ok); return; }
+                    if (quietMod) { if (r.Ok) { SetProgress(r.Message, 100); tabs.Select(SheetStatus); } else buildLog.Line("PLAY VR (or Updates > Repair mod) tries again.", Theme.Dim); return; }
                     string news = whatsNew; whatsNew = null;
                     if (r.Ok && Backups.SelfReplaced)
                     {

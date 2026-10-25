@@ -81,7 +81,7 @@ namespace Sm2VrLauncher
             return m;
         }
 
-        static string Fetch(string url)
+        public static string Fetch(string url)
         {
             var r = (HttpWebRequest)WebRequest.Create(url);
             r.UserAgent = LauncherInfo.UserAgent;

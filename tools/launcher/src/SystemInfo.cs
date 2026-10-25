@@ -307,14 +307,16 @@ namespace Sm2VrLauncher
             {
                 var d = new DirectoryInfo(Downloads());
                 if (!d.Exists) return null;
-                return d.GetFiles("sm2-*.zip").Where(f => IsUpdateZipName(f.Name)).OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
+                return d.GetFiles("*.zip").Where(f => IsUpdateZipName(f.Name)).OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
             }
             catch { return null; }
         }
 
         public static bool IsUpdateZipName(string name)
         {
-            return name != null && Regex.IsMatch(name, @"^sm2-(vr|update)-.*\.zip$", RegexOptions.IgnoreCase)
+            if (name == null) return false;
+            if (Regex.IsMatch(name, @"^HERO-VR-.*-mod-win64\.zip$", RegexOptions.IgnoreCase)) return true;   // the ready-made mod files
+            return Regex.IsMatch(name, @"^sm2-(vr|update)-.*\.zip$", RegexOptions.IgnoreCase)
                 && name.IndexOf("full", StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf("win64", StringComparison.OrdinalIgnoreCase) < 0;
         }
 

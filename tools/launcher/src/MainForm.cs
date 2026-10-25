@@ -312,7 +312,7 @@ namespace Sm2VrLauncher
             stateSub = Add(card, new TextLabel("", Theme.Ui(12), Theme.Sub), 22, 44, 716, 22);
             // The three step rows of the old PLAY card fed the same checks; they are kept (not shown) so the logic is unchanged.
             step1 = new StatusRow("1  Headset connected") { Separator = false };
-            step2 = new StatusRow("2  VR mod built") { Separator = false };
+            step2 = new StatusRow("2  VR mod files installed") { Separator = false };
             step3 = new StatusRow("3  Press PLAY VR") { Separator = false };
             step3.Set(CheckState.Info, "The game starts; put on the headset when it says VR started.");
             rowGame = Add(card, new StatusRow("Game"), 18, 68, 724, 58);
@@ -328,9 +328,10 @@ namespace Sm2VrLauncher
             var recheck = new AccentButton("Re-check", ButtonKind.Secondary) { Glyph = "refresh" };
             rowVr.AddAction(recheck);
             recheck.Click += (s, e) => RefreshAll();
-            var build = new AccentButton("Build", ButtonKind.Secondary) { Glyph = "build" };
+            var build = new AccentButton("Repair", ButtonKind.Secondary) { Glyph = "build" };
             rowBuild.AddAction(build);
-            build.Click += (s, e) => StartBuild(null);
+            build.Click += (s, e) => RepairMod(null);
+            tip.SetToolTip(build, "Downloads this version's ready-made mod files again and reinstalls them (nothing to compile)");
             var modFolder = new AccentButton("Mod folder", ButtonKind.Secondary) { Glyph = "folder" };
             rowGameVer.AddAction(modFolder);
             modFolder.Click += (s, e) => BrowseRoot();
@@ -371,9 +372,20 @@ namespace Sm2VrLauncher
             string what = null, pending = null;
             try { pending = Backups.PendingRollback(root, out what); } catch { }
             bool rollback = pending != null && Directory.Exists(pending);
+            // Files an earlier rollback could not put back (open in another program at the time) are finished now.
+            var deferredLog = new List<string>();
+            int stillOpen = 0;
+            try { if (Backups.HasDeferred(root)) stillOpen = Backups.FinishDeferred(root, deferredLog.Add); }
+            catch (Exception ex) { deferredLog.Add("Could not finish the last rollback's files yet: " + ex.Message); }
             if (!rollback) StartupUpdateCheck();
             try { RefreshAll(); }
             catch (Exception ex) { Program.LogError(ex); try { buildLog.Line("A status check failed: " + ex.Message + " (details in launcher-error.log). The launcher keeps working.", Theme.Bad); } catch { } }
+            try
+            {
+                foreach (var l in deferredLog) buildLog.Line(l, Theme.Dim);
+                if (stillOpen > 0) buildLog.Line(stillOpen + " file(s) from the last rollback are still open in another program; they are put back the next time the launcher starts (or restart the PC).", Theme.Warn);
+            }
+            catch { }
             try { ShowJustUpdated(); } catch { }
             poll.Start();
             if (rollback)
@@ -425,18 +437,20 @@ namespace Sm2VrLauncher
             }
             else if (built == null)
             {
-                rowBuild.Set(CheckState.Warn, "Not built yet. Press Build (tools\\build.ps1 -Observer); the first build takes a few minutes.");
-                step2.Set(CheckState.Warn, "Not built yet: PLAY VR builds it first.");
+                rowBuild.Set(CheckState.Warn, "Mod files not installed yet. PLAY VR (or Repair) downloads the ready-made files; nothing to install by hand.");
+                step2.Set(CheckState.Warn, "Not installed yet: PLAY VR downloads them first.");
             }
             else if (stale != null)
             {
-                rowBuild.Set(CheckState.Warn, "Built " + built.Value.ToString("d MMM HH:mm") + ", but " + stale + " is newer. Build again.");
-                step2.Set(CheckState.Warn, "Out of date: press Build.");
+                bool dev = ModFiles.DevToolsPresent() && !ModFiles.FromRelease(root);
+                rowBuild.Set(dev ? CheckState.Warn : CheckState.Ok, dev ? "Built " + built.Value.ToString("d MMM HH:mm") + ", but " + stale + " is newer (developer PC: Updates > Build from source)."
+                    : (SystemInfo.PortVersion(root) ?? "") + ", mod files installed " + built.Value.ToString("d MMM yyyy HH:mm") + ".");
+                step2.Set(dev ? CheckState.Warn : CheckState.Ok, dev ? "Older than its source." : "Installed.");
             }
             else
             {
-                rowBuild.Set(CheckState.Ok, (SystemInfo.PortVersion(root) ?? "") + ", built " + built.Value.ToString("d MMM yyyy HH:mm") + ".");
-                step2.Set(CheckState.Ok, "Built and up to date.");
+                rowBuild.Set(CheckState.Ok, (SystemInfo.PortVersion(root) ?? "") + (ModFiles.FromRelease(root) ? ", ready-made mod files installed " : ", built ") + built.Value.ToString("d MMM yyyy HH:mm") + ".");
+                step2.Set(CheckState.Ok, "Installed and up to date.");
             }
             UpdatePlayState();
         }
@@ -463,11 +477,12 @@ namespace Sm2VrLauncher
             SetUpdateButtons();
             optionsSummary.Text = "Launch options: " + LaunchOptions.Summary(OptValue);
             if (job == Job.Vr) return;
-            if (job == Job.Build) { SetState("BUILDING...", Theme.Silver, "tools\\build.ps1 -Observer is running (see Updates)."); return; }
+            if (job == Job.Build) { SetState("BUILDING...", Theme.Silver, "Developer build from source is running (see Updates)."); return; }
             if (job == Job.Update) { SetState("UPDATING...", Theme.Silver, "Installing; see Updates."); return; }
             if (job == Job.Reports) { SetState("COLLECTING...", Theme.Silver, "Making reports\\send-me.zip."); return; }
             if (lastError != null) { SetState("VR STOPPED", Theme.Bad, lastError); return; }
             if (!SystemInfo.IsPortRoot(root)) SetState("MOD NOT FOUND", Theme.Bad, "Pick the mod folder or install an update zip.");
+            else if (!File.Exists(SystemInfo.BuiltModule(root))) SetState("MOD FILES NEEDED", Theme.Warn, "PLAY VR downloads the ready-made mod files first (a minute; nothing to install by hand).");
             else if (gamePath == null) SetState("GAME NOT FOUND", Theme.Warn, "Press Browse and pick Spider-Man2.exe.");
             else if (running) SetState("GAME RUNNING", Theme.Warn, "PLAY VR attaches VR to the running game.");
             else SetState("READY", Theme.Good, "Everything checks out. Put the headset on after the game opens.");
@@ -535,10 +550,18 @@ namespace Sm2VrLauncher
                 MessageBox.Show(this, "No VR app is running yet (Virtual Desktop, SteamVR or Quest Link).\n\nConnect the headset first, or press Yes to start anyway.", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             DateTime? built; string stale;
             SystemInfo.BuildState(root, out built, out stale);
-            if (built == null || stale != null)
+            if (built == null)
             {
-                string why = built == null ? "The VR mod isn't built yet." : "The VR mod build is older than its files (" + stale + ").";
-                var r = MessageBox.Show(this, why + "\n\nBuild it now (tools\\build.ps1 -Observer) and then start VR?", LauncherInfo.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                // Players never build: the release's ready-made mod files are downloaded, checked and installed.
+                if (MessageBox.Show(this, "The VR mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " aren't installed yet.\n\nDownload the ready-made files from GitHub now " +
+                    "(their SHA-256 is checked) and then start VR?", LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+                RepairMod(ok => { RefreshLive(); if (ok) LaunchVr(extra); });
+                return;
+            }
+            if (stale != null && ModFiles.DevToolsPresent() && !ModFiles.FromRelease(root))
+            {
+                var r = MessageBox.Show(this, "Developer PC: the VR mod build is older than its source (" + stale + ").\n\nBuild from source now and then start VR? (No starts VR with the current build.)",
+                    LauncherInfo.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                 if (r == DialogResult.Cancel) return;
                 if (r == DialogResult.Yes) { StartBuild(ok => { if (ok) LaunchVr(extra); }); return; }
             }
@@ -569,7 +592,7 @@ namespace Sm2VrLauncher
                     sessionLog.Line("VR stopped (exit code " + code + "). The game's settings are put back by the session itself when it ends.", Theme.Bad);
                     if (last != null && last.IndexOf("Build first", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        if (MessageBox.Show(this, "The mod needs a build first. Build now?", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes) StartBuild(null);
+                        if (MessageBox.Show(this, "The VR mod files are missing. Download the ready-made files again now (Repair)?", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes) RepairMod(null, true);
                     }
                 }
                 RefreshLive();
@@ -620,8 +643,9 @@ namespace Sm2VrLauncher
             job = Job.Build;
             UpdatePlayState();
             if (then == null) tabs.Select(2);
-            buildLog.Line("> tools\\build.ps1 -Observer", Theme.Info);
-            sessionLog.Line("> Building the VR mod (log in Updates)...", Theme.Info);
+            var buildArgs = Installer.BuildArgs(root);
+            buildLog.Line("> tools\\build.ps1 " + string.Join(" ", buildArgs) + "   (developer build from source)", Theme.Info);
+            sessionLog.Line("> Building the VR mod from source (log in Updates)...", Theme.Info);
             SetProgress("Building the VR mod...", -1);
             var r = new PsRunner { Name = "Build" };
             r.Output += (l, e) => buildLog.Line(l, e && !l.StartsWith("WARNING") ? Theme.Bad : LogBox.ColorFor(l));
@@ -630,13 +654,14 @@ namespace Sm2VrLauncher
                 buildLock.Dispose();
                 job = Job.None;
                 bool ok = code == 0;
-                buildLog.Line(ok ? "Build finished." : "Build failed (exit code " + code + "). The first red line above says why.", ok ? Theme.Good : Theme.Bad);
+                buildLog.Line(ok ? "Build finished." : "The build from source did not finish (exit code " + code + "). Building needs Visual Studio 2022 with C++ and git; the first red line above says what was missing. " +
+                    "Players don't need this: Repair mod (or PLAY VR) installs the ready-made mod files.", ok ? Theme.Good : Theme.Bad);
                 sessionLog.Line(ok ? "Build finished." : "Build failed: see Updates.", ok ? Theme.Good : Theme.Bad);
                 SetProgress(ok ? "Build finished." : "Build failed.", ok ? 100 : 0);
                 RefreshLive();
                 if (then != null) then(ok);
             });
-            if (!r.Start(root, Path.Combine(root, "tools", "build.ps1"), new[] { "-Observer" })) { buildLock.Dispose(); job = Job.None; UpdatePlayState(); }
+            if (!r.Start(root, Path.Combine(root, "tools", "build.ps1"), buildArgs)) { buildLock.Dispose(); job = Job.None; UpdatePlayState(); }
         }
 
         void CollectReports()
@@ -684,7 +709,7 @@ namespace Sm2VrLauncher
                 while (vr.Running && DateTime.Now < until) { Application.DoEvents(); Thread.Sleep(100); }
             }
             if (job == Job.Build &&
-                MessageBox.Show(this, "A build is running. Close anyway? (The build stops; press Build next time.)", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                MessageBox.Show(this, "A build from source is running. Close anyway? (The build stops.)", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             { e.Cancel = true; return; }
             settings.Save();
             base.OnFormClosing(e);

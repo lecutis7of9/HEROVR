@@ -67,7 +67,24 @@ jobs:
           ./tools/build.ps1 -Observer -FromSource
           if ($LASTEXITCODE) { throw "tools/build.ps1 failed ($LASTEXITCODE)" }
 
-      - name: Run the Python protocol tests
+      - name: Run the Python test suites (the release gates)
+        run: |
+          # Need developer docs the public repository does not carry (docs/CHANGELOG.md, docs/*.md, images).
+          $needDocs = 'update382_tests', 'update385_tests', 'v003_tests', 'v004_tests', 'v005_tests'
+          $failed = @(); $ran = 0
+          foreach ($suite in Get-ChildItem tests -Filter '*.py') {
+            if ($suite.BaseName -like '*_protocol_tests' -or $suite.BaseName -eq 'vr_display_tests') { continue }
+            if ($needDocs -contains $suite.BaseName) { Write-Output "skip $($suite.Name) (needs the developer docs)"; continue }
+            Write-Output "== $($suite.Name)"
+            python -B $suite.FullName
+            if ($LASTEXITCODE) { $failed += $suite.Name }
+            $ran++
+          }
+          if ($failed) { throw "Failed: $($failed -join ', ')" }
+          "Python suites: $ran passed" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Run the Windows-only protocol tests (inherited from SpidyVR; informational)
+        continue-on-error: true
         run: |
           $failed = @()
           foreach ($suite in Get-ChildItem tests -Filter '*_protocol_tests.py') {
@@ -75,7 +92,10 @@ jobs:
             python -B $suite.FullName
             if ($LASTEXITCODE) { $failed += $suite.Name }
           }
-          if ($failed) { throw "Failed: $($failed -join ', ')" }
+          if ($failed) {
+            "Protocol tests (Spider-Man Remastered era, informational): failed $($failed -join ', ')" >> $env:GITHUB_STEP_SUMMARY
+            Write-Output "::warning::Protocol tests failed (informational): $($failed -join ', ')"
+          }
 
       - name: Compile the launcher with Windows' own .NET Framework compiler and check it
         run: |

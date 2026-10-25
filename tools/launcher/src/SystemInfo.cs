@@ -244,7 +244,9 @@ namespace Sm2VrLauncher
         public static CheckState VrStatus(out string detail)
         {
             var running = new List<string>();
-            if (Running("VirtualDesktop.Streamer", "VirtualDesktop.Service")) running.Add("Virtual Desktop streamer");
+            // 0.0.5 hotfix 3: VirtualDesktop.Service runs all the time, headset or not; only the streamer counts
+            // (the headset itself is asked for when VR starts, and the game never starts without it).
+            if (Running("VirtualDesktop.Streamer")) running.Add("Virtual Desktop streamer");
             if (Running("vrserver", "vrmonitor")) running.Add("SteamVR");
             if (Running("OVRServer_x64")) running.Add("Meta Quest Link");
             string active = ActiveOpenXr();

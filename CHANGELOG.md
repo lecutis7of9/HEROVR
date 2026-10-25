@@ -4,6 +4,11 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 ## v0.0.5 (October 25, 2026)
 
+- Launcher build 4 (hotfix, mod files unchanged): VR lost (e.g. back to the desktop in Virtual Desktop) or a headset
+  that is not connected no longer leaves the game silently on its flat screen. PLAY VR says "Headset not connected:
+  open Virtual Desktop in your headset first" and waits for it (up to 5 minutes) without starting the game; a
+  Spider-Man 2 left running is offered to be closed first; when VR is lost mid-game the launcher offers to close the
+  game and start VR again (VR cannot restart inside the same game process in 0.0.5).
 - First public HERO VR release, with the HERO VR launcher (new background, "Made by Agent Mulder").
 
 **Version 0.0.5 (build Update 38.9, October 25).** Built on 0.0.4. The player, after the 0.0.4 headset test: punches

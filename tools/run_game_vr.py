@@ -89,6 +89,18 @@ def flat_fallback_line(reason):
     return f'VR STOPPED - the game is back on its flat screen. Reason: {reason}'
 
 
+# 0.0.5 hotfix 3 (B3ARVR, Virtual Desktop): VR lost mid-game cannot start again inside the same game process, and
+# the game must never be left on its flat screen without the player being told what to do.
+VR_LOST_HELP = ('VR cannot come back inside this game process. Close Spider-Man 2, open Virtual Desktop in your '
+                'headset (or start SteamVR / Quest Link), then press PLAY VR: the launcher offers to close the game '
+                'for you.')
+# How long PLAY VR waits for a headset before giving up; the game is never started without one.
+HEADSET_WAIT = 300
+HEADSET_RETRY = 3
+HEADSET_MISSING = ('Headset not connected: open Virtual Desktop in your headset first (or start SteamVR / Quest '
+                   'Link). Waiting for it - the game is not started without a headset; Stop VR cancels.')
+
+
 def documents_folder():
     """The user's Documents folder, wherever OneDrive or the user has moved it."""
     known, path = (c.c_ubyte*16).from_buffer_copy(uuid.UUID('FDD39AD0-238F-46AF-ADB4-6C85480369C7').bytes_le), c.c_void_p()
@@ -476,6 +488,25 @@ def accepted(result):
                 result.get('game_entries_restored') and result.get('xr_stop') == 0 and result.get('bridge_stop') == 0)
 
 
+def wait_for_headset(ask, wait=HEADSET_WAIT, retry=HEADSET_RETRY, clock=time.monotonic, sleep=time.sleep,
+                     say=lambda line: print(line, flush=True)):
+    """0.0.5 hotfix 3: ask for the headset until it answers or `wait` seconds pass (then the last error is raised,
+    so the game is never started without a headset). A missing headset is said once, in plain words."""
+    deadline = clock()+wait
+    told = False
+    while True:
+        try:
+            return ask()
+        except RuntimeError as error:
+            if clock()+retry > deadline:
+                raise RuntimeError(f'{error} No headset within {wait // 60} minutes: the game was not started. Open '
+                                   'Virtual Desktop in your headset first, then press PLAY VR again.') from error
+            if not told:
+                say(HEADSET_MISSING)
+                told = True
+            sleep(retry)
+
+
 def preflight(requested):
     """The session's OpenXR runtime, once it has a headset: the one asked for, or by default ('auto') the one
     the headset is connected to (xr_runtime.detect). No session is started. Returns (manifest, what the
@@ -485,11 +516,15 @@ def preflight(requested):
         manifest = xr_runtime.choose(requested)
         runtime = xr_runtime.name(manifest)
         print(f'VR runtime: {runtime} ({manifest}).', flush=True)
-        found, said = xr_runtime.probe(manifest)
-        if not found:
-            raise RuntimeError(f'{said} Connect your headset in {runtime} before starting Spidy VR.')
+
+        def ask():
+            found, said = xr_runtime.probe(manifest)
+            if not found:
+                raise RuntimeError(f'{said} Connect your headset in {runtime} before starting Spidy VR.')
+            return manifest, said
+        manifest, said = wait_for_headset(ask)
     else:
-        manifest, said = xr_runtime.detect(say=lambda line: print(line, flush=True))
+        manifest, said = wait_for_headset(lambda: xr_runtime.detect(say=lambda line: print(line, flush=True)))
         runtime = xr_runtime.name(manifest)
         print(f'VR runtime: {runtime} ({manifest}), found automatically.', flush=True)
     print(said, flush=True)
@@ -2146,8 +2181,9 @@ def main():
                         'asked for at its smaller rendered size (about 2 percent more frames)')
     p.add_argument('--auto-launch',action='store_true')
     p.add_argument('--close-game', action='store_true',
-                   help='A running game that already holds Spidy (VR ran in it, or another build is in it) is '
-                        'closed as its close button does, then started again (the launcher asks the player first)')
+                   help='A running game (VR ran or was lost in it, another build is in it, or it was started '
+                        'flat) is closed as its close button does, then started again (the launcher asks the player '
+                        'first)')
     p.add_argument('--stop-after',type=float,default=0,help='End an untimed session after this many seconds for validation')
     p.add_argument('--capture-images', action='store_true',help='Enable diagnostic CPU eye readback (adds overhead)')
     p.add_argument('--overlay-webs', action='store_true',help="Draw Spidy's overlay webs instead of the game's web lines")
@@ -2323,11 +2359,13 @@ def session(a, startup):
     if game_running():
         pid = find_game()
         reason = restart_reason(pid)
-        if reason and a.close_game:
+        if a.close_game:
             # The launcher asked the player first (kCloseGameExit). A game started by another Spidy folder left
             # the player's own display settings in that folder's backup: back they go before this one saves any.
             startup.stage = 'closing the game'
             found = other_build(pid)
+            # 0.0.5 hotfix 3: the launcher asked the player, so a game left over (VR lost, or started flat) closes
+            # too; VR can only start in a game this session starts.
             print('Closing Spider-Man as its close button does (it saves as it quits)...', flush=True)
             if not close_game(pid):
                 raise RuntimeError('Spider-Man did not close within 30 seconds. Quit it from its own menu, then press '
@@ -2791,6 +2829,7 @@ def session(a, startup):
         lowest_commit = start_commit = free_commit_mb()
         printed_ring = False
         previous = None
+        vr_lost = False  # 0.0.5 hotfix 3: VR ended while the game keeps running
         printed_controllers = None
         printed_prompt = 0
         printed_dimensions=False
@@ -3304,6 +3343,9 @@ def session(a, startup):
                     if sample['status'] == 5 or (sample['status'] == 4 and 'runtime closed' in sample['message']):
                         # Update 24.1: say plainly that VR has ended and why (the line above is the reason).
                         print(flat_fallback_line(sample['message']), flush=True)
+                        # 0.0.5 hotfix 3: and what to do; the launcher offers to close the game (CLOSE_GAME_EXIT).
+                        print(VR_LOST_HELP, flush=True)
+                        vr_lost = True
                     if sample['status'] in (4, 5):
                         break
                 time.sleep(.05)
@@ -3465,6 +3507,9 @@ def session(a, startup):
                          if seen['anisotropy'] != 'game' else "kept as the game made them."), flush=True)
         tell_device_lost()
         print(f"Test {'passed' if result['passed'] else 'failed'}; report: {a.output.resolve()}", flush=True)
+        if vr_lost and alive(game):
+            # 0.0.5 hotfix 3: never silently flat. The launcher asks to close the game and start VR again.
+            return CLOSE_GAME_EXIT
         return 0 if result['passed'] else 1
     finally:
         if previous_signal is not None: signal.signal(signal.SIGINT,previous_signal)

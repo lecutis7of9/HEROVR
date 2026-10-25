@@ -535,9 +535,17 @@ namespace Sm2VrLauncher
             if (FolderLock.Busy(root)) { MessageBox.Show(this, "Another launcher is updating or building " + root + " right now. Wait for it to finish, then press PLAY VR.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             if (SystemInfo.GameRunning())
             {
-                if (!scriptParams.ContainsKey("AttachOnly")) { MessageBox.Show(this, "Spider-Man 2 is already running. Close it first, then press PLAY VR.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
-                if (MessageBox.Show(this, "Spider-Man 2 is already running. Start VR in the running game (-AttachOnly)?", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-                extra.Add("-AttachOnly");
+                if (!scriptParams.ContainsKey("AttachOnly"))
+                {
+                    // 0.0.5 hotfix 3: a game left over (VR lost, or started flat) is offered to be closed, never used flat.
+                    if (!AskCloseGame("Spider-Man 2 is still running (left over after VR was lost, or started without VR). VR only starts in a game PLAY VR starts.")) return;
+                    extra.Add("-CloseGame");
+                }
+                else
+                {
+                    if (MessageBox.Show(this, "Spider-Man 2 is already running. Start VR in the running game (-AttachOnly)?", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                    extra.Add("-AttachOnly");
+                }
             }
             if (gamePath != null)
             {
@@ -547,7 +555,8 @@ namespace Sm2VrLauncher
             }
             string vrText;
             if (SystemInfo.VrStatus(out vrText) != CheckState.Ok &&
-                MessageBox.Show(this, "No VR app is running yet (Virtual Desktop, SteamVR or Quest Link).\n\nConnect the headset first, or press Yes to start anyway.", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+                MessageBox.Show(this, "Headset not connected: open Virtual Desktop in your headset first (or start SteamVR / Quest Link).\n\n" +
+                    "Press Yes to wait for it: PLAY VR never starts the game without a headset (it waits up to 5 minutes; Stop VR cancels).", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             DateTime? built; string stale;
             SystemInfo.BuildState(root, out built, out stale);
             if (built == null)
@@ -594,6 +603,13 @@ namespace Sm2VrLauncher
                     {
                         if (MessageBox.Show(this, "The VR mod files are missing. Download the ready-made files again now (Repair)?", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes) RepairMod(null, true);
                     }
+                    else if (code == CloseGameExit && SystemInfo.GameRunning())
+                    {
+                        // 0.0.5 hotfix 3: VR was lost (or ran before) in this game; never leave it silently flat.
+                        RefreshLive();
+                        if (AskCloseGame("VR was lost and can't come back inside the running game: Spider-Man 2 is on its flat screen now.\n\nOpen Virtual Desktop in your headset first.")) LaunchVr(new List<string> { "-CloseGame" });
+                        return;
+                    }
                 }
                 RefreshLive();
             });
@@ -601,6 +617,15 @@ namespace Sm2VrLauncher
             SetState("VR RUNNING", Theme.Good, "Starting the game and VR. Stop VR ends it cleanly; the game keeps running.");
             UpdatePlayState();
             if (!vr.Start(root, Path.Combine(root, "tools", "launch-game-vr.ps1"), args)) { job = Job.None; UpdatePlayState(); }
+        }
+
+        // run_game_vr.py CLOSE_GAME_EXIT (tools/vr_launcher.py): the running game has to close before VR can start.
+        const int CloseGameExit = 6;
+
+        bool AskCloseGame(string why)
+        {
+            return MessageBox.Show(this, why + "\n\nClose Spider-Man 2 now and start VR? It closes as its own close button does (it saves as it quits).",
+                LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
         }
 
         void StopVr()

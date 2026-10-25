@@ -49,6 +49,7 @@ param(
     [switch]$EngineTaa,  # Update 34: the eyes get the game's TAA targets, for the wrist's ENGINE TAA
     [switch]$KeepGameSettings,
     [switch]$AttachOnly,
+    [switch]$CloseGame,  # 0.0.5 hotfix 3: the launcher asked; a running Spider-Man 2 is closed first, then VR starts
     [string]$XrRuntime
 )
 $ErrorActionPreference='Stop'
@@ -351,6 +352,7 @@ if($EngineTaa) {
 }
 if(-not $AttachOnly) { $captureArgs+=@('--auto-launch') }
 if($XrRuntime) { $captureArgs+=@('--xr-runtime',$XrRuntime) }
+if($CloseGame) { $captureArgs+=@('--close-game') }
 if($SnapTurn -ne 30) { Write-Host "Snap turn: $SnapTurn degrees (0: off)." }
 if($SmoothTurn -ne 0) { Write-Host "Smooth turn: $SmoothTurn degrees a second (replaces snap turning)." }
 if($Weight -ne 80) { Write-Host "Weight: $Weight% of real gravity while webs fly you." }

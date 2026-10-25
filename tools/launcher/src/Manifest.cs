@@ -27,6 +27,19 @@ namespace Sm2VrLauncher
         public string BuildScript; public List<string> BuildArgs = new List<string>();
         public string LaunchScript; public List<string> LaunchArgs = new List<string>();
         public string ManifestUrl;
+        public int LauncherBuild;   // "launcher_build": the launcher build inside the release zip (0 when not given)
+        public string WhatsNew;     // "whats_new": one line shown in the update prompt
+        /// <summary>launcher.ini UpdateManifestUrl=...: read version.json from here instead of GitHub (testing).</summary>
+        public static string OverrideUrl;
+
+        /// <summary>https, or http to this PC only (a local test server).</summary>
+        public static bool SafeUrl(string u)
+        {
+            if (string.IsNullOrEmpty(u)) return false;
+            if (u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return true;
+            return u.StartsWith("http://127.0.0.1:", StringComparison.OrdinalIgnoreCase) || u.StartsWith("http://127.0.0.1/", StringComparison.OrdinalIgnoreCase)
+                || u.StartsWith("http://localhost:", StringComparison.OrdinalIgnoreCase) || u.StartsWith("http://localhost/", StringComparison.OrdinalIgnoreCase);
+        }
 
         public ManifestFile File(string kind) { return Files.FirstOrDefault(f => string.Equals(f.Kind, kind, StringComparison.OrdinalIgnoreCase)); }
         public ModVersion Ver { get { return ModVersion.Parse(VersionNumber) ?? ModVersion.Parse(Version) ?? ModVersion.Parse(Tag); } }
@@ -49,6 +62,8 @@ namespace Sm2VrLauncher
             if (m.Schema > 1) throw new InvalidDataException("This version.json is schema " + m.Schema + "; this launcher reads schema 1. Update the launcher.");
             m.Name = S(d, "name"); m.Version = S(d, "version"); m.VersionNumber = S(d, "version_number"); m.Tag = S(d, "tag");
             m.ReleaseDate = S(d, "release_date"); m.MinGameVersion = S(d, "min_game_version"); m.InstallSubfolder = S(d, "install_subfolder");
+            int lb; if (int.TryParse(S(d, "launcher_build") ?? "0", out lb)) m.LauncherBuild = lb;
+            m.WhatsNew = S(d, "whats_new");
             m.ChangelogUrl = S(d, "changelog_url"); m.SourceUrl = S(d, "source_url"); m.License = S(d, "license");
             object files;
             if (d.TryGetValue("files", out files) && files is ArrayList)
@@ -61,7 +76,7 @@ namespace Sm2VrLauncher
             var l = D(d, "launch"); m.LaunchScript = S(l, "script"); m.LaunchArgs = L(l, "args");
             if (string.IsNullOrEmpty(m.Version)) throw new InvalidDataException("version.json has no \"version\".");
             foreach (var f in m.Files)
-                if (string.IsNullOrEmpty(f.Url) || !f.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                if (!SafeUrl(f.Url))
                     throw new InvalidDataException("version.json lists a file without an https download URL (" + f.Name + ").");
             return m;
         }
@@ -82,7 +97,13 @@ namespace Sm2VrLauncher
         public static Manifest Latest(string repo, out Release release, Action<string> log)
         {
             release = null;
-            string direct = "https://github.com/" + repo.Trim().Trim('/') + "/releases/latest/download/version.json";
+            if (!string.IsNullOrEmpty(OverrideUrl))
+            {
+                if (!SafeUrl(OverrideUrl)) throw new InvalidDataException("UpdateManifestUrl must be https (or http://127.0.0.1 for a local test): " + OverrideUrl);
+                log("Reading version.json from UpdateManifestUrl " + OverrideUrl);
+                var o = Parse(Fetch(OverrideUrl)); o.ManifestUrl = OverrideUrl; return o;
+            }
+            string direct = "https://github.com/" + repo.Trim().Trim(new[] { '/' }) + "/releases/latest/download/version.json";
             try
             {
                 var m = Parse(Fetch(direct));

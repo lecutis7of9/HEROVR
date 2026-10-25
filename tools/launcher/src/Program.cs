@@ -17,6 +17,12 @@ namespace Sm2VrLauncher
             bool first;
             using (var mutex = new Mutex(true, @"Local\SM2VR-Launcher-" + Environment.UserName, out first))
             {
+                bool afterUpdate = Array.IndexOf(args, "--after-update") >= 0;
+                if (!first && afterUpdate)   // the copy that just updated us is still closing: wait for it
+                {
+                    try { first = mutex.WaitOne(30000); } catch (AbandonedMutexException) { first = true; }
+                }
+                Backups.CleanOldSelf();
                 if (!first && !SystemInfo.Preview)
                 {
                     MessageBox.Show("The " + LauncherInfo.Title + " launcher is already open.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -33,11 +39,18 @@ namespace Sm2VrLauncher
             return 0;
         }
 
-        static void Crash(Exception ex, bool canContinue)
+        /// <summary>Appends an error to launcher-error.log (never throws).</summary>
+        public static string LogError(Exception ex)
         {
-            string text = DateTime.Now.ToString("o") + "\r\n" + (ex == null ? "unknown error" : ex.ToString()) + "\r\n\r\n";
+            string text = DateTime.Now.ToString("o") + " (launcher " + LauncherInfo.Version + ", build " + LauncherInfo.Build + ")\r\n" + (ex == null ? "unknown error" : ex.ToString()) + "\r\n\r\n";
             string log = Path.Combine(Settings.Folder, "launcher-error.log");
             try { Directory.CreateDirectory(Settings.Folder); File.AppendAllText(log, text); } catch { }
+            return log;
+        }
+
+        static void Crash(Exception ex, bool canContinue)
+        {
+            string log = LogError(ex);
             try
             {
                 MessageBox.Show("Something went wrong in the launcher:\n\n" + (ex == null ? "unknown error" : ex.Message) +

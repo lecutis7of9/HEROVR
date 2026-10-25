@@ -25,7 +25,7 @@ namespace Sm2VrLauncher
 
         public static string BackupRoot(string portRoot)
         {
-            string full = Path.GetFullPath(portRoot).TrimEnd('\\', '/');
+            string full = Path.GetFullPath(portRoot).TrimEnd(new[] { '\\', '/' });
             return full + "-backup";   // C:\sm2-port -> C:\sm2-port-backup
         }
         public static string TxnFolder(string portRoot) { return Path.Combine(BackupRoot(portRoot), "_txn"); }
@@ -33,7 +33,7 @@ namespace Sm2VrLauncher
 
         static bool Skipped(string rel)
         {
-            string top = rel.Split('\\', '/')[0].ToLowerInvariant();
+            string top = rel.Split(new[] { '\\', '/' })[0].ToLowerInvariant();
             if (SkipTop.Contains(top)) return true;
             if (rel.IndexOf("__pycache__", StringComparison.OrdinalIgnoreCase) >= 0) return true;
             if (rel.IndexOf("launcher-data", StringComparison.OrdinalIgnoreCase) >= 0) return true;   // a portable launcher's own logs and downloads
@@ -55,7 +55,7 @@ namespace Sm2VrLauncher
         public static List<string> InstallFiles(string root)
         {
             var list = new List<string>();
-            string full = Path.GetFullPath(root).TrimEnd('\\') + "\\";
+            string full = Path.GetFullPath(root).TrimEnd(new[] { '\\', '/' }) + Path.DirectorySeparatorChar;
             if (!Directory.Exists(root)) return list;
             var stack = new Stack<string>();
             stack.Push(root);
@@ -208,17 +208,31 @@ namespace Sm2VrLauncher
         {
             try
             {
-                string dir = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+                string dir = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd(new[] { '\\', '/' }) + Path.DirectorySeparatorChar;
                 return Path.GetFullPath(path).StartsWith(dir, StringComparison.OrdinalIgnoreCase);
             }
             catch { return false; }
         }
         /// <summary>Windows lets a running exe be renamed but not overwritten: rename it, the new copy runs next time.</summary>
+        /// <summary>True once this run has moved its own exe aside for a new copy: the launcher must restart.</summary>
+        public static bool SelfReplaced;
         public static void MoveSelfAside(string path)
         {
+            SelfReplaced = true;
             string old = path + ".old";
             try { if (File.Exists(old)) File.Delete(old); } catch { old = path + "." + DateTime.Now.Ticks + ".old"; }
             if (File.Exists(path)) File.Move(path, old);
+        }
+
+        /// <summary>Deletes SM2VRLauncher.exe*.old left by an earlier self-update (the old exe could not be deleted while it ran).</summary>
+        public static void CleanOldSelf()
+        {
+            try
+            {
+                string dir = AppDomain.CurrentDomain.BaseDirectory;
+                foreach (var f in Directory.GetFiles(dir, "*.old")) try { File.Delete(f); } catch { }
+            }
+            catch { }
         }
 
         // ---- The build folder during a transaction ---------------------------------------------------------

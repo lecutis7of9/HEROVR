@@ -84,7 +84,7 @@ namespace Sm2VrLauncher
             try
             {
                 if (!File.Exists(file)) return null;
-                foreach (var l in File.ReadAllLines(file)) { string t = l.Trim().TrimStart('\uFEFF'); if (t.Length > 0) return t; }
+                foreach (var l in File.ReadAllLines(file)) { string t = l.Trim().TrimStart(new[] { '\uFEFF' }); if (t.Length > 0) return t; }
             }
             catch { }
             return null;
@@ -120,12 +120,12 @@ namespace Sm2VrLauncher
             if (a == b) return 0;
             if (a.Length == 0) return 1;        // a release is above its pre-releases
             if (b.Length == 0) return -1;
-            var x = a.Split('.'); var y = b.Split('.');
+            var x = a.Split(new[] { '.' }); var y = b.Split(new[] { '.' });
             for (int i = 0; i < Math.Min(x.Length, y.Length); i++)
             {
                 bool xn = x[i].All(char.IsDigit), yn = y[i].All(char.IsDigit);
                 int c;
-                if (xn && yn) { c = x[i].Length != y[i].Length ? x[i].TrimStart('0').Length.CompareTo(y[i].TrimStart('0').Length) : 0; if (c == 0) c = string.CompareOrdinal(x[i].TrimStart('0'), y[i].TrimStart('0')); }
+                if (xn && yn) { c = x[i].Length != y[i].Length ? x[i].TrimStart(new[] { '0' }).Length.CompareTo(y[i].TrimStart(new[] { '0' }).Length) : 0; if (c == 0) c = string.CompareOrdinal(x[i].TrimStart(new[] { '0' }), y[i].TrimStart(new[] { '0' })); }
                 else if (xn) c = -1;            // numeric identifiers sort below alphanumeric ones
                 else if (yn) c = 1;
                 else c = string.CompareOrdinal(x[i], y[i]);
@@ -151,7 +151,11 @@ namespace Sm2VrLauncher
 
     static class LauncherInfo
     {
-        public const string Version = "0.0.5";
+        public const string Version = "0.0.6.1";
+        /// <summary>The launcher's own build number. version.json's "launcher_build" above this offers the update even
+        /// when the mod version is the same (a launcher-only hotfix). 1 = the first 0.0.5/0.0.6 launchers, 2 = the
+        /// Trim(Char) hotfix with self-update.</summary>
+        public const int Build = 2;
         /// <summary>The name shown to players: window title, taskbar, dialogs, wordmark. Internal names (exe, settings folder,
         /// mutex, release manifest, update zips) stay "SM2 VR" so existing installs and settings keep working.</summary>
         public const string Title = "HERO VR";

@@ -365,19 +365,24 @@ namespace Sm2VrLauncher
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            RefreshAll();
-            if (preview) { FillPreview(); return; }
+            if (preview) { RefreshAll(); FillPreview(); return; }
+            // The update check goes first and on its own: no problem in the status checks below can stop it
+            // (the 0.0.5 launcher's Trim(Char) crash in the status check also stopped its update check).
+            string what = null, pending = null;
+            try { pending = Backups.PendingRollback(root, out what); } catch { }
+            bool rollback = pending != null && Directory.Exists(pending);
+            if (!rollback) StartupUpdateCheck();
+            try { RefreshAll(); }
+            catch (Exception ex) { Program.LogError(ex); try { buildLog.Line("A status check failed: " + ex.Message + " (details in launcher-error.log). The launcher keeps working.", Theme.Bad); } catch { } }
+            try { ShowJustUpdated(); } catch { }
             poll.Start();
-            string what;
-            string pending = Backups.PendingRollback(root, out what);
-            if (pending != null && Directory.Exists(pending))
+            if (rollback)
             {
                 var r = MessageBox.Show(this, "The launcher was closed or the PC stopped while it was busy (" + what + ").\n\nPut back the version from before (" +
                     Path.GetFileName(pending) + ")? This is recommended: the half-installed files may not work.", LauncherInfo.Title + " - unfinished update",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (r == DialogResult.Yes) RunInstall("Finishing the rollback", inst => inst.FinishRollback(pending));
             }
-            else if (settings.GetBool("CheckOnStart", false) && settings.RepoConfigured) CheckForUpdate(true);
         }
 
         void RefreshAll()

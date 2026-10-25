@@ -117,6 +117,8 @@ def main(argv=None):
     p.add_argument("--install-subfolder", default="sm2-port", help="folder name launchers install into")
     p.add_argument("--changelog-url", help="default: the release page")
     p.add_argument("--source-url", help="default: https://github.com/<repo>")
+    p.add_argument("--launcher-build", type=int, help="launcher build in the zip (launchers update when it is higher, even at the same mod version)")
+    p.add_argument("--whats-new", help="one line shown in the launcher's update prompt")
     p.add_argument("--out", default="version.json")
     p.add_argument("--no-sha-files", action="store_true", help="do not write <zip>.sha256 files")
     a = p.parse_args(argv)
@@ -183,6 +185,8 @@ def main(argv=None):
         "license": "GPL-3.0",
         "credits": CREDITS,
     }
+    if a.launcher_build: manifest["launcher_build"] = a.launcher_build
+    if a.whats_new: manifest["whats_new"] = a.whats_new
     if note:
         manifest["internal_build"] = note   # informational; launchers order by version_number
     with open(a.out, "w", encoding="utf-8", newline="\n") as f:

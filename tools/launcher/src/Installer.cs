@@ -79,13 +79,13 @@ namespace Sm2VrLauncher
                                                     || x.StartsWith("src/", StringComparison.OrdinalIgnoreCase) || x.StartsWith("python/", StringComparison.OrdinalIgnoreCase));
                 if (!rootLooksRight)
                 {
-                    var tops = names.Select(x => x.Split('/')[0]).Distinct().ToList();
+                    var tops = names.Select(x => x.Split(new[] { '/' })[0]).Distinct().ToList();
                     if (tops.Count == 1 && names.All(x => x.Contains("/"))) c.Prefix = tops[0] + "/";
                 }
                 foreach (var n in names)
                 {
                     string rel = n.Substring(n.StartsWith(c.Prefix) ? c.Prefix.Length : 0);
-                    if (rel.StartsWith("/") || rel.Contains(":") || rel.Split('/').Any(p => p == ".."))
+                    if (rel.StartsWith("/") || rel.Contains(":") || rel.Split(new[] { '/' }).Any(p => p == ".."))
                         throw new InvalidDataException("The zip has an unsafe path (" + n + "); not installing it.");
                 }
                 c.Files = names.Count;
@@ -96,7 +96,7 @@ namespace Sm2VrLauncher
                     using (var rd = new StreamReader(e.Open()))
                     {
                         string l;
-                        while ((l = rd.ReadLine()) != null) { l = l.Trim().TrimStart('\uFEFF'); if (l.Length > 0) return l; }
+                        while ((l = rd.ReadLine()) != null) { l = l.Trim().TrimStart(new[] { '\uFEFF' }); if (l.Length > 0) return l; }
                     }
                     return null;
                 };
@@ -112,7 +112,7 @@ namespace Sm2VrLauncher
         int Extract(string zipPath, ZipCheck c, string dest)
         {
             int n = 0;
-            string full = Path.GetFullPath(dest).TrimEnd('\\') + "\\";
+            string full = Path.GetFullPath(dest).TrimEnd(new[] { '\\', '/' }) + Path.DirectorySeparatorChar;
             using (var z = ZipFile.OpenRead(zipPath))
             {
                 var entries = z.Entries.Where(e => e.Name.Length > 0).ToList();
@@ -121,7 +121,7 @@ namespace Sm2VrLauncher
                     Cancel.ThrowIfCancellationRequested();
                     string rel = e.FullName.Replace('\\', '/');
                     if (c.Prefix.Length > 0 && rel.StartsWith(c.Prefix)) rel = rel.Substring(c.Prefix.Length);
-                    string to = Path.GetFullPath(Path.Combine(dest, rel.Replace('/', '\\')));
+                    string to = Path.GetFullPath(Path.Combine(dest, rel.Replace('/', Path.DirectorySeparatorChar)));
                     if (!to.StartsWith(full, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Unsafe path in zip: " + e.FullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(to));
                     if (Backups.IsSelf(to)) Backups.MoveSelfAside(to);

@@ -118,7 +118,7 @@ namespace Sm2VrLauncher
                 string block = text.Substring(start, end - start);
                 foreach (Match m in Regex.Matches(block, @"\$(\w+)\s*(=\s*('[^']*'|[^,\r\n#\)]+))?"))
                 {
-                    string def = m.Groups[3].Success ? m.Groups[3].Value.Trim().Trim('\'') : null;
+                    string def = m.Groups[3].Success ? m.Groups[3].Value.Trim().Trim(new[] { '\'' }) : null;
                     result[m.Groups[1].Value] = def;
                 }
             }
@@ -175,7 +175,7 @@ namespace Sm2VrLauncher
                     {
                         string f = Path.Combine(steam, vdf);
                         if (File.Exists(f)) foreach (var p in VdfValues(File.ReadAllText(f), "path"))
-                                if (!libs.Any(l => string.Equals(l.TrimEnd('\\'), p.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))) libs.Add(p);
+                                if (!libs.Any(l => string.Equals(l.TrimEnd(new[] { '\\' }), p.TrimEnd(new[] { '\\' }), StringComparison.OrdinalIgnoreCase))) libs.Add(p);
                     }
                     catch { }
                 }

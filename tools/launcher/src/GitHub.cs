@@ -112,13 +112,13 @@ namespace Sm2VrLauncher
         public static Release Latest(string repo)
         {
             var js = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
-            return Parse(js.Deserialize<Dictionary<string, object>>(GetText(Api + repo.Trim().Trim('/') + "/releases/latest")));
+            return Parse(js.Deserialize<Dictionary<string, object>>(GetText(Api + repo.Trim().Trim(new[] { '/' }) + "/releases/latest")));
         }
 
         public static List<Release> All(string repo)
         {
             var js = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
-            var list = js.Deserialize<ArrayList>(GetText(Api + repo.Trim().Trim('/') + "/releases?per_page=30"));
+            var list = js.Deserialize<ArrayList>(GetText(Api + repo.Trim().Trim(new[] { '/' }) + "/releases?per_page=30"));
             var result = new List<Release>();
             foreach (Dictionary<string, object> d in list) result.Add(Parse(d));
             return result;
@@ -135,7 +135,7 @@ namespace Sm2VrLauncher
                 bool sums = Regex.IsMatch(a.Name, @"^(SHA256SUMS|sha256sums)(\.txt)?$|checksums?\.txt$", RegexOptions.IgnoreCase);
                 if (!own && !sums) continue;
                 string text = GetText(a.Url);
-                foreach (var line in text.Split('\n'))
+                foreach (var line in text.Split(new[] { '\n' }))
                 {
                     var m = hex.Match(line);
                     if (m.Success && (own || line.IndexOf(asset.Name, StringComparison.OrdinalIgnoreCase) >= 0)) return m.Value.ToLowerInvariant();
@@ -143,7 +143,7 @@ namespace Sm2VrLauncher
             }
             if (!string.IsNullOrEmpty(r.Body))
             {
-                foreach (var line in r.Body.Split('\n'))
+                foreach (var line in r.Body.Split(new[] { '\n' }))
                     if (line.IndexOf(asset.Name, StringComparison.OrdinalIgnoreCase) >= 0 && hex.IsMatch(line)) return hex.Match(line).Value.ToLowerInvariant();
                 var all = hex.Matches(r.Body);
                 if (all.Count == 1) return all[0].Value.ToLowerInvariant();

@@ -64,10 +64,10 @@ namespace Sm2VrLauncher
             checkOnStart.Changed += (s, e) => { settings.SetBool("CheckOnStart", checkOnStart.Checked); settings.Save(); };
             btnSaveRepo.Click += (s, e) =>
             {
-                string r = repoField.Text.Trim().Trim('/');
+                string r = repoField.Text.Trim().Trim(new[] { '/' });
                 if (r.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase)) r = r.Substring(19);
                 if (r.EndsWith(".git")) r = r.Substring(0, r.Length - 4);
-                if (r.Split('/').Length != 2) { MessageBox.Show(this, "Write the repository as owner/name, e.g. someone/sm2-vr.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+                if (r.Split(new[] { '/' }).Length != 2) { MessageBox.Show(this, "Write the repository as owner/name, e.g. someone/sm2-vr.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
                 settings.UpdateRepo = r; settings.Save(); repoField.Text = r;
                 latest = null; updatePill.Visible = false;
                 upLatest.Set(CheckState.Info, "Saved. Press Check for update.");
@@ -114,7 +114,9 @@ namespace Sm2VrLauncher
             var have = ModVersion.Read(root);
             var got = m.Ver;
             if (got == null) return false;
-            return have == null || got.CompareTo(have) > 0;
+            if (have == null || got.CompareTo(have) > 0) return true;
+            // a launcher-only hotfix: same mod version, newer launcher build
+            return got.CompareTo(have) == 0 && m.LauncherBuild > LauncherInfo.Build;
         }
 
         void RefreshDownloads()
@@ -146,9 +148,86 @@ namespace Sm2VrLauncher
 
         // ---- Checking ---------------------------------------------------------------------------------------
 
-        void CheckForUpdate(bool silent)
+        bool CanCheck { get { return settings.RepoConfigured || !string.IsNullOrEmpty(Manifest.OverrideUrl); } }
+
+        // ---- Self-update: checked first thing on start ---------------------------------------------------
+
+        bool autoUpdate;
+        string whatsNew;   // this install was started by the start-up prompt: restart quietly when done
+
+        void StartupUpdateCheck()
         {
-            if (!settings.RepoConfigured)
+            try
+            {
+                Manifest.OverrideUrl = settings.Get("UpdateManifestUrl", null);
+                if (!settings.GetBool("CheckOnStart", false) || !CanCheck) return;
+                CheckForUpdate(true, m => { try { OfferUpdate(m); } catch (Exception ex) { Program.LogError(ex); buildLog.Line("Update prompt failed: " + ex.Message, Theme.Bad); } });
+            }
+            catch (Exception ex) { Program.LogError(ex); }
+        }
+
+        static string UpdateKey(Manifest m) { return (m.VersionNumber ?? m.Version) + "#" + m.LauncherBuild; }
+
+        void OfferUpdate(Manifest m)
+        {
+            if (m == null || !IsNewer(m) || job != Job.None) return;
+            if (settings.Get("SkipUpdate", "") == UpdateKey(m))
+            {
+                buildLog.Line("You chose to skip " + m.Version + ". Updates > Update now installs it any time.", Theme.Dim);
+                return;
+            }
+            string have = SystemInfo.PortVersion(root) ?? "no mod";
+            string news = string.IsNullOrEmpty(m.WhatsNew) ? "" : "\n\nWhat's new: " + m.WhatsNew;
+            string test = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_UPDATE_ANSWER");   // automated tests only
+            DialogResult r = test == "yes" ? DialogResult.Yes : test == "skip" ? DialogResult.No : test == "later" ? DialogResult.Cancel :
+                MessageBox.Show(this, LauncherInfo.Title + " " + m.Version + (m.LauncherBuild > LauncherInfo.Build ? " (launcher build " + m.LauncherBuild + ")" : "") +
+                    " is available. You have " + have + ", launcher build " + LauncherInfo.Build + "." + news +
+                    "\n\nUpdate now? The launcher backs up your version, downloads the update and checks its SHA-256, installs it, keeps your settings, " +
+                    "builds, and restarts itself. It never touches the game's own files. If anything fails, your current version is put back." +
+                    "\n\nYes: update now.    No: skip this version.    Cancel: ask me next time.",
+                    LauncherInfo.Title + " - update available", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
+            if (r == DialogResult.No) { settings.Set("SkipUpdate", UpdateKey(m)); settings.Save(); buildLog.Line("Skipped " + m.Version + ".", Theme.Dim); return; }
+            if (r != DialogResult.Yes) return;
+            autoUpdate = true;
+            UpdateNow(true);
+        }
+
+        /// <summary>After a self-update the new launcher says what happened (and the what's-new line) once.</summary>
+        void ShowJustUpdated()
+        {
+            string done = settings.Get("JustUpdated", "");
+            if (done.Length == 0) return;
+            done += " Launcher " + LauncherInfo.Version + " (build " + LauncherInfo.Build + ") is running.";
+            buildLog.Line(done, Theme.Good);
+            SetProgress(done, 100);
+            settings.Set("JustUpdated", ""); settings.Save();
+        }
+
+        void RestartLauncher(string message)
+        {
+            string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            try
+            {
+                settings.Set("JustUpdated", message); settings.Save();
+                var psi = Type.GetType("Mono.Runtime") != null
+                    ? new System.Diagnostics.ProcessStartInfo("mono", "\"" + exe + "\" --after-update")
+                    : new System.Diagnostics.ProcessStartInfo(exe, "--after-update");
+                psi.UseShellExecute = false;
+                psi.WorkingDirectory = Path.GetDirectoryName(exe);
+                buildLog.Line("Restarting the launcher (new version)...", Theme.Info);
+                System.Diagnostics.Process.Start(psi);
+                Close();
+            }
+            catch (Exception ex)
+            {
+                Program.LogError(ex);
+                MessageBox.Show(this, message + "\n\nClose the launcher and open it again to use the new version (" + ex.Message + ").", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        void CheckForUpdate(bool silent, Action<Manifest> then = null)
+        {
+            if (!CanCheck)
             {
                 if (!silent) MessageBox.Show(this, "Set the GitHub repository first (owner/name) and press Save.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -187,6 +266,7 @@ namespace Sm2VrLauncher
                     }
                     tabs.Invalidate();
                     SetUpdateButtons();
+                    if (then != null) then(m);
                 });
             });
         }
@@ -244,10 +324,10 @@ namespace Sm2VrLauncher
             };
         }
 
-        void UpdateNow()
+        void UpdateNow(bool noConfirm = false)
         {
             if (!GuardIdle()) return;
-            if (!settings.RepoConfigured) { CheckForUpdate(false); return; }
+            if (!CanCheck) { CheckForUpdate(false); return; }
             if (latest == null)
             {
                 SetProgress("Checking for the latest version...", -1);
@@ -260,9 +340,10 @@ namespace Sm2VrLauncher
             var file = m.File("update") ?? m.File("source");
             if (file == null) { MessageBox.Show(this, m.Version + " on GitHub has no update zip attached (sm2-vr-*.zip).", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Error); return; }
             if (!GameVersionAllows(m)) return;
-            if (MessageBox.Show(this, "Update " + (SystemInfo.PortVersion(root) ?? "the mod") + " to " + m.Version + "?\n\nThe launcher backs up this version first, then downloads, verifies, installs and builds. If anything fails it puts this version back.",
+            if (!noConfirm && MessageBox.Show(this, "Update " + (SystemInfo.PortVersion(root) ?? "the mod") + " to " + m.Version + "?\n\nThe launcher backs up this version first, then downloads, verifies, installs and builds. If anything fails it puts this version back.",
                 LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
             var ask = AskUnverified();
+            whatsNew = m.WhatsNew;
             RunInstall("Updating to " + m.Version, inst =>
             {
                 string zip = DownloadVerified(file, inst, ask);
@@ -318,6 +399,7 @@ namespace Sm2VrLauncher
             if (SystemInfo.GameRunning()) { MessageBox.Show(this, "Close Spider-Man 2 first: the files it uses can't be replaced while it runs.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             if (FolderLock.Busy(root)) { MessageBox.Show(this, "Another launcher is updating or building " + root + " right now. Wait for it to finish.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             job = Job.Update;
+            Backups.SelfReplaced = false;
             cancel = new CancellationTokenSource();
             tabs.Select(2);
             UpdatePlayState();
@@ -344,6 +426,16 @@ namespace Sm2VrLauncher
                     RefreshAll();
                     if (latest != null && !IsNewer(latest)) { updatePill.Visible = false; upLatest.Set(CheckState.Ok, latest.Version + ": you are up to date."); }
                     UpdatePlayState();
+                    bool quiet = autoUpdate; autoUpdate = false;
+                    string news = whatsNew; whatsNew = null;
+                    if (r.Ok && Backups.SelfReplaced)
+                    {
+                        string msg = "Updated to " + (SystemInfo.PortVersion(root) ?? "the new version") + "." + (string.IsNullOrEmpty(news) ? "" : " What's new: " + news);
+                        if (!quiet) MessageBox.Show(this, r.Message + "\n\nThe launcher restarts now to use its new version.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        RestartLauncher(msg);
+                        return;
+                    }
+                    if (r.Ok && quiet) { buildLog.Line("Updated. " + (string.IsNullOrEmpty(news) ? "" : "What's new: " + news), Theme.Good); return; }
                     MessageBox.Show(this, r.Message + (r.Ok ? "\n\nInstalled: " + (SystemInfo.PortVersion(root) ?? "?") : ""), LauncherInfo.Title, MessageBoxButtons.OK, r.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Error);
                 });
             }) { IsBackground = false, Name = "Install" };

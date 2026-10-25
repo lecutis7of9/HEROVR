@@ -99,8 +99,12 @@ jobs:
 
       - name: Compile the launcher with Windows' own .NET Framework compiler and check it
         run: |
-          ./tools/launcher/build.ps1 -Out out/ci/SM2VRLauncher.exe
-          python -B tools/launcher/tools/check-netfx.py tools/launcher/src
+          # build.ps1 changes into tools/launcher, so use absolute paths and come back afterwards.
+          $ws = $env:GITHUB_WORKSPACE
+          Push-Location $ws
+          try { & "$ws/tools/launcher/build.ps1" -Out "$ws/out/ci/SM2VRLauncher.exe" } finally { Pop-Location }
+          if (-not (Test-Path -LiteralPath "$ws/out/ci/SM2VRLauncher.exe")) { throw 'The launcher exe was not built' }
+          python -B "$ws/tools/launcher/tools/check-netfx.py" "$ws/tools/launcher/src"
           if ($LASTEXITCODE) { throw 'check-netfx failed' }
 
       - name: Package the ready-made mod files

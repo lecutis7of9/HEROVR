@@ -1,4 +1,4 @@
-# Builds the ready-made mod files players install (HERO-VR-<PORT-VERSION>-mod-win64.zip), so no player ever
+# Builds the ready-made mod files players install (HERO-VR-<VERSION>-mod-win64.zip), so no player ever
 # compiles anything. Actions > Build prebuilt mod > Run workflow. The zip, its .sha256 and its size are kept
 # with the run; with "upload" ticked the zip and its .sha256 are also put on the release (--clobber).
 # version.json (the launcher's update manifest, with the zip's sha256 and size) is made and uploaded after.
@@ -46,8 +46,8 @@ jobs:
 
       - name: Check the mod's sources are the release's
         run: |
-          $version = (Get-Content PORT-VERSION -TotalCount 1).Trim()
-          if ("v$version" -ne $env:TAG) { throw "PORT-VERSION is $version, not $($env:TAG.TrimStart('v'))." }
+          $version = (Get-Content VERSION -TotalCount 1).Trim()
+          if ("v$version" -ne $env:TAG) { throw "VERSION is $version, not $($env:TAG.TrimStart('v'))." }
           git fetch --tags --force --quiet
           $changed = git diff --name-only $env:TAG HEAD -- src include apps assets CMakeLists.txt
           if ($LASTEXITCODE) { throw "Tag $env:TAG was not found." }
@@ -83,7 +83,8 @@ jobs:
       - name: Package the ready-made mod files
         id: pkg
         run: |
-          $version = (Get-Content PORT-VERSION -TotalCount 1).Trim()
+          $version = (Get-Content VERSION -TotalCount 1).Trim()
+          $port = (Get-Content PORT-VERSION -TotalCount 1).Trim()
           $name = "HERO-VR-$version-mod"
           ./tools/package.ps1 -Name $name
           $zip = "dist/$name-win64.zip"
@@ -97,7 +98,7 @@ jobs:
             $pv = $z.Entries | Where-Object { ($_.FullName -replace '\\', '/') -eq "$name/PORT-VERSION" }
             if (-not $pv) { throw 'The zip has no PORT-VERSION.' }
             $r = New-Object IO.StreamReader($pv.Open()); $inner = $r.ReadLine().Trim(); $r.Close()
-            if ($inner -ne $version) { throw "The zip says $inner, not $version." }
+            if ($inner -ne $port) { throw "The zip says $inner, not $port." }
             Write-Output "$($entries.Count) entries; modules: $($dlls -join ', ')"
           } finally { $z.Dispose() }
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()

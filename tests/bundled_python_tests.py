@@ -1,6 +1,7 @@
 """Update 26: the shareable package always runs its own Python 3.12.10, never the PC's, and says so plainly."""
 import pathlib
 import shutil
+import os
 import subprocess
 import tempfile
 import unittest
@@ -39,7 +40,8 @@ class BundledPython(unittest.TestCase):
         ui = (ROOT / 'apps' / 'launcher' / 'ui.cpp').read_text(encoding='utf-8')
         self.assertIn('scan_.packaged ? spidy::launcher::kBundledPythonHelp', ui)
 
-    @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell 7 is not installed')
+    # The fake python.exe files below are POSIX shell scripts, so this check runs on Linux/macOS only.
+    @unittest.skipUnless(shutil.which('pwsh') and os.name != 'nt', 'needs PowerShell 7 on Linux/macOS (fake python.exe is a shell script)')
     def test_runs(self):
         cases = {'good': '#!/bin/sh\nexec python3 "$@"\n', 'missing': None,
                  'broken': '#!/bin/sh\necho "Fatal Python error" >&2; exit 1\n', 'old': '#!/bin/sh\necho "(3, 9)"\n'}

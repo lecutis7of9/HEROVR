@@ -54,7 +54,8 @@ class DisplayPermissionTests(unittest.TestCase):
             with self.subTest(full_desktop=full_desktop, pending=pending):
                 args = argparse.Namespace(stop_event=None, xr_runtime='auto', render_scale=100, size=0,
                                           auto_launch=True, full_desktop_view=full_desktop,
-                                          game_depth_of_field=False, game_sharpening=full_desktop)
+                                          game_depth_of_field=False, game_sharpening=full_desktop,
+                                          mip_bias='0.5', anisotropy=16)  # run_game_vr.py's defaults
                 startup = run_game_vr.Startup(pathlib.Path('unused.json'))
                 shown = io.StringIO()
                 with patch.object(run_game_vr, 'game_running', return_value=False), \

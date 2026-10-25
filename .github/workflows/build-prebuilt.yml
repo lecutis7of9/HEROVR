@@ -69,10 +69,13 @@ jobs:
 
       - name: Run the Python protocol tests
         run: |
+          $failed = @()
           foreach ($suite in Get-ChildItem tests -Filter '*_protocol_tests.py') {
+            Write-Output "== $($suite.Name)"
             python -B $suite.FullName
-            if ($LASTEXITCODE) { throw "$($suite.Name) failed" }
+            if ($LASTEXITCODE) { $failed += $suite.Name }
           }
+          if ($failed) { throw "Failed: $($failed -join ', ')" }
 
       - name: Compile the launcher with Windows' own .NET Framework compiler and check it
         run: |

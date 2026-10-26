@@ -48,6 +48,33 @@ namespace Sm2VrLauncher
 
         /// <summary>The installed mod version for display: "Version 0.0.1" (VERSION, else the semver in PORT-VERSION),
         /// "Update 38.5" for an install from before 0.0.1, the raw PORT-VERSION line if it parses as neither, or null.</summary>
+        /// <summary>The launcher build installed in the mod folder (tools\launcher\src\ModVersion.cs "Build = N"), 0 when unknown.</summary>
+        public static int InstalledLauncherBuild(string root)
+        {
+            try
+            {
+                string f = Path.Combine(root ?? "", "tools", "launcher", "src", "ModVersion.cs");
+                if (!File.Exists(f)) return 0;
+                var m = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(f), @"public\s+const\s+int\s+Build\s*=\s*(\d+)\s*;");
+                int b; return m.Success && int.TryParse(m.Groups[1].Value, out b) ? b : 0;
+            }
+            catch { return 0; }
+        }
+
+        /// <summary>The installed launcher exe (tools\launcher\SM2VRLauncher.exe) when it is not this exe and its build is
+        /// newer than this one's; otherwise null.</summary>
+        public static string NewerInstalledLauncher(string root)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(root)) return null;
+                string exe = Path.Combine(root, "tools", "launcher", "SM2VRLauncher.exe");
+                if (!File.Exists(exe) || Backups.IsSelf(exe)) return null;
+                return InstalledLauncherBuild(root) > LauncherInfo.Build ? exe : null;
+            }
+            catch { return null; }
+        }
+
         public static string PortVersion(string root)
         {
             var v = ModVersion.Read(root);

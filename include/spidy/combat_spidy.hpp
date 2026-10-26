@@ -195,9 +195,12 @@ class Lunger {
         }
         StrikeWish wish;
         wish.target = lock_.target();
+        // Version 0.0.62 AIM PICK (FLY MODE's lunge too): the fist and the look pick the enemy.
+        wish.gaze = look;
+        wish.gazePick = true;
         const bool looking = finite(look) && length(look) > .5f;
-        const std::span<const FightTarget> strikeable =
-            looking && !wish.target ? std::span<const FightTarget>{} : std::span<const FightTarget>{enemies_};
+        wish.freeAim = !looking; // no look known: any enemy the fist points at, as before
+        const std::span<const FightTarget> strikeable{enemies_};
         auto opened = strike_.open(seconds, fists, head, feet, strikeable, world, wish);
         if (opened) {
             punches_.spend(opened->hand);

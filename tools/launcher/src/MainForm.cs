@@ -399,6 +399,14 @@ namespace Sm2VrLauncher
         {
             base.OnShown(e);
             if (preview) { RefreshAll(); FillPreview(); return; }
+            // Started from an older copy outside the install while a newer launcher is installed in the mod folder
+            // (an old shortcut or dev build): hand over to the installed launcher, so it never loops on an update.
+            try
+            {
+                string installedExe = SystemInfo.NewerInstalledLauncher(root);
+                if (installedExe != null) { RestartLauncher("", installedExe); return; }
+            }
+            catch (Exception ex) { Program.LogError(ex); }
             // The update check goes first and on its own: no problem in the status checks below can stop it
             // (the 0.0.5 launcher's Trim(Char) crash in the status check also stopped its update check).
             string what = null, pending = null;
@@ -669,6 +677,7 @@ namespace Sm2VrLauncher
             vr.Exited += code => Ui(() =>
             {
                 job = Job.None;
+                bool userStopped = stopAsked != DateTime.MinValue;
                 stopAsked = DateTime.MinValue;
                 if (code == 0) { sessionLog.Line("VR session ended.", Theme.Good); lastError = null; }
                 else
@@ -688,6 +697,13 @@ namespace Sm2VrLauncher
                         if (AskCloseGame("VR was lost and can't come back inside the running game: Spider-Man 2 is on its flat screen now.\n\nOpen Virtual Desktop in your headset first.")) LaunchVr(new List<string> { "-CloseGame" });
                         return;
                     }
+                    else if (!userStopped && code != 130)
+                    {
+                        // 0.0.62.2: never only reset PLAY VR. Whatever stopped the session is said in a window.
+                        RefreshLive();
+                        MessageBox.Show(this, StartFailureText(code, last), LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
                 }
                 RefreshLive();
             });
@@ -700,6 +716,19 @@ namespace Sm2VrLauncher
 
         // run_game_vr.py CLOSE_GAME_EXIT (tools/vr_launcher.py): the running game has to close before VR can start.
         const int CloseGameExit = 6;
+        // run_game_vr.py NEEDS_ADMINISTRATOR_EXIT (tools/vr_launcher.py).
+        const int NeedsAdministratorExit = 5;
+
+        /// <summary>0.0.62.2: what a window says when a VR session stopped with an error (a gate checks every PLAY failure says something).</summary>
+        internal static string StartFailureText(int code, string last)
+        {
+            string what = code == CloseGameExit ? "Spider-Man 2 was running before VR started (or VR was lost in it). Quit the game from its own menu, then press PLAY VR again."
+                : code == NeedsAdministratorExit ? "The game runs as administrator. Start this launcher as administrator too, or start the game normally."
+                : code == -1 ? "Windows PowerShell could not be started, so VR could not start."
+                : "VR stopped with exit code " + code + ".";
+            string why = string.IsNullOrEmpty(last) ? "" : "\n\n" + last.Replace("ERROR: ", "");
+            return what + why + "\n\nThe whole log is on the Status page; Reports > Collect gathers it to send.";
+        }
 
         bool AskCloseGame(string why)
         {

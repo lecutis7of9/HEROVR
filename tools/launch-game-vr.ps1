@@ -53,6 +53,33 @@ param(
     [switch]$CloseGame,  # 0.0.5 hotfix 3: the launcher asked; a running Spider-Man 2 is closed first, then VR starts
     [string]$XrRuntime
 )
+# 0.0.62: a launcher older than build 9 (the 0.0.6.1 dev launcher) only resets its PLAY VR button when a session
+# cannot start (exit 2, 5, 6 or a crash), so the reason shows here in a window. Build 9 and later show it themselves
+# (they set SM2VR_LAUNCHER_BUILD).
+function Show-StartFailure([int]$Code, [string]$Reason) {
+    if($Code -eq 0 -or $Code -eq 130 -or $env:SM2VR_LAUNCHER -ne '1') { return }
+    $build = 0
+    if(-not [int]::TryParse([string]$env:SM2VR_LAUNCHER_BUILD, [ref]$build)) { $build = 0 }
+    if($build -ge 9) { return }
+    if(-not $Reason) {
+        $file = Join-Path (Split-Path $PSScriptRoot -Parent) 'reports\last-vr-error.txt'
+        if(Test-Path -LiteralPath $file) { $Reason = (Get-Content -LiteralPath $file -Raw).Trim() }
+    }
+    $what = switch($Code) {
+        6 { 'Spider-Man 2 is already running (or VR was lost in it). VR can only start in a game it starts itself: quit the game from its own menu, then press PLAY VR again.' }
+        5 { 'The game runs as administrator. Start the launcher as administrator too (right-click, Run as administrator), or start the game normally.' }
+        default { 'VR did not start (exit code ' + $Code + ').' }
+    }
+    $text = $what
+    if($Reason) { $text += "`n`n" + $Reason }
+    $text += "`n`nThis launcher is older than the mod. Start the new one: " + (Join-Path (Split-Path $PSScriptRoot -Parent) 'HERO VR Launcher.cmd') + ' (it repairs files and explains errors). Reports > Collect gathers the logs.'
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        [void][System.Windows.Forms.MessageBox]::Show($text, 'HERO VR', 'OK', 'Warning', 'Button1', 'DefaultDesktopOnly')
+    } catch { Write-Host $text }
+}
+# A throw before the session (the package's Python, the mod files, the options) shows the same way, then goes on as before.
+trap { Show-StartFailure 1 $_.Exception.Message; break }
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 # Update 31 (since 30.1): which update is installed, first and in green (a report from old files is told apart at once).
@@ -367,4 +394,6 @@ $captureArgs+=@('--snap-turn',$SnapTurn,'--smooth-turn',$SmoothTurn,'--haptics',
                '--render-scale',$RenderScale,'--upscale',$Upscale,'--mip-bias',$MipBias,'--anisotropy',$Anisotropy,'--eye-aa',$EyeAA.ToLower(),'--supersample',$Supersample,'--weight',$Weight,'--hud',$hudIndex,
                '--flip-speed',$FlipSpeed,'--monitor-rate',$MonitorRate,'--building-reach',$BuildingReach,'--screen-depth',$depthIndex)
 & $Python (Join-Path $PSScriptRoot 'run_game_vr.py') --seconds $Seconds --size $Size --swing-speed $SwingSpeed --output $report @captureArgs
-exit $LASTEXITCODE
+$vrExit = $LASTEXITCODE
+Show-StartFailure $vrExit
+exit $vrExit

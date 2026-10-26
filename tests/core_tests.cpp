@@ -19245,6 +19245,134 @@ int main() {
             check(lunges == 1 && (buttons & padY), "SPIDYVR MOVE without the bridge did not fall back");
         }
     });
+    test("Version 0.0.62 AIM PICK: the fist and the look pick the nearest enemy in the cone; a lock in the cone holds", [] {
+        const Vec3 head{0, 1.6f, 0}, fist{.2f, 1.4f, -.4f}, chest{0, 1.2f, 0};
+        const auto at = [](uint64_t id, Vec3 feet) { return combat_spidy::fightTarget(id, feet); };
+        // A ahead 5 m, B 45 degrees right 5 m, C straight ahead 9 m.
+        std::array<FightTarget, 3> t{at(1, {0, 0, -5}), at(2, {3.5f, 0, -3.5f}), at(3, {0, 0, -9})};
+        const Vec3 ahead{0, 0, -1}, right = normalized(Vec3{1, 0, -1});
+        check(aimPick(head, ahead, fist, ahead, chest, 1.3f, 10, t) == 1, "ahead: not the nearer one ahead (A over C)");
+        check(aimPick(head, right, fist, right, chest, 1.3f, 10, t) == 2, "look and throw right: not B");
+        check(aimPick(head, ahead, fist, right, chest, 1.3f, 10, t) == 2, "the fist leads: a throw at B with the look 45 degrees off");
+        check(aimPick(head, ahead, fist, Vec3{1, 0, 0}, chest, 1.3f, 10, t) == 0,
+              "a throw 90 degrees right with the look ahead picked someone (each of the two must point at him)");
+        // The lock on A: a look + throw at B moves the strike to B (A is outside the cone) ...
+        check(aimRetarget(1, head, right, fist, right, chest, 1.3f, 10, t) == 2, "the lock on A kept a throw aimed at B");
+        // ... but a lock on C (ahead, 9 m) holds against nearer A while both are in the cone (finishing him).
+        check(aimRetarget(3, head, ahead, fist, ahead, chest, 1.3f, 10, t) == 3, "a lock in the cone gave way to a nearer one");
+        check(aimRetarget(0, head, ahead, fist, ahead, chest, 1.3f, 10, t) == 1, "no lock: not the pick");
+        // A locked enemy who left (not in the list) gives way; nobody in the cone keeps the lock.
+        check(aimRetarget(99, head, right, fist, right, chest, 1.3f, 10, t) == 2, "a gone lock held the throw");
+        check(aimRetarget(1, head, Vec3{-1, 0, 0}, fist, Vec3{-1, 0, 0}, chest, 1.3f, 10, t) == 1,
+              "a throw at nobody dropped the lock");
+        check(aimAlong(head, Vec3{NAN, 0, 0}, fist, ahead, {0, 1, -5}) == -2, "a NaN look scored");
+    });
+    test("Version 0.0.62 FLY MODE punches: a held thrust trigger holds nothing back; in the air the aim is 3D", [] {
+        using namespace combat_input;
+        Config c;
+        // Flying 1.6 m above a thug 1.4 m ahead: a punch down at him with both thrust triggers held.
+        const auto frame = [](bool flightTriggers) {
+            Frame f;
+            f.play = true;
+            f.airborne = true;
+            f.flightTriggers = flightTriggers;
+            f.forward = normalized(Vec3{0, -.6f, -1});
+            f.head = {0, 1.6f, 0};
+            f.seconds = 1 / 90.f;
+            for (unsigned i = 0; i < 2; ++i) {
+                f.hands[i].tracked = f.hands[i].free = true;
+                f.hands[i].position = {i ? .2f : -.2f, 1.3f, -.15f};
+                f.hands[i].aim = {0, 0, -1};
+                f.hands[i].button = 1; // FLY MODE's thrust
+            }
+            f.enemies[0] = {0, -1.6f, -1.4f};
+            f.enemyIds[0] = 7;
+            f.enemyCount = 1;
+            f.enemyMetres = 2.2f;
+            return f;
+        };
+        const auto run = [&](Frame f, uint32_t& lastReject) {
+            Machine m;
+            int punches = 0;
+            lastReject = combat38::sent;
+            const Vec3 way = normalized(Vec3{0, -.55f, -1});
+            for (int i = 0; i < 70; ++i) {
+                if (i >= 30 && i < 40)
+                    f.hands[1].position = f.hands[1].position + way * (4.5f / 90);
+                const auto o = m.update(f, c);
+                punches += o.punch[1];
+                if (o.candidate[1] && !o.punch[1])
+                    lastReject = o.reject[1];
+            }
+            return punches;
+        };
+        uint32_t why{};
+        check(run(frame(false), why) == 0 && why == combat38::triggerHeld,
+              "0.0.6's rule (a held trigger) did not hold the punch back - the test does not reproduce the bug");
+        const int flown = run(frame(true), why);
+        check(flown == 1, "FLY MODE: a punch down at a thug below, thrust held, did not land once (" + std::to_string(flown) +
+                              ", reject " + std::to_string(why) + ")");
+        // Straight down at one under him (65 degrees down): 0.0.6 flattened the aim and called it "not forward".
+        {
+            Frame f = frame(true);
+            f.enemies[0] = {0, -2.6f, -.75f};
+            f.forward = normalized(Vec3{0, -1.f, -.5f});
+            Machine m;
+            int punches = 0;
+            const Vec3 way = normalized(Vec3{0, -2.1f, -1});
+            for (int i = 0; i < 70; ++i) {
+                if (i >= 30 && i < 40)
+                    f.hands[1].position = f.hands[1].position + way * (4.5f / 90);
+                punches += m.update(f, c).punch[1];
+            }
+            check(punches == 1, "FLY MODE: a punch straight down at a thug below did not land once (" + std::to_string(punches) + ")");
+        }
+        // The thrust never fires a web ball or a gadget either.
+        {
+            Machine m;
+            Frame f = frame(true);
+            int fired = 0;
+            for (int i = 0; i < 60; ++i) {
+                f.hands[0].button = (i / 10) % 2 ? 1.f : 0.f;
+                const auto o = m.update(f, c);
+                fired += o.fired[0] != 0;
+            }
+            check(fired == 0, "FLY MODE's thrust presses fired the web shooter");
+        }
+    });
+    test("Version 0.0.62: a thug within punch reach takes the punch from a lock 5 m away", [lungeFrame, lungeRun] {
+        using namespace combat_input;
+        Config c;
+        Machine m;
+        int lunges{}, zips{};
+        uint64_t target{};
+        uint16_t buttons{};
+        lungeRun(m, lungeFrame(), c, lunges, zips, target, buttons); // the lunge at 42 locks him
+        check(m.lockTarget() == 42, "no lock on 42 to start with");
+        // 42 steps away to the right (5 m, still in the fight); 43 is 1 m in front, looked past.
+        Frame f = lungeFrame();
+        f.enemies[0] = {4, 0, -3};
+        f.enemies[1] = {0, 0, -1.f};
+        f.enemyIds[1] = 43;
+        f.enemyCount = 2;
+        f.forward = normalized(Vec3{.6f, 0, -1});
+        int punches = 0;
+        for (int i = 0; i < 70; ++i) {
+            if (i >= 40 && i < 49)
+                f.hands[1].position = f.hands[1].position + Vec3{0, 0, -4.f / 90};
+            const auto o = m.update(f, c);
+            punches += o.punch[1] && o.lungeHand < 0;
+        }
+        check(punches == 1, "a punch at the thug in front went to the far lock's lunge (or nowhere)");
+    });
+    test("Version 0.0.62 ENEMY TRACKING LIVE: the world list stays usable while flying fast", [] {
+        check(combat38::foeWorldUsable(2.f, .03f, 0), "standing: refused");
+        check(!combat38::foeWorldUsable(30.f, .03f, 0), "another hero's list (30 m off) accepted");
+        // FLY MODE / SUPERSONIC at 70 m/s: the hero moved 70 x 0.033 = 2.3 m + jitter.
+        check(combat38::foeWorldUsable(3.f + 70.f * .05f, .05f, 70), "70 m/s flight fell back to the trailing offsets");
+        check(!combat38::foeWorldUsable(3.f + 70.f * .05f, .05f, 0), "0.0.6.2's 40 m/s rule changed for a standing player");
+        check(!combat38::foeWorldUsable(NAN, .03f, 10) && !combat38::foeWorldUsable(1, NAN, 10), "NaN accepted");
+    });
     test("Update 38.1: LUNGE FROM / LUNGE SPEED / LUNGE AIM STEADY / PUNCH ANGLE / per-swing rejects", [lungeFrame, lungeRun] {
         using namespace combat_input;
         const auto at = [&](float z) {

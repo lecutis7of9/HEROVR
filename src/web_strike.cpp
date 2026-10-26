@@ -64,6 +64,54 @@ Vec3 WebStrike::stop(Vec3 feet, const FightTarget& t) {
     const float off = config_.standOff + std::max(0.f, t.radius - .3f);
     return {t.feet.x + away_.x * off, t.feet.y + t.height * .5f - config_.middle, t.feet.z + away_.z * off};
 }
+float aimAlong(Vec3 head, Vec3 gaze, Vec3 fist, Vec3 way, Vec3 at, const AimPickConfig& c) {
+    const Vec3 fromFist = at - fist, fromHead = at - head;
+    if (!finite(fromFist) || !finite(fromHead) || !finite(way) || !finite(gaze) || length(fromFist) < .05f ||
+        length(fromHead) < .05f || length(way) < .5f || length(gaze) < .5f)
+        return -2;
+    const float pointing = dot(normalized(way), normalized(fromFist));
+    const float looking = dot(normalized(gaze), normalized(fromHead));
+    if (pointing < c.each || looking < c.each)
+        return -2;
+    return c.pointShare * pointing + (1 - c.pointShare) * looking;
+}
+std::uint64_t aimPick(Vec3 head, Vec3 gaze, Vec3 fist, Vec3 way, Vec3 chest, float minDistance, float maxDistance,
+                      std::span<const FightTarget> targets, const AimPickConfig& c) {
+    std::uint64_t best{};
+    float bestScore = -1e9f;
+    for (const auto& t : targets) {
+        const Vec3 middle = t.middle();
+        const float distance = length(middle - chest);
+        if (!t.id || !(distance >= minDistance && distance <= maxDistance))
+            continue;
+        const float along = aimAlong(head, gaze, fist, way, middle, c);
+        if (along < c.cone)
+            continue;
+        const float score = along - c.perMetre * distance;
+        if (score > bestScore) {
+            bestScore = score;
+            best = t.id;
+        }
+    }
+    return best;
+}
+std::uint64_t aimRetarget(std::uint64_t locked, Vec3 head, Vec3 gaze, Vec3 fist, Vec3 way, Vec3 chest,
+                          float minDistance, float maxDistance, std::span<const FightTarget> targets,
+                          const AimPickConfig& c) {
+    const std::uint64_t pick = aimPick(head, gaze, fist, way, chest, minDistance, maxDistance, targets, c);
+    if (!locked)
+        return pick;
+    if (!pick || pick == locked)
+        return locked;
+    for (const auto& t : targets)
+        if (t.id == locked) {
+            const float distance = length(t.middle() - chest);
+            const bool reachable = distance >= minDistance && distance <= maxDistance;
+            if (reachable && aimAlong(head, gaze, fist, way, t.middle(), c) >= c.cone)
+                return locked; // he is in the cone too: the lock holds (finishing him)
+        }
+    return pick;
+}
 std::optional<WebStrike::Opening> WebStrike::open(float seconds, const std::array<FightFist, 2>& fists, Vec3 head,
                                                   Vec3 feet, std::span<const FightTarget> targets,
                                                   const WorldQueries& world, const StrikeWish& wish) {
@@ -84,9 +132,13 @@ std::optional<WebStrike::Opening> WebStrike::open(float seconds, const std::arra
     const bool finiteBody = finite(head) && finite(feet);
     // The enemy the player has marked, and the way the flow's call asks a
     // fist to travel.
-    const bool wished = wish.target != 0;
     const Vec3 calledWay = finite(wish.called) && length(wish.called) > .5f ? normalized(wish.called) : Vec3{};
+    const bool gazing = wish.gazePick && finite(wish.gaze) && length(wish.gaze) > .5f && finiteBody;
     for (int i = 0; i < 2; ++i) {
+        // Version 0.0.62 AIM PICK: this fist's enemy - the lock, or the one this throw and the look
+        // point at together (aimRetarget); without the pick, the lock as before.
+        std::uint64_t marked = wish.target;
+        bool wished = marked != 0;
         const auto& f = fists[static_cast<size_t>(i)];
         auto& freeFor = freeFor_[static_cast<size_t>(i)];
         auto& armed = armed_[static_cast<size_t>(i)];
@@ -124,6 +176,17 @@ std::optional<WebStrike::Opening> WebStrike::open(float seconds, const std::arra
         const bool held = f.holds != 0;
         if (!held && (freeFor < config_.freeSeconds || sincePress < config_.pressSeconds))
             continue;
+        if (gazing && !held) {
+            const Vec3 armWay = length(f.position - neck) > .15f ? normalized(f.position - neck) : way;
+            // The throw's way: its motion and the arm's line together (a hook curves while the arm points).
+            const Vec3 sum = way + armWay;
+            const Vec3 throwWay = length(sum) > .2f ? normalized(sum) : way;
+            marked = aimRetarget(wish.target, head, normalized(wish.gaze), f.position, throwWay, chest,
+                                 config_.minDistance, config_.maxDistance, targets);
+            wished = marked != 0;
+            if (!wished && !wish.freeAim)
+                continue;
+        }
         bool found{}, other{};
         for (const auto& t : targets) {
             if (held && t.id != f.holds)
@@ -140,7 +203,7 @@ std::optional<WebStrike::Opening> WebStrike::open(float seconds, const std::arra
             // The marked enemy takes a fist thrown his way, or one swung the
             // called way that does not go away from him; anyone else, like
             // the enemy the hand's own web holds, a fist thrown at him.
-            const bool his = !held && wished && t.id == wish.target;
+            const bool his = !held && wished && t.id == marked;
             const bool called = his && swung && pointing >= config_.calledToward;
             const bool aimed = held  ? pointing >= config_.heldAim
                                : his ? called || (outward && std::max(pointing, reaching) >= config_.markedAim)

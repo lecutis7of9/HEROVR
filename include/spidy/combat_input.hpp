@@ -281,6 +281,10 @@ struct Frame {
     std::array<Vec3, combat38::maxEnemies> enemies{};
     uint32_t enemyCount{};
     bool airborne{};          // Update 38: in the air or on a swing (combat allowed there now)
+    // Version 0.0.62: FLY MODE in the air - the triggers are flight's thrust, so a held trigger
+    // does not hold a punch or a zip strike back (0.0.6: every punch thrown while thrusting was
+    // "trigger held"; the user: "with FLY MODE on punches basically never land").
+    bool flightTriggers{};
     std::array<Hand, 2> hands{};
     Vec3 head{}, forward{};   // head position and its look, tracking space
     // Update 38 (SpidyVR fold-in): each enemy's registry id (0: unknown) and what the latest
@@ -448,7 +452,16 @@ inline bool aimsLow(Vec3 aim, const Config& c) {
 class Machine {
   public:
     static constexpr float release = .25f;
-    Out update(const Frame& f, const Config& c) {
+    Out update(const Frame& in, const Config& c) {
+        // Version 0.0.62 FLY MODE: in the air the triggers and grips are flight's (thrust), never a
+        // web ball, a gadget or a held trigger that holds a punch back.
+        Frame flying;
+        if (in.flightTriggers) {
+            flying = in;
+            for (auto& h : flying.hands)
+                h.button = h.grip = 0;
+        }
+        const Frame& f = in.flightTriggers ? flying : in;
         Out out;
         const float press = pressAt(c), grace = c.gadgetEasy ? std::max(graceOf(c), Config::easyGrace) : graceOf(c);
         const float dt = std::isfinite(f.seconds) ? std::clamp(f.seconds, 0.f, .1f) : 0.f;
@@ -772,22 +785,21 @@ class Machine {
             }
             StrikeWish wish;
             wish.target = locked;
-            const bool looking = finite(f.forward) && length(f.forward) > .5f;
-            auto strikeable = looking && !locked && !c.farLunge ? std::span<const FightTarget>{} : fightList;
+            // Version 0.0.62 AIM PICK: the throw's own enemy is the one the fist and the look point
+            // at together, nearest in the cone; the lock yields only when he is outside it.
+            wish.gaze = f.forward;
+            wish.gazePick = true;
+            wish.freeAim = c.farLunge;
+            auto strikeable = fightList; // 0.0.62: the aim pick decides (0.0.6: none unless locked or far)
             // STEADY: only the locked enemy, and only while his sight ray is not blocked.
             // Update 38.5 farLunge: with no lock yet, any enemy in sight the throw points at.
             std::array<FightTarget, combat38::maxEnemies> seen{};
             uint32_t seenCount = 0;
-            if (c.lungeSteady && c.farLunge && !locked) {
+            if (c.lungeSteady) { // 0.0.62: any enemy in sight (the aim pick and the lock choose)
                 for (uint32_t e = 0; e < count; ++e)
                     if (f.enemySight[e] != combat_spidy::sightBlocked)
                         seen[seenCount++] = fightTargets[e];
                 strikeable = std::span<const FightTarget>{seen.data(), seenCount};
-            } else if (c.lungeSteady) {
-                strikeable = {};
-                for (uint32_t e = 0; e < count; ++e)
-                    if (locked && fightTargets[e].id == locked && f.enemySight[e] != combat_spidy::sightBlocked)
-                        strikeable = std::span<const FightTarget>{&fightTargets[e], 1};
             }
             const uint64_t unknownBefore = sightWorld.unknownAsked;
             if (const auto opened = strike_.open(dt, fists, f.head, feet, strikeable, sightWorld, wish)) {
@@ -827,8 +839,35 @@ class Machine {
         if (c.punch) {
             const float l = looseness(c);
             // Toward the locked enemy when there is one (SpidyVR's punches go to him).
-            const Vec3 toLocked = lockedTarget ? level(lockedTarget->middle() - f.head) : Vec3{};
-            Vec3 ahead = length(toLocked) > .5f ? toLocked : level(f.forward);
+            // Version 0.0.62: in the air the aim is 3D (flying over a thug, a punch down at him goes
+            // his way; 0.0.6 flattened it and every downward punch was "not forward").
+            const auto aimWay = [&](Vec3 v) {
+                return f.airborne && length(v) > .05f ? normalized(v) : level(v);
+            };
+            const auto reachOf = [&](Vec3 to) { return f.airborne ? length(to) : length(Vec3{to.x, 0, to.z}); };
+            Vec3 toLocked = lockedTarget ? aimWay(lockedTarget->middle() - f.head) : Vec3{};
+            Vec3 ahead = length(toLocked) > .5f ? toLocked : aimWay(f.forward);
+            // Version 0.0.62: a thug within punch reach takes the punch from a lock farther off (0.0.6:
+            // a lock on a thug 5 m away pointed every punch at him and gave it to the lunge, so a punch
+            // at the one in front "barely landed").
+            const FightTarget* nearTarget{};
+            {
+                float nearest = Config::targetReach;
+                for (uint32_t e = 0; e < count; ++e) {
+                    const Vec3 to = fightTargets[e].middle() - f.head;
+                    const float d = reachOf(to);
+                    if (finite(to) && d <= nearest) {
+                        nearest = d;
+                        nearTarget = &fightTargets[e];
+                    }
+                }
+            }
+            const bool lockFar = lockedTarget && nearTarget && nearTarget != lockedTarget &&
+                                 reachOf(lockedTarget->middle() - f.head) > Config::targetReach;
+            if (lockFar) {
+                toLocked = aimWay(nearTarget->middle() - f.head);
+                ahead = toLocked;
+            }
             // Update 38.2 TARGETED: the nearest enemy within targetReach (flat, from the head),
             // or the lock; none: no attack at all.
             bool target = lockedTarget != nullptr, enemyBeyond = false;
@@ -836,12 +875,12 @@ class Machine {
                 float best = Config::targetReach;
                 for (uint32_t e = 0; e < count; ++e) {
                     const Vec3 to = fightTargets[e].middle() - f.head;
-                    const float d = length(Vec3{to.x, 0, to.z});
+                    const float d = reachOf(to);
                     enemyBeyond = enemyBeyond || (finite(to) && d > best && d <= Config::heldOffFarReach);
                     if (finite(to) && d <= best) {
                         best = d;
                         target = true;
-                        ahead = level(to);
+                        ahead = aimWay(to);
                     }
                 }
             }
@@ -855,7 +894,7 @@ class Machine {
             if (spidyZip && lockedTarget) {
                 const WebStrikeConfig& sc = strikeConfig_;
                 const float away = length(lockedTarget->middle() - (feet + Vec3{0, sc.chest, 0}));
-                lungeOwns = away >= sc.minDistance && away <= sc.maxDistance;
+                lungeOwns = away >= sc.minDistance && away <= sc.maxDistance && !lockFar;
                 if (lungeOwns && c.lungeSteady)
                     for (uint32_t e = 0; e < count; ++e)
                         if (fightTargets[e].id == locked && f.enemySight[e] == combat_spidy::sightBlocked) {
@@ -872,7 +911,7 @@ class Machine {
                 for (uint32_t e = 0; e < count; ++e)
                     if (f.enemySight[e] != combat_spidy::sightBlocked)
                         nearest = std::min(nearest, length(fightTargets[e].middle() - (feet + Vec3{0, sc.chest, 0})));
-                lungeOwns = nearest >= sc.minDistance && nearest <= sc.maxDistance;
+                lungeOwns = nearest >= sc.minDistance && nearest <= sc.maxDistance && !nearTarget;
             }
             for (unsigned i = 0; i < 2; ++i) {
                 if (out.lungeHand == static_cast<int>(i))

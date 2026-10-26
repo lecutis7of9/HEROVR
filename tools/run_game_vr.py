@@ -3560,7 +3560,24 @@ def session(a, startup):
         game.close()
 
 
+# 0.0.62: why the last start failed, for launch-game-vr.ps1 to show in a window when an older launcher (0.0.6.1)
+# would only reset its PLAY VR button. Removed at every start; written only when the session could not run.
+START_ERROR = ROOT/'reports'/'last-vr-error.txt'
+
+
+def note_start_error(text):
+    try:
+        START_ERROR.parent.mkdir(parents=True, exist_ok=True)
+        START_ERROR.write_text(str(text).strip() + '\n', encoding='utf-8')
+    except OSError:
+        pass
+
+
 if __name__ == '__main__':
+    try:
+        START_ERROR.unlink()
+    except OSError:
+        pass
     try:
         with LauncherLock(): sys.exit(main())
     except KeyboardInterrupt:
@@ -3569,5 +3586,15 @@ if __name__ == '__main__':
         sys.exit(130)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
         print(f'Spidy VR unavailable: {error}', file=sys.stderr)
+        note_start_error(f'Spidy VR unavailable: {error}')
         settle_display(game_running())
         sys.exit(exit_code(error))
+    except Exception as error:  # 0.0.62: never a silent stop, whatever went wrong
+        import traceback
+        traceback.print_exc()
+        note_start_error(f'Spidy VR stopped on an internal error: {type(error).__name__}: {error}')
+        try:
+            settle_display(game_running())
+        except Exception:
+            pass
+        sys.exit(1)

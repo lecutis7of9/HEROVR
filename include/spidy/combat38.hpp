@@ -253,6 +253,16 @@ inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
 inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }
 inline bool foeTrackLive(uint32_t value) { return value != 1; }
+// ENEMY TRACKING LIVE's check that the 30 Hz world list was measured from this hero: he is within
+// 3 m + (40 m/s, or 1.5x the player's own speed when faster) x the list's age of where he was then.
+// Version 0.0.62 fix: 0.0.6.2's 40 m/s alone failed for FLY MODE and SUPERSONIC (60+ m/s), and every
+// frame there fell back to the old offsets that trail behind by speed x age.
+inline bool foeWorldUsable(float heroGap, float age, float playerSpeed) {
+    if (!std::isfinite(heroGap) || !std::isfinite(age))
+        return false;
+    const float speed = std::isfinite(playerSpeed) ? std::max(40.f, 1.5f * std::abs(playerSpeed)) : 40.f;
+    return heroGap <= 3.f + speed * std::clamp(age, 0.f, .5f);
+}
 inline bool beaconsInVision(uint32_t value) { return value != 1; } // Version 0.0.62
 // The instant blow (SpidyVR's 7-28 HP melee blow, scaled down beside the game's own punch, which
 // still lands with GAME + INSTANT): amount 4-12 HP and knock amount 40-120 by the fist's strength

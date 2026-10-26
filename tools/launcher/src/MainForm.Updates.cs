@@ -122,8 +122,10 @@ namespace Sm2VrLauncher
             var got = m.Ver;
             if (got == null) return false;
             if (have == null || got.CompareTo(have) > 0) return true;
-            // a launcher-only hotfix: same mod version, newer launcher build
-            return got.CompareTo(have) == 0 && m.LauncherBuild > LauncherInfo.Build;
+            // a launcher-only hotfix: same mod version, newer launcher build. The build counted is the newer of this
+            // launcher and the one installed in the mod folder (tools\launcher), so a launcher started from somewhere
+            // else (an older copy, a shortcut to a dev build) never offers the same version again after installing it.
+            return got.CompareTo(have) == 0 && m.LauncherBuild > Math.Max(LauncherInfo.Build, SystemInfo.InstalledLauncherBuild(root));
         }
 
         void RefreshDownloads()
@@ -256,9 +258,12 @@ namespace Sm2VrLauncher
             settings.Set("JustUpdated", ""); settings.Save();
         }
 
-        void RestartLauncher(string message)
+        void RestartLauncher(string message) { RestartLauncher(message, null); }
+
+        /// <summary>Restarts into <paramref name="target"/> (the launcher installed in the mod folder) or, when null, this exe.</summary>
+        void RestartLauncher(string message, string target)
         {
-            string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            string exe = target ?? System.Reflection.Assembly.GetExecutingAssembly().Location;
             try
             {
                 settings.Set("JustUpdated", message); settings.Save();
@@ -535,6 +540,16 @@ namespace Sm2VrLauncher
                     if (thenMod != null) { if (!r.Ok) MessageBox.Show(this, r.Message, LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Error); thenMod(r.Ok); return; }
                     if (quietMod) { if (r.Ok) { SetProgress(r.Message, 100); tabs.Select(SheetStatus); } else buildLog.Line("PLAY VR (or Updates > Repair mod) tries again.", Theme.Dim); return; }
                     string news = whatsNew; whatsNew = null;
+                    // The update installed a newer launcher in the mod folder but this exe runs from somewhere else
+                    // (so it was not replaced): switch to the installed one instead of offering the update again.
+                    string installedExe = r.Ok && !Backups.SelfReplaced ? SystemInfo.NewerInstalledLauncher(root) : null;
+                    if (installedExe != null)
+                    {
+                        string msg = "Updated to " + (SystemInfo.PortVersion(root) ?? "the new version") + ". Switched to the launcher installed in " + root + "." + (string.IsNullOrEmpty(news) ? "" : " What's new: " + news);
+                        buildLog.Line("This launcher runs from outside the install, so it was not replaced. Starting the new launcher from " + installedExe + ".", Theme.Info);
+                        RestartLauncher(msg, installedExe);
+                        return;
+                    }
                     if (r.Ok && Backups.SelfReplaced)
                     {
                         string msg = "Updated to " + (SystemInfo.PortVersion(root) ?? "the new version") + "." + (string.IsNullOrEmpty(news) ? "" : " What's new: " + news);

@@ -73,7 +73,38 @@ struct StrikeWish {
     // enemy opens the strike too: a hook, an uppercut or a blow down, which
     // go across and not out at him.
     Vec3 called{};
+    // Version 0.0.62 AIM PICK (the user, playing 0.0.6: "ranged punches rarely go toward the
+    // target I want"): where the head looks (unit; zero: unknown) and gazePick on. The enemy a
+    // throw goes to is then the one the fist and the look point at together (aimPick: the throw
+    // 0.6, the look 0.4, within 35 degrees of both blended, the nearer preferred); the lock gives
+    // way to him only when the locked one is outside that cone, so a lock on the thug being
+    // finished still holds while the player looks and throws at him (October 12).
+    Vec3 gaze{};
+    bool gazePick{};
+    // With nobody marked and no enemy in the aim pick's cone, any enemy the fist points at
+    // (the aim rule, 38.5 farLunge); off: no strike.
+    bool freeAim{};
 };
+// Version 0.0.62 AIM PICK's rule (StrikeWish::gazePick), on its own for the tests and the log.
+struct AimPickConfig {
+    // Blended cosine: pointShare x the throw's + (1 - pointShare) x the look's; in the cone at
+    // `cone` (35 degrees) or nearer the line, with each of the two at least `each` (60 degrees).
+    float pointShare = .6f, cone = .82f, each = .5f;
+    // Of those in the cone the nearer wins: score = blended - perMetre x metres.
+    float perMetre = .02f;
+};
+// How well a throw (`way`, unit, from `fist`) and the look (`gaze`, unit, from `head`) point at a
+// middle `at`: the blended cosine, or -2 when either goes more than `each` away from him.
+float aimAlong(Vec3 head, Vec3 gaze, Vec3 fist, Vec3 way, Vec3 at, const AimPickConfig& c = {});
+// The enemy the throw and look pick (0: none in the cone), of `targets` between minDistance and
+// maxDistance of `chest`.
+std::uint64_t aimPick(Vec3 head, Vec3 gaze, Vec3 fist, Vec3 way, Vec3 chest, float minDistance, float maxDistance,
+                      std::span<const FightTarget> targets, const AimPickConfig& c = {});
+// The enemy a throw goes to: the lock, unless the throw and look pick another and the locked one
+// is outside the cone (or gone); with no lock, the pick.
+std::uint64_t aimRetarget(std::uint64_t locked, Vec3 head, Vec3 gaze, Vec3 fist, Vec3 way, Vec3 chest,
+                          float minDistance, float maxDistance, std::span<const FightTarget> targets,
+                          const AimPickConfig& c = {});
 struct WebStrikeConfig {
     // A strike opens with a fist at least this fast relative to the player
     // (a punch lands from 2.2 m/s, PunchConfig), going out from the player:

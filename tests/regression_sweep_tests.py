@@ -22,7 +22,8 @@ STRICT = os.environ.get('REGRESSION_STRICT') == '1'
 PWSH = os.environ.get('PWSH', os.path.expanduser('~/pwsh/pwsh'))
 CHECKS = ROOT / 'tools' / 'release_checks'
 # The launcher zips players have installed: (build, zip, tag of the release they came from).
-SHIPPED = [(3, '/workspace/publish-final/HERO-VR-Launcher-0.0.5.zip'),
+SHIPPED = [(2, '/workspace/live-before/HERO-VR-Launcher-0.0.5.zip'),   # launcher 0.0.6.1: the update-loop report
+           (3, '/workspace/publish-final/HERO-VR-Launcher-0.0.5.zip'),
            (4, '/workspace/publish-hf3/HERO-VR-Launcher-0.0.5.zip'),
            (6, '/tmp/rel/live-b6/HERO-VR-Launcher-0.0.6.zip'),
            (7, '/tmp/rel/live-b7/HERO-VR-Launcher-0.0.6.zip'),
@@ -60,6 +61,26 @@ COVERAGE = {
     'stale modules after a same-version update': [
         ('launcher_build8_tests.py', 'test_same_version_update_downloads_a_newer_builds_mod_files'),
         ('launcher_build8_tests.py', 'test_start_up_replaces_stale_mod_files_by_itself')],
+    'update loop: launcher started from outside the install re-offers the installed version': [
+        ('update_loop_tests.py', 'test_no_build_offers_0_0_62_again_after_installing_it'),
+        ('update_loop_tests.py', 'test_the_release_manifest_gate_rejects_launcher_build'),
+        ('update_loop_tests.py', 'test_build_9_hands_over_to_the_installed_launcher')],
+    'PLAY VR goes grey then red with no window (0.0.6.1 launcher, 0.0.62 mod)': [
+        ('launch_path_tests.py', 'test_build_2_options_reach_python'),
+        ('launch_path_tests.py', 'test_every_failure_is_said_for_an_older_launcher'),
+        ('launch_path_tests.py', 'test_a_throw_before_python_is_said'),
+        ('launch_path_tests.py', 'test_every_nonzero_exit_shows_a_window')],
+    'FLY MODE: punches never land (the thrust triggers read as a held trigger)': [
+        ('core_tests.cpp', 'Version 0.0.62 FLY MODE punches: a held thrust trigger holds nothing back'),
+        ('regression_sweep_tests.py', 'test_game_xr_marks_fly_mode_triggers')],
+    'punches barely land (a far lock takes the punch at the thug in front)': [
+        ('core_tests.cpp', 'Version 0.0.62: a thug within punch reach takes the punch from a lock 5 m away')],
+    'ranged punches miss the intended target (lock and look only, the fist ignored)': [
+        ('core_tests.cpp', 'Version 0.0.62 AIM PICK: the fist and the look pick the nearest enemy in the cone'),
+        ('regression_sweep_tests.py', 'test_both_strike_paths_use_the_aim_pick')],
+    'enemies trail behind while flying fast (ENEMY TRACKING LIVE fell back over 40 m/s)': [
+        ('core_tests.cpp', 'Version 0.0.62 ENEMY TRACKING LIVE: the world list stays usable while flying fast'),
+        ('regression_sweep_tests.py', 'test_game_xr_marks_fly_mode_triggers')],
     'placeholder or blank repo setting': [('launcher_build8_tests.py', 'test_blank_or_placeholder_repository_falls_back_to_herovr')],
     'bracketed folder paths / running inside the zip': [('launcher_build9_tests.py', 'test_build_ps1_literal_paths_and_log'),
                                                          ('launcher_build9_tests.py', 'test_cmd')],
@@ -79,6 +100,23 @@ class Coverage(unittest.TestCase):
                 if not p.is_file() or name not in p.read_text(encoding='utf-8'):
                     missing.append(f'{issue}: {f} {name}')
         self.assertEqual(missing, [])
+
+
+class Combat062(unittest.TestCase):
+    """0.0.62 combat steering (7:12): FLY MODE punches, far-lock punches, ranged aim, fast-flight tracking."""
+    def test_game_xr_marks_fly_mode_triggers(self):
+        g = (ROOT / 'src' / 'game_xr.cpp').read_text(encoding='utf-8')
+        self.assertIn('cf.flightTriggers = flyModeNow.load() != 0 && flyNow.flying', g)
+        self.assertIn('combat38::foeWorldUsable(', g)
+        self.assertNotIn('<= 3.f + 40.f * std::clamp(age', g)
+
+    def test_both_strike_paths_use_the_aim_pick(self):
+        ci = (ROOT / 'include' / 'spidy' / 'combat_input.hpp').read_text(encoding='utf-8')
+        cs = (ROOT / 'include' / 'spidy' / 'combat_spidy.hpp').read_text(encoding='utf-8')
+        ws = (ROOT / 'src' / 'web_strike.cpp').read_text(encoding='utf-8')
+        for text in (ci, cs):
+            self.assertIn('wish.gazePick = true;', text)
+        self.assertIn('aimRetarget(wish.target', ws)
 
 
 class NoMinMax(unittest.TestCase):
@@ -165,7 +203,7 @@ class ReleaseHasPrebuilt(unittest.TestCase):
             files.append({'kind': 'prebuilt', 'name': 'HERO-VR-9.9.9-mod-win64.zip', 'size': len(mod),
                           'url': 'https://x/download/v9.9.9/HERO-VR-9.9.9-mod-win64.zip',
                           'sha256': '0' * 64 if wrong_hash else hashlib.sha256(mod).hexdigest()})
-        pathlib.Path(d, 'version.json').write_text(json.dumps({'tag': 'v9.9.9', 'version_number': '9.9.9', 'launcher_build': 9, 'files': files}))
+        pathlib.Path(d, 'version.json').write_text(json.dumps({'tag': 'v9.9.9', 'version_number': '9.9.9', 'launcher_build_in_zip': 9, 'files': files}))
 
     def test_good_passes_missing_or_wrong_fails(self):
         for kw, rc in (({}, 0), ({'prebuilt': False}, 1), ({'wrong_hash': True}, 1)):
@@ -174,9 +212,10 @@ class ReleaseHasPrebuilt(unittest.TestCase):
                 self.assertEqual(self.run_check(d, '--tag', 'v9.9.9').returncode, rc, kw)
 
     def test_the_shipped_releases_pass(self):
+        # Both were launcher-only re-releases of a version already out (their launcher_build is the hotfix case).
         for d in ('/workspace/publish-hf3', '/tmp/rel/live-b8'):
             need(os.path.isdir(d), d)
-            r = self.run_check(d)
+            r = self.run_check(d, '--launcher-only-hotfix')
             self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_finalize_runs_the_check(self):
@@ -281,7 +320,7 @@ class StorePythonStub(unittest.TestCase):
 
 
 class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
-    """Every launcher players have (builds 3-8; build 5 was never published) must see 0.0.62 as newer, and build 9's
+    """Every launcher players have (builds 2-4, 6-8; build 5 was never published) must see 0.0.62 as newer, and build 9's
     Revert must offer 0.0.6 and 0.0.5. The live E2E (fresh, self-update b4/b6/b7/b8, revert) runs after upload."""
     def compile_and_ask(self, modversion_cs, expect_build):
         with tempfile.TemporaryDirectory() as d:
@@ -325,7 +364,10 @@ class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
         self.assertTrue(all(b < 9 for b, _ in SHIPPED))
         s = pathlib.Path('/tmp/rel/make_release_00062.sh')
         need(s.is_file(), 'make_release_00062.sh')
-        self.assertIn('--launcher-build 9', s.read_text())
+        t = s.read_text()
+        self.assertIn('--launcher-build 9', t)
+        # ...but the published version.json carries it only as information (update-loop fix)
+        self.assertIn("m['launcher_build_in_zip'] = m.pop('launcher_build', 9)", t)
 
     def test_the_live_e2e_covers_every_path(self):
         s = pathlib.Path('/workspace/herovr-release/e2e62/run.sh')

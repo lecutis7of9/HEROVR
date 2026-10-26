@@ -5412,6 +5412,10 @@ DWORD WINAPI run(void*) {
                             cf.play = (playing || inFlight) && !calibrationInput && !layerOn && !phone.open() &&
                                       !gadgetWheel.open() && !padLayer.latched();
                             cf.airborne = inFlight;
+                            // Version 0.0.62: FLY MODE in the air - the triggers thrust, so a held one holds no punch back.
+                            // IRON MAN keeps his trigger (the repulsor fires in flight, as in 0.0.6).
+                            cf.flightTriggers = flyModeNow.load() != 0 && flyNow.flying && heroNow() != hero_modes::ironMan;
+                            cf.airborne = cf.airborne || (flyModeNow.load() != 0 && flyNow.flying);
                             for (unsigned i = 0; i < 2; ++i) {
                                 auto& h = cf.hands[i];
                                 const auto& grip = frame.hands[i].grip;
@@ -5462,7 +5466,8 @@ DWORD WINAPI run(void*) {
                                     const uint32_t wn = std::min<uint32_t>(world_trace::enemiesWorld(worldFeet, worldIds, age),
                                                                            world_trace::enemySlots);
                                     if (wn && world_trace::heroAtRefresh(heroThen) && finite(motion.anchor) &&
-                                        length(heroThen - motion.anchor) <= 3.f + 40.f * std::clamp(age, 0.f, .5f)) {
+                                        combat38::foeWorldUsable(length(heroThen - motion.anchor), age,
+                                                                 finite(swingState.velocity) ? length(swingState.velocity) : 0.f)) {
                                         for (uint32_t e = 0; e < wn; ++e)
                                             nearby[e] = worldFeet[e] - motion.anchor; // the same sum below, now exact
                                         nearbyIds = worldIds;

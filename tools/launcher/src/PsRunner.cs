@@ -44,6 +44,8 @@ namespace Sm2VrLauncher
             psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
             psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
             psi.EnvironmentVariables["SM2VR_LAUNCHER"] = "1";
+            // 0.0.62.2: this launcher shows a session's start failure itself (launch-game-vr.ps1 shows it for older ones).
+            psi.EnvironmentVariables["SM2VR_LAUNCHER_BUILD"] = LauncherInfo.Build.ToString();
             try
             {
                 proc = new Process { StartInfo = psi, EnableRaisingEvents = true };

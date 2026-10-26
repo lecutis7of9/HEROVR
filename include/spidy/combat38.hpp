@@ -84,6 +84,14 @@ enum Option : uint32_t {
     // Version 0.0.6 (Update 39.0): DAREDEVIL and HULK ABILITIES (hero_modes.hpp; one hero toggle on at
     // a time with IRON MAN's shooterType) and DAREDEVIL's punch multiplier
     daredevil, hulk, daredevilPunch,
+    // Version 0.0.62: HIT INDICATOR (hit_marks.hpp, OFF by default), HAND FLIPS (ON: 0.0.6's
+    // behaviour) and LENS FLARES (GAME: the game's own graphics setting; OFF IN VR: RESTART)
+    hitIndicator, handFlips, lensFlares,
+    // Version 0.0.62 (the SpidyVR comparison): PUNCH HITS (GAME + INSTANT: SpidyVR's blow on the
+    // contact frame, as well as the game's move) and ENEMY TRACKING (LIVE: world positions, 30 a second)
+    punchHits, foeTrack,
+    // Version 0.0.62: BEACONS IN VISION (DAREDEVIL SONAR keeps bright coloured beacons and markers)
+    beaconsVision,
     options
 };
 struct OptionInfo {
@@ -208,7 +216,56 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"OFF", "ON", nullptr, nullptr}},
     {"daredevil_punch", "DAREDEVIL PUNCH", "DDPUNCH", "How many normal punches each DAREDEVIL punch hits like, live.",
      5, {"3X", "1X", "2X", "4X", "5X"}},
+    // Version 0.0.62 HIT INDICATOR: OFF (0) the default; a brief X where your hits land, live.
+    {"hit_indicator", "HIT INDICATOR", "HITMARK", "ON: a brief white X flashes where your punches, batons, blasts and webs land.",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    // HAND FLIPS: ON (0) keeps 0.0.6 (hand swings add to REALISTIC FLIPS); OFF: no flip from moving
+    // your hands, live.
+    {"hand_flips", "HAND FLIPS", "HANDFLIP", "OFF: swinging your arms never starts a flip; the stick and A still flip you.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    // LENS FLARES: GAME (0) leaves the game's setting alone; OFF IN VR turns the game's lens flares
+    // off while VR runs (they test the monitor's view, not each eye's, and shine through walls),
+    // RESTART REQUIRED, put back when VR closes.
+    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR: no headlight flares through walls; takes effect when VR next starts.",
+     2, {"GAME", "OFF IN VR", nullptr, nullptr}},
+    // Version 0.0.62 PUNCH HITS (SpidyVR's land(): the hit is sent the moment the fist touches):
+    // GAME + INSTANT (0, the default) sends a small CONFIRMED DirectDamage blow with a knock on the
+    // contact frame and still presses the game's X for its move; GAME MOVE (1) is 0.0.6 (the X
+    // only: the hit lands when the game's animation does); INSTANT ONLY (2) sends no X (no game
+    // animation pulls you; the X comes back by itself if the damage path is closed). Live.
+    {"punch_hits", "PUNCH HITS", "HITS", "GAME + INSTANT hurts enemies the moment your fist lands; GAME MOVE waits for X.",
+     3, {"GAME + INSTANT", "GAME MOVE", "INSTANT ONLY", nullptr}},
+    // ENEMY TRACKING: LIVE (0, the default) places enemies by their own world positions, re-read 30
+    // times a second; 0.0.6 (1) by their offset from you, re-read 10 times a second (while you move,
+    // lunge or swing they trail behind where they are). Live.
+    {"foe_track", "ENEMY TRACKING", "FOES", "LIVE: lock-on and punches follow enemies 30 times a second, not the old 10.",
+     2, {"LIVE", "0.0.6", nullptr, nullptr}},
+    // BEACONS IN VISION: ON (0, the default) keeps the game's bright coloured beacons, mission icons and
+    // markers drawn into the world in their own colours, outlined and gently pulsing, on top of
+    // DAREDEVIL's sonar look (eye_color::sonarPixel); OFF (1) is 0.0.6's sonar. Live.
+    {"beacons_vision", "BEACONS IN VISION", "BEACONS", "ON: mission beacons and markers stay bright and coloured in Daredevil's sonar.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
+// Version 0.0.62 HAND FLIPS / LENS FLARES values
+inline bool handFlipsOn(uint32_t value) { return value != 1; }
+inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }
+// Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
+inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
+inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }
+inline bool foeTrackLive(uint32_t value) { return value != 1; }
+inline bool beaconsInVision(uint32_t value) { return value != 1; } // Version 0.0.62
+// The instant blow (SpidyVR's 7-28 HP melee blow, scaled down beside the game's own punch, which
+// still lands with GAME + INSTANT): amount 4-12 HP and knock amount 40-120 by the fist's strength
+// (0-1), the knockback kind 5 the CONFIRMED repulsor blow uses (the amounts are estimates).
+// INSTANT ONLY has no game punch beside it: 1.75x the amount.
+struct InstantBlow {
+    float amount, knockAmount;
+};
+inline InstantBlow instantBlowOf(float strength, uint32_t value) {
+    const float s = std::isfinite(strength) ? std::clamp(strength, 0.f, 1.f) : 0.f;
+    const float k = value == punchHitsInstant ? 1.75f : 1.f;
+    return {(4.f + 8.f * s) * k, 40.f + 80.f * s};
+}
 // ---- Version 0.0.6 HERO TOGGLES --------------------------------------------------------------------
 // The three hero toggles (IRON MAN's is shooterType, 1 ON); only one is on at a time.
 inline constexpr Option heroToggles[3] = {shooterType, daredevil, hulk};

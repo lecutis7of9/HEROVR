@@ -43,6 +43,9 @@ std::array<uint64_t, enemySlots> enemyId{}; // the record's address: one enemy's
 uint32_t enemyCount{};
 std::chrono::steady_clock::time_point enemyWhen{};
 std::atomic<float> enemyRate{};
+Vec3 heroWorldAt{}; // under enemyLock
+std::atomic<bool> fastRefresh{true}; // Version 0.0.62 ENEMY TRACKING LIVE
+std::atomic<bool> enemyNear{};      // the last refresh found one (LIVE goes fast only then)
 std::array<Vec3, enemySlots> enemyWorld{}; // Version 0.0.3: the same enemies' world feet
 // Version 0.0.5 DAMAGE PROBE: the same enemies' hit points (enemyLock), read-only.
 constexpr uintptr_t botHealthTable = 0x531b0a0, healthHp = 0xd0, healthMost = 0xa0;
@@ -321,7 +324,9 @@ void run() {
                 enemyVital[i] = v;
             }
             enemyWhen = std::chrono::steady_clock::now();
+            heroWorldAt = heroAt; // Version 0.0.62: where the hero was for this list
         }
+        enemyNear.store(n > 0, std::memory_order_relaxed);
         if (n)
             nearestEnemy.store(found[0].first, std::memory_order_relaxed);
         botStep(n ? found[0].record : 0);
@@ -587,8 +592,13 @@ void run() {
             }
             work.intervalS = interval;
             publish(work);
-            for (float slept = 0; slept < interval && running.load(); slept += .1f) {
-                Sleep(100);
+            // Version 0.0.62 ENEMY TRACKING LIVE: 30 a second while an enemy is near (the same
+            // guarded reads of the same records, 3x as often, on this thread - not the game's or the
+            // frame's); 10 a second with none near and on 0.0.6.
+            for (float slept = 0; slept < interval && running.load();) {
+                const bool fast = fastRefresh.load(std::memory_order_relaxed) && enemyNear.load(std::memory_order_relaxed);
+                Sleep(fast ? 33 : 100);
+                slept += fast ? .033f : .1f;
                 refreshEnemies(); // Update 38: 10 Hz
             }
         }
@@ -640,6 +650,14 @@ uint32_t enemies(std::array<Vec3, enemySlots>& out, std::array<uint64_t, enemySl
     }
     return enemyCount;
 }
+bool heroAtRefresh(Vec3& out) {
+    if (!running.load())
+        return false;
+    std::lock_guard<std::mutex> lock(enemyLock);
+    out = heroWorldAt;
+    return enemyCount > 0 && finite(heroWorldAt);
+}
+void setFastRefresh(bool on) { fastRefresh.store(on, std::memory_order_relaxed); }
 float enemyScanHz() { return running.load() ? enemyRate.load(std::memory_order_relaxed) : 0.f; }
 uint32_t enemiesWorld(std::array<Vec3, enemySlots>& out, std::array<uint64_t, enemySlots>& ids, float& ageSeconds) {
     ageSeconds = 1e9f;

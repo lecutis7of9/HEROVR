@@ -167,7 +167,12 @@ namespace Sm2VrLauncher
             try
             {
                 Manifest.OverrideUrl = settings.Get("UpdateManifestUrl", null);
-                if (Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_USE_PREVIOUS") == "1" && RevertDialog.OfferPrevious(root)) { UsePreviousVersion(false); return; }   // automated tests only
+                if (Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_USE_PREVIOUS") == "1")   // automated tests only
+                {
+                    string testTag = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_PREVIOUS_TAG");
+                    if (string.IsNullOrEmpty(testTag) || !LauncherInfo.PreviousTags.Contains(testTag)) testTag = LauncherInfo.PreviousTags[LauncherInfo.PreviousTags.Length - 1];
+                    if (RevertDialog.OfferPrevious(root, testTag)) { UsePreviousVersion(false, testTag); return; }
+                }
                 if (!settings.GetBool("CheckOnStart", false) || !CanCheck) { FirstRunModFiles(); return; }
                 CheckForUpdate(true, m =>
                 {
@@ -419,7 +424,7 @@ namespace Sm2VrLauncher
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
                 bool rs = d.RestoreSettings;
-                if (d.UsePrevious) { UsePreviousVersion(rs); return; }
+                if (d.UsePrevious) { UsePreviousVersion(rs, d.PreviousTag); return; }
                 if (d.Backup != null)
                 {
                     var b = d.Backup;
@@ -444,15 +449,16 @@ namespace Sm2VrLauncher
             }
         }
 
-        /// <summary>REVERT > USE PREVIOUS VERSION: installs LauncherInfo.PreviousTag (0.0.5) straight from its GitHub release,
+        /// <summary>REVERT > USE PREVIOUS VERSION: installs the picked earlier release (build 9: v0.0.6 or v0.0.5) straight from its GitHub release,
         /// with no backup needed: its version.json (releases/download/&lt;tag&gt;/version.json, no API limit), its full
         /// package ("source") downloaded and SHA-256 checked, installed like any update (this version backed up first and
         /// put back if anything fails), then that version's ready-made mod files (also SHA-256 checked). The newer
         /// release is then skipped (SkipUpdate), so the older launcher does not offer it again at once; Updates >
         /// Update now installs it any time.</summary>
-        void UsePreviousVersion(bool restoreSettings)
+        void UsePreviousVersion(bool restoreSettings, string tag)
         {
-            string prev = RevertDialog.PreviousNumber();
+            if (string.IsNullOrEmpty(tag)) tag = LauncherInfo.PreviousTag;
+            string prev = RevertDialog.PreviousNumber(tag);
             if (!settings.RepoConfigured) { MessageBox.Show(this, "Set the GitHub repository in Updates first.", LauncherInfo.Title); return; }
             string have = SystemInfo.PortVersion(root) ?? "this version";
             string test = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_UPDATE_ANSWER");   // automated tests only
@@ -460,8 +466,10 @@ namespace Sm2VrLauncher
                 "with its ready-made mod files. " + have + " is backed up first, so Revert can bring it back too, and it is put back if anything fails. Your settings are kept." +
                 "\n\nYou then stay on " + prev + ": the update is not offered again until you press Updates > Update now.",
                 LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
-            string url = "https://github.com/" + settings.UpdateRepo.Trim().Trim(new[] { '/' }) + "/releases/download/" + LauncherInfo.PreviousTag + "/version.json";
-            string skip = settings.Get("PreviousManifestUrl", "").Trim();
+            string url = "https://github.com/" + settings.UpdateRepo.Trim().Trim(new[] { '/' }) + "/releases/download/" + tag + "/version.json";
+            // tests: a local server (PreviousManifestUrl.<tag>, else PreviousManifestUrl for the oldest, as build 8)
+            string skip = settings.Get("PreviousManifestUrl." + tag, "").Trim();
+            if (skip.Length == 0 && tag == LauncherInfo.PreviousTags[LauncherInfo.PreviousTags.Length - 1]) skip = settings.Get("PreviousManifestUrl", "").Trim();
             if (skip.Length > 0 && Manifest.SafeUrl(skip)) url = skip;   // tests: a local server
             string newer = (latest != null ? UpdateKey(latest) : null) ?? ((ModVersion.Parse(SystemInfo.PortVersion(root)) != null ? ModVersion.Parse(SystemInfo.PortVersion(root)).Number : "") + "#" + LauncherInfo.Build);
             var ask = AskUnverified();

@@ -14,6 +14,11 @@
 // a chord is always the beam's (released early: nothing), so it never doubles as two blasts. A
 // single press waits chordWindow for the other hand before its blast goes (the EVERY HIT budget).
 //
+// Version 0.0.62 HAND COOLDOWN (the user): each hand fires at most one blast every handCooldown (2 s),
+// its own timer starting the instant its trigger is pulled. A pull during it does nothing at all: no
+// charge sound, no blast, no part in a chord (so no beam), no damage. The other hand is not blocked.
+// The chest beam keeps its own 30 s cooldown. Shown on each wrist (web_visual appendBlastRing).
+//
 // Damage: SM2's hit path for the punch is the game's own X press (CONFIRMED to be a melee blow);
 // a ranged blast has no confirmed damage call or enemy write, so the blast's and the beam's
 // damage are CANDIDATE: counted (Ledger, the record's would-be damage per enemy) and NOT sent.
@@ -64,6 +69,7 @@ inline uint32_t webShotsPerPress(const Plan& p) {
 inline constexpr float chordWindow = .12f; // both presses this close: a chord (= combat_input's Sonic grace)
 inline constexpr float beamHold = .35f;    // the chord held this long fires the beam
 inline constexpr float beamCooldown = 30.f;
+inline constexpr float handCooldown = 2.f; // Version 0.0.62: one blast per hand every 2 s
 inline constexpr float beamRange = 40.f, beamRadius = .9f, beamSeconds = .7f, chestBelowHead = .35f;
 inline constexpr float blastDamage = 1.f, beamShare = 4.f, beamDamage = beamShare * blastDamage;
 inline constexpr float blastLife = .25f; // the impact flash
@@ -74,6 +80,8 @@ struct Out {
     bool beam{};         // fire the chest beam now
     bool cooledChord{};  // a chord came while cooling: nothing fired
     bool ready{};        // the cooldown just ended (the cue)
+    bool accepted[2]{};  // Version 0.0.62: this hand's pull counted (it started its cooldown)
+    bool handCooled[2]{}; // Version 0.0.62: this hand pulled during its own cooldown: ignored
 };
 
 // The trigger's chord and the beam's cooldown. press: this hand's shot press this frame (one per
@@ -93,8 +101,16 @@ public:
         for (int i = 0; i < 2; ++i) {
             if (!press[i])
                 continue;
+            if (now < handReadyAt_[i]) { // Version 0.0.62 HAND COOLDOWN: this hand is cooling
+                o.handCooled[i] = true;
+                ++handCooledPresses_;
+                continue;
+            }
             if (chord_ != idle) // a third press during a chord is the chord's
                 continue;
+            handReadyAt_[i] = now + handCooldown; // from the instant of the pull
+            handPulledAt_[i] = now;
+            o.accepted[i] = true;
             const int other = 1 - i;
             if (pending_[other] && now - pendingAt_[other] <= chordWindow) {
                 pending_[other] = false;
@@ -143,6 +159,17 @@ public:
         chord_ = idle;
     }
     bool cooling() const { return cooling_; }
+    // Version 0.0.62 HAND COOLDOWN: seconds before this hand can fire again (0: ready), and since
+    // its cooldown ended (-1 while cooling or never pulled).
+    float handCooldownLeft(int i) const {
+        return i >= 0 && i <= 1 ? std::max(0.f, handReadyAt_[i] - now_) : 0.f;
+    }
+    float sinceHandReady(int i) const {
+        if (i < 0 || i > 1 || handPulledAt_[i] < -1e8f || now_ < handReadyAt_[i])
+            return -1.f;
+        return now_ - handReadyAt_[i];
+    }
+    uint64_t handCooledPresses() const { return handCooledPresses_; }
     float cooldownLeft() const { return cooling_ ? std::max(0.f, readyAt_ - now_) : 0.f; }
     bool chordWaiting() const { return chord_ == waiting; }
     // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK (repulsor_mcu.hpp): how long this hand's palm has been
@@ -173,7 +200,32 @@ private:
     float blastAt_[2]{-1.f, -1.f};
     bool cooling_{};
     uint64_t blasts_{}, beams_{}, chords_{}, shortChords_{}, cooledChords_{}, readyCues_{};
+    // Version 0.0.62 HAND COOLDOWN (kept through clear(): switching modes does not reset it)
+    float handReadyAt_[2]{-1e9f, -1e9f}, handPulledAt_[2]{-1e9f, -1e9f};
+    uint64_t handCooledPresses_{};
 };
+
+// Version 0.0.62 PALM BLAST: a hand's repulsor leaves the PALM and flies along the palm's normal,
+// wherever the palm faces (the MCU's open-hand blast), not along the web shooter's axis (the hand's
+// -Y, combat38 aim_axis, which Spider-Man's webs and balls keep). The OpenXR grip pose defines its
+// +X as the ray normal to the palm: away from the palm in the LEFT hand, into the palm in the RIGHT
+// (the OpenXR 1.0 spec, "Standard pose identifiers", grip; tracking.hpp webShooter says the same),
+// so out of the palm is grip +X on the left and grip -X on the right. The palm's centre: the grip
+// point (the middle of the handle the fingers close round) moved palmOut along that normal, the
+// same 3.5 cm the web shooter sits out on the palm's side (tracking.hpp; an estimate of the glove's
+// surface, not a measured joint). XR_EXT_palm_pose is not enabled by the mod (no new extension at
+// session start, so VR cannot fail to start over it); the grip axis is the same normal.
+inline constexpr float palmOut = .035f;
+inline Vec3 palmNormal(const Pose& grip, unsigned hand) {
+    const float n = grip.orientation.w * grip.orientation.w + grip.orientation.x * grip.orientation.x +
+                    grip.orientation.y * grip.orientation.y + grip.orientation.z * grip.orientation.z;
+    if (!std::isfinite(n) || n < .5f || n > 1.5f)
+        return {};
+    return normalized(grip.orientation.rotate({hand == 0 ? 1.f : -1.f, 0, 0}));
+}
+inline Vec3 palmCentre(const Pose& grip, unsigned hand) {
+    return compose(grip, {{hand == 0 ? palmOut : -palmOut, 0, 0}, {0, 0, 0, 1}}).position;
+}
 
 // The chest and where it faces: the head's level forward (the torso is not tracked), the chest
 // chestBelowHead under the head and 0.1 m ahead of it.
@@ -279,6 +331,17 @@ inline float chargeShare(const Trigger& t) {
         return 1.f;
     const float left = t.cooldownLeft();
     return std::isfinite(left) ? std::clamp(1.f - left / beamCooldown, 0.f, 1.f) : 1.f;
+}
+// Version 0.0.62 HAND COOLDOWN ring (each wrist): 0 just pulled .. 1 ready; its ready blink lasts
+// handReadyFlashSeconds, then the ring hides until the next pull.
+inline constexpr float handReadyFlashSeconds = .3f;
+inline float handShare(const Trigger& t, int hand) {
+    const float left = t.handCooldownLeft(hand);
+    return std::isfinite(left) ? std::clamp(1.f - left / handCooldown, 0.f, 1.f) : 1.f;
+}
+inline float handReadyFlash(const Trigger& t, int hand) {
+    const float age = t.sinceHandReady(hand);
+    return age < 0 || age >= handReadyFlashSeconds ? 0.f : 1.f - age / handReadyFlashSeconds;
 }
 // 1 at the ready moment, falling to 0 over readyFlashSeconds; 0 before (age < 0) or after.
 inline float readyFlash(float age) {

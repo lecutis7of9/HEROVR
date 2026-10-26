@@ -18,6 +18,7 @@
 // Pure and allocation-free; all positions tracking space (metres, y up), the enemies' feet as
 // combat_input::Frame has them (world_trace at 10 Hz).
 #include "math.hpp"
+#include "bolt_walls.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -207,6 +208,7 @@ struct Ball {
     bool alive{};
     int hand = -1;
     uint64_t target{}; // the picked enemy's id (0 none)
+    uint32_t serial{}; // Version 0.0.62: which fire() this is (1, 2, ...), for BOLT WALLS' casts
     float age{}, life{}, travelled{};
     Vec3 from{}, at{}, direction{};
     Vec3 tail() const { return at - direction * std::min(1.2f, travelled); }
@@ -223,6 +225,9 @@ struct Step {
     Hit hits[most]{};
     int hitCount{};
     int expired{};
+    // Version 0.0.62 BOLT WALLS: balls stopped at a wall this frame (the hand, where; tracking space).
+    Hit walls[most]{};
+    int wallCount{};
 };
 
 // Up to `balls` balls in flight (a fast trigger never drops a ball in flight); one per fire().
@@ -259,6 +264,7 @@ class Pool {
         }
         // the oldest gives way when all are flying
         int s = slot();
+        b.serial = static_cast<uint32_t>(fired_ + 1);
         ball_[static_cast<size_t>(s)] = b;
         next_ = (s + 1) % balls;
         ++fired_;
@@ -266,8 +272,10 @@ class Pool {
         return true;
     }
     // A frame: each ball flies (homing on its enemy by id, or his index when he has no id), and a
-    // pass through any enemy's body is a hit.
-    Step update(float seconds, const Enemies& e) {
+    // pass through any enemy's body is a hit. Version 0.0.62 BOLT WALLS: `walls` (one per slot,
+    // tracking space; nullptr or an unknown wall: none) stop a ball where its step reaches the wall -
+    // an enemy short of the wall is still hit first, one behind it never is.
+    Step update(float seconds, const Enemies& e, const bolt_walls::Wall* walls = nullptr) {
         Step out{};
         const float dt = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
         const Tune t = tuneOf(tune_);
@@ -297,6 +305,10 @@ class Pool {
             b.at = b.at + b.direction * stepMetres;
             b.travelled += stepMetres;
             b.age += dt;
+            Vec3 cut{};
+            const bool walled = walls && bolt_walls::crossed(walls[s], before, b.at, &cut);
+            if (walled)
+                b.at = cut;
             // a hit: the step's segment within hitRadius of an enemy's body line
             int hitIndex = -1;
             float hitDistance = 1e9f;
@@ -317,6 +329,13 @@ class Pool {
                 ++hitsBy_[b.hand & 1];
                 if (out.hitCount < Step::most)
                     out.hits[out.hitCount++] = {b.hand, e.list[static_cast<size_t>(hitIndex)].id, hitIndex, b.at};
+                continue;
+            }
+            if (walled) {
+                b.alive = false;
+                ++walled_;
+                if (out.wallCount < Step::most)
+                    out.walls[out.wallCount++] = {b.hand, 0, -1, b.at};
                 continue;
             }
             if (b.age >= b.life || b.travelled >= t.range) {
@@ -346,6 +365,7 @@ class Pool {
     uint64_t assisted() const { return assisted_; }
     uint64_t unassisted() const { return unassisted_; }
     uint64_t refused() const { return refused_; }
+    uint64_t walled() const { return walled_; } // Version 0.0.62 BOLT WALLS
     float lastDegrees() const { return lastDegrees_; }
 
   private:
@@ -358,7 +378,7 @@ class Pool {
     std::array<Ball, balls> ball_{};
     int next_{};
     uint32_t tune_{};
-    uint64_t fired_{}, firedBy_[2]{}, hits_{}, hitsBy_[2]{}, misses_{}, assisted_{}, unassisted_{}, refused_{};
+    uint64_t fired_{}, firedBy_[2]{}, hits_{}, hitsBy_[2]{}, misses_{}, assisted_{}, unassisted_{}, refused_{}, walled_{};
     float lastDegrees_ = 180.f;
 };
 

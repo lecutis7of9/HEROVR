@@ -52,6 +52,9 @@ struct Config {
     // Version 0.0.6 DAREDEVIL SONAR: on while DAREDEVIL ABILITIES is on (game_xr sets it, with on);
     // it takes the place of the FILTER and the grade (sonarPixel, the toon pipeline's sonar mode).
     bool sonar = false;
+    // Version 0.0.62 BEACONS IN VISION (combat38 beaconsVision, ON by default): the sonar keeps bright
+    // coloured pixels (the game's beacons, mission icons and markers drawn into the world) in colour.
+    bool sonarBeacons = false;
 };
 struct Limits {
     int lo, hi, step;
@@ -227,13 +230,13 @@ inline constexpr const char* bandsHelp = "90s ANIMATED: how many flat shades eac
 struct Toon {
     float on = 0, paint = 0, bands = 4, ink = 0; // ink 0 = OUTLINES OFF
     int stride = 1;                              // 1 or 2 pixels (CARTOON STRENGTH 50+)
-    float sonar = 0;                             // Version 0.0.6 DAREDEVIL SONAR (1: on)
+    float sonar = 0;                             // Version 0.0.6 DAREDEVIL SONAR (1: on; 0.0.62: 2 with BEACONS IN VISION)
 };
 inline Toon toon(const Config& c) {
     Toon t;
     if (c.on && c.sonar) {
         t.on = 1;
-        t.sonar = 1;
+        t.sonar = c.sonarBeacons ? 2.f : 1.f;
         return t;
     }
     if (!c.on || c.filter != animated90s)
@@ -359,13 +362,32 @@ inline float sonarRings(float r, float phase) {
     }
     return ring;
 }
+// Version 0.0.62 BEACONS IN VISION: how much a colour reads as a beacon - bright (its top channel
+// 0.55-0.85) and strongly coloured (saturation 0.45-0.7). The game's beacons, mission icons and
+// in-world markers are vivid yellow, blue and red lights; white street lamps, headlights and the sky
+// are not saturated and stay in the sonar look. The game's own HUD markers (the Scaleform movie on
+// the HUD panel, native_hud.hpp) are drawn after this pass and were never filtered.
+inline float sonarStep(float a, float b, float x) {
+    const float t = saturate((x - a) / (b - a));
+    return t * t * (3 - 2 * t);
+}
+inline float beaconMask(const std::array<float, 3>& c) {
+    const float mx = std::max({fin(c[0], 0), fin(c[1], 0), fin(c[2], 0)});
+    const float mn = std::min({fin(c[0], 0), fin(c[1], 0), fin(c[2], 0)});
+    return sonarStep(.55f, .85f, mx) * sonarStep(.45f, .7f, (mx - mn) / std::max(mx, 1e-3f));
+}
+// The beacons' gentle pulse (0.8-1.0, once every 2 s with the sonar's rings).
+inline float beaconPulse(float phase) { return .9f + .1f * std::sin(fin(phase, 0) * 3.14159265f); }
 template <class Fetch>
-std::array<float, 3> sonarPixel(Fetch&& fetch, int x, int y, int w, int h, float phase) {
+std::array<float, 3> sonarPixel(Fetch&& fetch, int x, int y, int w, int h, float phase, bool beacons = false) {
     const auto lum = [](const std::array<float, 3>& k) { return .299f * k[0] + .587f * k[1] + .114f * k[2]; };
     float l[9];
+    std::array<float, 3> tap[9];
     for (int j = 0; j < 3; ++j)
-        for (int i = 0; i < 3; ++i)
-            l[j * 3 + i] = lum(fetch(x + (i - 1) * 2, y + (j - 1) * 2));
+        for (int i = 0; i < 3; ++i) {
+            tap[j * 3 + i] = fetch(x + (i - 1) * 2, y + (j - 1) * 2);
+            l[j * 3 + i] = lum(tap[j * 3 + i]);
+        }
     const float gx = (l[2] + 2 * l[5] + l[8]) - (l[0] + 2 * l[3] + l[6]);
     const float gy = (l[6] + 2 * l[7] + l[8]) - (l[0] + 2 * l[1] + l[2]);
     const float e = std::pow(saturate(std::sqrt(gx * gx + gy * gy) * .8f), .8f);
@@ -378,8 +400,30 @@ std::array<float, 3> sonarPixel(Fetch&& fetch, int x, int y, int w, int h, float
     const float near = std::exp(-r / .55f);
     const float edge = e * (.35f + .65f * near) + e * ring * 1.5f;
     const float base = l[4] * .06f;
-    return {saturate(base + edge + ring * .25f), saturate(base * .4f + edge * .38f + ring * .08f),
-            saturate(base * .3f + edge * .08f)};
+    std::array<float, 3> out{saturate(base + edge + ring * .25f), saturate(base * .4f + edge * .38f + ring * .08f),
+                             saturate(base * .3f + edge * .08f)};
+    if (beacons) {
+        // The beacon itself in its own colour (a little brighter, pulsing), and a ring of its colour
+        // round it (the taps 2 pixels away): an outline that reads against the dark sonar world.
+        const float pulse = beaconPulse(phase), m0 = beaconMask(tap[4]);
+        float halo = 0;
+        int from = 4;
+        for (int k = 0; k < 9; ++k)
+            if (k != 4) {
+                const float m = beaconMask(tap[k]);
+                if (m > halo) {
+                    halo = m;
+                    from = k;
+                }
+            }
+        const float glow = halo * (1 - m0) * .6f * pulse;
+        for (size_t c = 0; c < 3; ++c) {
+            const float lit = saturate(fin(tap[4][c], 0) * 1.15f * pulse);
+            out[c] = out[c] + (lit - out[c]) * m0;
+            out[c] = std::max(out[c], saturate(fin(tap[from][c], 0) * glow));
+        }
+    }
+    return out;
 }
 
 } // namespace spidy::eye_color

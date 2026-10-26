@@ -184,6 +184,10 @@ struct Config {
     //   strikeSteer (STRIKE STEER TO LOCK): a web strike's Y waits assistLead with the left stick
     //     toward its enemy (CANDIDATE: the game's strike reads the stick, as the ball assist).
     bool lookQuick = false, strikeSteer = false;
+    // Version 0.0.62 PUNCH HITS INSTANT ONLY: a blow sends no X (the game's melee move and its
+    // animation stay out; the game_xr's instant DirectDamage blow is the hit). The game_xr sets it
+    // only while the damage path is open, so a closed path falls back to the X.
+    bool noPunchX = false;
     // Update 38.5 (run384/DIAGNOSIS.md; default false = 38.4's, the game_xr sets it):
     //   farLunge: a far throw zips on the first try - the lock and the lunge reach zipFar (20 m,
     //     was 10), the marked enemy takes a throw within farAim of him (by its motion or by the
@@ -304,6 +308,11 @@ struct Out {
     bool zip{};               // Update 37.2: this frame's hit went out as the zip strike (Y)
     // Update 38
     bool contact[2]{};        // the hit was a hand touching an enemy (not the fast gesture)
+    // Version 0.0.62 PUNCH HITS (SpidyVR's land()): the enemy a blow touched (its contact event; 0
+    // for a gesture blow, the game_xr picks the nearest chest) and the blow's strength (0 at
+    // SpidyVR's minSpeed 2.2 m/s, 1 at its fullSpeed 7.5 m/s), for the instant DirectDamage blow.
+    uint64_t punchTarget[2]{};
+    float punchStrength[2]{};
     bool assisted{};          // a web ball bent toward an enemy this frame
     float assistDegrees = 180.f;
     Vec3 ballDirection[2]{};  // a web ball's flight (assisted or the wrist's), for the glob
@@ -936,14 +945,19 @@ class Machine {
                 if (!contact)
                     fists_.spend(static_cast<int>(i)); // the gesture's blow re-arms the fist too
                 strike_.spent(static_cast<int>(i));
+                out.punchStrength[i] = std::clamp((speed - 2.2f) / (7.5f - 2.2f), 0.f, 1.f);
                 for (const auto& e : events_)
-                    if (e.hand == static_cast<int>(i))
+                    if (e.hand == static_cast<int>(i)) {
                         lock_.take(e.target);
+                        out.punchTarget[i] = e.target;
+                        if (std::isfinite(e.strength))
+                            out.punchStrength[i] = std::clamp(e.strength, 0.f, 1.f);
+                    }
                 if (zipsNow(f, c, i)) {
                     out.zip = true;
                     startZip(f, c, locked, fightList);
                     ++fired_[zipStrike];
-                } else {
+                } else if (!c.noPunchX) {
                     punchUntil_ = now_ + Config::punchPulse;
                     meleeWant_ = true;
                 }

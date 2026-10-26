@@ -9,8 +9,9 @@ VR for Marvel's Spider-Man 2 (Steam, Spider-Man2.exe 2.810.0.0), with the HERO V
 
 ## New in 0.0.6
 - **Hero powers** (one hero at a time, all OFF by default, no restart needed):
-  - IRON MAN: repulsor blasts and the chest beam (4x a blast, 30 s cooldown on the wrist ring) do real damage, and the
-    beam aims at the enemy you look at.
+  - IRON MAN: hand repulsor blasts and the CHEST BEAM do real damage. The CHEST BEAM does 4x a blast's damage, has a
+    30-second cooldown shown on the wrist ring, and aims at the enemy you look at. (From 0.0.62, hand repulsor blasts
+    have their own 2-second cooldown per hand.)
   - DAREDEVIL: a baton in each hand, a trigger throw that chains to up to 3 more enemies within 6 m and comes back,
     harder punches (DAREDEVIL PUNCH 1x-5x, 3x by default) and a sonar look.
   - HULK: a 4x charged jump and one-punch knockouts on normal enemies (bigger ones take 2 to 3).

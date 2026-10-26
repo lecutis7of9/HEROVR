@@ -104,6 +104,19 @@ SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, R
                       ForcedAspectRatio=0, ReflexMode=0, MotionBlurScale=0, FilmGrainStrength=0,
                       ChromaticAberration=0, Vignette=0), False),
            (INPUT_KEY, dict(EnableWindowsGamingInput=0), True))
+# - Version 0.0.62 (the player chooses, live.txt lens_flares = off_in_vr; the default leaves it): the game's
+#   lens flares off for the session. Car and bridge headlights' flares showed through walls in the headset at
+#   night: the game tests a flare's light against the monitor camera's depth, not each eye's (best lead, not
+#   proven without the headset). LensFlares is the name in the game's registry (the October 25 report,
+#   game-vr-20261025-130446: LensFlares = 1 beside its log's "Lens Flares: On", CONFIRMED); 0 for Off is by
+#   the other toggles' encoding (CANDIDATE). Backed up and put back after the session as SESSION's are.
+SESSION_OFF = dict(lens_flares=dict(LensFlares=0))
+
+
+def session_list(off=()):
+    """SESSION, with the SESSION_OFF choices named in `off` added to the graphics key's."""
+    extra = {name: value for choice in off for name, value in SESSION_OFF[choice].items()}
+    return tuple((key, dict(wanted, **extra) if key == KEY else wanted, create) for key, wanted, create in SESSION)
 
 
 class Registry:
@@ -185,7 +198,7 @@ def restore(registry=None, backup=BACKUP):
     values = saved.get('values') if saved.get('key') == KEY else None
     # Backups before October 7's SteamVR fix hold the window's values only.
     session = saved.get('session', [])
-    allowed = {key: (tuple(wanted), create) for key, wanted, create in SESSION}
+    allowed = {key: (tuple(wanted), create) for key, wanted, create in session_list(tuple(SESSION_OFF))}
     known = isinstance(session, list) and all(
         isinstance(entry, dict) and entry.get('key') in allowed and
         _saved(entry.get('values'), *allowed[entry['key']]) for entry in session)
@@ -322,16 +335,17 @@ def shrink(registry=None, backup=BACKUP, screen=None, height=HEIGHT):
     return wanted
 
 
-def prepare_session(registry=None, backup=BACKUP, keep=()):
+def prepare_session(registry=None, backup=BACKUP, keep=(), off=()):
     """Turn off what SESSION lists, adding the user's values to the backup (made here if the window
     keeps the user's settings). keep: PICTURE names ('depth_of_field', 'sharpening', 'comfort') to leave as the
-    player has them. Returns the values written."""
+    player has them; off: SESSION_OFF names ('lens_flares') turned off too. Returns the values written."""
     registry = registry or Registry()
+    session = session_list(off)
     kept = {value for name in keep for value in PICTURE[name]}
     saved = json.loads(backup.read_text()) if backup.exists() else dict(key=KEY, values={})
     if 'session' not in saved:
         saved['session'] = []
-        for key, wanted, create in SESSION:
+        for key, wanted, create in session:
             current = registry.read(tuple(wanted), key)
             saved['session'].append(dict(key=key, values={name: current.get(name) for name in wanted
                                                           if (name in current or create) and name not in kept}))
@@ -340,7 +354,7 @@ def prepare_session(registry=None, backup=BACKUP, keep=()):
     before = {entry['key']: entry['values'] for entry in saved['session']}
     written = {}
     by_key = {}
-    for key, wanted, _ in SESSION:
+    for key, wanted, _ in session:
         values = {name: value for name, value in wanted.items() if name in before.get(key, {})}
         if values:
             by_key[key] = values
@@ -354,7 +368,7 @@ def prepare_session(registry=None, backup=BACKUP, keep=()):
     return written
 
 
-def prepare_launch(small=True, registry=None, backup=BACKUP, screen=None, keep=(), height=HEIGHT):
+def prepare_launch(small=True, registry=None, backup=BACKUP, screen=None, keep=(), height=HEIGHT, off=()):
     """Called with the game closed, just before it starts. A previous session's values are restored
     first, so a backup always holds the user's own settings. keep: as prepare_session's. Returns the
     window's values written (None when the window keeps the user's settings).
@@ -365,7 +379,7 @@ def prepare_launch(small=True, registry=None, backup=BACKUP, screen=None, keep=(
     restore(registry, backup)
     try:
         window = shrink(registry, backup, screen, height) if small else None
-        prepare_session(registry, backup, keep)
+        prepare_session(registry, backup, keep, off)
     except OSError:
         try:
             restore(registry, backup)

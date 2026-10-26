@@ -67,6 +67,8 @@ struct NativeEyeFrame {
     bool repulsorLook{};
     Vec3 beamFrom{}, beamTo{};
     float beamFade{}, beamRingOk{}, beamShare{}, beamFlash{};
+    // Version 0.0.62 HAND COOLDOWN: each hand's 2 s ring on its own wrist (ok 0: hidden; share 0..1; flash 1..0 ready).
+    std::array<float, 2> blastRingOk{}, blastShare{1.f, 1.f}, blastFlash{};
     // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK: each palm's charge glow (0: none), place and way out.
     std::array<Vec3, 2> palmAt{}, palmWay{};
     std::array<float, 2> palmGlow{};
@@ -74,6 +76,9 @@ struct NativeEyeFrame {
     // Version 0.0.6 DAREDEVIL ABILITIES: each hand's baton (this frame's world; on 0: none), grip to tip.
     std::array<Vec3, 2> batonGrip{}, batonTip{};
     std::array<float, 2> batonOn{};
+    // Version 0.0.62 HIT INDICATOR: the hit marks (this frame's world; fade 0: none - always 0 while OFF).
+    std::array<Vec3, 8> markAt{};
+    std::array<float, 8> markFade{};
     // Version 0.0.5 SUPERSONIC: the shockwave (fade 1..0, 0 none), the flight's way (world, unit), its age.
     float shockFade{}, shockAge{};
     Vec3 shockWay{};

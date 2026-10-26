@@ -431,7 +431,8 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         controls.manualAngular = want * flip_.steeringRate();
         if (controls.brake || automatic_.recovering())
             automaticHands_.reset();
-        flight.handMomentum = automaticHands_.update(f, autoSettings_.handThreshold);
+        // Version 0.0.62 HAND FLIPS off: no arm movement reaches the flip.
+        flight.handMomentum = handFlips_ ? automaticHands_.update(f, autoSettings_.handThreshold) : Vec3{};
         rig_.tilt = automatic_.update(flight, flip.airborne, flip.surface, rig_.yaw, f.seconds, autoSettings_,
                                       controls);
         // Where the spin leaves the player facing is the heading: the yaw

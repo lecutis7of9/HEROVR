@@ -28,8 +28,8 @@ class PublicVersion(unittest.TestCase):
         self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update ' + build)
 
     def test_first_public_release(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.6')
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.1.1')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.62')  # 0.0.62 (build 39.2)
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.2')
 
     def test_release_scripts_bump_version_too(self):
         ps = (ROOT / 'tools/release.ps1').read_text(encoding='utf-8')
@@ -45,8 +45,8 @@ class PublicVersion(unittest.TestCase):
         for name in ('public_version', 'version_line', 'port_version'):
             m = re.search(r'^def %s\(\):\n(?:    .*\n|\n)+' % name, src, re.M)
             exec(m.group(0), scope)
-        self.assertEqual(scope['public_version'](), '0.0.6')
-        self.assertEqual(scope['version_line'](), 'Version 0.0.6 (build Update 39.1.1)')
+        self.assertEqual(scope['public_version'](), '0.0.62')
+        self.assertEqual(scope['version_line'](), 'Version 0.0.62 (build Update 39.2)')
         self.assertIn("version=public_version(), port_version=port_version()", src)
         finder = (ROOT / 'tools/address_finder.py').read_text(encoding='utf-8')
         self.assertIn("'version': public_version()", finder)

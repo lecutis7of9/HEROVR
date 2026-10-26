@@ -1500,6 +1500,35 @@ void appendBeamRing(std::vector<Vertex>& out, float share, float flash, Pose han
     if (!web_style::sane(out, from))
         out.resize(from);
 }
+void appendBlastRing(std::vector<Vertex>& out, float share, float flash, Pose hand, Vec3 viewer, float pixelAngle) {
+    if (!std::isfinite(share) || !std::isfinite(flash) || !finite(hand.position) || !finite(viewer) ||
+        !std::isfinite(pixelAngle) || pixelAngle <= 0)
+        return;
+    const float s = std::clamp(share, 0.f, 1.f), f = std::clamp(flash, 0.f, 1.f);
+    if (s >= 1.f && f <= 0.f)
+        return;
+    const Vec3 c = hand.position + hand.orientation.rotate({0, .045f, .11f});
+    const float distance = length(viewer - c);
+    if (!finite(c) || !(distance > .08f && distance < 3))
+        return;
+    const size_t from = out.size();
+    const Vec3 view3 = (viewer - c) / distance;
+    Vec3 right = cross(Vec3{0, 1, 0}, view3);
+    right = length(right) > .1f ? normalized(right) : perpendicular(view3);
+    const Vec3 up = cross(view3, right);
+    const float px = pixelAngle * distance, soft = std::max(.8f * px, .0003f);
+    constexpr float radius = .011f, half = .0022f, top = pi / 2;
+    constexpr Vec3 cyan{.25f, .8f, 1.f}, white{.9f, .97f, 1.f};
+    softArc(out, c, right, up, radius - half - 1.2f * px, radius + half + 1.6f * px, 0, 2 * pi, shadowColor, .5f, 1.8f * px,
+            48, 1.1f * px);
+    softArc(out, c, right, up, radius - half, radius + half, 0, 2 * pi, mix(cyan, {0, 0, 0}, .7f), .5f, soft, 48);
+    if (s >= 1.f)
+        softArc(out, c, right, up, radius - half, radius + half, 0, 2 * pi, white, f, soft, 48);
+    else if (s > .002f)
+        softArc(out, c, right, up, radius - half, radius + half, top - 2 * pi * s, top, cyan, 1.f, soft, 48);
+    if (!web_style::sane(out, from))
+        out.resize(from);
+}
 namespace {
 Vec3 guideColor(uint8_t state, bool done) {
     switch (state) {

@@ -50,7 +50,10 @@ EXPORTS = dict(crawl_cap='SpidyCrawlCap', zip_mode='SpidyZipMode', aim_assist='S
                punch_sense='SpidyPunchSense', sfx_volume='SpidySfxVolume', supersonic='SpidySupersonic',
                supersonic_speed='SpidySupersonicSpeed',
                # Version 0.0.6
-               daredevil='SpidyDaredevil', hulk='SpidyHulk', daredevil_punch='SpidyDaredevilPunch')
+               daredevil='SpidyDaredevil', hulk='SpidyHulk', daredevil_punch='SpidyDaredevilPunch',
+               # Version 0.0.62
+               hit_indicator='SpidyHitIndicator', hand_flips='SpidyHandFlips', lens_flares='SpidyLensFlares',
+               punch_hits='SpidyPunchHits', foe_track='SpidyFoeTrack', beacons_vision='SpidyBeaconsVision')
 # Where each setting is read (combat38 option name in C++).
 READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist', ball_look='ballLook',
                punch_mode='punchMode', ring_anchor='ringAnchor', holo_open='holoOpen', wall_tilt='wallTilt',
@@ -66,7 +69,9 @@ READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist',
                iron_man='shooterType', mirror_view='mirrorView',  # Version 0.0.4
                hero_height='heroHeight', hero_damage='heroDamage',
                punch_sense='punchSense', sfx_volume='sfxVolume', supersonic='supersonic', supersonic_speed='supersonicSpeed',  # Version 0.0.5
-               daredevil='daredevil', hulk='hulk', daredevil_punch='daredevilPunch')  # Version 0.0.6
+               daredevil='daredevil', hulk='hulk', daredevil_punch='daredevilPunch',  # Version 0.0.6
+               hit_indicator='hitIndicator', hand_flips='handFlips', lens_flares='lensFlares',
+               punch_hits='punchHits', foe_track='foeTrack', beacons_vision='beaconsVision')  # Version 0.0.62
 
 
 def cpp_options():

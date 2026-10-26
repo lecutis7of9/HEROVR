@@ -349,6 +349,15 @@ class GameTrackingRig {
     void automaticFlips(RealisticFlipSettings settings) {
         autoSettings_ = settings;
     }
+    // Version 0.0.62 HAND FLIPS (combat38 handFlips): off, the arms' movement adds nothing to a
+    // REALISTIC FLIP (B3ARVR: "it's hard to do anything when I'm moving around all of the time");
+    // the swing's flight, the stick and A still turn and right the player. On by default (0.0.6).
+    void handFlips(bool on) {
+        if (!on && handFlips_)
+            automaticHands_.reset();
+        handFlips_ = on;
+    }
+    bool handFlipsOn() const { return handFlips_; }
     // The swing's flight for the next update: its velocity and its webs' pull.
     void flight(RealisticFlight sample) {
         flight_ = sample;
@@ -375,6 +384,7 @@ class GameTrackingRig {
     RealisticFlight flight_{};
     RealisticFlip automatic_{};
     AutomaticHandMotion automaticHands_{};
+    bool handFlips_ = true; // Version 0.0.62 HAND FLIPS
     bool automaticStickReady_{}, automaticBrakeHeld_{}, automaticBrakeFromAir_{};
     Rig rig_{};
     FlipMotion flip_{};

@@ -5,7 +5,7 @@ Found by the 0.0.6 hotfix e2e (self-update from launcher build 6): build 6 saw t
 mod files (Update 39.1) beside the Update 39.1.1 sources, so the swapchain-retry modules never arrived."""
 import pathlib, re, unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LAUNCHER = next((p for p in (ROOT/'tools/launcher/src', ROOT.parent/'herovr-launcher-006/src') if p.is_dir()),
+LAUNCHER = next((p for p in (ROOT/'tools/launcher/src', ROOT.parent/'herovr-launcher-0062/src', ROOT.parent/'herovr-launcher-006/src') if p.is_dir()),
                 ROOT/'tools/launcher/src')
 def src(n): return (LAUNCHER/n).read_text(encoding='utf-8')
 

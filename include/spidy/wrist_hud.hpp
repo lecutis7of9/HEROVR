@@ -408,6 +408,15 @@ enum class Control : uint8_t {
     combatDaredevil,
     combatHulk,
     combatDaredevilPunch,
+    // Version 0.0.62: HIT INDICATOR, HAND FLIPS, LENS FLARES (RESTART)
+    combatHitIndicator,
+    combatHandFlips,
+    combatLensFlares,
+    // Version 0.0.62 (the SpidyVR comparison): PUNCH HITS, ENEMY TRACKING
+    combatPunchHits,
+    combatFoeTrack,
+    // Version 0.0.62: BEACONS IN VISION (DAREDEVIL)
+    combatBeaconsVision,
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -467,8 +476,8 @@ enum class Control : uint8_t {
     section4,
     section5,
 };
-constexpr int controls = 149;
-constexpr int combatControls = 48; // combat38::options (checked in wrist_hud.cpp)
+constexpr int controls = 155;
+constexpr int combatControls = 54; // combat38::options (checked in wrist_hud.cpp)
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);

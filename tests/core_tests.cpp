@@ -132,6 +132,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "spidy/bolt_walls.hpp"
+#include "spidy/hit_marks.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
 // Stand-ins for the game's classes, by the names the target scan's rules look
@@ -1612,7 +1614,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 149, "controls count drifted"); // Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 155, "controls count drifted"); // Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1952,7 +1954,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 149, "controls count drifted"); // Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 155, "controls count drifted"); // Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18422,7 +18424,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 48, "forty-eight options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3)");
+        check(options == 54, "fifty-four options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6)");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18456,7 +18458,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 48, "0.0.6 has 48 COMBAT options");
+        check(options == 54, "0.0.62 has 54 COMBAT options (0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18778,7 +18780,7 @@ int main() {
                 }
             }
         }
-        check(placed == 123, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 129 /* 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -21374,14 +21376,17 @@ int main() {
         o = run(.3f, false, true, false, false);
         check(o.blast[1] && !o.blast[0] && !o.beam && t.blasts() == 1, "one press is not one blast");
         check(length(o.blastAim[1] - aim[1]) < 1e-5f, "the blast lost its aim");
-        // Fast single presses: every one blasts.
+        // Fast single presses, hands taking turns (0.0.62 HAND COOLDOWN: each hand once every 2 s): every one blasts.
+        run(2.1f, false, false, false, false);
         for (int k = 0; k < 6; ++k)
-            run(.2f, k % 2 == 0, k % 2 == 1, false, false);
+            run(1.05f, k % 2 == 0, k % 2 == 1, false, false);
         check(t.blasts() == 7, "fast presses lost a blast");
+        run(2.1f, false, false, false, false);
         // Both pressed together but let go early: nothing.
         o = run(.2f, true, true, true, true);
         o = run(.3f, false, false, false, false);
         check(!o.beam && !o.blast[0] && !o.blast[1] && t.shortChords() == 1 && t.beams() == 0, "a short chord fired");
+        run(2.1f, false, false, false, false);
         // Both pressed together and held: the beam, once.
         o = run(.6f, true, true, true, true);
         check(o.beam && !o.blast[0] && !o.blast[1] && t.beams() == 1 && t.cooling(), "the held chord did not fire the beam");
@@ -21396,7 +21401,7 @@ int main() {
         o = run(.6f, true, true, true, true);
         check(!o.beam && o.cooledChord && !o.blast[0] && !o.blast[1] && t.beams() == 1 && t.cooledChords() == 1,
               "a chord while cooling did something");
-        run(.2f, false, false, false, false);
+        run(2.1f, false, false, false, false);
         // Single blasts still work while it cools.
         o = run(.3f, true, false, false, false);
         check(o.blast[0], "a blast was blocked by the beam's cooldown");
@@ -21753,11 +21758,11 @@ int main() {
         Snap still[4]{};
         check(velocityIndex(still, 4) == -1, "a still enemy matched zeros");
     });
-    test("0.0.5 BATON CHAIN: at most 3 chains, never the same enemy twice, home after, home at once with none in range", [] {
+    test("0.0.5 BATON CHAIN (0.0.62: 2 bounces, 5 m): at most batonMaxChains chains, never the same enemy twice, home after, home at once with none in range", [] {
         using namespace spidy::hero_modes;
         const float dt = 1.f / 90;
         const Vec3 hand{0, 1.4f, 0};
-        // Four enemies in a line 3 m apart (each within 6 m of the next), and a fifth also in range.
+        // Five enemies in a line 3 m apart (each within 5 m of the next): 0.0.62 stops at 3.
         BatonEnemy five[5] = {{11, {0, 1.2f, -4}}, {12, {3, 1.2f, -4}}, {13, {6, 1.2f, -4}}, {14, {9, 1.2f, -4}},
                               {15, {12, 1.2f, -4}}};
         Baton b;
@@ -21771,8 +21776,8 @@ int main() {
                 order.push_back(aimingAt);
             }
         }
-        check(hitFrames == 4 && b.chains == 3 && b.chainEnds == 1, "the chain did not stop at 3 chains (4 enemies)");
-        check(order.size() == 4 && order[0] == 11 && order[1] == 12 && order[2] == 13 && order[3] == 14,
+        check(hitFrames == 3 && b.chains == 2 && b.chainEnds == 1, "the chain did not stop at 2 bounces (3 enemies)");
+        check(order.size() == 3 && order[0] == 11 && order[1] == 12 && order[2] == 13,
               "the chain did not go to the nearest other enemy each time");
         check(b.inHandNow() && b.catches == 1, "the baton did not come home after the chain");
         bool repeat = false;
@@ -21813,8 +21818,174 @@ int main() {
         uint32_t again = 0;
         for (int i = 0; i < 3000 && !b.inHandNow(); ++i)
             again += b.update(dt, false, hand, {0, 0, -1}, five, 5, 0);
-        check(again == 4 && b.chains == 6, "the second throw did not chain afresh");
+        check(again == 3 && b.chains == 4, "the second throw did not chain afresh");
         check(b.chainTarget({0, 0, 0}, nullptr, 0) == -1, "an empty list chose an enemy");
+    });
+    test("Version 0.0.62: BEACONS IN VISION - bright coloured beacons stay in colour in the sonar; lamps and OFF as 0.0.6", [] {
+        using namespace spidy;
+        using C = std::array<float, 3>;
+        // A 100x100 eye: dark street, a vivid yellow beacon (8x8) at (50,40), a white lamp at (20,40).
+        auto scene = [](int x, int y) -> C {
+            if (std::abs(x - 50) < 4 && std::abs(y - 40) < 4)
+                return {1.f, .85f, .1f};
+            if (std::abs(x - 20) < 4 && std::abs(y - 40) < 4)
+                return {.95f, .93f, .9f};
+            return {.08f, .08f, .09f};
+        };
+        const C off = eye_color::sonarPixel(scene, 50, 40, 100, 100, 0.f, false);
+        const C on = eye_color::sonarPixel(scene, 50, 40, 100, 100, 0.f, true);
+        check(off[0] < .2f && off[2] < .1f, "0.0.6's sonar darkened the beacon's middle (the problem)");
+        check(on[0] > .8f && on[1] > .65f && on[2] < .3f, "BEACONS IN VISION: the beacon is not bright yellow");
+        // Its outline: a pixel just outside it takes its colour.
+        const C rim = eye_color::sonarPixel(scene, 55, 40, 100, 100, 0.f, true);
+        check(rim[1] > .3f && rim[1] > eye_color::sonarPixel(scene, 55, 40, 100, 100, 0.f, false)[1], "no outline round the beacon");
+        // A white lamp (not saturated) keeps the sonar look: the same with BEACONS on or off.
+        const C lampOn = eye_color::sonarPixel(scene, 20, 40, 100, 100, 0.f, true),
+                lampOff = eye_color::sonarPixel(scene, 20, 40, 100, 100, 0.f, false);
+        check(std::fabs(lampOn[0] - lampOff[0]) < 1e-5f && std::fabs(lampOn[1] - lampOff[1]) < 1e-5f, "a white lamp was kept");
+        // The dark street is untouched.
+        const C road = eye_color::sonarPixel(scene, 80, 80, 100, 100, 0.f, true),
+                roadOff = eye_color::sonarPixel(scene, 80, 80, 100, 100, 0.f, false);
+        check(road == roadOff, "the road changed");
+        // The pulse is gentle (0.8-1.0) and NaN-safe; a dim coloured pixel is not a beacon.
+        check(eye_color::beaconPulse(.5f) <= 1.0001f && eye_color::beaconPulse(1.5f) >= .799f && std::isfinite(eye_color::beaconPulse(1e30f)) && eye_color::beaconPulse(1e30f) >= .79f,
+              "the pulse");
+        check(eye_color::beaconMask({.3f, .1f, .05f}) == 0.f && eye_color::beaconMask({.2f, .2f, .2f}) == 0.f &&
+                  eye_color::beaconMask({NAN, 1.f, 0.f}) >= 0.f,
+              "dim colour or grey counted as a beacon");
+        // The setting: ON by default, live; the sonar's mode says so (2), OFF is 0.0.6's (1).
+        check(combat38::beaconsInVision(0) && !combat38::beaconsInVision(1) &&
+                  std::string(combat38::valueName(combat38::beaconsVision, 0)) == "ON",
+              "BEACONS IN VISION ON by default");
+        eye_color::Config c;
+        c.on = c.sonar = true;
+        check(eye_color::toon(c).sonar == 1.f, "OFF: 0.0.6's sonar");
+        c.sonarBeacons = true;
+        check(eye_color::toon(c).sonar == 2.f, "ON: the sonar's beacon mode");
+    });
+    test("Version 0.0.62: PLASMA FLICKER - the beams shimmer 0.76-1.0, never dark, never NaN", [] {
+        using namespace spidy::repulsor_mcu;
+        float lo = 2.f, hi = -1.f;
+        for (int i = 0; i < 6000; ++i) {
+            const float f = plasmaFlicker(static_cast<float>(i) * .0137f, static_cast<unsigned>(i % 7));
+            lo = std::min(lo, f);
+            hi = std::max(hi, f);
+        }
+        check(lo >= .759f && hi <= 1.0001f, "flicker stays 0.76-1.0");
+        check(hi - lo > .1f, "it actually flickers");
+        check(plasmaFlicker(std::nanf("")) == 1.f && plasmaFlicker(INFINITY) == 1.f, "not finite: steady");
+        check(plasmaFlicker(1.f, 0u) != plasmaFlicker(1.f, 41u), "beams flicker out of step");
+    });
+    test("Version 0.0.62: PALM BLAST - Iron Man's hand repulsor leaves the palm along its normal; webs keep the shooter axis", [] {
+        using namespace spidy;
+        auto near = [](Vec3 a, Vec3 b) { return length(a - b) < 1e-4f; };
+        const Pose level{{0, 1, 0}, {0, 0, 0, 1}};
+        // OpenXR grip +X: out of the LEFT palm, into the RIGHT one.
+        check(near(repulsor::palmNormal(level, 0), {1, 0, 0}), "left palm: grip +X");
+        check(near(repulsor::palmNormal(level, 1), {-1, 0, 0}), "right palm: grip -X (mirrored)");
+        check(near(repulsor::palmCentre(level, 0), {repulsor::palmOut, 1, 0}) &&
+                  near(repulsor::palmCentre(level, 1), {-repulsor::palmOut, 1, 0}),
+              "the palm's centre, 3.5 cm out on the palm's side");
+        // Palm turned to face forward (-Z): the right hand rolled +90 deg about the grip's -Y (the
+        // forearm), i.e. a grip turned -90 deg about world Y; the left the mirror (+90 deg).
+        const float h = .70710678f;
+        const Pose rightFwd{{0, 1, 0}, {0, -h, 0, h}}, leftFwd{{0, 1, 0}, {0, h, 0, h}};
+        check(near(repulsor::palmNormal(rightFwd, 1), {0, 0, -1}), "right palm facing forward fires forward");
+        check(near(repulsor::palmNormal(leftFwd, 0), {0, 0, -1}), "left palm facing forward fires forward");
+        // Palm down (MCU hover): the right palm rolled about the grip's Z.
+        const Pose rightDown{{0, 1, 0}, {0, 0, h, h}};
+        check(near(repulsor::palmNormal(rightDown, 1), {0, -1, 0}), "right palm down fires down");
+        // The web shooter's axis (aim_axis HAND) is not the palm: Spider-Man keeps it.
+        const Vec3 web = combat38::aimOf(level, level, combat38::axisHand);
+        check(near(web, {0, -1, 0}) && std::fabs(dot(web, repulsor::palmNormal(level, 1))) < 1e-4f,
+              "the web shooter axis moved");
+        // A broken pose: no direction (the blast falls back to the assisted aim).
+        check(length(repulsor::palmNormal(Pose{{0, 0, 0}, {0, 0, 0, 0}}, 0)) == 0.f, "a broken grip gave a palm");
+        // Aim assist still bends a palm blast onto a foe near its line, from the palm.
+        our_ball::Pool shooter;
+        our_ball::Enemies foes{};
+        foes.count = 1;
+        foes.list[0].id = 7;
+        foes.list[0].feet = {0, 0, -8};
+        const Vec3 from = repulsor::palmCentre(rightFwd, 1);
+        check(shooter.fire(1, from, repulsor::palmNormal(rightFwd, 1), foes, 0, 0), "the palm blast fired");
+    });
+    test("Version 0.0.62: BATON BOUNCE - 3 enemies at most within 5 m, no repeats, none down, always home", [] {
+        using namespace spidy::hero_modes;
+        check(batonChainRange == 5.f && batonMaxChains + 1 == 3, "3 enemies in all, 5 m");
+        const float dt = 1.f / 90;
+        const Vec3 hand{0, 1.4f, 0};
+        auto throwAt = [&](BatonEnemy* list, uint32_t n, int aimed, std::vector<uint64_t>& order, Baton& b) {
+            b.update(dt, true, hand, {0, 0, -1}, list, n, aimed);
+            bool sawReturn = false;
+            for (int i = 0; i < 3000 && !b.inHandNow(); ++i) {
+                const uint64_t at = b.targetId;
+                if (b.update(dt, false, hand, {0, 0, -1}, list, n, aimed))
+                    order.push_back(at);
+                sawReturn |= b.state == returning;
+            }
+            return sawReturn;
+        };
+        auto noRepeats = [](const std::vector<uint64_t>& o) {
+            for (size_t i = 0; i < o.size(); ++i)
+                for (size_t j = i + 1; j < o.size(); ++j)
+                    if (o[i] == o[j])
+                        return false;
+            return true;
+        };
+        {   // 3 in range (2 m apart): 3 hits, then home.
+            BatonEnemy three[3] = {{41, {0, 1.2f, -4}}, {42, {2, 1.2f, -4}}, {43, {4, 1.2f, -4}}};
+            Baton b; std::vector<uint64_t> o;
+            const bool back = throwAt(three, 3, 0, o, b);
+            check(o.size() == 3 && o[0] == 41 && o[1] == 42 && o[2] == 43 && noRepeats(o), "3 in range: 3 hits in order");
+            check(back && b.inHandNow() && b.catches == 1 && b.timeouts == 0, "3 in range: then back in the hand");
+        }
+        {   // 1 in range (the others 7 m and more away): 1 hit, then home.
+            BatonEnemy far[3] = {{51, {0, 1.2f, -4}}, {52, {7, 1.2f, -4}}, {53, {-8, 1.2f, -4}}};
+            Baton b; std::vector<uint64_t> o;
+            throwAt(far, 3, 0, o, b);
+            check(o.size() == 1 && o[0] == 51 && b.chainNoneInRange == 1 && b.inHandNow() && b.timeouts == 0,
+                  "1 in range: 1 hit, then home at once");
+        }
+        {   // 0: a throw at nobody comes straight back.
+            Baton b; std::vector<uint64_t> o;
+            const bool back = throwAt(nullptr, 0, -1, o, b);
+            check(o.empty() && back && b.inHandNow() && b.hits == 0 && b.catches == 1, "0 in range: straight back");
+        }
+        {   // Never one down (dead or knocked out): the down one 2 m away is skipped for the one 4 m away.
+            BatonEnemy mixed[3] = {{61, {0, 1.2f, -4}}, {62, {2, 1.2f, -4}, true}, {63, {4, 1.2f, -4}}};
+            Baton b; std::vector<uint64_t> o;
+            throwAt(mixed, 3, 0, o, b);
+            check(o.size() == 2 && o[0] == 61 && o[1] == 63 && noRepeats(o), "a downed enemy is skipped");
+            // A target who goes down while it flies: home, no hit.
+            BatonEnemy one[1] = {{71, {0, 1.2f, -8}}};
+            Baton c;
+            c.update(dt, true, hand, {0, 0, -1}, one, 1, 0);
+            for (int i = 0; i < 5; ++i)
+                c.update(dt, false, hand, {0, 0, -1}, one, 1, 0);
+            one[0].down = true;
+            uint32_t hits = 0;
+            for (int i = 0; i < 3000 && !c.inHandNow(); ++i)
+                hits += c.update(dt, false, hand, {0, 0, -1}, one, 1, 0);
+            check(hits == 0 && c.targetDowns == 1 && c.inHandNow(), "a target who went down: home, no hit");
+            check(Baton::sweepHit({0, 1.2f, -1}, {0, 1.2f, -7}, mixed + 1, 1) == -1, "a straight throw passes a downed body");
+        }
+        {   // Two close together: never back to the first (no repeats), and the hand never waits past batonMaxOut.
+            BatonEnemy two[2] = {{81, {0, 1.2f, -4}}, {82, {1, 1.2f, -4}}};
+            Baton b; std::vector<uint64_t> o;
+            throwAt(two, 2, 0, o, b);
+            check(o.size() == 2 && noRepeats(o), "a pair: each once");
+            // An enemy who runs away as fast as it flies: the timeout brings it home.
+            Baton r;
+            BatonEnemy runner[1] = {{91, {0, 1.2f, -4}}};
+            r.update(dt, true, hand, {0, 0, -1}, runner, 1, 0);
+            int frames = 0;
+            for (; frames < 3000 && !r.inHandNow(); ++frames) {
+                runner[0].chest.z -= batonSpeed * dt * 1.01f;
+                r.update(dt, false, hand, {0, 0, -1}, runner, 1, 0);
+            }
+            check(r.inHandNow() && frames <= static_cast<int>(batonMaxOut * 90) + 2, "the baton always comes back");
+        }
     });
     test("0.0.5 HERO HEIGHT: 1.00X changes nothing, the eyes rise along up, the arm grows, limits clamp", [] {
         using namespace spidy::hero_height;
@@ -22202,7 +22373,9 @@ int main() {
     test("0.0.5 SOUND EFFECTS: the seven WAVs are compiled in, 48 kHz mono 16-bit", [] {
         using namespace spidy::sfx;
         // Update 39.0.2: the MCU repulsor (take C, TIGHT): a .26 s blast and a .12 s charge-up.
-#if defined(SPIDY_REPULSOR_TAKE_a)
+#if defined(SPIDY_REPULSOR_TAKE_user)
+        constexpr float fire = 1.088f; // Version 0.0.62: the player's own sound's blast (tools/sfx/user_repulsor.py)
+#elif defined(SPIDY_REPULSOR_TAKE_a)
         constexpr float fire = .38f; // take A, CLASSIC
 #elif defined(SPIDY_REPULSOR_TAKE_b)
         constexpr float fire = .5f; // take B, HEAVY
@@ -22301,7 +22474,7 @@ int main() {
         const uint32_t whoosh = sfx::requests().take(sfx::batonWhoosh, dropped);
         const uint32_t hitSounds = sfx::requests().take(sfx::batonHit, dropped);
         check(b.throws == 1 && whoosh == 1, "one throw, one whoosh");
-        check(hits == 4 && hitSounds == 4 && dropped == 0, "four hits (three chains), four hit sounds");
+        check(hits == 3 && hitSounds == 3 && dropped == 0, "0.0.62: three hits (two bounces), three hit sounds");
     });
     test("0.0.6 BEAM AIM ASSIST: the enemy nearest the look within 30 deg and 40 m, none: the level forward", [] {
         using namespace spidy;
@@ -22424,6 +22597,279 @@ int main() {
         cc.on = true;
         cc.sonar = true;
         check(eye_color::toon(cc).sonar == 1.f, "the toon pipeline's sonar mode is off");
+    });
+
+    test("Version 0.0.62: PUNCH HITS, ENEMY TRACKING, HIT INDICATOR, HAND FLIPS, LENS FLARES (options)", [] {
+        using namespace combat38;
+        check(std::string(optionInfo[punchHits].key) == "punch_hits" && optionInfo[punchHits].count == 3 &&
+                  std::string(valueName(punchHits, 0)) == "GAME + INSTANT" && std::string(valueName(punchHits, 1)) == "GAME MOVE" &&
+                  std::string(valueName(punchHits, 2)) == "INSTANT ONLY",
+              "PUNCH HITS values");
+        check(std::string(optionInfo[foeTrack].key) == "foe_track" && std::string(valueName(foeTrack, 0)) == "LIVE" &&
+                  std::string(valueName(foeTrack, 1)) == "0.0.6",
+              "ENEMY TRACKING values");
+        check(std::string(valueName(hitIndicator, 0)) == "OFF" && std::string(valueName(handFlips, 0)) == "ON" &&
+                  std::string(valueName(lensFlares, 0)) == "GAME",
+              "HIT INDICATOR OFF, HAND FLIPS ON (0.0.6), LENS FLARES GAME by default");
+        for (uint32_t o : {hitIndicator, handFlips, lensFlares, punchHits, foeTrack, beaconsVision}) {
+            const std::string sub = optionInfo[o].help ? optionInfo[o].help : "";
+            check(!sub.empty() && sub.size() <= 100, "every 0.0.62 setting has a one-line subtext");
+        }
+        check(instantPunch(0) && !instantPunch(1) && instantPunch(2), "instantPunch");
+        check(foeTrackLive(0) && !foeTrackLive(1), "foeTrackLive");
+        check(handFlipsOn(0) && !handFlipsOn(1) && !lensFlaresOffInVr(0) && lensFlaresOffInVr(1), "flip / flare values");
+        const auto soft = instantBlowOf(0.f, punchHitsBoth), hard = instantBlowOf(1.f, punchHitsBoth),
+                   only = instantBlowOf(1.f, punchHitsInstant), bad = instantBlowOf(NAN, punchHitsBoth);
+        near(soft.amount, 4, 1e-4f);
+        near(hard.amount, 12, 1e-4f);
+        near(only.amount, 21, 1e-4f);
+        near(hard.knockAmount, 120, 1e-4f);
+        near(bad.amount, 4, 1e-4f);
+        check(hard.amount < sm2_damage::batonHit().amount, "the instant blow stays under a baton's");
+    });
+    test("Version 0.0.62: INSTANT ONLY sends no X; a punch still goes out with its strength", [combatFrame] {
+        using namespace combat_input;
+        for (bool noX : {false, true}) {
+            Config c;
+            c.noPunchX = noX;
+            Machine m;
+            Frame f = combatFrame();
+            int punches = 0;
+            float held = 0, strength = -1;
+            for (int i = 0; i < 60; ++i) {
+                if (i >= 5 && i < 14)
+                    f.hands[1].position = f.hands[1].position + Vec3{0, 0, -4.f / 90};
+                const auto o = m.update(f, c);
+                if (o.punch[1]) {
+                    ++punches;
+                    strength = o.punchStrength[1];
+                }
+                if (o.buttons & padX)
+                    held += f.seconds;
+            }
+            check(punches == 1 && strength >= 0 && strength <= 1, "the punch and its strength");
+            check(noX ? held == 0 : std::abs(held - .18f) < .02f, noX ? "INSTANT ONLY pressed X" : "GAME pressed no X");
+        }
+    });
+    test("Version 0.0.62: DAREDEVIL batons hit - straight throws on the way, swings in the hand", [] {
+        using namespace hero_modes;
+        near(segmentGap({-1, 0, 0}, {1, 0, 0}, {0, -1, 1}, {0, 1, 1}), 1, 1e-4f);
+        near(segmentGap({0, 0, 0}, {0, 0, 0}, {3, 0, 0}, {3, 0, 0}), 3, 1e-4f);
+        const BatonEnemy list[2] = {{7, {0, 1.2f, -5}}, {9, {0, 1.2f, -9}}};
+        check(Baton::sweepHit({0, 1.2f, -1}, {0, 1.2f, -6}, list, 2) == 0, "a straight throw through him missed");
+        check(Baton::sweepHit({3, 1.2f, -1}, {3, 1.2f, -6}, list, 2) < 0, "a throw 3 m aside hit");
+        check(Baton::sweepHit({0, 1.2f, -1}, {0, 1.2f, -6}, nullptr, 0) < 0, "no list");
+        // a straight throw (no enemy aimed) still hits the one in its path
+        Baton b;
+        bool hit = false;
+        for (int i = 0; i < 90 && !hit; ++i)
+            hit = b.update(1 / 90.f, i < 3, {0, 1.2f, 0}, {0, 0, -1}, list, 2, -1);
+        check(hit && b.hitCount >= 1 && b.hitIds[0] == 7 && b.straightLocks == 1, "a straight throw passed through");
+        // a swing: the shaft sweeps through his body at speed - one hit, then the cooldown
+        const BatonEnemy one[1] = {{5, {0, 1.2f, -.6f}}};
+        BatonSwing sw;
+        Vec3 grip{}, tip{};
+        batonShaft({.5f, 1.2f, -.2f}, {0, 0, -1}, grip, tip);
+        check(sw.update(1 / 90.f, true, grip, tip, one, 1) < 0, "the first frame hit (no sweep yet)");
+        batonShaft({0, 1.2f, -.2f}, {0, 0, -1}, grip, tip);
+        check(sw.update(1 / 90.f, true, grip, tip, one, 1) == 0 && sw.hits == 1, "the swing through him missed");
+        check(sw.update(1 / 90.f, true, grip, tip, one, 1) < 0, "a resting baton hit again");
+        // slow, touching: no hit (not a swing)
+        BatonSwing slow;
+        batonShaft({.02f, 1.2f, -.2f}, {0, 0, -1}, grip, tip);
+        slow.update(1 / 90.f, true, grip, tip, one, 1);
+        batonShaft({0, 1.2f, -.2f}, {0, 0, -1}, grip, tip);
+        check(slow.update(1 / 90.f, true, grip, tip, one, 1) < 0, "a slow touch hit");
+        // after the cooldown, a new swing hits again; out of the hand nothing does
+        for (int i = 0; i < 40; ++i)
+            sw.update(1 / 90.f, false, grip, tip, one, 1);
+        batonShaft({.5f, 1.2f, -.2f}, {0, 0, -1}, grip, tip);
+        sw.update(1 / 90.f, true, grip, tip, one, 1);
+        batonShaft({0, 1.2f, -.2f}, {0, 0, -1}, grip, tip);
+        check(sw.update(1 / 90.f, true, grip, tip, one, 1) == 0 && sw.hits == 2, "no second swing hit after the cooldown");
+        check(sw.update(1 / 90.f, false, grip, tip, one, 1) < 0, "a thrown baton swung");
+    });
+    test("Version 0.0.62: BOLT WALLS - shots and the beam stop at the first wall, fail safe", [] {
+        using namespace bolt_walls;
+        int slot = -1;
+        uint32_t low = 99;
+        check(ballOfTag(ballTag(3, 0x25), slot, low) && slot == 3 && low == 5, "ball tags");
+        check(!ballOfTag(beamTag(2), slot, low) && isBeamTag(beamTag(2)) && !isBeamTag(7) && !ballOfTag(107, slot, low),
+              "beam tags never clash with the hands / head / roof / sight tags");
+        const Wall none = fromHit({0, 0, 0}, {0, 0, -1}, 40, false, .5f);
+        check(none.known && !none.blocked && none.metres == 40, "a body (not fixed) is no wall");
+        const Wall miss = fromHit({0, 0, 0}, {0, 0, -1}, 40, true, 1.f);
+        check(miss.known && !miss.blocked, "no hit is no wall");
+        const Wall wall = fromHit({0, 0, 0}, {0, 0, -1}, 40, true, .25f);
+        check(wall.known && wall.blocked && std::abs(wall.metres - 10) < 1e-4f, "a wall 10 m");
+        check(!fromHit({NAN, 0, 0}, {0, 0, -1}, 40, true, .25f).known && !fromHit({0, 0, 0}, {0, 0, -2}, 40, true, .25f).known,
+              "a bad answer is no answer");
+        Vec3 cut{};
+        check(!crossed(wall, {0, 0, -8}, {0, 0, -9}, &cut) && crossed(wall, {0, 0, -9}, {0, 0, -10.5f}, &cut) &&
+                  std::abs(cut.z + 10) < 1e-4f,
+              "the step that reaches the wall stops on it");
+        check(!crossed(Wall{}, {0, 0, -9}, {0, 0, -50}, &cut), "no answer never stops a shot");
+        near(beamReach(wall, 40), 10, 1e-4f);
+        near(beamReach(none, 40), 40, 1e-4f);
+        near(beamReach(Wall{}, 40), 40, 1e-4f);
+        near(beamReach(fromHit({0, 0, 0}, {0, 0, -1}, 40, true, 0.f), 40), minBeam, 1e-4f);
+        // the hand's aim ray stands in for a shot that left along it, moved onto its line
+        const Wall hand = fromHit({0, 1, 0}, {0, 0, -1}, 100, true, .2f); // wall 20 m
+        const Wall along = fromHandRay(hand, {.1f, 1, -2}, {0, 0, -1});
+        check(along.known && along.blocked && std::abs(along.metres - 18) < 1e-3f, "the hand's wall for a shot along it");
+        check(!fromHandRay(hand, {0, 1, -2}, {.3f, 0, -1}).known, "a turned shot borrowed the hand's wall");
+        check(!fromHandRay(hand, {1, 1, -2}, {0, 0, -1}).known, "a shot a metre aside borrowed the hand's wall");
+        check(stale(wall, {0, 0, -3}, {.5f, 0, -1}) && !stale(wall, {0, 0, -3}, {0, 0, -1}) && stale(Wall{}, {}, {0, 0, -1}),
+              "a turned shot asks again");
+        // the pool: a wall 5 m ahead stops the ball there; an enemy short of it is still hit, one behind never
+        our_ball::Enemies e;
+        Wall ws[our_ball::Pool::balls]{};
+        for (auto& w : ws)
+            w = fromHit({0, 1.3f, 0}, {0, 0, -1}, 40, true, .125f); // 5 m
+        {
+            our_ball::Pool pool;
+            check(pool.fire(1, {0, 1.3f, 0}, {0, 0, -1}, e, 0, 0) && pool.ball(0).serial == 1, "fired, serial 1");
+            int walls = 0;
+            Vec3 at{};
+            for (int i = 0; i < 90 && pool.flying(); ++i) {
+                const auto st = pool.update(1 / 90.f, e, ws);
+                walls += st.wallCount;
+                if (st.wallCount)
+                    at = st.walls[0].at;
+            }
+            check(walls == 1 && std::abs(at.z + 5) < .01f && pool.walled() == 1 && pool.hits() == 0, "the ball went through the wall");
+        }
+        {
+            our_ball::Enemies behind;
+            behind.list[0].feet = {0, 0, -8};
+            behind.list[0].id = 42;
+            behind.count = 1;
+            our_ball::Pool pool;
+            pool.fire(1, {0, 1.3f, 0}, {0, 0, -1}, behind, 0, 3);
+            for (int i = 0; i < 90 && pool.flying(); ++i)
+                pool.update(1 / 90.f, behind, ws);
+            check(pool.hits() == 0 && pool.walled() == 1, "an enemy behind the wall was hit");
+            our_ball::Enemies front;
+            front.list[0].feet = {0, 0, -3};
+            front.list[0].id = 43;
+            front.count = 1;
+            our_ball::Pool p2;
+            p2.fire(1, {0, 1.3f, 0}, {0, 0, -1}, front, 0, 3);
+            for (int i = 0; i < 90 && p2.flying(); ++i)
+                p2.update(1 / 90.f, front, ws);
+            check(p2.hits() == 1 && p2.walled() == 0, "an enemy short of the wall was not hit");
+            our_ball::Pool p3; // no walls: 0.0.6
+            p3.fire(1, {0, 1.3f, 0}, {0, 0, -1}, behind, 0, 3);
+            for (int i = 0; i < 90 && p3.flying(); ++i)
+                p3.update(1 / 90.f, behind);
+            check(p3.hits() == 1, "without walls the shot no longer reached him");
+        }
+    });
+    test("Version 0.0.62: REPULSOR HAND COOLDOWN - each hand once every 2 s, its own timer from the pull", [] {
+        using namespace spidy::repulsor;
+        // Frames at 90 Hz; a pull is one frame's press, the trigger held for 0.05 s.
+        Trigger t;
+        int fired[2]{}, sounds[2]{}, cooled[2]{};
+        float firedAt[2][8]{};
+        const Vec3 aim[2]{{0, 0, -1}, {0, 0, -1}};
+        auto run = [&](float from, float to, float pullR, float pullL) { // -1: no pull in this span
+            for (int f = 0;; ++f) {
+                const float now = from + static_cast<float>(f) / 90.f;
+                if (now > to + 1e-6f)
+                    break;
+                bool press[2]{}, held[2]{};
+                const float pull[2]{pullL, pullR}; // hand 0 left, 1 right
+                for (int i = 0; i < 2; ++i) {
+                    press[i] = pull[i] >= 0 && std::fabs(now - pull[i]) < .5f / 90.f;
+                    held[i] = pull[i] >= 0 && now >= pull[i] - 1e-6f && now < pull[i] + .05f;
+                }
+                const Out o = t.update(now, press, aim, held);
+                for (int i = 0; i < 2; ++i) {
+                    if (o.blast[i] && fired[i] < 8)
+                        firedAt[i][fired[i]++] = now;
+                    sounds[i] += o.accepted[i] && t.chargingFor(i) >= 0 ? 1 : 0;
+                    cooled[i] += o.handCooled[i] ? 1 : 0;
+                    check(!o.beam, "a single pull fired the chest beam");
+                }
+            }
+        };
+        run(0.f, .4f, 0.f, -1);   // right at t = 0
+        run(.4f + 1 / 90.f, .9f, -1, .5f); // left at t = 0.5: not blocked by the right hand
+        check(fired[1] == 1 && fired[0] == 1, "right at 0 and left at 0.5 both fire");
+        check(std::fabs(t.handCooldownLeft(1) - (2.f - .9f)) < .02f, "the right hand's timer runs from its pull");
+        check(handShare(t, 1) > .4f && handShare(t, 1) < .5f, "the right wrist ring shows 0.9 of 2 s");
+        check(handShare(t, 0) > .15f && handShare(t, 0) < .25f, "the left wrist ring shows its own 0.4 of 2 s");
+        run(.9f + 1 / 90.f, 1.95f, 1.9f, -1); // right at 1.9: ignored
+        check(fired[1] == 1 && cooled[1] == 1 && sounds[1] == 1, "a right pull at 1.9 s does nothing (no sound, no blast)");
+        // Exactly 2.0 s after the first pull (an exact time, not a frame: the clock is the combat clock).
+        {
+            bool press[2]{false, true}, held[2]{false, true};
+            Out o = t.update(2.0f, press, aim, held);
+            check(o.accepted[1] && !o.handCooled[1], "a right pull at 2.0 s counts");
+            bool none[2]{};
+            o = t.update(2.0f + chordWindow + .01f, none, aim, none);
+            check(o.blast[1], "a right pull at 2.0 s fires");
+        }
+        // The left hand's own cooldown (from 0.5) is still running at 2.4 and over at 2.5.
+        {
+            bool pressL[2]{true, false}, held[2]{true, false}, none[2]{};
+            Out o = t.update(2.4f, pressL, aim, held);
+            check(o.handCooled[0], "the left hand's pull at 2.4 s (0.5 + 1.9) is ignored");
+            o = t.update(2.5f, pressL, aim, held);
+            check(o.accepted[0], "the left hand's pull at 2.5 s counts");
+            o = t.update(2.5f + chordWindow + .01f, none, aim, none);
+            check(o.blast[0], "and fires");
+        }
+        // A pull during its hand's cooldown takes no part in a chord: no beam from it.
+        {
+            Trigger c;
+            bool r[2]{false, true}, both[2]{true, true}, none[2]{};
+            c.update(10.f, r, aim, r);
+            c.update(10.2f, none, aim, none); // the right blast went
+            Out o = c.update(11.f, both, aim, both); // left counts, right is cooling
+            check(o.accepted[0] && o.handCooled[1], "a chord with a cooling hand: only the ready hand counts");
+            bool beam = false;
+            for (float now = 11.f; now < 12.f; now += 1 / 90.f)
+                beam |= c.update(now, none, aim, both).beam;
+            check(!beam, "a cooling hand's pull never makes the chest beam");
+        }
+        // The chest beam's own 30 s cooldown is unchanged.
+        check(beamCooldown == 30.f && handCooldown == 2.f, "cooldowns: beam 30 s, each hand 2 s");
+        // The wrist ring: drawn while cooling, hidden when ready (after its blink).
+        std::vector<Vertex> v;
+        const Pose hand{{0, 1, -.4f}, {}};
+        appendBlastRing(v, .5f, 0, hand, {0, 1.2f, 0}, .001f);
+        check(!v.empty(), "the cooling ring is drawn");
+        const size_t n = v.size();
+        appendBlastRing(v, 1.f, 0, hand, {0, 1.2f, 0}, .001f);
+        check(v.size() == n, "a ready hand shows no ring");
+        appendBlastRing(v, std::nanf(""), 0, hand, {0, 1.2f, 0}, .001f);
+        check(v.size() == n, "odd input draws nothing");
+    });
+    test("Version 0.0.62: HIT INDICATOR marks and HAND FLIPS", [] {
+        spidy::hit_marks::Marks marks;
+        check(marks.showing() == 0, "marks at start");
+        marks.add({0, 1, -2});
+        marks.add({NAN, 0, 0});
+        check(marks.showing() == 1 && marks.added() == 1, "one mark (a bad point is none)");
+        std::vector<Vertex> v;
+        for (int i = 0; i < spidy::hit_marks::most; ++i)
+            if (marks.fade(i) > 0)
+                spidy::hit_marks::appendMark(v, marks.at(i), {0, 1.6f, 0}, .001f, marks.fade(i));
+        check(v.size() == 72, "a mark is 72 vertices");
+        for (int i = 0; i < 20; ++i)
+            marks.add({0, 1, -3.f - i});
+        check(marks.showing() == spidy::hit_marks::most, "at most 8 marks");
+        for (int i = 0; i < 3; ++i)
+            marks.update(.1f); // (a frame's step is capped at 0.1 s)
+        check(marks.showing() == 0, "marks outlived 0.22 s");
+        marks.add({0, 1, -2});
+        marks.clear();
+        check(marks.showing() == 0, "clear");
+        GameTrackingRig rig;
+        check(rig.handFlipsOn(), "HAND FLIPS on by default (0.0.6)");
+        rig.handFlips(false);
+        check(!rig.handFlipsOn(), "HAND FLIPS off");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

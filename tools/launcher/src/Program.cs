@@ -43,15 +43,17 @@ namespace Sm2VrLauncher
         public static string LogError(Exception ex)
         {
             string text = DateTime.Now.ToString("o") + " (launcher " + LauncherInfo.Version + ", build " + LauncherInfo.Build + ")\r\n" + (ex == null ? "unknown error" : ex.ToString()) + "\r\n\r\n";
-            string log = Path.Combine(Settings.Folder, "launcher-error.log");
-            try { Directory.CreateDirectory(Settings.Folder); File.AppendAllText(log, text); } catch { }
-            return log;
+            // Settings.Folder itself can be what failed (a bad launcher.ini, an unreadable %APPDATA%): fall back to %TEMP%.
+            string log = null;
+            try { string dir = Settings.Folder; Directory.CreateDirectory(dir); log = Path.Combine(dir, "launcher-error.log"); File.AppendAllText(log, text); return log; } catch { }
+            try { log = Path.Combine(Path.GetTempPath(), "SM2 VR Launcher-error.log"); File.AppendAllText(log, text); } catch { }
+            return log ?? "launcher-error.log";
         }
 
         static void Crash(Exception ex, bool canContinue)
         {
             string log = LogError(ex);
-            Telemetry.NoteLauncherCrash(ex);   // Version 0.0.6: asked about (once) at the next start
+            try { Telemetry.NoteLauncherCrash(ex); } catch { }   // Version 0.0.6: asked about (once) at the next start
             try
             {
                 MessageBox.Show("Something went wrong in the launcher:\n\n" + (ex == null ? "unknown error" : ex.Message) +

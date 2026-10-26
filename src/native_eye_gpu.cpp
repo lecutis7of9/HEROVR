@@ -1216,12 +1216,21 @@ float sonarRings(float r, float phase) {
     }
     return ring;
 }
-float4 sonar(int2 p, int2 hi, uint w, uint h) {
+// Version 0.0.62 BEACONS IN VISION (eye_color::beaconMask / beaconPulse, the same steps).
+float beaconMask(float3 c) {
+    const float mx = max(c.r, max(c.g, c.b));
+    const float mn = min(c.r, min(c.g, c.b));
+    return sstep(0.55, 0.85, mx) * sstep(0.45, 0.7, (mx - mn) / max(mx, 0.001));
+}
+float4 sonar(int2 p, int2 hi, uint w, uint h, bool beacons) {
     const float3 lw = float3(0.299, 0.587, 0.114);
     float l[9];
+    float3 tap[9];
     [unroll] for (int j = 0; j < 3; ++j)
-        [unroll] for (int i = 0; i < 3; ++i)
-            l[j * 3 + i] = dot(source.Load(int3(clamp(p + int2(i - 1, j - 1) * 2, int2(0, 0), hi), 0)).rgb, lw);
+        [unroll] for (int i = 0; i < 3; ++i) {
+            tap[j * 3 + i] = source.Load(int3(clamp(p + int2(i - 1, j - 1) * 2, int2(0, 0), hi), 0)).rgb;
+            l[j * 3 + i] = dot(tap[j * 3 + i], lw);
+        }
     const float alpha = source.Load(int3(clamp(p, int2(0, 0), hi), 0)).a;
     const float gx = (l[2] + 2.0 * l[5] + l[8]) - (l[0] + 2.0 * l[3] + l[6]);
     const float gy = (l[6] + 2.0 * l[7] + l[8]) - (l[0] + 2.0 * l[1] + l[2]);
@@ -1234,8 +1243,26 @@ float4 sonar(int2 p, int2 hi, uint w, uint h) {
     const float nearK = exp(-r / 0.55);
     const float edge = e * (0.35 + 0.65 * nearK) + e * ring * 1.5;
     const float base = l[4] * 0.06;
-    const float3 col = saturate(float3(base + edge + ring * 0.25, base * 0.4 + edge * 0.38 + ring * 0.08,
-                                       base * 0.3 + edge * 0.08));
+    float3 col = saturate(float3(base + edge + ring * 0.25, base * 0.4 + edge * 0.38 + ring * 0.08,
+                                 base * 0.3 + edge * 0.08));
+    if (beacons) {
+        const float pulse = 0.9 + 0.1 * sin(foveaView.z * 3.14159265);
+        const float m0 = beaconMask(tap[4]);
+        float halo = 0.0;
+        float3 haloCol = tap[4];
+        [unroll] for (int k = 0; k < 9; ++k) {
+            if (k != 4) {
+                const float m = beaconMask(tap[k]);
+                if (m > halo) {
+                    halo = m;
+                    haloCol = tap[k];
+                }
+            }
+        }
+        const float glow = halo * (1.0 - m0) * 0.6 * pulse;
+        col = lerp(col, saturate(tap[4] * 1.15 * pulse), m0);
+        col = max(col, saturate(haloCol * glow));
+    }
     return float4(lerp(col, toLinear(col), linearOut), alpha);
 }
 float4 toon(float4 position : SV_POSITION) : SV_TARGET {
@@ -1244,7 +1271,7 @@ float4 toon(float4 position : SV_POSITION) : SV_TARGET {
     const int2 p = int2(position.xy);
     const int2 hi = int2(w, h) - 1;
     if (highTone.w > 3.5)
-        return sonar(p, hi, w, h);
+        return sonar(p, hi, w, h, highTone.w > 7.5); // 0.0.62 BEACONS IN VISION: +8
     const int stride = clamp(int(highTone.w + 0.5), 1, 2);
     const float paint = saturate(unused);
     const float bands = clamp(balance.w, 3.0, 5.0);
@@ -1534,7 +1561,7 @@ bool drawSharpen(ID3D12GraphicsCommandList* list, size_t slot, ID3D12Resource* c
                              cp.balance[0], cp.balance[1], cp.balance[2], tp.bands,
                              cp.shadow[0], cp.shadow[1], cp.shadow[2], tp.ink,
                              cp.high[0], cp.high[1], cp.high[2],
-                             static_cast<float>(tp.stride) + (tp.sonar > .5f ? 4.f : 0.f)}; // 0.0.6 SONAR: +4
+                             static_cast<float>(tp.stride) + (tp.sonar > 1.5f ? 8.f : tp.sonar > .5f ? 4.f : 0.f)}; // 0.0.6 SONAR: +4; 0.0.62 BEACONS: +8
     // Version 0.0.6 DAREDEVIL SONAR: the pulse rings' clock (seconds, wrapped) in foveaView.z.
     const float sonarPhase =
         tp.sonar > .5f ? static_cast<float>(std::fmod(
@@ -1652,7 +1679,16 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
         return here;
     // Update 21: extra.w widens the clamp (eye_history.hpp historyLoosen).
     const float3 give = (hi - lo) * saturate(extra.w);
-    const float3 before = clamp(previous.SampleLevel(bilinear, old, 0).rgb, max(lo - give, 0), hi + give);
+    const float3 raw = previous.SampleLevel(bilinear, old, 0).rgb;
+    const float3 before = clamp(raw, max(lo - give, 0), hi + give);
+    // Version 0.0.62 ANTI-GHOST: the history follows the head only, so a hand (or anything that
+    // moved on its own) leaves its old picture behind - the "ghost hand copies". History far outside
+    // this pixel's own 3x3 colours is such a thing, not edge shimmer: keep less of it (none at
+    // twice the neighbourhood's spread), so the trail is gone in a frame or two.
+    const float3 outside = max(max(lo - raw, raw - hi), 0);
+    const float spread = max(max(hi.r - lo.r, hi.g - lo.g), hi.b - lo.b) + 0.03;
+    const float miss = max(outside.r, max(outside.g, outside.b)) / spread;
+    keep *= saturate(1.5 - miss * 0.75);
     return float4(lerp(here.rgb, before, keep), here.a);
 }
 )";

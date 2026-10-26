@@ -875,12 +875,12 @@ constexpr SectionDef powersSections[] = {
       C::flyAutoLevel}},
     {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
     {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType}},
-    {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2, {C::combatDaredevil, C::combatDaredevilPunch}},
+    {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2, {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision}},
     {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight}},
 };
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
-     {C::combatCrawlCap, C::combatWallTilt, C::npcFade, C::playOnMonitor}},
+     {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor}},
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -893,13 +893,14 @@ constexpr SectionDef vrSections[] = {
 };
 constexpr SectionDef combatSections[] = {
     {"PUNCHES", C::combatPunchMode, C::none, "", "", nullptr, -1,
-     {C::combatPunchMode, C::combatPunchSense, C::combatPunchAngle, C::combatMeleeAnim, C::combatZipMode}},
+     {C::combatPunchMode, C::combatPunchSense, C::combatPunchAngle, C::combatMeleeAnim, C::combatZipMode,
+      C::combatHitIndicator, C::combatPunchHits}},
     {"WEB BALL", C::combatBallAim, C::combatBallLook, "", "", nullptr, -1,
      {C::combatBallAim, C::combatBallLook, C::combatBallFire, C::combatBallLead, C::combatAimStrength,
       C::combatBallHit}},
     {"LUNGE AND LOCK-ON", C::combatLunge, C::none, "", "", nullptr, -1,
      {C::combatLunge, C::combatLungeFrom, C::combatLungeSpeed, C::combatLungeAim, C::combatLookLock,
-      C::combatStrikeSteer, C::combatAimAxis}},
+      C::combatStrikeSteer, C::combatAimAxis, C::combatFoeTrack}},
     {"GADGETS AND GRABS", C::combatGadgetKeys, C::none, "", " KEYS", nullptr, -1,
      {C::combatGadgetKeys, C::combatGadgetFeel, C::combatGadgetHint, C::combatGrabWeb, C::combatRopeGrab,
       C::combatRopeStrength, C::combatWallStick}},
@@ -911,7 +912,7 @@ constexpr SectionDef graphicsSections[] = {
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
      {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
     {"DISPLAY AND DETAIL", C::monitor, C::none, "WINDOW ", "", nullptr, -1,
-     {C::monitor, C::eyeBloom, C::sharedLod, C::eyeLod}},
+     {C::monitor, C::eyeBloom, C::combatLensFlares, C::sharedLod, C::eyeLod}},
     {"ADVANCED - TESTS AND ENGINE", C::none, C::none, "", "", "SETTINGS", -1,
      {C::engineTaa, C::taaJitter, C::eyeTest, C::addressFinder, C::webBallTest, C::foveaDebug, C::foveaStats}},
 };
@@ -1039,7 +1040,9 @@ Place placeOf(Control c) {
     }
     return {};
 }
-bool restartTag(Control c) { return c == Control::supersample || c == Control::combatMirrorView; }
+bool restartTag(Control c) {
+    return c == Control::supersample || c == Control::combatMirrorView || c == Control::combatLensFlares; // 0.0.62
+}
 
 namespace {
 Layout build(int page, float k, int open) {
@@ -4108,6 +4111,12 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatDaredevil:
             case Control::combatHulk:
             case Control::combatDaredevilPunch:
+            case Control::combatHitIndicator:
+            case Control::combatHandFlips:
+            case Control::combatLensFlares:
+            case Control::combatPunchHits:
+            case Control::combatFoeTrack:
+            case Control::combatBeaconsVision:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

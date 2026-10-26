@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
-project(Spidy VERSION 0.0.6 LANGUAGES C CXX)
+project(Spidy VERSION 0.0.62 LANGUAGES C CXX)
 # Every target on Windows: windows.h must never define min/max macros (they break std::min/std::max, MSVC C2589).
 if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 # The public version (semver, docs/VERSIONING.md): the launcher, the zip, the tag and VERSION all follow
-# this line; PORT-VERSION keeps the internal build ("Update 39.1.1"). Version 0.0.6 is build 39.1.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work, then the 0.0.6 hotfix eye swapchain retry; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
+# this line; PORT-VERSION keeps the internal build ("Update 39.2"). Version 0.0.62 is build 39.2 (0.0.6 + ghost-hand fix, bolt walls, baton hits, instant punches, live enemy tracking, hit indicator, hand flips, lens flares). Version 0.0.6 was build 39.1.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work, then the 0.0.6 hotfix eye swapchain retry; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
 add_compile_definitions(SPIDY_PUBLIC_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,7 +70,8 @@ target_sources(spidy_core PRIVATE "${SPIDY_CALIBRATION_ART_CPP}")
 # (spidy::sfx_data::<name>, src/sfx.cpp).
 # Version 0.0.6 (Update 39.0.2) REPULSOR: the blast's sound is one of three takes (make_sfx.py): a CLASSIC,
 # b HEAVY, c TIGHT. Switching is this one line; the take's _charge plays on the press, _fire at the blast.
-set(SPIDY_REPULSOR_TAKE c)
+# Version 0.0.62: "user", the player's own sound (assets/sfx/source/user-repulsor.mp3, tools/sfx/user_repulsor.py).
+set(SPIDY_REPULSOR_TAKE user)
 set(SPIDY_SFX_FILE_repulsor_fire "repulsor_mcu_${SPIDY_REPULSOR_TAKE}_fire")
 set(SPIDY_SFX_FILE_repulsor_charge "repulsor_mcu_${SPIDY_REPULSOR_TAKE}_charge")
 foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoosh baton_hit repulsor_charge)

@@ -2,6 +2,29 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.62 (October 26, 2026)
+
+Version 0.0.62 (build Update 39.2), launcher build 9 (0.0.62.1). Built on 0.0.6 and its hotfix. No new game address:
+every hit uses the CONFIRMED damage path, every wall test the CONFIRMED ray bridge. Graphics defaults unchanged.
+
+- Ghost hands: EYE AA no longer keeps history far outside a pixel's neighbourhood, so fast hands leave no copies.
+- BOLT WALLS: repulsor bolts, the chest beam and web balls stop at the first wall (fail safe: no answer, no wall).
+- LENS FLARES (GRAPHICS, takes effect at the next VR start): OFF IN VR turns off the game's flares (headlights and
+  bridge lights through walls at night); GAME, the default, leaves them.
+- Combat: PUNCH HITS (GAME + INSTANT by default) lands a small hit when the fist touches; ENEMY TRACKING (LIVE by
+  default) follows enemies at 30 Hz by their own positions. 0.0.6 behaviour one setting away.
+- Daredevil: batons hit in the hand and on straight throws; a thrown baton bounces between up to 3 enemies (next within
+  5 m, never the same twice, skipping downed enemies) and always returns. BEACONS IN VISION (ON): beacons and markers
+  stay bright and coloured in the sonar.
+- Iron Man: a new CHEST BEAM sound made from the player's repulsor sound, and the bolts and the chest beam shimmer like plasma.
+- Iron Man: the hand blast uses a player's own repulsor sound (thank you!), fires from the palm along its normal, and
+  hand repulsor blasts have a 2-second cooldown per hand (a ring on each wrist). The CHEST BEAM does 4x a blast's damage
+  with its 30-second cooldown shown on the wrist ring, as before.
+- REAL ANCHORS (launcher, ON): a swing starts only when the web meets a surface within 100 m; otherwise a miss and a
+  buzz. OFF keeps the air swing. HIT INDICATOR (OFF) and HAND FLIPS (ON = 0.0.6).
+- Launcher build 9: Revert offers 0.0.6 and 0.0.5; numeric version compare; first-run fixes for bracket folders,
+  running inside the zip and antivirus removing the launcher; crash log falls back to %TEMP%.
+
 ## v0.0.6 hotfix (October 26, 2026)
 
 Version 0.0.6 (build Update 39.1.1), launcher build 8 (0.0.6.6; build 7 = 0.0.6.5 was the first hotfix launcher).

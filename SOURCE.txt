@@ -1,11 +1,11 @@
-HERO VR 0.0.6: source code (GNU GPL version 3)
+HERO VR 0.0.62: source code (GNU GPL version 3)
 
 This zip contains the complete corresponding source code:
 - the VR mod is in the folder's top level (src\, tools\, CMakeLists.txt, tests\ ...). It is built by tools\build.ps1 -Observer;
 - the HERO VR launcher is in tools\launcher\ (src\*.cs, assets\, build.ps1). It is built by tools\launcher\build.ps1;
 - third-party libraries are fetched at their pinned revisions by tools\bootstrap.ps1 (see THIRD_PARTY_NOTICES.md).
 
-Mod Version 0.0.6 (build Update 39.1.1), from git commit baa52b877997fcefc878ef134c457f4260b24d22.
+Mod Version 0.0.62 (build Update 39.2), from git commit e91344ecc8a2828e8bbf395f5132c3aa056429fd.
 Public repository: https://github.com/lecutis7of9/HEROVR
 Upstream project (Spidy / SpidyVR by Ilya Mezerowsky): https://github.com/IlyaMez/SpidyVR
 

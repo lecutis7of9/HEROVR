@@ -104,7 +104,11 @@ V005_OPTIONS = (('hero_height', ('1.00X', '1.15X', '1.30X', '1.45X', '1.60X')), 
                 ('supersonic', ('ON', 'OFF')), ('supersonic_speed', ('2X', '1.5X', '2.5X', '3X')))
 # Version 0.0.6: options 45-47, in the V006 record.
 V006_OPTIONS = (('daredevil', ('OFF', 'ON')), ('hulk', ('OFF', 'ON')), ('daredevil_punch', ('3X', '1X', '2X', '4X', '5X')))
-COMBAT38_ALL_OPTIONS = COMBAT38_OPTIONS + V003_OPTIONS + V004_OPTIONS + V005_OPTIONS + V006_OPTIONS
+# Version 0.0.62: HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING (the records keep
+# 0.0.6's layout: these are not in them; listed so the tables agree).
+V0062_OPTIONS = (('hit_indicator', ('OFF', 'ON')), ('hand_flips', ('ON', 'OFF')), ('lens_flares', ('GAME', 'OFF IN VR')),
+                 ('punch_hits', ('GAME + INSTANT', 'GAME MOVE', 'INSTANT ONLY')), ('foe_track', ('LIVE', '0.0.6')), ('beacons_vision', ('ON', 'OFF')))
+COMBAT38_ALL_OPTIONS = COMBAT38_OPTIONS + V003_OPTIONS + V004_OPTIONS + V005_OPTIONS + V006_OPTIONS + V0062_OPTIONS
 COMBAT38_REJECTS = ('sent', 'hand untracked', 'hand holding or carrying', 'trigger held', 'hand busy', 'too slow',
                     'not forward', 'not extended', 'not re-armed', 'gated (not playing)')
 CRAWL_WHY = ('none', 'low ceiling', 'crawl flag (WITH FLAG)', 'held off: combat', 'off')

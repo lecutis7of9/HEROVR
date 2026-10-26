@@ -22,6 +22,10 @@
 // enemy within batonChainRange of the one it hit, never one already hit on this throw, at most
 // batonMaxChains times (batonMaxChains + 1 enemies hit); then it returns to the hand. With no
 // enemy in range it returns at once; a miss still returns. Wired in game in 0.0.6.
+// Version 0.0.62 BATON BOUNCE (the user): 3 enemies in all (2 bounces) within 5 m of the one it hit,
+// never one already hit on the throw, never one down (BatonEnemy::down: dead or knocked out, his hit
+// points read 0 or less); a target who goes down while it flies sends it home; batonMaxOut still
+// brings it back whatever happens.
 // Pure; no game memory.
 #include "spidy/math.hpp"
 #include "spidy/sfx.hpp"
@@ -100,12 +104,32 @@ inline constexpr float batonHitRadius = .45f;  // m
 inline constexpr float batonCatch = .3f;       // m from the hand: caught
 inline constexpr float batonRicochet = .25f;   // s bouncing off him before it heads home
 inline constexpr float batonMaxOut = 4.f;      // s: never lost; back in the hand after this
-inline constexpr float batonChainRange = 6.f;  // m from the enemy it hit to the next (0.0.5 BATON CHAIN)
-inline constexpr uint32_t batonMaxChains = 3;  // chains per throw: 4 enemies at most
+inline constexpr float batonChainRange = 5.f;  // m from the enemy it hit to the next (0.0.62; 0.0.5-0.0.6: 6)
+inline constexpr uint32_t batonMaxChains = 2;  // bounces per throw: 3 enemies at most (0.0.62; 0.0.5-0.0.6: 3)
+// Version 0.0.62: the closest distance between segment a-b and segment c-d (metres).
+inline float segmentGap(Vec3 a, Vec3 b, Vec3 c, Vec3 d) {
+    const Vec3 u = b - a, v = d - c, w = a - c;
+    const float A = dot(u, u), B = dot(u, v), C = dot(v, v), D = dot(u, w), E = dot(v, w);
+    float s = 0, t = 0;
+    if (A < 1e-9f && C < 1e-9f)
+        return length(a - c);
+    if (A < 1e-9f) {
+        t = std::clamp(E / C, 0.f, 1.f);
+    } else if (C < 1e-9f) {
+        s = std::clamp(-D / A, 0.f, 1.f);
+    } else {
+        const float den = A * C - B * B;
+        s = den > 1e-9f ? std::clamp((B * E - C * D) / den, 0.f, 1.f) : 0.f;
+        t = std::clamp((B * s + E) / C, 0.f, 1.f);
+        s = std::clamp((B * t - D) / A, 0.f, 1.f);
+    }
+    return length((a + u * s) - (c + v * t));
+}
 // One enemy the aim assist sees this frame (the chain's list): an id that stays his while he lives.
 struct BatonEnemy {
     uint64_t id{};
     Vec3 chest{};
+    bool down{}; // Version 0.0.62: dead or knocked out (hit points read 0 or less): never a target
 };
 enum BatonState : uint32_t { inHand = 0, flying, ricochet, returning };
 inline constexpr const char* batonStateNames[] = {"IN HAND", "FLYING", "RICOCHET", "RETURNING"};
@@ -123,6 +147,30 @@ struct Baton {
     uint32_t hitCount{}, chainsNow{};
     uint64_t targetId{};
     uint32_t chains{}, chainEnds{}, chainNoneInRange{};
+    uint32_t straightLocks{}; // 0.0.62: straight throws that hit someone on the way
+    uint32_t targetDowns{};   // 0.0.62: its target went down while it flew (home, no hit)
+
+    // Version 0.0.62: the first enemy (index, -1 none) whose body (chest -1.0 m .. +0.6 m) the
+    // segment a-b passes within batonHitRadius of; ties: the one nearest a.
+    static int sweepHit(Vec3 a, Vec3 b, const BatonEnemy* list, uint32_t count) {
+        if (!finite(a) || !finite(b))
+            return -1;
+        int best = -1;
+        float bestMetres = 1e9f;
+        for (uint32_t i = 0; list && i < count; ++i) {
+            const Vec3 c = list[i].chest;
+            if (!list[i].id || list[i].down || !finite(c))
+                continue;
+            if (segmentGap(a, b, c - Vec3{0, 1.f, 0}, c + Vec3{0, .6f, 0}) > batonHitRadius)
+                continue;
+            const float m = length(c - a);
+            if (m < bestMetres) {
+                best = static_cast<int>(i);
+                bestMetres = m;
+            }
+        }
+        return best;
+    }
 
     bool inHandNow() const { return state == inHand; }
     bool hitThisThrow(uint64_t id) const {
@@ -138,7 +186,7 @@ struct Baton {
         float bestMetres = batonChainRange;
         for (uint32_t i = 0; list && i < count; ++i) {
             const float metres = length(list[i].chest - from);
-            if (!list[i].id || hitThisThrow(list[i].id) || !(metres <= bestMetres))
+            if (!list[i].id || list[i].down || hitThisThrow(list[i].id) || !(metres <= bestMetres))
                 continue;
             best = static_cast<int>(i);
             bestMetres = metres;
@@ -162,11 +210,32 @@ struct Baton {
         } else if (targetId) {
             have = true;
             for (uint32_t i = 0; list && i < count; ++i)
-                if (list[i].id == targetId)
+                if (list[i].id == targetId) {
                     enemy = list[i].chest;
+                    // Version 0.0.62: he went down while it flew at him: home, no hit.
+                    if (list[i].down && state == flying) {
+                        state = returning;
+                        targetId = 0;
+                        hasTarget = have = false;
+                        ++targetDowns;
+                    }
+                }
         }
         if (state == flying && hasTarget)
             target = enemy;
+        // Version 0.0.62 BATON STRAIGHT THROW: a throw with no enemy picked (none in the 35 deg cone)
+        // had no hit test at all and flew through everyone (B3ARVR, 0.0.6.6). Now this frame's flight
+        // is swept against each enemy's body; the first one it passes becomes its target (it homes
+        // the last few centimetres and hits him on the usual path, chain and blow included).
+        if (state == flying && !hasTarget && list && count) {
+            const int k = sweepHit(position, position + velocity * std::clamp(dt, 0.f, .1f), list, count);
+            if (k >= 0) {
+                targetId = list[k].id;
+                target = enemy = list[k].chest;
+                hasTarget = have = true;
+                ++straightLocks;
+            }
+        }
         const bool hit = update(dt, trigger, hand, aim, enemy, have);
         if (!hit)
             return false;
@@ -302,6 +371,83 @@ inline int batonAim(Vec3 hand, Vec3 aim, const BatonEnemy* list, uint32_t count)
         }
     }
     return best;
+}
+
+// Version 0.0.62 BATON SWING (the fix for "batons do no damage", the user and B3ARVR on 0.0.6.6): in
+// 0.0.6 a baton only hurt when thrown at an enemy the aim assist picked; swinging it in the hand
+// hit nothing. Now a baton in the hand hits an enemy when its shaft (grip to tip, tracking space)
+// or its tip's path this frame passes within swingRadius of his body (chest -1.0 m .. +0.6 m) while
+// the tip moves at least swingSpeed - a swing, not a baton resting against him - at most once per
+// enemy every swingCooldown seconds. The blow is batonHit on sm2_damage's path (CONFIRMED).
+inline constexpr float swingSpeed = 2.f;      // m/s at the tip
+inline constexpr float swingRadius = .35f;    // m from the body line
+inline constexpr float swingCooldown = .35f;  // s per enemy
+struct BatonSwing {
+    static constexpr int remembered = 8;
+    uint64_t ids[remembered]{};
+    float since[remembered]{};
+    Vec3 tipWas{};
+    bool haveTip{};
+    uint32_t hits{}, cooled{};
+    float lastSpeed{};
+    void reset() { *this = BatonSwing{}; }
+    bool cooling(uint64_t id) const {
+        for (int k = 0; k < remembered; ++k)
+            if (ids[k] == id && since[k] < swingCooldown)
+                return true;
+        return false;
+    }
+    // One frame with the baton in the hand (inHand false: forgets the tip, hits nothing). Returns
+    // the index into list of the enemy hit this frame (-1 none).
+    int update(float dt, bool inHand, Vec3 grip, Vec3 tip, const BatonEnemy* list, uint32_t count) {
+        const float step = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+        for (int k = 0; k < remembered; ++k)
+            since[k] = std::min(since[k] + step, 10.f);
+        if (!inHand || !finite(grip) || !finite(tip)) {
+            haveTip = false;
+            return -1;
+        }
+        const Vec3 was = haveTip ? tipWas : tip;
+        tipWas = tip;
+        haveTip = true;
+        lastSpeed = step > 1e-4f ? length(tip - was) / step : 0.f;
+        if (!(lastSpeed >= swingSpeed) || !list)
+            return -1;
+        int best = -1;
+        float bestGap = swingRadius;
+        for (uint32_t i = 0; i < count; ++i) {
+            const Vec3 c = list[i].chest;
+            if (!list[i].id || !finite(c))
+                continue;
+            const Vec3 lo = c - Vec3{0, 1.f, 0}, hi = c + Vec3{0, .6f, 0};
+            const float gap = std::min(segmentGap(grip, tip, lo, hi), segmentGap(was, tip, lo, hi));
+            if (gap > bestGap)
+                continue;
+            if (cooling(list[i].id)) {
+                ++cooled;
+                continue;
+            }
+            best = static_cast<int>(i);
+            bestGap = gap;
+        }
+        if (best < 0)
+            return -1;
+        int slot = 0;
+        for (int k = 1; k < remembered; ++k)
+            if (since[k] > since[slot])
+                slot = k;
+        ids[slot] = list[best].id;
+        since[slot] = 0;
+        ++hits;
+        return best;
+    }
+};
+// The in-hand baton's shaft from the hand and its aim (as it is drawn): grip 0.12 m behind, tip
+// 0.45 m ahead.
+inline void batonShaft(Vec3 hand, Vec3 aim, Vec3& grip, Vec3& tip) {
+    const Vec3 a = length(aim) > 1e-4f ? normalized(aim) : Vec3{0, 0, -1};
+    grip = hand - a * .12f;
+    tip = hand + a * .45f;
 }
 
 // Version 0.0.6 punches. A punch that lands (the gesture sent as the game's punch with an enemy's

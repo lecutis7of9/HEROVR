@@ -13,12 +13,14 @@ namespace Sm2VrLauncher
         public BackupInfo Backup;
         public Manifest Release;
         public bool RestoreSettings { get { return restore.Checked; } }
-        /// <summary>"Use previous version" was pressed: install LauncherInfo.PreviousTag from GitHub (no backup needed).</summary>
+        /// <summary>"Use previous version" was pressed: install PreviousTag (v0.0.6 or v0.0.5) from GitHub (no backup needed).</summary>
         public bool UsePrevious;
+        /// <summary>Build 9: which of LauncherInfo.PreviousTags was picked ("v0.0.6" or "v0.0.5").</summary>
+        public string PreviousTag = LauncherInfo.PreviousTag;
 
         readonly ListBox list = new ListBox();
         readonly CheckBox restore = new CheckBox();
-        readonly Button ok = new Button(), cancelBtn = new Button(), fromGitHub = new Button(), previous = new Button();
+        readonly Button ok = new Button(), cancelBtn = new Button(), fromGitHub = new Button();
         readonly Label info = new Label();
         readonly string root;
         readonly Settings settings;
@@ -51,12 +53,20 @@ namespace Sm2VrLauncher
                 Text = "Pick a version. The one you have now is backed up first, so you can come back to it. Then the launcher restores, builds and checks the version; if anything fails, nothing changes.",
                 ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 54, 590, 44)
             };
-            // One click back to the previous release (e.g. 0.0.6 -> 0.0.5): works with no backup at all.
-            string prevNumber = PreviousNumber();
-            Style(previous, "USE PREVIOUS VERSION (" + prevNumber + ")", true); previous.Bounds = Theme.R(24, 104, 300, 38);
-            var prevNote = new Label { Text = "Downloads " + prevNumber + " from GitHub, checks its SHA-256 and installs it. You stay on it until you press Update now.", ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(334, 104, 282, 42) };
-            previous.Enabled = (settings.RepoConfigured || preview) && OfferPrevious(root);
-            previous.Click += (s, e) => { UsePrevious = true; DialogResult = preview ? DialogResult.Cancel : DialogResult.OK; };
+            // One click back to an earlier release (build 9: 0.0.62 -> 0.0.6 or 0.0.5): works with no backup at all.
+            var previousButtons = new List<Control>();
+            int px = 24;
+            foreach (string tag in LauncherInfo.PreviousTags)
+            {
+                string t = tag, number = PreviousNumber(t);
+                var b = new Button();
+                Style(b, "USE " + number, previousButtons.Count == 0); b.Bounds = Theme.R(px, 104, 140, 38);
+                b.Enabled = (settings.RepoConfigured || preview) && OfferPrevious(root, t);
+                b.Click += (s, e) => { UsePrevious = true; PreviousTag = t; DialogResult = preview ? DialogResult.Cancel : DialogResult.OK; };
+                previousButtons.Add(b);
+                px += 148;
+            }
+            var prevNote = new Label { Text = "From GitHub, SHA-256 checked. You stay on it until you press Update now.", ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(px + 6, 104, 616 - px - 6, 42) };
             list.Bounds = Theme.R(24, 158, 592, 210);
             list.BackColor = Theme.Field; list.ForeColor = Theme.Text; list.BorderStyle = BorderStyle.FixedSingle;
             list.DrawMode = DrawMode.OwnerDrawFixed; list.ItemHeight = Theme.S(30);
@@ -73,7 +83,8 @@ namespace Sm2VrLauncher
             ok.Click += (s, e) => Accept();
             fromGitHub.Click += (s, e) => LoadReleases();
             fromGitHub.Enabled = settings.RepoConfigured || preview;
-            Controls.AddRange(new Control[] { head, sub, previous, prevNote, list, restore, info, fromGitHub, ok, cancelBtn });
+            Controls.AddRange(new Control[] { head, sub, prevNote, list, restore, info, fromGitHub, ok, cancelBtn });
+            Controls.AddRange(previousButtons.ToArray());
 
             var backups = preview ? FakeBackups() : Backups.List(root);
             foreach (var b in backups) list.Items.Add(new Item { Backup = b });
@@ -82,18 +93,20 @@ namespace Sm2VrLauncher
             Selected();
         }
 
-        /// <summary>"0.0.5" from LauncherInfo.PreviousTag.</summary>
-        public static string PreviousNumber()
+        /// <summary>"0.0.6" from LauncherInfo.PreviousTag (or the tag given).</summary>
+        public static string PreviousNumber() { return PreviousNumber(LauncherInfo.PreviousTag); }
+        public static string PreviousNumber(string tag)
         {
-            var v = ModVersion.Parse(LauncherInfo.PreviousTag);
-            return v == null ? LauncherInfo.PreviousTag.TrimStart(new[] { 'v', 'V' }) : v.Number;
+            var v = ModVersion.Parse(tag);
+            return v == null ? (tag ?? "").TrimStart(new[] { 'v', 'V' }) : v.Number;
         }
 
-        /// <summary>Only when the installed version is newer than the previous release (on 0.0.5 already there is nothing to go back to).</summary>
-        public static bool OfferPrevious(string root)
+        /// <summary>Only when the installed version is newer than that release (numbers compared as numbers: 0.0.62 &gt; 0.0.6 &gt; 0.0.5).</summary>
+        public static bool OfferPrevious(string root) { return OfferPrevious(root, LauncherInfo.PreviousTag); }
+        public static bool OfferPrevious(string root, string tag)
         {
             var have = ModVersion.Parse(SystemInfo.PortVersion(root));
-            var prev = ModVersion.Parse(LauncherInfo.PreviousTag);
+            var prev = ModVersion.Parse(tag);
             return prev != null && (have == null || have > prev);
         }
 

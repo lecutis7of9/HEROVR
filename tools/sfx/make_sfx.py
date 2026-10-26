@@ -238,7 +238,9 @@ def split_take(path):
     return out
 
 
-ALL = [sonic_boom, repulsor_fire, chest_beam, beam_ready, baton_whoosh, baton_hit]
+# Version 0.0.62: chest_beam.wav is made from the player's repulsor sound (tools/sfx/user_repulsor.py);
+# this script's 0.0.5 chest_beam() stays for reference and is no longer written.
+ALL = [sonic_boom, repulsor_fire, beam_ready, baton_whoosh, baton_hit]
 
 if __name__ == '__main__':
     import sys

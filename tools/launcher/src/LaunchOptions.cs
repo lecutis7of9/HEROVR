@@ -59,7 +59,9 @@ namespace Sm2VrLauncher
                       Sub = "Spidy's overlay web strands. Off uses the game's own web lines (-GameWebs)." },
             Opt.Sw("WEBS & MOVEMENT", "TriggerWebs", "WEBS ON TRIGGER", "Shoot webs with the trigger and reel in with the grip (default: grip webs).", false),
             Opt.Sw("WEBS & MOVEMENT", "ArcadeWebs", "ARCADE WEBS", "Webs pass through lamp posts, signs and cars; swings stay above the street.", false),
-            Opt.Inv("WEBS & MOVEMENT", "NoAirWebs", "WEBS IN OPEN AIR", "A web that hits nothing within 100 m holds in the air anyway."),
+            // 0.0.62 REAL ANCHORS (default on): passes -RealAnchors (= -NoAirWebs). Older mods' scripts lack the
+            // switch, so Supported() leaves it out and they keep their air swing.
+            Opt.Sw("WEBS & MOVEMENT", "RealAnchors", "REAL ANCHORS", "Webs only stick to a real building or object within 100 m; off lets them hold in thin air.", true),
             Opt.Inv("WEBS & MOVEMENT", "NoWebGrab", "WEB GRAB", "Webs catch props and thugs: reel them in, yank, throw."),
             Opt.Num("WEBS & MOVEMENT", "SwingSpeed", "SWING SPEED CAP", "Top speed while swinging.", 1, 65, 1, 32, " m/s"),
             Opt.Num("WEBS & MOVEMENT", "Weight", "WEIGHT", "Gravity while webs fly you, % of real gravity.", 40, 300, 5, 80, "%"),

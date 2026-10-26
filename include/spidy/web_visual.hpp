@@ -126,6 +126,10 @@ void appendBaton(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, Vec3 viewer, flo
 // out. Nothing when share or anything else is not finite or it is nearer than 8 cm or past 3 m.
 void appendBeamRing(std::vector<Vertex>& out, float share, float flash, Pose hand, Vec3 viewer, float pixelAngle,
                     float seconds);
+// Version 0.0.62 HAND COOLDOWN: a hand's 2 s repulsor cooldown on its own wrist, 4.5 cm behind the beam
+// ring's place (clear of it on the right wrist): a small cyan arc filling clockwise (share 0..1), a blink
+// when ready (flash 1..0); nothing when ready and not flashing, or nearer than 8 cm or past 3 m.
+void appendBlastRing(std::vector<Vertex>& out, float share, float flash, Pose hand, Vec3 viewer, float pixelAngle);
 // Version 0.0.5 SUPERSONIC's shockwave, `age` seconds after the boom (nothing outside 0..0.9 s):
 // a ring sweeping from 3 m ahead past the eye, widening as it fades, and a faint vapour cone
 // along the flight's `way` (unit), both around the eye.

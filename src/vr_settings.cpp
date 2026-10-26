@@ -248,7 +248,7 @@ const std::array<Row, 43>& rows() {
          "Which button shoots and holds a web; the other reels in and shoots web balls.", webButtonChoices},
         {Item::aimMarkers, "AIM MARKERS", "Show where each web would land.", {}},
         {Item::airWebs, "WEBS HOLD IN OPEN AIR",
-         "With nothing in reach, a web still holds in open air, 100 m out.", {}},
+         "On: webs hold in thin air; off (REAL ANCHORS, the default) they need a surface.", {}},
         {Item::none, "SWINGING", nullptr, {}},
         {Item::swingSpeed, "SWING SPEED LIMIT", "How fast a swing can carry you.", swingChoices},
         {Item::weight, "WEIGHT", "How heavy you are while swinging and after letting go. 100% is real gravity.",

@@ -292,16 +292,25 @@ SETTINGS = {
     'supersonic': ((0, 1), 'SpidySupersonic', 'SUPERSONIC {} (0 on; 1 off: in FLY MODE, both hands out and the left stick forward is a sonic boom dash, live)'),
     'supersonic_speed': ((0, 3), 'SpidySupersonicSpeed', 'SUPERSONIC SPEED {} (0 2x; 1 1.5x; 2 2.5x; 3 3x the FAST fly speed, live)'),
     # Version 0.0.6 (Update 39.0): one hero toggle at a time (turning one on turns the others off)
-    'daredevil': ((0, 1), 'SpidyDaredevil', 'DAREDEVIL ABILITIES {} (0 off; 1 on: a baton in each hand, the trigger throws it (strong aim assist, chains to 3 more enemies, always comes back), punches hit DAREDEVIL PUNCH times harder, sonar colours; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'daredevil': ((0, 1), 'SpidyDaredevil', 'DAREDEVIL ABILITIES {} (0 off; 1 on: a baton in each hand, the trigger throws it (strong aim assist, bounces to 2 more enemies within 5 m, always comes back), punches hit DAREDEVIL PUNCH times harder, sonar colours; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
     'hulk': ((0, 1), 'SpidyHulk', 'HULK ABILITIES {} (0 off; 1 on: the charged jump (hold A) goes 4x as high and far, a punch knocks a normal enemy out, brutes take 2-3; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
     'daredevil_punch': ((0, 4), 'SpidyDaredevilPunch', 'DAREDEVIL PUNCH {} (0 3x; 1 1x; 2 2x; 3 4x; 4 5x a normal punch, live)'),
+    # Version 0.0.62
+    'hit_indicator': ((0, 1), 'SpidyHitIndicator', 'HIT INDICATOR {} (0 off; 1 on: a brief white X where your punches, batons, blasts and webs land, live)'),
+    'hand_flips': ((0, 1), 'SpidyHandFlips', 'HAND FLIPS {} (0 on: hand swings add to REALISTIC FLIPS as in 0.0.6; 1 off: moving your hands never starts a flip, live)'),
+    'lens_flares': ((0, 1), 'SpidyLensFlares', 'LENS FLARES {} (0 game: the game\'s own setting; 1 off in vr: the game\'s lens flares off while VR runs, put back after; RESTART)'),
+    'punch_hits': ((0, 2), 'SpidyPunchHits', 'PUNCH HITS {} (0 game + instant: a small blow lands the moment your fist touches, as SpidyVR, and the game\'s move still plays; 1 game move: the X only, as 0.0.6; 2 instant only: no game move, live)'),
+    'beacons_vision': ((0, 1), 'SpidyBeaconsVision', 'BEACONS IN VISION {} (0 on: DAREDEVIL\'s sonar keeps bright coloured beacons and markers in colour, outlined and pulsing; 1 off: 0.0.6\'s sonar, live)'),
+    'foe_track': ((0, 1), 'SpidyFoeTrack', 'ENEMY TRACKING {} (0 live: enemies by their world positions, 30 a second; 1 0.0.6: by their offset from you, 10 a second, live)'),
 }
 # Update 37: the view gates share one export (SpidyViewGate): the selector in the high half.
 VIEW_GATES = {'bloom_fx': 0, 'lod_fade': 1, 'lod_reach': 2, 'impostors': 3}
 # Update 37: the three world tracers share SpidyWorldLogKind: the kind in the high half.
 WORLD_LOG_KINDS = {'npc_log': 0, 'spawn_log': 1, 'mission_log': 2}
 # Update 37: settings that cannot change while VR runs: kept for the next start, with this notice.
-RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next time VR starts.'}
+RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next time VR starts.',
+           # Version 0.0.62: the game reads its Lens Flares setting when it starts
+           'lens_flares': 'RESTART NOTICE: lens_flares takes effect the next time VR starts.'}
 # Update 37: the run36 closing settings, the defaults now (reach and monitor are the launcher's own
 # -BuildingReach 150 and -MonitorRate 30 again in Update 37.2); applied at the start for any setting live.txt does not keep.
 UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 140, 'trail': 0, 'taa_jitter': 3, 'hud_theme': 'raimi',
@@ -337,7 +346,13 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'hero_height': '1.00x', 'hero_damage': 'off',
                      'punch_sense': 'forgiving', 'sfx_volume': '100%', 'supersonic': 'on', 'supersonic_speed': '2x',
                      # Version 0.0.6 (the heroes experimental: off)
-                     'daredevil': 'off', 'hulk': 'off', 'daredevil_punch': '3x'}
+                     'daredevil': 'off', 'hulk': 'off', 'daredevil_punch': '3x',
+                     # Version 0.0.62 (HIT INDICATOR off: the user's call; HAND FLIPS on and LENS FLARES
+                     # game: 0.0.6's behaviour and the graphics defaults kept)
+                     'hit_indicator': 'off', 'hand_flips': 'on', 'lens_flares': 'game',
+                     # Version 0.0.62 (the SpidyVR comparison; 0.0.6's: game_move, 0.0.6)
+                     'punch_hits': 'game_instant', 'foe_track': 'live',
+                     'beacons_vision': 'on'}  # Version 0.0.62 (the user's call)
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Update 37.2: the startup checks (tests): these must start this way on a fresh install and over an
@@ -445,6 +460,9 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'sfx_volume': ('100%', '75%', '50%', '25%', 'off'), 'supersonic': ('on', 'off'),
                 'supersonic_speed': ('2x', '1.5x', '2.5x', '3x'),
                 'daredevil': ('off', 'on'), 'hulk': ('off', 'on'), 'daredevil_punch': ('3x', '1x', '2x', '4x', '5x'),
+                'hit_indicator': ('off', 'on'), 'hand_flips': ('on', 'off'), 'lens_flares': ('game', 'off_in_vr'),
+                'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
+                'beacons_vision': ('on', 'off'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -519,6 +537,12 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'daredevil': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'hulk': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'daredevil_punch': {'3x': 0, '1x': 1, '2x': 2, '4x': 3, '5x': 4, '3': 0, '1': 1, '2': 2, '4': 3, '5': 4},
+           'hit_indicator': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'hand_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'lens_flares': {'game': 0, 'off_in_vr': 1, 'off': 1, '0': 0, '1': 1},
+           'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
+           'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
+           'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
            'holo_open': {'forearm': 0, 'tap': 0, 'palm_look': 1, 'palm': 1, 'look': 1, 'click': 2, 'f8_only': 3,
@@ -720,7 +744,8 @@ HEADER = '# Live settings (tools/live_settings.py). Save to apply; the wrist hol
 PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sharpen', 'reticles',
              'hud_height', 'hud_scale', 'hud_text', 'hud_theme', 'hud_text_color',
              'web_style', *(f'web_color_{style}' for style in WEB_STYLES),
-             'music_volume', 'music_visualizer', 'music_track')
+             'music_volume', 'music_visualizer', 'music_track',
+             'lens_flares')  # Version 0.0.62: the hologram's LENS FLARES (RESTART: kept for the next start)
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -762,7 +787,9 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.5
                  'hero_height', 'hero_damage', 'punch_sense', 'sfx_volume', 'supersonic', 'supersonic_speed',
                  # Version 0.0.6
-                 'daredevil', 'hulk', 'daredevil_punch')
+                 'daredevil', 'hulk', 'daredevil_punch',
+                 # Version 0.0.62
+                 'hit_indicator', 'hand_flips', 'lens_flares', 'punch_hits', 'foe_track', 'beacons_vision')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 HERO_KEYS = ('iron_man', 'daredevil', 'hulk')
 START_ONLY = START_ONLY + UPDATE38_KEYS
@@ -771,13 +798,14 @@ START_ONLY = START_ONLY + UPDATE38_KEYS
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',
                 10: 'supersample', 11: 'sharpen', 12: 'reticles', 13: 'hud_height', 14: 'hud_scale',
                 15: 'hud_text', 16: 'hud_theme', 17: 'hud_text_color', 18: 'web_style', 19: 'web_color',
-                20: 'music_track', 27: 'music_volume', 28: 'music_visualizer'}
+                20: 'music_track', 27: 'music_volume', 28: 'music_visualizer',
+                29: 'lens_flares'}  # Version 0.0.62: the hologram's LENS FLARES (RESTART), kept in live.txt
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
-            'music_volume': 7, 'music_visualizer': 7, 'music_track': 7}
+            'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -800,6 +828,8 @@ def decode_hud_settings(selector, code):
         return {'aa': code & 1, 'history': code >> 1 & 127, 'reach': code >> 8 & 511, 'monitor': code >> 17 & 255}
     if selector == 2:
         return {'supersample': code & 1023}
+    if selector == 10:  # Version 0.0.62: LENS FLARES (0 game, 1 off in vr)
+        return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)]}
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):

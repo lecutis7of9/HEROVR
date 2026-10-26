@@ -25,6 +25,15 @@ inline constexpr float pi = 3.14159265f;
 inline const Vec3 core{1, 1, 1}, hot{.78f, .95f, 1}, cyan{.16f, .74f, 1}, deep{.05f, .30f, 1};
 
 inline constexpr float muzzleSeconds = .09f, impactSeconds = .18f;
+// Version 0.0.62 PLASMA FLICKER: the bolts' and the chest beam's brightness shimmers 0.76-1.0 (two
+// unrelated fast waves, per beam by seed), so they read as live plasma, not a painted line. Costs no
+// vertices (it scales the fade the draw already passes). Anything not finite: 1 (no flicker).
+inline float plasmaFlicker(float seconds, unsigned seed = 0) {
+    if (!std::isfinite(seconds))
+        return 1.f;
+    const float t = std::fmod(seconds, 600.f), s = static_cast<float>(seed % 97u);
+    return .88f + .06f * std::sin(t * 61.f + s * 1.7f) + .06f * std::sin(t * 23.f + s * .9f);
+}
 // The palm's glow 0..1 from repulsor::Trigger: charging (chargingFor, -1 not) rises over the chord
 // window (fast first, so a quick tap still shows), full while a chord waits for the beam; after a
 // blast (sinceBlast, -1 none) it fades over muzzleSeconds. Anything not finite: 0.

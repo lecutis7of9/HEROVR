@@ -1,16 +1,44 @@
-# HERO VR 0.0.6 - Made by Agent Mulder
+# HERO VR 0.0.62 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of mod Version 0.0.6 (build Update 39.1.1) plus the prebuilt HERO VR launcher.
+This zip is the full source of mod Version 0.0.62 (build Update 39.2) plus the prebuilt HERO VR launcher.
 
-## What's new in 0.0.6
+## What's new in 0.0.62
+- **Ghost hands:** the EYE AA smoothing no longer leaves faint copies of your hands behind when they move fast.
+- **Repulsor bolts, the chest beam and your web balls stop at the first wall** (with their impact flash there)
+  instead of flying on through it. No new game address: they use the same ray checks as swinging.
+- **Headlights and bridge lights through walls at night:** these are the game's own lens flares. New option
+  **LENS FLARES** (GRAPHICS): OFF IN VR turns them off while VR runs (takes effect at the next VR start; GAME, the
+  default, leaves them as they are).
+- **Daredevil's batons hurt enemies again** when you hit with them in your hands, not only when thrown.
+- **Combat feels quicker:** **PUNCH HITS** (COMBAT; GAME + INSTANT by default) also lands a small hit the moment your
+  fist touches, like SpidyVR, as well as the game's move. GAME MOVE is the 0.0.6 behaviour. **ENEMY TRACKING**
+  (LIVE by default) follows enemies 30 times a second by their own position, so lock-on and punches no longer aim
+  where an enemy was while you lunge or swing; 0.0.6 is the old way.
+- **HIT INDICATOR** (COMBAT, OFF by default): a brief white X where your punches, batons, blasts and webs land.
+- **HAND FLIPS** (COMBAT, ON by default as in 0.0.6): OFF stops arm swings from starting flips; the stick and A
+  still flip you.
+- **New CHEST BEAM sound** made from the same player's repulsor sound, and the bolts and the chest beam **shimmer like plasma**.
+- **Iron Man's hand blast uses your own repulsor sound** (thanks to the player who sent it), **fires from the palm**
+  in the direction the palm faces, and hand blasts now have a **2-second cooldown per hand**, shown by a ring on each
+  wrist. The CHEST BEAM is separate: 4x a blast's damage, 30-second cooldown shown on the wrist ring.
+- **Daredevil's thrown baton bounces** between up to 3 enemies (each within 5 m of the last, never the same one twice)
+  and always comes back.
+- **REAL ANCHORS** (launcher, WEBS & MOVEMENT, ON by default): webs only hold on a real building or object within
+  100 m; a web into empty sky misses with a short buzz. Turn it off for the old swing in thin air.
+- **BEACONS IN VISION** (DAREDEVIL, ON by default): mission beacons and markers stay bright and coloured in the sonar.
+- The launcher (build 9) can go back to **0.0.6 or 0.0.5** from Revert, and the first run explains what went wrong
+  when the zip was not extracted, or antivirus removed the launcher (tools\launcher\build.log).
+
+## In 0.0.6
 - **Hotfix (build Update 39.1.1, launcher build 8):** if Virtual Desktop refuses the eye images when VR starts ("Create eye swapchain XrResult=-2"), the game no longer falls back to flat screen. It tries again with the 0.0.5 settings, then other settings and smaller sizes, writes every try to the console, and keeps trying. After 2 minutes it tells you to restart Virtual Desktop and the game. The launcher updates itself and then downloads the fixed mod files on its own. If PLAY VR said "No working Python 3.11 or newer was found", you do not need to install anything: open the launcher, let it update (launcher 0.0.6.6), and it puts the mod's own Python back by itself.
 - Your 0.0.5 test proved the damage path: blows sent from the mod really hurt enemies. 0.0.6 builds the heroes on it.
-- IRON MAN ABILITIES: repulsor blasts and the chest beam (4x a blast, 30 s cooldown on the wrist ring) do real damage,
-  and the beam now aims at the enemy you look at.
+- IRON MAN ABILITIES: hand repulsor blasts and the CHEST BEAM do real damage. The CHEST BEAM does 4x a blast's damage,
+  has a 30-second cooldown shown on the wrist ring, and now aims at the enemy you look at. (Since 0.0.62, hand repulsor
+  blasts have a 2-second cooldown per hand.)
 - DAREDEVIL ABILITIES: a baton in each hand, a trigger throw with strong aim assist that chains to up to 3 more enemies
   within 6 m and always comes back, harder punches (DAREDEVIL PUNCH, 1x to 5x, 3x by default) and a sonar look.
 - HULK ABILITIES: a 4x charged jump and one-punch knockouts on normal enemies (bigger ones take 2 to 3).
@@ -29,14 +57,14 @@ This zip is the full source of mod Version 0.0.6 (build Update 39.1.1) plus the 
   half rate when full rate is out of reach. The graphics defaults are unchanged.
 - VR never ends silently when the headset is lost: the mod waits for it and brings VR back by itself.
 - Opt-in reports (see Privacy below).
-- Don't like 0.0.6? **Revert > USE PREVIOUS VERSION (0.0.5)** downloads 0.0.5 from GitHub, checks it and installs it.
-  The launcher then stays on 0.0.5 until you press **Updates > Update now**.
+- Don't like 0.0.62? **Revert > USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
+  installs it. The launcher then stays on it until you press **Updates > Update now**.
 
 ## Requirements
 - Windows 10 or 11 (64-bit).
 - Marvel's Spider-Man 2 on Steam, **version 2.810.0.0** (Spider-Man2.exe). Other versions are refused on purpose.
 - A PC VR headset and its OpenXR app: Virtual Desktop (tested with Quest 3), Quest Link / Air Link or SteamVR.
-- **Python 3.11+** from python.org, with "Add python.exe to PATH" ticked (it runs the mod's live settings).
+- Nothing else to install: the mod files come with their own Python.
 - An internet connection on the first run. You don't need Visual Studio or Git: nothing is compiled on your PC.
 
 ## Install
@@ -44,8 +72,8 @@ This zip is the full source of mod Version 0.0.6 (build Update 39.1.1) plus the 
    `C:\HERO-VR`. Don't use Program Files or a OneDrive folder.
 2. Double-click **HERO VR Launcher.cmd**. If SmartScreen warns you, click **More info** and then **Run anyway**.
    The launcher is unsigned.
-3. On the first run the launcher downloads the ready-made mod files for 0.0.6 from the GitHub release
-   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.6) and checks them. If that was interrupted,
+3. On the first run the launcher downloads the ready-made mod files for 0.0.62 from the GitHub release
+   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.62) and checks them. If that was interrupted,
    press **Repair** on **Status** (or just PLAY VR, which offers it).
 4. Start your VR app, put the headset on and press **PLAY VR**. The default launch options are:
    `-RenderScale 100 -OverlayWebs -EngineTaa -SmallerDesktopView`.

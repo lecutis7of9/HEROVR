@@ -193,6 +193,11 @@ inline constexpr float enemyReach = 30.f;
 uint32_t enemies(std::array<Vec3, enemySlots>& out, std::array<uint64_t, enemySlots>* ids = nullptr);
 // How many times a second the list was refreshed (about 10).
 float enemyScanHz();
+// Version 0.0.62 ENEMY TRACKING: LIVE (true, the default) refreshes the list 30 times a second,
+// 0.0.6 (false) 10 times.
+void setFastRefresh(bool on);
+// The hero's world position the last enemy list was measured from (false: none).
+bool heroAtRefresh(Vec3& out);
 // Version 0.0.3: the same list in world positions (feet, y up) with the list's age in seconds
 // (WALL STICK measures speeds with it; the hero-relative list carries the player's own motion).
 uint32_t enemiesWorld(std::array<Vec3, enemySlots>& out, std::array<uint64_t, enemySlots>& ids, float& ageSeconds);

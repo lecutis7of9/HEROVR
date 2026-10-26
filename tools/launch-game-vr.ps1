@@ -26,6 +26,7 @@ param(
     [switch]$GameWebs,     # Update 24: the game's own web lines instead of Spidy's overlay strands
     [switch]$NoWebGrab,
     [switch]$NoAirWebs,
+    [switch]$RealAnchors, # Version 0.0.62 REAL ANCHORS (the launcher's default): the same as -NoAirWebs
     [switch]$NoBody,
     [switch]$NoPunch,
     [switch]$NoWebShooter,
@@ -256,9 +257,9 @@ else {
     Write-Host "A web aimed at a throwable prop or a thug catches it: the $reel reels it in, a sharp pull yanks"
     Write-Host "it to your hand, release the $web to throw (add -NoWebGrab to only swing)."
 }
-if($NoAirWebs) {
+if($NoAirWebs -or $RealAnchors) {
     $captureArgs+=@('--no-air-webs')
-    Write-Host 'Webs in open air off: a web that meets nothing within 100 m misses.'
+    Write-Host 'REAL ANCHORS: a web needs a building or object within 100 m; one that meets nothing misses (a short buzz).'
 }
 else { Write-Host 'A web that meets nothing within 100 m holds in open air there (add -NoAirWebs to make it miss).' }
 if($NoBody) {

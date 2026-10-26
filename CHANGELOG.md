@@ -4,8 +4,12 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 ## v0.0.63 (October 26, 2026)
 
-Version 0.0.63 (build Update 39.3), launcher build 10 (0.0.63.1). The mod is 0.0.62's, unchanged.
+Version 0.0.63 (build Update 39.3), launcher build 10 (0.0.63.1). The mod is 0.0.62's plus one fix.
 
+- Fixed: 0.0.62 failing to start VR. PLAY VR stopped at "starting the game" with `NameError: name 'session_off' is
+  not defined` (run_game_vr.py read a variable of main() inside session()). The lens-flare choice now travels with
+  the launch settings. New gate: tests/launch_session_tests.py runs the real launch path (main -> session ->
+  prepare_display) with stand-in Windows modules, plus a pyflakes check for undefined names in tools/*.py.
 - New opt-in launcher design (HERO VR orb, soundscape, big menu). Classic stays the default; the launcher asks once.
   Options > Launcher switches either way; Shift or --classic opens classic once; if the new design cannot start, the
   classic one opens and says why, once.

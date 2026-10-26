@@ -1,13 +1,19 @@
 # HERO VR v0.0.63 - Made by Agent Mulder
 
 VR for Marvel's Spider-Man 2 (Steam, Spider-Man2.exe 2.810.0.0), with the HERO VR launcher (0.0.63.1, build 10).
-Version 0.0.63 = build Update 39.3. **The mod is the same as 0.0.62**: only the launcher is new.
+Version 0.0.63 = build Update 39.3. **0.0.63 fixes 0.0.62 failing to start VR** (the 'session_off' crash); apart
+from that fix the mod is the same as 0.0.62, and the launcher has a new optional design.
 
 **New install:** download `HERO-VR-Launcher-0.0.63.zip` (below), extract it to e.g. `C:\HERO-VR`, double-click
 **HERO VR Launcher.cmd**, then **PLAY VR**. The launcher downloads the ready-made mod files
 (`HERO-VR-0.0.63-mod-win64.zip`) and checks their SHA-256; nothing is compiled on your PC.
 **Already on 0.0.62, 0.0.6 or 0.0.5:** the launcher offers 0.0.63 by itself (or **Updates > Update now**). It
 installs once and is not offered again.
+
+## Fixed
+- **0.0.62 failing to start VR (the 'session_off' crash).** In 0.0.62, PLAY VR stopped at "starting the game"
+  with `NameError: name 'session_off' is not defined`, so VR never started. 0.0.63 fixes it. A new test now runs the
+  real launch path before every release, so this kind of mistake cannot ship again.
 
 ## What's new
 - **A new launcher design (optional).** A full-screen-feeling HERO VR window with the glowing orb, a soundscape that
@@ -21,7 +27,7 @@ installs once and is not offered again.
 - **Safety net.** If the new design ever can't start on your PC (a damaged file, a graphics problem, or it stops
   responding), the launcher opens the classic design instead and tells you why, once.
 - **Revert** now also offers **USE 0.0.62**.
-- Everything else - PLAY VR, updates, repair, reports, your settings - works exactly as in 0.0.62.
+- Everything else - updates, repair, reports, your settings - works as in 0.0.62, and PLAY VR starts again.
 
 ## Going back
 - **To the classic launcher design:** Options > Launcher > New launcher design off (or Switch to classic launcher).
@@ -32,7 +38,7 @@ installs once and is not offered again.
 
 ## Files
 - `HERO-VR-Launcher-0.0.63.zip`: the launcher and the full source.
-- `HERO-VR-0.0.63-mod-win64.zip`: the ready-made mod files (built by the "Build prebuilt mod" workflow; same mod as 0.0.62).
+- `HERO-VR-0.0.63-mod-win64.zip`: the ready-made mod files (built by the "Build prebuilt mod" workflow; 0.0.62's mod plus the launch fix).
 - `version.json`: the launcher's update manifest. `SHA256SUMS.txt` and the `.sha256` files: checksums.
 
 ## Credits and license

@@ -13,7 +13,9 @@ This zip is the full source of mod Version 0.0.63 (build Update 39.3) plus the p
 - If the new design ever fails to start, the launcher opens the classic one by itself and says why. Hold **Shift**
   while starting the launcher (or start it with `--classic`) to open the classic design.
 - The ambient sound stops when you close the launcher or start the game, and the animation pauses while you play.
-- **The mod itself is the same as 0.0.62:** same features, same settings, same defaults. Only the version number changed.
+- **Fixed: 0.0.62 failing to start VR.** In 0.0.62 PLAY VR stopped at "starting the game" with the error
+  `name 'session_off' is not defined`. 0.0.63 fixes it. Otherwise the mod is the same as 0.0.62: same features, same
+  settings, same defaults.
 - **Revert** now offers **USE 0.0.62** as well as 0.0.6 and 0.0.5.
 
 ## In 0.0.62

@@ -2309,6 +2309,7 @@ def main():
                   '(headlight flares through walls).', flush=True)
     except OSError:
         pass
+    a.session_off = session_off   # session() reads it: it is not a local there (0.0.62 NameError at 'starting the game')
     # SM2 VR (from SM2VR 0.0.27): a Spider-Man 2 that renders no view of its own writes a swapchain back
     # buffer that is not the current one, and the graphics device is lost (DXGI_ERROR_ACCESS_DENIED). The
     # game always renders its own (monitor) view until that is understood.
@@ -2425,7 +2426,7 @@ def session(a, startup):
         print('Tip: to hide the game\'s own HUD (health, focus, mini-map) in VR, turn on Settings > UI > '
               'Hide HUD in the game. It applies at once; prompts, subtitles and menus stay.', flush=True)
         try:
-            values = vr_display.prepare_launch(small=not a.full_desktop_view, keep=picture_kept(a), off=session_off,
+            values = vr_display.prepare_launch(small=not a.full_desktop_view, keep=picture_kept(a), off=getattr(a, 'session_off', ()),
                                                height=vr_display.SMALLER_HEIGHT if a.smaller_desktop_view
                                                else vr_display.HEIGHT)
         except OSError as error:

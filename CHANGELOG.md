@@ -2,6 +2,26 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.6 (October 25, 2026)
+
+Version 0.0.6 (build Update 39.1), launcher build 6. Built on 0.0.5 (with its hotfixes 2 and 3).
+
+- Hero powers with real damage: IRON MAN (repulsors, the chest beam aimed at the enemy you look at), DAREDEVIL
+  (batons that chain to up to 3 more enemies, DAREDEVIL PUNCH, sonar) and HULK (charged jump, knockouts). One hero at a
+  time, all OFF by default, all live.
+- New Iron Man repulsor look and sound (no new render pass).
+- The hologram in 8 pages with named sections; RESTART tags on the settings that need one.
+- Opt-in reports (crash report, Report a bug, play stats off by default); nothing is sent by itself.
+- Frame rate (Update 39.1): measured 34.5-37 new frames a second at 90 Hz, GPU-bound (the headset copy waits about
+  6.6 ms for 0.19 ms of work; Spidy's own work is under about 1 ms). Session advice for 72/80 Hz and RenderScale
+  90/80 (+14% / +30%, estimates from the RTX 4080 measurement); AUTO PERFORMANCE's AUTO target is half rate when full
+  rate is out of reach; stalls are counted only during play. Graphics defaults unchanged. No new game address.
+- VR-loss fix (Update 39.0.3): a lost OpenXR session is recovered (the mod retries every 2 s) instead of leaving the
+  game flat.
+- Launcher build 6: Revert > USE PREVIOUS VERSION (0.0.5) downloads and SHA-256 checks the v0.0.5 release, installs
+  it and skips 0.0.6 until Updates > Update now.
+- `tools\build.ps1` run by a launcher installs the release's ready-made mod files (never compiles); `-FromSource` builds.
+
 ## v0.0.5 (October 25, 2026)
 
 - Launcher build 4 (hotfix, mod files unchanged): VR lost (e.g. back to the desktop in Virtual Desktop) or a headset

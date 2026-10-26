@@ -404,6 +404,10 @@ enum class Control : uint8_t {
     combatSfxVolume,
     combatSupersonic,
     combatSupersonicSpeed,
+    // Version 0.0.6: DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH
+    combatDaredevil,
+    combatHulk,
+    combatDaredevilPunch,
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -444,9 +448,27 @@ enum class Control : uint8_t {
     // Version 0.0.2 TRAIN MOVE (training_guide.hpp): the move TRAINING draws a path for; a press
     // steps to the next one. Never kept in live.txt.
     trainMove,
+    // Update 39.0.1 (owner: "give all the hero profiles their own page in holo"): the hero picker,
+    // one tab a hero page (SPIDER-MAN, IRON MAN, DAREDEVIL, HULK), and PLAY AS SPIDER-MAN on
+    // SPIDER-MAN's page. Navigation and a press: never kept in live.txt, past the mask.
+    heroTabSpider,
+    heroTabIron,
+    heroTabDaredevil,
+    heroTabHulk,
+    heroPlaySpider,
+    // Update 39.0.2 (owner: "the holo menus need to be cleaner and better organized"): a page's
+    // section headers, each a press opening its group of settings (and closing the page's other
+    // one). Navigation: never kept in live.txt, past the mask. The hero tabs above stay unused so
+    // every index holds.
+    section0,
+    section1,
+    section2,
+    section3,
+    section4,
+    section5,
 };
-constexpr int controls = 135;
-constexpr int combatControls = 45; // combat38::options (checked in wrist_hud.cpp)
+constexpr int controls = 149;
+constexpr int combatControls = 48; // combat38::options (checked in wrist_hud.cpp)
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);
@@ -469,7 +491,9 @@ static_assert(static_cast<int>(Control::farShadows) >= maskedControls, "only pre
 static_assert(static_cast<int>(Control::eyeBloom) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
-static_assert(static_cast<int>(Control::trainMove) == controls - 1);
+static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
+static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
+static_assert(static_cast<int>(Control::section5) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -518,14 +542,46 @@ struct Range {
 constexpr float minWidthCm = .4f, maxWidthCm = 4, widthStep = .1f;
 constexpr float minSpeed = 60, maxSpeed = 400, speedStep = 10;
 Range range(Control);
-constexpr int pages = 8; // Update 38.5: + EXTRAS; STATUS, VR SETTINGS, GRAPHICS, HOLOGRAM (Update 17), MUSIC (Update 19), CONTROLS (Update 37), COLOR (Update 37.2)
-constexpr int musicPage = 4;
-constexpr int controlsPage = 5; // Update 37: every motion control, marked as the mod runs now (controls_guide.hpp)
-constexpr int colorPage = 6;    // Update 37.2: COLOR / ATMOSPHERE (eye_color.hpp)
-constexpr int extrasPage = 7;   // Update 38.5: EXTRAS (extras385.hpp)
+// Update 39.0.2 (owner: "Not every hero needs its own page ... one 'powers' page that has flight,
+// invincibility and hero profiles with sub menus"): eight pages, the settings in sections.
+constexpr int pages = 8;
+constexpr int statusPage = 0;
+constexpr int powersPage = 1;   // INVINCIBLE, FLYING and the HERO PROFILES (one section a hero)
+constexpr int vrPage = 2;       // VR SETTINGS: RECALIBRATE, body, webs, hologram, mirror, sound, tests
+constexpr int combatPage = 3;   // COMBAT (combat38.hpp's rows, grouped)
+constexpr int graphicsPage = 4; // GRAPHICS: the FPS rows, quality, performance, display, tests, NEXT LAUNCH
+constexpr int colorPage = 5;    // COLOR / ATMOSPHERE (eye_color.hpp)
+constexpr int controlsPage = 6; // CONTROLS: how to play, gestures, remap, gamepad
+constexpr int musicPage = 7;
+// Update 39.0.2: a page's sections, one open at a time (an accordion; a closed section's rows are
+// not laid out, so they are neither drawn nor pressed). What is open is kept for the session (not
+// in live.txt), shared by the input and the drawing side; until a section is pressed each page
+// opens its first (COLOR none; POWERS the hero being played).
+constexpr int sectionsMost = 6;
+int sectionCount(int page);
+const char* sectionName(int page, int section); // "" past the page's sections
+int openSection(int page);                      // -1: none open
+void setOpenSection(int page, int section);     // -1 (or not one of the page's): close them all
+void resetSections();                           // every page back to its default
+void setActiveHero(int hero);                   // hero_modes::Hero: POWERS' default section
+int activeHero();
+inline Control sectionControl(int section) {
+    return static_cast<Control>(static_cast<int>(Control::section0) + section);
+}
+inline int sectionIndex(Control c) {
+    const int i = static_cast<int>(c) - static_cast<int>(Control::section0);
+    return i >= 0 && i < sectionsMost ? i : -1;
+}
+// The section a control is in on its page (-1: always shown, or not on any page).
+struct Place {
+    int page = -1, section = -1;
+};
+Place placeOf(Control c);
+// Update 39.0.2: a gold RESTART tag beside the name (EYE SUPERSAMPLE, MIRROR VIEW).
+bool restartTag(Control c);
 const char* pageName(int page);
-// Page 2's player mirror (Update 37: built, vr_mirror.hpp). The greyed row stays only for
-// the game-music mute on page 5, which reuses Kind::mirror.
+// The player mirror (Update 37: built, vr_mirror.hpp). The greyed row stays only for
+// the game-music mute on the MUSIC page, which reuses Kind::mirror.
 constexpr const char* mirrorText = "MIRROR";
 // Update 17: the text size as a factor (hud_text / 100, held to .75-1.75;
 // not finite: 1). The settings pages are laid out for it: bigger text wraps
@@ -924,6 +980,7 @@ class Menu {
         // from the plain help.
         Control helpControl{};
         int helpOverflow = -1;
+        int hero = -1; // Update 39.0.2: hero_modes::Hero being played (POWERS opens its profile); -1 unknown
     };
     // Update 19: what the MUSIC page asks of the player this update.
     enum class Music : uint8_t { none, rescan, pick, previous, rewind, toggle, stop, forward, next, seek };
@@ -953,6 +1010,8 @@ class Menu {
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed
         bool trainMove{};                                           // Version 0.0.2: TRAIN MOVE pressed
+        bool heroSpider{};  // Update 39.0.1: PLAY AS SPIDER-MAN pressed (every hero toggle off)
+        bool section{};     // Update 39.0.2: a section header pressed (opened or closed)
         bool remapMove{}, remapRecord{}, remapKeep{}, remapAgain{}, remapCancel{}; // Update 38.5 GESTURE REMAP
         bool remapResetMove{}, remapResetAll{}, remapProfile{};
         bool foveated{}, foveaInner{}, foveaDebug{}, foveaStats{};  // Update 37.2: FOVEATED's
@@ -967,8 +1026,9 @@ class Menu {
     int page() const {
         return page_;
     }
+    // Update 39.0.2: a page past the eight (an older layout's) is STATUS.
     void setPage(int page) {
-        page_ = ((page % pages) + pages) % pages;
+        page_ = page >= 0 && page < pages ? page : 0;
     }
     Control hover() const {
         return hover_;

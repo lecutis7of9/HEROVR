@@ -49,6 +49,9 @@ struct Config {
     uint32_t cartoon = 60;    // CARTOON STRENGTH 0-100: painted flats, ink width and band hardness
     bool outlines = true;     // OUTLINES
     uint32_t bands = 4;       // BANDS 3, 4 or 5
+    // Version 0.0.6 DAREDEVIL SONAR: on while DAREDEVIL ABILITIES is on (game_xr sets it, with on);
+    // it takes the place of the FILTER and the grade (sonarPixel, the toon pipeline's sonar mode).
+    bool sonar = false;
 };
 struct Limits {
     int lo, hi, step;
@@ -112,6 +115,10 @@ inline Params params(const Config& c) {
     Params p;
     if (!c.on)
         return p;
+    if (c.sonar) { // DAREDEVIL SONAR draws its own look (sonarPixel): no grade
+        p.on = 1;
+        return p;
+    }
     const Look l = look(c.filter);
     const float s = static_cast<float>(std::min(c.strength, 100u)) / 100.f;
     const float ev = static_cast<float>(std::clamp(c.exposureTenths, exposureLimits.lo, exposureLimits.hi)) / 10.f +
@@ -220,9 +227,15 @@ inline constexpr const char* bandsHelp = "90s ANIMATED: how many flat shades eac
 struct Toon {
     float on = 0, paint = 0, bands = 4, ink = 0; // ink 0 = OUTLINES OFF
     int stride = 1;                              // 1 or 2 pixels (CARTOON STRENGTH 50+)
+    float sonar = 0;                             // Version 0.0.6 DAREDEVIL SONAR (1: on)
 };
 inline Toon toon(const Config& c) {
     Toon t;
+    if (c.on && c.sonar) {
+        t.on = 1;
+        t.sonar = 1;
+        return t;
+    }
     if (!c.on || c.filter != animated90s)
         return t;
     const float k = static_cast<float>(std::min(c.cartoon, 100u)) / 100.f;
@@ -330,4 +343,43 @@ struct Data {
     uint64_t sequence{}; // odd while written (publish)
 };
 static_assert(sizeof(Data) == 80);
+// Version 0.0.6 DAREDEVIL SONAR (the approved preview's look, preview004/make.py): a near-black world,
+// red and orange outlines (a Sobel of the brightness over 3x3 taps 2 pixels apart: fine texture
+// draws little), brightest near the bottom centre (where he stands), and three pulse rings that
+// grow out from there and fade (one every 2 s, 0.75 image widths across). The toon pipeline's
+// sonar mode (native_eye_gpu.cpp toonShader sonar()) is the same steps in the same order; both
+// eyes alike (the rings at the same place in each eye). 9 Loads a pixel. phase: seconds.
+inline float sonarRings(float r, float phase) {
+    float ring = 0;
+    for (int k = 0; k < 3; ++k) {
+        float t = phase * .5f + static_cast<float>(k) / 3.f;
+        t -= std::floor(t);
+        const float R = t * .75f, d = (r - R) / .008f;
+        ring += (1 - t) * std::exp(-d * d);
+    }
+    return ring;
+}
+template <class Fetch>
+std::array<float, 3> sonarPixel(Fetch&& fetch, int x, int y, int w, int h, float phase) {
+    const auto lum = [](const std::array<float, 3>& k) { return .299f * k[0] + .587f * k[1] + .114f * k[2]; };
+    float l[9];
+    for (int j = 0; j < 3; ++j)
+        for (int i = 0; i < 3; ++i)
+            l[j * 3 + i] = lum(fetch(x + (i - 1) * 2, y + (j - 1) * 2));
+    const float gx = (l[2] + 2 * l[5] + l[8]) - (l[0] + 2 * l[3] + l[6]);
+    const float gy = (l[6] + 2 * l[7] + l[8]) - (l[0] + 2 * l[1] + l[2]);
+    const float e = std::pow(saturate(std::sqrt(gx * gx + gy * gy) * .8f), .8f);
+    const float u = (static_cast<float>(x) + .5f) / static_cast<float>(std::max(w, 1));
+    const float v = (static_cast<float>(y) + .5f) / static_cast<float>(std::max(h, 1));
+    const float aspect = static_cast<float>(std::max(h, 1)) / static_cast<float>(std::max(w, 1));
+    const float du = u - .5f, dv = (v - .92f) * 1.6f * aspect;
+    const float r = std::sqrt(du * du + dv * dv);
+    const float ring = sonarRings(r, fin(phase, 0));
+    const float near = std::exp(-r / .55f);
+    const float edge = e * (.35f + .65f * near) + e * ring * 1.5f;
+    const float base = l[4] * .06f;
+    return {saturate(base + edge + ring * .25f), saturate(base * .4f + edge * .38f + ring * .08f),
+            saturate(base * .3f + edge * .08f)};
+}
+
 } // namespace spidy::eye_color

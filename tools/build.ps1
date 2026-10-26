@@ -23,8 +23,7 @@ $portVersionFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'PORT-VERSION'
 $portVersion = if (Test-Path -LiteralPath $portVersionFile) { (Get-Content -LiteralPath $portVersionFile -TotalCount 1).Trim() } else { 'unknown (PORT-VERSION missing)' }
 $publicFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'VERSION'
 $publicVersion = if (Test-Path -LiteralPath $publicFile) { (Get-Content -LiteralPath $publicFile -TotalCount 1).Trim() } else { 'unknown' }
-Write-Host "SM2 VR Version $publicVersion (build $portVersion)" -ForegroundColor Green
-Write-Host 'HERO VR - Made by Agent Mulder' -ForegroundColor Green
+Write-Host "SM2 VR Version $publicVersion (build $portVersion) - Made by Agent Mulder" -ForegroundColor Green
 # Version 0.0.5: a fresh folder (the zip unpacked anywhere) has no third_party yet. Name what is
 # missing and fetch it with tools/bootstrap.ps1 (the pinned revisions) before building.
 $tpRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'third_party'

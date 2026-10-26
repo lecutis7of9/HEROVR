@@ -14,9 +14,12 @@
 
 namespace spidy::sfx {
 
-enum Id : uint32_t { sonicBoom, repulsorFire, chestBeam, beamReady, batonWhoosh, batonHit, sounds };
+// Version 0.0.6 (Update 39.0.2) REPULSOR: repulsor_fire is the chosen take's blast (CMakeLists.txt
+// SPIDY_REPULSOR_TAKE, assets/sfx/repulsor_mcu_<take>_fire.wav) and repulsor_charge its whine, played on
+// the press so it fills the 0.12 s chord wait (repulsor.hpp chordWindow); back to back they are the take.
+enum Id : uint32_t { sonicBoom, repulsorFire, chestBeam, beamReady, batonWhoosh, batonHit, repulsorCharge, sounds };
 inline constexpr const char* names[sounds] = {"sonic_boom", "repulsor_fire", "chest_beam",
-                                              "beam_ready", "baton_whoosh", "baton_hit"};
+                                              "beam_ready", "baton_whoosh", "baton_hit", "repulsor_charge"};
 // Voices playing one sound at most at once (a fast run of blasts layers up to this).
 inline constexpr uint32_t voicesPerSound = 4;
 

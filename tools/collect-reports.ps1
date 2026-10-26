@@ -11,7 +11,7 @@ if (-not (Test-Path -LiteralPath $reports)) { throw "No reports folder at $repor
 $files = @()
 # Update 38.5: the version these reports came from, first.
 $versionFile = Join-Path $root 'VERSION'
-if (Test-Path -LiteralPath $versionFile) { Write-Host ('SM2 VR Version ' + (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim()) }
+if (Test-Path -LiteralPath $versionFile) { Write-Host ('SM2 VR Version ' + (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim() + ' - Made by Agent Mulder') }
 $report = Get-ChildItem -LiteralPath $reports -Filter 'game-vr-*.json' -File |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($report) {

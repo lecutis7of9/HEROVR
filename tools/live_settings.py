@@ -282,15 +282,19 @@ SETTINGS = {
     'perf_floor': ((0, 2), 'SpidyPerfFloor', 'QUALITY FLOOR {} (0 medium; 1 high; 2 low)'),
     'perf_status': ((0, 1), 'SpidyPerfStatus', 'SHOW STATUS {} (0 on; 1 off)'),
     # Version 0.0.4
-    'iron_man': ((0, 1), 'SpidyShooterType', 'IRON MAN ABILITIES {} (0 off: Spider-Man; 1 on: palm repulsor blasts and, both triggers held, a chest beam every 30 s; no web of any kind (no swing, zip, web shooter, gadgets, grab or rope); damage not sent yet, EXPERIMENTAL)'),
+    'iron_man': ((0, 1), 'SpidyShooterType', 'IRON MAN ABILITIES {} (0 off: Spider-Man; 1 on: palm repulsor blasts and, both triggers held, a chest beam every 30 s; no web of any kind (no swing, zip, web shooter, gadgets, grab or rope); blasts and beam do real damage; one hero at a time, EXPERIMENTAL)'),
     'mirror_view': ((0, 1), 'SpidyMirrorView', 'MIRROR VIEW {} (0 off; 1 test: a hidden game camera looks at you for 30 s, made when VR starts: RESTART to run it, EXPERIMENTAL)'),
     # Version 0.0.5
     'hero_height': ((0, 4), 'SpidyHeroHeight', 'HERO HEIGHT {} (0 1.00x: your size; 1 1.15x; 2 1.30x; 3 1.45x; 4 1.60x: the VR body grows for a big skin like Hulk, live)'),
-    'hero_damage': ((0, 1), 'SpidyHeroDamage', 'DAMAGE TEST {} (0 off; 1 on: web ball and repulsor hits ask the game for damage directly, EXPERIMENTAL)'),
+    'hero_damage': ((0, 1), 'SpidyHeroDamage', 'WEB BALL DAMAGE {} (0 off; 1 on: Spider-Man\'s web ball hits ask the game for damage directly; the heroes\' hits always do, EXPERIMENTAL)'),
     'punch_sense': ((0, 3), 'SpidyPunchSense', 'PUNCH SENSITIVITY {} (0 forgiving: slow, sloppy jabs count; 1 max; 2 0.0.4; 3 strict, live)'),
     'sfx_volume': ((0, 4), 'SpidySfxVolume', 'SFX VOLUME {} (0 100%; 1 75%; 2 50%; 3 25%; 4 off: the mod\'s own sounds, live)'),
     'supersonic': ((0, 1), 'SpidySupersonic', 'SUPERSONIC {} (0 on; 1 off: in FLY MODE, both hands out and the left stick forward is a sonic boom dash, live)'),
     'supersonic_speed': ((0, 3), 'SpidySupersonicSpeed', 'SUPERSONIC SPEED {} (0 2x; 1 1.5x; 2 2.5x; 3 3x the FAST fly speed, live)'),
+    # Version 0.0.6 (Update 39.0): one hero toggle at a time (turning one on turns the others off)
+    'daredevil': ((0, 1), 'SpidyDaredevil', 'DAREDEVIL ABILITIES {} (0 off; 1 on: a baton in each hand, the trigger throws it (strong aim assist, chains to 3 more enemies, always comes back), punches hit DAREDEVIL PUNCH times harder, sonar colours; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'hulk': ((0, 1), 'SpidyHulk', 'HULK ABILITIES {} (0 off; 1 on: the charged jump (hold A) goes 4x as high and far, a punch knocks a normal enemy out, brutes take 2-3; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'daredevil_punch': ((0, 4), 'SpidyDaredevilPunch', 'DAREDEVIL PUNCH {} (0 3x; 1 1x; 2 2x; 3 4x; 4 5x a normal punch, live)'),
 }
 # Update 37: the view gates share one export (SpidyViewGate): the selector in the high half.
 VIEW_GATES = {'bloom_fx': 0, 'lod_fade': 1, 'lod_reach': 2, 'impostors': 3}
@@ -331,7 +335,9 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'iron_man': 'off', 'mirror_view': 'off',
                      # Version 0.0.5
                      'hero_height': '1.00x', 'hero_damage': 'off',
-                     'punch_sense': 'forgiving', 'sfx_volume': '100%', 'supersonic': 'on', 'supersonic_speed': '2x'}
+                     'punch_sense': 'forgiving', 'sfx_volume': '100%', 'supersonic': 'on', 'supersonic_speed': '2x',
+                     # Version 0.0.6 (the heroes experimental: off)
+                     'daredevil': 'off', 'hulk': 'off', 'daredevil_punch': '3x'}
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Update 37.2: the startup checks (tests): these must start this way on a fresh install and over an
@@ -438,6 +444,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'punch_sense': ('forgiving', 'max', '0.0.4', 'strict'),
                 'sfx_volume': ('100%', '75%', '50%', '25%', 'off'), 'supersonic': ('on', 'off'),
                 'supersonic_speed': ('2x', '1.5x', '2.5x', '3x'),
+                'daredevil': ('off', 'on'), 'hulk': ('off', 'on'), 'daredevil_punch': ('3x', '1x', '2x', '4x', '5x'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -509,6 +516,9 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
                           '0': 0, '1': 1, '2': 2, '3': 3, '4': 4},
            'supersonic': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'supersonic_speed': {'2x': 0, '1.5x': 1, '2.5x': 2, '3x': 3, '2': 0, '1.5': 1, '2.5': 2, '3': 3, '0': 0, '1': 1},
+           'daredevil': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'hulk': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'daredevil_punch': {'3x': 0, '1x': 1, '2x': 2, '4x': 3, '5x': 4, '3': 0, '1': 1, '2': 2, '4': 3, '5': 4},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
            'holo_open': {'forearm': 0, 'tap': 0, 'palm_look': 1, 'palm': 1, 'look': 1, 'click': 2, 'f8_only': 3,
@@ -639,7 +649,18 @@ def parse(text):
             problems.append(f'line {number}: {name} must be {low}-{high}')
             continue
         values[name] = number_value
+    one_hero(values, problems)
     return values, problems
+
+
+def one_hero(values, problems=None):
+    """Version 0.0.6: only one hero toggle (HERO_KEYS) on; with two or more on, the first is kept."""
+    on = [k for k in HERO_KEYS if values.get(k) == 'on']
+    for k in on[1:]:
+        values[k] = 'off'
+        if problems is not None:
+            problems.append(f'{k}: only one hero at a time, {on[0]} kept on')
+    return values
 
 
 class LiveFile:
@@ -739,7 +760,11 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.4
                  'iron_man', 'mirror_view',
                  # Version 0.0.5
-                 'hero_height', 'hero_damage', 'punch_sense', 'sfx_volume', 'supersonic', 'supersonic_speed')
+                 'hero_height', 'hero_damage', 'punch_sense', 'sfx_volume', 'supersonic', 'supersonic_speed',
+                 # Version 0.0.6
+                 'daredevil', 'hulk', 'daredevil_punch')
+# Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
+HERO_KEYS = ('iron_man', 'daredevil', 'hulk')
 START_ONLY = START_ONLY + UPDATE38_KEYS
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
@@ -872,6 +897,11 @@ def format_value(name, value):
 def write_back(text, updates):
     """`text` with every line that names a setting in `updates` (or an alias of it) set to the new value,
     its comment kept; a setting no line names is added at the end."""
+    updates = dict(updates)
+    for key in HERO_KEYS:  # Version 0.0.6: a hero turned on turns the others off in the file too
+        if updates.get(key) == 'on':
+            updates.update({k: 'off' for k in HERO_KEYS if k != key})
+            break
     lines = text.splitlines()
     done = set()
     for i, line in enumerate(lines):

@@ -197,7 +197,7 @@ void addTexts() {
     if (textCount)
         return;
     tabName = addText("SPIDY_VR_TAB", "SPIDY VR");
-    tabHeading = addText("SPIDY_VR_HEADING", "SPIDY VR SETTINGS");
+    tabHeading = addText("SPIDY_VR_HEADING", "SPIDY VR SETTINGS - MADE BY AGENT MULDER"); // Version 0.0.6: the credit
     char tag[24];
     for (size_t r = 0; r < rowCount; ++r) {
         const auto& row = vr_settings::rows()[r];

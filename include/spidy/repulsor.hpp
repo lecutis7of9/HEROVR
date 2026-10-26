@@ -111,6 +111,7 @@ public:
         for (int i = 0; i < 2; ++i)
             if (pending_[i] && now - pendingAt_[i] > chordWindow) {
                 pending_[i] = false;
+                blastAt_[i] = now;
                 o.blast[i] = true;
                 o.blastAim[i] = pendingAim_[i];
                 ++blasts_;
@@ -138,11 +139,23 @@ public:
     }
     void clear() {
         pending_[0] = pending_[1] = false;
+        blastAt_[0] = blastAt_[1] = -1.f;
         chord_ = idle;
     }
     bool cooling() const { return cooling_; }
     float cooldownLeft() const { return cooling_ ? std::max(0.f, readyAt_ - now_) : 0.f; }
     bool chordWaiting() const { return chord_ == waiting; }
+    // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK (repulsor_mcu.hpp): how long this hand's palm has been
+    // charging (its press waiting out the chord window; a chord held for the beam: both palms, full),
+    // -1 when it is not; and seconds since its last blast (-1 none yet).
+    float chargingFor(int i) const {
+        if (i < 0 || i > 1)
+            return -1.f;
+        if (pending_[i])
+            return std::max(0.f, now_ - pendingAt_[i]);
+        return chord_ == waiting ? chordWindow + std::max(0.f, now_ - chordAt_) : -1.f;
+    }
+    float sinceBlast(int i) const { return i >= 0 && i <= 1 && blastAt_[i] >= 0 ? std::max(0.f, now_ - blastAt_[i]) : -1.f; }
     uint64_t blasts() const { return blasts_; }
     uint64_t beams() const { return beams_; }
     uint64_t chords() const { return chords_; }
@@ -157,6 +170,7 @@ private:
     Vec3 pendingAim_[2]{};
     Chord chord_ = idle;
     float chordAt_{}, readyAt_{}, now_{};
+    float blastAt_[2]{-1.f, -1.f};
     bool cooling_{};
     uint64_t blasts_{}, beams_{}, chords_{}, shortChords_{}, cooledChords_{}, readyCues_{};
 };
@@ -190,7 +204,53 @@ inline int beamHits(Vec3 from, Vec3 dir, const Vec3* feet, int count, int* hit, 
     return n;
 }
 
-// Would-be damage (CANDIDATE: nothing is sent): per kind and the largest an enemy took.
+// Version 0.0.6 BEAM AIM ASSIST (rep0050: a beam at 460.6 s caught nobody, aimed along the head's
+// level forward with no enemy near): the beam turns to the chest of the enemy nearest the head's
+// forward within beamAssistDeg and beamRange (pitch too); none: the level forward, as 0.0.5.
+// Returns the enemy's index (-1 none) and sets dir.
+inline constexpr float beamAssistDeg = 30.f;
+inline int beamAim(Vec3 from, Vec3 forward, const Vec3* feet, int count, Vec3& dir) {
+    Vec3 f{forward.x, 0, forward.z};
+    if (!finite(from) || !finite(f) || length(f) < 1e-3f)
+        return -1;
+    f = normalized(f);
+    dir = f;
+    if (!feet)
+        return -1;
+    const float cosMax = std::cos(beamAssistDeg * 3.14159265f / 180.f);
+    int best = -1;
+    float bestCos = cosMax;
+    for (int i = 0; i < count; ++i) {
+        const Vec3 c = feet[i] + Vec3{0, 1.f, 0};
+        if (!finite(c))
+            continue;
+        const Vec3 to = c - from;
+        const float d = length(to);
+        if (!(d >= .3f) || d > beamRange)
+            continue;
+        const Vec3 u = to / d;
+        const float flat = length(Vec3{u.x, 0, u.z});
+        const float cosFlat = flat > 1e-4f ? dot(Vec3{u.x, 0, u.z} / flat, f) : 0.f;
+        if (cosFlat > bestCos) {
+            bestCos = cosFlat;
+            best = i;
+            dir = u;
+        }
+    }
+    return best;
+}
+// The nearest enemy's distance from `from` (-1 none): the log says why a beam caught nobody.
+inline float nearestMetres(Vec3 from, const Vec3* feet, int count) {
+    float best = -1;
+    for (int i = 0; feet && i < count; ++i) {
+        const float d = length(feet[i] + Vec3{0, 1.f, 0} - from);
+        if (std::isfinite(d) && (best < 0 || d < best))
+            best = d;
+    }
+    return best;
+}
+
+// The damage counted per kind (Version 0.0.6: each hit also sends its blow, sm2_damage's CONFIRMED path).
 struct Ledger {
     float blastTotal{}, beamTotal{};
     uint64_t blastHits{}, beamHits{}, sent{}; // sent stays 0 until a damage call is confirmed

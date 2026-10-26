@@ -154,6 +154,20 @@ namespace Sm2VrLauncher
                 dt.Tick += (s, e) => { dt.Stop(); using (var d = new RevertDialog(root, settings, true)) d.ShowDialog(this); };
                 dt.Start();
             }
+            string dlg = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_DIALOG");
+            if (dlg == "crash" || dlg == "bug")
+            {
+                var dt = new Timer { Interval = 1500 };
+                dt.Tick += (s, e) =>
+                {
+                    dt.Stop();
+                    if (dlg == "bug") { using (var d = new BugDialog(root)) d.ShowDialog(this); return; }
+                    var c = new CrashFinding { Kind = "The game closed with a crash report from Windows.",
+                        Body = Telemetry.Header(root, true) + "\nWhat was found: Windows error report AppCrash_Spider-Man2.exe (preview)\n\nGame fps: average 41.9, low 33.0\nHero: Iron Man" };
+                    using (var d = new CrashDialog(c, root)) d.ShowDialog(this);
+                };
+                dt.Start();
+            }
         }
     }
 }

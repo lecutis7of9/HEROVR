@@ -9,7 +9,30 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.5**, shipped with mod Version 0.0.5 (build Update 38.9).
+Launcher version **0.0.6.3** (launcher build 5), shipped with mod Version 0.0.6 (build Update 39.0.3).
+
+## Privacy and reports
+
+The launcher never sends anything on its own. There is no tracking, no account and no server of ours: every report
+opens a pre-filled issue on the mod's GitHub page ([lecutis7of9/HEROVR](https://github.com/lecutis7of9/HEROVR/issues))
+in your browser, where you can read and edit all of it, and nothing is sent until **you** press *Submit* (a free
+GitHub account is needed for that). Close the page and nothing is sent.
+
+* **Crash reports** (on by default, Options > Privacy > *Offer crash reports*). If the game or the launcher crashed,
+  or a VR session did not end cleanly, the next start asks *"Send this crash report to help fix it?"* with
+  **Send report**, **Not now** and **Don't ask again**. It is asked once per crash.
+* **Report a bug** (Reports). Type a short description; tick or untick the system info (Windows version, graphics
+  card, VR runtime name).
+* **Play stats** (off by default, asked once at first start, Options > Privacy > *Share play stats*). When on, the
+  launcher keeps a short summary of your last 10 VR sessions on your PC, and **Send play stats** in Reports shares
+  them in one click: mod version, minutes played, game fps (average and low), VR frame rate, stalls, the hero and
+  which features were on, render scale, graphics card and headset/runtime name. Turning it off deletes what was kept.
+  Neither setting needs a restart of the game or the launcher.
+
+What is never included: your name, Windows user name or PC name, folder paths (`C:\Users\<you>\...` becomes
+`<user>`), e-mail addresses, IP addresses, Steam IDs, save data or files. Reports are plain text you can see before
+sending. **Collect reports** is separate and older: it zips `reports\` for you to attach yourself, and those log
+files can contain folder paths with your Windows user name, so look before you share it.
 
 ## Where it lives
 The prebuilt exe is `tools\launcher\SM2VRLauncher.exe`, and **HERO VR Launcher.cmd** in the install's top folder starts it.

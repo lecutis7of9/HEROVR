@@ -1,19 +1,35 @@
-# HERO VR 0.0.5 - Made by Agent Mulder
+# HERO VR 0.0.6 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of mod Version 0.0.5 (build Update 38.9) plus the prebuilt HERO VR launcher.
+This zip is the full source of mod Version 0.0.6 (build Update 39.1) plus the prebuilt HERO VR launcher.
 
-## What's new in 0.0.5
-- Punch sensitivity: FORGIVING is the new default, and MAX, 0.0.4 and STRICT are also available. More of your punches land.
-- HERO HEIGHT goes from 1.00x to 1.60x, so a big hero skin stands straight.
-- Iron Man's chest-beam cooldown is now a ring on the right wrist.
-- FLY: FAST is now 40 m/s, and there is a new SUPERSONIC dash with a sonic boom.
-- The mod has its own sound effects (repulsor, beam, sonic boom), with SFX VOLUME.
-- A damage probe and the experimental DAMAGE TEST, which is OFF by default.
-- New experimental settings start OFF, and none of them needs a game restart.
+## What's new in 0.0.6
+- Your 0.0.5 test proved the damage path: blows sent from the mod really hurt enemies. 0.0.6 builds the heroes on it.
+- IRON MAN ABILITIES: repulsor blasts and the chest beam (4x a blast, 30 s cooldown on the wrist ring) do real damage,
+  and the beam now aims at the enemy you look at.
+- DAREDEVIL ABILITIES: a baton in each hand, a trigger throw with strong aim assist that chains to up to 3 more enemies
+  within 6 m and always comes back, harder punches (DAREDEVIL PUNCH, 1x to 5x, 3x by default) and a sonar look.
+- HULK ABILITIES: a 4x charged jump and one-punch knockouts on normal enemies (bigger ones take 2 to 3).
+- One hero at a time; all heroes are OFF by default and none of them needs a game restart.
+- A cleaner hologram: 8 pages (STATUS, POWERS, VR SETTINGS, COMBAT, GRAPHICS, COLOR, CONTROLS, MUSIC), each split into
+  named sections that open with a press, one at a time. Nothing was removed, only reorganised.
+- POWERS page: INVINCIBLE, FLYING (fly mode, supersonic and its options) and HERO PROFILES (Spider-Man, Iron Man,
+  Daredevil, Hulk; one hero at a time). It opens on the hero you are playing.
+- New Iron Man repulsor: a palm charge, a tight white-hot bolt with a blue falloff and a short impact burst, and a new,
+  tighter sound. It costs about the same as the webs (no new render pass).
+- Settings that need a restart (EYE SUPERSAMPLE, MIRROR VIEW TEST) carry a gold RESTART tag; everything else is live.
+- The report now carries the MIRROR VIEW TEST result, and SUPERSONIC logs the speed each dash reaches.
+- Frame rate help: after a session the mod says whether your graphics card is the limit, suggests 72 or 80 Hz in your
+  VR app when the game already makes about half your headset's rate (no more judder), and suggests RenderScale 90 or 80
+  (about +14% and +30% frames; estimates from one RTX 4080 measurement). AUTO PERFORMANCE (off by default) now aims at
+  half rate when full rate is out of reach. The graphics defaults are unchanged.
+- VR never ends silently when the headset is lost: the mod waits for it and brings VR back by itself.
+- Opt-in reports (see Privacy below).
+- Don't like 0.0.6? **Revert > USE PREVIOUS VERSION (0.0.5)** downloads 0.0.5 from GitHub, checks it and installs it.
+  The launcher then stays on 0.0.5 until you press **Updates > Update now**.
 
 ## Requirements
 - Windows 10 or 11 (64-bit).
@@ -27,14 +43,28 @@ This zip is the full source of mod Version 0.0.5 (build Update 38.9) plus the pr
    `C:\HERO-VR`. Don't use Program Files or a OneDrive folder.
 2. Double-click **HERO VR Launcher.cmd**. If SmartScreen warns you, click **More info** and then **Run anyway**.
    The launcher is unsigned.
-3. On the first run the launcher downloads the ready-made mod files for 0.0.5 from the GitHub release
-   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.5) and checks them. If that was interrupted,
+3. On the first run the launcher downloads the ready-made mod files for 0.0.6 from the GitHub release
+   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.6) and checks them. If that was interrupted,
    press **Repair** on **Status** (or just PLAY VR, which offers it).
 4. Start your VR app, put the headset on and press **PLAY VR**. The default launch options are:
    `-RenderScale 100 -OverlayWebs -EngineTaa -SmallerDesktopView`.
 
 To get the wrist hologram (the settings menu) in VR, bring your right hand to your left forearm and pull the right trigger. On the keyboard, press F8.
-If something goes wrong, open **Reports** in the launcher, or send the newest `reports\game-vr-*.json` and `-console.log`.
+If something goes wrong, open **Reports** in the launcher and press **Report a bug**, or send the newest
+`reports\game-vr-*.json` and `-console.log`.
+
+## Privacy
+HERO VR never sends anything by itself: no tracking, no accounts, no servers. Reports are opt-in and you see every word
+first. Each one opens a filled-in issue on the mod's GitHub page in your browser, and nothing is sent until you press
+*Submit* there (a free GitHub account is needed); close the page and nothing is sent.
+- **Crash reports**: after a crash, the next start asks "Send this crash report to help fix it?" (Send report, Not now,
+  Don't ask again). You can turn this off in Options > Privacy.
+- **Report a bug**: a short description, with or without the mod version, graphics card and VR runtime name.
+- **Play stats**: **off** unless you turn it on (asked once at the first start, Options > Privacy). It keeps a short
+  summary of your last 10 sessions on your PC (fps, stalls, hero and features used, mod version, graphics card and
+  headset name) to send from Reports in one click. Turning it off deletes them. No restart is needed.
+- Never included: your name, Windows user or PC name, folder paths, e-mail, IP address, Steam ID or save files.
+  (Collect reports, the older zip of the `reports` folder, is not cleaned this way; check it before you share it.)
 
 ## Credits
 - **Spidy (SpidyVR) by Ilya Mezerowsky**: the VR mod this is built on. https://github.com/IlyaMez/SpidyVR,

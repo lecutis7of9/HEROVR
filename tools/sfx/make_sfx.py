@@ -149,10 +149,107 @@ def baton_hit():
     return save('baton_hit.wav', np.tanh(1.8 * x), -1.0)
 
 
+# Version 0.0.6 (Update 39.0.2) REPULSOR: three takes on one shape (A CLASSIC, B HEAVY, C TIGHT; the
+# one shipped is CMakeLists.txt's SPIDY_REPULSOR_TAKE). Each take is cut at the blast (0.12 s) into
+# <take>_charge.wav, played on the press so the whine fills the chord wait, and <take>_fire.wav,
+# played when the blast leaves the palm (the thump). Played back to back they are the whole take.
+#   charge whine (rising, filtered, quiet) -> deep thump + air crack at 0.12 s -> short electric crackle.
+def _whine(t, f0, f1, sec, level):
+    """A turbine-like charge: two detuned rising partials and a shimmer band, swelling then cut."""
+    k = np.clip(t / sec, 0, 1)
+    f = f0 + (f1 - f0) * k ** 1.6
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    tone = np.sin(ph) + .35 * np.sin(2.003 * ph) + .12 * np.sin(3.01 * ph)
+    shimmer = band(noise(len(t) / SR), 4000, 11000, 2) * .25
+    env = (k ** 1.5) * (t < sec) + (t >= sec) * np.exp(-(t - sec) / .012)
+    return level * env * (tone + shimmer)
+
+
+def _thump(t, at, f0, f1, decay, level):
+    """The blast: a falling sine kick, a click of air and a pressure burst, all starting at `at`."""
+    x = np.zeros_like(t)
+    s = int(SR * at)
+    tt = t[: len(t) - s]
+    kick = np.sin(2 * np.pi * np.cumsum(f1 + (f0 - f1) * np.exp(-tt / .018)) / SR) * np.exp(-tt / decay)
+    click = high(noise(len(tt) / SR), 2500) * np.exp(-tt / .0025)
+    click /= np.max(np.abs(click)) + 1e-9
+    press = band(noise(len(tt) / SR), 180, 1600, 2) * np.exp(-tt / .03)
+    press /= np.max(np.abs(press)) + 1e-9
+    x[s:] = level * (1.0 * kick + .45 * click + .5 * press)
+    return x
+
+
+def _crackle(t, at, length, density, level, seed):
+    """Electric crackle: sparse sharp ticks, thinning out, through a bright band, plus a fading buzz."""
+    r = np.random.default_rng(seed)
+    x = np.zeros_like(t)
+    s, e = int(SR * at), min(len(t), int(SR * (at + length)))
+    for i in range(s, e):
+        k = (i - s) / max(1, e - s)
+        if r.random() < density * 100 * (1 - k) ** 1.5 / SR:
+            x[i] = r.choice([-1, 1]) * (.4 + .6 * r.random()) * (1 - k)
+    ticks = band(x, 1800, 9500, 2)
+    ticks /= np.max(np.abs(ticks)) + 1e-9
+    tt = np.maximum(t - at, 0)
+    buzz = signal.sawtooth(2 * np.pi * 120 * t) * (t >= at) * np.exp(-tt / (length * .35))
+    buzz = band(buzz, 200, 2400, 2)
+    buzz /= np.max(np.abs(buzz)) + 1e-9
+    return level * (ticks + .18 * buzz)
+
+
+def _repulsor(name, sec, whine, thump, crackle, drive):
+    t = t_of(sec)
+    x = _whine(t, *whine) + _thump(t, *thump) + _crackle(t, *crackle)
+    x = high(x, 30, 2)          # no DC or sub rumble the headset speakers can't play
+    return save(name, np.tanh(drive * x), -1.0)
+
+
+def repulsor_mcu_a():   # A "CLASSIC": balanced whine, solid thump, short crackle
+    return _repulsor('repulsor_mcu_a.wav', .50, (900, 3600, .12, .30), (.12, 130, 62, .075, 1.0),
+                     (.13, .22, 3.5, .30, 61), 1.4)
+
+
+def repulsor_mcu_b():   # B "HEAVY": lower whine, deeper longer thump, longer crackle
+    return _repulsor('repulsor_mcu_b.wav', .62, (650, 2800, .12, .26), (.12, 115, 52, .11, 1.15),
+                     (.14, .32, 4.5, .32, 62), 1.6)
+
+
+def repulsor_mcu_c():   # C "TIGHT": brighter, quicker, little crackle (good for rapid fire)
+    return _repulsor('repulsor_mcu_c.wav', .38, (1200, 4600, .12, .24), (.12, 150, 72, .05, .95),
+                     (.125, .13, 3, .24, 63), 1.3)
+
+
+REPULSOR_0_0_6 = [repulsor_mcu_a, repulsor_mcu_b, repulsor_mcu_c]
+BLAST_AT = .12  # the chord window (repulsor.hpp chordWindow): where the thump starts
+
+
+def split_take(path):
+    """<take>.wav -> <take>_charge.wav (0..BLAST_AT, a 3 ms fade out) + <take>_fire.wav (BLAST_AT..end)."""
+    sr, d = wavfile.read(path)
+    cut = int(sr * BLAST_AT)
+    charge = d[:cut].astype(np.float64)
+    n = int(sr * .003)
+    charge[-n:] *= np.linspace(1, 0, n)
+    stem = path[:-4]
+    out = []
+    for name, x in ((stem + '_charge.wav', charge.astype(np.int16)), (stem + '_fire.wav', d[cut:])):
+        wavfile.write(name, sr, x)
+        out.append(name)
+    return out
+
+
 ALL = [sonic_boom, repulsor_fire, chest_beam, beam_ready, baton_whoosh, baton_hit]
 
 if __name__ == '__main__':
-    for make in ALL:
+    import sys
+    made = []
+    if '--preview-repulsor' not in sys.argv:
+        made += [make() for make in ALL]
+    # 0.0.6's takes start from the seed again, so they are the same files whether made alone or after ALL.
+    rng = np.random.default_rng(5005)
+    for make in REPULSOR_0_0_6:
         p = make()
+        made += [p] + split_take(p)
+    for p in made:
         sr, d = wavfile.read(p)
-        print(f'{os.path.relpath(p)}  {len(d) / sr:.2f} s  {sr} Hz')
+        print(f'{os.path.relpath(p)}  {len(d) / sr:.3f} s  {sr} Hz')

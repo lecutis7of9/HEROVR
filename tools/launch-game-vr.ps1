@@ -59,8 +59,7 @@ $versionFile=Join-Path $projectRoot 'PORT-VERSION'
 $portVersion=if(Test-Path -LiteralPath $versionFile) { (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim() } else { 'before Update 8' }
 $publicFile=Join-Path $projectRoot 'VERSION'
 $publicVersion=if(Test-Path -LiteralPath $publicFile) { (Get-Content -LiteralPath $publicFile -TotalCount 1).Trim() } else { 'unknown' }
-Write-Host "SM2 VR Version $publicVersion (build $portVersion)" -ForegroundColor Green
-Write-Host 'HERO VR - Made by Agent Mulder' -ForegroundColor Green
+Write-Host "SM2 VR Version $publicVersion (build $portVersion) - Made by Agent Mulder" -ForegroundColor Green
 # Update 24: files from a downloaded zip carry Windows' "came from the internet" mark (Zone.Identifier), which
 # can make Windows ask about or refuse them. Spidy's own folder is unmarked first (never anything outside it).
 try {

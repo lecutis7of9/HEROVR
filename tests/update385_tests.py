@@ -27,7 +27,7 @@ def _code(text):
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertRegex(VERSION, r'^Update 38\.[5-9]')  # 38.6 is Version 0.0.2
+        self.assertRegex(VERSION, r'^Update (38\.[5-9]|39\.\d)')  # 38.6 is Version 0.0.2
 
 
 class Migration(unittest.TestCase):

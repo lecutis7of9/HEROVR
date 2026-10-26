@@ -1205,11 +1205,46 @@ float sstep(float a, float b, float x) {
     const float t = saturate((x - a) / (b - a));
     return t * t * (3.0 - 2.0 * t);
 }
+// Version 0.0.6 DAREDEVIL SONAR (eye_color::sonarPixel, the same steps in the same order): toon's
+// sonar mode (highTone.w above 3.5), its phase in seconds in foveaView.z.
+float sonarRings(float r, float phase) {
+    float ring = 0.0;
+    [unroll] for (int k = 0; k < 3; ++k) {
+        const float t = frac(phase * 0.5 + float(k) / 3.0);
+        const float d = (r - t * 0.75) / 0.008;
+        ring += (1.0 - t) * exp(-d * d);
+    }
+    return ring;
+}
+float4 sonar(int2 p, int2 hi, uint w, uint h) {
+    const float3 lw = float3(0.299, 0.587, 0.114);
+    float l[9];
+    [unroll] for (int j = 0; j < 3; ++j)
+        [unroll] for (int i = 0; i < 3; ++i)
+            l[j * 3 + i] = dot(source.Load(int3(clamp(p + int2(i - 1, j - 1) * 2, int2(0, 0), hi), 0)).rgb, lw);
+    const float alpha = source.Load(int3(clamp(p, int2(0, 0), hi), 0)).a;
+    const float gx = (l[2] + 2.0 * l[5] + l[8]) - (l[0] + 2.0 * l[3] + l[6]);
+    const float gy = (l[6] + 2.0 * l[7] + l[8]) - (l[0] + 2.0 * l[1] + l[2]);
+    const float e = pow(saturate(sqrt(gx * gx + gy * gy) * 0.8), 0.8);
+    const float2 uv = (float2(p) + 0.5) / float2(max(w, 1u), max(h, 1u));
+    const float aspect = float(max(h, 1u)) / float(max(w, 1u));
+    const float2 d = float2(uv.x - 0.5, (uv.y - 0.92) * 1.6 * aspect);
+    const float r = length(d);
+    const float ring = sonarRings(r, foveaView.z);
+    const float nearK = exp(-r / 0.55);
+    const float edge = e * (0.35 + 0.65 * nearK) + e * ring * 1.5;
+    const float base = l[4] * 0.06;
+    const float3 col = saturate(float3(base + edge + ring * 0.25, base * 0.4 + edge * 0.38 + ring * 0.08,
+                                       base * 0.3 + edge * 0.08));
+    return float4(lerp(col, toLinear(col), linearOut), alpha);
+}
 float4 toon(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
     source.GetDimensions(w, h);
     const int2 p = int2(position.xy);
     const int2 hi = int2(w, h) - 1;
+    if (highTone.w > 3.5)
+        return sonar(p, hi, w, h);
     const int stride = clamp(int(highTone.w + 0.5), 1, 2);
     const float paint = saturate(unused);
     const float bands = clamp(balance.w, 3.0, 5.0);
@@ -1498,7 +1533,13 @@ bool drawSharpen(ID3D12GraphicsCommandList* list, size_t slot, ID3D12Resource* c
                              cp.vibrance, cp.mono, cp.vignette, tp.paint,
                              cp.balance[0], cp.balance[1], cp.balance[2], tp.bands,
                              cp.shadow[0], cp.shadow[1], cp.shadow[2], tp.ink,
-                             cp.high[0], cp.high[1], cp.high[2], static_cast<float>(tp.stride)};
+                             cp.high[0], cp.high[1], cp.high[2],
+                             static_cast<float>(tp.stride) + (tp.sonar > .5f ? 4.f : 0.f)}; // 0.0.6 SONAR: +4
+    // Version 0.0.6 DAREDEVIL SONAR: the pulse rings' clock (seconds, wrapped) in foveaView.z.
+    const float sonarPhase =
+        tp.sonar > .5f ? static_cast<float>(std::fmod(
+                             std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(), 600.0))
+                       : 0.f;
     if (cel)
         list->SetPipelineState(srgb ? sharp.toonSrgb.Get() : sharp.toon.Get());
     else
@@ -1527,7 +1568,9 @@ bool drawSharpen(ID3D12GraphicsCommandList* list, size_t slot, ID3D12Resource* c
         // Update 24: eye_debug same reads the left eye's picture for both.
         view.ptr += static_cast<UINT64>(viewStep) * eye_debug::eyeDebugSource(debug, i);
         list->SetGraphicsRootDescriptorTable(0, view);
-        list->SetGraphicsRoot32BitConstants(1, 8, foveaTint(i).data(), 24); // Update 37.2
+        auto tint = foveaTint(i);
+        tint[6] = sonarPhase; // Version 0.0.6 DAREDEVIL SONAR
+        list->SetGraphicsRoot32BitConstants(1, 8, tint.data(), 24); // Update 37.2
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }

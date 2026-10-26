@@ -859,8 +859,10 @@ void Swing::inputs(float dt, const Input& in, const WorldQueries& world) {
     climbInputs(in, world);
     jumpQueued_ |= in.jump && !jumpHeld_;
     const bool leap = std::isfinite(in.leap) && in.leap > 0;
-    if (leap && !leapHeld_)
+    if (leap && !leapHeld_) {
         leapQueued_ = std::min(in.leap, 1.f);
+        leapScaleQueued_ = std::isfinite(in.leapScale) ? std::clamp(in.leapScale, 1.f, 2.f) : 1.f;
+    }
     leapHeld_ = leap;
     jumpHeld_ = in.jump;
     for (int i = 0; i < 2; ++i) {
@@ -1028,8 +1030,10 @@ void Swing::step(float dt, const Input& in, const WorldQueries& world, const Wor
             const float tilt = std::min(length(stick), 1.f);
             const Vec3 along = tilt > .1f ? stick * (config_.leapForward * (.5f + .5f * leapQueued_) / length(stick) * tilt)
                                           : Vec3{};
+            // Version 0.0.6 HULK LEAP: leapScaleQueued_ (1 or 2) times the speed, 4x the height and reach.
             body_.velocity = limited(
-                along + Vec3{0, config_.leapUp + (config_.leapUpFull - config_.leapUp) * leapQueued_, 0},
+                (along + Vec3{0, config_.leapUp + (config_.leapUpFull - config_.leapUp) * leapQueued_, 0}) *
+                    leapScaleQueued_,
                 config_.maxSpeed);
             body_.grounded = false;
             events_.push_back({EventKind::Leap, -1, leapQueued_});

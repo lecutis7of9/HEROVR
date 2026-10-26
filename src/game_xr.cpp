@@ -47,10 +47,12 @@
 #include "spidy/phone_music.hpp"
 #include "spidy/reentry_guard.hpp"
 #include "spidy/repulsor.hpp"
+#include "spidy/repulsor_mcu.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/hero_height.hpp" // Version 0.0.5
 #include "spidy/sm2_damage.hpp" // Version 0.0.5
 #include "spidy/v005.hpp"       // Version 0.0.5
+#include "spidy/v006.hpp"       // Version 0.0.6
 #include "spidy/sfx.hpp"        // Version 0.0.5 SOUND EFFECTS
 #include "spidy/fly_boost.hpp"  // Version 0.0.5 SUPERSONIC
 #include "spidy/music_audio.hpp"
@@ -92,6 +94,7 @@
 #include "spidy/v003.hpp"
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
+#include "spidy/version.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -544,6 +547,7 @@ __declspec(dllexport) spidy::hero_switch::Data SpidyHeroSwitchData; // Update 38
 __declspec(dllexport) spidy::air_watch::Data SpidyAirWatchData;     // Update 38.5: Y IN THE AIR (AIRW)
 __declspec(dllexport) spidy::v003::Data SpidyV003Data;               // Version 0.0.3 (V003)
 __declspec(dllexport) spidy::v005::Data SpidyV005Data;               // Version 0.0.5 (V005)
+__declspec(dllexport) spidy::v006::Data SpidyV006Data;               // Version 0.0.6 (V006)
 extern world_trace::Data SpidyWorldTraceData;       // Update 37: the WORLD LOG (world_trace.cpp)
 __declspec(dllexport) PromptData SpidyPromptData;
 __declspec(dllexport) SlowMotionData SpidySlowMotionData;
@@ -654,9 +658,15 @@ std::atomic<int32_t> colorExposure{eye_color::Config{}.exposureTenths}, colorWar
 // color_bands); toonNoted: its shader's failure was told (and the FILTER put back to NONE) once.
 std::atomic<uint32_t> colorCartoon{eye_color::Config{}.cartoon}, colorBands{eye_color::Config{}.bands};
 std::atomic<bool> colorOutlines{eye_color::Config{}.outlines}, toonNoted{false};
+uint32_t heroNow();
 eye_color::Config colorWanted() {
     eye_color::Config c;
     c.on = colorFxOn.load();
+    // Version 0.0.6 DAREDEVIL SONAR: on with DAREDEVIL ABILITIES, in place of the COLOR page's look.
+    if (heroNow() == hero_modes::daredevil) {
+        c.on = true;
+        c.sonar = true;
+    }
     c.filter = colorFilter.load();
     c.strength = colorStrength.load();
     c.exposureTenths = colorExposure.load();
@@ -693,10 +703,20 @@ uint32_t c38(uint32_t option) {
         return 0u;
     return option < combat38::options ? combat38::clampValue(option, combat38Values[option].load()) : 0u;
 }
-// Version 0.0.4 HERO ABILITIES (hero_modes.hpp): IRON MAN ABILITIES ON (combat38's shooterType 1) is
-// the only hero toggle this build ships; any hero but SPIDER-MAN has no web path at all.
+// Version 0.0.4 HERO ABILITIES (hero_modes.hpp): any hero but SPIDER-MAN has no web path at all.
+// Version 0.0.6: IRON MAN (shooterType 1), DAREDEVIL and HULK; only one on (heroOnly).
 uint32_t heroNow() {
-    return c38(combat38::shooterType) == repulsor::repulsor ? hero_modes::ironMan : hero_modes::spiderMan;
+    return hero_modes::fromToggles(c38(combat38::shooterType) == repulsor::repulsor, c38(combat38::daredevil) == 1,
+                                   c38(combat38::hulk) == 1);
+}
+// Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
+// hologram, the live exports, live.txt at start).
+void heroOnly(uint32_t option) {
+    if (!combat38::isHeroToggle(option) || combat38Values[option].load() == 0)
+        return;
+    for (const auto o : combat38::heroToggles)
+        if (o != option)
+            combat38Values[o] = 0;
 }
 // Version 0.0.3 AUTO PERFORMANCE: what the render thread's controller did, for the V003 record (the
 // game thread publishes it; this lock is the only thing the two threads share for it).
@@ -786,7 +806,8 @@ combat_input::Config combatConfig() {
     c.ballOurs = c38(combat38::ballLook) == combat38::lookOurs;
     // Version 0.0.4 IRON MAN ABILITIES (REPULSOR): the trigger makes the mod's own shot at the press only
     // (no RB, no game ball) and no trigger gadget, yank or Sonic Burst (repulsor.hpp planFor).
-    if (c38(combat38::shooterType) == repulsor::repulsor) {
+    // Version 0.0.6: DAREDEVIL (the trigger throws a baton) and HULK (no trigger power) the same: no web.
+    if (heroNow() != hero_modes::spiderMan) {
         c.ballOurs = true;
         c.ballOnPress = true;
         c.noTriggerGadgets = true;
@@ -1255,7 +1276,20 @@ DWORD WINAPI run(void*) {
                                                  "It stays on for your other games";
                 message(1, 0, text.c_str());
             }
-            runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);
+            // Update 39.0.3: no headset yet (Virtual Desktop not connected) waits for it, up to 2 minutes,
+            // instead of ending VR with the game on its flat screen.
+            for (const uint64_t headsetDeadline = GetTickCount64() + 120000;;) {
+                try {
+                    runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);
+                    break;
+                } catch (const XrError& e) {
+                    if (e.result != XR_ERROR_FORM_FACTOR_UNAVAILABLE || stopRequested ||
+                        GetTickCount64() >= headsetDeadline)
+                        throw;
+                    message(2, 0, "Headset not connected: open Virtual Desktop in your headset first");
+                    Sleep(2000);
+                }
+            }
         }
         D3D12Renderer overlay;
         overlay.initialize(device.Get(), queue);
@@ -1581,10 +1615,22 @@ DWORD WINAPI run(void*) {
         uint32_t damageEventsNoted{}, damageHealthNoted{}, damageWriteNoted{};
         uint32_t sfxStateNoted = 0xffffffffu; // Version 0.0.5 SOUND EFFECTS
         bool repWas{};
+        // Version 0.0.6 DAREDEVIL ABILITIES (hero_modes.hpp Baton): a baton per hand, its sounds' count,
+        // its clock; the blows sent (batons, DAREDEVIL PUNCH's extra, HULK's punches).
+        hero_modes::Baton batons[2];
+        uint32_t batonThrowsSeen[2]{};
+        double batonAt = -1;
+        uint64_t batonBlowsSent{}, ddPunchBlows{}, hulkPunchBlows{}, heroPunchMisses{};
+        uint32_t heroWas{};
+        Vec3 batonHand[2]{}, batonAimNow[2]{}; // the hands as the batons last saw them (tracking)
+        bool batonTracked[2]{};
+        // Version 0.0.6: SUPERSONIC's reached speed (rep0050: 80 asked, 64 reached), the dash's top and all's.
+        float sonicPeak{}, sonicLast{}, sonicBest{};
+        bool sonicWas{};
         double repBeamAt = -100, repNotedAt = -10;
         double repReadyAt = -100; // Version 0.0.5 BEAM RING: the ready flash's start
         Vec3 repBeamFrom{}, repBeamTo{};
-        uint64_t repNotedBlasts{}, repBeamHitsTotal{};
+        uint64_t repNotedBlasts{}, repBeamHitsTotal{}, repBlowsSent{};
         double everyHitNotedAt = -10;
         uint32_t lastReject{};
         float heroShareWas = std::numeric_limits<float>::quiet_NaN();
@@ -1680,6 +1726,7 @@ DWORD WINAPI run(void*) {
         wrist_hud::FpsSession wristSession; // Update 24: HIGH / LOW / AVG, RESET
         // Version 0.0.3 AUTO PERFORMANCE (render thread only, but the report under perfReportLock).
         auto_perf::Controller autoPerf;
+        auto_perf::PaceTarget perfPace; // 0.0.6: AUTO at half the headset rate when the full rate is out of reach
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
@@ -2228,6 +2275,9 @@ DWORD WINAPI run(void*) {
             rig.reset();
             history.clear();
         };
+        bool headsetLost{}, restartTold{};
+        unsigned recoveriesSeen{};
+        uint64_t stallToldFor = ~0ull;
         while (!stopRequested && (!nativeDeadline || GetTickCount64() < nativeDeadline)) {
             if (!config.durationMs && GetTickCount64() >= keepAliveDeadline)
                 break;
@@ -2254,10 +2304,32 @@ DWORD WINAPI run(void*) {
             // VR play has eye images; the game played on its screen has the
             // screen's, which these do not count.
             const bool eyesWanted = motion.active && !flatScreen;
-            if (eyesWanted && firstImageDeadline && !lastNewImageMs && GetTickCount64() >= firstImageDeadline)
-                throw std::runtime_error("No native eye images reached OpenXR within 3 seconds");
-            if (eyesWanted && lastNewImageMs && GetTickCount64() - lastNewImageMs >= 3000)
-                throw std::runtime_error("Native eye presentation stalled for 3 seconds");
+            // Update 39.0.3: the headset lost (XrRuntime::lost) never ends VR: the game stays in VR mode and
+            // VR comes back by itself once the headset does.
+            if (runtime.lost() != headsetLost) {
+                headsetLost = runtime.lost();
+                message(3, 0, headsetLost ? "Headset lost: reopen Virtual Desktop in your headset; VR comes back by itself"
+                                          : "Headset back: VR goes on");
+            }
+            if (headsetLost && runtime.restartNeeded() && !restartTold) {
+                restartTold = true;
+                message(3, 0, "The headset came back with smaller eyes: restart the game to play in VR again");
+            }
+            if (runtime.recoveries() != recoveriesSeen) {
+                // A new session: its first images are waited for afresh.
+                recoveriesSeen = runtime.recoveries();
+                lastPresentedMs = lastNewImageMs = 0;
+                firstImageDeadline = GetTickCount64() + 3000;
+            }
+            // Update 39.0.3: eye images that stop (or never start) are said, once each time, and VR goes on;
+            // they used to end VR with the game on its flat screen.
+            if (eyesWanted && !headsetLost &&
+                ((firstImageDeadline && !lastNewImageMs && GetTickCount64() >= firstImageDeadline) ||
+                 (lastNewImageMs && GetTickCount64() - lastNewImageMs >= 3000)) &&
+                stallToldFor != lastNewImageMs) {
+                stallToldFor = lastNewImageMs;
+                message(3, 0, "The game's eye images paused: VR goes on and shows them when they come back");
+            }
             const bool active = runtime.frameStereo(
                 [&](const XrFrame& trackedFrame) {
                     perfSections.begin(); // Update 37 (perf37.hpp): every way out ends it
@@ -2816,6 +2888,7 @@ DWORD WINAPI run(void*) {
                                 in.stick = gripsTracked[pointHand] ? frame.hands[pointHand].stickY : 0.f;
                                 in.seconds = hudDt;
                                 in.text = static_cast<float>(wristHudTextPercent.load()) / 100.f;
+                                in.hero = static_cast<int>(heroNow()); // Update 39.0.2: POWERS opens this hero's profile
                                 {   // Update 38.5: the drawn subtext's overflow (0: not known yet).
                                     const uint32_t ho = wristHelpOverflow.load();
                                     if (ho & 0xffu) {
@@ -3062,7 +3135,11 @@ DWORD WINAPI run(void*) {
                                 if (result.combat38 >= 0 && result.combat38 < static_cast<int>(combat38::options)) {
                                     const auto o = static_cast<uint32_t>(result.combat38);
                                     combat38Values[o] = (c38(o) + 1) % combat38::optionInfo[o].count;
+                                    heroOnly(o); // Version 0.0.6: one hero toggle at a time
                                 }
+                                if (result.heroSpider) // Update 39.0.1: PLAY AS SPIDER-MAN, every hero toggle off (live)
+                                    for (const auto o : combat38::heroToggles)
+                                        combat38Values[o] = 0;
                                 if (result.colorFx) { // Update 37.2: COLOR FX on/off
                                     colorFxOn = !colorFxOn.load();
                                     colorDirty = true;
@@ -3955,6 +4032,7 @@ DWORD WINAPI run(void*) {
                         input.tilt = motion.swing.tilt;
                         input.leap = input.focused ? leapOut : 0.f;
                         input.asks = input.focused && askingGame ? 1u : 0u;
+                        input.asks |= hero_modes::leapAsks(heroNow()); // Version 0.0.6 HULK LEAP (CANDIDATE)
                         if (const Vec3 look = motion.headPose.orientation.rotate({0, 0, -1});
                             input.focused && finite(look) && length(look) > .5f)
                             input.look = normalized(look);
@@ -4102,6 +4180,19 @@ DWORD WINAPI run(void*) {
                                 bi.handsOut = flyPoses.pose() == extras385::fly::forward;
                                 bi.stickY = frame.hands[0].stickY;
                                 const bool dash = flyBoost.update(bi);
+                                // Version 0.0.6: the speed SUPERSONIC reached, logged as the dash ends.
+                                if (dash && finite(swingState.velocity))
+                                    sonicPeak = std::max(sonicPeak, length(swingState.velocity));
+                                if (sonicWas && !dash) {
+                                    sonicLast = sonicPeak;
+                                    sonicBest = std::max(sonicBest, sonicPeak);
+                                    char line[128];
+                                    sprintf_s(line, "VERSION 0.0.6 SUPERSONIC: reached %.1f m/s (asked %.0f)", static_cast<double>(sonicPeak),
+                                              static_cast<double>(fly_boost::speedOf(c38(combat38::supersonicSpeed))));
+                                    game_prompts::note(line);
+                                    sonicPeak = 0;
+                                }
+                                sonicWas = dash;
                                 if (flyBoost.boomed()) {
                                     flyBoomAt = combatClock;
                                     sfx::play(sfx::sonicBoom);
@@ -5412,7 +5503,7 @@ DWORD WINAPI run(void*) {
                                 // whose RB just went down: its muzzle, its wrist (GAME ONLY: none).
                                 // Version 0.0.4: never in REPULSOR (no game web ball, no web look at all).
                                 const bool wristBall = combat38::wristMuzzle(c38(combat38::ballLook)) &&
-                                                       c38(combat38::shooterType) != repulsor::repulsor;
+                                                       heroNow() == hero_modes::spiderMan; // 0.0.6: every hero but SPIDER-MAN
                                 wrist_muzzle::setEnabled(wristBall);
                                 for (unsigned i = 0; i < 2; ++i) {
                                     const bool ok = motion.swing.hands[i].tracked && validTrackedPose(motion.grips[i]);
@@ -5441,14 +5532,67 @@ DWORD WINAPI run(void*) {
                                         repWas = repMode;
                                         repTrigger.clear();
                                         oursBalls.clear(); // no web ball drawn as a blast or the other way
-                                        game_prompts::note(repMode ? "VERSION 0.0.4 IRON MAN ABILITIES (REPULSOR): palm blasts and the chest beam, "
-                                                                     "no webs at all (no swing, zip, web shooter or gadgets); damage CANDIDATE, not sent"
-                                                                   : "VERSION 0.0.4 IRON MAN ABILITIES OFF (SPIDER-MAN, WEBS)");
+                                        game_prompts::note(repMode ? "VERSION 0.0.6 IRON MAN ABILITIES (REPULSOR): palm blasts and the chest beam, "
+                                                                     "no webs at all (no swing, zip, web shooter or gadgets); real damage (CONFIRMED path)"
+                                                                   : "VERSION 0.0.6 IRON MAN ABILITIES OFF");
                                     }
                                     const auto wristOf = [&](unsigned i) {
                                         const Pose& grip = frame.hands[i].grip;
                                         return validTrackedPose(grip) ? spidy::webShooter(grip, i).position : cf.hands[i].position;
                                     };
+                                    // Version 0.0.6 DAREDEVIL ABILITIES: the trigger throws that hand's baton at the enemy
+                                    // the strong aim assist picks (35 deg, 25 m); a hit sends sm2_damage's batonHit
+                                    // (CONFIRMED path), chains up to 3 times to the nearest other enemy within 6 m
+                                    // (never one already hit) and always comes back; no throw while it is out.
+                                    if (const uint32_t heroIs = heroNow(); heroIs != heroWas) {
+                                        heroWas = heroIs;
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            batons[i] = {};
+                                            batonThrowsSeen[i] = 0;
+                                        }
+                                        batonAt = -1;
+                                        char line[200];
+                                        sprintf_s(line, "VERSION 0.0.6 HERO: %s (%s)", hero_modes::heroNames[heroIs < hero_modes::heroes ? heroIs : 0],
+                                                  heroIs == hero_modes::daredevil ? "a baton in each hand, trigger throws, punches x DAREDEVIL PUNCH, sonar look, no webs"
+                                                  : heroIs == hero_modes::hulk    ? "4x charged jump, one-punch knockouts, brutes 2-3, no webs"
+                                                  : heroIs == hero_modes::ironMan ? "repulsors and the chest beam, no webs"
+                                                                                  : "webs");
+                                        game_prompts::note(line);
+                                    }
+                                    if (heroWas == hero_modes::daredevil) {
+                                        hero_modes::BatonEnemy batonList[our_ball::maxEnemies];
+                                        for (uint32_t e = 0; e < foes.count; ++e)
+                                            batonList[e] = {foes.list[e].id, foes.list[e].feet + Vec3{0, 1.2f, 0}};
+                                        const float batonDt = batonAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - batonAt, 0.0, .1));
+                                        batonAt = combatClock;
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            auto& b = batons[i];
+                                            const bool trig = cf.hands[i].tracked && cf.hands[i].button > .5f;
+                                            const Vec3 hand = cf.hands[i].position;
+                                            const Vec3 aimDir = cf.hands[i].aim;
+                                            batonHand[i] = hand;
+                                            batonAimNow[i] = aimDir;
+                                            batonTracked[i] = cf.hands[i].tracked;
+                                            const int batonAimed = b.inHandNow() ? hero_modes::batonAim(hand, aimDir, batonList, foes.count) : -1;
+                                            const uint32_t throwsWas = b.throws;
+                                            const bool hit = finite(hand) && finite(aimDir) &&
+                                                             b.update(batonDt, trig, hand, aimDir, batonList, foes.count, batonAimed);
+                                            if (b.throws != throwsWas)
+                                                runtime.haptic(static_cast<int>(i), .3f);
+                                            hero_modes::batonSounds(batonThrowsSeen[i], b, hit);
+                                            if (hit && b.hitCount > 0) {
+                                                const uint64_t who = b.hitIds[b.hitCount - 1];
+                                                const bool sent = who && sm2_damage::queue(who, sm2_damage::batonHit());
+                                                batonBlowsSent += sent ? 1 : 0;
+                                                runtime.haptic(static_cast<int>(i), .5f);
+                                                char line[160];
+                                                sprintf_s(line, "VERSION 0.0.6 DAREDEVIL BATON HIT 0x%llx (hit %u of this throw), blow %s",
+                                                          static_cast<unsigned long long>(who), b.hitCount,
+                                                          sent ? "sent (CONFIRMED path)" : "not sent (damage path off)");
+                                                game_prompts::note(line);
+                                            }
+                                        }
+                                    }
                                     if (repMode) {
                                         // The press goes through the chord: a single press blasts after the
                                         // chord window, both pressed together and held fire the beam.
@@ -5460,6 +5604,11 @@ DWORD WINAPI run(void*) {
                                             held[i] = cf.hands[i].tracked && cf.hands[i].button > .5f;
                                         }
                                         const auto ro = repTrigger.update(static_cast<float>(combatClock), press, aim, held);
+                                        // Version 0.0.6 (Update 39.0.2) REPULSOR: the take's charge whine on the press
+                                        // (it fills the chord wait; the blast's thump is repulsor_fire).
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (press[i] && repTrigger.chargingFor(static_cast<int>(i)) >= 0)
+                                                sfx::play(sfx::repulsorCharge);
                                         // Strong aim assist always: STRONG, or MAX if picked.
                                         const uint32_t repStrength = strength == 1 ? 1u : 0u;
                                         for (unsigned i = 0; i < 2; ++i)
@@ -5467,8 +5616,8 @@ DWORD WINAPI run(void*) {
                                                                              fightOut.lockTarget, repStrength)) {
                                                 runtime.haptic(static_cast<int>(i), .35f);
                                                 sfx::play(sfx::repulsorFire); // Version 0.0.5 SOUND EFFECTS
-                                                oursSplash[oursSplashNext].start(wristOf(i)); // the palm's flash
-                                                oursSplashNext = (oursSplashNext + 1) % our_ball::Pool::balls;
+                                                // Version 0.0.6 (Update 39.0.2): the palm's flash is the charge
+                                                // fading out (repulsor_mcu palmGlow), not a splash.
                                             }
                                         if (ro.beam) {
                                             Vec3 from{}, dir{};
@@ -5476,16 +5625,21 @@ DWORD WINAPI run(void*) {
                                                 Vec3 foeFeet[our_ball::maxEnemies];
                                                 for (uint32_t e = 0; e < foes.count; ++e)
                                                     foeFeet[e] = foes.list[e].feet;
+                                                // Version 0.0.6 BEAM AIM ASSIST: at the enemy nearest the look (30 deg).
+                                                const int beamAimed = repulsor::beamAim(from, cf.forward, foeFeet,
+                                                                                        static_cast<int>(foes.count), dir);
+                                                const float beamNearest = repulsor::nearestMetres(from, foeFeet, static_cast<int>(foes.count));
                                                 int hitIdx[our_ball::maxEnemies];
                                                 const int beamCount = repulsor::beamHits(from, dir, foeFeet, static_cast<int>(foes.count), hitIdx,
                                                                                  our_ball::maxEnemies);
                                                 for (int k = 0; k < beamCount; ++k) {
                                                     repLedger.beam();
-                                                    // Version 0.0.5 DAMAGE TEST (OFF by default): the beam's blow.
+                                                    // Version 0.0.6: the beam's blow, real damage while IRON MAN is on.
                                                     if (sm2_damage::enabled() && hitIdx[k] >= 0 &&
-                                                        static_cast<uint32_t>(hitIdx[k]) < foes.count)
+                                                        static_cast<uint32_t>(hitIdx[k]) < foes.count &&
                                                         sm2_damage::queue(foes.list[static_cast<size_t>(hitIdx[k])].id,
-                                                                          sm2_damage::chestBeam());
+                                                                          sm2_damage::chestBeam()))
+                                                        ++repBlowsSent;
                                                 }
                                                 repBeamHitsTotal += static_cast<uint64_t>(beamCount);
                                                 repBeamFrom = from;
@@ -5494,10 +5648,17 @@ DWORD WINAPI run(void*) {
                                                 sfx::play(sfx::chestBeam); // Version 0.0.5 SOUND EFFECTS
                                                 runtime.haptic(0, 1.f);
                                                 runtime.haptic(1, 1.f);
-                                                char line[200];
-                                                sprintf_s(line, "VERSION 0.0.4 CHEST BEAM: fired, %d enemies in the beam, %.0f damage each "
-                                                                "(4x a blast; CANDIDATE, not sent); ready again in 30 s", beamCount,
-                                                          static_cast<double>(repulsor::beamDamage));
+                                                char line[240];
+                                                char nearest[64];
+                                                if (beamNearest < 0)
+                                                    sprintf_s(nearest, "no enemy alive near");
+                                                else
+                                                    sprintf_s(nearest, "nearest enemy %.0f m", static_cast<double>(beamNearest));
+                                                sprintf_s(line, "VERSION 0.0.6 CHEST BEAM: fired, %d enemies in the beam (%s, %s), %.0f HP each "
+                                                                "(4x a blast, sent: %s); ready again in 30 s", beamCount,
+                                                          beamAimed >= 0 ? "assist on one" : "no enemy in the 30 deg cone", nearest,
+                                                          static_cast<double>(sm2_damage::chestBeam().amount),
+                                                          sm2_damage::enabled() ? "yes" : "no, the damage path is closed");
                                                 game_prompts::note(line);
                                             }
                                         }
@@ -5506,12 +5667,12 @@ DWORD WINAPI run(void*) {
                                             runtime.haptic(1, .3f);
                                             sfx::play(sfx::beamReady); // Version 0.0.5: the ready cue
                                             repReadyAt = combatClock;
-                                            game_prompts::note("VERSION 0.0.4 CHEST BEAM READY");
+                                            game_prompts::note("VERSION 0.0.6 CHEST BEAM READY");
                                         }
                                     } else {
                                         repTrigger.clear();
                                     }
-                                    for (unsigned i = 0; i < 2 && !repMode; ++i) {
+                                    for (unsigned i = 0; i < 2 && heroWas == hero_modes::spiderMan; ++i) {
                                         if (!fightOut.ballOurs[i])
                                             continue;
                                         if (oursBalls.fire(static_cast<int>(i), wristOf(i), fightOut.ballDirection[i], foes,
@@ -5531,14 +5692,15 @@ DWORD WINAPI run(void*) {
                                     for (int h = 0; h < step.hitCount && h < our_ball::Step::most; ++h) {
                                         const auto& hit = step.hits[h];
                                         oursSplash[oursSplashNext].start(hit.at); // REPULSOR: the impact flash
-                                        if (!plan.webSplash) { // REPULSOR: no web of any kind, the damage CANDIDATE
+                                        if (!plan.webSplash) { // REPULSOR: no web of any kind
                                             oursSplashNext = (oursSplashNext + 1) % our_ball::Pool::balls;
                                             repLedger.blast();
-                                            // Version 0.0.5 DAMAGE TEST (OFF by default): the blast's blow, CANDIDATE.
+                                            // Version 0.0.6: the blast's blow, real damage while IRON MAN is on (rep0050 CONFIRMED).
                                             if (sm2_damage::enabled() && hit.index >= 0 &&
-                                                static_cast<uint32_t>(hit.index) < foes.count)
+                                                static_cast<uint32_t>(hit.index) < foes.count &&
                                                 sm2_damage::queue(foes.list[static_cast<size_t>(hit.index)].id,
-                                                                  sm2_damage::repulsorBlast());
+                                                                  sm2_damage::repulsorBlast()))
+                                                ++repBlowsSent;
                                             if (hit.hand == 0 || hit.hand == 1)
                                                 runtime.haptic(hit.hand, .7f);
                                             continue;
@@ -5553,8 +5715,10 @@ DWORD WINAPI run(void*) {
                                             game_prompts::note(line);
                                         }
                                         oursSplashNext = (oursSplashNext + 1) % our_ball::Pool::balls;
-                                        // Version 0.0.5 DAMAGE TEST (OFF by default): the web ball's small blow.
-                                        if (sm2_damage::enabled() && hit.index >= 0 && static_cast<uint32_t>(hit.index) < foes.count)
+                                        // Version 0.0.5 WEB BALL DAMAGE (DAMAGE TEST, OFF by default): the web ball's small blow,
+                                        // only with that switch on (0.0.6: the heroes open the path for their own hits).
+                                        if (c38(combat38::heroDamage) == 1 && sm2_damage::enabled() && hit.index >= 0 &&
+                                            static_cast<uint32_t>(hit.index) < foes.count)
                                             sm2_damage::queue(foes.list[static_cast<size_t>(hit.index)].id, sm2_damage::webBallTest());
                                         if (hit.hand == 0 || hit.hand == 1) {
                                             runtime.haptic(hit.hand, .7f);
@@ -5573,9 +5737,9 @@ DWORD WINAPI run(void*) {
                                         repNotedAt = combatClock;
                                         char line[320];
                                         sprintf_s(line,
-                                                  "VERSION 0.0.4 REPULSOR: blasts %llu, hits %llu, beams %llu (%llu enemies), chords %llu, "
-                                                  "short %llu, while cooling %llu; damage ledger %.0f blast + %.0f beam "
-                                                  "(CANDIDATE, not sent: no confirmed ranged damage call)",
+                                                  "VERSION 0.0.6 REPULSOR: blasts %llu, hits %llu, beams %llu (%llu enemies), chords %llu, "
+                                                  "short %llu, while cooling %llu; hits counted %.0f blast + %.0f beam, "
+                                                  "blows queued %llu (real damage)",
                                                   static_cast<unsigned long long>(repTrigger.blasts()),
                                                   static_cast<unsigned long long>(repLedger.blastHits),
                                                   static_cast<unsigned long long>(repTrigger.beams()),
@@ -5583,7 +5747,8 @@ DWORD WINAPI run(void*) {
                                                   static_cast<unsigned long long>(repTrigger.chords()),
                                                   static_cast<unsigned long long>(repTrigger.shortChords()),
                                                   static_cast<unsigned long long>(repTrigger.cooledChords()),
-                                                  static_cast<double>(repLedger.blastTotal), static_cast<double>(repLedger.beamTotal));
+                                                  static_cast<double>(repLedger.blastTotal), static_cast<double>(repLedger.beamTotal),
+                                                  static_cast<unsigned long long>(repBlowsSent));
                                         game_prompts::note(line);
                                     }
                                     if (oursBalls.fired() != oursNotedFired && combatClock - oursNotedAt >= 2) {
@@ -5657,7 +5822,7 @@ DWORD WINAPI run(void*) {
                                 // Update 38 BALL LOOK GLOB: our glob flies with the web ball.
                                 // Update 38.3: GLOB is 1 (GAME ONLY, 0, the default: the game's ball alone).
                                 if (fightOut.fired[i] == combat_input::webShooter && c38(combat38::ballLook) == combat38::lookGlob &&
-                                    c38(combat38::shooterType) != repulsor::repulsor) { // 0.0.4: no glob in REPULSOR
+                                    heroNow() == hero_modes::spiderMan) { // 0.0.4/0.0.6: no glob for any other hero
                                     // Update 38.1: from the web shooter's nozzle (AIM AXIS HAND), 38: the grip.
                                     const Vec3 from = c38(combat38::aimAxis) == 0 && validTrackedPose(frame.hands[i].grip)
                                                           ? spidy::webShooter(frame.hands[i].grip, i).position
@@ -5713,8 +5878,8 @@ DWORD WINAPI run(void*) {
                                                             : g == combat_input::webYank     ? config37.yankSlot
                                                                                              : 0;
                                         sprintf_s(line, "Update 37: %s gesture -> the game's %s", combat_input::gadgetNames[g],
-                                                  g == combat_input::webShooter ? (c38(combat38::shooterType) == repulsor::repulsor
-                                                                                     ? "nothing (REPULSOR: the palm blast, no web)"
+                                                  g == combat_input::webShooter ? (heroNow() != hero_modes::spiderMan
+                                                                                     ? "nothing (no webs for this hero)"
                                                                                      : fightOut.ballOurs[i] ? "nothing (OURS: the mod's own ball, no RB)" : "RB tap")
                                                                                 : combat_input::slotName(slot));
                                         game_prompts::note(line);
@@ -5751,6 +5916,43 @@ DWORD WINAPI run(void*) {
                                     }
                                     runtime.haptic(static_cast<int>(i), .4f);
                                     feel(body_haptics::Kind::punch, static_cast<int>(i), .6f);
+                                    // Version 0.0.6 DAREDEVIL PUNCH / HULK: a landed punch (an enemy's chest within
+                                    // 2.2 m of the fist) gets one more blow on sm2_damage's path (CONFIRMED):
+                                    // DAREDEVIL (k - 1) x a punch (each hits like k); HULK a normal enemy's whole
+                                    // health (one punch KO), a brute's most / 2.5, with the big knock (fling, CANDIDATE).
+                                    if (const uint32_t hero = heroNow(); hero == hero_modes::daredevil || hero == hero_modes::hulk) {
+                                        Vec3 punchFeet[world_trace::enemySlots];
+                                        const uint32_t pn = std::min<uint32_t>(cf.enemyCount, world_trace::enemySlots);
+                                        for (uint32_t e = 0; e < pn; ++e)
+                                            punchFeet[e] = cf.enemies[e];
+                                        const int victim = hero_modes::punchVictim(cf.hands[i].position, punchFeet, pn);
+                                        if (victim < 0) {
+                                            ++heroPunchMisses;
+                                        } else {
+                                            const uint64_t who = cf.enemyIds[static_cast<size_t>(victim)];
+                                            sm2_damage::Blow blow{};
+                                            if (hero == hero_modes::daredevil) {
+                                                blow.amount = hero_modes::daredevilExtraHp(
+                                                    combat38::daredevilPunchK(c38(combat38::daredevilPunch)));
+                                            } else {
+                                                float most = NAN;
+                                                std::array<world_trace::Vital, world_trace::enemySlots> vit{};
+                                                const uint32_t vn = world_trace::enemyVitals(vit);
+                                                for (uint32_t v = 0; v < vn && v < vit.size(); ++v)
+                                                    if (vit[v].id == who && vit[v].have)
+                                                        most = vit[v].most;
+                                                blow = {hero_modes::hulkPunchHp(most), 5, hero_modes::hulkFlingKnock};
+                                            }
+                                            const bool sent = who && blow.amount > 0 && sm2_damage::queue(who, blow);
+                                            (hero == hero_modes::daredevil ? ddPunchBlows : hulkPunchBlows) += sent ? 1 : 0;
+                                            char line[200];
+                                            sprintf_s(line, "VERSION 0.0.6 %s PUNCH 0x%llx: +%.0f HP blow %s",
+                                                      hero == hero_modes::daredevil ? "DAREDEVIL" : "HULK",
+                                                      static_cast<unsigned long long>(who), static_cast<double>(blow.amount),
+                                                      sent ? "sent (CONFIRMED path)" : blow.amount > 0 ? "not sent (damage path off)" : "none (1X)");
+                                            game_prompts::note(line);
+                                        }
+                                    }
                                     if (fightOut.zip) {
                                         char line[128];
                                         sprintf_s(line, "Update 37.2: ZIP STRIKE, enemy %.1f m -> the game's Y",
@@ -5898,7 +6100,9 @@ DWORD WINAPI run(void*) {
                                 damageProbeClock += std::isfinite(frame.seconds) ? std::clamp(frame.seconds, 0.f, .1f) : 0.f;
                                 if (damageProbeClock >= .1f) {
                                     damageProbeClock = 0;
-                                    sm2_damage::setEnabled(c38(combat38::heroDamage) == 1);
+                                    // Version 0.0.6: the damage path is open for any hero's own hits (rep0050 CONFIRMED it);
+                                    // WEB BALL DAMAGE (DAMAGE TEST) opens it for Spider-Man's web ball.
+                                    sm2_damage::setEnabled(c38(combat38::heroDamage) == 1 || heroNow() != hero_modes::spiderMan);
                                     // Version 0.0.5 SFX VOLUME (live) and the player's state in the log.
                                     sfx::setGain(combat38::sfxGainOf(c38(combat38::sfxVolume)));
                                     const sfx::Stats sfxNow = sfx::stats();
@@ -5997,6 +6201,30 @@ DWORD WINAPI run(void*) {
                                         d.refusedOff = ds.refusedOff;
                                         d.lastRecord = ds.lastRecord;
                                         d.lastHandle = ds.lastHandle;
+                                    });
+                                    publish(SpidyV006Data, [&](v006::Data& d) {
+                                        d.bytes = sizeof(v006::Data);
+                                        d.flags = 1u;
+                                        d.daredevilValue = c38(combat38::daredevil);
+                                        d.hulkValue = c38(combat38::hulk);
+                                        d.daredevilPunchValue = c38(combat38::daredevilPunch);
+                                        d.heroNow = heroWas;
+                                        d.batonThrows = d.batonHits = d.batonCatches = d.batonRefused = 0;
+                                        for (const auto& b : batons) {
+                                            d.batonThrows += b.throws;
+                                            d.batonHits += b.hits;
+                                            d.batonCatches += b.catches;
+                                            d.batonRefused += b.refused;
+                                        }
+                                        d.batonBlows = batonBlowsSent;
+                                        d.ddPunchBlows = ddPunchBlows;
+                                        d.hulkPunchBlows = hulkPunchBlows;
+                                        d.punchMisses = heroPunchMisses;
+                                        d.ironBlows = repBlowsSent;
+                                        d.sonarState = heroWas != hero_modes::daredevil ? 0u
+                                                       : (native_gpu::eyeToonFault() || native_gpu::eyeSharpenFault()) ? 2u : 1u;
+                                        d.sonicLast = sonicLast;
+                                        d.sonicBest = sonicBest;
                                     });
                                 }
                             }
@@ -6950,6 +7178,54 @@ DWORD WINAPI run(void*) {
                         saved.beamRingOk = rep && validTrackedPose(motion.grips[1]) && motion.swing.hands[1].tracked ? 1.f : 0.f;
                         saved.beamShare = repulsor::chargeShare(repTrigger);
                         saved.beamFlash = repulsor::readyFlash(static_cast<float>(combatClock - repReadyAt));
+                        // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK: each palm's charge (the web shooter's
+                        // place, facing along the hand's aim), this frame's world; glow 0: none.
+                        for (unsigned i = 0; i < 2; ++i) {
+                            saved.palmGlow[i] = 0;
+                            if (!rep || !validTrackedPose(motion.grips[i]) || !motion.swing.hands[i].tracked)
+                                continue;
+                            const float glow = repulsor_mcu::palmGlow(repTrigger.chargingFor(static_cast<int>(i)),
+                                                                      repTrigger.sinceBlast(static_cast<int>(i)));
+                            const Vec3 at = compose(saved.worldFromTracking, spidy::webShooter(motion.grips[i], i)).position;
+                            const Vec3 way = saved.worldFromTracking.orientation.rotate(
+                                motion.swing.hands[i].aim.orientation.rotate({0, 0, -1}));
+                            if (glow > 0 && finite(at) && finite(way) && length(way) > .5f) {
+                                saved.palmGlow[i] = glow;
+                                saved.palmAt[i] = at;
+                                saved.palmWay[i] = normalized(way);
+                            }
+                        }
+                        saved.palmSpin = static_cast<float>(std::fmod(combatClock * 9.0, 2.0 * 3.14159265));
+                    }
+                    {   // Version 0.0.6 DAREDEVIL ABILITIES: the batons, in the hand along its aim or spinning in flight.
+                        const bool dd = !oursFault && heroWas == hero_modes::daredevil;
+                        for (unsigned i = 0; i < 2; ++i) {
+                            const auto& b = batons[i];
+                            saved.batonOn[i] = 0;
+                            if (!dd || (b.inHandNow() && (!batonTracked[i] || !(length(batonAimNow[i]) > .5f))))
+                                continue;
+                            Vec3 grip{}, tip{};
+                            if (b.inHandNow()) {
+                                const Vec3 aimDir = normalized(batonAimNow[i]);
+                                grip = batonHand[i] - aimDir * .12f;
+                                tip = batonHand[i] + aimDir * .45f;
+                            } else {
+                                const Vec3 way = length(b.velocity) > .1f ? normalized(b.velocity) : Vec3{0, 0, -1};
+                                const Vec3 flat = cross(way, Vec3{0, 1, 0});
+                                const Vec3 across = length(flat) > .1f ? normalized(flat) : Vec3{1, 0, 0};
+                                const float spin = b.out * 18.f;
+                                const Vec3 axis = way * std::cos(spin) + across * std::sin(spin);
+                                grip = b.position - axis * .28f;
+                                tip = b.position + axis * .28f;
+                            }
+                            grip = compose(saved.worldFromTracking, Pose{grip, {}}).position;
+                            tip = compose(saved.worldFromTracking, Pose{tip, {}}).position;
+                            if (finite(grip) && finite(tip)) {
+                                saved.batonGrip[i] = grip;
+                                saved.batonTip[i] = tip;
+                                saved.batonOn[i] = 1;
+                            }
+                        }
                     }
                     {   // Version 0.0.5 SUPERSONIC: the shockwave around the head, the way the hands point.
                         saved.shockFade = fly_boost::shock(static_cast<float>(combatClock - flyBoomAt));
@@ -6977,6 +7253,8 @@ DWORD WINAPI run(void*) {
                             if (oursSplash[b].fade() > 0) {
                                 saved.splashAt[b] = compose(saved.worldFromTracking, Pose{oursSplash[b].at, {}}).position;
                                 saved.splashFade[b] = oursSplash[b].fade();
+                                if (saved.repulsorLook) // Version 0.0.6 (Update 39.0.2): the 0.18 s impact burst
+                                    saved.splashFade[b] = repulsor_mcu::impactLife(oursSplash[b].age);
                             }
                         }
                     if (trainDraw.on) { // Version 0.0.2 TRAINING's guide, this frame's world
@@ -7186,6 +7464,12 @@ DWORD WINAPI run(void*) {
                             static uint32_t pairs{}, faultLogged{};
                             if (frameSeconds - lastSent >= .25 || frameSeconds < lastSent) {
                                 lastSent = frameSeconds;
+                                // Version 0.0.6 DAREDEVIL SONAR: on and off with DAREDEVIL ABILITIES.
+                                static bool sonarWas{};
+                                if (const bool sonarNow = heroNow() == hero_modes::daredevil; sonarNow != sonarWas) {
+                                    sonarWas = sonarNow;
+                                    colorDirty = true;
+                                }
                                 if (colorDirty.exchange(false)) {
                                     const auto want = colorWanted();
                                     const bool ok = native_gpu::setEyeColor(want);
@@ -7202,6 +7486,12 @@ DWORD WINAPI run(void*) {
                                     if (!toonNoted.exchange(true))
                                         game_prompts::note(tf == 1 ? "90s ANIMATED could not start (its shader failed): FILTER set to NONE"
                                                                : "90s ANIMATED could not start (its pipeline failed): FILTER set to NONE");
+                                }
+                                if (static bool sonarNoted{}; !sonarNoted && sonarWas &&
+                                                                  (native_gpu::eyeToonFault() || native_gpu::eyeSharpenFault())) {
+                                    sonarNoted = true;
+                                    game_prompts::note("VERSION 0.0.6 DAREDEVIL SONAR could not start (the eye pass failed): "
+                                                       "the game's look stays");
                                 }
                                 if (foveaDirty.exchange(false)) {
                                     const uint32_t level = foveaLevelWant.load();
@@ -7623,6 +7913,9 @@ DWORD WINAPI run(void*) {
                         if (saved->beamFade > 0)
                             appendChestBeam(vertices, saved->beamFrom + travel, saved->beamTo + travel, viewer, pixelAngle,
                                             saved->beamFade);
+                        for (unsigned i = 0; i < 2; ++i) // Version 0.0.6 DAREDEVIL's batons
+                            if (saved->batonOn[i] > 0)
+                                appendBaton(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
                         if (saved->shockFade > 0) // Version 0.0.5 SUPERSONIC's shockwave
                             appendShockwave(vertices, viewer, saved->shockWay, saved->shockAge, pixelAngle);
                         if (saved->beamRingOk > 0) { // Version 0.0.5 BEAM RING (right wrist)
@@ -7631,13 +7924,19 @@ DWORD WINAPI run(void*) {
                             appendBeamRing(vertices, saved->beamShare, saved->beamFlash, grip, viewer, pixelAngle,
                                            static_cast<float>(std::fmod(static_cast<double>(shown) * 1e-9, 3600.)));
                         }
+                        // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK (repulsor_mcu.hpp): the palms' charge, the
+                        // bolts and the impact bursts (0.0.4's bolt and flash retired).
+                        for (unsigned i = 0; i < 2 && saved->repulsorLook; ++i)
+                            if (saved->palmGlow[i] > 0)
+                                repulsor_mcu::appendCharge(vertices, saved->palmAt[i] + travel, saved->palmWay[i], viewer, pixelAngle,
+                                                           saved->palmGlow[i], saved->palmSpin);
                         for (size_t b = 0; b < saved->oursAt.size() && saved->repulsorLook; ++b) {
                             if (saved->oursFade[b] > 0)
-                                appendRepulsorBolt(vertices, saved->oursAt[b] + travel, saved->oursTail[b] + travel, viewer,
-                                                   pixelAngle, saved->oursFade[b]);
+                                repulsor_mcu::appendBolt(vertices, saved->oursAt[b] + travel, saved->oursTail[b] + travel, viewer,
+                                                         pixelAngle, saved->oursFade[b]);
                             if (saved->splashFade[b] > 0)
-                                appendRepulsorFlash(vertices, saved->splashAt[b] + travel, viewer, pixelAngle,
-                                                    saved->splashFade[b], .08f + .1f * saved->splashFade[b]);
+                                repulsor_mcu::appendImpact(vertices, saved->splashAt[b] + travel, viewer, viewer, pixelAngle,
+                                                           saved->splashFade[b], .2f, static_cast<unsigned>(b) + 7u);
                         }
                         for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook; ++b) {
                             if (saved->oursFade[b] > 0)
@@ -7892,7 +8191,8 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                             const float headsetHz = wristFps.refreshHz();
-                            const float target = auto_perf::targetFps(c38(combat38::perfTarget), headsetHz);
+                            const float target = perfPace.pick(c38(combat38::perfTarget), headsetHz,
+                                                               perfOn ? autoPerf.meanFps() : 0.f);
                             if (perfNewPair || perfOn != perfWas) {
                                 const float pairMs = perfPairAt > 0 ? static_cast<float>((perfPairSeconds - perfPairAt) * 1000.0)
                                                                     : 0.f;
@@ -8949,7 +9249,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     // The worker attaches each player it finds; none yet.
     native_appearance::setPlayerRecord(0);
     keepAliveDeadline = GetTickCount64() + 10000;
-    message(1, 0, "Starting OpenXR");
+    // Version 0.0.6: the start banner names the version and its maker.
+    message(1, 0, "SM2 VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");
     // Version 0.0.2 hotfix: the VR thread reserves its own 8 MB of stack (address space only;
     // pages are committed as used) instead of the game's default (1 MB), so its deep frame
     // has room whatever the game's own default is.
@@ -9355,7 +9656,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerfStatus(void* v) {
 }
 // Version 0.0.4 (Update 38.8)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShooterType(void* v) {
-    return setLive(v, 0, combat38::optionInfo[combat38::shooterType].count - 1, 5338, combat38Values[combat38::shooterType], asU32);
+    const DWORD r = setLive(v, 0, combat38::optionInfo[combat38::shooterType].count - 1, 5338,
+                            combat38Values[combat38::shooterType], asU32);
+    if (!r)
+        heroOnly(combat38::shooterType); // Version 0.0.6: one hero toggle at a time
+    return r;
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorView(void* v) {
     return setLive(v, 0, combat38::optionInfo[combat38::mirrorView].count - 1, 5339, combat38Values[combat38::mirrorView], asU32);
@@ -9379,6 +9684,23 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySupersonic(void* v) {
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySupersonicSpeed(void* v) {
     return setLive(v, 0, combat38::optionInfo[combat38::supersonicSpeed].count - 1, 5366, combat38Values[combat38::supersonicSpeed], asU32);
+}
+// Version 0.0.6 (Update 39.0): DAREDEVIL / HULK ABILITIES (one hero toggle at a time) and DAREDEVIL PUNCH
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDaredevil(void* v) {
+    const DWORD r = setLive(v, 0, combat38::optionInfo[combat38::daredevil].count - 1, 5367,
+                            combat38Values[combat38::daredevil], asU32);
+    if (!r)
+        heroOnly(combat38::daredevil);
+    return r;
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHulk(void* v) {
+    const DWORD r = setLive(v, 0, combat38::optionInfo[combat38::hulk].count - 1, 5368, combat38Values[combat38::hulk], asU32);
+    if (!r)
+        heroOnly(combat38::hulk);
+    return r;
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDaredevilPunch(void* v) {
+    return setLive(v, 0, combat38::optionInfo[combat38::daredevilPunch].count - 1, 5369, combat38Values[combat38::daredevilPunch], asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;

@@ -51,8 +51,35 @@ class Rate(unittest.TestCase):
             self.assertNotIn(name, text)
         even = '\n'.join(comfort.comfort_advice(comfort.play_rate(samples(45)), settings, 100))
         self.assertNotIn('RenderScale', even)
+        self.assertNotIn('Hz:', even)
         timing = dict(pair_to_copy=dict(count=3, mean_ms=21.4, max_ms=40))
         self.assertIn('21 ms', '\n'.join(comfort.comfort_advice(None, {}, None, timing)))
+
+
+    def test_performance_advice_0_0_6(self):
+        # rep0050 (0.0.5, October 25): 37 new pictures a second at 90 Hz, RenderScale 100, the copy 6.82 ms
+        # of which 0.19 ms is its own work: GPU-bound, 72 Hz divides evenly, 90/80% are estimates.
+        rate = dict(new_pairs_fps=37.0, headset_fps=90.0, lowest_new_pairs_fps=29.0, headset_frames_per_pair=2.43)
+        timing = dict(copy_gpu=dict(count=38612, mean_ms=6.82), sharpen=dict(gpu_ms_mean=.19))
+        text = '\n'.join(comfort.performance_advice(rate, 100, timing))
+        self.assertIn('graphics card is the limit', text)
+        self.assertIn('to 72 Hz', text)
+        self.assertIn('-RenderScale 90', text)
+        self.assertIn('-RenderScale 80', text)
+        self.assertIn('ESTIMATE', text)
+        # The model reproduces its own measurement: 45 at 100% -> 33 at 125%.
+        self.assertAlmostEqual(comfort.estimated_fps(45, 100, 125), 33, delta=.1)
+        self.assertAlmostEqual(comfort.estimated_fps(33, 125, 100), 45, delta=.1)
+        # 40 a second at 90 Hz: 80 Hz is the even rate; 46 at 90: nothing to say; never a raise in scale.
+        self.assertIn('to 80 Hz', '\n'.join(comfort.performance_advice(dict(rate, new_pairs_fps=40.0), 100)))
+        self.assertEqual(comfort.performance_advice(dict(rate, new_pairs_fps=46.0), 100, timing)[1:], [])
+        self.assertNotIn('RenderScale', '\n'.join(comfort.performance_advice(rate, 80)))
+        self.assertEqual(comfort.performance_advice(None), [])
+        # 120 Hz at 50: 90 Hz (45 a second) is even.
+        self.assertIn('to 90 Hz', '\n'.join(comfort.performance_advice(dict(rate, headset_fps=120.0,
+                                                                               new_pairs_fps=50.0), 100)))
+        # The session's advice carries it.
+        self.assertIn('72 Hz', '\n'.join(comfort.comfort_advice(rate | dict(windows=1), {}, 100, timing)))
 
 
 if __name__ == '__main__':

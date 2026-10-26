@@ -81,6 +81,9 @@ enum Option : uint32_t {
     heroHeight, heroDamage,
     // Version 0.0.5 (the 0.0.4 headset test): PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC and its speed
     punchSense, sfxVolume, supersonic, supersonicSpeed,
+    // Version 0.0.6 (Update 39.0): DAREDEVIL and HULK ABILITIES (hero_modes.hpp; one hero toggle on at
+    // a time with IRON MAN's shooterType) and DAREDEVIL's punch multiplier
+    daredevil, hulk, daredevilPunch,
     options
 };
 struct OptionInfo {
@@ -174,7 +177,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.4 (Update 38.8) IRON MAN ABILITIES (hero_modes.hpp; option shooterType, value 1 the
     // repulsor): OFF (0, Spider-Man) is the default; ON fires no web of any kind and sends none to the game.
-    {"iron_man", "IRON MAN ABILITIES", "IRONMAN", "ON: repulsor blasts and chest beam, no webs at all (experimental).",
+    {"iron_man", "IRON MAN ABILITIES", "IRONMAN", "ON: blasts and a chest beam that hurt enemies, no webs (one hero at a time).",
      2, {"OFF", "ON", nullptr, nullptr}},
     {"mirror_view", "MIRROR VIEW", "MIRRORCAM", "TEST: a hidden game camera looks at you 30 s to test a real mirror (restart).",
      2, {"OFF", "TEST", nullptr, nullptr}},
@@ -182,8 +185,9 @@ inline constexpr OptionInfo optionInfo[options] = {
     // straight); live; 1.00X (0) the default, nothing changed.
     {"hero_height", "HERO HEIGHT", "HEIGHT", "Grows your VR body for a big skin like Hulk so its legs stand straight, live.",
      5, {"1.00X", "1.15X", "1.30X", "1.45X", "1.60X"}},
-    // DAMAGE TEST: the candidate damage write (sm2_damage.hpp), OFF by default.
-    {"hero_damage", "DAMAGE TEST", "DAMAGE", "ON: your web ball and repulsor hits hurt enemies directly (experimental).",
+    // WEB BALL DAMAGE (0.0.5's DAMAGE TEST; sm2_damage.hpp), OFF by default. Version 0.0.6: the heroes'
+    // own hits always send their blows (rep0050 CONFIRMED the path); this is Spider-Man's web ball only.
+    {"hero_damage", "WEB BALL DAMAGE", "DAMAGE", "ON: Spider-Man's web ball hits hurt enemies too (experimental).",
      2, {"OFF", "ON", nullptr, nullptr}},
     // Version 0.0.5 PUNCH SENSITIVITY (punchFeelOf): FORGIVING (0, the default) is easier than 0.0.4.
     {"punch_sense", "PUNCH SENSITIVITY", "SENSE", "How easily a fist counts as a punch; FORGIVING takes slow, sloppy jabs.",
@@ -196,7 +200,24 @@ inline constexpr OptionInfo optionInfo[options] = {
      {"ON", "OFF", nullptr, nullptr}},
     {"supersonic_speed", "SUPERSONIC SPEED", "MACH", "How many times your FAST fly speed the supersonic dash reaches.", 4,
      {"2X", "1.5X", "2.5X", "3X", nullptr}},
+    // Version 0.0.6 (Update 39.0) DAREDEVIL / HULK ABILITIES: OFF by default (experimental); turning one
+    // on turns the other heroes off (heroOnly). DAREDEVIL PUNCH: 3X (0) the default, live.
+    {"daredevil", "DAREDEVIL ABILITIES", "DAREDEVIL", "ON: thrown batons, harder punches and sonar sight, no webs (one hero at a time).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"hulk", "HULK ABILITIES", "HULK", "ON: a 4x charged jump and one-punch knockouts, no webs (one hero at a time).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"daredevil_punch", "DAREDEVIL PUNCH", "DDPUNCH", "How many normal punches each DAREDEVIL punch hits like, live.",
+     5, {"3X", "1X", "2X", "4X", "5X"}},
 };
+// ---- Version 0.0.6 HERO TOGGLES --------------------------------------------------------------------
+// The three hero toggles (IRON MAN's is shooterType, 1 ON); only one is on at a time.
+inline constexpr Option heroToggles[3] = {shooterType, daredevil, hulk};
+inline bool isHeroToggle(uint32_t o) { return o == shooterType || o == daredevil || o == hulk; }
+// DAREDEVIL PUNCH's multiplier (3X, 1X, 2X, 4X, 5X).
+inline float daredevilPunchK(uint32_t value) {
+    static constexpr float k[5] = {3.f, 1.f, 2.f, 4.f, 5.f};
+    return k[value < 5 ? value : 0];
+}
 // ---- Version 0.0.5 PUNCH SENSITIVITY ------------------------------------------------------------
 // The 0.0.4 headset test: "punches still don't register enough". Each value scales the punch's
 // speed threshold (PUNCH SPEED), its forward share (how straight at him) and its reach in front of

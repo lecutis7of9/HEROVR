@@ -5,11 +5,12 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 namespace spidy {
 namespace {
 void xr(XrResult r, const char* where) {
     if (XR_FAILED(r))
-        throw std::runtime_error(std::string(where) + " XrResult=" + std::to_string(r));
+        throw XrError(std::string(where) + " XrResult=" + std::to_string(r), r);
 }
 Pose pose(XrPosef p) {
     return {{p.position.x, p.position.y, p.position.z},
@@ -22,27 +23,50 @@ XrPosef identity() {
 }
 } // namespace
 XrRuntime::~XrRuntime() {
-    for (auto& e : eyes_)
+    teardown();
+}
+void XrRuntime::teardown(bool keepInstance) {
+    for (auto& e : eyes_) {
         if (e.swapchain)
             xrDestroySwapchain(e.swapchain);
-    for (auto s : aimSpaces_)
+        e.swapchain = XR_NULL_HANDLE;
+        e.images.clear();
+    }
+    for (auto& s : aimSpaces_)
         if (s)
-            xrDestroySpace(s);
-    for (auto s : gripSpaces_)
+            xrDestroySpace(std::exchange(s, XrSpace{}));
+    for (auto& s : gripSpaces_)
         if (s)
-            xrDestroySpace(s);
+            xrDestroySpace(std::exchange(s, XrSpace{}));
     if (head_)
-        xrDestroySpace(head_);
+        xrDestroySpace(std::exchange(head_, XrSpace{}));
     if (space_)
-        xrDestroySpace(space_);
+        xrDestroySpace(std::exchange(space_, XrSpace{}));
     if (session_)
-        xrDestroySession(session_);
+        xrDestroySession(std::exchange(session_, XrSession{}));
+    // The actions go with their set (an attached set cannot take new bindings).
     if (actionSet_)
-        xrDestroyActionSet(actionSet_);
-    if (instance_)
-        xrDestroyInstance(instance_);
+        xrDestroyActionSet(std::exchange(actionSet_, XrActionSet{}));
+    aim_ = grip_ = trigger_ = squeeze_ = stick_ = stickClick_ = jump_ = reset_ = haptic_ = XR_NULL_HANDLE;
+    buttonB_ = buttonX_ = menu_ = view_ = XR_NULL_HANDLE;
+    dpad_ = {};
+    profiles_.clear();
+    controllers_ = {};
+    layouts_ = inputs_ = 0;
+    state_ = XR_SESSION_STATE_UNKNOWN;
+    running_ = exit_ = lastFrameSubmitted_ = false;
+    previousTime_ = referenceChangeTime_ = 0;
+    if (!keepInstance) {
+        if (instance_)
+            xrDestroyInstance(std::exchange(instance_, XrInstance{}));
+        extensions_.clear();
+        instanceLost_ = false;
+    }
+    system_ = XR_NULL_SYSTEM_ID;
 }
 void XrRuntime::initialize(D3D12Renderer& renderer, bool probeOnly) {
+    if (instance_)
+        throw std::logic_error("OpenXR runtime already initialized");
     initialize(
         [&](const XrGraphicsRequirementsD3D12KHR& requirements) {
             renderer.initialize(requirements.adapterLuid, requirements.minFeatureLevel);
@@ -52,55 +76,69 @@ void XrRuntime::initialize(D3D12Renderer& renderer, bool probeOnly) {
 }
 void XrRuntime::initialize(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned eyeSize,
                            unsigned renderScale) {
-    initialize([=](const XrGraphicsRequirementsD3D12KHR&) { return Graphics{device, queue}; }, false, true,
-               eyeSize, renderScale);
+    if (instance_)
+        throw std::logic_error("OpenXR runtime already initialized");
+    try {
+        initialize([=](const XrGraphicsRequirementsD3D12KHR&) { return Graphics{device, queue}; }, false, true,
+                   eyeSize, renderScale);
+    } catch (...) {
+        // Nothing half made: the caller may try again (no headset yet).
+        teardown();
+        throw;
+    }
+    // Update 39.0.3: the game's runtime comes back after a loss, with these eyes.
+    recoverable_ = true;
+    eyeSize_ = eyeSize;
+    renderScale_ = renderScale;
+    forced_ = {eyes_[0].width, eyes_[0].height};
 }
 void XrRuntime::initialize(
     const std::function<Graphics(const XrGraphicsRequirementsD3D12KHR&)>& createGraphics, bool probeOnly,
     bool copyDestination, unsigned eyeSize, unsigned renderScale) {
-    if (instance_)
-        throw std::logic_error("OpenXR runtime already initialized");
     uint32_t count{};
-    xr(xrEnumerateInstanceExtensionProperties(nullptr, 0, &count, nullptr), "Enumerate XR extensions");
-    std::vector<XrExtensionProperties> extensions(count, {XR_TYPE_EXTENSION_PROPERTIES});
-    xr(xrEnumerateInstanceExtensionProperties(nullptr, count, &count, extensions.data()),
-       "Read XR extensions");
-    const auto has = [&](const char* name) {
-        return std::any_of(extensions.begin(), extensions.end(), [&](const XrExtensionProperties& e) {
-            return std::strcmp(e.extensionName, name) == 0;
-        });
-    };
-    if (!has(XR_KHR_D3D12_ENABLE_EXTENSION_NAME))
-        throw std::runtime_error("Runtime does not support OpenXR D3D12");
-    // A controller that comes with an extension of its own (the Steam
-    // Frame's) gets its layout where the runtime has that extension.
-    extensions_ = {XR_KHR_D3D12_ENABLE_EXTENSION_NAME};
-    for (const auto& layout : controllerLayouts())
-        if (layout.extension && has(layout.extension))
-            extensions_.push_back(layout.extension);
-    XrInstanceCreateInfo ci{XR_TYPE_INSTANCE_CREATE_INFO};
-    strcpy_s(ci.applicationInfo.applicationName, "Spidy");
-    strcpy_s(ci.applicationInfo.engineName, "Spidy");
-    ci.applicationInfo.apiVersion = XR_MAKE_VERSION(1, 0, 0);
-    ci.enabledExtensionCount = static_cast<uint32_t>(extensions_.size());
-    ci.enabledExtensionNames = extensions_.data();
-    XrResult created = xrCreateInstance(&ci, &instance_);
-    if (XR_FAILED(created) && extensions_.size() > 1) {
-        // Not at the price of VR: without them the runtime translates
-        // another controller's layout, as before.
-        extensions_.resize(1);
-        ci.enabledExtensionCount = 1;
-        created = xrCreateInstance(&ci, &instance_);
-    }
-    xr(created, "Create XR instance");
-    XrInstanceProperties properties{XR_TYPE_INSTANCE_PROPERTIES};
-    xr(xrGetInstanceProperties(instance_, &properties), "XR runtime properties");
-    std::cout << "Runtime: " << properties.runtimeName << '\n';
-    if (probeOnly) {
-        std::cout << "D3D12 extension available. Probe did not start a headset session.\n";
-        // Which controller layouts this runtime takes needs no headset.
-        createActions();
-        return;
+    // Update 39.0.3: a session built again after a loss keeps the instance when the runtime kept it.
+    if (!instance_) {
+        xr(xrEnumerateInstanceExtensionProperties(nullptr, 0, &count, nullptr), "Enumerate XR extensions");
+        std::vector<XrExtensionProperties> extensions(count, {XR_TYPE_EXTENSION_PROPERTIES});
+        xr(xrEnumerateInstanceExtensionProperties(nullptr, count, &count, extensions.data()),
+           "Read XR extensions");
+        const auto has = [&](const char* name) {
+            return std::any_of(extensions.begin(), extensions.end(), [&](const XrExtensionProperties& e) {
+                return std::strcmp(e.extensionName, name) == 0;
+            });
+        };
+        if (!has(XR_KHR_D3D12_ENABLE_EXTENSION_NAME))
+            throw std::runtime_error("Runtime does not support OpenXR D3D12");
+        // A controller that comes with an extension of its own (the Steam
+        // Frame's) gets its layout where the runtime has that extension.
+        extensions_ = {XR_KHR_D3D12_ENABLE_EXTENSION_NAME};
+        for (const auto& layout : controllerLayouts())
+            if (layout.extension && has(layout.extension))
+                extensions_.push_back(layout.extension);
+        XrInstanceCreateInfo ci{XR_TYPE_INSTANCE_CREATE_INFO};
+        strcpy_s(ci.applicationInfo.applicationName, "Spidy");
+        strcpy_s(ci.applicationInfo.engineName, "Spidy");
+        ci.applicationInfo.apiVersion = XR_MAKE_VERSION(1, 0, 0);
+        ci.enabledExtensionCount = static_cast<uint32_t>(extensions_.size());
+        ci.enabledExtensionNames = extensions_.data();
+        XrResult created = xrCreateInstance(&ci, &instance_);
+        if (XR_FAILED(created) && extensions_.size() > 1) {
+            // Not at the price of VR: without them the runtime translates
+            // another controller's layout, as before.
+            extensions_.resize(1);
+            ci.enabledExtensionCount = 1;
+            created = xrCreateInstance(&ci, &instance_);
+        }
+        xr(created, "Create XR instance");
+        XrInstanceProperties properties{XR_TYPE_INSTANCE_PROPERTIES};
+        xr(xrGetInstanceProperties(instance_, &properties), "XR runtime properties");
+        std::cout << "Runtime: " << properties.runtimeName << '\n';
+        if (probeOnly) {
+            std::cout << "D3D12 extension available. Probe did not start a headset session.\n";
+            // Which controller layouts this runtime takes needs no headset.
+            createActions();
+            return;
+        }
     }
     XrSystemGetInfo si{XR_TYPE_SYSTEM_GET_INFO};
     si.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
@@ -194,7 +232,16 @@ void XrRuntime::initialize(
         const auto& v = views[i];
         e.recommendedWidth = v.recommendedImageRectWidth;
         e.recommendedHeight = v.recommendedImageRectHeight;
-        if (eyeSize) {
+        if (forced_[0]) {
+            // Update 39.0.3: a session built again gives the game the eyes it was set up with.
+            if (forced_[0] > std::max(v.maxImageRectWidth, v.recommendedImageRectWidth) ||
+                forced_[1] > std::max(v.maxImageRectHeight, v.recommendedImageRectHeight)) {
+                restartNeeded_ = true;
+                throw std::runtime_error("The headset came back with smaller eyes: restart the game for VR");
+            }
+            e.width = forced_[0];
+            e.height = forced_[1];
+        } else if (eyeSize) {
             if (eyeSize < 64 || eyeSize > v.maxImageRectWidth || eyeSize > v.maxImageRectHeight)
                 throw std::invalid_argument("Requested native eye size exceeds runtime limits");
             e.width = e.height = eyeSize;
@@ -396,7 +443,9 @@ void XrRuntime::poll() {
     XrEventDataBuffer event{XR_TYPE_EVENT_DATA_BUFFER};
     XrResult result;
     while ((result = xrPollEvent(instance_, &event)) == XR_SUCCESS) {
-        if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
+        if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED &&
+            reinterpret_cast<XrEventDataSessionStateChanged*>(&event)->session == session_) {
+            // (Update 39.0.3: a lost session's late events are not this one's.)
             state_ = reinterpret_cast<XrEventDataSessionStateChanged*>(&event)->state;
             if (state_ == XR_SESSION_STATE_READY && !running_) {
                 XrSessionBeginInfo begin{XR_TYPE_SESSION_BEGIN_INFO};
@@ -413,7 +462,7 @@ void XrRuntime::poll() {
                 exit_ = true;
         }
         if (event.type == XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING)
-            exit_ = true;
+            exit_ = instanceLost_ = true;
         if (event.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED)
             readControllers();
         if (event.type == XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING) {
@@ -553,8 +602,75 @@ bool XrRuntime::frame(const std::function<void(const XrFrame&)>& update,
             return true;
         });
 }
+// Update 39.0.3: the game's runtime never ends VR for a lost headset (lost()); probes and the lab do.
 bool XrRuntime::frameStereo(const std::function<bool(const XrFrame&)>& prepare,
                             const std::function<bool(std::array<EyeTarget, 2>&)>& draw) {
+    if (!recoverable_)
+        return frameOnce(prepare, draw);
+    if (lost_ && !recover()) {
+        idle(prepare);
+        return true;
+    }
+    try {
+        if (frameOnce(prepare, draw))
+            return true;
+        lose(state_ == XR_SESSION_STATE_EXITING ? "the runtime ended the session" : "the session was lost",
+             instanceLost_);
+    } catch (const XrError& e) {
+        // A frame the runtime refused: the session (or the runtime) is gone. Only OpenXR's errors: the
+        // game's own go on as before.
+        lose(e.what(), e.result != XR_ERROR_SESSION_LOST || instanceLost_);
+    }
+    idle(prepare);
+    return true;
+}
+void XrRuntime::idle(const std::function<bool(const XrFrame&)>& prepare) {
+    frameTiming_ = {};
+    lastFrameSubmitted_ = false;
+    XrFrame inactive;
+    prepare(inactive);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+}
+// The game's queue may still be copying into the eye images: done before their swapchains go (a loss only).
+void XrRuntime::drainQueue() {
+    ComPtr<ID3D12Fence> fence;
+    if (!boundDevice_ || !boundQueue_ || FAILED(boundDevice_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))) ||
+        FAILED(boundQueue_->Signal(fence.Get(), 1)))
+        return;
+    for (int i = 0; i < 100 && fence->GetCompletedValue() < 1; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+}
+void XrRuntime::lose(const char* why, bool instanceLost) {
+    std::cout << "VR lost (" << why << "): VR waits for the headset and builds its session again every 2 s.\n";
+    drainQueue();
+    teardown(!instanceLost);
+    lost_ = true;
+    failedTries_ = 0;
+    retryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+}
+bool XrRuntime::recover() {
+    const auto now = std::chrono::steady_clock::now();
+    if (now < retryAt_)
+        return false;
+    retryAt_ = now + std::chrono::seconds(2);
+    try {
+        initialize([this](const XrGraphicsRequirementsD3D12KHR&) { return Graphics{boundDevice_.Get(), boundQueue_.Get()}; },
+                   false, true, eyeSize_, renderScale_);
+    } catch (const std::exception& e) {
+        // No headset yet (FORM_FACTOR_UNAVAILABLE) keeps the instance; anything else starts from a new one.
+        const auto* xe = dynamic_cast<const XrError*>(&e);
+        teardown(xe && xe->result == XR_ERROR_FORM_FACTOR_UNAVAILABLE);
+        if (!failedTries_++ || !(failedTries_ % 30))
+            std::cout << "VR still waiting for the headset (" << e.what() << ").\n";
+        return false;
+    }
+    lost_ = false;
+    ++recoveries_;
+    std::cout << "VR back: a new session after " << failedTries_ << " tries.\n";
+    return true;
+}
+bool XrRuntime::frameOnce(const std::function<bool(const XrFrame&)>& prepare,
+                          const std::function<bool(std::array<EyeTarget, 2>&)>& draw) {
     using Clock = std::chrono::steady_clock;
     const auto start = Clock::now();
     auto elapsed = [](auto t) { return std::chrono::duration<double, std::milli>(Clock::now() - t).count(); };

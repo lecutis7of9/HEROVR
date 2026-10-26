@@ -6,7 +6,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RUN = (ROOT/'tools/run_game_vr.py').read_text(encoding='utf-8')
-LAUNCHER = ROOT/'tools/launcher/src'
+# The public repo carries the launcher in tools/launcher; the dev tree keeps it beside (herovr-launcher-006).
+LAUNCHER = next((p for p in (ROOT/'tools/launcher/src', ROOT.parent/'herovr-launcher-006/src') if p.is_dir()),
+                ROOT/'tools/launcher/src')
 
 
 def pick(*names):
@@ -86,6 +88,7 @@ class NeverSilentlyFlat(unittest.TestCase):
         self.assertIn('[switch]$CloseGame', ps1)
         self.assertIn("if($CloseGame) { $captureArgs+=@('--close-game') }", ps1)
 
+    @unittest.skipUnless(LAUNCHER.is_dir(), 'launcher sources not beside this tree')
     def test_launcher_offers_to_close_the_game_and_never_starts_flat(self):
         form = (LAUNCHER/'MainForm.cs').read_text(encoding='utf-8')
         self.assertIn('extra.Add("-CloseGame")', form)
@@ -97,11 +100,13 @@ class NeverSilentlyFlat(unittest.TestCase):
         vr = (ROOT/'tools/vr_launcher.py').read_text(encoding='utf-8')
         self.assertIn('CLOSE_GAME_EXIT=6', vr)
 
+    @unittest.skipUnless(LAUNCHER.is_dir(), 'launcher sources not beside this tree')
     def test_the_always_running_vd_service_is_not_a_connected_headset(self):
         info = (LAUNCHER/'SystemInfo.cs').read_text(encoding='utf-8')
         self.assertNotIn('"VirtualDesktop.Service"', info)
         self.assertIn('Running("VirtualDesktop.Streamer")', info)
 
+    @unittest.skipUnless(LAUNCHER.is_dir(), 'launcher sources not beside this tree')
     def test_launcher_build_is_bumped_for_self_update(self):
         version = (LAUNCHER/'ModVersion.cs').read_text(encoding='utf-8')
         build = int(re.search(r'public const int Build = (\d+);', version).group(1))

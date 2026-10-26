@@ -61,6 +61,8 @@ RECORDS = {
     'v003': ('SpidyV003Data', 0x33303056, 1, 5200),
     # Version 0.0.5
     'v005': ('SpidyV005Data', 0x35303056, 2, 552),
+    # Version 0.0.6
+    'v006': ('SpidyV006Data', 0x36303056, 1, 128),
 }
 # Update 38: records of the swing (ray) module, not the VR module: never in RECORDS, whose exports the
 # launcher requires of the VR module. The COMBAT record already carries the lunge counts.
@@ -100,7 +102,9 @@ V004_OPTIONS = (('iron_man', ('OFF', 'ON')), ('mirror_view', ('OFF', 'TEST')))
 V005_OPTIONS = (('hero_height', ('1.00X', '1.15X', '1.30X', '1.45X', '1.60X')), ('hero_damage', ('OFF', 'ON')),
                 ('punch_sense', ('FORGIVING', 'MAX', '0.0.4', 'STRICT')), ('sfx_volume', ('100%', '75%', '50%', '25%', 'OFF')),
                 ('supersonic', ('ON', 'OFF')), ('supersonic_speed', ('2X', '1.5X', '2.5X', '3X')))
-COMBAT38_ALL_OPTIONS = COMBAT38_OPTIONS + V003_OPTIONS + V004_OPTIONS + V005_OPTIONS
+# Version 0.0.6: options 45-47, in the V006 record.
+V006_OPTIONS = (('daredevil', ('OFF', 'ON')), ('hulk', ('OFF', 'ON')), ('daredevil_punch', ('3X', '1X', '2X', '4X', '5X')))
+COMBAT38_ALL_OPTIONS = COMBAT38_OPTIONS + V003_OPTIONS + V004_OPTIONS + V005_OPTIONS + V006_OPTIONS
 COMBAT38_REJECTS = ('sent', 'hand untracked', 'hand holding or carrying', 'trigger held', 'hand busy', 'too slow',
                     'not forward', 'not extended', 'not re-armed', 'gated (not playing)')
 CRAWL_WHY = ('none', 'low ceiling', 'crawl flag (WITH FLAG)', 'held off: combat', 'off')
@@ -411,6 +415,10 @@ def parse_combat38(raw):
 
 
 LUNGE_PHASES = ('idle', 'flying', 'hanging')
+# mirror_view.hpp Phase / Why (the MIRROR VIEW TEST in the v003 record; 0.0.6 exports it).
+MIRROR_TEST_PHASES = ('off', 'waiting', 'running', 'done', 'failed')
+MIRROR_TEST_WHYS = ('', 'fewer than 4 view slots free', 'the eyes are not up', 'the game made no view',
+                    'the view left the pool', 'too slow: frames over 1.5x')
 LUNGE_MODES = ('GAME BUTTON', 'SPIDYVR MOVE')
 
 
@@ -687,6 +695,11 @@ def parse_v003(raw):
     nets_now, = struct.unpack_from('<I', raw, 736)
     suit_id, suit_have = struct.unpack_from('<2I', raw, 744)
     suit_reads, suit_failed, suit_changes, forgot = struct.unpack_from('<4Q', raw, 752)
+    t_phase, t_why2, t_slot, t_runs = struct.unpack_from('<4I', raw, 784)
+    t_secs, t_base, t_ms = struct.unpack_from('<3f', raw, 800)
+    t_frames, = struct.unpack_from('<Q', raw, 816)
+    t_w, t_h, t_tex, t_free = struct.unpack_from('<4I', raw, 824)
+    t_hero, t_other = struct.unpack_from('<2Q', raw, 840)
     bot_on, = struct.unpack_from('<I', raw, 856)
     b = 864
     scans, objects, bot_states, flung, wall_stuck, changes, faults, watched = struct.unpack_from('<8Q', raw, b)
@@ -714,6 +727,11 @@ def parse_v003(raw):
                                 nets_now=nets_now),
                 suit_watch=dict(suit_id=suit_id, have=bool(suit_have), reads=suit_reads, failed=suit_failed,
                                 changes=suit_changes, colours_forgot=forgot),
+                mirror_view_test=dict(phase=_name(MIRROR_TEST_PHASES, t_phase), why=_name(MIRROR_TEST_WHYS, t_why2),
+                                      slot=t_slot, runs=t_runs, seconds=round(t_secs, 1),
+                                      base_ms=round(t_base, 2), test_ms=round(t_ms, 2), frames=t_frames,
+                                      width=t_w, height=t_h, texture=t_tex, free_slots=t_free,
+                                      hero_draws=t_hero, other_draws=t_other),
                 bot_probe=dict(on=bool(bot_on), scans=scans, objects_read=objects, bot_states=bot_states,
                                flung_seen=flung, wall_stuck_seen=wall_stuck, changes=changes, faults=faults,
                                watched=hex(watched), found=found, snaps=snap_count))
@@ -776,11 +794,37 @@ def parse_v005(raw):
                            refused_off=refused_off, last_record=hex(last_record), last_handle=hex(last_handle)))
 
 
+HEROES = ('SPIDER-MAN', 'IRON MAN', 'DAREDEVIL', 'HULK')
+SONAR_STATES = ('off', 'on', 'could not start (the eye pass failed)')
+
+
+def parse_v006(raw):
+    """Version 0.0.6: the V006 record (v006.hpp Data): the hero now, DAREDEVIL's batons and punches,
+    HULK's punches, IRON MAN's blows, DAREDEVIL SONAR and SUPERSONIC's reached speed."""
+    if not _header(raw, 'v006'):
+        return None
+    flags, = struct.unpack_from('<I', raw, 12)
+    values = struct.unpack_from('<3I', raw, 16)
+    hero, = struct.unpack_from('<I', raw, 28)
+    throws, hits, catches, refused, baton_blows = struct.unpack_from('<5Q', raw, 32)
+    dd_blows, hulk_blows, misses, iron_blows = struct.unpack_from('<4Q', raw, 72)
+    sonar, = struct.unpack_from('<I', raw, 104)
+    sonic_last, sonic_best = struct.unpack_from('<2f', raw, 112)
+    names = [n for n, _ in V006_OPTIONS]
+    return dict(flags=flags, values={names[i]: _name(V006_OPTIONS[i][1], v) for i, v in enumerate(values)},
+                hero=_name(HEROES, hero),
+                batons=dict(throws=throws, hits=hits, catches=catches, refused=refused, blows_sent=baton_blows),
+                daredevil_punch_blows=dd_blows, hulk_punch_blows=hulk_blows, punches_out_of_reach=misses,
+                iron_man_blows=iron_blows, sonar=_name(SONAR_STATES, sonar),
+                supersonic_reached=round(sonic_last, 1), supersonic_best=round(sonic_best, 1))
+
+
 PARSERS = dict(air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
                health=parse_health, mirror=parse_mirror, world_trace=parse_world_trace, blood=parse_blood,
                perf=parse_perf, color=parse_color, fovea=parse_fovea, npc_fade=parse_npc_fade,
                combat38=parse_combat38, mirror_probe=parse_mirror_probe, wrist_muzzle=parse_wrist_muzzle,
-               hero_switch=parse_hero_switch, v003=parse_v003, v005=parse_v005)
+               hero_switch=parse_hero_switch, v003=parse_v003, v005=parse_v005,
+               v006=parse_v006)
 
 
 def snapshot(game, xr, key):
@@ -974,6 +1018,12 @@ def console_lines(records):
                      f"{hex(sw['suit_id']) if sw['have'] else 'not read'}, "
                      f"{sw['changes']} changes, {sw['reads']} reads, {sw['failed']} failed; colours relearned "
                      f"{sw['colours_forgot']} times.")
+        mt = v3.get('mirror_view_test')
+        if mt and (mt['runs'] or mt['phase'] != 'off'):
+            lines.append(f"VERSION 0.0.6 MIRROR VIEW TEST: phase {mt['phase']}"
+                         f"{' (' + mt['why'] + ')' if mt['why'] else ''}, {mt['runs']} runs, {mt['seconds']} s, "
+                         f"{mt['frames']} frames, {mt['base_ms']} -> {mt['test_ms']} ms; hero draws {mt['hero_draws']}, "
+                         f"other draws {mt['other_draws']} (hero draws above 0 with phase done: a real mirror can be built).")
         if bp['on'] or bp['scans']:
             lines.append(f"Version 0.0.3 BOT STATE PROBE: {bp['scans']} scans, {bp['bot_states']} BotState objects, "
                          f"Flung seen {bp['flung_seen']}, WallStuck seen {bp['wall_stuck_seen']}, {len(bp['found'])} finds.")

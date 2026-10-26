@@ -209,6 +209,10 @@ def public_version():
         return None
 
 
+# Version 0.0.6: the on-screen credit (console, holo, overlay): this build's maker only.
+MADE_BY = 'Made by Agent Mulder'
+
+
 def version_line():
     """The log's and the report's header: "Version 0.0.1 (build Update 38.5)"."""
     return f'Version {public_version() or "unknown (VERSION missing)"} (build {port_version() or "unknown"})'
@@ -443,10 +447,17 @@ def link_warning(links, runtime_name):
 
 def stream_stalls(samples):
     """Rounds of the headset's loop that the VR runtime held for about a tenth of a second (its submit
-    timed out: Virtual Desktop was not taking frames), from the samples' `xr_ms`; and their seconds."""
-    rounds = {s.get('frames') for s in samples if s.get('xr_ms') and s['xr_ms'][0] >= 90 and
-              s['xr_ms'][XR_STAGES.index('end_frame')]+s['xr_ms'][XR_STAGES.index('wait_frame')] >= 80}
-    return dict(rounds=len(rounds), seconds=round(len(rounds)/10, 1))
+    timed out: Virtual Desktop was not taking frames), from the samples' `xr_ms`; and their seconds.
+    Version 0.0.6 (Update 39.1): only rounds while immersive count. Reports rep0022 and rep0050 had 183 and
+    131 such rounds, but all except 1 each came while nothing was presented (loading, or the headset
+    taken off at the end: the runtime then holds every frame); those are `outside_rounds`."""
+    held = lambda s: s.get('xr_ms') and s['xr_ms'][0] >= 90 and \
+        s['xr_ms'][XR_STAGES.index('end_frame')]+s['xr_ms'][XR_STAGES.index('wait_frame')] >= 80
+    playing = lambda s: s.get('presentation', 'immersive') == 'immersive'
+    rounds = {s.get('frames') for s in samples if held(s) and playing(s)}
+    outside = {s.get('frames') for s in samples if held(s) and not playing(s)} - rounds
+    return dict(rounds=len(rounds), seconds=round(len(rounds)/10, 1), outside_rounds=len(outside),
+                outside_seconds=round(len(outside)/10, 1))
 
 
 # What the headset's loop spent on its newest frame, in milliseconds, in a session's samples (`xr_ms`).
@@ -2339,7 +2350,7 @@ def main():
     player_check.before_session(ROOT, launching=a.auto_launch and not game_running())
     keep_console(a.output)
     startup = Startup(a.output)
-    print(f'SM2 VR {version_line()} - HERO VR - Made by Agent Mulder', flush=True)  # Update 38.5: the public version first  # Update 30.1 (Update 31 from PORT-VERSION)
+    print(f'SM2 VR {version_line()} - {MADE_BY}', flush=True)  # Update 38.5: the public version first  # Update 30.1 (Update 31 from PORT-VERSION)
     print(f'This session\'s report will be written to: {a.output.resolve()}', flush=True)
     try:
         return session(a, startup)
@@ -3368,9 +3379,10 @@ def session(a, startup):
             hand_over_settings(samples[-1] if samples else None)
             stalls = stream_stalls(list(samples))
             if stalls['rounds'] >= 5:
-                print(f"The headset's picture stalled: the VR runtime held {stalls['rounds']} frames for a tenth "
-                      f"of a second each ({stalls['seconds']} s in all). That is the stream to the headset, not "
-                      'the game' + (': this PC was on Wi-Fi.' if links.get('wifi') else '.'), flush=True)
+                print(f"The headset's picture stalled while you played: the VR runtime held {stalls['rounds']} "
+                      f"frames for a tenth of a second each ({stalls['seconds']} s in all). That is the stream to "
+                      'the headset, not the game' + (': this PC was on Wi-Fi.' if links.get('wifi') else '.'),
+                      flush=True)
             tell_device_lost()
             print(f'Game closed. Session report: {a.output.resolve()}',flush=True)
             return 0

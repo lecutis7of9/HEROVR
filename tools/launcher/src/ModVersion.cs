@@ -151,11 +151,14 @@ namespace Sm2VrLauncher
 
     static class LauncherInfo
     {
-        public const string Version = "0.0.6.2";
+        public const string Version = "0.0.6.4";
         /// <summary>The launcher's own build number. version.json's "launcher_build" above this offers the update even
         /// when the mod version is the same (a launcher-only hotfix). 1 = the first 0.0.5/0.0.6 launchers, 2 = the
-        /// Trim(Char) hotfix with self-update, 3 = ready-made mod files (players never build), 4 = VR lost / headset not connected: never left flat.</summary>
-        public const int Build = 4;
+        /// Trim(Char) hotfix with self-update, 3 = ready-made mod files (players never build), 4 = opt-in crash, bug and play stats reports, 5 = VR lost / headset not connected: never left flat, 6 = one click back to the previous version (Revert).</summary>
+        public const int Build = 6;
+        /// <summary>REVERT's one-click "Use previous version": the release this launcher's version replaces. Its version.json is read
+        /// from github.com/&lt;repo&gt;/releases/download/&lt;tag&gt;/version.json (no API, no limit) and its zip is SHA-256 checked.</summary>
+        public const string PreviousTag = "v0.0.5";
         /// <summary>The name shown to players: window title, taskbar, dialogs, wordmark. Internal names (exe, settings folder,
         /// mutex, release manifest, update zips) stay "SM2 VR" so existing installs and settings keep working.</summary>
         public const string Title = "HERO VR";

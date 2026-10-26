@@ -13,10 +13,12 @@ namespace Sm2VrLauncher
         public BackupInfo Backup;
         public Manifest Release;
         public bool RestoreSettings { get { return restore.Checked; } }
+        /// <summary>"Use previous version" was pressed: install LauncherInfo.PreviousTag from GitHub (no backup needed).</summary>
+        public bool UsePrevious;
 
         readonly ListBox list = new ListBox();
         readonly CheckBox restore = new CheckBox();
-        readonly Button ok = new Button(), cancelBtn = new Button(), fromGitHub = new Button();
+        readonly Button ok = new Button(), cancelBtn = new Button(), fromGitHub = new Button(), previous = new Button();
         readonly Label info = new Label();
         readonly string root;
         readonly Settings settings;
@@ -41,7 +43,7 @@ namespace Sm2VrLauncher
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Color.FromArgb(16, 17, 24); ForeColor = Theme.Text; Font = Theme.Ui(12.5f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(Theme.S(640), Theme.S(470));
+            ClientSize = new Size(Theme.S(640), Theme.S(522));
 
             var head = new Label { Text = "Revert to a previous version", Font = Theme.F("ui", 18, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = false, Bounds = Theme.R(24, 18, 590, 34) };
             var sub = new Label
@@ -49,29 +51,50 @@ namespace Sm2VrLauncher
                 Text = "Pick a version. The one you have now is backed up first, so you can come back to it. Then the launcher restores, builds and checks the version; if anything fails, nothing changes.",
                 ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 54, 590, 44)
             };
-            list.Bounds = Theme.R(24, 106, 592, 210);
+            // One click back to the previous release (e.g. 0.0.6 -> 0.0.5): works with no backup at all.
+            string prevNumber = PreviousNumber();
+            Style(previous, "USE PREVIOUS VERSION (" + prevNumber + ")", true); previous.Bounds = Theme.R(24, 104, 300, 38);
+            var prevNote = new Label { Text = "Downloads " + prevNumber + " from GitHub, checks its SHA-256 and installs it. You stay on it until you press Update now.", ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(334, 104, 282, 42) };
+            previous.Enabled = (settings.RepoConfigured || preview) && OfferPrevious(root);
+            previous.Click += (s, e) => { UsePrevious = true; DialogResult = preview ? DialogResult.Cancel : DialogResult.OK; };
+            list.Bounds = Theme.R(24, 158, 592, 210);
             list.BackColor = Theme.Field; list.ForeColor = Theme.Text; list.BorderStyle = BorderStyle.FixedSingle;
             list.DrawMode = DrawMode.OwnerDrawFixed; list.ItemHeight = Theme.S(30);
             list.DrawItem += DrawItem;
             list.SelectedIndexChanged += (s, e) => Selected();
             list.DoubleClick += (s, e) => { if (ok.Enabled) Accept(); };
             restore.Text = "Also restore that version's settings files (live.txt, next-launch.txt, gestures)";
-            restore.ForeColor = Theme.Silver; restore.Bounds = Theme.R(24, 326, 592, 26);
-            info.ForeColor = Theme.Sub; info.AutoSize = false; info.Bounds = Theme.R(24, 356, 592, 52);
-            Style(fromGitHub, "Download an older release from GitHub", false); fromGitHub.Bounds = Theme.R(24, 416, 300, 36);
-            Style(ok, "REVERT", true); ok.Bounds = Theme.R(392, 416, 110, 36);
-            Style(cancelBtn, "CANCEL", false); cancelBtn.Bounds = Theme.R(508, 416, 108, 36);
+            restore.ForeColor = Theme.Silver; restore.Bounds = Theme.R(24, 378, 592, 26);
+            info.ForeColor = Theme.Sub; info.AutoSize = false; info.Bounds = Theme.R(24, 408, 592, 52);
+            Style(fromGitHub, "Download an older release from GitHub", false); fromGitHub.Bounds = Theme.R(24, 468, 300, 36);
+            Style(ok, "REVERT", true); ok.Bounds = Theme.R(392, 468, 110, 36);
+            Style(cancelBtn, "CANCEL", false); cancelBtn.Bounds = Theme.R(508, 468, 108, 36);
             cancelBtn.DialogResult = DialogResult.Cancel; CancelButton = cancelBtn;
             ok.Click += (s, e) => Accept();
             fromGitHub.Click += (s, e) => LoadReleases();
             fromGitHub.Enabled = settings.RepoConfigured || preview;
-            Controls.AddRange(new Control[] { head, sub, list, restore, info, fromGitHub, ok, cancelBtn });
+            Controls.AddRange(new Control[] { head, sub, previous, prevNote, list, restore, info, fromGitHub, ok, cancelBtn });
 
             var backups = preview ? FakeBackups() : Backups.List(root);
             foreach (var b in backups) list.Items.Add(new Item { Backup = b });
             if (list.Items.Count > 0) list.SelectedIndex = 0;
             else info.Text = "No backups yet (one is made before every update and revert). " + (settings.RepoConfigured ? "Press Download an older release from GitHub." : "Set the GitHub repository in Updates to download older releases.");
             Selected();
+        }
+
+        /// <summary>"0.0.5" from LauncherInfo.PreviousTag.</summary>
+        public static string PreviousNumber()
+        {
+            var v = ModVersion.Parse(LauncherInfo.PreviousTag);
+            return v == null ? LauncherInfo.PreviousTag.TrimStart(new[] { 'v', 'V' }) : v.Number;
+        }
+
+        /// <summary>Only when the installed version is newer than the previous release (on 0.0.5 already there is nothing to go back to).</summary>
+        public static bool OfferPrevious(string root)
+        {
+            var have = ModVersion.Parse(SystemInfo.PortVersion(root));
+            var prev = ModVersion.Parse(LauncherInfo.PreviousTag);
+            return prev != null && (have == null || have > prev);
         }
 
         static List<BackupInfo> FakeBackups()

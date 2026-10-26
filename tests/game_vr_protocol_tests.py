@@ -804,7 +804,10 @@ class ProtocolTests(unittest.TestCase):
         samples = [dict(frames=10, xr_ms=[13.9, 0, .2, 0, 0, .1, .1, 0, 13.2]), dict(frames=11, xr_ms=held),
                    dict(frames=11, xr_ms=held), dict(frames=12, xr_ms=held), dict(frames=13),
                    dict(frames=14, xr_ms=[95.0, 0, .2, 0, 0, 90.0, .1, 0, 4.0])]
-        self.assertEqual(stream_stalls(samples), dict(rounds=2, seconds=.2))
+        self.assertEqual(stream_stalls(samples), dict(rounds=2, seconds=.2, outside_rounds=0, outside_seconds=0))
+        # 0.0.6: held rounds while nothing is presented (loading, the headset off at the end) are not play.
+        off = [dict(frames=20+i, presentation='none', xr_ms=held) for i in range(30)]
+        self.assertEqual(stream_stalls(samples+off), dict(rounds=2, seconds=.2, outside_rounds=30, outside_seconds=3))
 
     def test_eye_reflections_follow_the_games_setting(self):
         # The game's saved Screen Space Reflections value: 0 is Off; the eyes' buffers are made once.

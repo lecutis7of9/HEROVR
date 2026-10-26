@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
-project(Spidy VERSION 0.0.5 LANGUAGES C CXX)
+project(Spidy VERSION 0.0.6 LANGUAGES C CXX)
 # Every target on Windows: windows.h must never define min/max macros (they break std::min/std::max, MSVC C2589).
 if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 # The public version (semver, docs/VERSIONING.md): the launcher, the zip, the tag and VERSION all follow
-# this line; PORT-VERSION keeps the internal build ("Update 38.9"). Version 0.0.5 is build 38.9 (0.0.4 was 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
+# this line; PORT-VERSION keeps the internal build ("Update 39.1"). Version 0.0.6 is build 39.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
 add_compile_definitions(SPIDY_PUBLIC_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -68,8 +68,17 @@ add_custom_command(OUTPUT "${SPIDY_CALIBRATION_ART_CPP}"
 target_sources(spidy_core PRIVATE "${SPIDY_CALIBRATION_ART_CPP}")
 # Version 0.0.5 SOUND EFFECTS: the mod's own WAVs (tools/sfx/make_sfx.py), compiled in as bytes
 # (spidy::sfx_data::<name>, src/sfx.cpp).
-foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoosh baton_hit)
-  set(SPIDY_SFX_IN "${CMAKE_CURRENT_SOURCE_DIR}/assets/sfx/${SPIDY_SFX_NAME}.wav")
+# Version 0.0.6 (Update 39.0.2) REPULSOR: the blast's sound is one of three takes (make_sfx.py): a CLASSIC,
+# b HEAVY, c TIGHT. Switching is this one line; the take's _charge plays on the press, _fire at the blast.
+set(SPIDY_REPULSOR_TAKE c)
+set(SPIDY_SFX_FILE_repulsor_fire "repulsor_mcu_${SPIDY_REPULSOR_TAKE}_fire")
+set(SPIDY_SFX_FILE_repulsor_charge "repulsor_mcu_${SPIDY_REPULSOR_TAKE}_charge")
+foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoosh baton_hit repulsor_charge)
+  if(DEFINED SPIDY_SFX_FILE_${SPIDY_SFX_NAME})
+    set(SPIDY_SFX_IN "${CMAKE_CURRENT_SOURCE_DIR}/assets/sfx/${SPIDY_SFX_FILE_${SPIDY_SFX_NAME}}.wav")
+  else()
+    set(SPIDY_SFX_IN "${CMAKE_CURRENT_SOURCE_DIR}/assets/sfx/${SPIDY_SFX_NAME}.wav")
+  endif()
   set(SPIDY_SFX_CPP "${CMAKE_CURRENT_BINARY_DIR}/generated/sfx_${SPIDY_SFX_NAME}_data.cpp")
   add_custom_command(OUTPUT "${SPIDY_SFX_CPP}"
                      COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
@@ -93,6 +102,7 @@ if(WIN32)
   target_compile_definitions(spidy_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 endif()
 target_sources(spidy_tests PRIVATE src/sfx_quiet.cpp) # Version 0.0.5: SOUND EFFECTS without audio
+target_compile_definitions(spidy_tests PRIVATE SPIDY_REPULSOR_TAKE_${SPIDY_REPULSOR_TAKE}=1) # 39.0.2: the take's lengths
 target_link_libraries(spidy_tests PRIVATE spidy_core)
 if(WIN32)
   # The game target scan's class rules, tried on the test's own classes.

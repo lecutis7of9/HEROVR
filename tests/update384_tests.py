@@ -33,7 +33,7 @@ def _code(text):
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertRegex(VERSION, r'^Update 38\.[4-9]')
+        self.assertRegex(VERSION, r'^Update (38\.[4-9]|39\.\d)')
 
 
 class ReadOnly(unittest.TestCase):

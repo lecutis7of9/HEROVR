@@ -80,6 +80,52 @@ def _number(text):
         return 0.0
 
 
+# Version 0.0.6 (Update 39.1): the one RenderScale measurement there is (tools/launch-game-vr.ps1: an RTX 4080
+# at 90 Hz gave 45 new pictures a second at 100% and 33 at 125%). With frame time = fixed + per-pixel and the
+# pixels growing with the square of the scale, 1/45 s = a + b and 1/33 s = a + 1.5625 b: about 65% of a frame
+# scales with the pixels (b), 35% does not (a). Every gain derived from it is an ESTIMATE (one GPU, one scene).
+PIXEL_SHARE = (1/33 - 1/45) / 0.5625 / (1/45)
+
+
+def estimated_fps(fps, scale_from, scale_to):
+    """An ESTIMATE of the new pictures a second at RenderScale `scale_to` from `fps` at `scale_from`."""
+    if not fps or not scale_from or not scale_to:
+        return None
+    frame = lambda scale: (1 - PIXEL_SHARE) + PIXEL_SHARE * (scale / 100) ** 2
+    return round(fps * frame(scale_from) / frame(scale_to), 1)
+
+
+def performance_advice(rate, render_scale=None, timing=None):
+    """Version 0.0.6: what would raise or even out the frame rate, from the session's own numbers. Never
+    changes a setting; the gains are estimates and say so."""
+    lines = []
+    if not rate or not rate.get('headset_fps') or not rate.get('new_pairs_fps'):
+        return lines
+    hz, fps, scale = rate['headset_fps'], rate['new_pairs_fps'], render_scale or 100
+    copy = (timing or {}).get('copy_gpu') or {}
+    work = ((timing or {}).get('sharpen') or {}).get('gpu_ms_mean') or 0
+    if copy.get('count') and copy.get('mean_ms', 0) - work >= 3 and fps < hz * 0.95:
+        lines.append(f"The graphics card is the limit: the headset's copy waited {copy['mean_ms'] - work:.1f} ms "
+                     "on average behind the game's frame on the GPU (its own work is "
+                     f"{work:.2f} ms). Fewer pixels or lighter game settings raise the frame rate; the CPU is not "
+                     'what holds it.')
+    # A lower refresh where the game's rate divides it evenly: each picture then stays exactly 2 frames.
+    for lower in (90, 80, 72):
+        if lower < hz * 0.97 and lower / 2 * 0.95 <= fps < hz / 2 * 0.95:
+            lines.append(f'At {hz:.0f} Hz each of your {fps:.0f} pictures a second stays 2 or 3 headset frames '
+                         f'unevenly (judder). Set the headset (Virtual Desktop/Quest Link/SteamVR) to {lower} Hz: '
+                         f'the game already makes the {lower // 2} a second that needs, so each picture stays '
+                         'exactly 2 frames. Nothing in the game changes.')
+            break
+    if fps < hz / 2 * 0.95:
+        for to in (90, 80):
+            if to < scale:
+                est = estimated_fps(fps, scale, to)
+                lines.append(f'-RenderScale {to} (now {scale}): about {est:.0f} new pictures a second (ESTIMATE, '
+                             f'+{(est / fps - 1) * 100:.0f}%, from one RTX 4080 measurement), slightly softer.')
+    return lines
+
+
 def comfort_advice(rate, settings, render_scale=None, timing=None):
     """Console lines about the session's play frame rate and the game settings to change for comfort."""
     lines = []
@@ -95,6 +141,7 @@ def comfort_advice(rate, settings, render_scale=None, timing=None):
                 lines.append('The game kept up with less than half the headset rate, so each picture stays for 2 '
                              'or 3 headset frames unevenly (judder). Lower the settings below, -RenderScale '
                              '(e.g. 80), or the headset refresh rate (72 Hz).')
+        lines += performance_advice(rate, render_scale, timing)
     copy = (timing or {}).get('pair_to_copy')
     if copy and copy.get('count'):
         lines.append(f"From the game's eye pictures to the headset's copy of them: {copy['mean_ms']:.0f} ms on "

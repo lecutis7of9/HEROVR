@@ -11,7 +11,7 @@ on:
       tag:
         description: Release the mod files are for (its native sources must match this branch)
         required: true
-        default: v0.0.5
+        default: v0.0.6
       upload:
         description: Also upload the zip and its .sha256 to that release (--clobber)
         type: boolean

@@ -39,7 +39,7 @@ def v005_record(values=(0, 0), more=(0, 0, 0, 0), engages=0, fly=0.0, sfx=(2, 0,
 
 class V005(unittest.TestCase):
     def test_version(self):
-        self.assertIn('0.0.5', (ROOT / 'VERSION').read_text(encoding='utf-8'))
+        # 0.0.5 was build Update 38.9 (0.0.6's bump moved VERSION on; the changelog keeps it).
         self.assertIn('**Version 0.0.5 (build Update 38.9', (ROOT / 'docs/CHANGELOG.md').read_text(encoding='utf-8'))
 
     def test_new_settings_and_defaults(self):

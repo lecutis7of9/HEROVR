@@ -48,7 +48,9 @@ EXPORTS = dict(crawl_cap='SpidyCrawlCap', zip_mode='SpidyZipMode', aim_assist='S
                # Version 0.0.5
                hero_height='SpidyHeroHeight', hero_damage='SpidyHeroDamage',
                punch_sense='SpidyPunchSense', sfx_volume='SpidySfxVolume', supersonic='SpidySupersonic',
-               supersonic_speed='SpidySupersonicSpeed')
+               supersonic_speed='SpidySupersonicSpeed',
+               # Version 0.0.6
+               daredevil='SpidyDaredevil', hulk='SpidyHulk', daredevil_punch='SpidyDaredevilPunch')
 # Where each setting is read (combat38 option name in C++).
 READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist', ball_look='ballLook',
                punch_mode='punchMode', ring_anchor='ringAnchor', holo_open='holoOpen', wall_tilt='wallTilt',
@@ -63,7 +65,8 @@ READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist',
                perf_target='perfTarget', perf_floor='perfFloor', perf_status='perfStatus',  # Version 0.0.3
                iron_man='shooterType', mirror_view='mirrorView',  # Version 0.0.4
                hero_height='heroHeight', hero_damage='heroDamage',
-               punch_sense='punchSense', sfx_volume='sfxVolume', supersonic='supersonic', supersonic_speed='supersonicSpeed')  # Version 0.0.5
+               punch_sense='punchSense', sfx_volume='sfxVolume', supersonic='supersonic', supersonic_speed='supersonicSpeed',  # Version 0.0.5
+               daredevil='daredevil', hulk='hulk', daredevil_punch='daredevilPunch')  # Version 0.0.6
 
 
 def cpp_options():
@@ -97,7 +100,7 @@ class Defaults(unittest.TestCase):
         self.assertIn('Update 38 COMBAT defaults (all live, no restart)', LAUNCHER)
 
     def test_version(self):
-        self.assertIn('Update 38', VERSION)
+        self.assertRegex(VERSION, r'Update 3[89]')  # 0.0.6 is Update 39.0.2
 
 
 class Options(unittest.TestCase):

@@ -4,12 +4,22 @@
 #include "tracking.hpp"
 #include "xr_timing.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
+#include <stdexcept>
+#include <string>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
 namespace spidy {
+// Update 39.0.3: an OpenXR call that failed, with the runtime's result (so a missing headset or a lost
+// session can be told from a real fault).
+class XrError : public std::runtime_error {
+  public:
+    XrError(const std::string& what, XrResult code) : std::runtime_error(what), result(code) {}
+    XrResult result;
+};
 class XrRuntime {
   public:
     ~XrRuntime();
@@ -36,6 +46,21 @@ class XrRuntime {
     // pair. Projection layers must describe the images' actual render poses.
     bool frameStereo(const std::function<bool(const XrFrame&)>& prepare,
                      const std::function<bool(std::array<EyeTarget, 2>&)>& draw);
+    // Update 39.0.3 (the game's runtime only: the device initialize): the headset went away (Virtual Desktop
+    // left for the desktop or closed, the session or the runtime lost, an OpenXR error mid-frame). The game
+    // never drops to flat screen for it: frameStereo goes on as an idle session (prepare gets an inactive
+    // frame) and builds the session again every 2 s with the same device, queue and eye size.
+    bool lost() const {
+        return lost_;
+    }
+    // Sessions that came back after a loss: the game resets its eye-image timers when this changes.
+    unsigned recoveries() const {
+        return recoveries_;
+    }
+    // The headset came back but cannot give the eyes the game was set up with: VR needs a game restart.
+    bool restartNeeded() const {
+        return restartNeeded_;
+    }
     bool lastFrameSubmitted() const {
         return lastFrameSubmitted_;
     }
@@ -84,6 +109,14 @@ class XrRuntime {
     };
     void initialize(const std::function<Graphics(const XrGraphicsRequirementsD3D12KHR&)>& graphics,
                     bool probeOnly, bool copyDestination, unsigned eyeSize = 0, unsigned renderScale = 100);
+    bool frameOnce(const std::function<bool(const XrFrame&)>& prepare,
+                   const std::function<bool(std::array<EyeTarget, 2>&)>& draw);
+    void idle(const std::function<bool(const XrFrame&)>& prepare);
+    // Destroys the session and what belongs to it; the instance too unless keepInstance (eye sizes stay).
+    void teardown(bool keepInstance = false);
+    void lose(const char* why, bool instanceLost);
+    bool recover();
+    void drainQueue();
     void actions();
     void createActions();
     bool offered(const ControllerLayout& layout) const;
@@ -135,5 +168,12 @@ class XrRuntime {
     XrReferenceSpaceType referenceType_ = XR_REFERENCE_SPACE_TYPE_STAGE;
     ComPtr<ID3D12Device> boundDevice_;
     ComPtr<ID3D12CommandQueue> boundQueue_;
+    // Update 39.0.3: the recovery (lost()). forced_: the eye size the game was set up with, which a new
+    // session has to give again.
+    bool recoverable_{}, lost_{}, instanceLost_{}, restartNeeded_{};
+    unsigned recoveries_{}, failedTries_{};
+    unsigned eyeSize_{}, renderScale_ = 100;
+    std::array<unsigned, 2> forced_{};
+    std::chrono::steady_clock::time_point retryAt_{};
 };
 } // namespace spidy

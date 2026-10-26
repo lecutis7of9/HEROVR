@@ -88,6 +88,28 @@ inline float targetFps(uint32_t target, float headsetHz) {
             best = targetHz[t];
     return best;
 }
+// Version 0.0.6 (Update 39.1): AUTO aims at half the headset rate when the full rate is out of reach.
+// Reports rep0050 (0.0.5) and rep0022 (0.0.2) made 37 and 34.5 new pictures a second at 90 Hz, so AUTO's
+// 90 was missed on every frame and the ladder sat at its floor for nothing; the runtime shows each
+// picture for whole headset frames, so 45 (each picture exactly 2 frames) is the even rate below 90.
+// Hysteresis: half below 75% of the full rate (mean over about 1 s), full again from 95%; the fixed
+// targets (72/80/90/120) are kept as chosen. No game address is used.
+struct PaceTarget {
+    static constexpr float toHalf = .75f, toFull = .95f;
+    bool half{};
+    float pick(uint32_t target, float headsetHz, float meanFps) {
+        const float full = targetFps(target, headsetHz);
+        if (target != targetAuto || !(meanFps > 0) || !std::isfinite(meanFps)) {
+            half = false;
+            return full;
+        }
+        if (!half && meanFps < full * toHalf)
+            half = true;
+        else if (half && meanFps >= full * toFull)
+            half = false;
+        return half ? full / 2 : full;
+    }
+};
 // A zone: a 250 m cell of the city (x, z) and the activity.
 inline uint32_t zoneOf(float x, float z, uint32_t activity) {
     if (!std::isfinite(x) || !std::isfinite(z))

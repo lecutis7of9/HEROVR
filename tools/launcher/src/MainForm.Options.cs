@@ -89,6 +89,23 @@ namespace Sm2VrLauncher
                 optRows[o.Param] = row;
                 if (col == 0) col = 1; else { col = 0; y += 76; }
             }
+            // Version 0.0.6: PRIVACY. Not launch options: they only change what the launcher offers to send.
+            if (col == 1) { col = 0; y += 76; }
+            var ph = new TextLabel(GlassPanel.Spaced("Privacy"), Theme.UiBold(11), Theme.Red) { Wrap = false };
+            ph.Bounds = Theme.R(0, y + 8, 1040, 20);
+            area.Controls.Add(ph);
+            y += 34;
+            privacyStats = new ToggleRow("Share play stats", "Keeps a summary of each session to send from Reports; off deletes it.", settings.GetBool(Telemetry.KeyStats, false));
+            privacyStats.Bounds = Theme.R(0, y, colW, 70);
+            privacyStats.Changed += (a, e) => { settings.SetBool(Telemetry.KeyStats, privacyStats.Checked); settings.SetBool(Telemetry.KeyAsked, true); settings.Save(); if (!privacyStats.Checked) Telemetry.ClearStats(); RefreshStatsButton(); };
+            area.Controls.Add(privacyStats);
+            privacyCrash = new ToggleRow("Offer crash reports", "After a crash, asks once at the next start whether to send it.", settings.GetBool(Telemetry.KeyCrash, true));
+            privacyCrash.Bounds = Theme.R(colW + gap, y, colW, 70);
+            privacyCrash.Changed += (a, e) => { settings.SetBool(Telemetry.KeyCrash, privacyCrash.Checked); settings.Save(); if (!privacyCrash.Checked) Telemetry.Clear(); };
+            area.Controls.Add(privacyCrash);
+            tip.SetToolTip(privacyStats, "Frame rate, stutters, heroes and features used, versions, GPU and headset. Never names, folders or IP. Takes effect at once.");
+            tip.SetToolTip(privacyCrash, "Nothing is sent without your click: it opens a filled-in GitHub issue you submit. Takes effect at once.");
+            y += 76; col = 0;
             // Room at the end so the last row clears the edge.
             var spacer = new TextLabel("", Theme.Ui(10), Theme.Dim);
             spacer.Bounds = Theme.R(0, y + (col == 1 ? 76 : 0), 10, 10);

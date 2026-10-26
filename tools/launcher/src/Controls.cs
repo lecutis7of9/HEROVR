@@ -447,6 +447,21 @@ namespace Sm2VrLauncher
                     case "zip":
                         g.DrawRectangle(pen, x + w * .15f, y, w * .7f, h);
                         for (int i = 0; i < 3; i++) g.DrawLine(pen, x + w * .45f, y + h * (.2f + .2f * i), x + w * .55f, y + h * (.2f + .2f * i)); break;
+                    case "bug":   // Version 0.0.6: Report a bug
+                        g.DrawEllipse(pen, x + w * .28f, y + h * .25f, w * .44f, h * .7f);
+                        g.DrawLine(pen, x + w * .5f, y + h * .25f, x + w * .5f, y + h * .95f);
+                        for (int i = 0; i < 3; i++)
+                        {
+                            float ly = y + h * (.42f + .2f * i);
+                            g.DrawLine(pen, x + w * .28f, ly, x + w * .05f, ly - h * .08f);
+                            g.DrawLine(pen, x + w * .72f, ly, x + w * .95f, ly - h * .08f);
+                        }
+                        break;
+                    case "chart":   // Version 0.0.6: Send play stats
+                        g.DrawLine(pen, x, y + h, x + w, y + h);
+                        g.DrawLine(pen, x + w * .2f, y + h * .95f, x + w * .2f, y + h * .55f);
+                        g.DrawLine(pen, x + w * .5f, y + h * .95f, x + w * .5f, y + h * .2f);
+                        g.DrawLine(pen, x + w * .8f, y + h * .95f, x + w * .8f, y + h * .45f); break;
                     case "monitor":
                         g.DrawRectangle(pen, x, y + h * .05f, w, h * .65f);
                         g.DrawLine(pen, x + w * .3f, y + h, x + w * .7f, y + h); break;

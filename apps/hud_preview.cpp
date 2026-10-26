@@ -42,13 +42,16 @@
 //   v002     STATUS (VERSION 0.0.2 top right), COMBAT's BALL LOOK OURS with AIM STRENGTH STRONG pointed
 //            at (its subtext), and EXTRAS' TRAIN MOVE in TRAINING pointed at
 //
-//   spidy_hud_preview <path.bmp> [pages|scroll|themes|webstyle|music|raimi|subtext|remap|v002]
+//   spidy_hud_preview <path.bmp> [pages|scroll|themes|webstyle|music|raimi|subtext|remap|v002|heroes|holo]
+//   spidy_hud_preview <path.bmp> v0062 <page>   (Update 39.0.2: a page, each section opened, the end)
 #include "spidy/soft_shapes.hpp"
 #include "spidy/music_player.hpp"
 #include "spidy/wrist_hud.hpp"
+#include "spidy/combat38.hpp"
 #include "spidy/gesture_session.hpp"
 #include "preview_image.hpp"
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -124,6 +127,13 @@ music::Spectrum madeUpSong(float seconds) {
     }
     return out;
 }
+// Update 39.0.2: a control's page with its section opened (a closed section's rows are not laid out).
+int homeOf(wrist_hud::Control c) {
+    const auto place = wrist_hud::placeOf(c);
+    if (place.section >= 0)
+        wrist_hud::setOpenSection(place.page, place.section);
+    return place.page < 0 ? 0 : place.page;
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -134,13 +144,20 @@ int main(int argc, char** argv) {
     const std::string sheet = argc > 2 ? argv[2] : "";
     if (!sheet.empty() && sheet != "pages" && sheet != "scroll" && sheet != "themes" && sheet != "webstyle" &&
         sheet != "music" && sheet != "raimi" && sheet != "subtext" &&
-        sheet != "remap" && sheet != "v002") {
+        sheet != "remap" && sheet != "v002" && sheet != "heroes" && sheet != "holo" && sheet != "v0062") {
         std::fprintf(stderr, "unknown sheet %s (pages, scroll, themes, webstyle, music or raimi)\n", sheet.c_str());
         return 2;
     }
     constexpr float pixelAngle = .00065f;
     constexpr int size = 1100, height = 1400;
-    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : 4; // subtext: 4
+    // Update 39.0.2: "holo" - the eight pages at their defaults; "v0062 <page>" - one page at its default,
+    // then each of its sections opened (scrolled to the header), then scrolled to the end.
+    const int sheetPage = sheet == "v0062" && argc > 3 ? std::atoi(argv[3]) : 0;
+    if (sheet == "v0062" && (sheetPage < 0 || sheetPage >= wrist_hud::pages)) {
+        std::fprintf(stderr, "v0062 needs a page 0..%d\n", wrist_hud::pages - 1);
+        return 2;
+    }
+    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
     Image image(size * cells, height); // Update 15: pages 2 and 3 in cells 2 and 3
     const Vec3 eye{0, 1.62f, 0};
     for (int cell = 0; cell < cells; ++cell) {
@@ -156,13 +173,34 @@ int main(int argc, char** argv) {
         wrist_hud::View view;
         view.emitter = wristAt + Vec3{0, .03f, 0};
         view.seconds = .3f;
+        wrist_hud::resetSections();
         if (sheet == "pages") {
             view.page = cell;
             madeUpRun(view);
+        } else if (sheet == "holo") {
+            view.page = cell;
+            view.flyMode = 1;
+            madeUpRun(view);
+        } else if (sheet == "v0062") {
+            view.page = sheetPage;
+            view.flyMode = 1;
+            madeUpRun(view);
+            const int count = wrist_hud::sectionCount(sheetPage);
+            if (cell >= 1 && cell <= count) {
+                wrist_hud::setOpenSection(sheetPage, cell - 1);
+                const auto header = wrist_hud::sectionControl(cell - 1);
+                const float at = wrist_hud::controlSpot(sheetPage, header).v;
+                view.scroll = wrist_hud::clampScroll(sheetPage, wrist_hud::viewTop - .02f - at);
+                view.hover = header;
+                const auto spot = wrist_hud::controlSpot(sheetPage, header, view.scroll);
+                pointAt(view, eye, spot.u, spot.v);
+            } else if (cell == count + 1) {
+                view.scroll = wrist_hud::maxScroll(sheetPage, 1);
+            }
         } else if (sheet == "scroll") {
             madeUpRun(view);
             const float k[4] = {1, 1.5f, 1.5f, 1.5f};
-            const int page[4] = {2, 1, 1, 3};
+            const int page[4] = {wrist_hud::vrPage, wrist_hud::vrPage, wrist_hud::vrPage, wrist_hud::graphicsPage};
             view.page = page[cell];
             view.textScale = k[cell];
             view.settings.hudText = k[cell] * 100;
@@ -170,18 +208,18 @@ int main(int argc, char** argv) {
             view.scroll = cell == 1 ? 0 : cell == 2 ? most : most / 2;
             if (cell == 0) // pointing at the scrollbar's thumb: it lights up
                 pointAt(view, eye, (wrist_hud::scrollbarU0 + wrist_hud::scrollbarU1) / 2,
-                        (wrist_hud::scrollThumb(2, view.scroll).v0 + wrist_hud::scrollThumb(2, view.scroll).v1) / 2);
+                        (wrist_hud::scrollThumb(view.page, view.scroll).v0 + wrist_hud::scrollThumb(view.page, view.scroll).v1) / 2);
         } else if (sheet == "webstyle") {
             madeUpRun(view);
             const int style[4] = {0, 1, 3, 4}, shade[4] = {0, 3, 2, 5};
-            view.page = 1;
+            view.page = homeOf(wrist_hud::Control::webStyle);
             view.settings.webStyle = static_cast<float>(style[cell]);
             view.settings.webColors[style[cell]] = static_cast<float>(shade[cell]);
-            const float at = wrist_hud::controlSpot(1, wrist_hud::Control::webStyle).v;
-            view.scroll = wrist_hud::clampScroll(1, wrist_hud::viewTop - .03f - at);
+            const float at = wrist_hud::controlSpot(view.page, wrist_hud::Control::webStyle).v;
+            view.scroll = wrist_hud::clampScroll(view.page, wrist_hud::viewTop - .03f - at);
             if (cell == 2) {
                 view.hover = wrist_hud::Control::webColor;
-                const auto spot = wrist_hud::controlSpot(1, view.hover, view.scroll);
+                const auto spot = wrist_hud::controlSpot(view.page, view.hover, view.scroll);
                 pointAt(view, eye, spot.u + .02f, spot.v);
             }
         } else if (sheet == "music") {
@@ -230,8 +268,8 @@ int main(int argc, char** argv) {
             madeUpRun(view);
             view.theme = wrist_hud::raimiTheme;
             view.settings.hudTheme = static_cast<float>(wrist_hud::raimiTheme);
-            view.page = cell == 0 ? 2 : 3;
             view.hover = cell == 0 ? wrist_hud::Control::farShadows : wrist_hud::Control::hudTheme;
+            view.page = homeOf(view.hover);
             const auto spot = wrist_hud::controlSpot(view.page, view.hover);
             pointAt(view, eye, spot.u, spot.v);
         } else if (sheet == "subtext") {
@@ -286,7 +324,7 @@ int main(int argc, char** argv) {
             r.conflictName = cell == 4 ? "WINGS BOOST" : "";
             r.customMask = cell == 3 ? 1u : 0u;
             view.remap = &r;
-            view.page = wrist_hud::extrasPage;
+            view.page = homeOf(wrist_hud::Control::gestureRecord);
             view.hover = cell == 4 ? wrist_hud::Control::gestureKeep : wrist_hud::Control::gestureRecord;
             const float at = wrist_hud::controlSpot(view.page, wrist_hud::Control::gestureRecord).v;
             view.scroll = wrist_hud::clampScroll(view.page, wrist_hud::viewTop - .03f - at);
@@ -296,15 +334,29 @@ int main(int argc, char** argv) {
             view.gestureMoves = gestures385::modeTraining;
             view.trainMove = "ABILITY PUNCH";
             if (cell > 0) {
-                view.page = cell == 1 ? 1 : wrist_hud::extrasPage;
                 view.hover = cell == 1 ? wrist_hud::Control::combatAimStrength : wrist_hud::Control::trainMove;
+                view.page = homeOf(view.hover);
                 const float at = wrist_hud::controlSpot(view.page, view.hover).v;
                 view.scroll = wrist_hud::clampScroll(view.page, wrist_hud::viewTop - .10f - at);
                 const auto spot = wrist_hud::controlSpot(view.page, view.hover, view.scroll);
                 pointAt(view, eye, spot.u, spot.v);
             }
+        } else if (sheet == "heroes") {
+            // Update 39.0.2 (5 cells): POWERS with FLYING, then each hero profile opened - IRON MAN is the
+            // hero being played (its profile ACTIVE), the pointer on the profile's header.
+            view.page = wrist_hud::powersPage;
+            view.combat38[combat38::shooterType] = 1;
+            view.flyMode = 1;
+            madeUpRun(view);
+            wrist_hud::setOpenSection(view.page, cell);
+            const auto header = wrist_hud::sectionControl(cell);
+            const float at = wrist_hud::controlSpot(view.page, header).v;
+            view.scroll = wrist_hud::clampScroll(view.page, wrist_hud::viewTop - .02f - at);
+            view.hover = header;
+            const auto spot = wrist_hud::controlSpot(view.page, header, view.scroll);
+            pointAt(view, eye, spot.u, spot.v);
         } else if (sheet == "themes") {
-            view.page = 1;
+            view.page = wrist_hud::vrPage;
             view.theme = cell;
             view.settings.hudTheme = static_cast<float>(cell);
             madeUpRun(view);
@@ -317,7 +369,7 @@ int main(int argc, char** argv) {
             if (cell >= 2) {
                 // The other hand's tip points at the panel: page 2 hovering the web thickness slider,
                 // page 3 dragging the building reach with a next-launch supersample chosen (restart notice).
-                view.page = cell - 1;
+                view.page = homeOf(cell == 2 ? wrist_hud::Control::thickness : wrist_hud::Control::reach);
                 view.settings.widthCm = 2.1f;
                 view.settings.speed = 240;
                 view.settings.aa = 1;
@@ -330,7 +382,7 @@ int main(int argc, char** argv) {
                 madeUpRun(view);
                 view.hover = cell == 2 ? wrist_hud::Control::thickness : wrist_hud::Control::reach;
                 view.held = cell == 2 ? wrist_hud::Control::none : wrist_hud::Control::reach;
-                const auto spot = wrist_hud::controlSpot(cell - 1, view.hover);
+                const auto spot = wrist_hud::controlSpot(view.page, view.hover);
                 pointAt(view, eye, spot.u + (cell == 2 ? .010f : .025f), spot.v);
             }
         }

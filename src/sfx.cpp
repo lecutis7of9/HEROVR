@@ -14,6 +14,7 @@ SPIDY_SFX(chest_beam)
 SPIDY_SFX(beam_ready)
 SPIDY_SFX(baton_whoosh)
 SPIDY_SFX(baton_hit)
+SPIDY_SFX(repulsor_charge) // Version 0.0.6 (Update 39.0.2) REPULSOR: the take's charge whine
 #undef SPIDY_SFX
 } // namespace spidy::sfx_data
 
@@ -64,7 +65,8 @@ const Pcm& sound(Id id) {
         parseWav(sfx_data::chest_beam, sfx_data::chest_beamSize),
         parseWav(sfx_data::beam_ready, sfx_data::beam_readySize),
         parseWav(sfx_data::baton_whoosh, sfx_data::baton_whooshSize),
-        parseWav(sfx_data::baton_hit, sfx_data::baton_hitSize)};
+        parseWav(sfx_data::baton_hit, sfx_data::baton_hitSize),
+        parseWav(sfx_data::repulsor_charge, sfx_data::repulsor_chargeSize)};
     static const Pcm none{};
     return id < sounds ? table[id] : none;
 }

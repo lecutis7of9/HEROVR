@@ -24,8 +24,8 @@ RUN = (ROOT / 'tools/run_game_vr.py').read_text(encoding='utf-8')
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.5')
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 38.9')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.6')
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.1')
 
 
 class Settings(unittest.TestCase):
@@ -132,7 +132,7 @@ class OursBall(unittest.TestCase):
         self.assertIn('out.ballOurs[i] = true', block)
 
     def test_fired_from_the_wrist_and_guarded(self):
-        self.assertIn('webShooter(', XR[XR.index('fightOut.ballOurs[i]') - 2000:XR.index('fightOut.ballOurs[i]') + 2000])
+        self.assertIn('webShooter(', XR[XR.index('fightOut.ballOurs[i]') - 6000:XR.index('fightOut.ballOurs[i]') + 2000])
         self.assertIn('Version 0.0.2 OURS BALL', XR)
 
     def test_strengths(self):

@@ -167,6 +167,7 @@ namespace Sm2VrLauncher
             try
             {
                 Manifest.OverrideUrl = settings.Get("UpdateManifestUrl", null);
+                if (Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_USE_PREVIOUS") == "1" && RevertDialog.OfferPrevious(root)) { UsePreviousVersion(false); return; }   // automated tests only
                 if (!settings.GetBool("CheckOnStart", false) || !CanCheck) { FirstRunModFiles(); return; }
                 CheckForUpdate(true, m =>
                 {
@@ -413,6 +414,7 @@ namespace Sm2VrLauncher
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
                 bool rs = d.RestoreSettings;
+                if (d.UsePrevious) { UsePreviousVersion(rs); return; }
                 if (d.Backup != null)
                 {
                     var b = d.Backup;
@@ -435,6 +437,47 @@ namespace Sm2VrLauncher
                     });
                 }
             }
+        }
+
+        /// <summary>REVERT > USE PREVIOUS VERSION: installs LauncherInfo.PreviousTag (0.0.5) straight from its GitHub release,
+        /// with no backup needed: its version.json (releases/download/&lt;tag&gt;/version.json, no API limit), its full
+        /// package ("source") downloaded and SHA-256 checked, installed like any update (this version backed up first and
+        /// put back if anything fails), then that version's ready-made mod files (also SHA-256 checked). The newer
+        /// release is then skipped (SkipUpdate), so the older launcher does not offer it again at once; Updates >
+        /// Update now installs it any time.</summary>
+        void UsePreviousVersion(bool restoreSettings)
+        {
+            string prev = RevertDialog.PreviousNumber();
+            if (!settings.RepoConfigured) { MessageBox.Show(this, "Set the GitHub repository in Updates first.", LauncherInfo.Title); return; }
+            string have = SystemInfo.PortVersion(root) ?? "this version";
+            string test = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_TEST_UPDATE_ANSWER");   // automated tests only
+            if (test != "yes" && MessageBox.Show(this, "Go back to Version " + prev + "?\n\nThe launcher downloads " + prev + " from GitHub, checks its SHA-256 and installs it, " +
+                "with its ready-made mod files. " + have + " is backed up first, so Revert can bring it back too, and it is put back if anything fails. Your settings are kept." +
+                "\n\nYou then stay on " + prev + ": the update is not offered again until you press Updates > Update now.",
+                LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+            string url = "https://github.com/" + settings.UpdateRepo.Trim().Trim(new[] { '/' }) + "/releases/download/" + LauncherInfo.PreviousTag + "/version.json";
+            string skip = settings.Get("PreviousManifestUrl", "").Trim();
+            if (skip.Length > 0 && Manifest.SafeUrl(skip)) url = skip;   // tests: a local server
+            string newer = (latest != null ? UpdateKey(latest) : null) ?? ((ModVersion.Parse(SystemInfo.PortVersion(root)) != null ? ModVersion.Parse(SystemInfo.PortVersion(root)).Number : "") + "#" + LauncherInfo.Build);
+            var ask = AskUnverified();
+            RunInstall("Going back to Version " + prev, inst =>
+            {
+                inst.Log("Reading " + url);
+                var m = Manifest.Parse(Manifest.Fetch(url));
+                m.ManifestUrl = url;
+                var file = m.File("source");
+                if (file == null) throw new InvalidDataException("The " + prev + " release lists no full package (\"source\") in its version.json.");
+                if (string.IsNullOrEmpty(file.Sha256)) throw new InvalidDataException("The " + prev + " release gives no SHA-256 for " + file.Name + ", so it is not installed.");
+                string zip = DownloadVerified(file, inst, ask);
+                inst.Release = m;   // its mod files: the "prebuilt" entry of the same version.json
+                var r = inst.InstallFull(zip, restoreSettings, "before going back to " + prev);
+                if (r.Ok)
+                {
+                    settings.Set("SkipUpdate", newer); settings.Save();
+                    inst.Log("Staying on " + prev + ": the newer version is skipped (" + newer + "). Updates > Update now installs it again.");
+                }
+                return r;
+            });
         }
 
         void RunInstall(string title, Func<Installer, InstallResult> work)

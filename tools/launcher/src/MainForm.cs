@@ -52,6 +52,8 @@ namespace Sm2VrLauncher
         AccentButton btnPlay, btnFlat, btnStop, btnChangeOptions;
         StatusRow rowGame, rowGameVer, rowVr, rowBuild;
         LogBox sessionLog;
+        AccentButton btnSendStats;
+        ToggleRow privacyStats, privacyCrash;
 
         public MainForm()
         {
@@ -347,13 +349,43 @@ namespace Sm2VrLauncher
             var card = Add(pages[SheetReports], new GlassPanel("Reports & session log"), 0, 0, 720, 346);
             sessionLog = Add(card, new LogBox(), 20, 50, 680, 226);
             var copy = Add(card, new AccentButton("Copy log", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 628, 18, 72, 22);
-            btnReportsTop = Add(card, new AccentButton("Collect reports", ButtonKind.Secondary) { Glyph = "zip" }, 20, 290, 172, 38);
-            var rep = Add(card, new AccentButton("Open reports folder", ButtonKind.Secondary) { Glyph = "folder" }, 202, 290, 196, 38);
-            Add(card, new TextLabel("Collect reports runs tools\\collect-reports.ps1: it makes reports\\send-me.zip and shows it in Explorer.", Theme.Ui(11.5f), Theme.Sub), 412, 288, 290, 44);
+            btnReportsTop = Add(card, new AccentButton("Collect reports", ButtonKind.Secondary) { Glyph = "zip" }, 20, 290, 160, 38);
+            var rep = Add(card, new AccentButton("Reports folder", ButtonKind.Secondary) { Glyph = "folder" }, 188, 290, 150, 38);
+            // Version 0.0.6: Report a bug and Send play stats open a filled-in GitHub issue; the player submits it.
+            var bug = Add(card, new AccentButton("Report a bug", ButtonKind.Secondary) { Glyph = "bug" }, 346, 290, 150, 38);
+            btnSendStats = Add(card, new AccentButton("Send play stats", ButtonKind.Secondary) { Glyph = "chart" }, 504, 290, 196, 38);
+            bug.Click += (s, e) => { using (var d = new BugDialog(root)) if (d.ShowDialog(this) == DialogResult.OK) sessionLog.Line("Bug report opened on GitHub: press Submit there to send it. Thank you!", Theme.Good); };
+            btnSendStats.Click += (s, e) => SendStats();
+            tip.SetToolTip(bug, "Opens a filled-in bug report on GitHub; you read it and press Submit (no personal data)");
+            RefreshStatsButton();
             copy.Click += (s, e) => { try { Clipboard.SetText(sessionLog.AllText.Length > 0 ? sessionLog.AllText : " "); } catch { } };
             rep.Click += (s, e) => SystemInfo.OpenFolder(Path.Combine(root, "reports"), null);
             btnReportsTop.Click += (s, e) => CollectReports();
             tip.SetToolTip(btnReportsTop, "tools\\collect-reports.ps1: makes reports\\send-me.zip and shows it in Explorer");
+        }
+
+        void RefreshStatsButton()
+        {
+            if (btnSendStats == null) return;
+            int n = Telemetry.PendingStats().Count;
+            bool on = settings.GetBool(Telemetry.KeyStats, false);
+            btnSendStats.Text = n > 0 ? "Send play stats (" + n + ")" : "Send play stats";
+            btnSendStats.Enabled = n > 0;
+            tip.SetToolTip(btnSendStats, n > 0 ? "Opens your last " + n + " session summaries on GitHub to submit (no personal data)"
+                : on ? "Summaries appear here after each VR session" : "Play stats are off (Options > Privacy)");
+        }
+
+        void SendStats()
+        {
+            if (Telemetry.PendingStats().Count == 0) return;
+            string body = Telemetry.StatsBody();
+            var r = MessageBox.Show(this, "This opens a GitHub issue with these play stats for you to submit:\n\n" + (body.Length > 1600 ? body.Substring(0, 1600) + "..." : body) +
+                "\n\nNo names, PC name, folders or IP address are included.", LauncherInfo.Title + " - Send play stats", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+            if (r != DialogResult.OK) return;
+            Telemetry.Open("[stats] Play stats (" + Telemetry.PendingStats().Count + " sessions, launcher " + LauncherInfo.Version + ")", body);
+            Telemetry.ClearStats();
+            RefreshStatsButton();
+            sessionLog.Line("Play stats opened on GitHub: press Submit there to send them. Thank you!", Theme.Good);
         }
 
         void SetState(string title, Color color, string sub)
@@ -395,6 +427,36 @@ namespace Sm2VrLauncher
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (r == DialogResult.Yes) RunInstall("Finishing the rollback", inst => inst.FinishRollback(pending));
             }
+            else
+            {
+                // Version 0.0.6: the opt-in reports, after the window has painted (a crash from last time is asked
+                // about once; the play stats question once ever). Never stops the launcher.
+                try { BeginInvoke(new Action(StartupReports)); } catch { }
+            }
+        }
+
+        void StartupReports()
+        {
+            Telemetry.WarmGpu();
+            try
+            {
+                var crash = Telemetry.PendingCrash(root, settings);
+                if (crash != null && !(vr != null && vr.Running))
+                {
+                    using (var d = new CrashDialog(crash, root))
+                    {
+                        var r = d.ShowDialog(this);
+                        if (d.DontAskAgain) { settings.SetBool(Telemetry.KeyCrash, false); settings.Save(); if (privacyCrash != null) privacyCrash.Checked = false; }
+                        if (r == DialogResult.OK) sessionLog.Line("Crash report opened on GitHub: press Submit there to send it. Thank you!", Theme.Good);
+                    }
+                    Telemetry.Clear();
+                }
+                bool asked = settings.GetBool(Telemetry.KeyAsked, false);
+                StatsQuestion.AskOnce(this, settings);
+                if (!asked && privacyStats != null) privacyStats.Checked = settings.GetBool(Telemetry.KeyStats, false);
+                RefreshStatsButton();
+            }
+            catch (Exception ex) { Program.LogError(ex); }
         }
 
         void RefreshAll()
@@ -588,6 +650,13 @@ namespace Sm2VrLauncher
             vr.Output += (line, err) => sessionLog.Line(line, err && !line.StartsWith("WARNING") ? Theme.Bad : LogBox.ColorFor(line));
             var lines = new List<string>();
             vr.Output += (line, err) => { lock (lines) { lines.Add(line); if (lines.Count > 60) lines.RemoveAt(0); } };
+            vr.Exited += code =>
+            {
+                // Version 0.0.6: crash check and (opt-in) play stats, off the UI thread (it reads the session report).
+                string r0 = root;
+                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                    Telemetry.SessionEnded(r0, code, settings, line => Ui(() => { sessionLog.Line(line, Theme.Info); RefreshStatsButton(); })));
+            };
             vr.Exited += code => Ui(() =>
             {
                 job = Job.None;
@@ -616,7 +685,8 @@ namespace Sm2VrLauncher
             job = Job.Vr;
             SetState("VR RUNNING", Theme.Good, "Starting the game and VR. Stop VR ends it cleanly; the game keeps running.");
             UpdatePlayState();
-            if (!vr.Start(root, Path.Combine(root, "tools", "launch-game-vr.ps1"), args)) { job = Job.None; UpdatePlayState(); }
+            Telemetry.SessionStarted();
+            if (!vr.Start(root, Path.Combine(root, "tools", "launch-game-vr.ps1"), args)) { Telemetry.SessionAborted(); job = Job.None; UpdatePlayState(); }
         }
 
         // run_game_vr.py CLOSE_GAME_EXIT (tools/vr_launcher.py): the running game has to close before VR can start.

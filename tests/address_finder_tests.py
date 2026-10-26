@@ -276,14 +276,14 @@ class VersionShownAndFullWindow(unittest.TestCase):
 
     def test_port_version_file(self):
         self.assertEqual(af.port_version(), self.read('PORT-VERSION').splitlines()[0].strip())
-        self.assertEqual(af.port_version(), 'Update 38.9')
+        self.assertEqual(af.port_version(), 'Update 39.1')
 
     def test_launcher_prints_version_first_in_green(self):
         s = self.read('tools/launch-game-vr.ps1')
-        line = 'Write-Host "SM2 VR Version $publicVersion (build $portVersion)" -ForegroundColor Green'  # Version 0.0.1
+        line = 'Write-Host "SM2 VR Version $publicVersion (build $portVersion) - Made by Agent Mulder" -ForegroundColor Green'  # Version 0.0.1, 0.0.6 credit
         self.assertIn(line, s)
         self.assertLess(s.index(line), s.index("foreach($name in @('spidy_headset_probe.exe'"))
-        self.assertIn('Write-Host "SM2 VR Version $publicVersion (build $portVersion)" -ForegroundColor Green', self.read('tools/build.ps1'))
+        self.assertIn('Write-Host "SM2 VR Version $publicVersion (build $portVersion) - Made by Agent Mulder" -ForegroundColor Green', self.read('tools/build.ps1'))
 
     def test_session_console_names_version(self):
         s = self.read('tools/run_game_vr.py')

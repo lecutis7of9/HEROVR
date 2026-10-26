@@ -23,6 +23,7 @@
 #include "spidy/auto_perf.hpp"
 #include "spidy/rope_grab.hpp"
 #include "spidy/repulsor.hpp"
+#include "spidy/repulsor_mcu.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/web_cocoon.hpp"
 #include "spidy/wall_stick.hpp"
@@ -714,6 +715,25 @@ template <typename F> bool onSmallStack(size_t stackBytes, F body) {
     pthread_join(t, nullptr);
 #endif
     return box.done;
+}
+// Update 39.0.2: the hologram's sections. A control's page, its section opened (a closed section's
+// rows are not laid out); and whether a control is on a page with any of its sections open.
+int openAt(spidy::wrist_hud::Control c) {
+    const auto place = spidy::wrist_hud::placeOf(c);
+    if (place.section >= 0)
+        spidy::wrist_hud::setOpenSection(place.page, place.section);
+    return place.page;
+}
+bool onPageAny(int page, spidy::wrist_hud::Control c) {
+    using namespace spidy::wrist_hud;
+    const int was = openSection(page);
+    bool found = false;
+    for (int s = -1; s < sectionCount(page) && !found; ++s) {
+        setOpenSection(page, s);
+        found = controlSpot(page, c).found;
+    }
+    setOpenSection(page, was);
+    return found;
 }
 int main() {
     int total = 0, failed = 0;
@@ -1536,10 +1556,10 @@ int main() {
         check(s.windows() >= 1 && std::abs(s.high() - 30) < 2.5f && std::abs(s.low() - 30) < 2.5f, "RESET kept the old");
         s.frame(t - 50, true); // the clock back: nothing breaks
         check(std::isfinite(s.average()), "the clock going back broke it");
-        // Its row on the VR SETTINGS page: RESET answers there and only there, not a setting.
-        check(controlSpot(1, Control::fpsReset).found, "no RESET on page 1");
+        // Its row on the GRAPHICS page (Update 39.0.2): RESET answers there and only there, not a setting.
+        check(controlSpot(graphicsPage, Control::fpsReset).found, "no RESET on GRAPHICS");
         for (int page = 0; page < pages; ++page)
-            check(page == 1 || !controlSpot(page, Control::fpsReset).found, "RESET on another page");
+            check(page == graphicsPage || !controlSpot(page, Control::fpsReset).found, "RESET on another page");
         check(std::string(helpText(Control::fpsReset)).size() <= 80, "the RESET sentence is too long");
         Applier a;
         a.start(Settings{});
@@ -1548,7 +1568,7 @@ int main() {
         // Pressed: Result::fpsReset, nothing changed.
         Menu m;
         Settings set;
-        m.setPage(1);
+        m.setPage(graphicsPage);
         auto step = [&](float u, float v, float trigger) {
             Menu::Input in;
             in.active = true;
@@ -1558,7 +1578,7 @@ int main() {
             in.trigger = trigger;
             return m.update(in, set);
         };
-        const Spot spot = controlSpot(1, Control::fpsReset);
+        const Spot spot = controlSpot(graphicsPage, Control::fpsReset);
         step(spot.u, spot.v, 0);
         step(spot.u, spot.v, .3f);
         const auto r = step(spot.u, spot.v, .8f);
@@ -1576,7 +1596,7 @@ int main() {
         check(defaultEyeUpscale == 100 && validEyeUpscale(defaultEyeUpscale), "the SM2 eyes' upscale default");
         // The hologram's EYE TEST: a live ON/OFF button on GRAPHICS, off by default.
         using namespace wrist_hud;
-        check(controlSpot(2, Control::eyeTest).found && !controlSpot(1, Control::eyeTest).found,
+        check(onPageAny(graphicsPage, Control::eyeTest) && !controlSpot(1, Control::eyeTest).found,
               "EYE TEST is not on the GRAPHICS page");
         check(gpuSide(Control::eyeTest) && !onRelease(Control::eyeTest) && !cycles(Control::eyeTest),
               "EYE TEST is not a live button");
@@ -1591,8 +1611,8 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 135, "controls count drifted"); // Version 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
-        check(controlSpot(2, Control::addressFinder).found && !controlSpot(1, Control::addressFinder).found,
+        check(controls == 149, "controls count drifted"); // Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
         check(std::string(helpText(Control::addressFinder)).size() <= 80, "ADDRESS FINDER help is past two lines");
@@ -1603,7 +1623,7 @@ int main() {
         check(pressOnly.due(0, Control::none) == 0, "ADDRESS FINDER was due as a setting");
         // Update 28: EYE LOD, a live press past the mask on GRAPHICS, default OFF, never kept.
         check(static_cast<int>(Control::eyeLod) >= maskedControls, "EYE LOD must be a press");
-        check(controlSpot(2, Control::eyeLod).found && !controlSpot(1, Control::eyeLod).found,
+        check(onPageAny(graphicsPage, Control::eyeLod) && !controlSpot(1, Control::eyeLod).found,
               "EYE LOD is not on the GRAPHICS page");
         check(!gpuSide(Control::eyeLod), "EYE LOD must not be gpuSide");
         check(std::string(helpText(Control::eyeLod)) == eyeLodHelp, "EYE LOD help drifted");
@@ -1657,7 +1677,7 @@ int main() {
         for (uint32_t aa = 0; aa < 9; ++aa)
             check(et::aaMakesTargets(aa) == (aa == 1 || (aa >= 5 && aa <= 7)), "aaMakesTargets " + std::to_string(aa));
         const Control c = Control::engineTaa;
-        check(static_cast<int>(c) >= maskedControls && controlSpot(2, c).found && !controlSpot(1, c).found,
+        check(static_cast<int>(c) >= maskedControls && onPageAny(graphicsPage, c) && !controlSpot(1, c).found,
               "ENGINE TAA not a press on GRAPHICS");
         check(!gpuSide(c), "ENGINE TAA must not be gpuSide");
         const std::string h = helpText(c);
@@ -1719,7 +1739,7 @@ int main() {
         namespace sl = spidy::shared_lod;
         for (const Control c : {Control::eyeBloom, Control::sharedLod}) {
             check(static_cast<int>(c) >= maskedControls, "must be past the mask");
-            check(controlSpot(2, c).found && !controlSpot(1, c).found, "not on the GRAPHICS page");
+            check(onPageAny(graphicsPage, c) && !controlSpot(1, c).found, "not on the GRAPHICS page");
         }
         check(std::string(shortName(Control::eyeBloom)) == "EYE BLOOM" &&
                   std::string(shortName(Control::sharedLod)) == "SHARED LOD",
@@ -1785,10 +1805,10 @@ int main() {
         using namespace spidy::eye_history;
         // FAR SHADOWS: a press past the mask, near the top of GRAPHICS, default EYES.
         check(static_cast<int>(Control::farShadows) >= maskedControls, "must be past the mask");
-        const auto spot = controlSpot(2, Control::farShadows);
+        const auto spot = (resetSections(), controlSpot(graphicsPage, Control::farShadows));
         check(spot.found && !controlSpot(1, Control::farShadows).found, "FAR SHADOWS not on the GRAPHICS page");
-        check(spot.found && controlSpot(2, Control::aa).found && spot.v > controlSpot(2, Control::aa).v,
-              "FAR SHADOWS not above ANTI-ALIASING");
+        check(spot.found && controlSpot(graphicsPage, Control::aa).found && spot.v < controlSpot(graphicsPage, Control::aa).v,
+              "FAR SHADOWS not under ANTI-ALIASING in QUALITY");
         check(std::string(shortName(Control::farShadows)) == "FAR SHADOWS", "short name");
         check(fs::defaultMode == fs::eyesCache && fs::next(fs::off) == fs::eyes && fs::next(fs::eyes) == fs::eyesCache &&
                   fs::next(fs::eyesCache) == fs::off,
@@ -1856,7 +1876,7 @@ int main() {
         // EYE AA TRAIL and TAA JITTER: past the mask, on GRAPHICS, one-sentence help, never settings.
         for (const Control c : {Control::eyeTrail, Control::taaJitter}) {
             check(static_cast<int>(c) >= maskedControls, "must be past the mask");
-            check(controlSpot(2, c).found && !controlSpot(1, c).found, "not on the GRAPHICS page");
+            check(onPageAny(graphicsPage, c) && !controlSpot(1, c).found, "not on the GRAPHICS page");
             const std::string h = helpText(c);
             check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.back() == '.', "help " + h);
         }
@@ -1920,7 +1940,7 @@ int main() {
         check(!controlSpot(2, Control::shadowDistance).found, "SHADOW DISTANCE still on the GRAPHICS page");
         for (const Control c : {Control::shadowDistance, Control::eyeAa}) {
             check(static_cast<int>(c) >= maskedControls, "must be past the mask");
-            check(c == Control::shadowDistance || (controlSpot(2, c).found && !controlSpot(1, c).found),
+            check(c == Control::shadowDistance || (onPageAny(graphicsPage, c) && !controlSpot(1, c).found),
                   "not on the GRAPHICS page");
             check(!gpuSide(c), "must not be gpuSide");
             const std::string h = helpText(c);
@@ -1931,7 +1951,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 135, "controls count drifted"); // Version 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 149, "controls count drifted"); // Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -2268,34 +2288,40 @@ int main() {
                           "a control out of view answered");
                 }
             }
-        const auto on = [](int page, Control c) {
-            return controlSpot(page, c).found;
-        };
-        check(on(1, Control::recalibrate) && on(1, Control::thickness) && on(1, Control::speed) &&
-                  !on(1, Control::aa) && !on(0, Control::recalibrate),
-              "page 2 has the wrong controls");
-        check(on(2, Control::aa) && on(2, Control::history) && on(2, Control::reach) && on(2, Control::monitor) &&
-                  on(2, Control::supersample) && !on(2, Control::thickness),
-              "page 3 has the wrong controls");
-        check(controlAt(1, controlSpot(1, Control::speed).u + .07f, controlSpot(1, Control::speed).v) ==
-                  Control::speed,
-              "the speed slider's right end does not answer");
+        // Update 39.0.2: a page's rows with any of its sections open.
+        const auto on = [](int page, Control c) { return onPageAny(page, c); };
+        check(on(vrPage, Control::recalibrate) && on(vrPage, Control::thickness) && on(vrPage, Control::speed) &&
+                  !on(vrPage, Control::aa) && !on(0, Control::recalibrate),
+              "VR SETTINGS has the wrong controls");
+        check(on(graphicsPage, Control::aa) && on(graphicsPage, Control::history) && on(graphicsPage, Control::reach) &&
+                  on(graphicsPage, Control::monitor) && on(graphicsPage, Control::supersample) &&
+                  !on(graphicsPage, Control::thickness),
+              "GRAPHICS has the wrong controls");
+        {   // Scrolled into view first, its section open.
+            const int vp = openAt(Control::speed);
+            const float sc = clampScroll(vp, viewTop - .05f - controlSpot(vp, Control::speed).v);
+            const Spot sp = controlSpot(vp, Control::speed, sc);
+            check(sp.visible && controlAt(vp, sp.u + .07f, sp.v, sc) == Control::speed,
+                  "the speed slider's right end does not answer");
+        }
         // Update 37: the greyed "mirror (coming soon)" became the live MIRROR and RECENTRE MIRROR.
-        check(on(1, Control::mirror) && on(1, Control::mirrorRecentre) && !on(2, Control::mirror),
-              "Update 37: MIRROR and RECENTRE MIRROR are not on page 2");
+        check(on(vrPage, Control::mirror) && on(vrPage, Control::mirrorRecentre) && !on(graphicsPage, Control::mirror),
+              "Update 37: MIRROR and RECENTRE MIRROR are not on VR SETTINGS");
         for (Control c : {Control::mirror, Control::mirrorRecentre}) {
             bool answered = false;
-            for (float scroll = 0; scroll < 1 && !answered; scroll += .01f) {
-                const float at = clampScroll(1, scroll);
-                const auto spot = controlSpot(1, c, at);
-                answered = spot.found && spot.visible && controlAt(1, spot.u, spot.v, at) == c;
+            const int mp = openAt(c);
+            for (float scroll = 0; scroll < 2 && !answered; scroll += .01f) {
+                const float at = clampScroll(mp, scroll);
+                const auto spot = controlSpot(mp, c, at);
+                answered = spot.found && spot.visible && controlAt(mp, spot.u, spot.v, at) == c;
             }
             check(answered, "Update 37: a mirror control does not answer");
         }
-        for (const Area& a : pageAreas(1))
+        for (const Area& a : pageAreas(vrPage))
             check(std::string(a.what) != "the mirror", "Update 37: the greyed mirror is still drawn");
-        check(controlAt(1, .5f, 0) == Control::none && controlAt(1, std::nanf(""), 0) == Control::none &&
-                  !onPanel(1, 0, std::nanf("")),
+        resetSections();
+        check(controlAt(vrPage, .5f, 0) == Control::none && controlAt(vrPage, std::nanf(""), 0) == Control::none &&
+                  !onPanel(vrPage, 0, std::nanf("")),
               "off the panel or NaN found a control");
         near(sliderValue(Control::thickness, -1), .4f);
         near(sliderValue(Control::thickness, 1), 4);
@@ -2333,10 +2359,13 @@ int main() {
                   valueText(Control::monitor, 30) == "30 FPS" && valueText(Control::supersample, 150) == "150%" &&
                       valueText(Control::supersample, 100) == "OFF",
               "a value prints wrong");
-        check(std::string(pageName(0)) == "STATUS" && std::string(pageName(1)) == "VR SETTINGS" &&
-                  std::string(pageName(2)) == "GRAPHICS" && std::string(pageName(3)) == "HOLOGRAM" && std::string(pageName(4)) == "MUSIC" &&
-                  pages == 8 && musicPage == 4 && controlsPage == 5 && colorPage == 6 && extrasPage == 7 &&
-                  std::string(pageName(colorPage)) == "COLOR" && std::string(pageName(extrasPage)) == "EXTRAS",
+        // Update 39.0.2: eight pages.
+        check(std::string(pageName(0)) == "STATUS" && std::string(pageName(powersPage)) == "POWERS" &&
+                  std::string(pageName(vrPage)) == "VR SETTINGS" && std::string(pageName(combatPage)) == "COMBAT" &&
+                  std::string(pageName(graphicsPage)) == "GRAPHICS" && std::string(pageName(colorPage)) == "COLOR" &&
+                  std::string(pageName(controlsPage)) == "CONTROLS" && std::string(pageName(musicPage)) == "MUSIC" &&
+                  pages == 8 && powersPage == 1 && vrPage == 2 && combatPage == 3 && graphicsPage == 4 &&
+                  colorPage == 5 && controlsPage == 6 && musicPage == 7 && std::string(pageName(8)) == "STATUS",
               "the pages are wrong");
         // Every page draws sanely, with the pointer, odd values, a note and a
         // disabled control; the restart notice shows only once the next
@@ -2345,14 +2374,14 @@ int main() {
         v.emitter = {0, 1, -.4f};
         const Vec3 eye{0, 1.6f, 0};
         size_t counts[2]{};
-        for (int page = 0; page < 5; ++page) {
+        for (int page = 0; page < pages; ++page) {
             v.page = page;
             std::vector<Vertex> out;
             appendWristHud(out, v, eye, .001f);
             check(!out.empty() && sane(out, 0, v.emitter, 1.f), "a page is not sane");
         }
-        v.page = 2;
-        v.scroll = maxScroll(2); // Update 17: the notice is at the page's foot
+        v.page = graphicsPage;
+        v.scroll = maxScroll(graphicsPage); // Update 17: the notice is at the page's foot
         for (int differs = 0; differs < 2; ++differs) {
             v.settings.supersample = differs ? 150.f : 100.f;
             v.supersampleNow = 100;
@@ -2476,8 +2505,11 @@ int main() {
             in.disabled = disabled;
             return m.update(in, s);
         };
-        const Spot recal = controlSpot(1, Control::recalibrate), width = controlSpot(1, Control::thickness),
-                   speed = controlSpot(1, Control::speed), aa = controlSpot(2, Control::aa);
+        resetSections();
+        const Spot recal = controlSpot(vrPage, Control::recalibrate), aa = controlSpot(graphicsPage, Control::aa);
+        const Spot webs = controlSpot(vrPage, sectionControl(1));
+        check(recal.found && aa.found && webs.found && !controlSpot(vrPage, Control::thickness).found,
+              "VR SETTINGS' rows are not where they belong");
         auto r = step(.06f, strip, 0);
         check(r.hovered && m.hover() == Control::next && !m.claims(), "no hover on the next arrow");
         r = step(.06f, strip, .3f);
@@ -2488,11 +2520,26 @@ int main() {
             check(!step(.06f, strip, .8f).pressed, "a held press repeated");
         step(.06f, strip, 0);
         check(!m.claims() && m.held() == Control::none, "a let-go trigger stayed claimed");
-        // RECALIBRATE.
+        // Update 39.0.2: on to VR SETTINGS, and its WEBS section opened with a press.
+        step(.06f, strip, .3f);
+        step(.06f, strip, .8f);
+        step(.06f, strip, 0);
+        check(m.page() == vrPage, "the next arrow did not reach VR SETTINGS");
+        // RECALIBRATE (at the top of VR SETTINGS, unscrolled).
         step(recal.u, recal.v, .3f);
         r = step(recal.u, recal.v, .8f);
         check(r.recalibrate, "RECALIBRATE did nothing");
         step(recal.u, recal.v, 0);
+        m.setScroll(vrPage, clampScroll(vrPage, viewTop - .03f - webs.v));
+        const Spot websAt = controlSpot(vrPage, sectionControl(1), m.scroll());
+        check(websAt.visible, "WEBS cannot be scrolled into view");
+        step(websAt.u, websAt.v, 0);
+        step(websAt.u, websAt.v, .3f);
+        r = step(websAt.u, websAt.v, .8f);
+        check(r.pressed && r.section && openSection(vrPage) == 1 && r.changed == 0, "WEBS did not open");
+        step(websAt.u, websAt.v, 0);
+        const Spot width = controlSpot(vrPage, Control::thickness, m.scroll(), 1);
+        check(width.found && width.visible, "WEB THICKNESS is not shown under WEBS");
         // A slider: pressed at its right end, dragged off the panel to the left.
         step(.066f, width.v, .3f);
         r = step(.066f, width.v, .8f);
@@ -2510,28 +2557,26 @@ int main() {
         check(!r.pressed && !r.recalibrate && !m.claims(), "a pull begun off the panel pressed");
         step(recal.u, recal.v, 0);
         // A disabled control: the pull is the panel's, the value stays.
-        const float before = s.speed;
-        step(.066f, speed.v, .3f, true, 1u << static_cast<unsigned>(Control::speed));
-        r = step(.066f, speed.v, .9f, true, 1u << static_cast<unsigned>(Control::speed));
-        check(m.claims() && !r.changed && s.speed == before, "a disabled slider changed");
+        // Update 39.0.1: WEB THICKNESS (in view at the top; the hero picker pushed WEB SPEED down).
+        const float before = s.widthCm;
+        step(.066f, width.v, .3f, true, 1u << static_cast<unsigned>(Control::thickness));
+        r = step(.066f, width.v, .9f, true, 1u << static_cast<unsigned>(Control::thickness));
+        check(m.claims() && !r.changed && s.widthCm == before && m.page() == vrPage, "a disabled slider changed");
         step(0, 0, 0);
-        // Flip back past the first page: the last (CONTROLS, Update 37), MUSIC, HOLOGRAM, then GRAPHICS; AA switches.
-        for (int i = 0; i < 7; ++i) { // Update 38.5: EXTRAS is the last page now, then COLOR
+        // Flip back past the first page: it wraps to the last (MUSIC), then CONTROLS ... down to GRAPHICS.
+        // Update 39.0.2: eight pages (STATUS, POWERS, VR SETTINGS, COMBAT, GRAPHICS, COLOR, CONTROLS, MUSIC).
+        for (int i = 0; i < 6; ++i) {
             step(-.06f, strip, .3f);
             step(-.06f, strip, .8f);
             step(-.06f, strip, 0);
-            if (i == 1)
-                check(m.page() == wrist_hud::extrasPage, "the previous arrow did not wrap to EXTRAS");
             if (i == 2)
-                check(m.page() == wrist_hud::colorPage, "the previous arrow did not reach COLOR");
+                check(m.page() == wrist_hud::musicPage, "the previous arrow did not wrap to MUSIC");
             if (i == 3)
                 check(m.page() == wrist_hud::controlsPage, "the previous arrow did not reach CONTROLS");
             if (i == 4)
-                check(m.page() == 4, "the previous arrow did not reach MUSIC");
-            if (i == 5)
-                check(m.page() == 3, "the previous arrow did not reach HOLOGRAM");
+                check(m.page() == wrist_hud::colorPage, "the previous arrow did not reach COLOR");
         }
-        check(m.page() == 2, "the previous arrow did not wrap to GRAPHICS");
+        check(m.page() == graphicsPage, "the previous arrow did not wrap to GRAPHICS");
         s.aa = 0;
         step(aa.u, aa.v, .3f);
         r = step(aa.u, aa.v, .8f);
@@ -2544,7 +2589,7 @@ int main() {
         // Not active (the panel not shown whole, the toggle's pull): nothing.
         r = step(.06f, strip, .3f, false);
         r = step(.06f, strip, .9f, false);
-        check(!r.pressed && !m.claims() && m.hover() == Control::none && m.page() == 2, "an inactive panel acted");
+        check(!r.pressed && !m.claims() && m.hover() == Control::none && m.page() == graphicsPage, "an inactive panel acted");
         step(0, 0, 0);
         // A NaN trigger is a let-go one.
         step(.06f, strip, .3f);
@@ -16166,7 +16211,7 @@ int main() {
     });
     test("the hologram's graphics page has SHARPNESS and the VR page the FPS readout", [] {
         using namespace wrist_hud;
-        check(controlSpot(2, Control::sharpen).found && gpuSide(Control::sharpen) &&
+        check(onPageAny(graphicsPage, Control::sharpen) && gpuSide(Control::sharpen) &&
                   !restartRequired(Control::sharpen),
               "SHARPNESS is not a live graphics slider");
         check(clampTo(Control::sharpen, 400) == 200 && clampTo(Control::sharpen, -3) == 0, "SHARPNESS is not clamped");
@@ -16174,10 +16219,10 @@ int main() {
                   "Up to 100% is normal CAS; 110-200% is extra strong, with halos and more shimmer.",
               "SHARPNESS's explanation changed");
         int fps = 0;
-        for (const Area& a : pageAreas(1))
+        for (const Area& a : pageAreas(graphicsPage)) // Update 39.0.2: the FPS block heads GRAPHICS
             fps += std::string(a.what) == "the FPS readout" || std::string(a.what) == "the FPS sparkline" ||
                    std::string(a.what) == "the eye GPU line";
-        check(fps == 3, "the FPS readout is missing from the VR page");
+        check(fps == 3, "the FPS readout is missing from GRAPHICS");
     });
     test("Update 17: every text size reflows the settings pages, nothing overflows or overlaps", [] {
         using namespace wrist_hud;
@@ -16228,7 +16273,9 @@ int main() {
         }
         // Update 18: page 2 has WEB STYLE and WEB COLOR too, so it scrolls a
         // little even at 75% text, but less than at 100%.
-        check(maxScroll(1, .75f) < maxScroll(1, 1), "page 2 at 75% text scrolls as far as at 100%");
+        // Update 39.0.2: sectioned pages; smaller text never scrolls further.
+        for (int page = 1; page < pages; ++page)
+            check(maxScroll(page, .75f) <= maxScroll(page, 1), "a page at 75% text scrolls further than at 100%");
     });
     test("Update 17: a page scrolls inside the fixed panel; out of view nothing answers", [] {
         using namespace wrist_hud;
@@ -16238,7 +16285,10 @@ int main() {
         const float strip = -panelHeight / 2 - .014f;
         for (int page = 1; page < pages; ++page) {
             const float most = maxScroll(page);
-            check(most > 0, "a settings page fits at 100% text: no scroll to test");
+            if (most <= 0) { // Update 39.0.2: a page with its sections closed (COLOR) may fit at 100%.
+                check(maxScroll(page, 1.75f) > 0, "a settings page fits at the biggest text: no scroll to test");
+                continue;
+            }
             near(clampScroll(page, -1), 0);
             near(clampScroll(page, 9), most);
             near(clampScroll(page, std::nanf("")), 0);
@@ -16408,10 +16458,13 @@ int main() {
     test("Update 17: the hologram page's settings, their values and when they apply", [] {
         using namespace wrist_hud;
         const auto bit = [](Control c) { return 1u << static_cast<unsigned>(c); };
-        check(std::string(pageName(3)) == "HOLOGRAM", "page 4 is not HOLOGRAM");
+        // Update 39.0.2: HOLOGRAM is VR SETTINGS' third section.
+        check(placeOf(Control::hudHeight).page == vrPage &&
+                  std::string(sectionName(vrPage, placeOf(Control::hudHeight).section)) == "HOLOGRAM",
+              "HOLOGRAM is not a VR SETTINGS section");
         for (Control c : {Control::hudHeight, Control::hudScale, Control::hudText, Control::hudTheme,
                           Control::hudTextColor}) {
-            check(controlSpot(3, c).found && !restartRequired(c) && !gpuSide(c), "a hologram setting is wrong");
+            check(onPageAny(vrPage, c) && !restartRequired(c) && !gpuSide(c), "a hologram setting is wrong");
             const std::string help = helpText(c);
             check(help.size() > 20 && help.back() == '.', "a hologram setting has no explanation");
         }
@@ -16453,7 +16506,8 @@ int main() {
         const auto bit = [](Control c) { return 1u << static_cast<unsigned>(c); };
         Menu m;
         Settings s;
-        m.setPage(2);
+        resetSections();
+        m.setPage(graphicsPage);
         auto step = [&](float u, float v, float trigger, float stick = 0, uint32_t layout = 0, float seconds = .05f) {
             Menu::Input in;
             in.active = true;
@@ -16466,7 +16520,7 @@ int main() {
             in.layout = layout;
             return m.update(in, s);
         };
-        const float most = maxScroll(2);
+        const float most = maxScroll(graphicsPage);
         // Stick down on the panel shows further down; off the panel the stick is the game's.
         auto r = step(0, 0, 0, -1);
         check(r.stick && r.scrolled && m.scroll() > 0, "stick down did not scroll");
@@ -16489,7 +16543,8 @@ int main() {
         bool found = false;
         for (float v = viewTop - .005f; v > viewBottom + .02f && !found; v -= .002f)
             for (float u = -.075f; u < .07f && !found; u += .005f)
-                if (controlAt(2, u, v, 0) == Control::none && controlAt(2, u, v + .02f, .02f) == Control::none) {
+                if (controlAt(graphicsPage, u, v, 0) == Control::none &&
+                    controlAt(graphicsPage, u, v + .02f, .02f) == Control::none) {
                     emptyU = u;
                     emptyV = v;
                     found = true;
@@ -16505,20 +16560,21 @@ int main() {
         step(emptyU, emptyV, 0);
         // The scrollbar: dragged down, the page scrolls to its end.
         const float bar = (scrollbarU0 + scrollbarU1) / 2;
-        const Thumb th = scrollThumb(2, m.scroll());
+        const Thumb th = scrollThumb(graphicsPage, m.scroll());
         step(bar, (th.v0 + th.v1) / 2, .3f);
         step(bar, (th.v0 + th.v1) / 2, .8f);
         step(bar, -.5f, .8f);
         near(m.scroll(), most);
         step(bar, 0, 0);
         // A slider held: the stick does not scroll.
-        m.setScroll(2, 0);
-        const Spot hist = controlSpot(2, Control::history);
+        const float histScroll = clampScroll(graphicsPage, (viewTop + viewBottom) / 2 - controlSpot(graphicsPage, Control::history).v);
+        m.setScroll(graphicsPage, histScroll);
+        const Spot hist = controlSpot(graphicsPage, Control::history, m.scroll());
         step(hist.u, hist.v, .3f);
         step(hist.u, hist.v, .8f);
         check(m.held() == Control::history, "the history slider was not held");
         r = step(hist.u, hist.v, .8f, -1);
-        check(!r.scrolled && m.scroll() == 0, "the stick scrolled while a slider was held");
+        check(!r.scrolled && m.scroll() == histScroll, "the stick scrolled while a slider was held");
         step(hist.u, hist.v, 0);
         // Relaid (resized or moved) as the trigger is pulled: no hover, no press,
         // and holding on after presses nothing.
@@ -16541,11 +16597,12 @@ int main() {
         check(!r.changed, "a slider let go by a relayout still moved");
         step(hist.u, hist.v, 0, 0, 8);
         // The theme cycles and wraps on each press.
-        m.setPage(3);
-        const Spot theme = controlSpot(3, Control::hudTheme);
-        const float scroll = clampScroll(3, (viewTop + viewBottom) / 2 - theme.v);
-        m.setScroll(3, scroll);
-        const Spot at = controlSpot(3, Control::hudTheme, scroll);
+        const int themePage = openAt(Control::hudTheme);
+        m.setPage(themePage);
+        const Spot theme = controlSpot(themePage, Control::hudTheme);
+        const float scroll = clampScroll(themePage, (viewTop + viewBottom) / 2 - theme.v);
+        m.setScroll(themePage, scroll);
+        const Spot at = controlSpot(themePage, Control::hudTheme, scroll);
         check(at.visible, "the theme cannot be shown");
         s.hudTheme = 4;
         for (float want : {5.f, 0.f, 1.f}) {
@@ -16870,17 +16927,18 @@ int main() {
         check(webStyleOf(s) == st::count - 1, "a style past the end is not clamped");
         // Both rows on page 2, one line each, before the reticles; the
         // page's layout is the same whatever is chosen.
-        const Spot style = controlSpot(1, Control::webStyle), color = controlSpot(1, Control::webColor);
-        check(style.found && color.found && color.v < style.v, "WEB COLOR is not under WEB STYLE on page 2");
+        const int wp = openAt(Control::webStyle); // Update 39.0.2: VR SETTINGS, WEBS open
+        const Spot style = controlSpot(wp, Control::webStyle), color = controlSpot(wp, Control::webColor);
+        check(style.found && color.found && color.v < style.v, "WEB COLOR is not under WEB STYLE on VR SETTINGS");
         // Pressing: right half forward, left half back, wrapping in the style's own list.
         const auto bit = [](Control c) { return 1u << static_cast<unsigned>(c); };
         Menu m;
         Settings t;
         t.webStyle = st::nineties; // the walk starts at 90s (the default until Update 20)
-        m.setPage(1);
-        const float scroll = clampScroll(1, (viewTop + viewBottom) / 2 - color.v);
-        m.setScroll(1, scroll);
-        const Spot at = controlSpot(1, Control::webColor, scroll), atStyle = controlSpot(1, Control::webStyle, scroll);
+        m.setPage(wp);
+        const float scroll = clampScroll(wp, (viewTop + viewBottom) / 2 - color.v);
+        m.setScroll(wp, scroll);
+        const Spot at = controlSpot(wp, Control::webColor, scroll), atStyle = controlSpot(wp, Control::webStyle, scroll);
         check(at.visible && atStyle.visible, "the rows cannot be shown");
         const auto press = [&](Spot where, float du) {
             const auto step = [&](float trigger) {
@@ -16899,8 +16957,8 @@ int main() {
             step(0);
             return r;
         };
-        check(controlAt(1, at.u + .02f, at.v, scroll) == Control::webColor &&
-                  controlAt(1, at.u - .02f, at.v, scroll) == Control::webColor,
+        check(controlAt(wp, at.u + .02f, at.v, scroll) == Control::webColor &&
+                  controlAt(wp, at.u - .02f, at.v, scroll) == Control::webColor,
               "WEB COLOR's halves are not WEB COLOR");
         auto r = press(at, .02f);
         check(r.changed == bit(Control::webColor), "WEB COLOR did not change");
@@ -17904,7 +17962,8 @@ int main() {
         using namespace wrist_hud;
         bool listed = false;
         for (int page = 0; page < pages; ++page)
-            listed = listed || (controlSpot(page, Control::bloodVisor).found && controlSpot(page, Control::blood).found);
+            listed = listed || (onPageAny(page, Control::bloodVisor) && placeOf(Control::bloodVisor).page == placeOf(Control::blood).page &&
+                                 placeOf(Control::bloodVisor).section == placeOf(Control::blood).section);
         check(listed, "VISOR DROPS is not beside BLOOD SPLATTER");
         const std::string h = helpText(Control::bloodVisor);
         check(h.size() <= 80 && h.back() == '.', "VISOR DROPS' help");
@@ -18362,10 +18421,10 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 45, "forty-five options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6)");
+        check(options == 48, "forty-eight options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3)");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
-        for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView}) // experimental: OFF by default
+        for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
             check(std::string(valueName(o, 0)) == "OFF", std::string("not OFF by default: ") + optionInfo[o].key);
         for (uint32_t i = 0; i < options; ++i) {
             const auto& o = optionInfo[i];
@@ -18396,7 +18455,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 45, "0.0.5 has 45 COMBAT options");
+        check(options == 48, "0.0.6 has 48 COMBAT options");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18648,18 +18707,273 @@ int main() {
                   "a NaN wrist moved the ring");
         }
     });
-    test("Update 38: the COMBAT rows are on VR SETTINGS, each answering, live, with its own subtext", [] {
+    test("Update 39.0.2 HOLO SECTIONS: eight pages, every setting in one place, one section open at a time", [] {
+        using namespace wrist_hud;
+        const auto combat = [](uint32_t o) {
+            return static_cast<Control>(static_cast<int>(Control::combatCrawlCap) + static_cast<int>(o));
+        };
+        resetSections();
+        // The defaults: each page's first section open, COLOR none, POWERS the hero being played.
+        setActiveHero(0);
+        check(openSection(vrPage) == 0 && openSection(combatPage) == 0 && openSection(graphicsPage) == 0 &&
+                  openSection(controlsPage) == 0 && openSection(colorPage) == -1 && openSection(powersPage) == 1 &&
+                  openSection(statusPage) == -1 && openSection(musicPage) == -1,
+              "a page's default section is wrong");
+        for (int h = 0; h < 4; ++h) {
+            setActiveHero(h);
+            check(openSection(powersPage) == 1 + h, "POWERS does not open the played hero's profile");
+        }
+        setActiveHero(99);
+        check(activeHero() == 0 && openSection(powersPage) == 1, "an odd hero is not SPIDER-MAN");
+        check(sectionCount(powersPage) == 5 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 5 &&
+                  sectionCount(graphicsPage) == 4 && sectionCount(colorPage) == 2 && sectionCount(controlsPage) == 4 &&
+                  sectionCount(statusPage) == 0 && sectionCount(musicPage) == 0 && sectionCount(pages) == 0,
+              "a page's section count");
+        check(std::string(sectionName(powersPage, 0)) == "FLYING" && std::string(sectionName(powersPage, 2)) == "IRON MAN" &&
+                  std::string(sectionName(graphicsPage, 0)) == "QUALITY" && *sectionName(vrPage, 6) == 0 &&
+                  *sectionName(vrPage, -1) == 0,
+              "a section's name");
+        // Opened, closed, odd values: none open; one page's choice leaves the others alone.
+        setOpenSection(vrPage, 3);
+        setOpenSection(combatPage, -1);
+        check(openSection(vrPage) == 3 && openSection(combatPage) == -1 && openSection(graphicsPage) == 0,
+              "a page's open section leaked");
+        setOpenSection(vrPage, 6);
+        check(openSection(vrPage) == -1, "a section past the page's opened");
+        setOpenSection(-1, 0);
+        setOpenSection(pages, 0);
+        resetSections();
+        check(openSection(vrPage) == 0, "resetSections did not reset");
+        // Every setting on exactly one page and in one place; the retired and the hero tabs on none.
+        int placed = 0;
+        for (int i = static_cast<int>(Control::recalibrate); i < controls; ++i) {
+            const auto c = static_cast<Control>(i);
+            const Place pl = placeOf(c);
+            const bool retired = c == Control::shadowCamera || c == Control::shadowDistance ||
+                                 (c >= Control::heroTabSpider && c <= Control::heroTabHulk) || sectionIndex(c) >= 0;
+            if (retired) {
+                check(pl.page < 0, "a retired control is on a page");
+                continue;
+            }
+            check(pl.page >= 1 && pl.page < pages, "a control is on no page: " + std::string(shortName(c)));
+            placed += pl.page != musicPage;
+            for (int p = 0; p < pages; ++p)
+                check(onPageAny(p, c) == (p == pl.page) || c == Control::musicPick,
+                      "a control is on the wrong page: " + std::string(shortName(c)));
+            if (pl.section >= 0) {
+                setOpenSection(pl.page, -1);
+                check(!controlSpot(pl.page, c).found, "a closed section's row is laid out");
+                setOpenSection(pl.page, pl.section);
+                check(controlSpot(pl.page, c).found, "an open section's row is missing");
+                for (int other = 0; other < sectionCount(pl.page); ++other)
+                    if (other != pl.section) {
+                        setOpenSection(pl.page, other);
+                        check(!controlSpot(pl.page, c).found, "a row is in two sections");
+                    }
+            } else if (c != Control::musicPick) {
+                for (int open = -1; open < sectionCount(pl.page); ++open) {
+                    setOpenSection(pl.page, open);
+                    check(controlSpot(pl.page, c).found, "an always-shown row hid");
+                }
+            }
+        }
+        check(placed == 123, "the number of settings placed drifted: " + std::to_string(placed));
+        resetSections();
+        // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
+        check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
+                  placeOf(Control::flyMode).section == 0 && placeOf(combat(combat38::supersonic)).section == 0 &&
+                  placeOf(Control::heroPlaySpider).section == 1 && placeOf(combat(combat38::shooterType)).section == 2 &&
+                  placeOf(combat(combat38::daredevil)).section == 3 && placeOf(combat(combat38::hulk)).section == 4 &&
+                  placeOf(combat(combat38::heroHeight)).section == 4,
+              "POWERS is not as approved");
+        check(placeOf(Control::aa).page == graphicsPage && placeOf(Control::supersample).section == -1 &&
+                  placeOf(Control::recalibrate).page == vrPage && placeOf(Control::fpsReset).page == graphicsPage &&
+                  placeOf(Control::gestureRecord).page == controlsPage && placeOf(Control::colorFx).section == -1,
+              "a row moved from the approved layout");
+        // The section headers: navigation (past the mask, never kept), one-sentence subtexts.
+        for (int i = 0; i < sectionsMost; ++i) {
+            const Control c = sectionControl(i);
+            check(sectionIndex(c) == i && static_cast<int>(c) >= maskedControls && !restartRequired(c) && !gpuSide(c),
+                  "a section header is a kept setting");
+            const std::string h = helpText(c);
+            check(h.size() > 20 && h.size() <= 80 && h.back() == '.' && std::count(h.begin(), h.end(), '.') == 1 &&
+                      h.find("restart") == std::string::npos && h.find("RESTART") == std::string::npos,
+                  "a section subtext breaks the rule: " + h);
+            check(*shortName(c) != 0 && *shortName(c) != 0, "a section header has no name");
+        }
+        check(sectionIndex(Control::none) == -1 && sectionIndex(Control::heroPlaySpider) == -1, "a row is a header");
+        check(restartTag(Control::supersample) && restartTag(combat(combat38::mirrorView)) && !restartTag(Control::aa),
+              "the RESTART tag is on the wrong rows");
+        // Every page with every section open, at every text size: nothing overlaps, nothing off the
+        // panel, each header pressable and the RESTART tags drawn where they fit.
+        int tags = 0;
+        for (const float k : {.75f, 1.f, 1.25f, 1.75f})
+            for (int p = 1; p < pages; ++p)
+                for (int open = -1; open < std::max(1, sectionCount(p)); ++open) {
+                    setOpenSection(p, open);
+                    const auto areas = pageAreas(p, k);
+                    for (size_t a = 0; a < areas.size(); ++a) {
+                        const Area& x = areas[a];
+                        tags += std::string(x.what) == "a RESTART tag";
+                        check(x.u0 >= -panelWidth / 2 + .006f && x.u1 <= scrollbarU0 - .001f && x.v1 <= viewTop,
+                              std::string(x.what) + " is outside the panel");
+                        for (size_t b = a + 1; b < areas.size(); ++b) {
+                            const Area& y = areas[b];
+                            check(x.u1 <= y.u0 || y.u1 <= x.u0 || x.v1 <= y.v0 || y.v1 <= x.v0,
+                                  std::string(x.what) + " overlaps " + y.what + " on " + pageName(p));
+                        }
+                    }
+                    for (int sct = 0; sct < sectionCount(p); ++sct) {
+                        const Control h = sectionControl(sct);
+                        bool pressable = false;
+                        for (float scroll = 0; scroll < 3 && !pressable; scroll += .01f) {
+                            const float at = clampScroll(p, scroll, k);
+                            const Spot spot = controlSpot(p, h, at, k);
+                            pressable = spot.found && spot.visible && controlAt(p, spot.u, spot.v, at, k) == h;
+                        }
+                        check(pressable, "a section header cannot be pressed");
+                    }
+                }
+        check(tags >= 4, "the RESTART tags are not drawn");
+        resetSections();
+        // The menu: a header press opens it (closing the other), the header stays under the pointer,
+        // a second press closes it; nothing kept changes.
+        for (const float k : {.75f, 1.f, 1.75f})
+            for (int p = 1; p < pages; ++p)
+                for (int sct = 0; sct < sectionCount(p); ++sct) {
+                    resetSections();
+                    Menu m;
+                    Settings s;
+                    const Settings before = s;
+                    m.setPage(p);
+                    float scroll = 0;
+                    Spot at{false, 0, 0};
+                    for (; scroll < 3; scroll += .01f) {
+                        m.setScroll(p, scroll, k);
+                        at = controlSpot(p, sectionControl(sct), m.scroll(), k);
+                        if (at.found && at.visible && at.v > viewBottom + .01f && at.v < viewTop - .01f)
+                            break;
+                    }
+                    check(at.found && at.visible, "a section header never in view");
+                    auto step = [&](float trigger) {
+                        Menu::Input in;
+                        in.active = true;
+                        in.pointer.hit = true;
+                        in.pointer.u = at.u;
+                        in.pointer.v = at.v;
+                        in.trigger = trigger;
+                        in.text = k;
+                        return m.update(in, s);
+                    };
+                    const bool wasOpen = openSection(p) == sct;
+                    step(0);
+                    step(.3f);
+                    auto r = step(.9f);
+                    step(0);
+                    check(r.pressed && r.section && !r.changed && m.page() == p, "a header press did not act");
+                    check(openSection(p) == (wasOpen ? -1 : sct), "a header press did not toggle its section");
+                    const Spot now = controlSpot(p, sectionControl(sct), m.scroll(), k);
+                    check(now.found && (std::fabs(now.v - at.v) < 1e-4f || m.scroll() == clampScroll(p, 99, k) ||
+                                        m.scroll() == 0),
+                          "the header jumped from under the pointer");
+                    if (std::fabs(now.v - at.v) < 1e-4f) {
+                        step(.3f);
+                        r = step(.9f);
+                        step(0);
+                        check(r.section && openSection(p) == (wasOpen ? sct : -1), "a second press did not toggle back");
+                    }
+                    check(std::memcmp(&before, &s, sizeof s) == 0, "a header press changed a setting");
+                }
+        // The hero being played picks POWERS' open profile through the menu's input.
+        resetSections();
+        {
+            Menu m;
+            Settings s;
+            Menu::Input in;
+            in.hero = 3;
+            m.update(in, s);
+            check(openSection(powersPage) == 4, "the menu's hero did not open HULK");
+            in.hero = -1;
+            m.update(in, s);
+            check(openSection(powersPage) == 4, "an unknown hero changed the profile");
+        }
+        // A page past the eight (an older layout's) is STATUS; the arrows wrap.
+        {
+            Menu m;
+            m.setPage(11);
+            check(m.page() == 0, "page 11 was not STATUS");
+            m.setPage(-3);
+            check(m.page() == 0, "a negative page was not STATUS");
+            m.setPage(musicPage);
+            check(m.page() == musicPage, "MUSIC");
+        }
+        // PLAY AS SPIDER-MAN asks from its profile; every page with every section draws finite vertices.
+        resetSections();
+        setActiveHero(0);
+        {
+            Menu m;
+            Settings s;
+            m.setPage(powersPage);
+            Spot at{false, 0, 0};
+            for (float scroll = 0; scroll < 3; scroll += .01f) {
+                m.setScroll(powersPage, scroll, 1);
+                at = controlSpot(powersPage, Control::heroPlaySpider, m.scroll());
+                if (at.found && at.visible)
+                    break;
+            }
+            auto step = [&](float trigger) {
+                Menu::Input in;
+                in.active = true;
+                in.pointer.hit = true;
+                in.pointer.u = at.u;
+                in.pointer.v = at.v;
+                in.trigger = trigger;
+                in.hero = 0;
+                return m.update(in, s);
+            };
+            step(0);
+            step(.3f);
+            const auto r = step(.9f);
+            check(at.visible && r.pressed && r.heroSpider && !r.changed, "PLAY AS SPIDER-MAN did not ask");
+        }
+        View v;
+        v.emitter = {0, 1, -.4f};
+        for (int hero = 0; hero < 4; ++hero)
+            for (int p = 0; p < pages + 1; ++p)
+                for (int open = -1; open < std::max(1, sectionCount(p)); ++open) {
+                    setOpenSection(p, open);
+                    v.page = p;
+                    v.combat38[combat38::shooterType] = hero == 1;
+                    v.combat38[combat38::daredevil] = hero == 2;
+                    v.combat38[combat38::hulk] = hero == 3;
+                    v.hover = sectionControl(std::max(open, 0));
+                    v.scroll = maxScroll(p);
+                    std::vector<Vertex> out;
+                    appendWristHud(out, v, {0, 1.6f, 0}, .00065f);
+                    check(!out.empty(), "a page drew nothing");
+                    for (const Vertex& x : out)
+                        check(finite(x.position) && x.alpha >= 0 && x.alpha <= 1, "a bad vertex on a sectioned page");
+                }
+        resetSections();
+    });
+    test("Update 38: the COMBAT rows are on their pages, each answering, live, with its own subtext", [] {
         using namespace wrist_hud;
         for (uint32_t o = 0; o < combat38::options; ++o) {
             const auto c = static_cast<Control>(static_cast<int>(Control::combatCrawlCap) + static_cast<int>(o));
             check(combatOption(c) == static_cast<int>(o), "a COMBAT row's option drifted");
-            check(controlSpot(1, c).found && !controlSpot(0, c).found && !controlSpot(2, c).found,
-                  "a COMBAT row is not on page 2 only");
+            // Update 39.0.2: each on its one page (COMBAT, POWERS, VR SETTINGS or GRAPHICS), in its section.
+            const int home = openAt(c);
+            check(home == combatPage || home == powersPage || home == vrPage || home == graphicsPage,
+                  "a COMBAT row is not on its one page");
+            for (int p = 0; p < pages; ++p)
+                if (p != home)
+                    check(!onPageAny(p, c), "a COMBAT row is on two pages");
+            openAt(c);
             bool answered = false;
             for (float scroll = 0; scroll < 3 && !answered; scroll += .01f) {
-                const float at = clampScroll(1, scroll);
-                const auto spot = controlSpot(1, c, at);
-                answered = spot.found && spot.visible && controlAt(1, spot.u, spot.v, at) == c;
+                const float at = clampScroll(home, scroll);
+                const auto spot = controlSpot(home, c, at);
+                answered = spot.found && spot.visible && controlAt(home, spot.u, spot.v, at) == c;
             }
             check(answered, "a COMBAT row cannot be pressed");
             check(std::string(helpText(c)) == combat38::optionInfo[o].help &&
@@ -20243,7 +20557,9 @@ int main() {
         std::set<int> seen;
         for (float k : {.75f, 1.f, 1.25f, 1.5f, 1.75f})
             for (int page = 1; page < pages; ++page)
+                for (int open = -1; open < std::max(1, sectionCount(page)); ++open) // Update 39.0.2: each section
                 for (int c = 0; c < controls; ++c) {
+                    setOpenSection(page, open);
                     const auto control = static_cast<Control>(c);
                     for (View& v : states) {
                         v.textScale = k;
@@ -20272,6 +20588,7 @@ int main() {
                           Control::colorBands, Control::blood, Control::farShadows, Control::hudTheme})
             check(seen.count(static_cast<int>(c)) == 1, "control " + std::to_string(static_cast<int>(c)) + "'s subtext was not checked");
         check(seen.size() >= 80 && checked > 1000, "the gate checked too few subtexts");
+        resetSections();
         check(scrolled > 0, "no subtext overflowed at any text size: the scroll is not exercised");
         // Long words are split, never left to run off.
         for (const std::string& line : wrapText(std::string(200, 'W') + " end.", helpHeight, helpWidth - helpGutter))
@@ -20685,7 +21002,11 @@ int main() {
         using namespace wrist_hud;
         for (Control c : {Control::gestureRemapMove, Control::gestureRecord, Control::gestureKeep, Control::gestureAgain,
                           Control::gestureCancel, Control::gestureResetMove, Control::gestureResetAll, Control::gestureProfile})
-            check(controlSpot(extrasPage, c).found && std::string(helpText(c)).size() > 0, "a REMAP row is missing");
+            check(placeOf(c).page == controlsPage && placeOf(c).section == 2 && std::string(helpText(c)).size() > 0,
+                  "a REMAP row is not under CONTROLS' GESTURE REMAP");
+        setOpenSection(controlsPage, 2); // Update 39.0.2: GESTURE REMAP open
+        for (Control c : {Control::gestureRemapMove, Control::gestureRecord, Control::gestureResetAll, Control::gestureProfile})
+            check(controlSpot(controlsPage, c).found, "a REMAP row is missing");
         gs::Session d;
         d.record();
         std::vector<gs::View> states{gs::View{}, d.view()};
@@ -20703,18 +21024,18 @@ int main() {
         }
         View v;
         v.emitter = {0, 1, -.4f};
-        v.page = extrasPage;
+        v.page = controlsPage;
         const Vec3 eye{0, 1.6f, 0};
         size_t sizes[2]{};
         for (size_t i = 0; i < states.size(); ++i) {
             v.remap = &states[i];
-            for (float scroll : {0.f, maxScroll(extrasPage)}) {
+            for (float scroll : {0.f, maxScroll(controlsPage)}) {
                 v.scroll = scroll;
                 std::vector<Vertex> out;
                 appendWristHud(out, v, eye, .001f);
-                check(!out.empty(), "the EXTRAS page did not draw");
+                check(!out.empty(), "the CONTROLS page did not draw");
                 for (const Vertex& x : out)
-                    check(finite(x.position) && x.alpha >= 0 && x.alpha <= 1, "a bad vertex on EXTRAS");
+                    check(finite(x.position) && x.alpha >= 0 && x.alpha <= 1, "a bad vertex on CONTROLS");
                 if (scroll > 0 && i < 2)
                     sizes[i] = out.size();
             }
@@ -20802,6 +21123,30 @@ int main() {
         for (int i = 0; i < 500; ++i)
             d.frame(true, std::nanf(""), std::nanf(""), 90, 1, floorLow);
         check(d.rung() == 0, "NaNs moved the rung");
+    });
+    test("0.0.6 AUTO PERFORMANCE: AUTO aims at half the headset rate when the full rate is out of reach", [] {
+        using namespace spidy::auto_perf;
+        PaceTarget p;
+        near(p.pick(targetAuto, 90.f, 0.f), 90); // not measured yet: the full rate
+        near(p.pick(targetAuto, 90.f, 70.f), 90); // 78%: still full
+        near(p.pick(targetAuto, 90.f, 37.f), 45); // rep0050's 37: half, each picture 2 frames
+        check(p.half, "37 at 90 Hz did not aim at half");
+        near(p.pick(targetAuto, 90.f, 80.f), 45); // between 75% and 95%: stays half (no flapping)
+        near(p.pick(targetAuto, 90.f, 86.f), 90); // 95%: full again
+        near(p.pick(targetAuto, 90.f, 60.f), 45);
+        near(p.pick(targetAuto, 120.f, 50.f), 60);
+        near(p.pick(target90, 90.f, 37.f), 90); // a fixed target is kept as chosen
+        check(!p.half, "a fixed target left half on");
+        near(p.pick(targetAuto, 90.f, NAN), 90);
+        near(p.pick(targetAuto, 90.f, 37.f), 45);
+        near(p.pick(targetAuto, 90.f, 0.f), 90); // OFF (no mean): the full rate
+        // With half, a 37 FPS session no longer misses every frame of the budget: 1000/45 * 1.08 = 24 ms.
+        Controller c;
+        c.setUser(Knobs{250, 2, 2});
+        const float dt = 1.f / 37;
+        for (int i = 0; i < 37 * 3; ++i)
+            c.frame(true, dt, 1000.f / 44, p.pick(targetAuto, 90.f, c.meanFps()), 1, floorLow);
+        check(c.rung() == 0, "a steady 44 FPS was cut with AUTO at 90 Hz");
     });
     test("0.0.3 PUNCHES REGISTER: rep0023's punch bursts are never dropped, the taps stay single", [] {
         using namespace spidy::combat38;
@@ -21114,7 +21459,7 @@ int main() {
         check(hero == hulk && !toggleOn(hero, daredevil), "two heroes on at once");
         hero = select(hero, hulk, false);
         check(hero == spiderMan, "all off is not Spider-Man");
-        check(shipped[ironMan] && !shipped[daredevil] && !shipped[hulk], "a hero without its parts is shipped");
+        check(shipped[ironMan] && shipped[daredevil] && shipped[hulk], "0.0.6: every hero ships with its parts");
     });
     test("0.0.4 DAREDEVIL BATON: one throw per press, none while it is away, it always comes back (hit or miss)", [] {
         using namespace spidy::hero_modes;
@@ -21684,7 +22029,9 @@ int main() {
         c.serial = c.focused = 1;
         c.asks = 1u | fly_boost::asksOf(true, 3);
         check(game_swing::valid(c), "the swing module refuses SUPERSONIC's asks");
-        c.asks = 16;
+        c.asks = 16; // 0.0.6: bit 4 is HULK LEAP
+        check(game_swing::valid(c), "the swing module refuses HULK LEAP's ask");
+        c.asks = 32;
         check(!game_swing::valid(c), "junk asks accepted");
         // The Boost: needs ON, flying, hands out and the stick forward; booms once, re-arms after 1 s off.
         fly_boost::Boost b;
@@ -21786,9 +22133,83 @@ int main() {
         appendShockwave(junk, eye, {0, 0, -1}, std::nanf(""), .001f);
         check(junk.empty(), "the shockwave drew junk");
     });
-    test("0.0.5 SOUND EFFECTS: the six WAVs are compiled in, 48 kHz mono 16-bit", [] {
+    test("Update 39.0.2 REPULSOR LOOK: the palm charges in the chord wait, a tight bolt, a short burst, cheap", [] {
+        using namespace spidy::repulsor;
+        namespace mcu = spidy::repulsor_mcu;
+        Trigger t;
+        const Vec3 aim[2] = {{0, 0, -1}, {.1f, 0, -1}};
+        const bool none[2] = {false, false}, right[2] = {false, true};
+        check(t.chargingFor(0) == -1 && t.chargingFor(1) == -1 && t.sinceBlast(1) == -1 && t.chargingFor(2) == -1 &&
+                  t.sinceBlast(-1) == -1,
+              "a fresh trigger charges or has blasted");
+        t.update(1, right, aim, none);
+        check(t.chargingFor(1) == 0 && t.chargingFor(0) == -1, "a press did not start the palm's charge");
+        t.update(1 + chordWindow / 2, none, aim, none);
+        near(t.chargingFor(1), chordWindow / 2, 1e-5f);
+        bool blasted = false;
+        float now = 1 + chordWindow / 2;
+        for (int k = 0; k < 30 && !blasted; ++k) {
+            now += 1.f / 90;
+            blasted = t.update(now, none, aim, none).blast[1];
+        }
+        check(blasted && t.chargingFor(1) == -1 && t.sinceBlast(1) == 0 && t.sinceBlast(0) == -1,
+              "the blast did not end the charge");
+        t.update(now + .05f, none, aim, none);
+        near(t.sinceBlast(1), .05f, 1e-5f);
+        // The beam chord: both palms full while it waits.
+        Trigger c;
+        const bool both[2] = {true, true};
+        c.update(5, both, aim, both);
+        c.update(5.05f, none, aim, both);
+        check(c.chordWaiting() && c.chargingFor(0) >= chordWindow && c.chargingFor(1) >= chordWindow,
+              "a waiting chord's palms are not full");
+        c.clear();
+        check(c.sinceBlast(0) == -1, "clear kept a blast");
+        // The glow: rises through the chord window (a quick tap shows), fades after; odd input is none.
+        check(mcu::palmGlow(-1, -1) == 0 && mcu::palmGlow(0, -1) == 0 && mcu::palmGlow(chordWindow, -1) == 1 &&
+                  mcu::palmGlow(chordWindow / 4, -1) > .25f && mcu::palmGlow(9, -1) == 1,
+              "the palm's charge glow");
+        check(mcu::palmGlow(-1, 0) == 1 && mcu::palmGlow(-1, mcu::muzzleSeconds / 2) > .4f &&
+                  mcu::palmGlow(-1, mcu::muzzleSeconds) == 0 && mcu::palmGlow(std::nanf(""), std::nanf("")) == 0,
+              "the palm's fade");
+        check(mcu::impactLife(0) == 1 && mcu::impactLife(mcu::impactSeconds) == 0 && mcu::impactLife(-1) == 0 &&
+                  mcu::impactLife(std::nanf("")) == 0 && mcu::impactSeconds < .25f,
+              "the burst's life");
+        // Drawn: two palms, a bolt, a burst within ~3,600 vertices, all finite; odd input draws nothing.
+        const Vec3 eye{0, 1.6f, 0};
+        std::vector<Vertex> out;
+        mcu::appendCharge(out, {-.2f, 1.3f, -.4f}, {0, 0, -1}, eye, .001f, 1, .3f);
+        mcu::appendCharge(out, {.2f, 1.3f, -.4f}, {0, 0, -1}, eye, .001f, .5f, 1.1f);
+        const size_t palms = out.size();
+        mcu::appendBolt(out, {0, 1.5f, -6}, {0, 1.45f, -4.8f}, eye, .001f, 1);
+        const size_t bolt = out.size();
+        mcu::appendImpact(out, {0, 1.5f, -8}, eye, eye, .001f, .7f);
+        check(palms > 0 && bolt > palms && out.size() > bolt && out.size() <= 3600,
+              "the look's vertex budget: " + std::to_string(out.size()));
+        for (const Vertex& v : out)
+            check(finite(v.position) && finite(v.color) && v.alpha >= 0 && v.alpha <= 1, "a bad repulsor vertex");
+        std::vector<Vertex> junk;
+        const float nan = std::nanf("");
+        mcu::appendCharge(junk, {nan, 0, 0}, {0, 0, -1}, eye, .001f, 1);
+        mcu::appendCharge(junk, {0, 1, -1}, {0, 0, 0}, eye, .001f, 1);
+        mcu::appendCharge(junk, {0, 1, -1}, {0, 0, -1}, eye, .001f, 0);
+        mcu::appendBolt(junk, {0, 1, -2}, {0, 1, -1}, eye, nan, 1);
+        mcu::appendImpact(junk, {0, 1, -2}, eye, eye, .001f, 0);
+        mcu::appendImpact(junk, eye, eye, eye, .001f, 1);
+        check(junk.empty(), "odd input drew the repulsor");
+    });
+    test("0.0.5 SOUND EFFECTS: the seven WAVs are compiled in, 48 kHz mono 16-bit", [] {
         using namespace spidy::sfx;
-        const float expect[sounds] = {1.85f, .42f, 1.7f, .62f, .5f, .34f};
+        // Update 39.0.2: the MCU repulsor (take C, TIGHT): a .26 s blast and a .12 s charge-up.
+#if defined(SPIDY_REPULSOR_TAKE_a)
+        constexpr float fire = .38f; // take A, CLASSIC
+#elif defined(SPIDY_REPULSOR_TAKE_b)
+        constexpr float fire = .5f; // take B, HEAVY
+#else
+        constexpr float fire = .26f; // take C, TIGHT (the 0.0.6 default, CMakeLists' SPIDY_REPULSOR_TAKE)
+#endif
+        const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f};
+        static_assert(sounds == 7);
         for (uint32_t i = 0; i < sounds; ++i) {
             const Pcm& p = sound(static_cast<Id>(i));
             check(p.ok && p.rate == 48000 && p.channels == 1 && p.bits == 16 && p.data && p.bytes % 2 == 0,
@@ -21880,6 +22301,101 @@ int main() {
         const uint32_t hitSounds = sfx::requests().take(sfx::batonHit, dropped);
         check(b.throws == 1 && whoosh == 1, "one throw, one whoosh");
         check(hits == 4 && hitSounds == 4 && dropped == 0, "four hits (three chains), four hit sounds");
+    });
+    test("0.0.6 BEAM AIM ASSIST: the enemy nearest the look within 30 deg and 40 m, none: the level forward", [] {
+        using namespace spidy;
+        const Vec3 from{0, 1.f, 0}, fwd{0, -.3f, -1};
+        Vec3 feet[3] = {{20, 0, -5}, {2, 0, -15}, {0, 0, -50}};
+        Vec3 dir{};
+        const int i = repulsor::beamAim(from, fwd, feet, 3, dir);
+        check(i == 1 && dir.z < -.9f && dir.x > 0, "the second enemy, 7.6 deg off the look");
+        Vec3 far[1] = {{0, 0, -50}};
+        check(repulsor::beamAim(from, fwd, far, 1, dir) == -1 && std::fabs(dir.y) < 1e-6f && dir.z < -.99f,
+              "beyond 40 m: no assist, the level forward");
+        check(repulsor::beamAim(from, fwd, nullptr, 0, dir) == -1, "no enemies: no assist");
+        check(repulsor::nearestMetres(from, feet, 3) > 15 && repulsor::nearestMetres(from, nullptr, 0) < 0,
+              "the nearest enemy's distance for the log, -1 with none");
+        int hits[8];
+        const int n = repulsor::beamHits(from, dir, feet, 3, hits, 8);
+        (void)n;
+        Vec3 d2{};
+        repulsor::beamAim(from, fwd, feet, 3, d2);
+        const int n2 = repulsor::beamHits(from, d2, feet, 3, hits, 8);
+        check(n2 >= 1 && hits[0] == 1, "the assisted beam catches the enemy it turned to");
+    });
+    test("0.0.6 HERO TOGGLES: IRON MAN, DAREDEVIL, HULK; one at a time, the first if two, DAREDEVIL PUNCH 3X", [] {
+        using namespace spidy;
+        check(hero_modes::fromToggles(false, false, false) == hero_modes::spiderMan &&
+                  hero_modes::fromToggles(true, false, false) == hero_modes::ironMan &&
+                  hero_modes::fromToggles(false, true, false) == hero_modes::daredevil &&
+                  hero_modes::fromToggles(false, false, true) == hero_modes::hulk &&
+                  hero_modes::fromToggles(false, true, true) == hero_modes::daredevil,
+              "the hero from the toggles, the first wins");
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+            check(hero_modes::shipped[h], "every hero ships a toggle in 0.0.6");
+        check(combat38::isHeroToggle(combat38::shooterType) && combat38::isHeroToggle(combat38::daredevil) &&
+                  combat38::isHeroToggle(combat38::hulk) && !combat38::isHeroToggle(combat38::heroHeight),
+              "the hero toggles");
+        check(combat38::daredevilPunchK(0) == 3.f && combat38::daredevilPunchK(1) == 1.f && combat38::daredevilPunchK(4) == 5.f &&
+                  combat38::daredevilPunchK(99) == 3.f,
+              "DAREDEVIL PUNCH 3X default, 1X-5X");
+        check(std::string(combat38::optionInfo[combat38::daredevilPunch].values[0]) == "3X", "3X first (the default)");
+        check(!hero_modes::webPaths(hero_modes::daredevil).any() && !hero_modes::webPaths(hero_modes::hulk).any(),
+              "no web for DAREDEVIL or HULK");
+    });
+    test("0.0.6 DAREDEVIL/HULK: baton aim assist, punch blows, HULK LEAP (2x speed = 4x height), sonar", [] {
+        using namespace spidy;
+        // The baton's strong aim assist: the smallest angle within 35 deg and 25 m.
+        const hero_modes::BatonEnemy list[3] = {{11, {3, 1.2f, -10}}, {12, {0, 1.2f, -30}}, {13, {-1, 1.2f, -8}}};
+        check(hero_modes::batonAim({0, 1.2f, 0}, {0, 0, -1}, list, 3) == 2, "the assist picked the wrong enemy");
+        check(hero_modes::batonAim({0, 1.2f, 0}, {0, 0, 1}, list, 3) == -1, "the assist picked one behind");
+        check(hero_modes::batonAim({0, 1.2f, 0}, {0, 0, -1}, list, 0) == -1, "the assist picked from none");
+        // DAREDEVIL PUNCH: (k - 1) x 10 more; 1X: none.
+        near(hero_modes::daredevilExtraHp(3), 20, 1e-4f);
+        near(hero_modes::daredevilExtraHp(1), 0, 1e-4f);
+        near(hero_modes::daredevilExtraHp(5), 40, 1e-4f);
+        near(hero_modes::daredevilExtraHp(NAN), 0, 1e-4f);
+        // HULK: a normal enemy (25) in one; a brute (50) in 2-3; unknown: a normal one's worth.
+        near(hero_modes::hulkPunchHp(25), 25, 1e-4f);
+        const float brute = hero_modes::hulkPunchHp(50);
+        check(50 / brute > 2 - 1e-3f && 50 / brute <= 3, "a brute should take 2-3 punches");
+        near(hero_modes::hulkPunchHp(NAN), 25, 1e-4f);
+        // The landed punch's enemy: the nearest chest within 2.2 m.
+        const Vec3 feet[2] = {{0, 0, -1.5f}, {0, 0, -1}};
+        check(hero_modes::punchVictim({0, 1.1f, 0}, feet, 2) == 1, "not the nearest chest");
+        check(hero_modes::punchVictim({0, 1.1f, 5}, feet, 2) == -1, "a punch 5 m away landed");
+        // HULK LEAP: bit 4 only for HULK, twice the speed.
+        check(hero_modes::leapAsks(hero_modes::hulk) == 16u && hero_modes::leapAsks(hero_modes::daredevil) == 0u, "the leap ask");
+        game_swing::Command c;
+        c.serial = 1;
+        c.leap = 1;
+        c.asks = 16;
+        check(game_swing::valid(c) && game_swing::input(c).leapScale == 2.f, "HULK LEAP's ask lost");
+        c.asks = 1;
+        check(game_swing::input(c).leapScale == 1.f, "the leap scaled without HULK");
+        TestWorld w;
+        w.enabled = false;
+        const spidy::Body standing{{0, 0, 0}, {}, true};
+        spidy::Swing s(inert());
+        spidy::Input in;
+        in.leap = 1;
+        in.leapScale = 2;
+        const auto hulkOut = s.predictNativeStep(1.f / 60, in, w, standing);
+        near(hulkOut.velocity.y, 30, .05f);
+        spidy::Swing s2(inert());
+        in.leapScale = 99;
+        near(s2.predictNativeStep(1.f / 60, in, w, standing).velocity.y, 30, .05f); // capped at 2
+        // DAREDEVIL SONAR: a flat picture stays dark; an edge glows red over green over blue.
+        const auto flat = [](int, int) { return std::array<float, 3>{.5f, .5f, .5f}; };
+        const auto lit = eye_color::sonarPixel(flat, 50, 50, 100, 100, 0.f);
+        check(lit[0] < .1f && lit[1] < .1f && lit[2] < .1f, "a flat picture lit up");
+        const auto edge = [](int x, int) { return x < 50 ? std::array<float, 3>{0, 0, 0} : std::array<float, 3>{1, 1, 1}; };
+        const auto e = eye_color::sonarPixel(edge, 50, 80, 100, 100, 0.f);
+        check(e[0] > e[1] && e[1] > e[2] && e[0] > .2f, "an edge is not red");
+        eye_color::Config cc;
+        cc.on = true;
+        cc.sonar = true;
+        check(eye_color::toon(cc).sonar == 1.f, "the toon pipeline's sonar mode is off");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

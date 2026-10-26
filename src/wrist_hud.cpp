@@ -26,6 +26,8 @@
 #include "spidy/tracking.hpp"
 #include "spidy/web_visual.hpp"
 #include <algorithm>
+#include <atomic>
+#include <initializer_list>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -407,6 +409,9 @@ void readouts(const Painter& p, const WristHudData& d) {
     // Public version (0.0.1 = build 38.5, 0.0.2 = build 38.6), top right of STATUS (the about line).
     const float vh = fittedHeight(spidy::version::statusLine, .0042f, halfW - .040f);
     p.text(spidy::version::statusLine, halfW - .010f - textWidth(spidy::version::statusLine, vh), halfH - .019f, vh, p.c.line);
+    // Version 0.0.6: the credit under it.
+    const float mh = fittedHeight(spidy::version::madeBy, .0034f, halfW - .040f);
+    p.text(spidy::version::madeBy, halfW - .010f - textWidth(spidy::version::madeBy, mh), halfH - .019f - vh - .002f, mh, p.c.line);
 }
 
 // The round map: its streets turn with the head, its arrow the player.
@@ -480,6 +485,28 @@ constexpr float trackLeft = -.066f, trackRight = .066f, sliderReach = .009f;
 const char* const nextLaunchHeading = "NEXT LAUNCH - RESTART REQUIRED";
 const char* const restartNotice = "RESTART THE GAME TO APPLY";
 const char* const scrollFooter = "STICK UP/DOWN OR DRAG TO SCROLL";
+// Update 39.0.1's hero tabs (Update 39.0.2: no longer on any page; their Controls stay).
+const char* const heroTabsHelp = "Opens a hero's own page: their powers, flying and INVINCIBLE.";
+// Update 39.0.2: POWERS' heading over the hero sections, its banner, and a section's subtext.
+const char* const heroProfilesHeading = "HERO PROFILES - ONE HERO AT A TIME";
+const char* const activeHeroWidest = "ACTIVE HERO: SPIDER-MAN";
+const char* const activeHeroHelp = "Turn a hero ON in its profile below; only one hero is on at a time.";
+const char* const sectionHelp = "Opens this group of settings and closes the page's other open group.";
+const char* const restartTagText = "RESTART";
+// The hero being played as View has it (hero_modes::fromToggles' order).
+int heroOf(const View& view) {
+    return view.combat38[combat38::shooterType] == 1 ? 1
+           : view.combat38[combat38::daredevil] != 0 ? 2
+           : view.combat38[combat38::hulk] != 0      ? 3
+                                                     : 0;
+}
+// No hero toggle on: Spider-Man (hero_modes.hpp).
+bool spiderActive(const View& view) {
+    for (const auto o : combat38::heroToggles)
+        if (view.combat38[o] != 0)
+            return false;
+    return true;
+}
 constexpr float titleHeight = .0068f, labelHeight = .0046f, headingHeight = .0042f, noticeHeight = .0044f,
                 footerHeight = .0040f, fpsHeight = .0056f;
 // Update 16: the FPS monitor's widest readout (Update 17: with its band's
@@ -535,6 +562,9 @@ bool off(const View& view, Control c) {
         return view.flyMode == 0;
     if (c == Control::combatSupersonicSpeed)
         return view.flyMode == 0 || view.combat38[combat38::supersonic] != 0;
+    // Version 0.0.6: DAREDEVIL PUNCH is DAREDEVIL's
+    if (c == Control::combatDaredevilPunch)
+        return view.combat38[combat38::daredevil] == 0;
     if (c == Control::gestureKeep) // Update 38.5 GESTURE REMAP: only in the popup, never for a safety gesture
         return !view.remap || !view.remap->popup || view.remap->safety;
     if (c == Control::gestureAgain)
@@ -637,6 +667,23 @@ const char* labelOf(Control c) {
         return "GESTURE MOVES";
     case Control::trainMove:
         return "TRAIN MOVE";
+    case Control::heroTabSpider:
+        return "SPIDER-MAN";
+    case Control::heroTabIron:
+        return "IRON MAN";
+    case Control::heroTabDaredevil:
+        return "DAREDEVIL";
+    case Control::heroTabHulk:
+        return "HULK";
+    case Control::heroPlaySpider:
+        return "PLAY AS SPIDER-MAN";
+    case Control::section0:
+    case Control::section1:
+    case Control::section2:
+    case Control::section3:
+    case Control::section4:
+    case Control::section5:
+        return "SECTION";
     case Control::gestureRemapMove:
         return "REMAP MOVE";
     case Control::gestureRecord:
@@ -773,7 +820,9 @@ enum class Kind : uint8_t {
     dropdown, visual, progress, transport, musicStatus,
     fpsStats, // Update 24: the session HIGH / LOW / AVG boxes, RESET its box
     guide,    // Update 37: a CONTROLS line (Item::line), its how-to as its help
-    trail     // Update 38.5 GESTURE REMAP: the recorded move's trail and the popup's line
+    trail,    // Update 38.5 GESTURE REMAP: the recorded move's trail and the popup's line
+    section,  // Update 39.0.2: a section's header (a press opens or closes it), its summary on the right
+    banner    // Update 39.0.2: POWERS' ACTIVE HERO line
 };
 struct Item {
     Kind kind = Kind::title;
@@ -786,6 +835,14 @@ struct Item {
     float v2 = 0, h2 = 0;               // the FPS monitor's GPU line
     Help help;
     uint32_t line = 0;                  // Update 37: a guide item's controls_guide::Line
+    // Update 39.0.2: a section header's summary (sum0 / sum1's values between pre and post, else
+    // "count SETTINGS"), its hero (-1 none: the ACTIVE badge), and a row's RESTART tag (tagH 0: none).
+    Control sum0 = Control::none, sum1 = Control::none;
+    const char* pre = "";
+    const char* post = "";
+    int count = 0, hero = -1;
+    bool open = false;
+    float tagU = 0, tagH = 0;
 };
 Item itemOf(Kind kind, Control control = Control::none) {
     Item it;
@@ -800,7 +857,192 @@ struct Layout {
     std::vector<Area> areas;
 };
 
-Layout build(int page, float k) {
+// Update 39.0.2: the pages' sections (the approved 0.0.6 layout). A header's summary: sum0 (and
+// sum1) between pre and post; else, with a word, how many rows ("4 SETTINGS"); else pre alone.
+struct SectionDef {
+    const char* name;
+    Control sum0, sum1;
+    const char* pre;
+    const char* post;
+    const char* word;
+    int hero; // hero_modes::Hero, -1: not a hero's profile
+    Control rows[9];
+};
+using C = Control;
+constexpr SectionDef powersSections[] = {
+    {"FLYING", C::flyMode, C::none, "FLY ", "", nullptr, -1,
+     {C::flyMode, C::combatSupersonic, C::combatSupersonicSpeed, C::flyVignette, C::flyRoll, C::flyRollSpeed,
+      C::flyAutoLevel}},
+    {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
+    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType}},
+    {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2, {C::combatDaredevil, C::combatDaredevilPunch}},
+    {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight}},
+};
+constexpr SectionDef vrSections[] = {
+    {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
+     {C::combatCrawlCap, C::combatWallTilt, C::npcFade, C::playOnMonitor}},
+    {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
+     {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
+    {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
+     {C::hudHeight, C::hudScale, C::hudText, C::hudTheme, C::hudTextColor, C::combatHoloOpen, C::combatRingAnchor,
+      C::combatRingLayer}},
+    {"MIRROR", C::mirror, C::none, "MIRROR ", "", nullptr, -1,
+     {C::mirror, C::mirrorRecentre, C::mirrorAnchor, C::combatMirrorLook, C::combatMirrorView}},
+    {"SOUND", C::combatSfxVolume, C::none, "SFX ", "", nullptr, -1, {C::combatSfxVolume}},
+    {"ADVANCED - TESTS AND LOGS", C::none, C::none, "", "", "SETTINGS", -1, {C::worldLog, C::slotTest}},
+};
+constexpr SectionDef combatSections[] = {
+    {"PUNCHES", C::combatPunchMode, C::none, "", "", nullptr, -1,
+     {C::combatPunchMode, C::combatPunchSense, C::combatPunchAngle, C::combatMeleeAnim, C::combatZipMode}},
+    {"WEB BALL", C::combatBallAim, C::combatBallLook, "", "", nullptr, -1,
+     {C::combatBallAim, C::combatBallLook, C::combatBallFire, C::combatBallLead, C::combatAimStrength,
+      C::combatBallHit}},
+    {"LUNGE AND LOCK-ON", C::combatLunge, C::none, "", "", nullptr, -1,
+     {C::combatLunge, C::combatLungeFrom, C::combatLungeSpeed, C::combatLungeAim, C::combatLookLock,
+      C::combatStrikeSteer, C::combatAimAxis}},
+    {"GADGETS AND GRABS", C::combatGadgetKeys, C::none, "", " KEYS", nullptr, -1,
+     {C::combatGadgetKeys, C::combatGadgetFeel, C::combatGadgetHint, C::combatGrabWeb, C::combatRopeGrab,
+      C::combatRopeStrength, C::combatWallStick}},
+    {"BLOOD", C::blood, C::combatBloodLook, "", "", nullptr, -1, {C::blood, C::combatBloodLook, C::bloodVisor}},
+};
+constexpr SectionDef graphicsSections[] = {
+    {"QUALITY", C::aa, C::sharpen, "", "", nullptr, -1,
+     {C::aa, C::sharpen, C::farShadows, C::reach, C::combatFarWindows, C::eyeAa, C::eyeTrail, C::history}},
+    {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
+     {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
+    {"DISPLAY AND DETAIL", C::monitor, C::none, "WINDOW ", "", nullptr, -1,
+     {C::monitor, C::eyeBloom, C::sharedLod, C::eyeLod}},
+    {"ADVANCED - TESTS AND ENGINE", C::none, C::none, "", "", "SETTINGS", -1,
+     {C::engineTaa, C::taaJitter, C::eyeTest, C::addressFinder, C::webBallTest, C::foveaDebug, C::foveaStats}},
+};
+constexpr SectionDef colorSections[] = {
+    {"ADJUST", C::none, C::none, "", "", "SLIDERS", -1,
+     {C::exposure, C::contrast, C::saturation, C::vibrance, C::warmth, C::tint, C::vignette}},
+    {"90s ANIMATED", C::none, C::none, "ONLY WITH 90s FILTER", "", nullptr, -1,
+     {C::colorCartoon, C::colorOutlines, C::colorBands}},
+};
+constexpr SectionDef controlsSections[] = {
+    {"HOW TO PLAY", C::none, C::none, "", "", "MOVES", -1, {}},
+    {"GESTURES", C::gestureMoves, C::none, "", "", nullptr, -1, {C::gestureMoves, C::trainMove}},
+    {"GESTURE REMAP", C::gestureProfile, C::none, "", "", nullptr, -1,
+     {C::gestureProfile, C::gestureRemapMove, C::gestureRecord, C::gestureKeep, C::gestureAgain, C::gestureCancel,
+      C::gestureResetMove, C::gestureResetAll}},
+    {"GAMEPAD", C::padMode, C::none, "PAD MODE ", "", nullptr, -1, {C::padMode, C::promptHandling}},
+};
+struct PageSections {
+    const SectionDef* list;
+    int count;
+};
+template <size_t N> constexpr PageSections of(const SectionDef (&a)[N]) { return {a, static_cast<int>(N)}; }
+PageSections pageSections(int page) {
+    switch (page) {
+    case powersPage:
+        return of(powersSections);
+    case vrPage:
+        return of(vrSections);
+    case combatPage:
+        return of(combatSections);
+    case graphicsPage:
+        return of(graphicsSections);
+    case colorPage:
+        return of(colorSections);
+    case controlsPage:
+        return of(controlsSections);
+    default:
+        return {nullptr, 0};
+    }
+}
+const SectionDef* sectionsOf(int page) { return pageSections(page).list; }
+int rowsIn(const SectionDef& d) {
+    int n = 0;
+    for (const Control c : d.rows)
+        n += c != Control::none;
+    return n;
+}
+// The rows outside every section, per page (STATUS and the arrows: none).
+constexpr Control alwaysShown[] = {C::invincible, C::recalibrate, C::fpsReset, C::supersample,
+                                   C::colorFx,    C::colorFilter, C::colorStrength};
+constexpr int alwaysShownPage[] = {powersPage, vrPage, graphicsPage, graphicsPage, colorPage, colorPage, colorPage};
+static_assert(std::size(alwaysShown) == std::size(alwaysShownPage));
+bool isSliderRow(Control c) {
+    switch (c) {
+    case Control::eyeTrail:
+    case Control::foveaInner:
+    case Control::colorStrength:
+    case Control::exposure:
+    case Control::contrast:
+    case Control::saturation:
+    case Control::vibrance:
+    case Control::warmth:
+    case Control::tint:
+    case Control::vignette:
+    case Control::colorCartoon:
+    case Control::flyRollSpeed:
+    case Control::shadowDistance:
+        return true;
+    default:
+        return slider(c);
+    }
+}
+bool isCycleRow(Control c) {
+    return c == Control::webStyle || c == Control::webColor || c == Control::hudTheme || c == Control::hudTextColor ||
+           c == Control::musicVisualizer;
+}
+// The open sections, a nibble a page: 0xF the page's default, 0xE none, else the section.
+std::atomic<uint32_t> openSections{0xFFFFFFFFu};
+std::atomic<int> heroPlayed{0};
+} // namespace
+
+int sectionCount(int page) { return pageSections(page).count; }
+const char* sectionName(int page, int section) {
+    const PageSections ps = pageSections(page);
+    return section >= 0 && section < ps.count ? ps.list[section].name : "";
+}
+int openSection(int page) {
+    const int count = sectionCount(page);
+    if (count == 0)
+        return -1;
+    const uint32_t n = openSections.load(std::memory_order_relaxed) >> (4 * page) & 0xFu;
+    if (n == 0xFu) // the default
+        return page == colorPage    ? -1
+               : page == powersPage ? 1 + std::clamp(heroPlayed.load(std::memory_order_relaxed), 0, 3)
+                                    : 0;
+    return static_cast<int>(n) < count ? static_cast<int>(n) : -1;
+}
+void setOpenSection(int page, int section) {
+    if (page < 0 || page >= pages)
+        return;
+    const uint32_t n = section >= 0 && section < sectionCount(page) ? static_cast<uint32_t>(section) : 0xEu;
+    uint32_t was = openSections.load(std::memory_order_relaxed);
+    while (!openSections.compare_exchange_weak(was, (was & ~(0xFu << (4 * page))) | n << (4 * page),
+                                               std::memory_order_relaxed)) {
+    }
+}
+void resetSections() { openSections.store(0xFFFFFFFFu, std::memory_order_relaxed); }
+void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 3 ? hero : 0, std::memory_order_relaxed); }
+int activeHero() { return heroPlayed.load(std::memory_order_relaxed); }
+Place placeOf(Control c) {
+    if (c == Control::none)
+        return {};
+    for (size_t i = 0; i < std::size(alwaysShown); ++i)
+        if (alwaysShown[i] == c)
+            return {alwaysShownPage[i], -1};
+    const int ci = static_cast<int>(c);
+    if (ci >= static_cast<int>(Control::musicTrack) && ci <= static_cast<int>(Control::musicPick))
+        return {musicPage, -1};
+    for (int page = 0; page < pages; ++page) {
+        const PageSections ps = pageSections(page);
+        for (int s = 0; s < ps.count; ++s)
+            for (const Control r : ps.list[s].rows)
+                if (r == c && r != Control::none)
+                    return {page, s};
+    }
+    return {};
+}
+bool restartTag(Control c) { return c == Control::supersample || c == Control::combatMirrorView; }
+
+namespace {
+Layout build(int page, float k, int open) {
     Layout l;
     l.text = k;
     if (page < 1 || page >= pages)
@@ -868,7 +1110,115 @@ Layout build(int page, float k) {
         c = f.v;
         l.items.push_back(std::move(f));
     };
-    if (page == 1) {
+    auto heading = [&](const char* text) {
+        Item h = itemOf(Kind::heading);
+        h.text = text;
+        h.track = c - gapV;
+        h.h = fittedHeight(h.text, headingHeight * k, trackRight - trackLeft);
+        h.v = h.track - .0035f * k - h.h;
+        c = h.v;
+        l.items.push_back(std::move(h));
+    };
+    // Update 39.0.2 (owner: "the holo menus need to be cleaner and better organized"): the rows in
+    // sections, a header each (a press opens it and closes the page's other one); a closed
+    // section's rows are not laid out at all.
+    auto row = [&](Control control) {
+        if (isSliderRow(control))
+            sliderItem(control);
+        else if (isCycleRow(control))
+            cycleItem(control);
+        else
+            toggleItem(control);
+    };
+    auto sectionHeader = [&](int s) -> bool {
+        const SectionDef& d = sectionsOf(page)[s];
+        Item h = itemOf(Kind::section, sectionControl(s));
+        h.text = d.name;
+        h.line = static_cast<uint32_t>(s);
+        h.open = s == open;
+        h.sum0 = d.sum0;
+        h.sum1 = d.sum1;
+        h.pre = d.pre;
+        h.post = d.post;
+        h.hero = d.hero;
+        h.count = d.word ? (page == controlsPage && s == 0 ? static_cast<int>(controls_guide::lines) : rowsIn(d)) : 0;
+        const float bh = std::max(.019f * k, .016f);
+        h.box = {h.control, trackLeft, c - gapV - bh, trackRight, c - gapV};
+        h.h = std::min(fittedHeight(h.text, labelHeight * k, (trackRight - trackLeft) * .55f), bh * .5f);
+        h.v = (h.box.v0 + h.box.v1) / 2 - h.h / 2;
+        h.h2 = std::min(.0036f * k, bh * .42f); // the summary's (or the ACTIVE badge's) height, fitted when drawn
+        c = h.box.v0;
+        l.items.push_back(std::move(h));
+        return s == open;
+    };
+    auto section = [&](int s) {
+        if (!sectionHeader(s))
+            return;
+        const SectionDef& d = sectionsOf(page)[s];
+        if (page == controlsPage && s == 0) {
+            // Update 37: one line per control and its how-to under it; marked when drawn.
+            for (uint32_t i = 0; i < controls_guide::lines; ++i) {
+                Item g = itemOf(Kind::guide);
+                g.line = i;
+                g.text = controls_guide::texts[i].name;
+                g.h = fittedHeight(g.text, labelHeight * k, .085f);
+                g.v = c - gapV - g.h;
+                c = g.v;
+                helpUnder(controls_guide::texts[i].how, g.help, false);
+                l.items.push_back(std::move(g));
+            }
+            return;
+        }
+        for (const Control control : d.rows) {
+            if (control == Control::none)
+                break;
+            row(control);
+            if (control == Control::gestureRecord) {
+                // Update 38.5 GESTURE REMAP: the trail (RED / BLUE / GREEN) with the popup's
+                // CONFLICTS WITH line in it, under RECORD.
+                Item t = itemOf(Kind::trail);
+                const float th = .046f * k;
+                t.box = {Control::none, trackLeft, c - gapV - th, trackRight, c - gapV};
+                t.h = std::min(.0042f * k, .0060f);
+                c = t.box.v0;
+                l.items.push_back(std::move(t));
+            }
+        }
+    };
+    auto sections = [&](int from, int to) {
+        for (int s = from; s < to; ++s)
+            section(s);
+    };
+    switch (page) {
+    case powersPage: {
+        // ACTIVE HERO, INVINCIBLE and FLYING for every hero, then a profile per hero (the one played open).
+        Item b = itemOf(Kind::banner);
+        b.text = activeHeroWidest;
+        b.h = fittedHeight(activeHeroWidest, .0046f * k, trackRight - trackLeft);
+        b.v = c - gapV - b.h;
+        c = b.v;
+        helpUnder(activeHeroHelp, b.help);
+        l.items.push_back(std::move(b));
+        row(Control::invincible);
+        section(0);
+        heading(heroProfilesHeading);
+        sections(1, 5);
+        break;
+    }
+    case vrPage: {
+        Item r = itemOf(Kind::wide, Control::recalibrate);
+        r.text = "RECALIBRATE";
+        r.box = {Control::recalibrate, trackLeft, c - gapV - .024f * k, trackRight, c - gapV};
+        c = r.box.v0;
+        helpUnder(helpText(Control::recalibrate), r.help);
+        l.items.push_back(std::move(r));
+        sections(0, 6);
+        break;
+    }
+    case combatPage:
+        sections(0, 5);
+        break;
+    case graphicsPage: {
         // Update 16: the FPS monitor. Update 17: its sparkline beside the
         // readout while the readout fits there near its size, else under it.
         Item f = itemOf(Kind::fps);
@@ -897,86 +1247,29 @@ Layout build(int page, float k) {
         c = st.box.v0;
         helpUnder(helpText(Control::fpsReset), st.help);
         l.items.push_back(std::move(st));
-        Item r = itemOf(Kind::wide, Control::recalibrate);
-        r.text = "RECALIBRATE";
-        r.box = {Control::recalibrate, trackLeft, c - gapV - .024f * k, trackRight, c - gapV};
-        c = r.box.v0;
-        helpUnder(helpText(Control::recalibrate), r.help);
-        l.items.push_back(std::move(r));
-        sliderItem(Control::thickness);
-        sliderItem(Control::speed);
-        // Update 18: the webs' look beside their width and speed. WEB
-        // COLOR's row is always there and one line whatever the style's
-        // list, so the page never reflows under the pointer.
-        cycleItem(Control::webStyle);
-        cycleItem(Control::webColor);
-        toggleItem(Control::reticles);
-        // Update 37: the player mirror (vr_mirror.hpp): show/dismiss, and place it again.
-        toggleItem(Control::mirror);
-        toggleItem(Control::mirrorRecentre);
-        toggleItem(Control::mirrorAnchor); // Update 37.2: PLAYSPACE / WORLD
-        // Update 37: the read-only research log (world_trace.hpp).
-        toggleItem(Control::worldLog);
-        toggleItem(Control::blood); // Update 37: BLOOD SPLATTER, default OFF
-        toggleItem(Control::bloodVisor); // Update 38.5: EXTREME's VISOR DROPS, default OFF
-        toggleItem(Control::npcFade);  // Update 37.2: NPC NEAR FADE, default OFF (the fix)
-        toggleItem(Control::slotTest); // Update 37.2: SLOT TEST, a press, never kept
-        // Update 38: COMBAT, each live (combat38.hpp), its default the recommended fix.
-        for (int o = 0; o < combatControls; ++o)
-            toggleItem(static_cast<Control>(static_cast<int>(Control::combatCrawlCap) + o));
-        // Update 24: the session FPS row makes the page taller: it scrolls.
-        footerItem(scrollFooter);
-    } else if (page == colorPage) {
+        sections(0, 4);
+        // The launch-only part, set apart and labelled, always shown.
+        heading(nextLaunchHeading);
+        sliderItem(Control::supersample);
+        Item n = itemOf(Kind::notice);
+        n.text = restartNotice;
+        n.h = fittedHeight(n.text, noticeHeight * k, .12f);
+        n.v = c - .004f * k - n.h;
+        c = n.v;
+        l.items.push_back(std::move(n));
+        break;
+    }
+    case colorPage:
         // Update 37.2: COLOR / ATMOSPHERE (eye_color.hpp): live, both eyes alike, default OFF.
-        toggleItem(Control::colorFx);
-        toggleItem(Control::colorFilter);
-        for (const Control control : {Control::colorStrength, Control::exposure, Control::contrast, Control::saturation,
-                                      Control::vibrance, Control::warmth, Control::tint, Control::vignette})
-            sliderItem(control);
-        // Update 38.5: 90s ANIMATED's own (greyed under another FILTER).
-        sliderItem(Control::colorCartoon);
-        toggleItem(Control::colorOutlines);
-        toggleItem(Control::colorBands);
-        footerItem(scrollFooter);
-    } else if (page == extrasPage) {
-        // Update 38.5 EXTRAS (extras385.hpp): each OFF by default, live.
-        for (const Control control : {Control::invincible, Control::flyMode, Control::flyVignette, Control::flyRoll})
-            toggleItem(control);
-        sliderItem(Control::flyRollSpeed); // Update 38.5: FLY ROLL's (owner 4:52)
-        for (const Control control : {Control::flyAutoLevel, Control::symbiote, Control::padMode,
-                                      Control::promptHandling, Control::playOnMonitor, Control::gestureMoves,
-                                      Control::trainMove})
-            toggleItem(control);
-        // Update 38.5 GESTURE REMAP: the move, RECORD, the trail (RED / BLUE / GREEN) with the popup's
-        // CONFLICTS WITH line in it, the popup's three answers (greyed while there is no popup).
-        toggleItem(Control::gestureRemapMove);
-        toggleItem(Control::gestureRecord);
-        {
-            Item t = itemOf(Kind::trail);
-            const float th = .046f * k;
-            t.box = {Control::none, trackLeft, c - gapV - th, trackRight, c - gapV};
-            t.h = std::min(.0042f * k, .0060f);
-            c = t.box.v0;
-            l.items.push_back(std::move(t));
-        }
-        for (const Control control : {Control::gestureKeep, Control::gestureAgain, Control::gestureCancel,
-                                      Control::gestureResetMove, Control::gestureResetAll, Control::gestureProfile})
-            toggleItem(control);
-        footerItem(scrollFooter);
-    } else if (page == controlsPage) {
-        // Update 37: one line per control and its how-to under it; marked when drawn.
-        for (uint32_t i = 0; i < controls_guide::lines; ++i) {
-            Item g = itemOf(Kind::guide);
-            g.line = i;
-            g.text = controls_guide::texts[i].name;
-            g.h = fittedHeight(g.text, labelHeight * k, .085f);
-            g.v = c - gapV - g.h;
-            c = g.v;
-            helpUnder(controls_guide::texts[i].how, g.help, false);
-            l.items.push_back(std::move(g));
-        }
-        footerItem(scrollFooter);
-    } else if (page == musicPage) {
+        row(Control::colorFx);
+        row(Control::colorFilter);
+        row(Control::colorStrength);
+        sections(0, 2);
+        break;
+    case controlsPage:
+        sections(0, 4);
+        break;
+    default: { // musicPage
         // Update 19, from the top as in the concept: the song list, the
         // visualizer, the progress, the buttons, the volume.
         Item d = itemOf(Kind::dropdown, Control::musicTrack);
@@ -1027,54 +1320,23 @@ Layout build(int page, float k) {
         st.v2 = st.v - .0025f * k - st.h2;
         c = st.v2;
         l.items.push_back(std::move(st));
-        footerItem(scrollFooter);
-    } else if (page == 2) {
-        toggleItem(Control::farShadows); // Update 35: live press, default EYES, never kept
-        toggleItem(Control::eyeBloom);   // Update 36: live press, default OFF, never kept
-        toggleItem(Control::sharedLod);  // Update 36: live press, default OFF, never kept
-        toggleItem(Control::aa);
-        for (const Control control : {Control::history, Control::reach, Control::monitor, Control::sharpen})
-            sliderItem(control);
-        toggleItem(Control::eyeTest); // Update 24: live, never kept
-        toggleItem(Control::addressFinder); // Update 27: press, value from View, never kept
-        toggleItem(Control::eyeLod);        // Update 28: live press, default OFF, never kept
-        toggleItem(Control::eyeAa);          // Update 33: live press, default OFF, never kept
-        sliderItem(Control::eyeTrail);       // Update 34.2: live, EYE AA's trail at swing speed
-        toggleItem(Control::engineTaa);      // Update 34: live press, default OFF, never kept
-        toggleItem(Control::taaJitter);      // Update 34.2: live press, ENGINE TAA's jitter
-        toggleItem(Control::webBallTest);    // Update 37.2: EYE BLOOM OFF <-> COPY + one web ball
-        // Update 37.2: FOVEATED (EXPERIMENTAL, D3D12 VRS tier 2, foveation.hpp), default OFF.
-        toggleItem(Control::foveated);
-        sliderItem(Control::foveaInner);
-        toggleItem(Control::foveaDebug);
-        toggleItem(Control::foveaStats);
-        // Update 35: SHADOW DISTANCE (Update 33) is retired from the page: no visible effect
-        // (the eyes had no far cascades for it to reach; FAR SHADOWS).
-        // Update 32: SHADOW CAMERA (Update 31) is retired from the page: no visible effect.
-        // The launch-only part, set apart and labelled.
-        Item h = itemOf(Kind::heading);
-        h.text = nextLaunchHeading;
-        h.track = c - gapV;
-        h.h = fittedHeight(h.text, headingHeight * k, trackRight - trackLeft);
-        h.v = h.track - .0035f * k - h.h;
-        c = h.v;
-        l.items.push_back(std::move(h));
-        sliderItem(Control::supersample);
-        Item n = itemOf(Kind::notice);
-        n.text = restartNotice;
-        n.h = fittedHeight(n.text, noticeHeight * k, .12f);
-        n.v = c - .004f * k - n.h;
-        c = n.v;
-        l.items.push_back(std::move(n));
-        // Update 24: EYE TEST's row pushes NEXT LAUNCH down: said how to reach it.
-        footerItem(scrollFooter);
-    } else if (page == 3) {
-        for (const Control control : {Control::hudHeight, Control::hudScale, Control::hudText})
-            sliderItem(control);
-        cycleItem(Control::hudTheme);
-        cycleItem(Control::hudTextColor);
-        footerItem(scrollFooter);
+        break;
     }
+    }
+    // Update 39.0.2: EYE SUPERSAMPLE's and MIRROR VIEW's gold RESTART tag, after the name when it fits.
+    for (Item& it : l.items) {
+        if (!restartTag(it.control) || (it.kind != Kind::slider && it.kind != Kind::toggle))
+            continue;
+        const float limit = it.kind == Kind::slider ? trackRight - it.numberW - .003f : it.box.u0 - .002f;
+        const float u = trackLeft + textWidth(it.text, it.h) + .003f;
+        for (float th = std::min(.0032f * k, it.h * .85f); th >= .0022f; th -= .0004f)
+            if (u + textWidth(restartTagText, th) + .003f <= limit) {
+                it.tagU = u;
+                it.tagH = th;
+                break;
+            }
+    }
+    footerItem(scrollFooter);
     l.bottom = c - .007f * k;
 
     // Everything drawn, as rectangles (tests: none overlaps another).
@@ -1138,6 +1400,12 @@ Layout build(int page, float k) {
         case Kind::transport:
             box(it.box, "a player button");
             break;
+        case Kind::section:
+            box(it.box, "a section header");
+            break;
+        case Kind::banner:
+            centred(activeHeroWidest, it.v, it.h, "the ACTIVE HERO line");
+            break;
         case Kind::musicStatus:
             area(trackLeft, it.v, trackRight, it.v + it.h, "the music note");
             area(trackLeft, it.v2, trackRight, it.v2 + it.h2, "the music folder");
@@ -1146,10 +1414,14 @@ Layout build(int page, float k) {
             area(trackLeft, it.v, trackLeft + textWidth(it.text, it.h), it.v + it.h, "a control's name");
             area(trackRight - it.numberW, it.v, trackRight, it.v + it.numberH, "a slider's number");
             area(trackLeft - .005f, it.track - .005f, trackRight + .005f, it.track + .005f, "a slider's track");
+            if (it.tagH > 0)
+                area(it.tagU, it.v, it.tagU + textWidth(restartTagText, it.tagH) + .003f, it.v + it.h, "a RESTART tag");
             break;
         case Kind::toggle:
             area(trackLeft, it.v, trackLeft + textWidth(it.text, it.h), it.v + it.h, "a control's name");
             box(it.box, "a button");
+            if (it.tagH > 0)
+                area(it.tagU, it.v, it.tagU + textWidth(restartTagText, it.tagH) + .003f, it.v + it.h, "a RESTART tag");
             break;
         case Kind::cycle:
             area(trackLeft, it.v, trackLeft + textWidth(it.text, it.h), it.v + it.h, "a control's name");
@@ -1171,9 +1443,10 @@ Layout build(int page, float k) {
     return l;
 }
 // Per thread (the overlay and the input stage each keep their own), rebuilt
-// only when the text size changes: no allocation in a steady frame.
+// only when the text size or the open section changes: no allocation in a steady frame.
+// Update 39.0.2: a page past the eight is STATUS.
 const Layout& layoutOf(int page, float text) {
-    const int p = ((page % pages) + pages) % pages;
+    const int p = page >= 0 && page < pages ? page : 0;
     const float k = textFactor(text);
     thread_local std::array<Layout, pages> cache;
     thread_local std::array<long, pages> key = [] {
@@ -1181,9 +1454,10 @@ const Layout& layoutOf(int page, float text) {
         a.fill(-1);
         return a;
     }();
-    const long want = std::lround(k * 1000);
+    const int open = openSection(p); // read once: the key and the build agree
+    const long want = std::lround(k * 1000) * 16 + (open + 1);
     if (key[static_cast<size_t>(p)] != want) {
-        cache[static_cast<size_t>(p)] = build(p, k);
+        cache[static_cast<size_t>(p)] = build(p, k, open);
         key[static_cast<size_t>(p)] = want;
     }
     return cache[static_cast<size_t>(p)];
@@ -2008,6 +2282,126 @@ void remapTrail(const Painter& p, const Item& it, const View& view, Vec3 grey) {
         p.text(third, tu, top - .007f - h2 - h3, h3, p.c.label);
 }
 
+// A toggle's or cycle's button value (Update 39.0.2: one place, also a section header's summary).
+std::string buttonValue(const View& view, Control c) {
+    return c == Control::addressFinder ? addressFinderValue(view)
+           : c == Control::eyeLod      ? eyeLodValue(view)
+           : c == Control::eyeAa       ? eyeAaValue(view)
+           : c == Control::engineTaa   ? engineTaaValue(view)
+           : c == Control::taaJitter   ? std::string(engine_taa::jitterName(view.taaJitter))
+           : c == Control::shadowCamera ? shadowCameraValue(view)
+           : c == Control::farShadows   ? farShadowsValue(view)
+           : c == Control::eyeBloom     ? eyeBloomValue(view)
+           : c == Control::sharedLod    ? sharedLodValue(view)
+           : c == Control::mirror       ? mirrorValue(view)
+           : c == Control::mirrorRecentre ? std::string("PRESS")
+           : c == Control::worldLog     ? worldLogValue(view)
+           : c == Control::blood        ? bloodValue(view)
+           : c == Control::bloodVisor   ? std::string(view.bloodVisor ? "ON" : "OFF")
+           : c == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
+           : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
+           : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
+           : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
+           : c == Control::flyAutoLevel ? std::string(view.flyAutoLevel ? "ON" : "OFF")
+           : c == Control::symbiote     ? std::string(view.symbiote ? "ON" : "OFF")
+           : c == Control::padMode      ? std::string(!view.padMode ? "OFF" : view.padByPrompt ? "ON (PROMPT)" : "ON")
+           : c == Control::promptHandling ? std::string(view.promptHandling ? "AUTO" : "MANUAL")
+           : c == Control::playOnMonitor ? std::string(view.monitorArmed ? extras385::view::confirm : "PRESS")
+           : c == Control::gestureMoves ? std::string(gestures385::modeName(view.gestureMoves))
+           : c == Control::trainMove    ? std::string(view.trainMove) + (view.trainMine ? " (MINE)" : "")
+           : c == Control::heroPlaySpider ? std::string(spiderActive(view) ? "ACTIVE" : "PRESS")
+           : remapRow(c)                ? remapValue(c, view)
+           : c == Control::mirrorAnchor ? mirrorAnchorValue(view)
+           : c == Control::npcFade      ? npcFadeValue(view)
+           : c == Control::colorFx      ? colorValue(view)
+           : c == Control::colorFilter  ? std::string(eye_color::filterName(view.color >> 8 & 0xff))
+           : c == Control::colorOutlines ? std::string(view.color & 0x20000 ? "ON" : "OFF")
+           : c == Control::colorBands   ? std::to_string(std::clamp<uint32_t>(view.color >> 20 & 0xf, 3, 5))
+           : c == Control::foveated     ? foveaValue(view)
+           : c == Control::foveaDebug   ? std::string(view.fovea & 0x10000 ? "ON" : "OFF")
+           : c == Control::foveaStats   ? foveaStatsValue(view)
+           : c == Control::slotTest     ? testValue(view.slotTest)
+           : c == Control::webBallTest  ? webBallValue(view)
+           : combatOption(c) >= 0
+               ? std::string(combat38::valueName(static_cast<uint32_t>(combatOption(c)),
+                                                 view.combat38[combatOption(c)]))
+                                                : valueText(c, view.settings);
+}
+// A row's value as drawn: a slider's number, else its button's.
+std::string rowValue(const View& view, Control c) {
+    if (!isSliderRow(c))
+        return off(view, c) ? std::string("N/A") : buttonValue(view, c);
+    if (off(view, c))
+        return "UNAVAILABLE";
+    return c == Control::shadowDistance
+               ? shadow_distance::valueText(view.shadowDistance, view.settings[c], view.shadowDistanceGame)
+               : valueText(c, view.settings[c]);
+}
+// Update 39.0.2: a section's header: + or - at the left, its name, and on the right its summary (a
+// hero's profile: a gold ACTIVE badge while that hero is played).
+void sectionRow(const Painter& p, const Item& it, const View& view) {
+    const Box& b = it.box;
+    const bool hover = view.hover == it.control, held = view.held == it.control;
+    p.rect(b.u0, b.v0, b.u1, b.v1, p.c.backing, .8f);
+    p.rect(b.u0, b.v0, b.u1, b.v1, held ? p.c.line : p.c.accent, held ? .45f : hover ? .28f : it.open ? .16f : .08f);
+    const Vec3 edge = hover || held ? p.c.text : p.c.accent;
+    p.bar(b.u0, b.v1, b.u1, b.v1, .0007f, edge, it.open ? .9f : .55f);
+    p.bar(b.u0, b.v0, b.u1, b.v0, .0007f, edge, it.open ? .9f : .55f);
+    p.bar(b.u0, b.v0, b.u0, b.v1, .0013f, it.open ? p.c.line : edge, .9f);
+    // The sign: - open, + closed.
+    const float mid = (b.v0 + b.v1) / 2, s = std::min((b.v1 - b.v0) * .2f, .0026f), cx = b.u0 + .0055f;
+    const Vec3 sign = hover || held || it.open ? p.c.text : p.c.line;
+    p.bar(cx - s, mid, cx + s, mid, .0008f, sign, .95f);
+    if (!it.open)
+        p.bar(cx, mid - s, cx, mid + s, .0008f, sign, .95f);
+    const float nameU = b.u0 + .011f;
+    p.text(it.text, nameU, it.v, it.h, hover || held || it.open ? p.c.text : p.c.label);
+    const float left = nameU + textWidth(it.text, it.h) + .006f, right = b.u1 - .004f;
+    if (right <= left)
+        return;
+    if (it.hero >= 0) {
+        if (heroOf(view) != it.hero)
+            return;
+        const float h = fittedHeight("ACTIVE", it.h2, right - left - .004f);
+        const float w = textWidth("ACTIVE", h) + .004f, u0 = right - w;
+        p.rect(u0, mid - h * .9f, right, mid + h * .9f, p.c.warn, .18f);
+        p.bar(u0, mid - h * .9f, right, mid - h * .9f, .0006f, p.c.warn, .9f);
+        p.bar(u0, mid + h * .9f, right, mid + h * .9f, .0006f, p.c.warn, .9f);
+        p.text("ACTIVE", u0 + .002f, mid - h / 2, h, p.c.warn);
+        return;
+    }
+    std::string summary = it.pre;
+    if (it.sum0 != Control::none) {
+        summary += rowValue(view, it.sum0);
+        if (it.sum1 != Control::none)
+            summary += " / " + rowValue(view, it.sum1);
+        summary += it.post;
+    } else if (it.count > 0) {
+        const SectionDef& d = sectionsOf(view.page)[it.line];
+        summary = std::to_string(it.count) + " " + (d.word ? d.word : "");
+    }
+    if (summary.empty())
+        return;
+    const float h = fittedHeight(summary, it.h2, right - left);
+    p.text(summary, right - textWidth(summary, h), mid - h / 2, h, p.c.value);
+}
+// Update 39.0.2: POWERS' ACTIVE HERO line, the hero in gold.
+void bannerRow(const Painter& p, const Item& it, const View& view) {
+    static constexpr const char* names[4] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK"};
+    const char* lead = "ACTIVE HERO: ";
+    const char* name = names[heroOf(view)];
+    const float w = textWidth(lead, it.h) + textWidth(name, it.h);
+    p.text(lead, -w / 2, it.v, it.h, p.c.label);
+    p.text(name, -w / 2 + textWidth(lead, it.h), it.v, it.h, p.c.warn);
+}
+// Update 39.0.2: the gold RESTART tag after a row's name.
+void restartTagOn(const Painter& p, const Item& it) {
+    if (it.tagH <= 0)
+        return;
+    const float mid = it.v + it.h / 2, w = textWidth(restartTagText, it.tagH) + .003f;
+    p.rect(it.tagU, mid - it.tagH * .85f, it.tagU + w, mid + it.tagH * .85f, p.c.warn, .16f);
+    p.text(restartTagText, it.tagU + .0015f, mid - it.tagH / 2, it.tagH, p.c.warn);
+}
 void content(const Painter& p, const Layout& l, const View& view) {
     const float k = l.text;
     const Vec3 grey{.45f, .5f, .58f};
@@ -2030,54 +2424,14 @@ void content(const Painter& p, const Layout& l, const View& view) {
             break;
         case Kind::slider:
             sliderRow(p, it, view);
+            restartTagOn(p, it);
             break;
         case Kind::toggle:
         case Kind::cycle:
+            restartTagOn(p, it);
             p.text(it.text, trackLeft, it.v, it.h,
                    view.hover == it.control || view.held == it.control ? p.c.text : p.c.label);
-            button(p, it.box,
-                   it.control == Control::addressFinder ? addressFinderValue(view)
-                   : it.control == Control::eyeLod      ? eyeLodValue(view)
-                   : it.control == Control::eyeAa       ? eyeAaValue(view)
-                   : it.control == Control::engineTaa   ? engineTaaValue(view)
-                   : it.control == Control::taaJitter   ? std::string(engine_taa::jitterName(view.taaJitter))
-                   : it.control == Control::shadowCamera ? shadowCameraValue(view)
-                   : it.control == Control::farShadows   ? farShadowsValue(view)
-                   : it.control == Control::eyeBloom     ? eyeBloomValue(view)
-                   : it.control == Control::sharedLod    ? sharedLodValue(view)
-                   : it.control == Control::mirror       ? mirrorValue(view)
-                   : it.control == Control::mirrorRecentre ? std::string("PRESS")
-                   : it.control == Control::worldLog     ? worldLogValue(view)
-                   : it.control == Control::blood        ? bloodValue(view)
-                   : it.control == Control::bloodVisor   ? std::string(view.bloodVisor ? "ON" : "OFF")
-                   : it.control == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
-                   : it.control == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
-                   : it.control == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
-                   : it.control == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
-                   : it.control == Control::flyAutoLevel ? std::string(view.flyAutoLevel ? "ON" : "OFF")
-                   : it.control == Control::symbiote     ? std::string(view.symbiote ? "ON" : "OFF")
-                   : it.control == Control::padMode      ? std::string(!view.padMode ? "OFF" : view.padByPrompt ? "ON (PROMPT)" : "ON")
-                   : it.control == Control::promptHandling ? std::string(view.promptHandling ? "AUTO" : "MANUAL")
-                   : it.control == Control::playOnMonitor ? std::string(view.monitorArmed ? extras385::view::confirm : "PRESS")
-                   : it.control == Control::gestureMoves ? std::string(gestures385::modeName(view.gestureMoves))
-                   : it.control == Control::trainMove    ? std::string(view.trainMove) + (view.trainMine ? " (MINE)" : "")
-                   : remapRow(it.control)                ? remapValue(it.control, view)
-                   : it.control == Control::mirrorAnchor ? mirrorAnchorValue(view)
-                   : it.control == Control::npcFade      ? npcFadeValue(view)
-                   : it.control == Control::colorFx      ? colorValue(view)
-                   : it.control == Control::colorFilter  ? std::string(eye_color::filterName(view.color >> 8 & 0xff))
-                   : it.control == Control::colorOutlines ? std::string(view.color & 0x20000 ? "ON" : "OFF")
-                   : it.control == Control::colorBands   ? std::to_string(std::clamp<uint32_t>(view.color >> 20 & 0xf, 3, 5))
-                   : it.control == Control::foveated     ? foveaValue(view)
-                   : it.control == Control::foveaDebug   ? std::string(view.fovea & 0x10000 ? "ON" : "OFF")
-                   : it.control == Control::foveaStats   ? foveaStatsValue(view)
-                   : it.control == Control::slotTest     ? testValue(view.slotTest)
-                   : it.control == Control::webBallTest  ? webBallValue(view)
-                   : combatOption(it.control) >= 0
-                       ? std::string(combat38::valueName(static_cast<uint32_t>(combatOption(it.control)),
-                                                         view.combat38[combatOption(it.control)]))
-                                                        : valueText(it.control, view.settings),
-                   view, k);
+            button(p, it.box, buttonValue(view, it.control), view, k);
             if (arrows(it.control))
                 arrowsOn(p, it.box, view.hover == it.control || view.held == it.control ? p.c.text : p.c.accent,
                          off(view, it.control) ? .25f : .9f);
@@ -2123,6 +2477,13 @@ void content(const Painter& p, const Layout& l, const View& view) {
             break;
         case Kind::transport:
             transport(p, it, view, k, grey);
+            break;
+        case Kind::section:
+            sectionRow(p, it, view);
+            help = grey;
+            break;
+        case Kind::banner:
+            bannerRow(p, it, view);
             break;
         case Kind::musicStatus:
             musicStatus(p, it, view);
@@ -2401,20 +2762,20 @@ Range range(Control c) {
 }
 const char* pageName(int page) {
     switch (page) {
-    case 1:
+    case powersPage:
+        return "POWERS";
+    case vrPage:
         return "VR SETTINGS";
-    case 2:
+    case combatPage:
+        return "COMBAT";
+    case graphicsPage:
         return "GRAPHICS";
-    case 3:
-        return "HOLOGRAM";
-    case 4:
-        return "MUSIC";
-    case controlsPage:
-        return "CONTROLS";
     case colorPage:
         return "COLOR";
-    case extrasPage:
-        return "EXTRAS";
+    case controlsPage:
+        return "CONTROLS";
+    case musicPage:
+        return "MUSIC";
     default:
         return "STATUS";
     }
@@ -2515,7 +2876,7 @@ Control helpAt(int page, float u, float v, float scroll, float text) {
     return Control::none;
 }
 Spot controlSpot(int page, Control c, float scroll, float text) {
-    const int p = ((page % pages) + pages) % pages;
+    const int p = page >= 0 && page < pages ? page : 0;
     if (c == Control::previous || c == Control::next) {
         const Box& b = c == Control::previous ? previousBox : nextBox;
         return {true, (b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2, true};
@@ -2791,6 +3152,20 @@ const char* helpText(Control c) {
         return gestures385::help;
     case Control::trainMove:
         return "Picks the move TRAINING draws as a glowing path in the air to follow.";
+    case Control::heroTabSpider:
+    case Control::heroTabIron:
+    case Control::heroTabDaredevil:
+    case Control::heroTabHulk:
+        return heroTabsHelp;
+    case Control::section0:
+    case Control::section1:
+    case Control::section2:
+    case Control::section3:
+    case Control::section4:
+    case Control::section5:
+        return sectionHelp;
+    case Control::heroPlaySpider:
+        return "Turns every other hero off so you swing as Spider-Man again, live.";
     case Control::gestureRemapMove:
         return gesture_session::helpMove;
     case Control::gestureRecord:
@@ -3147,6 +3522,23 @@ const char* shortName(Control c) {
         return "GESTURES";
     case Control::trainMove:
         return "TRAIN";
+    case Control::heroTabSpider:
+        return "SPIDER-MAN";
+    case Control::heroTabIron:
+        return "IRON MAN";
+    case Control::heroTabDaredevil:
+        return "DAREDEVIL";
+    case Control::heroTabHulk:
+        return "HULK";
+    case Control::heroPlaySpider:
+        return "SPIDER-MAN";
+    case Control::section0:
+    case Control::section1:
+    case Control::section2:
+    case Control::section3:
+    case Control::section4:
+    case Control::section5:
+        return "SECTION";
     case Control::gestureRemapMove:
         return "REMAP";
     case Control::gestureRecord:
@@ -3382,7 +3774,7 @@ Pointer point(const Frame& f, float scale, const Pose& grip, unsigned hand) {
 
 constexpr float listRowsPerSecond = 8;
 void Menu::setScroll(int page, float scroll, float text) {
-    const int p = ((page % pages) + pages) % pages;
+    const int p = page >= 0 && page < pages ? page : 0;
     scroll_[static_cast<size_t>(p)] = clampScroll(p, scroll, textFactor(text));
 }
 Menu::Result Menu::update(const Input& in, Settings& settings) {
@@ -3395,6 +3787,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
     const bool press = down && !down_;
     down_ = down;
     const float k = textFactor(in.text);
+    if (in.hero >= 0)
+        setActiveHero(in.hero); // Update 39.0.2: POWERS opens the profile of the hero played
     // Update 17: the update the panel's size, place or text changes, what
     // the pointer is over moves under it: hover nothing, press nothing.
     const bool relaid = layoutSeen_ && in.layout != layout_;
@@ -3480,14 +3874,33 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             r.pressed = true;
             held_ = hover_;
             switch (hover_) {
-            case Control::previous:
-                setPage(page_ - 1);
+            case Control::previous: // the arrows wrap (MUSIC <-> STATUS)
+                setPage((page_ + pages - 1) % pages);
                 closeList();
                 break;
             case Control::next:
-                setPage(page_ + 1);
+                setPage((page_ + 1) % pages);
                 closeList();
                 break;
+            case Control::section0:
+            case Control::section1:
+            case Control::section2:
+            case Control::section3:
+            case Control::section4:
+            case Control::section5: {
+                // Update 39.0.2: open it (closing the page's other one), or close it; the header
+                // stays where it is under the pointer (the rows above may have closed).
+                const int s = sectionIndex(hover_);
+                const Spot before = controlSpot(page_, hover_, 0, in.text);
+                setOpenSection(page_, openSection(page_) == s ? -1 : s);
+                const Spot after = controlSpot(page_, hover_, 0, in.text);
+                if (before.found && after.found)
+                    scroll += before.v - after.v;
+                scroll = clampScroll(page_, scroll, k);
+                closeList();
+                r.section = true;
+                break;
+            }
             case Control::musicPick:
                 if (listHover_ >= 0) {
                     r.music = Music::pick;
@@ -3608,6 +4021,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::trainMove:
                 r.trainMove = true;
                 break;
+            case Control::heroPlaySpider:
+                r.heroSpider = true;
+                break;
             case Control::gestureRemapMove:
                 r.remapMove = true;
                 break;
@@ -3689,6 +4105,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatSfxVolume:
             case Control::combatSupersonic:
             case Control::combatSupersonicSpeed:
+            case Control::combatDaredevil:
+            case Control::combatHulk:
+            case Control::combatDaredevilPunch:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:
@@ -4160,7 +4579,7 @@ void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, flo
     painter.seconds = view.seconds;
     const Painter& p = painter;
     light(p, view.emitter, view.seconds);
-    const int page = ((view.page % pages) + pages) % pages;
+    const int page = view.page >= 0 && view.page < pages ? view.page : 0;
     const float top = panelTop(page);
     if (p.pixel)
         raimiHalo(p, top);

@@ -134,6 +134,7 @@ struct Command {
     Vec3 move{};
     float trackingYaw{};
     float sampleSeconds = 1.f / 90.f;
+    // Version 0.0.6: bit 4 HULK LEAP (hero_modes::hulkLeapAsk): the charged leap at 2x the speed.
     // Version 0.0.5: bit 1 FLY's SUPERSONIC dash now, bits 2-3 its SUPERSONIC SPEED
     // (fly_boost::asksOf; the layout is unchanged).
     // Bit 0: the player asks the game for a move of its own now - its LT + RT
@@ -392,7 +393,7 @@ inline bool valid(const Command& c) {
           (c.version == 6 && c.bytes == sizeof(c))) ||
         !std::isfinite(c.leap) || c.leap < 0 || c.leap > 1 || !finite(c.look) || length(c.look) > 1.01f ||
         !c.serial || c.focused > 1 || c.jump > 1 || c.leaseMs > 250 || (c.focused && !c.leaseMs) ||
-        !finite(c.move) || length(c.move) > 1.001f || !std::isfinite(c.trackingYaw) || c.asks > 15 ||
+        !finite(c.move) || length(c.move) > 1.001f || !std::isfinite(c.trackingYaw) || c.asks > 31 ||
         !std::isfinite(c.sampleSeconds) || c.sampleSeconds <= 0 || c.sampleSeconds > .1f ||
         (c.focused && !c.sampleTimeNs) || !std::isfinite(tilt) || tilt < .99f || tilt > 1.01f)
         return false;
@@ -583,6 +584,7 @@ inline Input input(const Command& c) {
     if (c.version >= 4) {
         out.leap = c.leap;
         out.look = c.look;
+        out.leapScale = (c.asks & 16u) ? 2.f : 1.f; // Version 0.0.6 HULK LEAP
     }
     for (unsigned i = 0; i < 2; ++i)
         out.hands[i] = {c.hands[i].aim, c.hands[i].relative, c.hands[i].tracked != 0, c.hands[i].trigger,

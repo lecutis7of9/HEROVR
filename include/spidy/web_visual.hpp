@@ -117,6 +117,9 @@ void appendWebSplash(std::vector<Vertex>& out, Vec3 at, Vec3 viewer, float pixel
 void appendRepulsorBolt(std::vector<Vertex>& out, Vec3 bolt, Vec3 tail, Vec3 viewer, float pixelAngle, float fade);
 void appendRepulsorFlash(std::vector<Vertex>& out, Vec3 at, Vec3 viewer, float pixelAngle, float fade, float size);
 void appendChestBeam(std::vector<Vertex>& out, Vec3 chest, Vec3 end, Vec3 viewer, float pixelAngle, float fade);
+// Version 0.0.6 DAREDEVIL ABILITIES: a billy club from `grip` to `tip` (dark red, a black grip wrap on
+// the grip's third, a light streak), turned to the eye, at least a pixel and a half wide.
+void appendBaton(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, Vec3 viewer, float pixelAngle);
 // Version 0.0.5 BEAM RING: the chest beam's cooldown on the back of the right wrist (hand: the
 // right grip), like a watch face: an orange arc filling clockwise from the top over 30 s (share
 // 0..1), the whole ring blue-white when ready; flash 1..0 just ready: brighter, a ring swelling

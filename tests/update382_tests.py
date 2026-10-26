@@ -31,7 +31,7 @@ FIXES = dict(aim_assist='smart', punch_mode='targeted', ring_anchor='wrist', hol
 
 class Settings(unittest.TestCase):
     def test_version(self):
-        self.assertRegex(VERSION, r'^Update 38\.[2-9]')
+        self.assertRegex(VERSION, r'^Update (38\.[2-9]|39\.\d)')
 
     def test_exports_codes_defaults(self):
         for key, (export, code, default) in NEW.items():

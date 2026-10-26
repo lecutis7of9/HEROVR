@@ -92,6 +92,7 @@ Set-Content -LiteralPath (Join-Path $stage 'Music\Put your songs here.txt') -Enc
     'Turn Music down to 0 in the game''s Audio settings so it does not play over your songs.')
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY_NOTICES.md') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $root 'CREDITS.md') -Destination $stage  # Version 0.0.6: who made it, and SpidyVR's author
 Copy-Item -Path (Join-Path $root 'docs\licenses\*') -Destination (Join-Path $stage 'docs\licenses')
 $notices = @{
     'third_party\imgui\LICENSE.txt' = 'DearImGui-LICENSE.txt'

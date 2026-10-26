@@ -1439,6 +1439,23 @@ void appendChestBeam(std::vector<Vertex>& out, Vec3 chest, Vec3 end, Vec3 viewer
     if (!web_style::sane(out, from))
         out.resize(from);
 }
+void appendBaton(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, Vec3 viewer, float pixelAngle) {
+    if (!finite(grip) || !finite(tip) || !finite(viewer) || !std::isfinite(pixelAngle) || length(tip - grip) < .05f)
+        return;
+    const Vec3 mid = (grip + tip) * .5f;
+    const float range = length(mid - viewer);
+    if (range < .05f || range > 60.f)
+        return;
+    const size_t from = out.size();
+    const Vec3 view = normalized(viewer - mid);
+    const float hw = std::max(.016f, 1.5f * pixelAngle * range);
+    softBar(out, grip, tip, view, hw, Vec3{.42f, .03f, .04f}, .97f, hw * .3f);
+    softBar(out, grip, grip + (tip - grip) * .3f, view, hw * 1.12f, Vec3{.05f, .035f, .035f}, .97f, hw * .3f);
+    const Vec3 side = normalized(cross(tip - grip, view)) * (hw * .4f);
+    softBar(out, grip + (tip - grip) * .34f + side, tip + side, view, hw * .22f, Vec3{.86f, .32f, .30f}, .6f, hw * .1f);
+    if (!web_style::sane(out, from))
+        out.resize(from);
+}
 void appendBeamRing(std::vector<Vertex>& out, float share, float flash, Pose hand, Vec3 viewer, float pixelAngle,
                     float seconds) {
     if (!std::isfinite(share) || !std::isfinite(flash) || !finite(hand.position) || !finite(viewer) ||

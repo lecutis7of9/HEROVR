@@ -39,12 +39,14 @@ class V004(unittest.TestCase):
 
     def test_repulsor_never_webs(self):
         # makeConfig: REPULSOR forces our own shot at the press, no trigger gadgets (no RB, no Sonic).
-        self.assertRegex(GAME, r'shooterType\) == repulsor::repulsor\) \{\s*c\.ballOurs = true;\s*c\.ballOnPress = true;'
+        self.assertRegex(GAME, r'heroNow\(\) != hero_modes::spiderMan\) \{\s*c\.ballOurs = true;\s*c\.ballOnPress = true;'
                                r'\s*c\.noTriggerGadgets = true;')
-        self.assertIn("c38(combat38::shooterType) != repulsor::repulsor;", GAME)  # no wrist muzzle (game ball)
-        self.assertIn("for (unsigned i = 0; i < 2 && !repMode; ++i)", GAME)  # no web ball
+        # 0.0.6: every hero but SPIDER-MAN: no wrist muzzle (game ball), no web ball, no glob
+        self.assertIn("heroNow() == hero_modes::spiderMan; // 0.0.6: every hero but SPIDER-MAN", GAME)
+        self.assertIn("for (unsigned i = 0; i < 2 && heroWas == hero_modes::spiderMan; ++i)", GAME)
+        self.assertIn("heroNow() == hero_modes::spiderMan) { // 0.0.4/0.0.6: no glob for any other hero", GAME)
         self.assertIn("if (!plan.webSplash) { // REPULSOR", GAME)  # no splash, cocoon or game web
-        self.assertIn("damage CANDIDATE", GAME)
+        self.assertIn("real damage (CONFIRMED path)", GAME)  # 0.0.6: rep0050 CONFIRMED the blows
 
     def test_hero_abilities_strip_every_web_path_in_game(self):
         # One choke point for the game's inputs, plus the mod's own web paths, all gated on the hero.

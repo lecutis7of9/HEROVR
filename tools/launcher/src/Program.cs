@@ -51,6 +51,7 @@ namespace Sm2VrLauncher
         static void Crash(Exception ex, bool canContinue)
         {
             string log = LogError(ex);
+            Telemetry.NoteLauncherCrash(ex);   // Version 0.0.6: asked about (once) at the next start
             try
             {
                 MessageBox.Show("Something went wrong in the launcher:\n\n" + (ex == null ? "unknown error" : ex.Message) +

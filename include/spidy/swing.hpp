@@ -197,6 +197,9 @@ struct Input {
     // the caller holds it out (it counts once, as it appears). The swing's
     // own Charge Jump: the game's is a skill a save may lack.
     float leap{};
+    // Version 0.0.6 HULK LEAP: the charged leap's speed times this (1 or 2: 4x the height and
+    // distance; hero_modes::hulkLeapScale), taken when the leap is let go of.
+    float leapScale = 1.f;
     // Where the head looks (world, unit; zero: unknown): the enemy a punch
     // would go to is the one looked at (game_punch).
     Vec3 look{};
@@ -545,6 +548,7 @@ class Swing {
     bool jumpHeld_{}, jumpQueued_{};
     // A leap's charge waiting for the next step, and whether one is held out.
     float leapQueued_{};
+    float leapScaleQueued_ = 1.f; // Version 0.0.6 HULK LEAP
     bool leapHeld_{};
     WallHold wall_{};
     struct ClimbingHand {

@@ -151,11 +151,11 @@ namespace Sm2VrLauncher
 
     static class LauncherInfo
     {
-        public const string Version = "0.0.6.5";
+        public const string Version = "0.0.6.6";
         /// <summary>The launcher's own build number. version.json's "launcher_build" above this offers the update even
         /// when the mod version is the same (a launcher-only hotfix). 1 = the first 0.0.5/0.0.6 launchers, 2 = the
-        /// Trim(Char) hotfix with self-update, 3 = ready-made mod files (players never build), 4 = opt-in crash, bug and play stats reports, 5 = VR lost / headset not connected: never left flat, 6 = one click back to the previous version (Revert), 7 = mod Update 39.1.1: VR retries the eye images (swapchain) instead of falling back to flat screen.</summary>
-        public const int Build = 7;
+        /// Trim(Char) hotfix with self-update, 3 = ready-made mod files (players never build), 4 = opt-in crash, bug and play stats reports, 5 = VR lost / headset not connected: never left flat, 6 = one click back to the previous version (Revert), 7 = mod Update 39.1.1: VR retries the eye images (swapchain) instead of falling back to flat screen, 8 = the mod's own Python and newer-build mod files are checked after every install, update and start (missing python\ or older modules are downloaded again, nothing for players to install), and a blank or placeholder repository setting falls back to lecutis7of9/HEROVR.</summary>
+        public const int Build = 8;
         /// <summary>REVERT's one-click "Use previous version": the release this launcher's version replaces. Its version.json is read
         /// from github.com/&lt;repo&gt;/releases/download/&lt;tag&gt;/version.json (no API, no limit) and its zip is SHA-256 checked.</summary>
         public const string PreviousTag = "v0.0.5";

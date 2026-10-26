@@ -4,7 +4,15 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 ## v0.0.6 hotfix (October 26, 2026)
 
-Version 0.0.6 (build Update 39.1.1), launcher build 7 (0.0.6.5).
+Version 0.0.6 (build Update 39.1.1), launcher build 8 (0.0.6.6; build 7 = 0.0.6.5 was the first hotfix launcher).
+
+- Launcher build 8: fixes "No working Python 3.11 or newer was found" after updating to the hotfix. The update from
+  launcher build 6 kept the old mod files for the same version 0.0.6 and, doing so, left out the mod's own Python
+  (python folder). The launcher now checks python\python.exe and the mod files' build after every install, update and
+  start, and before PLAY VR, and downloads the ready-made mod files again by itself when anything is missing or older.
+  Players never install Python. The release mod zips (0.0.5 and 0.0.6) always had their Python; a new gate checks it.
+- The update from launcher build 6 also now replaces the Update 39.1 mod files with the 39.1.1 ones (the swapchain fix).
+- A blank or placeholder update-repository setting falls back to lecutis7of9/HEROVR.
 
 - VR no longer falls back to flat screen when the headset runtime refuses the eye images at start ("Create eye
   swapchain XrResult=-2", seen with Virtual Desktop). The mod tries again with the 0.0.5 settings (the same request,

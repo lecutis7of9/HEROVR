@@ -9,6 +9,14 @@ namespace Sm2VrLauncher
     class Settings
     {
         public const string RepoPlaceholder = "YOUR-GITHUB-NAME/sm2-vr";
+        /// <summary>The HERO VR releases. Used when the repository setting is blank or still the placeholder, so a launcher
+        /// whose settings.ini or launcher.ini lost UpdateRepo still finds updates, the mod files and Revert (launcher build 8).</summary>
+        public const string DefaultRepo = "lecutis7of9/HEROVR";
+        public static bool IsPlaceholderRepo(string r)
+        {
+            r = (r ?? "").Trim();
+            return r.Length == 0 || r.Equals(RepoPlaceholder, StringComparison.OrdinalIgnoreCase) || r.StartsWith("YOUR-", StringComparison.OrdinalIgnoreCase);
+        }
         /// <summary>%APPDATA%\SM2 VR Launcher, or "launcher-data" beside the exe when launcher.ini says Portable=1
         /// (so a second copy of the launcher, e.g. for a test build, keeps fully separate settings and downloads).</summary>
         public static readonly string Folder = PickFolder();
@@ -102,7 +110,7 @@ namespace Sm2VrLauncher
 
         public string UpdateRepo
         {
-            get { return Get("UpdateRepo", RepoPlaceholder); }
+            get { string r = Get("UpdateRepo", ""); return IsPlaceholderRepo(r) ? DefaultRepo : r; }
             set { Set("UpdateRepo", value); }
         }
         public bool RepoConfigured

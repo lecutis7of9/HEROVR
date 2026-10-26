@@ -7,7 +7,7 @@ one window with a big **PLAY VR** button, launch options, build, updates, revert
 This zip is the full source of mod Version 0.0.6 (build Update 39.1.1) plus the prebuilt HERO VR launcher.
 
 ## What's new in 0.0.6
-- **Hotfix (build Update 39.1.1, launcher build 7):** if Virtual Desktop refuses the eye images when VR starts ("Create eye swapchain XrResult=-2"), the game no longer falls back to flat screen. It tries again with the 0.0.5 settings, then other settings and smaller sizes, writes every try to the console, and keeps trying. After 2 minutes it tells you to restart Virtual Desktop and the game.
+- **Hotfix (build Update 39.1.1, launcher build 8):** if Virtual Desktop refuses the eye images when VR starts ("Create eye swapchain XrResult=-2"), the game no longer falls back to flat screen. It tries again with the 0.0.5 settings, then other settings and smaller sizes, writes every try to the console, and keeps trying. After 2 minutes it tells you to restart Virtual Desktop and the game. The launcher updates itself and then downloads the fixed mod files on its own. If PLAY VR said "No working Python 3.11 or newer was found", you do not need to install anything: open the launcher, let it update (launcher 0.0.6.6), and it puts the mod's own Python back by itself.
 - Your 0.0.5 test proved the damage path: blows sent from the mod really hurt enemies. 0.0.6 builds the heroes on it.
 - IRON MAN ABILITIES: repulsor blasts and the chest beam (4x a blast, 30 s cooldown on the wrist ring) do real damage,
   and the beam now aims at the enemy you look at.

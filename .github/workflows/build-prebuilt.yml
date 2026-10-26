@@ -136,6 +136,26 @@ jobs:
           "size=$size" >> $env:GITHUB_OUTPUT
           "### $name-win64.zip`n`nsha256 ``$hash```n`nsize $size bytes" >> $env:GITHUB_STEP_SUMMARY
 
+      - name: Check the zip's own Python runs (players never install Python)
+        env:
+          ZIP: ${{ steps.pkg.outputs.zip }}
+        run: |
+          python -B tools/check_bundled_python.py $env:ZIP --run
+          if ($LASTEXITCODE) { throw 'The new mod zip has no runnable Python of its own.' }
+
+      - name: Check the release's current mod zip has a runnable Python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          New-Item -ItemType Directory -Force -Path live | Out-Null
+          gh release download $env:TAG -p '*-mod-win64.zip' -D live --clobber
+          if ($LASTEXITCODE) { Write-Output 'The release has no mod zip yet.'; exit 0 }
+          foreach ($z in Get-ChildItem live -Filter '*-mod-win64.zip') {
+            python -B tools/check_bundled_python.py $z.FullName --run
+            if ($LASTEXITCODE) { throw "$($z.Name) on $env:TAG has no runnable Python of its own." }
+          }
+
       - name: Keep the zip with this run
         uses: actions/upload-artifact@v7
         with:

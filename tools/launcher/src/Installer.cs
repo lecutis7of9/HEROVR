@@ -199,11 +199,21 @@ namespace Sm2VrLauncher
             }
             string nowLong = SystemInfo.PortVersionLong(Root);
             string parkedDll = Path.Combine(Backups.TxnFolder(Root), "build", "windows-ninja", "spidy_stereo_probe.dll");
-            if (parked && nowLong != null && string.Equals(nowLong, beforeLong, StringComparison.OrdinalIgnoreCase) && File.Exists(parkedDll))
+            string parkedMarker = Path.Combine(Backups.TxnFolder(Root), "build", "windows-ninja", ModFiles.MarkerName);
+            if (parked && nowLong != null && string.Equals(nowLong, beforeLong, StringComparison.OrdinalIgnoreCase) && File.Exists(parkedDll)
+                && ModFiles.StaleFor(Root, parkedMarker))
+                Log("Same mod version (" + nowLong + ") but a newer build (" + (SystemInfo.PortVersion(Root) ?? "?") + ") than the working mod files (" +
+                    ModFiles.MarkerBuild(parkedMarker) + "): downloading its ready-made mod files.");
+            else if (parked && nowLong != null && string.Equals(nowLong, beforeLong, StringComparison.OrdinalIgnoreCase) && File.Exists(parkedDll))
             {
                 Backups.UnparkBuild(Root, Log);
-                Log("Same mod version (" + nowLong + "): kept its working mod files.");
-                return;
+                if (ModFiles.PythonPresent(Root) || !ModFiles.FromRelease(Root))
+                {
+                    Log("Same mod version (" + nowLong + "): kept its working mod files.");
+                    return;
+                }
+                // Launcher builds before 8 lost python\ here: the update's file list has no python folder, only the mod zip does.
+                Log("Same mod version (" + nowLong + "), but the mod's own Python is not in the folder: downloading the ready-made mod files.");
             }
             if (InstallModFiles()) return;
             throw new Exception("The release of " + (nowLong ?? "this version") + " has no ready-made mod files yet, so the mod can't be installed on this PC. " +

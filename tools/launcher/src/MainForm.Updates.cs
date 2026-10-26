@@ -186,9 +186,14 @@ namespace Sm2VrLauncher
         {
             try
             {
-                if (preview || job != Job.None || !SystemInfo.IsPortRoot(root) || ModFiles.Installed(root)) return;
+                if (preview || job != Job.None || !SystemInfo.IsPortRoot(root)) return;
+                string why = ModFiles.RepairReason(root);
+                if (why == null) return;
                 if (FolderLock.Busy(root)) return;
-                buildLog.Line("The mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " are not installed yet: downloading the ready-made files from GitHub.", Theme.Info);
+                if (ModFiles.Installed(root))
+                    buildLog.Line("The mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " are " + why + ": downloading the ready-made files from GitHub (nothing to install by hand).", Theme.Info);
+                else
+                    buildLog.Line("The mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " are not installed yet: downloading the ready-made files from GitHub.", Theme.Info);
                 quietModFiles = true;
                 RepairMod(null, true);
             }

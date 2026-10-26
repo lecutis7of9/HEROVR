@@ -544,7 +544,7 @@ namespace Sm2VrLauncher
             if (job == Job.Reports) { SetState("COLLECTING...", Theme.Silver, "Making reports\\send-me.zip."); return; }
             if (lastError != null) { SetState("VR STOPPED", Theme.Bad, lastError); return; }
             if (!SystemInfo.IsPortRoot(root)) SetState("MOD NOT FOUND", Theme.Bad, "Pick the mod folder or install an update zip.");
-            else if (!File.Exists(SystemInfo.BuiltModule(root))) SetState("MOD FILES NEEDED", Theme.Warn, "PLAY VR downloads the ready-made mod files first (a minute; nothing to install by hand).");
+            else if (ModFiles.RepairReason(root) != null) SetState("MOD FILES NEEDED", Theme.Warn, "PLAY VR downloads the ready-made mod files first (a minute; nothing to install by hand).");
             else if (gamePath == null) SetState("GAME NOT FOUND", Theme.Warn, "Press Browse and pick Spider-Man2.exe.");
             else if (running) SetState("GAME RUNNING", Theme.Warn, "PLAY VR attaches VR to the running game.");
             else SetState("READY", Theme.Good, "Everything checks out. Put the headset on after the game opens.");
@@ -627,6 +627,15 @@ namespace Sm2VrLauncher
                 if (MessageBox.Show(this, "The VR mod files for " + (SystemInfo.PortVersion(root) ?? "this version") + " aren't installed yet.\n\nDownload the ready-made files from GitHub now " +
                     "(their SHA-256 is checked) and then start VR?", LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
                 RepairMod(ok => { RefreshLive(); if (ok) LaunchVr(extra); });
+                return;
+            }
+            string repairWhy = ModFiles.RepairReason(root);
+            if (repairWhy != null)
+            {
+                // Build 8: a release folder without its own Python (or with an older build's modules) is repaired from the
+                // release first; players never install Python or anything else.
+                sessionLog.Line("The mod files are " + repairWhy + ": downloading the ready-made files from GitHub first, then VR starts.", Theme.Info);
+                RepairMod(ok => { RefreshLive(); if (ok && ModFiles.RepairReason(root) == null) LaunchVr(extra); }, true);
                 return;
             }
             if (stale != null && ModFiles.DevToolsPresent() && !ModFiles.FromRelease(root))

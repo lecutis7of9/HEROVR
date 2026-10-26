@@ -23,6 +23,43 @@ namespace Sm2VrLauncher
         public static string Marker(string root) { return Path.Combine(root, "build", "windows-ninja", MarkerName); }
         public static bool Installed(string root) { return File.Exists(SystemInfo.BuiltModule(root)); }
         public static bool FromRelease(string root) { return File.Exists(Marker(root)); }
+        /// <summary>The mod's own Python (python\python.exe from the ready-made mod files). Players never install Python.</summary>
+        public static string BundledPython(string root) { return Path.Combine(root, "python", "python.exe"); }
+        public static bool PythonPresent(string root) { return File.Exists(BundledPython(root)); }
+        /// <summary>Why this folder's ready-made mod files must be (re)installed before PLAY VR, or null when they are complete:
+        /// no modules, the bundled Python missing (launcher builds before 8 dropped python\ on a same-version hotfix update),
+        /// or modules from an older build than the sources. Developer builds (no marker) only need the modules.</summary>
+        public static string RepairReason(string root)
+        {
+            if (!Installed(root)) return "not installed yet";
+            if (!FromRelease(root)) return null;
+            if (!PythonPresent(root)) return "missing the mod's own Python (python folder)";
+            if (Stale(root)) return "from " + MarkerBuild(Marker(root)) + ", older than this folder";
+            return null;
+        }
+        const string MarkerHead = "Ready-made HERO VR mod files for ";
+        /// <summary>The mod build a marker file names ("Update 39.1"), or null when unreadable or unknown.</summary>
+        public static string MarkerBuild(string markerPath)
+        {
+            try
+            {
+                if (!File.Exists(markerPath)) return null;
+                string l = (ModVersion.FirstLine(markerPath) ?? "").Trim();
+                if (!l.StartsWith(MarkerHead, StringComparison.OrdinalIgnoreCase)) return null;
+                l = l.Substring(MarkerHead.Length).Trim();
+                return l.Length == 0 || l == "?" ? null : l;
+            }
+            catch { return null; }
+        }
+        /// <summary>True when ready-made mod files from an older build sit beside newer sources: the same Version (0.0.6) with a
+        /// newer build (Update 39.1 files, Update 39.1.1 PORT-VERSION). Launchers before build 8 kept the old files on such
+        /// a same-version hotfix update, so the hotfix's modules never arrived; the launcher now replaces them by itself.</summary>
+        public static bool Stale(string root) { return StaleFor(root, Marker(root)); }
+        public static bool StaleFor(string root, string markerPath)
+        {
+            string files = MarkerBuild(markerPath), sources = PortLine(root);
+            return files != null && sources != null && !string.Equals(files, sources, StringComparison.OrdinalIgnoreCase);
+        }
 
         /// <summary>"v0.0.5" for the installed VERSION, or null.</summary>
         public static string Tag(string root)
@@ -62,6 +99,7 @@ namespace Sm2VrLauncher
             progress("Checking the mod files...", -1);
             var c = Installer.Inspect(zipPath);
             string want = PortLine(root), have = null;
+            bool zipHasPython = false;
             using (var z = ZipFile.OpenRead(zipPath))
             {
                 var pv = z.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').Equals(c.Prefix + "PORT-VERSION", StringComparison.OrdinalIgnoreCase));
@@ -95,6 +133,7 @@ namespace Sm2VrLauncher
                 string build = Path.Combine(root, "build");
                 Directory.CreateDirectory(build);
                 Replace(Path.Combine(tmp, "build", "windows-ninja"), Path.Combine(build, "windows-ninja"));
+                zipHasPython = File.Exists(Path.Combine(tmp, "python", "python.exe"));
                 if (Directory.Exists(Path.Combine(tmp, "python"))) Replace(Path.Combine(tmp, "python"), Path.Combine(root, "python"));
                 string lic = Path.Combine(tmp, "docs", "licenses");
                 if (Directory.Exists(lic))
@@ -105,6 +144,9 @@ namespace Sm2VrLauncher
                 }
                 try { Directory.Delete(tmp, true); } catch { }
             }
+            // Release mod zips always carry their own Python; a folder left without it can't start VR on a player's PC.
+            if (zipHasPython && !PythonPresent(root))
+                throw new InvalidDataException("The mod files were installed but python\\python.exe is missing afterwards. Try Repair again.");
             // Dated now: the modules are newer than the sources they were built from, so nothing says "build again".
             var now = DateTime.Now;
             foreach (var f in Directory.GetFiles(Path.Combine(root, "build", "windows-ninja"))) try { File.SetLastWriteTime(f, now); } catch { }

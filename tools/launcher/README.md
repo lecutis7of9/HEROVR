@@ -9,7 +9,7 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.6.5** (launcher build 7), shipped with mod Version 0.0.6 (build Update 39.1.1).
+Launcher version **0.0.6.6** (launcher build 8), shipped with mod Version 0.0.6 (build Update 39.1.1).
 
 ## Privacy and reports
 

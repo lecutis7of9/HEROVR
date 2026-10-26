@@ -9,6 +9,7 @@
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
@@ -60,6 +61,14 @@ class XrRuntime {
     // The headset came back but cannot give the eyes the game was set up with: VR needs a game restart.
     bool restartNeeded() const {
         return restartNeeded_;
+    }
+    // 0.0.6 hotfix (Update 39.1.1): the eye swapchain tries of the last session built, one line each, and
+    // which try made the eyes when it was not the first (empty otherwise).
+    const std::vector<std::string>& swapchainTries() const {
+        return swapchainTries_;
+    }
+    const std::string& swapchainNote() const {
+        return swapchainNote_;
     }
     bool lastFrameSubmitted() const {
         return lastFrameSubmitted_;
@@ -174,6 +183,8 @@ class XrRuntime {
     unsigned recoveries_{}, failedTries_{};
     unsigned eyeSize_{}, renderScale_ = 100;
     std::array<unsigned, 2> forced_{};
+    std::vector<std::string> swapchainTries_;
+    std::string swapchainNote_;
     std::chrono::steady_clock::time_point retryAt_{};
 };
 } // namespace spidy

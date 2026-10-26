@@ -1,5 +1,6 @@
 #include "spidy/xr_session.hpp"
 #include "spidy/eye_resolution.hpp"
+#include "spidy/swapchain_ladder.hpp"
 #include <chrono>
 #include <cstring>
 #include <iostream>
@@ -219,14 +220,15 @@ void XrRuntime::initialize(
     xr(xrEnumerateSwapchainFormats(session_, count, &count, formats.data()), "Read formats");
     const DXGI_FORMAT preferred[] = {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
                                      DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_B8G8R8A8_UNORM};
+    // 0.0.6 hotfix: the others the eyes may use, should the runtime refuse the first (swapchainLadder).
+    std::vector<int64_t> usable;
     for (auto f : preferred)
         if ((!copyDestination || f == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || f == DXGI_FORMAT_R8G8B8A8_UNORM) &&
-            std::find(formats.begin(), formats.end(), f) != formats.end()) {
-            format_ = f;
-            break;
-        }
-    if (format_ == DXGI_FORMAT_UNKNOWN)
+            std::find(formats.begin(), formats.end(), f) != formats.end())
+            usable.push_back(f);
+    if (usable.empty())
         throw std::runtime_error("No supported color swapchain format");
+    format_ = static_cast<DXGI_FORMAT>(usable.front());
     for (unsigned i = 0; i < 2; ++i) {
         auto& e = eyes_[i];
         const auto& v = views[i];
@@ -257,32 +259,104 @@ void XrRuntime::initialize(
             throw std::runtime_error("Runtime eye dimensions exceed supported 64..8192 range");
         if (copyDestination && i && (e.width != eyes_[0].width || e.height != eyes_[0].height))
             throw std::runtime_error("Native paired views require matching eye dimensions");
-        XrSwapchainCreateInfo sc{XR_TYPE_SWAPCHAIN_CREATE_INFO};
-        sc.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-        if (copyDestination)
-            sc.usageFlags |= XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT;
-        sc.format = format_;
-        sc.sampleCount = 1;
-        sc.width = e.width;
-        sc.height = e.height;
-        sc.faceCount = sc.arraySize = sc.mipCount = 1;
-        xr(xrCreateSwapchain(session_, &sc, &e.swapchain), "Create eye swapchain");
-        xr(xrEnumerateSwapchainImages(e.swapchain, 0, &count, nullptr), "Count eye images");
-        e.images.resize(count, {XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR});
-        xr(xrEnumerateSwapchainImages(e.swapchain, count, &count,
-                                      reinterpret_cast<XrSwapchainImageBaseHeader*>(e.images.data())),
-           "Read eye images");
-        std::cout << "Eye " << i << ": " << e.width << 'x' << e.height << " (" << count << " images; runtime "
-                  << v.recommendedImageRectWidth << 'x' << v.recommendedImageRectHeight << " recommended, "
-                  << v.maxImageRectWidth << 'x' << v.maxImageRectHeight << " largest)\n";
-        for (unsigned j = 0; j < e.images.size(); ++j) {
-            const auto d = e.images[j].texture->GetDesc();
-            std::cout << "Image " << i << '/' << j << ": format=" << d.Format
-                      << " requestedFormat=" << format_ << " size=" << d.Width << 'x' << d.Height
-                      << " dimension=" << d.Dimension << " array=" << d.DepthOrArraySize
-                      << " mips=" << d.MipLevels << " samples=" << d.SampleDesc.Count << '\n';
-        }
     }
+    // 0.0.6 hotfix (Update 39.1.1, rep0060): Virtual Desktop refused the eyes' swapchain once
+    // (XR_ERROR_RUNTIME_FAILURE) and VR ended. The same request as 0.0.5's is tried again, then with
+    // fewer usage flags, the other format and smaller eyes; every try is logged.
+    uint64_t fullUsage = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT, lessUsage = fullUsage;
+    if (copyDestination) {
+        fullUsage |= XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT;
+        // D3D12 has no resource flag for a copy source: the images can still be copied from.
+        lessUsage |= XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
+    }
+    const auto tries = swapchainLadder(format_, usable, fullUsage, lessUsage, eyes_[0].width, eyes_[0].height,
+                                       forced_[0] != 0);
+    swapchainTries_.clear();
+    swapchainNote_.clear();
+    XrResult last = XR_ERROR_RUNTIME_FAILURE;
+    std::string lastWhere = "Create eye swapchain";
+    for (unsigned t = 0; t < tries.size(); ++t) {
+        const auto& attempt = tries[t];
+        if (attempt.delayMs)
+            std::this_thread::sleep_for(std::chrono::milliseconds(attempt.delayMs));
+        const auto said = describeSwapchainTry(t, static_cast<unsigned>(tries.size()), attempt);
+        std::cout << said << '\n';
+        XrResult result = XR_SUCCESS;
+        const char* where = "Create eye swapchain";
+        // The chosen size keeps each eye's own (a probe's eyes may differ); a smaller try sizes both.
+        const bool chosenSize = attempt.width == eyes_[0].width && attempt.height == eyes_[0].height;
+        for (unsigned i = 0; i < 2 && XR_SUCCEEDED(result); ++i) {
+            auto& e = eyes_[i];
+            XrSwapchainCreateInfo sc{XR_TYPE_SWAPCHAIN_CREATE_INFO};
+            sc.usageFlags = attempt.usage;
+            sc.format = attempt.format;
+            sc.sampleCount = 1;
+            sc.width = chosenSize ? e.width : attempt.width;
+            sc.height = chosenSize ? e.height : attempt.height;
+            sc.faceCount = sc.arraySize = sc.mipCount = 1;
+            result = xrCreateSwapchain(session_, &sc, &e.swapchain);
+            if (XR_FAILED(result)) {
+                e.swapchain = XR_NULL_HANDLE;
+                break;
+            }
+            result = xrEnumerateSwapchainImages(e.swapchain, 0, &count, nullptr);
+            where = "Count eye images";
+            if (XR_SUCCEEDED(result) && !count)
+                result = XR_ERROR_RUNTIME_FAILURE;
+            if (XR_SUCCEEDED(result)) {
+                e.images.assign(count, {XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR});
+                result = xrEnumerateSwapchainImages(
+                    e.swapchain, count, &count, reinterpret_cast<XrSwapchainImageBaseHeader*>(e.images.data()));
+                where = "Read eye images";
+            }
+            if (XR_SUCCEEDED(result))
+                where = "Create eye swapchain";
+        }
+        if (XR_SUCCEEDED(result)) {
+            swapchainTries_.push_back(said + ": made");
+            std::cout << "Eye swapchain try " << t + 1 << " made the eyes\n";
+            format_ = static_cast<DXGI_FORMAT>(attempt.format);
+            if (t)
+                swapchainNote_ = "VR started on eye swapchain try " + std::to_string(t + 1) + " (" + attempt.why +
+                                 ", " + std::to_string(attempt.width) + "x" + std::to_string(attempt.height) + ")";
+            for (unsigned i = 0; i < 2; ++i) {
+                auto& e = eyes_[i];
+                if (!chosenSize) {
+                    e.width = attempt.width;
+                    e.height = attempt.height;
+                }
+                const auto& v = views[i];
+                std::cout << "Eye " << i << ": " << e.width << 'x' << e.height << " (" << e.images.size()
+                          << " images; runtime " << v.recommendedImageRectWidth << 'x'
+                          << v.recommendedImageRectHeight << " recommended, " << v.maxImageRectWidth << 'x'
+                          << v.maxImageRectHeight << " largest)\n";
+                for (unsigned j = 0; j < e.images.size(); ++j) {
+                    const auto d = e.images[j].texture->GetDesc();
+                    std::cout << "Image " << i << '/' << j << ": format=" << d.Format
+                              << " requestedFormat=" << format_ << " size=" << d.Width << 'x' << d.Height
+                              << " dimension=" << d.Dimension << " array=" << d.DepthOrArraySize
+                              << " mips=" << d.MipLevels << " samples=" << d.SampleDesc.Count << '\n';
+                }
+            }
+            return;
+        }
+        last = result;
+        lastWhere = where;
+        swapchainTries_.push_back(said + ": " + where + " XrResult=" + std::to_string(result));
+        std::cout << swapchainTries_.back() << '\n';
+        for (auto& e : eyes_) {
+            if (e.swapchain)
+                xrDestroySwapchain(e.swapchain);
+            e.swapchain = XR_NULL_HANDLE;
+            e.images.clear();
+        }
+        // A lost session or runtime does not come back by asking again.
+        if (result == XR_ERROR_SESSION_LOST || result == XR_ERROR_INSTANCE_LOST || result == XR_ERROR_HANDLE_INVALID)
+            break;
+    }
+    throw XrError(lastWhere + " XrResult=" + std::to_string(last) + " (" + std::to_string(swapchainTries_.size()) +
+                      " tries)",
+                  last);
 }
 XrPath XrRuntime::path(const char* value) {
     XrPath p{};

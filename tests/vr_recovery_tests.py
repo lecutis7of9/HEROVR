@@ -65,7 +65,9 @@ class HeadsetLostNeverFlat(unittest.TestCase):
         self.assertNotIn('throw std::runtime_error("Native eye presentation stalled for 3 seconds")', GAME)
         self.assertIn('"Headset lost: reopen Virtual Desktop in your headset; VR comes back by itself"', GAME)
         self.assertIn('"Headset not connected: open Virtual Desktop in your headset first"', GAME)
-        self.assertIn('e.result != XR_ERROR_FORM_FACTOR_UNAVAILABLE', GAME)
+        # 0.0.6 hotfix (39.1.1): every start refusal waits now, not only a missing headset
+        # (tests/swapchain_retry_hotfix_tests.py); no headset still waits 2 minutes.
+        self.assertIn('if (e.result == XR_ERROR_FORM_FACTOR_UNAVAILABLE) {', GAME)
         self.assertIn('restart the game to play in VR again', GAME)
         self.assertIn('runtime.recoveries() != recoveriesSeen', GAME)
 

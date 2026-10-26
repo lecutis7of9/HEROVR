@@ -5,7 +5,7 @@ This zip contains the complete corresponding source code:
 - the HERO VR launcher is in tools\launcher\ (src\*.cs, assets\, build.ps1). It is built by tools\launcher\build.ps1;
 - third-party libraries are fetched at their pinned revisions by tools\bootstrap.ps1 (see THIRD_PARTY_NOTICES.md).
 
-Mod Version 0.0.6 (build Update 39.0.3), from git commit 396fa769b7a17e8ebcb9f072d275b49c20ab85bb.
+Mod Version 0.0.6 (build Update 39.1.1), from git commit 6b0cec94f065adccb37fc95aeea691799e03fddc.
 Public repository: https://github.com/lecutis7of9/HEROVR
 Upstream project (Spidy / SpidyVR by Ilya Mezerowsky): https://github.com/IlyaMez/SpidyVR
 

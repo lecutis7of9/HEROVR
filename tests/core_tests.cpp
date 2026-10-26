@@ -61,6 +61,7 @@
 #include "spidy/native_movement.hpp"
 #include "spidy/presentation_gate.hpp"
 #include "spidy/eye_resolution.hpp"
+#include "spidy/swapchain_ladder.hpp"
 #include "spidy/monitor_rate.hpp"
 #include "spidy/eye_snapshot.hpp"
 #include "spidy/vr_settings.hpp"
@@ -22322,6 +22323,33 @@ int main() {
         repulsor::beamAim(from, fwd, feet, 3, d2);
         const int n2 = repulsor::beamHits(from, d2, feet, 3, hits, 8);
         check(n2 >= 1 && hits[0] == 1, "the assisted beam catches the enemy it turned to");
+    });
+    test("0.0.6 HOTFIX SWAPCHAIN LADDER: the 0.0.5 request first and again, then fewer flags, the other format, smaller eyes", [] {
+        // rep0060 (Quest 2 on Virtual Desktop, 2496x2688 recommended): "Create eye swapchain XrResult=-2".
+        // DXGI 29 = R8G8B8A8_UNORM_SRGB, 28 = R8G8B8A8_UNORM; XR usage 0x19 = color | transfer src | dst.
+        const auto l = spidy::swapchainLadder(29, {29, 28}, 0x19, 0x11, 2496, 2688, false);
+        check(l.size() == 9, "the first start has 9 tries: 3 x 0.0.5, fewer flags, other format, 4 sizes");
+        check(l[0].format == 29 && l[0].usage == 0x19 && l[0].width == 2496 && l[0].height == 2688 && !l[0].delayMs,
+              "the first try is not the 0.0.5 request");
+        check(l[1].format == 29 && l[1].usage == 0x19 && l[1].delayMs == 500 && l[2].delayMs == 1500,
+              "the 0.0.5 request is not tried again after a pause");
+        check(l[3].usage == 0x11 && l[3].format == 29, "no try without the transfer-source usage");
+        check(l[4].format == 28 && l[4].usage == 0x19 && l[4].width == 2496, "no try with the other format");
+        uint32_t lastWidth = 2496;
+        for (unsigned i = 5; i < 9; ++i) {
+            check(l[i].width < lastWidth && l[i].width % 8 == 0 && l[i].height % 8 == 0, "sizes do not shrink in 8s");
+            check(l[i].format == 29 && l[i].usage == 0x19, "a smaller size changed the format or flags");
+            lastWidth = l[i].width;
+        }
+        check(l[5].width == 2248 && l[5].height == 2416, "90% of 2496x2688 is not 2248x2416");
+        // A session built again after a loss keeps the game's eyes and pauses nowhere (recover() waits 2 s).
+        const auto r = spidy::swapchainLadder(29, {29}, 0x19, 0x19, 2496, 2688, true);
+        check(r.size() == 1 && r[0].width == 2496 && !r[0].delayMs, "a rebuilt session changed its eyes");
+        for (const auto& a : spidy::swapchainLadder(29, {29, 28}, 0x19, 0x11, 64, 64, false))
+            check(validEyeSize(a.width) && validEyeSize(a.height), "a try outside 64..8192");
+        const auto said = spidy::describeSwapchainTry(0, 9, l[0]);
+        check(said == "Eye swapchain try 1/9: the 0.0.5 parameters (format 29, 2496x2688, usage 0x19, 1 sample, 1 mip, 1 layer)",
+              "the try's log line: " + said);
     });
     test("0.0.6 HERO TOGGLES: IRON MAN, DAREDEVIL, HULK; one at a time, the first if two, DAREDEVIL PUNCH 3X", [] {
         using namespace spidy;

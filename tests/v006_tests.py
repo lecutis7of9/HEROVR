@@ -20,7 +20,7 @@ def tracked():
 class Version(unittest.TestCase):
     def test_version(self):
         self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.6')
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.1')
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.1.1')
 
 
 class Credit(unittest.TestCase):

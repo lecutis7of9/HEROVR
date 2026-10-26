@@ -12,5 +12,5 @@ inline constexpr const char* statusLine = "VERSION " SPIDY_PUBLIC_VERSION; // to
 // this build's maker only. SpidyVR's author is credited in LICENSE, CREDITS.md and the source headers.
 inline constexpr const char* madeBy = "MADE BY AGENT MULDER";
 inline constexpr const char* madeByText = "Made by Agent Mulder";
-inline constexpr const char* build = "39.1"; // PORT-VERSION's "Update 39.1" (39.0 + the hero pages, the holo sections, the repulsor look, the headset recovery, the frame rate work)
+inline constexpr const char* build = "39.1.1"; // PORT-VERSION's "Update 39.1.1" (39.0 + the hero pages, the holo sections, the repulsor look, the headset recovery, the frame rate work; .1: the eye swapchain retry hotfix)
 } // namespace spidy::version

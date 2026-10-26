@@ -1278,16 +1278,51 @@ DWORD WINAPI run(void*) {
             }
             // Update 39.0.3: no headset yet (Virtual Desktop not connected) waits for it, up to 2 minutes,
             // instead of ending VR with the game on its flat screen.
-            for (const uint64_t headsetDeadline = GetTickCount64() + 120000;;) {
+            // 0.0.6 hotfix (Update 39.1.1, rep0060): any other OpenXR refusal at the start (Virtual Desktop's
+            // "Create eye swapchain XrResult=-2") is tried again too, with a new session every 2 s (5 s after
+            // 2 minutes), for as long as the launcher is there; each eye swapchain try is said in the console.
+            // VR no longer ends on it with the game on its flat screen.
+            const auto sayTries = [&](const char* prefix) {
+                for (const auto& line : runtime.swapchainTries()) {
+                    const auto text = std::string(prefix) + line;
+                    OutputDebugStringA((text + "\n").c_str());
+                    message(2, 0, text.c_str());
+                    Sleep(150); // the launcher reads the message every 50 ms: each line reaches the console
+                }
+            };
+            const uint64_t startedAt = GetTickCount64();
+            for (unsigned startTries = 1;; ++startTries) {
                 try {
                     runtime.initialize(device.Get(), queue, config.eyeSize, config.renderScale);
+                    if (startTries > 1 || !runtime.swapchainNote().empty()) {
+                        sayTries("");
+                        const auto text = (runtime.swapchainNote().empty()
+                                               ? std::string("VR started")
+                                               : runtime.swapchainNote()) +
+                                          " after " + std::to_string(startTries) + " session tries";
+                        message(2, 0, text.c_str());
+                    }
                     break;
                 } catch (const XrError& e) {
-                    if (e.result != XR_ERROR_FORM_FACTOR_UNAVAILABLE || stopRequested ||
-                        GetTickCount64() >= headsetDeadline)
+                    const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline;
+                    if (stopRequested || launcherGone)
                         throw;
-                    message(2, 0, "Headset not connected: open Virtual Desktop in your headset first");
-                    Sleep(2000);
+                    const uint64_t waited = GetTickCount64() - startedAt;
+                    if (e.result == XR_ERROR_FORM_FACTOR_UNAVAILABLE) {
+                        if (waited >= 120000)
+                            throw;
+                        message(2, 0, "Headset not connected: open Virtual Desktop in your headset first");
+                        Sleep(2000);
+                        continue;
+                    }
+                    sayTries("");
+                    const auto text = std::string(waited < 120000 ? "VR is starting: the runtime refused (" :
+                                                                    "VR could not start yet (") +
+                                      e.what() + "); trying again, session try " + std::to_string(startTries + 1) +
+                                      (waited < 120000 ? "" : ". If it goes on: restart Virtual Desktop and the game");
+                    OutputDebugStringA((text + "\n").c_str());
+                    message(2, 0, text.c_str());
+                    Sleep(waited < 120000 ? 2000 : 5000);
                 }
             }
         }

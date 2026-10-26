@@ -2,6 +2,16 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.6 hotfix (October 26, 2026)
+
+Version 0.0.6 (build Update 39.1.1), launcher build 7 (0.0.6.5).
+
+- VR no longer falls back to flat screen when the headset runtime refuses the eye images at start ("Create eye
+  swapchain XrResult=-2", seen with Virtual Desktop). The mod tries again with the 0.0.5 settings (the same request,
+  after 0.5 s and 1.5 s), then without the transfer-source usage, then another colour format, then smaller eye sizes
+  (90/80/70/60%), and writes every try to the console. If all fail it keeps retrying the session every 2 s (5 s after
+  2 minutes, with advice to restart Virtual Desktop and the game). No game addresses changed.
+
 ## v0.0.6 (October 25, 2026)
 
 Version 0.0.6 (build Update 39.1), launcher build 6. Built on 0.0.5 (with its hotfixes 2 and 3).

@@ -222,6 +222,9 @@ namespace Sm2VrLauncher
         Action<bool> modFilesThen;   // PLAY VR waiting for the mod files
 
         static string UpdateKey(Manifest m) { return (m.VersionNumber ?? m.Version) + "#" + m.LauncherBuild; }
+        /// <summary>Revert's skip key when the live version.json can't be read: releases carry no launcher_build any more
+        /// (update-loop fix), so older launchers compute "&lt;number&gt;#0".</summary>
+        internal static string RevertSkipKey(string number) { return number + "#0"; }
 
         void OfferUpdate(Manifest m)
         {
@@ -476,10 +479,22 @@ namespace Sm2VrLauncher
             string skip = settings.Get("PreviousManifestUrl." + tag, "").Trim();
             if (skip.Length == 0 && tag == LauncherInfo.PreviousTags[LauncherInfo.PreviousTags.Length - 1]) skip = settings.Get("PreviousManifestUrl", "").Trim();
             if (skip.Length > 0 && Manifest.SafeUrl(skip)) url = skip;   // tests: a local server
-            string newer = (latest != null ? UpdateKey(latest) : null) ?? ((ModVersion.Parse(SystemInfo.PortVersion(root)) != null ? ModVersion.Parse(SystemInfo.PortVersion(root)).Number : "") + "#" + LauncherInfo.Build);
+            // The skip must be the exact key the older launcher computes from the live version.json (UpdateKey: number
+            // + "#" + its launcher_build). 0.0.62 dropped launcher_build (update-loop fix), so a guess with this launcher's
+            // own build ("0.0.62#9") never matched "0.0.62#0" and the older launcher offered 0.0.62 again at once. When
+            // the start-up check has not finished yet, the live version.json is read here; failing that, "#0".
+            string newer = latest != null ? UpdateKey(latest) : null;
+            string repo = settings.UpdateRepo;
+            string ownNumber = ModVersion.Parse(SystemInfo.PortVersion(root)) != null ? ModVersion.Parse(SystemInfo.PortVersion(root)).Number : "";
             var ask = AskUnverified();
             RunInstall("Going back to Version " + prev, inst =>
             {
+                if (newer == null)
+                {
+                    try { Release rel; newer = UpdateKey(Manifest.Latest(repo, out rel, inst.Log)); }
+                    catch (Exception ex) { inst.Log("Could not read the latest version.json (" + ex.Message + "); skipping " + ownNumber + "."); }
+                    if (newer == null) newer = RevertSkipKey(ownNumber);
+                }
                 inst.Log("Reading " + url);
                 var m = Manifest.Parse(Manifest.Fetch(url));
                 m.ManifestUrl = url;

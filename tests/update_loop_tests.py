@@ -101,6 +101,25 @@ class UpdateLoop(unittest.TestCase):
         self.assertIn('public static int InstalledLauncherBuild(string root)', i)
         self.assertIn('InstalledLauncherBuild(root) > LauncherInfo.Build ? exe : null', i)
 
+    def test_revert_skips_the_key_older_launchers_compute(self):
+        # e2e 26 Oct 08:15 (rv6): Revert to 0.0.6 wrote SkipUpdate=0.0.62#9 (the reverting launcher's own build), but the
+        # 0.0.6 launcher computes 0.0.62#0 from a version.json without launcher_build, so it offered 0.0.62 again at once.
+        need((ASSETS / 'version.json').is_file(), str(ASSETS / 'version.json'))
+        m = json.load(open(ASSETS / 'version.json', encoding='utf-8'))
+        want = m['version_number'] + '#' + str(manifest_launcher_build(m))
+        for build, z in SHIPPED:
+            with zipfile.ZipFile(z) as zz:
+                every = ''.join(zz.read(n).decode('utf-8', 'replace') for n in zz.namelist() if n.endswith('.cs'))
+            self.assertIn('static string UpdateKey(Manifest m) { return (m.VersionNumber ?? m.Version) + "#" + m.LauncherBuild; }', every, build)
+            self.assertIn('if (settings.Get("SkipUpdate", "") == UpdateKey(m))', every, build)
+        u = src('MainForm.Updates.cs')
+        rv = u[u.index('void UsePreviousVersion'):u.index('void RunInstall')]
+        self.assertNotIn('"#" + LauncherInfo.Build', rv, 'revert guesses the skip key from its own launcher build')
+        self.assertIn('newer = UpdateKey(Manifest.Latest(repo, out rel, inst.Log))', rv)
+        self.assertIn('newer = RevertSkipKey(ownNumber)', rv)
+        self.assertIn('internal static string RevertSkipKey(string number) { return number + "#0"; }', u)
+        self.assertEqual(want, m['version_number'] + '#0', 'the fallback key assumes version.json has no launcher_build')
+
     def test_the_e2e_has_the_outside_launcher_restart_mode(self):
         s = pathlib.Path('/workspace/herovr-release/e2e62/run.sh')
         need(s.is_file(), str(s))

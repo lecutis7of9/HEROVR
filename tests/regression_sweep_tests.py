@@ -81,6 +81,8 @@ COVERAGE = {
     'enemies trail behind while flying fast (ENEMY TRACKING LIVE fell back over 40 m/s)': [
         ('core_tests.cpp', 'Version 0.0.62 ENEMY TRACKING LIVE: the world list stays usable while flying fast'),
         ('regression_sweep_tests.py', 'test_game_xr_marks_fly_mode_triggers')],
+    'Revert to 0.0.6 offered 0.0.62 again at once (skip key 0.0.62#9 vs 0.0.62#0)': [
+        ('update_loop_tests.py', 'test_revert_skips_the_key_older_launchers_compute')],
     'placeholder or blank repo setting': [('launcher_build8_tests.py', 'test_blank_or_placeholder_repository_falls_back_to_herovr')],
     'bracketed folder paths / running inside the zip': [('launcher_build9_tests.py', 'test_build_ps1_literal_paths_and_log'),
                                                          ('launcher_build9_tests.py', 'test_cmd')],

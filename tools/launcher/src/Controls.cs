@@ -10,22 +10,22 @@ namespace Sm2VrLauncher
 {
     static class Theme
     {
-        public static readonly Color Bg = Color.FromArgb(10, 12, 19);
-        public static readonly Color PanelTint = Color.FromArgb(200, 10, 12, 20);
-        public static readonly Color PanelBorder = Color.FromArgb(60, 205, 210, 220);
-        public static readonly Color Red = Color.FromArgb(226, 32, 48);
-        public static readonly Color RedHot = Color.FromArgb(246, 58, 72);
-        public static readonly Color RedDark = Color.FromArgb(120, 12, 22);
-        public static readonly Color Silver = Color.FromArgb(206, 211, 219);
-        public static readonly Color Text = Color.FromArgb(242, 244, 248);
-        public static readonly Color Sub = Color.FromArgb(150, 158, 174);
-        public static readonly Color Dim = Color.FromArgb(95, 102, 118);
-        public static readonly Color Good = Color.FromArgb(72, 214, 132);
-        public static readonly Color Warn = Color.FromArgb(246, 182, 70);
-        public static readonly Color Bad = Color.FromArgb(255, 86, 96);
-        public static readonly Color Info = Color.FromArgb(120, 170, 255);
-        public static readonly Color Field = Color.FromArgb(16, 19, 29);
-        public static readonly Color ScrollBg = Color.FromArgb(14, 16, 25);
+        public static Color Bg = Color.FromArgb(10, 12, 19);
+        public static Color PanelTint = Color.FromArgb(200, 10, 12, 20);
+        public static Color PanelBorder = Color.FromArgb(60, 205, 210, 220);
+        public static Color Red = Color.FromArgb(226, 32, 48);
+        public static Color RedHot = Color.FromArgb(246, 58, 72);
+        public static Color RedDark = Color.FromArgb(120, 12, 22);
+        public static Color Silver = Color.FromArgb(206, 211, 219);
+        public static Color Text = Color.FromArgb(242, 244, 248);
+        public static Color Sub = Color.FromArgb(150, 158, 174);
+        public static Color Dim = Color.FromArgb(95, 102, 118);
+        public static Color Good = Color.FromArgb(72, 214, 132);
+        public static Color Warn = Color.FromArgb(246, 182, 70);
+        public static Color Bad = Color.FromArgb(255, 86, 96);
+        public static Color Info = Color.FromArgb(120, 170, 255);
+        public static Color Field = Color.FromArgb(16, 19, 29);
+        public static Color ScrollBg = Color.FromArgb(14, 16, 25);
         public static float Scale = 1f;
 
         public static int S(int v) { return (int)Math.Round(v * Scale); }
@@ -54,16 +54,106 @@ namespace Sm2VrLauncher
         }
 
         /// <summary>A cached font; size is in 96-dpi pixels and scaled.</summary>
-        public static Font F(string kind, float px, FontStyle style)
+        public static Font F(string kind, float px, FontStyle style) { return F(kind, px, style, false); }
+
+        /// <summary>For Windows' own text controls (text boxes, labels, buttons in dialogs): always an installed font,
+        /// never the new design's embedded one (Windows' GDI text cannot use a private font).</summary>
+        public static Font Native(string kind, float px, FontStyle style) { return F(kind, px, style, true); }
+        public static Font NUi(float px) { return Native("ui", px, FontStyle.Regular); }
+        public static Font NUiBold(float px) { return Native("ui", px, FontStyle.Bold); }
+
+        static Font F(string kind, float px, FontStyle style, bool native)
         {
-            string key = kind + "|" + px + "|" + (int)style;
+            string key = kind + "|" + px + "|" + (int)style + (native ? "|n" : "");
             Font f;
             if (!fonts.TryGetValue(key, out f))
             {
-                f = new Font(Family(kind), px * Scale, style, GraphicsUnit.Pixel);
+                // The new design (HeroStyle) draws its text in the embedded Barlow (Medium stands in for bold); mono stays.
+                if (HeroRegular != null && kind != "mono" && !native)
+                {
+                    bool bold = (style & FontStyle.Bold) != 0 || kind == "heavy" || kind == "display";
+                    f = new Font(bold ? HeroMedium : HeroRegular, px * Scale, style & ~FontStyle.Bold, GraphicsUnit.Pixel);
+                }
+                else f = new Font(Family(kind), px * Scale, style, GraphicsUnit.Pixel);
                 fonts[key] = f;
             }
             return f;
+        }
+
+        // ---- The new design (HERO VR, the concept video): black, neon green, slanted tiles ----
+        /// <summary>True when the new design is on: panels, toggles and dialogs use its black and neon green look.</summary>
+        public static bool HeroStyle;
+        public static FontFamily HeroRegular, HeroMedium;
+        public static Color Neon = Color.FromArgb(104, 236, 66);
+        public static Color DialogBg = Color.FromArgb(16, 17, 24);
+
+        /// <summary>Re-themes every shared colour for the new design. Called once, before any control is built.</summary>
+        public static void ApplyHero(FontFamily regular, FontFamily medium)
+        {
+            if (classic == null) classic = new[] { Bg, PanelTint, PanelBorder, Red, RedHot, RedDark, Silver, Text, Sub, Dim, Good, Field, ScrollBg, DialogBg };
+            HeroStyle = true;
+            // An installed Barlow wins over the embedded copy (same font): Mono's GDI+ cannot draw private fonts.
+            HeroRegular = Installed("Barlow") ?? regular; HeroMedium = Installed("Barlow Medium") ?? medium;
+            foreach (var f in fonts.Values) f.Dispose();
+            fonts.Clear();
+            Bg = Color.Black;
+            PanelTint = Color.FromArgb(225, 4, 7, 4);
+            PanelBorder = Color.FromArgb(120, 104, 236, 66);
+            Red = Neon;                                   // the accent
+            RedHot = Color.FromArgb(150, 255, 110);
+            RedDark = Color.FromArgb(24, 70, 18);
+            Silver = Color.FromArgb(206, 212, 204);
+            Text = Color.FromArgb(244, 246, 244);
+            Sub = Color.FromArgb(136, 136, 136);          // #888, the tile subtitles
+            Dim = Color.FromArgb(88, 92, 88);
+            Good = Neon;
+            Field = Color.FromArgb(8, 12, 8);
+            ScrollBg = Color.Black;
+            DialogBg = Color.FromArgb(5, 8, 5);
+        }
+
+        static Color[] classic;
+
+        static FontFamily Installed(string name)
+        {
+            try
+            {
+                var ff = new FontFamily(name);
+                if (ff.Name.StartsWith("Barlow", StringComparison.OrdinalIgnoreCase)) return ff;   // fontconfig reports "Barlow Medium" as "Barlow"
+                ff.Dispose();
+            }
+            catch (ArgumentException) { }
+            return null;
+        }
+
+        /// <summary>Back to the classic colours and fonts (the new design failed while its window was being built).</summary>
+        public static void ApplyClassic()
+        {
+            HeroStyle = false;
+            HeroRegular = HeroMedium = null;
+            foreach (var f in fonts.Values) f.Dispose();
+            fonts.Clear();
+            if (classic == null) return;
+            var c = classic;
+            Bg = c[0]; PanelTint = c[1]; PanelBorder = c[2]; Red = c[3]; RedHot = c[4]; RedDark = c[5]; Silver = c[6]; Text = c[7];
+            Sub = c[8]; Dim = c[9]; Good = c[10]; Field = c[11]; ScrollBg = c[12]; DialogBg = c[13];
+        }
+
+        /// <summary>A slanted tile (parallelogram): the top edge sits `slant` to the right of the bottom edge.</summary>
+        public static GraphicsPath Slanted(RectangleF r, float slant)
+        {
+            var p = new GraphicsPath();
+            p.AddPolygon(new[] { new PointF(r.X + slant, r.Y), new PointF(r.Right, r.Y), new PointF(r.Right - slant, r.Bottom), new PointF(r.X, r.Bottom) });
+            return p;
+        }
+
+        /// <summary>A rectangle with the top-left and bottom-right corners cut at 45 degrees (the new design's panels).</summary>
+        public static GraphicsPath Chamfer(RectangleF r, float cut)
+        {
+            var p = new GraphicsPath();
+            p.AddPolygon(new[] { new PointF(r.X + cut, r.Y), new PointF(r.Right, r.Y), new PointF(r.Right, r.Bottom - cut),
+                new PointF(r.Right - cut, r.Bottom), new PointF(r.X, r.Bottom), new PointF(r.X, r.Y + cut) });
+            return p;
         }
         public static Font Ui(float px) { return F("ui", px, FontStyle.Regular); }
         public static Font UiBold(float px) { return F("ui", px, FontStyle.Bold); }
@@ -219,6 +309,25 @@ namespace Sm2VrLauncher
                     Theme.Hq(g);
                     g.DrawImageUnscaled(behind, 0, 0);
                     var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+                    if (Theme.HeroStyle)
+                    {
+                        // Near-black with a thin neon outline and cut corners; the heading in spaced neon capitals.
+                        using (var p = Theme.Chamfer(r, Theme.S(18)))
+                        {
+                            using (var b = new SolidBrush(Theme.PanelTint)) g.FillPath(b, p);
+                            using (var pen = new Pen(Theme.PanelBorder, Math.Max(1f, Theme.S(1)))) g.DrawPath(pen, p);
+                        }
+                        using (var pen = new Pen(Theme.Neon, Math.Max(2f, Theme.S(2))))
+                            g.DrawLine(pen, Theme.S(18), 1, Theme.S(118), 1);
+                        if (!string.IsNullOrEmpty(heading))
+                            using (var b = new SolidBrush(Theme.Neon))
+                                g.DrawString(Spaced(heading), Theme.F("ui", 15, FontStyle.Bold), b, Theme.S(24), Theme.S(15));
+                        if (ShowHandle && HandleClicked != null)
+                            using (var b = new SolidBrush(Theme.Sub))
+                            using (var sf = new StringFormat { Alignment = StringAlignment.Far })
+                                g.DrawString(Spaced("Back") + "   ESC", Theme.F("ui", 11, FontStyle.Bold), b, new RectangleF(0, Theme.S(17), Width - Theme.S(26), Theme.S(20)), sf);
+                        return;
+                    }
                     Frost.Pane(g, behind, r, Theme.S(Radius), Color.FromArgb(208, 20, 21, 29), Color.FromArgb(222, 11, 12, 18));
                     if (ShowHandle)
                         using (var p = Theme.Round(new RectangleF(Width / 2f - Theme.S(20), Theme.S(7), Theme.S(40), Theme.S(4)), Theme.S(2)))
@@ -230,14 +339,20 @@ namespace Sm2VrLauncher
             }
         }
 
+        bool OnHandle(Point e)
+        {
+            if (!ShowHandle || HandleClicked == null) return false;
+            if (Theme.HeroStyle) return e.Y < Theme.S(44) && e.X > Width - Theme.S(130);   // BACK  ESC, top right
+            return e.Y < Theme.S(18) && Math.Abs(e.X - Width / 2) < Theme.S(40);
+        }
         protected override void OnMouseClick(MouseEventArgs e)
         {
-            if (ShowHandle && HandleClicked != null && e.Y < Theme.S(18) && Math.Abs(e.X - Width / 2) < Theme.S(40)) HandleClicked(this, EventArgs.Empty);
+            if (OnHandle(e.Location)) HandleClicked(this, EventArgs.Empty);
             base.OnMouseClick(e);
         }
         protected override void OnMouseMove(MouseEventArgs e)
         {
-            Cursor = ShowHandle && HandleClicked != null && e.Y < Theme.S(18) && Math.Abs(e.X - Width / 2) < Theme.S(40) ? Cursors.Hand : Cursors.Default;
+            Cursor = OnHandle(e.Location) ? Cursors.Hand : Cursors.Default;
             base.OnMouseMove(e);
         }
 
@@ -336,6 +451,7 @@ namespace Sm2VrLauncher
         protected override void Render(Graphics g)
         {
             if (Hero) { RenderHero(g); return; }
+            if (Theme.HeroStyle && Kind != ButtonKind.Ghost) { RenderSlanted(g); return; }
             int depth = Kind == ButtonKind.Primary ? Theme.S(6) : 0;
             int press = (down && Enabled) ? depth / 2 : 0;
             var face = new RectangleF(0.5f, press + 0.5f, Width - 1.5f, Height - depth - 1.5f);
@@ -373,6 +489,31 @@ namespace Sm2VrLauncher
             float cy = face.Y + face.Height / 2f;
             if (glyphW > 0) DrawGlyph(g, Glyph, new RectangleF(x, cy - glyphW / 2f + Theme.S(1), glyphW * 0.72f, glyphW * 0.72f), fg);
             using (var b = new SolidBrush(fg)) g.DrawString(label, TextFont, b, x + glyphW, cy - ts.Height / 2f);
+        }
+
+        /// <summary>The new design's buttons: slanted like the tiles, near-black with a neon edge (filled when primary).</summary>
+        void RenderSlanted(Graphics g)
+        {
+            float sl = Math.Min(Theme.S(10), Height * 0.3f);
+            var face = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+            bool prim = Kind == ButtonKind.Primary, danger = Kind == ButtonKind.Danger;
+            Color edge = danger ? Theme.Bad : Theme.Neon;
+            using (var p = Theme.Slanted(face, sl))
+            {
+                Color fill = !Enabled ? Color.FromArgb(14, 255, 255, 255)
+                    : prim ? Color.FromArgb(hover ? 120 : 84, edge)
+                    : Color.FromArgb(hover ? 46 : 18, edge);
+                using (var b = new SolidBrush(fill)) g.FillPath(b, p);
+                using (var pen = new Pen(Enabled ? Color.FromArgb(hover || prim ? 255 : 130, edge) : Color.FromArgb(40, 255, 255, 255), down ? 2f : 1f)) g.DrawPath(pen, p);
+            }
+            Color fg = Enabled ? Theme.Text : Theme.Dim;
+            string label = Text.ToUpperInvariant();
+            var f = prim && TextFont.Size > Theme.S(20) ? TextFont : Theme.F("ui", 12, FontStyle.Bold);
+            SizeF ts = g.MeasureString(label, f);
+            float glyphW = string.IsNullOrEmpty(Glyph) ? 0 : Theme.S(18);
+            float x = (Width - ts.Width - glyphW) / 2f, cy = Height / 2f;
+            if (glyphW > 0) DrawGlyph(g, Glyph, new RectangleF(x, cy - glyphW / 2f + Theme.S(1), glyphW * 0.72f, glyphW * 0.72f), fg);
+            using (var b = new SolidBrush(fg)) g.DrawString(label, f, b, x + glyphW, cy - ts.Height / 2f);
         }
 
         void RenderHero(Graphics g)
@@ -583,6 +724,21 @@ namespace Sm2VrLauncher
             int sw = Theme.S(44), sh = Theme.S(24);
             var track = new RectangleF(Width - sw - Theme.S(4), Theme.S(8), sw, sh);
             bool active = on && Enabled;
+            if (Theme.HeroStyle)
+            {
+                // Slanted track and a slanted knob, like the tiles.
+                float sl = Theme.S(6);
+                using (var p = Theme.Slanted(track, sl))
+                {
+                    using (var b = new SolidBrush(active ? Color.FromArgb(90, Theme.Neon) : Color.FromArgb(Enabled ? 40 : 18, 200, 205, 200))) g.FillPath(b, p);
+                    using (var pen = new Pen(active ? Theme.Neon : Color.FromArgb(70, 255, 255, 255))) g.DrawPath(pen, p);
+                }
+                float kw = sw * 0.46f;
+                var knob = new RectangleF(on ? track.Right - kw - Theme.S(3) : track.X + Theme.S(3), track.Y + Theme.S(3), kw, sh - Theme.S(6));
+                using (var p = Theme.Slanted(knob, sl * 0.75f))
+                using (var b = new SolidBrush(!Enabled ? Theme.Dim : active ? Theme.Neon : Color.FromArgb(200, 205, 200))) g.FillPath(b, p);
+            }
+            else
             using (var p = Theme.Round(track, sh / 2f))
             {
                 using (var b = new SolidBrush(active ? Theme.Red : Color.FromArgb(Enabled ? 60 : 25, 200, 205, 215))) g.FillPath(b, p);
@@ -590,7 +746,8 @@ namespace Sm2VrLauncher
             }
             float k = sh - Theme.S(6);
             float kx = on ? track.Right - k - Theme.S(3) : track.X + Theme.S(3);
-            using (var b = new SolidBrush(Enabled ? Color.White : Theme.Dim)) g.FillEllipse(b, kx, track.Y + Theme.S(3), k, k);
+            if (!Theme.HeroStyle)
+                using (var b = new SolidBrush(Enabled ? Color.White : Theme.Dim)) g.FillEllipse(b, kx, track.Y + Theme.S(3), k, k);
             int textW = Width - sw - Theme.S(16);
             using (var b = new SolidBrush(Enabled ? Theme.Text : Theme.Dim))
                 g.DrawString(Title, Theme.UiBold(13), b, new RectangleF(0, Theme.S(4), textW, Theme.S(20)));

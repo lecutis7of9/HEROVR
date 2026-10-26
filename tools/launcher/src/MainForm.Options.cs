@@ -106,6 +106,8 @@ namespace Sm2VrLauncher
             tip.SetToolTip(privacyStats, "Frame rate, stutters, heroes and features used, versions, GPU and headset. Never names, folders or IP. Takes effect at once.");
             tip.SetToolTip(privacyCrash, "Nothing is sent without your click: it opens a filled-in GitHub issue you submit. Takes effect at once.");
             y += 76; col = 0;
+            // Build 10: LAUNCHER - the new design or the classic one (both designs), and the new design's sound.
+            BuildLauncherSection(area, ref y, colW, gap);
             // Room at the end so the last row clears the edge.
             var spacer = new TextLabel("", Theme.Ui(10), Theme.Dim);
             spacer.Bounds = Theme.R(0, y + (col == 1 ? 76 : 0), 10, 10);

@@ -14,9 +14,10 @@ import json, os, pathlib, re, shutil, subprocess, sys, tempfile, unittest, zipfi
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tests'))
-from regression_sweep_tests import SHIPPED, L, src, need, CHECKS   # noqa: E402
+from regression_sweep_tests import SHIPPED, SHIPPED_B9, CUR, L, src, need, CHECKS   # noqa: E402
 
-ASSETS = pathlib.Path(os.environ.get('HEROVR_ASSETS', '/workspace/herovr-release/github/release-assets-0.0.62'))
+# The release assets for this tree's version (0.0.62, then 0.0.63: the same rule, one version on).
+ASSETS = pathlib.Path(os.environ.get('HEROVR_ASSETS', '/workspace/herovr-release/github/release-assets-' + CUR))
 
 HARNESS = '''namespace Sm2VrLauncher { static class H { static int Main(string[] a) {
  // the rule every build 2-8 ships: newer mod version, or same version and launcher_build above the running build
@@ -57,13 +58,30 @@ class UpdateLoop(unittest.TestCase):
         need((ASSETS / 'version.json').is_file(), str(ASSETS / 'version.json'))
         m = json.load(open(ASSETS / 'version.json', encoding='utf-8'))
         lb = manifest_launcher_build(m)
+        self.assertEqual(m['version_number'], CUR)
+        cur_build = int(re.search(r'public const int Build = (\d+);', src('ModVersion.cs')).group(1))
         for build, mv in self.shipped():
-            # before: 0.0.62 is offered (the self-update path); after installing it and restarting: not again
-            self.assertTrue(offers(mv, '0.0.6' if build >= 6 else '0.0.5', m['version'], lb, 9, 'LauncherInfo.Build'), build)
-            self.assertFalse(offers(mv, '0.0.62', m['version'], lb, 9, 'LauncherInfo.Build'),
-                             f'launcher build {build} run from outside the install would offer 0.0.62 again (update loop)')
+            # before: this version is offered (the self-update path); after installing it and restarting: not again
+            self.assertTrue(offers(mv, '0.0.6' if build >= 6 else '0.0.5', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
+            if CUR != '0.0.62':   # 0.0.63: also from 0.0.62 (the outside 0.0.6.1 launcher of the report, with 0.0.62 installed)
+                self.assertTrue(offers(mv, '0.0.62', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
+            self.assertFalse(offers(mv, CUR, m['version'], lb, cur_build, 'LauncherInfo.Build'),
+                             f'launcher build {build} run from outside the install would offer {CUR} again (update loop)')
+        if CUR != '0.0.62':   # launcher build 9 (the 0.0.62 release's own), with its Math.Max rule
+            b, z = SHIPPED_B9
+            need(os.path.isfile(z), z)
+            with zipfile.ZipFile(z) as zz:
+                names = zz.namelist()
+                mv9 = zz.read([n for n in names if n.endswith('tools/launcher/src/ModVersion.cs')][0]).decode('utf-8')
+                every = ''.join(zz.read(n).decode('utf-8', 'replace') for n in names if n.endswith('.cs'))
+            self.assertIn('m.LauncherBuild > Math.Max(LauncherInfo.Build, SystemInfo.InstalledLauncherBuild(root))', every)
+            self.assertIn('public const int Build = 9;', mv9)
+            self.assertTrue(offers(mv9, '0.0.62', m['version'], lb, 9, 'System.Math.Max(LauncherInfo.Build, installed)'))
+            for installed in (9, cur_build):
+                self.assertFalse(offers(mv9, CUR, m['version'], lb, installed, 'System.Math.Max(LauncherInfo.Build, installed)'),
+                                 f'launcher build 9 would offer {CUR} again (update loop)')
         b9 = src('ModVersion.cs')
-        self.assertFalse(offers(b9, '0.0.62', m['version'], lb, 9, 'System.Math.Max(LauncherInfo.Build, installed)'))
+        self.assertFalse(offers(b9, CUR, m['version'], lb, cur_build, 'System.Math.Max(LauncherInfo.Build, installed)'))
 
     def test_the_old_manifest_reproduces_the_loop(self):
         # the published-at-6:2x manifest had launcher_build 9: the same rule offers 0.0.62 again for builds 2-8
@@ -85,11 +103,12 @@ class UpdateLoop(unittest.TestCase):
             m['launcher_build'] = 9; pathlib.Path(d, 'version.json').write_text(json.dumps(m))
             self.assertTrue(any('update loop' in p for p in c.problems(d, 'v9.9.9', 9)))
             self.assertEqual(c.problems(d, 'v9.9.9', 9, True), [])
-        fin = pathlib.Path('/workspace/herovr-release/finalize_00062.sh')
-        if fin.is_file():
-            t = fin.read_text()
-            self.assertIn("m['launcher_build_in_zip']=lb", t)
-            self.assertIn('check_release_manifest.py . --tag v0.0.62 --min-launcher-build 9', t)
+        for fin, tag in ((pathlib.Path('/workspace/herovr-release/finalize_00062.sh'), 'v0.0.62 --min-launcher-build 9'),
+                         (pathlib.Path('/tmp/rel/finalize_%s.sh' % CUR.replace('.', '').zfill(5)), 'v%s --min-launcher-build ' % CUR)):
+            if fin.is_file():
+                t = fin.read_text()
+                self.assertIn("m['launcher_build_in_zip']=lb", t)
+                self.assertIn('check_release_manifest.py . --tag ' + tag, t)
 
     def test_build_9_hands_over_to_the_installed_launcher(self):
         u, f, i = src('MainForm.Updates.cs'), src('MainForm.cs'), src('SystemInfo.cs')

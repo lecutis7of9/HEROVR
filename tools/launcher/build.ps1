@@ -22,7 +22,9 @@ $refs = "System.dll","System.Core.dll","System.Drawing.dll","System.Windows.Form
 
 & $csc /nologo /target:winexe /optimize+ /platform:anycpu /langversion:5 "/out:$Out" `
   /win32icon:assets\sm2vr.ico /win32manifest:app.manifest `
-  /resource:assets\background.jpg,background.jpg @refs @src | ForEach-Object { Write-Host $_ }   # through Write-Host so build.log has the compiler messages
+  /resource:assets\background.jpg,background.jpg `
+  /resource:assets\hero\orb.bin,hero.orb.bin /resource:assets\hero\intro.wav,hero.intro.wav /resource:assets\hero\loop.wav,hero.loop.wav `
+  /resource:assets\hero\Barlow-Regular.ttf,hero.Barlow-Regular.ttf /resource:assets\hero\Barlow-Medium.ttf,hero.Barlow-Medium.ttf @refs @src | ForEach-Object { Write-Host $_ }   # through Write-Host so build.log has the compiler messages
 if ($LASTEXITCODE -ne 0) { throw "The launcher did not compile (csc exit $LASTEXITCODE)." }
 Write-Host "Built $Out ($([math]::Round((Get-Item -LiteralPath $Out).Length/1KB)) KB)" -ForegroundColor Green
 

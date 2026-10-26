@@ -18,10 +18,10 @@ namespace Sm2VrLauncher
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false; ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
-            BackColor = Color.FromArgb(16, 17, 24); ForeColor = Theme.Text; Font = Theme.Ui(12.5f);
+            BackColor = Theme.DialogBg; ForeColor = Theme.Text; Font = Theme.NUi(12.5f);
             AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(Theme.S(640), Theme.S(height));
-            Controls.Add(new Label { Text = heading, Font = Theme.F("ui", 17, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = false, Bounds = Theme.R(24, 16, 592, 32) });
+            Controls.Add(new Label { Text = heading, Font = Theme.Native("ui", 17, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = false, Bounds = Theme.R(24, 16, 592, 32) });
             Controls.Add(new Label { Text = sub, ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 50, 592, 44) });
             preview.Multiline = true; preview.ReadOnly = true; preview.ScrollBars = ScrollBars.Vertical; preview.WordWrap = true;
             preview.BackColor = Theme.Field; preview.ForeColor = Theme.Silver; preview.BorderStyle = BorderStyle.FixedSingle; preview.Font = Theme.Mono(10.5f);
@@ -31,8 +31,8 @@ namespace Sm2VrLauncher
 
         protected static void Style(Button b, string text, bool main)
         {
-            b.Text = text; b.FlatStyle = FlatStyle.Flat; b.Font = Theme.UiBold(12);
-            b.BackColor = main ? Theme.Red : Color.FromArgb(34, 36, 46); b.ForeColor = Color.White;
+            b.Text = text; b.FlatStyle = FlatStyle.Flat; b.Font = Theme.NUiBold(12);
+            b.BackColor = main ? Theme.Red : (Theme.HeroStyle ? Color.FromArgb(14, 20, 14) : Color.FromArgb(34, 36, 46)); b.ForeColor = Theme.HeroStyle && main ? Color.Black : Color.White;
             b.FlatAppearance.BorderColor = main ? Theme.RedHot : Theme.PanelBorder;
             b.Cursor = Cursors.Hand;
         }
@@ -48,7 +48,7 @@ namespace Sm2VrLauncher
             preview.Text = c.Body.Replace("\r", "").Replace("\n", "\r\n");
             preview.Bounds = Theme.R(24, 100, 592, 230);
             Controls.Add(preview);
-            Controls.Add(new Label { Text = PrivacyLine, ForeColor = Theme.Dim, AutoSize = false, Bounds = Theme.R(24, 336, 592, 22), Font = Theme.Ui(11) });
+            Controls.Add(new Label { Text = PrivacyLine, ForeColor = Theme.Dim, AutoSize = false, Bounds = Theme.R(24, 336, 592, 22), Font = Theme.NUi(11) });
             Style(primary, "SEND REPORT", true); primary.Bounds = Theme.R(24, 372, 170, 38);
             Style(secondary, "NOT NOW", false); secondary.Bounds = Theme.R(204, 372, 120, 38);
             Style(third, "DON'T ASK AGAIN", false); third.Bounds = Theme.R(458, 372, 158, 38);
@@ -78,7 +78,7 @@ namespace Sm2VrLauncher
             system.Text = "Add the mod version, GPU and VR runtime (no personal data)"; system.Checked = true;
             system.ForeColor = Theme.Silver; system.Bounds = Theme.R(24, 204, 592, 24);
             preview.Bounds = Theme.R(24, 232, 592, 130);
-            Controls.Add(new Label { Text = PrivacyLine, ForeColor = Theme.Dim, AutoSize = false, Bounds = Theme.R(24, 368, 592, 22), Font = Theme.Ui(11) });
+            Controls.Add(new Label { Text = PrivacyLine, ForeColor = Theme.Dim, AutoSize = false, Bounds = Theme.R(24, 368, 592, 22), Font = Theme.NUi(11) });
             Style(primary, "OPEN ON GITHUB", true); primary.Bounds = Theme.R(24, 410, 180, 38);
             Style(secondary, "CANCEL", false); secondary.Bounds = Theme.R(508, 410, 108, 38);
             secondary.DialogResult = DialogResult.Cancel; CancelButton = secondary;

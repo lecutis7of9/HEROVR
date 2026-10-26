@@ -48,12 +48,15 @@ namespace Sm2VrLauncher
 
             // The build & update log shares the sheet, on the right.
             var logCard = card;
-            Add(card, new TextLabel("Build & update log", Theme.F("ui", 13, FontStyle.Bold), Theme.Text) { Wrap = false }, 556, 18, 300, 22);
+            // The label is narrowed in the new design so it never covers Build (dev) and Copy, which sit further left there.
+            Add(card, new TextLabel("Build & update log", Theme.F("ui", 13, FontStyle.Bold), Theme.Text) { Wrap = false }, 556, 18, Theme.HeroStyle ? 156 : 300, 22);
             buildLog = Add(logCard, new LogBox(), 556, 48, 532, 488);
-            var copy = Add(logCard, new AccentButton("Copy", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 960, 18, 50, 22);
-            var logs = Add(logCard, new AccentButton("Logs", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 1024, 18, 64, 22);
+            // The new design draws BACK  ESC in the sheet's top right corner: these move left of it there.
+            bool hs = Theme.HeroStyle;
+            var copy = Add(logCard, new AccentButton("Copy", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, hs ? 830 : 960, 18, 50, 22);
+            var logs = Add(logCard, new AccentButton("Logs", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, hs ? 890 : 1024, 18, 64, 22);
             // Developers only (Visual Studio C++ and git found): compile the mod from source. Players never see it.
-            btnDevBuild = Add(logCard, new AccentButton("Build from source (dev)", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 760, 18, 190, 22);
+            btnDevBuild = Add(logCard, new AccentButton(hs ? "Build (dev)" : "Build from source (dev)", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, hs ? 716 : 760, 18, hs ? 104 : 190, 22);
             btnDevBuild.Visible = !preview && ModFiles.DevToolsPresent();
             btnDevBuild.Click += (s, e) => StartBuild(null);
             copy.Click += (s, e) => { try { Clipboard.SetText(buildLog.AllText.Length > 0 ? buildLog.AllText : " "); } catch { } };

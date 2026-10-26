@@ -30,13 +30,54 @@ namespace Sm2VrLauncher
                 }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                var form = new MainForm();
+                var form = CreateWindow(args);
                 string shot = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_SCREENSHOT");
                 if (!string.IsNullOrEmpty(shot)) Screenshot.Arm(form, shot);
                 Application.Run(form);
                 GC.KeepAlive(mutex);
             }
             return 0;
+        }
+
+        /// <summary>The settings this process uses (one copy: the design fallback and the window save the same one).</summary>
+        public static Settings Shared;
+
+        /// <summary>Build 10: the new HERO VR design or the classic window. Anything that goes wrong while the new design
+        /// loads (its assets, its fonts, building its window) opens the classic window instead and says why, once.</summary>
+        static MainForm CreateWindow(string[] args)
+        {
+            Settings s;
+            try { s = Settings.Load(); }
+            catch (Exception ex) { LogError(ex); return new MainForm(); }   // as before build 10: the window reports it
+            Shared = s;
+            Design design = Design.Classic;
+            try { design = LauncherMode.Decide(s, args, LauncherMode.ShiftHeld()); }
+            catch (Exception ex) { LogError(ex); design = Design.Classic; }
+            if (design == Design.Hero)
+            {
+                try
+                {
+                    HeroAssets.Load();
+                    LauncherMode.WriteMarker();   // cleared once the first frames are on screen; still here next time = a failed start
+                    Theme.ApplyHero(HeroAssets.Regular, HeroAssets.Medium);
+                    LauncherMode.Current = Design.Hero;
+                    LauncherMode.Log("opening the new design");
+                    return new MainForm(s, Design.Hero);
+                }
+                catch (Exception ex)
+                {
+                    LogError(ex);
+                    Theme.ApplyClassic();
+                    var hae = ex as HeroAssetException;
+                    LauncherMode.FallBack(s, hae != null
+                        ? "The new launcher design could not start because " + hae.Message + ", so the classic launcher opened instead."
+                        : "The new launcher design could not open its window (" + ex.Message + "; details in launcher-error.log), so the classic launcher opened instead.");
+                    LauncherMode.Notice = s.Get(LauncherMode.KeyFallbackReason, "");
+                }
+            }
+            LauncherMode.Current = Design.Classic;
+            if (!string.IsNullOrEmpty(LauncherMode.Notice)) LauncherMode.Log("opening the classic design (" + LauncherMode.Notice + ")");
+            return new MainForm(s, Design.Classic);
         }
 
         /// <summary>Appends an error to launcher-error.log (never throws).</summary>
@@ -53,7 +94,15 @@ namespace Sm2VrLauncher
         static void Crash(Exception ex, bool canContinue)
         {
             string log = LogError(ex);
-            try { Telemetry.NoteLauncherCrash(ex); } catch { }   // Version 0.0.6: asked about (once) at the next start
+            try { Telemetry.NoteLauncherCrash(ex); } catch { }
+            // Build 10: an error in the new design opens the classic one next time (and says why, once).
+            try
+            {
+                if (LauncherMode.Current == Design.Hero && Shared != null)
+                    LauncherMode.FallBack(Shared, "The new launcher design hit an error (" + (ex == null ? "unknown error" : ex.Message) +
+                        "; details in launcher-error.log), so the classic launcher opened instead.");
+            }
+            catch { }   // Version 0.0.6: asked about (once) at the next start
             try
             {
                 MessageBox.Show("Something went wrong in the launcher:\n\n" + (ex == null ? "unknown error" : ex.Message) +

@@ -43,17 +43,18 @@ namespace Sm2VrLauncher
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = MinimizeBox = false; ShowInTaskbar = false;
             StartPosition = FormStartPosition.CenterParent;
-            BackColor = Color.FromArgb(16, 17, 24); ForeColor = Theme.Text; Font = Theme.Ui(12.5f);
+            BackColor = Theme.DialogBg; ForeColor = Theme.Text; Font = Theme.NUi(12.5f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(Theme.S(640), Theme.S(522));
+            ClientSize = new Size(Theme.S(640), Theme.S(548));
 
-            var head = new Label { Text = "Revert to a previous version", Font = Theme.F("ui", 18, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = false, Bounds = Theme.R(24, 18, 590, 34) };
+            var head = new Label { Text = "Revert to a previous version", Font = Theme.Native("ui", 18, FontStyle.Bold), ForeColor = Theme.Text, AutoSize = false, Bounds = Theme.R(24, 18, 590, 34) };
             var sub = new Label
             {
                 Text = "Pick a version. The one you have now is backed up first, so you can come back to it. Then the launcher restores, builds and checks the version; if anything fails, nothing changes.",
                 ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 54, 590, 44)
             };
-            // One click back to an earlier release (build 9: 0.0.62 -> 0.0.6 or 0.0.5): works with no backup at all.
+            // One click back to an earlier release (build 9: 0.0.62 -> 0.0.6 or 0.0.5; build 10: 0.0.63 -> 0.0.62, 0.0.6 or 0.0.5): works
+            // with no backup at all. Build 10: three buttons fill the row, so their note sits under them.
             var previousButtons = new List<Control>();
             int px = 24;
             foreach (string tag in LauncherInfo.PreviousTags)
@@ -66,19 +67,19 @@ namespace Sm2VrLauncher
                 previousButtons.Add(b);
                 px += 148;
             }
-            var prevNote = new Label { Text = "From GitHub, SHA-256 checked. You stay on it until you press Update now.", ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(px + 6, 104, 616 - px - 6, 42) };
-            list.Bounds = Theme.R(24, 158, 592, 210);
+            var prevNote = new Label { Text = "From GitHub, SHA-256 checked. You stay on it until you press Update now.", ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 146, 592, 24) };
+            list.Bounds = Theme.R(24, 184, 592, 210);
             list.BackColor = Theme.Field; list.ForeColor = Theme.Text; list.BorderStyle = BorderStyle.FixedSingle;
             list.DrawMode = DrawMode.OwnerDrawFixed; list.ItemHeight = Theme.S(30);
             list.DrawItem += DrawItem;
             list.SelectedIndexChanged += (s, e) => Selected();
             list.DoubleClick += (s, e) => { if (ok.Enabled) Accept(); };
             restore.Text = "Also restore that version's settings files (live.txt, next-launch.txt, gestures)";
-            restore.ForeColor = Theme.Silver; restore.Bounds = Theme.R(24, 378, 592, 26);
-            info.ForeColor = Theme.Sub; info.AutoSize = false; info.Bounds = Theme.R(24, 408, 592, 52);
-            Style(fromGitHub, "Download an older release from GitHub", false); fromGitHub.Bounds = Theme.R(24, 468, 300, 36);
-            Style(ok, "REVERT", true); ok.Bounds = Theme.R(392, 468, 110, 36);
-            Style(cancelBtn, "CANCEL", false); cancelBtn.Bounds = Theme.R(508, 468, 108, 36);
+            restore.ForeColor = Theme.Silver; restore.Bounds = Theme.R(24, 404, 592, 26);
+            info.ForeColor = Theme.Sub; info.AutoSize = false; info.Bounds = Theme.R(24, 434, 592, 52);
+            Style(fromGitHub, "Download an older release from GitHub", false); fromGitHub.Bounds = Theme.R(24, 494, 300, 36);
+            Style(ok, "REVERT", true); ok.Bounds = Theme.R(392, 494, 110, 36);
+            Style(cancelBtn, "CANCEL", false); cancelBtn.Bounds = Theme.R(508, 494, 108, 36);
             cancelBtn.DialogResult = DialogResult.Cancel; CancelButton = cancelBtn;
             ok.Click += (s, e) => Accept();
             fromGitHub.Click += (s, e) => LoadReleases();
@@ -122,8 +123,8 @@ namespace Sm2VrLauncher
 
         static void Style(Button b, string text, bool primary)
         {
-            b.Text = text; b.FlatStyle = FlatStyle.Flat; b.Font = Theme.UiBold(12);
-            b.BackColor = primary ? Theme.Red : Color.FromArgb(34, 36, 46); b.ForeColor = Color.White;
+            b.Text = text; b.FlatStyle = FlatStyle.Flat; b.Font = Theme.NUiBold(12);
+            b.BackColor = primary ? Theme.Red : (Theme.HeroStyle ? Color.FromArgb(14, 20, 14) : Color.FromArgb(34, 36, 46)); b.ForeColor = Theme.HeroStyle && primary ? Color.Black : Color.White;
             b.FlatAppearance.BorderColor = primary ? Theme.RedHot : Theme.PanelBorder;
             b.Cursor = Cursors.Hand;
         }
@@ -134,7 +135,7 @@ namespace Sm2VrLauncher
             bool sel = (e.State & DrawItemState.Selected) != 0;
             using (var b = new SolidBrush(sel ? Color.FromArgb(90, Theme.Red) : Theme.Field)) e.Graphics.FillRectangle(b, e.Bounds);
             var it = (Item)list.Items[e.Index];
-            TextRenderer.DrawText(e.Graphics, it.ToString(), Theme.Ui(12.5f), new Rectangle(e.Bounds.X + Theme.S(8), e.Bounds.Y, e.Bounds.Width - Theme.S(12), e.Bounds.Height),
+            TextRenderer.DrawText(e.Graphics, it.ToString(), Theme.NUi(12.5f), new Rectangle(e.Bounds.X + Theme.S(8), e.Bounds.Y, e.Bounds.Width - Theme.S(12), e.Bounds.Height),
                 it.Backup != null ? Theme.Text : Theme.Silver, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 

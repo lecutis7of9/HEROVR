@@ -1,12 +1,22 @@
-# HERO VR 0.0.62 - Made by Agent Mulder
+# HERO VR 0.0.63 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of mod Version 0.0.62 (build Update 39.2) plus the prebuilt HERO VR launcher.
+This zip is the full source of mod Version 0.0.63 (build Update 39.3) plus the prebuilt HERO VR launcher.
 
-## What's new in 0.0.62
+## What's new in 0.0.63
+- **A new look for the launcher, if you want it:** the HERO VR design, with an animated orb, ambient sound and
+  slanted menu items. It is optional. The classic design stays the default; the launcher asks you once whether to
+  try the new one, and **Options > Launcher design** switches between the two at any time (the launcher restarts).
+- If the new design ever fails to start, the launcher opens the classic one by itself and says why. Hold **Shift**
+  while starting the launcher (or start it with `--classic`) to open the classic design.
+- The ambient sound stops when you close the launcher or start the game, and the animation pauses while you play.
+- **The mod itself is the same as 0.0.62:** same features, same settings, same defaults. Only the version number changed.
+- **Revert** now offers **USE 0.0.62** as well as 0.0.6 and 0.0.5.
+
+## In 0.0.62
 - **Ghost hands:** the EYE AA smoothing no longer leaves faint copies of your hands behind when they move fast.
 - **Repulsor bolts, the chest beam and your web balls stop at the first wall** (with their impact flash there)
   instead of flying on through it. No new game address: they use the same ray checks as swinging.
@@ -57,7 +67,7 @@ This zip is the full source of mod Version 0.0.62 (build Update 39.2) plus the p
   half rate when full rate is out of reach. The graphics defaults are unchanged.
 - VR never ends silently when the headset is lost: the mod waits for it and brings VR back by itself.
 - Opt-in reports (see Privacy below).
-- Don't like 0.0.62? **Revert > USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
+- Don't like 0.0.63? **Revert > USE 0.0.62**, **USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
   installs it. The launcher then stays on it until you press **Updates > Update now**.
 
 ## Requirements
@@ -72,8 +82,8 @@ This zip is the full source of mod Version 0.0.62 (build Update 39.2) plus the p
    `C:\HERO-VR`. Don't use Program Files or a OneDrive folder.
 2. Double-click **HERO VR Launcher.cmd**. If SmartScreen warns you, click **More info** and then **Run anyway**.
    The launcher is unsigned.
-3. On the first run the launcher downloads the ready-made mod files for 0.0.62 from the GitHub release
-   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.62) and checks them. If that was interrupted,
+3. On the first run the launcher downloads the ready-made mod files for 0.0.63 from the GitHub release
+   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.63) and checks them. If that was interrupted,
    press **Repair** on **Status** (or just PLAY VR, which offers it).
 4. Start your VR app, put the headset on and press **PLAY VR**. The default launch options are:
    `-RenderScale 100 -OverlayWebs -EngineTaa -SmallerDesktopView`.

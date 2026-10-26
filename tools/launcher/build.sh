@@ -13,7 +13,9 @@ mcs -nostdlib -noconfig -lib:"$API" -r:"$API/mscorlib.dll" -r:"$API/System.dll" 
   -r:"$API/System.Drawing.dll" -r:"$API/System.Windows.Forms.dll" -r:"$API/System.IO.Compression.dll" \
   -r:"$API/System.IO.Compression.FileSystem.dll" -r:"$API/System.Web.Extensions.dll" -r:"$API/System.Management.dll" \
   -langversion:5 -target:winexe -optimize+ -platform:anycpu -out:"$OUT" \
-  -win32icon:assets/sm2vr.ico -resource:assets/background.jpg,background.jpg src/*.cs
+  -win32icon:assets/sm2vr.ico -resource:assets/background.jpg,background.jpg \
+  -resource:assets/hero/orb.bin,hero.orb.bin -resource:assets/hero/intro.wav,hero.intro.wav -resource:assets/hero/loop.wav,hero.loop.wav \
+  -resource:assets/hero/Barlow-Regular.ttf,hero.Barlow-Regular.ttf -resource:assets/hero/Barlow-Medium.ttf,hero.Barlow-Medium.ttf src/*.cs
 python3 tools/check-netfx.py src "$OUT"
 echo "Built $OUT (against .NET Framework 4.8 reference assemblies)"
 # Preview: SM2VR_LAUNCHER_PREVIEW=1 mono out/SM2VRLauncher.exe

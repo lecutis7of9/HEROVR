@@ -125,7 +125,7 @@ namespace Sm2VrLauncher
         {
             BackColor = Theme.Field;
             Padding = new Padding(Theme.S(8), Theme.S(6), Theme.S(8), Theme.S(4));
-            Box = new TextBox { BorderStyle = BorderStyle.None, BackColor = Theme.Field, ForeColor = Theme.Text, Font = Theme.Ui(13), Dock = DockStyle.Fill };
+            Box = new TextBox { BorderStyle = BorderStyle.None, BackColor = Theme.Field, ForeColor = Theme.Text, Font = Theme.NUi(13), Dock = DockStyle.Fill };
             Controls.Add(Box);
         }
         protected override void OnPaint(PaintEventArgs e)

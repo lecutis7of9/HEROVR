@@ -55,9 +55,13 @@ namespace Sm2VrLauncher
         AccentButton btnSendStats;
         ToggleRow privacyStats, privacyCrash;
 
-        public MainForm()
+        public MainForm() : this(Settings.Load(), Design.Classic) { }
+
+        /// <summary>design: the classic window or the new HERO VR design (build 10); both share everything behind them.</summary>
+        public MainForm(Settings loaded, Design design)
         {
-            settings = Settings.Load();
+            settings = loaded;
+            hero = design == Design.Hero;
             Text = LauncherInfo.Title + " Launcher " + LauncherInfo.Version + "  \u2014  " + Byline;
             using (var g = CreateGraphics()) Theme.Scale = Math.Max(1f, g.DpiX / 96f);
             AutoScaleMode = AutoScaleMode.None;
@@ -70,13 +74,14 @@ namespace Sm2VrLauncher
             DoubleBuffered = true;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-            try
+            if (hero) HeroSetupWindow();
+            else try
             {
                 var s = typeof(MainForm).Assembly.GetManifestResourceStream("background.jpg");
                 if (s != null) background = Image.FromStream(s);
             }
             catch { }
-            if (background == null)
+            if (background == null && !hero)
             {
                 string f = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "background.jpg");
                 if (File.Exists(f)) background = Image.FromFile(f);
@@ -93,11 +98,19 @@ namespace Sm2VrLauncher
             BuildBar();
             foreach (var pg in pages)
                 foreach (Control c in pg.Controls) { var gp = c as GlassPanel; if (gp != null) gp.HandleClicked += (s, e) => tabs.Select(-1); }
-            tabs.SelectedChanged += (s, e) => ShowPage(tabs.Selected);
+            tabs.SelectedChanged += (s, e) => { HeroSheetChanged(); ShowPage(tabs.Selected); };
             slide.Tick += (s, e) => SlideStep();
             KeyPreview = true;
-            tabs.Selected = SheetStatus;
-            ShowPage(SheetStatus);
+            if (hero)
+            {
+                tabs.Selected = -1;   // the new design opens on its tiles; the sheets open from them
+                HeroFinishBuild();
+            }
+            else
+            {
+                tabs.Selected = SheetStatus;
+                ShowPage(SheetStatus);
+            }
             poll.Tick += (s, e) => { if (!preview) RefreshLive(); };
             sessionLog.FilePath = LogFile("session");
             buildLog.FilePath = LogFile("build-update");
@@ -169,9 +182,19 @@ namespace Sm2VrLauncher
             }
         }
         Rectangle BarRect { get { return Theme.R(36, 662, 1108, 72); } }
-        protected override void OnPaintBackground(PaintEventArgs e) { EnsureBackdrop(); e.Graphics.DrawImageUnscaled(backdrop, 0, 0); }
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (hero) { HeroPaint(e.Graphics, e.ClipRectangle); return; }
+            EnsureBackdrop(); e.Graphics.DrawImageUnscaled(backdrop, 0, 0);
+        }
         public void DrawBackdrop(Graphics g, Rectangle src, Point dest)
         {
+            if (hero)
+            {
+                if (sheetSnapshot == null) HeroTakeSnapshot();
+                g.DrawImage(sheetSnapshot, new Rectangle(dest, src.Size), src, GraphicsUnit.Pixel);
+                return;
+            }
             EnsureBackdrop();
             g.DrawImage(backdrop, new Rectangle(dest, src.Size), src, GraphicsUnit.Pixel);
         }
@@ -290,6 +313,7 @@ namespace Sm2VrLauncher
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (hero && HeroKey(keyData)) return true;
             if (keyData == Keys.Escape && tabs != null && tabs.Selected >= 0) { tabs.Select(-1); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
@@ -310,7 +334,7 @@ namespace Sm2VrLauncher
         void BuildPlay()
         {
             var card = Add(pages[SheetStatus], new GlassPanel("Status"), 0, 0, 760, 346);
-            stateTitle = Add(card, new TextLabel("CHECKING...", Theme.F("ui", 14, FontStyle.Bold), Theme.Text) { Wrap = false, Align = StringAlignment.Far }, 390, 17, 348, 24);
+            stateTitle = Add(card, new TextLabel("CHECKING...", Theme.F("ui", 14, FontStyle.Bold), Theme.Text) { Wrap = false, Align = StringAlignment.Far }, Theme.HeroStyle ? 250 : 390, 17, 348, 24);   // the new design: left of BACK  ESC
             stateSub = Add(card, new TextLabel("", Theme.Ui(12), Theme.Sub), 22, 44, 716, 22);
             // The three step rows of the old PLAY card fed the same checks; they are kept (not shown) so the logic is unchanged.
             step1 = new StatusRow("1  Headset connected") { Separator = false };
@@ -348,7 +372,7 @@ namespace Sm2VrLauncher
         {
             var card = Add(pages[SheetReports], new GlassPanel("Reports & session log"), 0, 0, 720, 346);
             sessionLog = Add(card, new LogBox(), 20, 50, 680, 226);
-            var copy = Add(card, new AccentButton("Copy log", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 628, 18, 72, 22);
+            var copy = Add(card, new AccentButton("Copy log", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, Theme.HeroStyle ? 488 : 628, 18, 72, 22);   // the new design: left of BACK  ESC
             btnReportsTop = Add(card, new AccentButton("Collect reports", ButtonKind.Secondary) { Glyph = "zip" }, 20, 290, 160, 38);
             var rep = Add(card, new AccentButton("Reports folder", ButtonKind.Secondary) { Glyph = "folder" }, 188, 290, 150, 38);
             // Version 0.0.6: Report a bug and Send play stats open a filled-in GitHub issue; the player submits it.
@@ -398,6 +422,7 @@ namespace Sm2VrLauncher
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            if (hero) HeroShown();
             if (preview) { RefreshAll(); FillPreview(); return; }
             // Started from an older copy outside the install while a newer launcher is installed in the mod folder
             // (an old shortcut or dev build): hand over to the installed launcher, so it never loops on an update.
@@ -445,6 +470,9 @@ namespace Sm2VrLauncher
 
         void StartupReports()
         {
+            // Build 10: why the new design was turned off (once), else the one-time offer of it (classic design only).
+            try { DesignStartupNotices(); } catch (Exception ex) { Program.LogError(ex); }
+            if (IsDisposed || Disposing) return;
             Telemetry.WarmGpu();
             try
             {
@@ -556,6 +584,7 @@ namespace Sm2VrLauncher
             else if (gamePath == null) SetState("GAME NOT FOUND", Theme.Warn, "Press Browse and pick Spider-Man2.exe.");
             else if (running) SetState("GAME RUNNING", Theme.Warn, "PLAY VR attaches VR to the running game.");
             else SetState("READY", Theme.Good, "Everything checks out. Put the headset on after the game opens.");
+            HeroSync();
         }
         string lastError;
 
@@ -708,6 +737,7 @@ namespace Sm2VrLauncher
                 RefreshLive();
             });
             job = Job.Vr;
+            HeroGameStarting();
             SetState("VR RUNNING", Theme.Good, "Starting the game and VR. Stop VR ends it cleanly; the game keeps running.");
             UpdatePlayState();
             Telemetry.SessionStarted();
@@ -762,6 +792,7 @@ namespace Sm2VrLauncher
                 bool steam = gamePath != null && gamePath.IndexOf("steamapps", StringComparison.OrdinalIgnoreCase) >= 0;
                 if (steam || gamePath == null) Process.Start(new ProcessStartInfo("steam://rungameid/" + SystemInfo.SteamAppId) { UseShellExecute = true });
                 else Process.Start(new ProcessStartInfo(gamePath) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(gamePath) });
+                HeroGameStarting();
             }
             catch (Exception ex) { MessageBox.Show(this, "Could not start the game: " + ex.Message, LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
@@ -846,6 +877,7 @@ namespace Sm2VrLauncher
             { e.Cancel = true; return; }
             settings.Save();
             base.OnFormClosing(e);
+            if (hero && !e.Cancel) HeroClosed();
         }
     }
 }

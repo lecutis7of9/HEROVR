@@ -7,7 +7,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 # The public repo carries the launcher in tools/launcher and the .cmd at its root; the dev tree keeps them beside.
 LAUNCHER = next((p for p in (ROOT/'tools/launcher', ROOT.parent/'herovr-launcher-0062') if (p/'src').is_dir()),
                 ROOT/'tools/launcher')
-CMD = next((p for p in (ROOT/'HERO VR Launcher.cmd', ROOT.parent/'herovr-release/text-0.0.62/HERO VR Launcher.cmd')
+CMD = next((p for p in (ROOT/'HERO VR Launcher.cmd', ROOT.parent/'herovr-release/text-0.0.63/HERO VR Launcher.cmd', ROOT.parent/'herovr-release/text-0.0.62/HERO VR Launcher.cmd')
             if p.is_file()), ROOT/'HERO VR Launcher.cmd')
 def src(n): return (LAUNCHER/'src'/n).read_text(encoding='utf-8')
 
@@ -17,14 +17,23 @@ class LauncherBuild9(unittest.TestCase):
         mv = src('ModVersion.cs')
         self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', mv).group(1)), 9)
         v = re.search(r'public const string Version = "([0-9.]+)";', mv).group(1)
-        self.assertTrue(v.startswith('0.0.62'), v)
+        # the launcher version is the mod version plus its own number (0.0.62.2 for 0.0.62, 0.0.63.1 for 0.0.63)
+        self.assertTrue(v.startswith((ROOT/'VERSION').read_text(encoding='utf-8').strip() + '.'), v)
         ai = src('AssemblyInfo.cs')
         self.assertIn('AssemblyVersion("%s")' % v, ai)
-        self.assertIn('(launcher build 9)', ai)
+        self.assertIn('(launcher build %d)' % int(re.search(r'public const int Build = (\d+);', mv).group(1)), ai)
 
     def test_revert_offers_both_earlier_releases(self):
         mv = src('ModVersion.cs')
-        self.assertIn('public static readonly string[] PreviousTags = { "v0.0.6", "v0.0.5" };', mv)
+        # build 9 (0.0.62): 0.0.6 and 0.0.5; build 10 (0.0.63): 0.0.62 first, then 0.0.6 and 0.0.5 (newest first)
+        tags = re.search(r'public static readonly string\[\] PreviousTags = \{ ([^}]*) \};', mv).group(1)
+        tags = [t.strip().strip('"') for t in tags.split(',')]
+        self.assertEqual(tags[-2:], ['v0.0.6', 'v0.0.5'])
+        if int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 10:
+            self.assertEqual(tags, ['v0.0.62', 'v0.0.6', 'v0.0.5'])
+            self.assertIn('public const string PreviousTag = "v0.0.62";', mv)
+        cur = tuple(int(x) for x in (ROOT/'VERSION').read_text(encoding='utf-8').strip().split('.'))
+        self.assertTrue(all(tuple(int(x) for x in t[1:].split('.')) < cur for t in tags), tags)
         rd = src('RevertDialog.cs')
         self.assertIn('foreach (string tag in LauncherInfo.PreviousTags)', rd)
         self.assertIn('PreviousTag = t;', rd)

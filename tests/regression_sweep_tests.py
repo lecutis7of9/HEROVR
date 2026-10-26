@@ -28,6 +28,12 @@ SHIPPED = [(2, '/workspace/live-before/HERO-VR-Launcher-0.0.5.zip'),   # launche
            (6, '/tmp/rel/live-b6/HERO-VR-Launcher-0.0.6.zip'),
            (7, '/tmp/rel/live-b7/HERO-VR-Launcher-0.0.6.zip'),
            (8, '/tmp/rel/live-b8/HERO-VR-Launcher-0.0.6.zip')]
+# Version 0.0.63: launcher build 9 (the 0.0.62 release) is shipped too. It has the build-9 update rule (Math.Max with the
+# installed launcher), so update_loop_tests checks it on its own.
+SHIPPED_B9 = (9, '/workspace/herovr-release/github/release-assets-0.0.62/HERO-VR-Launcher-0.0.62.zip')
+# This tree's mod version (VERSION, PORT-VERSION): 0.0.62 (build 39.2) for the 0.0.62 release, 0.0.63 (39.3) after.
+CUR = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
+CUR_PORT = (ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip()
 
 
 def need(cond, what):
@@ -88,6 +94,9 @@ COVERAGE = {
                                                          ('launcher_build9_tests.py', 'test_cmd')],
     'revert must offer 0.0.6 and 0.0.5, numeric versions': [('launcher_build9_tests.py', 'test_revert_offers_both_earlier_releases'),
                                                             ('launcher_build9_tests.py', 'test_semver_is_numeric')],
+    'build 10 new design: fallback to classic, Shift/--classic, every past issue, DPI/screens/locales': [
+        ('launcher_hero_tests.py', 'test_injected_failures_fall_back'), ('launcher_hero_tests.py', 'test_hang_before_first_frame'),
+        ('launcher_hero_tests.py', 'class PastIssues'), ('launcher_hero_tests.py', 'test_self_test')],
     'release without the prebuilt mod': [('v006_tests.py', 'test_build_ps1_routes_launcher_runs_to_prebuilt'),
                                          ('v006_tests.py', 'test_install_prebuilt_checks_sha')],
 }
@@ -329,14 +338,15 @@ class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
             pathlib.Path(d, 'mv.cs').write_text(modversion_cs)
             pathlib.Path(d, 'h.cs').write_text(
                 'namespace Sm2VrLauncher { static class H { static int Main() {\n'
-                ' var a = ModVersion.Parse("Version 0.0.62 (build 39.2)"); var b = ModVersion.Parse("0.0.6"); var c = ModVersion.Parse("0.0.5");\n'
-                ' var v = ModVersion.Parse("v0.0.62");\n'
+                ' var a = ModVersion.Parse("Version %s (build %s)"); var b = ModVersion.Parse("0.0.6"); var c = ModVersion.Parse("0.0.5");\n'
+                ' var v = ModVersion.Parse("v%s"); var p = ModVersion.Parse("0.0.62");\n'
                 ' System.Console.WriteLine("build=" + LauncherInfo.Build);\n'
-                ' return (a > b && b > c && a > c && !(b > a) && a.Patch == 62 && v.CompareTo(a) == 0) ? 0 : 1; } } }')
+                ' return (a > b && b > c && a > c && !(b > a) && a.Patch == %d && v.CompareTo(a) == 0 && p > b && p > c && !(p > a) && (a > p || a.Patch == 62)) ? 0 : 1; } } }'
+                % (CUR, CUR_PORT.replace('Update ', ''), CUR, int(CUR.split('.')[2])))
             r = subprocess.run(['mcs', '-nologo', '-out:' + d + '/h.exe', d + '/mv.cs', d + '/h.cs'], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             o = subprocess.run(['mono', d + '/h.exe'], capture_output=True, text=True)
-            self.assertEqual(o.returncode, 0, f'build {expect_build}: 0.0.62 is not seen as newer than 0.0.6/0.0.5')
+            self.assertEqual(o.returncode, 0, f'build {expect_build}: {CUR} is not seen as newer than 0.0.62/0.0.6/0.0.5')
             self.assertIn(f'build={expect_build}', o.stdout)
 
     def test_every_shipped_launcher_sees_0_0_62_as_newer(self):
@@ -356,20 +366,29 @@ class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
 
     def test_build_9_itself(self):
         need(shutil.which('mcs') and shutil.which('mono'), 'mono')
-        self.compile_and_ask(src('ModVersion.cs'), 9)
         s = src('ModVersion.cs')
-        self.assertIn('public static readonly string[] PreviousTags = { "v0.0.6", "v0.0.5" };', s)
+        # build 9 (Version 0.0.62) or later (build 10: the HERO VR design, branch launcher-redesign): never below 9,
+        # so every shipped launcher (builds 3-9) is offered the update when version.json says launcher_build 10
+        cur = int(re.search(r'public const int Build = (\d+);', s).group(1))
+        self.assertGreaterEqual(cur, 9)
+        self.compile_and_ask(s, cur)
+        # build 9: 0.0.6 and 0.0.5; build 10 (Version 0.0.63): 0.0.62 first (launcher_build9_tests pins the order)
+        self.assertIn('public static readonly string[] PreviousTags = { %s"v0.0.6", "v0.0.5" };' % ('"v0.0.62", ' if cur >= 10 else ''), s)
 
     def test_the_0_0_62_manifest_outranks_every_build(self):
         mj = src('ModVersion.cs')
-        self.assertIn('public const int Build = 9;', mj)
+        # 9 = the 0.0.62 release; 10 = the HERO VR design build (launcher-redesign), never below 9
+        self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', mj).group(1)), 9)
         self.assertTrue(all(b < 9 for b, _ in SHIPPED))
-        s = pathlib.Path('/tmp/rel/make_release_00062.sh')
-        need(s.is_file(), 'make_release_00062.sh')
+        cur = int(re.search(r'public const int Build = (\d+);', mj).group(1))
+        # the release script for this tree's version (0.0.62: build 9; 0.0.63: build 10)
+        name = 'make_release_%s.sh' % CUR.replace('.', '').zfill(5)
+        s = pathlib.Path('/tmp/rel') / name
+        need(s.is_file(), name)
         t = s.read_text()
-        self.assertIn('--launcher-build 9', t)
+        self.assertIn('--launcher-build %d' % cur, t)
         # ...but the published version.json carries it only as information (update-loop fix)
-        self.assertIn("m['launcher_build_in_zip'] = m.pop('launcher_build', 9)", t)
+        self.assertIn("m['launcher_build_in_zip'] = m.pop('launcher_build', %d)" % cur, t)
 
     def test_the_live_e2e_covers_every_path(self):
         s = pathlib.Path('/workspace/herovr-release/e2e62/run.sh')

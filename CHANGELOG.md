@@ -2,6 +2,15 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.63 (October 26, 2026)
+
+Version 0.0.63 (build Update 39.3), launcher build 10 (0.0.63.1). The mod is 0.0.62's, unchanged.
+
+- New opt-in launcher design (HERO VR orb, soundscape, big menu). Classic stays the default; the launcher asks once.
+  Options > Launcher switches either way; Shift or --classic opens classic once; if the new design cannot start, the
+  classic one opens and says why, once.
+- Revert offers 0.0.62, 0.0.6 and 0.0.5. Updating from any earlier launcher installs 0.0.63 exactly once.
+
 ## v0.0.62 (October 26, 2026)
 
 Version 0.0.62 (build Update 39.2), launcher build 9 (0.0.62.1). Built on 0.0.6 and its hotfix. No new game address:

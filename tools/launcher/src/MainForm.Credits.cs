@@ -155,6 +155,14 @@ namespace Sm2VrLauncher
                 dt.Start();
             }
             string dlg = Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_DIALOG");
+            if (dlg == "offer" || dlg == "fallback" || dlg == "switch")
+            {
+                var dt = new Timer { Interval = 1500 };
+                dt.Tick += (s, e) => { dt.Stop(); PreviewDesignDialog(dlg); };
+                dt.Start();
+            }
+            if (hero) latest = null;   // the preview's fake install is "up to date": the tile says CHECK FOR NEW VERSION
+            HeroSync();
             if (dlg == "crash" || dlg == "bug")
             {
                 var dt = new Timer { Interval = 1500 };

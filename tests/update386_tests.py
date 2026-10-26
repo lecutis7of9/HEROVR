@@ -24,8 +24,8 @@ RUN = (ROOT / 'tools/run_game_vr.py').read_text(encoding='utf-8')
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.62')  # 0.0.62 (build 39.2)
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.2')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.63')  # 0.0.63 (build 39.3; 0.0.62 was 39.2)
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.3')
 
 
 class Settings(unittest.TestCase):

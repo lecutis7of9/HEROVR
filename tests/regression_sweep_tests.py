@@ -8,13 +8,16 @@ so deleting or renaming it fails here. The rest are checked here, by running the
   - PowerShell's real CLIXML output is fed to the launcher's own Clixml decoder;
   - the launch script's Python check is run (pwsh) on a fake Microsoft Store stub, a broken and an old Python;
   - the Nexus zip and release asset checkers are run on good and bad examples.
-Environment: HEROVR_LAUNCHER (launcher source, default /workspace/herovr-launcher-0062), REGRESSION_STRICT=1 turns
+Environment: HEROVR_LAUNCHER (launcher source, default /workspace/herovr-launcher-0062, else tools/launcher), REGRESSION_STRICT=1 turns
 "resource missing" skips into failures (the gate sets it), PWSH (default ~/pwsh/pwsh)."""
 import hashlib, io, json, os, pathlib, re, shutil, subprocess, sys, tempfile, unittest, zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TESTS = ROOT / 'tests'
-L = pathlib.Path(os.environ.get('HEROVR_LAUNCHER', '/workspace/herovr-launcher-0062'))
+# The launcher sources: HEROVR_LAUNCHER, the developer copy, or (the published repo, CI) tools/launcher.
+L = pathlib.Path(os.environ.get('HEROVR_LAUNCHER') or next(
+    (p for p in ('/workspace/herovr-launcher-0062',) if os.path.isfile(os.path.join(p, 'src', 'ModVersion.cs'))),
+    str(ROOT / 'tools' / 'launcher')))
 STRICT = os.environ.get('REGRESSION_STRICT') == '1'
 PWSH = os.environ.get('PWSH', os.path.expanduser('~/pwsh/pwsh'))
 CHECKS = ROOT / 'tools' / 'release_checks'
@@ -34,6 +37,7 @@ def need(cond, what):
 
 
 def src(name):
+    need((L / 'src' / name).is_file(), 'launcher source ' + str(L / 'src' / name))
     return (L / 'src' / name).read_text(encoding='utf-8')
 
 
@@ -316,7 +320,7 @@ class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
         self.assertIn('public static readonly string[] PreviousTags = { "v0.0.6", "v0.0.5" };', s)
 
     def test_the_0_0_62_manifest_outranks_every_build(self):
-        mj = pathlib.Path('/workspace/herovr-launcher-0062/src/ModVersion.cs').read_text()
+        mj = src('ModVersion.cs')
         self.assertIn('public const int Build = 9;', mj)
         self.assertTrue(all(b < 9 for b, _ in SHIPPED))
         s = pathlib.Path('/tmp/rel/make_release_00062.sh')

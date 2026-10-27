@@ -11,6 +11,7 @@
 #include "spidy/blood_splatter.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/combat38.hpp"
+#include "spidy/hero_modes.hpp"
 #include "spidy/mirror_view.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/controls_guide.hpp"
@@ -908,7 +909,8 @@ constexpr SectionDef powersSections[] = {
       C::combatShieldLook, C::combatShieldSlam}},
     // Version 0.0.72 (TEST)
     {"THOR", C::none, C::none, "", "", nullptr, 9,
-     {C::combatThor, C::combatThorLightning, C::combatThorStorm, C::combatThorChain, C::combatThorHammer, C::combatNaturalInvincible}},
+     {C::combatThor, C::combatThorLightning, C::combatThorStorm, C::combatThorChain, C::combatThorHammer, C::combatThorHammerModel, C::combatThorFlight,
+      C::combatNaturalInvincible}},
     {"GREEN LANTERN", C::none, C::none, "", "", nullptr, 10,
      {C::combatGreenLantern, C::combatGlFlight, C::combatGlFist, C::combatGlBeam, C::combatGlBubble, C::combatGlChain,
       C::combatGlCharge}},
@@ -1062,6 +1064,13 @@ void setOpenSection(int page, int section) {
 void resetSections() { openSections.store(0xFFFFFFFFu, std::memory_order_relaxed); }
 void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 10 ? hero : 0, std::memory_order_relaxed); } // 0.0.7: 9 (CAPTAIN AMERICA)
 int activeHero() { return heroPlayed.load(std::memory_order_relaxed); }
+const char* activeHeroName(int hero) {
+    static_assert(sizeof(hero_modes::heroNames) / sizeof(hero_modes::heroNames[0]) == hero_modes::heroes,
+                  "every hero has a name");
+    if (hero < 0 || hero >= static_cast<int>(hero_modes::heroes) || !hero_modes::heroNames[hero])
+        return hero_modes::heroNames[hero_modes::spiderMan];
+    return hero_modes::heroNames[hero];
+}
 Place placeOf(Control c) {
     if (c == Control::none)
         return {};
@@ -2448,10 +2457,12 @@ void sectionRow(const Painter& p, const Item& it, const View& view) {
 }
 // Update 39.0.2: POWERS' ACTIVE HERO line, the hero in gold.
 void bannerRow(const Painter& p, const Item& it, const View& view) {
-    static constexpr const char* names[9] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK",
-                                            "BATMAN",     "WOLVERINE", "SUPERMAN", "PUNISHER", "CAPTAIN AMERICA"};
+    // Version 0.0.72 build 6 THOR CRASH (crash-t876, 0x85e36ea0 / build 4's 0x8309fa70: both strlen's
+    // byte loop): this was names[9], nine heroes, and heroOf is 9 for THOR and 10 for GREEN LANTERN, so
+    // turning THOR on read past the table into the "ACTIVE HERO: " text and strlen'd it as a pointer.
+    // The name now comes from hero_modes::heroNames (every hero) and any other number reads SPIDER-MAN.
     const char* lead = "ACTIVE HERO: ";
-    const char* name = names[heroOf(view)];
+    const char* name = activeHeroName(heroOf(view));
     const float w = textWidth(lead, it.h) + textWidth(name, it.h);
     p.text(lead, -w / 2, it.v, it.h, p.c.label);
     p.text(name, -w / 2 + textWidth(lead, it.h), it.v, it.h, p.c.warn);
@@ -4252,6 +4263,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatPunisherVan:
             case Control::combatThorHammer:
             case Control::combatGameBody:
+            case Control::combatThorHammerModel:
+            case Control::combatThorFlight:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

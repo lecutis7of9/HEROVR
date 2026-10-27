@@ -1625,7 +1625,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 219, "controls count drifted"); // Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 221, "controls count drifted"); // Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1965,7 +1965,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 219, "controls count drifted"); // Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 221, "controls count drifted"); // Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18448,7 +18448,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 112, "one hundred and twelve options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 114, "one hundred and fourteen options (build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18482,7 +18482,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 112, "0.0.72 has 112 COMBAT options (0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 114, "0.0.72 has 114 COMBAT options (build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18804,7 +18804,7 @@ int main() {
                 }
             }
         }
-        check(placed == 187 /* 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 189 /* build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -27262,6 +27262,125 @@ int main() {
             tn::append(out, tn::View{});
             check(out.empty(), "opacity 0 draws nothing");
             check(tn::view(n, {{0, 0, 0}, {NAN, 0, 0, 1}}).opacity == 0, "a bad world pose: nothing");
+        }
+    });
+    test("Build 6: the THOR crash (POWERS' ACTIVE HERO banner read names[9] past its end) - every hero has a banner name", [] {
+        using spidy::wrist_hud::activeHeroName;
+        check(std::string(activeHeroName(9)) == "THOR", "THOR's banner name");
+        check(std::string(activeHeroName(10)) == "GREEN LANTERN", "GREEN LANTERN's banner name");
+        check(std::string(activeHeroName(0)) == "SPIDER-MAN", "SPIDER-MAN's");
+        for (int h = 0; h < static_cast<int>(spidy::hero_modes::heroes); ++h)
+            check(activeHeroName(h) && *activeHeroName(h), "hero " + std::to_string(h) + " has a name");
+        check(std::string(activeHeroName(11)) == "SPIDER-MAN" && std::string(activeHeroName(-1)) == "SPIDER-MAN" &&
+                  std::string(activeHeroName(1 << 20)) == "SPIDER-MAN",
+              "an odd hero reads SPIDER-MAN, never past the table");
+    });
+    test("Build 6: TEST BUILD NOTICE - A on either controller closes it, kept from play until let go; a laser; OK outlined", [] {
+        namespace tn = spidy::test_notice;
+        check(tn::closeHint == "Press A to close", "the hint");
+        for (char c : tn::closeHint)
+            check(c == ' ' || drawable(c), std::string("the font draws '") + c + "'");
+        check(tn::buttonWidth / 2 + tn::closeHintGap + textWidth(tn::closeHint, tn::closeHintHeight) <= tn::width / 2 - .02f, "the hint fits beside OK");
+        const auto base = [](double t) {
+            tn::Input in;
+            in.enabled = true;
+            in.seconds = t;
+            in.immersive = true;
+            in.head = {{0, 1.7f, 0}, {}};
+            for (auto& h : in.hands) {
+                h.tracked = true;
+                h.grip = h.aim = {{.2f, 1.1f, -.3f}, Quat::around({1, 0, 0}, -1.2f)};
+            }
+            return in;
+        };
+        for (unsigned side = 0; side < 2; ++side) {
+            tn::Notice n;
+            auto in = base(0);
+            in.hands[side].a = true; // A held before it shows: not a close
+            for (double t = 0; t < 1.5; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::shown && n.holdsA(), "shown, and A is the notice's");
+            in.seconds = 2.5;
+            n.update(in);
+            check(n.state() == tn::State::shown, "an A held from before does not close it");
+            in.hands[side].a = false;
+            in.seconds = 2.6;
+            n.update(in);
+            in.hands[side].a = true;
+            in.seconds = 2.7;
+            n.update(in);
+            check(n.state() == tn::State::gone && n.ended() == tn::Ended::pressedA, "a fresh A closes it, either hand");
+            check(n.holdsA(), "the closing A stays the notice's while held (no jump)");
+            in.seconds = 2.8;
+            n.update(in);
+            check(n.holdsA(), "still held");
+            in.hands[side].a = false;
+            in.seconds = 2.9;
+            n.update(in);
+            check(!n.holdsA(), "let go: play has A again");
+            in.hands[side].a = true;
+            in.seconds = 3.0;
+            n.update(in);
+            check(!n.holdsA() && n.state() == tn::State::gone, "later A presses are play's");
+        }
+        {
+            tn::Notice n; // untracked hands: A still closes it
+            auto in = base(0);
+            for (double t = 0; t < 1.5; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            in.hands[0].tracked = in.hands[1].tracked = false;
+            in.hands[0].a = true;
+            in.seconds = 2;
+            n.update(in);
+            check(n.ended() == tn::Ended::pressedA, "A closes it with the hands untracked");
+        }
+        {
+            tn::Notice n; // the laser
+            auto in = base(0);
+            for (double t = 0; t < 1.5; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            Vec3 a{}, b{};
+            check(!n.laser(0, a, b), "aimed at the floor: no laser");
+            in.hands[0].aim = {{0, 1.385f, -.4f}, Quat{}}; // straight at OK
+            in.seconds = 1.6;
+            n.update(in);
+            check(n.laser(0, a, b) && n.hover(), "aimed at OK: a laser and OK lit");
+            check(length(a - in.hands[0].aim.position) < 1e-4f && std::abs(b.z - (n.panel().position.z + .006f)) < .01f &&
+                      std::abs(b.y - 1.385f) < .01f,
+                  "from the hand to the panel's face");
+            check(!n.laser(2, a, b), "only two hands");
+            const auto v = tn::view(n, {{0, 0, 0}, {}});
+            check(v.laser[0] && !v.laser[1] && v.hover, "the view has the laser");
+            std::vector<Vertex> lit, plain;
+            tn::append(lit, v);
+            auto off = v;
+            off.hover = false;
+            off.laser[0] = false;
+            tn::append(plain, off);
+            check(lit.size() >= plain.size() + 4 * 6 + 12 + 6, "the white outline, the beam and the dot are drawn");
+            bool ok = true;
+            for (const auto& x : lit)
+                ok &= finite(x.position) && x.alpha >= 0 && x.alpha <= 1;
+            check(ok, "finite and in range");
+            in.hands[0].trigger = 0;
+            in.hands[0].a = true;
+            in.seconds = 3.5; // armed
+            n.update(in);
+            check(n.state() == tn::State::gone && !n.laser(0, a, b), "closed: no laser");
+            auto bad = v;
+            bad.laserTo[0] = {NAN, 0, 0};
+            std::vector<Vertex> nan;
+            tn::append(nan, bad);
+            ok = true;
+            for (const auto& x : nan)
+                ok &= finite(x.position);
+            check(ok, "a NaN laser draws nothing bad");
         }
     });
     test("Version 0.0.72: 0.0.71 VIDEOS FIX ROUND - holsters on the thigh / belt, the batarang pinch, the grapple line flies out", [] {

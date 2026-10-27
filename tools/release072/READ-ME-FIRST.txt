@@ -71,10 +71,29 @@ and grip, and everything starts holstered or sheathed.
 - THOR: lightning with your own two sounds. Mjolnir starts on your back:
   reach over your right shoulder and grip to draw it. COMBAT > THOR HAMMER
   picks the model: BOOOOP (default), DEVILSEYE, LOVE THUNDER, FCCOOPER.
+  BUILD 6 FIX: selecting THOR (or GREEN LANTERN) crashed the game - the
+  POWERS page's ACTIVE HERO banner only knew nine hero names. Fixed.
 - GREEN LANTERN: ring constructs (fist, beam, bubble, chain), ring flight.
 - COMING SOON suits are labelled COMING SOON in the suit list.
 - ENEMY FACTION: the Hand, Hydra and the Joker Gang stay the game's own enemies
   in this build (the enemy swap hook is not confirmed yet).
+
+THE TEST NOTICE
+Point at OK (a laser shows from your hand, OK lights up with a white outline)
+and pull the trigger, poke OK, or just press A on either controller (X on the
+left Touch controller). That A press never makes you jump.
+
+IF THOR STILL CRASHES (bisect keys, build 6)
+The console logs "THOR: step 1 ..." / "THOR: step 2 ..." as Thor comes on;
+the last THOR line before a crash says where it went. Then add ONE of these
+lines to live.txt in the mod folder (or set it on the wrist HUD's THOR
+section), play Thor again, and tell me which one stops the crash:
+  thor_lightning=off
+  thor_storm=off
+  thor_chain=off
+  thor_hammer_model=off
+  thor_flight=off
+Remove the line (or set it back to on) afterwards.
 
 IF SOMETHING GOES WRONG
 A missing or broken model shows MODEL MISSING and the feature turns itself off;

@@ -69,11 +69,21 @@ Vec3 Notice::buttonCentre() const {
 Vec3 Notice::facing() const {
     return panel_.orientation.rotate({0, 0, 1});
 }
+bool Notice::laser(unsigned i, Vec3& from, Vec3& to) const {
+    if (i >= 2 || !laserOn_[i] || state_ != State::shown)
+        return false;
+    from = laserFrom_[i];
+    to = laserTo_[i];
+    return true;
+}
 
 void Notice::update(const Input& in) {
     const double dt = std::clamp(in.seconds - last_, 0.0, .25);
     last_ = in.seconds;
     hover_ = false;
+    laserOn_[0] = laserOn_[1] = false;
+    if (aLatch_ && !in.hands[0].a && !in.hands[1].a)
+        aLatch_ = false; // the closing A let go: play has A again
     if (!in.enabled) {
         if (state_ == State::shown)
             ended_ = Ended::off;
@@ -101,6 +111,7 @@ void Notice::update(const Input& in) {
         for (unsigned i = 0; i < 2; ++i) {
             released_[i] = in.hands[i].trigger < triggerOff; // a trigger held from the calibration does not count
             wasNear_[i] = false;
+            aReleased_[i] = !in.hands[i].a; // nor an A already held
         }
         return;
     }
@@ -110,6 +121,14 @@ void Notice::update(const Input& in) {
         Ended why = Ended::no;
         for (unsigned i = 0; i < 2; ++i) {
             const Hand& h = in.hands[i];
+            // Build 6: A (tracked or not) closes it, a fresh press once it is armed.
+            if (!h.a)
+                aReleased_[i] = true;
+            else if (aReleased_[i]) {
+                aReleased_[i] = false;
+                if (armed && why == Ended::no)
+                    why = Ended::pressedA;
+            }
             if (!h.tracked || !okPose(h.grip) || !okPose(h.aim)) {
                 released_[i] = false;
                 wasNear_[i] = false;
@@ -124,8 +143,16 @@ void Notice::update(const Input& in) {
             wasNear_[i] = near;
             // Aim and pull: the aim ray over the button (with some slack) and a fresh pull.
             Vec3 hit{};
-            const bool aimed = hitPlane(panel_, h.aim.position, h.aim.orientation.rotate({0, 0, -1}), hit) && overButton(hit, .05f);
+            const Vec3 way = h.aim.orientation.rotate({0, 0, -1});
+            const bool onPlane = hitPlane(panel_, h.aim.position, way, hit);
+            const bool aimed = onPlane && overButton(hit, .05f);
             hover_ |= aimed;
+            // Build 6: the laser, while the aim ray is on the panel (or a little round it).
+            if (onPlane && std::abs(hit.x) <= width / 2 + .15f && std::abs(hit.y) <= height / 2 + .15f) {
+                laserOn_[i] = true;
+                laserFrom_[i] = h.aim.position;
+                laserTo_[i] = panel_.position + panel_.orientation.rotate({hit.x, hit.y, .006f});
+            }
             if (h.trigger < triggerOff)
                 released_[i] = true;
             else if (h.trigger > triggerOn && released_[i]) {
@@ -137,6 +164,8 @@ void Notice::update(const Input& in) {
         if (why == Ended::no && in.seconds - shownAt_ >= autoHideSeconds)
             why = Ended::timedOut;
         if (why != Ended::no) {
+            if (why == Ended::pressedA)
+                aLatch_ = true; // its A stays the notice's until let go
             ended_ = why;
             state_ = State::gone;
             goneAt_ = in.seconds;
@@ -156,6 +185,14 @@ View view(const Notice& n, Pose worldFromTracking) {
     v.panel = compose(worldFromTracking, n.panel());
     v.opacity = okPose(v.panel) ? n.opacity() : 0.f;
     v.hover = n.hover();
+    for (unsigned i = 0; i < 2; ++i) {
+        Vec3 a{}, b{};
+        if (v.opacity > 0 && n.laser(i, a, b)) {
+            v.laserFrom[i] = worldFromTracking.position + worldFromTracking.orientation.rotate(a);
+            v.laserTo[i] = worldFromTracking.position + worldFromTracking.orientation.rotate(b);
+            v.laser[i] = finite(v.laserFrom[i]) && finite(v.laserTo[i]);
+        }
+    }
     return v;
 }
 
@@ -195,9 +232,19 @@ void append(std::vector<Vertex>& out, const View& v) {
             out[i].alpha *= a;
         y -= textHeight + lineGap;
     }
-    // the OK button
-    const Vec3 face = v.hover ? Vec3{1.f, .75f, .2f} : gold * .8f;
-    quad(-buttonWidth / 2, buttonY - buttonHeight / 2, buttonWidth / 2, buttonY + buttonHeight / 2, .002f, face, .97f * a);
+    // the OK button (build 6: under a hover brighter, a touch bigger, outlined in white)
+    const Vec3 face = v.hover ? Vec3{1.f, .86f, .38f} : gold * .8f;
+    const float grow = v.hover ? .012f : 0.f, bx = buttonWidth / 2 + grow, by0 = buttonY - buttonHeight / 2 - grow,
+                by1 = buttonY + buttonHeight / 2 + grow;
+    if (v.hover) {
+        const Vec3 white{1, 1, 1};
+        const float e = .007f;
+        quad(-bx - e, by1, bx + e, by1 + e, .0025f, white, a);
+        quad(-bx - e, by0 - e, bx + e, by0, .0025f, white, a);
+        quad(-bx - e, by0, -bx, by1, .0025f, white, a);
+        quad(bx, by0, bx + e, by1, .0025f, white, a);
+    }
+    quad(-bx, by0, bx, by1, .002f, face, .97f * a);
     TextStyle bs = ts;
     bs.height = .045f;
     bs.color = {.02f, .02f, .03f};
@@ -207,6 +254,40 @@ void append(std::vector<Vertex>& out, const View& v) {
     appendText(out, okLabel, P(-bw / 2, buttonY - bs.height / 2, .004f), r, u, bs);
     for (size_t i = mark; i < out.size(); ++i)
         out[i].alpha *= a;
+    // Build 6: "Press A to close" beside OK.
+    {
+        TextStyle hs = ts;
+        hs.height = closeHintHeight;
+        hs.color = {.85f, .88f, .95f};
+        const float x = buttonWidth / 2 + closeHintGap;
+        const size_t hm = out.size();
+        appendText(out, closeHint, P(x, buttonY - hs.height / 2, .003f), r, u, hs);
+        for (size_t i = hm; i < out.size(); ++i)
+            out[i].alpha *= a;
+    }
+    // Build 6: the lasers, a bright beam (two crossed strips) from the hand to the panel and a dot there.
+    for (unsigned k = 0; k < 2; ++k) {
+        if (!v.laser[k])
+            continue;
+        const Vec3 s0 = v.laserFrom[k], s1 = v.laserTo[k], d = s1 - s0;
+        const float len = length(d);
+        if (!(len > .02f && len < 20.f))
+            continue;
+        const Vec3 dir = d * (1.f / len);
+        Vec3 side = cross(dir, u);
+        if (!(length(side) > .1f))
+            side = cross(dir, r);
+        side = normalized(side);
+        const Vec3 up2 = normalized(cross(side, dir));
+        const Vec3 beam{.55f, .9f, 1.f};
+        for (const Vec3& across : {side, up2}) {
+            const Vec3 h0 = across * (laserWidth / 2);
+            for (const Vec3& p : {s0 - h0, s0 + h0, s1 + h0, s0 - h0, s1 + h0, s1 - h0})
+                out.push_back(Vertex{p, beam, .85f * a});
+        }
+        const Vec3 c = v.panel.orientation.conjugate().rotate(s1 - o);
+        quad(c.x - laserDot / 2, c.y - laserDot / 2, c.x + laserDot / 2, c.y + laserDot / 2, .007f, Vec3{1, 1, 1}, a);
+    }
     for (size_t i = from; i < out.size(); ++i)
         if (!finite(out[i].position) || !std::isfinite(out[i].alpha)) {
             out.resize(from);

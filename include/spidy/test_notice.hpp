@@ -20,6 +20,11 @@ inline constexpr std::string_view text =
     "You are on the latest test version, please be aware that some features do not work or are unfinished, "
     "revert to 0.0.63 if unplayable and report issues in my discord server linked on the launcher";
 inline constexpr std::string_view okLabel = "OK";
+// Build 6 (the user, 9:39: "OK is hard to select"): A on either controller closes it too (the left
+// controller's A is its X), and says so beside OK. That press never reaches play (holdsA).
+inline constexpr std::string_view closeHint = "Press A to close";
+inline constexpr float closeHintHeight = .026f, closeHintGap = .03f; // right of OK, inside the rim
+inline constexpr float laserWidth = .004f, laserDot = .016f; // build 6: the aiming hand's laser
 #if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
 inline constexpr bool testBuild = true;
 #else
@@ -42,6 +47,7 @@ struct Hand {
     bool tracked{};
     Pose grip{}, aim{}; // tracking space; aim -z forward
     float trigger{};
+    bool a{}; // build 6: A (the left hand's X)
 };
 struct Input {
     double seconds{};
@@ -54,7 +60,7 @@ struct Input {
 };
 enum class State : uint8_t { waiting, shown, gone };
 // How it went (the session report and the tests).
-enum class Ended : uint8_t { no, poked, triggered, timedOut, off };
+enum class Ended : uint8_t { no, poked, triggered, timedOut, off, pressedA };
 
 class Notice {
   public:
@@ -68,6 +74,11 @@ class Notice {
     // The button's centre and the panel's facing (tracking space).
     Vec3 buttonCentre() const;
     Vec3 facing() const;
+    // Build 6: whether A / X belong to the notice this frame (it shows, or A closed it and is still
+    // held): the caller takes them from play so the closing press is never a jump.
+    bool holdsA() const { return state_ == State::shown || aLatch_; }
+    // Build 6: the laser of hand i (its aim ray onto the panel; tracking space). false: none.
+    bool laser(unsigned i, Vec3& from, Vec3& to) const;
 
   private:
     State state_ = State::waiting;
@@ -76,6 +87,8 @@ class Notice {
     double settledSince_ = -1, shownAt_ = 0, goneAt_ = 0, last_ = 0;
     float fade_ = 0;
     bool hover_{}, released_[2]{}, wasNear_[2]{};
+    bool aReleased_[2]{}, aLatch_{}, laserOn_[2]{};
+    Vec3 laserFrom_[2]{}, laserTo_[2]{};
 };
 
 // What a frame draws (NativeEyeFrame::notice), the panel in this frame's world (opacity 0: none).
@@ -83,9 +96,12 @@ struct View {
     float opacity{};
     bool hover{};
     Pose panel{};
+    bool laser[2]{};       // build 6: each hand's laser (world)
+    Vec3 laserFrom[2]{}, laserTo[2]{};
 };
 View view(const Notice&, Pose worldFromTracking);
-// The panel: its dark plate and gold rim, the lines, the OK button (brighter under a hover). Appends
+// The panel: its dark plate and gold rim, the lines, the OK button (brighter, outlined in white under a
+// hover), "Press A to close" beside it, and the lasers (build 6). Appends
 // nothing for opacity 0 or a pose that is not finite. `out` blends (drawn without depth, last).
 void append(std::vector<Vertex>& out, const View&);
 } // namespace spidy::test_notice

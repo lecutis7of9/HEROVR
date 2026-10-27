@@ -1161,6 +1161,7 @@ void message(uint32_t status, uint32_t error, const char* text) {
 // vanished (build 4's model notes never reached the console). consoleLine() queues; drainConsoleLines()
 // (the VR loop) shows one line every 250 ms, keeping the current status and error. Never throws.
 std::mutex consoleLinesLock;
+int thorStepsLogged = 0; // Version 0.0.72 build 6: THOR's console steps (game_xr's frame loop only)
 std::deque<std::string> consoleLinesQueue;
 void consoleLine(const std::string& text) noexcept {
     try {
@@ -2747,6 +2748,15 @@ DWORD WINAPI run(void*) {
                     perf37::Guard perfGuard{perfSections,
                                             std::chrono::duration<double>(std::chrono::steady_clock::now() - perfStart).count()};
                     XrFrame frame = trackedFrame;
+                    // Build 6: the TEST BUILD NOTICE closes on A (either controller: the left
+                    // one's A is its X). Its raw A is kept for it, and while the notice shows,
+                    // or the A that closed it is still held, A / X reach nothing else: the
+                    // closing press is never a jump (nor a charged leap on its release).
+                    const bool noticeA[2]{(frame.buttons & buttonX) != 0, frame.jump};
+                    if (test_notice::testBuild && !testNoticeFault && testNotice.holdsA()) {
+                        frame.jump = false;
+                        frame.buttons &= ~static_cast<uint32_t>(buttonA | buttonX);
+                    }
                     // The phone takes its controls first (Phone::take, PhoneHold):
                     // while it is live the stick picks a button, A presses it, B
                     // puts it away and the triggers step the volume, and none of
@@ -4298,6 +4308,7 @@ DWORD WINAPI run(void*) {
                                 in.hands[i].grip = hand.grip;
                                 in.hands[i].aim = hand.aim;
                                 in.hands[i].trigger = hand.trigger;
+                                in.hands[i].a = noticeA[i]; // build 6: A closes it
                             }
                             const auto before = testNotice.state();
                             testNotice.update(in);
@@ -4307,7 +4318,11 @@ DWORD WINAPI run(void*) {
                             }
                             else if (before == test_notice::State::shown && testNotice.state() == test_notice::State::gone &&
                                      testNotice.ended() != test_notice::Ended::timedOut)
+                                {
                                 runtime.haptic(testNotice.ended() == test_notice::Ended::poked ? 1 : 0, .25f);
+                                if (testNotice.ended() == test_notice::Ended::pressedA)
+                                    consoleLine("TEST NOTICE: closed with A (A kept from play until let go)");
+                            }
                         } catch (...) {
                             testNoticeFault = true; // only the notice goes off
                         }
@@ -4761,7 +4776,9 @@ DWORD WINAPI run(void*) {
                             // Version 0.0.72 FLIGHT ON BY DEFAULT for the flyers (hero072::FlyDefault).
                             {
                                 static hero072::FlyDefault flyDefault;
-                                const uint32_t want = flyDefault.update(heroNow(), flyModeNow.load());
+                                // Version 0.0.72 build 6 THOR FLIGHT OFF (a bisect key): THOR is no flyer then.
+                                const bool thorGrounded = heroNow() == hero_modes::thor && c38(combat38::thorFlight) == 1;
+                                const uint32_t want = flyDefault.update(thorGrounded ? hero_modes::hulk : heroNow(), flyModeNow.load());
                                 if (want != flyModeNow.load()) {
                                     flyModeNow = want;
                                     game_prompts::note(want ? "Version 0.0.72: FLY MODE on (NORMAL) for this hero - a hand up takes off"
@@ -4770,7 +4787,8 @@ DWORD WINAPI run(void*) {
                             }
                             const uint32_t fm = flyModeNow.load();
                             // Version 0.0.7 BATMAN: no flight at all (his cape glide and grapple instead).
-                            const bool batmanNow = heroNow() == hero_modes::batman;
+                            const bool batmanNow = heroNow() == hero_modes::batman ||
+                                                   (heroNow() == hero_modes::thor && c38(combat38::thorFlight) == 1); // build 6: THOR FLIGHT OFF
                             const bool flyLive = fm && !batmanNow && !calibrationInput && !padLayer.latched() && !phone.open();
                             // R3 drops and lands (FLY stays on; a hand up takes off again); L3+R3 within
                             // StickChord::window is still the game's ultimate.
@@ -6362,6 +6380,17 @@ DWORD WINAPI run(void*) {
                                                   : heroIs == hero_modes::punisher  ? "0.0.7: grip at a hip or behind the back to draw, trigger fires, EASY RELOAD"
                                                                                   : "webs");
                                         game_prompts::note(line);
+                                        // Version 0.0.72 build 6: THOR's enable path on the launcher console, step by step
+                                        // (the build 4 / 5 crash was the wrist's ACTIVE HERO name, fixed; these stay).
+                                        if (heroIs == hero_modes::thor) {
+                                            thorStepsLogged = 0;
+                                            consoleLine(std::string("THOR: step 1 hero on (lightning ") +
+                                                        (c38(combat38::thorLightning) == 1 ? "off" : "on") + ", storm " +
+                                                        (c38(combat38::thorStorm) == 1 ? "off" : "on") + ", chain " +
+                                                        (c38(combat38::thorChain) == 1 ? "off" : "on") + ", hammer model " +
+                                                        (c38(combat38::thorHammerModel) == 1 ? "off" : "on") + ", flight " +
+                                                        (c38(combat38::thorFlight) == 1 ? "off" : "on") + ")");
+                                        }
                                     }
                                     if (heroWas == hero_modes::daredevil) {
                                         hero_modes::BatonEnemy batonList[our_ball::maxEnemies];
@@ -8747,9 +8776,18 @@ DWORD WINAPI run(void*) {
                                 saved.hero007.grappleGunModel = slotModel(mesh_model::slotGrappleGun, "GRAPPLE GUN");
                             // Version 0.0.72 THOR's hammer (Models\Hammer\<THOR HAMMER's pick>): the model or nothing,
                             // MODEL MISSING on the wrist.
-                            if (saved.hero072.hammer) // (only Thor holds it)
+                            if (saved.hero072.hammer && c38(combat38::thorHammerModel) != 1) { // (only Thor holds it; build 6: THOR HAMMER MODEL OFF draws none)
+                                if (thorStepsLogged < 2) {
+                                    thorStepsLogged = 2;
+                                    consoleLine("THOR: step 2 hammer model (THOR HAMMER " + std::to_string(c38(combat38::thorHammer)) + ")");
+                                }
                                 saved.hero072.hammerModel =
                                     slotModel(mesh_model::hammerSlot(c38(combat38::thorHammer)), "THOR HAMMER");
+                                if (thorStepsLogged < 3) {
+                                    thorStepsLogged = 3;
+                                    consoleLine(std::string("THOR: step 3 hammer model ") + (saved.hero072.hammerModel ? "drawn" : "MISSING (none drawn)"));
+                                }
+                            }
                             // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the Vandura, its built cab and its wheel - each the
                             // model or nothing (MODEL MISSING on the wrist); drawn where the van is (world space).
                             if (c38(combat38::punisherVan) == 1 && hero007In.hero == hero_modes::punisher) {
@@ -11480,6 +11518,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherVan(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorHammer(void* v) { return setHero007(v, combat38::thorHammer, 5432); }
 // Version 0.0.72 GAME BODY (EXPERIMENTAL): 0 off (the body as before), 1 on (strict checks first), live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameBody(void* v) { return setHero007(v, combat38::gameBody, 5433); }
+// Version 0.0.72 build 6: the THOR crash bisect keys (live.txt thor_hammer_model / thor_flight).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorHammerModel(void* v) { return setHero007(v, combat38::thorHammerModel, 5434); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorFlight(void* v) { return setHero007(v, combat38::thorFlight, 5435); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

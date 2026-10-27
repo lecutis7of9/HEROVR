@@ -123,6 +123,7 @@ enum Option : uint32_t {
     perchTakedown, takedownLight,
     punisherVan, // Version 0.0.72 EXPERIMENTAL: the Punisher van (van072.hpp), off by default
     thorHammer,  // Version 0.0.72 THOR HAMMER: which Mjolnir (mesh_model::hammerSlot), BOOOOP by default
+    gameBody,    // Version 0.0.72 GAME BODY (EXPERIMENTAL): strict checks (native_game_body.hpp), off by default
     options
 };
 struct OptionInfo {
@@ -415,6 +416,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"OFF", "ON", nullptr, nullptr}},
     {"thor_hammer", "THOR HAMMER", "HAMMER", "Picks which Mjolnir model Thor draws from his back, no restart.",
      4, {"BOOOOP", "DEVILSEYE", "LOVE THUNDER", "FCCOOPER"}},
+    {"game_body", "GAME BODY (EXPERIMENTAL)", "GBODY", "EXPERIMENTAL: game's own body only after every safety check passes, no restart.",
+     2, {"OFF", "ON", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

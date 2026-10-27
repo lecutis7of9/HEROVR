@@ -3,6 +3,7 @@
 #include "spidy/sm2_port.hpp"
 #include "spidy/native_body.hpp"
 #include "spidy/body_ik.hpp"
+#include "spidy/game_body.hpp"
 #include "spidy/native_appearance.hpp"
 #include "spidy/hero_height.hpp"
 #include <MinHook.h>
@@ -147,30 +148,16 @@ template <class F> void publish(F change) {
     InterlockedIncrement64(&SpidyBodyData.sequence);
     ReleaseSRWLockExclusive(&statusLock);
 }
-// The game's name hash (1bb88d0): CRC-32 table steps seeded with 0xedb88320,
-// no final inversion.
 // Spider-Man 2 2.810.0.0 (evidenced by SM2VR 0.0.27's native_body; Remastered
-// 4.0630 had 0x1601290 and 0x1600770).
-constexpr uintptr_t writerRva = 0x292b880, toModelRva = 0x292af50;
-uint32_t nameHash(const char* name) {
-    static const auto table = [] {
-        std::array<uint32_t, 256> t{};
-        for (uint32_t i = 0; i < 256; ++i) {
-            uint32_t c = i;
-            for (int k = 0; k < 8; ++k)
-                c = c & 1 ? (c >> 1) ^ 0xedb88320u : c >> 1;
-            t[i] = c;
-        }
-        return t;
-    }();
-    uint32_t c = 0xedb88320u;
-    for (; *name; ++name)
-        c = table[(c ^ static_cast<uint8_t>(*name)) & 0xff] ^ (c >> 8);
-    return c;
-}
+// 4.0630 had 0x1601290 and 0x1600770). CANDIDATE: start() checks their first
+// bytes; GAME BODY (native_game_body.cpp) re-finds them and calls startAt().
+uintptr_t writerRva = game_body::candidateWriter, toModelRva = game_body::candidateToModel;
+// GAME BODY strict mode: rigs whose protected joints (fx_root, sync,
+// cameraTarget, aimTarget, the IK roots) hang under a moved joint are refused.
+std::atomic<bool> strictRigs{};
+char refusal[160]{}; // statusLock: why the latest rig was refused, "" none
 struct RigData {
-    std::vector<int16_t> parent;
-    std::vector<uint32_t> hash;
+    game_body::Table table;
     std::vector<float> rest; // model space, the layout body_ik works on
 };
 // The game's conversion of a local pose to model space, guarded.
@@ -194,14 +181,8 @@ bool readRig(uintptr_t rig, RigData& out) {
     std::vector<uint8_t> table(count * 16ull);
     if (!read(joints, table.data(), table.size()))
         return false;
-    out.parent.resize(count);
-    out.hash.resize(count);
-    for (uint32_t j = 0; j < count; ++j) {
-        std::memcpy(&out.parent[j], &table[j * 16], 2);
-        std::memcpy(&out.hash[j], &table[j * 16 + 8], 4);
-        if (out.parent[j] >= static_cast<int>(j) || out.parent[j] < -1)
-            return false; // the conversion needs parents before children
-    }
+    if (!game_body::parseJoints(table, count, out.table))
+        return false; // the conversion needs parents before children
     std::vector<float> model((count + 1) * 16ull);
     const float identity[16]{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
     std::memcpy(model.data(), identity, sizeof(identity));
@@ -213,34 +194,12 @@ bool readRig(uintptr_t rig, RigData& out) {
             return false;
     return true;
 }
-int byName(const RigData& rig, std::initializer_list<const char*> names) {
-    for (const auto* name : names) {
-        const auto h = nameHash(name);
-        for (size_t j = 0; j < rig.hash.size(); ++j)
-            if (rig.hash[j] == h)
-                return static_cast<int>(j);
-    }
-    return -1;
-}
-// The joints from `from` (exclusive) up to `to` (inclusive) along the
-// parents, bottom first; empty when `to` is not under `from`.
-std::vector<int16_t> chain(const RigData& rig, int from, int to) {
-    std::vector<int16_t> out;
-    for (int j = to; j >= 0 && j != from; j = rig.parent[j]) {
-        out.push_back(static_cast<int16_t>(j));
-        if (out.size() > rig.parent.size())
-            return {};
-        if (rig.parent[j] < 0)
-            return {};
-    }
-    std::reverse(out.begin(), out.end());
-    return out;
-}
-// Roles from the probe's override, or from the rig's joint names.
+// Roles from the probe's override, or from the rig's joint names
+// (game_body::identify).
 uint32_t identify(const RigData& data, body::Rig& rig) {
     rig = {};
-    rig.parent = data.parent;
-    const int n = static_cast<int>(data.parent.size());
+    rig.parent = data.table.parent;
+    const int n = static_cast<int>(data.table.parent.size());
     if (roles.joints && roles.joints == static_cast<uint32_t>(n)) {
         rig.pelvis = roles.pelvis;
         rig.head = roles.head;
@@ -255,57 +214,24 @@ uint32_t identify(const RigData& data, body::Rig& rig) {
         }
         return native_body::none;
     }
-    // The hero's rig (Spider-Man Remastered 4.0630, every suit tried so far;
-    // tools/probe_game_body.py lists it): a_body is the root of the body,
-    // with the pelvis (and under it the legs) and the spine as its children.
-    // Fingers A to D run index to little finger; B_B is the middle knuckle.
     // The body never moves the rig's other roots (fx_root, sync, the IK
     // targets, cameraTarget, aimTarget), which gameplay reads.
-    rig.pelvis = byName(data, {"a_body", "pelvis"});
-    rig.head = byName(data, {"head"});
-    const int chest = byName(data, {"chest"});
-    const char* side[2] = {"LF_", "RT_"};
-    for (int i = 0; i < 2; ++i) {
-        const std::string s = side[i];
-        auto named = [&](std::initializer_list<const char*> names) {
-            for (const auto* name : names)
-                if (const int j = byName(data, {(s + name).c_str()}); j >= 0)
-                    return j;
-            return -1;
-        };
-        rig.arms[i] = {named({"clavicle"}), named({"uparm"}), named({"loarm"}), named({"wrist"}),
-                       named({"finger_B_B"}), named({"thumb_A"})};
-        rig.legs[i] = {named({"upleg"}), named({"loleg"}), named({"foot"})};
-        rig.eyes[i] = named({"middle_eye_deform"});
-        // Fingers A (index) to D (little), from the base in the palm to the
-        // end past the tip; the thumb likewise.
-        for (const char* finger : {"A", "B", "C", "D"}) {
-            std::vector<int16_t> chain;
-            for (const char* joint : {"_A", "_B", "_C", "_D", "_D_end"})
-                if (const int j = named({(std::string("finger_") + finger + joint).c_str()}); j >= 0)
-                    chain.push_back(static_cast<int16_t>(j));
-            if (chain.size() == 5)
-                rig.arms[i].fingers.push_back(chain);
-        }
-        for (const char* joint : {"thumb_A", "thumb_B", "thumb_C", "thumb_C_end"})
-            if (const int j = named({joint}); j >= 0)
-                rig.arms[i].thumbChain.push_back(static_cast<int16_t>(j));
-        if (rig.arms[i].thumbChain.size() != 4)
-            rig.arms[i].thumbChain.clear();
+    std::vector<std::string> missing;
+    std::string why;
+    uint32_t problem = native_body::none;
+    if (!game_body::identify(data.table, rig, &missing)) {
+        why = "missing:";
+        for (const auto& m : missing)
+            why += " " + m;
+        problem = native_body::unknownRig;
+    } else if (std::string hit; strictRigs && !game_body::protectedClear(data.table, rig, &hit)) {
+        why = "protected joint under the body: " + hit;
+        problem = native_body::unknownRig;
     }
-    if (rig.pelvis < 0 || rig.head < 0 || chest < 0)
-        return native_body::unknownRig;
-    rig.spine = chain(data, rig.pelvis, chest);
-    rig.neck = chain(data, chest, data.parent[rig.head]);
-    if (rig.spine.empty() || (data.parent[rig.head] != chest && rig.neck.empty()))
-        return native_body::unknownRig;
-    for (const auto& a : rig.arms)
-        if (a.upper < 0 || a.lower < 0 || a.hand < 0 || a.finger < 0)
-            return native_body::unknownRig;
-    for (const auto& l : rig.legs)
-        if (l.upper < 0 || l.lower < 0 || l.foot < 0)
-            return native_body::unknownRig;
-    return native_body::none;
+    AcquireSRWLockExclusive(&statusLock);
+    strncpy_s(refusal, why.c_str(), _TRUNCATE);
+    ReleaseSRWLockExclusive(&statusLock);
+    return problem;
 }
 // Which way the actor faces about the world's up (its forward row, or, facing
 // straight up or down, its left one), radians.
@@ -358,7 +284,7 @@ Cache& rigEntry(uintptr_t rig) {
     if (!rig || !readRig(rig, data)) {
         entry.problem = native_body::noRig;
     } else {
-        entry.joints = static_cast<uint32_t>(data.parent.size());
+        entry.joints = static_cast<uint32_t>(data.table.parent.size());
         entry.problem = identify(data, entry.ik);
         if (!entry.problem && !body::prepare(entry.ik, data.rest))
             entry.problem = native_body::badRest;
@@ -553,21 +479,29 @@ float writer(float* out, void* job) {
 } // namespace
 
 uint32_t native_body::start(uintptr_t gameBase) {
+    return startAt(gameBase, game_body::candidateWriter, game_body::candidateToModel);
+}
+uint32_t native_body::startAt(uintptr_t gameBase, uintptr_t writer, uintptr_t conversion) {
     AcquireSRWLockExclusive(&lifecycle);
     uint32_t result{};
     do {
         if (enabled)
             break;
+        if (hooked && (writer != writerRva || conversion != toModelRva)) {
+            result = 7002; // already hooked elsewhere: keep that
+            break;
+        }
+        writerRva = writer;
+        toModelRva = conversion;
         // Spider-Man 2 2.810: the pose writer and the model-space conversion
         // are at the RVAs SM2VR 0.0.27's body uses (checked against the same
         // prologue bytes as Remastered's 1601290 and 1600770 before hooking).
         base = gameBase;
         QueryPerformanceFrequency(&frequency);
-        const unsigned char writerBytes[] = {0x48, 0x89, 0x5c, 0x24, 0x08, 0x55, 0x56, 0x57, 0x41, 0x54,
-                                             0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x83, 0xec, 0x20};
-        const unsigned char modelBytes[] = {0x48, 0x8b, 0xc4, 0x57, 0x48, 0x81, 0xec, 0xa0, 0x00, 0x00, 0x00};
-        if (!base || !entry(writerRva, writerBytes, sizeof(writerBytes)) ||
-            !entry(toModelRva, modelBytes, sizeof(modelBytes))) {
+        const auto& writerBytes = game_body::writerPrologue;
+        const auto& modelBytes = game_body::toModelPrologue;
+        if (!base || !entry(writerRva, writerBytes.data(), writerBytes.size()) ||
+            !entry(toModelRva, modelBytes.data(), modelBytes.size())) {
             result = 7001;
             break;
         }
@@ -611,6 +545,16 @@ uint32_t native_body::start(uintptr_t gameBase) {
         publish([&](Status& d) { d.state = failed; });
     ReleaseSRWLockExclusive(&lifecycle);
     return result;
+}
+void native_body::strict(bool on) {
+    if (strictRigs.exchange(on) != on)
+        rolesSerial.fetch_add(1); // read the rigs again under the new rule
+}
+std::string native_body::refused() {
+    AcquireSRWLockShared(&statusLock);
+    std::string out = refusal;
+    ReleaseSRWLockShared(&statusLock);
+    return out;
 }
 void native_body::retarget(uintptr_t heroRecord) {
     record = heroRecord;
@@ -697,16 +641,26 @@ uint32_t native_body::stop() {
     return result;
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBodyStart(void* input) {
-    native_body::ProbeConfig c{};
-    if (!read(reinterpret_cast<uintptr_t>(input), &c, sizeof(c)) || c.magic != 0x53424346 || c.version != 1 ||
-        c.bytes != sizeof(c) || c.pid != GetCurrentProcessId() ||
+    native_body::ProbeConfigV2 c{};
+    uint32_t header[3]{};
+    const auto at = reinterpret_cast<uintptr_t>(input);
+    if (!read(at, header, sizeof(header)) || header[0] != 0x53424346 ||
+        !((header[1] == 1 && header[2] == sizeof(native_body::ProbeConfig)) ||
+          (header[1] == 2 && header[2] == sizeof(native_body::ProbeConfigV2))) ||
+        !read(at, &c, header[2]) || c.pid != GetCurrentProcessId() ||
         c.base != reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)) || !c.record)
         return 7501;
     // The eye views anchor to this hero and hide it unless the body is on
     // it, as in a VR session.
     native_appearance::setPlayerRecord(c.record);
     native_body::retarget(c.record);
-    return native_body::start(c.base);
+    if (c.version == 1)
+        return native_body::start(c.base);
+    // Version 0.0.72 GAME BODY (EXPERIMENTAL): the probe's solve phase, at what its find phase found.
+    if (!c.writer || !c.toModel)
+        return 7501;
+    native_body::strict(true);
+    return native_body::startAt(c.base, static_cast<uintptr_t>(c.writer), static_cast<uintptr_t>(c.toModel));
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBodySubmit(void* input) {
     // A version 1, 2 or 3 command (the probe's) is shorter: read as many bytes as it says.

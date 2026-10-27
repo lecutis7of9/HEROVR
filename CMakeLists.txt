@@ -59,6 +59,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/calibration_art.cpp src/calibration_panel.cpp src/health_ring.cpp src/sfx.cpp
             src/hero007_visual.cpp
             src/hero072_visual.cpp
+            src/game_body.cpp
             src/mesh_model.cpp
             src/test_notice.cpp)
 target_include_directories(spidy_core PUBLIC include)
@@ -131,6 +132,10 @@ if(WIN32)
   target_sources(spidy_tests PRIVATE src/game_targets.cpp)
 endif()
 add_test(NAME core COMMAND spidy_tests)
+# Version 0.0.72 GAME BODY (EXPERIMENTAL): the multiplayer team's spec offline, a synthetic 237-joint rig.
+add_executable(spidy_game_body_tests tests/game_body_tests.cpp src/sfx_quiet.cpp)
+target_link_libraries(spidy_game_body_tests PRIVATE spidy_core)
+add_test(NAME game_body COMMAND spidy_game_body_tests)
 # Update 38.2: the fixes replayed on the recorded sessions (tests/replay/*.csv).
 add_executable(spidy_replay_tests tests/replay_tests.cpp)
 if(WIN32)
@@ -335,7 +340,7 @@ if(SPIDY_BUILD_XR)
   target_compile_definitions(spidy_haptics_test PRIVATE _CRT_SECURE_NO_WARNINGS) # getenv
   spidy_stamp_version(spidy_haptics_test "Spidy VR haptics test")
   if(SPIDY_BUILD_OBSERVER)
-    target_sources(spidy_stereo_probe PRIVATE src/game_xr.cpp src/game_player.cpp src/game_pad.cpp src/sm2_damage.cpp
+    target_sources(spidy_stereo_probe PRIVATE src/game_xr.cpp src/game_player.cpp src/native_game_body.cpp src/game_pad.cpp src/sm2_damage.cpp
                    src/game_menu.cpp src/game_time.cpp src/game_prompts.cpp src/game_steam.cpp
                    src/phone_music.cpp src/music_audio_win.cpp src/sfx_win.cpp)
     # Update 19: the MUSIC page's player (Media Foundation decodes, WASAPI plays).

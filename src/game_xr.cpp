@@ -7,6 +7,7 @@
 #include "spidy/eye_debug.hpp"
 #include "spidy/native_appearance.hpp"
 #include "spidy/native_body.hpp"
+#include "spidy/native_game_body.hpp"
 // The input bridge remains a separately verified, separately stoppable module.
 #include "spidy/bhaptics_output.hpp"
 #include "spidy/body_calibration.hpp"
@@ -1389,6 +1390,9 @@ DWORD WINAPI run(void*) {
     bool nativeStarted = false, gpuStarted = false, raysStarted = false, swingStarted = false,
          raysFailed = false, swingFailed = false, websStarted = false,
          bodyStarted = false;
+    // Version 0.0.72 GAME BODY: the checks' state last logged, and the one a hook was last tried at.
+    uint32_t gameBodySerial = ~0u, gameBodyTried = ~0u;
+    std::string gameBodyRigRefusal;
     uint64_t serial = 1, nativeDeadline{};
     // lastPresentedMs: an image was on show. lastNewImageMs: the game delivered a newer one.
     uint64_t firstImageDeadline{}, lastPresentedMs{}, lastNewImageMs{};
@@ -2521,7 +2525,11 @@ DWORD WINAPI run(void*) {
             }
             // Turned off, the body blends back to the game's pose (Command
             // flags); it is started only once.
-            if (nativeStarted && values.body && !bodyStarted)
+            // Version 0.0.72 GAME BODY (EXPERIMENTAL): on, the body waits for the strict
+            // checks (native_game_body.hpp) and is started from the frame loop once they pass;
+            // off, everything is as before (the checks' thread stopped).
+            const bool strictBody = c38(combat38::gameBody) == 1;
+            if (nativeStarted && values.body && !strictBody && !bodyStarted)
                 bodyStarted = !native_body::start(config.base);
         };
         applySettings();
@@ -8106,7 +8114,9 @@ DWORD WINAPI run(void*) {
                         websStarted = !(config.options & 2) && !native_webs::start(config.base, player.record);
                         // The player's body is optional too: without it the hero stays
                         // hidden and the overlay draws gloves, as before.
-                        bodyStarted = values.body && !native_body::start(config.base);
+                        // GAME BODY on: not before its checks pass (the frame loop starts it).
+                        bodyStarted = values.body && c38(combat38::gameBody) != 1 &&
+                                      !native_body::start(config.base);
                         firstImageDeadline = GetTickCount64() + 3000;
                         message(3, 0, vrPlay ? "Gameplay found; waiting for the first eye images"
                                              : "A scene found; waiting for its first eye images");
@@ -8145,6 +8155,39 @@ DWORD WINAPI run(void*) {
                                       : h > standingEye
                                           ? standingEye + (h - standingEye) * std::min(1.f, frame.seconds * 4)
                                           : standingEye - std::min(standingEye - h, frame.seconds * .01f);
+                    // Version 0.0.72 GAME BODY (EXPERIMENTAL): the strict checks' verdict, logged
+                    // when it changes; the writer hooked only once they passed for this player.
+                    const bool strictBody = c38(combat38::gameBody) == 1;
+                    native_body::strict(strictBody);
+                    if (strictBody)
+                        native_game_body::begin(config.base); // once; nothing if running
+                    else if (native_game_body::running())
+                        native_game_body::end();
+                    const bool strictVerified = strictBody && native_game_body::verified(player.record);
+                    {
+                        uint32_t bodySerial{};
+                        const auto said = native_game_body::state(bodySerial);
+                        const auto refusedRig = bodyStarted && strictBody ? native_body::refused() : std::string{};
+                        if (bodySerial != gameBodySerial || refusedRig != gameBodyRigRefusal) {
+                            gameBodySerial = bodySerial;
+                            gameBodyRigRefusal = refusedRig;
+                            const auto line = "GAME BODY: " + said +
+                                              (refusedRig.empty() ? std::string{} : "; rig refused: " + refusedRig);
+                            message(3, 0, line.c_str());
+                            OutputDebugStringA((line + "\n").c_str());
+                        }
+                        // One try per verdict: a hook that fails waits for the checks to pass anew.
+                        if (strictVerified && !bodyStarted && gameBodyTried != bodySerial) {
+                            gameBodyTried = bodySerial;
+                            const auto f = native_game_body::found();
+                            const auto code = native_body::startAt(config.base, f.writer, f.toModel);
+                            bodyStarted = !code;
+                            const auto line = code ? "GAME BODY: refused: hook " + std::to_string(code)
+                                                   : std::string("GAME BODY: hooked; the body is on");
+                            message(3, 0, line.c_str());
+                            OutputDebugStringA((line + "\n").c_str());
+                        }
+                    }
                     if (bodyStarted) {
                         // The hero's body follows the headset and the controllers,
                         // placed from the same feet as the eyes.
@@ -8158,7 +8201,10 @@ DWORD WINAPI run(void*) {
                         // Standing on a wall or a ceiling - Spidy's own or the
                         // game's crawl - the body stands on it with the player,
                         // never in the air the swing keeps the hero in there.
-                        pose.flags = (flatScreen || !values.body || !hero_modes::gameBodyShown(heroNow()) ? 0u : native_body::bodyOn) | // 0.0.72 BATMAN BODY
+                        pose.flags = (flatScreen || !(values.body || strictBody) || (strictBody && !strictVerified) ||
+                                              !hero_modes::gameBodyShown(heroNow())
+                                          ? 0u
+                                          : native_body::bodyOn) | // 0.0.72 BATMAN BODY, GAME BODY
                                      native_body::hideHead |
                                      native_body::handTurn |
                                      (swingState.owned && !motion.standing ? native_body::airborne : 0u) |
@@ -10529,6 +10575,7 @@ DWORD WINAPI run(void*) {
             stopFailure("Game web lines did not stop cleanly");
         }
     }
+    native_game_body::end();
     if (bodyStarted) {
         const auto code = native_body::stop();
         if (code) {
@@ -11210,6 +11257,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerchTakedown(void* v) { retu
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyTakedownLight(void* v) { return setHero007(v, combat38::takedownLight, 5430); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherVan(void* v) { return setHero007(v, combat38::punisherVan, 5431); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorHammer(void* v) { return setHero007(v, combat38::thorHammer, 5432); }
+// Version 0.0.72 GAME BODY (EXPERIMENTAL): 0 off (the body as before), 1 on (strict checks first), live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameBody(void* v) { return setHero007(v, combat38::gameBody, 5433); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

@@ -735,7 +735,9 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
             drawn = appendBatonModel(out, it.at, it.at + normalized(it.forward) * .57f, *d.batonModel[it.side], viewer);
         else if ((it.look == lookShield || it.look == lookShieldSpin) && d.shieldModel)
             drawn = appendShieldModel(out, it, *d.shieldModel, viewer);
-        if (!drawn) {
+        if (!drawn && noStandIn(d.modelWanted, it.look)) {
+            // Version 0.0.72 MODEL MISSING: no fake lookalike (the wrist names the missing model).
+        } else if (!drawn) {
             appendItem(out, it, viewer, pixelAngle);
         } else if (it.holster) {
             appendHolster(out, it, viewer, pixelAngle);

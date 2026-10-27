@@ -100,8 +100,15 @@ def cpp_options():
 
 class Defaults(unittest.TestCase):
     def test_recommended_first(self):
-        """Each default is the recommended fix: value 0 of its option."""
+        """Each default is the recommended fix: value 0 of its option.
+
+        Version 0.0.72: the four model looks default to their MODEL value instead (the
+        user's 0.0.71 test: index 0 drew the built-in stand-ins, never the bundled models)."""
         for key, value in ls.UPDATE38_DEFAULTS.items():
+            if key in ls.MODEL_LOOKS_072:
+                self.assertEqual(value, ls.MODEL_LOOKS_072[key], key)
+                self.assertNotEqual(ls.export_value(key, value), 0, key)
+                continue
             self.assertEqual(ls.export_value(key, value), 0, key)
 
     def test_keys(self):

@@ -22220,8 +22220,8 @@ int main() {
         check(std::fabs(dir[2] - 1.f) < 1e-5f, "a far direction is not unit");
         directionOf(hero, hero, dir);
         check(dir[0] == 0 && dir[1] == 0 && dir[2] == 1, "a zero direction is not straight ahead");
-        check(repulsorBlast().amount * 3 >= thugHp && chestBeam().amount >= 4 * repulsorBlast().amount,
-              "a thug takes ~3 blasts, the beam 4x a blast");
+        check(repulsorBlast().amount * 5 >= thugHp && chestBeam().amount >= 4 * repulsorBlast().amount,
+              "a thug takes ~5 blasts, the beam 4x a blast or more");
         check(std::string(statusName(off)) == "OFF" && std::string(statusName(confirmed)) == "CONFIRMED", "status names");
     });
     test("0.0.5 DAMAGE PROBE: HP falls after X are CONFIRMED punches, ours alone the mod's, knockouts, the ring", [] {
@@ -22931,7 +22931,7 @@ int main() {
             check(p3.hits() == 1, "without walls the shot no longer reached him");
         }
     });
-    test("Version 0.0.62: REPULSOR HAND COOLDOWN - each hand once every 2 s, its own timer from the pull", [] {
+    test("Version 0.0.72: REPULSOR EVERY PULL - each hand fires every pull (0.06 s debounce), its own timer", [] {
         using namespace spidy::repulsor;
         // Frames at 90 Hz; a pull is one frame's press, the trigger held for 0.05 s.
         Trigger t;
@@ -22962,45 +22962,65 @@ int main() {
         run(0.f, .4f, 0.f, -1);   // right at t = 0
         run(.4f + 1 / 90.f, .9f, -1, .5f); // left at t = 0.5: not blocked by the right hand
         check(fired[1] == 1 && fired[0] == 1, "right at 0 and left at 0.5 both fire");
-        check(std::fabs(t.handCooldownLeft(1) - (2.f - .9f)) < .02f, "the right hand's timer runs from its pull");
-        check(handShare(t, 1) > .4f && handShare(t, 1) < .5f, "the right wrist ring shows 0.9 of 2 s");
-        check(handShare(t, 0) > .15f && handShare(t, 0) < .25f, "the left wrist ring shows its own 0.4 of 2 s");
-        run(.9f + 1 / 90.f, 1.95f, 1.9f, -1); // right at 1.9: ignored
-        check(fired[1] == 1 && cooled[1] == 1 && sounds[1] == 1, "a right pull at 1.9 s does nothing (no sound, no blast)");
-        // Exactly 2.0 s after the first pull (an exact time, not a frame: the clock is the combat clock).
+        run(.9f + 1 / 90.f, 1.2f, 1.0f, -1); // Version 0.0.72: right again at 1.0 fires (no 2 s wait)
+        check(fired[1] == 2 && cooled[1] == 0 && sounds[1] == 2, "a right pull at 1.0 s fires (0.0.72)");
+        // Version 0.0.72 EVERY PULL FIRES: ten right pulls 0.1 s apart are ten blasts, each quick.
         {
-            bool press[2]{false, true}, held[2]{false, true};
-            Out o = t.update(2.0f, press, aim, held);
-            check(o.accepted[1] && !o.handCooled[1], "a right pull at 2.0 s counts");
-            bool none[2]{};
-            o = t.update(2.0f + chordWindow + .01f, none, aim, none);
-            check(o.blast[1], "a right pull at 2.0 s fires");
+            Trigger q;
+            bool r[2]{false, true}, none[2]{};
+            int blasts = 0;
+            for (int k = 0; k < 10; ++k) {
+                const float at = 2.f + .1f * static_cast<float>(k);
+                check(q.update(at, r, aim, r).accepted[1], "a pull 0.1 s after the last counts");
+                const Out o = q.update(at + chordWindow + .01f, none, aim, none);
+                blasts += o.blast[1] ? 1 : 0;
+            }
+            check(blasts == 10, "ten pulls, ten blasts");
+            check(chordWindow <= .06f && handCooldown <= .1f, "near-zero delay: chord wait and debounce");
+            // A second press inside the debounce (the same pull bouncing) is not a second blast.
+            q.update(5.f, r, aim, r);
+            check(q.update(5.f + handCooldown / 2, r, aim, r).handCooled[1], "a bounce inside the debounce is ignored");
+            // Both hands independent: left and right pulls 0.03 s apart (outside the chord) each fire.
+            Trigger b;
+            bool l[2]{true, false};
+            int both = 0;
+            b.update(7.f, l, aim, l);
+            for (float now = 7.f + 1 / 90.f; now < 7.3f; now += 1 / 90.f) {
+                const bool pr = std::fabs(now - 7.1f) < .5f / 90.f;
+                bool p2[2]{false, pr};
+                const Out o = b.update(now, p2, aim, p2);
+                both += (o.blast[0] ? 1 : 0) + (o.blast[1] ? 1 : 0);
+            }
+            check(both == 2, "each hand fires its own pull");
         }
-        // The left hand's own cooldown (from 0.5) is still running at 2.4 and over at 2.5.
-        {
-            bool pressL[2]{true, false}, held[2]{true, false}, none[2]{};
-            Out o = t.update(2.4f, pressL, aim, held);
-            check(o.handCooled[0], "the left hand's pull at 2.4 s (0.5 + 1.9) is ignored");
-            o = t.update(2.5f, pressL, aim, held);
-            check(o.accepted[0], "the left hand's pull at 2.5 s counts");
-            o = t.update(2.5f + chordWindow + .01f, none, aim, none);
-            check(o.blast[0], "and fires");
-        }
-        // A pull during its hand's cooldown takes no part in a chord: no beam from it.
+        // A pull during its hand's debounce takes no part in a chord: no beam from it.
         {
             Trigger c;
             bool r[2]{false, true}, both[2]{true, true}, none[2]{};
             c.update(10.f, r, aim, r);
-            c.update(10.2f, none, aim, none); // the right blast went
-            Out o = c.update(11.f, both, aim, both); // left counts, right is cooling
+            Out o = c.update(10.f + handCooldown / 2, both, aim, both); // left counts, right is in its debounce
             check(o.accepted[0] && o.handCooled[1], "a chord with a cooling hand: only the ready hand counts");
+            c.update(10.2f, none, aim, none);
             bool beam = false;
-            for (float now = 11.f; now < 12.f; now += 1 / 90.f)
+            for (float now = 10.2f; now < 11.f; now += 1 / 90.f)
                 beam |= c.update(now, none, aim, both).beam;
             check(!beam, "a cooling hand's pull never makes the chest beam");
         }
         // The chest beam's own 30 s cooldown is unchanged.
-        check(beamCooldown == 30.f && handCooldown == 2.f, "cooldowns: beam 30 s, each hand 2 s");
+        check(beamCooldown == 30.f && handCooldown == .06f, "cooldowns: beam 30 s, each hand 0.06 s (0.0.72)");
+        // Version 0.0.72 FAST BLAST: a blast at repulsorSpeed covers 20 m in under 0.15 s; default balls stay 35 m/s.
+        {
+            our_ball::Pool fast, slow;
+            our_ball::Enemies none{};
+            check(fast.fire(1, {0, 1.3f, 0}, {0, 0, -1}, none, 0, 0, our_ball::repulsorSpeed) &&
+                      slow.fire(1, {0, 1.3f, 0}, {0, 0, -1}, none, 0, 0), "both fire");
+            for (int i = 0; i < 12; ++i) {
+                fast.update(1 / 90.f, none);
+                slow.update(1 / 90.f, none);
+            }
+            check(fast.ball(0).travelled > 20.f && slow.ball(0).travelled < 5.f, "the blast is near-hitscan, a ball is not");
+            check(our_ball::repulsorSpeed >= 4 * our_ball::speed, "repulsor speed");
+        }
         // The wrist ring: drawn while cooling, hidden when ready (after its blink).
         std::vector<Vertex> v;
         const Pose hand{{0, 1, -.4f}, {}};
@@ -24820,6 +24840,28 @@ int main() {
         for (const auto& v : o2)
             fin2 = fin2 && std::isfinite(v.position.x) && std::isfinite(v.position.y) && std::isfinite(v.position.z);
         check(fin2, "a NaN look let an insane vertex through");
+    });
+
+    test("Version 0.0.72 MODEL MISSING: a look whose MODEL is on is the model or nothing (no stand-in)", [] {
+        using namespace hero007;
+        check(noStandIn(modelBitGuns, lookPistol) && noStandIn(modelBitGuns, lookSawedOff) && noStandIn(modelBitGuns, lookSawedOffOpen) &&
+                  noStandIn(modelBitShield, lookShield) && noStandIn(modelBitShield, lookShieldSpin) &&
+                  noStandIn(modelBitBatarang, lookBatarang) && noStandIn(modelBitBaton, lookBatonModel),
+              "each MODEL setting covers its looks");
+        check(!noStandIn(0, lookPistol) && !noStandIn(modelBitShield, lookPistol) && !noStandIn(modelBitGuns | modelBitShield, lookClaws),
+              "BUILT-IN (no bit) keeps the drawn look; a bit covers only its own looks");
+        Draw d{};
+        d.any = true;
+        d.held[1].look = lookPistol;
+        d.held[1].at = {.2f, 1.3f, -.3f};
+        d.held[1].forward = {0, 0, -1};
+        d.held[1].up = {0, 1, 0};
+        const Vec3 viewer{0, 1.6f, 0};
+        std::vector<Vertex> builtIn, missing;
+        appendHero007(builtIn, d, {}, viewer, .0015f);
+        d.modelWanted = modelBitGuns; // MODELS on, the model null (missing)
+        appendHero007(missing, d, {}, viewer, .0015f);
+        check(!builtIn.empty() && missing.size() < builtIn.size(), "MODELS on and the model missing: no fake pistol drawn");
     });
 
     test("Version 0.0.72: the looks into the world (worldLook), PERCH TAKEDOWN's light and rope", [] {

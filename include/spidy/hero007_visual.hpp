@@ -54,6 +54,15 @@ struct Item {
 // -> hand), the model frame of captain.hpp (the hand strap at the origin, -z the face).
 inline constexpr uint32_t drawSmokes = 6, drawShells = 24;
 // Everything 0.0.7 draws in one frame (NativeEyeFrame::hero007), world positions.
+// Version 0.0.72: Draw::modelWanted bits (a look's MODEL setting on).
+inline constexpr uint32_t modelBitBatarang = 1, modelBitGuns = 2, modelBitBaton = 4, modelBitShield = 8;
+// A look whose model is wanted: true when the built-in stand-in must NOT be drawn for it.
+constexpr bool noStandIn(uint32_t wanted, uint32_t look) {
+    return ((wanted & modelBitBatarang) && look == lookBatarang) ||
+           ((wanted & modelBitGuns) && (look == lookPistol || look == lookSawedOff || look == lookSawedOffOpen)) ||
+           ((wanted & modelBitBaton) && look == lookBatonModel) ||
+           ((wanted & modelBitShield) && (look == lookShield || look == lookShieldSpin));
+}
 struct Draw {
     bool any{};
     Item held[2]{};
@@ -79,6 +88,10 @@ struct Draw {
     const mesh_model::Mesh* batonModel[2]{};
     // SHIELD LOOK MODEL: Models\Shield (null: the BUILT-IN look). Library-owned.
     const mesh_model::Mesh* shieldModel{};
+    // Version 0.0.72 MODEL MISSING (the user, 27 Oct: "not a fake lookalike"): the looks whose MODEL
+    // setting is on (modelBit*). One of them whose model is null or will not draw is NOT drawn as the
+    // built-in stand-in: nothing is drawn and the wrist says MODEL MISSING: <name> (game_xr).
+    uint32_t modelWanted{};
     // DAREDEVIL: the chain from the hand to its baton, ONLY while that baton is thrown (and on its
     // bounces); never between the batons, never while held or holstered.
     bool cable[2]{};

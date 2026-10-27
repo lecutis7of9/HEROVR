@@ -63,7 +63,7 @@ inline constexpr Perk perkTable[] = {
     // IRON MAN
     {1, 0, 0, "REPULSOR DAMAGE +1", "Repulsor blasts hit harder.", Stat::repulsorDamage, 0.15f, 1},
     {1, 0, 1, "ARMOR REGEN", "The armor slowly mends between fights.", Stat::armorRegen, 0.15f, 1},
-    {1, 0, 2, "FAST REPULSORS", "Repulsors charge faster.", Stat::repulsorCharge, 0.15f, 1},
+    {1, 0, 2, "HEAVY REPULSORS", "Repulsor blasts knock foes back further.", Stat::knockback, 0.15f, 1}, // 0.0.72: was FAST REPULSORS (no charge left)
     {1, 1, 0, "REPULSOR DAMAGE +2", "Repulsor blasts hit harder again.", Stat::repulsorDamage, 0.15f, 2},
     {1, 1, 1, "FLARE COUNTER", "Flares shake off a locked missile.", Stat::idea, 0.f, 2},
     {1, 1, 2, "MISSILE LOCK", "Locks missiles on the enemy you look at.", Stat::missileLock, 0.2f, 2},

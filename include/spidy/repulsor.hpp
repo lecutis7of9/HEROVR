@@ -66,10 +66,12 @@ inline uint32_t webShotsPerPress(const Plan& p) {
     return (p.gameWebBall ? 1u : 0u) + (p.ourShot && p.webLook ? 1u : 0u) + (p.gameWebOnHit ? 1u : 0u);
 }
 
-inline constexpr float chordWindow = .12f; // both presses this close: a chord (= combat_input's Sonic grace)
+// Version 0.0.72 EVERY PULL FIRES (the user): the chord wait cut to 0.05 s (a single pull's only delay).
+inline constexpr float chordWindow = .05f; // both presses this close: a chord
 inline constexpr float beamHold = .35f;    // the chord held this long fires the beam
 inline constexpr float beamCooldown = 30.f;
-inline constexpr float handCooldown = 2.f; // Version 0.0.62: one blast per hand every 2 s
+// Version 0.0.72 EVERY PULL FIRES: 0.06 s, only a debounce (one blast per pull, about 16 pulls a second).
+inline constexpr float handCooldown = .06f;
 inline constexpr float beamRange = 40.f, beamRadius = .9f, beamSeconds = .7f, chestBelowHead = .35f;
 inline constexpr float blastDamage = 1.f, beamShare = 4.f, beamDamage = beamShare * blastDamage;
 inline constexpr float blastLife = .25f; // the impact flash

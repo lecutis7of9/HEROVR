@@ -37,6 +37,9 @@ struct Tune {
     bool lead;       // aim where a moving enemy will be
     float lockCone;  // Version 0.0.4: the locked enemy is taken this far off the aim (0: only in the cone)
 };
+// Version 0.0.72 FAST REPULSORS: a blast at 160 m/s (40 m in 0.25 s, near-hitscan; hits test the
+// whole step's segment, so no tunnelling).
+inline constexpr float repulsorSpeed = 160.f;
 inline constexpr float speed = 35.f, nearMetres = 3.f, bodyHeight = 1.8f, chest = 1.05f, magnetMetres = 3.f;
 inline Tune tuneOf(uint32_t strength) {
     switch (strength) {
@@ -210,6 +213,7 @@ struct Ball {
     uint64_t target{}; // the picked enemy's id (0 none)
     uint32_t serial{}; // Version 0.0.62: which fire() this is (1, 2, ...), for BOLT WALLS' casts
     float age{}, life{}, travelled{};
+    float metresPerSecond = speed; // Version 0.0.72: a repulsor blast flies at repulsorSpeed
     Vec3 from{}, at{}, direction{};
     Vec3 tail() const { return at - direction * std::min(1.2f, travelled); }
 };
@@ -236,7 +240,8 @@ class Pool {
     static constexpr int balls = 6;
     // A press: one ball from `wrist` along `aim`, toward the picked enemy (led) if any. False when
     // the wrist or aim is unusable (nothing fired - counted).
-    bool fire(int hand, Vec3 wrist, Vec3 aim, const Enemies& e, uint64_t locked, uint32_t strength) {
+    bool fire(int hand, Vec3 wrist, Vec3 aim, const Enemies& e, uint64_t locked, uint32_t strength,
+              float ballSpeed = speed) {
         if (!finite(wrist) || !finite(aim) || length(aim) < .5f) {
             ++refused_;
             return false;
@@ -248,7 +253,8 @@ class Pool {
         b.hand = hand;
         b.from = b.at = wrist;
         b.direction = normalized(aim);
-        b.life = t.range / speed + .1f;
+        b.metresPerSecond = std::isfinite(ballSpeed) && ballSpeed > 1.f ? ballSpeed : speed;
+        b.life = t.range / b.metresPerSecond + .1f;
         float off = 180.f;
         const int i = pick(wrist, aim, e, locked, t, &off);
         if (i >= 0) {
@@ -301,7 +307,7 @@ class Pool {
                 }
             }
             const Vec3 before = b.at;
-            const float stepMetres = speed * dt;
+            const float stepMetres = b.metresPerSecond * dt;
             b.at = b.at + b.direction * stepMetres;
             b.travelled += stepMetres;
             b.age += dt;

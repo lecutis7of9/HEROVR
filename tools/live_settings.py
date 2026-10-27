@@ -423,6 +423,12 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'on', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on'}
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
+# Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
+# picked Sketchfab models"): 0.0.7-0.0.71 started every model look on its built-in stand-in (index 0)
+# and nothing ever turned the shipped Models\ on. Now the models are the start values; BUILT-IN /
+# CLASSIC / DEFAULT stay selectable. migrate_072 sets them once over an existing live.txt.
+MODEL_LOOKS_072 = {'gun_models': 'models', 'shield_look': 'model', 'baton_look': 'model', 'batarang_style': 'eira'}
+UPDATE38_DEFAULTS.update(MODEL_LOOKS_072)
 # Update 37.2: the startup checks (tests): these must start this way on a fresh install and over an
 # existing live.txt (migrate_372, once).
 STARTUP_ON = {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140}
@@ -1172,6 +1178,44 @@ def migrate_web_style(path):
         return None
     return (f'live.txt: web_style 90s changed once to {DEFAULT_WEB_STYLE}, the new default (Update 20); '
             'set "web_style = 90s" to go back, it stays from now on.')
+
+
+MIGRATED_072 = '# Version 0.0.72: the model looks (GUN MODELS, SHIELD LOOK, BATON LOOK, BATARANG STYLE) set once (migrated).'
+# The 0.0.7-0.0.71 start values migrate_072 replaces (a live.txt that chose another keeps it).
+OLD_LOOKS_072 = {'gun_models': 'built-in', 'shield_look': 'built-in', 'baton_look': 'classic', 'batarang_style': 'default'}
+
+
+def migrate_072(path):
+    """Version 0.0.72, once: an existing live.txt whose model looks are the old built-in start values
+    gets MODEL_LOOKS_072, and the MIGRATED_072 marker (a value chosen after it stays). The line to
+    show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_072 in text:
+        return None
+    try:
+        values, _ = parse(text)
+    except Exception:
+        return None
+    changed = {k: v for k, v in MODEL_LOOKS_072.items()
+               if k in values and str(values[k]).strip().lower() == OLD_LOOKS_072[k]}
+    if changed:
+        text = write_back(text, changed)
+    if text and not text.endswith('\n'):
+        text += '\n'
+    try:
+        write_atomically(path, text + MIGRATED_072 + '\n')
+    except OSError:
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to the 0.0.72 model looks: ' +
+            ', '.join(f'{k} = {v}' for k, v in changed.items()) + ' (change them again and they stay).')
 
 
 def migrate_372(path):

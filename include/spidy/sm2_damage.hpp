@@ -115,8 +115,9 @@ inline bool poolRequest(uint64_t request, uint64_t system) {
 
 // Version 0.0.5 hero blows (hero_modes.md): what each hero's hit asks for (damage CANDIDATE).
 inline constexpr float thugHp = 100.f; // a normal thug's hit points (the probe reports the real ones)
-inline Blow repulsorBlast() { return {35.f, 5, 100.f}; }  // ~3 blasts a thug
-inline Blow chestBeam() { return {140.f, 5, 300.f}; }      // 4x a blast
+// Version 0.0.72: blasts fire every pull now, so each is 20 (5 a thug); the beam stays 140.
+inline Blow repulsorBlast() { return {20.f, 5, 100.f}; }  // ~5 blasts a thug
+inline Blow chestBeam() { return {140.f, 5, 300.f}; }      // 7x a blast
 inline Blow batonHit() { return {30.f, 5, 120.f}; }
 inline Blow webBallTest() { return {10.f, 0, 0.f}; }       // DAMAGE TEST's web ball: small, no knockback
 // The runtime status (V005 record's write state).

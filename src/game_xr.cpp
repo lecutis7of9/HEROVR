@@ -706,6 +706,16 @@ std::atomic<uint32_t> combatTapMs{combat_input::Config{}.tapMs}, combatGestureMs
 // Update 38: the COMBAT page's live settings (combat38.hpp; live.txt and the hologram, each at
 // once, no restart), index 0 of each the default.
 std::atomic<uint32_t> combat38Values[combat38::options]{};
+// Version 0.0.72 MODEL MISSING: one bit per mesh_model slot whose MODEL setting is on and whose model
+// could not be read (the render thread sets it; the wrist names them: "MODEL MISSING: <name>").
+std::atomic<uint32_t> modelMissingMask{0};
+std::string modelMissingNote(uint32_t mask) {
+    std::string t;
+    for (uint32_t s = 0; s < mesh_model::slots; ++s)
+        if (mask >> s & 1u)
+            t += (t.empty() ? "MODEL MISSING: " : ", ") + std::string(mesh_model::slotFolders[s]);
+    return t;
+}
 std::atomic<float> heroHeightNow{1.f}; // Version 0.0.5 HERO HEIGHT in force (the V005 record)
 uint32_t c38(uint32_t option) {
     // Version 0.0.2 hotfix: a getter that reaches itself again answers the default (0) rather than recursing.
@@ -3503,6 +3513,8 @@ DWORD WINAPI run(void*) {
                                 wristNote = wristApply.note(wristClock);
                                 if (wristNote.empty() && mirrorTooLate)
                                     wristNote = "RESTART THE GAME TO RUN MIRROR VIEW TEST";
+                                if (wristNote.empty() && modelMissingMask.load())
+                                    wristNote = modelMissingNote(modelMissingMask.load());
                                 if (wristMenu.claims()) {
                                     hudTriggers |= 1u << pointHand;
                                 }
@@ -6155,7 +6167,8 @@ DWORD WINAPI run(void*) {
                                         const uint32_t repStrength = strength == 1 ? 1u : 0u;
                                         for (unsigned i = 0; i < 2; ++i)
                                             if (ro.blast[i] && oursBalls.fire(static_cast<int>(i), palmOf(i), ro.blastAim[i], foes,
-                                                                             fightOut.lockTarget, repStrength)) {
+                                                                             fightOut.lockTarget, repStrength,
+                                                                             our_ball::repulsorSpeed)) {
                                                 runtime.haptic(static_cast<int>(i), .35f);
                                                 sfx::play(sfx::repulsorFire); // Version 0.0.5 SOUND EFFECTS
                                                 // Version 0.0.6 (Update 39.0.2): the palm's flash is the charge
@@ -8168,12 +8181,17 @@ DWORD WINAPI run(void*) {
                                               mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
                                               status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
                                     game_prompts::note(line);
+                                    if (status != mesh_model::loaded && slot < 32)
+                                        modelMissingMask.fetch_or(1u << slot);
                                 }
                                 return models.model(slot);
                             };
                             const uint32_t style = c38(combat38::batarangStyle);
-                            if (style && style < mesh_model::styles && hero007In.hero == hero_modes::batman)
+                            // Version 0.0.72 MODEL MISSING: a look whose MODEL setting is on is the model or nothing.
+                            if (style && style < mesh_model::styles && hero007In.hero == hero_modes::batman) {
                                 saved.hero007.batarangModel = slotModel(style, "BATARANG STYLE");
+                                saved.hero007.modelWanted |= hero007::modelBitBatarang;
+                            }
                             // BATMAN GRAPPLE GUN model (Models\GrappleGun): none drawn when it is missing.
                             if (hero007In.hero == hero_modes::batman)
                                 saved.hero007.grappleGunModel = slotModel(mesh_model::slotGrappleGun, "GRAPPLE GUN");
@@ -8181,11 +8199,16 @@ DWORD WINAPI run(void*) {
                                 saved.hero007.pistolModel = slotModel(mesh_model::slotPistol, "GUN MODELS");
                                 saved.hero007.sawedFrame = slotModel(mesh_model::slotSawedOffFrame, "GUN MODELS");
                                 saved.hero007.sawedBarrels = slotModel(mesh_model::slotSawedOffBarrels, "GUN MODELS");
+                                saved.hero007.modelWanted |= hero007::modelBitGuns;
                             }
                             // Version 0.0.7 CAPTAIN AMERICA SHIELD LOOK MODEL (Models\Shield; BUILT-IN when missing).
                             if (captain::lookModel(c38(combat38::shieldLook)) && hero007In.hero == hero_modes::captainAmerica)
+                            {
                                 saved.hero007.shieldModel = slotModel(mesh_model::slotShield, "SHIELD LOOK");
+                                saved.hero007.modelWanted |= hero007::modelBitShield;
+                            }
                             if (combat38::batonModel(batonLookNow) && dd) {
+                                saved.hero007.modelWanted |= hero007::modelBitBaton;
                                 for (unsigned i = 0; i < 2; ++i) {
                                     saved.hero007.batonModel[i] = slotModel(i ? mesh_model::slotBatonRight : mesh_model::slotBatonLeft, "BATON LOOK");
                                     // The chain: ONLY while this baton is out of the hand (thrown, bouncing, coming back).

@@ -2721,6 +2721,10 @@ def session(a, startup, session_off=()):
         migrated_372 = live_settings.migrate_372(ROOT/'live.txt')
         if migrated_372:
             print(migrated_372, flush=True)
+        # Version 0.0.72: the model looks start on (the shipped Models), once over an old live.txt.
+        migrated_072 = live_settings.migrate_072(ROOT/'live.txt')
+        if migrated_072:
+            print(migrated_072, flush=True)
         # Update 38.2: a 38.1 live.txt's COMBAT numbers kept meaning what they did (values reordered).
         migrated_382 = live_settings.migrate_382(ROOT/'live.txt')
         if migrated_382:

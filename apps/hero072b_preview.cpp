@@ -26,7 +26,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
-#include <sys/stat.h>
+#include <filesystem>
 #include <vector>
 using namespace spidy;
 using namespace spidy::preview;
@@ -107,7 +107,8 @@ bool frame(const std::string& dir, int n, Cell& c) {
 }
 std::string clipDir(const std::string& dir, const char* name) {
     const std::string d = dir + name;
-    mkdir(d.c_str(), 0755);
+    std::error_code ec;
+    std::filesystem::create_directories(d, ec);
     return d;
 }
 } // namespace

@@ -1622,7 +1622,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 213, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 214, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1962,7 +1962,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 213, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 214, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18445,7 +18445,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 106, "one hundred and six options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 35)");
+        check(options == 107, "one hundred and seven options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 35)");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18479,7 +18479,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 106, "0.0.72 has 106 COMBAT options (0.0.72: + 35; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 107, "0.0.72 has 107 COMBAT options (0.0.72: + 36; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18801,7 +18801,7 @@ int main() {
                 }
             }
         }
-        check(placed == 181 /* 0.0.72: + 35; CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 182 /* 0.0.72: + 36; CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -22359,7 +22359,14 @@ int main() {
         check(game_swing::valid(c), "the swing module refuses SUPERSONIC's asks");
         c.asks = 16; // 0.0.6: bit 4 is HULK LEAP
         check(game_swing::valid(c), "the swing module refuses HULK LEAP's ask");
-        c.asks = 32;
+        // Version 0.0.72: bits 5-8 (BATMAN, the grapples, the grapple without the cape) are valid -
+        // 0.0.7 refused anything over 31, so BATMAN's own asks made the command invalid.
+        c.asks = cape_glide::pack(true, true, true);
+        check(game_swing::valid(c), "the swing module refuses BATMAN's asks");
+        c.asks = cape_glide::packGrappleOnly(false, true);
+        check(game_swing::valid(c) && c.asks == (cape_glide::askGrappleOnly | cape_glide::askGrapple[1]), "the grapple without the cape");
+        check(cape_glide::asksMost == game_swing::asksMost && cape_glide::packGrappleOnly(false, false) == 0, "the asks' top");
+        c.asks = 512;
         check(!game_swing::valid(c), "junk asks accepted");
         // The Boost: needs ON, flying, hands out and the stick forward; booms once, re-arms after 1 s off.
         fly_boost::Boost b;
@@ -25056,39 +25063,80 @@ int main() {
             check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1, "a 0.0.72 subtext: " + help);
         }
     });
-    test("Version 0.0.72: SUITS per hero - generic, credited, unlocked by that hero's reputation, kept for good", [] {
+    test("Version 0.0.72: SUITS per hero - the user's picks, FINAL at max reputation, COMING SOON never worn", [] {
         using namespace hero072;
         SuitCatalog c;
-        check(c.suits(hero_modes::punisher) == 2 && c.suits(hero_modes::spiderMan) == 1 && c.suits(hero_modes::captainAmerica) == 1,
-              "the built-in suits");
+        // The user's picks (8:59): Batman 4, Iron Man 4, Cap 3 (+ the 0.0.7 suit), Daredevil 3, Hulk 3,
+        // Wolverine 5, the Punisher 2 (+ WARZONE), Thor 3, Green Lantern 4, Superman 4; each after DEFAULT.
+        const uint32_t want[hero_modes::heroes] = {1, 5, 4, 4, 5, 6, 5, 4, 4, 4, 5};
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+            check(c.suits(h) == want[h], "the built-in suits of hero " + std::to_string(h));
+        const uint32_t finals[hero_modes::heroes] = {0, 2, 3, 3, 1, 4, 4, 0, 1, 2, 3}; // the sheets' numbers (0: none)
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            uint32_t f = 0, n = 0;
+            for (uint32_t i = 0; i < c.suits(h); ++i)
+                if (c.suit(h, i)->final) {
+                    ++f;
+                    n = i;
+                    check(c.suit(h, i)->rep == repMost, "a FINAL suit is not at max reputation");
+                } else {
+                    check(c.suit(h, i)->rep == 0, "a picked suit is not unlocked from the start");
+                }
+            check(f == (finals[h] ? 1u : 0u), "one FINAL suit per hero (none for the Punisher)");
+            if (finals[h]) {
+                const std::string folder = c.suit(h, n)->folder;
+                check(folder.substr(folder.size() - 2) == "_" + std::to_string(finals[h]), "the FINAL is the user's number: " + folder);
+            }
+            for (uint32_t i = 0; i < c.suits(h); ++i)
+                check(i == 0 ? c.suit(h, i)->artist[0] != 0 : c.suit(h, i)->artist[0] && c.suit(h, i)->licence[0], "a suit without its credit");
+        }
+        // Nothing fetched in this build (Sketchfab 401): every pick COMING SOON, never stepped onto, never worn.
         char line[96];
-        c.line(hero_modes::punisher, 1, false, line, sizeof line);
-        check(std::string(line) == "WARZONE LOCKED: REP 2500", std::string("a locked suit's line: ") + line);
-        c.line(hero_modes::punisher, 0, false, line, sizeof line);
-        check(std::string(line) == "SUIT: VEST BY floh (CC BY-NC)", std::string("the default suit's credit: ") + line);
-        check(c.next(hero_modes::punisher, false) == 0, "SUIT stepped onto a locked suit");
-        check(c.next(hero_modes::punisher, true) == 1 && c.current(hero_modes::punisher, true) == 1, "UNLOCK ALL SUITS");
-        check(c.current(hero_modes::punisher, false) == 0, "a locked chosen suit was worn");
-        c.unlockFor(hero_modes::punisher, 2600);
-        check(c.isUnlocked(hero_modes::punisher, 1, false) && c.current(hero_modes::punisher, false) == 1, "rep 2600 did not unlock WARZONE");
-        c.unlockFor(hero_modes::punisher, 100);
-        check(c.isUnlocked(hero_modes::punisher, 1, false), "a lost reputation locked a suit again");
+        c.line(hero_modes::batman, 1, true, line, sizeof line);
+        check(std::string(line) == "BEYOND: COMING SOON", std::string("a COMING SOON line: ") + line);
+        check(c.next(hero_modes::batman, true) == 0 && c.current(hero_modes::batman, true) == 0, "a COMING SOON suit was picked");
+        c.chosen[hero_modes::batman] = 3;
+        check(c.current(hero_modes::batman, true) == 0, "a COMING SOON suit was worn");
+        c.line(hero_modes::captainAmerica, 0, false, line, sizeof line);
+        check(std::string(line) == "SUIT: CAPTAIN AMERICA BY iqbalmulyawan (CC BY)", std::string("the 0.0.7 suit: ") + line);
+        // A converted model dropped in (suits.txt, the same NAME) replaces the COMING SOON entry and keeps its rule.
+        check(c.parseList("4|BEYOND|Light.k|CC BY|0|Suit_batman_1\n4|1989|Homeless_Models|CC BY|0|Suit_batman_2\n") == 2 &&
+                  c.suits(hero_modes::batman) == 5,
+              "a converted pick did not replace its COMING SOON entry");
+        check(c.suit(hero_modes::batman, 1)->final && c.suit(hero_modes::batman, 1)->rep == repMost, "the dropped-in FINAL lost its rule");
+        check(c.isUnlocked(hero_modes::batman, 2, false), "a picked suit is locked at the start");
+        c.line(hero_modes::batman, 1, false, line, sizeof line);
+        check(std::string(line) == "BEYOND LOCKED: MAX REP (FINAL)", std::string("a FINAL's lock: ") + line);
+        c.unlockFor(hero_modes::batman, repMost - 1);
+        check(!c.isUnlocked(hero_modes::batman, 1, false), "the FINAL opened below max reputation");
+        check(c.isUnlocked(hero_modes::batman, 1, true), "UNLOCK ALL SUITS did not open the FINAL");
+        c.chosen[hero_modes::batman] = 0;
+        check(c.next(hero_modes::batman, false) == 2, "SUIT stepped onto the locked FINAL");
+        c.unlockFor(hero_modes::batman, repMost);
+        check(c.isUnlocked(hero_modes::batman, 1, false), "max reputation did not open the FINAL");
+        c.unlockFor(hero_modes::batman, 100);
+        check(c.isUnlocked(hero_modes::batman, 1, false), "a lost reputation locked a suit again");
+        c.chosen[hero_modes::batman] = 1;
+        check(c.inUse(hero_modes::batman, false, false) == 1 && c.inUse(hero_modes::batman, false, true) == 0,
+              "USE MY OWN OR GAME SUIT did not fall back to the game's suit");
         char save[1024];
         c.save(save, sizeof save);
         SuitCatalog d;
+        d.parseList("4|BEYOND|Light.k|CC BY|0|Suit_batman_1\n");
         d.load(save);
-        check(d.isUnlocked(hero_modes::punisher, 1, false) && d.current(hero_modes::punisher, false) == 1, "the unlock was not saved");
-        d.load("suits.7=0\n");
-        check(d.isUnlocked(hero_modes::punisher, 1, false), "an old save locked it again");
-        // Drop-in suits.
-        const uint32_t added = d.parseList("# my suits\n9|CLASSIC|someone|CC BY|850|ThorClassic\r\nbad line\n42|X|y|z|0|f\n9|CLASSIC|dupe|CC BY|0|f\n");
-        check(added == 1 && d.suits(hero_modes::thor) == 2 && d.suit(hero_modes::thor, 1)->rep == 850, "suits.txt");
-        d.line(hero_modes::thor, 1, false, line, sizeof line);
-        check(std::string(line) == "CLASSIC LOCKED: REP 850", "a dropped-in suit's lock");
+        check(d.isUnlocked(hero_modes::batman, 1, false) && d.current(hero_modes::batman, false) == 1, "the unlock was not saved");
+        d.load("suits.4=0\n");
+        check(d.isUnlocked(hero_modes::batman, 1, false), "an old save locked it again");
+        // Drop-in suits of its own.
+        const uint32_t added = d.parseList("# my suits\n9|STORM|someone|CC BY|850|ThorStorm\r\nbad line\n42|X|y|z|0|f\n9|STORM|dupe|CC BY|0|f\n");
+        check(added == 1 && d.suits(hero_modes::thor) == 5 && d.suit(hero_modes::thor, 4)->rep == 850, "suits.txt");
+        d.line(hero_modes::thor, 4, false, line, sizeof line);
+        check(std::string(line) == "STORM LOCKED: REP 850", std::string("a dropped-in suit's lock: ") + line);
         for (int i = 0; i < 20; ++i)
             d.add(makeSuit(hero_modes::thor, ("S" + std::to_string(i)).c_str(), "a", "CC BY", 0, ""));
         check(d.suits(hero_modes::thor) == suitsMost, "the suits per hero are not capped");
         check(combat38::optionInfo[combat38::testUnlocks].values[0] == std::string("OFF"), "TEST UNLOCKS is not OFF by default");
+        check(combat38::optionInfo[combat38::ownSuit].values[0] == std::string("OFF"), "USE MY OWN OR GAME SUIT is not OFF by default");
     });
     test("Version 0.0.72: PERK TREES and ULTIMATES - one table, a point a level, the capstone at max reputation", [] {
         using namespace hero072;

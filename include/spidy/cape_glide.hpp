@@ -26,8 +26,15 @@ namespace spidy::cape_glide {
 // ---- The swing command's asks bits (bits 0-4 are the game move, SUPERSONIC and HULK LEAP's) ----
 inline constexpr uint32_t askBatman = 1u << 5;               // BATMAN is on: glide allowed, no flight
 inline constexpr uint32_t askGrapple[2] = {1u << 6, 1u << 7}; // that hand's grapple trigger is held
+// Version 0.0.72 (TEST): the grapple without the cape (the PUNISHER's hook, DAREDEVIL's baton cast):
+// askGrapple[i] then zips that hand along its aim, no glide.
+inline constexpr uint32_t askGrappleOnly = 1u << 8;
+inline constexpr uint32_t asksMost = (1u << 9) - 1u; // every bit in use (game_swing::valid)
 inline uint32_t pack(bool batman, bool left, bool right) {
     return batman ? askBatman | (left ? askGrapple[0] : 0u) | (right ? askGrapple[1] : 0u) : 0u;
+}
+inline uint32_t packGrappleOnly(bool left, bool right) {
+    return left || right ? askGrappleOnly | (left ? askGrapple[0] : 0u) | (right ? askGrapple[1] : 0u) : 0u;
 }
 
 // One sentence each (the cheat sheet, TRAINING and the wrist HUD).

@@ -1618,15 +1618,20 @@ inline Faction factionFor(uint32_t hero, uint32_t setting) {
 // UNLOCKS (the user, 8:43): suit 0 of each hero is his default and always unlocked; the others unlock
 // when THAT hero's reputation reaches the suit's rep (tiers). Once unlocked a suit stays unlocked
 // (saved: "suits.<hero>=<mask>" lines, only ever OR-ed). UNLOCK ALL SUITS shows them all.
-inline constexpr uint32_t suitsMost = 8, suitsListMost = 48;
+inline constexpr uint32_t suitsMost = 8, suitsListMost = 64;
 inline constexpr int32_t suitTier[4] = {0, repTuning.suitTier[0], repTuning.suitTier[1], repTuning.suitTier[2]};
 struct Suit {
     uint32_t hero{hero_modes::heroes};
     char name[32]{}, artist[48]{}, licence[16]{}, folder[48]{};
     int32_t rep{}; // the hero's reputation that unlocks it (0: from the start)
+    bool final{};  // the hero's FINAL suit (the user, 8:59: unlocks at that hero's max reputation)
+    bool soon{};   // COMING SOON: its model is not converted yet - listed, never picked, never loaded
 };
-inline Suit makeSuit(uint32_t hero, const char* name, const char* artist, const char* licence, int32_t rep, const char* folder) {
+inline Suit makeSuit(uint32_t hero, const char* name, const char* artist, const char* licence, int32_t rep, const char* folder,
+                     bool final = false, bool soon = false) {
     Suit x;
+    x.final = final;
+    x.soon = soon;
     x.hero = hero;
     std::snprintf(x.name, sizeof x.name, "%s", name ? name : "");
     std::snprintf(x.artist, sizeof x.artist, "%s", artist ? artist : "");
@@ -1644,23 +1649,72 @@ class SuitCatalog {
     bool dirty{};
     SuitCatalog() { builtIn(); }
     bool add(const Suit& x) {
-        if (x.hero >= hero_modes::heroes || !x.name[0] || count >= suitsListMost || suits(x.hero) >= suitsMost)
+        if (x.hero >= hero_modes::heroes || !x.name[0])
             return false;
         for (uint32_t i = 0; i < count; ++i)
-            if (list[i].hero == x.hero && std::strcmp(list[i].name, x.name) == 0)
-                return false; // already there
+            if (list[i].hero == x.hero && std::strcmp(list[i].name, x.name) == 0) {
+                if (!list[i].soon || x.soon)
+                    return false; // already there
+                const bool final = list[i].final;
+                list[i] = x; // a converted model for a COMING SOON pick: it keeps its FINAL rule
+                list[i].final = final;
+                list[i].rep = final ? repMost : x.rep;
+                return true;
+            }
+        if (count >= suitsListMost || suits(x.hero) >= suitsMost)
+            return false;
         list[count++] = x;
         return true;
     }
+    // Suit 0 of each hero: the game's own (or whatever suit another mod applies) - always there. Then
+    // the user's picks (8:59, tools/alt_suits/alt_suits.py makes these lines; the numbers on the sheets
+    // are in the folder names). Every pick is COMING SOON in this build: Sketchfab refused the
+    // downloads (401), so none is fetched, rigged or decimated yet. A suits.txt line with the same
+    // hero and NAME (a converted model dropped in) replaces the COMING SOON entry.
     void builtIn() {
         count = 0;
         const char* game = "THE GAME'S OWN";
         for (uint32_t h = 0; h < hero_modes::heroes; ++h)
-            if (h != hero_modes::punisher && h != hero_modes::captainAmerica)
+            if (h != hero_modes::captainAmerica)
                 add(makeSuit(h, "DEFAULT", game, "", 0, ""));
         add(makeSuit(hero_modes::captainAmerica, "CAPTAIN AMERICA", "iqbalmulyawan", "CC BY", 0, "CapSuit"));
-        add(makeSuit(hero_modes::punisher, "VEST", "floh", "CC BY-NC", 0, "PunisherVest"));
-        add(makeSuit(hero_modes::punisher, "WARZONE", "spybg (Valentin Yovchev)", "CC BY", suitTier[1], "PunisherWarzone"));
+        // The PUNISHER's (the user, 8:59: 1 and 2, no final) and WARZONE (8:35), all from the start.
+        add(makeSuit(hero_modes::batman, "BEYOND", "Light.k", "CC BY", repMost, "Suit_batman_1", true, true));
+        add(makeSuit(hero_modes::batman, "1989", "Homeless_Models (hl_models)", "CC BY", 0, "Suit_batman_2", false, true));
+        add(makeSuit(hero_modes::batman, "YEAR ONE", "Tigerar1 (allanromanreyes)", "SF STANDARD", 0, "Suit_batman_3", false, true));
+        add(makeSuit(hero_modes::batman, "ORIGINS", "Light.k", "CC BY", 0, "Suit_batman_5", false, true));
+        add(makeSuit(hero_modes::ironMan, "MARK 85", "9A Films / Nihar Arora", "CC BY", 0, "Suit_ironMan_1", false, true));
+        add(makeSuit(hero_modes::ironMan, "MARK 1", "Nathang30", "CC BY-NC-SA", repMost, "Suit_ironMan_2", true, true));
+        add(makeSuit(hero_modes::ironMan, "MARK 7", "benjamin.borromeo", "CC BY", 0, "Suit_ironMan_3", false, true));
+        add(makeSuit(hero_modes::ironMan, "MARK 6", "Mittergen", "CC BY", 0, "Suit_ironMan_4", false, true));
+        add(makeSuit(hero_modes::captainAmerica, "WINTER SOLDIER", "Zeztz777", "CC BY", repMost, "Suit_captainAmerica_1", true, true));
+        add(makeSuit(hero_modes::captainAmerica, "WW2", "Marco.41", "SF STANDARD", 0, "Suit_captainAmerica_2", false, true));
+        add(makeSuit(hero_modes::captainAmerica, "CLASSIC", "alexseagle2004", "CC BY", 0, "Suit_captainAmerica_4", false, true));
+        add(makeSuit(hero_modes::daredevil, "BORN AGAIN S2", "YE YE", "CC BY", 0, "Suit_daredevil_1", false, true));
+        add(makeSuit(hero_modes::daredevil, "NETFLIX", "VLTXD", "CC BY", 0, "Suit_daredevil_2", false, true));
+        add(makeSuit(hero_modes::daredevil, "YELLOW AND RED", "AtoMichael Editz", "CC BY", repMost, "Suit_daredevil_3", true, true));
+        add(makeSuit(hero_modes::hulk, "GREY", "3D MODELS", "CC BY", 0, "Suit_hulk_1", false, true));
+        add(makeSuit(hero_modes::hulk, "PROFESSOR", "Shivam.Yadav", "CC BY", 0, "Suit_hulk_2", false, true));
+        add(makeSuit(hero_modes::hulk, "MAESTRO", "YE YE", "CC BY", repMost, "Suit_hulk_4", true, true));
+        add(makeSuit(hero_modes::wolverine, "CLASSIC", "stokissout", "CC BY", 0, "Suit_wolverine_1", false, true));
+        add(makeSuit(hero_modes::wolverine, "LEGENDARY", "LombaxLover2K", "CC BY", 0, "Suit_wolverine_2", false, true));
+        add(makeSuit(hero_modes::wolverine, "JACKET AND JEANS", "Light.k", "CC BY", 0, "Suit_wolverine_3", false, true));
+        add(makeSuit(hero_modes::wolverine, "WEAPON X", "AssetGoat", "CC BY", repMost, "Suit_wolverine_4", true, true));
+        add(makeSuit(hero_modes::wolverine, "D AND W", "BlendAtlas", "UNKNOWN", 0, "Suit_wolverine_5", false, true));
+        add(makeSuit(hero_modes::punisher, "VEST", "floh", "CC BY-NC", 0, "Suit_punisher_1", false, true));
+        add(makeSuit(hero_modes::punisher, "CLASSIC", "floh", "CC BY-NC", 0, "Suit_punisher_2", false, true));
+        add(makeSuit(hero_modes::thor, "RIGGED", "3D MODELS", "CC BY", 0, "Suit_thor_1", false, true));
+        add(makeSuit(hero_modes::thor, "CLASSIC", "3D MODELS", "CC BY", repMost, "Suit_thor_2", true, true));
+        add(makeSuit(hero_modes::thor, "RAGNAROK", "YE YE", "CC BY", 0, "Suit_thor_3", false, true));
+        add(makeSuit(hero_modes::greenLantern, "FILM", "DavidA3D", "CC BY-NC", 0, "Suit_greenLantern_1", false, true));
+        add(makeSuit(hero_modes::greenLantern, "INJUSTICE 2", "Neut2000", "CC BY", 0, "Suit_greenLantern_2", false, true));
+        add(makeSuit(hero_modes::greenLantern, "RENEGADE", "3D MODELS", "CC BY", repMost, "Suit_greenLantern_3", true, true));
+        add(makeSuit(hero_modes::greenLantern, "RIGGED", "3D MODELS", "CC BY", 0, "Suit_greenLantern_4", false, true));
+        add(makeSuit(hero_modes::superman, "SSKTJL", "20062020year", "CC BY", 0, "Suit_superman_1", false, true));
+        add(makeSuit(hero_modes::superman, "CLASSIC", "Allen Tseng", "CC BY", 0, "Suit_superman_2", false, true));
+        add(makeSuit(hero_modes::superman, "CAVILL", "DavidA3D", "CC BY-NC", 0, "Suit_superman_3", false, true));
+        add(makeSuit(hero_modes::superman, "DC", "Chechorams16", "CC BY", repMost, "Suit_superman_4", true, true));
+        add(makeSuit(hero_modes::punisher, "WARZONE", "spybg (Valentin Yovchev)", "CC BY", 0, "PunisherWarzone", false, true));
     }
     uint32_t suits(uint32_t hero) const {
         uint32_t n = 0;
@@ -1686,9 +1740,17 @@ class SuitCatalog {
         dirty = dirty || m != unlocked[hero];
         unlocked[hero] = m;
     }
+    // UNLOCK ALL SUITS (`all`) opens the finals too; a COMING SOON suit is never unlocked (no model).
     bool isUnlocked(uint32_t hero, uint32_t i, bool all) const {
-        return hero < hero_modes::heroes && i < suits(hero) && (all || i == 0 || (unlocked[hero] >> i & 1u));
+        const Suit* x = suit(hero, i);
+        return hero < hero_modes::heroes && x && !x->soon && (all || i == 0 || x->rep <= 0 || (unlocked[hero] >> i & 1u));
     }
+    bool comingSoon(uint32_t hero, uint32_t i) const {
+        const Suit* x = suit(hero, i);
+        return x && x->soon;
+    }
+    // USE MY OWN OR GAME SUIT (the user, 8:59): the fallback - suit 0 (the game's, or another mod's).
+    uint32_t inUse(uint32_t hero, bool all, bool ownSuit) const { return ownSuit ? 0u : current(hero, all); }
     // HERO SUIT / the popup's SUIT: the next unlocked suit of the hero (wrapping).
     uint32_t next(uint32_t hero, bool all) {
         if (hero >= hero_modes::heroes)
@@ -1717,7 +1779,11 @@ class SuitCatalog {
             std::snprintf(out, n, "SUIT: DEFAULT");
             return;
         }
-        if (!isUnlocked(hero, i, all))
+        if (x->soon)
+            std::snprintf(out, n, "%s: COMING SOON", x->name);
+        else if (!isUnlocked(hero, i, all) && x->final)
+            std::snprintf(out, n, "%s LOCKED: MAX REP (FINAL)", x->name);
+        else if (!isUnlocked(hero, i, all))
             std::snprintf(out, n, "%s LOCKED: REP %d", x->name, x->rep);
         else if (x->licence[0])
             std::snprintf(out, n, "SUIT: %s BY %s (%s)", x->name, x->artist, x->licence);

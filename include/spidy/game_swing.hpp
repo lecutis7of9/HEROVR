@@ -384,6 +384,10 @@ struct AimData {
 };
 static_assert(sizeof(Aim) == 32 && sizeof(AimData) == 96);
 constexpr uint32_t aimLeaseMs = 250;
+// Version 0.0.72 (TEST): bits 0-8 are all in use (bit 5 BATMAN, 6-7 the grapples - 0.0.7 - and 8
+// the grapple without the cape). 0.0.7 still refused anything over 31, so BATMAN's asks (bit 5 and
+// up) made the whole swing command invalid: FIXED here (cape_glide::asksMost), 0.0.7 is not touched.
+constexpr uint32_t asksMost = (1u << 9) - 1u;
 inline bool valid(const Command& c) {
     const auto& t = c.tilt;
     const float tilt = t.x * t.x + t.y * t.y + t.z * t.z + t.w * t.w;
@@ -393,7 +397,7 @@ inline bool valid(const Command& c) {
           (c.version == 6 && c.bytes == sizeof(c))) ||
         !std::isfinite(c.leap) || c.leap < 0 || c.leap > 1 || !finite(c.look) || length(c.look) > 1.01f ||
         !c.serial || c.focused > 1 || c.jump > 1 || c.leaseMs > 250 || (c.focused && !c.leaseMs) ||
-        !finite(c.move) || length(c.move) > 1.001f || !std::isfinite(c.trackingYaw) || c.asks > 31 ||
+        !finite(c.move) || length(c.move) > 1.001f || !std::isfinite(c.trackingYaw) || c.asks > asksMost ||
         !std::isfinite(c.sampleSeconds) || c.sampleSeconds <= 0 || c.sampleSeconds > .1f ||
         (c.focused && !c.sampleTimeNs) || !std::isfinite(tilt) || tilt < .99f || tilt > 1.01f)
         return false;

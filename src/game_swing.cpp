@@ -822,7 +822,9 @@ void visit(const native_rays::QueryContext& world) {
     Vec3 capeVelocity{};
     {
         const bool batman = live && (c.asks & cape_glide::askBatman) && !flown.drive;
-        const bool free = batman && !grasped && !handing && !gameRun && !yielding && !striking && collidable;
+        // Version 0.0.72: askGrappleOnly grapples with no cape (no glide after it).
+        const bool grappleOnly = live && (c.asks & cape_glide::askGrappleOnly) && !flown.drive;
+        const bool free = (batman || grappleOnly) && !grasped && !handing && !gameRun && !yielding && !striking && collidable;
         const bool wasCaped = capeGlide.on() || capeGrapple.phase() != cape_glide::idle;
         for (unsigned i = 0; i < 2; ++i) {
             const bool held = free && (c.asks & cape_glide::askGrapple[i]) && in.hands[i].tracked;
@@ -849,7 +851,7 @@ void visit(const native_rays::QueryContext& world) {
         capeData.arrivals += pulled.arrived ? 1u : 0u;
         cape_glide::In gi;
         gi.seconds = motion.dt;
-        gi.allowed = free && !pulled.drive;
+        gi.allowed = free && batman && !pulled.drive; // 0.0.72: no glide for the grapple without the cape
         gi.airborne = !body.grounded && !wall.on;
         gi.look = in.look;
         gi.velocity = body.velocity;

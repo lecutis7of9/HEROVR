@@ -117,6 +117,8 @@ enum Option : uint32_t {
     heroSuit, testUnlocks,
     // Version 0.0.72 (the user, 8:46, 8:47): ULTIMATES and HERO PERKS (hero072_progress.hpp).
     ultimates, perkBranch,
+    // Version 0.0.72 (the user, 8:59): USE MY OWN OR GAME SUIT, the alternate suits' fallback.
+    ownSuit,
     options
 };
 struct OptionInfo {
@@ -397,6 +399,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"perk_branch", "HERO PERKS", "PERKS", "Where this hero's perk points go: AUTO or a branch, live (no restart).",
      4, {"AUTO", "BRANCH 1", "BRANCH 2", "BRANCH 3"}},
+    {"own_suit", "USE MY OWN OR GAME SUIT", "OWNSUIT", "Fallback for a model glitch or crash: use your mod's or game's suit, no restart.",
+     2, {"OFF", "ON", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

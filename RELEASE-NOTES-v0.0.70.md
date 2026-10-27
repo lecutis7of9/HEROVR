@@ -29,6 +29,11 @@ installs once and is not offered again.
 - **Webs are Spider-Man's only.** With any other hero on, there are no web lines, web sounds or web pulls of any kind.
   Iron Man, Superman and Captain America fly; Batman grapples and glides; Daredevil, Punisher and Wolverine run,
   jump and climb. A punch at a far enemy lunges you to him without a web line. Nothing to restart.
+- **FLY MODE: the trigger no longer flies you when it fires a weapon** (Iron Man's repulsors, Daredevil's batons,
+  Batman's batarangs, Wolverine's claws, Punisher's guns, Cap's shield). Poses, sticks and R3 still fly. This came
+  from a player report.
+- **Captain America's shield is worn on the RIGHT arm by default.** The **SHIELD ARM** setting switches it to the
+  LEFT arm, live.
 - **Everything new is OFF until you turn it on**, including SHIELD BLOCK, which is an experiment.
 - **Guns fire along the barrel now.** Punisher's guns sit in your palm and the shot leaves the muzzle you see, so the
   sights are on target. Daredevil's batons sit in your fist.

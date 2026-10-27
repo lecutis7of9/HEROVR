@@ -80,7 +80,9 @@ class ReadOnly(unittest.TestCase):
         self.assertIn('stopAs(stoppedSlow);', CPP)
         self.assertIn('inline constexpr double budgetUs = 60;', HPP)
         self.assertIn('inline constexpr uint32_t drawCap = 4096;', HPP)
-        self.assertIn('>= drawCap)\n        return;', CPP)
+        # MIRROR TEST: a sampled frame looks at drawCap draws, and an offscreen slot's at drawCap more.
+        self.assertIn('if (frameDraws.fetch_add(1, std::memory_order_relaxed) >= drawCap) {', CPP)
+        self.assertIn('slotFrameDraws.fetch_add(1, std::memory_order_relaxed) >= drawCap)\n            return;', CPP)
 
     def test_built_into_the_vr_module(self):
         self.assertIn('src/mirror_probe.cpp)', CMAKE)

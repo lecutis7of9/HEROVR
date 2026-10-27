@@ -26,7 +26,7 @@ class V004(unittest.TestCase):
         self.assertIn('**Version 0.0.4 (build Update 38.8', (ROOT / 'docs/CHANGELOG.md').read_text(encoding='utf-8'))
 
     def test_new_settings_default_web_and_off(self):
-        self.assertEqual(rec.V004_OPTIONS, (('iron_man', ('OFF', 'ON')), ('mirror_view', ('OFF', 'TEST'))))
+        self.assertEqual(rec.V004_OPTIONS, (('iron_man', ('OFF', 'ON')), ('mirror_view', ('OFF', 'ON'))))
         self.assertEqual(L.export_value('iron_man', L.UPDATE38_DEFAULTS['iron_man']), 0)
         self.assertEqual(L.export_value('mirror_view', L.UPDATE38_DEFAULTS['mirror_view']), 0)
 

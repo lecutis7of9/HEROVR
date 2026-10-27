@@ -390,12 +390,14 @@ void solveHero(float* out, uintptr_t job, uintptr_t instance) {
             if (k <= 1.f)
                 scale = wanted.flags & native_body::calibrated
                             ? body_calibration::bodyScale(wanted.height, heroProportions)
-                            : std::clamp(wanted.height / cache.ik.eyeHeight, .85f, 1.2f);
+                            : std::clamp(wanted.height / cache.ik.eyeHeight, body_calibration::minUncalibratedScale,
+                                         body_calibration::maxUncalibratedScale);
             else if (wanted.flags & native_body::calibrated && heroProportions.eyeHeight > .5f)
                 scale = std::clamp(wanted.height / heroProportions.eyeHeight, body_calibration::minBodyScale,
                                    hero_height::maxScale(body_calibration::maxBodyScale, k));
             else
-                scale = std::clamp(wanted.height / cache.ik.eyeHeight, .85f, hero_height::maxScale(1.2f, k));
+                scale = std::clamp(wanted.height / cache.ik.eyeHeight, body_calibration::minUncalibratedScale,
+                                   hero_height::maxScale(body_calibration::maxUncalibratedScale, k));
         }
         armScale = body_calibration::armScale(wanted.armLength, scale, heroProportions);
         const float dt = lastSolve.QuadPart ? static_cast<float>(now.QuadPart - lastSolve.QuadPart) / frequency.QuadPart
@@ -563,7 +565,7 @@ void native_body::heroHeight(float k) { heroK.store(hero_height::clampFactor(k),
 void native_body::submit(const Command& next) {
     AcquireSRWLockExclusive(&commandLock);
     command = next;
-    commandDeadline = GetTickCount64() + std::min<uint32_t>(next.leaseMs, 500);
+    commandDeadline = GetTickCount64() + native_body::leaseOf(next.leaseMs); // spec: 250 ms
     ReleaseSRWLockExclusive(&commandLock);
 }
 void native_body::renderFrame() {

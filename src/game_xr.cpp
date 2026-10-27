@@ -1,4 +1,5 @@
 // Bounded first-person OpenXR integration using the game's two native views.
+#include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
 #include "spidy/baton_grip.hpp"
 #include "spidy/gun_grip.hpp"
 #include "spidy/grapple072.hpp" // Version 0.0.72 GRAPPLE (every hero who has one)
@@ -8196,11 +8197,8 @@ DWORD WINAPI run(void*) {
                         stereoScene = !code;
                         return true;
                     }
-                    if (const float h = frame.head.position.y; std::isfinite(h) && h > .8f && h < 2.4f)
-                        standingEye = standingEye <= 0 ? h
-                                      : h > standingEye
-                                          ? standingEye + (h - standingEye) * std::min(1.f, frame.seconds * 4)
-                                          : standingEye - std::min(standingEye - h, frame.seconds * .01f);
+                    // Spec 3a: up at once, down at most 1 cm/s (body_calibration::followEye, tested).
+                    standingEye = body_calibration::followEye(standingEye, frame.head.position.y, frame.seconds);
                     // Version 0.0.72 GAME BODY (EXPERIMENTAL): the strict checks' verdict, logged
                     // when it changes; the writer hooked only once they passed for this player.
                     const bool strictBody = c38(combat38::gameBody) == 1;
@@ -8210,6 +8208,7 @@ DWORD WINAPI run(void*) {
                     else if (native_game_body::running())
                         native_game_body::end();
                     const bool strictVerified = strictBody && native_game_body::verified(player.record);
+                    std::array<float, 2> gloveFist{}; // the fallback gloves' fists (glove_overlay)
                     {
                         uint32_t bodySerial{};
                         const auto said = native_game_body::state(bodySerial);
@@ -8297,6 +8296,7 @@ DWORD WINAPI run(void*) {
                             pose.hands[i] = {motion.grips[i].position - motion.anchor, motion.grips[i].orientation,
                                              tracked ? 1u : 0u, fingered.fist};
                             pose.shoot[i] = fingered.shoot;
+                            gloveFist[i] = fingered.fist;
                         }
                         pose.height = calibratedEye > 0 ? calibratedEye : standingEye;
                         pose.armLength = calibratedArm;
@@ -8398,6 +8398,14 @@ DWORD WINAPI run(void*) {
                     saved.screenPose = screenPose;
                     saved.screenAspect = SpidyFlatAspect();
                     saved.slow = moments.view(slowMotion.view());
+                    // Version 0.0.72 GAME BODY fallback (spec point 3): while the hero is not drawn as the
+                    // body (the game's switch hides him), a glove on each tracked controller (glove_overlay.hpp).
+                    if (glove_overlay::wanted(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen,
+                                              native_body::drawn()))
+                        for (unsigned i = 0; i < 2; ++i) {
+                            saved.gloveOn[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) ? 1.f : 0.f;
+                            saved.gloveFist[i] = gloveFist[i];
+                        }
                     saved.health = heroShown.update(heroShare, frame.seconds);
                     // Update 38: this frame's world-from-tracking (RING ANCHOR HAND) and the
                     // web-ball globs in its world (BALL LOOK GLOB).
@@ -9371,6 +9379,13 @@ DWORD WINAPI run(void*) {
                         for (size_t m = 0; m < saved->markFade.size(); ++m) // Version 0.0.62 HIT INDICATOR
                             if (saved->markFade[m] > 0)
                                 hit_marks::appendMark(vertices, saved->markAt[m] + travel, viewer, pixelAngle, saved->markFade[m]);
+                        for (unsigned i = 0; i < 2; ++i) // Version 0.0.72 GAME BODY fallback gloves
+                            if (saved->gloveOn[i] > 0) {
+                                Pose grip = rendered.grips[i];
+                                grip.position += travel;
+                                glove_overlay::append(vertices, grip, i == 1, saved->gloveFist[i], viewer,
+                                                      pixelAngle * length(grip.position - viewer));
+                            }
                         for (unsigned i = 0; i < 2; ++i) // Version 0.0.6 DAREDEVIL's batons
                             if (saved->batonOn[i] > 0) {
                                 if (saved->hero007.batonModel[i] && // Version 0.0.7 BATON LOOK MODEL

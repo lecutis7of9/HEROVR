@@ -21,6 +21,9 @@
 // joint's orientation as a rotation, only where its frame sends a direction.
 // Model space is the character's: +y up, the feet at the origin.
 namespace spidy::body {
+// GAME BODY spec point 3e: where the eyes sit from the head joint when a rig has no eye joints,
+// metres ahead along the head's forward and up.
+inline constexpr float eyeAhead = .1115f, eyeUp = .0505f;
 // Quaternion helpers (unit quaternions turning column vectors).
 Quat unit(Quat q);
 Quat axisAngle(Vec3 axis, float radians);

@@ -52,6 +52,11 @@ enum Flags : uint32_t {
     // roof (a vent, a duct): the legs kneel (body::Targets::kneel).
     kneel = 64,
 };
+// 0.0.72 GAME BODY spec point 3: a command expires 250 ms after it came (a longer lease, up to the
+// 500 SpidyBodySubmit accepts from older probes, is cut to 250), so a stalled game thread never
+// leaves the body following old hands for long.
+inline constexpr uint32_t maxLeaseMs = 250;
+constexpr uint32_t leaseOf(uint32_t ms) { return ms < maxLeaseMs ? ms : maxLeaseMs; }
 struct Command {
     uint32_t magic = 0x53424443, version = 4, bytes = sizeof(Command), flags{};
     uint64_t serial{};

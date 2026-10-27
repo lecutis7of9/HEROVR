@@ -28,6 +28,22 @@ Proportions proportions(const body::Rig&);
 
 // A calibrated body's size is trusted over a wider range than the headset's
 // running height (native_body: 0.85-1.2), and its arms within this.
+// GAME BODY spec point 3a: the uncalibrated standing eye height follows the headset - up at
+// once (4/s), down at most 1 cm/s, so crouching or ducking never shrinks the body. `was` <= 0:
+// none yet (h itself). A height outside 0.8..2.4 m, or a bad frame time, keeps `was`.
+inline constexpr float eyeRise = 4.f, eyeFall = .01f;
+inline float followEye(float was, float h, float seconds) {
+    if (!(h > .8f && h < 2.4f))
+        return was;
+    if (!(was > 0))
+        return h;
+    if (!(seconds > 0) || !(seconds < 10))
+        return was;
+    return h > was ? was + (h - was) * (seconds * eyeRise < 1 ? seconds * eyeRise : 1.f)
+                   : was - (was - h < seconds * eyeFall ? was - h : seconds * eyeFall);
+}
+// GAME BODY spec point 3a: the body's scale before a T-pose calibration (eye height / rig eye height).
+constexpr float minUncalibratedScale = .85f, maxUncalibratedScale = 1.2f;
 constexpr float minBodyScale = .7f, maxBodyScale = 1.3f, minArmScale = .8f, maxArmScale = 1.25f;
 // The body's scale for a player whose eyes are `eyeHeight` above the floor.
 float bodyScale(float eyeHeight, const Proportions& = {});

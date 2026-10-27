@@ -13,10 +13,17 @@ No new game address: every blow uses the CONFIRMED damage path, healing and SHIE
   zip at up to 24 m/s, vault over the edge); the grapple gun model ("Batman's Grapple Gun" by Falxx, CC BY 4.0,
   `Models\GrappleGun`) is drawn in the firing hand with the line from its muzzle, holstered on that hand's hip otherwise; arms out in the air glide (lean/dip one arm to turn, tuck to dive, raise
   to pull up; drop the arms or land to stop). No webs and no flight for BATMAN.
+- BATMAN batarang throw: the batarang shows in a hand only while its trigger is held (never idle, never during a
+  grapple press) and is thrown on release at the target the aim assist picks then, on a slight curve (~12 degrees,
+  mirrored per hand) that still ends on the target; CHAIN and the return are unchanged. No target: a slight arc onto
+  the aim, then straight.
+- BATMAN smoke pellet: a grip press starting at the front of the belt (0.55-0.95 m below the head, within 0.09 m of
+  the middle, 0.05-0.40 m ahead; clear of the hip holsters) takes a pellet; letting go throws it with the hand's
+  velocity; it bursts into smoke on the floor, on an enemy or after 3 s. Smoke no longer puffs on batarang hits.
 - Webs are Spider-Man's only: with any other hero the bridge gets no web triggers or grips, no aim markers, no web yank
   and no Y web strike (a far punch lunges without a line). Live, no restart.
 - New heroes, all OFF by default (one hero at a time): BATMAN (batarangs with BATARANG CHAIN, grapple gun, cape glide,
-  smoke as a look only), SUPERMAN (heat vision, COLD BREATH - real tick blows, nobody is frozen -, super strength, the SUPERSONIC
+  smoke pellets - the smoke is a look only), SUPERMAN (heat vision, COLD BREATH - real tick blows, nobody is frozen -, super strength, the SUPERSONIC
   dash), PUNISHER (two pistols and a sawed-off, holsters, EASY RELOAD), WOLVERINE (claws hitting 3x a punch, healing) and CAPTAIN AMERICA
   (shield worn, drawn, thrown with SHIELD CHAIN, bash; SHIELD BLOCK is an OFF-by-default experiment).
 - Guns fire along the barrel: pistols and sawed-off sit in the palm from the OpenXR grip pose and shots leave the drawn

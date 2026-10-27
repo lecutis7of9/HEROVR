@@ -4,8 +4,8 @@
 // Version 0.0.7 HERO PROFILES: BATMAN, WOLVERINE, SUPERMAN and PUNISHER (hero_modes::Hero 4-7).
 // Every hit here is a blow on sm2_damage's path (DirectDamage, CONFIRMED in rep0050: 34 queued, 34
 // sent, 0 faults); the amounts are the mod's own choices (estimates, like 0.0.6's batonHit).
-//  - BATMAN: a batarang in each hand (hero_modes::Baton, two in all). The trigger throws that hand's
-//    batarang at the enemy the strong aim assist picks; every hit is a batarangHit blow; after each
+//  - BATMAN: a batarang for each hand (hero_modes::Baton, two in all). Holding the trigger shows it in
+//    that hand; letting go throws it, on a slight curve, at the enemy the strong aim assist picks; every hit is a batarangHit blow; after each
 //    hit it rolls BATARANG CHAIN (default 25%) to bounce to the nearest other enemy within 5 m - at
 //    most 3 enemies in all (hero_modes::batonMaxChains), then it comes back. GRAPPLE GUN and
 //    CAPE GLIDE: cape_glide.hpp (the trigger aimed above level with no enemy in the sights grapples;
@@ -27,10 +27,13 @@
 //    and reload (Gun): EASY RELOAD AUTO refills an empty gun after a short wait; REALISTIC drops the
 //    magazine (or breaks the sawed-off open) with a quick downward flick of the gun and reloads it
 //    when the gun touches your hip. Spent cases fly out (Shells, a look, capped at shellsMost).
-//  - BATMAN's SMOKE: a puff where a batarang strikes (Smoke) - a look only, it hides nothing.
+//  - BATMAN's SMOKE PELLET: grip with a hand at the front of the belt to take one, let go to throw it
+//    (the hand's own speed, then gravity); it bursts into SMOKE where it lands or hits (SmokePellets).
+//    SMOKE (Smoke) is a look only, it hides nothing.
 // Pure; no game memory, no address.
 #include "spidy/extras385.hpp"
 #include "spidy/hero_modes.hpp"
+#include "spidy/holster.hpp"
 #include "spidy/math.hpp"
 #include "spidy/sm2_damage.hpp"
 
@@ -58,6 +61,9 @@ inline float batarangChance(uint32_t value) {
     return value < 5 ? chances[value] : .25f;
 }
 inline constexpr uint32_t batarangsInAll = 2; // one in each hand
+// BATARANG THROW CURVE: each batarang's flight leans this far off the straight line (hero_modes::Baton::
+// curve) - a slight arc, the left hand's one way and the right's the other, that still ends on the target.
+inline constexpr float batarangCurve = .21f; // radians, ~12 degrees
 
 // ---- WOLVERINE ---------------------------------------------------------------------------------
 // The claws from the hand along its aim: grip 5 cm ahead of the knuckles, tips 33 cm out (the
@@ -405,7 +411,7 @@ inline sm2_damage::Blow superPunch() { return {2.f * hero_modes::punchUnitHp, 5,
 // There is no CONFIRMED ground-speed control, so nothing on foot changes.
 
 // ---- BATMAN: SMOKE (a visual only) ----------------------------------------------------------------
-// A puff where a batarang strikes: grey soft discs swelling and fading over smokeSeconds. It hides
+// A puff where a SMOKE PELLET bursts: grey soft discs swelling and fading over smokeSeconds. It hides
 // nothing from enemies (no CONFIRMED stealth or blind function): looks only.
 inline constexpr float smokeSeconds = 1.6f;
 inline constexpr uint32_t smokeMost = 6;
@@ -432,6 +438,124 @@ struct Smoke {
         uint32_t n = 0;
         for (const auto& p : puffs)
             n += p.age < smokeSeconds;
+        return n;
+    }
+};
+
+// ---- BATMAN: SMOKE PELLET (the throw; the burst is Smoke, still a visual only) --------------------
+// The belt buckle: a box at the FRONT CENTRE of the waist in holster::bodyPoint's terms (metres below
+// the head, to the body's right, ahead). It sits between the hips (holster::inZone's hips begin
+// holster::hipSide = .10 m out each side, where the grapple gun hangs at .22 m) and wholly in front,
+// so it never overlaps a hip, the back or a back pocket.
+inline constexpr float beltBelow = .55f, beltLow = .95f, beltSide = .09f, beltNear = .05f, beltFar = .40f;
+inline bool atBelt(holster::BodyPoint p) {
+    return std::isfinite(p.below) && std::isfinite(p.side) && std::isfinite(p.ahead) && p.below >= beltBelow &&
+           p.below <= beltLow && std::abs(p.side) <= beltSide && p.ahead >= beltNear && p.ahead <= beltFar;
+}
+inline constexpr float pelletGravity = 9.8f, pelletFloor = 1.6f /* m below the head */, pelletSeconds = 3.f,
+                       pelletHitRadius = .25f, pelletFastest = 30.f;
+// One pellet per hand: a grip PRESS (holster::pressed) that starts at the belt takes it (that grip is
+// the pellet's - claimed - until let go: no web, zip or climb); letting go (holster::released) throws
+// it with the hand's release velocity. It falls under gravity and bursts where it reaches the floor
+// (pelletFloor below the head), passes an enemy's body, or after pelletSeconds.
+struct SmokePellets {
+    enum State : uint32_t { none = 0, held, thrown };
+    struct One {
+        uint32_t state = none;
+        Vec3 at{}, velocity{};
+        float age = 0;
+    };
+    One hands[2]{};
+    Vec3 last[2]{}, handVelocity[2]{};
+    bool haveLast[2]{}, down[2]{};
+    uint64_t grabs{}, throws{}, bursts{}, refused{};
+    // The grips, at the grip arbitration. Returns the claimed hands (bit 1 << i); grabbed: the hands
+    // that took a pellet this frame.
+    uint32_t grip(float dt, bool play, Vec3 head, const holster::BodyYaw& body, const Vec3* hand,
+                  const bool* tracked, const float* squeeze, const bool* busy, uint32_t* grabbed = nullptr) {
+        const float t = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+        uint32_t claimed = 0, took = 0;
+        for (unsigned i = 0; i < 2; ++i) {
+            const bool live = tracked[i] && finite(hand[i]);
+            if (live) {
+                if (haveLast[i] && t > 1e-4f)
+                    handVelocity[i] = handVelocity[i] * .4f + ((hand[i] - last[i]) / t) * .6f;
+                last[i] = hand[i];
+                haveLast[i] = true;
+            } else {
+                haveLast[i] = false;
+            }
+            const float sq = std::isfinite(squeeze[i]) ? squeeze[i] : 0.f;
+            const bool wasDown = down[i];
+            down[i] = sq >= holster::pressed || (wasDown && sq > holster::released);
+            One& p = hands[i];
+            if (p.state == held) {
+                if (!play) { // the game's pause / a menu: back in the belt, no throw
+                    p.state = none;
+                } else if (!down[i]) {
+                    Vec3 v = handVelocity[i];
+                    const float sp = length(v);
+                    if (!finite(v))
+                        v = {};
+                    else if (sp > pelletFastest)
+                        v = v * (pelletFastest / sp);
+                    p.state = thrown;
+                    p.velocity = v;
+                    p.age = 0;
+                    ++throws;
+                } else {
+                    if (live)
+                        p.at = hand[i];
+                    claimed |= 1u << i;
+                }
+                continue;
+            }
+            if (!play || !live || !down[i] || wasDown || !body.valid || !finite(head))
+                continue;
+            if (!atBelt(holster::bodyPoint(hand[i], head, body)))
+                continue;
+            if (busy[i] || p.state == thrown) { // a hand on a web or a wall; this hand's pellet still flying
+                ++refused;
+                continue;
+            }
+            p.state = held;
+            p.at = hand[i];
+            p.velocity = {};
+            ++grabs;
+            claimed |= 1u << i;
+            took |= 1u << i;
+        }
+        if (grabbed)
+            *grabbed = took;
+        return claimed;
+    }
+    // The thrown pellets' flight. Returns how many burst this frame (their points in burstAt[0..1]).
+    uint32_t fly(float dt, Vec3 head, const BatonEnemy* list, uint32_t count, Vec3* burstAt) {
+        const float t = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+        uint32_t n = 0;
+        for (auto& p : hands) {
+            if (p.state != thrown)
+                continue;
+            const Vec3 was = p.at;
+            p.velocity.y -= pelletGravity * t;
+            p.at += p.velocity * t;
+            p.age += t;
+            bool burst = !finite(p.at) || p.age >= pelletSeconds || (finite(head) && p.at.y <= head.y - pelletFloor);
+            for (uint32_t e = 0; !burst && list && e < count; ++e) {
+                const Vec3 c = list[e].chest;
+                if (list[e].id && !list[e].down && finite(c) &&
+                    hero_modes::segmentGap(was, p.at, c - Vec3{0, 1.f, 0}, c + Vec3{0, .6f, 0}) <= pelletHitRadius)
+                    burst = true;
+            }
+            if (!burst)
+                continue;
+            if (finite(head) && finite(p.at) && p.at.y < head.y - pelletFloor)
+                p.at.y = head.y - pelletFloor; // on the floor, not under it
+            if (burstAt && finite(p.at))
+                burstAt[n++] = p.at;
+            p.state = none;
+            ++bursts;
+        }
         return n;
     }
 };

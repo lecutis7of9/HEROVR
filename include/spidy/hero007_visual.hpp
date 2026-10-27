@@ -91,6 +91,9 @@ struct Draw {
     const mesh_model::Mesh* grappleGunModel{};
     bool grapple[2]{};
     Vec3 grappleFrom[2]{}, grappleTo[2]{};
+    // Version 0.0.7 BATMAN SMOKE PELLET: each hand's pellet, in the hand or in the air (false: none).
+    bool pellet[2]{};
+    Vec3 pelletAt[2]{};
 };
 
 void appendPistol(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);
@@ -128,6 +131,8 @@ void appendHolster(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float 
 void appendHeatBeam(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle, float fade);
 void appendFreezeBreath(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle, float fade);
 void appendSmoke(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer);
+// BATMAN's smoke pellet: a small dark ball (about 4 cm) with a glint.
+void appendPellet(std::vector<Vertex>& out, Vec3 at, Vec3 viewer);
 void appendShell(std::vector<Vertex>& out, Vec3 at, Vec3 way, bool shotgun, float age, Vec3 viewer, float pixelAngle);
 void appendAmmo(std::vector<Vertex>& out, const char* text, const Item& gun, Vec3 viewer);
 // One item by its look (with its holster when it has one).
@@ -139,12 +144,12 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
 namespace budget {
 inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 1000, club = 1200,
                         holster = 400, shield = 2100, batarangModel = 3 * mesh_model::drawTriangles, model = 3 * mesh_model::drawTriangles,
-                        cable = 600, grapple = 1800, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
+                        cable = 600, grapple = 1800, pellet = 200, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
 // The whole frame's worst case: 2 held + 4 worn + 2 flying + beam + smoke + shells + 2 readouts
-// (+ 2 cables, 2 grapple lines; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,
+// (+ 2 cables, 2 grapple lines, 2 smoke pellets; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,
 // worn or flying slot).
 inline constexpr size_t frame = 2 * std::max(sawedOff, model) + 4 * (std::max(sawedOff, model) + holster) + 2 * cable + 2 * grapple + 2 * std::max(batarang, batarangModel) + freeze +
-                                drawSmokes * smoke + drawShells * shell + 2 * ammo;
+                                drawSmokes * smoke + drawShells * shell + 2 * ammo + 2 * pellet;
 static_assert(shield <= model, "the shield fits any item slot's budget");
 } // namespace budget
 } // namespace spidy::hero007

@@ -5893,7 +5893,7 @@ DWORD WINAPI run(void*) {
                                                   heroIs == hero_modes::daredevil ? "a baton in each hand, trigger throws, punches x DAREDEVIL PUNCH, sonar look, no webs"
                                                   : heroIs == hero_modes::hulk    ? "4x charged jump, one-punch knockouts, brutes 2-3, no webs"
                                                   : heroIs == hero_modes::ironMan ? "repulsors and the chest beam, no webs"
-                                                  : heroIs == hero_modes::batman  ? "0.0.7: a batarang per hand (trigger, chain), LT+RT grapple, smoke, no other webs"
+                                                  : heroIs == hero_modes::batman  ? "0.0.7: hold, let go to throw a batarang; grip at the belt for smoke; no webs"
                                                   : heroIs == hero_modes::wolverine ? "0.0.7: claws on the trigger, healing, no webs"
                                                   : heroIs == hero_modes::superman  ? "0.0.7: both triggers heat vision (hand at mouth: cold breath), super strength, FLY MODE superspeed"
                                                   : heroIs == hero_modes::punisher  ? "0.0.7: grip at a hip or behind the back to draw, trigger fires, EASY RELOAD"

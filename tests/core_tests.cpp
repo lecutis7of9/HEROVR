@@ -23586,13 +23586,13 @@ int main() {
         p.draw(d, Pose{}, in, 0);
         check(d.any && d.worn[0].look == lookGrappleGun && d.worn[0].holster == 1 && d.worn[0].at.x > 0,
               "at rest: the grapple gun on the right hip");
-        check(d.held[1].look == lookBatarang && d.held[0].look == lookBatarang, "at rest: a batarang in each hand");
+        check(d.held[1].look == lookNone && d.held[0].look == lookNone, "at rest: both hands empty (no batarang idle)");
         in.hands[1].trigger = 1;
         p.step(in, o);
         p.draw(d, Pose{}, in, 0);
         check(p.grappling[1] && d.held[1].look == lookGrappleGun && d.held[1].palm && length(d.held[1].at - Vec3{.25f, 1.4f, -.3f}) < 1e-4f,
               "aimed up, pressed: the gun in the firing hand from its grip pose");
-        check(d.worn[0].look == lookNone && d.held[0].look == lookBatarang, "the hip is empty and the other hand keeps its batarang");
+        check(d.worn[0].look == lookNone && d.held[0].look == lookNone, "the hip is empty and the other (idle) hand stays empty");
         // The line from the muzzle with the model; from the hand without it; no gun drawn without it.
         const Vec3 viewer{0, 1.6f, 0};
         d.grapple[1] = true;
@@ -23686,10 +23686,238 @@ int main() {
             bat.step(in, o);
             batHits += static_cast<int>(o.blowCount);
         }
-        check(batHits == 1 && bat.smokes == 1, "a batarang hit: one blow and its smoke puff");
+        check(batHits == 1 && bat.smokes == 0 && bat.smoke.live() == 0, "a batarang hit: one blow and NO smoke (the pellet's now)");
         Draw d;
         bat.draw(d, Pose{}, in, 0);
-        check(d.any && d.held[0].look == lookBatarang && d.held[1].look == lookBatarang, "a batarang in each hand");
+        check(d.any && d.held[0].look == lookNone && d.held[1].look == lookNone, "back and idle: no batarang in either hand");
+    });
+    test("Version 0.0.7: BATMAN BATARANG THROW - in the hand on press, thrown on release, never idle, a curve onto the locked target", [] {
+        using namespace spidy::hero007;
+        using spidy::hero_modes::BatonEnemy;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}};
+        const BatonEnemy foe[1] = {{41, {1.f, 1.3f, -9}}};
+        in.list = foe;
+        in.count = 1;
+        const Vec3 hand{.2f, 1.3f, -.3f};
+        const Vec3 aim = normalized(foe[0].chest - hand);
+        in.hands[0] = {{-.2f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+        in.hands[1] = {hand, aim, true, 0, 0, false};
+        PlayOutput o;
+        Draw d;
+        bool idleShown = false;
+        for (int f = 0; f < 30; ++f) {
+            p.step(in, o);
+            p.draw(d, Pose{}, in, 0);
+            idleShown = idleShown || d.held[0].look == lookBatarang || d.held[1].look == lookBatarang;
+        }
+        check(!idleShown && p.batarangs[1].inHandNow(), "idle: never shown, still in hand (ready)");
+        in.hands[1].trigger = 1;
+        bool shownHeld = true;
+        for (int f = 0; f < 20; ++f) {
+            PlayOutput ho;
+            p.step(in, ho);
+            p.draw(d, Pose{}, in, 0);
+            shownHeld = shownHeld && d.held[1].look == lookBatarang && d.held[0].look == lookNone;
+        }
+        check(shownHeld && p.batarangs[1].inHandNow() && p.batarangs[1].throws == 0,
+              "press and hold: the batarang appears in that hand and is NOT thrown yet");
+        in.hands[1].trigger = 0;
+        PlayOutput ro;
+        p.step(in, ro);
+        p.draw(d, Pose{}, in, 0);
+        check(p.batarangs[1].throws == 1 && !p.batarangs[1].inHandNow() && p.batarangs[1].targetId == 41 &&
+                  d.held[1].look == lookNone && d.flying[1].look == lookBatarang && ((ro.sounds >> spidy::sfx::batonWhoosh) & 1),
+              "release: thrown, the target locked at release, drawn in the air not the hand");
+        // The flight: a gentle arc off the straight line that ENDS on the target.
+        const Vec3 from = hand, to = foe[0].chest, line = normalized(to - from);
+        float off = 0;
+        bool hit = false;
+        Vec3 hitAt{};
+        for (int f = 0; f < 200 && !hit; ++f) {
+            const Vec3 at = p.batarangs[1].position;
+            const Vec3 r = at - from;
+            off = std::max(off, length(r - line * dot(r, line)));
+            PlayOutput fo;
+            p.step(in, fo);
+            if (fo.blowCount == 1 && fo.blows[0].id == 41) {
+                hit = true;
+                hitAt = p.batarangs[1].position;
+            }
+        }
+        check(hit && length(hitAt - to) < spidy::hero_modes::batonHitRadius + spidy::hero_modes::batonSpeed / 90.f + .01f,
+              "the curve's end point is the locked target (within the hit radius)");
+        check(off > .15f && off < 1.5f, "a slight curve: " + std::to_string(off) + " m off the straight line at most");
+        check(p.smokes == 0, "no smoke from the hit");
+        // The left hand curves the other way (mirrored).
+        {
+            spidy::hero_modes::Baton l, r;
+            l.curve = r.curve = batarangCurve;
+            l.curveSign = -1;
+            const Vec3 a = l.curvedVelocity({0, 0, -10}), b = r.curvedVelocity({0, 0, -10});
+            check(a.x * b.x < 0 && std::abs(a.z + spidy::hero_modes::batonSpeed * std::cos(batarangCurve)) < 1e-3f,
+                  "the hands bend opposite ways, closing at cos(curve) of the speed");
+        }
+        // No target: the same slight curve onto the aim, then on along it.
+        {
+            Play q;
+            PlayInput qi = in;
+            qi.list = nullptr;
+            qi.count = 0;
+            qi.hands[1] = {hand, {0, 0, -1}, true, 1, 0, false};
+            PlayOutput qo;
+            q.step(qi, qo);
+            qi.hands[1].trigger = 0;
+            q.step(qi, qo);
+            float side = 0;
+            for (int f = 0; f < 50; ++f) {
+                q.step(qi, qo);
+                side = std::max(side, std::abs(q.batarangs[1].position.x - hand.x));
+            }
+            const Vec3 at = q.batarangs[1].position;
+            check(q.batarangs[1].throws == 1 && side > .1f && side < 1.5f && at.z < -8.f,
+                  "no target: along the aim with a slight curve: " + std::to_string(side) + " m");
+        }
+        // A grapple press (aimed up, nobody in the sights): the gun, never the batarang; no throw on release.
+        {
+            Play g;
+            PlayInput gi = in;
+            gi.list = nullptr;
+            gi.count = 0;
+            gi.hands[1] = {hand, normalized(Vec3{0, .7f, -1}), true, 1, 0, false};
+            bool bat = false;
+            for (int f = 0; f < 10; ++f) {
+                PlayOutput go;
+                g.step(gi, go);
+                g.draw(d, Pose{}, gi, 0);
+                bat = bat || d.held[1].look == lookBatarang;
+            }
+            gi.hands[1].trigger = 0;
+            PlayOutput go;
+            g.step(gi, go);
+            check(!bat && g.batarangs[1].throws == 0, "a grapple press shows no batarang and throws none");
+        }
+        // DAREDEVIL's batons and the shield stay straight (curve 0).
+        spidy::hero_modes::Baton dd;
+        check(dd.curve == 0, "the curve is BATMAN's only");
+    });
+    test("Version 0.0.7: BATMAN SMOKE PELLET - grip at the belt, throw on release, burst into smoke", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}}; // facing -z: right is +x, ahead -z
+        const Vec3 belt{0, 1.7f - .75f, -.2f}, hip{.22f, 1.7f - .78f, -.02f};
+        check(atBelt({.75f, 0, .2f}) && !atBelt({.78f, .22f, -.02f}) && !atBelt({.78f, -.22f, -.02f}),
+              "the belt is not a hip (the gun's)");
+        bool clash = false;
+        for (float b = beltBelow; b <= beltLow; b += .02f)
+            for (float sd = -beltSide; sd <= beltSide; sd += .01f)
+                for (float a = beltNear; a <= beltFar; a += .02f) {
+                    const spidy::holster::BodyPoint q{b, sd, a};
+                    for (uint32_t z = 0; z < spidy::holster::zones; ++z)
+                        clash = clash || spidy::holster::inZone(z, q);
+                }
+        check(!clash, "no point of the belt is in any holster zone (hips, back)");
+        auto at = [&](unsigned i, Vec3 pos, float squeeze, bool busy = false) {
+            in.hands[i] = {pos, {0, 0, -1}, true, 0, squeeze, busy};
+        };
+        at(0, {-.3f, 1.2f, -.3f}, 0);
+        at(1, belt, 0);
+        PlayOutput o;
+        p.holsterStep(in, o);
+        p.step(in, o);
+        at(1, belt, 1);
+        PlayOutput g;
+        p.holsterStep(in, g);
+        p.step(in, g);
+        Draw d;
+        p.draw(d, Pose{}, in, 0);
+        check(p.pellets.hands[1].state == SmokePellets::held && (g.claimed & 2) && !(g.claimed & 1) && d.pellet[1] &&
+                  length(d.pelletAt[1] - belt) < 1e-4f && !d.pellet[0],
+              "grip at the belt: a pellet in that hand, that grip claimed (no climb or web)");
+        // Throw: the hand moves forward and up at ~6 m/s, then lets go.
+        Vec3 h = belt;
+        for (int f = 0; f < 8; ++f) {
+            h += Vec3{0, 2.f, -6.f} / 90.f;
+            at(1, h, 1);
+            PlayOutput t;
+            p.holsterStep(in, t);
+            p.step(in, t);
+        }
+        h += Vec3{0, 2.f, -6.f} / 90.f; // still moving as the grip opens
+        at(1, h, 0);
+        PlayOutput r;
+        p.holsterStep(in, r);
+        p.step(in, r);
+        const Vec3 v = p.pellets.hands[1].velocity;
+        check(p.pellets.hands[1].state == SmokePellets::thrown && !(r.claimed & 2) && v.z < -4.f && v.y > 1.f,
+              "let go: thrown with the hand's release velocity");
+        int f = 0;
+        for (; f < 400 && p.pellets.hands[1].state == SmokePellets::thrown; ++f) {
+            PlayOutput t;
+            p.holsterStep(in, t);
+            p.step(in, t);
+        }
+        const auto& puff = p.smoke.puffs[(p.smoke.next + smokeMost - 1) % smokeMost];
+        check(p.smokes == 1 && p.smoke.live() == 1 && std::abs(puff.at.y - (1.7f - pelletFloor)) < 1e-3f && puff.at.z < -2.f,
+              "it lands ahead and bursts into smoke on the floor");
+        // An enemy in the way: it bursts on him.
+        {
+            Play e;
+            PlayInput ei = in;
+            const spidy::hero_modes::BatonEnemy foe[1] = {{5, {0, 1.3f, -2.f}}};
+            ei.list = foe;
+            ei.count = 1;
+            e.setHero(ei.hero);
+            e.pellets.hands[0] = {SmokePellets::thrown, {0, 1.3f, -.5f}, {0, 0, -8.f}, 0};
+            for (int k = 0; k < 60 && e.pellets.hands[0].state == SmokePellets::thrown; ++k) {
+                PlayOutput t;
+                e.step(ei, t);
+                check(t.blowCount == 0, "the pellet does no damage");
+            }
+            const auto& pf = e.smoke.puffs[(e.smoke.next + smokeMost - 1) % smokeMost];
+            check(e.smokes == 1 && pf.at.z < -1.5f && pf.at.z > -2.5f, "it bursts on the enemy it hits");
+        }
+        // Grips elsewhere and refusals.
+        {
+            Play q;
+            PlayInput qi = in;
+            qi.hands[0] = {hip, {0, 0, -1}, true, 0, 1, false}; // the hip (the gun's): nothing
+            qi.hands[1] = {belt, {0, 0, -1}, true, 0, 1, true};  // busy (on a wall): nothing
+            PlayOutput a;
+            q.holsterStep(qi, a);
+            PlayOutput b;
+            q.holsterStep(qi, b);
+            check(q.pellets.grabs == 0 && b.claimed == 0, "no pellet from a hip or a busy hand");
+            Play w;
+            PlayInput wi = in;
+            wi.hands[1] = {{.3f, 1.2f, -.5f}, {0, 0, -1}, true, 0, 1, false};
+            PlayOutput c;
+            w.holsterStep(wi, c);
+            wi.hands[1].position = belt; // squeezed elsewhere, slid onto the belt: no grab
+            PlayOutput c2;
+            w.holsterStep(wi, c2);
+            check(w.pellets.grabs == 0 && c2.claimed == 0, "a grip must START at the belt");
+            Play o2;
+            PlayInput oi = in;
+            oi.hero = spidy::hero_modes::punisher;
+            oi.hands[1] = {belt, {0, 0, -1}, true, 0, 0, false};
+            PlayOutput z;
+            o2.holsterStep(oi, z);
+            oi.hands[1].squeeze = 1;
+            o2.holsterStep(oi, z);
+            check(o2.pellets.grabs == 0, "nobody else has smoke pellets");
+        }
+        std::vector<spidy::Vertex> pv;
+        appendPellet(pv, {0, 1.f, -.5f}, {0, 1.6f, 0});
+        check(!pv.empty() && pv.size() <= budget::pellet, "the pellet look in budget: " + std::to_string(pv.size()));
     });
     test("Version 0.0.7: the looks keep their vertex budgets", [] {
         using namespace spidy::hero007;

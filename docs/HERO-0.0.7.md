@@ -46,10 +46,10 @@ CONFIRMED HeroHealth record. The damage amounts are the mod's own estimates.
 
 | Feature | Real | Visual only / not built |
 |---|---|---|
-| Batarangs (one in each hand), CHAIN (max 3) and return | Each hit is a real blow | Flight and return are drawn |
+| Batarangs (hold the trigger: one appears in that hand; let go: thrown on a slight curve onto the target), CHAIN (max 3) and return | Each hit is a real blow | Flight and return are drawn |
 | Grapple gun | Real movement: the bridge's ray finds the rooftop or ledge, the bridge's safe velocity path (FLY MODE's) pulls him up and over | The line and hook are drawn |
 | Cape glide | Real movement on the same path: arms out glide, dip an arm to turn, tuck to dive, raise to pull up | — (no cape model) |
-| Smoke | — | Visual only. It hides nothing (no CONFIRMED stealth function). |
+| Smoke pellet (grip at the front of the belt, let go to throw) | — | The pellet and its smoke burst are visual only. It hides nothing (no CONFIRMED stealth function). |
 | Heat vision | Real tick blows along the gaze, 3 s on and 2 s to cool | Beam |
 | Cold breath | Real tick blows | Frost look. **Nobody is frozen** (no CONFIRMED freeze). |
 | Super strength | Real: an extra blow on a landed punch | — |
@@ -144,8 +144,11 @@ true for 0.0.62's batons.
 
 1. Start 0.0.62 settings unchanged and confirm nothing differs (all 0.0.7 options OFF).
 2. **BATMAN ON.**
-   - [ ] A batarang shows in each hand.
-   - [ ] Throw with each trigger and see a hit, smoke, and a bounce at 25%.
+   - [ ] Idle hands are empty. Hold a trigger: a batarang appears in that hand. Let go: it is thrown.
+   - [ ] It flies on a slight curve and still hits the enemy you aimed at; a bounce at 25%. No smoke on a hit.
+   - [ ] Smoke pellet: put a hand at the front of your belt and grip: a small pellet in that hand.
+         Throw it and let go of the grip: it flies with your throw and bursts into smoke where it lands
+         or hits someone. The hips (grapple gun) never give a pellet.
    - [ ] It returns after at most 3 hits.
    - [ ] No web of any kind: RT, LT+RT, RB, LB+RB, Y at range and the right stick up never web; no web
          lines, balls, aim markers or web sounds. FLY MODE ON does not fly him.
@@ -362,3 +365,23 @@ style cape glide, and every other hero's web abilities are off.
   hip. Without the model nothing is drawn (no stand-in) and the line starts at the tracked hand.
 - Tests: "Version 0.0.7: BATMAN cape glide (...)", "BATMAN grapple gun (...)", "BATMAN trigger -
   grapple aimed up with no enemy, batarang otherwise", and the grapple line's budget.
+
+## BATMAN batarang throw and smoke pellet
+
+- BATARANG THROW (`hero007::Play::stepBatman`, `Play::batReady`): the batarang is drawn in a hand
+  only while that hand's trigger is held (a press that is not the grapple's); letting go throws it at
+  the enemy the batarang aim assist picks at that moment (35 degrees, 25 m). Idle hands are empty, and
+  a grapple press never shows one. It flies on a slight curve (`hero_modes::Baton::curve`,
+  `hero007::batarangCurve` = 0.21 rad, about 12 degrees, left and right hands mirrored): the flight
+  is held at that angle off the line to the target, so it bends gently and still ends on the target.
+  Chain hops curve the same way; it still comes back. With no target it arcs onto a point 12 m along
+  the aim, then flies straight on. DAREDEVIL's batons and the shield stay straight (curve 0).
+- SMOKE PELLET (`hero007::SmokePellets`): a grip press that starts at the belt buckle takes a pellet
+  into that hand; that grip is claimed (no web, zip or climb) until let go. Letting go throws it with
+  the hand's release velocity (at most 30 m/s); it falls under gravity and bursts into the existing
+  smoke where it reaches the floor (1.6 m below the head), passes an enemy (0.25 m) or after 3 s. One
+  pellet per hand at a time. Smoke no longer puffs on batarang hits. Visual only; no damage.
+- The belt zone (body frame, metres from the head): 0.55 to 0.95 below, within 0.09 either side of the
+  middle, 0.05 to 0.40 ahead. The hip holster zones start 0.10 out each side (the grapple gun hangs at
+  0.22) and the back zones are behind, so no point of the belt is in any holster zone (tested).
+- Tests: "Version 0.0.7: BATMAN BATARANG THROW (...)" and "BATMAN SMOKE PELLET (...)".

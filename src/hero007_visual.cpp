@@ -618,6 +618,14 @@ void appendSmoke(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer) {
     glob(out, at + Vec3{-.25f * r, .2f * t, .1f * r}, viewer, r * .6f, {.42f, .43f, .45f}, a * .8f);
 }
 
+void appendPellet(std::vector<Vertex>& out, Vec3 at, Vec3 viewer) {
+    if (!ok(at) || !ok(viewer) || !inRange(at, viewer, 40.f))
+        return;
+    Guard g(out);
+    glob(out, at, viewer, .022f, {.16f, .17f, .19f}, .97f);
+    glob(out, at + (normalized(viewer - at) + Vec3{0, 1, 0}) * .006f, viewer, .008f, {.55f, .57f, .6f}, .6f);
+}
+
 void appendShell(std::vector<Vertex>& out, Vec3 at, Vec3 way, bool shotgun, float age, Vec3 viewer, float pixelAngle) {
     constexpr float seconds = 1.2f; // hero007::shellSeconds
     if (!ok(at) || !ok(way) || !ok(viewer) || !std::isfinite(pixelAngle) || !std::isfinite(age) || age < 0 ||
@@ -741,6 +749,9 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
             item(moved(it));
     for (int i = 0; i < static_cast<int>(drawSmokes); ++i)
         appendSmoke(out, d.smokeAt[i] + travel, d.smokeAge[i], viewer);
+    for (int i = 0; i < 2; ++i)
+        if (d.pellet[i])
+            appendPellet(out, d.pelletAt[i] + travel, viewer);
     for (uint32_t i = 0; i < std::min(d.shells, drawShells); ++i)
         appendShell(out, d.shellAt[i] + travel, d.shellWay[i], d.shellShotgun[i], d.shellAge[i], viewer, pixelAngle);
     if (d.beamFade > 0) {

@@ -15,7 +15,7 @@ so every launcher sees it as newer than 0.0.63.
 installs once and is not offered again.
 
 ## What's new
-- **New heroes:** **BATMAN** (batarangs in each hand that bounce between enemies and come back, smoke, a grapple gun and
+- **New heroes:** **BATMAN** (batarangs that bounce between enemies and come back, smoke pellets, a grapple gun and
   a cape glide - see below),
   **SUPERMAN** (heat vision, COLD BREATH, super strength, the SUPERSONIC dash), **PUNISHER** (two pistols and a
   sawed-off, hip and back holsters, reload), **WOLVERINE** (claws - a claws-out hit is 3x a punch - and healing) and **CAPTAIN AMERICA** (his shield:
@@ -26,6 +26,11 @@ installs once and is not offered again.
   In the air, hold your **arms out** to glide on the cape: dip one arm (raise the other) to turn, **tuck your arms**
   to dive, **raise your arms** to pull up and trade speed for height. Drop your arms or land to stop. Batman has no
   webs and no flying.
+- **Batman's batarangs and smoke pellets.** Your hands are empty until you **hold a trigger**: a batarang appears in
+  that hand. **Let go** to throw it. It flies on a slight curve and still hits the enemy you aimed at, bounces on
+  (BATARANG CHAIN) and comes back. For smoke, put a hand at the **front of your belt** and **grip** to take a smoke
+  pellet, then throw it and let go: it bursts into smoke where it lands or hits. The smoke is a look only, and
+  batarang hits no longer puff smoke.
 - **Webs are Spider-Man's only.** With any other hero on, there are no web lines, web sounds or web pulls of any kind.
   Iron Man, Superman and Captain America fly; Batman grapples and glides; Daredevil, Punisher and Wolverine run,
   jump and climb. A punch at a far enemy lunges you to him without a web line. Nothing to restart.

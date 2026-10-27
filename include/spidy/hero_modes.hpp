@@ -176,6 +176,7 @@ inline constexpr float batonRicochet = .25f;   // s bouncing off him before it h
 inline constexpr float batonMaxOut = 4.f;      // s: never lost; back in the hand after this
 inline constexpr float batonChainRange = 5.f;  // m from the enemy it hit to the next (0.0.62; 0.0.5-0.0.6: 6)
 inline constexpr uint32_t batonMaxChains = 2;  // bounces per throw: 3 enemies at most (0.0.62; 0.0.5-0.0.6: 3)
+inline constexpr float curveAim = 12.f;      // m: BATARANG CURVE with no target arcs onto the aim this far out
 // Version 0.0.62: the closest distance between segment a-b and segment c-d (metres).
 inline float segmentGap(Vec3 a, Vec3 b, Vec3 c, Vec3 d) {
     const Vec3 u = b - a, v = d - c, w = a - c;
@@ -224,6 +225,23 @@ struct Baton {
     float chainChance = 1.f;
     Roll roll{};
     uint32_t chainRollsWon{}, chainRollsLost{};
+    // Version 0.0.7 BATMAN BATARANG CURVE: the flight leans `curve` radians off the straight line to
+    // where it is going (0, the default: straight - DAREDEVIL's batons, the shield). Held at that angle
+    // the path is a gentle arc that still ENDS on the target (it closes in at cos(curve) of its speed).
+    // With no target it arcs onto aimPoint (curveAim metres along the aim), then flies on straight.
+    float curve = 0;
+    float curveSign = 1; // +1 bends one way, -1 the other (the hand's side)
+    Vec3 aimPoint{};
+    bool toAimPoint{};
+    Vec3 curvedVelocity(Vec3 to) const {
+        const float len = length(to);
+        const Vec3 d = len > 1e-4f ? to / len : Vec3{0, 0, -1};
+        Vec3 side = cross(d, Vec3{0, 1, 0});
+        if (length(side) < 1e-3f)
+            side = cross(d, Vec3{1, 0, 0});
+        side = normalized(side);
+        return (d * std::cos(curve) + side * (curveSign * std::sin(curve))) * batonSpeed;
+    }
 
     // Version 0.0.62: the first enemy (index, -1 none) whose body (chest -1.0 m .. +0.6 m) the
     // segment a-b passes within batonHitRadius of; ties: the one nearest a.
@@ -345,7 +363,7 @@ struct Baton {
         state = flying;
         const Vec3 to = target - position;
         const float len = length(to);
-        velocity = (len > 1e-4f ? to / len : Vec3{0, 0, -1}) * batonSpeed;
+        velocity = curve > 0 ? curvedVelocity(to) : (len > 1e-4f ? to / len : Vec3{0, 0, -1}) * batonSpeed;
         return true;
     }
     // One frame. trigger: held now; aim: the assisted aim (a unit vector); enemy/haveEnemy: the
@@ -366,6 +384,12 @@ struct Baton {
                 const Vec3 to = haveEnemy ? enemy - hand : aim;
                 const float len = length(to);
                 velocity = (len > 1e-4f ? to / len : Vec3{0, 0, -1}) * batonSpeed;
+                toAimPoint = false;
+                if (curve > 0) { // BATARANG CURVE: leave on the arc
+                    toAimPoint = !haveEnemy;
+                    aimPoint = hand + (len > 1e-4f ? to / len : Vec3{0, 0, -1}) * curveAim;
+                    velocity = curvedVelocity(haveEnemy ? to : aimPoint - hand);
+                }
             }
             return false;
         default:
@@ -394,7 +418,13 @@ struct Baton {
                     velocity = Vec3{0, 4, 0} - (to / std::max(len, 1e-4f)) * 6.f; // off him and up
                     return hit;
                 }
-                velocity = to / len * batonSpeed;
+                velocity = curve > 0 ? curvedVelocity(to) : to / len * batonSpeed;
+            } else if (toAimPoint) { // BATARANG CURVE with no target: arc onto the aim, then straight on
+                const Vec3 to = aimPoint - position;
+                if (length(to) < 1.f)
+                    toAimPoint = false;
+                else
+                    velocity = curvedVelocity(to);
             }
             position += velocity * dt;
             if (length(position - hand) > batonReach)

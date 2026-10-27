@@ -146,6 +146,12 @@ class Play {
     bool batTrigWas[2]{}, grappling[2]{}; // Version 0.0.7 BATMAN GRAPPLE GUN: the press's kind
     unsigned grappleHand{1};              // the hand that fired it last (its hip holsters the gun; right at first)
     holster::BodyYaw batBody;             // BATMAN: the body's heading for the gun's hip holster
+    // Version 0.0.7 BATARANG THROW: the batarang is in the hand only while a (non-grapple) trigger is
+    // held; letting go throws it. Never in an idle hand.
+    bool batReady[2]{};
+    // Version 0.0.7 SMOKE PELLET: the belt buckle's pellets (grip there, let go to throw).
+    SmokePellets pellets;
+    holster::BodyYaw pelletBody; // the body's heading at the grip arbitration (the belt's front)
     Smoke smoke;
     Shells shells;
     HeatVision heat;
@@ -183,7 +189,9 @@ class Play {
             batarangs[i] = {};
             batarangs[i].roll.state = 0x2545f491u + 977u * i;
             batarangThrowsSeen[i] = 0;
-            batTrigWas[i] = grappling[i] = false;
+            batTrigWas[i] = grappling[i] = batReady[i] = false;
+            batarangs[i].curve = batarangCurve;
+            batarangs[i].curveSign = i == 0 ? -1.f : 1.f;
             grappleHand = 1;
             batBody = {};
             claws[i].reset();
@@ -195,6 +203,8 @@ class Play {
         heatWas = freezing = false;
         beamFade = 0;
         smoke = {};
+        pellets = {};
+        pelletBody = {};
         shells = {};
         guns = {};
         guns.add(holster::leftHip, pistol);
@@ -246,6 +256,25 @@ class Play {
                               : (hero == hero_modes::daredevil && in.batonHolsters) ? &batons
                               : captainAmerica()                                    ? &shieldRack
                                                                                     : nullptr;
+        if (hero == hero_modes::batman) { // SMOKE PELLET: the belt's grips
+            pelletBody.update(in.dt, in.head.orientation.rotate(Vec3{0, 0, -1}));
+            Vec3 at[2];
+            bool tracked[2], busy[2];
+            float squeeze[2];
+            for (unsigned i = 0; i < 2; ++i) {
+                at[i] = in.hands[i].position;
+                tracked[i] = in.hands[i].tracked;
+                busy[i] = in.hands[i].busy;
+                squeeze[i] = in.hands[i].squeeze;
+            }
+            uint32_t took = 0;
+            out.claimed |= pellets.grip(in.dt, in.play, in.head.position, pelletBody, at, tracked, squeeze, busy, &took);
+            for (unsigned i = 0; i < 2; ++i)
+                if (took & (1u << i)) {
+                    out.buzz(i, .2f);
+                    out.sound(sfx::holsterTick);
+                }
+        }
         if (!rack) {
             guns.stowAll();
             batons.stowAll();
@@ -346,7 +375,8 @@ class Play {
             for (unsigned i = 0; i < 2; ++i) {
                 const auto& b = batarangs[i];
                 if (b.inHandNow()) {
-                    if (d.held[i].look != lookGrappleGun && handOk(i)) { // not while the gun is in this hand
+                    // BATARANG THROW: only while its trigger is held (never idle), never with the gun drawn.
+                    if (batReady[i] && !grappling[i] && d.held[i].look != lookGrappleGun && handOk(i)) {
                         const Vec3 a = normalized(in.hands[i].aim);
                         d.held[i] = item(lookBatarang, in.hands[i].position + a * .05f, a, gunUp(a));
                         any = true;
@@ -355,6 +385,14 @@ class Play {
                     const Vec3 way = length(b.velocity) > .1f ? normalized(b.velocity) : Vec3{0, 0, -1};
                     d.flying[i] = item(lookBatarang, b.position, way, Vec3{0, 1, 0});
                     d.flying[i].spin = b.out * 20.f;
+                    any = true;
+                }
+            }
+            for (unsigned i = 0; i < 2; ++i) { // SMOKE PELLET: in the hand or in the air
+                const auto& p = pellets.hands[i];
+                if (p.state != SmokePellets::none && finite(p.at)) {
+                    d.pellet[i] = true;
+                    d.pelletAt[i] = W(p.at);
                     any = true;
                 }
             }
@@ -558,8 +596,13 @@ class Play {
                 out.grapple[i] = true;
                 grappleHand = i;
             }
+            // BATARANG THROW: held while the (non-grapple) trigger is down - in the hand only now - and
+            // thrown on the frame it is let go, at the enemy the aim assist picks THEN (aimed).
+            const bool readyWas = batReady[i];
+            batReady[i] = trig && !grappling[i] && (readyWas || b.inHandNow());
+            const bool release = readyWas && !trig && b.inHandNow();
             const uint32_t throwsWas = b.throws;
-            const bool hit = b.update(dt, trig && !grappling[i], h.position, h.aim, in.list, in.count, aimed);
+            const bool hit = b.update(dt, release, h.position, h.aim, in.list, in.count, aimed);
             if (b.throws != throwsWas) {
                 out.buzz(i, .3f);
                 out.sound(sfx::batonWhoosh);
@@ -574,10 +617,14 @@ class Play {
                 out.blow(who, batarangHit(), at, kindBatarang);
                 out.buzz(i, .5f);
                 out.sound(sfx::batonHit);
-                smoke.add(at);
-                ++smokes;
-                ++batarangHits;
+                ++batarangHits; // no smoke: that is the SMOKE PELLET's now
             }
+        }
+        Vec3 burst[2];
+        const uint32_t bursts = pellets.fly(dt, in.head.position, in.list, in.count, burst);
+        for (uint32_t k = 0; k < bursts; ++k) {
+            smoke.add(burst[k]);
+            ++smokes;
         }
     }
     void stepWolverine(const PlayInput& in, float dt, PlayOutput& out) {

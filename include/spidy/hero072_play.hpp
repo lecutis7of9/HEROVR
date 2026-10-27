@@ -128,6 +128,13 @@ struct PlayOut {
 inline constexpr float touchRange = .65f;
 inline constexpr float hammerReach = .9f;
 inline constexpr float chainJump = 8.f, hammerFlight = .35f;
+// Build 7 THOR's throw: the release speed (the fastest of the last swingMemory s) times throwGain, kept
+// between throwSpeedLow and throwSpeedHigh m/s; out at most throwSeconds or throwRange m, back at
+// returnSpeed, caught within catchRange; it hits what passes within hammerHitRange.
+inline constexpr float throwMinSpeed = 1.4f, swingMemory = .15f, throwGain = 6.f, throwSpeedLow = 14.f, throwSpeedHigh = 30.f;
+inline constexpr float throwSeconds = 1.f, throwRange = 26.f, returnSpeed = 24.f, catchRange = .4f, hammerHitRange = 1.2f;
+// LIGHTNING BLAST (the right trigger, hammer in hand) and every bolt's life on screen.
+inline constexpr float blastRange = 30.f, blastEvery = .6f, boltSeconds = .3f;
 // Version 0.0.72 THOR HAMMER: the grip 6 cm up the handle; SHEATHED, the handle's end 20 cm under the head,
 // 15 cm behind and 12 cm right (inside the draw reach: below <= .25, ahead <= .05, side >= -.05).
 inline constexpr float hammerGrip = .06f;
@@ -216,6 +223,9 @@ class Play {
             hulk.reset();
             hammerHeld = false;
             hammerOut = 0;
+            hammerFlying = hammerBack = false;
+            for (auto& b : liveBolts)
+                b.left = 0;
         }
         const PlayOptions& o = in.o;
         const Vec3 head = in.head.position;
@@ -692,44 +702,173 @@ class Play {
             out.look.fistAlpha = std::clamp(fistShow / .45f, 0.f, 1.f);
         }
     }
+    // ---- THOR (build 7: the user's "you cant actually throw thors hammer and theres no visual lightning") ----
+    // Build 6's throw needed 2.6 m/s at the very frame the grip opened (a throw has slowed by then), and the
+    // hammer then jumped 10 m away for 0.7 s and back to the back - nothing seen flying, nothing caught. Its
+    // lightning was one frame's bolt (14 ms at 72 Hz) and only on an enemy hit: invisible. Now:
+    //  - THROW: let go of the grip while swinging (the fastest hand speed of the last 0.15 s, at least
+    //    throwMinSpeed): the hammer flies from the hand along the swing (straight at an enemy in the aim
+    //    cone), spinning, lightning crackling on it; each enemy it passes is hit once and electrocuted.
+    //  - RECALL: press the right grip while it is out - it turns and flies back to the hand; it also comes
+    //    back on its own after throwSeconds / throwRange or its first hit. Caught with the grip held; not
+    //    held, it goes back on the back.
+    //  - LIGHTNING BLAST: the right trigger with the hammer in hand fires a bolt along the aim (a basic
+    //    projectile: the user's rule for triggers) at the enemy in the aim cone or into the air.
+    //  - STORM: the hammer held up overhead for 1 s: bolts rain from the sky around Thor (seen with no enemy).
+    //  - MELEE: swings with the hammer in hand (down: a bolt, up: a launch, down on an airborne lock: a slam).
+    // Every bolt stays boltSeconds, flickering: seen.
     void thorStep(float dt, const PlayIn& in, const Vec3* p, const Vec3* v, const bool* tracked, Vec3 look, PlayOut& out) {
         const PlayOptions& o = in.o;
         const uint32_t h = hero_modes::thor;
         const Vec3 hd = head(in);
-        // The hammer on the back: the right grip behind the right shoulder draws it, held while gripped.
         const bool grip = in.hands[1].grip >= holster::pressed || (gripWas && in.hands[1].grip > holster::released);
-        if (tracked[1] && grip && !gripWas && hammerOut <= 0) {
-            const holster::BodyPoint bp = holster::bodyPoint(p[1], hd, body);
-            if (bp.below <= .25f && bp.ahead <= .05f && bp.side >= -.05f)
-                hammerHeld = true;
+        const bool gripPressed = grip && !gripWas;
+        // The swing's fastest velocity over the last moment (the release is often after the peak).
+        swingAge += dt;
+        // (A tracking jump over 25 m/s is no swing; the grip's press - the draw's reach back - starts it over.)
+        if (tracked[1] && ok(v[1]) && length(v[1]) < 25.f && (length(v[1]) >= length(swingPeak) || swingAge > swingMemory)) {
+            swingPeak = v[1];
+            swingAge = 0;
         }
-        // THROW (HAMMER CHAIN): let go while swinging fast: it flies at the enemy aimed at and jumps on.
+        if (gripPressed)
+            swingPeak = {}, swingAge = 0;
+        // DRAW: the right grip behind the right shoulder (the hammer on the back).
+        if (tracked[1] && gripPressed && !hammerFlying) {
+            const holster::BodyPoint bp = holster::bodyPoint(p[1], hd, body);
+            if (bp.below <= .25f && bp.ahead <= .05f && bp.side >= -.05f) {
+                hammerHeld = true;
+                thorEvents |= thorDrawn;
+            }
+        }
+        // RECALL: the grip pressed again while the hammer is out.
+        if (hammerFlying && gripPressed && !hammerBack) {
+            hammerBack = true;
+            thorEvents |= thorRecalled;
+        }
+        // THROW: the grip opened while swinging.
         if (hammerHeld && gripWas && !grip) {
             hammerHeld = false;
-            if (length(v[1]) >= swingSpeed) {
-                const Vec3 aim = ok(v[1]) ? normalized(v[1]) : look;
-                int e = pullTarget(p[1], aim, in.list, in.count);
-                hammerOut = hammerFlight;
-                hammerTo = p[1] + aim * 10.f;
-                uint64_t hitIds[chainMost]{};
-                if (e >= 0 && o.thorLightning) { // the thrown hammer's lightning: one strike, however far it chains
-                    strike(out);
-                    ++strikes;
+            const float sp = length(swingPeak);
+            if (tracked[1] && ok(swingPeak) && sp >= throwMinSpeed) {
+                Vec3 dir = normalized(swingPeak);
+                hammerAim = 0;
+                const int e = pullTarget(p[1], dir, in.list, in.count);
+                if (e < 0) { // the aim helps: the controller's pointing, when it is near the swing
+                    const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : dir;
+                    const int a = pullTarget(p[1], aim, in.list, in.count);
+                    if (a >= 0 && dot(aim, dir) > .5f)
+                        dir = normalized(in.list[a].chest - p[1]), hammerAim = in.list[a].id;
+                } else {
+                    dir = normalized(in.list[e].chest - p[1]);
+                    hammerAim = in.list[e].id;
                 }
-                for (uint32_t jump = 0; e >= 0 && jump < (o.thorChain ? perks.chainCap(h) : 1u); ++jump) {
-                    hitIds[jump] = in.list[e].id;
-                    out.blow(in.list[e].id, hammerHit(), in.list[e].chest, kindHammer);
-                    if (jump == 0)
-                        hammerTo = in.list[e].chest;
-                    if (o.thorLightning && out.look.bolts < boltsMost)
-                        addBolt(out, p[1], in.list[e].chest);
-                    e = nextChain(in.list[e].chest, in.list, in.count, hitIds);
-                }
-                hammerOut += hammerFlight; // and back
+                hammerFlying = true;
+                hammerBack = false;
+                hammerAge = 0;
+                hammerPos = p[1];
+                hammerFrom = p[1];
+                hammerVel = dir * std::clamp(sp * throwGain, throwSpeedLow, throwSpeedHigh);
+                for (auto& id : hammerHitIds)
+                    id = 0;
+                lastThrowSpeed = length(hammerVel);
+                thorEvents |= thorThrown;
+                ++throws;
+                if (o.thorLightning) // the throw's crack of thunder
+                    strike(out), ++strikes;
+                out.buzz(1, .9f);
             }
         }
         gripWas = grip;
-        hammerOut = std::max(0.f, hammerOut - dt);
+        // The hammer in the air.
+        if (hammerFlying) {
+            hammerAge += dt;
+            const Vec3 was = hammerPos;
+            if (!hammerBack) {
+                for (uint32_t k = 0; in.list && k < in.count && hammerAim; ++k) // straight at its target
+                    if (in.list[k].id == hammerAim && !in.list[k].down && ok(in.list[k].chest)) {
+                        const Vec3 to = in.list[k].chest - hammerPos;
+                        if (length(to) > .05f)
+                            hammerVel = normalized(to) * length(hammerVel);
+                    }
+                hammerPos = hammerPos + hammerVel * dt;
+                if (hammerAge >= throwSeconds || length(hammerPos - hammerFrom) >= throwRange)
+                    hammerBack = true;
+            } else {
+                const Vec3 to = (tracked[1] ? p[1] : hd) - hammerPos;
+                const float d = length(to), stepLen = returnSpeed * dt;
+                if (!(d > std::max(stepLen, catchRange)) || hammerAge > throwSeconds + 4.f) {
+                    hammerFlying = false; // home: in the hand when the grip is held, else back on the back
+                    hammerHeld = grip && tracked[1];
+                    thorEvents |= hammerHeld ? thorCaught : thorStowed;
+                    if (hammerHeld)
+                        out.buzz(1, 1.f);
+                } else {
+                    hammerVel = to * (returnSpeed / d);
+                    hammerPos = hammerPos + hammerVel * dt;
+                }
+            }
+            // Each enemy it passes, once a throw: the hammer's hit and its electrocution (and the chain).
+            for (uint32_t k = 0; hammerFlying && in.list && k < in.count; ++k) {
+                const BatonEnemy& en = in.list[k];
+                if (!en.id || en.down || !ok(en.chest) || segmentDistance(en.chest, was, hammerPos) > hammerHitRange)
+                    continue;
+                bool seen = false;
+                for (uint64_t id : hammerHitIds)
+                    seen = seen || id == en.id;
+                if (seen)
+                    continue;
+                for (auto& id : hammerHitIds)
+                    if (!id) {
+                        id = en.id;
+                        break;
+                    }
+                out.blow(en.id, hammerHit(), en.chest, kindHammer);
+                thorEvents |= thorHammerHit;
+                if (o.thorLightning) {
+                    strike(out), ++strikes;
+                    liveBolt(hammerPos + Vec3{0, 6.f, 0}, en.chest, boltSeconds);
+                    if (o.thorChain) {
+                        uint64_t chainIds[chainMost]{en.id};
+                        Vec3 from = en.chest;
+                        const uint32_t cap = std::min(perks.chainCap(h), chainMost);
+                        for (uint32_t j = 1; j < cap; ++j) {
+                            const int n = nextChain(from, in.list, in.count, chainIds);
+                            if (n < 0)
+                                break;
+                            chainIds[j] = in.list[n].id;
+                            out.blow(in.list[n].id, thorBolt(), in.list[n].chest, kindBolt);
+                            liveBolt(from, in.list[n].chest, boltSeconds);
+                            from = in.list[n].chest;
+                        }
+                    }
+                }
+                if (en.id == hammerAim)
+                    hammerBack = true; // Mjolnir comes back after its target
+            }
+        }
+        hammerOut = hammerFlying ? 1.f : 0.f;
+        // LIGHTNING BLAST: the right trigger with the hammer in hand.
+        blastCool = std::max(0.f, blastCool - dt);
+        const bool trig = in.hands[1].trigger >= .5f;
+        if (o.thorLightning && hammerHeld && tracked[1] && trig && !blastWas && blastCool <= 0) {
+            blastCool = blastEvery;
+            const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : look;
+            const Vec3 from = p[1] + aim * .35f; // the hammer's head
+            const int e = pullTarget(p[1], aim, in.list, in.count);
+            Vec3 to = p[1] + aim * blastRange;
+            if (e >= 0 && length(in.list[e].chest - p[1]) <= blastRange) {
+                to = in.list[e].chest;
+                out.blow(in.list[e].id, thorBolt(), to, kindBolt);
+                if (o.thorChain)
+                    carry(h, in.list[e].id, to, thorBolt(), in.list, in.count, out, kindBolt);
+            }
+            liveBolt(from, to, boltSeconds);
+            liveBolt(from, to, boltSeconds * .7f);
+            strike(out), ++strikes;
+            thorEvents |= thorBlast;
+            out.buzz(1, .8f);
+        }
+        blastWas = trig;
         // MELEE: swings with the hammer in hand.
         if (hammerHeld && tracked[1]) {
             const Swing s = swing.step(dt, true, v[1]);
@@ -749,20 +888,22 @@ class Play {
                     out.blow(en.id, extra, en.chest,
                              act == ThorAct::bolt ? kindBolt : act == ThorAct::launch ? kindLaunch : kindSlam);
                     if (act != ThorAct::launch) {
-                        addBolt(out, en.chest + Vec3{0, 12.f, 0}, en.chest);
+                        liveBolt(en.chest + Vec3{0, 12.f, 0}, en.chest, boltSeconds);
                         strike(out); // the bolt (and its LIGHTNING CHAIN) / the slam: one strike
                         ++strikes;
                     }
                     if (act == ThorAct::bolt && o.thorChain) // LIGHTNING CHAIN: the bolt jumps on
                         carry(h, en.id, en.chest, thorBolt(), in.list, in.count, out, kindBolt);
+                    thorEvents |= thorMelee;
                     out.buzz(1, 1.f);
                 }
             }
         }
-        // STORM: the hammer raised straight up for a second.
+        // STORM: the hammer raised up overhead for a second.
         if (o.thorStorm && hammerHeld && tracked[1] && storm.step(dt, hammerRaised(hd, p[1], in.hands[1].aim))) {
             stormLeftStrikes = static_cast<uint32_t>(stormStrikes * perks.scale(h, Stat::lightningSeconds) + .5f);
             stormNext = 0;
+            thorEvents |= thorStorm;
             out.buzz(1, 1.f);
         }
         stormNext -= dt;
@@ -772,18 +913,26 @@ class Play {
             strike(out); // each storm strike, one sound
             ++strikes;
             const float r = stormRadius * perks.scale(h, Stat::stormRadius);
+            uint32_t hits = 0;
             for (uint32_t e = 0; in.list && e < in.count; ++e)
                 if (!in.list[e].down && ok(in.list[e].chest) && length(in.list[e].chest - hd) <= r) {
                     out.blow(in.list[e].id, stormHit(), in.list[e].chest, kindStorm);
-                    addBolt(out, in.list[e].chest + Vec3{0, 15.f, 0}, in.list[e].chest);
+                    liveBolt(in.list[e].chest + Vec3{0, 15.f, 0}, in.list[e].chest, boltSeconds);
+                    ++hits;
                 }
+            // Seen with no enemy too: bolts from the sky onto the ground around Thor (2-5 m out).
+            for (uint32_t k = hits; k < 3; ++k) {
+                const float ang = rand01() * 6.2831853f, dist = 2.f + rand01() * 3.f;
+                const Vec3 ground{hd.x + std::cos(ang) * dist, hd.y - 1.6f, hd.z + std::sin(ang) * dist};
+                liveBolt(ground + Vec3{(rand01() - .5f) * 3.f, 16.f, (rand01() - .5f) * 3.f}, ground, boltSeconds);
+            }
+            if (tracked[1]) // and one onto the raised hammer
+                liveBolt(p[1] + Vec3{0, 14.f, 0}, p[1] + Vec3{0, .3f, 0}, boltSeconds);
             shock(hd + Vec3{0, -1.6f, 0}, r);
         }
-        // The look: the hammer in the hand (or on its way), lightning on the arms in a fight.
-        // Version 0.0.72 THOR HAMMER: in the hand the grip sits 6 cm up the handle (its end below the fist), a
-        // face toward where Thor looks; not held and not flying, it hangs SHEATHED on his back, head down, the
-        // handle's end at the right shoulder blade - exactly where the right grip reaches to draw it (above).
-        // Nothing appears from nowhere: the hand that draws it is the hand that reached for it.
+        // The look: the hammer in the hand, flying, or SHEATHED on his back (head down, the handle's end at
+        // the right shoulder blade - exactly where the right grip reaches to draw it; build 7: not drawn
+        // there, it is behind the head and out of view, and it cost 150,000 vertices a frame).
         out.look.hammerChoice = o.thorHammer;
         if (hammerHeld && tracked[1]) {
             const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : look;
@@ -792,12 +941,13 @@ class Play {
             out.look.hammerForward = aim;
             out.look.hammerUp = faceOf(aim, look);
             out.look.hammerSpin = 0;
-        } else if (hammerOut > 0) {
+        } else if (hammerFlying && ok(hammerPos)) {
+            const Vec3 way = ok(hammerVel) && length(hammerVel) > 1e-3f ? normalized(hammerVel) : look;
             out.look.hammer = true;
-            out.look.hammerAt = hammerTo;
-            out.look.hammerForward = Vec3{0, 1, 0};
-            out.look.hammerUp = faceOf(out.look.hammerForward, look);
-            out.look.hammerSpin = clock * 20.f;
+            out.look.hammerAt = hammerPos;
+            out.look.hammerForward = way;
+            out.look.hammerUp = faceOf(way, look);
+            out.look.hammerSpin = clock * 18.f;
         } else if (ok(hd)) {
             const Vec3 f = body.forward(), r = body.right();
             out.look.hammer = true;
@@ -807,9 +957,72 @@ class Play {
             out.look.hammerSpin = 0;
             out.look.hammerSheathed = true;
         }
-        if (o.thorLightning && fight.on && tracked[1] && out.look.bolts < boltsMost)
+        // The bolts alive (each flickers: a new jag each frame), then the crackle on the hammer.
+        for (uint32_t k = 0; k < liveBoltsMost; ++k) {
+            LiveBolt& b = liveBolts[k];
+            if (b.left <= 0)
+                continue;
+            b.left -= dt;
+            addBolt(out, b.from, b.to);
+        }
+        if (o.thorLightning && hammerFlying && ok(hammerPos)) // crackling on the flying hammer
+            for (int k = 0; k < 2; ++k)
+                addBolt(out, hammerPos, hammerPos + Vec3{rand01() - .5f, rand01() - .5f, rand01() - .5f} * .9f);
+        else if (o.thorLightning && hammerHeld && tracked[1] && (fight.on || in.hands[1].trigger > .15f))
             addBolt(out, p[1], p[1] + Vec3{std::sin(clock * 13.f) * .25f, .2f, std::cos(clock * 11.f) * .25f});
     }
+  public:
+    static constexpr float boltsSeenSeconds() { return boltSeconds; }
+    bool hammerInHandOrOut() const { return hammerHeld || hammerFlying; }
+    bool hammerInAir() const { return hammerFlying; }
+    Vec3 hammerAirAt() const { return hammerPos; }
+    // THOR's events since the last take (game_xr logs them): bits of ThorEvent.
+    enum ThorEvent : uint32_t { thorDrawn = 1, thorThrown = 2, thorRecalled = 4, thorCaught = 8, thorStowed = 16,
+                                thorHammerHit = 32, thorBlast = 64, thorStorm = 128, thorMelee = 256 };
+    uint32_t takeThorEvents() {
+        const uint32_t e = thorEvents;
+        thorEvents = 0;
+        return e;
+    }
+    uint32_t throws{};
+    float lastThrowSpeed{};
+
+  private:
+    struct LiveBolt {
+        Vec3 from{}, to{};
+        float left{};
+    };
+    static constexpr uint32_t liveBoltsMost = 8;
+    LiveBolt liveBolts[liveBoltsMost]{};
+    void liveBolt(Vec3 from, Vec3 to, float seconds) {
+        if (!ok(from) || !ok(to))
+            return;
+        uint32_t best = 0;
+        for (uint32_t k = 1; k < liveBoltsMost; ++k)
+            if (liveBolts[k].left < liveBolts[best].left)
+                best = k;
+        liveBolts[best] = {from, to, seconds};
+    }
+    uint32_t boltRng = 0x2545f491u;
+    float rand01() {
+        boltRng ^= boltRng << 13;
+        boltRng ^= boltRng >> 17;
+        boltRng ^= boltRng << 5;
+        return static_cast<float>(boltRng >> 8) * (1.f / 16777216.f);
+    }
+    static float segmentDistance(Vec3 q, Vec3 a, Vec3 b) {
+        const Vec3 ab = b - a;
+        const float l2 = dot(ab, ab);
+        const float t = l2 > 1e-8f ? std::clamp(dot(q - a, ab) / l2, 0.f, 1.f) : 0.f;
+        return length(q - (a + ab * t));
+    }
+    bool hammerFlying{}, hammerBack{}, blastWas{};
+    Vec3 hammerPos{}, hammerVel{}, hammerFrom{}, swingPeak{};
+    float hammerAge{}, swingAge{}, blastCool{};
+    uint64_t hammerAim{};
+    uint64_t hammerHitIds[chainMost]{};
+    uint32_t thorEvents{};
+
   public:
     void seedLightning(uint32_t s) { lightningSeed = s ? s : 0x9e3779b9u; }
     // One lightning strike: one of the two sounds, at random.

@@ -229,13 +229,16 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         return false;
     const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
     const bool smooth = model.hasNormals(), uvs = model.hasUvs();
+    sink.reserve(from + size_t{model.triangles()} * 3); // build 7: one growth, not a dozen
+    // Build 7: the place is affine (at + axes), so each corner is o + ex x + ey y + ez z: no call per corner.
+    const auto P = [&](Vec3 c) { return o + ex * c.x + ey * c.y + ez * c.z; };
     for (uint32_t t = 0; t < model.triangles(); ++t) {
         const int16_t im = uvs && t < model.image.size() ? model.image[t] : int16_t{-1};
         const int32_t at = im >= 0 && static_cast<size_t>(im) < model.images.size() ? model.images[static_cast<size_t>(im)].layer : -1;
         // An image without a layer (it did not decode): its mean colour (colors[]) untextured.
         const float layer = at >= 0 ? static_cast<float>(at) : -1.f;
         const Vec3 tint = at >= 0 && t < model.tints.size() ? model.tints[t] : model.colors[t];
-        const Vec3 a = place(model.corners[t * 3]), b = place(model.corners[t * 3 + 1]), c = place(model.corners[t * 3 + 2]);
+        const Vec3 a = P(model.corners[t * 3]), b = P(model.corners[t * 3 + 1]), c = P(model.corners[t * 3 + 2]);
         const Vec3 fn = cross(b - a, c - a);
         const float fl = length(fn);
         if (!(fl > 1e-14f))

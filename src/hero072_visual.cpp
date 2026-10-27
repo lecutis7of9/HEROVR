@@ -385,7 +385,9 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
         return;
     const auto T = [&](Vec3 p) { return p + travel; };
     // Version 0.0.72 THOR's hammer: the real model or nothing (the old built-in bars are a fake, never drawn).
-    if (l.hammer && l.hammerModel && okv(l.hammerAt) && okv(l.hammerForward) && okv(l.hammerUp) &&
+    // Build 7: not SHEATHED - on the back, behind the head, it is never in view, and its 50,000 triangles
+    // were rebuilt and sent to the GPU every frame (9-11 ms a frame of the CPU in test 6).
+    if (l.hammer && !l.hammerSheathed && l.hammerModel && okv(l.hammerAt) && okv(l.hammerForward) && okv(l.hammerUp) &&
         length(l.hammerForward) > 1e-3f) {
         // The model frame: +y handle -> head, -z a face (mesh_model::slotHammer). Version 0.0.72: the handle's
         // direction is kept exactly (the face is made square to it here), and a flying hammer tumbles.

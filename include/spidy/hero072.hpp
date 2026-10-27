@@ -24,8 +24,9 @@
 //  - SURVIVAL: limb damage rolls on each hit taken (per hero), healing over time; a broken leg
 //    slows the walk and drifts the strafe, an injured arm weakens the mod's punches, a concussion
 //    pulses the view.
-//  - THOR: a hammer on the back (grip over a shoulder), trigger throws it (a projectile: it chains
-//    and comes back, each hit electrocutes), held straight up overhead for 1 s it calls a radial
+//  - THOR: a hammer on the back (grip over a shoulder); build 7: let go of the grip mid-swing throws it
+//    (it flies, each hit electrocutes; the grip again recalls it, caught with the grip held), the
+//    right trigger fires a LIGHTNING BLAST, held up overhead for 1 s it calls a radial
 //    lightning strike (a gesture, no trigger), lightning crawls on his arms in a fight; a down swing
 //    that lands calls a bolt, an up swing launches, a down swing on a locked enemy in the air slams
 //    him down with lightning (THOR MELEE, gestures).
@@ -1456,13 +1457,13 @@ inline sm2_damage::Blow stormHit() { return {60.f, 5, 380.f}; }  // the radial s
 inline constexpr float stormRadius = 9.f, stormHold = 1.0f, stormCooldown = 7.f; // the user, 8:18: about 1 s
 inline constexpr uint32_t stormStrikes = 3;
 inline constexpr float stormEvery = .35f;
-// Raised (a gesture, no trigger): the hammer hand straight up overhead (at least .25 m over the eyes,
-// within .45 m across) and the hammer pointing up.
+// Raised (a gesture, no trigger): the hammer hand up overhead (build 7: at least .15 m over the eyes,
+// within .5 m across) and the hammer pointing more up than not.
 inline bool hammerRaised(Vec3 head, Vec3 hand, Vec3 aim) {
     if (!ok(head) || !ok(hand) || !ok(aim) || length(aim) < 1e-3f)
         return false;
     const Vec3 d = hand - head;
-    return d.y >= .25f && std::sqrt(d.x * d.x + d.z * d.z) <= .45f && normalized(aim).y >= .85f;
+    return d.y >= .15f && std::sqrt(d.x * d.x + d.z * d.z) <= .5f && normalized(aim).y >= .5f; // build 7: was .25 m, .45 m, .85 (a controller held up points ~45 deg)
 }
 // THOR STORM's hold: the raise held stormHold seconds, then the cooldown.
 struct StormHold {
@@ -1560,7 +1561,7 @@ inline const Bio& bio(uint32_t hero) {
          "Frank Castle", "Pistols, shotgun, rage, grappling hook"},
         {"CAPTAIN AMERICA", "SHIELD", "Throw the shield, block with it, bash with it.", {.2f, .35f, .85f}, "Steve Rogers",
          "Shield throw, block, shield slam, leaps"},
-        {"THOR", "HAMMER, LIGHTNING", "Draw the hammer from your back, throw it, raise it for lightning.", {.55f, .65f, .95f},
+        {"THOR", "HAMMER, LIGHTNING", "Grab it off your back, swing and let go to throw, grip to recall.", {.55f, .65f, .95f},
          "Thor Odinson", "Hammer, lightning, storm, flight, invulnerable"},
         {"GREEN LANTERN", "RING CONSTRUCTS", "Arms up to fly, ring beam, chain, a construct fist and a bubble.", {.15f, .95f, .3f},
          "Hal Jordan", "Ring beam, chain, fist, bubble, flight"},

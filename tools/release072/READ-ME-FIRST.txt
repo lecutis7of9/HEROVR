@@ -27,6 +27,13 @@ TO UNDO
 Copy the files in <mod folder>\_before-0.0.72-test back over the mod folder,
 or use the launcher's Revert.
 
+IMPORTANT FOR SMOOTHNESS (build 7)
+Set Virtual Desktop (or Quest Link / SteamVR) back to 90 Hz. Test 6 ran the
+headset at 72 Hz from the very start (calibration included): at 72 Hz each
+picture the game cannot finish in time is held a whole extra refresh, so it
+dropped from about 39 to 32 pictures a second and judders more. 0.0.70 ran at
+90 Hz. If it is still slow at 90 Hz, lower RenderScale (e.g. 80), not the Hz.
+
 WHERE THE SETTINGS ARE
 Left wrist HUD > COMBAT page > HERO PROFILES. Only one hero can be on at a time.
 Every setting has a one-line note saying whether it needs a restart (none do,
@@ -68,12 +75,40 @@ and grip, and everything starts holstered or sheathed.
 - CAPTAIN AMERICA: the shield is on your back (the real model); reach + grip.
   A thrown shield flies back and eases into your hand. The aim marker is
   small and faint.
-- THOR: lightning with your own two sounds. Mjolnir starts on your back:
-  reach over your right shoulder and grip to draw it. COMBAT > THOR HAMMER
-  picks the model: BOOOOP (default), DEVILSEYE, LOVE THUNDER, FCCOOPER.
-  BUILD 6 FIX: selecting THOR (or GREEN LANTERN) crashed the game - the
-  POWERS page's ACTIVE HERO banner only knew nine hero names. Fixed.
-- GREEN LANTERN: ring constructs (fist, beam, bubble, chain), ring flight.
+- THOR: lightning with your own two sounds (one of the two at random, every
+  strike). Mjolnir starts on your back. COMBAT > THOR HAMMER picks the model:
+  BOOOOP (default), DEVILSEYE, LOVE THUNDER, FCCOOPER.
+  BUILD 7 THOR CONTROLS (right hand):
+  * DRAW: reach over your right shoulder and squeeze the right grip.
+  * THROW: swing your arm forward and let go of the grip during the swing.
+    The hammer flies (at the enemy you swing toward), crackling with
+    lightning, and electrocutes each enemy it hits. A slow let go just puts it
+    back on your back.
+  * RECALL / CATCH: squeeze the right grip again while it is out - it flies
+    back. Keep the grip held and it lands in your hand. It also comes back on
+    its own after a second (hold the grip to catch it; if not, it goes back
+    on your back).
+  * LIGHTNING BLAST: pull the right trigger with the hammer in your hand - a
+    bolt at the enemy you point at (or into the air), one shot per pull.
+  * STORM: hold the hammer up over your head for 1 second - lightning rains
+    down around you (and hits enemies within 9 m). 7 s cooldown.
+  * MELEE: swing the hammer down onto an enemy for a lightning bolt, up to
+    launch him, down on an enemy in the air to slam him.
+  * FLIGHT: raise your LEFT hand up to take off (the hammer hand no longer
+    takes off, so raising the hammer is the storm). Both hands forward fly.
+  The console logs each move ("VERSION 0.0.72 THOR: hammer THROWN ...").
+- GREEN LANTERN CONTROLS:
+  * TAKE OFF: put BOTH arms straight up over your head for a moment (one hand
+    up no longer takes him off - build 7 fix). In the air, fly like Superman:
+    both hands forward fly where they point, one hand up rises, arms out
+    wide (T-pose) stops, R3 drops you down to land. Triggers never fly.
+  * RING BEAM: hold the RIGHT trigger.
+  * CHAIN: pull the LEFT trigger - a chain grabs and yanks the enemy you
+    point at.
+  * CONSTRUCT FIST: hold the RIGHT grip and punch fast forward.
+  * SHIELD BUBBLE: hold BOTH grips and pull your hands apart.
+  * RING CHARGE: the green meter on your left wrist; fist, beam, chain and
+    bubble use it, it refills when you stop.
 - COMING SOON suits are labelled COMING SOON in the suit list.
 - ENEMY FACTION: the Hand, Hydra and the Joker Gang stay the game's own enemies
   in this build (the enemy swap hook is not confirmed yet).

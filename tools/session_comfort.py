@@ -109,9 +109,17 @@ def performance_advice(rate, render_scale=None, timing=None):
                      "on average behind the game's frame on the GPU (its own work is "
                      f"{work:.2f} ms). Fewer pixels or lighter game settings raise the frame rate; the CPU is not "
                      'what holds it.')
+    # Version 0.0.72 build 7: a headset below 85 Hz is called out first. The user's test-6 session ran at
+    # 72 Hz (set after 0.0.72 test 5's advice) and the game fell from 39 to 32 pictures a second: below
+    # 36 each picture holds 3 frames of 72 Hz, not 2.
+    if hz < 85:
+        lines.append(f'The headset ran at {hz:.0f} Hz. Set Virtual Desktop (or Quest Link/SteamVR) back to 90 Hz: '
+                     f'below {hz / 2:.0f} pictures a second a low refresh rate makes each picture stay 3 frames, '
+                     'which lowers the frame rate and judders more.')
     # A lower refresh where the game's rate divides it evenly: each picture then stays exactly 2 frames.
-    for lower in (90, 80, 72):
-        if lower < hz * 0.97 and lower / 2 * 0.95 <= fps < hz / 2 * 0.95:
+    # Build 7: only 80 Hz or more, and only when the game already makes the full half (never 72 Hz).
+    for lower in (90, 80):
+        if lower < hz * 0.97 and lower / 2 <= fps < hz / 2 * 0.95:
             lines.append(f'At {hz:.0f} Hz each of your {fps:.0f} pictures a second stays 2 or 3 headset frames '
                          f'unevenly (judder). Set the headset (Virtual Desktop/Quest Link/SteamVR) to {lower} Hz: '
                          f'the game already makes the {lower // 2} a second that needs, so each picture stays '
@@ -139,8 +147,9 @@ def comfort_advice(rate, settings, render_scale=None, timing=None):
                              'than the headset asks for. Try -RenderScale 100 (or 80) for smoother motion.')
             else:
                 lines.append('The game kept up with less than half the headset rate, so each picture stays for 2 '
-                             'or 3 headset frames unevenly (judder). Lower the settings below, -RenderScale '
-                             '(e.g. 80), or the headset refresh rate (72 Hz).')
+                             'or 3 headset frames unevenly (judder). Lower the settings below or -RenderScale '
+                             '(e.g. 80). Keep the headset at 90 Hz: a lower refresh rate such as 72 Hz makes it '
+                             'worse when the game cannot make half of it.')
         lines += performance_advice(rate, render_scale, timing)
     copy = (timing or {}).get('pair_to_copy')
     if copy and copy.get('count'):

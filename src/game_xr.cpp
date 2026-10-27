@@ -1585,7 +1585,9 @@ DWORD WINAPI run(void*) {
                         (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
             MEMORYSTATUSEX memory{sizeof(memory)};
             const uint64_t commitFree = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPageFile : 0;
-            const uint32_t size = commitFree >= (3ull << 30) ? 512u : 256u;
+            // Build 7: 512 px from 768 MB of free commit (29 layers: about 40 MB with mips). Builds 5-6 asked
+            // for 3 GB, so the user's 1228 MB got 256 px and every model looked blurred (the test-6 log).
+            const uint32_t size = commitFree >= (768ull << 20) ? 512u : 256u;
             uint32_t levels = 1;
             while ((size >> levels) >= 1)
                 ++levels;
@@ -1756,6 +1758,12 @@ DWORD WINAPI run(void*) {
         // Update 38.5 FLY's poses (a hand up, both hands in front, a T-pose; arms down hovers), R3's
         // drop and L3+R3's ultimate, and FLY ROLL (a mod-side view roll, GameTrackingRig::flyRoll).
         extras385::fly::Poses flyPoses;
+        // Build 7 GREEN LANTERN: RingFlight (hero072.hpp) was never called in game - one hand up took him off
+        // like SUPERMAN. Now on the ground only both arms straight up (held takeoffHold) take off; in the air
+        // the poses steer as for SUPERMAN.
+        hero072::RingFlight glRingFlight;
+        uint32_t glPose{};
+        float glLift{};
         extras385::fly::StickChord flyChord;
         extras385::fly::Roll flyRollState;
         bool flyDropHeld{};
@@ -2926,7 +2934,18 @@ DWORD WINAPI run(void*) {
                                 pi.tracked[i] = gripsTracked[i];
                                 pi.hands[i] = grips[i].position;
                             }
+                            // Build 7 THOR: the hammer hand never makes RISE (ONE HAND UP) - raising the hammer is
+                            // THOR STORM and a throw swings it high; build 6 took off instead. The left hand up rises.
+                            if (heroNow() == hero_modes::thor && hero072Play.hammerInHandOrOut() && finite(pi.head) &&
+                                finite(pi.hands[1]))
+                                pi.hands[1].y = std::min(pi.hands[1].y, pi.head.y - .15f);
                             flyPoses.update(pi);
+                            glPose = flyPoses.pose();
+                            glLift = flyPoses.lift();
+                            if (heroNow() == hero_modes::greenLantern && c38(combat38::glFlight) == 0 && pi.live &&
+                                pi.tracked[0] && pi.tracked[1])
+                                glPose = glRingFlight.gate(frame.seconds, flyNow.flying != 0, flyPoses.pose(), flyPoses.lift(),
+                                                           pi.head, pi.hands[0], pi.hands[1], glLift);
                             const uint32_t stage = flyPoses.stage(), shown = flyPoses.shown();
                             if (flyTraining && pi.live && (stage != flyStageShown || shown != flyPoseShown) && stage) {
                                 char line[112];
@@ -4816,7 +4835,8 @@ DWORD WINAPI run(void*) {
                             input.reserved6 = flyLive ? extras385::fly::pack(fm, hero_modes::flyThrust(flyHero, input.hands[0].trigger),
                                                                             hero_modes::flyThrust(flyHero, input.hands[1].trigger),
                                                                             frame.hands[1].stickY, true,
-                                                                            flyPoses.pose(), flyPoses.lift(), flyDropHeld)
+                                                                            flyHero == hero_modes::greenLantern ? glPose : flyPoses.pose(),
+                                                                            flyHero == hero_modes::greenLantern ? glLift : flyPoses.lift(), flyDropHeld)
                                                       : 0u;
                             // Version 0.0.5 SUPERSONIC: both hands out (FORWARD) and the left stick forward
                             // dash at SUPERSONIC SPEED x FAST; its first frame booms (sound + shockwave).
@@ -6809,6 +6829,24 @@ DWORD WINAPI run(void*) {
                                             for (uint32_t n = out72.lightning[k]; n > 0; --n)
                                                 sfx::play(k ? sfx::thorLightning2 : sfx::thorLightning1);
                                         hero072KeepTopped = out72.keepTopped;
+                                        // Build 7 THOR: each of his moves named in the log (the first 12 of each kind).
+                                        if (const uint32_t ev = hero072Play.takeThorEvents()) {
+                                            static uint32_t thorSaid[9]{};
+                                            static const char* const thorNames[9] = {
+                                                "hammer drawn from the back", "hammer THROWN", "hammer RECALLED (grip)",
+                                                "hammer CAUGHT", "hammer back on the back (not caught)", "thrown hammer HIT",
+                                                "LIGHTNING BLAST (right trigger)", "STORM called (hammer raised)", "hammer MELEE hit"};
+                                            for (uint32_t b = 0; b < 9; ++b)
+                                                if ((ev >> b) & 1u && ++thorSaid[b] <= 12) {
+                                                    char line[160];
+                                                    if (b == 1)
+                                                        sprintf_s(line, "VERSION 0.0.72 THOR: %s at %.1f m/s (throw %u)", thorNames[b],
+                                                                  static_cast<double>(hero072Play.lastThrowSpeed), hero072Play.throws);
+                                                    else
+                                                        sprintf_s(line, "VERSION 0.0.72 THOR: %s", thorNames[b]);
+                                                    game_prompts::note(line);
+                                                }
+                                        }
                                         for (unsigned i = 0; i < 2; ++i) { // Version 0.0.72 GRAPPLE
                                             hero072Grapple[i] = hero072Grapple[i] || out72.grapple[i];
                                             hero072HookOut[i] = out72.hookOut[i];
@@ -9311,7 +9349,11 @@ DWORD WINAPI run(void*) {
                         ringHiddenFrames += ringHide;
                         std::vector<Vertex> vertices;
                         // Version 0.0.72 REAL MODELS: the textured models' own vertices (hero007::setModelSink).
-                        std::vector<Vertex> modelVertices;
+                        // Build 7: kept between frames (cleared, its memory reused). THOR's 50,000-triangle hammer
+                        // is 150,000 vertices (6.6 MB): a new vector each frame regrew and refaulted it every frame.
+                        static thread_local std::vector<Vertex> modelVerticesKept;
+                        modelVerticesKept.clear();
+                        std::vector<Vertex>& modelVertices = modelVerticesKept;
                         hero007::setModelSink(overlay.modelReady() ? &modelVertices : nullptr);
                         struct EndModelSink {
                             ~EndModelSink() {

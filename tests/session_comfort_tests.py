@@ -63,7 +63,7 @@ class Rate(unittest.TestCase):
         timing = dict(copy_gpu=dict(count=38612, mean_ms=6.82), sharpen=dict(gpu_ms_mean=.19))
         text = '\n'.join(comfort.performance_advice(rate, 100, timing))
         self.assertIn('graphics card is the limit', text)
-        self.assertIn('to 72 Hz', text)
+        self.assertNotIn('to 72 Hz', text)  # build 7: never 72 Hz (the test-6 session: 39 -> 32 a second)
         self.assertIn('-RenderScale 90', text)
         self.assertIn('-RenderScale 80', text)
         self.assertIn('ESTIMATE', text)
@@ -78,8 +78,13 @@ class Rate(unittest.TestCase):
         # 120 Hz at 50: 90 Hz (45 a second) is even.
         self.assertIn('to 90 Hz', '\n'.join(comfort.performance_advice(dict(rate, headset_fps=120.0,
                                                                                new_pairs_fps=50.0), 100)))
-        # The session's advice carries it.
-        self.assertIn('72 Hz', '\n'.join(comfort.comfort_advice(rate | dict(windows=1), {}, 100, timing)))
+        # The session's advice says to keep 90 Hz, never to set 72.
+        advice = '\n'.join(comfort.comfort_advice(rate | dict(windows=1), {}, 100, timing))
+        self.assertIn('Keep the headset at 90 Hz', advice)
+        self.assertNotIn('to 72 Hz', advice)
+        # Build 7: a 72 Hz headset is told to go back to 90 Hz.
+        slow72 = '\n'.join(comfort.performance_advice(dict(rate, headset_fps=70.5, new_pairs_fps=32.2), 100, timing))
+        self.assertIn('back to 90 Hz', slow72)
 
 
 if __name__ == '__main__':

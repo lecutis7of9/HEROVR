@@ -27264,6 +27264,149 @@ int main() {
             check(tn::view(n, {{0, 0, 0}, {NAN, 0, 0, 1}}).opacity == 0, "a bad world pose: nothing");
         }
     });
+    test("Build 7: THOR - the hammer thrown flies, hits, comes back and is caught; LIGHTNING BLAST; bolts seen; storm with no enemy", [] {
+        using namespace hero072;
+        const auto frame = [] {
+            PlayIn in;
+            in.dt = 1 / 72.f; // the user's test 6 headset rate
+            in.play = true;
+            in.hero = hero_modes::thor;
+            in.head.position = {0, 1.7f, 0};
+            for (auto& h : in.hands)
+                h.tracked = true;
+            in.hands[0].position = {-.25f, 1.2f, -.2f};
+            in.hands[1].position = {.25f, 1.2f, -.2f};
+            in.hands[1].aim = {0, 0, -1};
+            return in;
+        };
+        BatonEnemy foes[1] = {{0x33, {.3f, 1.4f, -6.f}}};
+        Play play;
+        PlayIn in = frame();
+        in.list = foes;
+        in.count = 1;
+        PlayOut out;
+        play.step(in, out);
+        in.hands[1].position = {.2f, 1.6f, .1f};
+        in.hands[1].grip = 1;
+        play.step(in, out);
+        check(play.hammerHeld, "the hammer drawn from the back");
+        check(play.takeThorEvents() & Play::thorDrawn, "the draw not logged");
+        // A forward swing (3.6 m/s), the grip let go just after the swing's peak (the hand already slowing).
+        in.hands[1].position = {.25f, 1.45f, 0};
+        play.step(in, out);
+        for (int f = 0; f < 6; ++f) {
+            in.hands[1].position.z -= .05f;
+            out = PlayOut{};
+            play.step(in, out);
+        }
+        in.hands[1].position.z -= .01f;
+        in.hands[1].grip = 0;
+        out = PlayOut{};
+        play.step(in, out);
+        check(play.throws == 1 && play.hammerInAir() && !play.hammerHeld, "a swing and let go did not throw the hammer");
+        check(play.lastThrowSpeed >= throwSpeedLow && play.lastThrowSpeed <= throwSpeedHigh, "the throw's speed");
+        check(out.look.hammer && !out.look.hammerSheathed, "the thrown hammer not drawn in the air");
+        uint32_t hammerHits = 0, boltFrames = 0, frames = 0;
+        bool movedAway = false;
+        const float startZ = play.hammerAirAt().z;
+        for (; frames < 200 && play.hammerInAir(); ++frames) {
+            if (frames == 18)
+                in.hands[1].grip = 1; // hold the grip for the catch (its press also recalls)
+            out = PlayOut{};
+            play.step(in, out);
+            for (uint32_t k = 0; k < out.blowCount; ++k)
+                hammerHits += out.blows[k].kind == kindHammer && out.blows[k].id == 0x33;
+            boltFrames += out.look.bolts > 0;
+            movedAway = movedAway || play.hammerAirAt().z < startZ - 2.f;
+        }
+        check(movedAway, "the hammer did not fly out");
+        check(hammerHits == 1, "the thrown hammer did not hit the enemy in its way exactly once");
+        check(boltFrames >= 20, "no lightning seen on the flying hammer / its hit");
+        check(!play.hammerInAir() && play.hammerHeld, "the hammer did not come back into the held grip");
+        const uint32_t ev = play.takeThorEvents();
+        check((ev & Play::thorThrown) && (ev & Play::thorHammerHit) && (ev & Play::thorCaught), "the throw's events not logged");
+        // LIGHTNING BLAST: the right trigger with the hammer in hand, at the enemy aimed at; its bolt lingers.
+        in.hands[1].trigger = 1;
+        out = PlayOut{};
+        play.step(in, out);
+        uint32_t bolts = 0, sounds = out.lightning[0] + out.lightning[1];
+        for (uint32_t k = 0; k < out.blowCount; ++k)
+            bolts += out.blows[k].kind == kindBolt && out.blows[k].id == 0x33;
+        check(bolts >= 1 && sounds == 1, "the trigger's LIGHTNING BLAST did not strike the enemy with one sound");
+        check(play.takeThorEvents() & Play::thorBlast, "the blast not logged");
+        uint32_t seen = 0;
+        for (int f = 0; f < 15; ++f) {
+            out = PlayOut{};
+            play.step(in, out); // trigger held: no second blast
+            seen += out.look.bolts > 0;
+            sounds += out.lightning[0] + out.lightning[1];
+        }
+        check(seen == 15 && sounds == 1, "the blast's bolt not seen for a fifth of a second, or it re-fired");
+        in.hands[1].trigger = 0;
+        // STORM with no enemy: the hammer up overhead (the controller tilted, as held), bolts from the sky.
+        in.count = 0;
+        in.hands[1].position = {.1f, 2.f, -.1f};
+        in.hands[1].aim = {0, .7f, -.7f};
+        uint32_t stormSounds = 0, skyFrames = 0;
+        for (int f = 0; f < 200; ++f) {
+            out = PlayOut{};
+            play.step(in, out);
+            stormSounds += out.lightning[0] + out.lightning[1];
+            skyFrames += out.look.bolts >= 3;
+        }
+        check(stormSounds == stormStrikes, "the storm's strikes with no enemy");
+        check(skyFrames >= 20, "the storm's sky bolts not seen with no enemy");
+        check(play.takeThorEvents() & Play::thorStorm, "the storm not logged");
+        // A slow let go puts it back on the back: never thrown by accident.
+        for (int f = 0; f < 30; ++f)
+            play.step(in, out);
+        in.hands[1].grip = 0;
+        out = PlayOut{};
+        play.step(in, out);
+        check(!play.hammerHeld && !play.hammerInAir() && play.throws == 1, "a still let go threw the hammer");
+        out = PlayOut{};
+        play.step(in, out);
+        check(out.look.hammerSheathed, "the hammer not back on the back");
+        // Recall: thrown with nothing in its way, the grip pressed brings it back early.
+        in.hands[1].position = {.2f, 1.6f, .1f};
+        in.hands[1].grip = 1;
+        play.step(in, out);
+        in.hands[1].position = {.25f, 1.45f, 0};
+        play.step(in, out);
+        for (int f = 0; f < 6; ++f) {
+            in.hands[1].position.z -= .05f;
+            play.step(in, out);
+        }
+        in.hands[1].grip = 0;
+        play.step(in, out);
+        check(play.throws == 2 && play.hammerInAir(), "the second throw");
+        for (int f = 0; f < 10; ++f)
+            play.step(in, out);
+        in.hands[1].grip = 1;
+        play.step(in, out);
+        check(play.takeThorEvents() & Play::thorRecalled, "the grip did not recall the hammer");
+        int back = 0;
+        while (play.hammerInAir() && back < 200) {
+            play.step(in, out);
+            ++back;
+        }
+        check(play.hammerHeld && back < 60, "the recalled hammer not caught within a second");
+        check(Play::boltsSeenSeconds() >= .25f, "bolts last a moment");
+    });
+    test("Build 7: GREEN LANTERN - one hand up no longer takes him off (RingFlight gates FLY MODE's pose)", [] {
+        using namespace hero072;
+        const Vec3 head{0, 1.7f, 0};
+        RingFlight rf;
+        float lift = 0;
+        uint32_t pose = 0;
+        for (int f = 0; f < 60; ++f)
+            pose = rf.gate(1 / 72.f, false, 1u, 1.f, head, {-.25f, 1.2f, -.2f}, {.1f, 2.1f, 0}, lift);
+        check(pose == 0u, "one hand up took GREEN LANTERN off");
+        for (int f = 0; f < 60; ++f)
+            pose = rf.gate(1 / 72.f, false, 1u, 1.f, head, {-.15f, 2.15f, 0}, {.15f, 2.15f, 0}, lift);
+        check(pose == 1u && lift == 1.f, "both arms straight up did not take off");
+        check(rf.gate(1 / 72.f, true, 2u, 0.f, head, {}, {}, lift) == 2u, "in the air the poses do not steer");
+    });
     test("Build 6: the THOR crash (POWERS' ACTIVE HERO banner read names[9] past its end) - every hero has a banner name", [] {
         using spidy::wrist_hud::activeHeroName;
         check(std::string(activeHeroName(9)) == "THOR", "THOR's banner name");

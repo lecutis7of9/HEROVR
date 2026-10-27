@@ -18,16 +18,26 @@ namespace spidy::sfx {
 // SPIDY_REPULSOR_TAKE, assets/sfx/repulsor_mcu_<take>_fire.wav) and repulsor_charge its whine, played on
 // the press so it fills the 0.12 s chord wait (repulsor.hpp chordWindow); back to back they are the take.
 // Version 0.0.7 HERO PROFILES (tools/sfx/make_sfx_007.py): the guns, reloads, holsters, claws, heat and frost;
-// CAPTAIN AMERICA: the shield's throw, ricochet, catch and clang (bash).
+// CAPTAIN AMERICA: the shield's throw, ricochet, catch and clang (bash). Version 0.0.72: pistol_reload.
 enum Id : uint32_t { sonicBoom, repulsorFire, chestBeam, beamReady, batonWhoosh, batonHit, repulsorCharge,
                      pistolShot, shotgunBlast, dryClick, magDrop, magSeat, holsterTick, clawSnikt, heatVision, freezeBreath,
-                     shieldThrow, shieldRicochet, shieldCatch, shieldClang, sounds };
+                     shieldThrow, shieldRicochet, shieldCatch, shieldClang, pistolReload, thorLightning1, thorLightning2, sounds };
 inline constexpr const char* names[sounds] = {"sonic_boom", "repulsor_fire", "chest_beam",
                                               "beam_ready", "baton_whoosh", "baton_hit", "repulsor_charge",
                                               "pistol_shot", "shotgun_blast", "dry_click", "mag_drop", "mag_seat", "holster", "claw_snikt", "heat_vision", "freeze_breath",
-                                              "shield_throw", "shield_ricochet", "shield_catch", "shield_clang"};
+                                              "shield_throw", "shield_ricochet", "shield_catch", "shield_clang", "pistol_reload", "thor_lightning_1", "thor_lightning_2"};
 // Voices playing one sound at most at once (a fast run of blasts layers up to this).
 inline constexpr uint32_t voicesPerSound = 4;
+// Version 0.0.72: the Punisher's guns fire the player's own sounds (tools/sfx/user_guns.py): the sawed-off
+// 3.5 s, the pistols 2.5 s, the pistols' reload 1.75 s. Every shot (and every pistol reload) plays its sound
+// once, whole: each has voices enough that one is always idle at the fastest rate (both pistols at
+// pistolSpec.cooldown, the sawed-off at sawedOffSpec.cooldown; tests check it), so none is dropped or cut.
+inline constexpr uint32_t mostVoices = 28;
+inline constexpr uint32_t voicesFor(uint32_t id) {
+    return id == pistolShot ? 28u : id == shotgunBlast ? 12u : id == pistolReload ? 12u
+         : id == thorLightning1 || id == thorLightning2 ? 24u // THOR: a strike each stormEvery (.35 s) over 6.7 s
+                                                        : voicesPerSound;
+}
 
 // A WAV's PCM (a view into the embedded bytes).
 struct Pcm {
@@ -49,15 +59,16 @@ public:
         if (id < sounds)
             pending_[id].fetch_add(1, std::memory_order_relaxed);
     }
-    // The player: how many of this sound were asked since the last take (capped at voicesPerSound;
+    // The player: how many of this sound were asked since the last take (capped at voicesFor(id);
     // the rest counted as dropped).
     uint32_t take(Id id, uint64_t& dropped) {
         if (id >= sounds)
             return 0;
         const uint32_t n = pending_[id].exchange(0, std::memory_order_relaxed);
-        if (n > voicesPerSound)
-            dropped += n - voicesPerSound;
-        return n > voicesPerSound ? voicesPerSound : n;
+        const uint32_t most = voicesFor(id);
+        if (n > most)
+            dropped += n - most;
+        return n > most ? most : n;
     }
     bool any() const {
         for (const auto& p : pending_)

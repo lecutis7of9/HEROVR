@@ -28,7 +28,7 @@ HANDLE wake{};
 struct Player {
     IXAudio2* engine{};
     IXAudio2MasteringVoice* master{};
-    IXAudio2SourceVoice* voices[sounds][voicesPerSound]{};
+    IXAudio2SourceVoice* voices[sounds][mostVoices]{}; // voicesFor(id) of each made
     float gainSet = -1.f;
     uint64_t droppedHere{};
 };
@@ -93,7 +93,8 @@ bool setUp(Player& p, HMODULE dll) {
         wf.wBitsPerSample = static_cast<WORD>(pcm.bits);
         wf.nBlockAlign = static_cast<WORD>(pcm.channels * pcm.bits / 8);
         wf.nAvgBytesPerSec = pcm.rate * wf.nBlockAlign;
-        for (auto& v : p.voices[id]) {
+        for (uint32_t k = 0; k < voicesFor(id); ++k) {
+            auto& v = p.voices[id][k];
             hr = p.engine->CreateSourceVoice(&v, &wf);
             if (FAILED(hr) || !v) {
                 v = nullptr;

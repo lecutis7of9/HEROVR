@@ -102,6 +102,9 @@ struct PlayOut {
     uint32_t faction{};        // the faction chosen (the status page)
     uint32_t factionWorn{};    // what the enemies wear: VANILLA until its models and the hook are in
     bool ultimateFired{};
+    // Version 0.0.72: THOR's lightning strikes this frame, each one of the player's two sounds picked at
+    // random (sfx::thorLightning1 / 2): the game plays lightning[k] times sound k (one playback a strike).
+    uint8_t lightning[2]{};
     PerchOut perch{};          // BATMAN's PERCH TAKEDOWN: the light, the button to send, the rope, the alerted
     uint32_t events{};         // bit 1 << BlowKind: what fired this frame (the log)
     Look look{};
@@ -169,6 +172,7 @@ class Play {
     float lastDt{};
     float shockRadius{};
     bool hammerHeld{}, gripWas{};
+    uint32_t lightningSeed = 0x9e3779b9u; // THOR's strike sound pick (xorshift; seedLightning)
     float hammerOut{}; // THOR's thrown hammer: seconds left in the air
     Vec3 hammerTo{};
     uint32_t heroWas = hero_modes::heroes;
@@ -393,6 +397,10 @@ class Play {
             }
             while (ultimate.hit(h)) {
                 const Ultimate& u = ultimateOf(h);
+                if (h == hero_modes::thor) { // THOR's ultimate: each of its strikes
+                    strike(out);
+                    ++strikes;
+                }
                 for (uint32_t e = 0; in.list && e < in.count; ++e)
                     if (!in.list[e].down && ok(in.list[e].chest) && length(in.list[e].chest - head) <= u.radius)
                         out.blow(in.list[e].id, u.blow, in.list[e].chest, kindUltimate);
@@ -683,6 +691,10 @@ class Play {
                 hammerOut = hammerFlight;
                 hammerTo = p[1] + aim * 10.f;
                 uint64_t hitIds[chainMost]{};
+                if (e >= 0 && o.thorLightning) { // the thrown hammer's lightning: one strike, however far it chains
+                    strike(out);
+                    ++strikes;
+                }
                 for (uint32_t jump = 0; e >= 0 && jump < (o.thorChain ? perks.chainCap(h) : 1u); ++jump) {
                     hitIds[jump] = in.list[e].id;
                     out.blow(in.list[e].id, hammerHit(), in.list[e].chest, kindHammer);
@@ -715,8 +727,11 @@ class Play {
                     const sm2_damage::Blow extra = act == ThorAct::bolt ? thorBolt() : act == ThorAct::launch ? thorLaunch() : thorSlam();
                     out.blow(en.id, extra, en.chest,
                              act == ThorAct::bolt ? kindBolt : act == ThorAct::launch ? kindLaunch : kindSlam);
-                    if (act != ThorAct::launch)
+                    if (act != ThorAct::launch) {
                         addBolt(out, en.chest + Vec3{0, 12.f, 0}, en.chest);
+                        strike(out); // the bolt (and its LIGHTNING CHAIN) / the slam: one strike
+                        ++strikes;
+                    }
                     if (act == ThorAct::bolt && o.thorChain) // LIGHTNING CHAIN: the bolt jumps on
                         carry(h, en.id, en.chest, thorBolt(), in.list, in.count, out, kindBolt);
                     out.buzz(1, 1.f);
@@ -733,6 +748,8 @@ class Play {
         if (stormLeftStrikes > 0 && stormNext <= 0) {
             --stormLeftStrikes;
             stormNext = stormEvery;
+            strike(out); // each storm strike, one sound
+            ++strikes;
             const float r = stormRadius * perks.scale(h, Stat::stormRadius);
             for (uint32_t e = 0; in.list && e < in.count; ++e)
                 if (!in.list[e].down && ok(in.list[e].chest) && length(in.list[e].chest - hd) <= r) {
@@ -755,6 +772,20 @@ class Play {
         if (o.thorLightning && fight.on && tracked[1] && out.look.bolts < boltsMost)
             addBolt(out, p[1], p[1] + Vec3{std::sin(clock * 13.f) * .25f, .2f, std::cos(clock * 11.f) * .25f});
     }
+  public:
+    void seedLightning(uint32_t s) { lightningSeed = s ? s : 0x9e3779b9u; }
+    // One lightning strike: one of the two sounds, at random.
+    void strike(PlayOut& out) {
+        lightningSeed ^= lightningSeed << 13;
+        lightningSeed ^= lightningSeed >> 17;
+        lightningSeed ^= lightningSeed << 5;
+        uint8_t& n = out.lightning[(lightningSeed >> 7) & 1u];
+        if (n < 255)
+            ++n;
+    }
+    uint32_t strikes{}; // every THOR strike so far (the status page, the tests)
+
+  private:
     static int nextChain(Vec3 from, const BatonEnemy* list, uint32_t count, const uint64_t* hit) {
         int best = -1;
         float bd = chainJump;

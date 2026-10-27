@@ -28,6 +28,9 @@ SPIDY_SFX(shield_throw) // Version 0.0.7 CAPTAIN AMERICA
 SPIDY_SFX(shield_ricochet)
 SPIDY_SFX(shield_catch)
 SPIDY_SFX(shield_clang)
+SPIDY_SFX(thor_lightning_1) // Version 0.0.72: THOR's lightning, the player's own
+SPIDY_SFX(thor_lightning_2)
+SPIDY_SFX(pistol_reload) // Version 0.0.72: the player's own (tools/sfx/user_guns.py)
 #undef SPIDY_SFX
 } // namespace spidy::sfx_data
 
@@ -92,7 +95,10 @@ const Pcm& sound(Id id) {
         parseWav(sfx_data::shield_throw, sfx_data::shield_throwSize),
         parseWav(sfx_data::shield_ricochet, sfx_data::shield_ricochetSize),
         parseWav(sfx_data::shield_catch, sfx_data::shield_catchSize),
-        parseWav(sfx_data::shield_clang, sfx_data::shield_clangSize)};
+        parseWav(sfx_data::shield_clang, sfx_data::shield_clangSize),
+        parseWav(sfx_data::pistol_reload, sfx_data::pistol_reloadSize),
+        parseWav(sfx_data::thor_lightning_1, sfx_data::thor_lightning_1Size),
+        parseWav(sfx_data::thor_lightning_2, sfx_data::thor_lightning_2Size)};
     static const Pcm none{};
     return id < sounds ? table[id] : none;
 }

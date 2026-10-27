@@ -75,6 +75,9 @@ struct PlayOutput {
     uint32_t blowCount{};
     float haptic[2]{};
     uint32_t sounds{};  // bit 1 << sfx::Id
+    // Version 0.0.72: how many times each sound was asked this frame (two pistols firing on one frame are
+    // two shots: two playbacks). sound() sets both; the player plays plays[id] (at least 1 when the bit is set).
+    uint8_t plays[sfx::sounds]{};
     uint32_t claimed{}; // holsterStep: the hands whose grip is the rack's
     // Version 0.0.7 BATMAN GRAPPLE GUN: the hands whose trigger is held as a grapple (the press
     // began with no enemy aimed and the hand aimed above level); no batarang for that press.
@@ -87,8 +90,33 @@ struct PlayOutput {
         if (hand < 2)
             haptic[hand] = std::max(haptic[hand], s);
     }
-    void sound(sfx::Id id) { sounds |= 1u << id; }
+    void sound(sfx::Id id) {
+        if (id >= sfx::sounds)
+            return;
+        sounds |= 1u << id;
+        if (plays[id] < 255)
+            ++plays[id];
+    }
+    uint32_t playsOf(uint32_t id) const { return id < sfx::sounds ? std::max<uint32_t>(plays[id], (sounds >> id) & 1u) : 0; }
 };
+static_assert(sfx::sounds <= 32, "PlayOutput::sounds is a 32-bit mask");
+
+// Version 0.0.72: the reload sound a gun's state change asks for (sfx::sounds: none). The pistols play the
+// player's own reload sound once a reload, as it begins (the magazine dropped, or AUTO's refill started
+// from ready or empty; AUTO taking over a reload already begun is the same reload); the sawed-off keeps
+// its 0.0.7 breech-open and seat sounds.
+inline uint32_t reloadSoundOf(uint32_t weapon, uint32_t was, uint32_t now) {
+    if (now == was)
+        return sfx::sounds;
+    const bool begins = (now == opened || now == autoLoading) && (was == ready || was == empty);
+    if (weapon != sawedOff)
+        return begins ? sfx::pistolReload : sfx::sounds;
+    if (now == opened || (now == autoLoading && was != autoLoading))
+        return now == autoLoading ? sfx::magSeat : sfx::magDrop;
+    if (now == ready && (was == seating || was == autoLoading))
+        return sfx::magSeat;
+    return sfx::sounds;
+}
 
 // Where a holstered item sits on the body (tracking space): its grip, along it, its top.
 inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec3& at, Vec3& forward, Vec3& up) {
@@ -759,8 +787,10 @@ class Play {
             }
             if (g.state != was) {
                 const bool opening = g.state == opened || (g.state == autoLoading && was != autoLoading);
+                const uint32_t reloadSound = reloadSoundOf(g.weapon, was, g.state);
+                if (reloadSound < sfx::sounds)
+                    out.sound(static_cast<sfx::Id>(reloadSound));
                 if (opening) {
-                    out.sound(g.weapon == sawedOff && g.state == autoLoading ? sfx::magSeat : sfx::magDrop);
                     if (g.weapon == sawedOff && gh.ok) { // Version 0.0.7 GUN GRIP: out of the drawn breech
                         const Vec3 breech = gun_grip::from(gh, gun_grip::breechFromPalm(gw)), f = normalized(gh.forward);
                         shells.eject(breech, -f + gh.up * .3f, true);
@@ -772,7 +802,6 @@ class Play {
                     }
                 }
                 if (g.state == ready && (was == seating || was == autoLoading)) {
-                    out.sound(sfx::magSeat);
                     if (inHand)
                         out.buzz(i, .35f);
                 }

@@ -6253,8 +6253,8 @@ DWORD WINAPI run(void*) {
                                         for (unsigned i = 0; i < 2; ++i)
                                             if (hout.haptic[i] > 0)
                                                 runtime.haptic(static_cast<int>(i), hout.haptic[i]);
-                                        for (uint32_t id = 0; id < sfx::sounds; ++id)
-                                            if (hout.sounds & (1u << id))
+                                        for (uint32_t id = 0; id < sfx::sounds; ++id) // Version 0.0.72: one a shot
+                                            for (uint32_t k = hout.playsOf(id); k > 0; --k)
                                                 sfx::play(static_cast<sfx::Id>(id));
                                     } else {
                                         batmanGrapple[0] = batmanGrapple[1] = false;
@@ -6402,6 +6402,7 @@ DWORD WINAPI run(void*) {
                                             const std::string kept = readHero072Progress();
                                             if (!kept.empty())
                                                 hero072Play.load(kept.c_str());
+                                            hero072Play.seedLightning(static_cast<uint32_t>(GetTickCount64())); // THOR's sound pick
                                         }
                                         hero_modes::BatonEnemy list72[our_ball::maxEnemies];
                                         std::array<world_trace::Vital, world_trace::enemySlots> vit72{};
@@ -6466,6 +6467,9 @@ DWORD WINAPI run(void*) {
                                         }
                                         hero072::PlayOut out72;
                                         hero072Play.step(in72, out72);
+                                        for (uint32_t k = 0; k < 2; ++k) // Version 0.0.72: THOR's lightning, one sound a strike
+                                            for (uint32_t n = out72.lightning[k]; n > 0; --n)
+                                                sfx::play(k ? sfx::thorLightning2 : sfx::thorLightning1);
                                         hero072KeepTopped = out72.keepTopped;
                                         for (uint32_t k = 0; k < out72.blowCount; ++k) {
                                             const auto& b72 = out72.blows[k];

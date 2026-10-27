@@ -22547,21 +22547,88 @@ int main() {
 #else
         constexpr float fire = .26f; // take C, TIGHT (the 0.0.6 default, CMakeLists' SPIDY_REPULSOR_TAKE)
 #endif
+        // Version 0.0.72: the pistols' shot (2.496 s), the sawed-off's (3.504 s) and the pistols' reload (1.752 s)
+        // are the player's own sounds, decoded unchanged (tools/sfx/user_guns.py): their own rate, stereo.
         const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f,
-                                      .45f,  .8f,  .12f, .4f, .25f, .22f, .4f, .6f, .7f, // 0.0.7's nine
-                                      .6f,  .7f,  .45f, 1.1f}; // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang
-        static_assert(sounds == 20);
+                                      2.496f, 3.504f, .12f, .4f, .25f, .22f, .4f, .6f, .7f, // 0.0.7's nine
+                                      .6f,  .7f,  .45f, 1.1f, // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang
+                                      1.752f, 4.389f, 6.699f}; // 0.0.72 pistol_reload, THOR's two lightnings
+        static_assert(sounds == 23);
         for (uint32_t i = 0; i < sounds; ++i) {
             const Pcm& p = sound(static_cast<Id>(i));
-            check(p.ok && p.rate == 48000 && p.channels == 1 && p.bits == 16 && p.data && p.bytes % 2 == 0,
-                  std::string(names[i]) + " is not 48 kHz mono 16-bit PCM");
+            const bool user = i == pistolShot || i == shotgunBlast || i == pistolReload || i == thorLightning1 || i == thorLightning2;
+            const uint32_t rate = i == thorLightning1 ? 44100u : i == shotgunBlast || i == thorLightning2 ? 48000u : user ? 24000u : 48000u;
+            check(p.ok && p.rate == rate && p.channels == (user ? 2u : 1u) && p.bits == 16 && p.data && p.bytes % 2 == 0,
+                  std::string(names[i]) + " is not its rate, channels and 16-bit PCM");
             check(std::fabs(p.seconds() - expect[i]) < .02f, std::string(names[i]) + " has the wrong length");
             int peak = 0;
             for (uint32_t k = 0; k + 1 < p.bytes; k += 2) {
                 const int v = static_cast<int16_t>(static_cast<uint16_t>(p.data[k] | (p.data[k + 1] << 8)));
                 peak = std::max(peak, v < 0 ? -v : v);
             }
-            check(peak > 10000 && peak <= 32767, std::string(names[i]) + " is silent or clipped");
+            // the player's own sounds are full scale as given (-32768 included): kept as they are
+            check(peak > 10000 && peak <= (user ? 32768 : 32767), std::string(names[i]) + " is silent or clipped");
+        }
+    });
+    test("Version 0.0.72: the Punisher's guns play the player's own sounds, once a shot and once a pistol reload, never dropped", [] {
+        using namespace spidy::sfx;
+        using namespace spidy::hero007;
+        // the embedded bytes are the player's MP3s decoded as they are (the Python gate compares them to the files)
+        check(std::fabs(sound(shotgunBlast).seconds() - 3.504f) < .002f && std::fabs(sound(pistolShot).seconds() - 2.496f) < .002f &&
+                  std::fabs(sound(pistolReload).seconds() - 1.752f) < .002f, "not the player's sounds");
+        // a voice is always idle at the fastest fire: shots within one sound's length, both pistols at once
+        auto within = [](float seconds, float every) { return static_cast<uint32_t>(std::floor(seconds / every)) + 1; };
+        check(voicesFor(pistolShot) >= 2 * within(sound(pistolShot).seconds(), pistolSpec.cooldown), "a pistol shot can be dropped");
+        check(voicesFor(shotgunBlast) >= within(sound(shotgunBlast).seconds(), sawedOffSpec.cooldown), "a shotgun blast can be dropped");
+        check(voicesFor(pistolReload) >= 2 * within(sound(pistolReload).seconds(), seatSeconds), "a reload can be dropped");
+        for (uint32_t id = 0; id < sounds; ++id)
+            check(voicesFor(id) <= mostVoices && voicesFor(id) >= 1, "a voice count over the table");
+        // the requests keep every shot of a burst up to the voices
+        uint64_t dropped = 0;
+        for (uint32_t i = 0; i < sounds; ++i)
+            requests().take(static_cast<Id>(i), dropped);
+        dropped = 0;
+        for (int k = 0; k < 20; ++k)
+            requests().play(pistolShot);
+        check(requests().take(pistolShot, dropped) == 20 && dropped == 0, "a burst of pistol shots dropped");
+        // two pistols firing on one frame: two playbacks
+        PlayOutput o;
+        o.sound(pistolShot);
+        o.sound(pistolShot);
+        check(o.playsOf(pistolShot) == 2 && o.playsOf(shotgunBlast) == 0 && (o.sounds >> pistolShot & 1), "one frame's two shots");
+        PlayOutput bit;
+        bit.sounds |= 1u << holsterTick;
+        check(bit.playsOf(holsterTick) == 1 && bit.playsOf(sounds) == 0, "a bit set directly");
+        // the pistol's reload sound: once, as a reload begins, in either mode
+        check(reloadSoundOf(pistol, ready, opened) == pistolReload && reloadSoundOf(pistol, empty, opened) == pistolReload &&
+                  reloadSoundOf(pistol, ready, autoLoading) == pistolReload && reloadSoundOf(pistol, empty, autoLoading) == pistolReload,
+              "a pistol reload began silent");
+        check(reloadSoundOf(pistol, opened, seating) == sounds && reloadSoundOf(pistol, seating, ready) == sounds &&
+                  reloadSoundOf(pistol, opened, autoLoading) == sounds && reloadSoundOf(pistol, seating, autoLoading) == sounds &&
+                  reloadSoundOf(pistol, autoLoading, ready) == sounds && reloadSoundOf(pistol, ready, ready) == sounds &&
+                  reloadSoundOf(pistol, ready, empty) == sounds,
+              "a pistol reload played twice");
+        // the sawed-off as 0.0.7
+        check(reloadSoundOf(sawedOff, ready, opened) == magDrop && reloadSoundOf(sawedOff, ready, autoLoading) == magSeat &&
+                  reloadSoundOf(sawedOff, seating, ready) == magSeat && reloadSoundOf(sawedOff, autoLoading, ready) == magSeat &&
+                  reloadSoundOf(sawedOff, opened, seating) == sounds,
+              "the sawed-off's reload sounds changed");
+        // a whole AUTO cycle on a real Gun: one reload sound a reload
+        for (uint32_t mode : {uint32_t{reloadAuto}, uint32_t{reloadRealistic}}) {
+            Gun g;
+            g.arm(pistol);
+            uint32_t reloadSounds = 0, was = g.state;
+            float t = 0;
+            for (int f = 0; f < 60 * 12; ++f, t += 1.f / 60) {
+                const bool trigger = (f / 3) % 2 == 0; // pulls as fast as the frames allow
+                const bool flick = mode == reloadRealistic && g.state == empty && f % 30 == 0;
+                const bool hip = mode == reloadRealistic && g.state == opened && f % 30 == 15;
+                g.update(1.f / 60, trigger, mode, flick, hip);
+                reloadSounds += reloadSoundOf(g.weapon, was, g.state) == pistolReload;
+                was = g.state;
+            }
+            check(g.reloads > 0 && reloadSounds == g.reloads + (g.state == opened || g.state == seating || g.state == autoLoading ? 1u : 0u),
+                  "not one reload sound a reload");
         }
     });
     test("0.0.5 SOUND EFFECTS: broken WAVs are refused", [] {
@@ -24046,7 +24113,7 @@ int main() {
         check(v.empty(), "a NaN item draws nothing");
     });
     test("Version 0.0.7: the new sounds and defaults", [] {
-        check(spidy::sfx::sounds == 20, "twenty sounds (0.0.7: + 9, CAPTAIN AMERICA + 4)");
+        check(spidy::sfx::sounds == 23, "twenty-three sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2)");
         using namespace spidy::combat38;
         for (uint32_t o = batman; o <= shieldLook; ++o) { // CAPTAIN AMERICA: through SHIELD LOOK
             const std::string help = optionInfo[o].help;
@@ -25460,13 +25527,33 @@ int main() {
             check(play.hammerHeld, "the hammer drawn from behind the right shoulder");
             in.hands[1].position = {0, 2.1f, 0};
             in.hands[1].aim = {0, 1, 0};
-            uint32_t storms = 0;
+            uint32_t storms = 0, sounds72 = 0;
             for (int f = 0; f < 200; ++f) {
+                out = PlayOut{};
                 play.step(in, out);
                 for (uint32_t k = 0; k < out.blowCount; ++k)
                     storms += out.blows[k].kind == kindStorm;
+                sounds72 += out.lightning[0] + out.lightning[1];
             }
             check(storms == stormStrikes, "the storm's three strikes on the enemy near");
+            // Version 0.0.72: one of the player's two lightning sounds a strike, either at random
+            check(sounds72 == stormStrikes && play.strikes == stormStrikes, "not one lightning sound a storm strike");
+            PlayOut many;
+            for (int k = 0; k < 200; ++k)
+                play.strike(many);
+            check(many.lightning[0] + many.lightning[1] == 200 && many.lightning[0] > 60 && many.lightning[1] > 60,
+                  "the two lightning sounds not picked at random");
+            Play seeded;
+            seeded.seedLightning(0); // never a stuck generator
+            PlayOut s0;
+            for (int k = 0; k < 50; ++k)
+                seeded.strike(s0);
+            check(s0.lightning[0] > 0 && s0.lightning[1] > 0, "a zero seed stuck on one sound");
+            check(spidy::sfx::voicesFor(spidy::sfx::thorLightning1) >=
+                          static_cast<uint32_t>(spidy::sfx::sound(spidy::sfx::thorLightning1).seconds() / stormEvery) + 1 &&
+                      spidy::sfx::voicesFor(spidy::sfx::thorLightning2) >=
+                          static_cast<uint32_t>(spidy::sfx::sound(spidy::sfx::thorLightning2).seconds() / stormEvery) + 1,
+                  "a lightning strike's sound can be dropped");
         }
         // ULTIMATE: TEST UNLOCKS ULTIMATES, both fists crossed on the chest, both grips held.
         {

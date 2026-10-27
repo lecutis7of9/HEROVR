@@ -24,7 +24,7 @@ MAX_TEX = 1024
 # The VR targets (triangles a model; mesh_model::drawTriangles is the runtime cap, 24000). A
 # source at or under its target ships whole.
 TARGET = {'Batarang/EIRA': 7000, 'Batarang/CLOONEY': 1428, 'Pistol': 4707, 'SawedOff/Frame': 9000,
-          'SawedOff/Barrels': 7000, 'Baton/Left': 4000, 'Baton/Right': 4000, 'Shield': 14000, 'GrappleGun': 10272}
+          'SawedOff/Barrels': 12000, 'Baton/Left': 4000, 'Baton/Right': 4000, 'Shield': 24000, 'GrappleGun': 10272}
 
 
 def decimate(tris, uv, mat, target):
@@ -311,6 +311,11 @@ def main(src, out):
     centre_m = (np.array([A['centre'][0], A['centre'][1], 0]) - origin) @ rot.T * k
 
     def layer_order(t):  # the disc: triangles within the rim (in the face's plane) that are not straps
+        if len(t) == len(A['disc']) and len(A['tris']) == len(tris) and np.allclose(A['tris'], tris, atol=1e-6):
+            # 0.0.72: shipped whole, so the source analysis' own disc / strap split (the geometric test below
+            # takes every triangle of the whole mesh for the disc)
+            order = np.r_[np.flatnonzero(A['disc']), np.flatnonzero(~A['disc'])]
+            return order, int(A['disc'].sum())
         c = t.mean(1)
         r = np.hypot(c[:, 0] - centre_m[0], c[:, 1] - centre_m[1])
         disc = (r > .2 * radius_m) | (np.abs(c[:, 2] - back_c[2]) < .012)

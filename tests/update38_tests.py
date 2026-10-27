@@ -145,7 +145,9 @@ class Options(unittest.TestCase):
         for key, title, sub, count, names in cpp_options():
             self.assertTrue(sub.endswith('.'), key)
             self.assertEqual(sub.count('. '), 0, f'{key}: subtext is more than one sentence')
-            self.assertLessEqual(len(sub), 100, key)
+            self.assertLessEqual(len(sub), 80, key)  # 0.0.72 rule: <= 80 characters, exactly one '.'
+            self.assertEqual(sub.count('.'), 1, key)
+            self.assertRegex(sub, r'restart|live', key)  # says whether a restart is needed
 
     def test_every_switch_does_something(self):
         for key, export in EXPORTS.items():

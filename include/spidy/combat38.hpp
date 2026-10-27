@@ -133,89 +133,89 @@ struct OptionInfo {
     const char* values[5];
 };
 inline constexpr OptionInfo optionInfo[options] = {
-    {"crawl_cap", "CRAWL CAP", "CRAWL", "Crouches the view only under a ceiling lower than 1.6 m, never in a fight.", 3,
+    {"crawl_cap", "CRAWL CAP", "CRAWL", "Crouches the view only under a low ceiling, never in a fight, no restart.", 3,
      {"AUTO", "WITH FLAG", "OFF", nullptr}},
     {"zip_mode", "ZIP MODE", "ZIP",
-     "SPIDYVR lunges at the enemy you look at as you punch; the others use distance or aim.", 4,
+     "SPIDYVR lunges at the foe you look at as you punch, no restart.", 4,
      {"SPIDYVR", "BOTH", "DISTANCE", "AIMED"}},
-    {"aim_assist", "BALL AIM", "AIM", "SMART aims at the enemy nearest your aim, closer ones first, at his chest.",
+    {"aim_assist", "BALL AIM", "AIM", "SMART aims at the enemy nearest your aim, at his chest, no restart.",
      4, {"SMART", "SPIDYVR", "CONE 20", "OFF"}},
     {"ball_look", "BALL LOOK", "BALL",
-     "OURS fires one mod ball from your wrist; WRIST, GLOB and GAME fire the game's.", 4,
+     "OURS fires one mod ball from your wrist; the others the game's, no restart.", 4,
      {"OURS", "WRIST", "GLOB", "GAME ONLY"}},
-    {"punch_mode", "PUNCH MODE", "PUNCH", "TARGETED attacks only an enemy in reach or locked; waving arms never attacks.", 4,
+    {"punch_mode", "PUNCH MODE", "PUNCH", "TARGETED attacks only an enemy in reach or locked, no restart.", 4,
      {"TARGETED", "BOTH", "GESTURE", "CONTACT"}},
-    {"ring_anchor", "RING ANCHOR", "RING", "Pins the health ring to the drawn wrist's web shooter, or 38.1's or 37.2's spot.",
+    {"ring_anchor", "RING ANCHOR", "RING", "Pins the health ring to the drawn wrist's web shooter, no restart.",
      3, {"WRIST", "HAND", "WORLD", nullptr}},
     {"holo_open", "HOLO OPEN", "HOLO",
-     "Point at your forearm and pull the trigger to open; that pull never reaches the game.", 4,
+     "Point at your forearm and pull the trigger to open it, no restart.", 4,
      {"FOREARM", "PALM LOOK", "CLICK", "F8 ONLY"}},
-    {"wall_tilt", "WALL TILT", "TILT", "Levels the view on death or respawn and off a wall past 60 degrees.", 2,
+    {"wall_tilt", "WALL TILT", "TILT", "Levels the view on death, respawn and off a steep wall, no restart.", 2,
      {"SAFE", "OFF", nullptr, nullptr}},
-    {"web_rope", "WEB ROPE", "ROPE", "Draws the swing web as a thick bending rope, or the 37.2 frayed fibre.", 2,
+    {"web_rope", "WEB ROPE", "ROPE", "Draws the swing web as a thick bending rope or the frayed fibre, no restart.", 2,
      {"ROPE", "FIBRE", nullptr, nullptr}},
-    {"lunge", "LUNGE", "LUNGE", "GAME BUTTON uses the game's web strike; SPIDYVR MOVE flies you there (experimental).", 2,
+    {"lunge", "LUNGE", "LUNGE", "GAME BUTTON uses the game's web strike; SPIDYVR MOVE flies you, no restart.", 2,
      {"GAME BUTTON", "SPIDYVR MOVE", nullptr, nullptr}},
-    {"ball_fire", "BALL FIRE", "FIRE", "Shoots the web ball the moment the trigger goes down, or when it is let go.", 2,
+    {"ball_fire", "BALL FIRE", "FIRE", "Shoots the web ball as the trigger goes down, or as it is let go, no restart.", 2,
      {"PRESS", "RELEASE", nullptr, nullptr}},
-    {"aim_axis", "AIM AXIS", "AXIS", "Aims balls, punches and blood along your hand like the swing webs, or an older axis.", 3,
+    {"aim_axis", "AIM AXIS", "AXIS", "Aims balls, punches and blood along your hand or an older axis, no restart.", 3,
      {"HAND -Y", "AIM POSE", "OLD -Z", nullptr}},
-    {"ring_layer", "RING LAYER", "LAYER", "HOLD never hides the ring or hologram; NEWEST hides them in a stale picture.",
+    {"ring_layer", "RING LAYER", "LAYER", "HOLD never hides the ring; NEWEST hides it in a stale picture, no restart.",
      3, {"HOLD", "NEWEST", "IMAGE", nullptr}},
-    {"lunge_from", "LUNGE FROM", "FROM", "Only swings at an enemy at least this far away lunge; nearer ones punch.", 3,
+    {"lunge_from", "LUNGE FROM", "FROM", "Only swings at an enemy at least this far away lunge, no restart.", 3,
      {"2.5 M", "1.3 M", "4 M", nullptr}},
-    {"lunge_speed", "LUNGE SPEED", "SPEED", "How fast a swing must be, in metres a second, to lunge.", 3,
+    {"lunge_speed", "LUNGE SPEED", "SPEED", "How fast a swing must be, in metres a second, to lunge, no restart.", 3,
      {"2.2", "2.6", "1.9", nullptr}},
-    {"lunge_aim", "LUNGE AIM", "LAIM", "STEADY lunges only at a visible enemy you look at; 38 also takes a loose aim.", 2,
+    {"lunge_aim", "LUNGE AIM", "LAIM", "STEADY lunges only at a visible enemy you look at, no restart.", 2,
      {"STEADY", "38", nullptr, nullptr}},
-    {"punch_angle", "PUNCH ANGLE", "ANGLE", "How straight ahead a fast swing must go to count as a punch.", 3,
+    {"punch_angle", "PUNCH ANGLE", "ANGLE", "How straight ahead a fast swing must go to count as a punch, no restart.", 3,
      {"WIDE .2", "38 .35", "ANY 0", nullptr}},
-    {"ball_lead", "BALL LEAD", "LEAD", "ON TARGET: a ball's RB goes at once unless it bends to an enemy; ALWAYS: 30 ms late.", 2,
+    {"ball_lead", "BALL LEAD", "LEAD", "ON TARGET: a ball's RB goes at once; ALWAYS: 30 ms late, no restart.", 2,
      {"ON TARGET", "ALWAYS", nullptr, nullptr}},
-    {"blood_look", "BLOOD LOOK", "BLOOD", "BRUTAL: big dark lasting drops, a floor pool and blood on your glove.",
+    {"blood_look", "BLOOD LOOK", "BLOOD", "BRUTAL: big dark lasting drops, a floor pool and glove blood, no restart.",
      3, {"BRUTAL", "BIG", "37 SMALL", nullptr}},
-    {"melee_anim", "MELEE ANIM", "MELEE", "EVERY HIT: one X per punch at once, close jabs count; SPACED keeps old gaps.", 3,
+    {"melee_anim", "MELEE ANIM", "MELEE", "EVERY HIT: one X per punch at once; SPACED keeps old gaps, no restart.", 3,
      {"EVERY HIT", "GAME", "SPACED", nullptr}},
-    {"gadget_keys", "GADGET KEYS", "KEYS", "Which RB button each gadget sends: 38.2's (B = Grabber), the game's, or live.txt.",
+    {"gadget_keys", "GADGET KEYS", "KEYS", "Which RB button each gadget sends: the mod's, the game's or yours, no restart.",
      3, {"38.2", "GAME DEFAULT", "CUSTOM", nullptr}},
-    {"grab_web", "GRAB WEB", "GRAB", "Grip toward an enemy webs him (ASSIST forgives 12 degrees); pull back to yank him.", 3,
+    {"grab_web", "GRAB WEB", "GRAB", "Grip toward an enemy to web him, pull back to yank him, no restart.", 3,
      {"ASSIST", "EXACT", "OFF", nullptr}},
-    {"mirror_look", "MIRROR LOOK", "MIRROR", "SUIT: a Spider-Man on your pose, coloured from your eye images; FIGURE is 37's.", 2,
+    {"mirror_look", "MIRROR LOOK", "MIRROR", "SUIT: a Spider-Man on your pose; FIGURE is the older look, no restart.", 2,
      {"SUIT", "FIGURE", nullptr, nullptr}},
-    {"gadget_feel", "GADGET FEEL", "FEEL", "EASY: simpler, looser gadget moves with a buzz when one is recognised.", 2,
+    {"gadget_feel", "GADGET FEEL", "FEEL", "EASY: simpler, looser gadget moves with a buzz, no restart.", 2,
      {"EASY", "38.1", nullptr, nullptr}},
     // Update 38.3 (run382/DIAGNOSIS.md)
-    {"look_lock", "LOOK LOCK", "LOOK", "QUICK moves the lock to the enemy you look straight at for 0.15 s; STEADY is 38.2's.", 2,
+    {"look_lock", "LOOK LOCK", "LOOK", "QUICK moves the lock to the enemy you look straight at, no restart.", 2,
      {"QUICK", "STEADY", nullptr, nullptr}},
-    {"strike_steer", "STRIKE STEER", "STEER", "TO LOCK points the stick at your locked enemy as a web strike goes out.", 2,
+    {"strike_steer", "STRIKE STEER", "STEER", "TO LOCK points the stick at your locked enemy for a strike, no restart.", 2,
      {"TO LOCK", "OFF", nullptr, nullptr}},
-    {"far_windows", "FAR WINDOWS", "WINDOWS", "Eye building detail this much farther so night windows light sooner (costs GPU).", 4,
+    {"far_windows", "FAR WINDOWS", "WINDOWS", "Eye building detail farther so night windows light sooner (GPU), no restart.", 4,
      {"2X", "3X", "1.5X", "GAME"}},
-    {"gadget_hint", "GADGET HINT", "HINT", "Names each gadget at your wrist as it fires, and how to aim a Sonic after a miss.", 2,
+    {"gadget_hint", "GADGET HINT", "HINT", "Names each gadget at your wrist as it fires, no restart.", 2,
      {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.2 (Update 38.6)
-    {"aim_strength", "AIM STRENGTH", "STRENGTH", "How hard an OURS ball bends to an enemy: its cone, homing and lead.", 5,
+    {"aim_strength", "AIM STRENGTH", "STRENGTH", "How hard an OURS ball bends to an enemy: cone, homing, lead, no restart.", 5,
      {"STRONG", "MAX", "OFF", "LOW", "NORMAL"}},
-    {"ball_hit", "BALL HIT", "HIT", "+GAME WEB also asks the game for its own web ball at a hit (experimental).", 2,
+    {"ball_hit", "BALL HIT", "HIT", "+GAME WEB also asks the game for its own web ball at a hit, no restart.", 2,
      {"OURS ONLY", "+GAME WEB", nullptr, nullptr}},
     // Version 0.0.3 (Update 38.7): rope_grab.hpp, wall_stick.hpp, auto_perf.hpp
-    {"rope_grab", "ROPE GRAB", "TETHER", "ON: grip to rope an enemy 3-9 m away; fling or pull to yank him (experimental).", 2,
+    {"rope_grab", "ROPE GRAB", "TETHER", "ON: grip to rope an enemy 3-9 m away, fling or pull to yank, no restart.", 2,
      {"OFF", "ON", nullptr, nullptr}},
-    {"rope_strength", "ROPE STRENGTH", "PULL", "How far the held rope's end moves for each metre your hand moves.", 3,
+    {"rope_strength", "ROPE STRENGTH", "PULL", "How far the held rope's end moves per metre your hand moves, no restart.", 3,
      {"NORMAL", "LOW", "STRONG", nullptr}},
-    {"wall_stick", "WALL STICK", "STICK", "Nets an enemy you throw or punch into a wall or floor (experimental).", 3,
+    {"wall_stick", "WALL STICK", "STICK", "Nets an enemy you throw or punch into a wall or floor, no restart.", 3,
      {"OFF", "LOW HEALTH ONLY", "ALWAYS", nullptr}},
-    {"auto_perf", "AUTO PERFORMANCE", "AUTOPERF", "Lowers live graphics when frames drop and raises them again (experimental).",
+    {"auto_perf", "AUTO PERFORMANCE", "AUTOPERF", "Lowers graphics when frames drop and raises them again, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"perf_target", "TARGET FPS", "TARGET", "The frame rate it aims for; AUTO follows your headset's rate.", 5,
+    {"perf_target", "TARGET FPS", "TARGET", "The frame rate it aims for; AUTO follows your headset, no restart.", 5,
      {"AUTO", "72", "80", "90", "120"}},
-    {"perf_floor", "QUALITY FLOOR", "FLOOR", "How far it may lower graphics: HIGH a little, MEDIUM more, LOW the most.", 3,
+    {"perf_floor", "QUALITY FLOOR", "FLOOR", "How far it may lower graphics: HIGH a little, LOW the most, no restart.", 3,
      {"MEDIUM", "HIGH", "LOW", nullptr}},
-    {"perf_status", "SHOW STATUS", "STATUS", "Shows its frame rate and current step at your left wrist.", 2,
+    {"perf_status", "SHOW STATUS", "STATUS", "Shows its frame rate and current step at your left wrist, no restart.", 2,
      {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.4 (Update 38.8) IRON MAN ABILITIES (hero_modes.hpp; option shooterType, value 1 the
     // repulsor): OFF (0, Spider-Man) is the default; ON fires no web of any kind and sends none to the game.
-    {"iron_man", "IRON MAN ABILITIES", "IRONMAN", "ON: blasts and a chest beam that hurt enemies, no webs (one hero at a time).",
+    {"iron_man", "IRON MAN ABILITIES", "IRONMAN", "ON: blasts and a chest beam that hurt enemies, no webs, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     {"mirror_view", "MIRROR VIEW", "MIRRORCAM", "TEST: a hidden game camera looks at you for 30 s once, then goes OFF (restart).",
      2, {"OFF", "TEST", nullptr, nullptr}},
@@ -225,70 +225,70 @@ inline constexpr OptionInfo optionInfo[options] = {
      5, {"1.00X", "1.15X", "1.30X", "1.45X", "1.60X"}},
     // WEB BALL DAMAGE (0.0.5's DAMAGE TEST; sm2_damage.hpp), OFF by default. Version 0.0.6: the heroes'
     // own hits always send their blows (rep0050 CONFIRMED the path); this is Spider-Man's web ball only.
-    {"hero_damage", "WEB BALL DAMAGE", "DAMAGE", "ON: Spider-Man's web ball hits hurt enemies too (experimental).",
+    {"hero_damage", "WEB BALL DAMAGE", "DAMAGE", "ON: Spider-Man's web ball hits hurt enemies too, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     // Version 0.0.5 PUNCH SENSITIVITY (punchFeelOf): FORGIVING (0, the default) is easier than 0.0.4.
-    {"punch_sense", "PUNCH SENSITIVITY", "SENSE", "How easily a fist counts as a punch; FORGIVING takes slow, sloppy jabs.",
+    {"punch_sense", "PUNCH SENSITIVITY", "SENSE", "How easily a fist counts as a punch; FORGIVING takes sloppy jabs, no restart.",
      4, {"FORGIVING", "MAX", "0.0.4", "STRICT", nullptr}},
     // SFX VOLUME (sfx.hpp): the mod's own sounds (repulsor, beam, batons, sonic boom).
-    {"sfx_volume", "SFX VOLUME", "SFX", "How loud the mod's own sounds are: blasts, beam, batons and the boom.", 5,
+    {"sfx_volume", "SFX VOLUME", "SFX", "How loud the mod's own sounds are, no restart.", 5,
      {"100%", "75%", "50%", "25%", "OFF"}},
     // SUPERSONIC (fly_boost.hpp): in FLY MODE, the left stick forward while flying hands-out (ON by default).
-    {"supersonic", "SUPERSONIC", "SONIC", "With both hands out in FLY MODE, push the left stick forward for a sonic boom.", 2,
+    {"supersonic", "SUPERSONIC", "SONIC", "Both hands out in FLY MODE, left stick forward for a sonic boom, no restart.", 2,
      {"ON", "OFF", nullptr, nullptr}},
-    {"supersonic_speed", "SUPERSONIC SPEED", "MACH", "How many times your FAST fly speed the supersonic dash reaches.", 4,
+    {"supersonic_speed", "SUPERSONIC SPEED", "MACH", "How many times your FAST fly speed the sonic dash reaches, no restart.", 4,
      {"2X", "1.5X", "2.5X", "3X", nullptr}},
     // Version 0.0.6 (Update 39.0) DAREDEVIL / HULK ABILITIES: OFF by default (experimental); turning one
     // on turns the other heroes off (heroOnly). DAREDEVIL PUNCH: 3X (0) the default, live.
-    {"daredevil", "DAREDEVIL ABILITIES", "DAREDEVIL", "ON: thrown batons, harder punches and sonar sight, no webs (one hero at a time).",
+    {"daredevil", "DAREDEVIL ABILITIES", "DAREDEVIL", "ON: thrown batons, harder punches and sonar sight, no webs, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"hulk", "HULK ABILITIES", "HULK", "ON: a 4x charged jump and one-punch knockouts, no webs (one hero at a time).",
+    {"hulk", "HULK ABILITIES", "HULK", "ON: a 4x charged jump and one-punch knockouts, no webs, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     {"daredevil_punch", "DAREDEVIL PUNCH", "DDPUNCH", "How many normal punches each DAREDEVIL punch hits like, live.",
      5, {"3X", "1X", "2X", "4X", "5X"}},
     // Version 0.0.62 HIT INDICATOR: OFF (0) the default; a brief X where your hits land, live.
-    {"hit_indicator", "HIT INDICATOR", "HITMARK", "ON: a brief white X flashes where your punches, batons, blasts and webs land.",
+    {"hit_indicator", "HIT INDICATOR", "HITMARK", "ON: a brief white X flashes where your hits land, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     // HAND FLIPS: ON (0) keeps 0.0.6 (hand swings add to REALISTIC FLIPS); OFF: no flip from moving
     // your hands, live.
-    {"hand_flips", "HAND FLIPS", "HANDFLIP", "OFF: swinging your arms never starts a flip; the stick and A still flip you.",
+    {"hand_flips", "HAND FLIPS", "HANDFLIP", "OFF: swinging your arms never starts a flip, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // LENS FLARES: GAME (0) leaves the game's setting alone; OFF IN VR turns the game's lens flares
     // off while VR runs (they test the monitor's view, not each eye's, and shine through walls),
     // RESTART REQUIRED, put back when VR closes.
-    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR: no headlight flares through walls; takes effect when VR next starts.",
+    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR: no headlight flares through walls, restart VR to apply.",
      2, {"GAME", "OFF IN VR", nullptr, nullptr}},
     // Version 0.0.62 PUNCH HITS (SpidyVR's land(): the hit is sent the moment the fist touches):
     // GAME + INSTANT (0, the default) sends a small CONFIRMED DirectDamage blow with a knock on the
     // contact frame and still presses the game's X for its move; GAME MOVE (1) is 0.0.6 (the X
     // only: the hit lands when the game's animation does); INSTANT ONLY (2) sends no X (no game
     // animation pulls you; the X comes back by itself if the damage path is closed). Live.
-    {"punch_hits", "PUNCH HITS", "HITS", "GAME + INSTANT hurts enemies the moment your fist lands; GAME MOVE waits for X.",
+    {"punch_hits", "PUNCH HITS", "HITS", "GAME + INSTANT hurts foes as your fist lands; GAME MOVE waits, no restart.",
      3, {"GAME + INSTANT", "GAME MOVE", "INSTANT ONLY", nullptr}},
     // ENEMY TRACKING: LIVE (0, the default) places enemies by their own world positions, re-read 30
     // times a second; 0.0.6 (1) by their offset from you, re-read 10 times a second (while you move,
     // lunge or swing they trail behind where they are). Live.
-    {"foe_track", "ENEMY TRACKING", "FOES", "LIVE: lock-on and punches follow enemies 30 times a second, not the old 10.",
+    {"foe_track", "ENEMY TRACKING", "FOES", "LIVE: lock-on and punches follow enemies 30 times a second, no restart.",
      2, {"LIVE", "0.0.6", nullptr, nullptr}},
     // BEACONS IN VISION: ON (0, the default) keeps the game's bright coloured beacons, mission icons and
     // markers drawn into the world in their own colours, outlined and gently pulsing, on top of
     // DAREDEVIL's sonar look (eye_color::sonarPixel); OFF (1) is 0.0.6's sonar. Live.
-    {"beacons_vision", "BEACONS IN VISION", "BEACONS", "ON: mission beacons and markers stay bright and coloured in Daredevil's sonar.",
+    {"beacons_vision", "BEACONS IN VISION", "BEACONS", "ON: mission markers stay bright in Daredevil's sonar, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.7 HERO PROFILES: OFF by default; turning one on turns every other hero off (heroOnly).
-    {"batman", "BATMAN ABILITIES", "BATMAN", "ON: batarangs, grapple (aim up), glide, belt smoke pellets; no webs or flying.",
+    {"batman", "BATMAN ABILITIES", "BATMAN", "ON: batarangs, grapple, glide and smoke pellets, no webs, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"wolverine", "WOLVERINE ABILITIES", "WOLVERINE", "ON: claws on the trigger and fast healing, no webs (one hero at a time).",
+    {"wolverine", "WOLVERINE ABILITIES", "WOLVERINE", "ON: claws by grip fist and fast healing, no webs, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"superman", "SUPERMAN ABILITIES", "SUPERMAN", "ON: heat vision, cold breath (it hurts, nobody freezes) and super strength.",
+    {"superman", "SUPERMAN ABILITIES", "SUPERMAN", "ON: heat vision, cold breath and super strength, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"punisher", "PUNISHER ABILITIES", "PUNISHER", "ON: two hip pistols and a sawed-off on your back (one hero at a time).",
+    {"punisher", "PUNISHER ABILITIES", "PUNISHER", "ON: two hip pistols and a sawed-off on your back, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     // BATARANG CHAIN: 25% (0, the default) - each hit's own roll to bounce on (3 enemies at most).
     {"batarang_chain", "BATARANG CHAIN", "CHAIN", "The chance each batarang hit bounces on to another enemy, live.",
      5, {"25%", "50%", "75%", "100%", "OFF"}},
     // EASY RELOAD: AUTO (0, the default) or REALISTIC (a downward flick drops the mag, the hip reloads).
-    {"easy_reload", "EASY RELOAD", "RELOAD", "AUTO refills an empty gun; REALISTIC drops the mag, then touch your hip.",
+    {"easy_reload", "EASY RELOAD", "RELOAD", "AUTO refills an empty gun; REALISTIC drops the mag, no restart.",
      2, {"AUTO", "REALISTIC", nullptr, nullptr}},
     // HOLSTER HANDS: SAME SIDE (0, the default) or EITHER HAND (a cross draw); the back is either hand's.
     {"holster_hands", "HOLSTER HANDS", "HOLSTERS", "SAME SIDE: each hand draws only from its own hip, live.",
@@ -300,18 +300,18 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "ALWAYS ON", nullptr, nullptr}},
     // BATON LOOK: CLASSIC (0, the default: the baton as in 0.0.62/0.0.63), CLUB (the 0.0.7 billy club) or MODEL (Anthony Yanez's
     // "Daredevil's baton", rope removed, split in two: Models\Baton\Left|Right; CLUB when missing).
-    {"baton_look", "BATON LOOK", "BLOOK", "CLASSIC: the old red bar; CLUB: a billy club; MODEL: two realistic batons.",
+    {"baton_look", "BATON LOOK", "BLOOK", "CLASSIC: the red bar; CLUB: a billy club; MODEL: real batons, no restart.",
      3, {"CLASSIC", "CLUB", "MODEL", nullptr}},
     // BATARANG STYLE: DEFAULT (0, the default: the built-in batarang) or one of the three models the
     // player chose on Sketchfab, read from <Spidy folder>\Models\Batarang\<STYLE>\ (mesh_model.hpp);
     // a missing or broken file draws DEFAULT. Live.
-    {"batarang_style", "BATARANG STYLE", "BSTYLE", "DEFAULT: the built-in batarang; EIRA, CLOONEY, JOKER: models you drop in.",
+    {"batarang_style", "BATARANG STYLE", "BSTYLE", "DEFAULT: the built-in batarang; the others are models, no restart.",
      4, {"DEFAULT", "EIRA", "CLOONEY", "JOKER"}},
     // GUN MODELS: BUILT-IN (0, the default) or MODELS (Models\Pistol, Models\SawedOff; built-in when missing).
-    {"gun_models", "GUN MODELS", "GMODELS", "MODELS: Punisher's guns as the converted 3D models, else BUILT-IN.",
+    {"gun_models", "GUN MODELS", "GMODELS", "MODELS: Punisher's guns as the converted 3D models, no restart.",
      2, {"BUILT-IN", "MODELS", nullptr, nullptr}},
     // Version 0.0.7 CAPTAIN AMERICA: OFF by default (a hero toggle: one hero at a time).
-    {"captain_america", "CAPTAIN AMERICA ABILITIES", "CAPTAIN", "ON: his shield on your back; draw, guard and throw it (one hero at a time).",
+    {"captain_america", "CAPTAIN AMERICA ABILITIES", "CAPTAIN", "ON: his shield on your back to draw, guard and throw, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     // SHIELD ARM: RIGHT (0, the default) or LEFT (1); only that hand draws it (captain::armHand).
     {"shield_arm", "SHIELD ARM", "SARM", "RIGHT or LEFT: the forearm that wears and draws the shield, live.",
@@ -320,14 +320,14 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"shield_damage", "SHIELD DAMAGE", "SDAMAGE", "How much each thrown shield hit takes off an enemy, live.",
      4, {"35 HP", "20 HP", "50 HP", "70 HP"}},
     // SHIELD CHAIN: ON (0, the default: ricochets like the batons, 3 enemies at most) or OFF (one, home).
-    {"shield_chain", "SHIELD CHAIN", "SCHAIN", "ON: a thrown shield ricochets to two more enemies, then comes back.",
+    {"shield_chain", "SHIELD CHAIN", "SCHAIN", "ON: a thrown shield ricochets to two more enemies, then back, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // SHIELD BLOCK: OFF (0, the default) or EXPERIMENTAL (CANDIDATE: a hit while the shield faces the
     // nearest enemy is given back through the CONFIRMED health record; never above the cap, never a revive).
-    {"shield_block", "SHIELD BLOCK", "SBLOCK", "EXPERIMENTAL (CANDIDATE): a hit while the shield faces the foe is refunded.",
+    {"shield_block", "SHIELD BLOCK", "SBLOCK", "EXPERIMENTAL (CANDIDATE): a hit at the shield's face is refunded, no restart.",
      2, {"OFF", "EXPERIMENTAL", nullptr, nullptr}},
     // SHIELD LOOK: BUILT-IN (0, the default: drawn rings and star) or MODEL (Models\Shield; BUILT-IN when missing).
-    {"shield_look", "SHIELD LOOK", "SLOOK", "MODEL: the converted 3D shield, else BUILT-IN red, white and blue rings.",
+    {"shield_look", "SHIELD LOOK", "SLOOK", "MODEL: the converted 3D shield, else BUILT-IN rings, no restart.",
      2, {"BUILT-IN", "MODEL", nullptr, nullptr}},    // Version 0.0.72 (TEST): THOR (hero072.hpp) - one hero at a time like the others.
     {"thor", "THOR ABILITIES", "THOR", "ON: play as Thor with his hammer on your back, live (no restart).",
      2, {"OFF", "ON", nullptr, nullptr}},

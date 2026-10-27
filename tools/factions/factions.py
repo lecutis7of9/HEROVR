@@ -41,6 +41,31 @@ CRIMSON_HUE = 350 / 360.0
 # The spawn mix: each faction's variants in turn (the game side picks variant = spawn index % count).
 MIX = {'THE HAND': ['hand1', 'hand2', 'hand3'], 'HYDRA': ['hydra1', 'hydra2'],
        'JOKER GANG': []}  # 9:28: the Joker's henchmen; models still being picked (PENDING): vanilla until then
+# 10:19 JOKER GANG (Arkham mix) - the user's sources and what could be fetched in 0.0.72 (none is in the
+# MIX yet, so the gang stays the game's own enemies; nothing is credited until a model ships):
+#  - every one is a port of Rocksteady / WB Games' own Arkham meshes (the pages say so), not an artist's
+#    licensed work: fine for the user's private test, never for a public build;
+#  - 'download' is what the page offers without a login (the user, 10:19: "use what's downloadable and
+#    note the rest"); 'format' is why the box cannot convert it (the PC-side kit would need the tool named).
+JOKER_SOURCES = {
+    'joker_arkham_pack': dict(sub='JOKER GANG', title='Joker Arkham Pack [Add-On Ped] (2 Jokers, 2 thug variants)',
+                              porter='gtav_KWABZ', url='https://www.gta5-mods.com/player/joker-arkahm-pack',
+                              download='gta5-mods.com, no login (50.5 MB)',
+                              format='GTA V .ydd/.ytd peds: CodeWalker (Windows) export to XML, then Sollumz in Blender'),
+    'ac_thugs_1': dict(sub='JOKER GANG', title='Batman: Arkham City Joker Thugs set 1 (Moe, Larry, Curly)',
+                       porter='XNALaraFanatic',
+                       url='https://www.deviantart.com/xnalarafanatic/art/Batman-Arkham-City-Joker-Thugs-set-1-283309370',
+                       download='NOT FETCHED: DeviantArt says "Log in to download"', format='XNALara .mesh'),
+    'ac_thugs_2': dict(sub='JOKER GANG', title='Batman: Arkham City Joker Thugs set 2 (3 masked asylum clowns)',
+                       porter='XNALaraFanatic',
+                       url='https://www.deviantart.com/xnalarafanatic/art/Batman-%3A-Arkham-City-Joker-Thugs-set-2-283676997',
+                       download='NOT FETCHED: DeviantArt says "Log in to download"', format='XNALara .mesh'),
+    'harley_thugs': dict(sub='HARLEY (a JOKER GANG sub-gang)', title="Batman Arkham City: Harley's Thugs 1",
+                         porter='Kabalstein',
+                         url="https://www.deviantart.com/kabalstein/art/Batman-Arkham-City%3A-Harley%27s-Thugs-1-401824067",
+                         download='MediaFire .rar linked from the page, no login',
+                         format='XNALara .mesh (the XPS importer for Blender)'),
+}
 
 
 def variant(faction, spawn_index):

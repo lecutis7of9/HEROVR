@@ -1003,7 +1003,7 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
         return out;
     }
     std::map<std::pair<uint64_t, bool>, int32_t> seen; // (the image's bytes, cut) -> its layer
-    std::map<int32_t, Picture> small;                  // each layer at 64 x 64, for the untextured colours
+    std::map<int32_t, Picture> thumbs;                 // each layer at 64 x 64, for the untextured colours
     for (uint32_t slot = 1; slot < slots; ++slot) {
         if (lib.status[slot] != loaded)
             continue;
@@ -1056,7 +1056,7 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
             im.layer = static_cast<int32_t>(out.layers.size());
             out.layers.push_back(std::move(layer));
             seen[key] = im.layer;
-            small[im.layer] = resample(base, 64);
+            thumbs[im.layer] = resample(base, 64);
             out.notes.push_back(name + ": layer " + std::to_string(im.layer) + " (" + std::to_string(w0) + "x" + std::to_string(h0) + " -> " +
                                 std::to_string(size) + (im.cutout ? ", cut-out alpha)" : ")"));
         }
@@ -1066,7 +1066,7 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
                 const int16_t i = m.image[t];
                 if (i < 0 || static_cast<size_t>(i) >= m.images.size() || m.images[static_cast<size_t>(i)].layer < 0)
                     continue;
-                const Picture& p = small[m.images[static_cast<size_t>(i)].layer];
+                const Picture& p = thumbs[m.images[static_cast<size_t>(i)].layer];
                 float sum[3]{};
                 for (int c = 0; c < 4; ++c) {
                     float u = 0, v = 0;

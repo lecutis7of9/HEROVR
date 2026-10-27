@@ -37,7 +37,14 @@ try:
     check(.1 < filled < .7 and e.getpixel((0, 0))[3] == 0, 'the emblem is empty or a full square')
 except ImportError:
     print('SKIP: no PIL')
+# 10:19 JOKER GANG (Arkham mix): the sources noted, the gang vanilla until a model ships, nothing credited yet.
+check(factions.MIX['JOKER GANG'] == [] and factions.variant('JOKER GANG', 3) is None, 'JOKER GANG is vanilla until a model')
+check(set(factions.JOKER_SOURCES) == {'joker_arkham_pack', 'ac_thugs_1', 'ac_thugs_2', 'harley_thugs'}, 'the 10:19 Arkham mix')
+for k, m in factions.JOKER_SOURCES.items():
+    check(m['url'].startswith('https://') and m['download'] and m['format'], 'a JOKER source note: ' + k)
+check('Arkham' not in c, 'an Arkham port credited before it ships')
 if fails:
     print('FAIL', fails)
     sys.exit(1)
 print('FACTION TESTS PASS')
+

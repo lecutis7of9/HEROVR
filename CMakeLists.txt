@@ -323,7 +323,7 @@ if(SPIDY_BUILD_XR)
                    src/phone_music.cpp src/music_audio_win.cpp src/sfx_win.cpp)
     # Update 19: the MUSIC page's player (Media Foundation decodes, WASAPI plays).
     target_link_libraries(spidy_stereo_probe PRIVATE spidy_openxr spidy_bhaptics shell32 ole32 uuid mfplat
-                          mfreadwrite mfuuid)
+                          mfreadwrite mfuuid windowscodecs)
     # Update 22: Media Foundation delay-loaded, so the module (and VR) still loads on Windows N/KN without the
     # Media Feature Pack; music_audio_win.cpp checks for both libraries before it calls one.
     target_link_options(spidy_stereo_probe PRIVATE /DELAYLOAD:mfplat.dll /DELAYLOAD:mfreadwrite.dll)

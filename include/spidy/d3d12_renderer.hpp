@@ -52,9 +52,14 @@ class D3D12Renderer {
     // Update 36: `art` is drawn between the two, like the translucent
     // vertices, but each vertex's colour and opacity multiplied by the art
     // texture (setArt) at its shape.xy; without the texture it is left out.
+    // Version 0.0.72: `textured` (the drop-in models) right after the depth-writing vertices, depth
+    // tested and written, each colour times the model texture array (setModelTextures) at shape.xyz
+    // (u, v, layer; layer < 0: the colour alone), texels under half alpha cut out; without the
+    // array it is left out.
     void renderViews(std::span<const ViewTarget>, std::span<const Vertex>, bool preserveColor,
                      bool waitForCompletion = true, std::span<const Vertex> translucent = {},
-                     const Grade* grade = nullptr, std::span<const Vertex> art = {});
+                     const Grade* grade = nullptr, std::span<const Vertex> art = {},
+                     std::span<const Vertex> textured = {});
     // Update 36: the art texture (the calibration panel's pictures), each
     // level half the last, RGBA8 rows from the top, display-encoded (sRGB).
     // Uploaded once, waiting for the GPU. False, with artFault() saying why,
@@ -69,6 +74,17 @@ class D3D12Renderer {
     }
     const std::string& artFault() const {
         return artFault_;
+    }
+    // Version 0.0.72 REAL MODELS: the drop-in models' base-colour textures, one sRGB Texture2DArray
+    // (`layers` each `levels` mips of size >> level squared RGBA8, level 0 first). Uploaded once,
+    // waiting for the GPU. False, with modelFault() saying why, if it can't be used; then renderViews
+    // leaves its `textured` vertices out and the caller draws the models untextured.
+    bool setModelTextures(unsigned size, unsigned levels, std::span<const std::vector<unsigned char>> layers) noexcept;
+    bool modelReady() const {
+        return model_ && modelFault_.empty();
+    }
+    const std::string& modelFault() const {
+        return modelFault_;
     }
     // Scales `source` (read as `sourceView`, in PIXEL_SHADER_RESOURCE state)
     // over the whole target, which enters and leaves in RENDER_TARGET state.
@@ -118,6 +134,8 @@ class D3D12Renderer {
     void recordGrade(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Grade& grade, unsigned view);
     // The art pass's root signature and pipeline for a target format.
     void prepareArt(DXGI_FORMAT targetFormat);
+    // The model pass's root signature and pipeline for a target format.
+    void prepareModel(DXGI_FORMAT targetFormat);
     ComPtr<ID3D12Device> device_;
     ComPtr<ID3D12CommandQueue> queue_;
     ComPtr<ID3D12CommandAllocator> allocator_;
@@ -161,6 +179,13 @@ class D3D12Renderer {
     ComPtr<ID3D12PipelineState> artPipeline_;
     DXGI_FORMAT artFormat_ = DXGI_FORMAT_UNKNOWN;
     std::string artFault_;
+    // Version 0.0.72: the models' texture array, its descriptor, root signature and pipeline.
+    ComPtr<ID3D12Resource> model_;
+    ComPtr<ID3D12DescriptorHeap> modelHeap_;
+    ComPtr<ID3D12RootSignature> modelRoot_;
+    ComPtr<ID3D12PipelineState> modelPipeline_;
+    DXGI_FORMAT modelFormat_ = DXGI_FORMAT_UNKNOWN;
+    std::string modelFault_;
 };
 void addBox(std::vector<Vertex>& out, Vec3 min, Vec3 max, Vec3 color);
 void addBeam(std::vector<Vertex>& out, Vec3 a, Vec3 b, float radius, Vec3 color);

@@ -130,6 +130,8 @@
 #define SM2_PORT_GAMEPLAY 1
 #endif
 #include <shlobj.h>
+#include <thread>
+#include <wincodec.h> // Version 0.0.72 REAL MODELS: the models' PNG / JPEG textures
 using namespace spidy;
 struct XrConfig {
     uint32_t magic = 0x53585243, version = 24, bytes = sizeof(XrConfig), pid{};
@@ -715,6 +717,41 @@ std::string modelMissingNote(uint32_t mask) {
         if (mask >> s & 1u)
             t += (t.empty() ? "MODEL MISSING: " : ", ") + std::string(mesh_model::slotFolders[s]);
     return t;
+}
+// Version 0.0.72 REAL MODELS: a model texture (PNG, JPEG, anything Windows reads) to RGBA8 with WIC, its
+// sRGB values kept; false (that image left untextured) on any failure. COM is set up by the caller.
+bool wicDecode(const uint8_t* data, size_t size, mesh_model::Picture& out) {
+    if (!data || !size || size > mesh_model::mostImageBytes)
+        return false;
+    Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+    Microsoft::WRL::ComPtr<IWICStream> stream;
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+    Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->CreateStream(&stream)) ||
+        FAILED(stream->InitializeFromMemory(const_cast<BYTE*>(data), static_cast<DWORD>(size))) ||
+        FAILED(factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, &decoder)) ||
+        FAILED(decoder->GetFrame(0, &frame)) || FAILED(factory->CreateFormatConverter(&converter)) ||
+        FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0,
+                                     WICBitmapPaletteTypeCustom)))
+        return false;
+    UINT w = 0, h = 0;
+    if (FAILED(converter->GetSize(&w, &h)) || !w || !h || w > 8192 || h > 8192)
+        return false;
+    out.width = w;
+    out.height = h;
+    out.rgba.assign(size_t{w} * h * 4, 0);
+    return SUCCEEDED(converter->CopyPixels(nullptr, w * 4, static_cast<UINT>(out.rgba.size()), out.rgba.data()));
+}
+std::string modelsRoot() {
+    const std::wstring home = spidyHome() + L"\\Models\\";
+    std::string root(static_cast<size_t>(WideCharToMultiByte(CP_UTF8, 0, home.c_str(), -1, nullptr, 0, nullptr, nullptr)), '\0');
+    if (!root.empty()) {
+        WideCharToMultiByte(CP_UTF8, 0, home.c_str(), -1, root.data(), static_cast<int>(root.size()), nullptr, nullptr);
+        root.resize(root.size() - 1);
+    }
+    return root;
 }
 std::atomic<float> heroHeightNow{1.f}; // Version 0.0.5 HERO HEIGHT in force (the V005 record)
 uint32_t c38(uint32_t option) {
@@ -1451,6 +1488,48 @@ DWORD WINAPI run(void*) {
                 artMissing = overlay.artFault();
             if (!artMissing.empty())
                 OutputDebugStringA(("Spidy calibration art: " + artMissing).c_str());
+        }
+        // Version 0.0.72 REAL MODELS: every drop-in model read now (not on first use), its textures
+        // decoded (WIC, on a thread of its own for COM), scaled to one texture array and uploaded once;
+        // should any of that fail the models are drawn untextured (their light copies) - never a crash.
+        {
+            auto& models = mesh_model::library();
+            const std::string root = modelsRoot();
+            for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
+                const auto status = models.load(slot, root);
+                char line[400];
+                sprintf_s(line, "Version 0.0.72 REAL MODELS %s: %s %u triangles%s%.300s", mesh_model::slotFolders[slot],
+                          mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
+                          models.model(slot) ? models.model(slot)->triangles() : 0u,
+                          status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
+                game_prompts::note(line);
+                OutputDebugStringA(line);
+            }
+            mesh_model::TextureArray textures;
+            try {
+                std::thread decode([&] {
+                    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+                    try {
+                        textures = mesh_model::prepareTextures(models, &wicDecode);
+                    } catch (...) {
+                        textures = {};
+                        textures.notes.push_back("the textures could not be prepared");
+                    }
+                    if (SUCCEEDED(com))
+                        CoUninitialize();
+                });
+                decode.join();
+            } catch (...) {
+                textures.notes.push_back("no thread for the textures");
+            }
+            for (const auto& note : textures.notes) {
+                game_prompts::note(("Version 0.0.72 REAL MODELS texture: " + note).c_str());
+                OutputDebugStringA(note.c_str());
+            }
+            if (!textures.layers.empty() && !overlay.setModelTextures(textures.size, textures.levels, textures.layers)) {
+                game_prompts::note(("Version 0.0.72 REAL MODELS untextured: " + overlay.modelFault()).c_str());
+                OutputDebugStringA(overlay.modelFault().c_str());
+            }
         }
         const auto artClock = std::chrono::steady_clock::now();
         // Update 24.1: a drawing failure (its shader, its buffers) turns Spidy's
@@ -8181,13 +8260,7 @@ DWORD WINAPI run(void*) {
                             auto& models = mesh_model::library();
                             const auto slotModel = [&](uint32_t slot, const char* what) -> const mesh_model::Mesh* {
                                 if (models.status[slot] == mesh_model::notTried) {
-                                    const std::wstring home = spidyHome() + L"\\Models\\";
-                                    std::string root(static_cast<size_t>(WideCharToMultiByte(CP_UTF8, 0, home.c_str(), -1, nullptr, 0, nullptr, nullptr)), '\0');
-                                    if (!root.empty()) {
-                                        WideCharToMultiByte(CP_UTF8, 0, home.c_str(), -1, root.data(), static_cast<int>(root.size()), nullptr, nullptr);
-                                        root.resize(root.size() - 1);
-                                    }
-                                    const auto status = models.load(slot, root);
+                                    const auto status = models.load(slot, modelsRoot());
                                     char line[400];
                                     sprintf_s(line, "Version 0.0.7 %s %s: %s%s%.300s", what, mesh_model::slotFolders[slot],
                                               mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
@@ -8196,6 +8269,8 @@ DWORD WINAPI run(void*) {
                                     if (status != mesh_model::loaded && slot < 32)
                                         modelMissingMask.fetch_or(1u << slot);
                                 }
+                                if (models.status[slot] != mesh_model::loaded && slot < 32) // (read at start: 0.0.72)
+                                    modelMissingMask.fetch_or(1u << slot);
                                 return models.model(slot);
                             };
                             const uint32_t style = c38(combat38::batarangStyle);
@@ -8706,6 +8781,14 @@ DWORD WINAPI run(void*) {
                             combat38::ringStale(imageAge, length(latestToWorld.position - saved->worldFromTracking.position));
                         ringHiddenFrames += ringHide;
                         std::vector<Vertex> vertices;
+                        // Version 0.0.72 REAL MODELS: the textured models' own vertices (hero007::setModelSink).
+                        std::vector<Vertex> modelVertices;
+                        hero007::setModelSink(overlay.modelReady() ? &modelVertices : nullptr);
+                        struct EndModelSink {
+                            ~EndModelSink() {
+                                hero007::setModelSink(nullptr);
+                            }
+                        } endModelSink;
                         // Where the overlay puts each tracked web shooter, and
                         // where the game's rope for this image's frame starts.
                         Vec3 shooters[2]{}, ropeStarts[2]{};
@@ -9903,7 +9986,7 @@ DWORD WINAPI run(void*) {
                         extrasPart.add(std::chrono::duration<double, std::milli>(drawStart - extrasStart).count());
                         if (!saved->flatScreen && !overlayFault) {
                             try {
-                                overlay.renderViews(overlayViews, vertices, true, false, translucent, &grade, art);
+                                overlay.renderViews(overlayViews, vertices, true, false, translucent, &grade, art, modelVertices);
                             } catch (const std::exception& e) {
                                 overlayFault = true;
                                 // (The message holds 255 characters: the reason first.)

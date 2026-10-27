@@ -203,10 +203,76 @@ void appendBatarang(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float
 }
 
 namespace {
-// Draws a model's triangles placed by `place` (model space -> world), far to near, lit per face.
+std::vector<Vertex>* gModelSink = nullptr;
+}
+void setModelSink(std::vector<Vertex>* sink) {
+    gModelSink = sink;
+}
+std::vector<Vertex>* modelSink() {
+    return gModelSink;
+}
+
+namespace {
+// Version 0.0.72 REAL MODELS: a textured model into the model sink (the overlay's depth-tested
+// texture-array pass: no sort), each corner lit by its own normal (smooth where the model is
+// smooth), shape = (u, v, layer, 1); a triangle without a texture layer has layer -1 (its colour).
 template <class Place>
-bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& model, Place place, Vec3 viewer) {
-    if (!model.ok() || model.triangles() > mesh_model::drawTriangles)
+bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Place place) {
+    const Vec3 o = place(Vec3{0, 0, 0});
+    const Vec3 ex = place(Vec3{1, 0, 0}) - o, ey = place(Vec3{0, 1, 0}) - o, ez = place(Vec3{0, 0, 1}) - o;
+    if (!ok(o) || !ok(ex) || !ok(ey) || !ok(ez))
+        return false;
+    const size_t from = sink.size();
+    if (from + size_t{model.triangles()} * 3 > modelSinkBudget)
+        return false;
+    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
+    const bool smooth = model.hasNormals(), uvs = model.hasUvs();
+    for (uint32_t t = 0; t < model.triangles(); ++t) {
+        const int16_t im = uvs && t < model.image.size() ? model.image[t] : int16_t{-1};
+        const int32_t at = im >= 0 && static_cast<size_t>(im) < model.images.size() ? model.images[static_cast<size_t>(im)].layer : -1;
+        // An image without a layer (it did not decode): its mean colour (colors[]) untextured.
+        const float layer = at >= 0 ? static_cast<float>(at) : -1.f;
+        const Vec3 tint = at >= 0 && t < model.tints.size() ? model.tints[t] : model.colors[t];
+        const Vec3 a = place(model.corners[t * 3]), b = place(model.corners[t * 3 + 1]), c = place(model.corners[t * 3 + 2]);
+        const Vec3 fn = cross(b - a, c - a);
+        const float fl = length(fn);
+        if (!(fl > 1e-14f))
+            continue;
+        const Vec3 p[3]{a, b, c};
+        for (uint32_t k = 0; k < 3; ++k) {
+            Vec3 n = fn * (1.f / fl);
+            if (smooth) {
+                const Vec3 m = model.normals[t * 3 + k];
+                const Vec3 w = ex * m.x + ey * m.y + ez * m.z;
+                if (length(w) > 1e-12f)
+                    n = normalized(w);
+            }
+            const float lit = .32f + .68f * std::abs(dot(n, light)); // both sides (any winding)
+            const float u = uvs ? model.uvs[t * 6 + k * 2] : 0.f, v = uvs ? model.uvs[t * 6 + k * 2 + 1] : 0.f;
+            sink.push_back(Vertex{p[k], tint * lit, 1.f, {u, v, layer, 1.f}});
+        }
+    }
+    for (size_t i = from; i < sink.size(); ++i) {
+        const Vertex& v = sink[i];
+        if (!ok(v.position) || !ok(v.color) || !std::isfinite(v.shape.x) || !std::isfinite(v.shape.y)) {
+            sink.resize(from);
+            return false;
+        }
+    }
+    return true;
+}
+
+// Draws a model's triangles placed by `place` (model space -> world), far to near, lit per face.
+// Version 0.0.72: textured into the model sink when the overlay has one; otherwise (the overlay
+// could not make its texture array) untextured, its light copy (Mesh::lite) when it has one.
+template <class Place>
+bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place place, Vec3 viewer) {
+    if (!full.ok() || full.triangles() > mesh_model::drawTriangles)
+        return false;
+    if (gModelSink)
+        return drawTextured(*gModelSink, full, place);
+    const mesh_model::Mesh& model = full.lite && full.lite->ok() ? *full.lite : full;
+    if (model.triangles() > mesh_model::liteTriangles)
         return false;
     thread_local std::vector<std::pair<float, uint32_t>> order;
     thread_local std::vector<Vec3> placed;
@@ -429,7 +495,7 @@ namespace {
 // disc, the triangles facing away from the eye go first; each run far to near.
 template <class Place>
 bool drawLayered(std::vector<Vertex>& out, const mesh_model::Mesh& model, Place place, Vec3 viewer, Vec3 layerCentre, Vec3 layerNormal) {
-    if (!model.ok() || model.triangles() > mesh_model::drawTriangles || !model.hasLayer)
+    if (!model.ok() || model.triangles() > mesh_model::liteTriangles || !model.hasLayer)
         return false;
     thread_local std::vector<std::pair<std::pair<int, float>, uint32_t>> order;
     thread_local std::vector<Vec3> placed;
@@ -497,7 +563,7 @@ bool appendShieldModel(std::vector<Vertex>& out, const Item& it, const mesh_mode
         const Vec3 l = local(c);
         return k.o + k.r * l.x + k.u * l.y - k.f * l.z;
     };
-    if (model.hasLayer) {
+    if (model.hasLayer && !gModelSink && !model.lite) { // depth-tested or light: no layers needed
         const Vec3 lc = place(model.layerCentre);
         const Vec3 ln = place(model.layerCentre + model.layerNormal * .01f) - lc;
         if (ok(lc) && ok(ln) && length(ln) > 1e-6f)

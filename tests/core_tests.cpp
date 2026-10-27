@@ -24174,10 +24174,10 @@ int main() {
         put("Batarang/JOKER/scene.bin", good.bin);
         check(mm::loadFolder(root + "Batarang/JOKER/", false, m, err) == mm::loaded && m.triangles() == 4 && !m.decimated,
               "scene.gltf + scene.bin: LOADED, unmodified");
-        // A dense 2000-triangle plate: decimated where allowed, refused where not (JOKER, ND).
+        // A dense plate over the cap: decimated where allowed, refused where not (JOKER, ND).
         std::vector<float> grid;
         std::vector<uint16_t> tris;
-        const int n = 32;
+        const int n = 112; // Version 0.0.72: 25088 triangles, over the 24000 VR cap
         for (int y = 0; y <= n; ++y)
             for (int x = 0; x <= n; ++x)
                 grid.insert(grid.end(), {static_cast<float>(x) * .2f / n, static_cast<float>(y) * .06f / n,
@@ -24190,8 +24190,8 @@ int main() {
             }
         put("Batarang/EIRA/scene.glb", glb(build(grid, tris, "")));
         check(mm::loadFolder(root + "Batarang/EIRA/", true, m, err) == mm::loaded && m.decimated && m.triangles() <= mm::drawTriangles &&
-                  m.sourceTriangles == 2048,
-              "2048 triangles, CC BY: decimated to the budget (" + std::to_string(m.triangles()) + ")");
+                  m.sourceTriangles == 25088,
+              "25088 triangles, CC BY: decimated to the budget (" + std::to_string(m.triangles()) + ")");
         check(mm::loadFolder(root + "Batarang/EIRA/", false, m, err) == mm::overBudget && !m.ok(), "no changes allowed: refused, not reduced");
         // The library: once per style, null (DEFAULT) unless loaded.
         mm::Library lib;
@@ -24223,6 +24223,145 @@ int main() {
         appendHero007(fallback, d, {}, viewer, .0015f);
         check(fallback.size() == plain.size(), "an unusable model: DEFAULT drawn");
         std::filesystem::remove_all(root, ec);
+    });
+    test("Version 0.0.72: REAL MODELS keep their UVs, normals and textures (texture array, textured sink)", [] {
+        namespace mm = spidy::mesh_model;
+        // A 4 x 4 QOI picture: the left half red, the right half blue (QOI_OP_RGBA each pixel).
+        std::vector<uint8_t> qoi{'q', 'o', 'i', 'f', 0, 0, 0, 4, 0, 0, 0, 4, 4, 0};
+        for (int y = 0; y < 4; ++y)
+            for (int x = 0; x < 4; ++x)
+                qoi.insert(qoi.end(), {0xFF, static_cast<uint8_t>(x < 2 ? 255 : 0), 0, static_cast<uint8_t>(x < 2 ? 0 : 255), 255});
+        qoi.insert(qoi.end(), {0, 0, 0, 0, 0, 0, 0, 1});
+        // A quad (two triangles) with normals, UVs 0..1 and the picture; one more triangle without a material.
+        const std::vector<float> pos{0, 0, 0, .2f, 0, 0, .2f, .1f, 0, 0, .1f, 0};
+        const std::vector<float> nrm{0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+        const std::vector<float> uv{0, 1, 1, 1, 1, 0, 0, 0};
+        const std::vector<uint32_t> idx{0, 1, 2, 0, 2, 3};
+        const auto makeGlb = [&](const std::string& mime, const std::vector<uint8_t>& image, bool withUv) {
+            std::vector<uint8_t> bin;
+            const auto add = [&](const void* p, size_t n) {
+                const size_t at = bin.size();
+                bin.insert(bin.end(), static_cast<const uint8_t*>(p), static_cast<const uint8_t*>(p) + n);
+                while (bin.size() % 4)
+                    bin.push_back(0);
+                return std::to_string(at);
+            };
+            const std::string op = add(pos.data(), pos.size() * 4), on = add(nrm.data(), nrm.size() * 4),
+                              ou = add(uv.data(), uv.size() * 4), oi = add(idx.data(), idx.size() * 4),
+                              om = add(image.data(), image.size());
+            std::string j = "{\"asset\":{\"version\":\"2.0\"},\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0}],"
+                            "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":1" +
+                            std::string(withUv ? ",\"TEXCOORD_0\":2" : "") + "},\"indices\":3,\"material\":0}]}],"
+                            "\"materials\":[{\"alphaMode\":\"MASK\",\"pbrMetallicRoughness\":{\"baseColorFactor\":[1,0.5,1,1],"
+                            "\"baseColorTexture\":{\"index\":0}}}],\"textures\":[{\"source\":0}],"
+                            "\"images\":[{\"bufferView\":4,\"mimeType\":\"" + mime + "\"}],"
+                            "\"buffers\":[{\"byteLength\":" + std::to_string(bin.size()) + "}],"
+                            "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":" + op + ",\"byteLength\":48},"
+                            "{\"buffer\":0,\"byteOffset\":" + on + ",\"byteLength\":48},{\"buffer\":0,\"byteOffset\":" + ou +
+                            ",\"byteLength\":32},{\"buffer\":0,\"byteOffset\":" + oi + ",\"byteLength\":24},"
+                            "{\"buffer\":0,\"byteOffset\":" + om + ",\"byteLength\":" + std::to_string(image.size()) + "}],"
+                            "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":4,\"type\":\"VEC3\"},"
+                            "{\"bufferView\":1,\"componentType\":5126,\"count\":4,\"type\":\"VEC3\"},"
+                            "{\"bufferView\":2,\"componentType\":5126,\"count\":4,\"type\":\"VEC2\"},"
+                            "{\"bufferView\":3,\"componentType\":5125,\"count\":6,\"type\":\"SCALAR\"}]}";
+            while (j.size() % 4)
+                j += ' ';
+            std::vector<uint8_t> out(12);
+            const auto u32 = [&](uint32_t v) {
+                for (int k = 0; k < 4; ++k)
+                    out.push_back(static_cast<uint8_t>(v >> (8 * k)));
+            };
+            u32(static_cast<uint32_t>(j.size()));
+            u32(0x4E4F534Au);
+            out.insert(out.end(), j.begin(), j.end());
+            u32(static_cast<uint32_t>(bin.size()));
+            u32(0x004E4942u);
+            out.insert(out.end(), bin.begin(), bin.end());
+            const uint32_t head[3] = {0x46546C67u, 2, static_cast<uint32_t>(out.size())};
+            std::memcpy(out.data(), head, 12);
+            return out;
+        };
+        mm::Mesh m;
+        std::string err;
+        auto file = makeGlb("image/qoi", qoi, true);
+        check(mm::parseGlb(file.data(), file.size(), m, err) && m.triangles() == 2, "a textured GLB reads: " + err);
+        check(m.hasUvs() && m.hasNormals() && !m.textured() && m.images.size() == 1 && m.images[0].cutout,
+              "its UVs, normals, image and MASK cut-out are kept (textured once it has a layer)");
+        check(m.uvs.size() == 12 && std::abs(m.uvs[2] - 1.f) < 1e-6f && std::abs(m.uvs[1] - 1.f) < 1e-6f &&
+                  std::abs(m.normals[0].z - 1.f) < 1e-5f && m.image[0] == 0 && m.image[1] == 0,
+              "the corner UVs and normals as written");
+        check(std::abs(m.tints[0].y - .5f) < 1e-5f, "the base colour factor is the texture's tint");
+        mm::Mesh noUv;
+        auto plain = makeGlb("image/qoi", qoi, false);
+        check(mm::parseGlb(plain.data(), plain.size(), noUv, err) && !noUv.textured() && noUv.image[0] < 0,
+              "a texture without TEXCOORD_0: untextured, still read");
+        // The texture array: decoded, scaled, mipped, a layer; colors[] the mean x tint.
+        mm::Library lib;
+        lib.meshes[mm::slotPistol] = m;
+        lib.status[mm::slotPistol] = mm::loaded;
+        lib.meshes[mm::slotShield] = m; // the same bytes: one layer for both
+        lib.status[mm::slotShield] = mm::loaded;
+        const auto tex = mm::prepareTextures(lib, nullptr, 8, 4);
+        check(tex.size == 8 && tex.levels == 4 && tex.layers.size() == 1 && tex.layers[0].size() == (64 + 16 + 4 + 1) * 4,
+              "one 8x8 layer with 4 mips: " + std::to_string(tex.layers.size()));
+        check(lib.meshes[mm::slotPistol].images[0].layer == 0 && lib.meshes[mm::slotShield].images[0].layer == 0 &&
+                  lib.meshes[mm::slotPistol].textured(),
+              "equal images share their layer");
+        check(!tex.layers.empty() && tex.layers[0][0] == 255 && tex.layers[0][2] == 0 && tex.layers[0][7 * 4 + 2] == 255,
+              "the picture scaled as it is (red left, blue right)");
+        const Vec3 mean = lib.meshes[mm::slotPistol].colors[0];
+        check(mean.x > .2f && mean.z > .2f && mean.y < .01f, "the untextured look: the texture's mean colour");
+        // Without a PNG / JPEG decoder an image is noted, not read; nothing breaks.
+        mm::Mesh jpeg;
+        auto jf = makeGlb("image/jpeg", {0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4}, true);
+        check(mm::parseGlb(jf.data(), jf.size(), jpeg, err), "a JPEG-textured GLB reads");
+        mm::Library jl;
+        jl.meshes[mm::slotPistol] = jpeg;
+        jl.status[mm::slotPistol] = mm::loaded;
+        const auto jt = mm::prepareTextures(jl, nullptr, 8, 4);
+        check(jt.layers.empty() && !jt.notes.empty() && jl.meshes[mm::slotPistol].images[0].layer < 0,
+              "an image that does not decode: no layer, a note, the tint drawn");
+        // Drawn: with the model sink, textured and depth-tested (u, v, layer in shape); without it, as before.
+        using namespace spidy::hero007;
+        const Vec3 viewer{0, 1.6f, 0};
+        Item it{lookPistol, {0, 1.2f, -.5f}};
+        std::vector<Vertex> out, sink;
+        setModelSink(&sink);
+        check(appendModel(out, it, lib.meshes[mm::slotPistol], viewer) && out.empty() && sink.size() == 6,
+              "into the sink: 6 corners, none in the overlay's own");
+        check(sink.size() == 6 && sink[0].shape.z == 0.f && sink[0].shape.w == 1.f && std::abs(sink[1].shape.x - 1.f) < 1e-6f,
+              "each corner carries its UV and layer");
+        setModelSink(nullptr);
+        sink.clear();
+        check(appendModel(out, it, lib.meshes[mm::slotPistol], viewer) && out.size() == 6 && sink.empty() &&
+                  out[0].shape.w == 0.f,
+              "no sink (no texture array): drawn untextured as before");
+        // A model over liteTriangles keeps its full mesh and gets a light copy for the untextured look.
+        mm::Mesh big;
+        const int n = 40;
+        for (int y = 0; y < n; ++y)
+            for (int x = 0; x < n; ++x) {
+                const float x0 = x * .005f, y0 = y * .005f, x1 = x0 + .005f, y1 = y0 + .005f;
+                for (const Vec3& p : {Vec3{x0, y0, 0}, Vec3{x1, y0, 0}, Vec3{x1, y1, .001f}, Vec3{x0, y0, 0}, Vec3{x1, y1, .001f}, Vec3{x0, y1, 0}})
+                    big.corners.push_back(p);
+            }
+        big.colors.assign(big.corners.size() / 3, Vec3{.5f, .5f, .5f});
+        big.low = {0, 0, 0};
+        big.high = {.2f, .2f, .001f};
+        mm::Library bl;
+        bl.meshes[mm::slotPistol] = big;
+        bl.status[mm::slotPistol] = mm::loaded;
+        mm::prepareTextures(bl, nullptr, 8, 4);
+        const auto& kept = bl.meshes[mm::slotPistol];
+        check(kept.triangles() == 3200 && kept.lite && kept.lite->triangles() <= mm::liteTriangles && kept.lite->triangles() > 100,
+              "3200 triangles kept, a light copy for the untextured look: " + std::to_string(kept.lite ? kept.lite->triangles() : 0));
+        out.clear();
+        check(appendModel(out, it, kept, viewer) && out.size() <= budget::model, "untextured: the light copy, in budget");
+        setModelSink(&sink);
+        sink.clear();
+        out.clear();
+        check(appendModel(out, it, kept, viewer) && out.empty() && sink.size() == 3200 * 3, "textured: every triangle");
+        setModelSink(nullptr);
     });
     test("Version 0.0.7: never more than TWO of a hero's weapons, in every state", [] {
         using namespace spidy::hero007;

@@ -668,10 +668,213 @@ float4 ps(Out i):SV_TARGET {
     hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&artPipeline_)), "Create art pipeline");
     artFormat_ = targetFormat;
 }
+bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
+                                     std::span<const std::vector<unsigned char>> layers) noexcept {
+    bool recording = false;
+    try {
+        if (!device_ || !queue_ || !list_)
+            throw std::runtime_error("Overlay not initialized");
+        if (layers.empty() || layers.size() > 64 || !size || size > 4096 || !levels || levels > 13 ||
+            (size >> (levels - 1)) < 1)
+            throw std::runtime_error("Model textures need 1 to 64 layers of 1 to 4096 texels, 1 to 13 levels");
+        size_t layerBytes = 0;
+        for (unsigned l = 0; l < levels; ++l)
+            layerBytes += size_t{size >> l} * (size >> l) * 4;
+        for (size_t i = 0; i < layers.size(); ++i)
+            if (layers[i].size() != layerBytes)
+                throw std::runtime_error("Model texture layer " + std::to_string(i) + " has the wrong size");
+        model_.Reset();
+        modelFault_.clear();
+        D3D12_RESOURCE_DESC d{};
+        d.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        d.Width = size;
+        d.Height = size;
+        d.DepthOrArraySize = static_cast<UINT16>(layers.size());
+        d.MipLevels = static_cast<UINT16>(levels);
+        d.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        d.SampleDesc.Count = 1;
+        ComPtr<ID3D12Resource> texture, upload;
+        auto onGpu = heap(D3D12_HEAP_TYPE_DEFAULT);
+        hr(device_->CreateCommittedResource(&onGpu, D3D12_HEAP_FLAG_NONE, &d, D3D12_RESOURCE_STATE_COPY_DEST,
+                                            nullptr, IID_PPV_ARGS(&texture)),
+           "Create model texture array");
+        const UINT count = static_cast<UINT>(layers.size()) * levels;
+        std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footprints(count);
+        std::vector<UINT> rows(count);
+        std::vector<UINT64> rowBytes(count);
+        UINT64 total{};
+        device_->GetCopyableFootprints(&d, 0, count, 0, footprints.data(), rows.data(), rowBytes.data(), &total);
+        D3D12_RESOURCE_DESC b{};
+        b.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        b.Width = total;
+        b.Height = 1;
+        b.DepthOrArraySize = 1;
+        b.MipLevels = 1;
+        b.SampleDesc.Count = 1;
+        b.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        auto staging = heap(D3D12_HEAP_TYPE_UPLOAD);
+        hr(device_->CreateCommittedResource(&staging, D3D12_HEAP_FLAG_NONE, &b, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                            nullptr, IID_PPV_ARGS(&upload)),
+           "Create model texture upload buffer");
+        void* mapped{};
+        D3D12_RANGE none{0, 0};
+        hr(upload->Map(0, &none, &mapped), "Map model texture upload buffer");
+        // Subresource layer * levels + level: the order of each layer's mips.
+        for (size_t layer = 0; layer < layers.size(); ++layer) {
+            size_t offset = 0;
+            for (unsigned l = 0; l < levels; ++l) {
+                const unsigned w = size >> l;
+                const auto& f = footprints[layer * levels + l];
+                for (unsigned y = 0; y < w; ++y)
+                    std::memcpy(static_cast<char*>(mapped) + f.Offset + static_cast<UINT64>(y) * f.Footprint.RowPitch,
+                                layers[layer].data() + offset + size_t{y} * w * 4, size_t{w} * 4);
+                offset += size_t{w} * w * 4;
+            }
+        }
+        upload->Unmap(0, nullptr);
+        waitForSubmission();
+        hr(allocator_->Reset(), "Reset allocator for model textures");
+        hr(list_->Reset(allocator_.Get(), nullptr), "Reset list for model textures");
+        recording = true;
+        for (UINT i = 0; i < count; ++i) {
+            D3D12_TEXTURE_COPY_LOCATION to{texture.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, {}};
+            to.SubresourceIndex = i;
+            D3D12_TEXTURE_COPY_LOCATION from{upload.Get(), D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, {}};
+            from.PlacedFootprint = footprints[i];
+            list_->CopyTextureRegion(&to, 0, 0, 0, &from, nullptr);
+        }
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = texture.Get();
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        list_->ResourceBarrier(1, &barrier);
+        recording = false;
+        hr(list_->Close(), "Close model texture upload list");
+        ID3D12CommandList* lists[] = {list_.Get()};
+        queue_->ExecuteCommandLists(1, lists);
+        hr(queue_->Signal(fence_.Get(), ++fenceValue_), "Signal model texture upload");
+        waitForSubmission(); // the upload buffer must outlive the copy
+        if (!modelHeap_) {
+            D3D12_DESCRIPTOR_HEAP_DESC h{};
+            h.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            h.NumDescriptors = 1;
+            h.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            hr(device_->CreateDescriptorHeap(&h, IID_PPV_ARGS(&modelHeap_)), "Create model descriptor heap");
+        }
+        D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+        sv.Format = d.Format;
+        sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+        sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        sv.Texture2DArray.MipLevels = levels;
+        sv.Texture2DArray.ArraySize = static_cast<UINT>(layers.size());
+        device_->CreateShaderResourceView(texture.Get(), &sv, modelHeap_->GetCPUDescriptorHandleForHeapStart());
+        model_ = texture;
+        return true;
+    } catch (const std::exception& error) {
+        modelFault_ = std::string("Model textures unusable (") + error.what() + ")";
+    } catch (...) {
+        modelFault_ = "Model textures unusable";
+    }
+    if (recording)
+        list_->Close();
+    model_.Reset();
+    return false;
+}
+void D3D12Renderer::prepareModel(DXGI_FORMAT targetFormat) {
+    if (!modelRoot_) {
+        D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
+        D3D12_ROOT_PARAMETER parameters[2]{};
+        parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        parameters[0].Constants.Num32BitValues = 16;
+        parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameters[1].DescriptorTable = {1, &range};
+        parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_STATIC_SAMPLER_DESC sampler{};
+        sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+        sampler.MaxAnisotropy = 8;
+        sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_ROOT_SIGNATURE_DESC rs{2, parameters, 1, &sampler,
+                                    D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
+        ComPtr<ID3DBlob> signature, error;
+        hr(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
+           "Serialize model root signature");
+        hr(device_->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                        IID_PPV_ARGS(&modelRoot_)),
+           "Create model root signature");
+    }
+    if (modelPipeline_ && modelFormat_ == targetFormat)
+        return;
+    // The vertex colour (lit, linear like the rest of the overlay) times the decoded texel; the
+    // glTF MASK cut-out at half alpha; layer < 0 is a triangle without an image.
+    const char* shader = R"(
+cbuffer Eye : register(b0) { row_major float4x4 vp; };
+Texture2DArray skins : register(t0);
+SamplerState fine : register(s0);
+struct In { float3 position:POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
+struct Out { float4 position:SV_POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
+Out vs(In i) { Out o; o.position=mul(vp,float4(i.position,1)); o.color=i.color; o.shape=i.shape; return o; }
+float4 ps(Out i):SV_TARGET {
+    float4 t = float4(1, 1, 1, 1);
+    if (i.shape.z >= 0) {
+        t = skins.Sample(fine, float3(i.shape.xy, floor(i.shape.z + .5)));
+        clip(t.a - .5);
+    }
+    return float4(i.color.rgb * t.rgb, 1);
+}
+)";
+    ComPtr<ID3DBlob> vs, ps, error;
+    for (const char* stage : {"vs", "ps"}) {
+        error.Reset();
+        auto& out = stage[0] == 'v' ? vs : ps;
+        if (const HRESULT result = D3DCompile(shader, std::strlen(shader), "spidy_model", nullptr, nullptr, stage,
+                                              stage[0] == 'v' ? "vs_5_0" : "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
+                                              &out, &error);
+            FAILED(result) || !out)
+            throw std::runtime_error(std::string("Compile model ") + stage + " shader HRESULT=" +
+                                     std::to_string(static_cast<unsigned long>(result)) + ": " +
+                                     compilerText(error.Get()));
+    }
+    D3D12_INPUT_ELEMENT_DESC layout[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    };
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};
+    p.pRootSignature = modelRoot_.Get();
+    p.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    p.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    p.InputLayout = {layout, 3};
+    p.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    p.NumRenderTargets = 1;
+    p.RTVFormats[0] = targetFormat;
+    p.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+    p.SampleDesc.Count = 1;
+    p.SampleMask = UINT_MAX;
+    p.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    p.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // glTF doubleSided, and any winding
+    p.RasterizerState.DepthClipEnable = TRUE;
+    p.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    // Solid like the main vertices: tested and written, so no sorting is needed.
+    p.DepthStencilState.DepthEnable = TRUE;
+    p.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    p.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    p.DepthStencilState.FrontFace.StencilFailOp = p.DepthStencilState.FrontFace.StencilDepthFailOp =
+        p.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+    p.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    p.DepthStencilState.BackFace = p.DepthStencilState.FrontFace;
+    modelPipeline_.Reset();
+    hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&modelPipeline_)), "Create model pipeline");
+    modelFormat_ = targetFormat;
+}
 void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<const Vertex> vertices,
                                 bool preserveColor, bool waitForCompletion,
                                 std::span<const Vertex> translucent, const Grade* grade,
-                                std::span<const Vertex> art) {
+                                std::span<const Vertex> art, std::span<const Vertex> textured) {
     if (views.empty() || views.size() > 2)
         throw std::runtime_error("Overlay requires one or two views");
     const auto format = views[0].format;
@@ -719,8 +922,18 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     }
     if (!artReady())
         art = {};
-    // One buffer: the depth-writing vertices, the art, then the translucent ones.
-    const auto bytes = vertices.size_bytes() + art.size_bytes() + translucent.size_bytes();
+    // Version 0.0.72: the models likewise (modelReady() false: left out, never the rest).
+    if (!textured.empty() && modelReady()) {
+        try {
+            prepareModel(format);
+        } catch (const std::exception& error) {
+            modelFault_ = std::string("Model pipeline unusable (") + error.what() + ")";
+        }
+    }
+    if (!modelReady() || !modelPipeline_)
+        textured = {};
+    // One buffer: the depth-writing vertices, the art, the translucent ones, then the models.
+    const auto bytes = vertices.size_bytes() + art.size_bytes() + translucent.size_bytes() + textured.size_bytes();
     if (bytes > capacity_) {
         vertices_.Reset();
         // Room from the start for a fight's printed marks (some 80,000
@@ -750,6 +963,9 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
         if (!translucent.empty())
             std::memcpy(static_cast<char*>(data) + vertices.size_bytes() + art.size_bytes(), translucent.data(),
                         translucent.size_bytes());
+        if (!textured.empty())
+            std::memcpy(static_cast<char*>(data) + vertices.size_bytes() + art.size_bytes() + translucent.size_bytes(),
+                        textured.data(), textured.size_bytes());
         vertices_->Unmap(0, nullptr);
     }
     hr(allocator_->Reset(), "Reset allocator");
@@ -790,6 +1006,19 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
             if (!vertices.empty()) {
                 list_->SetPipelineState(pipeline_.Get());
                 list_->DrawInstanced(static_cast<UINT>(vertices.size()), 1, 0, 0);
+            }
+            // The models: solid, before anything blended over them.
+            if (!textured.empty()) {
+                ID3D12DescriptorHeap* heaps[] = {modelHeap_.Get()};
+                list_->SetDescriptorHeaps(1, heaps);
+                list_->SetGraphicsRootSignature(modelRoot_.Get());
+                list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
+                list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
+                list_->SetPipelineState(modelPipeline_.Get());
+                list_->DrawInstanced(static_cast<UINT>(textured.size()), 1,
+                                     static_cast<UINT>(vertices.size() + art.size() + translucent.size()), 0);
+                list_->SetGraphicsRootSignature(root_.Get());
+                list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
             }
             if (!art.empty()) {
                 ID3D12DescriptorHeap* heaps[] = {artHeap_.Get()};

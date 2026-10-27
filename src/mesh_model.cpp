@@ -2,10 +2,13 @@
 // Version 0.0.7 BATARANG STYLE: the strict glTF 2.0 reader (mesh_model.hpp).
 #include "spidy/mesh_model.hpp"
 
+#include "spidy/calibration_art.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cctype>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -375,6 +378,110 @@ struct Doc {
         }
         return true;
     }
+    // Version 0.0.72: TEXCOORD_0 (VEC2) / NORMAL (VEC3): FLOAT, or normalized UNSIGNED_BYTE / SHORT.
+    bool floatAccessor(uint32_t index, size_t want, size_t comps, std::vector<float>& out_) {
+        const Json* list = root.get("accessors");
+        const Json* a = list ? list->at(index) : nullptr;
+        if (!a || a->kind != Json::object || a->get("sparse"))
+            return refuse(error, "bad TEXCOORD_0 / NORMAL accessor");
+        const Json* bv = a->get("bufferView");
+        const Json* type = a->get("componentType");
+        const Json* count = a->get("count");
+        const Json* kind = a->get("type");
+        const Json* off = a->get("byteOffset");
+        if (!bv || !bv->isInt() || !type || !type->isInt() || !count || !count->isInt() || !kind || kind->kind != Json::string ||
+            (off && !off->isInt()) || static_cast<size_t>(count->num) != want ||
+            kind->text != (comps == 2 ? "VEC2" : "VEC3"))
+            return refuse(error, "bad TEXCOORD_0 / NORMAL accessor");
+        const auto component = static_cast<uint32_t>(type->num);
+        const Json* norm = a->get("normalized");
+        const size_t one = component == 5126 ? 4 : (component == 5123 || component == 5121) && norm && norm->yes ? (component == 5123 ? 2 : 1) : 0;
+        if (!one)
+            return refuse(error, "TEXCOORD_0 / NORMAL must be FLOAT (or normalized UNSIGNED_BYTE / SHORT)");
+        size_t offset{}, length{}, stride{};
+        if (!view(static_cast<uint32_t>(bv->num), offset, length, stride))
+            return false;
+        const size_t extra = off ? static_cast<size_t>(off->num) : 0, size = comps * one, step = stride ? stride : size;
+        if (want == 0 || step < size || extra > length || (want - 1) * step + size > length - extra)
+            return refuse(error, "TEXCOORD_0 / NORMAL outside its bufferView");
+        out_.resize(want * comps);
+        for (size_t i = 0; i < want; ++i) {
+            const uint8_t* at = bin.data() + offset + extra + i * step;
+            for (size_t k = 0; k < comps; ++k) {
+                float f;
+                if (one == 4)
+                    std::memcpy(&f, at + k * 4, 4);
+                else if (one == 2)
+                    f = static_cast<float>(at[k * 2] | (at[k * 2 + 1] << 8)) / 65535.f;
+                else
+                    f = static_cast<float>(at[k]) / 255.f;
+                if (!std::isfinite(f) || std::abs(f) > 1e4f)
+                    return refuse(error, "a NaN or huge TEXCOORD_0 / NORMAL");
+                out_[i * comps + k] = f;
+            }
+        }
+        return true;
+    }
+    // Version 0.0.72: the material's base-colour image (an index into out.images, -1 none) and its cut.
+    int16_t materialImage(const Json* index, bool& cutout) {
+        cutout = false;
+        const Json* list = root.get("materials");
+        const Json* m = index && index->isInt() && list ? list->at(static_cast<size_t>(index->num)) : nullptr;
+        if (!m)
+            return -1;
+        if (const Json* mode = m->get("alphaMode"); mode && mode->kind == Json::string && (mode->text == "MASK" || mode->text == "BLEND"))
+            cutout = true;
+        const Json* pbr = m->get("pbrMetallicRoughness");
+        const Json* ref = pbr ? pbr->get("baseColorTexture") : nullptr;
+        const Json* ti = ref ? ref->get("index") : nullptr;
+        if (const Json* set = ref ? ref->get("texCoord") : nullptr; set && (!set->isInt() || set->num != 0))
+            return -1; // only TEXCOORD_0 is read
+        const Json* textures = root.get("textures");
+        const Json* t = ti && ti->isInt() && textures ? textures->at(static_cast<size_t>(ti->num)) : nullptr;
+        const Json* src = t ? t->get("source") : nullptr;
+        if (!src || !src->isInt() || src->num >= static_cast<double>(out.images.size()))
+            return -1;
+        const auto i = static_cast<int16_t>(src->num);
+        if (out.images[static_cast<size_t>(i)].bytes.empty() && out.images[static_cast<size_t>(i)].uri.empty())
+            return -1;
+        if (cutout)
+            out.images[static_cast<size_t>(i)].cutout = true;
+        return i;
+    }
+    // Version 0.0.72: the document's images (a bufferView's bytes, or a relative file name).
+    bool readImages() {
+        const Json* list = root.get("images");
+        if (!list)
+            return true;
+        if (list->kind != Json::array || list->items.size() > 256)
+            return refuse(error, "bad images");
+        for (const Json& im : list->items) {
+            Mesh::Image one;
+            if (const Json* bv = im.get("bufferView"); bv && bv->isInt()) {
+                size_t offset{}, length{}, stride{};
+                if (!view(static_cast<uint32_t>(bv->num), offset, length, stride))
+                    return false;
+                if (length <= mostImageBytes)
+                    one.bytes.assign(bin.begin() + static_cast<std::ptrdiff_t>(offset), bin.begin() + static_cast<std::ptrdiff_t>(offset + length));
+            } else if (const Json* uri = im.get("uri"); uri && uri->kind == Json::string && uri->text.rfind("data:", 0) != 0) {
+                // a plain relative name only (no folder above, no drive, no absolute path)
+                std::string name;
+                for (size_t i = 0; i < uri->text.size(); ++i) {
+                    const char c = uri->text[i];
+                    if (c == '%' && i + 2 < uri->text.size() && std::isxdigit(static_cast<unsigned char>(uri->text[i + 1])) &&
+                        std::isxdigit(static_cast<unsigned char>(uri->text[i + 2]))) {
+                        name += static_cast<char>(std::stoi(uri->text.substr(i + 1, 2), nullptr, 16));
+                        i += 2;
+                    } else
+                        name += c == '\\' ? '/' : c;
+                }
+                if (!name.empty() && name[0] != '/' && name.find(':') == std::string::npos && name.find("..") == std::string::npos)
+                    one.uri = name;
+            }
+            out.images.push_back(std::move(one));
+        }
+        return true;
+    }
     bool hasMaterial(const Json* index) {
         const Json* list = root.get("materials");
         return index && index->isInt() && list && list->at(static_cast<size_t>(index->num));
@@ -424,6 +531,22 @@ struct Doc {
                     return error.empty() ? refuse(error, "bad COLOR_0") : false;
             }
             const Vec3 tint = hasMaterial(prim.get("material")) ? color : Vec3{1, 1, 1};
+            // Version 0.0.72: UVs, normals, the base-colour image
+            std::vector<float> uv, nrm;
+            if (const Json* t = attrs->get("TEXCOORD_0")) {
+                if (!t->isInt() || !floatAccessor(static_cast<uint32_t>(t->num), points.size(), 2, uv))
+                    return error.empty() ? refuse(error, "bad TEXCOORD_0") : false;
+            }
+            if (const Json* nn = attrs->get("NORMAL")) {
+                if (!nn->isInt() || !floatAccessor(static_cast<uint32_t>(nn->num), points.size(), 3, nrm))
+                    return error.empty() ? refuse(error, "bad NORMAL") : false;
+            }
+            bool cutout = false;
+            const int16_t image = uv.empty() ? int16_t{-1} : materialImage(prim.get("material"), cutout);
+            // normals go through the inverse transpose (the cofactors) of the node's 3 x 3
+            const float a = world[0], b = world[4], c = world[8], d = world[1], e = world[5], f = world[9], g = world[2], h = world[6],
+                        k = world[10];
+            const float cof[9]{e * k - f * h, f * g - d * k, d * h - e * g, c * h - b * k, a * k - c * g, b * g - a * h, b * f - c * e, c * d - a * f, a * e - b * d};
             for (size_t i = 0; i < idx.size(); i += 3) {
                 for (size_t k = 0; k < 3; ++k)
                     if (idx[i + k] >= points.size())
@@ -437,8 +560,27 @@ struct Doc {
                         return refuse(error, "a NaN or huge coordinate");
                     out.corners.push_back(p);
                 }
+                const Vec3 p0 = out.corners[out.corners.size() - 3], p1 = out.corners[out.corners.size() - 2], p2 = out.corners.back();
+                const Vec3 face = cross(p1 - p0, p2 - p0);
+                const Vec3 flat = length(face) > 1e-20f ? normalized(face) : Vec3{0, 1, 0};
+                for (size_t k2 = 0; k2 < 3; ++k2) {
+                    const uint32_t v = idx[i + k2];
+                    out.uvs.push_back(uv.empty() ? 0.f : uv[v * 2]);
+                    out.uvs.push_back(uv.empty() ? 0.f : uv[v * 2 + 1]);
+                    Vec3 n = flat;
+                    if (!nrm.empty()) {
+                        const Vec3 m{nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]};
+                        const Vec3 w{cof[0] * m.x + cof[3] * m.y + cof[6] * m.z, cof[1] * m.x + cof[4] * m.y + cof[7] * m.z,
+                                     cof[2] * m.x + cof[5] * m.y + cof[8] * m.z};
+                        if (std::isfinite(w.x) && std::isfinite(w.y) && std::isfinite(w.z) && length(w) > 1e-12f)
+                            n = normalized(w);
+                    }
+                    out.normals.push_back(n);
+                }
+                out.image.push_back(image);
+                out.tints.push_back(painted.empty() ? tint : Vec3{1, 1, 1});
                 if (painted.empty()) {
-                    out.colors.push_back(color);
+                    out.colors.push_back(image >= 0 ? tint : color);
                 } else {
                     const Vec3 mean = (painted[idx[i]] + painted[idx[i + 1]] + painted[idx[i + 2]]) * (1.f / 3);
                     out.colors.push_back({mean.x * tint.x, mean.y * tint.y, mean.z * tint.z});
@@ -496,6 +638,8 @@ struct Doc {
                 out.hasLayer = true;
             }
         }
+        if (!readImages())
+            return false;
         if (const Json* req = root.get("extensionsRequired"); req && req->kind == Json::array && !req->items.empty())
             return refuse(error, "needs an extension (" + (req->items[0].kind == Json::string ? req->items[0].text : std::string("?")) +
                                      "): re-download the uncompressed glTF");
@@ -534,6 +678,13 @@ bool finish(Mesh& out, std::string& error) {
         return refuse(error, "the model has no size");
     }
     out.sourceTriangles = out.triangles();
+    if (out.uvs.size() != out.colors.size() * 6 || out.normals.size() != out.colors.size() * 3 || out.image.size() != out.colors.size() ||
+        out.tints.size() != out.colors.size()) {
+        out.uvs.clear(); // never expected (every triangle gets them); untextured then
+        out.normals.clear();
+        out.image.clear();
+        out.tints.clear();
+    }
     if (out.hasLayer && !(out.layerSplit < out.triangles())) // a layer that does not fit the triangles: none
         out.hasLayer = false;
     return true;
@@ -655,9 +806,18 @@ bool decimate(Mesh& mesh, uint32_t most) {
                 next.corners.push_back(s.first * (1.f / static_cast<float>(s.second)));
             }
             next.colors.push_back(mesh.colors[t]);
+            if (mesh.hasUvs()) { // Version 0.0.72: each kept triangle keeps its corners' UVs, normals, image
+                next.uvs.insert(next.uvs.end(), mesh.uvs.begin() + t * 6, mesh.uvs.begin() + t * 6 + 6);
+                next.image.push_back(mesh.image[t]);
+                next.tints.push_back(mesh.tints[t]);
+                const Vec3 n0 = next.corners[next.corners.size() - 3], fc = cross(next.corners[next.corners.size() - 2] - n0, next.corners.back() - n0);
+                const Vec3 flat = length(fc) > 1e-20f ? normalized(fc) : Vec3{0, 1, 0};
+                next.normals.insert(next.normals.end(), {flat, flat, flat});
+            }
         }
         if (next.ok() && next.triangles() <= most) {
             next.sourceTriangles = mesh.sourceTriangles;
+            next.images = mesh.images;
             next.decimated = true;
             bounds(next);
             mesh = std::move(next);
@@ -699,6 +859,13 @@ Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::s
         out = {};
         return invalid;
     }
+    // Version 0.0.72: images beside a .gltf (textures\...): read now; one that is missing is untextured
+    size_t imageBytes = 0;
+    for (Mesh::Image& im : out.images)
+        if (im.bytes.empty() && !im.uri.empty()) {
+            if (!readFile(folder + im.uri, im.bytes, mostImageBytes) || (imageBytes += im.bytes.size()) > 2 * mostImageBytes)
+                im.bytes.clear();
+        }
     if (out.triangles() > drawTriangles) {
         if (!mayDecimate) {
             error = std::to_string(out.triangles()) + " triangles, over the " + std::to_string(drawTriangles) +
@@ -715,18 +882,211 @@ Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::s
     return loaded;
 }
 
+namespace {
+// Version 0.0.72: the untextured look's light copy (in its current colours), when the model is over liteTriangles.
+void makeLite(Mesh& m, bool mayChange) {
+    m.lite.reset();
+    if (!m.ok() || m.triangles() <= liteTriangles || !mayChange)
+        return;
+    auto copy = std::make_shared<Mesh>(m);
+    copy->lite.reset();
+    if (decimate(*copy, liteTriangles) && copy->ok())
+        m.lite = std::move(copy);
+}
+} // namespace
+
 Status Library::load(uint32_t style, const std::string& modelsRoot) {
     if (style == 0 || style >= slots)
         return notTried;
     if (status[style] != notTried)
         return status[style];
     status[style] = loadFolder(modelsRoot + slotFolders[style] + "/", slotMayDecimate[style], meshes[style], error[style]);
+    if (status[style] == loaded)
+        makeLite(meshes[style], slotMayDecimate[style]);
     return status[style];
 }
 
 Library& library() {
     static Library* one = new Library; // never freed (frames in flight point at its meshes)
     return *one;
+}
+
+bool Mesh::textured() const {
+    if (!hasUvs() || image.size() != colors.size())
+        return false;
+    bool any = false;
+    for (int16_t i : image)
+        if (i >= 0) {
+            if (static_cast<size_t>(i) >= images.size() || images[static_cast<size_t>(i)].layer < 0)
+                return false;
+            any = true;
+        }
+    return any;
+}
+
+bool decodeImage(const uint8_t* data, size_t size, Decoder decoder, Picture& out) {
+    out = {};
+    if (!data || size < 8)
+        return false;
+    if (std::memcmp(data, "qoif", 4) == 0) {
+        calibration_art::Image q;
+        if (!calibration_art::decodeQoi({data, size}, q) || q.width <= 0 || q.height <= 0)
+            return false;
+        out.width = static_cast<uint32_t>(q.width);
+        out.height = static_cast<uint32_t>(q.height);
+        out.rgba = std::move(q.rgba);
+        return true;
+    }
+    if (!decoder || !decoder(data, size, out))
+        return out = {}, false;
+    if (!out.width || !out.height || out.width > 16384 || out.height > 16384 || out.rgba.size() != size_t{out.width} * out.height * 4)
+        return out = {}, false;
+    return true;
+}
+
+Picture resample(const Picture& in, uint32_t size) {
+    Picture out;
+    out.width = out.height = size;
+    out.rgba.assign(size_t{size} * size * 4, 0);
+    if (!in.width || !in.height || in.rgba.size() != size_t{in.width} * in.height * 4 || !size)
+        return out;
+    // each output texel: the mean of the source texels it covers (at least the nearest one, bilinear when growing)
+    const double sx = static_cast<double>(in.width) / size, sy = static_cast<double>(in.height) / size;
+    for (uint32_t y = 0; y < size; ++y)
+        for (uint32_t x = 0; x < size; ++x) {
+            double acc[4]{};
+            if (sx > 1 || sy > 1) {
+                const auto x0 = static_cast<uint32_t>(x * sx), x1 = std::max(x0 + 1, std::min(in.width, static_cast<uint32_t>((x + 1) * sx)));
+                const auto y0 = static_cast<uint32_t>(y * sy), y1 = std::max(y0 + 1, std::min(in.height, static_cast<uint32_t>((y + 1) * sy)));
+                for (uint32_t v = y0; v < y1 && v < in.height; ++v)
+                    for (uint32_t u = x0; u < x1 && u < in.width; ++u)
+                        for (int c = 0; c < 4; ++c)
+                            acc[c] += in.rgba[(size_t{v} * in.width + u) * 4 + c];
+                const double n = static_cast<double>((std::min(x1, in.width) - x0) * (std::min(y1, in.height) - y0));
+                for (double& a : acc)
+                    a /= std::max(1.0, n);
+            } else {
+                const double fx = std::max(0.0, (x + .5) * sx - .5), fy = std::max(0.0, (y + .5) * sy - .5);
+                const auto u0 = std::min(in.width - 1, static_cast<uint32_t>(fx)), v0 = std::min(in.height - 1, static_cast<uint32_t>(fy));
+                const uint32_t u1 = std::min(in.width - 1, u0 + 1), v1 = std::min(in.height - 1, v0 + 1);
+                const double ax = fx - u0, ay = fy - v0;
+                for (int c = 0; c < 4; ++c) {
+                    auto at = [&](uint32_t u, uint32_t v) { return static_cast<double>(in.rgba[(size_t{v} * in.width + u) * 4 + c]); };
+                    acc[c] = (at(u0, v0) * (1 - ax) + at(u1, v0) * ax) * (1 - ay) + (at(u0, v1) * (1 - ax) + at(u1, v1) * ax) * ay;
+                }
+            }
+            for (int c = 0; c < 4; ++c)
+                out.rgba[(size_t{y} * size + x) * 4 + c] = static_cast<uint8_t>(std::clamp(acc[c] + .5, 0.0, 255.0));
+        }
+    return out;
+}
+
+namespace {
+float srgbToLinear(uint8_t v) {
+    const float c = static_cast<float>(v) / 255.f;
+    return c <= .04045f ? c / 12.92f : std::pow((c + .055f) / 1.055f, 2.4f);
+}
+uint64_t fnv(const std::vector<uint8_t>& b) {
+    uint64_t h = 1469598103934665603ull;
+    for (uint8_t c : b)
+        h = (h ^ c) * 1099511628211ull;
+    return h ^ b.size();
+}
+} // namespace
+
+TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint32_t levels) {
+    TextureArray out;
+    out.size = size;
+    out.levels = levels;
+    if (!size || !levels || levels > 16 || (size >> (levels - 1)) == 0) {
+        out.notes.push_back("bad texture array size");
+        return out;
+    }
+    std::map<std::pair<uint64_t, bool>, int32_t> seen; // (the image's bytes, cut) -> its layer
+    std::map<int32_t, Picture> small;                  // each layer at 64 x 64, for the untextured colours
+    for (uint32_t slot = 1; slot < slots; ++slot) {
+        if (lib.status[slot] != loaded)
+            continue;
+        Mesh& m = lib.meshes[slot];
+        for (size_t i = 0; i < m.images.size(); ++i) {
+            Mesh::Image& im = m.images[i];
+            im.layer = -1;
+            bool used = false;
+            for (int16_t t : m.image)
+                used = used || t == static_cast<int16_t>(i);
+            if (!used || !m.hasUvs())
+                continue;
+            const std::string name = std::string(slotFolders[slot]) + " image " + std::to_string(i) + (im.uri.empty() ? "" : " (" + im.uri + ")");
+            if (im.bytes.empty()) {
+                out.notes.push_back(name + ": NOT READ (missing file) - drawn in its material colour");
+                continue;
+            }
+            const auto key = std::make_pair(fnv(im.bytes), im.cutout);
+            if (auto f = seen.find(key); f != seen.end()) {
+                im.layer = f->second;
+                out.notes.push_back(name + ": layer " + std::to_string(im.layer) + " (shared)");
+                continue;
+            }
+            if (out.layers.size() >= mostTextureLayers) {
+                out.notes.push_back(name + ": NOT READ (the texture array is full) - drawn in its material colour");
+                continue;
+            }
+            Picture pic;
+            if (!decodeImage(im.bytes.data(), im.bytes.size(), decoder, pic)) {
+                out.notes.push_back(name + ": NOT READ (could not decode) - drawn in its material colour");
+                continue;
+            }
+            const uint32_t w0 = pic.width, h0 = pic.height;
+            Picture base = resample(pic, size);
+            pic = {};
+            if (!im.cutout) // opaque materials: their alpha is not a cut
+                for (size_t p = 3; p < base.rgba.size(); p += 4)
+                    base.rgba[p] = 255;
+            calibration_art::Image ci;
+            ci.width = ci.height = static_cast<int>(size);
+            ci.rgba = base.rgba;
+            const auto chain = calibration_art::mips(ci, static_cast<int>(levels));
+            if (chain.size() != levels) {
+                out.notes.push_back(name + ": NOT READ (mips) - drawn in its material colour");
+                continue;
+            }
+            std::vector<uint8_t> layer;
+            for (const auto& lv : chain)
+                layer.insert(layer.end(), lv.rgba.begin(), lv.rgba.end());
+            im.layer = static_cast<int32_t>(out.layers.size());
+            out.layers.push_back(std::move(layer));
+            seen[key] = im.layer;
+            small[im.layer] = resample(base, 64);
+            out.notes.push_back(name + ": layer " + std::to_string(im.layer) + " (" + std::to_string(w0) + "x" + std::to_string(h0) + " -> " +
+                                std::to_string(size) + (im.cutout ? ", cut-out alpha)" : ")"));
+        }
+        // the look without the texture array: each triangle its texture's mean (3 corners + centre) x tint
+        if (m.hasUvs())
+            for (uint32_t t = 0; t < m.triangles(); ++t) {
+                const int16_t i = m.image[t];
+                if (i < 0 || static_cast<size_t>(i) >= m.images.size() || m.images[static_cast<size_t>(i)].layer < 0)
+                    continue;
+                const Picture& p = small[m.images[static_cast<size_t>(i)].layer];
+                float sum[3]{};
+                for (int c = 0; c < 4; ++c) {
+                    float u = 0, v = 0;
+                    for (int k = 0; k < 3; ++k)
+                        if (c == 3 || c == k) {
+                            u += m.uvs[t * 6 + k * 2] / (c == 3 ? 3.f : 1.f);
+                            v += m.uvs[t * 6 + k * 2 + 1] / (c == 3 ? 3.f : 1.f);
+                        }
+                    u -= std::floor(u);
+                    v -= std::floor(v);
+                    const auto x = std::min(63u, static_cast<uint32_t>(u * 64)), y = std::min(63u, static_cast<uint32_t>(v * 64));
+                    for (int k = 0; k < 3; ++k)
+                        sum[k] += srgbToLinear(p.rgba[(size_t{y} * 64 + x) * 4 + k]) * .25f;
+                }
+                const Vec3 tint = m.tints[t];
+                m.colors[t] = {sum[0] * tint.x, sum[1] * tint.y, sum[2] * tint.z};
+            }
+        makeLite(m, slotMayDecimate[slot]);
+    }
+    return out;
 }
 
 Fit fit(const Mesh& mesh, float span) {

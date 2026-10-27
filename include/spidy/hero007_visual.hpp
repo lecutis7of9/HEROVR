@@ -153,10 +153,17 @@ void appendItem(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pix
 // Everything in `d`, moved by `travel` (the player's move to this image).
 void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 viewer, float pixelAngle);
 
+// Version 0.0.72 REAL MODELS: the models' own sink. Set (game_xr, each frame) when the overlay has its
+// model texture array: the drop-in models then go there textured (Vertex::shape = u, v, layer, 1),
+// drawn depth-tested and unsorted; null: they go untextured into `out` as before (their light copy).
+void setModelSink(std::vector<Vertex>* sink);
+std::vector<Vertex>* modelSink();
+inline constexpr size_t modelSinkBudget = 10 * 3 * size_t{mesh_model::drawTriangles};
+
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.
 namespace budget {
 inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 2600 /* 0.0.72: curved, 5 segments a claw */, club = 1200,
-                        holster = 400, shield = 2100, batarangModel = 3 * mesh_model::drawTriangles, model = 3 * mesh_model::drawTriangles,
+                        holster = 400, shield = 2100, batarangModel = 3 * mesh_model::liteTriangles, model = 3 * mesh_model::liteTriangles,
                         cable = 600, grapple = 1800, pellet = 200, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
 // The whole frame's worst case: 2 held + 4 worn + 2 flying + beam + smoke + shells + 2 readouts
 // (+ 2 cables, 2 grapple lines, 2 smoke pellets; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,

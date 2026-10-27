@@ -14,6 +14,7 @@ for who in ('Bugawuga', 'RITIKA_87', 'klava88', 'jeandiz', 'ErhanMatur', 'Mayess
 check('Marvel' not in c and 'Disney' not in c, 'a Marvel credit')
 check([factions.variant('THE HAND', i) for i in range(4)] == ['hand1', 'hand2', 'hand3', 'hand1'], 'THE HAND mix')
 check({factions.variant('HYDRA', i) for i in range(4)} == {'hydra1', 'hydra2'}, 'HYDRA mix')
+check(factions.variant('JOKER GANG', 0) is None and factions.variant('NOBODY', 3) is None, 'JOKER GANG (no model yet) not vanilla')
 check(all(m['target'] <= 52000 for m in factions.MODELS.values()), 'a crowd model above ~50k')
 check(factions.is_skin(224, 172, 140) and not factions.is_skin(30, 30, 35), 'skin test')
 r, g, b = factions.crimson(40, 40, 45)

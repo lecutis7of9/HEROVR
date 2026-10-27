@@ -345,7 +345,11 @@ struct ParryTiming {
         dt = clampDt(dt);
         crossedFor = crossed ? (crossedFor < 0 ? 0.f : crossedFor + dt) : -1.f;
     }
-    Result hit() const { return crossedFor < 0 ? none : crossedFor <= parryWindow ? parry : block; }
+    // window: parryWindow, longer with DAREDEVIL's LONG PARRY perk (a bad number: the default).
+    Result hit(float window = parryWindow) const {
+        const float w = std::isfinite(window) ? std::clamp(window, .05f, 1.f) : parryWindow;
+        return crossedFor < 0 ? none : crossedFor <= w ? parry : block;
+    }
 };
 inline sm2_damage::Blow parryCounter() { return {8.f, 5, 260.f}; }
 // The nearest standing enemy within range of p (-1 none).
@@ -522,8 +526,10 @@ class Rage {
     float level{};
     bool raging{};
     uint64_t rages{};
+    float after{}; // seconds raging since the fight ended
     void reset() { *this = Rage{}; }
-    void step(float dt, bool on, const Fight& fight) {
+    // keepSeconds: the PUNISHER's LONG RAGE perk keeps the rage that long after the fight (0: none).
+    void step(float dt, bool on, const Fight& fight, float keepSeconds = 0.f) {
         dt = clampDt(dt);
         if (!on) {
             level = 0;
@@ -534,7 +540,9 @@ class Rage {
             raging = true;
             ++rages;
         }
-        if (!fight.on)
+        const float keep = std::isfinite(keepSeconds) ? std::clamp(keepSeconds, 0.f, 30.f) : 0.f;
+        after = fight.on ? 0.f : after + dt;
+        if (!fight.on && after > keep)
             raging = false;
         level = raging ? std::min(1.f, level + dt * rageRise) : std::max(0.f, level - dt * rageFade);
     }
@@ -553,20 +561,32 @@ struct RepTuning {
     int32_t down, cleared, fire, saved;  // the gains
     int32_t abandoned, defeated, car;    // the losses (heavier)
     int32_t levelEvery;                  // a level (a perk point) every this many points
-    int32_t rank[4];                     // VIGILANTE, LOCAL HERO, CITY'S HERO, LEGEND from
+    int32_t antiHero;                    // rep lost to under this: the ANTI-HERO tag (9:26)
     int32_t suitTier[3];                 // the 2nd, 3rd and 4th suit of a hero unlock here
 };
 inline constexpr RepTuning repTuning{0, 10000, 2, 12, 15, 20, -60, -120, -40, 500,
-                                     {1500, 4000, 7000, 9500}, {2500, 5000, 7500}};
+                                     250, {2500, 5000, 7500}};
 inline constexpr int32_t repStart = repTuning.start, repMost = repTuning.most;
 inline constexpr int32_t repDown = repTuning.down, repCleared = repTuning.cleared, repDefeated = repTuning.defeated;
-inline const char* repRank(int32_t p) {
-    const auto& r = repTuning.rank;
-    return p < r[0] ? "ROOKIE" : p < r[1] ? "VIGILANTE" : p < r[2] ? "LOCAL HERO" : p < r[3] ? "CITY'S HERO" : "LEGEND";
-}
-// A hero's level (0 .. repMost / levelEvery): one perk point each.
+// A hero's level (0 .. repMost / levelEvery = 20): one perk point each. Losing rep can drop a level.
 inline int32_t repLevel(int32_t points) { return std::clamp(points, 0, repMost) / repTuning.levelEvery; }
 inline constexpr int32_t repLevels = repMost / repTuning.levelEvery;
+// THE TITLES (9:26): 5 titles of 4 steps each = the 20 levels. Level 1-4 ROOKIE 1-4, 5-8 VIGILANTE,
+// 9-12 HERO, 13-16 SUPERHERO, 17-20 LEGEND; LEGEND 4 (level 20) is the max: the ULTIMATE and the
+// FINAL suit. Level 0 (a new hero): ROOKIE, no step yet.
+inline constexpr uint32_t repTitles = 5, repSteps = 4;
+inline constexpr const char* repTitleNames[repTitles] = {"ROOKIE", "VIGILANTE", "HERO", "SUPERHERO", "LEGEND"};
+static_assert(repTitles * repSteps == static_cast<uint32_t>(repLevels), "5 titles x 4 steps = the 20 levels");
+inline uint32_t repTitleIndex(int32_t points) {
+    const int32_t l = repLevel(points);
+    return l <= 0 ? 0u : std::min(repTitles - 1, static_cast<uint32_t>(l - 1) / repSteps);
+}
+inline uint32_t repStep(int32_t points) {
+    const int32_t l = repLevel(points);
+    return l <= 0 ? 0u : static_cast<uint32_t>(l - 1) % repSteps + 1;
+}
+inline const char* repTitle(int32_t points) { return repTitleNames[repTitleIndex(points)]; }
+inline bool repLegend(int32_t points) { return points >= repMost; }
 // The user (8:32): per hero. Up: enemies downed (villains beaten), a fight cleared (a crime stopped),
 // a fire put out (FIRE DOUSE - its game hook is CANDIDATE, so 0 until it is CONFIRMED), a person
 // saved (no CONFIRMED signal yet: an event kept for when there is one). Down: a fight walked away
@@ -586,6 +606,7 @@ struct Reputation {
                                            repStart, repStart, repStart, repStart, repStart};
     uint32_t hero{};
     bool dirty{};
+    bool antiHero[hero_modes::heroes]{}; // rep LOST to under repTuning.antiHero (a new hero is not one)
     void select(uint32_t h) {
         if (h < hero_modes::heroes && h != hero) {
             heroPoints[hero] = points;
@@ -596,8 +617,13 @@ struct Reputation {
     void add(int32_t d) {
         const int32_t was = points;
         points = std::clamp(points + d, 0, repMost);
-        if (hero < hero_modes::heroes)
+        if (hero < hero_modes::heroes) {
             heroPoints[hero] = points;
+            if (d < 0 && points < repTuning.antiHero)
+                antiHero[hero] = true;
+            else if (points >= repTuning.antiHero)
+                antiHero[hero] = false;
+        }
         dirty = dirty || points != was;
     }
     void step(uint32_t newDowns, bool cleared, bool defeated) {
@@ -623,8 +649,15 @@ struct Reputation {
         if (e.defeated)
             add(repDefeated);
     }
-    // "REP 512 LOCAL HERO"
-    void text(char* out, size_t n) const { std::snprintf(out, n, "REP %d %s", points, repRank(points)); }
+    bool isAntiHero() const { return hero < hero_modes::heroes && antiHero[hero] && points < repTuning.antiHero; }
+    // "REP 5120 LV 10 HERO 2" ("... ROOKIE  ANTI-HERO" when rep was lost to the bottom).
+    void text(char* out, size_t n) const {
+        const uint32_t step = repStep(points);
+        char st[8] = "";
+        if (step)
+            std::snprintf(st, sizeof st, " %u", step);
+        std::snprintf(out, n, "REP %d LV %d %s%s%s", points, repLevel(points), repTitle(points), st, isAntiHero() ? "  ANTI-HERO" : "");
+    }
     // The meter, 0-1 (the wrist hologram's bar).
     float meter() const { return std::clamp(points / static_cast<float>(repMost), 0.f, 1.f); }
     // The saved line ("reputation=512") read back; anything else: the start.
@@ -646,6 +679,8 @@ struct Reputation {
             std::snprintf(key, sizeof key, "reputation.%u=", h);
             if (const char* v = s ? std::strstr(s, key) : nullptr)
                 heroPoints[h] = static_cast<int32_t>(std::clamp<long>(std::strtol(v + std::strlen(key), nullptr, 10), 0, repMost));
+            std::snprintf(key, sizeof key, "antihero.%u=1", h);
+            antiHero[h] = s && std::strstr(s, key) && heroPoints[h] < repTuning.antiHero;
         }
         points = heroPoints[hero < hero_modes::heroes ? hero : 0];
     }
@@ -653,8 +688,9 @@ struct Reputation {
     void save(char* out, size_t n) const {
         size_t at = 0;
         for (uint32_t h = 0; h < hero_modes::heroes && at < n; ++h) {
-            const int w = std::snprintf(out + at, n - at, "reputation.%u=%d\n", h,
-                                        h == hero ? points : heroPoints[h]);
+            const int32_t pts = h == hero ? points : heroPoints[h];
+            const int w = antiHero[h] ? std::snprintf(out + at, n - at, "reputation.%u=%d\nantihero.%u=1\n", h, pts, h)
+                                      : std::snprintf(out + at, n - at, "reputation.%u=%d\n", h, pts);
             if (w < 0)
                 break;
             at += static_cast<size_t>(w);
@@ -681,14 +717,16 @@ struct HulkRage {
     float mult = 1.f;
     uint64_t builds{};
     void reset() { *this = HulkRage{}; }
-    void step(float dt, bool on, const Fight& fight, float lostShare) {
+    // build: HULK's FAST RAGE perk (1: as 0.0.72 shipped; a bad number: 1).
+    void step(float dt, bool on, const Fight& fight, float lostShare, float build = 1.f) {
         dt = clampDt(dt);
         if (!on) {
             mult = 1.f;
             return;
         }
+        const float b = std::isfinite(build) ? std::clamp(build, 1.f, 3.f) : 1.f;
         if (fight.on && std::isfinite(lostShare) && lostShare > 0) {
-            mult = std::min(hulkRageMost, mult + std::min(lostShare, 1.f) * hulkRagePerShare);
+            mult = std::min(hulkRageMost, mult + std::min(lostShare, 1.f) * hulkRagePerShare * b);
             ++builds;
         }
         if (!fight.on)
@@ -1582,16 +1620,24 @@ struct ShoveGesture {
 // ---------------------------------------------------------------------------------------------
 // ENEMY FACTIONS (the user, 8:40): by default the enemies match the hero (AUTO): DAREDEVIL, BATMAN
 // and WOLVERINE THE HAND; CAP, IRON MAN and HULK HYDRA; SPIDER-MAN (Kraven's hunters) and the rest
-// VANILLA. FACTION overrides it: AUTO, VANILLA, THE HAND, HYDRA. Dressing the game's enemies as
+// VANILLA. BATMAN (9:28): the JOKER GANG (Joker's henchmen). FACTION overrides it: AUTO, VANILLA,
+// THE HAND, HYDRA, JOKER GANG. The JOKER GANG has no model picked yet (factionModelReady): it is
+// chosen and shown, and worn as VANILLA (factionWorn), never a crash or a missing model. Dressing the game's enemies as
 // another faction needs a CONFIRMED gear / spawn swap, which there is not: the hook is CANDIDATE, so
 // the faction is chosen and shown (the status page) and the game's enemies stay vanilla until then.
 inline constexpr bool factionHookConfirmed = false;
-enum Faction : uint32_t { vanilla = 0, theHand, hydra, factions };
-inline constexpr const char* factionNames[factions] = {"VANILLA", "THE HAND", "HYDRA"};
+enum Faction : uint32_t { vanilla = 0, theHand, hydra, jokerGang, factions };
+inline constexpr const char* factionNames[factions] = {"VANILLA", "THE HAND", "HYDRA", "JOKER GANG"};
+// A faction's crowd models are in the kit (tools/factions): the JOKER GANG's are still being picked.
+inline constexpr bool factionModelReady[factions] = {true, true, true, false};
+// What the enemies actually wear: a faction without models (or an odd number) falls back to VANILLA.
+inline Faction factionWorn(uint32_t f) {
+    return f < factions && factionModelReady[f] && factionHookConfirmed ? static_cast<Faction>(f) : vanilla;
+}
 inline Faction autoFaction(uint32_t hero) {
     switch (hero) {
+    case hero_modes::batman: return jokerGang;
     case hero_modes::daredevil:
-    case hero_modes::batman:
     case hero_modes::wolverine: return theHand;
     case hero_modes::captainAmerica:
     case hero_modes::ironMan:
@@ -1599,12 +1645,13 @@ inline Faction autoFaction(uint32_t hero) {
     default: return vanilla;
     }
 }
-// The setting: 0 AUTO, 1 VANILLA, 2 THE HAND, 3 HYDRA.
+// The setting: 0 AUTO, 1 VANILLA, 2 THE HAND, 3 HYDRA, 4 JOKER GANG.
 inline Faction factionFor(uint32_t hero, uint32_t setting) {
     switch (setting) {
     case 1: return vanilla;
     case 2: return theHand;
     case 3: return hydra;
+    case 4: return jokerGang;
     default: return autoFaction(hero);
     }
 }
@@ -1695,7 +1742,8 @@ class SuitCatalog {
         add(makeSuit(hero_modes::daredevil, "YELLOW AND RED", "AtoMichael Editz", "CC BY", repMost, "Suit_daredevil_3", true, true));
         add(makeSuit(hero_modes::hulk, "GREY", "3D MODELS", "CC BY", 0, "Suit_hulk_1", false, true));
         add(makeSuit(hero_modes::hulk, "PROFESSOR", "Shivam.Yadav", "CC BY", 0, "Suit_hulk_2", false, true));
-        add(makeSuit(hero_modes::hulk, "MAESTRO", "YE YE", "CC BY", repMost, "Suit_hulk_4", true, true));
+        add(makeSuit(hero_modes::hulk, "GLADIATOR", "aredjune", "CC BY", repMost, "Suit_hulk_3", true, true));
+        add(makeSuit(hero_modes::hulk, "MAESTRO", "YE YE", "CC BY", 0, "Suit_hulk_4", false, true));
         add(makeSuit(hero_modes::wolverine, "CLASSIC", "stokissout", "CC BY", 0, "Suit_wolverine_1", false, true));
         add(makeSuit(hero_modes::wolverine, "LEGENDARY", "LombaxLover2K", "CC BY", 0, "Suit_wolverine_2", false, true));
         add(makeSuit(hero_modes::wolverine, "JACKET AND JEANS", "Light.k", "CC BY", 0, "Suit_wolverine_3", false, true));

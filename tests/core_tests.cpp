@@ -30,6 +30,7 @@
 #include "spidy/hero072.hpp"
 #include "spidy/hero072_visual.hpp"
 #include "spidy/hero072_progress.hpp"
+#include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
 #include <filesystem>
 #include "spidy/web_cocoon.hpp"
@@ -18749,7 +18750,7 @@ int main() {
         }
         setActiveHero(99);
         check(activeHero() == 0 && openSection(powersPage) == 1, "an odd hero is not SPIDER-MAN");
-        check(sectionCount(powersPage) == 12 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 6 &&
+        check(sectionCount(powersPage) == 12 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 7 &&
                   sectionCount(graphicsPage) == 4 && sectionCount(colorPage) == 2 && sectionCount(controlsPage) == 4 &&
                   sectionCount(statusPage) == 0 && sectionCount(musicPage) == 0 && sectionCount(pages) == 0,
               "a page's section count");
@@ -24713,7 +24714,36 @@ int main() {
         check(repLevel(repMost) == repLevels && repLevels >= 15 && repLevel(-5) == 0, "the levels");
         for (int i = 0; i < 100; ++i)
             rep.step(0, false, true);
-        check(rep.points == 0 && std::string(repRank(rep.points)) == "ROOKIE", "reputation went below 0");
+        check(rep.points == 0 && std::string(repTitle(rep.points)) == "ROOKIE", "reputation went below 0");
+        // THE TITLES (9:26): 5 x 4 steps = 20 levels; LEGEND 4 is the max; a loss can drop a level.
+        check(repLevels == 20 && repStep(0) == 0 && std::string(repTitle(500)) == "ROOKIE" && repStep(500) == 1 &&
+                  repStep(2000) == 4 && std::string(repTitle(2500)) == "VIGILANTE" && repStep(2500) == 1 &&
+                  std::string(repTitle(4500)) == "HERO" && std::string(repTitle(6500)) == "SUPERHERO" &&
+                  std::string(repTitle(8500)) == "LEGEND" && repStep(8500) == 1 && repStep(repMost) == 4 &&
+                  !repLegend(repMost - 1) && repLegend(repMost),
+              "the titles and steps");
+        {
+            Reputation t;
+            t.select(hero_modes::hulk);
+            t.add(1000);
+            check(repLevel(t.points) == 2 && !t.isAntiHero(), "level 2");
+            t.add(repDefeated);
+            check(repLevel(t.points) == 1, "a loss did not drop the level");
+            check(!Reputation{}.isAntiHero(), "a new hero is an ANTI-HERO");
+            t.add(-t.points + 100);
+            char line[96];
+            t.text(line, sizeof line);
+            check(t.isAntiHero() && std::strstr(line, "ANTI-HERO") && std::strstr(line, "LV 0 ROOKIE"), "ANTI-HERO at the bottom");
+            char save[512];
+            t.save(save, sizeof save);
+            Reputation u;
+            u.select(hero_modes::hulk);
+            u.load(save);
+            check(u.isAntiHero() && u.points == 100, "the ANTI-HERO tag not saved");
+            t.add(1000);
+            t.text(line, sizeof line);
+            check(!t.isAntiHero() && std::strstr(line, "LV 2 ROOKIE 2") && !std::strstr(line, "ANTI"), "the ANTI-HERO tag stuck");
+        }
         check(Reputation::parse("x\nreputation=731\n") == 731 && Reputation::parse("reputation=99999") == repMost &&
                   Reputation::parse(nullptr) == repStart && Reputation::parse("junk") == repStart,
               "the saved reputation's read back");
@@ -25016,8 +25046,12 @@ int main() {
         check(!factionHookConfirmed, "the faction hook is marked CONFIRMED");
         check(factionFor(hero_modes::daredevil, 0) == theHand && factionFor(hero_modes::captainAmerica, 0) == hydra &&
                   factionFor(hero_modes::spiderMan, 0) == vanilla && factionFor(hero_modes::captainAmerica, 1) == vanilla &&
-                  factionFor(hero_modes::spiderMan, 2) == theHand && factionFor(hero_modes::daredevil, 3) == hydra,
-              "the factions");
+                  factionFor(hero_modes::spiderMan, 2) == theHand && factionFor(hero_modes::daredevil, 3) == hydra &&
+                  factionFor(hero_modes::batman, 0) == jokerGang && factionFor(hero_modes::thor, 4) == jokerGang &&
+                  std::string(factionNames[jokerGang]) == "JOKER GANG",
+              "the factions (BATMAN's AUTO: the JOKER GANG)");
+        check(factionWorn(jokerGang) == vanilla && factionWorn(99) == vanilla && !factionModelReady[jokerGang],
+              "the JOKER GANG (no model yet) is not worn as VANILLA");
         Reputation rep;
         rep.select(hero_modes::batman);
         rep.add(3000);
@@ -25063,12 +25097,284 @@ int main() {
             check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1, "a 0.0.72 subtext: " + help);
         }
     });
+    test("Version 0.0.72: PLAY composer - invincible, climb only, uppercut, GL beam, THOR storm, ultimate, rep, NaN safe", [] {
+        using namespace hero072;
+        const auto frame = [](uint32_t hero) {
+            PlayIn in;
+            in.dt = 1 / 90.f;
+            in.play = true;
+            in.hero = hero;
+            in.head.position = {0, 1.7f, 0};
+            for (auto& h : in.hands)
+                h.tracked = true;
+            in.hands[0].position = {-.25f, 1.2f, -.2f};
+            in.hands[1].position = {.25f, 1.2f, -.2f};
+            return in;
+        };
+        BatonEnemy foes[2] = {{0x11, {.3f, 1.4f, -.5f}}, {0x22, {.2f, 1.4f, -10.f}}};
+        // NATURAL INVINCIBLE and SPIDER CLIMB ONLY.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::thor);
+            PlayOut out;
+            play.step(in, out);
+            check(out.keepTopped && !out.climbAllowed, "THOR: kept topped, no wall crawl");
+            in.hero = hero_modes::spiderMan;
+            play.step(in, out);
+            check(!out.keepTopped && out.climbAllowed, "SPIDER-MAN: hurt as ever, crawls");
+            in.o.naturalInvincible = false;
+            in.hero = hero_modes::superman;
+            play.step(in, out);
+            check(!out.keepTopped, "NATURAL INVINCIBLE OFF");
+            in.hero = hero_modes::wolverine;
+            in.clawsOut = true;
+            play.step(in, out);
+            check(out.climbAllowed, "WOLVERINE claws out: CLAW CLIMB");
+        }
+        // UPPERCUT: a fast upward punch into the enemy.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::hulk);
+            in.list = foes;
+            in.count = 1;
+            in.hands[1].position = {.3f, .8f, -.45f};
+            uint32_t ups = 0;
+            for (int f = 0; f < 30; ++f) {
+                in.hands[1].position.y += 3.f / 90.f;
+                PlayOut out;
+                play.step(in, out);
+                for (uint32_t k = 0; k < out.blowCount; ++k)
+                    ups += out.blows[k].kind == kindUppercut && out.blows[k].id == 0x11;
+            }
+            check(ups == 1, "one uppercut for one punch up");
+            in.o.uppercut = false;
+            Play off;
+            uint32_t none = 0;
+            in.hands[1].position = {.3f, .8f, -.45f};
+            for (int f = 0; f < 30; ++f) {
+                in.hands[1].position.y += 3.f / 90.f;
+                PlayOut out;
+                off.step(in, out);
+                none += out.blowCount;
+            }
+            check(none == 0, "UPPERCUT OFF: no blow");
+        }
+        // GREEN LANTERN's beam: the right trigger held at an enemy, ticks and drains the charge.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::greenLantern);
+            in.list = foes + 1;
+            in.count = 1;
+            in.hands[1].position = {.2f, 1.4f, -.3f};
+            in.hands[1].aim = {0, 0, -1};
+            in.hands[1].trigger = 1;
+            uint32_t ticks = 0;
+            bool drawn = false;
+            for (int f = 0; f < 90; ++f) {
+                PlayOut out;
+                play.step(in, out);
+                for (uint32_t k = 0; k < out.blowCount; ++k)
+                    ticks += out.blows[k].kind == kindBeam;
+                drawn = drawn || (out.look.beam && out.look.any);
+            }
+            check(ticks >= 6 && ticks <= 10 && drawn, "the ring beam ticks about every .12 s");
+            check(play.charge.level < chargeMost - 10.f, "the beam drains the ring's charge");
+        }
+        // THOR: the hammer from the back, raised straight up 1 s: the storm strikes the enemy near.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::thor);
+            in.list = foes;
+            in.count = 1;
+            PlayOut out;
+            play.step(in, out);
+            in.hands[1].position = {.2f, 1.6f, .1f};
+            in.hands[1].grip = 1;
+            play.step(in, out);
+            check(play.hammerHeld, "the hammer drawn from behind the right shoulder");
+            in.hands[1].position = {0, 2.1f, 0};
+            in.hands[1].aim = {0, 1, 0};
+            uint32_t storms = 0;
+            for (int f = 0; f < 200; ++f) {
+                play.step(in, out);
+                for (uint32_t k = 0; k < out.blowCount; ++k)
+                    storms += out.blows[k].kind == kindStorm;
+            }
+            check(storms == stormStrikes, "the storm's three strikes on the enemy near");
+        }
+        // ULTIMATE: TEST UNLOCKS ULTIMATES, both fists crossed on the chest, both grips held.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::batman);
+            in.list = foes;
+            in.count = 1;
+            in.o.testUnlocks = 2;
+            in.hands[0].position = {.15f, 1.3f, -.15f};
+            in.hands[1].position = {-.15f, 1.3f, -.15f};
+            in.hands[0].grip = in.hands[1].grip = 1;
+            bool fired = false;
+            uint32_t hits = 0;
+            for (int f = 0; f < 200; ++f) {
+                PlayOut out;
+                play.step(in, out);
+                fired = fired || out.ultimateFired;
+                for (uint32_t k = 0; k < out.blowCount; ++k)
+                    hits += out.blows[k].kind == kindUltimate;
+            }
+            check(fired && hits == 1, "BATMAN's FEAR TAKEDOWN fires once, one blow");
+            Play locked;
+            in.o.testUnlocks = 0;
+            bool lockedFired = false;
+            for (int f = 0; f < 200; ++f) {
+                PlayOut out;
+                locked.step(in, out);
+                lockedFired = lockedFired || out.ultimateFired;
+            }
+            check(!lockedFired, "no ultimate before max reputation");
+        }
+        // REPUTATION: a fight, an enemy down: points up; saved and loaded.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::daredevil);
+            BatonEnemy one[1] = {{0x33, {0, 1.4f, -2.f}}};
+            in.list = one;
+            in.count = 1;
+            in.hitSent = true;
+            PlayOut out;
+            play.step(in, out);
+            check(play.fight.on, "the fight starts");
+            one[0].down = true;
+            play.step(in, out);
+            check(play.rep.points == repDown, "a down: reputation up");
+            char text[2048];
+            play.save(text, sizeof text);
+            Play back;
+            back.load(text);
+            back.rep.select(hero_modes::daredevil);
+            check(back.rep.heroPoints[hero_modes::daredevil] == repDown, "reputation kept for good");
+            char line[256];
+            play.status(line, sizeof line, false, true);
+            check(std::strstr(line, "REP 2") && std::strstr(line, "YOUR OWN"), line);
+        }
+        // PUNISHER RAGE: enough damage in a fight: raging, red tint, shots 1.5x, blood.
+        {
+            Play play;
+            PlayIn in = frame(hero_modes::punisher);
+            in.list = foes;
+            in.count = 1;
+            in.lostShare = .4f;
+            PlayOut out;
+            play.step(in, out);
+            in.lostShare = 0;
+            for (int f = 0; f < 90; ++f)
+                play.step(in, out);
+            check(play.raging() && play.shotScale() == rageShotScale && out.tint.step > 0, "the PUNISHER rages red");
+            play.shot(foes[0].chest, in.head.position, 0.f, bloodExtreme);
+            play.step(in, out);
+            check(out.look.blood != nullptr, "rage blood drawn");
+        }
+        // Nothing insane gets out: NaN hands and health, every hero.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            Play play;
+            PlayIn in = frame(h);
+            in.list = foes;
+            in.count = 2;
+            const float nan = std::numeric_limits<float>::quiet_NaN();
+            in.hands[0].position = {nan, nan, nan};
+            in.hands[1].aim = {nan, 0, 0};
+            in.lostShare = nan;
+            in.speed = nan;
+            in.dt = nan;
+            for (int f = 0; f < 20; ++f) {
+                PlayOut out;
+                play.step(in, out);
+                for (uint32_t k = 0; k < out.blowCount; ++k)
+                    check(std::isfinite(out.blows[k].blow.amount) && finite(out.blows[k].at), "a finite blow");
+                check(std::isfinite(out.punchScale[0]) && std::isfinite(out.dazed), "finite outputs");
+            }
+        }
+    });
+    test("Version 0.0.72: CHAIN MOVES - 3 enemies from the start, 4-6 with the CHAIN perks, SPIDER-MAN vanilla", [] {
+        using namespace hero072;
+        BatonEnemy foes[8]{};
+        for (uint32_t i = 0; i < 8; ++i)
+            foes[i] = {0x40u + i, {static_cast<float>(i) * 2.f, 1.3f, -5.f}};
+        foes[3].down = true; // a downed enemy is skipped
+        const sm2_damage::Blow b{10.f, 5, 100.f};
+        Play play;
+        PlayOut out;
+        check(play.carry(hero_modes::batman, foes[0].id, foes[0].chest, b, foes, 8, out, kindChain) == 2 && out.blowCount == 2 &&
+                  out.blows[0].id == 0x41 && out.blows[1].id == 0x42,
+              "RICOCHET: the batarang's first hit carries on to 2 more (3 in all), nearest first");
+        play.perks.spend(hero_modes::batman, 0, perkAuto, true);
+        out = {};
+        check(play.carry(hero_modes::batman, foes[0].id, foes[0].chest, b, foes, 8, out, kindChain) == 5 && out.blows[2].id == 0x44,
+              "RICOCHET 6: 6 in all, past the downed one");
+        out = {};
+        check(play.carry(hero_modes::spiderMan, foes[0].id, foes[0].chest, b, foes, 8, out, kindChain) == 0 && out.blowCount == 0 &&
+                  play.chainCap(hero_modes::spiderMan) == 1,
+              "SPIDER-MAN's moves carried a chain");
+        for (uint32_t h : {hero_modes::superman, hero_modes::ironMan, hero_modes::punisher}) {
+            out = {};
+            play.perks.spend(h, 0, perkAuto, true);
+            check(play.carry(h, foes[0].id, foes[0].chest, b, foes, 8, out, kindChain) == 0 && out.blowCount == 0 &&
+                      play.chainCap(h) == 1 && play.perks.statBonus(h, h == hero_modes::punisher ? Stat::reloadSpeed
+                                                                       : h == hero_modes::superman ? Stat::heatDamage
+                                                                                                   : Stat::repulsorDamage) > .4f,
+                  "SUPERMAN / IRON MAN / PUNISHER chained (9:26: they hit only where they aim), or no damage / reload perks");
+        }
+        out = {};
+        check(play.carry(hero_modes::thor, foes[0].id, Vec3{NAN, 0, 0}, b, foes, 8, out, kindChain) == 0 &&
+                  play.carry(hero_modes::thor, foes[0].id, foes[0].chest, b, nullptr, 0, out, kindChain) == 0,
+              "a bad chain did something");
+        // SPIDER-MAN: the REP meter only - no survival, uppercut, ultimate, perks or suits.
+        PlayIn in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = hero_modes::spiderMan;
+        in.o.testUnlocks = 3;
+        in.o.survival = true;
+        for (auto& h : in.hands)
+            h.tracked = true;
+        in.list = foes;
+        in.count = 8;
+        for (int f = 0; f < 30; ++f)
+            play.step(in, out);
+        char lines[4][96];
+        check(out.blowCount == 0 && out.climbAllowed && !out.keepTopped && !out.ultimateFired && play.tree(hero_modes::spiderMan, lines) == 0 &&
+                  play.suits.suits(hero_modes::spiderMan) == 1,
+              "SPIDER-MAN got a 0.0.72 extra");
+        check(play.tree(hero_modes::thor, lines) == 4, "the tree lines for the settings page");
+        // The wired perks: LONG PARRY, LONG RAGE, FAST RAGE.
+        ParryTiming t;
+        for (int f = 0; f <= 29; ++f)
+            t.step(.01f, true); // crossed .29 s
+        check(t.hit() == ParryTiming::block && t.hit(parryWindow * 1.3f) == ParryTiming::parry && t.hit(NAN) == ParryTiming::block,
+              "LONG PARRY");
+        Rage r;
+        hero072::Fight fight;
+        fight.on = true;
+        fight.damage = 1;
+        r.step(.1f, true, fight, 4.f);
+        fight.on = false;
+        for (int f = 0; f < 40; ++f)
+            r.step(.05f, true, fight, 4.f); // 2 s after the fight
+        check(r.raging, "LONG RAGE did not keep the rage");
+        for (int f = 0; f < 60; ++f)
+            r.step(.05f, true, fight, 4.f);
+        check(!r.raging, "LONG RAGE kept it for ever");
+        HulkRage a, c;
+        fight.on = true;
+        a.step(.1f, true, fight, .1f);
+        c.step(.1f, true, fight, .1f, 1.25f);
+        check(c.mult > a.mult && a.mult > 1.f, "FAST RAGE");
+    });
     test("Version 0.0.72: SUITS per hero - the user's picks, FINAL at max reputation, COMING SOON never worn", [] {
         using namespace hero072;
         SuitCatalog c;
-        // The user's picks (8:59): Batman 4, Iron Man 4, Cap 3 (+ the 0.0.7 suit), Daredevil 3, Hulk 3,
+        // The user's picks (8:59): Batman 4, Iron Man 4, Cap 3 (+ the 0.0.7 suit), Daredevil 3, Hulk 4 (GLADIATOR the FINAL),
         // Wolverine 5, the Punisher 2 (+ WARZONE), Thor 3, Green Lantern 4, Superman 4; each after DEFAULT.
-        const uint32_t want[hero_modes::heroes] = {1, 5, 4, 4, 5, 6, 5, 4, 4, 4, 5};
+        const uint32_t want[hero_modes::heroes] = {1, 5, 4, 5, 5, 6, 5, 4, 4, 4, 5};
         for (uint32_t h = 0; h < hero_modes::heroes; ++h)
             check(c.suits(h) == want[h], "the built-in suits of hero " + std::to_string(h));
         const uint32_t finals[hero_modes::heroes] = {0, 2, 3, 3, 1, 4, 4, 0, 1, 2, 3}; // the sheets' numbers (0: none)
@@ -25138,40 +25444,85 @@ int main() {
         check(combat38::optionInfo[combat38::testUnlocks].values[0] == std::string("OFF"), "TEST UNLOCKS is not OFF by default");
         check(combat38::optionInfo[combat38::ownSuit].values[0] == std::string("OFF"), "USE MY OWN OR GAME SUIT is not OFF by default");
     });
-    test("Version 0.0.72: PERK TREES and ULTIMATES - one table, a point a level, the capstone at max reputation", [] {
+    test("Version 0.0.72: PERK TREES and ULTIMATES - T1 > T2 > T3 > ULT, the CHAIN 3 to 6, none for SPIDER-MAN", [] {
         using namespace hero072;
-        check(perkCount == hero_modes::heroes * perksPerHero && treeCost() <= static_cast<uint32_t>(repLevels), "the perk table");
-        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
-            check(std::string(ultimate(h).name).size() > 0 && ultimate(h).cooldown >= 120.f && ultimate(h).radius > 0,
+        check(perkCount == treeHeroes * perksPerHero && treeCost() <= static_cast<uint32_t>(repLevels), "the perk table");
+        check(!hasTree(hero_modes::spiderMan) && std::string(ultimate(hero_modes::spiderMan).name).empty(),
+              "SPIDER-MAN has a tree or an ultimate (he keeps the game's own skill tree)");
+        for (uint32_t h = 1; h < hero_modes::heroes; ++h) {
+            check(hasTree(h) && std::string(ultimate(h).name).size() > 0 && ultimate(h).cooldown >= 120.f && ultimate(h).radius > 0,
                   "an ultimate without a name, a long cooldown or a reach");
-            for (uint32_t b = 0; b < branches; ++b)
-                for (uint32_t t = 0; t < tiers; ++t)
-                    check(perk(h, b, t).hero == h && perk(h, b, t).branch == b && perk(h, b, t).tier == t && perk(h, b, t).amount > 0,
-                          "a perk out of place");
+            uint32_t chains = 0;
+            for (uint32_t i = 0; i < perksPerHero; ++i) {
+                const Perk& k = perk(h, i);
+                const std::string sub = k.sub;
+                check(k.hero == h && k.tier == tierOf[i] && k.amount > 0 && k.cost == perkCost(i), "a perk out of place");
+                check(sub.size() <= 80 && std::count(sub.begin(), sub.end(), '.') == 1 && sub.back() == '.',
+                      std::string("a perk's subtext is not one short sentence: ") + k.name);
+                chains += k.stat == Stat::chainJumps;
+            }
+            const Stat want = hasChain(h) ? Stat::chainJumps : h == hero_modes::superman ? Stat::heatDamage
+                                                                 : h == hero_modes::ironMan  ? Stat::repulsorDamage
+                                                                                             : Stat::reloadSpeed;
+            check(chains == (hasChain(h) ? 3u : 0u) && perk(h, chainSlot[0]).stat == want && perk(h, chainSlot[1]).stat == want &&
+                      perk(h, chainSlot[2]).stat == want,
+                  "a CHAIN (or the damage / reload) perk in each tier");
         }
-        check(perk(hero_modes::batman, 1, 0).stat == Stat::grappleSpeed && perk(hero_modes::batman, 2, 0).stat == Stat::smokeSeconds &&
-                  perk(hero_modes::hulk, 0, 0).stat == Stat::rageDamage && perk(hero_modes::thor, 0, 1).stat == Stat::chainJumps &&
-                  perk(hero_modes::greenLantern, 1, 0).stat == Stat::chargeMost,
-              "the user's examples");
+        check(perk(hero_modes::thor, 1).stat == Stat::stormRadius && perk(hero_modes::greenLantern, 0).stat == Stat::chargeDrain &&
+                  perk(hero_modes::hulk, 1).stat == Stat::rageBuild && perk(hero_modes::batman, 1).stat == Stat::glideTime &&
+                  std::string(ultimate(hero_modes::thor).name) == "BIFROST STRIKE" && std::string(ultimate(hero_modes::hulk).name) == "GROUND SMASH",
+              "the user's tree (9:12)");
         Perks p;
+        check(p.chainCap(hero_modes::batman) == chainBase && p.chainCap(hero_modes::spiderMan) == 1, "the CHAIN hits 3 from the start");
+        check(!hasChain(hero_modes::superman) && !hasChain(hero_modes::ironMan) && !hasChain(hero_modes::punisher) &&
+                  hasChain(hero_modes::captainAmerica) && hasChain(hero_modes::daredevil) && hasChain(hero_modes::hulk) &&
+                  hasChain(hero_modes::wolverine) && hasChain(hero_modes::thor) && hasChain(hero_modes::greenLantern),
+              "the CHAIN heroes (9:26)");
+        check(treeCost() == 20 && perkCost(0) == 2 && perkCost(3) == 4 && perkCost(5) == 6, "the 20 levels fill the tree");
         check(p.points(hero_modes::batman, 499, false) == 0 && p.points(hero_modes::batman, 500, false) == 1, "a point a level");
-        check(p.spend(hero_modes::batman, 1000, 2, false) == 2 && (p.owned[hero_modes::batman] & perkBit(1, 0)) &&
-                  (p.owned[hero_modes::batman] & perkBit(1, 1)),
-              "BRANCH 2 did not go first, in order");
-        check(p.scale(hero_modes::batman, Stat::grappleSpeed) > 1.05f && p.scale(hero_modes::hulk, Stat::rageDamage) == 1.f,
+        check(p.points(hero_modes::spiderMan, repMost, false) == 0 && p.spend(hero_modes::spiderMan, repMost, perkAuto, true) == 0,
+              "SPIDER-MAN got perk points");
+        // 6 points (3000 rep): the whole of T1 (2 each), in order.
+        check(p.spend(hero_modes::batman, 2999, perkAuto, false) == 2 && !p.tierDone(hero_modes::batman, 0), "T1 in order");
+        check(p.spend(hero_modes::batman, 3000, perkAuto, false) == 1 && p.tierDone(hero_modes::batman, 0) && p.chainCap(hero_modes::batman) == 4,
+              "T1 in order, CHAIN 4");
+        check(!p.open(hero_modes::batman, 5), "T3 opened before T2 was full");
+        check(p.spend(hero_modes::batman, 5000, perkAuto, false) == 1 && (p.owned[hero_modes::batman] & perkBit(3)), "T2's first perk");
+        check(p.scale(hero_modes::batman, Stat::glideTime) > 1.1f && p.scale(hero_modes::hulk, Stat::glideTime) == 1.f,
               "the perks' stats are not per hero");
-        check(p.spend(hero_modes::batman, 1000, 2, false) == 0, "spent points it did not have");
-        check(p.spend(hero_modes::thor, 0, 0, true) == perksPerHero && p.count(hero_modes::thor) == perksPerHero, "ALL did not fill the tree");
-        check(p.scale(hero_modes::thor, Stat::cooldown) >= .5f && p.scale(hero_modes::thor, Stat::cooldown) <= 1.f, "the cooldown scale");
+        check(p.spend(hero_modes::batman, 5000, perkAuto, false) == 0, "spent points it did not have");
+        Perks c;
+        c.spend(hero_modes::thor, 500 * 8, perkChainFirst, false); // 8 points: CHAIN 4, T1 a, T1 b, then 2 short of T2
+        check((c.owned[hero_modes::thor] & perkBit(2)) && c.count(hero_modes::thor) == 3, "CHAIN FIRST");
+        c.spend(hero_modes::thor, 500 * 12, perkChainFirst, false);
+        check((c.owned[hero_modes::thor] & perkBit(4)) && !(c.owned[hero_modes::thor] & perkBit(3)) && c.chainCap(hero_modes::thor) == 5,
+              "CHAIN FIRST in T2");
+        Perks hold;
+        check(hold.spend(hero_modes::hulk, repMost, perkHold, false) == 0 && hold.points(hero_modes::hulk, repMost, false) == 20, "HOLD POINTS");
+        check(p.spend(hero_modes::thor, 0, perkAuto, true) == perksPerHero && p.count(hero_modes::thor) == perksPerHero &&
+                  p.chainCap(hero_modes::thor) == chainMost,
+              "ALL did not fill the tree, or the CHAIN is not 6");
+        p.spend(hero_modes::thor, 0, perkOff, false);
+        check(p.off && p.chainCap(hero_modes::thor) == chainBase && p.scale(hero_modes::thor, Stat::stormRadius) == 1.f, "PERKS OFF");
+        p.spend(hero_modes::thor, 0, perkAuto, false);
+        char lines[4][96];
+        check(p.tree(hero_modes::thor, false, lines) == 4 && std::strstr(lines[0], "[x] FAST RETURN") && std::strstr(lines[2], "LIGHTNING CHAIN 6") &&
+                  std::strstr(lines[3], "[ ] BIFROST STRIKE") && p.tree(hero_modes::spiderMan, true, lines) == 0,
+              "the tree lines");
         char buf[512];
         p.save(buf, sizeof buf);
+        check(!std::strstr(buf, "perks.0="), "SPIDER-MAN's perks saved");
         Perks q;
         q.load(buf);
         check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman] && q.count(hero_modes::thor) == perksPerHero, "perks not saved");
-        q.load("perks.4=0\n");
-        check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman], "an old save took perks away");
+        q.load("perks.4=0\nperks.10=63\n");
+        check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman] && q.count(hero_modes::greenLantern) == perksPerHero &&
+                  q.count(hero_modes::ironMan) == 0,
+              "an old save took perks away, or perks.1 read perks.10");
         // The ultimate: max reputation (or TEST UNLOCKS), the crossed fists held, a long cooldown.
-        check(!ultimateUnlocked(repMost - 1, false) && ultimateUnlocked(repMost, false) && ultimateUnlocked(0, true), "the ultimate's unlock");
+        check(!ultimateUnlocked(hero_modes::hulk, repMost - 1, false) && ultimateUnlocked(hero_modes::hulk, repMost, false) &&
+                  ultimateUnlocked(hero_modes::hulk, 0, true) && !ultimateUnlocked(hero_modes::spiderMan, repMost, true),
+              "the ultimate's unlock (none for SPIDER-MAN)");
         check(testSuits(1) && !testUltimates(1) && testUltimates(2) && testSuits(2) && testPerks(3) && !testSuits(0), "TEST UNLOCKS' values");
         holster::BodyPoint l{.35f, .12f, .15f}, r{.35f, -.12f, .15f};
         check(fistsCrossed(l, r) && !fistsCrossed(r, l) && !fistsCrossed({1.f, .12f, .15f}, r), "fists crossed on the chest");
@@ -25185,7 +25536,7 @@ int main() {
             if (u.step(.016f, hero_modes::hulk, true, true, true, 1, 1))
                 at = i;
         check(at >= 70 && at <= 80, "the ultimate's 1.2 s hold");
-        check(u.hit(hero_modes::hulk) && !u.hit(hero_modes::hulk), "WORLD SMASH is not one blow");
+        check(u.hit(hero_modes::hulk) && !u.hit(hero_modes::hulk), "GROUND SMASH is not one blow");
         bool again = false;
         for (int i = 0; i < 300; ++i)
             again = u.step(.016f, hero_modes::hulk, true, true, true, 1, 1) || again;

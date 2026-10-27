@@ -39,12 +39,13 @@ MODELS = {
 KITBASH = 'ErhanMatur, Bzovius, SrGeneroso, shedmon, Albin and Mayess'
 CRIMSON_HUE = 350 / 360.0
 # The spawn mix: each faction's variants in turn (the game side picks variant = spawn index % count).
-MIX = {'THE HAND': ['hand1', 'hand2', 'hand3'], 'HYDRA': ['hydra1', 'hydra2']}
+MIX = {'THE HAND': ['hand1', 'hand2', 'hand3'], 'HYDRA': ['hydra1', 'hydra2'],
+       'JOKER GANG': []}  # 9:28: the Joker's henchmen; models still being picked (PENDING): vanilla until then
 
 
 def variant(faction, spawn_index):
-    v = MIX[faction]
-    return v[spawn_index % len(v)]
+    v = MIX.get(faction) or []
+    return v[spawn_index % len(v)] if v else None  # None: no model, the game's own (vanilla) enemy
 
 
 def credits():

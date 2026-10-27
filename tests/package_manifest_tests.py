@@ -179,6 +179,23 @@ class Scripts(unittest.TestCase):
         self.assertNotIn('Visual C++ Redistributable', s)
         self.assertNotIn('Launch Spidy Game VR', s)
 
+    def test_v072_game_body_probe_ships(self):
+        # Version 0.0.72 GAME BODY: the no-headset probe, what it imports and a starter per check go in tools\.
+        probe = pm.manifest(ROOT / 'tools', ('probe_game_body',))
+        self.assertIn('probe_game_body', probe['tools'])
+        self.assertEqual(probe['missing_tools'], [])
+        self.assertTrue(set(probe['binaries']) <= set(pm.manifest(ROOT / 'tools')['binaries']))
+        s = self.text('tools/package.ps1')
+        for item in ("--entry probe_game_body", "@($probeManifest.tools)", "@($probeManifest.binaries)",
+                     "tools\\probe_game_body.py') --help", "'Game Body Test 1 - checks.bat', 'Game Body Test 2 - body.bat'"):
+            self.assertIn(item, s)
+        for name, phases in (('Game Body Test 1 - checks.bat', '--phases find\r\n'),
+                             ('Game Body Test 2 - body.bat', '--phases find,solve\r\n')):
+            bat = (ROOT / 'tools' / name).read_bytes().decode('ascii')
+            self.assertNotIn('\n', bat.replace('\r\n', ''))
+            self.assertIn('"%~dp0..\\python\\python.exe" -B -X utf8 "%~dp0probe_game_body.py" ' + phases, bat)
+            self.assertIn('pause', bat)
+
     def test_update24_unzip_and_play(self):
         s = self.text('tools/package.ps1')
         self.assertIn("foreach ($starter in @('Launch Spidy VR.cmd')) {", s)

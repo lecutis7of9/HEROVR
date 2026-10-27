@@ -58,10 +58,16 @@ $listing = & $python -B -X utf8 $manifestTool list --tools (Join-Path $root 'too
 if ($LASTEXITCODE) { throw "tools\package_manifest.py list failed: $listing" }
 $manifest = ($listing -join "`n") | ConvertFrom-Json
 if (@($manifest.missing_tools).Count) { throw "A tool the session imports is missing: $($manifest.missing_tools -join ', ')." }
+# Version 0.0.72 GAME BODY (EXPERIMENTAL): the no-headset body probe ships too (tools\probe_game_body.py and what
+# it imports), with a starter in tools\ for each of its checks; the folder's top keeps Launch Spidy VR.cmd only.
+$probeListing = & $python -B -X utf8 $manifestTool list --tools (Join-Path $root 'tools') --entry probe_game_body
+if ($LASTEXITCODE) { throw "tools\package_manifest.py list --entry probe_game_body failed: $probeListing" }
+$probeManifest = ($probeListing -join "`n") | ConvertFrom-Json
+$probeStarters = @('Game Body Test 1 - checks.bat', 'Game Body Test 2 - body.bat')
 
 # The modules: every one the tools and launch-game-vr.ps1 name (all built by build.ps1 -Observer), and the
 # haptics test. bHaptics' own library ships as it comes (a bHaptics Redistributable).
-$modules = @($manifest.binaries) + @('spidy_haptics_test.exe') | Sort-Object -Unique
+$modules = @($manifest.binaries) + @($probeManifest.binaries) + @('spidy_haptics_test.exe') | Sort-Object -Unique
 $missing = @($modules | Where-Object { -not (Test-Path -LiteralPath (Join-Path $bin $_)) })
 if ($missing) {
     throw ("Missing in build\windows-ninja: $($missing -join ', '). Build first: " +
@@ -74,7 +80,7 @@ $launcher = Join-Path $bin 'spidy_launcher.exe'
 if (Test-Path -LiteralPath $launcher) { Copy-Item -LiteralPath $launcher -Destination (Join-Path $stage 'tools\Spidy Launcher.exe') }
 else { Write-Warning 'build\windows-ninja\spidy_launcher.exe is missing: the package has no Spidy Launcher.exe (the starter still works).' }
 
-foreach ($tool in @($manifest.tools)) { Copy-Item -LiteralPath (Join-Path $root "tools\$tool.py") -Destination (Join-Path $stage 'tools') }
+foreach ($tool in (@($manifest.tools) + @($probeManifest.tools) | Sort-Object -Unique)) { Copy-Item -LiteralPath (Join-Path $root "tools\$tool.py") -Destination (Join-Path $stage 'tools') }
 foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py')) {
     Copy-Item -LiteralPath (Join-Path $root "tools\$script") -Destination (Join-Path $stage 'tools')
 }
@@ -83,6 +89,10 @@ foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py')) {
 foreach ($starter in @('Launch Spidy VR.cmd')) {
     $text = [IO.File]::ReadAllText((Join-Path $root $starter)) -replace "`r?`n", "`r`n"
     [IO.File]::WriteAllText((Join-Path $stage $starter), $text, (New-Object Text.ASCIIEncoding))
+}
+foreach ($starter in $probeStarters) {
+    $text = [IO.File]::ReadAllText((Join-Path $root "tools\$starter")) -replace "`r?`n", "`r`n"
+    [IO.File]::WriteAllText((Join-Path $stage "tools\$starter"), $text, (New-Object Text.ASCIIEncoding))
 }
 Copy-Item -LiteralPath $versionFile -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'SHARING.md') -Destination (Join-Path $stage 'README.txt')
@@ -114,6 +124,15 @@ $check | ForEach-Object { Write-Host "  self-test: $_" }
 if ($LASTEXITCODE -or @($check)[-1] -ne 'ok') { throw 'The package self-test failed (the lines above say what is missing).' }
 $help = & $python -B -X utf8 (Join-Path $stage 'tools\run_game_vr.py') --help
 if ($LASTEXITCODE -or -not ("$help" -match '--overlay-webs')) { throw 'The packaged Python cannot start tools\run_game_vr.py.' }
+# GAME BODY: the probe imports with the packaged Python on the packaged tools, and starts (--help touches nothing).
+$probeCheck = & $python -B -X utf8 (Join-Path $stage 'tools\package_manifest.py') check --tools (Join-Path $stage 'tools') --entry probe_game_body
+$probeCheck | ForEach-Object { Write-Host "  self-test (body probe): $_" }
+if ($LASTEXITCODE -or @($probeCheck)[-1] -ne 'ok') { throw 'The body probe self-test failed (the lines above say what is missing).' }
+$probeHelp = & $python -B -X utf8 (Join-Path $stage 'tools\probe_game_body.py') --help
+if ($LASTEXITCODE -or -not ("$probeHelp" -match '--phases')) { throw 'The packaged Python cannot start tools\probe_game_body.py.' }
+foreach ($starter in $probeStarters) {
+    if (-not (Test-Path -LiteralPath (Join-Path $stage "tools\$starter"))) { throw "tools\$starter is missing from the package." }
+}
 # Update 24, unzip-and-play:
 # no module needs Microsoft's Visual C++ Redistributable (all /MT; bHaptics' library uses the game's own),
 $runtime = & $python -B -X utf8 (Join-Path $stage 'tools\player_check.py') runtime (Join-Path $stage 'build\windows-ninja')

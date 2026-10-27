@@ -1,6 +1,7 @@
 // Bounded first-person OpenXR integration using the game's two native views.
 #include "spidy/baton_grip.hpp"
 #include "spidy/gun_grip.hpp"
+#include "spidy/grapple072.hpp" // Version 0.0.72 GRAPPLE (every hero who has one)
 #include "spidy/shadow_camera.hpp"
 #include "spidy/pixel_font.hpp"
 #include "spidy/eye_debug.hpp"
@@ -1889,6 +1890,11 @@ DWORD WINAPI run(void*) {
         // Version 0.0.7 BATMAN (cape_glide.hpp): the grapple presses for the next swing command, and
         // the bridge's glide / grapple state (counts seen: a new grapple, miss or glide buzzes once).
         bool batmanGrapple[2]{};
+        // Version 0.0.72 GRAPPLE (grapple072.hpp): DAREDEVIL's cast and the PUNISHER's hook (hero072's
+        // presses, for the next swing command), the hook launcher drawn, and the hands for the line.
+        bool hero072Grapple[2]{}, hero072HookOut[2]{}, hero072HandTracked[2]{};
+        Vec3 hero072HandAt[2]{}, hero072HandAim[2]{};
+        uint32_t hero072GrappleNotes{};
         cape_glide::Data capeNow{};
         bool capeCounted{};
         uint32_t capeGrapplesSeen{}, capeMissesSeen{}, capeGlidesSeen{}, capeArrivalsSeen{};
@@ -4653,6 +4659,13 @@ DWORD WINAPI run(void*) {
                             const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open();
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
                             batmanGrapple[0] = batmanGrapple[1] = false;
+                            // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
+                            // (askGrappleOnly every live frame, so the pull carries on to the point).
+                            if (const uint32_t gh = heroNow(); gh != hero_modes::batman && grapple072::grappler(gh)) {
+                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open();
+                                input.asks |= grapple072::asks(gh, grappleLive, hero072Grapple[0], hero072Grapple[1]);
+                            }
+                            hero072Grapple[0] = hero072Grapple[1] = false;
                             // Version 0.0.7: webs are SPIDER-MAN's only. Every other hero's triggers and grips
                             // never reach the bridge's webs, web balls or web grabs (climbing holds the wall by
                             // wallGrips, kept; FLY reads its own word).
@@ -4711,12 +4724,18 @@ DWORD WINAPI run(void*) {
                                 capeNow.version != expected.version || capeNow.bytes != expected.bytes) {
                                 capeNow = {};
                             } else {
-                                if (capeCounted && heroNow() == hero_modes::batman) {
+                                // Version 0.0.72: every grappler's (BATMAN, DAREDEVIL, the PUNISHER).
+                                if (capeCounted && grapple072::grappler(heroNow())) {
                                     const unsigned h = capeNow.hand < 2 ? capeNow.hand : 1u;
                                     if (capeNow.grapples > capeGrapplesSeen) {
                                         runtime.haptic(static_cast<int>(h), .45f);
                                         sfx::play(sfx::batonWhoosh); // the grapple's fire (never a web sound)
-                                        game_prompts::note("VERSION 0.0.7 BATMAN: grapple fired");
+                                        if (++hero072GrappleNotes <= 16) {
+                                            char line[160];
+                                            sprintf_s(line, "%s (%s)", grapple072::fireNote[static_cast<uint32_t>(grapple072::deviceOf(heroNow()))],
+                                                      grapple072::heroName(heroNow()));
+                                            game_prompts::note(line);
+                                        }
                                     }
                                     if (capeNow.arrivals > capeArrivalsSeen) {
                                         runtime.haptic(static_cast<int>(h), .35f);
@@ -6430,6 +6449,9 @@ DWORD WINAPI run(void*) {
                                             in72.hands[i].position = cf.hands[i].position;
                                             in72.hands[i].aim = cf.hands[i].aim;
                                             in72.hands[i].tracked = cf.hands[i].tracked;
+                                            hero072HandAt[i] = cf.hands[i].position; // 0.0.72 GRAPPLE's line
+                                            hero072HandAim[i] = cf.hands[i].aim;
+                                            hero072HandTracked[i] = cf.hands[i].tracked;
                                             in72.hands[i].trigger = cf.hands[i].button;
                                             in72.hands[i].grip = cf.hands[i].grip;
                                         }
@@ -6471,6 +6493,10 @@ DWORD WINAPI run(void*) {
                                             for (uint32_t n = out72.lightning[k]; n > 0; --n)
                                                 sfx::play(k ? sfx::thorLightning2 : sfx::thorLightning1);
                                         hero072KeepTopped = out72.keepTopped;
+                                        for (unsigned i = 0; i < 2; ++i) { // Version 0.0.72 GRAPPLE
+                                            hero072Grapple[i] = hero072Grapple[i] || out72.grapple[i];
+                                            hero072HookOut[i] = out72.hookOut[i];
+                                        }
                                         for (uint32_t k = 0; k < out72.blowCount; ++k) {
                                             const auto& b72 = out72.blows[k];
                                             const bool sent = sm2_damage::queue(b72.id, b72.blow);
@@ -8274,14 +8300,24 @@ DWORD WINAPI run(void*) {
                         // Version 0.0.7 HERO PROFILES: the heroes' weapons, holsters, beams, smoke and shells.
                         if (!oursFault)
                         {
+                            const bool pulling = capeNow.grappling == cape_glide::pull && capeNow.hand < 2;
+                            for (unsigned h = 0; h < 2; ++h) // Version 0.0.72: the grapple gun out while it fires / pulls
+                                hero007In.grappleHeld[h] = grapple072::deviceOf(hero007In.hero) == grapple072::Device::gun &&
+                                                           ((pulling && capeNow.hand == h) ||
+                                                            (hero007In.hero == hero_modes::punisher && hero072HookOut[h]));
                             hero007Play.draw(saved.hero007, saved.worldFromTracking, hero007In, batonLookNow);
                             saved.hero072 = hero072::worldLook(hero072Look, saved.worldFromTracking); // Version 0.0.72
                             // Version 0.0.7 BATMAN GRAPPLE GUN: the line from the firing hand to the hook (game
                             // world, the bridge's) while it pulls him; never a web.
-                            if (hero007In.hero == hero_modes::batman && capeNow.grappling == cape_glide::pull &&
-                                capeNow.hand < 2 && hero007In.hands[capeNow.hand].tracked) {
+                            // Version 0.0.72: every grappler's - from the gun's muzzle (BATMAN, the PUNISHER:
+                            // hero007_visual moves it there) or DAREDEVIL's baton tip.
+                            const uint32_t gh = hero007In.hero;
+                            const bool dd = gh == hero_modes::daredevil;
+                            if (grapple072::grappler(gh) && pulling &&
+                                (dd ? hero072HandTracked[capeNow.hand] : hero007In.hands[capeNow.hand].tracked)) {
                                 const unsigned h = capeNow.hand;
-                                const Vec3 from = compose(saved.worldFromTracking, Pose{hero007In.hands[h].position, {}}).position;
+                                const Vec3 at = dd ? grapple072::cableFrom(hero072HandAt[h], hero072HandAim[h]) : hero007In.hands[h].position;
+                                const Vec3 from = compose(saved.worldFromTracking, Pose{at, {}}).position;
                                 if (finite(from) && finite(capeNow.anchor)) {
                                     saved.hero007.grapple[h] = true;
                                     saved.hero007.grappleFrom[h] = from;
@@ -8315,8 +8351,11 @@ DWORD WINAPI run(void*) {
                                 saved.hero007.modelWanted |= hero007::modelBitBatarang;
                             }
                             // BATMAN GRAPPLE GUN model (Models\GrappleGun): none drawn when it is missing.
-                            if (hero007In.hero == hero_modes::batman)
+                            if (hero007In.hero == hero_modes::batman || hero007In.hero == hero_modes::punisher) // 0.0.72: his hook too
                                 saved.hero007.grappleGunModel = slotModel(mesh_model::slotGrappleGun, "GRAPPLE GUN");
+                            // Version 0.0.72 THOR's hammer (Models\Hammer): the model or nothing, MODEL MISSING on the wrist.
+                            if (saved.hero072.hammer) // (only Thor holds it)
+                                saved.hero072.hammerModel = slotModel(mesh_model::slotHammer, "THOR HAMMER");
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
                                 saved.hero007.pistolModel = slotModel(mesh_model::slotPistol, "GUN MODELS");
                                 saved.hero007.sawedFrame = slotModel(mesh_model::slotSawedOffFrame, "GUN MODELS");

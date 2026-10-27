@@ -23490,6 +23490,170 @@ int main() {
         o = frame({0, .6f, -1}, 1);
         check(!o.grapple[0] && !o.grapple[1], "nobody else grapples");
     });
+    // Version 0.0.72 GRAPPLE FOR EVERY HERO WHO HAS ONE (the user, 11:09): the bridge's pull as
+    // game_swing runs it - a pull from the ground holds (clock too) while the game's jump takes him off
+    // (cape_glide::liftFirst), then the velocity drive carries the body (integrated here) to the point.
+    struct PullRun {
+        bool arrived{}, ended{}, everDrove{};
+        float seconds{}, closest{1e9f};
+        spidy::Vec3 body{};
+    };
+    static const auto pullTo = [](spidy::Vec3 body, spidy::Vec3 hit, spidy::Vec3 normal, unsigned hand, bool grounded,
+                                  bool jumpWorks = true) {
+        using namespace spidy::cape_glide;
+        Grapple gr;
+        PullRun r;
+        if (!gr.start(body, hit, normal, hand))
+            return r;
+        spidy::Vec3 v{};
+        float jump = 0; // the game's jump: .25 s to leave the floor (SwingTakeoff's measured progress)
+        for (; r.seconds < 8 && gr.phase() != idle; r.seconds += 1 / 90.f) {
+            if (liftFirst(gr.phase(), grounded, true)) {
+                if (jumpWorks && (jump += 1 / 90.f) >= .25f) {
+                    grounded = false;
+                    v = {0, 4.f, 0};
+                }
+                if (jumpWorks)
+                    continue; // the pull waits for the takeoff (game_swing's liftWait)
+            }
+            const auto o = gr.update(1 / 90.f, r.body = body, v, true);
+            r.arrived |= o.arrived;
+            r.ended |= o.ended;
+            if (o.drive) {
+                r.everDrove = true;
+                v = o.velocity;
+                body = body + v * (1 / 90.f);
+                if (grounded)
+                    body.y = 0; // 0.0.71: the walk keeps a grounded body on its floor
+            }
+            r.closest = std::min(r.closest, length(body - hit));
+        }
+        r.body = body;
+        return r;
+    };
+    test("Version 0.0.72: GRAPPLE - BATMAN's gun: the trigger aimed up -> asks -> a pull from the ground to the ledge", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}};
+        p.setHero(in.hero);
+        PlayOutput o;
+        const Vec3 aim = normalized(Vec3{0, .6f, -1});
+        for (float t : {0.f, 1.f}) {
+            in.hands[1] = {{.2f, 1.4f, -.3f}, aim, true, t, 0, false};
+            in.hands[0] = {{-.2f, 1.4f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+            o = {};
+            p.step(in, o);
+        }
+        check(o.grapple[1], "the press is the grapple's");
+        const uint32_t asks = spidy::grapple072::asks(in.hero, true, o.grapple[0], o.grapple[1]);
+        check(asks == (spidy::cape_glide::askBatman | spidy::cape_glide::askGrapple[1]), "the bridge's asks");
+        // The 0.0.71 failure, kept as proof of the cause: grounded, no takeoff - a tug, then let go.
+        const auto old = pullTo({0, 0, 0}, {0, 9, -14}, {0, 0, 1}, 1, true, false);
+        check(!old.arrived && old.ended && old.closest > 8.f, "no takeoff (0.0.71): stuck under the ledge, let go: " + std::to_string(old.closest));
+        const auto r = pullTo({0, 0, 0}, {0, 9, -14}, {0, 0, 1}, 1, true);
+        check(r.everDrove && r.arrived, "BATMAN pulled all the way: " + std::to_string(r.closest));
+        check(r.body.y > 9.f && r.body.z < -13.f, "up at the ledge and over: " + std::to_string(r.body.y) + " " + std::to_string(r.body.z));
+        // Far (40 m): the clock scales with the trip (0.0.71's 3 s cut a long pull short).
+        const auto far = pullTo({0, 0, 0}, {0, 30, -26}, {0, 1, 0}, 1, true);
+        check(far.arrived && far.body.y > 30.f, "a 40 m pull arrives: " + std::to_string(far.closest));
+    });
+    test("Version 0.0.72: GRAPPLE - DAREDEVIL's baton cable: the cast -> askGrappleOnly held -> the pull arrives", [] {
+        using namespace spidy::hero072;
+        BatonCast cast;
+        const Vec3 head{0, 1.7f, 0};
+        Vec3 hands[2]{{-.2f, 1.2f, -.3f}, {.2f, 1.9f, -.2f}}, vel[2]{{}, {0, 4, -1}};
+        const bool tr[2]{true, true};
+        const int hand = cast.step(.016f, head, hands, vel, tr);
+        check(hand == 1, "the cast");
+        using namespace spidy::cape_glide;
+        const uint32_t dd = spidy::hero_modes::daredevil;
+        check(spidy::grapple072::asks(dd, true, false, true) == (askGrappleOnly | askGrapple[1]), "the press frame's asks");
+        check(spidy::grapple072::asks(dd, true, false, false) == askGrappleOnly, "every live frame: the pull carries on");
+        check(spidy::grapple072::asks(dd, false, false, true) == 0 && spidy::grapple072::asks(spidy::hero_modes::spiderMan, true, true, true) == 0,
+              "not live / not a grappler: nothing");
+        check(spidy::grapple072::deviceOf(dd) == spidy::grapple072::Device::baton, "his device is the baton");
+        const Vec3 tip = spidy::grapple072::cableFrom({.2f, 1.9f, -.2f}, {0, .6f, -1});
+        check(length(tip - Vec3{.2f, 1.9f, -.2f}) > .5f && tip.y > 1.9f, "the line leaves the baton's tip, along the aim");
+        const auto r = pullTo({0, 0, 0}, {6, 7, -10}, {0, 1, 0}, 1, true);
+        check(r.everDrove && r.arrived && r.body.y > 7.f, "DAREDEVIL pulled onto the roof: " + std::to_string(r.closest));
+        const auto air = pullTo({0, 3, 0}, {0, 12, -18}, {0, 0, 1}, 1, false);
+        check(air.arrived, "mid-air: straight to it: " + std::to_string(air.closest));
+    });
+    test("Version 0.0.72: GRAPPLE - the PUNISHER's hook launcher: draw, push, bite -> asks -> the pull arrives; gun along the aim", [] {
+        using namespace spidy::hero072;
+        HookLauncher hk;
+        hk.step(.016f, true, 1.f, true, {}, {0, 0, -1});
+        hk.step(.016f, true, 1.f, false, {0, 0, -3}, {0, 0, -1});
+        bool bite = false;
+        for (int i = 0; i < 100 && !bite; ++i)
+            bite = hk.step(.016f, true, 1.f, false, {}, {0, 0, -1});
+        check(bite, "the hook bites");
+        using namespace spidy::cape_glide;
+        const uint32_t pu = spidy::hero_modes::punisher;
+        check(spidy::grapple072::asks(pu, true, true, false) == (askGrappleOnly | askGrapple[0]), "the asks (left hand)");
+        const auto r = pullTo({0, 0, 0}, {-3, 10, -16}, {0, 0, 1}, 0, true);
+        check(r.everDrove && r.arrived && r.body.y > 10.f, "the PUNISHER pulled to the ledge: " + std::to_string(r.closest));
+        // The launcher drawn in his left hand: the grapple-gun model, its barrel along the aim.
+        using spidy::hero007::Draw, spidy::hero007::PlayInput, spidy::hero007::PlayOutput, spidy::hero007::lookGrappleGun;
+        spidy::hero007::Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = pu;
+        in.head = {{0, 1.7f, 0}, {}};
+        p.setHero(in.hero);
+        const Vec3 aim = normalized(Vec3{.1f, .5f, -1});
+        in.hands[0] = {{-.2f, 1.4f, -.3f}, aim, true, 0, 0, false};
+        in.hands[1] = {{.2f, 1.4f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+        in.hands[0].holdGun(spidy::gun_grip::Held{{-.2f, 1.38f, -.32f}, normalized(Vec3{0, -.3f, -1}), {0, 1, -.3f}, true});
+        PlayOutput o;
+        p.step(in, o);
+        in.grappleHeld[0] = true;
+        Draw d;
+        p.draw(d, {}, in, 0);
+        check(d.held[0].look == lookGrappleGun, "the hook launcher in the hand");
+        check(dot(d.held[0].forward, aim) > .999f && std::abs(dot(d.held[0].up, d.held[0].forward)) < 1e-3f,
+              "the barrel along the aim (not the forearm)");
+        check(length(d.held[0].at - Vec3{-.2f, 1.38f, -.32f}) < 1e-4f && d.held[0].palm, "its grip in the palm");
+        in.grappleHeld[0] = false;
+        Draw d2;
+        p.draw(d2, {}, in, 0);
+        check(d2.held[0].look != lookGrappleGun, "stowed: not in the hand");
+    });
+    test("Version 0.0.72: GRAPPLE - BATMAN's gun in the hand along the aim while it pulls, at the hip (never the feet) otherwise", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}};
+        p.setHero(in.hero);
+        const Vec3 aim = normalized(Vec3{0, .7f, -1});
+        in.hands[1] = {{.2f, 1.4f, -.3f}, aim, true, 0, 0, false};
+        in.hands[0] = {{-.2f, 1.4f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+        in.hands[1].holdGun(spidy::gun_grip::Held{{.2f, 1.38f, -.32f}, normalized(Vec3{0, -.4f, -1}), {0, 1, -.4f}, true});
+        for (int i = 0; i < 30; ++i) {
+            PlayOutput o;
+            p.step(in, o);
+        }
+        Draw idle;
+        p.draw(idle, {}, in, 0);
+        check(idle.worn[0].look == lookGrappleGun && idle.worn[0].at.y > .6f && idle.worn[0].at.y < 1.3f,
+              "worn on the hip: " + std::to_string(idle.worn[0].at.y));
+        in.grappleHeld[1] = true; // the bridge pulling on the right hand's line (the trigger let go)
+        Draw d;
+        p.draw(d, {}, in, 0);
+        check(d.held[1].look == lookGrappleGun && dot(d.held[1].forward, aim) > .999f, "in the hand, the barrel along the aim");
+        check(d.worn[0].look != lookGrappleGun, "not on the hip as well");
+        check(!spidy::grapple072::alongAim({0, 1, 0}, {NAN, 0, 0}, {0, 1, 0}).ok &&
+                  spidy::grapple072::alongAim({0, 1, 0}, {0, 1, 0}, {0, 1, 0}).ok,
+              "NaN aim: nothing; straight up: still a sane frame");
+    });
     test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
         using namespace spidy::hero007;
         Play p;
@@ -25018,6 +25182,16 @@ int main() {
         check(g.live(true) && g.sane(true, "x") && !g.sane(false, "bad") && g.tripped && !g.live(true) &&
                   std::string(g.why) == "bad" && g.trips == 1,
               "the GUARD does not turn a feature off for good");
+        {   // Version 0.0.72: Mjolnir is the real model or NOTHING (no built-in stand-in until the user picks one).
+            Look h;
+            h.any = h.hammer = true;
+            h.hammerAt = {0, 1.2f, -.5f};
+            std::vector<Vertex> none;
+            appendLook(none, h, {}, {0, 1.6f, 0}, .001f);
+            check(none.empty() && std::string(mesh_model::slotFolders[mesh_model::slotHammer]) == "Hammer" &&
+                      mesh_model::slotHammer < 32,
+                  "THOR's hammer draws a fake stand-in without its model (MODEL MISSING: Hammer)");
+        }
         Look l;
         l.any = l.hammer = true;
         l.hammerAt = {0, 1.2f, -.5f};

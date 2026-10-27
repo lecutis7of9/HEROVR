@@ -630,10 +630,14 @@ void visit(const native_rays::QueryContext& world) {
     // lifted, at one on a ledge) leaves it as a web does: by the game's jump.
     const bool strikeLift = body.grounded && (game_punch::lifting(body.position - Vec3{0, 1, 0}) ||
                                               lunger.lifting(body.position - Vec3{0, 1, 0}));
+    // Version 0.0.72 GRAPPLE (every hero's): a pull that starts on the ground leaves it as a web does,
+    // by the game's own jump (the walk keeps a grounded body on its floor: the 0.0.71 "brief tug then
+    // drop" - the pull's velocity went nowhere, it counted as stuck and let go). The pull waits for it.
+    const bool grappleLift = cape_glide::liftFirst(capeGrapple.phase(), body.grounded, collidable);
     // Takeoff follows the native jump's measured progress.
     const auto transition =
-        takeoffTransition.update(GetTickCount64(), attached || strikeLift, body.grounded, collidable,
-                                 wantsLift || strikeLift, zipped || pointLaunched || newAttachment, harness,
+        takeoffTransition.update(GetTickCount64(), attached || strikeLift || grappleLift, body.grounded, collidable,
+                                 wantsLift || strikeLift || grappleLift, zipped || pointLaunched || newAttachment, harness,
                                  motion.achievedVelocity, (zipped || pointLaunched) ? predicted.velocity : Vec3{},
                                  pointLaunched, length(crawl) > .5f ? crawl : Vec3{0, 1, 0});
     if (transition.resumed)
@@ -847,7 +851,10 @@ void visit(const native_rays::QueryContext& world) {
             }
             grappleHeldWas[i] = held;
         }
-        const auto pulled = capeGrapple.update(motion.dt, body.position, body.velocity, free);
+        // 0.0.72: the pull holds (its clock too) while the game's jump takes him off the ground.
+        const bool liftWait = transition.waiting && capeGrapple.phase() == cape_glide::pull && free;
+        const auto pulled = liftWait ? cape_glide::GrappleOut{false, {}, cape_glide::pull, capeGrapple.anchor()}
+                                     : capeGrapple.update(motion.dt, body.position, body.velocity, free);
         capeData.arrivals += pulled.arrived ? 1u : 0u;
         cape_glide::In gi;
         gi.seconds = motion.dt;

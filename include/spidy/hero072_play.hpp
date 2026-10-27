@@ -95,6 +95,7 @@ struct PlayOut {
     bool keepTopped{};         // NATURAL INVINCIBLE: refill the health this frame
     bool climbAllowed = true;  // SPIDER CLIMB ONLY
     bool grapple[2]{};         // the grapple without the cape (hook, baton cast): that hand's ask
+    bool hookOut[2]{};         // 0.0.72: the PUNISHER's hook launcher drawn in this hand (grapple-gun model)
     float punchScale[2]{1, 1}; // SURVIVAL: an injured arm hits half
     float dazed{};             // SURVIVAL: a concussion's sway, 0-1
     RageTint tint{};
@@ -362,12 +363,12 @@ class Play {
             for (unsigned i = 0; i < 1; ++i) { // the left hand (the right holds the gun)
                 const bool chest = tracked[i] && atChest(holster::bodyPoint(p[i], head, body));
                 if (hook.step(dt, true, in.hands[i].grip, chest, v[i], look)) {
+                    // Version 0.0.72: the line is the bridge's real one (game_xr, to the raycast's hit);
+                    // 0.0.71's 12 m stand-in line to nowhere is gone.
                     out.grapple[i] = true;
-                    hookShow = .5f;
-                    hookFrom = p[i];
-                    hookTo = p[i] + look * 12.f;
                     out.buzz(i, .7f);
                 }
+                out.hookOut[i] = hook.state != HookLauncher::stowed;
             }
         }
         // ---- FIRE DOUSE (the mod's own FireSpots; the game's fire hook is CANDIDATE) ----
@@ -819,12 +820,6 @@ class Play {
             out.look.shockRadius = shockRadius;
             out.look.shockAge = 1.f - shockShow / .6f;
             shockShow = std::max(0.f, shockShow - dt);
-        }
-        if (hookShow > 0) {
-            out.look.hook = true;
-            out.look.hookFrom = hookFrom;
-            out.look.hookTo = hookTo;
-            hookShow = std::max(0.f, hookShow - dt);
         }
         if (out.perch.light != lightNone && ok(out.perch.targetAt)) { // PERCH TAKEDOWN: over the target's head
             out.look.perchLight = true;

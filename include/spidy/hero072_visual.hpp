@@ -10,6 +10,8 @@
 #include "spidy/math.hpp"
 #include "vertex.hpp"
 
+namespace spidy::mesh_model { struct Mesh; }
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -24,6 +26,9 @@ struct Look {
     bool hammer{};
     Vec3 hammerAt{}, hammerForward{0, 1, 0}, hammerUp{0, 0, -1};
     float hammerSpin{};
+    // Version 0.0.72: Mjolnir is Models\Hammer (mesh_model::slotHammer) or NOTHING (no built-in stand-in;
+    // the wrist says MODEL MISSING: Hammer). Library-owned; set on the render thread by game_xr.
+    const mesh_model::Mesh* hammerModel{};
     // Lightning: each bolt from -> to, jagged by its seed.
     uint32_t bolts{};
     Vec3 boltFrom[boltsMost]{}, boltTo[boltsMost]{};

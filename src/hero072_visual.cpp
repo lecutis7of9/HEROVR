@@ -3,6 +3,8 @@
 // Version 0.0.72 (TEST) looks (hero072_visual.hpp).
 #include "spidy/hero072_visual.hpp"
 #include "spidy/hero072.hpp"
+#include "spidy/hero007_visual.hpp"
+#include "spidy/mesh_model.hpp"
 #include "spidy/pixel_font.hpp"
 #include "spidy/soft_shapes.hpp"
 #include "spidy/web_visual.hpp"
@@ -381,8 +383,16 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
     if (!l.any || !okv(travel) || !okv(viewer) || !std::isfinite(pixelAngle))
         return;
     const auto T = [&](Vec3 p) { return p + travel; };
-    if (l.hammer)
-        appendHammer(out, T(l.hammerAt), l.hammerForward, l.hammerUp, viewer, pixelAngle);
+    // Version 0.0.72 THOR's hammer: the real model or nothing (the old built-in bars are a fake, never drawn).
+    if (l.hammer && l.hammerModel && okv(l.hammerAt) && okv(l.hammerForward) && okv(l.hammerUp) &&
+        length(l.hammerForward) > 1e-3f) {
+        hero007::Item it;
+        it.at = T(l.hammerAt);
+        // The model frame: +y handle -> head, -z a face (mesh_model::slotHammer).
+        it.up = normalized(l.hammerForward);
+        it.forward = l.hammerUp;
+        hero007::appendModel(out, it, *l.hammerModel, viewer);
+    }
     for (uint32_t i = 0; i < std::min(l.bolts, boltsMost); ++i)
         appendBolt(out, T(l.boltFrom[i]), T(l.boltTo[i]), l.boltSeed[i], viewer, pixelAngle);
     for (int i = 0; i < 2; ++i)

@@ -18,6 +18,7 @@
 #include "spidy/hero007_visual.hpp"
 #include "spidy/gun_grip.hpp"
 #include "spidy/hero_modes.hpp"
+#include "spidy/grapple072.hpp"
 #include "spidy/holster.hpp"
 #include "spidy/sfx.hpp"
 
@@ -57,6 +58,9 @@ struct PlayInput {
     bool crossDraw{};       // HOLSTER HANDS EITHER HAND
     bool batonHolsters{};   // BATON HOLSTERS ON
     uint32_t shieldArm{};   // CAPTAIN AMERICA SHIELD ARM value (0 RIGHT, the default; 1 LEFT)
+    // Version 0.0.72 GRAPPLE: this hand's grapple gun is out (the bridge pulling on this hand's line, or
+    // the PUNISHER's hook launcher drawn and winding): drawn in the hand, the barrel along the aim.
+    bool grappleHeld[2]{};
     bool shieldChain = true; // SHIELD CHAIN ON
     uint32_t shieldDamage{}; // SHIELD DAMAGE value (0: 35 HP)
 };
@@ -389,10 +393,14 @@ class Play {
             // grapple's (the grip pose, like PUNISHER's guns), else on that hand's hip.
             bool gunHeld = false;
             for (unsigned i = 0; i < 2; ++i) {
-                if (!grappling[i])
+                if (!grappling[i] && !in.grappleHeld[i])
                     continue;
-                if (in.hands[i].tracked && in.hands[i].gunOk && finite(in.hands[i].gunAt)) {
-                    d.held[i] = item(lookGrappleGun, in.hands[i].gunAt, in.hands[i].gunForward, in.hands[i].gunUp);
+                // Version 0.0.72: the barrel ALONG THE AIM (the ray the line fires on), not the forearm.
+                const auto g = in.hands[i].tracked && in.hands[i].gunOk && finite(in.hands[i].gunAt) && handOk(i)
+                                   ? grapple072::alongAim(in.hands[i].gunAt, in.hands[i].aim, in.hands[i].gunUp)
+                                   : grapple072::Held{};
+                if (g.ok) {
+                    d.held[i] = item(lookGrappleGun, g.at, g.forward, g.up);
                     d.held[i].palm = true;
                     gunHeld = any = true;
                 } else if (handOk(i)) {
@@ -473,6 +481,19 @@ class Play {
                     }
                 }
                 any = true;
+            }
+            // Version 0.0.72 GRAPPLE: the hook launcher (the grapple-gun model) in the hand that fires it,
+            // the barrel along the aim (a hand already holding a gun keeps its gun).
+            for (unsigned i = 0; i < 2; ++i) {
+                if (!in.grappleHeld[i] || d.held[i].look != lookNone || !handOk(i))
+                    continue;
+                const auto g = in.hands[i].gunOk ? grapple072::alongAim(in.hands[i].gunAt, in.hands[i].aim, in.hands[i].gunUp)
+                                                 : grapple072::alongAim(in.hands[i].position, in.hands[i].aim, Vec3{0, 1, 0});
+                if (g.ok) {
+                    d.held[i] = item(lookGrappleGun, g.at, g.forward, g.up);
+                    d.held[i].palm = in.hands[i].gunOk;
+                    any = true;
+                }
             }
         } else if (captainAmerica()) {
             const unsigned i = shieldHand;

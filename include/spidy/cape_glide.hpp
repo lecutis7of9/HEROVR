@@ -240,7 +240,10 @@ inline bool hookable(Vec3 from, Vec3 point, bool airAnchor, bool fixedSurface) {
 enum Phase : uint32_t { idle = 0, pull = 1, vault = 2 };
 struct GrappleTune {
     float speed = 24, accel = 55, near = 1.0f, slowFrom = 3.5f;
-    float timeout = 3.0f, stuckWindow = .5f, stuckMetres = .45f;
+    // Version 0.0.72 SUSTAINED PULL (the user, 11:09: "no brief tug then drop"): the time allowed grows
+    // with the distance (timeout at least, else the trip at full speed plus timeoutSpare); progress is
+    // the distance to the target coming down (not any movement), checked only after stuckGrace.
+    float timeout = 3.0f, timeoutSpare = 1.5f, stuckGrace = .6f, stuckWindow = .5f, stuckMetres = .45f;
     float vaultUp = 7.5f, vaultOver = 4.f, vaultSeconds = .32f;
     float roofStand = 1.1f, ledgeAbove = 1.6f, ledgeOut = .6f;
 };
@@ -278,6 +281,8 @@ class Grapple {
         progressAt_ = body;
         progressT_ = 0;
         first_ = normalized(target_ - body);
+        progressD_ = length(target_ - body);
+        allowed_ = std::max(tune.timeout, progressD_ / std::max(tune.speed, 1.f) + tune.timeoutSpare);
         return true;
     }
     GrappleOut update(float seconds, Vec3 body, Vec3 velocity, bool allowed) {
@@ -300,16 +305,20 @@ class Grapple {
             // Arrived (or passed it), or out of time, or stuck (a wall in the way): the vault, or off.
             progressT_ += dt;
             bool stuck = false;
-            if (progressT_ >= tune.stuckWindow) {
-                stuck = length(body - progressAt_) < tune.stuckMetres;
+            if (t_ < tune.stuckGrace) {
+                progressT_ = 0;
+                progressD_ = d;
+            } else if (progressT_ >= tune.stuckWindow) {
+                stuck = progressD_ - d < tune.stuckMetres;
                 progressAt_ = body;
+                progressD_ = d;
                 progressT_ = 0;
             }
             if (d <= tune.near || dot(to, first_) < 0 || stuck) {
                 phase_ = vault;
                 t_ = 0;
                 o.arrived = !stuck;
-            } else if (t_ >= tune.timeout) {
+            } else if (t_ >= allowed_) {
                 stop();
                 o.ended = true;
                 return o;
@@ -340,13 +349,18 @@ class Grapple {
     uint32_t hand() const { return hand_; }
     Vec3 anchor() const { return anchor_; }
     Vec3 target() const { return target_; }
+    float allowed() const { return allowed_; }
 
   private:
     uint32_t phase_{}, hand_{};
     Vec3 anchor_{}, target_{}, over_{}, first_{}, progressAt_{};
     bool roof_{};
-    float t_{}, speed_{}, progressT_{};
+    float t_{}, speed_{}, progressT_{}, progressD_{}, allowed_{3.f};
 };
+
+// Version 0.0.72: a pull from the ground takes off by the game's jump first (game_swing's takeoff, as
+// a web's): the bridge asks for it while this is true and holds the pull until he is off.
+inline bool liftFirst(uint32_t phase, bool grounded, bool collidable) { return phase == pull && grounded && collidable; }
 
 // ---- The bridge's sample (SpidyCapeSample) ----
 struct Data {

@@ -74,7 +74,7 @@ namespace Sm2VrLauncher
             Opt.Num("COMFORT", "SmoothTurn", "SMOOTH TURN", "Smooth turning speed; above 0 it replaces snap turning.", 0, 360, 10, 0, "\u00B0/s"),
             Opt.Num("COMFORT", "Haptics", "VIBRATION", "Controller vibration strength.", 0, 100, 5, 100, "%"),
             Opt.Pick("COMFORT", "ScreenSize", "GAME SCREEN SIZE", "The screen for menus, cutscenes and flat mode.", new[] { "Small", "Medium", "Large" }, "Medium"),
-            Opt.Pick("COMFORT", "ScreenDepth", "CUTSCENE 3D DEPTH", "How deep the game screen looks in cutscenes.", new[] { "Off", "Low", "Medium", "High" }, "Medium"),
+            Opt.Pick("COMFORT", "ScreenDepth", "CUTSCENE 3D DEPTH", "Cutscene depth. Spider-Man 2 cutscenes stay flat for now: the HUD hook is not found yet.", new[] { "Off", "Low", "Medium", "High" }, "Medium"),
             Opt.Pick("COMFORT", "Hud", "VR HUD SIZE", "Size of the VR HUD panel.", new[] { "Off", "Small", "Medium", "Large" }, "Medium"),
             // Body & combat
             Opt.Inv("BODY & COMBAT", "NoBody", "SPIDER-MAN BODY", "Spider-Man's body follows your head and hands (off: gloves only)."),

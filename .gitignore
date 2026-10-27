@@ -16,10 +16,7 @@ __pycache__/
 # The wrist hologram's NEXT LAUNCH choice (tools/live_settings.py, Update 15).
 /next-launch.txt
 /next-launch.txt.tmp
-
-# HERO VR launcher (local build output and per-user files)
 tools/launcher/out/
-tools/launcher/launcher-data/
-tools/launcher/launcher.ini
-tools/launcher/SM2VRLauncher.exe
-/test logs/
+
+# Local test logs (never shipped)
+test logs/

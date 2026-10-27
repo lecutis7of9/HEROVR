@@ -7,6 +7,7 @@
 #include "phone.hpp"
 #include "presentation_gate.hpp"
 #include "web_cocoon.hpp"
+#include "hero007_visual.hpp"
 #include "web_visual.hpp"
 
 #include <limits>
@@ -76,6 +77,10 @@ struct NativeEyeFrame {
     // Version 0.0.6 DAREDEVIL ABILITIES: each hand's baton (this frame's world; on 0: none), grip to tip.
     std::array<Vec3, 2> batonGrip{}, batonTip{};
     std::array<float, 2> batonOn{};
+    // Version 0.0.7: BATON LOOK CLUB (the billy club instead of the 0.0.62 baton) and the 0.0.7 heroes'
+    // looks (hero007_visual.hpp; any false: nothing - always nothing while the 0.0.7 options are OFF).
+    bool batonClub{};
+    hero007::Draw hero007{};
     // Version 0.0.62 HIT INDICATOR: the hit marks (this frame's world; fade 0: none - always 0 while OFF).
     std::array<Vec3, 8> markAt{};
     std::array<float, 8> markFade{};

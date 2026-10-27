@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
-project(Spidy VERSION 0.0.63 LANGUAGES C CXX)
+project(Spidy VERSION 0.0.70 LANGUAGES C CXX)
 # Every target on Windows: windows.h must never define min/max macros (they break std::min/std::max, MSVC C2589).
 if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 # The public version (semver, docs/VERSIONING.md): the launcher, the zip, the tag and VERSION all follow
-# this line; PORT-VERSION keeps the internal build ("Update 39.3"). Version 0.0.63 is build 39.3 (0.0.62's mod unchanged; the new opt-in HERO VR launcher design, launcher build 10, and Revert to 0.0.62). Version 0.0.62 was build 39.2 (0.0.6 + ghost-hand fix, bolt walls, baton hits, instant punches, live enemy tracking, hit indicator, hand flips, lens flares). Version 0.0.6 was build 39.1.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work, then the 0.0.6 hotfix eye swapchain retry; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
+# this line; PORT-VERSION keeps the internal build ("Update 39.4"). Version 0.0.70 ("0.0.7"; the trailing 0 makes every launcher see it as newer than 0.0.63) is build 39.4 (the heroes: CAPTAIN AMERICA, BATMAN, WOLVERINE, SUPERMAN and PUNISHER with their weapon models, the MIRROR VIEW fix and launcher build 11). Version 0.0.63 was build 39.3 (0.0.62's mod unchanged; the new opt-in HERO VR launcher design, launcher build 10, and Revert to 0.0.62). Version 0.0.62 was build 39.2 (0.0.6 + ghost-hand fix, bolt walls, baton hits, instant punches, live enemy tracking, hit indicator, hand flips, lens flares). Version 0.0.6 was build 39.1.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work, then the 0.0.6 hotfix eye swapchain retry; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
 add_compile_definitions(SPIDY_PUBLIC_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,7 +53,9 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/body_calibration.cpp src/overlay_text.cpp src/pixel_font.cpp src/slow_motion.cpp src/web_strike.cpp
             src/impact_sound.cpp src/prompt_buttons.cpp src/gadget_wheel.cpp src/spider_sense.cpp src/phone.cpp
             src/body_haptics.cpp src/tech_marks.cpp src/wrist_hud.cpp src/music_player.cpp
-            src/calibration_art.cpp src/calibration_panel.cpp src/health_ring.cpp src/sfx.cpp)
+            src/calibration_art.cpp src/calibration_panel.cpp src/health_ring.cpp src/sfx.cpp
+            src/hero007_visual.cpp
+            src/mesh_model.cpp)
 target_include_directories(spidy_core PUBLIC include)
 # Update 36: the calibration panel's art atlas, compiled in as bytes
 # (tools/calibration_art/make_atlas.py makes the file).
@@ -74,7 +76,10 @@ target_sources(spidy_core PRIVATE "${SPIDY_CALIBRATION_ART_CPP}")
 set(SPIDY_REPULSOR_TAKE user)
 set(SPIDY_SFX_FILE_repulsor_fire "repulsor_mcu_${SPIDY_REPULSOR_TAKE}_fire")
 set(SPIDY_SFX_FILE_repulsor_charge "repulsor_mcu_${SPIDY_REPULSOR_TAKE}_charge")
-foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoosh baton_hit repulsor_charge)
+# Version 0.0.7 HERO PROFILES: nine more (tools/sfx/make_sfx_007.py); CAPTAIN AMERICA: the four shield sounds.
+foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoosh baton_hit repulsor_charge
+        pistol_shot shotgun_blast dry_click mag_drop mag_seat holster claw_snikt heat_vision freeze_breath
+        shield_throw shield_ricochet shield_catch shield_clang)
   if(DEFINED SPIDY_SFX_FILE_${SPIDY_SFX_NAME})
     set(SPIDY_SFX_IN "${CMAKE_CURRENT_SOURCE_DIR}/assets/sfx/${SPIDY_SFX_FILE_${SPIDY_SFX_NAME}}.wav")
   else()
@@ -150,6 +155,8 @@ add_executable(spidy_beam_ring_preview apps/beam_ring_preview.cpp) # Version 0.0
 target_link_libraries(spidy_beam_ring_preview PRIVATE spidy_core)
 add_executable(spidy_supersonic_preview apps/supersonic_preview.cpp) # Version 0.0.5
 target_link_libraries(spidy_supersonic_preview PRIVATE spidy_core)
+add_executable(spidy_hero007_preview apps/hero007_preview.cpp) # Version 0.0.7
+target_link_libraries(spidy_hero007_preview PRIVATE spidy_core)
 add_executable(spidy_phone_preview apps/phone_preview.cpp)
 target_link_libraries(spidy_phone_preview PRIVATE spidy_core)
 if(SPIDY_BUILD_OBSERVER)

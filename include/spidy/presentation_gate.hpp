@@ -82,6 +82,15 @@ class SceneClock {
     uint64_t tickMs_{};
     bool ticked_{};
 };
+// Version 0.0.70: whether to ask the game for a scene's two eye views at all.
+// They are shown only with the HUD's panel on their screen (it carries the
+// subtitles), and the panel needs the HUD placement hook. The SM2 port does not
+// hook it (SM2_STEREO_HUD 0), so asking only made the game render two hidden
+// full-size eye views for about 1-1.25 s at every scene start or resume.
+// `hudPanelHooked`: native_hud::panelHooked().
+inline bool sceneStereoAsked(bool scene, bool depthOn, bool hudPanelHooked) {
+    return scene && depthOn && hudPanelHooked;
+}
 // One stretch of a scene's stereo eyes on the screen: whether to go on asking
 // the game for them.
 class ScenePanel {

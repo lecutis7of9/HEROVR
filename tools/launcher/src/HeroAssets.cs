@@ -28,9 +28,17 @@ namespace Sm2VrLauncher
     class OrbData
     {
         public int Fps, IntroCount, LoopCount, Width, Height;
+        /// <summary>The idle loop's own frame rate (version 2; version 1 plays the loop at Fps).</summary>
+        public int LoopFps;
+        /// <summary>Version 3: the launcher turns the orb in the idle loop (the frames hold no turn): Spin deg/s from
+        /// SpinStart deg (where the intro's spin-up leaves it), about (frame Cx, CentreY) in design pixels; the disc
+        /// inside DiscIn turns, outside DiscOut stays put, smoothly in between. Spin 0: the frames are drawn as they are.</summary>
+        public float Spin, SpinStart, CentreY, DiscIn, DiscOut;
         public OrbFrame[] Frames;
 
-        /// <summary>orb.bin: "HORB", 7 int32 (version, fps, intro, loop, width, height, 0), then per frame
+        /// <summary>orb.bin: "HORB", 7 int32 (version, fps, intro, loop, width, height, loop fps (version 2; 0 in
+        /// version 1, whose loop plays at fps)), version 3: 5 more int32 x1000 (spin deg/s, start deg, centre y,
+        /// disc in, disc out), then per frame
         /// x, y, w, h (int32), cx, scale (float32), length (int32) and the JPEG bytes.</summary>
         public static OrbData Parse(byte[] data)
         {
@@ -41,9 +49,17 @@ namespace Sm2VrLauncher
             Func<float> F = () => { if (pos + 4 > data.Length) throw new HeroAssetException("orb.bin is cut short"); float v = BitConverter.ToSingle(data, pos); pos += 4; return v; };
             int version = I();
             var o = new OrbData { Fps = I(), IntroCount = I(), LoopCount = I(), Width = I(), Height = I() };
-            I();
-            if (version != 1) throw new HeroAssetException("orb.bin version " + version + " is not supported");
-            if (o.Fps < 1 || o.Fps > 120 || o.IntroCount < 0 || o.LoopCount < 1 || o.IntroCount + o.LoopCount > 2000 || o.Width < 16 || o.Height < 16)
+            int loopFps = I();
+            if (version < 1 || version > 3) throw new HeroAssetException("orb.bin version " + version + " is not supported");
+            o.LoopFps = version >= 2 ? loopFps : o.Fps;
+            if (version >= 3)
+            {
+                o.Spin = I() / 1000f; o.SpinStart = I() / 1000f; o.CentreY = I() / 1000f; o.DiscIn = I() / 1000f; o.DiscOut = I() / 1000f;
+                if (o.Spin < 0 || o.Spin > 90 || Math.Abs(o.SpinStart) > 360 || o.CentreY < 0 || o.CentreY > o.Height
+                    || o.DiscIn < 1 || o.DiscOut < o.DiscIn || o.DiscOut > o.Width)
+                    throw new HeroAssetException("orb.bin has an impossible turn");
+            }
+            if (o.Fps < 1 || o.Fps > 120 || o.LoopFps < 1 || o.LoopFps > 120 || o.IntroCount < 0 || o.LoopCount < 1 || o.IntroCount + o.LoopCount > 2000 || o.Width < 16 || o.Height < 16)
                 throw new HeroAssetException("orb.bin has impossible sizes");
             o.Frames = new OrbFrame[o.IntroCount + o.LoopCount];
             for (int i = 0; i < o.Frames.Length; i++)

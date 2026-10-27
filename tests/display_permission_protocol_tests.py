@@ -55,7 +55,8 @@ class DisplayPermissionTests(unittest.TestCase):
                 args = argparse.Namespace(stop_event=None, xr_runtime='auto', render_scale=100, size=0,
                                           auto_launch=True, full_desktop_view=full_desktop,
                                           game_depth_of_field=False, game_sharpening=full_desktop,
-                                          mip_bias='0.5', anisotropy=16)  # run_game_vr.py's defaults
+                                          mip_bias='0.5', anisotropy=16, close_game=False,
+                                          smaller_desktop_view=False, keep_game_settings=False)  # run_game_vr.py's defaults
                 startup = run_game_vr.Startup(pathlib.Path('unused.json'))
                 shown = io.StringIO()
                 with patch.object(run_game_vr, 'game_running', return_value=False), \
@@ -66,7 +67,8 @@ class DisplayPermissionTests(unittest.TestCase):
                     with self.assertRaises(Prepared):
                         run_game_vr.session(args, startup)
                 prepare.assert_called_once_with(small=not full_desktop,
-                                                keep=('sharpening',) if full_desktop else ())
+                                                keep=('sharpening',) if full_desktop else (), off=(),
+                                                height=display.HEIGHT)
                 self.assertIn('Access is denied', startup.fields['game_settings_refused'])
                 self.assertIn('WARNING:', shown.getvalue())
                 self.assertIn('frame generation off', shown.getvalue())

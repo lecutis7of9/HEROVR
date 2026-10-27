@@ -24,8 +24,8 @@ RUN = (ROOT / 'tools/run_game_vr.py').read_text(encoding='utf-8')
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.63')  # 0.0.63 (build 39.3; 0.0.62 was 39.2)
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.3')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.70')  # 0.0.70 = "0.0.7" (build 39.4; 0.0.63 was 39.3, 0.0.62 was 39.2)
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.4')
 
 
 class Settings(unittest.TestCase):
@@ -131,8 +131,8 @@ class OursBall(unittest.TestCase):
         self.assertNotIn('RB', block.replace('no RB', ''))
         self.assertIn('out.ballOurs[i] = true', block)
 
-    def test_fired_from_the_wrist_and_guarded(self):  # 0.0.62: 11000 (the baton swing, baton bounce and palm blast sit between)
-        self.assertIn('webShooter(', XR[XR.index('fightOut.ballOurs[i]') - 11000:XR.index('fightOut.ballOurs[i]') + 2000])
+    def test_fired_from_the_wrist_and_guarded(self):  # 0.0.62: 11000 (the baton swing, baton bounce and palm blast sit between); 0.0.7: 17000 (+ the HERO PROFILES step)
+        self.assertIn('webShooter(', XR[XR.index('fightOut.ballOurs[i]') - 17000:XR.index('fightOut.ballOurs[i]') + 2000])
         self.assertIn('Version 0.0.2 OURS BALL', XR)
 
     def test_strengths(self):

@@ -26,6 +26,10 @@
 // never one already hit on the throw, never one down (BatonEnemy::down: dead or knocked out, his hit
 // points read 0 or less); a target who goes down while it flies sends it home; batonMaxOut still
 // brings it back whatever happens.
+// Version 0.0.7 HERO PROFILES (hero007.hpp): BATMAN (two batarangs on this Baton, a chain roll per
+// hit: chainChance, default 25%; the game's zip / point launch kept as his grapple), WOLVERINE (claws,
+// rapid healing), SUPERMAN (heat vision) and PUNISHER (pistol, shotgun). Every hit is a blow on
+// sm2_damage's CONFIRMED path. Knockdown and disarm are NOT here: no CONFIRMED game path (research).
 // Pure; no game memory.
 #include "spidy/math.hpp"
 #include "spidy/sfx.hpp"
@@ -36,14 +40,31 @@
 
 namespace spidy::hero_modes {
 
-enum Hero : uint32_t { spiderMan = 0, ironMan, daredevil, hulk, heroes };
-inline constexpr const char* heroNames[heroes] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK"};
-// Which heroes have a working hologram toggle in this build (Version 0.0.6: all of them).
-inline constexpr bool shipped[heroes] = {true, true, true, true};
+// Version 0.0.7: BATMAN, WOLVERINE, SUPERMAN, PUNISHER after HULK (0.0.6's numbers unchanged);
+// CAPTAIN AMERICA (captain.hpp) after PUNISHER.
+enum Hero : uint32_t { spiderMan = 0, ironMan, daredevil, hulk, batman, wolverine, superman, punisher, captainAmerica, heroes };
+inline constexpr const char* heroNames[heroes] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK",
+                                                  "BATMAN",     "WOLVERINE", "SUPERMAN", "PUNISHER", "CAPTAIN AMERICA"};
+// Which heroes have a working hologram toggle in this build (Version 0.0.6: all of them; 0.0.7: all).
+inline constexpr bool shipped[heroes] = {true, true, true, true, true, true, true, true, true};
 // Version 0.0.6: the hero from the three toggles (IRON MAN, DAREDEVIL, HULK); should two ever be on
 // (a hand-edited live.txt), the first wins, so exactly one hero plays.
 inline uint32_t fromToggles(bool ironMan_, bool daredevil_, bool hulk_) {
     return ironMan_ ? ironMan : daredevil_ ? daredevil : hulk_ ? hulk : spiderMan;
+}
+// Version 0.0.7: the seven toggles in combat38::heroToggles' order; the first on wins.
+inline uint32_t fromToggles(bool ironMan_, bool daredevil_, bool hulk_, bool batman_, bool wolverine_,
+                            bool superman_, bool punisher_) {
+    const uint32_t old = fromToggles(ironMan_, daredevil_, hulk_);
+    if (old != spiderMan)
+        return old;
+    return batman_ ? batman : wolverine_ ? wolverine : superman_ ? superman : punisher_ ? punisher : spiderMan;
+}
+// Version 0.0.7 CAPTAIN AMERICA: the eight toggles (combat38::heroToggles' order); the first on wins.
+inline uint32_t fromToggles(bool ironMan_, bool daredevil_, bool hulk_, bool batman_, bool wolverine_,
+                            bool superman_, bool punisher_, bool captain_) {
+    const uint32_t seven = fromToggles(ironMan_, daredevil_, hulk_, batman_, wolverine_, superman_, punisher_);
+    return seven != spiderMan ? seven : captain_ ? captainAmerica : spiderMan;
 }
 
 // The toggles: only one on. Turning `which` on makes it the hero; turning the current hero off
@@ -68,6 +89,10 @@ struct WebPaths {
 };
 inline WebPaths webPaths(uint32_t hero) {
     WebPaths w;
+    if (hero == batman) { // Version 0.0.7 BATMAN GRAPPLE: the game's zip / point launch (LT + RT) only
+        w.zip = true;
+        return w;
+    }
     if (hero != spiderMan)
         return w;
     w.webBall = w.gameWebBall = w.swing = w.zip = w.chargeLeap = w.gadgets = w.gadgetWheel = w.sonic = w.yank =
@@ -80,10 +105,15 @@ inline WebPaths webPaths(uint32_t hero) {
 inline constexpr uint16_t padRb = 0x200;
 // Takes the web inputs out of a pad on its way to the game. askedButtons / askedRt: what a story
 // prompt asks for this frame (kept). Returns how many web inputs were taken out.
+// Version 0.0.7 BATMAN GRAPPLE: with LT held (leftTrigger past grappleLt) BATMAN's RT is kept - the
+// game's own zip / point launch (his grapple); RT alone (the swing) is still taken out.
+inline constexpr uint8_t grappleLt = 30;
 inline uint32_t stripPad(uint32_t hero, uint16_t& buttons, uint8_t& rightTrigger, uint16_t askedButtons,
-                         bool askedRt) {
+                         bool askedRt, uint8_t leftTrigger) {
     if (hero == spiderMan)
         return 0;
+    if (hero == batman && leftTrigger > grappleLt)
+        askedRt = true;
     uint32_t taken = 0;
     if ((buttons & padRb) && !(askedButtons & padRb)) {
         buttons = static_cast<uint16_t>(buttons & ~padRb);
@@ -95,6 +125,51 @@ inline uint32_t stripPad(uint32_t hero, uint16_t& buttons, uint8_t& rightTrigger
     }
     return taken;
 }
+inline uint32_t stripPad(uint32_t hero, uint16_t& buttons, uint8_t& rightTrigger, uint16_t askedButtons,
+                         bool askedRt) {
+    return stripPad(hero, buttons, rightTrigger, askedButtons, askedRt, 0);
+}
+
+// Version 0.0.7 FLY MODE: the heroes whose trigger fires a weapon - IRON MAN's palm repulsor,
+// DAREDEVIL's baton throw, BATMAN's batarangs, WOLVERINE's claws, PUNISHER's guns, CAPTAIN AMERICA's
+// shield throw (the SHIELD ARM hand's trigger, RIGHT by default). Their triggers
+// never thrust FLY MODE (the user, 26 Oct: "if youre iron man and you shoot your hand palm you
+// actually fly around"); they fly by the poses (a hand up rises, both hands forward fly, a T-pose
+// stops), the sticks and R3, which every hero already has. SPIDER-MAN (no webs while flying),
+// SUPERMAN (his triggers are flight's: no heat vision while flying) and HULK (no trigger weapon)
+// keep the trigger thrust. A hero added later with a trigger weapon belongs here too.
+inline bool triggerWeapon(uint32_t hero) {
+    return hero == ironMan || hero == daredevil || hero == batman || hero == wolverine || hero == punisher ||
+           hero == captainAmerica;
+}
+// The trigger value FLY MODE's thrust gets for this hero (0 for a trigger-weapon hero; NaN is 0).
+inline float flyThrust(uint32_t hero, float trigger) {
+    if (triggerWeapon(hero) || !std::isfinite(trigger))
+        return 0.f;
+    return std::clamp(trigger, 0.f, 1.f);
+}
+
+// Version 0.0.7: a small seeded random number source (xorshift32) for the per-hit chance rolls;
+// tests give it a seed. chance(p): true with probability p (p >= 1 always, p <= 0 never; neither
+// draws a number, so DAREDEVIL's sure chain draws nothing).
+struct Roll {
+    uint32_t state = 0x9e3779b9u;
+    float next01() {
+        uint32_t x = state ? state : 0x9e3779b9u;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        state = x;
+        return static_cast<float>(x >> 8) / 16777216.f; // [0, 1)
+    }
+    bool chance(float p) {
+        if (!(p > 0))
+            return false;
+        if (p >= 1)
+            return true;
+        return next01() < p;
+    }
+};
 
 // DAREDEVIL's baton, one per hand.
 inline constexpr float batonSpeed = 22.f;      // m/s out
@@ -149,6 +224,11 @@ struct Baton {
     uint32_t chains{}, chainEnds{}, chainNoneInRange{};
     uint32_t straightLocks{}; // 0.0.62: straight throws that hit someone on the way
     uint32_t targetDowns{};   // 0.0.62: its target went down while it flew (home, no hit)
+    // Version 0.0.7 BATMAN CHAIN ROLL: each hit rolls this chance to chain on (DAREDEVIL: 1, always);
+    // a failed roll sends it home. batonMaxChains still caps it (3 enemies in all).
+    float chainChance = 1.f;
+    Roll roll{};
+    uint32_t chainRollsWon{}, chainRollsLost{};
 
     // Version 0.0.62: the first enemy (index, -1 none) whose body (chest -1.0 m .. +0.6 m) the
     // segment a-b passes within batonHitRadius of; ties: the one nearest a.
@@ -241,9 +321,20 @@ struct Baton {
             return false;
         if (hitCount < batonMaxChains + 1)
             hitIds[hitCount++] = targetId;
-        const int next = chainsNow < batonMaxChains ? chainTarget(position, list, count) : -1;
+        int next = chainsNow < batonMaxChains ? chainTarget(position, list, count) : -1;
+        bool lostRoll = false;
+        if (next >= 0) { // Version 0.0.7: the roll only when there is someone to chain to
+            if (roll.chance(chainChance)) {
+                if (chainChance < 1)
+                    ++chainRollsWon;
+            } else {
+                ++chainRollsLost;
+                lostRoll = true;
+                next = -1;
+            }
+        }
         if (next < 0) { // the chain is done (or never started): home at once
-            if (chainsNow < batonMaxChains)
+            if (!lostRoll && chainsNow < batonMaxChains) // a lost roll is counted in chainRollsLost
                 ++chainNoneInRange;
             else
                 ++chainEnds;

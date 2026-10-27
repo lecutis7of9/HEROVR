@@ -2,6 +2,31 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.70 - HERO VR 0.0.7 (October 26, 2026)
+
+Version 0.0.70 (build Update 39.4), launcher build 11 (0.0.70.1). "0.0.7" is published as 0.0.70 because versions
+compare number by number (7 < 63); the trailing 0 keeps it above 0.0.63 for every launcher (docs/VERSIONING.md).
+No new game address: every blow uses the CONFIRMED damage path, healing and SHIELD BLOCK the CONFIRMED HeroHealth record.
+
+- New heroes, all OFF by default (one hero at a time): BATMAN (batarangs with BATARANG CHAIN, grapple, smoke as a look
+  only), SUPERMAN (heat vision, COLD BREATH - real tick blows, nobody is frozen -, super strength, the SUPERSONIC
+  dash), PUNISHER (two pistols and a sawed-off, holsters, EASY RELOAD), WOLVERINE (claws, healing) and CAPTAIN AMERICA
+  (shield worn, drawn, thrown with SHIELD CHAIN, bash; SHIELD BLOCK is an OFF-by-default experiment).
+- Guns fire along the barrel: pistols and sawed-off sit in the palm from the OpenXR grip pose and shots leave the drawn
+  muzzle. Daredevil's batons sit in the fist. Valve Index 15-degree tilt: unconfirmed (CANDIDATE).
+- Optional models (BATON LOOK, BATARANG STYLE, GUN MODELS, SHIELD LOOK) from `Models\` in the release zip, with a
+  built-in fallback. Credits: THIRD-PARTY-MODELS.md and CREDITS.md. The JOKER batarang (CC BY-NC-ND 4.0) ships unmodified
+  with its licence.
+- MIRROR VIEW: kept across the restart the wrist asks for, and the test turns itself OFF (saved) after its 30 s run.
+- Captain America suit: a manual guide (CapSuit/, docs/CAP-SUIT-PIPELINE.md); nothing installs it.
+- Launcher build 11: smoother opt-in HERO VR design (60 fps menu, seamless orb loop at the concept speed); classic stays
+  the default with its fallback. Revert offers 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
+- Smoother cutscene starts: the mod no longer asks the game for two hidden 3D eye views (about 1-1.25 s at every
+  cutscene start or resume) while the HUD panel's hook, without which they cannot be shown, is not installed (SM2:
+  never yet). Cutscenes stay on the flat screen as before; GAME SCREEN 3D's text says so.
+- Fixed: the launch settings' `session_off` now reaches prepare_launch on the real launch path.
+- Release cleanup: test logs untracked, debug notes go to the log only, build paths removed from shipped files.
+
 ## v0.0.63 (October 26, 2026)
 
 Version 0.0.63 (build Update 39.3), launcher build 10 (0.0.63.1). The mod is 0.0.62's plus one fix.

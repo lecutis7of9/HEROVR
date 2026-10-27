@@ -2270,7 +2270,8 @@ def main():
     p.add_argument('--screen-depth', type=int, choices=(0, 1, 2, 3), default=2,
                    help='The depth cutscenes have on the game screen (the game renders them once for each eye): '
                         '0 off (flat), 1 low, 2 medium (default), 3 high, everything as far away as it is from '
-                        "the game's camera")
+                        "the game's camera. Spider-Man 2: cutscenes stay flat for now (the HUD panel hook is not found "
+                        'yet, so no stereo scene is asked for)')
     p.add_argument('--hud', type=int, choices=(0, 1, 2, 3), default=2,
                    help="The game's HUD in the headset: 0 off, 1 small (50 degrees across), 2 medium (60, the "
                         'default), 3 large (70)')
@@ -2365,14 +2366,18 @@ def main():
     print(f'SM2 VR {version_line()} - {MADE_BY}', flush=True)  # Update 38.5: the public version first  # Update 30.1 (Update 31 from PORT-VERSION)
     print(f'This session\'s report will be written to: {a.output.resolve()}', flush=True)
     try:
-        return session(a, startup)
+        return session(a, startup, session_off=session_off)
     except BaseException as error:
         startup.ended(error)
         raise
 
 
-def session(a, startup):
-    """One VR session from the headset check to the report; `startup` follows it until VR starts."""
+def session(a, startup, session_off=()):
+    """One VR session from the headset check to the report; `startup` follows it until VR starts.
+
+    `session_off`: the game settings turned off only while VR runs (vr_display.SESSION_OFF names, from
+    main()'s live.txt read, e.g. ('lens_flares',)); () keeps the game's own. 0.0.7 fix: it was read from
+    main()'s locals, a NameError on every real launch."""
     if a.stop_event:
         watch_stop_event(a.stop_event)
     # First: nothing later can start VR in such a game.
@@ -2426,7 +2431,7 @@ def session(a, startup):
         print('Tip: to hide the game\'s own HUD (health, focus, mini-map) in VR, turn on Settings > UI > '
               'Hide HUD in the game. It applies at once; prompts, subtitles and menus stay.', flush=True)
         try:
-            values = vr_display.prepare_launch(small=not a.full_desktop_view, keep=picture_kept(a), off=getattr(a, 'session_off', ()),
+            values = vr_display.prepare_launch(small=not a.full_desktop_view, keep=picture_kept(a), off=tuple(session_off) or getattr(a, 'session_off', ()),
                                                height=vr_display.SMALLER_HEIGHT if a.smaller_desktop_view
                                                else vr_display.HEIGHT)
         except OSError as error:
@@ -2620,6 +2625,11 @@ def session(a, startup):
                   'EYE AA on, if it fails).', flush=True)
         if call_remote(process, xr['SpidyEyeSupersample'], a.supersample):
             raise RuntimeError(f'Eye supersample {a.supersample}% refused')
+        # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
+        for name, value in live_settings.vr_start_settings(ROOT/'live.txt').items():
+            _, export, text = live_settings.SETTINGS[name]
+            if export in xr and not call_remote(process, xr[export], live_settings.export_value(name, value)):
+                print(f'live.txt (kept, before VR starts): {text.format(value)}', flush=True)
         startup.stage = 'starting VR'
         code = call_with_payload(process, xr['SpidyXrStart'], config)
         if code == 1001 and a.engine_taa:

@@ -183,6 +183,102 @@ namespace Sm2VrLauncher
 
         static Color A(Color c, float a) { return Color.FromArgb(Math.Max(0, Math.Min(255, (int)(c.A * a))), c.R, c.G, c.B); }
 
+        // ---- What needs redrawing ----
+        /// <summary>The overlay's parts (design units). Everything the overlay draws is inside one of them (they may
+        /// overlap). MainForm keeps the drawn overlay and redraws only a part whose RegionKey changed, so the intro, a
+        /// hover or the highlight sliding never redraw (or repaint) the whole window.</summary>
+        public static readonly RectangleF[] Regions = MakeRegions();
+        public const int RegionLogo = 0, RegionStatus = 1, RegionRow0 = 2, RegionFooter = 7, RegionCorner = 8;
+        static RectangleF[] MakeRegions()
+        {
+            var r = new List<RectangleF>();
+            r.Add(RectangleF.FromLTRB(40, 15, 330, 145));                       // the logo (with its glow)
+            r.Add(RectangleF.FromLTRB(670, 80, W, TileTop - 8));                 // the status line (and the corner lines' ends)
+            for (int i = 0; i < 5; i++)                                          // a row: its text, icon, press and the highlight in it
+                r.Add(RectangleF.FromLTRB(670, TileTop + TilePitch * i - 10, W, TileTop + TilePitch * i + TileH + 10));
+            r.Add(RectangleF.FromLTRB(40, 622, W, H));                           // footer, D-pad hint, bottom corner lines
+            r.Add(RectangleF.FromLTRB(1060, 0, W, 80));                          // top corner lines, minimise and close
+            return r.ToArray();
+        }
+
+        /// <summary>Regions in window pixels for the picture at `content` drawn at scale k (a pixel wider each side for
+        /// the anti-aliasing, and never outside the picture).</summary>
+        public static Rectangle[] Parts(Rectangle content, float k)
+        {
+            var o = new Rectangle[Regions.Length];
+            for (int i = 0; i < Regions.Length; i++)
+            {
+                var r = Regions[i];
+                int x0 = (int)Math.Floor(content.X + r.X * k) - 1, y0 = (int)Math.Floor(content.Y + r.Y * k) - 1;
+                int x1 = (int)Math.Ceiling(content.X + r.Right * k) + 1, y1 = (int)Math.Ceiling(content.Y + r.Bottom * k) + 1;
+                o[i] = Rectangle.Intersect(Rectangle.FromLTRB(x0, y0, x1, y1), content);
+            }
+            return o;
+        }
+
+        /// <summary>Redraws into `overlay` (premultiplied, the window's size) the parts whose key differs from keys[]
+        /// (every part when full: the overlay is cleared first) and returns them in window pixels. Outside the parts the
+        /// overlay stays clear.</summary>
+        public List<Rectangle> UpdateOverlay(Bitmap overlay, string[] keys, bool full, Rectangle content, float k)
+        {
+            var changed = new List<Rectangle>();
+            var parts = Parts(content, k);
+            for (int i = 0; i < Regions.Length; i++)
+            {
+                string key = RegionKey(i);
+                if (!full && key == keys[i]) continue;
+                keys[i] = key;
+                if (parts[i].Width > 0 && parts[i].Height > 0) changed.Add(parts[i]);
+            }
+            if (changed.Count == 0 && !full) return changed;
+            using (var g = Graphics.FromImage(overlay))
+            using (var clip = new Region(Rectangle.Empty))
+            {
+                // Clear the changed parts to exact whole pixels, then draw the scene once, clipped to all of them.
+                g.CompositingMode = CompositingMode.SourceCopy;
+                if (full) g.Clear(Color.Transparent);
+                else using (var clear = new SolidBrush(Color.Transparent)) foreach (var r in changed) g.FillRectangle(clear, r);
+                g.CompositingMode = CompositingMode.SourceOver;
+                foreach (var r in changed) clip.Union(r);
+                g.Clip = clip;
+                g.TranslateTransform(content.X, content.Y);
+                g.ScaleTransform(k, k);
+                g.IntersectClip(new RectangleF(0, 0, W, H));
+                Draw(g);
+            }
+            return changed;
+        }
+
+        static string K(double v) { return v.ToString("0.#####", System.Globalization.CultureInfo.InvariantCulture); }
+
+        string RowKey(int i)
+        {
+            if (i < 0 || i >= Tiles.Length) return "";
+            var t = Tiles[i];
+            return K(TileIn(i)) + "|" + K(TileTextIn(i)) + "|" + K(Selectedness(i)) + "|" + (Pressed == i) + "|" + t.Title + "|" + t.Sub + "|" + t.Icon + "|" + t.Enabled + "|" + t.SubColor.ToArgb();
+        }
+
+        /// <summary>Everything that changes what is drawn inside Regions[r] (equal keys: the same pixels).</summary>
+        public string RegionKey(int r)
+        {
+            switch (r)
+            {
+                case RegionLogo: return K(LogoIn);
+                case RegionStatus: return K(TileIn(0)) + "|" + K(TileTextIn(0)) + "|" + K(FooterIn) + "|" + Status + "|" + StatusColor.ToArgb() + "|" + StatusHot;
+                case RegionFooter: return K(FooterIn) + "|" + K(SelectIn) + "|" + Version;
+                case RegionCorner: return K(FooterIn) + "|" + (T >= IntroEnd) + "|" + MinHot + "|" + CloseHot;
+            }
+            int i = r - RegionRow0;
+            var band = Regions[r];
+            // The highlight (with its glow) is in this row's part only while it overlaps it.
+            float top = TileTop + TilePitch * Sel;
+            bool hl = top - 14 < band.Bottom && top + TileH + 14 > band.Top;
+            int near = Math.Max(0, Math.Min(4, (int)Math.Round(Sel)));
+            // The parts of neighbouring rows overlap a little (a pressed row's fill reaches into the one above).
+            return RowKey(i - 1) + "#" + RowKey(i) + "#" + RowKey(i + 1)
+                + (hl ? "|h" + K(Sel) + "|" + K(TileIn(near)) + "|" + K(TileOffset(near)) : "|-");
+        }
+
         // ---- Drawing ----
         /// <summary>Draws the whole overlay (not the orb) in 1280x720 design units; the caller scales and places it.</summary>
         public void Draw(Graphics g)
@@ -191,13 +287,15 @@ namespace Sm2VrLauncher
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
             g.CompositingQuality = CompositingQuality.HighQuality;
+            // Text is the slow part: anything wholly outside the clip (a part being redrawn) is skipped.
             DrawDecorations(g);
             for (int i = Tiles.Length - 1; i >= 0; i--) DrawTile(g, i);
             DrawHighlight(g);
-            for (int i = 0; i < Tiles.Length; i++) DrawTileContent(g, i);
-            DrawLogo(g, LogoIn);
-            DrawFooter(g);
-            DrawStatus(g);
+            for (int i = 0; i < Tiles.Length; i++)
+                if (g.IsVisible(new RectangleF(0, TileTop + TilePitch * i - 24, W, TileH + 48))) DrawTileContent(g, i);
+            if (g.IsVisible(RectangleF.Inflate(Regions[RegionLogo], 8, 8))) DrawLogo(g, LogoIn);
+            if (g.IsVisible(new RectangleF(0, 600, W, H - 600))) DrawFooter(g);
+            if (g.IsVisible(new RectangleF(0, 60, W, 80))) DrawStatus(g);
             DrawWindowButtons(g);
         }
 

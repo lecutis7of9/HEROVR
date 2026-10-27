@@ -53,8 +53,8 @@ namespace Sm2VrLauncher
                 Text = "Pick a version. The one you have now is backed up first, so you can come back to it. Then the launcher restores, builds and checks the version; if anything fails, nothing changes.",
                 ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 54, 590, 44)
             };
-            // One click back to an earlier release (build 9: 0.0.62 -> 0.0.6 or 0.0.5; build 10: 0.0.63 -> 0.0.62, 0.0.6 or 0.0.5): works
-            // with no backup at all. Build 10: three buttons fill the row, so their note sits under them.
+            // One click back to an earlier release (build 9: 0.0.62 -> 0.0.6 or 0.0.5; build 10: 0.0.63 -> 0.0.62, 0.0.6 or 0.0.5; build 11: 0.0.70 -> 0.0.63,
+            // 0.0.62, 0.0.6 or 0.0.5): works with no backup at all. Build 10: the buttons fill the row, so their note sits under them.
             var previousButtons = new List<Control>();
             int px = 24;
             foreach (string tag in LauncherInfo.PreviousTags)

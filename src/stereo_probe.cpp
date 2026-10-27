@@ -3576,6 +3576,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             break;
         }
         enabled = true;
+        native_hud::panelHooked(hudPlaceHook != nullptr); // 0.0.70: never in SM2 (SM2_STEREO_HUD 0)
         SpidyShadowCameraData.fitHook = fitCascadesHook ? 1 : 0; // Update 31
         SpidyFarShadowsData.hooked = csmFitHook ? 1 : 0; // Update 35
         if (!csmFitHook && farShadowsMode.load())
@@ -3623,6 +3624,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
     ReleaseSRWLockExclusive(&commandLock);
     AcquireSRWLockExclusive(&creation);
     enabled = false;
+    native_hud::panelHooked(false);
     ReleaseSRWLockExclusive(&creation);
     hiddenHud = 0;
     // Keep maintenance installed until both owned views are excluded from jobs

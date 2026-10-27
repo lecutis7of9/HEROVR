@@ -190,6 +190,9 @@ struct Test {
         return false;
     }
 };
+// 0.0.7: the test has run its course (its 30 s done, or stopped by itself): MIRROR VIEW goes back
+// to OFF and is saved so, so it runs once and not at every start. Waiting (no eyes yet) is not over.
+inline bool finished(const Test& t) { return t.phase == done || (t.phase == failed && t.why != noEyes); }
 // Version 0.0.4: what stereo_probe.cpp's test did, copied out for game_xr.cpp's V003 record.
 // The view gets none of the eyes' extra flags (no readback, no display output, no GPU slot): the
 // game renders it into its own targets, the probe counts the draws in its slot.

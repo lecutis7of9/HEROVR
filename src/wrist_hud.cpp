@@ -498,6 +498,11 @@ int heroOf(const View& view) {
     return view.combat38[combat38::shooterType] == 1 ? 1
            : view.combat38[combat38::daredevil] != 0 ? 2
            : view.combat38[combat38::hulk] != 0      ? 3
+           : view.combat38[combat38::batman] != 0    ? 4 // Version 0.0.7
+           : view.combat38[combat38::wolverine] != 0 ? 5
+           : view.combat38[combat38::superman] != 0  ? 6
+           : view.combat38[combat38::punisher] != 0  ? 7
+           : view.combat38[combat38::captainAmerica] != 0 ? 8 // Version 0.0.7 CAPTAIN AMERICA
                                                      : 0;
 }
 // No hero toggle on: Spider-Man (hero_modes.hpp).
@@ -683,6 +688,10 @@ const char* labelOf(Control c) {
     case Control::section3:
     case Control::section4:
     case Control::section5:
+    case Control::section6:
+    case Control::section7:
+    case Control::section8:
+    case Control::section9:
         return "SECTION";
     case Control::gestureRemapMove:
         return "REMAP MOVE";
@@ -875,8 +884,17 @@ constexpr SectionDef powersSections[] = {
       C::flyAutoLevel}},
     {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
     {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType}},
-    {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2, {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision}},
+    {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2,
+     {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision, C::combatBatonHolsters, C::combatBatonLook}},
     {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight}},
+    // Version 0.0.7 HERO PROFILES
+    {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle}},
+    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine}},
+    {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
+    {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels}},
+    {"CAPTAIN AMERICA", C::none, C::none, "", "", nullptr, 8,
+     {C::combatCaptainAmerica, C::combatShieldArm, C::combatShieldDamage, C::combatShieldChain, C::combatShieldBlock,
+      C::combatShieldLook}},
 };
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
@@ -1006,7 +1024,7 @@ int openSection(int page) {
     const uint32_t n = openSections.load(std::memory_order_relaxed) >> (4 * page) & 0xFu;
     if (n == 0xFu) // the default
         return page == colorPage    ? -1
-               : page == powersPage ? 1 + std::clamp(heroPlayed.load(std::memory_order_relaxed), 0, 3)
+               : page == powersPage ? 1 + std::clamp(heroPlayed.load(std::memory_order_relaxed), 0, 8)
                                     : 0;
     return static_cast<int>(n) < count ? static_cast<int>(n) : -1;
 }
@@ -1020,7 +1038,7 @@ void setOpenSection(int page, int section) {
     }
 }
 void resetSections() { openSections.store(0xFFFFFFFFu, std::memory_order_relaxed); }
-void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 3 ? hero : 0, std::memory_order_relaxed); }
+void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 8 ? hero : 0, std::memory_order_relaxed); } // 0.0.7: 9 (CAPTAIN AMERICA)
 int activeHero() { return heroPlayed.load(std::memory_order_relaxed); }
 Place placeOf(Control c) {
     if (c == Control::none)
@@ -1205,7 +1223,7 @@ Layout build(int page, float k, int open) {
         row(Control::invincible);
         section(0);
         heading(heroProfilesHeading);
-        sections(1, 5);
+        sections(1, sectionCount(powersPage)); // Version 0.0.7: nine heroes (CAPTAIN AMERICA)
         break;
     }
     case vrPage: {
@@ -2390,7 +2408,8 @@ void sectionRow(const Painter& p, const Item& it, const View& view) {
 }
 // Update 39.0.2: POWERS' ACTIVE HERO line, the hero in gold.
 void bannerRow(const Painter& p, const Item& it, const View& view) {
-    static constexpr const char* names[4] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK"};
+    static constexpr const char* names[9] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK",
+                                            "BATMAN",     "WOLVERINE", "SUPERMAN", "PUNISHER", "CAPTAIN AMERICA"};
     const char* lead = "ACTIVE HERO: ";
     const char* name = names[heroOf(view)];
     const float w = textWidth(lead, it.h) + textWidth(name, it.h);
@@ -3166,6 +3185,10 @@ const char* helpText(Control c) {
     case Control::section3:
     case Control::section4:
     case Control::section5:
+    case Control::section6:
+    case Control::section7:
+    case Control::section8:
+    case Control::section9:
         return sectionHelp;
     case Control::heroPlaySpider:
         return "Turns every other hero off so you swing as Spider-Man again, live.";
@@ -3541,6 +3564,10 @@ const char* shortName(Control c) {
     case Control::section3:
     case Control::section4:
     case Control::section5:
+    case Control::section6:
+    case Control::section7:
+    case Control::section8:
+    case Control::section9:
         return "SECTION";
     case Control::gestureRemapMove:
         return "REMAP";
@@ -3890,7 +3917,11 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::section2:
             case Control::section3:
             case Control::section4:
-            case Control::section5: {
+            case Control::section5:
+            case Control::section6:
+            case Control::section7:
+            case Control::section8:
+            case Control::section9: {
                 // Update 39.0.2: open it (closing the page's other one), or close it; the header
                 // stays where it is under the pointer (the rows above may have closed).
                 const int s = sectionIndex(hover_);
@@ -4117,6 +4148,23 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatPunchHits:
             case Control::combatFoeTrack:
             case Control::combatBeaconsVision:
+            case Control::combatBatman: // Version 0.0.7
+            case Control::combatWolverine:
+            case Control::combatSuperman:
+            case Control::combatPunisher:
+            case Control::combatBatarangChain:
+            case Control::combatEasyReload:
+            case Control::combatHolsterHands:
+            case Control::combatBatonHolsters:
+            case Control::combatBatonLook:
+            case Control::combatBatarangStyle:
+            case Control::combatGunModels:
+            case Control::combatCaptainAmerica: // Version 0.0.7 CAPTAIN AMERICA
+            case Control::combatShieldArm:
+            case Control::combatShieldDamage:
+            case Control::combatShieldChain:
+            case Control::combatShieldBlock:
+            case Control::combatShieldLook:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

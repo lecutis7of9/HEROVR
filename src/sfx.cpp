@@ -15,6 +15,19 @@ SPIDY_SFX(beam_ready)
 SPIDY_SFX(baton_whoosh)
 SPIDY_SFX(baton_hit)
 SPIDY_SFX(repulsor_charge) // Version 0.0.6 (Update 39.0.2) REPULSOR: the take's charge whine
+SPIDY_SFX(pistol_shot)
+SPIDY_SFX(shotgun_blast)
+SPIDY_SFX(dry_click)
+SPIDY_SFX(mag_drop)
+SPIDY_SFX(mag_seat)
+SPIDY_SFX(holster)
+SPIDY_SFX(claw_snikt)
+SPIDY_SFX(heat_vision)
+SPIDY_SFX(freeze_breath)
+SPIDY_SFX(shield_throw) // Version 0.0.7 CAPTAIN AMERICA
+SPIDY_SFX(shield_ricochet)
+SPIDY_SFX(shield_catch)
+SPIDY_SFX(shield_clang)
 #undef SPIDY_SFX
 } // namespace spidy::sfx_data
 
@@ -66,7 +79,20 @@ const Pcm& sound(Id id) {
         parseWav(sfx_data::beam_ready, sfx_data::beam_readySize),
         parseWav(sfx_data::baton_whoosh, sfx_data::baton_whooshSize),
         parseWav(sfx_data::baton_hit, sfx_data::baton_hitSize),
-        parseWav(sfx_data::repulsor_charge, sfx_data::repulsor_chargeSize)};
+        parseWav(sfx_data::repulsor_charge, sfx_data::repulsor_chargeSize),
+        parseWav(sfx_data::pistol_shot, sfx_data::pistol_shotSize),
+        parseWav(sfx_data::shotgun_blast, sfx_data::shotgun_blastSize),
+        parseWav(sfx_data::dry_click, sfx_data::dry_clickSize),
+        parseWav(sfx_data::mag_drop, sfx_data::mag_dropSize),
+        parseWav(sfx_data::mag_seat, sfx_data::mag_seatSize),
+        parseWav(sfx_data::holster, sfx_data::holsterSize),
+        parseWav(sfx_data::claw_snikt, sfx_data::claw_sniktSize),
+        parseWav(sfx_data::heat_vision, sfx_data::heat_visionSize),
+        parseWav(sfx_data::freeze_breath, sfx_data::freeze_breathSize),
+        parseWav(sfx_data::shield_throw, sfx_data::shield_throwSize),
+        parseWav(sfx_data::shield_ricochet, sfx_data::shield_ricochetSize),
+        parseWav(sfx_data::shield_catch, sfx_data::shield_catchSize),
+        parseWav(sfx_data::shield_clang, sfx_data::shield_clangSize)};
     static const Pcm none{};
     return id < sounds ? table[id] : none;
 }

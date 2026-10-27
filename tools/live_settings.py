@@ -283,7 +283,7 @@ SETTINGS = {
     'perf_status': ((0, 1), 'SpidyPerfStatus', 'SHOW STATUS {} (0 on; 1 off)'),
     # Version 0.0.4
     'iron_man': ((0, 1), 'SpidyShooterType', 'IRON MAN ABILITIES {} (0 off: Spider-Man; 1 on: palm repulsor blasts and, both triggers held, a chest beam every 30 s; no web of any kind (no swing, zip, web shooter, gadgets, grab or rope); blasts and beam do real damage; one hero at a time, EXPERIMENTAL)'),
-    'mirror_view': ((0, 1), 'SpidyMirrorView', 'MIRROR VIEW {} (0 off; 1 test: a hidden game camera looks at you for 30 s, made when VR starts: RESTART to run it, EXPERIMENTAL)'),
+    'mirror_view': ((0, 1), 'SpidyMirrorView', 'MIRROR VIEW {} (0 off; 1 test: a hidden game camera looks at you for 30 s once, made when VR starts, then it turns itself OFF: RESTART to run it, EXPERIMENTAL)'),
     # Version 0.0.5
     'hero_height': ((0, 4), 'SpidyHeroHeight', 'HERO HEIGHT {} (0 1.00x: your size; 1 1.15x; 2 1.30x; 3 1.45x; 4 1.60x: the VR body grows for a big skin like Hulk, live)'),
     'hero_damage': ((0, 1), 'SpidyHeroDamage', 'WEB BALL DAMAGE {} (0 off; 1 on: Spider-Man\'s web ball hits ask the game for damage directly; the heroes\' hits always do, EXPERIMENTAL)'),
@@ -302,6 +302,25 @@ SETTINGS = {
     'punch_hits': ((0, 2), 'SpidyPunchHits', 'PUNCH HITS {} (0 game + instant: a small blow lands the moment your fist touches, as SpidyVR, and the game\'s move still plays; 1 game move: the X only, as 0.0.6; 2 instant only: no game move, live)'),
     'beacons_vision': ((0, 1), 'SpidyBeaconsVision', 'BEACONS IN VISION {} (0 on: DAREDEVIL\'s sonar keeps bright coloured beacons and markers in colour, outlined and pulsing; 1 off: 0.0.6\'s sonar, live)'),
     'foe_track': ((0, 1), 'SpidyFoeTrack', 'ENEMY TRACKING {} (0 live: enemies by their world positions, 30 a second; 1 0.0.6: by their offset from you, 10 a second, live)'),
+    # Version 0.0.7 HERO PROFILES (one hero toggle at a time with the 0.0.6 ones; each off by default)
+    'batman': ((0, 1), 'SpidyBatman', 'BATMAN ABILITIES {} (0 off; 1 on: a batarang in each hand, the trigger throws it (strong aim assist, BATARANG CHAIN rolls to bounce on, 3 enemies at most, always comes back), the grapple (LT + RT), smoke where batarangs strike (a look only); no other web; one hero at a time, EXPERIMENTAL, live)'),
+    'wolverine': ((0, 1), 'SpidyWolverine', 'WOLVERINE ABILITIES {} (0 off; 1 on: hold the trigger for that hand\'s claws (their sweep hits), health climbs back 3 s after a hit (never a revive, never past the game\'s cap); no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'superman': ((0, 1), 'SpidySuperman', 'SUPERMAN ABILITIES {} (0 off; 1 on: both triggers burn HEAT VISION along your gaze, with a hand at your mouth COLD BREATH (damage and a frosty look only: nobody freezes), punches hit harder, FLY MODE\'s SUPERSONIC is his speed; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'punisher': ((0, 1), 'SpidyPunisher', 'PUNISHER ABILITIES {} (0 off; 1 on: a pistol on each hip and a sawed-off on your back, grip at the holster to draw, let go there to holster; each trigger fires its own gun; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'batarang_chain': ((0, 4), 'SpidyBatarangChain', 'BATARANG CHAIN {} (0 25%; 1 50%; 2 75%; 3 100%; 4 off: each batarang hit\'s chance to bounce on, 3 enemies at most, live)'),
+    'easy_reload': ((0, 1), 'SpidyEasyReload', 'EASY RELOAD {} (0 auto: an empty gun refills by itself; 1 realistic: flick the gun down to drop the magazine (or open the sawed-off), touch your hip to reload, live)'),
+    'holster_hands': ((0, 1), 'SpidyHolsterHands', 'HOLSTER HANDS {} (0 same side: each hand draws only from its own hip; 1 either hand: cross draws too; the back is either hand\'s, live)'),
+    'baton_holsters': ((0, 1), 'SpidyBatonHolsters', 'BATON HOLSTERS {} (0 off: DAREDEVIL\'s batons always in the hands, as 0.0.62; 1 on: worn on the back, grip over a shoulder to draw, let go there to holster, live)'),
+    'baton_look': ((0, 2), 'SpidyBatonLook', 'BATON LOOK {} (0 classic: the old red bar, as 0.0.63; 1 club: the 0.0.7 billy club; 2 model: the two converted batons in Models\\Baton, CLUB when missing, live)'),
+    'batarang_style': ((0, 3), 'SpidyBatarangStyle', 'BATARANG STYLE {} (0 default: the built-in batarang; 1 eira, 2 clooney, 3 joker: the model dropped in Models\\Batarang\\<STYLE>, DEFAULT when missing or broken, live)'),
+    'gun_models': ((0, 1), 'SpidyGunModels', 'GUN MODELS {} (0 built-in: the drawn pistols and sawed-off; 1 models: the converted models in Models\\Pistol and Models\\SawedOff, built-in when missing, live)'),
+    # Version 0.0.7 CAPTAIN AMERICA (a hero toggle; his shield's settings, each its first value by default)
+    'captain_america': ((0, 1), 'SpidyCaptainAmerica', 'CAPTAIN AMERICA ABILITIES {} (0 off; 1 on: his shield on your back, grip over the SHIELD ARM\'s shoulder to draw it onto that forearm, the trigger throws it backhand (flat spin, ricochets, comes back to the hand), a swing of its rim bashes; no web of any kind; one hero at a time, EXPERIMENTAL, live)'),
+    'shield_arm': ((0, 1), 'SpidyShieldArm', 'SHIELD ARM {} (0 right: worn on the right forearm, drawn by the right hand; 1 left, live)'),
+    'shield_damage': ((0, 3), 'SpidyShieldDamage', 'SHIELD DAMAGE {} (0 35 hp; 1 20 hp; 2 50 hp; 3 70 hp: each thrown shield hit, live)'),
+    'shield_chain': ((0, 1), 'SpidyShieldChain', 'SHIELD CHAIN {} (0 on: a thrown shield ricochets on to two more enemies like the batons, then comes back; 1 off: one enemy, then back, live)'),
+    'shield_block': ((0, 1), 'SpidyShieldBlock', 'SHIELD BLOCK {} (0 off; 1 experimental: CANDIDATE, a hit taken while the shield on your arm faces the nearest enemy is given back, never a revive, never past the cap, live)'),
+    'shield_look': ((0, 1), 'SpidyShieldLook', 'SHIELD LOOK {} (0 built-in: drawn rings and star; 1 model: the converted shield in Models\\Shield, built-in when missing, live)'),
 }
 # Update 37: the view gates share one export (SpidyViewGate): the selector in the high half.
 VIEW_GATES = {'bloom_fx': 0, 'lod_fade': 1, 'lod_reach': 2, 'impostors': 3}
@@ -352,7 +371,15 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'hit_indicator': 'off', 'hand_flips': 'on', 'lens_flares': 'game',
                      # Version 0.0.62 (the SpidyVR comparison; 0.0.6's: game_move, 0.0.6)
                      'punch_hits': 'game_instant', 'foe_track': 'live',
-                     'beacons_vision': 'on'}  # Version 0.0.62 (the user's call)
+                     'beacons_vision': 'on',  # Version 0.0.62 (the user's call)
+                     # Version 0.0.7 (the heroes experimental: off; the rest as 0.0.62)
+                     'batman': 'off', 'wolverine': 'off', 'superman': 'off', 'punisher': 'off',
+                     'batarang_chain': '25%', 'easy_reload': 'auto', 'holster_hands': 'same_side',
+                     'baton_holsters': 'off', 'baton_look': 'classic', 'batarang_style': 'default',
+                     'gun_models': 'built-in',
+                     # Version 0.0.7 CAPTAIN AMERICA (off; RIGHT arm (LEFT selectable), 35 HP, chain on, block off, built-in)
+                     'captain_america': 'off', 'shield_arm': 'right', 'shield_damage': '35hp', 'shield_chain': 'on',
+                     'shield_block': 'off', 'shield_look': 'built-in'}
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Update 37.2: the startup checks (tests): these must start this way on a fresh install and over an
@@ -463,6 +490,14 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'hit_indicator': ('off', 'on'), 'hand_flips': ('on', 'off'), 'lens_flares': ('game', 'off_in_vr'),
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
+                'batman': ('off', 'on'), 'wolverine': ('off', 'on'), 'superman': ('off', 'on'), 'punisher': ('off', 'on'),
+                'batarang_chain': ('25%', '50%', '75%', '100%', 'off'), 'easy_reload': ('auto', 'realistic'),
+                'holster_hands': ('same_side', 'either_hand'), 'baton_holsters': ('off', 'on'),
+                'baton_look': ('classic', 'club', 'model'), 'batarang_style': ('default', 'eira', 'clooney', 'joker'),
+                'gun_models': ('built-in', 'models'),
+                'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
+                'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
+                'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -543,6 +578,28 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           # Version 0.0.7
+           'batman': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'wolverine': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'superman': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'punisher': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'batarang_chain': {'25%': 0, '50%': 1, '75%': 2, '100%': 3, 'off': 4, '25': 0, '50': 1, '75': 2, '100': 3,
+                              '0': 0, '1': 1, '2': 2, '3': 3, '4': 4},
+           'easy_reload': {'auto': 0, 'realistic': 1, 'easy': 0, '0': 0, '1': 1},
+           'holster_hands': {'same_side': 0, 'either_hand': 1, 'same': 0, 'either': 1, '0': 0, '1': 1},
+           'baton_holsters': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'baton_look': {'classic': 0, '0.0.62': 0, 'club': 1, 'model': 2, 'old': 0, '0': 0, '1': 1, '2': 2},
+           'gun_models': {'built-in': 0, 'builtin': 0, 'models': 1, 'model': 1, '0': 0, '1': 1},
+           'batarang_style': {'default': 0, 'eira': 1, 'clooney': 2, 'joker': 3, '0': 0, '1': 1, '2': 2, '3': 3},
+           # Version 0.0.7 CAPTAIN AMERICA
+           'captain_america': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'shield_arm': {'right': 0, 'left': 1, 'r': 0, 'l': 1, '0': 0, '1': 1},
+           'shield_damage': {'35hp': 0, '20hp': 1, '50hp': 2, '70hp': 3, '35_hp': 0, '20_hp': 1, '50_hp': 2, '70_hp': 3,
+                             '35': 0, '20': 1, '50': 2, '70': 3,
+                             '0': 0, '1': 1, '2': 2, '3': 3},
+           'shield_chain': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'shield_block': {'off': 0, 'experimental': 1, 'on': 1, '0': 0, '1': 1},
+           'shield_look': {'built-in': 0, 'builtin': 0, 'model': 1, 'models': 1, '0': 0, '1': 1},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
            'holo_open': {'forearm': 0, 'tap': 0, 'palm_look': 1, 'palm': 1, 'look': 1, 'click': 2, 'f8_only': 3,
@@ -745,7 +802,8 @@ PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sha
              'hud_height', 'hud_scale', 'hud_text', 'hud_theme', 'hud_text_color',
              'web_style', *(f'web_color_{style}' for style in WEB_STYLES),
              'music_volume', 'music_visualizer', 'music_track',
-             'lens_flares')  # Version 0.0.62: the hologram's LENS FLARES (RESTART: kept for the next start)
+             'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART: kept for the next start)
+             'mirror_view')  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -789,9 +847,15 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.6
                  'daredevil', 'hulk', 'daredevil_punch',
                  # Version 0.0.62
-                 'hit_indicator', 'hand_flips', 'lens_flares', 'punch_hits', 'foe_track', 'beacons_vision')
+                 'hit_indicator', 'hand_flips', 'lens_flares', 'punch_hits', 'foe_track', 'beacons_vision',
+                 # Version 0.0.7
+                 'batman', 'wolverine', 'superman', 'punisher', 'batarang_chain', 'easy_reload', 'holster_hands',
+                 'baton_holsters', 'baton_look', 'batarang_style', 'gun_models',
+                 # Version 0.0.7 CAPTAIN AMERICA
+                 'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
-HERO_KEYS = ('iron_man', 'daredevil', 'hulk')
+# Version 0.0.7: seven; CAPTAIN AMERICA eight.
+HERO_KEYS = ('iron_man', 'daredevil', 'hulk', 'batman', 'wolverine', 'superman', 'punisher', 'captain_america')
 START_ONLY = START_ONLY + UPDATE38_KEYS
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
@@ -799,13 +863,15 @@ CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach
                 10: 'supersample', 11: 'sharpen', 12: 'reticles', 13: 'hud_height', 14: 'hud_scale',
                 15: 'hud_text', 16: 'hud_theme', 17: 'hud_text_color', 18: 'web_style', 19: 'web_color',
                 20: 'music_track', 27: 'music_volume', 28: 'music_visualizer',
-                29: 'lens_flares'}  # Version 0.0.62: the hologram's LENS FLARES (RESTART), kept in live.txt
+                29: 'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART), kept in live.txt
+                21: 'mirror_view'}  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
-            'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10}
+            'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10,
+            'mirror_view': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -828,8 +894,9 @@ def decode_hud_settings(selector, code):
         return {'aa': code & 1, 'history': code >> 1 & 127, 'reach': code >> 8 & 511, 'monitor': code >> 17 & 255}
     if selector == 2:
         return {'supersample': code & 1023}
-    if selector == 10:  # Version 0.0.62: LENS FLARES (0 game, 1 off in vr)
-        return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)]}
+    if selector == 10:  # Version 0.0.62: LENS FLARES (0 game, 1 off in vr); 0.0.7: MIRROR VIEW in bit 1
+        return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)],
+                'mirror_view': ('off', 'test')[code >> 1 & 1]}
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):
@@ -950,6 +1017,17 @@ def write_back(text, updates):
         if key not in done:
             lines.append(f'{key} = {format_value(key, value)}')
     return '\n'.join(lines) + '\n'
+
+
+# 0.0.7 MIRROR PERSIST FIX: the settings only read when VR starts (the MIRROR VIEW TEST's view is made with
+# the eyes), so live.txt's value is sent before SpidyXrStart rather than with the other kept ones after it.
+VR_START_KEYS = ('mirror_view',)
+
+
+def vr_start_settings(path):
+    """{name: value} of VR_START_KEYS the live.txt at `path` keeps (none when it cannot be read)."""
+    kept, _ = persisted(path)
+    return {k: kept[k] for k in VR_START_KEYS if k in kept}
 
 
 def write_atomically(path, text):

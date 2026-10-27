@@ -61,6 +61,19 @@ namespace Sm2VrLauncher
             sourceLine = line();
             RefreshCredits();
 
+            // Version 0.0.7 (launcher build 11): the heroes' 3D models, credited as their licences ask (THIRD-PARTY-MODELS.md).
+            head("3D models");
+            para("Captain America's shield - \"Captain America Shield\" by Digital Goblin, CC BY 4.0 (remeshed, recoloured)\n" +
+                 "Captain America suit (optional manual swap) - \"Captain America\" by iqbalmulyawan, CC BY 4.0 (re-oriented, rescaled)\n" +
+                 "Daredevil's batons - \"Daredevil's baton\" by Yanez Designs (Anthony Yanez), CC BY 4.0 (rope removed, split in two)\n" +
+                 "Punisher's pistols - \"9mm Pistol\" by TORI106, CC BY 4.0 (decimated, recoloured)\n" +
+                 "Punisher's sawed-off - \"Sawed-off Shotgun\" by LiliumLetifer, CC BY 4.0 (split at the hinge, decimated)\n" +
+                 "Batarang EIRA - \"Batarang\" by Eira, CC BY 4.0 (decimated, recoloured)\n" +
+                 "Batarang CLOONEY - \"Batarang Clooney\" by Ludus101, CC BY 4.0 (decimated)\n" +
+                 "Batarang JOKER - \"Batarang Joker\" by baton268, CC BY-NC-ND 4.0 (unmodified, non-commercial: HERO VR is free)\n" +
+                 "Links, licences and changes: THIRD-PARTY-MODELS.md in the mod folder.", f, Theme.Silver);
+            line().Act("Open THIRD-PARTY-MODELS", fb, () => OpenNotice("THIRD-PARTY-MODELS.md"));
+
             head("Third-party software");
             para("OpenXR SDK - The Khronos Group Inc., Apache License 2.0\n" +
                  "JsonCpp - Baptiste Lepilleur and The JsonCpp Authors, public domain / MIT\n" +

@@ -1932,7 +1932,7 @@ void App::options(ImVec2 origin, ImVec2 size) {
             stepCombo("##screen", kScreenSizes, sizes, 3, &o.screenSize);
         });
         option("Game screen 3D",
-               "Cutscenes have depth on that screen; higher brings the scene nearer. Off, they are flat.", S(150), [&] {
+               "Cutscene depth. Spider-Man 2 cutscenes stay flat for now: the HUD hook is not found yet.", S(150), [&] {
                    static constexpr int depths[] = {0, 1, 2, 3};
                    stepCombo("##depth", kScreenDepths, depths, 4, &o.screenDepth);
                });

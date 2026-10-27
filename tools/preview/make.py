@@ -1,6 +1,6 @@
 import subprocess, os
 from PIL import Image, ImageDraw, ImageFont
-out = '/workspace/sm2-port/docs/images'
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'docs', 'images')
 scenes = {'day-wall': 'day-wall.png', 'day-street': 'day-street.png', 'night-street': 'night-street.png', 'night-city': 'night-city.png'}
 levels = [('before', None), ('low', 20), ('medium', 60), ('high', 100)]
 try:

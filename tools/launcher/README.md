@@ -9,9 +9,9 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.63.1** (launcher build 10), shipped with mod Version 0.0.63 (build Update 39.3: the 0.0.62 mod plus the fix for 0.0.62 failing to start VR).
+Launcher version **0.0.70.1** (launcher build 11), shipped with HERO VR 0.0.7 (mod Version 0.0.70, build Update 39.4).
 
-Build 10 adds an optional new look, the HERO VR design (an animated orb, ambient sound and slanted menu items). The classic design stays the default: the launcher asks once whether to restart with the new design, Options > Launcher design switches between the two at any time, and the launcher opens the classic design by itself if the new one fails to start. Hold Shift while starting it, or start it with `--classic`, to open the classic design.
+Build 11 makes the optional HERO VR design smoother (the orb and the lag fixes) and adds 0.0.63 to Revert (USE 0.0.63, 0.0.62, 0.0.6 or 0.0.5). The classic design stays the default: the launcher asks once whether to restart with the new design, Options > Launcher design switches between the two at any time, and the launcher opens the classic design by itself if the new one fails to start. Hold Shift while starting it, or start it with `--classic`, to open the classic design.
 
 ## Privacy and reports
 

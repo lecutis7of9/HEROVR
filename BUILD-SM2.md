@@ -835,10 +835,10 @@ Each of these needs new game-address evidence, which this port does not invent.
 - The overlay font gained ';'. Subtexts that use it showed a gap before.
 
 **Previews** (`spidy_hud_preview <out.bmp> [pages|scroll|themes]`):
-- /workspace/sm2-hud-pages-preview.png: every page at its defaults.
-- /workspace/sm2-hud-scroll-text-preview.png: GRAPHICS scrolled with the pointer on the scrollbar, then
+- sm2-hud-pages-preview.png: every page at its defaults.
+- sm2-hud-scroll-text-preview.png: GRAPHICS scrolled with the pointer on the scrollbar, then
   VR SETTINGS at 150% text (top and end), and HOLOGRAM at 150% halfway.
-- /workspace/sm2-hud-themes-preview.png: one tile per theme.
+- sm2-hud-themes-preview.png: one tile per theme.
 
 **Tests.** Six new core test groups cover reflow, scroll geometry and hit-testing, `clipBand`, theme
 contrast, the HOLOGRAM settings, and menu scroll and relayout input. There is also a new live-settings
@@ -919,12 +919,12 @@ shade.
   swapchain or session changes.
 
 **Previews.**
-- `spidy_web_preview <prefix> styles`, saved as /workspace/sm2-web-styles-preview.png. Rows are the styles
+- `spidy_web_preview <prefix> styles`, saved as sm2-web-styles-preview.png. Rows are the styles
   (90s, MESSY, MODERN, SYMBIOTE, ENERGY), each in its default shade. Columns show the held web seen from
   the head, the held web seen from beside its first metre, and webs across the street 10-60 m away.
-- `spidy_web_preview <prefix> shades`, saved as /workspace/sm2-web-colors-preview.png. It is a grid of
+- `spidy_web_preview <prefix> shades`, saved as sm2-web-colors-preview.png. It is a grid of
   styles (rows) by shades (columns), zoomed in; empty tiles are shades a style does not have.
-- `spidy_hud_preview <out.bmp> webstyle`, saved as /workspace/sm2-hud-page2-webstyle-preview.png. It shows
+- `spidy_hud_preview <out.bmp> webstyle`, saved as sm2-hud-page2-webstyle-preview.png. It shows
   VR SETTINGS with both rows, at 90s CREAM, MESSY FROST, SYMBIOTE CRIMSON SHEEN (pointer on WEB COLOR) and
   ENERGY GOLD.
 
@@ -1010,7 +1010,7 @@ So the row is greyed with "Not built yet: for now set Music Volume to 0 in the g
 The next step: find the Music Volume setting's number through the settings system, verified in-game, then
 lower it while the page's music plays and restore it on pause or stop.
 
-**Previews.** `spidy_hud_preview <path.bmp> music`, saved as /workspace/sm2-music-preview.png: the page with
+**Previews.** `spidy_hud_preview <path.bmp> music`, saved as sm2-music-preview.png: the page with
 each of the 5 visualizers (BARS with the list open and a row pointed at, FRACTAL BLOOM pointing at play, TUNNEL
 paused), and the no-songs page scrolled to its end (visualizer picker, MUTE GAME MUSIC, the folder line). It is
 fed a made-up signal, not a recording.
@@ -2186,7 +2186,7 @@ gesture does nothing; Impact Web is not used. HAND HITS: a fast free hand = X (t
 wrist aim steers the lock-on, sticky (aim_cone, lock_stick; CANDIDATE). Per-enemy hits (game_punch) are not ported.
 
 **Movement.** WEB PHYSICS (default on; web_wiggle, web_bend): strands fly, ripple and sag; preview in
-/workspace/preview37. WALL CRAWL 1: the game's own crawl lays the body on walls; HAND CLIMB: pull hand over hand
+preview37. WALL CRAWL 1: the game's own crawl lays the body on walls; HAND CLIMB: pull hand over hand
 (climb_pull, climb_grip), the stick as plan B. HEAL: right stick down held heal_hold_ms (default 250 ms).
 
 **MIRROR (vr_mirror.hpp; default off).** The tracked head and hands as a Spider-Man figure, mirrored, body only;
@@ -2359,7 +2359,7 @@ regression tests.
 Every fix is a live setting with its plan B. Five are new: MELEE ANIM (PUNCH ONLY / GAME), GADGET KEYS (38.2 / GAME
 DEFAULT / CUSTOM), GRAB WEB (ENEMY / OFF), MIRROR LOOK (SUIT / FIGURE) and GADGET FEEL (EASY / 38.1). The
 defaults are now SMART aim, TARGETED punches, WRIST ring, FOREARM holo, HOLD layer and BRUTAL blood. Root causes with file:line
-references and the replay numbers are in /workspace/run381/DIAGNOSIS.md and docs/combat38.md ("Update 38.2").
+references and the replay numbers are in the run381 diagnosis (DIAGNOSIS.md) and docs/combat38.md ("Update 38.2").
 
 **Replay tests.** `spidy_replay_tests` (tests/replay_tests.cpp, ctest `replay`, gate G6) feeds the logged
 poses and buttons of run381, run38, run372, run371 and run36 through the shipped classes. It covers holo opens, ring
@@ -2377,7 +2377,7 @@ defaults unchanged. The new DLL needs one game restart; the switches are live af
 Every fix is a live setting with its plan B. Four are new: LOOK LOCK (QUICK / STEADY), STRIKE STEER (TO LOCK / OFF), FAR
 WINDOWS (2X / 3X / 1.5X / GAME) and GADGET HINT (ON / OFF). The new defaults are GAME ONLY ball look (our glob is off),
 GRAB WEB ASSIST and WEB YANK on. A 38.2 live.txt is moved to those three once (migrate_383). Root causes with file:line
-references and the replay numbers are in /workspace/run382/DIAGNOSIS.md and docs/combat38.md ("Update 38.3").
+references and the replay numbers are in the run382 diagnosis (DIAGNOSIS.md) and docs/combat38.md ("Update 38.3").
 
 **Replay tests.** `spidy_replay_tests` also replays run382, and adds [9] look lock (deliberate looks followed 16/16,
 was 2/28; 0 stray switches, was 17) and [10] grab assist (408/408 within 12 degrees, was 194/408; 0 false past 13 degrees).

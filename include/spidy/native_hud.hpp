@@ -273,6 +273,11 @@ void eyesShown(bool screen = false);
 // without it the second movie stays in the game's own frame.
 void onScreen();
 bool onScreen(uint64_t withinMs);
+// Version 0.0.70: whether the HUD panel's placement hook is installed and on
+// (stereo_probe sets it when its hooks are enabled, clears it when they stop).
+// Without it no scene is shown in stereo, so none is asked for.
+void panelHooked(bool installed);
+bool panelHooked();
 // Puts the game's own texture size back (waiting for the game's frames, up to
 // `waitMs`), then removes the hooks.
 uint32_t stop(uint32_t waitMs);

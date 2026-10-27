@@ -14,7 +14,7 @@ import json, os, pathlib, re, shutil, subprocess, sys, tempfile, unittest, zipfi
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tests'))
-from regression_sweep_tests import SHIPPED, SHIPPED_B9, CUR, L, src, need, CHECKS   # noqa: E402
+from regression_sweep_tests import SHIPPED, SHIPPED_B9, SHIPPED_B10, CUR, src, need, CHECKS   # noqa: E402
 
 # The release assets for this tree's version (0.0.62, then 0.0.63: the same rule, one version on).
 ASSETS = pathlib.Path(os.environ.get('HEROVR_ASSETS', '/workspace/herovr-release/github/release-assets-' + CUR))
@@ -65,21 +65,27 @@ class UpdateLoop(unittest.TestCase):
             self.assertTrue(offers(mv, '0.0.6' if build >= 6 else '0.0.5', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
             if CUR != '0.0.62':   # 0.0.63: also from 0.0.62 (the outside 0.0.6.1 launcher of the report, with 0.0.62 installed)
                 self.assertTrue(offers(mv, '0.0.62', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
+            if CUR not in ('0.0.62', '0.0.63'):   # 0.0.70: also from 0.0.63
+                self.assertTrue(offers(mv, '0.0.63', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
             self.assertFalse(offers(mv, CUR, m['version'], lb, cur_build, 'LauncherInfo.Build'),
                              f'launcher build {build} run from outside the install would offer {CUR} again (update loop)')
-        if CUR != '0.0.62':   # launcher build 9 (the 0.0.62 release's own), with its Math.Max rule
-            b, z = SHIPPED_B9
+        # launcher build 9 (the 0.0.62 release's own) and, from 0.0.70, build 10 (0.0.63's), with their Math.Max rule
+        later = [(SHIPPED_B9, '0.0.62')] if CUR != '0.0.62' else []
+        if CUR not in ('0.0.62', '0.0.63'):
+            later.append((SHIPPED_B10, '0.0.63'))
+        for (b, z), have in later:
             need(os.path.isfile(z), z)
             with zipfile.ZipFile(z) as zz:
                 names = zz.namelist()
                 mv9 = zz.read([n for n in names if n.endswith('tools/launcher/src/ModVersion.cs')][0]).decode('utf-8')
                 every = ''.join(zz.read(n).decode('utf-8', 'replace') for n in names if n.endswith('.cs'))
             self.assertIn('m.LauncherBuild > Math.Max(LauncherInfo.Build, SystemInfo.InstalledLauncherBuild(root))', every)
-            self.assertIn('public const int Build = 9;', mv9)
-            self.assertTrue(offers(mv9, '0.0.62', m['version'], lb, 9, 'System.Math.Max(LauncherInfo.Build, installed)'))
-            for installed in (9, cur_build):
+            self.assertIn('public const int Build = %d;' % b, mv9)
+            self.assertTrue(offers(mv9, have, m['version'], lb, b, 'System.Math.Max(LauncherInfo.Build, installed)'),
+                            f'launcher build {b} with {have} installed is not offered {CUR}')
+            for installed in (b, cur_build):
                 self.assertFalse(offers(mv9, CUR, m['version'], lb, installed, 'System.Math.Max(LauncherInfo.Build, installed)'),
-                                 f'launcher build 9 would offer {CUR} again (update loop)')
+                                 f'launcher build {b} would offer {CUR} again (update loop)')
         b9 = src('ModVersion.cs')
         self.assertFalse(offers(b9, CUR, m['version'], lb, cur_build, 'System.Math.Max(LauncherInfo.Build, installed)'))
 

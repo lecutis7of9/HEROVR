@@ -98,9 +98,8 @@ class RealLaunchPath(unittest.TestCase):
 
 class NoUndefinedNames(unittest.TestCase):
     def test_pyflakes_undefined_names(self):
-        try:
-            import pyflakes  # noqa: F401
-        except ImportError:
+        import importlib.util
+        if importlib.util.find_spec('pyflakes') is None:
             if STRICT: raise AssertionError('pyflakes is not installed (pip install pyflakes)')
             raise unittest.SkipTest('pyflakes not installed')
         files = sorted(str(p) for p in TOOLS.glob('*.py'))

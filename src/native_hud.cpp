@@ -349,6 +349,13 @@ void native_hud::eyesShown(bool screen) {
 }
 namespace {
 std::atomic<uint64_t> screenTick{};
+std::atomic<bool> hudPanelHooked{};
+}
+void native_hud::panelHooked(bool installed) {
+    hudPanelHooked = installed;
+}
+bool native_hud::panelHooked() {
+    return hudPanelHooked.load();
 }
 void native_hud::onScreen() {
     screenTick = GetTickCount64();

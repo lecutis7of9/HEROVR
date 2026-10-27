@@ -29,7 +29,9 @@ class LauncherBuild9(unittest.TestCase):
         tags = re.search(r'public static readonly string\[\] PreviousTags = \{ ([^}]*) \};', mv).group(1)
         tags = [t.strip().strip('"') for t in tags.split(',')]
         self.assertEqual(tags[-2:], ['v0.0.6', 'v0.0.5'])
-        if int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 10:
+        if int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 11:   # build 11 (0.0.70): 0.0.63 first
+            self.assertEqual(tags, ['v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
+        elif int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 10:
             self.assertEqual(tags, ['v0.0.62', 'v0.0.6', 'v0.0.5'])
             self.assertIn('public const string PreviousTag = "v0.0.62";', mv)
         cur = tuple(int(x) for x in (ROOT/'VERSION').read_text(encoding='utf-8').strip().split('.'))

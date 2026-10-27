@@ -417,6 +417,25 @@ enum class Control : uint8_t {
     combatFoeTrack,
     // Version 0.0.62: BEACONS IN VISION (DAREDEVIL)
     combatBeaconsVision,
+    // Version 0.0.7 HERO PROFILES (combat38's order): BATMAN, WOLVERINE, SUPERMAN, PUNISHER, BATARANG
+    // CHAIN, EASY RELOAD, HOLSTER HANDS, BATON HOLSTERS, BATON LOOK
+    combatBatman,
+    combatWolverine,
+    combatSuperman,
+    combatPunisher,
+    combatBatarangChain,
+    combatEasyReload,
+    combatHolsterHands,
+    combatBatonHolsters,
+    combatBatonLook,
+    combatBatarangStyle, // Version 0.0.7 BATARANG STYLE
+    combatGunModels,     // Version 0.0.7 GUN MODELS
+    combatCaptainAmerica, // Version 0.0.7 CAPTAIN AMERICA: the hero toggle and his shield's five
+    combatShieldArm,
+    combatShieldDamage,
+    combatShieldChain,
+    combatShieldBlock,
+    combatShieldLook,
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -475,9 +494,13 @@ enum class Control : uint8_t {
     section3,
     section4,
     section5,
+    section6, // Version 0.0.7: POWERS has 9 sections (FLYING and eight heroes); CAPTAIN AMERICA: 10
+    section7,
+    section8,
+    section9,
 };
-constexpr int controls = 155;
-constexpr int combatControls = 54; // combat38::options (checked in wrist_hud.cpp)
+constexpr int controls = 176;
+constexpr int combatControls = 71; // combat38::options (checked in wrist_hud.cpp)
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);
@@ -502,7 +525,7 @@ static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a liv
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
-static_assert(static_cast<int>(Control::section5) == controls - 1);
+static_assert(static_cast<int>(Control::section9) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -566,7 +589,7 @@ constexpr int musicPage = 7;
 // not laid out, so they are neither drawn nor pressed). What is open is kept for the session (not
 // in live.txt), shared by the input and the drawing side; until a section is pressed each page
 // opens its first (COLOR none; POWERS the hero being played).
-constexpr int sectionsMost = 6;
+constexpr int sectionsMost = 10; // Version 0.0.7 (was 6; CAPTAIN AMERICA 10); a nibble a page still holds it
 int sectionCount(int page);
 const char* sectionName(int page, int section); // "" past the page's sections
 int openSection(int page);                      // -1: none open

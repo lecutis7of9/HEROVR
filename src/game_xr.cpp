@@ -1,4 +1,6 @@
 // Bounded first-person OpenXR integration using the game's two native views.
+#include "spidy/baton_grip.hpp"
+#include "spidy/gun_grip.hpp"
 #include "spidy/shadow_camera.hpp"
 #include "spidy/pixel_font.hpp"
 #include "spidy/eye_debug.hpp"
@@ -49,6 +51,9 @@
 #include "spidy/repulsor.hpp"
 #include "spidy/repulsor_mcu.hpp"
 #include "spidy/hero_modes.hpp"
+#include "spidy/hero007_play.hpp" // Version 0.0.7 HERO PROFILES
+#include "spidy/captain.hpp"      // Version 0.0.7 CAPTAIN AMERICA
+#include "spidy/mesh_model.hpp"   // Version 0.0.7 BATARANG STYLE
 #include "spidy/hero_height.hpp" // Version 0.0.5
 #include "spidy/sm2_damage.hpp" // Version 0.0.5
 #include "spidy/hit_marks.hpp"  // Version 0.0.62 HIT INDICATOR
@@ -711,7 +716,9 @@ uint32_t c38(uint32_t option) {
 // Version 0.0.6: IRON MAN (shooterType 1), DAREDEVIL and HULK; only one on (heroOnly).
 uint32_t heroNow() {
     return hero_modes::fromToggles(c38(combat38::shooterType) == repulsor::repulsor, c38(combat38::daredevil) == 1,
-                                   c38(combat38::hulk) == 1);
+                                   c38(combat38::hulk) == 1, c38(combat38::batman) == 1, c38(combat38::wolverine) == 1,
+                                   c38(combat38::superman) == 1, c38(combat38::punisher) == 1, // Version 0.0.7
+                                   c38(combat38::captainAmerica) == 1);                        // CAPTAIN AMERICA
 }
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
 // hologram, the live exports, live.txt at start).
@@ -1694,7 +1701,18 @@ DWORD WINAPI run(void*) {
         float v0062NotedAt = -100;
         uint32_t heroWas{};
         Vec3 batonHand[2]{}, batonAimNow[2]{}; // the hands as the batons last saw them (tracking)
+        // Version 0.0.7 BATON GRIP: the held baton from the controller's grip pose (baton_grip.hpp;
+        // batonShaftOk false: no usable grip pose, 0.0.62's shaft along the aim instead).
+        Vec3 batonButt[2]{}, batonTipHeld[2]{};
+        bool batonShaftOk[2]{};
         bool batonTracked[2]{};
+        // Version 0.0.7 HERO PROFILES (hero007_play.hpp): BATMAN, WOLVERINE, SUPERMAN, PUNISHER and
+        // DAREDEVIL's BATON HOLSTERS; the last frame's input (tracking space) for the draw.
+        hero007::Play hero007Play;
+        hero007::PlayInput hero007In;
+        uint64_t hero007Sent{}, hero007Unsent{}, hero007Heals{}, superPunchBlows{};
+        uint32_t hero007Claimed{};
+        double hero007At = -1, hero007HoldAt = -1, healAt = -1;
         // Version 0.0.6: SUPERSONIC's reached speed (rep0050: 80 asked, 64 reached), the dash's top and all's.
         float sonicPeak{}, sonicLast{}, sonicBest{};
         bool sonicWas{};
@@ -3215,6 +3233,13 @@ DWORD WINAPI run(void*) {
                                     // reads it back (SpidyHudSettings 3 bit 29, 10) into live.txt.
                                     if (o == combat38::lensFlares)
                                         wristChanged |= 1u << 29;
+                                    // 0.0.7 MIRROR PERSIST FIX: MIRROR VIEW is for the next start too (it
+                                    // only runs when VR starts): it was never read back, so live.txt kept
+                                    // OFF and the restart the wrist asks for turned it off again
+                                    // (SpidyHudSettings 3 bit 21, 10 bit 1). Bit 21 is MUSIC PREVIOUS's,
+                                    // a press the pages never mark changed (as 29 is MUSIC SEEK's).
+                                    if (o == combat38::mirrorView)
+                                        wristChanged |= 1u << 21;
                                 }
                                 if (result.heroSpider) // Update 39.0.1: PLAY AS SPIDER-MAN, every hero toggle off (live)
                                     for (const auto o : combat38::heroToggles)
@@ -3440,6 +3465,42 @@ DWORD WINAPI run(void*) {
                             if (hudZone & (1u << i))
                                 squeezes[i] = 0; // Update 38.1: the holo zone's grip
                         const bool drawPlay = gesturesPlay && !phone.open() && !padLayer.latched();
+                        // Version 0.0.7 HOLSTERS (holster.hpp): PUNISHER's hips and back, DAREDEVIL's
+                        // BATON HOLSTERS. A grip at a holster draws or holsters there and is the rack's
+                        // (no web, zip or climb from it) until let go; a hand on a web or a wall is busy
+                        // (never draws). Any other hero: nothing claimed, the grips as in 0.0.62.
+                        {
+                            hero007::PlayInput hin;
+                            hin.dt = hero007HoldAt < 0 ? 0.f : static_cast<float>(std::clamp(frame.seconds - hero007HoldAt, 0.0, .1));
+                            hero007HoldAt = frame.seconds;
+                            hin.play = drawPlay;
+                            hin.hero = heroNow();
+                            hin.head = frame.head;
+                            hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands));
+                            hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
+                            hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
+                            for (unsigned i = 0; i < 2; ++i) {
+                                hin.hands[i].position = grips[i].position;
+                                hin.hands[i].tracked = gripsTracked[i] && validTrackedPose(frame.head);
+                                hin.hands[i].squeeze = squeezes[i];
+                                hin.hands[i].busy = swingState.webs[i].attached != 0 || u37.climbing[i] ||
+                                                    (pocketDraw.hands() & (1u << i)) != 0;
+                                hin.hands[i].thrown = !batons[i].inHandNow(); // Version 0.0.7: never 3 batons
+                            }
+                            hero007::PlayOutput hout;
+                            hero007Play.holsterStep(hin, hout);
+                            hero007Claimed = hout.claimed;
+                            for (unsigned i = 0; i < 2; ++i) {
+                                if (hout.haptic[i] > 0)
+                                    runtime.haptic(static_cast<int>(i), hout.haptic[i]);
+                                if (hero007Claimed & (1u << i)) {
+                                    squeezes[i] = 0;
+                                    controller.hands[i].squeeze = 0;
+                                }
+                            }
+                            if (hout.sounds & (1u << sfx::holsterTick))
+                                sfx::play(sfx::holsterTick);
+                        }
                         if (pocketDraw.update(frame.seconds, drawPlay, frame.head, grips, gripsTracked,
                                               squeezes))
                             phoneDrawnWith = pocketDraw.drewWith();
@@ -3728,12 +3789,16 @@ DWORD WINAPI run(void*) {
                     // or a hint card (the game's frames take no game time),
                     // nor without a player (the title screen, a load), nor a
                     // scene whose eyes get no HUD panel for its subtitles.
+                    // Version 0.0.70: nor without the HUD panel's hook at all
+                    // (SM2: not hooked), so the game renders no hidden eye
+                    // views at each scene start; the flat screen stays.
                     const auto clock = game_time::telemetry();
                     const bool timeRuns =
                         sceneClock.running(clock.installed && clock.gameFrame > 0, GetTickCount64());
-                    const bool scene =
-                        scenePanel.wanted(screen && values.screenDepth > 0 && player.hero && bridgeRunning && timeRuns,
-                                          native_hud::onScreen(sceneHoldMs), GetTickCount64());
+                    const bool scene = scenePanel.wanted(
+                        sceneStereoAsked(screen && player.hero && bridgeRunning && timeRuns, values.screenDepth > 0,
+                                         native_hud::panelHooked()),
+                        native_hud::onScreen(sceneHoldMs), GetTickCount64());
                     // On the screen the controllers are the game's Xbox
                     // controller; in VR it gets Start (menu), Back (X) and
                     // the native walking, jumping, dodge and interact
@@ -4311,8 +4376,12 @@ DWORD WINAPI run(void*) {
                                     (!flyNow.flying && flyDropSeconds > .5f))
                                     flyDropHeld = false;
                             }
-                            input.reserved6 = flyLive ? extras385::fly::pack(fm, input.hands[0].trigger,
-                                                                            input.hands[1].trigger,
+                            // Version 0.0.7: a hero whose trigger fires a weapon (IRON MAN's repulsor, the
+                            // batons, batarangs, claws, guns) never thrusts by it (hero_modes::flyThrust);
+                            // the poses, the sticks and R3 fly him.
+                            const uint32_t flyHero = heroNow();
+                            input.reserved6 = flyLive ? extras385::fly::pack(fm, hero_modes::flyThrust(flyHero, input.hands[0].trigger),
+                                                                            hero_modes::flyThrust(flyHero, input.hands[1].trigger),
                                                                             frame.hands[1].stickY, true,
                                                                             flyPoses.pose(), flyPoses.lift(), flyDropHeld)
                                                       : 0u;
@@ -5760,11 +5829,15 @@ DWORD WINAPI run(void*) {
                                             batonThrowsSeen[i] = 0;
                                         }
                                         batonAt = -1;
-                                        char line[200];
+                                        char line[240];
                                         sprintf_s(line, "VERSION 0.0.6 HERO: %s (%s)", hero_modes::heroNames[heroIs < hero_modes::heroes ? heroIs : 0],
                                                   heroIs == hero_modes::daredevil ? "a baton in each hand, trigger throws, punches x DAREDEVIL PUNCH, sonar look, no webs"
                                                   : heroIs == hero_modes::hulk    ? "4x charged jump, one-punch knockouts, brutes 2-3, no webs"
                                                   : heroIs == hero_modes::ironMan ? "repulsors and the chest beam, no webs"
+                                                  : heroIs == hero_modes::batman  ? "0.0.7: a batarang per hand (trigger, chain), LT+RT grapple, smoke, no other webs"
+                                                  : heroIs == hero_modes::wolverine ? "0.0.7: claws on the trigger, healing, no webs"
+                                                  : heroIs == hero_modes::superman  ? "0.0.7: both triggers heat vision (hand at mouth: cold breath), super strength, FLY MODE superspeed"
+                                                  : heroIs == hero_modes::punisher  ? "0.0.7: grip at a hip or behind the back to draw, trigger fires, EASY RELOAD"
                                                                                   : "webs");
                                         game_prompts::note(line);
                                     }
@@ -5782,14 +5855,24 @@ DWORD WINAPI run(void*) {
                                         }
                                         const float batonDt = batonAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - batonAt, 0.0, .1));
                                         batonAt = combatClock;
+                                        // Version 0.0.7 BATON HOLSTERS ON: a baton throws and swings only once drawn.
+                                        const bool ddHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                                         for (unsigned i = 0; i < 2; ++i) {
                                             auto& b = batons[i];
-                                            const bool trig = cf.hands[i].tracked && cf.hands[i].button > .5f;
+                                            const bool batonOut = hero007Play.batonDrawn(i, ddHolsters);
+                                            const bool trig = cf.hands[i].tracked && cf.hands[i].button > .5f && batonOut;
                                             const Vec3 hand = cf.hands[i].position;
                                             const Vec3 aimDir = cf.hands[i].aim;
                                             batonHand[i] = hand;
                                             batonAimNow[i] = aimDir;
                                             batonTracked[i] = cf.hands[i].tracked;
+                                            // Version 0.0.7 BATON GRIP: through the fist from the grip pose, per controller.
+                                            {
+                                                const auto held = baton_grip::shaft(frame.hands[i].grip, i, runtime.controllers()[i]);
+                                                batonShaftOk[i] = held.ok;
+                                                batonButt[i] = held.butt;
+                                                batonTipHeld[i] = held.tip;
+                                            }
                                             const int batonAimed = b.inHandNow() ? hero_modes::batonAim(hand, aimDir, batonList, foes.count) : -1;
                                             const uint32_t throwsWas = b.throws;
                                             const bool hit = finite(hand) && finite(aimDir) &&
@@ -5815,7 +5898,11 @@ DWORD WINAPI run(void*) {
                                             // sweeps through (0.0.6 hurt only with a thrown baton at an aimed enemy).
                                             Vec3 grip{}, tip{};
                                             hero_modes::batonShaft(hand, aimDir, grip, tip);
-                                            const int swung = batonSwings[i].update(batonDt, b.inHandNow() && cf.hands[i].tracked,
+                                            if (batonShaftOk[i]) { // Version 0.0.7 BATON GRIP: the shaft as it is drawn
+                                                grip = batonButt[i];
+                                                tip = batonTipHeld[i];
+                                            }
+                                            const int swung = batonSwings[i].update(batonDt, b.inHandNow() && cf.hands[i].tracked && batonOut,
                                                                                     grip, tip, batonList, foes.count);
                                             if (swung >= 0) {
                                                 const uint64_t who = batonList[swung].id;
@@ -5835,6 +5922,72 @@ DWORD WINAPI run(void*) {
                                                 }
                                             }
                                         }
+                                    }
+                                    // Version 0.0.7 HERO PROFILES: BATMAN's batarangs, WOLVERINE's claws, SUPERMAN's
+                                    // heat vision / cold breath, PUNISHER's guns (hero007_play.hpp). Every blow on
+                                    // sm2_damage's path (CONFIRMED), as DAREDEVIL's batons; the rest is visual.
+                                    if (heroWas >= hero_modes::batman && heroWas < hero_modes::heroes) {
+                                        hero_modes::BatonEnemy heroList[our_ball::maxEnemies];
+                                        std::array<world_trace::Vital, world_trace::enemySlots> heroVit{};
+                                        const uint32_t heroVn = world_trace::enemyVitals(heroVit);
+                                        for (uint32_t e = 0; e < foes.count; ++e) {
+                                            heroList[e] = {foes.list[e].id, foes.list[e].feet + Vec3{0, 1.2f, 0}};
+                                            for (uint32_t v = 0; v < heroVn && v < heroVit.size(); ++v)
+                                                if (heroVit[v].id == foes.list[e].id && heroVit[v].have && heroVit[v].hp <= 0.f)
+                                                    heroList[e].down = true;
+                                        }
+                                        hero007::PlayInput& hin = hero007In;
+                                        hin.dt = hero007At < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - hero007At, 0.0, .1));
+                                        hero007At = combatClock;
+                                        hin.play = cf.play;
+                                        hin.hero = heroWas;
+                                        hin.head = frame.head;
+                                        hin.list = heroList;
+                                        hin.count = foes.count;
+                                        hin.flying = cf.flightTriggers;
+                                        hin.chain = c38(combat38::batarangChain);
+                                        hin.reload = c38(combat38::easyReload);
+                                        hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands));
+                                        hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
+                                        hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
+                                        hin.shieldChain = captain::chainOn(c38(combat38::shieldChain));
+                                        hin.shieldDamage = c38(combat38::shieldDamage);
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            hin.hands[i].position = cf.hands[i].position;
+                                            hin.hands[i].aim = cf.hands[i].aim;
+                                            hin.hands[i].tracked = cf.hands[i].tracked;
+                                            hin.hands[i].trigger = cf.hands[i].button;
+                                            // Version 0.0.7 PUNISHER GUN GRIP: the held gun from the grip pose.
+                                            hin.hands[i].holdGun(gun_grip::held(frame.hands[i].grip, i, runtime.controllers()[i]));
+                                        }
+                                        hero007::PlayOutput hout;
+                                        hero007Play.step(hin, hout);
+                                        for (uint32_t k = 0; k < hout.blowCount; ++k) {
+                                            const auto& hb = hout.blows[k];
+                                            const bool sent = sm2_damage::queue(hb.id, hb.blow);
+                                            (sent ? hero007Sent : hero007Unsent) += 1;
+                                            hitMarks.add(hb.at);
+                                            if (hero007Sent + hero007Unsent <= 8 || !sent) {
+                                                char line[160];
+                                                sprintf_s(line, "VERSION 0.0.7 %s HIT 0x%llx: %.0f HP blow %s",
+                                                          hero007::blowKindNames[hb.kind < hero007::blowKinds ? hb.kind : 0],
+                                                          static_cast<unsigned long long>(hb.id), static_cast<double>(hb.blow.amount),
+                                                          sent ? "sent (CONFIRMED path)" : "not sent (damage path off)");
+                                                game_prompts::note(line);
+                                            }
+                                        }
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (hout.haptic[i] > 0)
+                                                runtime.haptic(static_cast<int>(i), hout.haptic[i]);
+                                        for (uint32_t id = 0; id < sfx::sounds; ++id)
+                                            if (hout.sounds & (1u << id))
+                                                sfx::play(static_cast<sfx::Id>(id));
+                                    } else {
+                                        hero007In.hero = heroWas;
+                                        hero007In.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
+                                        hero007In.shieldArm = c38(combat38::shieldArm);
+                                        hero007In.head = frame.head;
+                                        hero007At = -1;
                                     }
                                     if (repMode) {
                                         // The press goes through the chord: a single press blasts after the
@@ -6252,6 +6405,30 @@ DWORD WINAPI run(void*) {
                                     // 2.2 m of the fist) gets one more blow on sm2_damage's path (CONFIRMED):
                                     // DAREDEVIL (k - 1) x a punch (each hits like k); HULK a normal enemy's whole
                                     // health (one punch KO), a brute's most / 2.5, with the big knock (fling, CANDIDATE).
+                                    // Version 0.0.7 SUPER STRENGTH: SUPERMAN's landed punch gets one more blow (2 punches'
+                                    // worth, a big knock) on the same CONFIRMED path; the knock's fling is CANDIDATE as HULK's.
+                                    if (const uint32_t hero = heroNow(); hero == hero_modes::superman) {
+                                        Vec3 punchFeet[world_trace::enemySlots];
+                                        const uint32_t pn = std::min<uint32_t>(cf.enemyCount, world_trace::enemySlots);
+                                        for (uint32_t e = 0; e < pn; ++e)
+                                            punchFeet[e] = cf.enemies[e];
+                                        const int victim = hero_modes::punchVictim(cf.hands[i].position, punchFeet, pn);
+                                        if (victim < 0) {
+                                            ++heroPunchMisses;
+                                        } else {
+                                            hitMarks.add(punchFeet[victim] + Vec3{0, 1.1f, 0});
+                                            const uint64_t who = cf.enemyIds[static_cast<size_t>(victim)];
+                                            const bool sent = who && sm2_damage::queue(who, hero007::superPunch());
+                                            superPunchBlows += sent ? 1 : 0;
+                                            if (superPunchBlows <= 5 || !sent) {
+                                                char line[160];
+                                                sprintf_s(line, "VERSION 0.0.7 SUPERMAN PUNCH 0x%llx: blow %s",
+                                                          static_cast<unsigned long long>(who),
+                                                          sent ? "sent (CONFIRMED path)" : "not sent (damage path off)");
+                                                game_prompts::note(line);
+                                            }
+                                        }
+                                    }
                                     if (const uint32_t hero = heroNow(); hero == hero_modes::daredevil || hero == hero_modes::hulk) {
                                         Vec3 punchFeet[world_trace::enemySlots];
                                         const uint32_t pn = std::min<uint32_t>(cf.enemyCount, world_trace::enemySlots);
@@ -6295,7 +6472,7 @@ DWORD WINAPI run(void*) {
                                     // (DAREDEVIL and HULK have their own extra blow above); never for the
                                     // zip strike (the game's Y lands that one).
                                     if (const uint32_t hero = heroNow(); !fightOut.zip && hero != hero_modes::daredevil &&
-                                                                         hero != hero_modes::hulk &&
+                                                                         hero != hero_modes::hulk && hero != hero_modes::superman &&
                                                                          combat38::instantPunch(c38(combat38::punchHits))) {
                                         uint64_t who = fightOut.punchTarget[i];
                                         Vec3 markAt{NAN, NAN, NAN};
@@ -6644,6 +6821,15 @@ DWORD WINAPI run(void*) {
                                         game_prompts::note("VERSION 0.0.4 MIRROR VIEW TEST: asked after the eyes were made; "
                                                            "restart the game to run it");
                                     mirrorTooLate = late;
+                                    // 0.0.7: MIRROR VIEW runs once. When its 30 s test has run its course (done, or
+                                    // stopped by itself), it switches back to OFF and the launcher saves OFF
+                                    // (SpidyHudSettings 3 bit 21, as a press does), so it does not run at every start.
+                                    if (mirrorWant && mirror_view::finished(mirrorStats.test)) {
+                                        combat38Values[combat38::mirrorView] = 0;
+                                        SpidyMirrorViewWant(0);
+                                        wristChanged |= 1u << 21;
+                                        game_prompts::note("0.0.7 MIRROR VIEW: the test ran once and turned itself OFF (saved)");
+                                    }
                                     if (player.hero != suitHeroWas) { // another hero: start the watch again
                                         suitWatch.forget();
                                         suitHeroWas = player.hero;
@@ -6810,8 +6996,10 @@ DWORD WINAPI run(void*) {
                         if (mapping == game_pad::Mapping::gameplay) {
                             static uint64_t heroWebsTaken = 0;
                             static double heroNotedAt = -1e9;
+                            // Version 0.0.7 BATMAN GRAPPLE: with LT held his RT (the game's zip) is kept.
                             const uint32_t taken = hero_modes::stripPad(heroNow(), pad.buttons, pad.rightTrigger,
-                                                                        walk.demand.buttons, walk.demand.rightTrigger);
+                                                                        walk.demand.buttons, walk.demand.rightTrigger,
+                                                                        pad.leftTrigger);
                             heroWebsTaken += taken;
                             if (taken && frame.seconds - heroNotedAt > 10) {
                                 heroNotedAt = frame.seconds;
@@ -6928,7 +7116,31 @@ DWORD WINAPI run(void*) {
                                     ++invincibleRefills;
                                     hitPoints = to;
                                 }
+                            } else if (record && heroNow() == hero_modes::wolverine) {
+                                // Version 0.0.7 WOLVERINE HEALING: 3 s unhurt, then 10%/s back, through the same
+                                // CONFIRMED record and cap as INVINCIBLE (never above it, never a revive).
+                                read(h + extras385::invincible::reduceAt, &reduce, sizeof(reduce));
+                                const float healDt = healAt < 0 ? 0.f : static_cast<float>(std::clamp(frame.seconds - healAt, 0.0, .1));
+                                const float to = hero007Play.healing.step(healDt, hitPoints, mostHitPoints, reduce);
+                                if (to >= 0 && writeFloatIf(h + game_player::hitPointsAt, hitPoints, to)) {
+                                    ++hero007Heals;
+                                    hitPoints = to;
+                                }
+                            } else if (record && heroNow() == hero_modes::captainAmerica) {
+                                // Version 0.0.7 CAPTAIN AMERICA SHIELD BLOCK (EXPERIMENTAL, OFF by default): a
+                                // fall in health while the shield on the arm faces the nearest enemy (a
+                                // CANDIDATE guess at "the hit met the shield") is given back through the same
+                                // CONFIRMED record and cap as INVINCIBLE: never above it, never a revive.
+                                read(h + extras385::invincible::reduceAt, &reduce, sizeof(reduce));
+                                const float to = hero007Play.block.step(hitPoints, mostHitPoints, reduce,
+                                                                        captain::blockOn(c38(combat38::shieldBlock)),
+                                                                        hero007Play.guarding, invincibleOn.load());
+                                if (to >= 0 && writeFloatIf(h + game_player::hitPointsAt, hitPoints, to))
+                                    hitPoints = to;
                             }
+                            if (!record || heroNow() != hero_modes::captainAmerica)
+                                hero007Play.block.hpWas = -1; // a stale reading never refunds later
+                            healAt = frame.seconds;
                         } else {
                             invincibleNa = 1u;
                         }
@@ -7609,15 +7821,22 @@ DWORD WINAPI run(void*) {
                         }
                         saved.palmSpin = static_cast<float>(std::fmod(combatClock * 9.0, 2.0 * 3.14159265));
                     }
-                    {   // Version 0.0.6 DAREDEVIL ABILITIES: the batons, in the hand along its aim or spinning in flight.
+                    {   // Version 0.0.6 DAREDEVIL ABILITIES: the batons, in the hand (0.0.7: in the fist) or spinning in flight.
                         const bool dd = !oursFault && heroWas == hero_modes::daredevil;
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& b = batons[i];
                             saved.batonOn[i] = 0;
                             if (!dd || (b.inHandNow() && (!batonTracked[i] || !(length(batonAimNow[i]) > .5f))))
                                 continue;
+                            // Version 0.0.7 BATON HOLSTERS: a holstered baton is drawn on the back (hero007).
+                            if (!hero007Play.batonShown(i, b.inHandNow(), hero007In.batonHolsters))
+                                continue;
                             Vec3 grip{}, tip{};
-                            if (b.inHandNow()) {
+                            if (b.inHandNow() && batonShaftOk[i]) {
+                                // Version 0.0.7 BATON GRIP: in the fist, from the grip pose (baton_grip.hpp).
+                                grip = batonButt[i];
+                                tip = batonTipHeld[i];
+                            } else if (b.inHandNow()) { // no usable grip pose: 0.0.62's, along the aim
                                 const Vec3 aimDir = normalized(batonAimNow[i]);
                                 grip = batonHand[i] - aimDir * .12f;
                                 tip = batonHand[i] + aimDir * .45f;
@@ -7638,6 +7857,65 @@ DWORD WINAPI run(void*) {
                                 saved.batonOn[i] = 1;
                             }
                         }
+                        // Version 0.0.7 BATON LOOK (MODEL: the converted batons, CLUB when they are missing).
+                        const uint32_t batonLookNow = c38(combat38::batonLook);
+                        saved.batonClub = combat38::batonClub(batonLookNow) || combat38::batonModel(batonLookNow);
+                        // Version 0.0.7 HERO PROFILES: the heroes' weapons, holsters, beams, smoke and shells.
+                        if (!oursFault)
+                        {
+                            hero007Play.draw(saved.hero007, saved.worldFromTracking, hero007In, batonLookNow);
+                            // Version 0.0.7 BATARANG STYLE / GUN MODELS / BATON LOOK MODEL: the converted models
+                            // under <Spidy folder>\Models\ (each slot read once, on first use; the built-in look
+                            // when missing or refused - never a crash, nothing else stops).
+                            auto& models = mesh_model::library();
+                            const auto slotModel = [&](uint32_t slot, const char* what) -> const mesh_model::Mesh* {
+                                if (models.status[slot] == mesh_model::notTried) {
+                                    const std::wstring home = spidyHome() + L"\\Models\\";
+                                    std::string root(static_cast<size_t>(WideCharToMultiByte(CP_UTF8, 0, home.c_str(), -1, nullptr, 0, nullptr, nullptr)), '\0');
+                                    if (!root.empty()) {
+                                        WideCharToMultiByte(CP_UTF8, 0, home.c_str(), -1, root.data(), static_cast<int>(root.size()), nullptr, nullptr);
+                                        root.resize(root.size() - 1);
+                                    }
+                                    const auto status = models.load(slot, root);
+                                    char line[400];
+                                    sprintf_s(line, "Version 0.0.7 %s %s: %s%s%.300s", what, mesh_model::slotFolders[slot],
+                                              mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
+                                              status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
+                                    game_prompts::note(line);
+                                }
+                                return models.model(slot);
+                            };
+                            const uint32_t style = c38(combat38::batarangStyle);
+                            if (style && style < mesh_model::styles && hero007In.hero == hero_modes::batman)
+                                saved.hero007.batarangModel = slotModel(style, "BATARANG STYLE");
+                            if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
+                                saved.hero007.pistolModel = slotModel(mesh_model::slotPistol, "GUN MODELS");
+                                saved.hero007.sawedFrame = slotModel(mesh_model::slotSawedOffFrame, "GUN MODELS");
+                                saved.hero007.sawedBarrels = slotModel(mesh_model::slotSawedOffBarrels, "GUN MODELS");
+                            }
+                            // Version 0.0.7 CAPTAIN AMERICA SHIELD LOOK MODEL (Models\Shield; BUILT-IN when missing).
+                            if (captain::lookModel(c38(combat38::shieldLook)) && hero007In.hero == hero_modes::captainAmerica)
+                                saved.hero007.shieldModel = slotModel(mesh_model::slotShield, "SHIELD LOOK");
+                            if (combat38::batonModel(batonLookNow) && dd) {
+                                for (unsigned i = 0; i < 2; ++i) {
+                                    saved.hero007.batonModel[i] = slotModel(i ? mesh_model::slotBatonRight : mesh_model::slotBatonLeft, "BATON LOOK");
+                                    // The chain: ONLY while this baton is out of the hand (thrown, bouncing, coming back).
+                                    const auto& b = batons[i];
+                                    if (saved.hero007.batonModel[i] && saved.batonOn[i] > 0 && !b.inHandNow() && batonTracked[i]) {
+                                        const Vec3 from = compose(saved.worldFromTracking, Pose{batonHand[i], {}}).position;
+                                        const Vec3 to = compose(saved.worldFromTracking, Pose{b.position, {}}).position;
+                                        if (finite(from) && finite(to)) {
+                                            saved.hero007.cable[i] = true;
+                                            saved.hero007.cableFrom[i] = from;
+                                            saved.hero007.cableTo[i] = to;
+                                            saved.hero007.any = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                            saved.hero007 = hero007::Draw{};
                     }
                     {   // Version 0.0.5 SUPERSONIC: the shockwave around the head, the way the hands point.
                         saved.shockFade = fly_boost::shock(static_cast<float>(combatClock - flyBoomAt));
@@ -8340,8 +8618,18 @@ DWORD WINAPI run(void*) {
                             if (saved->markFade[m] > 0)
                                 hit_marks::appendMark(vertices, saved->markAt[m] + travel, viewer, pixelAngle, saved->markFade[m]);
                         for (unsigned i = 0; i < 2; ++i) // Version 0.0.6 DAREDEVIL's batons
-                            if (saved->batonOn[i] > 0)
-                                appendBaton(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
+                            if (saved->batonOn[i] > 0) {
+                                if (saved->hero007.batonModel[i] && // Version 0.0.7 BATON LOOK MODEL
+                                    hero007::appendBatonModel(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
+                                                              *saved->hero007.batonModel[i], viewer))
+                                    ;
+                                else if (saved->batonClub) // Version 0.0.7 BATON LOOK CLUB (MODEL's fallback too)
+                                    hero007::appendBatonClub(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
+                                else
+                                    appendBaton(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
+                            }
+                        if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
+                            hero007::appendHero007(vertices, saved->hero007, travel, viewer, pixelAngle);
                         if (saved->shockFade > 0) // Version 0.0.5 SUPERSONIC's shockwave
                             appendShockwave(vertices, viewer, saved->shockWay, saved->shockAge, pixelAngle);
                         if (saved->beamRingOk > 0) { // Version 0.0.5 BEAM RING (right wrist)
@@ -10096,7 +10384,14 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyShooterType(void* v) {
     return r;
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorView(void* v) {
-    return setLive(v, 0, combat38::optionInfo[combat38::mirrorView].count - 1, 5339, combat38Values[combat38::mirrorView], asU32);
+    const DWORD r =
+        setLive(v, 0, combat38::optionInfo[combat38::mirrorView].count - 1, 5339, combat38Values[combat38::mirrorView], asU32);
+    // 0.0.7 MIRROR PERSIST FIX: the wish reaches the probe at once (the launcher sends live.txt's before
+    // SpidyXrStart): the view is only made with the eyes, before the session loop's quarter-second
+    // SpidyMirrorViewWant, which kept a live.txt "mirror_view = test" too late as well.
+    if (!r)
+        SpidyMirrorViewWant(c38(combat38::mirrorView));
+    return r;
 }
 // Version 0.0.5 (Update 38.9)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeroHeight(void* v) {
@@ -10158,6 +10453,37 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFoeTrack(void* v) {
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBeaconsVision(void* v) {
     return setLive(v, 0, combat38::optionInfo[combat38::beaconsVision].count - 1, 5375, combat38Values[combat38::beaconsVision], asU32);
 }
+// Version 0.0.7 HERO PROFILES: BATMAN / WOLVERINE / SUPERMAN / PUNISHER (one hero toggle at a time),
+// BATARANG CHAIN, EASY RELOAD, HOLSTER HANDS, BATON HOLSTERS, BATON LOOK, live.
+namespace {
+DWORD setHero007(void* v, uint32_t option, DWORD refused) {
+    const DWORD r = setLive(v, 0, combat38::optionInfo[option].count - 1, refused, combat38Values[option], asU32);
+    if (!r && combat38::isHeroToggle(option))
+        heroOnly(option);
+    return r;
+}
+} // namespace
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatman(void* v) { return setHero007(v, combat38::batman, 5376); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWolverine(void* v) { return setHero007(v, combat38::wolverine, 5377); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySuperman(void* v) { return setHero007(v, combat38::superman, 5378); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisher(void* v) { return setHero007(v, combat38::punisher, 5379); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatarangChain(void* v) { return setHero007(v, combat38::batarangChain, 5380); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEasyReload(void* v) { return setHero007(v, combat38::easyReload, 5381); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHolsterHands(void* v) { return setHero007(v, combat38::holsterHands, 5382); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatonHolsters(void* v) { return setHero007(v, combat38::batonHolsters, 5383); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatonLook(void* v) { return setHero007(v, combat38::batonLook, 5384); }
+// Version 0.0.7 BATARANG STYLE (the model itself is read on its first use: mesh_model::Library).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatarangStyle(void* v) { return setHero007(v, combat38::batarangStyle, 5385); }
+// Version 0.0.7 GUN MODELS (PUNISHER; the models are read on their first use: mesh_model::Library).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGunModels(void* v) { return setHero007(v, combat38::gunModels, 5386); }
+// Version 0.0.7 CAPTAIN AMERICA (a hero toggle) and his shield's SHIELD ARM, SHIELD DAMAGE, SHIELD
+// CHAIN, SHIELD BLOCK (EXPERIMENTAL, CANDIDATE) and SHIELD LOOK, live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCaptainAmerica(void* v) { return setHero007(v, combat38::captainAmerica, 5387); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldArm(void* v) { return setHero007(v, combat38::shieldArm, 5388); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldDamage(void* v) { return setHero007(v, combat38::shieldDamage, 5389); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldChain(void* v) { return setHero007(v, combat38::shieldChain, 5390); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldBlock(void* v) { return setHero007(v, combat38::shieldBlock, 5391); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldLook(void* v) { return setHero007(v, combat38::shieldLook, 5392); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;
@@ -10323,8 +10649,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(nextSupersample.load(), 1023);
     case 3:
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
-        // Version 0.0.62: LENS FLARES (29), kept for the next start.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 27 | 1u << 28 | 1u << 29));
+        // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -10344,8 +10670,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(sessionFpsAvg.load(), 2047) | std::min<DWORD>(sessionFpsSeconds.load(), 262143) << 11;
     case 9: // Update 24: the session FPS: HIGH in tenths (bits 0-10), LOW (11-21); 0 none
         return marker | std::min<DWORD>(sessionFpsHigh.load(), 2047) | std::min<DWORD>(sessionFpsLow.load(), 2047) << 11;
-    case 10: // Version 0.0.62: LENS FLARES (0 GAME, 1 OFF IN VR), for live.txt and the next start
-        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1);
+    case 10: // Version 0.0.62: LENS FLARES (0 GAME, 1 OFF IN VR), for live.txt and the next start;
+             // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
+        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1;
     default:
         return 3970;
     }

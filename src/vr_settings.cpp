@@ -277,7 +277,7 @@ const std::array<Row, 43>& rows() {
         {Item::screenSize, "GAME SCREEN SIZE", "The screen that shows menus, cutscenes and flat mode.",
          screenChoices},
         {Item::screenDepth, "GAME SCREEN 3D",
-         "Cutscenes and VIEW: GAME SCREEN get depth. Higher brings them nearer. Off: flat.",
+         "Cutscene depth. SM2 cutscenes stay flat for now: the HUD hook is not found yet.",
          depthChoices},
         {Item::hud, "HUD", "How large the game's HUD shows in front of you. Off: no HUD in VR.", hudChoices},
         {Item::uiStyle, "UI STYLE",

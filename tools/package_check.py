@@ -51,7 +51,19 @@ for p in pyfiles:
     for f in set(re.findall(r"""['"]((?:tools|tests|src|include)/[A-Za-z0-9_./-]+\.(?:py|cpp|hpp|ps1|json))['"]""", s)):
         if not os.path.exists(os.path.join(root, f)):
             missing.append(f'{os.path.relpath(p, root)} names {f}')
-allowed = {'pefile', 'capstone', 'numpy', 'PIL', 'scipy'}  # research, art and sfx-generator tools only (the WAVs ship in assets/sfx; the docs say pip install)
+allowed = {'pefile', 'capstone', 'numpy', 'PIL', 'scipy', 'pyfqmr'}  # research, art, sfx-generator and model-converter tools only (the WAVs ship in assets/sfx, converted models never ship in git; the docs say pip install)
+# Version 0.0.7 CAPTAIN AMERICA: modules that exist only where a dev tool runs, allowed ONLY for those
+# files - Blender's own (bpy, mathutils, bmesh) for the suit scripts run inside Blender on the PC, and
+# matplotlib for the preview diagram (a box-side preview tool; nothing ships its output).
+scoped = {'bpy': 'tools/cap_suit/blender/', 'mathutils': 'tools/cap_suit/blender/', 'bmesh': 'tools/cap_suit/blender/',
+          'matplotlib': 'tools/models007/'}
+for k in list(third):
+    if k in scoped:
+        outside = [f for f in third[k] if not f.replace(os.sep, '/').startswith(scoped[k])]
+        if outside:
+            third[k] = outside
+        else:
+            del third[k]
 for k, v in third.items():
     if k not in allowed:
         missing.append(f'python import {k} (in {v[:3]}) is neither stdlib nor in the zip')

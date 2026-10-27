@@ -1,5 +1,5 @@
 #pragma once
-// Update 38.5 GESTURES (/workspace/gesture-design-385.md, approved by the user): the body moves that
+// Update 38.5 GESTURES (the gesture design approved by the user): the body moves that
 // send the game's own ability, parry, finisher, camouflage and Web Wings inputs, and TRAINING, which
 // shows where each move goes and says SUCCESS or FAIL using this same recogniser.
 //

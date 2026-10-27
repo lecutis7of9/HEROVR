@@ -2,7 +2,7 @@
 Asset loading and every fallback (damaged orb/sound/font, renderer error, crash, hang, Shift/--classic, corrupt
 setting), the window at 720p/1080p/4K and 100-200% DPI on several monitors, the seamless sound loop, and the rules
 the past player issues taught (see regression_sweep_tests.py for those gates on the whole tree)."""
-import os, pathlib, re, shutil, subprocess, tempfile, time, unittest
+import os, pathlib, re, shutil, subprocess, tempfile, unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT/'tools/launcher'
 SRC = LAUNCHER/'src'
@@ -167,7 +167,7 @@ class PastIssues(unittest.TestCase):
 
     def test_placeholder_repo_and_self_update_from_builds_6_to_9(self):
         v = src('ModVersion.cs')
-        self.assertEqual(int(re.search(r'public const int Build = (\d+);', v).group(1)), 10)
+        self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', v).group(1)), 10)   # 10, 11 (0.0.70)
         # builds 6-9 update when version.json's launcher_build is above theirs; the exe keeps its name and is one file
         self.assertIn('-out:', (LAUNCHER/'build.sh').read_text())
         self.assertIn('m.LauncherBuild > LauncherInfo.Build', src('MainForm.Updates.cs'))

@@ -53,7 +53,15 @@ EXPORTS = dict(crawl_cap='SpidyCrawlCap', zip_mode='SpidyZipMode', aim_assist='S
                daredevil='SpidyDaredevil', hulk='SpidyHulk', daredevil_punch='SpidyDaredevilPunch',
                # Version 0.0.62
                hit_indicator='SpidyHitIndicator', hand_flips='SpidyHandFlips', lens_flares='SpidyLensFlares',
-               punch_hits='SpidyPunchHits', foe_track='SpidyFoeTrack', beacons_vision='SpidyBeaconsVision')
+               punch_hits='SpidyPunchHits', foe_track='SpidyFoeTrack', beacons_vision='SpidyBeaconsVision',
+               # Version 0.0.7
+               batman='SpidyBatman', wolverine='SpidyWolverine', superman='SpidySuperman', punisher='SpidyPunisher',
+               batarang_chain='SpidyBatarangChain', easy_reload='SpidyEasyReload', holster_hands='SpidyHolsterHands',
+               baton_holsters='SpidyBatonHolsters', baton_look='SpidyBatonLook', batarang_style='SpidyBatarangStyle',
+               gun_models='SpidyGunModels',
+               # Version 0.0.7 CAPTAIN AMERICA
+               captain_america='SpidyCaptainAmerica', shield_arm='SpidyShieldArm', shield_damage='SpidyShieldDamage',
+               shield_chain='SpidyShieldChain', shield_block='SpidyShieldBlock', shield_look='SpidyShieldLook')
 # Where each setting is read (combat38 option name in C++).
 READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist', ball_look='ballLook',
                punch_mode='punchMode', ring_anchor='ringAnchor', holo_open='holoOpen', wall_tilt='wallTilt',
@@ -71,7 +79,12 @@ READ_AS = dict(crawl_cap='crawlCap', zip_mode='zipMode', aim_assist='aimAssist',
                punch_sense='punchSense', sfx_volume='sfxVolume', supersonic='supersonic', supersonic_speed='supersonicSpeed',  # Version 0.0.5
                daredevil='daredevil', hulk='hulk', daredevil_punch='daredevilPunch',  # Version 0.0.6
                hit_indicator='hitIndicator', hand_flips='handFlips', lens_flares='lensFlares',
-               punch_hits='punchHits', foe_track='foeTrack', beacons_vision='beaconsVision')  # Version 0.0.62
+               punch_hits='punchHits', foe_track='foeTrack', beacons_vision='beaconsVision',  # Version 0.0.62
+               batman='batman', wolverine='wolverine', superman='superman', punisher='punisher',
+               batarang_chain='batarangChain', easy_reload='easyReload', holster_hands='holsterHands',
+               baton_holsters='batonHolsters', baton_look='batonLook', batarang_style='batarangStyle', gun_models='gunModels',  # Version 0.0.7
+               captain_america='captainAmerica', shield_arm='shieldArm', shield_damage='shieldDamage',
+               shield_chain='shieldChain', shield_block='shieldBlock', shield_look='shieldLook')  # CAPTAIN AMERICA
 
 
 def cpp_options():

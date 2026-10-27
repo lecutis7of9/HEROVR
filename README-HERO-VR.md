@@ -1,12 +1,33 @@
-# HERO VR 0.0.63 - Made by Agent Mulder
+# HERO VR 0.0.7 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of mod Version 0.0.63 (build Update 39.3) plus the prebuilt HERO VR launcher.
+This zip is the full source of HERO VR 0.0.7 (version number **Version 0.0.70**, build Update 39.4, launcher 0.0.70.1)
+plus the prebuilt HERO VR launcher.
 
-## What's new in 0.0.63
+Why 0.0.70: versions compare number by number, so "0.0.7" would look older than 0.0.63
+to the launcher; 0.0.70 is the same release, seen as newer by every launcher.
+
+## What's new in 0.0.7
+- **New heroes** on the wrist hologram's COMBAT page, under HERO PROFILES: **BATMAN** (batarangs that chain and come
+  back, grapple, smoke), **SUPERMAN** (heat vision, COLD BREATH, super strength, the SUPERSONIC dash), **PUNISHER** (two
+  pistols and a sawed-off, holsters, reload), **WOLVERINE** (claws, healing) and **CAPTAIN AMERICA** (his shield: wear,
+  draw, guard, throw and bash). One hero at a time. **Every new hero and option is OFF** until you turn it on, and
+  SHIELD BLOCK is an OFF-by-default experiment.
+- **Guns fire along the barrel now**, from the gun in your palm, and the batons sit in your fist.
+- **Optional 3D models** for the batons, batarangs, guns and shield (BATON LOOK, BATARANG STYLE, GUN MODELS, SHIELD
+  LOOK). They are in the `Models` folder; a missing file falls back to the built-in look.
+- **Mirror View runs once and turns itself off.** The MIRROR VIEW test now runs for its 30 seconds at the next VR
+  start, then switches itself OFF (and saves that), so it never stays on by accident.
+- **Captain America suit:** `CapSuit` and docs/CAP-SUIT-PIPELINE.md are an optional guide for doing a suit swap by
+  hand. Nothing installs it for you.
+- The launcher (0.0.70.1, build 11): the HERO VR design's orb is smoother and lags less (still optional; classic stays
+  the default). **Revert** offers **USE 0.0.63**, 0.0.62, 0.0.6 and 0.0.5.
+- The Valve Index 15-degree controller tilt is **unconfirmed**; tell us how it feels.
+
+## In 0.0.63
 - **A new look for the launcher, if you want it:** the HERO VR design, with an animated orb, ambient sound and
   slanted menu items. It is optional. The classic design stays the default; the launcher asks you once whether to
   try the new one, and **Options > Launcher design** switches between the two at any time (the launcher restarts).
@@ -69,7 +90,7 @@ This zip is the full source of mod Version 0.0.63 (build Update 39.3) plus the p
   half rate when full rate is out of reach. The graphics defaults are unchanged.
 - VR never ends silently when the headset is lost: the mod waits for it and brings VR back by itself.
 - Opt-in reports (see Privacy below).
-- Don't like 0.0.63? **Revert > USE 0.0.62**, **USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
+- Don't like 0.0.7? **Revert > USE 0.0.63**, **USE 0.0.62**, **USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
   installs it. The launcher then stays on it until you press **Updates > Update now**.
 
 ## Requirements
@@ -84,8 +105,8 @@ This zip is the full source of mod Version 0.0.63 (build Update 39.3) plus the p
    `C:\HERO-VR`. Don't use Program Files or a OneDrive folder.
 2. Double-click **HERO VR Launcher.cmd**. If SmartScreen warns you, click **More info** and then **Run anyway**.
    The launcher is unsigned.
-3. On the first run the launcher downloads the ready-made mod files for 0.0.63 from the GitHub release
-   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.63) and checks them. If that was interrupted,
+3. On the first run the launcher downloads the ready-made mod files for 0.0.7 from the GitHub release
+   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.70) and checks them. If that was interrupted,
    press **Repair** on **Status** (or just PLAY VR, which offers it).
 4. Start your VR app, put the headset on and press **PLAY VR**. The default launch options are:
    `-RenderScale 100 -OverlayWebs -EngineTaa -SmallerDesktopView`.
@@ -116,6 +137,9 @@ first. Each one opens a filled-in issue on the mod's GitHub page in your browser
   - Adrian (AdrianGzzEsc), PR 24.
 - Swinging inspiration: Blaze's Spider-Man for Blade & Sorcery, by Blazeventura and ANTIOPSVR. None of its code is used.
 - Game addresses: SM2VR 0.0.27.
+- 3D models (0.0.7), CC BY 4.0 unless noted: Digital Goblin (shield), iqbalmulyawan (Captain America suit), Yanez
+  Designs (batons), TORI106 (pistol), LiliumLetifer (sawed-off), Eira and Ludus101 (batarangs), baton268 (JOKER
+  batarang, CC BY-NC-ND 4.0, unmodified). Links and licences: THIRD-PARTY-MODELS.md and CREDITS.md.
 - Third-party software is listed in THIRD_PARTY_NOTICES.md: OpenXR SDK, JsonCpp, MinHook, Dear ImGui, fonts, bHaptics SDK and Python.
 - The HERO VR port and launcher are by Agent Mulder. TikTok: https://www.tiktok.com/@agentmulder, Discord: https://discord.gg/W2b9YjRXzf
 

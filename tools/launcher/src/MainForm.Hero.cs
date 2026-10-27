@@ -18,10 +18,13 @@ namespace Sm2VrLauncher
         OrbPlayer orb;
         WaveAudio audio;
         readonly Stopwatch heroClock = new Stopwatch(), shownWatch = new Stopwatch();
-        readonly System.Windows.Forms.Timer heroTimer = new System.Windows.Forms.Timer { Interval = 16 };
+        // 10 ms, not 16: a Windows timer fires on the system tick (15.6 ms), so 16 ms meant every other tick (32 Hz).
+        const int TickMs = 10;
+        readonly System.Windows.Forms.Timer heroTimer = new System.Windows.Forms.Timer { Interval = TickMs };
         Rectangle content;
         float heroK = 1f;
         Bitmap overlay, sheetSnapshot;
+        string[] overlayKeys;   // what each part of the overlay (HeroScene.Regions) was drawn with
         bool overlayDirty = true, heroBroken, heroStarted, heroPainted, soundOffForGame, gameOn, dragging;
         Point dragFrom, dragWindow;
         double lastTick, heroOffset;
@@ -112,7 +115,7 @@ namespace Sm2VrLauncher
             MouseMove += (s, e) => HeroMouseMove(e);
             MouseDown += (s, e) => HeroMouseDown(e);
             MouseUp += (s, e) => HeroMouseUp(e);
-            MouseLeave += (s, e) => { if (scene != null && (scene.CloseHot || scene.MinHot || scene.StatusHot)) { scene.CloseHot = scene.MinHot = scene.StatusHot = false; overlayDirty = true; Invalidate(); } };
+            MouseLeave += (s, e) => { if (scene != null && (scene.CloseHot || scene.MinHot || scene.StatusHot)) { scene.CloseHot = scene.MinHot = scene.StatusHot = false; HeroOverlayChanged(); } };
             double off;   // preview stills and tests: start this many seconds in (e.g. 6 = idle) and on tile n
             if (double.TryParse(Environment.GetEnvironmentVariable("SM2VR_LAUNCHER_HERO_T"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out off) && off > 0) heroOffset = off;
             int sel;
@@ -202,7 +205,7 @@ namespace Sm2VrLauncher
             // (Updates while the mod files install) must not leave the clock stopped, and the home black, for good.
             if (run && !heroClock.IsRunning && (heroStarted || shownWatch.IsRunning)) { heroClock.Start(); lastTick = HeroNow; }
             if (!run && heroClock.IsRunning) heroClock.Stop();
-            heroTimer.Interval = run ? 16 : 100;   // paused: only the controller and the window fade are looked at
+            heroTimer.Interval = run ? TickMs : 100;   // paused: only the controller and the window fade are looked at
         }
 
         void HeroSheetChanged()
@@ -245,15 +248,28 @@ namespace Sm2VrLauncher
             g.CompositingMode = CompositingMode.SourceCopy;
             using (var b = new SolidBrush(Color.Black)) g.FillRectangle(b, clip);
             g.CompositingMode = CompositingMode.SourceOver;
-            var st = g.Save();
-            g.SetClip(content);
-            orb.Draw(g);
-            g.Restore(st);
-            EnsureOverlay();
-            g.DrawImage(overlay, clip, clip, GraphicsUnit.Pixel);
+            if (orb.ShownRect.IntersectsWith(clip))
+            {
+                var st = g.Save();
+                g.IntersectClip(content);   // within the paint's own clip: a small repaint draws only its part of the orb
+                orb.Draw(g);
+                g.Restore(st);
+            }
+            foreach (var r in EnsureOverlay())
+                if (!clip.Contains(r)) Invalidate(r);   // a part changed outside this paint: it comes next
+            g.CompositingMode = CompositingMode.SourceOver;
+            foreach (var part in OverlayParts())
+            {
+                var r = Rectangle.Intersect(part, clip);
+                if (r.Width > 0 && r.Height > 0) g.DrawImage(overlay, r, r, GraphicsUnit.Pixel);   // the overlay is clear elsewhere
+            }
         }
 
-        void EnsureOverlay()
+        Rectangle[] OverlayParts() { return HeroScene.Parts(content, heroK); }
+
+        /// <summary>Brings the overlay up to date: redraws only the parts whose state changed (all of it when new or
+        /// when overlayDirty says so) and returns them in window pixels.</summary>
+        System.Collections.Generic.List<Rectangle> EnsureOverlay()
         {
             var size = ClientSize;
             if (overlay == null || overlay.Size != size)
@@ -262,16 +278,17 @@ namespace Sm2VrLauncher
                 overlay = new Bitmap(Math.Max(1, size.Width), Math.Max(1, size.Height), PixelFormat.Format32bppPArgb);
                 overlayDirty = true;
             }
-            if (!overlayDirty) return;
-            using (var g = Graphics.FromImage(overlay))
-            {
-                g.Clear(Color.Transparent);
-                g.TranslateTransform(content.X, content.Y);
-                g.ScaleTransform(heroK, heroK);
-                g.SetClip(new RectangleF(0, 0, HeroScene.W, HeroScene.H));
-                scene.Draw(g);
-            }
+            if (overlayKeys == null || overlayKeys.Length != HeroScene.Regions.Length) { overlayKeys = new string[HeroScene.Regions.Length]; overlayDirty = true; }
+            var changed = scene.UpdateOverlay(overlay, overlayKeys, overlayDirty, content, heroK);
             overlayDirty = false;
+            return changed;
+        }
+
+        /// <summary>The scene's state changed (a hover, the highlight, a tile's text): repaints only the parts that changed.</summary>
+        void HeroOverlayChanged()
+        {
+            if (!IsHandleCreated || overlay == null || heroBroken || sheetSnapshot != null) { if (IsHandleCreated) Invalidate(content); return; }
+            foreach (var r in EnsureOverlay()) Invalidate(r);
         }
 
         /// <summary>The plain fallback: the same tiles as simple shapes and text, no orb, no effects.</summary>
@@ -348,20 +365,19 @@ namespace Sm2VrLauncher
                 heroStarted = true;
                 double now = HeroNow, dt = Math.Max(0, Math.Min(0.1, now - lastTick));
                 lastTick = now;
-                bool anim = scene.Animating;
-                if (anim)
+                if (scene.Animating)
                 {
                     scene.T = Math.Min(now, HeroScene.IntroEnd);
                     scene.Step(dt);
-                    overlayDirty = true;
                 }
-                int fi = orb.IndexAt(now);
-                if (fi != orb.ShownIndex)
+                // Only what changed is repainted: the overlay's changed parts and the orb's old and new rectangles.
+                HeroOverlayChanged();
+                long fi = orb.StepAt(now);
+                if (fi != orb.ShownStep)
                 {
                     var before = orb.ShownRect;
-                    if (orb.Show(fi) && !anim) Invalidate(Rectangle.Union(before, orb.ShownRect));
+                    if (orb.Show(fi)) Invalidate(Rectangle.Union(before, orb.ShownRect));
                 }
-                if (anim) Invalidate(content);
             }
             catch (Exception ex) { HeroBroke(ex); }
         }
@@ -380,7 +396,7 @@ namespace Sm2VrLauncher
             bool ch = HeroScene.CloseRect.Contains(d), mh = HeroScene.MinRect.Contains(d);
             bool sh = scene.Status != null && HeroScene.StatusRect.Contains(d);
             int t = heroBroken || scene.T < 3.0 ? -1 : scene.HitTile(d);
-            if (ch != scene.CloseHot || mh != scene.MinHot || sh != scene.StatusHot) { scene.CloseHot = ch; scene.MinHot = mh; scene.StatusHot = sh; overlayDirty = true; Invalidate(content); }
+            if (ch != scene.CloseHot || mh != scene.MinHot || sh != scene.StatusHot) { scene.CloseHot = ch; scene.MinHot = mh; scene.StatusHot = sh; HeroOverlayChanged(); }
             if (t >= 0 && t != scene.Target) HeroSelect(t);
             Cursor = t >= 0 || ch || mh || sh ? Cursors.Hand : Cursors.Default;
         }
@@ -392,7 +408,7 @@ namespace Sm2VrLauncher
             var d = ToDesign(e.Location);
             if (HeroScene.CloseRect.Contains(d) || HeroScene.MinRect.Contains(d) || (scene.Status != null && HeroScene.StatusRect.Contains(d))) return;
             int t = heroBroken || scene.T < 3.0 ? -1 : scene.HitTile(d);
-            if (t >= 0) { scene.Pressed = t; HeroSelect(t); overlayDirty = true; Invalidate(content); return; }
+            if (t >= 0) { scene.Pressed = t; HeroSelect(t); HeroOverlayChanged(); return; }
             dragging = true; dragFrom = Cursor.Position; dragWindow = Location;
         }
 
@@ -405,7 +421,7 @@ namespace Sm2VrLauncher
             if (HeroScene.MinRect.Contains(d)) { WindowState = FormWindowState.Minimized; return; }
             if (scene.Status != null && HeroScene.StatusRect.Contains(d)) { tabs.Select(SheetStatus); return; }
             int pressed = scene.Pressed;
-            scene.Pressed = -1; overlayDirty = true; Invalidate(content);
+            scene.Pressed = -1; HeroOverlayChanged();
             if (pressed >= 0 && pressed == scene.HitTile(d)) HeroActivate(pressed);
         }
 
@@ -414,8 +430,7 @@ namespace Sm2VrLauncher
             if (i < 0 || i >= scene.Tiles.Length || i == scene.Target) return;
             scene.Target = i;
             if (heroBroken || !heroClock.IsRunning) scene.Sel = i;
-            overlayDirty = true;
-            Invalidate(content);
+            HeroOverlayChanged();
         }
 
         void HeroActivate(int i)
@@ -492,8 +507,7 @@ namespace Sm2VrLauncher
             bool nowGame = job == Job.Vr || running;
             if (nowGame && !gameOn) HeroGameStarting();
             else if (!nowGame && gameOn) { gameOn = false; HeroPauseCheck(); }
-            overlayDirty = true;
-            if (IsHandleCreated) Invalidate(content);
+            HeroOverlayChanged();
         }
 
         // ---- Options > Launcher (both designs) ----

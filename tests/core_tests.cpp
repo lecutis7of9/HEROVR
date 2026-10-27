@@ -25,6 +25,10 @@
 #include "spidy/repulsor.hpp"
 #include "spidy/repulsor_mcu.hpp"
 #include "spidy/hero_modes.hpp"
+#include "spidy/baton_grip.hpp"
+#include "spidy/hero007_play.hpp"
+#include "spidy/mesh_model.hpp"
+#include <filesystem>
 #include "spidy/web_cocoon.hpp"
 #include "spidy/wall_stick.hpp"
 #include "spidy/mirror_view.hpp"
@@ -1614,7 +1618,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 155, "controls count drifted"); // Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 176, "controls count drifted"); // Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1954,7 +1958,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 155, "controls count drifted"); // Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 176, "controls count drifted"); // Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -9500,6 +9504,15 @@ int main() {
               "a panel that left was waited for too briefly, or for ever");
         check(!panel.wanted(false,false,20000) && panel.wanted(true,false,100) && panel.wanted(true,false,50),
               "a clock reversal");
+        // Version 0.0.70: no HUD panel hook (SM2), no scene eyes asked for at all.
+        check(!sceneStereoAsked(true,true,false),"scene eyes asked for without the HUD panel's hook");
+        check(!sceneStereoAsked(true,false,true) && !sceneStereoAsked(false,true,true),"scene eyes without a scene or depth");
+        check(sceneStereoAsked(true,true,true),"a hooked panel's scene got no eyes");
+        {
+            ScenePanel unhooked;
+            for(uint64_t t=0;t<5000;t+=11)
+                check(!unhooked.wanted(sceneStereoAsked(true,true,false),false,t),"hidden scene eyes in the first second");
+        }
         near(eyeDistance({-.032f,1.6f,0},{.032f,1.6f,0}),.064f);
         near(eyeDistance({-.029f,1.6f,0},{.029f,1.6f,0}),.058f);
         near(eyeDistance({0,0,0},{0,0,0}),.064f);
@@ -18424,7 +18437,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 54, "fifty-four options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6)");
+        check(options == 71, "seventy-one options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6)");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18458,7 +18471,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 54, "0.0.62 has 54 COMBAT options (0.0.6: 48)");
+        check(options == 71, "0.0.7 has 71 COMBAT options (CAPTAIN AMERICA + 6; 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18722,13 +18735,13 @@ int main() {
                   openSection(controlsPage) == 0 && openSection(colorPage) == -1 && openSection(powersPage) == 1 &&
                   openSection(statusPage) == -1 && openSection(musicPage) == -1,
               "a page's default section is wrong");
-        for (int h = 0; h < 4; ++h) {
+        for (int h = 0; h < 9; ++h) { // Version 0.0.7: nine heroes (CAPTAIN AMERICA)
             setActiveHero(h);
             check(openSection(powersPage) == 1 + h, "POWERS does not open the played hero's profile");
         }
         setActiveHero(99);
         check(activeHero() == 0 && openSection(powersPage) == 1, "an odd hero is not SPIDER-MAN");
-        check(sectionCount(powersPage) == 5 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 5 &&
+        check(sectionCount(powersPage) == 10 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 5 &&
                   sectionCount(graphicsPage) == 4 && sectionCount(colorPage) == 2 && sectionCount(controlsPage) == 4 &&
                   sectionCount(statusPage) == 0 && sectionCount(musicPage) == 0 && sectionCount(pages) == 0,
               "a page's section count");
@@ -18780,7 +18793,7 @@ int main() {
                 }
             }
         }
-        check(placed == 129 /* 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 146 /* CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -21828,6 +21841,7 @@ int main() {
         Test t;
         check(!t.shouldCreate(false, true, 8) && t.phase == off, "created while off");
         check(!t.shouldCreate(true, false, 8) && t.why == noEyes, "created before the eyes");
+        check(!finished(t), "0.0.7: waiting for the eyes turned MIRROR VIEW off");
         Test full;
         check(!full.shouldCreate(true, true, 3) && full.phase == spidy::mirror_view::failed && full.why == noSlots,
               "created with 3 slots free");
@@ -21840,6 +21854,7 @@ int main() {
         for (int i = 0; i < 90 * 31 && !retire; ++i)
             retire = t.runFrame(1.f / 90, 11.5f, true);
         check(retire && t.phase == done, "did not finish after 30 s");
+        check(finished(t), "0.0.7: the finished 30 s test did not turn MIRROR VIEW back OFF");
         check(!t.shouldCreate(true, true, 8), "ran twice in a session");
         Test slow;
         slow.shouldCreate(true, true, 8);
@@ -21858,6 +21873,11 @@ int main() {
         none.shouldCreate(true, true, 8);
         none.created(false, 0);
         check(none.phase == spidy::mirror_view::failed && none.why == createFailed, "a failed create was not noticed");
+        check(finished(none) && finished(slow) && finished(full), "0.0.7: a test that stopped itself kept MIRROR VIEW on");
+        Test running;
+        running.shouldCreate(true, true, 8);
+        running.created(true, 1);
+        check(!finished(running), "0.0.7: a running test turned MIRROR VIEW off");
     });
     test("0.0.3 BOT STATE PROBE: names, the find list, the velocity field offline", [] {
         using namespace spidy::bot_probe;
@@ -22498,7 +22518,7 @@ int main() {
         mcu::appendImpact(junk, eye, eye, eye, .001f, 1);
         check(junk.empty(), "odd input drew the repulsor");
     });
-    test("0.0.5 SOUND EFFECTS: the seven WAVs are compiled in, 48 kHz mono 16-bit", [] {
+    test("0.0.5 SOUND EFFECTS: the seven WAVs (+ 0.0.7's nine: sixteen) are compiled in, 48 kHz mono 16-bit", [] {
         using namespace spidy::sfx;
         // Update 39.0.2: the MCU repulsor (take C, TIGHT): a .26 s blast and a .12 s charge-up.
 #if defined(SPIDY_REPULSOR_TAKE_user)
@@ -22510,8 +22530,10 @@ int main() {
 #else
         constexpr float fire = .26f; // take C, TIGHT (the 0.0.6 default, CMakeLists' SPIDY_REPULSOR_TAKE)
 #endif
-        const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f};
-        static_assert(sounds == 7);
+        const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f,
+                                      .45f,  .8f,  .12f, .4f, .25f, .22f, .4f, .6f, .7f, // 0.0.7's nine
+                                      .6f,  .7f,  .45f, 1.1f}; // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang
+        static_assert(sounds == 20);
         for (uint32_t i = 0; i < sounds; ++i) {
             const Pcm& p = sound(static_cast<Id>(i));
             check(p.ok && p.rate == 48000 && p.channels == 1 && p.bits == 16 && p.data && p.bytes % 2 == 0,
@@ -22998,6 +23020,1400 @@ int main() {
         check(rig.handFlipsOn(), "HAND FLIPS on by default (0.0.6)");
         rig.handFlips(false);
         check(!rig.handFlipsOn(), "HAND FLIPS off");
+    });
+    // ---- Version 0.0.7 HERO PROFILES -------------------------------------------------------------
+    test("Version 0.0.7: FLY MODE - a trigger-weapon hero's trigger never moves him (IRON MAN palm blast)", [] {
+        // The user, 26 Oct: "when in fly mode hitting the trigger moves you so if youre iron man and you
+        // shoot your hand palm you actually fly around". The trigger goes into the swing command's
+        // word the way game_xr packs it (hero_modes::flyThrust), then FLY MODE's own flight.
+        using extras385::fly::Flight;
+        using extras385::fly::In;
+        using extras385::fly::Out;
+        namespace fly = extras385::fly;
+        namespace hm = spidy::hero_modes;
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        const auto flies = [](uint32_t hero, float left, float right, uint32_t pose, float stickRise, Vec3 move,
+                              float& fastest, const char*& how) {
+            Flight fl;
+            In in;
+            in.seconds = 1 / 90.f;
+            in.airborne = true;
+            in.look = {0, 0, -1};
+            in.move = move;
+            in.hands[0] = {true, {0, 0, -1}, {-.2f, -.3f, -.3f}};  // both hands aimed ahead, as a palm blast is
+            in.hands[1] = {true, {0, 0, -1}, {.2f, -.3f, -.3f}};
+            for (uint32_t speed : {1u, 2u, 3u}) {
+                fl.land();
+                in.word = fly::unpack(fly::pack(speed, hm::flyThrust(hero, left), hm::flyThrust(hero, right), stickRise, true, pose));
+                for (int i = 0; i < 180; ++i) {
+                    const Out o = fl.update(in);
+                    fastest = std::max(fastest, length(o.velocity));
+                    if (i == 179)
+                        how = o.how;
+                }
+            }
+        };
+        for (uint32_t hero : {hm::ironMan, hm::daredevil, hm::batman, hm::wolverine, hm::punisher, hm::captainAmerica}) {
+            check(hm::triggerWeapon(hero), "a trigger-weapon hero is not marked as one");
+            for (float t : {.2f, .5f, 1.f}) {
+                float fastest = 0;
+                const char* how = "";
+                flies(hero, t, t, fly::hover, 0, {}, fastest, how);  // both triggers, every speed, 2 s each
+                check(fastest == 0 && std::string(how) == "HOVER", "a trigger-weapon hero's trigger moved him in FLY MODE");
+                fastest = 0;
+                flies(hero, 0, t, fly::hover, 0, {}, fastest, how);  // one palm
+                check(fastest == 0, "one trigger-weapon trigger moved him in FLY MODE");
+            }
+            // Flight itself still works for him through its own inputs, the trigger held or not.
+            float fastest = 0;
+            const char* how = "";
+            flies(hero, 1, 1, fly::forward, 0, {}, fastest, how);
+            check(fastest > 10 && std::string(how) == "FORWARD", "the FORWARD pose no longer flies a trigger-weapon hero");
+            fastest = 0;
+            flies(hero, 1, 0, fly::rise, 0, {}, fastest, how);
+            check(fastest > 1 && std::string(how) == "RISE", "the RISE pose no longer flies a trigger-weapon hero");
+            fastest = 0;
+            flies(hero, 1, 1, fly::hover, 0, {0, 0, -1}, fastest, how);
+            check(fastest > 5 && std::string(how) == "STICK", "the left stick no longer flies a trigger-weapon hero");
+            fastest = 0;
+            flies(hero, 1, 1, fly::hover, 1, {}, fastest, how);
+            check(fastest > 5 && std::string(how) == "STICK", "the right stick's rise no longer flies a trigger-weapon hero");
+        }
+        // SPIDER-MAN, SUPERMAN and HULK keep the trigger's thrust (as 0.0.62).
+        for (uint32_t hero : {hm::spiderMan, hm::superman, hm::hulk}) {
+            check(!hm::triggerWeapon(hero), "a hero with no trigger weapon lost his trigger thrust");
+            float fastest = 0;
+            const char* how = "";
+            flies(hero, 0, 1, fly::hover, 0, {}, fastest, how);
+            check(fastest > 5 && std::string(how) == "THRUST", "the trigger no longer thrusts SPIDER-MAN, SUPERMAN or HULK");
+        }
+        check(hm::flyThrust(hm::spiderMan, nan) == 0 && hm::flyThrust(hm::spiderMan, 2) == 1 &&
+                  hm::flyThrust(hm::spiderMan, -1) == 0 && hm::flyThrust(hm::ironMan, 1) == 0 &&
+                  hm::flyThrust(hm::heroes + 5, .5f) == .5f,
+              "flyThrust's clamp or NaN");
+    });
+    test("Version 0.0.7: FLY MODE - CAPTAIN AMERICA's shield throw never flies him (either SHIELD ARM)", [] {
+        // The shield is thrown by the SHIELD ARM hand's trigger (RIGHT by default, LEFT selectable), so in
+        // FLY MODE neither trigger may thrust him; the poses and sticks still fly him, and SPIDER-MAN,
+        // SUPERMAN and HULK keep the trigger thrust.
+        namespace fly = extras385::fly;
+        namespace hm = spidy::hero_modes;
+        check(hm::triggerWeapon(hm::captainAmerica), "CAPTAIN AMERICA's shield trigger is a weapon");
+        const auto top = [](uint32_t hero, float left, float right, uint32_t pose, Vec3 move, const char*& how) {
+            fly::Flight fl;
+            fly::In in;
+            in.seconds = 1 / 90.f;
+            in.airborne = true;
+            in.look = {0, 0, -1};
+            in.move = move;
+            in.hands[0] = {true, {0, 0, -1}, {-.2f, -.3f, -.3f}};
+            in.hands[1] = {true, {0, 0, -1}, {.2f, -.3f, -.3f}};
+            float fastest = 0;
+            for (uint32_t speed : {1u, 2u, 3u}) {
+                fl.land();
+                in.word = fly::unpack(fly::pack(speed, hm::flyThrust(hero, left), hm::flyThrust(hero, right), 0, true, pose));
+                for (int i = 0; i < 180; ++i) {
+                    const fly::Out o = fl.update(in);
+                    fastest = std::max(fastest, length(o.velocity));
+                    how = o.how;
+                }
+            }
+            return fastest;
+        };
+        const char* how = "";
+        for (float t : {.25f, .6f, 1.f}) {
+            check(top(hm::captainAmerica, 0, t, fly::hover, {}, how) == 0 && std::string(how) == "HOVER",
+                  "the RIGHT (default SHIELD ARM) trigger moved CAPTAIN AMERICA in FLY MODE");
+            check(top(hm::captainAmerica, t, 0, fly::hover, {}, how) == 0, "the LEFT trigger moved CAPTAIN AMERICA in FLY MODE");
+            check(top(hm::captainAmerica, t, t, fly::hover, {}, how) == 0, "both triggers moved CAPTAIN AMERICA in FLY MODE");
+        }
+        check(hm::flyThrust(hm::captainAmerica, 1) == 0 && hm::flyThrust(hm::captainAmerica, .5f) == 0, "flyThrust for CAPTAIN AMERICA");
+        check(top(hm::captainAmerica, 1, 1, fly::forward, {}, how) > 10 && std::string(how) == "FORWARD", "the FORWARD pose no longer flies him");
+        check(top(hm::captainAmerica, 0, 0, fly::hover, {0, 0, -1}, how) > 5 && std::string(how) == "STICK", "the left stick no longer flies him");
+        for (uint32_t hero : {hm::spiderMan, hm::superman, hm::hulk})
+            check(!hm::triggerWeapon(hero) && top(hero, 0, 1, fly::hover, {}, how) > 5 && std::string(how) == "THRUST",
+                  "SPIDER-MAN, SUPERMAN or HULK lost the trigger thrust");
+    });
+    test("Version 0.0.7: BATMAN batarang chain roll (25% default, 3 enemies at most, always home)", [] {
+        using namespace spidy::hero_modes;
+        const BatonEnemy foes[4] = {{11, {0, 1.3f, -4}}, {12, {1.5f, 1.3f, -4.5f}}, {13, {-1.5f, 1.3f, -4.5f}}, {14, {0, 1.3f, -6}}};
+        const auto run = [&](uint32_t chainValue, int throwsWanted, int& chained, int& mostHits, int& home) {
+            Baton b;
+            b.roll.state = 0x1234567u;
+            b.chainChance = spidy::hero007::batarangChance(chainValue);
+            chained = mostHits = home = 0;
+            const Vec3 hand{0, 1.3f, -.3f}, aim{0, 0, -1};
+            for (int t = 0; t < throwsWanted; ++t) {
+                int hits = 0;
+                bool thrown = false;
+                for (int f = 0; f < 900; ++f) {
+                    const bool trig = f == 1;
+                    const int aimed = b.inHandNow() ? batonAim(hand, aim, foes, 4) : -1;
+                    if (b.update(1 / 90.f, trig, hand, aim, foes, 4, aimed))
+                        ++hits;
+                    thrown |= !b.inHandNow();
+                    if (thrown && b.inHandNow())
+                        break;
+                }
+                home += thrown && b.inHandNow();
+                chained += hits > 1;
+                mostHits = std::max(mostHits, hits);
+            }
+        };
+        int chained, most, home;
+        run(0, 400, chained, most, home);
+        check(chained > 70 && chained < 130, "25%: about a quarter of throws chain (" + std::to_string(chained) + "/400)");
+        check(most <= 3, "never more than 3 enemies a throw");
+        check(home == 400, "every batarang comes back to the hand");
+        run(3, 50, chained, most, home);
+        check(chained == 50 && most == 3 && home == 50, "100%: every throw hits 3 and comes home");
+        run(4, 50, chained, most, home);
+        check(chained == 0 && most == 1 && home == 50, "OFF: one enemy a throw");
+        check(spidy::hero007::batarangChance(0) == .25f && spidy::hero007::batarangChance(99) == .25f, "the default and a bad value: 25%");
+    });
+    test("Version 0.0.7: BATMAN grapple keeps RT only with LT held", [] {
+        using namespace spidy::hero_modes;
+        uint16_t buttons = 0;
+        uint8_t rt = 200;
+        stripPad(batman, buttons, rt, 0, false, 0);
+        check(rt == 0, "RT alone (a swing) is taken out");
+        rt = 200;
+        stripPad(batman, buttons, rt, 0, false, 200);
+        check(rt == 200, "LT + RT: the game's zip / launch kept (his grapple)");
+        rt = 200;
+        stripPad(wolverine, buttons, rt, 0, false, 200);
+        check(rt == 0, "nobody else keeps it");
+        rt = 200;
+        stripPad(spiderMan, buttons, rt, 0, false, 0);
+        check(rt == 200, "SPIDER-MAN untouched");
+    });
+    test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::punisher;
+        in.head = {{0, 1.7f, 0}, {}};
+        const Vec3 rightHip{.25f, 1.0f, 0}, leftHip{-.25f, 1.0f, 0}, back{.1f, 1.5f, .25f}, away{.3f, 1.3f, -.5f};
+        const auto frame = [&](Vec3 l, float sl, Vec3 r, float sr) {
+            in.hands[0] = {l, {0, 0, -1}, true, 0, sl, false};
+            in.hands[1] = {r, {0, 0, -1}, true, 0, sr, in.hands[1].busy};
+            PlayOutput o;
+            p.holsterStep(in, o);
+            return o;
+        };
+        frame(away, 0, rightHip, 0);
+        PlayOutput o = frame(away, 0, rightHip, 1);
+        check(p.guns.heldIn(1) == 1 && (o.claimed & 2) && o.haptic[1] > 0 && (o.sounds & (1u << spidy::sfx::holsterTick)),
+              "the right hand draws its own hip's pistol with a tick");
+        o = frame(away, 0, rightHip, 0);
+        check(p.guns.heldIn(1) < 0 && p.guns.events(1) == spidy::holster::holstered && o.haptic[1] > 0, "released at the hip: holstered");
+        frame(away, 0, leftHip, 0);
+        frame(away, 0, leftHip, 1);
+        check(p.guns.heldIn(1) < 0 && p.guns.refusedSide == 1, "SAME SIDE: the right hand cannot take the left hip's");
+        frame(away, 0, leftHip, 0);
+        in.crossDraw = true;
+        frame(away, 0, leftHip, 1);
+        check(p.guns.heldIn(1) == 0, "EITHER HAND: a cross draw");
+        frame(away, 0, away, 0);
+        check(p.guns.heldIn(1) < 0 && p.guns.events(1) == spidy::holster::returnedAway, "let go away from the hip: it goes home");
+        in.crossDraw = false;
+        frame(away, 0, back, 0);
+        frame(away, 0, back, 1);
+        check(p.guns.heldIn(1) == 2, "reach behind and grip: the sawed-off");
+        frame(away, 0, back, 0);
+        check(p.guns.heldIn(1) < 0 && p.guns.events(1) == spidy::holster::holstered, "released behind: back on the back");
+        in.hands[1].busy = true;
+        frame(away, 0, rightHip, 0);
+        o = frame(away, 0, rightHip, 1);
+        check(p.guns.heldIn(1) < 0 && o.claimed == 0 && p.guns.refusedBusy == 1, "a busy hand (web, climb) never draws");
+        in.hands[1].busy = false;
+        frame(away, 0, away, 0);
+        o = frame(away, 1, away, 1);
+        check(o.claimed == 0, "grips away from a holster stay the web's / climb's");
+        in.hero = spidy::hero_modes::batman;
+        frame(away, 0, rightHip, 0);
+        o = frame(away, 0, rightHip, 1);
+        check(o.claimed == 0, "no rack for other heroes");
+        in.hero = spidy::hero_modes::daredevil;
+        in.batonHolsters = false;
+        check(p.batonDrawn(0, false) && p.batonDrawn(1, false), "BATON HOLSTERS OFF: batons in the hands as 0.0.62");
+        frame(away, 0, away, 0);
+        check(!p.batonDrawn(0, true), "BATON HOLSTERS ON: holstered until drawn");
+        in.batonHolsters = true;
+        const Vec3 overRight{.12f, 1.55f, .22f};
+        frame(away, 0, overRight, 0);
+        frame(away, 0, overRight, 1);
+        check(p.batonDrawn(1, true), "over the shoulder: the baton drawn");
+    });
+    test("Version 0.0.7: PUNISHER guns, reloads, shells", [] {
+        using namespace spidy::hero007;
+        Gun g;
+        g.arm(pistol);
+        int fired = 0;
+        for (int k = 0; k < 40 && g.state == ready; ++k) {
+            fired += g.update(.1f, true, reloadAuto, false, false);
+            g.update(.1f, false, reloadAuto, false, false);
+        }
+        check(fired == 15 && g.state == autoLoading, "AUTO: 15 rounds, then it reloads itself");
+        for (int k = 0; k < 14; ++k)
+            g.update(.1f, false, reloadAuto, false, false);
+        check(g.state == ready && g.rounds == 15 && g.reloads == 1, "AUTO: full again after 1.2 s");
+        g.arm(pistol);
+        for (int k = 0; k < 40 && g.state == ready; ++k) {
+            g.update(.1f, true, reloadRealistic, false, false);
+            g.update(.1f, false, reloadRealistic, false, false);
+        }
+        check(g.state == empty, "REALISTIC: empty waits for the player");
+        g.update(.1f, true, reloadRealistic, false, false);
+        check(g.dryPulls == 1, "a dry click on an empty gun");
+        g.update(.1f, false, reloadRealistic, false, true);
+        check(g.state == empty, "the hip alone does nothing while the mag is in");
+        g.update(.1f, false, reloadRealistic, true, false);
+        check(g.state == opened && g.drops == 1, "a flick drops the mag");
+        g.update(.1f, false, reloadRealistic, false, true);
+        for (int k = 0; k < 5; ++k)
+            g.update(.1f, false, reloadRealistic, false, false);
+        check(g.state == ready && g.rounds == 15, "the hip seats a new one");
+        g.arm(sawedOff);
+        check(g.rounds == 2, "the sawed-off holds 2");
+        const spidy::hero_modes::BatonEnemy foe[1] = {{5, {0, 1.3f, -3}}};
+        float amount[1]{};
+        const int hits = shoot(sawedOffSpec, {0, 1.3f, 0}, {0, 0, -1}, foe, 1, amount);
+        check(hits == 1 && amount[0] > sawedOffSpec.amount, "pellets at 3 m: several hit");
+        check(!flickDown({0, -1.f, 0}) && flickDown({0, -3.f, 0}), "a flick is faster than 2.5 m/s down");
+        Shells s;
+        for (int k = 0; k < 60; ++k)
+            s.eject({0, 1, 0}, {1, 0, 0}, k & 1);
+        int live = 0;
+        for (const auto& c : s.list)
+            live += c.age < shellSeconds;
+        check(live <= static_cast<int>(shellsMost), "at most 24 cases in the air");
+        for (int k = 0; k < 20; ++k)
+            s.update(.1f);
+        live = 0;
+        for (const auto& c : s.list)
+            live += c.age < shellSeconds;
+        check(live == 0, "cases fade away");
+        char text[16];
+        g.arm(pistol);
+        ammoText(g, text, sizeof text);
+        check(std::string(text).find("15") != std::string::npos, "the readout shows the rounds");
+    });
+    test("Version 0.0.7: WOLVERINE healing, SUPERMAN heat / freeze", [] {
+        using namespace spidy::hero007;
+        Healing h;
+        float wrote = -1;
+        for (int k = 0; k < 20; ++k)
+            wrote = h.step(.1f, 50, 100, NAN);
+        check(wrote < 0, "no healing in the first 3 s");
+        for (int k = 0; k < 20; ++k)
+            wrote = std::max(wrote, h.step(.1f, 50, 100, NAN));
+        check(wrote > 50 && wrote <= 100, "then it climbs");
+        Healing dead;
+        float any = -1;
+        for (int k = 0; k < 60; ++k)
+            any = std::max(any, dead.step(.1f, 0, 100, NAN));
+        check(any < 0, "never a revive");
+        Healing capped;
+        float top = -1;
+        for (int k = 0; k < 200; ++k)
+            top = std::max(top, capped.step(.1f, 70, 100, .25f));
+        check(top <= 75.01f, "never past the game's own cap");
+        HeatVision hv;
+        check(hv.update(.05f, true), "the first tick at once");
+        int ticks = 1;
+        for (int k = 0; k < 80; ++k)
+            ticks += hv.update(.05f, true);
+        check(hv.overheats == 1 && ticks <= 16, "3 s at most, then it cools");
+        check(!hv.update(.05f, true), "a fresh hold is needed");
+        Play p;
+        PlayInput in;
+        in.dt = .05f;
+        in.play = true;
+        in.hero = spidy::hero_modes::superman;
+        in.head = {{0, 1.7f, 0}, {}};
+        const spidy::hero_modes::BatonEnemy foe[1] = {{9, {0, 1.6f, -6}}};
+        in.list = foe;
+        in.count = 1;
+        for (auto& hand : in.hands)
+            hand = {{.2f, 1.2f, -.3f}, {0, 0, -1}, true, 1, 0, false};
+        PlayOutput o;
+        p.step(in, o);
+        check(o.blowCount == 1 && o.blows[0].kind == kindHeat, "both triggers: heat vision hits along the gaze");
+        Play q;
+        in.hands[0].position = {0, 1.62f, -.12f}; // at the mouth
+        PlayOutput o2;
+        q.step(in, o2);
+        check(o2.blowCount == 1 && o2.blows[0].kind == kindFreeze && q.freezing, "a hand at the mouth: cold breath");
+        Play r;
+        in.flying = true;
+        PlayOutput o3;
+        r.step(in, o3);
+        check(o3.blowCount == 0, "flying: the triggers are flight's");
+    });
+    test("Version 0.0.7: WOLVERINE claws and BATMAN smoke through Play", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::wolverine;
+        in.head = {{0, 1.7f, 0}, {}};
+        const spidy::hero_modes::BatonEnemy foe[1] = {{21, {0, 1.3f, -.7f}}};
+        in.list = foe;
+        in.count = 1;
+        bool snikt = false;
+        int hits = 0;
+        for (int f = 0; f < 60; ++f) {
+            const float x = -.6f + 1.2f * static_cast<float>(f) / 30.f;
+            in.hands[1] = {{std::min(x, .6f), 1.3f, -.4f}, {0, 0, -1}, true, 1, 0, false};
+            PlayOutput o;
+            p.step(in, o);
+            snikt |= (o.sounds >> spidy::sfx::clawSnikt) & 1;
+            for (uint32_t b = 0; b < o.blowCount; ++b)
+                hits += o.blows[b].kind == kindClaw;
+        }
+        check(snikt, "snikt when the claws come out");
+        check(hits >= 1, "a fast sweep through an enemy hits");
+        Play bat;
+        in.hero = spidy::hero_modes::batman;
+        const spidy::hero_modes::BatonEnemy target[1] = {{31, {0, 1.3f, -4}}};
+        in.list = target;
+        int batHits = 0;
+        for (int f = 0; f < 200; ++f) {
+            in.hands[0] = {{-.2f, 1.3f, -.3f}, {0, 0, -1}, true, f == 2 ? 1.f : 0.f, 0, false};
+            in.hands[1] = {{.2f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+            PlayOutput o;
+            bat.step(in, o);
+            batHits += static_cast<int>(o.blowCount);
+        }
+        check(batHits == 1 && bat.smokes == 1, "a batarang hit: one blow and its smoke puff");
+        Draw d;
+        bat.draw(d, Pose{}, in, 0);
+        check(d.any && d.held[0].look == lookBatarang && d.held[1].look == lookBatarang, "a batarang in each hand");
+    });
+    test("Version 0.0.7: the looks keep their vertex budgets", [] {
+        using namespace spidy::hero007;
+        const Vec3 viewer{0, 1.6f, 0};
+        const float px = .0015f;
+        const auto count = [&](uint32_t look, uint32_t holsterKind) {
+            std::vector<Vertex> v;
+            Item it;
+            it.look = look;
+            it.at = {0, 1.2f, -.5f};
+            it.holster = holsterKind;
+            appendItem(v, it, viewer, px);
+            return v.size();
+        };
+        check(count(lookPistol, 0) > 0 && count(lookPistol, 0) <= budget::pistol, "pistol in budget: " + std::to_string(count(lookPistol, 0)));
+        check(count(lookSawedOff, 0) <= budget::sawedOff && count(lookSawedOffOpen, 0) <= budget::sawedOff, "sawed-off in budget");
+        check(count(lookBatarang, 0) > 0 && count(lookBatarang, 0) <= budget::batarang, "batarang in budget: " + std::to_string(count(lookBatarang, 0)));
+        check(count(lookClaws, 0) > 0 && count(lookClaws, 0) <= budget::claws, "claws in budget: " + std::to_string(count(lookClaws, 0)));
+        check(count(lookClub, 0) > 0 && count(lookClub, 0) <= budget::club, "club in budget: " + std::to_string(count(lookClub, 0)));
+        check(count(lookPistol, 1) - count(lookPistol, 0) <= budget::holster, "a holster in budget");
+        std::vector<Vertex> v;
+        appendHeatBeam(v, {0, 1.6f, 0}, {0, 1.5f, -8}, viewer, px, 1);
+        check(!v.empty() && v.size() <= budget::heatBeam, "heat beam in budget: " + std::to_string(v.size()));
+        v.clear();
+        appendFreezeBreath(v, {0, 1.6f, 0}, {0, 1.5f, -8}, viewer, px, 1);
+        check(!v.empty() && v.size() <= budget::freeze, "freeze in budget: " + std::to_string(v.size()));
+        v.clear();
+        appendSmoke(v, {0, 1, -3}, .3f, viewer);
+        check(v.size() <= budget::smoke, "smoke in budget");
+        v.clear();
+        appendShell(v, {0, 1, -1}, {1, 0, 0}, true, .1f, viewer, px);
+        check(v.size() <= budget::shell, "shell in budget");
+        v.clear();
+        Item gun;
+        gun.look = lookPistol;
+        gun.at = {0, 1.2f, -.5f};
+        appendAmmo(v, "15/15", gun, viewer);
+        check(v.size() <= budget::ammo, "readout in budget: " + std::to_string(v.size()));
+        // A worst frame stays inside budget::frame, and NaN draws nothing.
+        Draw d;
+        d.any = true;
+        for (auto& h : d.held)
+            h = Item{lookSawedOffOpen, {0, 1.2f, -.5f}};
+        for (auto& w : d.worn)
+            w = Item{lookSawedOff, {0, 1.0f, -.2f}, {0, -1, 0}, {0, 0, -1}, 0, 2};
+        std::snprintf(d.ammo[0], sizeof d.ammo[0], "2/2");
+        std::snprintf(d.ammo[1], sizeof d.ammo[1], "2/2");
+        d.beamFade = 1;
+        d.beamFreeze = true;
+        d.beamTo = {0, 1.5f, -8};
+        for (uint32_t i = 0; i < drawSmokes; ++i) {
+            d.smokeAt[i] = {0, 1, -3};
+            d.smokeAge[i] = .2f;
+        }
+        d.shells = drawShells;
+        for (uint32_t i = 0; i < drawShells; ++i) {
+            d.shellAt[i] = {.1f * static_cast<float>(i), 1, -1};
+            d.shellWay[i] = {1, 0, 0};
+        }
+        v.clear();
+        appendHero007(v, d, {}, viewer, px);
+        check(v.size() <= budget::frame, "the worst frame in budget: " + std::to_string(v.size()) + " of " + std::to_string(budget::frame));
+        v.clear();
+        appendHero007(v, d, {NAN, 0, 0}, viewer, px);
+        check(v.empty(), "a NaN move draws nothing");
+        Item bad;
+        bad.look = lookPistol;
+        bad.at = {NAN, 0, 0};
+        appendItem(v, bad, viewer, px);
+        check(v.empty(), "a NaN item draws nothing");
+    });
+    test("Version 0.0.7: the new sounds and defaults", [] {
+        check(spidy::sfx::sounds == 20, "twenty sounds (0.0.7: + 9, CAPTAIN AMERICA + 4)");
+        using namespace spidy::combat38;
+        for (uint32_t o = batman; o <= shieldLook; ++o) { // CAPTAIN AMERICA: through SHIELD LOOK
+            const std::string help = optionInfo[o].help;
+            check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1 && help.back() == '.',
+                  std::string("one short sentence: ") + optionInfo[o].key);
+        }
+        check(std::string(optionInfo[batarangStyle].values[0]) == "DEFAULT" && optionInfo[batarangStyle].count == 4,
+              "BATARANG STYLE: DEFAULT first (the default)");
+    });
+    test("Version 0.0.7: BATARANG STYLE models (glTF reader, fallbacks, budget)", [] {
+        namespace mm = spidy::mesh_model;
+        // A GLB / glTF builder for the tests: positions, indices, optional extra top-level JSON.
+        struct Built {
+            std::string json;
+            std::vector<uint8_t> bin;
+        };
+        const auto build = [](const std::vector<float>& pos, const std::vector<uint16_t>& idx, const std::string& extra) {
+            Built b;
+            b.bin.resize(pos.size() * 4 + idx.size() * 2);
+            std::memcpy(b.bin.data(), pos.data(), pos.size() * 4);
+            std::memcpy(b.bin.data() + pos.size() * 4, idx.data(), idx.size() * 2);
+            while (b.bin.size() % 4)
+                b.bin.push_back(0);
+            const size_t pb = pos.size() * 4;
+            b.json = "{\"asset\":{\"version\":\"2.0\"},\"scene\":0,\"scenes\":[{\"nodes\":[0]}],"
+                     "\"nodes\":[{\"mesh\":0,\"scale\":[2,2,2]}],"
+                     "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"indices\":1,\"material\":0}]}],"
+                     "\"materials\":[{\"pbrMetallicRoughness\":{\"baseColorFactor\":[0.2,0.3,0.4,1]}}],"
+                     "\"buffers\":[{\"byteLength\":" + std::to_string(b.bin.size()) + ",\"uri\":\"scene.bin\"}],"
+                     "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":" + std::to_string(pb) +
+                     "},{\"buffer\":0,\"byteOffset\":" + std::to_string(pb) + ",\"byteLength\":" + std::to_string(idx.size() * 2) + "}],"
+                     "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" + std::to_string(pos.size() / 3) +
+                     ",\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":5123,\"count\":" + std::to_string(idx.size()) +
+                     ",\"type\":\"SCALAR\"}]" + extra + "}";
+            return b;
+        };
+        const auto glb = [](const Built& b) {
+            std::string j = b.json;
+            while (j.size() % 4)
+                j += ' ';
+            std::vector<uint8_t> out(12);
+            const auto u32 = [&](uint32_t v) {
+                for (int k = 0; k < 4; ++k)
+                    out.push_back(static_cast<uint8_t>(v >> (8 * k)));
+            };
+            u32(static_cast<uint32_t>(j.size()));
+            u32(0x4E4F534Au);
+            out.insert(out.end(), j.begin(), j.end());
+            u32(static_cast<uint32_t>(b.bin.size()));
+            u32(0x004E4942u);
+            out.insert(out.end(), b.bin.begin(), b.bin.end());
+            const uint32_t head[3] = {0x46546C67u, 2, static_cast<uint32_t>(out.size())};
+            std::memcpy(out.data(), head, 12);
+            return out;
+        };
+        const std::vector<float> tetra{0, 0, 0, .1f, 0, 0, 0, .02f, 0, 0, 0, .05f};
+        const std::vector<uint16_t> faces{0, 1, 2, 0, 1, 3, 0, 2, 3, 1, 2, 3};
+        const Built good = build(tetra, faces, "");
+        mm::Mesh m;
+        std::string err;
+        std::vector<uint8_t> file = glb(good);
+        check(mm::parseGlb(file.data(), file.size(), m, err) && m.triangles() == 4 && m.ok(), "a good GLB reads: " + err);
+        check(std::abs(m.high.x - .2f) < 1e-5f && std::abs(m.colors[0].y - .3f) < 1e-5f, "node scale and base colour applied");
+        check(mm::parseGltf(good.json, good.bin, m, err) && m.triangles() == 4, "a good .gltf + .bin reads");
+        // Broken files: each refused with a reason, nothing left in the mesh.
+        const auto refused = [&](std::vector<uint8_t> bytes, const char* what) {
+            mm::Mesh r;
+            std::string e;
+            const bool okNow = mm::parseGlb(bytes.data(), bytes.size(), r, e);
+            check(!okNow && !e.empty() && r.triangles() == 0, std::string("refused: ") + what);
+        };
+        std::vector<uint8_t> bad = file;
+        bad[0] = 'X';
+        refused(bad, "bad magic");
+        refused(std::vector<uint8_t>(file.begin(), file.begin() + static_cast<long>(file.size() / 2)), "truncated");
+        refused({}, "empty");
+        bad = file;
+        bad[4] = 1;
+        refused(bad, "GLB version 1");
+        bad = file;
+        bad[20] = '[';
+        refused(bad, "broken JSON");
+        refused(glb(build(tetra, {0, 1, 9}, "")), "an index out of range");
+        refused(glb(build({0, 0, 0, NAN, 0, 0, 0, 1, 0}, {0, 1, 2}, "")), "a NaN position");
+        refused(glb(build(tetra, faces, ",\"extensionsRequired\":[\"KHR_draco_mesh_compression\"]")), "Draco");
+        refused(glb(build({0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 1, 2}, "")), "no size");
+        refused(glb(build(tetra, {0, 1}, "")), "not whole triangles");
+        Built shortBin = good;
+        shortBin.bin.resize(8);
+        check(!mm::parseGltf(shortBin.json, shortBin.bin, m, err), "a .bin shorter than its .gltf says: refused");
+        check(!mm::parseGltf("", {}, m, err) && !mm::parseGltf("{\"asset\":{\"version\":\"1.0\"}}", {}, m, err), "empty / glTF 1: refused");
+        // A deep JSON (a stack bomb) is refused, not a crash.
+        check(!mm::parseGltf(std::string(100000, '[') + std::string(100000, ']'), {}, m, err), "a 100000-deep JSON: refused");
+        // Random damage never crashes (and never gives a NaN).
+        std::mt19937 rng(7007);
+        int stillGood = 0;
+        for (int k = 0; k < 2000; ++k) {
+            std::vector<uint8_t> f = file;
+            for (int n = 0; n < 1 + static_cast<int>(rng() % 6); ++n)
+                f[rng() % f.size()] = static_cast<uint8_t>(rng());
+            mm::Mesh r;
+            if (mm::parseGlb(f.data(), f.size(), r, err)) {
+                ++stillGood;
+                for (const Vec3& p : r.corners)
+                    check(std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z), "a damaged file read in gives finite points");
+            }
+        }
+        check(stillGood < 2000, "damage is noticed");
+        // The drop-in folders: missing, corrupt, .gltf without .bin, good, over budget.
+        const auto root = (std::filesystem::temp_directory_path() / "spidy_h7_models").string() + "/";
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        const auto put = [&](const std::string& rel, const std::vector<uint8_t>& bytes) {
+            std::filesystem::create_directories(std::filesystem::path(root + rel).parent_path(), ec);
+            std::FILE* f = std::fopen((root + rel).c_str(), "wb");
+            if (f) {
+                std::fwrite(bytes.data(), 1, bytes.size(), f);
+                std::fclose(f);
+            }
+        };
+        check(mm::loadFolder(root + "Batarang/EIRA/", true, m, err) == mm::missing && !m.ok(), "no file: MISSING");
+        put("Batarang/CLOONEY/scene.glb", std::vector<uint8_t>(file.begin(), file.begin() + 40));
+        check(mm::loadFolder(root + "Batarang/CLOONEY/", true, m, err) == mm::invalid && !m.ok(), "a corrupt scene.glb: INVALID");
+        put("Batarang/JOKER/scene.gltf", std::vector<uint8_t>(good.json.begin(), good.json.end()));
+        check(mm::loadFolder(root + "Batarang/JOKER/", false, m, err) == mm::invalid, "scene.gltf without scene.bin: INVALID");
+        put("Batarang/JOKER/scene.bin", good.bin);
+        check(mm::loadFolder(root + "Batarang/JOKER/", false, m, err) == mm::loaded && m.triangles() == 4 && !m.decimated,
+              "scene.gltf + scene.bin: LOADED, unmodified");
+        // A dense 2000-triangle plate: decimated where allowed, refused where not (JOKER, ND).
+        std::vector<float> grid;
+        std::vector<uint16_t> tris;
+        const int n = 32;
+        for (int y = 0; y <= n; ++y)
+            for (int x = 0; x <= n; ++x)
+                grid.insert(grid.end(), {static_cast<float>(x) * .2f / n, static_cast<float>(y) * .06f / n,
+                                         .002f * std::sin(static_cast<float>(x) * .7f) * std::cos(static_cast<float>(y) * .5f)});
+        for (int y = 0; y < n; ++y)
+            for (int x = 0; x < n; ++x) {
+                const auto a = static_cast<uint16_t>(y * (n + 1) + x), b = static_cast<uint16_t>(a + 1),
+                           c = static_cast<uint16_t>(a + n + 1), d = static_cast<uint16_t>(c + 1);
+                tris.insert(tris.end(), {a, b, c, b, d, c});
+            }
+        put("Batarang/EIRA/scene.glb", glb(build(grid, tris, "")));
+        check(mm::loadFolder(root + "Batarang/EIRA/", true, m, err) == mm::loaded && m.decimated && m.triangles() <= mm::drawTriangles &&
+                  m.sourceTriangles == 2048,
+              "2048 triangles, CC BY: decimated to the budget (" + std::to_string(m.triangles()) + ")");
+        check(mm::loadFolder(root + "Batarang/EIRA/", false, m, err) == mm::overBudget && !m.ok(), "no changes allowed: refused, not reduced");
+        // The library: once per style, null (DEFAULT) unless loaded.
+        mm::Library lib;
+        check(lib.load(mm::styleEira, root) == mm::loaded && lib.model(mm::styleEira), "the library loads EIRA");
+        check(lib.load(mm::styleClooney, root) == mm::invalid && !lib.model(mm::styleClooney), "CLOONEY corrupt: DEFAULT");
+        check(!lib.model(mm::styleDefault) && !lib.model(99) && lib.load(99, root) == mm::notTried, "DEFAULT / bad style: no model");
+        mm::Library none;
+        check(none.load(mm::styleJoker, root + "nowhere/") == mm::missing && !none.model(mm::styleJoker), "missing folder: DEFAULT");
+        // Drawn: inside the budget; DEFAULT when the model cannot be drawn.
+        using namespace spidy::hero007;
+        const Vec3 viewer{0, 1.6f, 0};
+        Draw d;
+        d.any = true;
+        d.held[0] = Item{lookBatarang, {0, 1.2f, -.5f}};
+        std::vector<Vertex> plain, model;
+        appendHero007(plain, d, {}, viewer, .0015f);
+        d.batarangModel = lib.model(mm::styleEira);
+        appendHero007(model, d, {}, viewer, .0015f);
+        check(!model.empty() && model.size() <= budget::batarangModel && model.size() != plain.size(),
+              "the model is drawn in budget: " + std::to_string(model.size()));
+        float span = 0;
+        for (const auto& a : model)
+            for (const auto& b : model)
+                span = std::max(span, length(a.position - b.position));
+        check(span > .18f && span < .23f, "fitted to a 20 cm span at draw time: " + std::to_string(span));
+        mm::Mesh broken;
+        d.batarangModel = &broken;
+        std::vector<Vertex> fallback;
+        appendHero007(fallback, d, {}, viewer, .0015f);
+        check(fallback.size() == plain.size(), "an unusable model: DEFAULT drawn");
+        std::filesystem::remove_all(root, ec);
+    });
+    test("Version 0.0.7: never more than TWO of a hero's weapons, in every state", [] {
+        using namespace spidy::hero007;
+        // DAREDEVIL (BATON HOLSTERS ON): worn on the back + in the hand / in the air (game_xr's rule).
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::daredevil;
+        in.batonHolsters = true;
+        in.head = {{0, 1.7f, 0}, {}};
+        const Vec3 overLeft{-.12f, 1.55f, .22f}, overRight{.12f, 1.55f, .22f}, awayL{-.3f, 1.3f, -.5f}, awayR{.3f, 1.3f, -.5f};
+        bool inHand[2] = {true, true};
+        int worst = 0;
+        const auto shown = [&](uint32_t look) {
+            Draw d;
+            p.draw(d, Pose{}, in, look);
+            int n = 0;
+            for (const Item& w : d.worn)
+                n += w.look == lookBaton062 || w.look == lookClub || w.look == lookBatonModel;
+            for (unsigned i = 0; i < 2; ++i)
+                n += p.batonShown(i, inHand[i], in.batonHolsters);
+            return n;
+        };
+        const auto frame = [&](Vec3 l, float sl, bool tl, Vec3 r, float sr, bool tr, const char* state) {
+            in.hands[0] = {l, {0, 0, -1}, true, 0, sl, false, tl};
+            in.hands[1] = {r, {0, 0, -1}, true, 0, sr, false, tr};
+            inHand[0] = !tl;
+            inHand[1] = !tr;
+            PlayOutput o;
+            p.holsterStep(in, o);
+            for (uint32_t look = 0; look < 3; ++look) {
+                const int n = shown(look);
+                worst = std::max(worst, n);
+                check(n == 2, std::string("DAREDEVIL: exactly 2 batons, ") + state + " (look " + std::to_string(look) + "): " +
+                                  std::to_string(n));
+            }
+        };
+        frame(awayL, 0, false, awayR, 0, false, "holstered");
+        frame(overLeft, 0, false, overRight, 0, false, "hands at the back");
+        frame(overLeft, 1, false, overRight, 1, false, "drawn");
+        check(p.batons.heldIn(0) >= 0 && p.batons.heldIn(1) >= 0, "both batons drawn");
+        frame(awayL, 1, false, awayR, 1, true, "the right one thrown");
+        frame(awayL, 1, false, overRight, 0, true, "thrown, grip let go at the back (mid-chain)");
+        check(p.batons.heldIn(1) >= 0, "a thrown baton is not holstered while it is in the air");
+        frame(awayL, 1, false, awayR, 0, true, "returning, grip let go away");
+        frame(awayL, 0, true, awayR, 0, true, "both in the air");
+        frame(awayL, 0, false, overRight, 0, false, "back in the hands: the let-go now counts");
+        check(p.batons.heldIn(1) < 0 && p.batons.heldIn(0) < 0, "caught again with the grip open: back to their holsters");
+        frame(awayL, 0, false, awayR, 0, false, "holstered again");
+        in.batonHolsters = false;
+        frame(awayL, 0, false, awayR, 0, false, "BATON HOLSTERS OFF (0.0.62)");
+        frame(awayL, 0, true, awayR, 0, true, "BATON HOLSTERS OFF, thrown");
+        check(worst == 2, "DAREDEVIL: never 3");
+        // PUNISHER: two pistols and one sawed-off, worn or held, whatever the hands do.
+        Play g;
+        in = PlayInput{};
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::punisher;
+        in.head = {{0, 1.7f, 0}, {}};
+        const Vec3 rightHip{.25f, 1.0f, 0}, leftHip{-.25f, 1.0f, 0}, back{.1f, 1.5f, .25f};
+        const auto gunFrame = [&](Vec3 l, float sl, Vec3 r, float sr, const char* state) {
+            in.hands[0] = {l, {0, 0, -1}, true, 0, sl, false};
+            in.hands[1] = {r, {0, 0, -1}, true, 0, sr, false};
+            PlayOutput o;
+            g.holsterStep(in, o);
+            g.step(in, o);
+            Draw d;
+            g.draw(d, Pose{}, in, 0);
+            int pistols = 0, sawed = 0;
+            for (const Item* it : {&d.worn[0], &d.worn[1], &d.worn[2], &d.worn[3], &d.held[0], &d.held[1]}) {
+                pistols += it->look == lookPistol;
+                sawed += it->look == lookSawedOff || it->look == lookSawedOffOpen;
+            }
+            check(pistols == 2 && sawed == 1, std::string("PUNISHER: 2 pistols, 1 sawed-off, ") + state + ": " +
+                                                  std::to_string(pistols) + ", " + std::to_string(sawed));
+        };
+        gunFrame(awayL, 0, awayR, 0, "holstered");
+        gunFrame(leftHip, 0, rightHip, 0, "hands at the hips");
+        gunFrame(leftHip, 1, rightHip, 1, "both pistols drawn");
+        gunFrame(awayL, 1, awayR, 1, "both pistols out");
+        gunFrame(awayL, 1, back, 1, "a pistol held, the back gripped");
+        gunFrame(awayL, 1, rightHip, 0, "right pistol holstered");
+        gunFrame(awayL, 1, back, 0, "at the back");
+        gunFrame(awayL, 1, back, 1, "the sawed-off drawn");
+        gunFrame(awayL, 0, awayR, 1, "let go away: home");
+        in.crossDraw = true;
+        gunFrame(awayL, 0, leftHip, 0, "cross draw ready");
+        gunFrame(awayL, 0, leftHip, 1, "cross draw");
+        gunFrame(leftHip, 1, leftHip, 1, "both hands at one hip");
+        gunFrame(awayL, 0, awayR, 0, "all home");
+        // BATMAN: one batarang per hand, in the hand or in the air, never both.
+        Play bat;
+        in = PlayInput{};
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}};
+        const spidy::hero_modes::BatonEnemy foes[2] = {{31, {0, 1.3f, -4}}, {32, {1, 1.3f, -5}}};
+        in.list = foes;
+        in.count = 2;
+        in.chain = 3; // 100%: the longest chain
+        for (int f = 0; f < 400; ++f) {
+            in.hands[0] = {{-.2f, 1.3f, -.3f}, {0, 0, -1}, true, f % 50 == 2 ? 1.f : 0.f, 0, false};
+            in.hands[1] = {{.2f, 1.3f, -.3f}, {0, 0, -1}, true, f % 70 == 5 ? 1.f : 0.f, 0, false};
+            PlayOutput o;
+            bat.step(in, o);
+            Draw d;
+            bat.draw(d, Pose{}, in, 0);
+            for (unsigned i = 0; i < 2; ++i) {
+                const int n = (d.held[i].look == lookBatarang) + (d.flying[i].look == lookBatarang);
+                if (n > 1)
+                    check(false, "BATMAN: two batarangs for one hand at frame " + std::to_string(f));
+            }
+        }
+        check(true, "BATMAN: one batarang per hand");
+    });
+    test("Version 0.0.7: GUN MODELS / BATON LOOK MODEL (COLOR_0, pivot, slots, fallbacks, cable)", [] {
+        namespace mm = spidy::mesh_model;
+        using namespace spidy::combat38;
+        check(optionInfo[gunModels].count == 2 && std::string(optionInfo[gunModels].values[0]) == "BUILT-IN",
+              "GUN MODELS: BUILT-IN first (the default)");
+        check(optionInfo[batonLook].count == 3 && std::string(optionInfo[batonLook].values[2]) == "MODEL" &&
+                  std::string(optionInfo[batonLook].values[0]) == "CLASSIC" &&
+                  batonClub(1) && !batonClub(2) && batonModel(2) && !batonModel(0) && !gunModelsOn(0) && gunModelsOn(1),
+              "BATON LOOK: CLASSIC (default), CLUB, MODEL");
+        check(std::string(mm::slotFolders[mm::slotBatonLeft]) == "Baton/Left" && std::string(mm::slotFolders[mm::slotPistol]) == "Pistol" &&
+                  !mm::slotMayDecimate[mm::styleJoker] && mm::slotMayDecimate[mm::slotPistol],
+              "slot folders; JOKER never reduced");
+        // A GLB with COLOR_0 (normalized UBYTE VEC4) and asset.extras.pivot.
+        const std::vector<float> pos{0, 0, 0, .1f, 0, 0, 0, .05f, 0, 0, 0, -.3f};
+        const std::vector<uint16_t> idx{0, 1, 2, 0, 1, 3, 0, 2, 3, 1, 2, 3};
+        const uint8_t cols[16] = {255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 255, 255};
+        const auto make = [&](const std::string& colorAcc, const std::string& asset, size_t colourBytes) {
+            std::vector<uint8_t> bin(pos.size() * 4 + 24 + colourBytes);
+            std::memcpy(bin.data(), pos.data(), pos.size() * 4);
+            std::memcpy(bin.data() + pos.size() * 4, idx.data(), idx.size() * 2);
+            std::memcpy(bin.data() + pos.size() * 4 + 24, cols, std::min<size_t>(16, colourBytes));
+            const size_t pb = pos.size() * 4;
+            std::string j = "{\"asset\":{\"version\":\"2.0\"" + asset + "},\"scene\":0,\"scenes\":[{\"nodes\":[0]}],"
+                            "\"nodes\":[{\"mesh\":0}],"
+                            "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"COLOR_0\":2},\"indices\":1}]}],"
+                            "\"buffers\":[{\"byteLength\":" + std::to_string(bin.size()) + "}],"
+                            "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":" + std::to_string(pb) +
+                            "},{\"buffer\":0,\"byteOffset\":" + std::to_string(pb) + ",\"byteLength\":24},"
+                            "{\"buffer\":0,\"byteOffset\":" + std::to_string(pb + 24) + ",\"byteLength\":" + std::to_string(colourBytes) + "}],"
+                            "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":4,\"type\":\"VEC3\"},"
+                            "{\"bufferView\":1,\"componentType\":5123,\"count\":12,\"type\":\"SCALAR\"}," + colorAcc + "]}";
+            while (j.size() % 4)
+                j += ' ';
+            std::vector<uint8_t> out(12);
+            const auto u32 = [&](uint32_t v) {
+                for (int k = 0; k < 4; ++k)
+                    out.push_back(static_cast<uint8_t>(v >> (8 * k)));
+            };
+            u32(static_cast<uint32_t>(j.size()));
+            u32(0x4E4F534Au);
+            out.insert(out.end(), j.begin(), j.end());
+            while (bin.size() % 4)
+                bin.push_back(0);
+            u32(static_cast<uint32_t>(bin.size()));
+            u32(0x004E4942u);
+            out.insert(out.end(), bin.begin(), bin.end());
+            const uint32_t head[3] = {0x46546C67u, 2, static_cast<uint32_t>(out.size())};
+            std::memcpy(out.data(), head, 12);
+            return out;
+        };
+        const std::string ubyte4 = "{\"bufferView\":2,\"componentType\":5121,\"normalized\":true,\"count\":4,\"type\":\"VEC4\"}";
+        mm::Mesh m;
+        std::string err;
+        std::vector<uint8_t> f = make(ubyte4, ",\"extras\":{\"pivot\":[0,0.01,-0.2]}", 16);
+        check(mm::parseGlb(f.data(), f.size(), m, err) && m.triangles() == 4, "COLOR_0 GLB reads: " + err);
+        check(std::abs(m.colors[0].x - 1) < 1e-4f && m.colors[0].z < 1e-4f, "triangle 0,1,2: all red");
+        check(std::abs(m.colors[1].x - .6667f) < 1e-3f && std::abs(m.colors[1].z - .3333f) < 1e-3f, "a triangle's colour: its corners' mean");
+        check(m.hasPivot && std::abs(m.pivot.z + .2f) < 1e-5f && std::abs(m.pivot.y - .01f) < 1e-5f, "asset.extras.pivot read");
+        f = make(ubyte4, ",\"extras\":{\"pivot\":[0,1e9,0]}", 16);
+        check(mm::parseGlb(f.data(), f.size(), m, err) && !m.hasPivot, "an insane pivot: ignored");
+        f = make(ubyte4, ",\"extras\":{\"pivot\":\"x\"}", 16);
+        check(mm::parseGlb(f.data(), f.size(), m, err) && !m.hasPivot, "a pivot that is not 3 numbers: ignored");
+        f = make("{\"bufferView\":2,\"componentType\":5121,\"normalized\":true,\"count\":3,\"type\":\"VEC4\"}", "", 16);
+        check(!mm::parseGlb(f.data(), f.size(), m, err), "COLOR_0 count not the POSITION count: refused");
+        f = make(ubyte4, "", 8);
+        check(!mm::parseGlb(f.data(), f.size(), m, err), "COLOR_0 past its bufferView: refused");
+        f = make("{\"bufferView\":2,\"componentType\":5126,\"count\":4,\"type\":\"VEC2\"}", "", 32);
+        check(!mm::parseGlb(f.data(), f.size(), m, err), "COLOR_0 VEC2: refused");
+        // Drawn through appendHero007 in the built-in looks' places; the built-in look without them.
+        using namespace spidy::hero007;
+        f = make(ubyte4, ",\"extras\":{\"pivot\":[0,0.01,-0.05]}", 16);
+        mm::Mesh model;
+        check(mm::parseGlb(f.data(), f.size(), model, err), "the test model");
+        const Vec3 viewer{0, 1.6f, 0};
+        const auto drawWith = [&](const Draw& d) {
+            std::vector<Vertex> v;
+            appendHero007(v, d, {}, viewer, .0015f);
+            return v;
+        };
+        Draw d;
+        d.any = true;
+        d.held[0] = Item{lookPistol, {0, 1.2f, -.5f}};
+        d.held[1] = Item{lookSawedOffOpen, {.2f, 1.2f, -.5f}};
+        d.worn[0] = Item{lookBatonModel, {0, 1.5f, .2f}, {0, -1, 0}, {0, 0, 1}, 0, 3, 0};
+        const auto builtin = drawWith(d);
+        d.pistolModel = &model;
+        d.sawedFrame = &model;
+        d.sawedBarrels = &model;
+        d.batonModel[0] = &model;
+        const auto models = drawWith(d);
+        check(!models.empty() && models.size() != builtin.size() && models.size() <= budget::frame, "the models drawn in budget");
+        mm::Mesh broken;
+        Draw b = d;
+        b.pistolModel = b.sawedFrame = b.sawedBarrels = b.batonModel[0] = &broken;
+        check(drawWith(b).size() == builtin.size(), "unusable models: the built-in looks");
+        mm::Mesh noPivot = model;
+        noPivot.hasPivot = false;
+        Draw np = d;
+        np.pistolModel = nullptr;
+        np.batonModel[0] = nullptr;
+        np.sawedBarrels = &noPivot;
+        Draw nb = d;
+        nb.pistolModel = nb.sawedFrame = nb.sawedBarrels = nullptr;
+        nb.batonModel[0] = nullptr;
+        check(drawWith(np).size() == drawWith(nb).size(), "barrels without a hinge: the built-in sawed-off");
+        // The barrels turn about the hinge when open: the open and closed models differ.
+        std::vector<Vertex> shut, open;
+        appendSawedOffModel(shut, Item{lookSawedOff, {0, 1.2f, -.5f}}, model, model, false, viewer);
+        appendSawedOffModel(open, Item{lookSawedOff, {0, 1.2f, -.5f}}, model, model, true, viewer);
+        bool moved = shut.size() == open.size() && !shut.empty();
+        float most = 0;
+        for (size_t k = 0; moved && k < shut.size(); ++k)
+            most = std::max(most, length(shut[k].position - open[k].position));
+        check(moved && most > .01f, "open: the barrels turned about the hinge");
+        // A held baton model spans its grip to its tip; NaN draws nothing.
+        std::vector<Vertex> bv;
+        mm::Mesh stick = model; // .1 x .05 x .3 m, the grip pivot at z 0: butt z .0 ... tip z -.3
+        check(appendBatonModel(bv, {0, 1.2f, -.3f}, {0, 1.2f, -.8f}, stick, viewer) && !bv.empty(), "a baton model drawn");
+        std::vector<Vertex> nan;
+        check(!appendBatonModel(nan, {NAN, 0, 0}, {0, 1, 0}, stick, viewer) && nan.empty(), "a NaN baton: nothing");
+        // The cable: only when asked (thrown), thin, in budget; none when not.
+        Draw c;
+        c.any = true;
+        const auto none = drawWith(c).size();
+        c.cable[1] = true;
+        c.cableFrom[1] = {.2f, 1.2f, -.3f};
+        c.cableTo[1] = {.5f, 1.4f, -6};
+        const auto withCable = drawWith(c).size();
+        check(none == 0 && withCable > 0 && withCable <= budget::cable, "the cable drawn only when thrown, in budget: " + std::to_string(withCable));
+        c.cableTo[1] = {NAN, 0, 0};
+        check(drawWith(c).empty(), "a NaN cable: nothing");
+        // The real converted models (build/h7out/Models) when this machine has them.
+        const std::string real = "build/h7out/Models/";
+        if (std::filesystem::exists(real + "Pistol/scene.glb")) {
+            mm::Library lib;
+            for (uint32_t s : {uint32_t(mm::styleEira), uint32_t(mm::styleClooney), uint32_t(mm::slotPistol),
+                               uint32_t(mm::slotSawedOffFrame), uint32_t(mm::slotSawedOffBarrels), uint32_t(mm::slotBatonLeft),
+                               uint32_t(mm::slotBatonRight), uint32_t(mm::slotShield)}) {
+                const auto st = lib.load(s, real);
+                check(st == mm::loaded && lib.model(s) && !lib.model(s)->decimated && lib.model(s)->triangles() <= mm::drawTriangles,
+                      std::string("converted model loads as shipped: ") + mm::slotFolders[s] + " " + mm::statusNames[st < 5 ? static_cast<int>(st) : 0] +
+                          " " + lib.error[s]);
+            }
+            check(lib.model(mm::slotSawedOffBarrels) && lib.model(mm::slotSawedOffBarrels)->hasPivot, "the barrels carry their hinge");
+            check(lib.model(mm::slotShield) && lib.model(mm::slotShield)->hasLayer && lib.model(mm::slotShield)->hasPivot &&
+                      lib.model(mm::slotShield)->layerSplit > 0 && lib.model(mm::slotShield)->layerSplit < lib.model(mm::slotShield)->triangles(),
+                  "CAPTAIN AMERICA: the shield carries its layer (face / straps) and its pivot");
+            const auto js = lib.load(mm::styleJoker, real);
+            check(js == mm::loaded || js == mm::overBudget, std::string("JOKER: drawn as downloaded or not at all: ") + mm::statusNames[js < 5 ? static_cast<int>(js) : 0]);
+        }
+    });
+    test("Version 0.0.7: CAPTAIN AMERICA settings, defaults and helpers", [] {
+        using namespace spidy;
+        using namespace spidy::combat38;
+        check(std::string(valueName(captainAmerica, 0)) == "OFF" && std::string(valueName(shieldArm, 0)) == "RIGHT" &&
+                  std::string(valueName(shieldArm, 1)) == "LEFT" &&
+                  std::string(valueName(shieldDamage, 0)) == "35 HP" && std::string(valueName(shieldChain, 0)) == "ON" &&
+                  std::string(valueName(shieldBlock, 0)) == "OFF" && std::string(valueName(shieldLook, 0)) == "BUILT-IN",
+              "OFF, RIGHT (LEFT selectable), 35 HP, CHAIN ON, BLOCK OFF, BUILT-IN by default");
+        check(std::string(valueName(shieldBlock, 1)) == "EXPERIMENTAL" &&
+                  std::string(optionInfo[shieldBlock].help).find("CANDIDATE") != std::string::npos,
+              "SHIELD BLOCK is labelled EXPERIMENTAL and CANDIDATE");
+        check(isHeroToggle(captainAmerica) && !isHeroToggle(shieldArm) && std::size(heroToggles) == 8, "the eighth hero toggle");
+        check(hero_modes::fromToggles(false, false, false, false, false, false, false, true) == hero_modes::captainAmerica &&
+                  hero_modes::fromToggles(false, false, false, false, false, false, true, true) == hero_modes::punisher &&
+                  hero_modes::fromToggles(false, false, false, false, false, false, false, false) == hero_modes::spiderMan,
+              "CAPTAIN AMERICA from the toggles, the first on wins");
+        check(captain::throwHp(0) == 35.f && captain::throwHp(1) == 20.f && captain::throwHp(2) == 50.f && captain::throwHp(3) == 70.f &&
+                  captain::throwHp(99) == 35.f && captain::throwHit(0).amount == 35.f && captain::throwHit(0).knockback == 5,
+              "SHIELD DAMAGE 35 / 20 / 50 / 70 HP, the CONFIRMED knock kind");
+        check(captain::armHand(captain::armRight) == 1 && captain::armHand(captain::armLeft) == 0 && captain::armHand(7) == 1 &&
+                  captain::armRight == 0 && captain::chainOn(0) &&
+                  !captain::chainOn(1) && !captain::blockOn(0) && captain::blockOn(1) && !captain::lookModel(0) && captain::lookModel(1),
+              "the value helpers");
+        check(std::string(hero007::blowKindNames[hero007::kindShield]) == "SHIELD" &&
+                  std::string(hero007::blowKindNames[hero007::kindShieldBash]) == "SHIELD BASH",
+              "the blow names");
+        // The throw's aim: a fast forward sweep, else the controller's aim; NaN safe.
+        const Vec3 f{0, 0, -1};
+        check(length(captain::throwAim({3, 0, -3}, f, f) - normalized(Vec3{3, 0, -3})) < 1e-4f, "a backhand sweep throws along it");
+        check(length(captain::throwAim({0, 0, -1}, f, f) - f) < 1e-4f, "slow: along the aim");
+        check(length(captain::throwAim({0, 0, 5}, f, f) - f) < 1e-4f, "a backswing (away from the view) is not the throw");
+        check(finite(captain::throwAim({NAN, 0, 0}, {NAN, 0, 0}, f)), "NaN: still a direction");
+        // The model's frame: the RIGHT arm's centre is the LEFT's turned about the pivot; on the back the
+        // disc's middle lands where it should, the face backward.
+        const Vec3 cr = captain::forSide(captain::centreLeft, 1);
+        check(std::abs(cr.x - .002f) < 1e-5f && std::abs(cr.y - (-.21763f + .113f)) < 1e-5f, "the RIGHT arm's mirror");
+        for (uint32_t side = 0; side < 2; ++side) {
+            const auto b = captain::onBack({0, 1.7f, 0}, {0, 0, -1}, {1, 0, 0}, side);
+            const Vec3 mid = captain::centreOf(b, side);
+            check(b.ok && length(mid - Vec3{0, 1.3f, .22f}) < 1e-4f && b.face.z > .99f, "on the back, between the shoulder blades");
+            const auto a = captain::onArm({0, 1.3f, -.3f}, {0, 0, -1}, {0, 0, -1}, {1, 0, 0}, side);
+            check(a.ok && std::abs(dot(a.face, a.up)) < 1e-4f && (side ? a.face.x > 0 : a.face.x < 0), "on the arm: square, leaning out");
+        }
+        check(!captain::onArm({NAN, 0, 0}, f, f, {1, 0, 0}, 0).ok && !captain::onBack({0, 1.7f, 0}, {0, 0, 0}, {1, 0, 0}, 0).ok,
+              "NaN / no body: no pose");
+    });
+    test("Version 0.0.7: CAPTAIN AMERICA SHIELD BLOCK (EXPERIMENTAL): never a revive, never above the cap", [] {
+        using namespace spidy;
+        captain::Block b;
+        check(b.step(100, 100, NAN, true, true, false) < 0, "the first reading: nothing");
+        check(b.step(80, 100, NAN, true, true, false) == 100.f && b.refunds == 1, "a covered hit is given back");
+        check(b.step(70, 100, NAN, true, false, false) < 0 && b.uncovered == 1, "an uncovered hit stays");
+        check(b.step(0, 100, NAN, true, true, false) < 0, "never a revive");
+        b = {};
+        b.step(100, 100, NAN, false, true, false);
+        check(b.step(80, 100, NAN, false, true, false) < 0, "OFF: nothing");
+        b = {};
+        b.step(100, 100, NAN, true, true, true);
+        check(b.step(80, 100, NAN, true, true, true) < 0, "INVINCIBLE already refills: nothing");
+        b = {};
+        b.step(100, 100, .25f, true, true, false);
+        check(b.step(60, 100, .25f, true, true, false) == 75.f, "never above the game's own cap");
+        b = {};
+        b.step(50, 100, NAN, true, true, false);
+        check(b.step(40, 100, NAN, true, true, false) == 50.f, "back to where it was, no more");
+        check(b.step(NAN, 100, NAN, true, true, false) < 0 && b.hpWas < 0 && b.step(30, 100, NAN, true, true, false) < 0,
+              "a NaN reading forgets the last one");
+        const hero_modes::BatonEnemy front[1] = {{5, {0, 1.3f, -4}}}, behind[1] = {{6, {0, 1.3f, 4}}};
+        check(captain::covers({0, 1.3f, -.3f}, {0, 0, -1}, front, 1) && !captain::covers({0, 1.3f, -.3f}, {0, 0, -1}, behind, 1) &&
+                  !captain::covers({0, 1.3f, -.3f}, {0, 0, -1}, nullptr, 0) && !captain::covers({NAN, 0, 0}, {0, 0, -1}, front, 1),
+              "covers: the nearest enemy in front of the face");
+    });
+    test("Version 0.0.7: CAPTAIN AMERICA shield: back holster, throw, chain, return, draw", [] {
+        using namespace spidy::hero007;
+        const spidy::hero_modes::BatonEnemy foes[3] = {{41, {0, 1.3f, -4}}, {42, {2, 1.3f, -5.5f}}, {43, {-2.5f, 1.3f, -7}}};
+        const Vec3 back{-.1f, 1.5f, .25f}, front{-.2f, 1.3f, -.3f}, rightAway{.3f, 1.3f, -.5f};
+        const auto mirror = [](Vec3 v) { return Vec3{-v.x, v.y, v.z}; };
+        const auto run = [&](uint32_t chainValue, uint32_t damage, int& hits, float& amount, uint32_t& sounds, bool& heldInFlight,
+                             Play& p, uint32_t armValue = spidy::captain::armLeft) {
+            const unsigned k = spidy::captain::armHand(armValue), other = 1 - k;
+            PlayInput in;
+            in.shieldArm = armValue;
+            in.dt = 1 / 90.f;
+            in.play = true;
+            in.hero = spidy::hero_modes::captainAmerica;
+            in.head = {{0, 1.7f, 0}, {}};
+            in.list = foes;
+            in.count = 3;
+            in.shieldChain = spidy::captain::chainOn(chainValue);
+            in.shieldDamage = damage;
+            for (int f = 0; f < 500; ++f) {
+                const Vec3 l = f < 4 ? back : front;
+                in.hands[k] = {k ? mirror(l) : l, {0, 0, -1}, true, f == 20 ? 1.f : 0.f, f >= 2 ? 1.f : 0.f, false, false};
+                in.hands[other] = {k ? mirror(rightAway) : rightAway, {0, 0, -1}, true, 0, 0, false, false};
+                PlayOutput o;
+                p.holsterStep(in, o);
+                PlayOutput s2;
+                p.step(in, s2);
+                sounds |= s2.sounds | o.sounds;
+                for (uint32_t b = 0; b < s2.blowCount; ++b)
+                    if (s2.blows[b].kind == kindShield) {
+                        ++hits;
+                        amount = s2.blows[b].blow.amount;
+                    }
+                if (!p.shield.inHandNow() && p.shieldRack.heldIn(k) < 0)
+                    heldInFlight = false;
+            }
+        };
+        Play p;
+        int hits = 0;
+        float amount = 0;
+        uint32_t sounds = 0;
+        bool held = true;
+        run(0, 0, hits, amount, sounds, held, p);
+        check(p.shield.throws == 1 && hits == 3 && amount == 35.f, "CHAIN ON: one throw, three enemies, 35 HP each: " + std::to_string(hits));
+        check(p.shield.catches + p.shield.timeouts == 1 && p.shield.inHandNow() && p.shieldOnArm(), "it comes back to the arm");
+        check(held, "the grip let go is kept while the shield flies (keep)");
+        check((sounds >> spidy::sfx::shieldThrow & 1) && (sounds >> spidy::sfx::shieldRicochet & 1) &&
+                  (sounds >> spidy::sfx::shieldCatch & 1) && (sounds >> spidy::sfx::holsterTick & 1),
+              "throw, ricochet, catch and the holster's tick");
+        Play q;
+        hits = 0;
+        sounds = 0;
+        run(1, 3, hits, amount, sounds, held, q);
+        check(q.shield.throws == 1 && hits == 1 && amount == 70.f && q.shield.inHandNow(), "CHAIN OFF: one enemy (70 HP), then home");
+        // SHIELD ARM RIGHT (the default value 0): the same throw, chain and return from the right arm.
+        Play pr;
+        hits = 0;
+        sounds = 0;
+        held = true;
+        run(0, 0, hits, amount, sounds, held, pr, spidy::captain::armRight);
+        check(pr.shieldHand == 1 && pr.shield.throws == 1 && hits == 3 && amount == 35.f && pr.shieldOnArm() &&
+                  pr.shieldRack.heldIn(1) >= 0 && pr.shieldRack.heldIn(0) < 0,
+              "RIGHT (default): drawn by the right hand, three enemies, back on the right arm: " + std::to_string(hits));
+        {
+            PlayInput d0;
+            check(d0.shieldArm == spidy::captain::armRight && spidy::captain::armHand(d0.shieldArm) == 1, "a default input is the RIGHT arm");
+        }
+        // Only the SHIELD ARM's hand draws it; a change of arm puts it back on the back.
+        Play r;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::captainAmerica;
+        in.head = {{0, 1.7f, 0}, {}};
+        const Vec3 backR{.1f, 1.5f, .25f};
+        in.shieldArm = spidy::captain::armLeft;
+        PlayOutput o;
+        for (int f = 0; f < 3; ++f) {
+            in.hands[0] = {front, {0, 0, -1}, true, 0, 0, false, false};
+            in.hands[1] = {backR, {0, 0, -1}, true, 0, f ? 1.f : 0.f, false, false};
+            o = {};
+            r.holsterStep(in, o);
+        }
+        check(r.shieldRack.heldIn(1) < 0 && !(o.claimed & 2), "LEFT: the right hand cannot take the shield");
+        Draw d;
+        r.draw(d, Pose{}, in, 0);
+        check(d.any && d.worn[0].look == lookShield && d.held[0].look == lookNone && d.held[1].look == lookNone,
+              "holstered: on the back only");
+        in.shieldArm = spidy::captain::armRight;
+        for (int f = 0; f < 3; ++f) {
+            in.hands[1] = {backR, {0, 0, -1}, true, 0, f ? 1.f : 0.f, false, false};
+            o = {};
+            r.holsterStep(in, o);
+        }
+        check(r.shieldHand == 1 && r.shieldRack.heldIn(1) >= 0 && (o.claimed & 2), "RIGHT: the right hand draws it");
+        in.hands[1] = {Vec3{-front.x, front.y, front.z}, {0, 0, -1}, true, 0, 1, false, false};
+        o = {};
+        r.holsterStep(in, o);
+        PlayOutput s2;
+        r.step(in, s2);
+        r.draw(d, Pose{}, in, 0);
+        check(d.held[1].look == lookShield && d.held[1].side == 1 && d.worn[0].look == lookNone, "drawn: on the right arm only");
+        in.shieldArm = spidy::captain::armLeft;
+        r.holsterStep(in, o);
+        check(r.shieldHand == 0 && r.shieldRack.heldIn(1) < 0 && r.shieldRack.heldIn(0) < 0, "an arm change: back on the back");
+        // Guarding: the face toward the nearest enemy.
+        Play g;
+        in.shieldArm = spidy::captain::armLeft;
+        const spidy::hero_modes::BatonEnemy one[1] = {{51, {-.5f, 1.3f, -4}}};
+        in.list = one;
+        in.count = 1;
+        for (int f = 0; f < 6; ++f) {
+            in.hands[0] = {f < 3 ? back : front, {0, 1, 0}, true, 0, f ? 1.f : 0.f, false, false};
+            in.hands[1] = {rightAway, {0, 0, -1}, true, 0, 0, false, false};
+            o = {};
+            g.holsterStep(in, o);
+            s2 = {};
+            g.step(in, s2);
+        }
+        check(g.shieldOnArm() && g.guarding, "the guard up, the enemy in front: guarding");
+        // Other heroes: no shield rack, nothing claimed.
+        in.hero = spidy::hero_modes::batman;
+        in.hands[0] = {back, {0, 0, -1}, true, 0, 1, false, false};
+        o = {};
+        g.holsterStep(in, o);
+        check(o.claimed == 0 && g.shieldRack.heldIn(0) < 0, "another hero: no shield");
+        // NaN never draws or throws.
+        Play n;
+        in.hero = spidy::hero_modes::captainAmerica;
+        in.hands[0] = {{NAN, 0, 0}, {0, 0, -1}, true, 1, 1, false, false};
+        o = {};
+        n.holsterStep(in, o);
+        s2 = {};
+        n.step(in, s2);
+        n.draw(d, Pose{}, in, 0);
+        check(n.shield.throws == 0 && s2.blowCount == 0, "NaN: no throw");
+    });
+    test("Version 0.0.7: DAREDEVIL BATON GRIP - in the fist from the grip pose: 15-25 deg off the forearm, hand at 1/3, mirrored, per controller", [] {
+        // The user (public 0.0.63): "daredevils batons sit weird in his hands not like a natural grop".
+        // 0.0.62 drew the held baton along the hand's AIM, .12 m behind the grip to .45 m ahead.
+        namespace bg = spidy::baton_grip;
+        const auto deg = [](Vec3 a, Vec3 b) {
+            return std::acos(std::clamp(dot(normalized(a), normalized(b)), -1.f, 1.f)) * 180.f / 3.14159265f;
+        };
+        const auto mirror = [](Vec3 v) { return Vec3{-v.x, v.y, v.z}; };
+        check(bg::handleTiltDeg(ControllerKind::touch) == 30.f && bg::handleTiltDeg(ControllerKind::index) == 15.f,
+              "per controller: Touch 30 deg (CONFIRMED, Update 20), Index 15 deg (CANDIDATE)");
+        check(bg::handleTiltDeg(ControllerKind::frame) == 30.f && bg::handleTiltDeg(ControllerKind::other) == 30.f &&
+                  bg::handleTiltDeg(ControllerKind::none) == 30.f,
+              "the Steam Frame, others and unknown hold like Touch");
+        check(bg::offForearmDeg >= 15.f && bg::offForearmDeg <= 25.f, "the shaft 15-25 deg off the forearm");
+        check(std::abs(bg::length - .57f) < 1e-6f && std::abs(bg::gripShare - 1.f / 3.f) < 1e-6f, "57 cm, the hand at a third");
+        // Touch vs Index in the grip frame: only the handle's tilt differs, both 20 deg off their forearm.
+        check(std::abs(deg(bg::localShaft(ControllerKind::touch), bg::localShaft(ControllerKind::index)) - 15.f) < .01f,
+              "Touch and Index shafts differ by the handles' 15 deg");
+        check(std::abs(deg(bg::localShaft(ControllerKind::touch), {0, -1, 0}) - 50.f) < .01f &&
+                  std::abs(deg(bg::localShaft(ControllerKind::index), {0, -1, 0}) - 35.f) < .01f,
+              "off the grip's -Y (0.0.62's aim, AIM AXIS HAND): Touch 50 deg, Index 35 deg");
+        check(std::abs(bg::localShaft(ControllerKind::touch).x) < 1e-6f, "in the grip's Y-Z plane (no palm-normal part)");
+        const Quat turns[] = {Quat{}, Quat::around({0, 1, 0}, .7f), Quat::around({1, .3f, -.2f}, -1.1f),
+                              Quat::yaw(2.5f) * Quat::around({0, 0, 1}, .4f), Quat::around({.2f, -1, .5f}, 2.9f)};
+        const ControllerKind kinds[] = {ControllerKind::touch, ControllerKind::index, ControllerKind::frame, ControllerKind::none};
+        for (const Quat& q : turns)
+            for (const ControllerKind k : kinds) {
+                const Pose right{{.21f, 1.27f, -.38f}, q};
+                const Pose left{mirror(right.position), {q.x, -q.y, -q.z, q.w}}; // the mirror image (+X kept right)
+                const auto r = bg::shaft(right, 1, k), l = bg::shaft(left, 0, k);
+                check(r.ok && l.ok, "a good grip pose gives a shaft");
+                const Vec3 way = r.tip - r.butt;
+                const Vec3 forearm = q.rotate(bg::localForearm(k));
+                const float off = deg(way, forearm);
+                check(off >= 15.f && off <= 25.f, "the shaft is not 15-25 deg off the forearm");
+                check(dot(normalized(way), q.rotate({0, 0, -1})) > .5f, "the tip does not leave over the thumb's side");
+                check(dot(normalized(way), forearm) > .9f, "the tip does not lead forward with the forearm");
+                check(std::abs(length(way) - .57f) < 1e-4f, "not 57 cm");
+                const float share = dot(right.position - r.butt, normalized(way)) / length(way);
+                check(std::abs(share - 1.f / 3.f) < .01f, "the hand is not a third of the way from the butt");
+                check(length(cross(right.position - r.butt, normalized(way))) < 1e-4f, "the grip point is off the shaft");
+                check(length(l.butt - mirror(r.butt)) < 1e-4f && length(l.tip - mirror(r.tip)) < 1e-4f,
+                      "left and right are not mirror images");
+                check(std::abs(deg(l.tip - l.butt, left.orientation.rotate(bg::localForearm(k))) - off) < .01f,
+                      "the left hand's angle differs");
+            }
+        // Never from the aim: the same grip gives the same shaft whatever the aim pose or AIM AXIS (it takes none).
+        // A bad pose draws nothing from it (game_xr keeps 0.0.62's shaft along the aim), never a NaN.
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        check(!bg::shaft({{nan, 1, 0}, {}}, 1, ControllerKind::touch).ok, "NaN position");
+        check(!bg::shaft({{0, 1, 0}, {0, 0, 0, 0}}, 1, ControllerKind::touch).ok, "zero rotation");
+        check(!bg::shaft({{0, 1, 0}, {nan, 0, 0, 1}}, 0, ControllerKind::index).ok, "NaN rotation");
+        check(!bg::shaft({{0, 1, 0}, {0, 0, 0, 2}}, 0, ControllerKind::touch).ok, "not a unit rotation");
+        check(!bg::shaft({{0, 1, 0}, {}}, 0, ControllerKind::touch, nan).ok, "NaN length");
+        // The fallback and what still uses the hand's aim are unchanged: 0.0.62's shaft .12 / .45, the
+        // throw (along the aim from the hand) and its catch; one baton per hand.
+        Vec3 g{}, tp{};
+        hero_modes::batonShaft({0, 1.2f, -.2f}, {0, 0, -1}, g, tp);
+        check(length(g - Vec3{0, 1.2f, -.08f}) < 1e-5f && length(tp - Vec3{0, 1.2f, -.65f}) < 1e-5f, "0.0.62's fallback shaft moved");
+        hero_modes::Baton b;
+        const Vec3 hand{0, 1.2f, 0};
+        b.update(1.f / 90, true, hand, {0, 0, -1}, nullptr, 0, -1);
+        check(!b.inHandNow() && b.throws == 1, "the trigger no longer throws");
+        for (int f = 0; f < 90 * 4 && !b.inHandNow(); ++f)
+            b.update(1.f / 90, false, hand, {0, 0, -1}, nullptr, 0, -1);
+        check(b.inHandNow() && b.catches == 1, "the baton did not come back to the hand");
+    });
+    test("Version 0.0.7: PUNISHER GUN GRIP - in the palm from the grip pose: barrel on the forearm and the aim ray, mirrored, per controller", [] {
+        // The user, 26 Oct: "make sure punishers gun sit right in his hand". 0.0.62 drew a held gun along
+        // the hand's AIM (AIM AXIS HAND: the grip's -Y, 30 deg below the forearm on Touch), upright to the
+        // world, its origin (the grip's front) on the grip point.
+        using namespace spidy::hero007;
+        namespace gg = spidy::gun_grip;
+        namespace bg = spidy::baton_grip;
+        const auto deg = [](Vec3 a, Vec3 b) {
+            return std::acos(std::clamp(dot(normalized(a), normalized(b)), -1.f, 1.f)) * 180.f / 3.14159265f;
+        };
+        const auto mirror = [](Vec3 v) { return Vec3{-v.x, v.y, v.z}; };
+        // Per controller, grip-local: the barrel is the forearm (Touch 30 deg off the grip's -Y, Index 15),
+        // the top toward the thumb (-Z), square to it, nothing along the palm's normal.
+        check(std::abs(deg(bg::localForearm(ControllerKind::touch), bg::localForearm(ControllerKind::index)) - 15.f) < .01f,
+              "Touch and Index barrels differ by the handles' 15 deg");
+        // Meta's aim pose (and Virtual Desktop's): the hand (the grip's -Y) turned 30 deg toward the thumb (tracking.hpp).
+        check(deg(bg::localForearm(ControllerKind::touch), bg::localDirection(30.f)) < .01f, "Touch: the barrel is the aim ray");
+        for (const ControllerKind k : {ControllerKind::touch, ControllerKind::index, ControllerKind::frame}) {
+            check(std::abs(dot(bg::localForearm(k), gg::localUp(k))) < 1e-5f && gg::localUp(k).z < -.8f &&
+                      std::abs(gg::localUp(k).x) < 1e-6f, "the top square to the barrel, toward the thumb");
+        }
+        // Each look's grip middle sits under the slide, behind the trigger (the web high on the backstrap,
+        // the index finger along the guard).
+        for (const bool model : {false, true})
+            for (const gg::Weapon w : {gg::pistol, gg::sawedOff}) {
+                const auto p = gg::palmPoint(w, model);
+                check(p.forward < 0 && p.forward > -.06f && p.up < 0 && p.up > -.04f, "a grip middle off the look's grip");
+            }
+        check(gg::muzzleFromPalm(gg::pistol).forward > .15f && gg::muzzleFromPalm(gg::sawedOff).forward > .35f &&
+                  gg::muzzleFromPalm(gg::pistol).up > .05f, "the muzzle ahead of and above the hand");
+        // From a grip pose: the grip point, the barrel along the forearm, mirrored left / right.
+        const Quat turns[] = {Quat{}, Quat::around({0, 1, 0}, .7f), Quat::around({1, .3f, -.2f}, -1.1f), Quat::around({.2f, -1, .5f}, 2.9f)};
+        for (const Quat& q : turns)
+            for (const ControllerKind k : {ControllerKind::touch, ControllerKind::index}) {
+                const Pose right{{.2f, 1.3f, -.4f}, q}, left{mirror(right.position), {q.x, -q.y, -q.z, q.w}};
+                const auto r = gg::held(right, 1, k), l = gg::held(left, 0, k);
+                check(r.ok && l.ok, "a good pose holds a gun");
+                check(length(r.at - right.position) < 1e-6f, "the gun's grip is not on the grip point");
+                check(deg(r.forward, q.rotate(bg::localForearm(k))) < .05f, "the barrel is off the forearm");
+                check(deg(r.up, q.rotate({0, 0, -1})) < 31.f, "the top is not toward the thumb");
+                check(length(l.forward - mirror(r.forward)) < 1e-4f && length(l.up - mirror(r.up)) < 1e-4f &&
+                          length(l.at - mirror(r.at)) < 1e-5f, "left and right are not mirror images");
+                const Vec3 mz = gg::from(r, gg::muzzleFromPalm(gg::pistol)), ml = gg::from(l, gg::muzzleFromPalm(gg::pistol));
+                check(length(ml - mirror(mz)) < 1e-4f, "the muzzles are not mirrored");
+            }
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        check(!gg::held({{nan, 1, 0}, {}}, 1, ControllerKind::touch).ok && !gg::held({{0, 1, 0}, {0, 0, 0, 0}}, 0, ControllerKind::touch).ok &&
+                  !gg::held({{0, 1, 0}, {nan, 0, 0, 1}}, 0, ControllerKind::index).ok, "a bad pose holds nothing");
+        // In play: draw both pistols at the hips, hold them out, shoot along the barrel (not the aim).
+        Play g;
+        PlayInput in{};
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::punisher;
+        in.head = {{0, 1.7f, 0}, {}};
+        in.reload = reloadAuto;
+        const Vec3 rightHip{.25f, 1.0f, 0}, leftHip{-.25f, 1.0f, 0};
+        // A right grip whose forearm points straight ahead (-Z world), thumb up (Touch: grip +Y 30 deg off the arm).
+        const Quat rq = Quat::around({1, 0, 0}, (90.f - 30.f) * 3.14159265f / 180.f);
+        const Quat lq{rq.x, -rq.y, -rq.z, rq.w};
+        check(deg(rq.rotate(bg::localForearm(ControllerKind::touch)), {0, 0, -1}) < .05f, "the test pose aims ahead");
+        const auto hands = [&](Vec3 l, float sl, Vec3 r, float sr, float trig, bool gunPose) {
+            in.hands[0] = {l, {0, -1, 0}, true, trig, sl, false};
+            in.hands[1] = {r, {0, -1, 0}, true, trig, sr, false}; // the aim points at the floor: shots must not
+            const gg::Held hl = gg::held({l, lq}, 0, ControllerKind::touch), hr = gg::held({r, rq}, 1, ControllerKind::touch);
+            in.hands[0].gunOk = gunPose && hl.ok;
+            in.hands[0].gunAt = hl.at;
+            in.hands[0].gunForward = hl.forward;
+            in.hands[0].gunUp = hl.up;
+            in.hands[1].gunOk = gunPose && hr.ok;
+            in.hands[1].gunAt = hr.at;
+            in.hands[1].gunForward = hr.forward;
+            in.hands[1].gunUp = hr.up;
+            PlayOutput o;
+            g.holsterStep(in, o);
+            g.step(in, o);
+            return o;
+        };
+        hands(leftHip, 1, rightHip, 1, 0, true);
+        const Vec3 outL{-.2f, 1.4f, -.4f}, outR{.2f, 1.4f, -.4f};
+        hands(outL, 1, outR, 1, 0, true);
+        Draw d;
+        g.draw(d, Pose{}, in, 0);
+        check(d.held[0].look == lookPistol && d.held[1].look == lookPistol && d.held[0].palm && d.held[1].palm, "both pistols held in the palm");
+        check(length(d.held[1].at - outR) < 1e-5f && deg(d.held[1].forward, {0, 0, -1}) < .1f && deg(d.held[1].up, {0, 1, 0}) < .1f,
+              "the right pistol: the grip in the palm, the barrel ahead along the forearm, upright with the thumb");
+        check(length(d.held[0].at - mirror(d.held[1].at)) < 1e-5f && length(d.held[0].forward - mirror(d.held[1].forward)) < 1e-4f,
+              "the left pistol mirrors the right");
+        const spidy::hero_modes::BatonEnemy foe[1] = {{77, {.2f, 1.4f + gg::muzzleFromPalm(gg::pistol).up, -6.f}}};
+        in.list = foe;
+        in.count = 1;
+        uint32_t blows = 0;
+        const uint64_t shotsWere = g.shots;
+        for (int f = 0; f < 6; ++f)
+            blows += hands(outL, 1, outR, 1, f % 2 ? 0.f : 1.f, true).blowCount;
+        check(g.shots > shotsWere && blows > 0, "a shot along the barrel misses the enemy it points at");
+        g.draw(d, Pose{}, in, 0);
+        bool caseNear = false;
+        for (uint32_t k = 0; k < d.shells; ++k)
+            caseNear = caseNear || length(d.shellAt[k] - (outR + Vec3{0, .07f, -.05f})) < .15f || length(d.shellAt[k] - (outL + Vec3{0, .07f, -.05f})) < .15f;
+        check(d.shells > 0 && caseNear, "the cases leave the ejection port");
+        // No usable grip pose: 0.0.62's placement along the aim, upright, not palm; still one pistol per hand.
+        hands(outL, 1, outR, 1, 0, false);
+        g.draw(d, Pose{}, in, 0);
+        check(d.held[1].look == lookPistol && !d.held[1].palm && length(d.held[1].at - outR) < 1e-5f &&
+                  deg(d.held[1].forward, {0, -1, 0}) < .1f, "the fallback moved");
+        // Both looks draw a palm gun, the sawed-off broken open too (its barrels on their hinge), nothing insane.
+        for (const uint32_t look : {static_cast<uint32_t>(lookPistol), static_cast<uint32_t>(lookSawedOff), static_cast<uint32_t>(lookSawedOffOpen)}) {
+            Draw one{};
+            one.any = true;
+            one.held[1] = {};
+            one.held[1].look = look;
+            one.held[1].at = outR;
+            one.held[1].forward = {0, 0, -1};
+            one.held[1].up = {0, 1, 0};
+            one.held[1].palm = true;
+            std::vector<spidy::Vertex> v;
+            appendHero007(v, one, {}, {0, 1.62f, 0}, .002f);
+            check(!v.empty(), "a palm gun drew nothing");
+            for (const auto& x : v)
+                check(finite(x.position), "a palm gun drew a NaN");
+        }
+    });
+    test("Version 0.0.7: CAPTAIN AMERICA SHIELD ARM RIGHT (default): no clash with the right hand's other inputs", [] {
+        using namespace spidy::hero007;
+        // The user, 26 Oct: "it should be on the right arm... or toggable between arms". The right hand
+        // draws from the back only at the holster, never while it is on a web or a wall (web-zip, climb),
+        // its grip anywhere else is never claimed, the left hand is left alone, and another hero's
+        // one-per-hand racks are unchanged with SHIELD ARM RIGHT set.
+        const Vec3 backR{.1f, 1.5f, .25f}, backL{-.1f, 1.5f, .25f}, ahead{.3f, 1.3f, -.5f}, aheadL{-.3f, 1.3f, -.5f};
+        const Vec3 rightHip{.25f, 1.0f, 0};
+        const auto frames = [](Play& p, PlayInput& in, int n) {
+            PlayOutput o;
+            for (int f = 0; f < n; ++f) {
+                o = {};
+                p.holsterStep(in, o);
+            }
+            return o;
+        };
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::captainAmerica;
+        in.head = {{0, 1.7f, 0}, {}};
+        check(in.shieldArm == spidy::captain::armRight, "SHIELD ARM RIGHT by default");
+        // On a web or a wall (busy): the right grip at the back draws nothing and is not claimed.
+        Play busy;
+        in.hands[0] = {aheadL, {0, 0, -1}, true, 0, 0, false, false};
+        in.hands[1] = {backR, {0, 0, -1}, true, 0, 0, true, false};
+        frames(busy, in, 1);
+        in.hands[1].squeeze = 1;
+        PlayOutput o = frames(busy, in, 3);
+        check(busy.shieldRack.heldIn(1) < 0 && !(o.claimed & 2), "a busy right hand (web-zip, climb) never draws the shield");
+        // The right grip in front (where web-zip and climb grab): never claimed.
+        Play front;
+        in.hands[1] = {ahead, {0, 0, -1}, true, 0, 0, false, false};
+        frames(front, in, 1);
+        in.hands[1].squeeze = 1;
+        o = frames(front, in, 3);
+        check(front.shieldRack.heldIn(1) < 0 && o.claimed == 0, "the right grip away from the back stays the game's");
+        // The left hand at the back: not the shield's (it is free for its own grips).
+        Play left;
+        in.hands[1] = {ahead, {0, 0, -1}, true, 0, 0, false, false};
+        in.hands[0] = {backL, {0, 0, -1}, true, 0, 0, false, false};
+        frames(left, in, 1);
+        in.hands[0].squeeze = 1;
+        o = frames(left, in, 3);
+        check(left.shieldRack.heldIn(0) < 0 && o.claimed == 0, "RIGHT: the left hand at the back takes nothing");
+        // The right hand draws it at the back, and only there.
+        Play ok;
+        in.hands[0] = {aheadL, {0, 0, -1}, true, 0, 0, false, false};
+        in.hands[1] = {backR, {0, 0, -1}, true, 0, 0, false, false};
+        frames(ok, in, 1);
+        in.hands[1].squeeze = 1;
+        o = frames(ok, in, 3);
+        check(ok.shieldRack.heldIn(1) >= 0 && (o.claimed & 2) && !(o.claimed & 1), "RIGHT: the right hand draws it at the back");
+        // PUNISHER with SHIELD ARM RIGHT set: his right pistol is drawn by the right hand as before, no shield.
+        Play gun;
+        in.hero = spidy::hero_modes::punisher;
+        in.hands[0] = {aheadL, {0, 0, -1}, true, 0, 0, false, false};
+        in.hands[1] = {rightHip, {0, 0, -1}, true, 0, 0, false, false};
+        frames(gun, in, 1);
+        in.hands[1].squeeze = 1;
+        o = frames(gun, in, 3);
+        check(gun.guns.heldIn(1) >= 0 && (o.claimed & 2) && gun.shieldRack.heldIn(1) < 0 && !gun.shieldOnArm(),
+              "PUNISHER: the right pistol is the right hand's, no shield");
+        // DAREDEVIL BATON HOLSTERS with SHIELD ARM RIGHT set: one baton per hand as before.
+        Play dd;
+        in.hero = spidy::hero_modes::daredevil;
+        in.batonHolsters = true;
+        in.hands[1] = {backR, {0, 0, -1}, true, 0, 0, false, false};
+        frames(dd, in, 1);
+        in.hands[1].squeeze = 1;
+        o = frames(dd, in, 3);
+        check(dd.batons.heldIn(1) >= 0 && dd.shieldRack.heldIn(1) < 0, "DAREDEVIL: the right back baton, no shield");
+    });
+    test("Version 0.0.7: CAPTAIN AMERICA shield looks keep their budget", [] {
+        using namespace spidy::hero007;
+        const Vec3 viewer{0, 1.6f, 0};
+        const float px = .0015f;
+        for (uint32_t look : {uint32_t(lookShield), uint32_t(lookShieldSpin)})
+            for (uint32_t side = 0; side < 2; ++side)
+                for (const Vec3 eye : {viewer, Vec3{0, 1.6f, -2}}) {
+                    std::vector<Vertex> v;
+                    Item it{look, {0, 1.3f, -.6f}, {0, 0, 1}, {0, 1, 0}, 1.f, 0, side};
+                    appendItem(v, it, eye, px);
+                    check(!v.empty() && v.size() <= budget::shield, "shield in budget: " + std::to_string(v.size()));
+                }
+        std::vector<Vertex> v;
+        Item bad{lookShield, {NAN, 0, 0}};
+        appendItem(v, bad, viewer, px);
+        check(v.empty(), "a NaN shield draws nothing");
+        Item flat{lookShield, {0, 1.3f, -.6f}, {0, 0, 0}, {0, 0, 0}};
+        appendItem(v, flat, viewer, px);
+        check(v.size() <= budget::shield, "a degenerate frame never overruns");
+        namespace mm = spidy::mesh_model;
+        const std::string real = "build/h7out/Models/";
+        if (std::filesystem::exists(real + "Shield/scene.glb")) {
+            mm::Library lib;
+            check(lib.load(mm::slotShield, real) == mm::loaded, "the converted shield loads");
+            for (uint32_t side = 0; side < 2; ++side) {
+                v.clear();
+                Item it{lookShieldSpin, {0, 1.3f, -.6f}, {0, 0, 1}, {0, 1, 0}, .7f, 0, side};
+                check(appendShieldModel(v, it, *lib.model(mm::slotShield), viewer) && !v.empty() && v.size() <= budget::model,
+                      "the shield model in budget: " + std::to_string(v.size()));
+            }
+        }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

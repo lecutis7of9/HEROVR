@@ -6,8 +6,13 @@
 Writes (all embedded in the exe by build.ps1 / build.sh):
   orb.bin    the orb: the video's own frames, cropped round the orb (soft round mask, on black), JPEG.
              Intro frames (orb centred, then shrinking to the left, exactly where it is in the video) and an
-             idle loop whose last frames are crossfaded into the frames just before its first one, so the
-             wrap is seamless.
+             idle loop made from the settled frame: a gentle twist, texture drift and core pulse whose periods
+             all divide the loop, so the last frame runs straight into the first (no cut, no fade). The turn
+             itself is not in the frames: the launcher turns the orb inside its ring at SPIN deg/s as it draws
+             each loop frame (the angle keeps growing, it never wraps or goes backwards), so the turn is as
+             slow as the video's own and costs no file size. The last second of the intro spins the orb up to
+             that speed, so intro -> loop is continuous too. Version 3 of the file: the loop has its own frame
+             rate (LOOP_FPS) and the turn (speed, start angle, the orb's centre and the turning disc's radii).
   intro.wav  the video's own sound from 0 s to LOOP_START (swell, whoosh, the tonal hit).
   loop.wav   the ambient drone after it (LOOP_START..LOOP_END), level-evened, whose last XFADE seconds are an
              equal-power crossfade into the sound just before LOOP_START: intro -> loop -> loop ... is continuous.
@@ -27,7 +32,16 @@ MASK_R = 280.0             # soft round mask radius at idle scale (ring ~207 px 
 RING_R = 207.0
 INTRO_END = 140            # frames 0..139 are the intro (centred orb, then the move left)
 LOOP_END = 188             # frames 140..187 are the idle loop (the video's orb changes look after ~190)
-LOOP_XF = 12               # frames crossfaded at the loop's end with frames 128..139
+LOOP_FPS = 30              # the loop's own frame rate (2 display frames each at 60 Hz)
+LOOP_SECONDS = 6.0         # the twist, drift and pulse repeat exactly in 6 s (the turn is added by the launcher)
+SPIN = 6.5                 # deg/s, always forwards: the video's own speed (its core turns 6.4-6.7 deg/s in the
+                           # settled part, frames 140..187; its outer rings 0.3-0.5 deg/s)
+SWIRL = 6.0                # deg: the core twists ahead of the rim and back, once per loop (its speed < SPIN)
+MORPH_FRAME = 162          # a second settled frame the texture drifts towards and back (twice per loop)
+MORPH = 0.45
+PULSE = 0.07               # core brightness, twice per loop
+SPINUP = 1.0               # s: the intro's last second speeds the orb up from the video's own drift to SPIN
+DISC_IN, DISC_OUT = 1.02, 1.12   # x RING_R: inside turns, outside (halo, floor glow) stays put
 JPEG_Q = 80
 STORE = 0.75              # frames are stored at 0.75x the video's pixels (the glow is soft; drawn scaled back)
 STORE_MAX = 1.25          # and an orb bigger than 1.25x the idle one at 1.25x idle size
@@ -107,16 +121,6 @@ def masked(path, cx, s):
     return c, x0, y0
 
 
-def warp_to_idle(c, x, y, cx, s):
-    """A crop of a nearly-settled frame moved/scaled onto the idle geometry (for the loop crossfade)."""
-    im = Image.fromarray(np.clip(c, 0, 255).astype(np.uint8))
-    k = 1.0 / s
-    nw, nh = max(1, int(round(im.width * k))), max(1, int(round(im.height * k)))
-    im = im.resize((nw, nh), Image.LANCZOS)
-    nx = IDLE_CX - (cx - x) * k; ny = CY - (CY - y) * k
-    return np.asarray(im).astype(np.float32), nx, ny
-
-
 def idle_canvas(parts):
     R = MASK_R
     x0, y0 = int(np.floor(IDLE_CX - R)), int(np.floor(CY - R))
@@ -129,6 +133,37 @@ def idle_canvas(parts):
         ww = min(w_ - sx0, size - dx0); hh = min(h_ - sy0, size - dy0)
         out[dy0:dy0 + hh, dx0:dx0 + ww] += c[sy0:sy0 + hh, sx0:sx0 + ww] * w
     return out, x0, y0
+
+
+def turn(c, ctr, s, deg, swirl, pulse=0.0):
+    """The crop with the orb inside its ring turned by deg (+ swirl more at the core, fading to 0 at the ring) about
+    ctr; the halo and floor glow outside DISC_OUT x the ring stay where they are. pulse brightens the core."""
+    from scipy.ndimage import map_coordinates
+    h, w = c.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    dx, dy = xx - ctr[0], yy - ctr[1]
+    r = np.sqrt(dx * dx + dy * dy); ring = RING_R * s
+    th = np.deg2rad(deg + swirl * np.clip(1 - r / ring, 0, 1) ** 1.5)
+    cs, sn = np.cos(th), np.sin(th)
+    sx = ctr[0] + cs * dx + sn * dy; sy = ctr[1] - sn * dx + cs * dy    # inverse map: turned clockwise on screen
+    rot = np.stack([map_coordinates(c[:, :, j], [sy, sx], order=1, mode="constant") for j in range(3)], 2)
+    if pulse:
+        rot *= (1 + pulse * np.exp(-(r / (0.3 * ring)) ** 2))[:, :, None]
+    a = np.clip((DISC_OUT * ring - r) / ((DISC_OUT - DISC_IN) * ring), 0, 1); a = a * a * (3 - 2 * a)
+    return c * (1 - a[:, :, None]) + rot * a[:, :, None]
+
+
+def drift(ref, other, ctr):
+    """How far (deg) the orb in other has turned from ref (inside the ring), to the nearest 0.25 deg."""
+    best = (-2.0, 0.0)
+    h, w = ref.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w]
+    inside = np.hypot(xx - ctr[0], yy - ctr[1]) < RING_R
+    p = ref[:, :, 1][inside]
+    for d in np.arange(-12, 12.01, 0.25):
+        q = turn(other, ctr, 1.0, -d, 0)[:, :, 1][inside]
+        best = max(best, (_corr(p, q), d))
+    return best[1]
 
 
 def jpeg(c, s=1.0):
@@ -149,25 +184,29 @@ def build_orb(paths, out):
     for i in range(INTRO_END):
         cx, s = geo[i]
         c, x, y = masked(paths[i], cx, s)
+        tau = (i - INTRO_END) / float(FPS) + SPINUP                # the spin-up: angle w*tau^2/2T, speed 0 -> SPIN
+        if tau > 0:
+            c = turn(c, (cx - x, CY - y), s, SPIN * tau * tau / (2 * SPINUP), 0)
         recs.append((x, y, c.shape[1], c.shape[0], cx, s, jpeg(c, s)))
     loop = []
-    n = LOOP_END - INTRO_END
+    ref, x0, y0 = idle_canvas([(lambda c, x, y: (c, 1.0, x, y))(*masked(paths[INTRO_END], IDLE_CX, 1.0))])
+    alt, _, _ = idle_canvas([(lambda c, x, y: (c, 1.0, x, y))(*masked(paths[MORPH_FRAME], IDLE_CX, 1.0))])
+    ctr = (IDLE_CX - x0, CY - y0)
+    alt = turn(alt, ctr, 1.0, -drift(ref, alt, ctr), 0)       # lined up with the reference frame
+    phi0 = SPIN * SPINUP / 2                                  # where the spin-up leaves the orb (the launcher goes on from here)
+    n = int(round(LOOP_SECONDS * LOOP_FPS))
     for k in range(n):
-        f = INTRO_END + k
-        c, x, y = masked(paths[f], IDLE_CX, 1.0)
-        if k >= n - LOOP_XF:
-            # the loop's end turns into the frames just before its start (frames 128..139, cut at the idle
-            # place: the orb has settled to within a pixel or two there), so the wrap is the video's own
-            # frame 139 -> 140 step
-            j = k - (n - LOOP_XF)
-            t = (j + 1.0) / LOOP_XF; t = t * t * (3 - 2 * t)
-            pc, px, py = masked(paths[INTRO_END - LOOP_XF + j], IDLE_CX, 1.0)
-            c = c * (1 - t) + pc * t
-        c, x, y = idle_canvas([(c, 1.0, x, y)])
-        loop.append((x, y, c.shape[1], c.shape[0], IDLE_CX, 1.0, jpeg(c, 1.0)))
+        t = k / float(LOOP_FPS); u = t / LOOP_SECONDS          # u in [0, 1): every periodic term is whole cycles of u
+        m = MORPH * (1 - np.cos(2 * np.pi * 2 * u)) / 2
+        src = ref * (1 - m) + alt * m
+        c = turn(src, ctr, 1.0, 0, SWIRL * (1 - np.cos(2 * np.pi * u)) / 2,
+                 pulse=PULSE * np.sin(2 * np.pi * 2 * u))
+        loop.append((x0, y0, c.shape[1], c.shape[0], IDLE_CX, 1.0, jpeg(c, 1.0)))
     with open(os.path.join(out, "orb.bin"), "wb") as f:
         f.write(b"HORB")
-        f.write(struct.pack("<7i", 1, FPS, len(recs), len(loop), W, H, 0))
+        f.write(struct.pack("<12i", 3, FPS, len(recs), len(loop), W, H, LOOP_FPS,     # all x1000 below: deg/s, deg, design px
+                            int(round(SPIN * 1000)), int(round(phi0 * 1000)), int(round(CY * 1000)),
+                            int(round(DISC_IN * RING_R * 1000)), int(round(DISC_OUT * RING_R * 1000))))
         for x, y, w, h, cx, s, data in recs + loop:  # x, y, w, h = where it goes in the 1280x720 video; the JPEG may be smaller
             f.write(struct.pack("<4i2fi", x, y, w, h, float(cx), float(s), len(data)))
             f.write(data)

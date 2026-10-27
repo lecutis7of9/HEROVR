@@ -92,6 +92,17 @@ enum Option : uint32_t {
     punchHits, foeTrack,
     // Version 0.0.62: BEACONS IN VISION (DAREDEVIL SONAR keeps bright coloured beacons and markers)
     beaconsVision,
+    // Version 0.0.7 HERO PROFILES (hero007.hpp, holster.hpp): BATMAN, WOLVERINE, SUPERMAN and PUNISHER
+    // (hero toggles: one hero at a time with the 0.0.6 ones), BATARANG CHAIN, EASY RELOAD, HOLSTER
+    // HANDS, DAREDEVIL's BATON HOLSTERS and BATON LOOK. Each OFF / its 0.0.62 behaviour by default, live.
+    batman, wolverine, superman, punisher, batarangChain, easyReload, holsterHands, batonHolsters, batonLook,
+    // BATARANG STYLE (mesh_model.hpp): DEFAULT, or a dropped-in Sketchfab model (else DEFAULT).
+    batarangStyle,
+    // GUN MODELS: PUNISHER's pistols and sawed-off as the built-in looks (0) or the converted models.
+    gunModels,
+    // Version 0.0.7 CAPTAIN AMERICA (captain.hpp): the hero toggle, SHIELD ARM, SHIELD DAMAGE, SHIELD
+    // CHAIN, SHIELD BLOCK (EXPERIMENTAL, CANDIDATE) and SHIELD LOOK. Each OFF / its first value by default, live.
+    captainAmerica, shieldArm, shieldDamage, shieldChain, shieldBlock, shieldLook,
     options
 };
 struct OptionInfo {
@@ -187,7 +198,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     // repulsor): OFF (0, Spider-Man) is the default; ON fires no web of any kind and sends none to the game.
     {"iron_man", "IRON MAN ABILITIES", "IRONMAN", "ON: blasts and a chest beam that hurt enemies, no webs (one hero at a time).",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"mirror_view", "MIRROR VIEW", "MIRRORCAM", "TEST: a hidden game camera looks at you 30 s to test a real mirror (restart).",
+    {"mirror_view", "MIRROR VIEW", "MIRRORCAM", "TEST: a hidden game camera looks at you for 30 s once, then goes OFF (restart).",
      2, {"OFF", "TEST", nullptr, nullptr}},
     // Version 0.0.5 (Update 38.9) HERO HEIGHT: the VR body k times the player (a Hulk skin stands
     // straight); live; 1.00X (0) the default, nothing changed.
@@ -245,6 +256,58 @@ inline constexpr OptionInfo optionInfo[options] = {
     // DAREDEVIL's sonar look (eye_color::sonarPixel); OFF (1) is 0.0.6's sonar. Live.
     {"beacons_vision", "BEACONS IN VISION", "BEACONS", "ON: mission beacons and markers stay bright and coloured in Daredevil's sonar.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    // Version 0.0.7 HERO PROFILES: OFF by default; turning one on turns every other hero off (heroOnly).
+    {"batman", "BATMAN ABILITIES", "BATMAN", "ON: batarangs, a grapple and smoke, no other webs (one hero at a time).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"wolverine", "WOLVERINE ABILITIES", "WOLVERINE", "ON: claws on the trigger and fast healing, no webs (one hero at a time).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"superman", "SUPERMAN ABILITIES", "SUPERMAN", "ON: heat vision, cold breath (it hurts, nobody freezes) and super strength.",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"punisher", "PUNISHER ABILITIES", "PUNISHER", "ON: two hip pistols and a sawed-off on your back (one hero at a time).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    // BATARANG CHAIN: 25% (0, the default) - each hit's own roll to bounce on (3 enemies at most).
+    {"batarang_chain", "BATARANG CHAIN", "CHAIN", "The chance each batarang hit bounces on to another enemy, live.",
+     5, {"25%", "50%", "75%", "100%", "OFF"}},
+    // EASY RELOAD: AUTO (0, the default) or REALISTIC (a downward flick drops the mag, the hip reloads).
+    {"easy_reload", "EASY RELOAD", "RELOAD", "AUTO refills an empty gun; REALISTIC drops the mag, then touch your hip.",
+     2, {"AUTO", "REALISTIC", nullptr, nullptr}},
+    // HOLSTER HANDS: SAME SIDE (0, the default) or EITHER HAND (a cross draw); the back is either hand's.
+    {"holster_hands", "HOLSTER HANDS", "HOLSTERS", "SAME SIDE: each hand draws only from its own hip, live.",
+     2, {"SAME SIDE", "EITHER HAND", nullptr, nullptr}},
+    // BATON HOLSTERS: OFF (0, the default: 0.0.62's batons always in the hands) or ON (worn on the back).
+    {"baton_holsters", "BATON HOLSTERS", "BHOLSTER", "ON: Daredevil's batons ride on your back; grip over a shoulder to draw.",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    // BATON LOOK: CLASSIC (0, the default: the baton as in 0.0.62/0.0.63), CLUB (the 0.0.7 billy club) or MODEL (Anthony Yanez's
+    // "Daredevil's baton", rope removed, split in two: Models\Baton\Left|Right; CLUB when missing).
+    {"baton_look", "BATON LOOK", "BLOOK", "CLASSIC: the old red bar; CLUB: a billy club; MODEL: two realistic batons.",
+     3, {"CLASSIC", "CLUB", "MODEL", nullptr}},
+    // BATARANG STYLE: DEFAULT (0, the default: the built-in batarang) or one of the three models the
+    // player chose on Sketchfab, read from <Spidy folder>\Models\Batarang\<STYLE>\ (mesh_model.hpp);
+    // a missing or broken file draws DEFAULT. Live.
+    {"batarang_style", "BATARANG STYLE", "BSTYLE", "DEFAULT: the built-in batarang; EIRA, CLOONEY, JOKER: models you drop in.",
+     4, {"DEFAULT", "EIRA", "CLOONEY", "JOKER"}},
+    // GUN MODELS: BUILT-IN (0, the default) or MODELS (Models\Pistol, Models\SawedOff; built-in when missing).
+    {"gun_models", "GUN MODELS", "GMODELS", "MODELS: Punisher's guns as the converted 3D models, else BUILT-IN.",
+     2, {"BUILT-IN", "MODELS", nullptr, nullptr}},
+    // Version 0.0.7 CAPTAIN AMERICA: OFF by default (a hero toggle: one hero at a time).
+    {"captain_america", "CAPTAIN AMERICA ABILITIES", "CAPTAIN", "ON: his shield on your back; draw, guard and throw it (one hero at a time).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    // SHIELD ARM: RIGHT (0, the default) or LEFT (1); only that hand draws it (captain::armHand).
+    {"shield_arm", "SHIELD ARM", "SARM", "RIGHT or LEFT: the forearm that wears and draws the shield, live.",
+     2, {"RIGHT", "LEFT", nullptr, nullptr}},
+    // SHIELD DAMAGE: 35 HP (0, the default) a thrown hit, on sm2_damage's CONFIRMED path.
+    {"shield_damage", "SHIELD DAMAGE", "SDAMAGE", "How much each thrown shield hit takes off an enemy, live.",
+     4, {"35 HP", "20 HP", "50 HP", "70 HP"}},
+    // SHIELD CHAIN: ON (0, the default: ricochets like the batons, 3 enemies at most) or OFF (one, home).
+    {"shield_chain", "SHIELD CHAIN", "SCHAIN", "ON: a thrown shield ricochets to two more enemies, then comes back.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    // SHIELD BLOCK: OFF (0, the default) or EXPERIMENTAL (CANDIDATE: a hit while the shield faces the
+    // nearest enemy is given back through the CONFIRMED health record; never above the cap, never a revive).
+    {"shield_block", "SHIELD BLOCK", "SBLOCK", "EXPERIMENTAL (CANDIDATE): a hit while the shield faces the foe is refunded.",
+     2, {"OFF", "EXPERIMENTAL", nullptr, nullptr}},
+    // SHIELD LOOK: BUILT-IN (0, the default: drawn rings and star) or MODEL (Models\Shield; BUILT-IN when missing).
+    {"shield_look", "SHIELD LOOK", "SLOOK", "MODEL: the converted 3D shield, else BUILT-IN red, white and blue rings.",
+     2, {"BUILT-IN", "MODEL", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }
@@ -277,9 +340,21 @@ inline InstantBlow instantBlowOf(float strength, uint32_t value) {
     return {(4.f + 8.f * s) * k, 40.f + 80.f * s};
 }
 // ---- Version 0.0.6 HERO TOGGLES --------------------------------------------------------------------
-// The three hero toggles (IRON MAN's is shooterType, 1 ON); only one is on at a time.
-inline constexpr Option heroToggles[3] = {shooterType, daredevil, hulk};
-inline bool isHeroToggle(uint32_t o) { return o == shooterType || o == daredevil || o == hulk; }
+// The hero toggles (IRON MAN's is shooterType, 1 ON); only one is on at a time. Version 0.0.7: eight
+// (CAPTAIN AMERICA the last).
+inline constexpr Option heroToggles[8] = {shooterType, daredevil, hulk, batman, wolverine, superman, punisher, captainAmerica};
+inline bool isHeroToggle(uint32_t o) {
+    for (const auto t : heroToggles)
+        if (o == t)
+            return true;
+    return false;
+}
+// Version 0.0.7 values
+inline bool holsterCrossDraw(uint32_t value) { return value == 1; }
+inline bool batonHolstersOn(uint32_t value) { return value == 1; }
+inline bool batonClub(uint32_t value) { return value == 1; }
+inline bool batonModel(uint32_t value) { return value == 2; } // else CLUB when the files are missing
+inline bool gunModelsOn(uint32_t value) { return value == 1; }
 // DAREDEVIL PUNCH's multiplier (3X, 1X, 2X, 4X, 5X).
 inline float daredevilPunchK(uint32_t value) {
     static constexpr float k[5] = {3.f, 1.f, 2.f, 4.f, 5.f};

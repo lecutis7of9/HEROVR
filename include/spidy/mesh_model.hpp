@@ -78,12 +78,14 @@ bool readFile(const std::string& path, std::vector<uint8_t>& out, size_t most = 
 // are already converted: metres, x right, y up, -z forward, the grip at the origin, colours baked).
 enum Style : uint32_t { styleDefault = 0, styleEira, styleClooney, styleJoker, styles };
 // Version 0.0.7 CAPTAIN AMERICA: slotShield (Models\Shield, CC BY, tools/models007/convert_shield.py).
-enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slots };
+// Version 0.0.7 BATMAN: slotGrappleGun (Models\GrappleGun) is RESERVED for the grapple gun model the player is
+// still choosing: 0.0.7 ships no grapple gun model and loads nothing from it (no stand-in); the line is drawn from the hand.
+enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
-                                                   "Baton/Right", "Shield"};
+                                                   "Baton/Right", "Shield",           "GrappleGun"};
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
-inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true};
+inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true};
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

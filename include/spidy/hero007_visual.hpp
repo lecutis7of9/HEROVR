@@ -84,6 +84,8 @@ struct Draw {
     Vec3 cableFrom[2]{}, cableTo[2]{};
     // Version 0.0.7 BATMAN GRAPPLE GUN: the taut line from the firing hand to the hook, ONLY while
     // the grapple pulls him (cape_glide::Grapple); never a web, never at rest.
+    // BATMAN GRAPPLE GUN MODEL: reserved (mesh_model::slotGrappleGun); always null in 0.0.7 - no gun is drawn yet.
+    const mesh_model::Mesh* grappleGunModel{};
     bool grapple[2]{};
     Vec3 grappleFrom[2]{}, grappleTo[2]{};
 };

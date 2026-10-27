@@ -355,5 +355,8 @@ style cape glide, and every other hero's web abilities are off.
   balls or web grabs (climbing is unchanged), the aim markers are Spider-Man's, and the combat
   config has no web yank and no game Y web strike (a punch at range uses the bridge's own lunge,
   no web line). No new setting; BATMAN ABILITIES' subtext says it. Live, no restart.
+- Grapple gun MODEL: not chosen yet (the user is picking one). `mesh_model::slotGrappleGun`
+  (`Models\GrappleGun`) and `hero007::Draw::grappleGunModel` are reserved for it; 0.0.7 loads and
+  draws no gun there (no stand-in) - the line starts at the tracked hand.
 - Tests: "Version 0.0.7: BATMAN cape glide (...)", "BATMAN grapple gun (...)", "BATMAN trigger -
   grapple aimed up with no enemy, batarang otherwise", and the grapple line's budget.

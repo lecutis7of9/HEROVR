@@ -812,6 +812,7 @@ hero072::PlayOptions hero072Options() {
     o.ownSuit = O::offFirst(c38(combat38::ownSuit));
     o.perchTakedown = O::onFirst(c38(combat38::perchTakedown));
     o.takedownLight = O::onFirst(c38(combat38::takedownLight));
+    o.punisherVan = O::offFirst(c38(combat38::punisherVan));
     return o;
 }
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
@@ -1895,6 +1896,7 @@ DWORD WINAPI run(void*) {
         bool hero072Grapple[2]{}, hero072HookOut[2]{}, hero072HandTracked[2]{};
         Vec3 hero072HandAt[2]{}, hero072HandAim[2]{};
         uint32_t hero072GrappleNotes{};
+        bool vanXWas{}; // Version 0.0.72 PUNISHER VAN: the X tap's edge
         cape_glide::Data capeNow{};
         bool capeCounted{};
         uint32_t capeGrapplesSeen{}, capeMissesSeen{}, capeGlidesSeen{}, capeArrivalsSeen{};
@@ -5673,6 +5675,22 @@ DWORD WINAPI run(void*) {
                         // An X the game names is its X: no wheel, no menu (NamedPress).
                         if (named & game_pad::NamedPress::controlX)
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
+                        // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL, van072.hpp): the PUNISHER's X tap summons it
+                        // (his X is free: no gadget wheel; an X the game names stays the game's, above). The van
+                        // needs Models\Vehicle\PunisherVan: until the user's pick lands it self-disables with
+                        // MODEL MISSING on the wrist (no stand-in, nothing spawned, X still taken off the game).
+                        if (c38(combat38::punisherVan) == 1 && heroNow() == hero_modes::punisher &&
+                            mapping == game_pad::Mapping::gameplay) {
+                            const bool vanX = (buttons.buttons & buttonX) != 0;
+                            buttons.buttons &= ~static_cast<uint32_t>(buttonX);
+                            if (vanX && !vanXWas) {
+                                runtime.haptic(0, .15f);
+                                message(3, 0, "PUNISHER VAN (EXPERIMENTAL): MODEL MISSING: Vehicle/PunisherVan - awaiting the pick, no van");
+                                game_prompts::note("Version 0.0.72 PUNISHER VAN: X tap - MODEL MISSING (Models\\Vehicle\\PunisherVan), no van spawned");
+                            }
+                            vanXWas = vanX;
+                        } else
+                            vanXWas = false;
                         // The gadget wheel: X held opens it in front of the hand
                         // X is on (the left on Touch and Index, the right on the
                         // Steam Frame); X tapped is the game menu as it is let go.
@@ -8356,6 +8374,9 @@ DWORD WINAPI run(void*) {
                             // Version 0.0.72 THOR's hammer (Models\Hammer): the model or nothing, MODEL MISSING on the wrist.
                             if (saved.hero072.hammer) // (only Thor holds it)
                                 saved.hero072.hammerModel = slotModel(mesh_model::slotHammer, "THOR HAMMER");
+                            // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the model or nothing; MODEL MISSING until the pick.
+                            if (c38(combat38::punisherVan) == 1 && hero007In.hero == hero_modes::punisher)
+                                (void)slotModel(mesh_model::slotVan, "PUNISHER VAN");
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
                                 saved.hero007.pistolModel = slotModel(mesh_model::slotPistol, "GUN MODELS");
                                 saved.hero007.sawedFrame = slotModel(mesh_model::slotSawedOffFrame, "GUN MODELS");
@@ -11023,6 +11044,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerkBranch(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyOwnSuit(void* v) { return setHero007(v, combat38::ownSuit, 5428); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerchTakedown(void* v) { return setHero007(v, combat38::perchTakedown, 5429); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyTakedownLight(void* v) { return setHero007(v, combat38::takedownLight, 5430); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherVan(void* v) { return setHero007(v, combat38::punisherVan, 5431); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

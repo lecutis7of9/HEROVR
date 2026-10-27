@@ -34,6 +34,7 @@ struct PlayOptions {
     bool ultimates = true;
     uint32_t perkBranch{};
     bool ownSuit{};
+    bool punisherVan = false; // 10:41: the Punisher van (EXPERIMENTAL, off by default)
     bool perchTakedown = true, takedownLight = true; // 9:31, 9:32: BATMAN's PERCH TAKEDOWN and its light
     // From the combat38 values (ON first: 0 is ON; SURVIVAL and OWN SUIT: OFF first).
     static bool onFirst(uint32_t v) { return v == 0; }

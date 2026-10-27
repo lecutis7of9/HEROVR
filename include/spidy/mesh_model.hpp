@@ -115,12 +115,16 @@ enum Style : uint32_t { styleDefault = 0, styleEira, styleClooney, styleJoker, s
 // Version 0.0.72 THOR: slotHammer (Models\Hammer): Mjolnir, the handle's end at the origin, +y the handle -> head,
 // -z a face. Not shipped until the user picks one of hammer-candidates/: no hammer is drawn and the wrist says
 // MODEL MISSING: Hammer (the user, 27 Oct: "keep MODEL MISSING for the hammer, no fake").
-enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slots };
+// Version 0.0.72 PUNISHER VAN (EXPERIMENTAL, van072.hpp): slotVan (Models\Vehicle\PunisherVan), the van with
+// its cab interior, metres, -z forward, the ground under the axles' middle at the origin. Not shipped until the
+// user's pick lands: no van is drawn and the wrist says MODEL MISSING: Vehicle/PunisherVan.
+enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slotVan, slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
-                                                   "Baton/Right", "Shield",           "GrappleGun",       "Hammer"};
+                                                   "Baton/Right", "Shield",           "GrappleGun",       "Hammer",
+                                                   "Vehicle/PunisherVan"};
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
-inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true};
+inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true};
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

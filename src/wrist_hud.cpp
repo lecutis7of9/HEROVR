@@ -879,7 +879,7 @@ struct SectionDef {
     const char* post;
     const char* word;
     int hero; // hero_modes::Hero, -1: not a hero's profile
-    Control rows[9];
+    Control rows[10]; // Version 0.0.72: PUNISHER has ten (the van)
 };
 using C = Control;
 constexpr SectionDef powersSections[] = {
@@ -898,7 +898,7 @@ constexpr SectionDef powersSections[] = {
     {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb}},
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
     {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
-      C::combatRageBlood, C::combatRageTint, C::combatPunisherHook}},
+      C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan}},
     {"CAPTAIN AMERICA", C::none, C::none, "", "", nullptr, 8,
      {C::combatCaptainAmerica, C::combatShieldArm, C::combatShieldDamage, C::combatShieldChain, C::combatShieldBlock,
       C::combatShieldLook, C::combatShieldSlam}},
@@ -4226,6 +4226,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatOwnSuit:
             case Control::combatPerchTakedown:
             case Control::combatTakedownLight:
+            case Control::combatPunisherVan:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

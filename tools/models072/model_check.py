@@ -41,7 +41,9 @@ SOURCES = {
 FLOORS = {'weapon': 3000, 'prop': 3000, 'shield': 5000, 'vehicle': 20000, 'vehicle_part': 1500, 'body': 10000}
 MIN_SHARE = .30
 # Version 0.0.72: slots not shipped on purpose (MODEL MISSING in game, no stand-in) until the user picks a model.
-AWAITING = {'Hammer': 'awaiting the user\'s pick from hammer-candidates/mjolnir_sheet.png'}
+AWAITING = {'Hammer': 'awaiting the user\'s pick from hammer-candidates/mjolnir_sheet.png',
+            # Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): MODEL MISSING until the user picks from van-candidates/.
+            'Vehicle/PunisherVan': 'awaiting the user\'s pick from van-candidates/'}
 # slots cut from part of their source (their shape is not the whole source's)
 PART = {'SawedOff/Frame', 'SawedOff/Barrels', 'Baton/Left', 'Baton/Right'}
 # a whole model's shape (the area-weighted spread along its own axes, as ratios to the longest, so the

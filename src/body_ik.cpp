@@ -395,11 +395,12 @@ bool prepare(Rig& rig, std::span<const float> restPose) {
         if (std::min({rig.upperArm[i], rig.forearm[i], rig.thigh[i], rig.shin[i]}) < .05f)
             return false;
     }
-    // Between the eyes: from eye joints when the rig has them, else a typical
-    // head (the joint at the top of the neck, the eyes ahead of and above it).
+    // Between the eyes: from eye joints when the rig has them, else the
+    // GAME BODY spec's (point 3e): 0.1115 m ahead of the head joint and
+    // 0.0505 m up (eyeAhead/eyeUp; before 0.0.72, 0.09 and 0.07).
     const Vec3 eyes = valid(rig.eyes[0], n) && valid(rig.eyes[1], n)
                           ? (rest.position(rig.eyes[0]) + rest.position(rig.eyes[1])) / 2
-                          : head + forward * .09f + up * .07f;
+                          : head + forward * eyeAhead + up * eyeUp;
     const Vec3 offset = eyes - head;
     rig.eyesFromHead = {dot(offset, forward), dot(offset, up), dot(offset, left)};
     rig.eyeHeight = eyes.y;

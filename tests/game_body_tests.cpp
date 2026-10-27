@@ -6,6 +6,9 @@
 // the same proof in the game.
 #include "spidy/game_body.hpp"
 #include "spidy/body_ik.hpp"
+#include "spidy/body_calibration.hpp"
+#include "spidy/glove_overlay.hpp"
+#include "spidy/native_body.hpp"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -372,6 +375,108 @@ int main() {
         g.feed(0x10, nullptr);
         check(!g.feed(0x20, nullptr) && !g.open(0x20) && !g.open(0x10), "another record starts over");
         check(!g.feed(0, nullptr), "no player");
+    });
+    // 0.0.72 audit of the multiplayer team's spec (t853u) against the merged build.
+    test("spec 3: a command expires 250 ms after it came (longer leases are cut)", [] {
+        static_assert(native_body::maxLeaseMs == 250);
+        check(native_body::Command{}.leaseMs == 250, "the default lease");
+        check(native_body::leaseOf(250) == 250 && native_body::leaseOf(500) == 250 && native_body::leaseOf(100) == 100 &&
+                  native_body::leaseOf(0) == 0 && native_body::leaseOf(0xffffffffu) == 250,
+              "the lease cap");
+    });
+    test("spec 3a: standing eye height up at once, down at most 1 cm/s", [] {
+        namespace bc = body_calibration;
+        check(bc::followEye(0, 1.7f, 1.f / 90) == 1.7f, "the first height");
+        float e = 1.7f;
+        for (int i = 0; i < 90; ++i) // one second crouched at 1.2 m
+            e = bc::followEye(e, 1.2f, 1.f / 90);
+        std::printf("  after 1 s crouched: %.4f m (from 1.7)\n", e);
+        check(std::abs(e - 1.69f) < 1e-4f, "falls 1 cm in a second");
+        for (int i = 0; i < 180; ++i) // two seconds standing on tiptoe at 1.8 m
+            e = bc::followEye(e, 1.8f, 1.f / 90);
+        check(std::abs(e - 1.8f) < 1e-3f, "rises at once");
+        check(bc::followEye(1.7f, 3.f, .1f) == 1.7f && bc::followEye(1.7f, .5f, .1f) == 1.7f &&
+                  bc::followEye(1.7f, std::nanf(""), .1f) == 1.7f && bc::followEye(1.7f, 1.6f, std::nanf("")) == 1.7f &&
+                  bc::followEye(1.7f, 1.6f, -1) == 1.7f,
+              "a bad height or frame time keeps it");
+        check(bc::followEye(1.7f, 1.69999f, 1) == 1.69999f, "never below the headset");
+    });
+    test("spec 3a: arms scale 0.8-1.25 about the shoulder; uncalibrated body 0.85-1.2", [&] {
+        check(body_calibration::minArmScale == .8f && body_calibration::maxArmScale == 1.25f, "the arm scale clamp");
+        check(body_calibration::minUncalibratedScale == .85f && body_calibration::maxUncalibratedScale == 1.2f,
+              "the uncalibrated clamp");
+    });
+    test("spec 3e: a rig without eye joints puts the eyes 0.1115 m ahead of the head joint, 0.0505 m up", [&] {
+        gb::Table t;
+        gb::parseJoints(bytes.joints, 237, t);
+        std::vector<float> rest;
+        gb::restToModel(bytes.rest, t, rest);
+        body::Rig rig;
+        check(gb::identify(t, rig), "identify");
+        rig.eyes[0] = rig.eyes[1] = -1;
+        check(body::prepare(rig, rest), "prepare");
+        std::printf("  eyes from head: %.4f ahead, %.4f up, %.4f left\n", rig.eyesFromHead.x, rig.eyesFromHead.y,
+                    rig.eyesFromHead.z);
+        check(std::abs(rig.eyesFromHead.x - .1115f) < 1e-4f && std::abs(rig.eyesFromHead.y - .0505f) < 1e-4f &&
+                  std::abs(rig.eyesFromHead.z) < 1e-4f,
+              "the fallback eye point");
+    });
+    test("spec 3g: the palm faces from the rest-pose knuckles, ~30 degrees off down toward the thumb", [&] {
+        gb::Table t;
+        gb::parseJoints(bytes.joints, 237, t);
+        std::vector<float> rest;
+        gb::restToModel(bytes.rest, t, rest);
+        body::Rig rig;
+        check(gb::identify(t, rig), "identify");
+        check(body::prepare(rig, rest), "prepare");
+        std::vector<float> copy = rest;
+        const body::Pose view(copy.data(), 237);
+        for (int i = 0; i < 2; ++i) {
+            const auto& a = rig.arms[i];
+            const Vec3 palm = normalized(view.direction(a.hand, rig.handPalm[i]));
+            // The knuckle line (index to little) across the four palm bones, as the spec says.
+            Vec3 bones{};
+            for (const auto& f : a.fingers)
+                bones += normalized(view.position(f[1]) - view.position(f[0]));
+            const Vec3 knuckles = view.position(a.fingers.back()[1]) - view.position(a.fingers.front()[1]);
+            const Vec3 fingers = normalized(view.position(a.finger) - view.position(a.hand));
+            Vec3 byKnuckles = cross(normalized(knuckles), normalized(bones));
+            byKnuckles = normalized(byKnuckles - fingers * dot(byKnuckles, fingers));
+            if (dot(byKnuckles, palm) < 0)
+                byKnuckles = byKnuckles * -1.f;
+            const float offDown = std::acos(std::clamp(-palm.y, -1.f, 1.f)) * 57.29578f;
+            const Vec3 thumb = view.position(a.thumb) - view.position(a.hand);
+            std::printf("  hand %d: palm %.1f deg off down, %.2f deg from the knuckles'\n", i, offDown,
+                        std::acos(std::clamp(dot(palm, byKnuckles), -1.f, 1.f)) * 57.29578f);
+            check(dot(palm, byKnuckles) > .9999f, "the palm is not the knuckles'");
+            check(offDown > 15 && offDown < 45, "the palm is not ~30 degrees off down");
+            check(dot(palm - Vec3{0, -1, 0} * -palm.y, thumb) > 0, "the palm does not lean toward the thumb");
+        }
+    });
+    test("spec 3 fallback: a glove on each controller while the hero is not drawn", [] {
+        namespace go = glove_overlay;
+        check(go::wanted(true, true, false, false), "GAME BODY on, body not drawn: gloves");
+        check(!go::wanted(true, true, false, true) && !go::wanted(false, true, false, false) &&
+                  !go::wanted(true, false, false, false) && !go::wanted(true, true, true, false),
+              "no gloves when drawn, OFF, another hero's look or the flat screen");
+        std::vector<Vertex> v;
+        const Pose grip{{.2f, 1.2f, -.3f}, Quat::yaw(.4f)};
+        const size_t open = go::append(v, grip, false, 0, {0, 1.6f, 0}, .001f);
+        check(open > 0 && open == v.size(), "an open glove");
+        for (const auto& x : v)
+            check(std::isfinite(x.position.x) && std::isfinite(x.position.y) && std::isfinite(x.position.z) &&
+                      length(x.position - grip.position) < .2f,
+                  "a glove vertex is off the hand");
+        std::vector<Vertex> closed;
+        check(go::append(closed, grip, true, 1, {0, 1.6f, 0}, .001f) > 0, "a fist");
+        std::vector<Vertex> none;
+        check(go::append(none, Pose{{0, 1, 0}, Quat{0, 0, 0, 0}}, false, 0, {0, 1.6f, 0}, .001f) == 0 &&
+                  go::append(none, Pose{{std::nanf(""), 1, 0}, Quat{}}, false, 0, {0, 1.6f, 0}, .001f) == 0 &&
+                  none.empty(),
+              "a bad pose draws nothing");
+        check(go::append(none, grip, false, std::nanf(""), {0, 1.6f, 0}, std::nanf("")) == 0,
+              "a bad pixel size draws nothing");
+        check(go::append(none, grip, false, std::nanf(""), {0, 1.6f, 0}, .001f) > 0, "a bad fist is open");
     });
     std::cout << total - failed << '/' << total << " game body tests passed\n";
     return failed ? 1 : 0;

@@ -46,6 +46,12 @@ namespace Sm2VrLauncher
             psi.EnvironmentVariables["SM2VR_LAUNCHER"] = "1";
             // 0.0.62.2: this launcher shows a session's start failure itself (launch-game-vr.ps1 shows it for older ones).
             psi.EnvironmentVariables["SM2VR_LAUNCHER_BUILD"] = LauncherInfo.Build.ToString();
+            // 0.0.70.1 hotfix: PowerShell (and the Python session it starts) got this launcher's standard input as is;
+            // a dead one (left by an earlier Stop VR, here or in the launcher that updated us) was "[WinError 6] The
+            // handle is invalid" at "finding the headset". PowerShell now gets a standard input of its own (a pipe,
+            // closed at once: end of input) and never this launcher's; a dead handle of ours is cleared too.
+            psi.RedirectStandardInput = true;
+            StdHandles.ClearDead();
             try
             {
                 proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -61,6 +67,7 @@ namespace Sm2VrLauncher
                     if (Exited != null) Exited(code);
                 };
                 proc.Start();
+                try { proc.StandardInput.Close(); } catch { }   // 0.0.70.1: nothing is ever typed in; end of input
                 Started = DateTime.Now;
                 proc.BeginOutputReadLine();
                 proc.BeginErrorReadLine();
@@ -107,6 +114,9 @@ namespace Sm2VrLauncher
             if (!Running) return false;
             lock (consoleLock)
             {
+                // 0.0.70.1 hotfix: AttachConsole sets this launcher's standard handles to that console's and FreeConsole
+                // closes them, leaving the handles dead for every later PLAY VR (WinError 6). They are put back after.
+                var saved = StdHandles.Save();
                 try
                 {
                     FreeConsole();
@@ -119,6 +129,7 @@ namespace Sm2VrLauncher
                 catch { return false; }
                 finally
                 {
+                    StdHandles.Restore(saved);
                     var t = new Thread(() => { Thread.Sleep(2000); SetConsoleCtrlHandler(IntPtr.Zero, false); });
                     t.IsBackground = true; t.Start();
                 }
@@ -167,6 +178,58 @@ namespace Sm2VrLauncher
                 try { using (var p = Process.GetProcessById(id)) p.Kill(); } catch { }
             }
             try { if (Running) proc.Kill(); } catch { }
+        }
+    }
+
+    /// <summary>0.0.70.1 hotfix: this process's standard handles (stdin, stdout, stderr), which every program it starts
+    /// with UseShellExecute=false gets for the streams it does not redirect. Windows only; elsewhere nothing.</summary>
+    static class StdHandles
+    {
+        const int StdInput = -10, StdOutput = -11, StdError = -12;
+        static readonly int[] All = { StdInput, StdOutput, StdError };
+        [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr GetStdHandle(int which);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetStdHandle(int which, IntPtr handle);
+        [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool DuplicateHandle(IntPtr srcProcess, IntPtr src, IntPtr dstProcess, out IntPtr dst, uint access, bool inherit, uint options);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr handle);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern uint GetFileType(IntPtr handle);
+
+        static bool OnWindows { get { return Environment.OSVersion.Platform == PlatformID.Win32NT && Type.GetType("Mono.Runtime") == null; } }
+
+        /// <summary>True when a child could be given <paramref name="h"/>: no handle (the child gets none, as from Explorer)
+        /// or one that duplicates, as Python's subprocess and CreateProcess do with it, and is a file, pipe or console
+        /// (a dead handle's number is soon reused by some other object of this process: an event, a thread...).</summary>
+        public static bool Usable(IntPtr h)
+        {
+            if (h == IntPtr.Zero) return true;
+            if (h == new IntPtr(-1)) return false;
+            IntPtr me = GetCurrentProcess(), copy;
+            if (!DuplicateHandle(me, h, me, out copy, 0, false, 2 /* DUPLICATE_SAME_ACCESS */)) return false;
+            CloseHandle(copy);
+            return GetFileType(h) != 0 /* FILE_TYPE_UNKNOWN */ || Marshal.GetLastWin32Error() == 0;
+        }
+
+        public static IntPtr[] Save()
+        {
+            if (!OnWindows) return null;
+            try { var r = new IntPtr[All.Length]; for (int i = 0; i < All.Length; i++) r[i] = GetStdHandle(All[i]); return r; }
+            catch { return null; }
+        }
+
+        public static void Restore(IntPtr[] saved)
+        {
+            if (saved == null) return;
+            try { for (int i = 0; i < All.Length; i++) SetStdHandle(All[i], saved[i]); ClearDead(); } catch { }
+        }
+
+        /// <summary>Clears (sets to none) any standard handle that is set but no longer valid. The number cleared.</summary>
+        public static int ClearDead()
+        {
+            if (!OnWindows) return 0;
+            int n = 0;
+            try { foreach (int which in All) if (!Usable(GetStdHandle(which)) && SetStdHandle(which, IntPtr.Zero)) n++; }
+            catch { }
+            return n;
         }
     }
 

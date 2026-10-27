@@ -283,7 +283,7 @@ SETTINGS = {
     'perf_status': ((0, 1), 'SpidyPerfStatus', 'SHOW STATUS {} (0 on; 1 off)'),
     # Version 0.0.4
     'iron_man': ((0, 1), 'SpidyShooterType', 'IRON MAN ABILITIES {} (0 off: Spider-Man; 1 on: palm repulsor blasts and, both triggers held, a chest beam every 30 s; no web of any kind (no swing, zip, web shooter, gadgets, grab or rope); blasts and beam do real damage; one hero at a time, EXPERIMENTAL)'),
-    'mirror_view': ((0, 1), 'SpidyMirrorView', 'MIRROR VIEW {} (0 off; 1 test: a hidden game camera looks at you for 30 s once, made when VR starts, then it turns itself OFF: RESTART to run it, EXPERIMENTAL)'),
+    'mirror_view': ((0, 1), 'SpidyMirrorView', 'MIRROR VIEW {} (0 off; 1 test: a small picture of you in your suit, low in your view, made when VR starts: RESTART to run it; needs BODY ON; it turns itself OFF on any problem, EXPERIMENTAL)'),
     # Version 0.0.5
     'hero_height': ((0, 4), 'SpidyHeroHeight', 'HERO HEIGHT {} (0 1.00x: your size; 1 1.15x; 2 1.30x; 3 1.45x; 4 1.60x: the VR body grows for a big skin like Hulk, live)'),
     'hero_damage': ((0, 1), 'SpidyHeroDamage', 'WEB BALL DAMAGE {} (0 off; 1 on: Spider-Man\'s web ball hits ask the game for damage directly; the heroes\' hits always do, EXPERIMENTAL)'),

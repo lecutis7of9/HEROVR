@@ -97,7 +97,7 @@ V003_OPTIONS = (('rope_grab', ('OFF', 'ON')), ('rope_strength', ('NORMAL', 'LOW'
                 ('perf_target', ('AUTO', '72', '80', '90', '120')), ('perf_floor', ('MEDIUM', 'HIGH', 'LOW')),
                 ('perf_status', ('ON', 'OFF')))
 # Version 0.0.4: options 37-38, in the V004 record.
-V004_OPTIONS = (('iron_man', ('OFF', 'ON')), ('mirror_view', ('OFF', 'TEST')))
+V004_OPTIONS = (('iron_man', ('OFF', 'ON')), ('mirror_view', ('OFF', 'ON')))
 # Version 0.0.5: options 39-44, in the V005 record.
 V005_OPTIONS = (('hero_height', ('1.00X', '1.15X', '1.30X', '1.45X', '1.60X')), ('hero_damage', ('OFF', 'ON')),
                 ('punch_sense', ('FORGIVING', 'MAX', '0.0.4', 'STRICT')), ('sfx_volume', ('100%', '75%', '50%', '25%', 'OFF')),
@@ -431,7 +431,8 @@ LUNGE_PHASES = ('idle', 'flying', 'hanging')
 # mirror_view.hpp Phase / Why (the MIRROR VIEW TEST in the v003 record; 0.0.6 exports it).
 MIRROR_TEST_PHASES = ('off', 'waiting', 'running', 'done', 'failed')
 MIRROR_TEST_WHYS = ('', 'fewer than 4 view slots free', 'the eyes are not up', 'the game made no view',
-                    'the view left the pool', 'too slow: frames over 1.5x')
+                    'the view left the pool', 'too slow: under 20 fps for 5 s',
+                    'the picture could not be shown')
 LUNGE_MODES = ('GAME BUTTON', 'SPIDYVR MOVE')
 
 

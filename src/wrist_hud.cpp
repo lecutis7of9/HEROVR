@@ -11,6 +11,7 @@
 #include "spidy/blood_splatter.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/combat38.hpp"
+#include "spidy/mirror_view.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/controls_guide.hpp"
 #include "spidy/native_view.hpp"
@@ -2237,6 +2238,13 @@ const Help& shadowDistanceLines(const Help& help, const View& view) {
 // Update 38.5: the subtext an item shows for `view`'s state (its own help,
 // or a state's text wrapped the same; one place for drawing and helpInfo).
 const Help& shownHelp(const Item& it, const View& view) {
+    // MIRROR TEST: why MIRROR VIEW turned itself OFF, under it, while it stays OFF.
+    if (view.mirrorViewWhy && view.mirrorViewWhy < mirror_view::whys && combatOption(it.control) == combat38::mirrorView &&
+        view.combat38[combat38::mirrorView] == 0) {
+        thread_local std::string text;
+        text = std::string("Turned itself OFF: ") + mirror_view::whyNames[view.mirrorViewWhy] + ". Restart the game to try again.";
+        return stateLines(it.help, 0x4d000000u | view.mirrorViewWhy, text.c_str());
+    }
     return it.control == Control::eyeLod && it.kind == Kind::toggle && view.eyeLodStatus == 2
                       ? eyeLodFailedLines(it.help, view.eyeLodReason)
                   : it.control == Control::shadowCamera && it.kind == Kind::toggle && !(view.shadowCamera & 0xff) &&

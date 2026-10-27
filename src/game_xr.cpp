@@ -2,6 +2,7 @@
 #ifndef SPIDY_TEST_COMMIT
 #define SPIDY_TEST_COMMIT "unknown"
 #endif
+#include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
 #include "spidy/baton_grip.hpp"
 #include "spidy/gun_grip.hpp"
 #include "spidy/grapple072.hpp" // Version 0.0.72 GRAPPLE (every hero who has one)
@@ -112,6 +113,7 @@
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
 #include <algorithm>
+#include <cctype>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -2130,6 +2132,9 @@ DWORD WINAPI run(void*) {
         std::string wristNote;
         bool mirrorTooLate{}; // Version 0.0.4 MIRROR VIEW TEST asked after the eyes were made: restart
         mirror_view::Stats mirrorStats{};
+        uint32_t mirrorOffWhy{};       // MIRROR TEST: why it turned itself OFF (shown on the wrist; 0 none)
+        double mirrorOffNoteUntil{};   // MIRROR TEST: the wrist's red line until then (wristClock)
+        float mirrorLogClock{};        // MIRROR TEST: a timeline line every 10 s while it runs
         // Update 17: the hologram's clock (frame.seconds summed): the applier's
         // "now" (frame.seconds is the frame's length, not a time).
         double wristClock{};
@@ -3726,6 +3731,12 @@ DWORD WINAPI run(void*) {
                                     wristNote = "RESTART THE GAME TO RUN MIRROR VIEW TEST";
                                 if (wristNote.empty() && modelMissingMask.load())
                                     wristNote = modelMissingNote(modelMissingMask.load());
+                                if (wristNote.empty() && mirrorOffWhy && wristClock < mirrorOffNoteUntil &&
+                                    mirrorOffWhy < mirror_view::whys) {
+                                    wristNote = std::string("MIRROR TEST OFF: ") + mirror_view::whyNames[mirrorOffWhy];
+                                    for (auto& ch : wristNote)
+                                        ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+                                }
                                 if (wristMenu.claims()) {
                                     hudTriggers |= 1u << pointHand;
                                 }
@@ -7519,14 +7530,50 @@ DWORD WINAPI run(void*) {
                                         game_prompts::note("VERSION 0.0.4 MIRROR VIEW TEST: asked after the eyes were made; "
                                                            "restart the game to run it");
                                     mirrorTooLate = late;
-                                    // 0.0.7: MIRROR VIEW runs once. When its 30 s test has run its course (done, or
-                                    // stopped by itself), it switches back to OFF and the launcher saves OFF
-                                    // (SpidyHudSettings 3 bit 21, as a press does), so it does not run at every start.
+                                    // MIRROR TEST (private): MIRROR VIEW stays while ON (OFF on the wrist closes it).
+                                    // When it stopped by itself (no slots, no view, too slow, no picture), it
+                                    // switches back to OFF and the launcher saves OFF (SpidyHudSettings 3 bit 21,
+                                    // as a press does), so a failing mirror does not come back at every start.
+                                    if (mirrorWant)
+                                        mirrorOffWhy = 0; // ON again: the old reason goes
                                     if (mirrorWant && mirror_view::finished(mirrorStats.test)) {
                                         combat38Values[combat38::mirrorView] = 0;
                                         SpidyMirrorViewWant(0);
                                         wristChanged |= 1u << 21;
-                                        game_prompts::note("0.0.7 MIRROR VIEW: the test ran once and turned itself OFF (saved)");
+                                        const auto& t = mirrorStats.test;
+                                        mirrorOffWhy = t.why < mirror_view::whys ? t.why : 0;
+                                        mirrorOffNoteUntil = wristClock + 20;
+                                        game_prompts::note((std::string("MIRROR TEST: turned itself OFF (saved): ") +
+                                                            mirror_view::whyNames[mirrorOffWhy])
+                                                               .c_str());
+                                        char line[128];
+                                        sprintf_s(line, "MIRROR TEST OFF at %.0fs: %.1fms avg (pre-VR %.1f), copies %llu fault %u, hero %llu",
+                                                  t.seconds, t.testMs, t.baseMs,
+                                                  static_cast<unsigned long long>(mirrorStats.gpuCopies),
+                                                  mirrorStats.gpuFault,
+                                                  static_cast<unsigned long long>(mirrorStats.heroDraws));
+                                        game_prompts::note(line);
+                                    }
+                                    // MIRROR TEST: how it is going, at 2 s, 15 s, 60 s, then every 2 min (the
+                                    // report's timeline keeps 32 lines: not more often).
+                                    if (mirrorStats.test.phase == mirror_view::running) {
+                                        const float at = mirrorStats.test.seconds;
+                                        const bool due = (mirrorLogClock < 2 && at >= 2) || (mirrorLogClock < 15 && at >= 15) ||
+                                                         (mirrorLogClock < 60 && at >= 60) ||
+                                                         (at >= 60 && at >= mirrorLogClock + 120);
+                                        if (due) {
+                                            mirrorLogClock = at;
+                                            const auto& t = mirrorStats.test;
+                                            char line[128];
+                                            sprintf_s(line, "MIRROR TEST %.0fs: %.1fms avg, copies %llu fault %u, posed %llu, hero %llu other %llu",
+                                                      at, t.testMs, static_cast<unsigned long long>(mirrorStats.gpuCopies),
+                                                      mirrorStats.gpuFault, static_cast<unsigned long long>(mirrorStats.posed),
+                                                      static_cast<unsigned long long>(mirrorStats.heroDraws),
+                                                      static_cast<unsigned long long>(mirrorStats.otherDraws));
+                                            game_prompts::note(line);
+                                        }
+                                    } else {
+                                        mirrorLogClock = 0;
                                     }
                                     if (player.hero != suitHeroWas) { // another hero: start the watch again
                                         suitWatch.forget();
@@ -8279,11 +8326,8 @@ DWORD WINAPI run(void*) {
                         stereoScene = !code;
                         return true;
                     }
-                    if (const float h = frame.head.position.y; std::isfinite(h) && h > .8f && h < 2.4f)
-                        standingEye = standingEye <= 0 ? h
-                                      : h > standingEye
-                                          ? standingEye + (h - standingEye) * std::min(1.f, frame.seconds * 4)
-                                          : standingEye - std::min(standingEye - h, frame.seconds * .01f);
+                    // Spec 3a: up at once, down at most 1 cm/s (body_calibration::followEye, tested).
+                    standingEye = body_calibration::followEye(standingEye, frame.head.position.y, frame.seconds);
                     // Version 0.0.72 GAME BODY (EXPERIMENTAL): the strict checks' verdict, logged
                     // when it changes; the writer hooked only once they passed for this player.
                     const bool strictBody = c38(combat38::gameBody) == 1;
@@ -8293,6 +8337,7 @@ DWORD WINAPI run(void*) {
                     else if (native_game_body::running())
                         native_game_body::end();
                     const bool strictVerified = strictBody && native_game_body::verified(player.record);
+                    std::array<float, 2> gloveFist{}; // the fallback gloves' fists (glove_overlay)
                     {
                         uint32_t bodySerial{};
                         const auto said = native_game_body::state(bodySerial);
@@ -8330,11 +8375,18 @@ DWORD WINAPI run(void*) {
                         // Standing on a wall or a ceiling - Spidy's own or the
                         // game's crawl - the body stands on it with the player,
                         // never in the air the swing keeps the hero in there.
+                        // MIRROR VIEW (EXPERIMENTAL): while its picture is up (copies made), the head
+                        // is not shrunk away, so the mirror shows the whole suit - the game's own hero,
+                        // with GAME BODY or BODY on (CANDIDATE: bits of the mask's inside may show at
+                        // the edge of the view meanwhile). It shrinks again at once when the picture goes.
+                        const bool mirrorShows = c38(combat38::mirrorView) &&
+                                                 mirrorStats.test.phase == mirror_view::running &&
+                                                 mirrorStats.gpuCopies > 0 && !mirrorStats.gpuFault;
                         pose.flags = (flatScreen || !(values.body || strictBody) || (strictBody && !strictVerified) ||
                                               !hero_modes::gameBodyShown(heroNow())
                                           ? 0u
                                           : native_body::bodyOn) | // 0.0.72 BATMAN BODY, GAME BODY
-                                     native_body::hideHead |
+                                     (mirrorShows ? 0u : native_body::hideHead) |
                                      native_body::handTurn |
                                      (swingState.owned && !motion.standing ? native_body::airborne : 0u) |
                                      (calibratedEye > 0 ? native_body::calibrated : 0u) |
@@ -8373,6 +8425,7 @@ DWORD WINAPI run(void*) {
                             pose.hands[i] = {motion.grips[i].position - motion.anchor, motion.grips[i].orientation,
                                              tracked ? 1u : 0u, fingered.fist};
                             pose.shoot[i] = fingered.shoot;
+                            gloveFist[i] = fingered.fist;
                         }
                         pose.height = calibratedEye > 0 ? calibratedEye : standingEye;
                         pose.armLength = calibratedArm;
@@ -8474,6 +8527,14 @@ DWORD WINAPI run(void*) {
                     saved.screenPose = screenPose;
                     saved.screenAspect = SpidyFlatAspect();
                     saved.slow = moments.view(slowMotion.view());
+                    // Version 0.0.72 GAME BODY fallback (spec point 3): while the hero is not drawn as the
+                    // body (the game's switch hides him), a glove on each tracked controller (glove_overlay.hpp).
+                    if (glove_overlay::wanted(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen,
+                                              native_body::drawn()))
+                        for (unsigned i = 0; i < 2; ++i) {
+                            saved.gloveOn[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) ? 1.f : 0.f;
+                            saved.gloveFist[i] = gloveFist[i];
+                        }
                     saved.health = heroShown.update(heroShare, frame.seconds);
                     // Update 38: this frame's world-from-tracking (RING ANCHOR HAND) and the
                     // web-ball globs in its world (BALL LOOK GLOB).
@@ -9456,6 +9517,13 @@ DWORD WINAPI run(void*) {
                         for (size_t m = 0; m < saved->markFade.size(); ++m) // Version 0.0.62 HIT INDICATOR
                             if (saved->markFade[m] > 0)
                                 hit_marks::appendMark(vertices, saved->markAt[m] + travel, viewer, pixelAngle, saved->markFade[m]);
+                        for (unsigned i = 0; i < 2; ++i) // Version 0.0.72 GAME BODY fallback gloves
+                            if (saved->gloveOn[i] > 0) {
+                                Pose grip = rendered.grips[i];
+                                grip.position += travel;
+                                glove_overlay::append(vertices, grip, i == 1, saved->gloveFist[i], viewer,
+                                                      pixelAngle * length(grip.position - viewer));
+                            }
                         for (unsigned i = 0; i < 2; ++i) // Version 0.0.6 DAREDEVIL's batons
                             if (saved->batonOn[i] > 0) {
                                 if (saved->hero007.batonModel[i] && // Version 0.0.7 BATON LOOK MODEL
@@ -10250,6 +10318,7 @@ DWORD WINAPI run(void*) {
                                         hud.held = wristMenu.held();
                                         hud.disabled = wristOff;
                                         hud.note = wristNote;
+                                        hud.mirrorViewWhy = mirrorOffWhy; // MIRROR TEST
                                         hud.supersampleNow = static_cast<float>(native_gpu::supersample());
                                         {
                                             uint32_t st = 0, n = 0;

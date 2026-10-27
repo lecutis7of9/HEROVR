@@ -31,7 +31,7 @@ iphlpapi.IcmpCloseHandle.argtypes = [w.HANDLE]
 def wifi():
     """The Wi-Fi connection as netsh reports it: SSID, access point, channel, rates and signal."""
     try:
-        text = subprocess.run(['netsh', 'wlan', 'show', 'interfaces'], capture_output=True, text=True,
+        text = subprocess.run(['netsh', 'wlan', 'show', 'interfaces'], stdin=subprocess.DEVNULL, capture_output=True, text=True,
                               timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
         return {}
@@ -46,7 +46,7 @@ def wifi():
 
 
 def gateway():
-    text = subprocess.run(['ipconfig'], capture_output=True, text=True, timeout=10).stdout
+    text = subprocess.run(['ipconfig'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10).stdout
     match = re.search(r'Default Gateway[ .]*:\s*(\d+\.\d+\.\d+\.\d+)', text)
     return match.group(1) if match else None
 

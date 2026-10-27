@@ -31,6 +31,15 @@ static_assert(sizeof(Config) == 48 && sizeof(Data) == 208);
 void enterMarker(unsigned eye, uint64_t serial, uint64_t generation, bool ended);
 void leaveMarker();
 void registerEye(unsigned eye, ID3D12Resource* resource);
+// 0.0.71 MIRROR VIEW (private test): the game's mirror view image (nullptr lets it go), copied as a
+// small picture into both headset eyes. fault: 1 pixel kind, 2 barrier kind, 3 size, 4 other queue,
+// 5 another device; any fault stops only the picture, for the session.
+struct MirrorGpu {
+    uint32_t fault{}, image{}, stateKnown{};
+    uint64_t copies{};
+};
+void registerMirror(ID3D12Resource* resource);
+MirrorGpu mirrorGpu();
 // Update 32.1 (eye_swap.hpp): eye images the game replaced mid-session and
 // the bridge took over (a graphics setting rebuilt them), and 3503 once a
 // replacement could not be taken: the eyes stay paused, VR goes on.

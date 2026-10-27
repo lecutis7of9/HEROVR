@@ -118,8 +118,11 @@ $cmd = $null
 $d = Get-Item -LiteralPath $root
 $i = 0
 while ($d -and $i -lt 3) {
-    $c = Join-Path $d.FullName 'HERO VR Launcher.cmd'
-    if (Test-Path -LiteralPath $c) { $cmd = $c; break }
+    foreach ($n in 'SM2VRLauncher.exe', 'HERO VR Launcher.cmd') {
+        $c = Join-Path $d.FullName $n
+        if (-not $cmd -and (Test-Path -LiteralPath $c)) { $cmd = $c }
+    }
+    if ($cmd) { break }
     $d = $d.Parent; $i++
 }
 Say ''

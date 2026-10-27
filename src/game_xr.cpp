@@ -53,6 +53,7 @@
 #include "spidy/hero_modes.hpp"
 #include "spidy/hero007_play.hpp" // Version 0.0.7 HERO PROFILES
 #include "spidy/captain.hpp"      // Version 0.0.7 CAPTAIN AMERICA
+#include "spidy/cape_glide.hpp"   // Version 0.0.7 BATMAN cape glide and grapple gun
 #include "spidy/mesh_model.hpp"   // Version 0.0.7 BATARANG STYLE
 #include "spidy/hero_height.hpp" // Version 0.0.5
 #include "spidy/sm2_damage.hpp" // Version 0.0.5
@@ -622,6 +623,7 @@ BridgeCall startPunch{}, samplePunch{}, stopPunch{}, swingSettings{}, sampleStri
 BridgeCall sampleLunge{};
 BridgeCall sampleAirYield{}; // Update 38.5: optional (an older ray module: no yield counts)
 BridgeCall sampleFly{};      // Update 38.5 FLY MODE: optional (an older ray module: no flight)
+BridgeCall sampleCape{};     // Version 0.0.7 BATMAN: optional (an older ray module: no grapple line drawn)
 // Spider-Sense (game_sense, in the same module as the punches): optional, an
 // older module draws no warnings.
 BridgeCall sampleSense{};
@@ -822,6 +824,11 @@ combat_input::Config combatConfig() {
         c.ballOurs = true;
         c.ballOnPress = true;
         c.noTriggerGadgets = true;
+        // Version 0.0.7: no web at all - no web yank, and a punch at range never sends the game's
+        // Y web strike: the bridge's own lunge flies him (SPIDYVR MOVE, no web line) or none.
+        c.webYank = false;
+        c.lungeMode = combat38::lungeSpidyMove;
+        c.zipStrike = c.zipStrike && c.zipMode == combat38::zipSpidy;
     }
     // Update 38.1: LUNGE FROM, LUNGE SPEED, LUNGE AIM, PUNCH ANGLE, BALL LEAD.
     c.lungeFrom = combat38::lungeFromMetres(c38(combat38::lungeFrom));
@@ -1710,6 +1717,12 @@ DWORD WINAPI run(void*) {
         // DAREDEVIL's BATON HOLSTERS; the last frame's input (tracking space) for the draw.
         hero007::Play hero007Play;
         hero007::PlayInput hero007In;
+        // Version 0.0.7 BATMAN (cape_glide.hpp): the grapple presses for the next swing command, and
+        // the bridge's glide / grapple state (counts seen: a new grapple, miss or glide buzzes once).
+        bool batmanGrapple[2]{};
+        cape_glide::Data capeNow{};
+        bool capeCounted{};
+        uint32_t capeGrapplesSeen{}, capeMissesSeen{}, capeGlidesSeen{}, capeArrivalsSeen{};
         uint64_t hero007Sent{}, hero007Unsent{}, hero007Heals{}, superPunchBlows{};
         uint32_t hero007Claimed{};
         double hero007At = -1, hero007HoldAt = -1, healAt = -1;
@@ -4342,7 +4355,7 @@ DWORD WINAPI run(void*) {
                         // Update 38 LUNGE SPIDYVR MOVE (EXPERIMENTAL): the bridge lunges itself, at the
                         // enemies near (world). Only with a ray module that has the lunge.
                         input.lungeMode = sampleLunge && (c38(combat38::lunge) == combat38::lungeSpidyMove ||
-                                                          flyModeNow.load() != 0)
+                                                          flyModeNow.load() != 0 || heroNow() != hero_modes::spiderMan)
                                               ? 1u
                                               : 0u;
                         for (uint32_t e = 0; e < enemiesHereCount && input.enemyCount < game_swing::lungeEnemies;
@@ -4356,7 +4369,9 @@ DWORD WINAPI run(void*) {
                         // air the triggers and grips fly instead of shooting webs or web balls.
                         {
                             const uint32_t fm = flyModeNow.load();
-                            const bool flyLive = fm && !calibrationInput && !padLayer.latched() && !phone.open();
+                            // Version 0.0.7 BATMAN: no flight at all (his cape glide and grapple instead).
+                            const bool batmanNow = heroNow() == hero_modes::batman;
+                            const bool flyLive = fm && !batmanNow && !calibrationInput && !padLayer.latched() && !phone.open();
                             // R3 drops and lands (FLY stays on; a hand up takes off again); L3+R3 within
                             // StickChord::window is still the game's ultimate.
                             const auto chord = flyChord.update(frame.seconds, flyLive && flyNow.flying,
@@ -4422,6 +4437,17 @@ DWORD WINAPI run(void*) {
                                                                                   frequency.QuadPart)))
                                 for (auto& h : input.hands)
                                     h.trigger = h.grip = 0;
+                            // Version 0.0.7 BATMAN (cape_glide.hpp): his glide is allowed, and the hands whose
+                            // trigger the last hero step took as the grapple gun's (the bridge fires on the press).
+                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open();
+                            input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
+                            batmanGrapple[0] = batmanGrapple[1] = false;
+                            // Version 0.0.7: webs are SPIDER-MAN's only. Every other hero's triggers and grips
+                            // never reach the bridge's webs, web balls or web grabs (climbing holds the wall by
+                            // wallGrips, kept; FLY reads its own word).
+                            if (heroNow() != hero_modes::spiderMan)
+                                for (auto& h : input.hands)
+                                    h.trigger = h.grip = 0;
                         }
                         if (const auto code = submitSwing(&input)) {
                             // 2002: the bridge switched itself off; its own
@@ -4468,6 +4494,39 @@ DWORD WINAPI run(void*) {
                                 runtime.haptic(1, .3f);
                             }
                         }
+                        {   // Version 0.0.7 BATMAN: the cape glide's and the grapple's state (optional export).
+                            const cape_glide::Data expected;
+                            if (!sampleCape || sampleCape(&capeNow) || capeNow.magic != expected.magic ||
+                                capeNow.version != expected.version || capeNow.bytes != expected.bytes) {
+                                capeNow = {};
+                            } else {
+                                if (capeCounted && heroNow() == hero_modes::batman) {
+                                    const unsigned h = capeNow.hand < 2 ? capeNow.hand : 1u;
+                                    if (capeNow.grapples > capeGrapplesSeen) {
+                                        runtime.haptic(static_cast<int>(h), .45f);
+                                        sfx::play(sfx::batonWhoosh); // the grapple's fire (never a web sound)
+                                        game_prompts::note("VERSION 0.0.7 BATMAN: grapple fired");
+                                    }
+                                    if (capeNow.arrivals > capeArrivalsSeen) {
+                                        runtime.haptic(static_cast<int>(h), .35f);
+                                        sfx::play(sfx::holsterTick);
+                                    }
+                                    if (capeNow.misses > capeMissesSeen)
+                                        for (int i = 0; i < 2; ++i)
+                                            runtime.haptic(i, .12f, .05f);
+                                    if (capeNow.glides > capeGlidesSeen) {
+                                        runtime.haptic(0, .25f);
+                                        runtime.haptic(1, .25f);
+                                        game_prompts::note("VERSION 0.0.7 BATMAN: cape glide");
+                                    }
+                                }
+                                capeCounted = true;
+                                capeGrapplesSeen = capeNow.grapples;
+                                capeMissesSeen = capeNow.misses;
+                                capeGlidesSeen = capeNow.glides;
+                                capeArrivalsSeen = capeNow.arrivals;
+                            }
+                        }
                         if (!sampleClimb || sampleClimb(&climbState) || climbState.magic != 0x53434c44 ||
                             climbState.version != 1 || climbState.bytes != sizeof(climbState))
                             climbState = {};
@@ -4506,7 +4565,7 @@ DWORD WINAPI run(void*) {
                                 sample.status == 2)
                                 aimed = sample;
                         }
-                        if (values.aimMarkers)
+                        if (values.aimMarkers && heroNow() == hero_modes::spiderMan) // 0.0.7: web aims are his only
                             aims = aimed;
                         // A free hand come onto the other hand's web: a light
                         // tick, a press here takes hold of that web.
@@ -5962,6 +6021,8 @@ DWORD WINAPI run(void*) {
                                         }
                                         hero007::PlayOutput hout;
                                         hero007Play.step(hin, hout);
+                                        for (unsigned i = 0; i < 2; ++i) // Version 0.0.7 BATMAN GRAPPLE GUN
+                                            batmanGrapple[i] = hout.grapple[i];
                                         for (uint32_t k = 0; k < hout.blowCount; ++k) {
                                             const auto& hb = hout.blows[k];
                                             const bool sent = sm2_damage::queue(hb.id, hb.blow);
@@ -5983,6 +6044,7 @@ DWORD WINAPI run(void*) {
                                             if (hout.sounds & (1u << id))
                                                 sfx::play(static_cast<sfx::Id>(id));
                                     } else {
+                                        batmanGrapple[0] = batmanGrapple[1] = false;
                                         hero007In.hero = heroWas;
                                         hero007In.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                                         hero007In.shieldArm = c38(combat38::shieldArm);
@@ -6996,7 +7058,7 @@ DWORD WINAPI run(void*) {
                         if (mapping == game_pad::Mapping::gameplay) {
                             static uint64_t heroWebsTaken = 0;
                             static double heroNotedAt = -1e9;
-                            // Version 0.0.7 BATMAN GRAPPLE: with LT held his RT (the game's zip) is kept.
+                            // Version 0.0.7: BATMAN loses RT too (his grapple gun is cape_glide.hpp's, not the game's web zip).
                             const uint32_t taken = hero_modes::stripPad(heroNow(), pad.buttons, pad.rightTrigger,
                                                                         walk.demand.buttons, walk.demand.rightTrigger,
                                                                         pad.leftTrigger);
@@ -7864,6 +7926,19 @@ DWORD WINAPI run(void*) {
                         if (!oursFault)
                         {
                             hero007Play.draw(saved.hero007, saved.worldFromTracking, hero007In, batonLookNow);
+                            // Version 0.0.7 BATMAN GRAPPLE GUN: the line from the firing hand to the hook (game
+                            // world, the bridge's) while it pulls him; never a web.
+                            if (hero007In.hero == hero_modes::batman && capeNow.grappling == cape_glide::pull &&
+                                capeNow.hand < 2 && hero007In.hands[capeNow.hand].tracked) {
+                                const unsigned h = capeNow.hand;
+                                const Vec3 from = compose(saved.worldFromTracking, Pose{hero007In.hands[h].position, {}}).position;
+                                if (finite(from) && finite(capeNow.anchor)) {
+                                    saved.hero007.grapple[h] = true;
+                                    saved.hero007.grappleFrom[h] = from;
+                                    saved.hero007.grappleTo[h] = capeNow.anchor;
+                                    saved.hero007.any = true;
+                                }
+                            }
                             // Version 0.0.7 BATARANG STYLE / GUN MODELS / BATON LOOK MODEL: the converted models
                             // under <Spidy folder>\Models\ (each slot read once, on first use; the built-in look
                             // when missing or refused - never a crash, nothing else stops).
@@ -9952,6 +10027,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     sampleLunge = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyLungeSample")));
     sampleAirYield = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyAirYieldSample")));
     sampleFly = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyFlySample")));
+    sampleCape = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyCapeSample")));
     sampleSense = reinterpret_cast<BridgeCall>(GetProcAddress(rays, "SpidySenseSample"));
     swingSettings = reinterpret_cast<BridgeCall>(GetProcAddress(rays, "SpidySwingSettings"));
     // Optional: an older ray module has no web shooter.

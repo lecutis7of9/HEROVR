@@ -137,6 +137,7 @@
 #include <string>
 #include <vector>
 #include "spidy/bolt_walls.hpp"
+#include "spidy/cape_glide.hpp"
 #include "spidy/hit_marks.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
@@ -23175,7 +23176,7 @@ int main() {
         check(chained == 0 && most == 1 && home == 50, "OFF: one enemy a throw");
         check(spidy::hero007::batarangChance(0) == .25f && spidy::hero007::batarangChance(99) == .25f, "the default and a bad value: 25%");
     });
-    test("Version 0.0.7: BATMAN grapple keeps RT only with LT held", [] {
+    test("Version 0.0.7: BATMAN has no web path (RT taken with or without LT)", [] {
         using namespace spidy::hero_modes;
         uint16_t buttons = 0;
         uint8_t rt = 200;
@@ -23183,13 +23184,212 @@ int main() {
         check(rt == 0, "RT alone (a swing) is taken out");
         rt = 200;
         stripPad(batman, buttons, rt, 0, false, 200);
-        check(rt == 200, "LT + RT: the game's zip / launch kept (his grapple)");
+        check(rt == 0, "LT + RT (the game's web zip) is taken out too");
+        check(!webPaths(batman).any(), "no web path at all for BATMAN");
         rt = 200;
         stripPad(wolverine, buttons, rt, 0, false, 200);
         check(rt == 0, "nobody else keeps it");
         rt = 200;
         stripPad(spiderMan, buttons, rt, 0, false, 0);
         check(rt == 200, "SPIDER-MAN untouched");
+    });
+    test("Version 0.0.7: BATMAN cape glide (arms out, steer, dive, pull up, let go, land)", [] {
+        using namespace spidy::cape_glide;
+        Glide gl;
+        In in;
+        in.seconds = 1 / 90.f;
+        in.allowed = true;
+        in.airborne = true;
+        in.look = {0, 0, -1};
+        in.velocity = {0, -3, -2};
+        const auto arms = [&](Vec3 l, Vec3 r) {
+            in.hands[0] = {true, l};
+            in.hands[1] = {true, r};
+        };
+        const Vec3 outL{-.7f, -.25f, 0}, outR{.7f, -.25f, 0};
+        const auto run = [&](float seconds) {
+            Out o;
+            for (float t = 0; t < seconds; t += in.seconds) {
+                o = gl.update(in);
+                if (o.drive)
+                    in.velocity = o.velocity;
+            }
+            return o;
+        };
+        // Arms at the sides: nothing.
+        arms({-.25f, -.6f, 0}, {.25f, -.6f, 0});
+        check(!run(.5f).drive && !gl.on(), "arms down: no glide");
+        // Arms out in the air: the glide (a slow fall with forward speed).
+        arms(outL, outR);
+        Out o = run(.3f);
+        check(gl.on() && o.drive && o.pose == glide, "arms out in the air: GLIDE");
+        o = run(3.f);
+        check(o.velocity.y < 0 && o.velocity.y > -4.f, "the glide sinks slowly: " + std::to_string(o.velocity.y));
+        check(-o.velocity.z > 8.f && std::fabs(o.velocity.x) < .5f, "and flies forward (the look)");
+        const float glideSpeed = o.speed;
+        // Dip the left arm (right hand higher): a left turn.
+        arms({-.65f, -.55f, 0}, {.65f, .05f, 0});
+        o = run(.5f);
+        check(o.bank > 10.f && o.velocity.x < -1.f, "right arm up, left dipped: turns left");
+        arms({-.65f, .05f, 0}, {.65f, -.55f, 0});
+        o = run(1.f);
+        check(o.bank < -10.f, "the other way: turns right");
+        // Tuck: a dive, building speed.
+        arms({-.2f, -.35f, -.15f}, {.2f, -.35f, -.15f});
+        o = run(1.5f);
+        check(o.pose == dive && o.speed > glideSpeed + 5.f && o.pitch < -30.f, "tucked: DIVE, faster: " + std::to_string(o.speed));
+        const float diveSpeed = o.speed;
+        // Spread and raise: pull up, trading speed for height.
+        arms({-.7f, .2f, 0}, {.7f, .2f, 0});
+        o = run(.6f);
+        check(o.pose == pullUp && o.velocity.y > 0 && o.speed < diveSpeed, "raised: PULL UP climbs and slows");
+        o = run(6.f);
+        check(o.pitch < 0 && o.speed <= 12.f, "out of speed it stalls back to a sink, never hangs");
+        // Arms dropped: let go.
+        arms({-.25f, -.9f, 0}, {.25f, -.9f, 0});
+        o = run(.3f);
+        check(!gl.on() && !o.drive, "arms dropped: the glide ends");
+        // Again, and land.
+        arms(outL, outR);
+        run(.3f);
+        check(gl.on(), "back in the glide");
+        in.airborne = false;
+        o = gl.update(in);
+        check(!gl.on() && o.ended && !o.drive, "landing ends it");
+        // On the ground arms out: nothing; just off the ground: not yet.
+        o = run(.5f);
+        check(!gl.on(), "on the ground: no glide");
+        in.airborne = true;
+        o = gl.update(in);
+        check(!gl.on(), "the first moment in the air: not yet (a jump's arm swing)");
+        // Not allowed (another hero, a grab): never.
+        in.allowed = false;
+        check(!run(1.f).drive, "not allowed: never");
+        in.allowed = true;
+        // Hands lost: it ends.
+        run(.4f);
+        check(gl.on(), "on");
+        in.hands[0].tracked = false;
+        run(.3f);
+        check(!gl.on(), "the hands lost: it ends");
+        // Blocked: barely moving although it drives - ends.
+        in.hands[0].tracked = true;
+        run(.4f);
+        check(gl.on(), "on again");
+        for (int i = 0; i < 90 && gl.on(); ++i) {
+            in.velocity = {0, -.1f, 0};
+            gl.update(in);
+        }
+        check(!gl.on(), "stuck against a wall: it ends");
+        // NaN never sticks.
+        in.hands[0].offset = {NAN, 0, 0};
+        o = gl.update(in);
+        check(!o.drive || finite(o.velocity), "NaN: no bad velocity");
+        check(std::string(glideHelp).find('.') == std::string(glideHelp).size() - 1 &&
+                  std::string(grappleHelp).find('.') == std::string(grappleHelp).size() - 1,
+              "one sentence each");
+    });
+    test("Version 0.0.7: BATMAN grapple gun (aim, reach, pull, vault, timeout, stuck, asks)", [] {
+        using namespace spidy::cape_glide;
+        check(pack(true, false, true) == (askBatman | askGrapple[1]) && pack(false, true, true) == 0, "the asks bits");
+        check((askBatman | askGrapple[0] | askGrapple[1]) == 0xe0u, "bits 5-7 (0-4 taken)");
+        check(grappleAim({0, .5f, -1}, false) && !grappleAim({0, .5f, -1}, true) && !grappleAim({0, 0, -1}, false) &&
+                  !grappleAim({NAN, 1, 0}, false),
+              "aimed up with no enemy only");
+        check(hookable({0, 1, 0}, {0, 10, -20}, false, true) && !hookable({0, 1, 0}, {0, 10, -60}, false, true) &&
+                  !hookable({0, 1, 0}, {0, 1, -1}, false, true) && !hookable({0, 1, 0}, {0, 10, -20}, true, true) &&
+                  !hookable({0, 1, 0}, {0, 10, -20}, false, false),
+              "a fixed surface within 2.5-45 m only");
+        // A ledge (a wall face): pulled up to it, then over.
+        Grapple gr;
+        Vec3 body{0, 1, 0};
+        check(gr.start(body, {0, 12, -15}, {0, 0, 1}, 1) && gr.phase() == pull && gr.hand() == 1, "fired");
+        bool arrived = false, vaulted = false;
+        float t = 0;
+        Vec3 v{};
+        for (; t < 4 && gr.phase() != idle; t += 1 / 90.f) {
+            const auto o = gr.update(1 / 90.f, body, v, true);
+            arrived |= o.arrived;
+            vaulted |= o.phase == vault;
+            if (o.drive) {
+                check(finite(o.velocity) && length(o.velocity) <= 24.5f, "a sane pull");
+                v = o.velocity;
+                body = body + v * (1 / 90.f);
+            }
+        }
+        check(arrived && vaulted && gr.phase() == idle, "arrived, vaulted, done");
+        check(body.y > 12.5f && body.z < -14.f, "up at the ledge and over: " + std::to_string(body.y) + " " + std::to_string(body.z));
+        check(t < 2.5f, "quick: " + std::to_string(t));
+        // A rooftop: lands on top.
+        body = {0, 1, 0};
+        gr.start(body, {5, 8, -10}, {0, 1, 0}, 0);
+        v = {};
+        for (t = 0; t < 4 && gr.phase() != idle; t += 1 / 90.f) {
+            const auto o = gr.update(1 / 90.f, body, v, true);
+            if (o.drive) {
+                v = o.velocity;
+                body = body + v * (1 / 90.f);
+            }
+        }
+        check(body.y > 8.5f, "on the roof");
+        // Blocked: no progress - it stops (no arrival).
+        gr.start({0, 1, 0}, {0, 12, -15}, {0, 0, 1}, 1);
+        bool everArrived = false;
+        for (t = 0; t < 4 && gr.phase() != idle; t += 1 / 90.f)
+            everArrived |= gr.update(1 / 90.f, {0, 1, 0}, {}, true).arrived;
+        check(gr.phase() == idle && !everArrived && t < 1.5f, "stuck: let go");
+        // Not allowed: off at once.
+        gr.start({0, 1, 0}, {0, 12, -15}, {0, 0, 1}, 1);
+        check(gr.update(1 / 90.f, {0, 1, 0}, {}, false).ended && gr.phase() == idle, "not allowed: off");
+        check(!gr.start({NAN, 0, 0}, {0, 1, 0}, {0, 1, 0}, 0), "NaN: no start");
+        // Timeout: a target that keeps away (moving the body sideways only).
+        gr.start({0, 1, 0}, {0, 40, -40}, {0, 0, 1}, 0);
+        body = {0, 1, 0};
+        for (t = 0; t < 5 && gr.phase() != idle; t += 1 / 90.f) {
+            gr.update(1 / 90.f, body, {}, true);
+            body.x += 1.f / 90.f * 3.f;
+            body.y += .01f; // creeping: progress but never there
+        }
+        check(gr.phase() == idle && t <= 3.1f, "out of time: let go");
+        Data d;
+        check(d.magic == 0x45504143 && d.bytes == sizeof(Data), "the sample's header");
+    });
+    test("Version 0.0.7: BATMAN trigger - grapple aimed up with no enemy, batarang otherwise", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}};
+        p.setHero(in.hero);
+        const auto frame = [&](Vec3 aim, float trig) {
+            in.hands[1] = {{.2f, 1.4f, -.3f}, aim, true, trig, 0, false};
+            in.hands[0] = {{-.2f, 1.4f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+            PlayOutput o;
+            p.step(in, o);
+            return o;
+        };
+        frame({0, .6f, -1}, 0);
+        PlayOutput o = frame({0, .6f, -1}, 1);
+        check(o.grapple[1] && !o.grapple[0], "aimed up, no enemy: the grapple");
+        o = frame({0, 0, -1}, 1);
+        check(o.grapple[1], "held: still the grapple's press (the hand may come down)");
+        for (int i = 0; i < 30; ++i)
+            frame({0, 0, -1}, 1);
+        check(p.batarangs[1].throws == 0, "no batarang for a grapple press");
+        o = frame({0, 0, -1}, 0);
+        check(!o.grapple[1], "let go: off");
+        o = frame({0, -.1f, -1}, 1);
+        check(!o.grapple[1], "aimed level or down: a batarang, not the grapple");
+        for (int i = 0; i < 30; ++i)
+            frame({0, -.1f, -1}, 0);
+        check(p.batarangs[1].throws >= 1, "the batarang went");
+        in.hero = spidy::hero_modes::wolverine;
+        p.setHero(in.hero);
+        o = frame({0, .6f, -1}, 0);
+        o = frame({0, .6f, -1}, 1);
+        check(!o.grapple[0] && !o.grapple[1], "nobody else grapples");
     });
     test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
         using namespace spidy::hero007;
@@ -23456,6 +23656,17 @@ int main() {
             d.shellAt[i] = {.1f * static_cast<float>(i), 1, -1};
             d.shellWay[i] = {1, 0, 0};
         }
+        for (int i = 0; i < 2; ++i) {
+            d.grapple[i] = true;
+            d.grappleFrom[i] = {.2f * static_cast<float>(i), 1.4f, -.3f};
+            d.grappleTo[i] = {0, 30, -38};
+        }
+        v.clear();
+        appendGrappleLine(v, d.grappleFrom[0], d.grappleTo[0], viewer, px);
+        check(!v.empty() && v.size() <= budget::grapple, "the grapple line in budget: " + std::to_string(v.size()));
+        v.clear();
+        appendGrappleLine(v, {0, 1, 0}, {0, 1, -80}, viewer, px);
+        check(v.empty(), "past 50 m: no line");
         v.clear();
         appendHero007(v, d, {}, viewer, px);
         check(v.size() <= budget::frame, "the worst frame in budget: " + std::to_string(v.size()) + " of " + std::to_string(budget::frame));

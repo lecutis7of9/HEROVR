@@ -8,8 +8,14 @@ Version 0.0.70 (build Update 39.4), launcher build 11 (0.0.70.1). "0.0.7" is pub
 compare number by number (7 < 63); the trailing 0 keeps it above 0.0.63 for every launcher (docs/VERSIONING.md).
 No new game address: every blow uses the CONFIRMED damage path, healing and SHIELD BLOCK the CONFIRMED HeroHealth record.
 
-- New heroes, all OFF by default (one hero at a time): BATMAN (batarangs with BATARANG CHAIN, grapple, smoke as a look
-  only), SUPERMAN (heat vision, COLD BREATH - real tick blows, nobody is frozen -, super strength, the SUPERSONIC
+- BATMAN grapple gun and cape glide (cape_glide, bridge `SpidyCapeSample`): aim a hand at least ~10 degrees up (no enemy
+  in the batarang sights) and pull the trigger to fire the grapple at a rooftop or ledge 2.5-45 m away (line drawn,
+  zip at up to 24 m/s, vault over the edge); arms out in the air glide (lean/dip one arm to turn, tuck to dive, raise
+  to pull up; drop the arms or land to stop). No webs and no flight for BATMAN.
+- Webs are Spider-Man's only: with any other hero the bridge gets no web triggers or grips, no aim markers, no web yank
+  and no Y web strike (a far punch lunges without a line). Live, no restart.
+- New heroes, all OFF by default (one hero at a time): BATMAN (batarangs with BATARANG CHAIN, grapple gun, cape glide,
+  smoke as a look only), SUPERMAN (heat vision, COLD BREATH - real tick blows, nobody is frozen -, super strength, the SUPERSONIC
   dash), PUNISHER (two pistols and a sawed-off, holsters, EASY RELOAD), WOLVERINE (claws, healing) and CAPTAIN AMERICA
   (shield worn, drawn, thrown with SHIELD CHAIN, bash; SHIELD BLOCK is an OFF-by-default experiment).
 - Guns fire along the barrel: pistols and sawed-off sit in the palm from the OpenXR grip pose and shots leave the drawn

@@ -257,7 +257,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"beacons_vision", "BEACONS IN VISION", "BEACONS", "ON: mission beacons and markers stay bright and coloured in Daredevil's sonar.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.7 HERO PROFILES: OFF by default; turning one on turns every other hero off (heroOnly).
-    {"batman", "BATMAN ABILITIES", "BATMAN", "ON: batarangs, a grapple and smoke, no other webs (one hero at a time).",
+    {"batman", "BATMAN ABILITIES", "BATMAN", "ON: batarangs, grapple gun (aim up), arms-out cape glide; no webs, no flying.",
      2, {"OFF", "ON", nullptr, nullptr}},
     {"wolverine", "WOLVERINE ABILITIES", "WOLVERINE", "ON: claws on the trigger and fast healing, no webs (one hero at a time).",
      2, {"OFF", "ON", nullptr, nullptr}},

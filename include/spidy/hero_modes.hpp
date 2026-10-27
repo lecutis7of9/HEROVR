@@ -27,7 +27,7 @@
 // points read 0 or less); a target who goes down while it flies sends it home; batonMaxOut still
 // brings it back whatever happens.
 // Version 0.0.7 HERO PROFILES (hero007.hpp): BATMAN (two batarangs on this Baton, a chain roll per
-// hit: chainChance, default 25%; the game's zip / point launch kept as his grapple), WOLVERINE (claws,
+// hit: chainChance, default 25%; his own grapple gun and cape glide, cape_glide.hpp), WOLVERINE (claws,
 // rapid healing), SUPERMAN (heat vision) and PUNISHER (pistol, shotgun). Every hit is a blow on
 // sm2_damage's CONFIRMED path. Knockdown and disarm are NOT here: no CONFIRMED game path (research).
 // Pure; no game memory.
@@ -89,10 +89,7 @@ struct WebPaths {
 };
 inline WebPaths webPaths(uint32_t hero) {
     WebPaths w;
-    if (hero == batman) { // Version 0.0.7 BATMAN GRAPPLE: the game's zip / point launch (LT + RT) only
-        w.zip = true;
-        return w;
-    }
+    // Version 0.0.7 BATMAN: no web path at all (his grapple gun and cape glide are cape_glide.hpp's).
     if (hero != spiderMan)
         return w;
     w.webBall = w.gameWebBall = w.swing = w.zip = w.chargeLeap = w.gadgets = w.gadgetWheel = w.sonic = w.yank =
@@ -105,15 +102,13 @@ inline WebPaths webPaths(uint32_t hero) {
 inline constexpr uint16_t padRb = 0x200;
 // Takes the web inputs out of a pad on its way to the game. askedButtons / askedRt: what a story
 // prompt asks for this frame (kept). Returns how many web inputs were taken out.
-// Version 0.0.7 BATMAN GRAPPLE: with LT held (leftTrigger past grappleLt) BATMAN's RT is kept - the
-// game's own zip / point launch (his grapple); RT alone (the swing) is still taken out.
-inline constexpr uint8_t grappleLt = 30;
+// Version 0.0.7: every hero but SPIDER-MAN loses RT whatever LT does (BATMAN included: the game's
+// zip is a web; his grapple gun is cape_glide.hpp's). leftTrigger is kept for the callers.
 inline uint32_t stripPad(uint32_t hero, uint16_t& buttons, uint8_t& rightTrigger, uint16_t askedButtons,
                          bool askedRt, uint8_t leftTrigger) {
+    (void)leftTrigger;
     if (hero == spiderMan)
         return 0;
-    if (hero == batman && leftTrigger > grappleLt)
-        askedRt = true;
     uint32_t taken = 0;
     if ((buttons & padRb) && !(askedButtons & padRb)) {
         buttons = static_cast<uint16_t>(buttons & ~padRb);

@@ -47,7 +47,8 @@ CONFIRMED HeroHealth record. The damage amounts are the mod's own estimates.
 | Feature | Real | Visual only / not built |
 |---|---|---|
 | Batarangs (one in each hand), CHAIN (max 3) and return | Each hit is a real blow | Flight and return are drawn |
-| Grapple | The game's own zip and point launch, kept | — |
+| Grapple gun | Real movement: the bridge's ray finds the rooftop or ledge, the bridge's safe velocity path (FLY MODE's) pulls him up and over | The line and hook are drawn |
+| Cape glide | Real movement on the same path: arms out glide, dip an arm to turn, tuck to dive, raise to pull up | — (no cape model) |
 | Smoke | — | Visual only. It hides nothing (no CONFIRMED stealth function). |
 | Heat vision | Real tick blows along the gaze, 3 s on and 2 s to cool | Beam |
 | Cold breath | Real tick blows | Frost look. **Nobody is frozen** (no CONFIRMED freeze). |
@@ -146,7 +147,17 @@ true for 0.0.62's batons.
    - [ ] A batarang shows in each hand.
    - [ ] Throw with each trigger and see a hit, smoke, and a bounce at 25%.
    - [ ] It returns after at most 3 hits.
-   - [ ] LT+RT zip still works, and other webs are off.
+   - [ ] No web of any kind: RT, LT+RT, RB, LB+RB, Y at range and the right stick up never web; no web
+         lines, balls, aim markers or web sounds. FLY MODE ON does not fly him.
+   - [ ] Grapple: with no enemy in the sights, aim a hand above level at a rooftop or a ledge (within
+         45 m) and pull the trigger: a whoosh, a dark line with a hook, a pull up to it, a pop over
+         the edge and a tick on arrival. At nothing (sky, too far): a light buzz, no line.
+   - [ ] Aimed level or down, or at an enemy: the trigger throws the batarang as before.
+   - [ ] Cape glide: jump or step off a roof and hold both arms out to the sides: a buzz in both
+         hands, a slow fall moving forward. Dip the left arm: turn left; the right: turn right.
+         Tuck the arms in: dive, faster. Spread and raise them: pull up, then it settles back.
+         Drop the arms or land: it stops. A grapple stops a glide.
+   - [ ] Comfort: no snap turns or jolts at a start or an end of a glide or a grapple.
 3. **BATARANG STYLE.**
    - [ ] EIRA, CLOONEY and JOKER each draw.
    - [ ] Renaming the Models folder draws DEFAULT, with no crash.
@@ -193,7 +204,7 @@ true for 0.0.62's batons.
    - [ ] Reach over the RIGHT shoulder and grip: a tick, and it is on the right forearm, face out.
    - [ ] The LEFT hand cannot take it. Gripping it never webs, zips or climbs.
    - [ ] With the right hand on a web or a wall, gripping at the back does not draw it; the right
-         grip in front still web-zips and climbs as before. The wrist HUD stays on the left wrist.
+         grip in front still climbs as before (no web: only Spider-Man webs). The wrist HUD stays on the left wrist.
    - [ ] Flying (FLY MODE): the right trigger does not move you (it is the shield's).
    - [ ] Let go behind the shoulder: it goes back on the back with a tick.
    - [ ] A backhand flick plus the trigger throws it flat and spinning; it hits, ricochets to up to
@@ -315,3 +326,34 @@ check allows matplotlib only under `tools/models007/` and Blender's `bpy` / `mat
   shield throw is the SHIELD ARM hand's trigger (RIGHT by default), so `triggerWeapon` lists him too and
   neither trigger thrusts him in FLY MODE (poses and sticks still fly him). Test: "Version 0.0.7: FLY MODE -
   CAPTAIN AMERICA's shield throw never flies him (either SHIELD ARM)".
+
+## BATMAN grapple gun and cape glide; webs are Spider-Man's only
+
+The user (27 Oct): Batman has no flying and no webs; he gets a grapple gun and an Arkham Shadow
+style cape glide, and every other hero's web abilities are off.
+
+- `include/spidy/cape_glide.hpp` (pure): `Glide` reads both hands against the head in the body's
+  frame. Arms out to the sides (more than 1.0 m apart, between shoulder-low and head height) for
+  0.1 s while in the air for 0.12 s starts the glide (heading from the body's motion, or the look).
+  Energy model: speed changes by -g sin(pitch) - drag * speed^2; a glide (-10 degrees) settles near
+  14 m/s, sinking about 2.4 m/s; a tuck dives (-50 degrees, toward 30 m/s); raised arms pull up
+  (+25 degrees) while there is speed, then stall back to a sink. The arms' tilt turns him (6 degrees
+  dead zone, full turn 85 degrees a second at 35 degrees). Landing, a wall, the arms dropped, lost
+  hands or being blocked for 0.45 s end it.
+- `Grapple`: a hit within 2.5-45 m on a fixed surface (never the air, never a moving body). A
+  rooftop (normal up): pulled to stand on it; a wall face: to 1.6 m above the hit, 0.6 m out, then
+  a 0.32 s pop up and over the edge. Up to 24 m/s, slowing near the end; no progress for 0.5 s or
+  3 s in all lets go.
+- VR side: `hero007::Play::stepBatman` takes a trigger press as the grapple's when no enemy is in
+  the batarang's sights and the hand points at least 10 degrees above level (`grappleAim`); that
+  press throws no batarang. `game_xr.cpp` sends it as `Command::asks` bits 6/7 with bit 5 (BATMAN);
+  FLY MODE is off for him. The bridge (`game_swing.cpp`) fires the ray from the hand's aim, runs the
+  grapple and the glide next to FLY MODE on the same capped velocity path, and publishes
+  `SpidyCapeSample` (optional: an older bridge draws no line). The line: `hero007::appendGrappleLine`.
+  Sounds: the existing baton whoosh (fire) and holster tick (arrival); never a web sound.
+- Every hero but Spider-Man: the hands' triggers and grips no longer reach the bridge's webs, web
+  balls or web grabs (climbing is unchanged), the aim markers are Spider-Man's, and the combat
+  config has no web yank and no game Y web strike (a punch at range uses the bridge's own lunge,
+  no web line). No new setting; BATMAN ABILITIES' subtext says it. Live, no restart.
+- Tests: "Version 0.0.7: BATMAN cape glide (...)", "BATMAN grapple gun (...)", "BATMAN trigger -
+  grapple aimed up with no enemy, batarang otherwise", and the grapple line's budget.

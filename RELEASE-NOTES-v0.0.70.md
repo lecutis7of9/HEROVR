@@ -15,11 +15,20 @@ so every launcher sees it as newer than 0.0.63.
 installs once and is not offered again.
 
 ## What's new
-- **New heroes:** **BATMAN** (batarangs in each hand that bounce between enemies and come back, grapple, smoke),
+- **New heroes:** **BATMAN** (batarangs in each hand that bounce between enemies and come back, smoke, a grapple gun and
+  a cape glide - see below),
   **SUPERMAN** (heat vision, COLD BREATH, super strength, the SUPERSONIC dash), **PUNISHER** (two pistols and a
   sawed-off, hip and back holsters, reload), **WOLVERINE** (claws and healing) and **CAPTAIN AMERICA** (his shield:
   wear it, draw it from your back, guard, throw it so it bounces and comes back, bash with it). Find them on the wrist
   hologram's COMBAT page under HERO PROFILES. One hero at a time.
+- **Batman's grapple gun and cape glide.** Aim a hand up at a rooftop or ledge and pull the trigger: the grapple
+  line fires and zips you up and over the edge (aimed level or at an enemy, the trigger throws a batarang as before).
+  In the air, hold your **arms out** to glide on the cape: dip one arm (raise the other) to turn, **tuck your arms**
+  to dive, **raise your arms** to pull up and trade speed for height. Drop your arms or land to stop. Batman has no
+  webs and no flying.
+- **Webs are Spider-Man's only.** With any other hero on, there are no web lines, web sounds or web pulls of any kind.
+  Iron Man, Superman and Captain America fly; Batman grapples and glides; Daredevil, Punisher and Wolverine run,
+  jump and climb. A punch at a far enemy lunges you to him without a web line. Nothing to restart.
 - **Everything new is OFF until you turn it on**, including SHIELD BLOCK, which is an experiment.
 - **Guns fire along the barrel now.** Punisher's guns sit in your palm and the shot leaves the muzzle you see, so the
   sights are on target. Daredevil's batons sit in your fist.
@@ -43,6 +52,8 @@ installs once and is not offered again.
   SHA-256 and installs it with its ready-made mod files, then stays there until you press **Updates > Update now**.
   Your settings are kept. **USE 0.0.62**, **USE 0.0.6** and **USE 0.0.5** are there too.
 - Or download 0.0.63 yourself: https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.63
+- **The original launcher that works stays up:** the 0.0.63 launcher (`HERO-VR-Launcher-0.0.63.zip`, build 10) is still on
+  the v0.0.63 release, unchanged. If the new launcher gives you any trouble, download that one and keep playing.
 - The v0.0.63, v0.0.62, v0.0.6 and v0.0.5 releases and their downloads (including their launchers) stay as they are.
 - **To the classic launcher design:** Options > Launcher > New launcher design off (or hold **Shift** while it opens).
 

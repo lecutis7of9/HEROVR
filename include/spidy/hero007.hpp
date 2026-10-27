@@ -7,8 +7,9 @@
 //  - BATMAN: a batarang in each hand (hero_modes::Baton, two in all). The trigger throws that hand's
 //    batarang at the enemy the strong aim assist picks; every hit is a batarangHit blow; after each
 //    hit it rolls BATARANG CHAIN (default 25%) to bounce to the nearest other enemy within 5 m - at
-//    most 3 enemies in all (hero_modes::batonMaxChains), then it comes back. GRAPPLE: the game's
-//    own zip / point launch (LT + RT) is kept for him (hero_modes::stripPad); every other web is off.
+//    most 3 enemies in all (hero_modes::batonMaxChains), then it comes back. GRAPPLE GUN and
+//    CAPE GLIDE: cape_glide.hpp (the trigger aimed above level with no enemy in the sights grapples;
+//    both arms out in the air glide). No web of any kind (hero_modes::stripPad), no flight.
 //    KNOCKDOWN and DISARM rolls are NOT built: no CONFIRMED game function for either (research).
 //  - WOLVERINE: CLAWS - hold the trigger and the hand's claws are out; their sweep hits like the
 //    0.0.62 baton swing (hero_modes::BatonSwing) with clawHit. RAPID HEALING (Healing): after

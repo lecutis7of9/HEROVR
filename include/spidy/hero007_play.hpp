@@ -12,6 +12,7 @@
 //  - step (in the combat block): the hero's weapons (hero007.hpp has the rules).
 //  - draw: the frame's looks (hero007_visual.hpp) in world space.
 // Pure; no game memory, no address.
+#include "spidy/cape_glide.hpp"
 #include "spidy/captain.hpp"
 #include "spidy/hero007.hpp"
 #include "spidy/hero007_visual.hpp"
@@ -75,6 +76,9 @@ struct PlayOutput {
     float haptic[2]{};
     uint32_t sounds{};  // bit 1 << sfx::Id
     uint32_t claimed{}; // holsterStep: the hands whose grip is the rack's
+    // Version 0.0.7 BATMAN GRAPPLE GUN: the hands whose trigger is held as a grapple (the press
+    // began with no enemy aimed and the hand aimed above level); no batarang for that press.
+    bool grapple[2]{};
     void blow(uint64_t id, sm2_damage::Blow b, Vec3 at, uint32_t kind) {
         if (id && blowCount < blowsMost)
             blows[blowCount++] = {id, b, at, kind};
@@ -139,6 +143,7 @@ class Play {
     uint32_t hero = 0xffffffffu;
     hero_modes::Baton batarangs[2];
     uint32_t batarangThrowsSeen[2]{};
+    bool batTrigWas[2]{}, grappling[2]{}; // Version 0.0.7 BATMAN GRAPPLE GUN: the press's kind
     Smoke smoke;
     Shells shells;
     HeatVision heat;
@@ -176,6 +181,7 @@ class Play {
             batarangs[i] = {};
             batarangs[i].roll.state = 0x2545f491u + 977u * i;
             batarangThrowsSeen[i] = 0;
+            batTrigWas[i] = grappling[i] = false;
             claws[i].reset();
             clawsOut[i] = false;
             haveLast[i] = false;
@@ -514,8 +520,17 @@ class Play {
             if (!finite(h.position) || !finite(h.aim))
                 continue;
             const int aimed = b.inHandNow() ? hero_modes::batonAim(h.position, h.aim, in.list, in.count) : -1;
+            // Version 0.0.7 BATMAN GRAPPLE GUN: a press that starts with no enemy in the batarang's
+            // sights and the hand aimed above level is the grapple's, held until the trigger lets go.
+            if (trig && !batTrigWas[i])
+                grappling[i] = cape_glide::grappleAim(h.aim, hero_modes::batonAim(h.position, h.aim, in.list, in.count) >= 0);
+            if (!trig)
+                grappling[i] = false;
+            batTrigWas[i] = trig;
+            if (grappling[i])
+                out.grapple[i] = true;
             const uint32_t throwsWas = b.throws;
-            const bool hit = b.update(dt, trig, h.position, h.aim, in.list, in.count, aimed);
+            const bool hit = b.update(dt, trig && !grappling[i], h.position, h.aim, in.list, in.count, aimed);
             if (b.throws != throwsWas) {
                 out.buzz(i, .3f);
                 out.sound(sfx::batonWhoosh);

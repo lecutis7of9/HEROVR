@@ -324,6 +324,33 @@ void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer,
     }
 }
 
+void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {
+    if (!ok(from) || !ok(to) || !ok(viewer) || !std::isfinite(pixelAngle) || length(to - from) < .05f ||
+        length(to - from) > 50.f || !inRange(from, viewer, 50.f))
+        return;
+    Guard g(out);
+    // The line: taut, in six pieces (each piece keeps its own width floor along a long line).
+    constexpr int pieces = 6;
+    Vec3 last = from;
+    for (int i = 1; i <= pieces; ++i) {
+        const Vec3 p = from + (to - from) * (static_cast<float>(i) / pieces);
+        part(out, last, p, viewer, pixelAngle, .004f, batBlack, .97f);
+        last = p;
+    }
+    // The hook: a short steel shank along the line and three prongs bent back from its tip.
+    const Vec3 way = normalized(to - from);
+    Vec3 side = cross(way, Vec3{0, 1, 0});
+    side = length(side) > 1e-3f ? normalized(side) : Vec3{1, 0, 0};
+    const Vec3 other = normalized(cross(side, way));
+    const Vec3 tail = to - way * .14f;
+    part(out, tail, to, viewer, pixelAngle, .012f, steel, .97f);
+    for (int k = 0; k < 3; ++k) {
+        const float a = 2.f * pi * static_cast<float>(k) / 3.f;
+        const Vec3 out1 = side * std::cos(a) + other * std::sin(a);
+        part(out, to, to - way * .07f + out1 * .09f, viewer, pixelAngle, .008f, steel, .97f);
+    }
+}
+
 namespace {
 // CAPTAIN AMERICA: the shield Item's disc (its middle, face normal and the in-plane axes, the spin
 // applied), from captain.hpp's frame.
@@ -713,6 +740,9 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
     for (int i = 0; i < 2; ++i)
         if (d.cable[i])
             appendBatonCable(out, d.cableFrom[i] + travel, d.cableTo[i] + travel, viewer, pixelAngle);
+    for (int i = 0; i < 2; ++i)
+        if (d.grapple[i])
+            appendGrappleLine(out, d.grappleFrom[i] + travel, d.grappleTo[i] + travel, viewer, pixelAngle);
     for (int i = 0; i < 2; ++i) {
         if (!d.held[i].look)
             continue;

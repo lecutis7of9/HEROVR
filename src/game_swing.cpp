@@ -3,6 +3,7 @@
 #include "spidy/game_swing.hpp"
 #include "spidy/combat_spidy.hpp"
 #include "spidy/combat_input.hpp"
+#include "spidy/cape_glide.hpp"
 #include "spidy/extras385.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/air_watch.hpp"
@@ -57,6 +58,11 @@ AirYield airYield;
 extras385::fly::Flight flight;
 bool lungeFar{}; // Update 38.5: the lunger has the zip strike's reach (FLY MODE's lunge)
 extras385::fly::Data flyData; // under `output`
+// Version 0.0.7 BATMAN (cape_glide): his cape glide and grapple gun, and what game_xr reads back.
+cape_glide::Glide capeGlide;
+cape_glide::Grapple capeGrapple;
+cape_glide::Data capeData; // under `output`
+bool grappleHeldWas[2]{};
 InFlightStep inFlight;
 SRWLOCK lifecycle = SRWLOCK_INIT, control = SRWLOCK_INIT, output = SRWLOCK_INIT, simulation = SRWLOCK_INIT;
 std::atomic<bool> enabled{};
@@ -147,6 +153,9 @@ void cancelSwing(bool keepWall = false) {
     takeoffTransition.reset();
     mountTakeoff.reset();
     solver.releaseAll();
+    capeGlide.reset(); // Version 0.0.7 BATMAN: no glide or grapple goes on past a cancel
+    capeGrapple.stop();
+    grappleHeldWas[0] = grappleHeldWas[1] = false;
     if (!keepWall)
         solver.leaveWall();
     inputClock.reset();
@@ -806,9 +815,78 @@ void visit(const native_rays::QueryContext& world) {
                    flown.moving ? 1u : 0u, flight.descending() ? 1u : 0u};
         ReleaseSRWLockExclusive(&output);
     }
+    // Version 0.0.7 BATMAN (cape_glide): the grapple gun, then the cape glide, through this same
+    // velocity command (never with FLY MODE: game_xr sends no flight word for BATMAN). A game move
+    // of its own, a grab, a crawl, a wall run or a strike comes first, as for FLY.
+    bool caped{};
+    Vec3 capeVelocity{};
+    {
+        const bool batman = live && (c.asks & cape_glide::askBatman) && !flown.drive;
+        const bool free = batman && !grasped && !handing && !gameRun && !yielding && !striking && collidable;
+        const bool wasCaped = capeGlide.on() || capeGrapple.phase() != cape_glide::idle;
+        for (unsigned i = 0; i < 2; ++i) {
+            const bool held = free && (c.asks & cape_glide::askGrapple[i]) && in.hands[i].tracked;
+            if (held && !grappleHeldWas[i] && capeGrapple.phase() == cape_glide::idle) {
+                const Vec3 from = in.hands[i].aim.position;
+                const Vec3 dir = normalized(in.hands[i].aim.orientation.rotate({0, 0, -1}));
+                const auto hit = finite(from) && length(dir) > .5f ? world.raycast(from, dir, cape_glide::reachMost)
+                                                                   : std::optional<RayHit>{};
+                if (world.error()) {
+                    fault(world.error());
+                    return;
+                }
+                if (hit && cape_glide::hookable(from, hit->point, false, hit->fixed) &&
+                    capeGrapple.start(body.position, hit->point, hit->normal, i)) {
+                    capeGlide.reset();
+                    ++capeData.grapples;
+                } else {
+                    ++capeData.misses;
+                }
+            }
+            grappleHeldWas[i] = held;
+        }
+        const auto pulled = capeGrapple.update(motion.dt, body.position, body.velocity, free);
+        capeData.arrivals += pulled.arrived ? 1u : 0u;
+        cape_glide::In gi;
+        gi.seconds = motion.dt;
+        gi.allowed = free && !pulled.drive;
+        gi.airborne = !body.grounded && !wall.on;
+        gi.look = in.look;
+        gi.velocity = body.velocity;
+        const Quat toWorld = trackingTurn(in);
+        for (unsigned i = 0; i < 2; ++i) {
+            gi.hands[i].tracked = live && in.hands[i].tracked;
+            gi.hands[i].offset = toWorld.rotate(in.hands[i].gripRelativeToHead);
+        }
+        const auto glided = capeGlide.update(gi);
+        capeData.glides += glided.started ? 1u : 0u;
+        caped = pulled.drive || glided.drive;
+        capeVelocity = pulled.drive ? pulled.velocity : glided.velocity;
+        if (caped) {
+            requested = limited(capeVelocity, cap);
+            if (!wasCaped) {
+                solver.releaseAll(); // the cape and the grapple replace the webs (BATMAN has none anyway)
+                solver.leaveWall();
+                takeoffTransition.reset();
+                mountTakeoff.reset();
+            }
+        } else if (wasCaped) {
+            solver.reset(body); // the game's fall goes on from where the glide left him
+        }
+        AcquireSRWLockExclusive(&output);
+        capeData.gliding = glided.drive ? 1u : 0u;
+        capeData.pose = glided.pose;
+        capeData.speed = glided.speed;
+        capeData.pitch = glided.pitch;
+        capeData.bank = glided.bank;
+        capeData.grappling = capeGrapple.phase();
+        capeData.hand = capeGrapple.hand();
+        capeData.anchor = capeGrapple.anchor();
+        ReleaseSRWLockExclusive(&output);
+    }
     // Nor does the swing take the body the game runs up its wall (gameRun).
     const bool drive = !grasped && !handing && !gameRun && !yielding &&
-                       (striking || flown.drive ||
+                       (striking || flown.drive || caped ||
                         (collidable && !body.grounded && !transition.waiting &&
                          (attached || owned || transition.resumed || wall.on)));
     if (drive) {
@@ -833,7 +911,7 @@ void visit(const native_rays::QueryContext& world) {
         // strike's own in real time, at rest once it has arrived.
         inFlight.issued(request.serial, requested,
                         striking ? limited(flightVelocity, config.maxSpeed)
-                        : flown.drive ? requested
+                        : flown.drive || caped ? requested
                                  : limited(predicted.velocity + requested - average, config.maxSpeed));
         owned = true;
     } else if (owned) {
@@ -1217,6 +1295,20 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlySample(void* out) {
         sample.flying = 0;
         sample.vignette = 0;
         sample.moving = sample.descending = 0;
+    }
+    ReleaseSRWLockShared(&control);
+    return copy(out, &sample, sizeof(sample)) ? 0 : 2201;
+}
+// Version 0.0.7 BATMAN: the cape glide's and the grapple's state (cape_glide::Data); off while the
+// input is stale. Optional: a VR module that finds no export draws no line.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCapeSample(void* out) {
+    AcquireSRWLockShared(&control);
+    AcquireSRWLockShared(&output);
+    auto sample = capeData;
+    ReleaseSRWLockShared(&output);
+    if (!enabled || GetTickCount64() >= deadline || GetTickCount64() >= inputDeadline || !command.focused) {
+        sample.gliding = 0;
+        sample.grappling = 0;
     }
     ReleaseSRWLockShared(&control);
     return copy(out, &sample, sizeof(sample)) ? 0 : 2201;

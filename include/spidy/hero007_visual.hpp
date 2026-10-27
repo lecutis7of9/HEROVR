@@ -82,6 +82,10 @@ struct Draw {
     // bounces); never between the batons, never while held or holstered.
     bool cable[2]{};
     Vec3 cableFrom[2]{}, cableTo[2]{};
+    // Version 0.0.7 BATMAN GRAPPLE GUN: the taut line from the firing hand to the hook, ONLY while
+    // the grapple pulls him (cape_glide::Grapple); never a web, never at rest.
+    bool grapple[2]{};
+    Vec3 grappleFrom[2]{}, grappleTo[2]{};
 };
 
 void appendPistol(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);
@@ -100,6 +104,9 @@ bool appendSawedOffModel(std::vector<Vertex>& out, const Item& it, const mesh_mo
 bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer);
 // The thrown baton's chain: a thin steel cable from the hand to the baton, sagging a little.
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
+// BATMAN's grapple line: a taut dark line from the gun hand to the hook (three prongs on the
+// surface), up to 50 m.
+void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 void appendClaws(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);
 // CAPTAIN AMERICA BUILT-IN: the 0.61 m disc flat in its plane (red, white, red rings, the blue centre and
 // the white star) seen from the face; the steel back and the two straps from behind.
@@ -124,11 +131,11 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
 namespace budget {
 inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 1000, club = 1200,
                         holster = 400, shield = 2100, batarangModel = 3 * mesh_model::drawTriangles, model = 3 * mesh_model::drawTriangles,
-                        cable = 600, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
+                        cable = 600, grapple = 1800, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
 // The whole frame's worst case: 2 held + 4 worn + 2 flying + beam + smoke + shells + 2 readouts
-// (+ 2 cables; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,
+// (+ 2 cables, 2 grapple lines; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,
 // worn or flying slot).
-inline constexpr size_t frame = 2 * std::max(sawedOff, model) + 4 * (std::max(sawedOff, model) + holster) + 2 * cable + 2 * std::max(batarang, batarangModel) + freeze +
+inline constexpr size_t frame = 2 * std::max(sawedOff, model) + 4 * (std::max(sawedOff, model) + holster) + 2 * cable + 2 * grapple + 2 * std::max(batarang, batarangModel) + freeze +
                                 drawSmokes * smoke + drawShells * shell + 2 * ammo;
 static_assert(shield <= model, "the shield fits any item slot's budget");
 } // namespace budget

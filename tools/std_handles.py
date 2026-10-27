@@ -26,6 +26,7 @@ def _kernel32():
     k.CloseHandle.argtypes = [w.HANDLE]; k.CloseHandle.restype = w.BOOL
     k.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, c.c_void_p, w.DWORD, w.DWORD, w.HANDLE]
     k.CreateFileW.restype = w.HANDLE
+    k.GetFileType.argtypes = [w.HANDLE]; k.GetFileType.restype = w.DWORD
     return k
 
 
@@ -41,6 +42,11 @@ def usable(k, handle):
     if not k.DuplicateHandle(me, handle, me, c.byref(copy), 0, False, 2):
         return False
     k.CloseHandle(copy)
+    # a dead handle's number can be reused by another object of this process (an event, a thread): not a stream
+    file_type = getattr(k, 'GetFileType', None)
+    if file_type is not None and file_type(handle) == 0:          # FILE_TYPE_UNKNOWN
+        last_error = getattr(k, 'last_error', None) or getattr(c, 'get_last_error', lambda: 0)
+        return last_error() == 0
     return True
 
 

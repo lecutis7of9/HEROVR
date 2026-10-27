@@ -187,6 +187,8 @@ class FakeKernel32:
         return h not in (777,)          # 777 = a closed handle
 
     def CloseHandle(self, h): return True
+    def GetFileType(self, h): return 0 if h == 778 else 2   # 778 = a dead number reused by an event (not a stream)
+    def last_error(self): return 6
 
     def CreateFileW(self, name, *rest):
         assert name == 'NUL'; self.opened += 1; return 4242
@@ -200,6 +202,10 @@ class Repair(unittest.TestCase):
         k = FakeKernel32({-10: 777, -11: 100, -12: 0})
         self.assertEqual(std_handles.repair(k), ['stdin'])
         self.assertEqual(k.set, {-10: 4242})
+
+    def test_reused_number_is_not_a_stream(self):
+        k = FakeKernel32({-10: 778, -11: 100, -12: 0})
+        self.assertEqual(std_handles.repair(k), ['stdin'])
 
     def test_all_dead_and_invalid_value(self):
         k = FakeKernel32({-10: 777, -11: 777, -12: -1})
@@ -231,6 +237,11 @@ class Launcher(unittest.TestCase):
     def test_start_clears_dead_handles_before_powershell(self):
         b = self.body('PsRunner.cs', 'public bool Start(')
         self.assertLess(b.index('StdHandles.ClearDead()'), b.index('proc.Start()'))
+        # PowerShell gets a standard input of its own, never the launcher's: a pipe closed at once
+        self.assertLess(b.index('psi.RedirectStandardInput = true;'), b.index('proc.Start()'))
+        self.assertLess(b.index('proc.Start()'), b.index('proc.StandardInput.Close()'))
+        text = (self.SRC/'PsRunner.cs').read_text(encoding='utf-8')
+        self.assertIn('GetFileType(h) != 0', text)
 
     def test_request_stop_puts_the_handles_back(self):
         b = self.body('PsRunner.cs', 'public bool RequestStop(')

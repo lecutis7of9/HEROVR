@@ -5,7 +5,8 @@
 //   legacy-python   0.0.70's PsRunner start after that Stop, 0.0.70's Python call (stdin not given)    -> expected FAILED WinError 6
 //   python-fix      the same launcher state, Python with std_handles.repair()                         -> STARTED
 //   launcher-fix    build 12's PsRunner.Start (clears dead handles), 0.0.70's Python call               -> STARTED
-//   stop-fix        build 12's RequestStop, then 0.0.70's PsRunner start and Python call               -> STARTED
+//   stop-fix        build 12's RequestStop, then build 12's PsRunner start and 0.0.70's Python call    -> STARTED
+//   stop-legacy     the same, started like 0.0.70 (information: the handles that start inherited)
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -96,7 +97,10 @@ namespace Sm2VrLauncher
                 if (r.Running) r.ForceStop();
                 Thread.Sleep(2500);
                 Say("stop-handles", Handles());
-                Say("stop-fix", Run(Ps(call + "0")));
+                lines = new StringBuilder();
+                code = PsRunner.RunAndWait(Path.GetTempPath(), WriteScript(call + "0"), null, (l, err) => { lock (lines) lines.Append(l).Append(' '); }, CancellationToken.None);
+                Say("stop-fix", lines.ToString().Trim() + " (exit " + code + ")");
+                Say("stop-legacy", Run(Ps(call + "0")));
             }
             catch (Exception ex) { Say("harness-error", ex.ToString()); }
             File.WriteAllText(outFile, log.ToString());

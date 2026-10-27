@@ -122,6 +122,7 @@ enum Option : uint32_t {
     // Version 0.0.72 (the user, 9:31, 9:32): BATMAN's PERCH TAKEDOWN and its GREEN / RED light.
     perchTakedown, takedownLight,
     punisherVan, // Version 0.0.72 EXPERIMENTAL: the Punisher van (van072.hpp), off by default
+    thorHammer,  // Version 0.0.72 THOR HAMMER: which Mjolnir (mesh_model::hammerSlot), BOOOOP by default
     options
 };
 struct OptionInfo {
@@ -412,6 +413,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"punisher_van", "PUNISHER VAN (EXPERIMENTAL)", "VAN", "EXPERIMENTAL: Punisher taps X to summon the van, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
+    {"thor_hammer", "THOR HAMMER", "HAMMER", "Picks which Mjolnir model Thor draws from his back, no restart.",
+     4, {"BOOOOP", "DEVILSEYE", "LOVE THUNDER", "FCCOOPER"}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

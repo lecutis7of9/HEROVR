@@ -35,6 +35,7 @@ struct PlayOptions {
     uint32_t perkBranch{};
     bool ownSuit{};
     bool punisherVan = false; // 10:41: the Punisher van (EXPERIMENTAL, off by default)
+    uint32_t thorHammer{};    // Version 0.0.72 THOR HAMMER: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE THUNDER, 3 FCCOOPER (the look only)
     bool perchTakedown = true, takedownLight = true; // 9:31, 9:32: BATMAN's PERCH TAKEDOWN and its light
     // From the combat38 values (ON first: 0 is ON; SURVIVAL and OWN SUIT: OFF first).
     static bool onFirst(uint32_t v) { return v == 0; }
@@ -126,6 +127,21 @@ struct PlayOut {
 inline constexpr float touchRange = .65f;
 inline constexpr float hammerReach = .9f;
 inline constexpr float chainJump = 8.f, hammerFlight = .35f;
+// Version 0.0.72 THOR HAMMER: the grip 6 cm up the handle; SHEATHED, the handle's end 20 cm under the head,
+// 15 cm behind and 12 cm right (inside the draw reach: below <= .25, ahead <= .05, side >= -.05).
+inline constexpr float hammerGrip = .06f;
+inline Vec3 sheathAt(Vec3 head, Vec3 bodyForward, Vec3 bodyRight) {
+    return head + Vec3{0, -.20f, 0} - bodyForward * .15f + bodyRight * .12f;
+}
+// A face for a hammer pointing along `along`: `look` without its part along the handle (world up when parallel).
+inline Vec3 faceOf(Vec3 along, Vec3 look) {
+    Vec3 f = look - along * dot(look, along);
+    if (!(length(f) > 1e-3f))
+        f = Vec3{0, 1, 0} - along * along.y;
+    if (!(length(f) > 1e-3f))
+        f = Vec3{0, 0, -1};
+    return normalized(f);
+}
 inline constexpr float longRageSeconds = 4.f; // the PUNISHER's LONG RAGE: the rage kept after a fight
 
 class Play {
@@ -763,15 +779,32 @@ class Play {
             shock(hd + Vec3{0, -1.6f, 0}, r);
         }
         // The look: the hammer in the hand (or on its way), lightning on the arms in a fight.
+        // Version 0.0.72 THOR HAMMER: in the hand the grip sits 6 cm up the handle (its end below the fist), a
+        // face toward where Thor looks; not held and not flying, it hangs SHEATHED on his back, head down, the
+        // handle's end at the right shoulder blade - exactly where the right grip reaches to draw it (above).
+        // Nothing appears from nowhere: the hand that draws it is the hand that reached for it.
+        out.look.hammerChoice = o.thorHammer;
         if (hammerHeld && tracked[1]) {
+            const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : look;
             out.look.hammer = true;
-            out.look.hammerAt = p[1];
-            out.look.hammerForward = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : look;
+            out.look.hammerAt = p[1] - aim * hammerGrip;
+            out.look.hammerForward = aim;
+            out.look.hammerUp = faceOf(aim, look);
             out.look.hammerSpin = 0;
         } else if (hammerOut > 0) {
             out.look.hammer = true;
             out.look.hammerAt = hammerTo;
+            out.look.hammerForward = Vec3{0, 1, 0};
+            out.look.hammerUp = faceOf(out.look.hammerForward, look);
             out.look.hammerSpin = clock * 20.f;
+        } else if (ok(hd)) {
+            const Vec3 f = body.forward(), r = body.right();
+            out.look.hammer = true;
+            out.look.hammerAt = sheathAt(hd, f, r);
+            out.look.hammerForward = normalized(Vec3{0, -1, 0} - f * .15f);
+            out.look.hammerUp = r;
+            out.look.hammerSpin = 0;
+            out.look.hammerSheathed = true;
         }
         if (o.thorLightning && fight.on && tracked[1] && out.look.bolts < boltsMost)
             addBolt(out, p[1], p[1] + Vec3{std::sin(clock * 13.f) * .25f, .2f, std::cos(clock * 11.f) * .25f});

@@ -387,12 +387,28 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
     // Version 0.0.72 THOR's hammer: the real model or nothing (the old built-in bars are a fake, never drawn).
     if (l.hammer && l.hammerModel && okv(l.hammerAt) && okv(l.hammerForward) && okv(l.hammerUp) &&
         length(l.hammerForward) > 1e-3f) {
-        hero007::Item it;
-        it.at = T(l.hammerAt);
-        // The model frame: +y handle -> head, -z a face (mesh_model::slotHammer).
-        it.up = normalized(l.hammerForward);
-        it.forward = l.hammerUp;
-        hero007::appendModel(out, it, *l.hammerModel, viewer);
+        // The model frame: +y handle -> head, -z a face (mesh_model::slotHammer). Version 0.0.72: the handle's
+        // direction is kept exactly (the face is made square to it here), and a flying hammer tumbles.
+        const Vec3 along = normalized(l.hammerForward);
+        Vec3 face = l.hammerUp - along * dot(l.hammerUp, along);
+        face = length(face) > 1e-3f ? normalized(face) : soft::perpendicular(along);
+        Vec3 handle = along;
+        if (l.hammerSpin != 0 && std::isfinite(l.hammerSpin)) {
+            const float c = std::cos(l.hammerSpin), s = std::sin(l.hammerSpin);
+            handle = along * c + face * s;
+            face = face * c - along * s;
+        }
+        hero007::appendPlacedModel(out, *l.hammerModel, T(l.hammerAt), face, handle, viewer);
+    }
+    // Version 0.0.72 PUNISHER VAN: the Vandura, its built cab and its wheel (turned with the hands); each the
+    // real model or nothing.
+    if (l.van && okv(l.vanAt) && okv(l.vanForward) && length(l.vanForward) > 1e-3f) {
+        if (l.vanModel)
+            hero007::appendPlacedModel(out, *l.vanModel, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
+        if (l.vanInterior)
+            hero007::appendPlacedModel(out, *l.vanInterior, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
+        if (l.vanWheel && okv(l.wheelAt) && okv(l.wheelForward) && okv(l.wheelUp))
+            hero007::appendPlacedModel(out, *l.vanWheel, T(l.wheelAt), l.wheelForward, l.wheelUp, viewer);
     }
     for (uint32_t i = 0; i < std::min(l.bolts, boltsMost); ++i)
         appendBolt(out, T(l.boltFrom[i]), T(l.boltTo[i]), l.boltSeed[i], viewer, pixelAngle);

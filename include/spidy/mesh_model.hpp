@@ -43,6 +43,10 @@ inline constexpr uint32_t mostSourceTriangles = 200000;
 // collapse-decimated only where VR needs it; the largest ships at about 14,000), so the per-model cap
 // is 24000 (was 700, which crushed them to flat shapes).
 inline constexpr uint32_t drawTriangles = 24000; // the VR cap per model (3 vertices each)
+// Version 0.0.72 THOR HAMMERS + PUNISHER VAN: a slot's own cap (slotDrawCap): the hammers 50,000 (a hero prop held
+// at the eye: the user's "make sure the new models arent falttened"), the van 150,000 (a whole vehicle; the source
+// has 431,452, the shipped one 135,000 by collapse decimation). Every other slot keeps drawTriangles.
+inline constexpr uint32_t hammerTriangles = 50000, vanTriangles = 150000;
 // Untextured (the overlay could not make its texture array), each model is drawn sorted far to near
 // in the overlay's own vertices: then its light copy (Mesh::lite, vertex clustering to liteTriangles).
 inline constexpr uint32_t liteTriangles = 2400;
@@ -50,7 +54,8 @@ inline constexpr uint32_t liteTriangles = 2400;
 // beside a .gltf, PNG / JPEG / QOI) is decoded once at start (QOI here; PNG / JPEG by the decoder
 // game_xr gives: WIC), scaled to textureSize x textureSize and put in one layer of the overlay's
 // texture array (D3D12Renderer::setModelTextures). Equal images share a layer.
-inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 24;
+// Version 0.0.72 THOR HAMMERS + PUNISHER VAN: 32 layers (the four hammers and the van take 15; about 160 MB at 1024 px with mips).
+inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 32;
 inline constexpr size_t mostImageBytes = 48u << 20;
 
 struct Mesh {
@@ -80,6 +85,7 @@ struct Mesh {
         int32_t layer = -1;         // its layer in the overlay's texture array (Library::prepareTextures)
     };
     std::vector<Image> images;
+    uint32_t cap = drawTriangles; // Version 0.0.72: its slot's draw cap (loadFolder; slotDrawCap)
     std::shared_ptr<const Mesh> lite; // Library::load: a copy at most liteTriangles (when this is over), untextured
     uint32_t triangles() const { return static_cast<uint32_t>(colors.size()); }
     bool ok() const { return !colors.empty() && corners.size() == colors.size() * 3; }
@@ -102,7 +108,8 @@ bool decimate(Mesh& mesh, uint32_t most);
 // mayDecimate false: a mesh over drawTriangles is refused instead of decimated (JOKER, ND).
 enum Status : uint32_t { notTried = 0, loaded, missing, invalid, overBudget };
 inline constexpr const char* statusNames[] = {"NOT TRIED", "LOADED", "MISSING", "INVALID", "OVER BUDGET (NO CHANGES ALLOWED)"};
-Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::string& error);
+// Version 0.0.72: cap, the slot's draw cap (slotDrawCap; drawTriangles by default), is kept in Mesh::cap.
+Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::string& error, uint32_t cap = drawTriangles);
 bool readFile(const std::string& path, std::vector<uint8_t>& out, size_t most = mostFileBytes);
 
 // ---- BATARANG STYLE and the other drop-in models ---------------------------------------------------
@@ -112,19 +119,34 @@ enum Style : uint32_t { styleDefault = 0, styleEira, styleClooney, styleJoker, s
 // Version 0.0.7 CAPTAIN AMERICA: slotShield (Models\Shield, CC BY, tools/models007/convert_shield.py).
 // Version 0.0.7 BATMAN: slotGrappleGun (Models\GrappleGun): the grapple gun (Falxx, CC BY 4.0), its grip middle at the
 // origin and its muzzle as extras.pivot. Missing: no gun is drawn (no stand-in) and the line starts at the hand.
-// Version 0.0.72 THOR: slotHammer (Models\Hammer): Mjolnir, the handle's end at the origin, +y the handle -> head,
-// -z a face. Not shipped until the user picks one of hammer-candidates/: no hammer is drawn and the wrist says
-// MODEL MISSING: Hammer (the user, 27 Oct: "keep MODEL MISSING for the hammer, no fake").
-// Version 0.0.72 PUNISHER VAN (EXPERIMENTAL, van072.hpp): slotVan (Models\Vehicle\PunisherVan), the van with
-// its cab interior, metres, -z forward, the ground under the axles' middle at the origin. Not shipped until the
-// user's pick lands: no van is drawn and the wrist says MODEL MISSING: Vehicle/PunisherVan.
-enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slotVan, slots };
+// Version 0.0.72 THOR HAMMERS (the user's picks 1, 5, 6, 3, CC BY 4.0; THOR HAMMER selects, no restart): slotHammer
+// (Models\Hammer\BOOOOP, the default), slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper. Each: the
+// handle's end at the origin, +y the handle -> head, -z a face, 50 cm long. Missing: no hammer is drawn and the
+// wrist says MODEL MISSING: Hammer/<name> (no stand-in).
+// Version 0.0.72 PUNISHER VAN (EXPERIMENTAL, van072.hpp; owner pick pt850u "For the van do 8": the GMC Vandura
+// 1976 by snafuj, CC BY 4.0): slotVan (Models\Vehicle\PunisherVan) the body, metres, -z forward, x right, the
+// ground under the axles' middle at the origin; slotVanInterior (.../Interior) the cab BUILT for the empty source
+// shell (the same frame); slotVanWheel (.../SteeringWheel) the hub at the origin, the rim in the xy plane, +z
+// toward the driver, +y 12 o'clock (turned by the hands).
+enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slotVan,
+                       slotVanInterior, slotVanWheel, slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper, slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
-                                                   "Baton/Right", "Shield",           "GrappleGun",       "Hammer",
-                                                   "Vehicle/PunisherVan"};
+                                                   "Baton/Right", "Shield",           "GrappleGun",       "Hammer/BOOOOP",
+                                                   "Vehicle/PunisherVan", "Vehicle/PunisherVan/Interior", "Vehicle/PunisherVan/SteeringWheel",
+                                                   "Hammer/DEVILSEYE", "Hammer/LOVEANDTHUNDER", "Hammer/FCCOOPER"};
+inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
+                                                vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles};
+// THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
+inline constexpr uint32_t hammers = 4;
+inline constexpr uint32_t hammerSlot(uint32_t choice) {
+    return choice == 1 ? slotHammerDevilsEye : choice == 2 ? slotHammerLoveThunder : choice == 3 ? slotHammerFccooper : slotHammer;
+}
+// The van's parts (drawn by hero007::appendPlacedModel: up to 8 m, seen to 80 m).
+inline constexpr bool slotIsVehicle(uint32_t slot) { return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel; }
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
-inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true};
+inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

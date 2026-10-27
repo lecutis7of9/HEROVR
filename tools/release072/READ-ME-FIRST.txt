@@ -45,16 +45,17 @@ and grip, and everything starts holstered or sheathed.
   grip. Muzzle flash, hit puffs, enemies flinch; the ammo counter stays.
   Your own sounds play for the shotgun, pistols and the pistol reload.
   GRAPPLE HOOK: draw from the chest, push forward to grapple up.
-  PUNISHER VAN (EXPERIMENTAL, OFF by default): tap X to summon. In this
-  build it shows "MODEL MISSING: Vehicle/PunisherVan" and no van appears,
-  because the van model has not been picked yet. Once it ships: grip the driver
-  door handle to get in and out, grip the steering wheel rim with both hands
-  to steer, RT drives, LT reverses, both triggers brake.
+  PUNISHER VAN (EXPERIMENTAL, OFF by default): tap X to summon the black
+  GMC Vandura. Grip the driver door handle to get in and out, grip the
+  steering wheel rim with both hands to turn it, RT drives, LT reverses,
+  both triggers brake. TEST: the van does not carry you through the city
+  yet (engine preview); getting in brings the van to you.
 - CAPTAIN AMERICA: the shield is on your back (the real model); reach + grip.
   A thrown shield flies back and eases into your hand. The aim marker is
   small and faint.
-- THOR: lightning with your own two sounds. The hammer shows "MODEL MISSING"
-  until you pick a Mjolnir model (on purpose: no fake hammer).
+- THOR: lightning with your own two sounds. Mjolnir starts on your back:
+  reach over your right shoulder and grip to draw it. COMBAT > THOR HAMMER
+  picks the model: BOOOOP (default), DEVILSEYE, LOVE THUNDER, FCCOOPER.
 - GREEN LANTERN: ring constructs (fist, beam, bubble, chain), ring flight.
 - COMING SOON suits are labelled COMING SOON in the suit list.
 - ENEMY FACTION: the Hand, Hydra and the Joker Gang stay the game's own enemies

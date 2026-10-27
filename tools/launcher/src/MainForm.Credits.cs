@@ -72,6 +72,12 @@ namespace Sm2VrLauncher
                  "Batarang EIRA - \"Batarang\" by Eira, CC BY 4.0 (decimated, recoloured)\n" +
                  "Batarang CLOONEY - \"Batarang Clooney\" by Ludus101, CC BY 4.0 (decimated)\n" +
                  "Batarang JOKER - \"Batarang Joker\" by baton268, CC BY-NC-ND 4.0 (unmodified, non-commercial: HERO VR is free)\n" +
+                 // Version 0.0.72 (test): THOR HAMMER's four Mjolnirs and the PUNISHER VAN.
+                 "Thor's hammer #1 - \"Marvel Thor's Hammer (Mjolnir)\" by Boooooop, CC BY 4.0 (decimated)\n" +
+                 "Thor's hammer #5 - \"Mjolnir (Thor's hammer)\" by TheDevilsEye, CC BY 4.0\n" +
+                 "Thor's hammer #6 - \"Mjolnir - Thor love and thunder\" by Jesus Osco, CC BY 4.0 (decimated)\n" +
+                 "Thor's hammer #3 - \"Thor's Hammer: Mjolnir\" by fccooper, CC BY 4.0\n" +
+                 "Punisher van - \"GMC Vandura1976 Van\" by snafuj, CC BY 4.0 (decimated, painted black; cab and wheel built by Agent Mulder)\n" +
                  "Links, licences and changes: THIRD-PARTY-MODELS.md in the mod folder.", f, Theme.Silver);
             line().Act("Open THIRD-PARTY-MODELS", fb, () => OpenNotice("THIRD-PARTY-MODELS.md"));
 

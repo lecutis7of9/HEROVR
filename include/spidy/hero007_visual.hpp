@@ -140,6 +140,8 @@ bool appendBatarangModel(std::vector<Vertex>& out, const Item& it, const mesh_mo
 // GUN MODELS / BATON LOOK MODEL: a converted model (metres, x right, y up, -z forward, the grip at
 // the origin) at the item. False (nothing added) when it cannot be drawn: the built-in look instead.
 bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
+// Version 0.0.72 PUNISHER VAN: a model up to 8 m placed by its axes (world = at + right x + up y - forward z).
+bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer);
 // The sawed-off as its frame and barrels; open: the barrels turned 35 degrees down about the pivot.
 bool appendSawedOffModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& frame,
                          const mesh_model::Mesh& barrels, bool open, Vec3 viewer);
@@ -189,7 +191,9 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
 // drawn depth-tested and unsorted; null: they go untextured into `out` as before (their light copy).
 void setModelSink(std::vector<Vertex>* sink);
 std::vector<Vertex>* modelSink();
-inline constexpr size_t modelSinkBudget = 10 * 3 * size_t{mesh_model::drawTriangles};
+// Version 0.0.72: ten ordinary models, plus the van (body, cab, wheel) and a hammer in hand and one on show.
+inline constexpr size_t modelSinkBudget = 3 * (10 * size_t{mesh_model::drawTriangles} + size_t{mesh_model::vanTriangles} +
+                                               2 * size_t{mesh_model::drawTriangles} + 2 * size_t{mesh_model::hammerTriangles});
 
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.
 namespace budget {

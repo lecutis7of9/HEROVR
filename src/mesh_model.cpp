@@ -827,7 +827,7 @@ bool decimate(Mesh& mesh, uint32_t most) {
     return false;
 }
 
-Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::string& error) {
+Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::string& error, uint32_t cap) {
     out = {};
     error.clear();
     std::vector<uint8_t> bytes;
@@ -866,19 +866,22 @@ Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::s
             if (!readFile(folder + im.uri, im.bytes, mostImageBytes) || (imageBytes += im.bytes.size()) > 2 * mostImageBytes)
                 im.bytes.clear();
         }
-    if (out.triangles() > drawTriangles) {
+    if (cap == 0 || cap > vanTriangles)
+        cap = drawTriangles;
+    if (out.triangles() > cap) {
         if (!mayDecimate) {
-            error = std::to_string(out.triangles()) + " triangles, over the " + std::to_string(drawTriangles) +
+            error = std::to_string(out.triangles()) + " triangles, over the " + std::to_string(cap) +
                     " budget, and its licence allows no changes";
             out = {};
             return overBudget;
         }
-        if (!decimate(out, drawTriangles)) {
+        if (!decimate(out, cap)) {
             error = "could not reduce it under the budget";
             out = {};
             return invalid;
         }
     }
+    out.cap = cap;
     return loaded;
 }
 
@@ -900,7 +903,7 @@ Status Library::load(uint32_t style, const std::string& modelsRoot) {
         return notTried;
     if (status[style] != notTried)
         return status[style];
-    status[style] = loadFolder(modelsRoot + slotFolders[style] + "/", slotMayDecimate[style], meshes[style], error[style]);
+    status[style] = loadFolder(modelsRoot + slotFolders[style] + "/", slotMayDecimate[style], meshes[style], error[style], slotDrawCap[style]);
     if (status[style] == loaded)
         makeLite(meshes[style], slotMayDecimate[style]);
     return status[style];

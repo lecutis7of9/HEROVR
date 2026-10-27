@@ -102,8 +102,14 @@ int main(int argc, char** argv) {
             hero007::Item it;
             it.at = {0, 0, 0};
             const Vec3 viewer{0, 0, 2};
-            drawn = s < mm::styles ? hero007::appendBatarangModel(plain, it, *model, viewer)
-                                   : hero007::appendModel(plain, it, *model, viewer);
+            // Version 0.0.72: the van, its parts and the hammers as the game places them (hero007::appendPlacedModel,
+            // the model's own frame here); the rest by their drawers.
+            bool placed = mm::slotIsVehicle(s);
+            for (uint32_t h = 0; h < mm::hammers; ++h)
+                placed = placed || s == mm::hammerSlot(h);
+            drawn = placed ? hero007::appendPlacedModel(plain, *model, {0, 0, 0}, {0, 0, -1}, {0, 1, 0}, viewer)
+                    : s < mm::styles ? hero007::appendBatarangModel(plain, it, *model, viewer)
+                                     : hero007::appendModel(plain, it, *model, viewer);
         }
         const auto& v = sink.empty() ? plain : sink;
         std::ofstream f(out + "slot_" + std::to_string(s) + ".bin", std::ios::binary);

@@ -24,16 +24,27 @@ itself off on failure. A missing model shows MODEL MISSING and is never replaced
   - the gun points along the aim;
   - simulated frames are in the test folder's `grapple-frames/` (simulations, not game captures).
   - BATMAN's grapple stays on the trigger: the player's call (a gun that fires a line counts as a projectile).
-- **THOR'S HAMMER:** `Models\Hammer` shows MODEL MISSING until the player picks a model; the candidate
-  sheets are in `hammer-candidates/`.
+- **THOR HAMMER (setting, COMBAT):** four real Mjolnir models (CC BY 4.0, in the user's order): #1 BOOOOP
+  (Boooooop, the default), #5 DEVILSEYE (TheDevilsEye), #6 LOVE THUNDER (Jesus Osco) and #3 FCCOOPER
+  (fccooper), in `Models\Hammer\<name>`.
+  - It starts SHEATHED on the back (right shoulder); reach back and grip to draw it. No magic spawn.
+  - The throw, recall and lightning are unchanged; the two user lightning sounds alternate at random.
+  - A missing pick shows MODEL MISSING (no stand-in). Real geometry, UVs and textures (model-check PASS).
 - **PUNISHER VAN (EXPERIMENTAL, OFF):**
   - the logic is in `van072.hpp`: a safe street spawn, the driver door handle in and out, a grip-latched
     wheel, RT/LT/both-brake, a wall stop, and NaN safety;
   - the summon is a tap of the left **X**. X is free for the Punisher (he has no gadget wheel) and is held
     back from the game only while the setting is on and the hero is the Punisher;
-  - `Models\Vehicle\PunisherVan` is MODEL MISSING until the pick (`van-candidates/`), so nothing spawns yet;
-  - the body carry (moving the player with the van) is NOT WIRED. The bridge has no velocity input, so that
-    command is CANDIDATE, and the ground and wall probes are not yet joined to the async ray batch.
+  - the model is the GMC Vandura 1976 by snafuj (CC BY 4.0; the owner's pick #8), painted black, 135k of its
+    431k triangles with its textures, the glass left out. Its cab is an empty shell in the download, so the
+    cab (seats, dash, gauges, door card) and a separate steering wheel are BUILT (840 + 1848 triangles,
+    one generated texture). The wheel turns with the hands on its rim;
+  - SUMMON: the X tap asks the async ray batch, one world ray a frame (8 per spot, up to 7 spots: four
+    down for the ground, three across the van's box, one from the chest), about 0.1-0.6 s (CANDIDATE);
+  - ENGINE PREVIEW: getting in brings the DRAWN van round the player (the seat at the eyes) and getting
+    out puts it back. RT/LT/both work on the engine and the triggers are held back from combat and the
+    game while seated, but the body carry (moving the player with the van) is NOT WIRED (the bridge has
+    no velocity input: CANDIDATE), so the van does not drive through the city yet.
 - **JOKER GANG (Arkham mix):** the sources are noted in `tools/factions/factions.py` (`JOKER_SOURCES`), and
   the gang stays vanilla until a model ships:
   - gtav_KWABZ's pack downloads from gta5-mods without a login, but it is in GTA V `.ydd`/`.ytd` format,
@@ -62,13 +73,13 @@ itself off on failure. A missing model shows MODEL MISSING and is never replaced
     the enemy; under CAP it is now 0.15 m and half opacity, with no wide lock-on ring. The slam ring is
     subtle too.
   - WOLVERINE: a preview clip of the claws.
-  - VAN: still a clean preview. There is no van model and the velocity carry is CANDIDATE, so nothing
-    moves and nothing can crash.
+  - VAN: the real model with its built cab and wheel (`previews-0.0.72c/`, SIMULATED). The velocity
+    carry is CANDIDATE, so the world does not move and nothing can crash.
 
 ## Coming soon / pending
 
 - PERCH TAKEDOWN: its hooks are CANDIDATE.
 - Alternate suits that are not fetched yet are labelled COMING SOON.
 - The enemy faction swap (THE HAND, HYDRA, JOKER GANG) is CANDIDATE.
-- The hammer and van models are awaiting the pick.
+- PUNISHER VAN driving: the body carry is CANDIDATE (engine preview only). VRAM: about 137k van triangles.
 - Multiplayer is skipped.

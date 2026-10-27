@@ -16,7 +16,17 @@ MODEL_FILES = [
     'Models/Baton/Right/scene.glb',
     'Models/Shield/scene.glb',
     'Models/GrappleGun/scene.glb',
+    # Version 0.0.72 THOR HAMMER (#1 default, #5, #6, #3) and the PUNISHER VAN (snafuj; its cab and wheel BUILT).
+    'Models/Hammer/BOOOOP/scene.glb',
+    'Models/Hammer/DEVILSEYE/scene.glb',
+    'Models/Hammer/LOVEANDTHUNDER/scene.glb',
+    'Models/Hammer/FCCOOPER/scene.glb',
+    'Models/Vehicle/PunisherVan/scene.glb',
+    'Models/Vehicle/PunisherVan/Interior/scene.glb',
+    'Models/Vehicle/PunisherVan/SteeringWheel/scene.glb',
 ]
+# Version 0.0.72: the CC BY credit beside each new model (the artist's own license.txt; the built parts' note).
+LICENSE_FILES = [os.path.dirname(m) + '/license.txt' for m in MODEL_FILES[10:]]
 
 # The player's own sounds, shipped unchanged (sha256 as sent) beside the mod, and the WAV the game embeds
 # from each (tools/sfx/user_guns.py; CMake SPIDY_SFX_FILE_<name> or the name itself).
@@ -32,7 +42,7 @@ DOC_FILES = ['READ-ME-FIRST.txt', 'SHA256SUMS.txt']
 
 
 def required_zip_files():
-    return MODEL_FILES + SOUND_FILES + DOC_FILES
+    return MODEL_FILES + LICENSE_FILES + SOUND_FILES + DOC_FILES
 
 
 def source_mp3(name):

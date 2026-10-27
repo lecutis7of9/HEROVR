@@ -1625,7 +1625,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 217, "controls count drifted"); // Version 0.0.72: + 38 COMBAT (PUNISHER VAN, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 218, "controls count drifted"); // Version 0.0.72: + 39 COMBAT (PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1965,7 +1965,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 217, "controls count drifted"); // Version 0.0.72: + 38 COMBAT (PUNISHER VAN, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 218, "controls count drifted"); // Version 0.0.72: + 39 COMBAT (PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18448,7 +18448,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 110, "one hundred and ten options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 38)");
+        check(options == 111, "one hundred and eleven options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 39 (THOR HAMMER))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18482,7 +18482,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 110, "0.0.72 has 110 COMBAT options (0.0.72: + 39; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 111, "0.0.72 has 111 COMBAT options (0.0.72: + 40 with THOR HAMMER; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18804,7 +18804,7 @@ int main() {
                 }
             }
         }
-        check(placed == 185 /* 0.0.72: + 39 (+ PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 186 /* 0.0.72: + 40 (+ PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -23805,6 +23805,140 @@ int main() {
         check(std::string(spidy::mesh_model::slotFolders[spidy::mesh_model::slotVan]) == "Vehicle/PunisherVan",
               "the van's slot: Models\\Vehicle\\PunisherVan (MODEL MISSING until the pick)");
     });
+    test("Version 0.0.72 PUNISHER VAN: the in-game summon probe (one world ray a frame) agrees with place()", [] {
+        namespace v = spidy::van072;
+        // A tiny world: ground at groundY (NaN: a drop), a solid slab for x in [wallLo, wallHi] (to 5 m up).
+        float wallLo = 1e9f, wallHi = 1e9f;
+        auto groundY = [](float, float z) { return z < -30.f ? NAN : 0.f; };
+        auto cast = [&](const v::Ray& r, float& fraction) {
+            if (r.dir.y < -.99f) { // a down ray
+                const float g = groundY(r.from.x, r.from.z);
+                if (!std::isfinite(g) || r.from.y - g > r.distance || r.from.y < g)
+                    return false;
+                fraction = (r.from.y - g) / r.distance;
+                return true;
+            }
+            for (int k = 0; k <= 200; ++k) {
+                const Vec3 q = r.from + r.dir * (r.distance * k / 200.f);
+                if (q.x >= wallLo && q.x <= wallHi && q.y < 5.f) {
+                    fraction = k / 200.f;
+                    return true;
+                }
+            }
+            return false;
+        };
+        auto run = [&](Vec3 feet, Vec3 look) {
+            v::Probe p;
+            p.start(feet, look);
+            v::Ray r;
+            int asked = 0;
+            while (p.next(r) && asked < 1000) {
+                float fr = NAN;
+                const bool hit = cast(r, fr);
+                p.answer(hit, fr);
+                ++asked;
+            }
+            check(p.done && !p.active && asked <= int(v::spots * v::Probe::raysPerSpot), "the probe ends, within its rays");
+            return p.result;
+        };
+        auto flat = [&](float x, float z, float) { return groundY(x, z); };
+        auto clearBox = [&](Vec3 c, Vec3 h, float) { return c.x + h.x < wallLo || c.x - h.x > wallHi; };
+        const auto a = run({0, 0, 0}, {0, 0, -1});
+        const auto b = v::place({0, 0, 0}, {0, 0, -1}, flat, clearBox);
+        check(a.ok && b.ok && length(a.frame.at - b.frame.at) < 1e-3f && std::abs(a.frame.yaw - b.frame.yaw) < 1e-5f &&
+                  a.tried == 8,
+              "an open street: the first spot, 8 rays, the same as place()");
+        wallLo = 1.f;
+        wallHi = 9.f;
+        const auto w = run({0, 0, 0}, {0, 0, -1});
+        check(w.ok && w.frame.at.x + 1.15f < 1.f, "a wall ahead-right: a spot clear of it");
+        wallLo = wallHi = 1e9f;
+        const auto d = run({0, 0, 0}, {0, 0, 1}); // facing +z, away from the drop (z < -30)
+        check(d.ok, "facing away from the drop: a spot");
+        const auto n = run({0, 0, -40}, {0, 0, -1}); // over the drop: no ground anywhere near
+        check(!n.ok, "no ground: no van");
+        v::Probe bad;
+        bad.start({NAN, 0, 0}, {0, 0, -1});
+        v::Ray r;
+        check(bad.done && !bad.next(r) && !bad.result.ok, "NaN feet: nothing asked, no van");
+        v::Probe nanAns;
+        nanAns.start({0, 0, 0}, {0, 0, -1});
+        for (int k = 0; k < 64 && nanAns.next(r); ++k)
+            nanAns.answer(true, NAN);
+        check(nanAns.done && !nanAns.result.ok, "NaN answers: no van, no hang");
+    });
+    test("Version 0.0.72 PUNISHER VAN ENGINE PREVIEW: the drawn van comes round him, goes home, nothing moves", [] {
+        namespace v = spidy::van072;
+        auto flat = [](float, float, float) { return 0.f; };
+        auto open = [](Vec3, Vec3, float) { return true; };
+        v::Van van;
+        v::In in;
+        in.dt = 1.f / 90;
+        in.enabled = in.punisher = in.play = true;
+        in.tracked[0] = in.tracked[1] = true;
+        in.head = {0, 1.7f, 0};
+        in.summonSpot = true;
+        in.spot.ok = true;
+        in.spot.frame = {{2.6f, 0, -6}, 0};
+        auto tick = [&] { return van.stepPreview(in, flat, open, open); };
+        check(tick().summoned && van.state == v::parked && length(van.frame.at - Vec3{2.6f, 0, -6}) < 1e-4f,
+              "the probe's spot: summoned there");
+        in.summonSpot = false;
+        const v::Frame home = van.frame;
+        in.hands[0] = van.frame.world(v::doorHandleOut);
+        in.grip[0] = 1;
+        in.look = {1, 0, 0};
+        const auto e = tick();
+        check(e.entered && van.state == v::driving && length(van.frame.world(v::seatEye) - in.head) < 1e-3f &&
+                  dot(van.frame.forward(), Vec3{1, 0, 0}) > .999f && !e.seat && length(e.velocity) == 0.f,
+              "in: the drawn van's seat at his eyes, facing his look; no seat pull, no velocity");
+        in.grip[0] = 0;
+        const v::Frame cab = van.frame;
+        in.trigger[1] = 1;
+        for (int f = 0; f < 90; ++f)
+            tick();
+        check(length(van.frame.at - cab.at) < 1e-5f && van.frame.yaw == cab.yaw && van.speed > 1.f,
+              "RT in the preview: the speed it would have, the van stays put");
+        in.trigger[1] = 0;
+        for (int f = 0; f < 900; ++f)
+            tick();
+        in.hands[0] = van.frame.world(v::doorHandleIn);
+        in.grip[0] = 1;
+        check(tick().exited && van.state == v::parked && length(van.frame.at - home.at) < 1e-5f,
+              "out: the van back where it was summoned");
+        in.head = {NAN, 0, 0};
+        in.grip[0] = 0;
+        tick();
+        check(std::isfinite(van.frame.at.x), "a NaN head: still a sane van");
+        // The wheel's drawn axes: turned a quarter, 12 o'clock goes to 3 o'clock (+x), toward stays the axis.
+        Vec3 up, toward;
+        v::wheelAxes(0, up, toward);
+        check(std::abs(dot(up, v::wheelAxis())) < 1e-4f && up.y > .5f, "the wheel unturned: 12 o'clock up");
+        v::wheelAxes(1.5708f, up, toward);
+        check(up.x > .999f && length(toward - v::wheelAxis()) < 1e-5f, "a quarter turn right: 12 o'clock at 3");
+        v::wheelAxes(NAN, up, toward);
+        check(std::isfinite(up.x) && up.y > .5f, "a NaN angle: the wheel unturned");
+        const v::Frame k{{0, 0, 0}, 1.5708f};
+        check(length(v::worldDir(k, {0, 0, -1}) - k.forward()) < 1e-5f && length(v::worldDir(k, {1, 0, 0}) - k.right()) < 1e-5f,
+              "worldDir: the van's axes");
+    });
+    test("Version 0.0.72 THOR HAMMER: four picks, own folders and caps; the van's three parts", [] {
+        namespace mm = spidy::mesh_model;
+        check(mm::hammers == 4 && mm::hammerSlot(0) == mm::slotHammer && mm::hammerSlot(9) == mm::slotHammer,
+              "the default (and anything unknown) is #1 BOOOOP");
+        const char* want[] = {"Hammer/BOOOOP", "Hammer/DEVILSEYE", "Hammer/LOVEANDTHUNDER", "Hammer/FCCOOPER"};
+        for (uint32_t h = 0; h < mm::hammers; ++h) {
+            const uint32_t s = mm::hammerSlot(h);
+            check(s < mm::slots && std::string(mm::slotFolders[s]) == want[h] && mm::slotDrawCap[s] == mm::hammerTriangles &&
+                      !mm::slotIsVehicle(s),
+                  std::string("hammer slot ") + want[h]);
+        }
+        check(std::string(mm::slotFolders[mm::slotVanInterior]) == "Vehicle/PunisherVan/Interior" &&
+                  std::string(mm::slotFolders[mm::slotVanWheel]) == "Vehicle/PunisherVan/SteeringWheel" &&
+                  mm::slotIsVehicle(mm::slotVan) && mm::slotIsVehicle(mm::slotVanInterior) && mm::slotIsVehicle(mm::slotVanWheel) &&
+                  !mm::slotIsVehicle(mm::slotHammer) && mm::slotDrawCap[mm::slotVan] == mm::vanTriangles,
+              "the van, its cab and its wheel: their folders, drawn placed");
+    });
     test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
         using namespace spidy::hero007;
         Play p;
@@ -25333,13 +25467,13 @@ int main() {
         check(g.live(true) && g.sane(true, "x") && !g.sane(false, "bad") && g.tripped && !g.live(true) &&
                   std::string(g.why) == "bad" && g.trips == 1,
               "the GUARD does not turn a feature off for good");
-        {   // Version 0.0.72: Mjolnir is the real model or NOTHING (no built-in stand-in until the user picks one).
+        {   // Version 0.0.72: Mjolnir is the real model or NOTHING (no built-in stand-in when its file is missing).
             Look h;
             h.any = h.hammer = true;
             h.hammerAt = {0, 1.2f, -.5f};
             std::vector<Vertex> none;
             appendLook(none, h, {}, {0, 1.6f, 0}, .001f);
-            check(none.empty() && std::string(mesh_model::slotFolders[mesh_model::slotHammer]) == "Hammer" &&
+            check(none.empty() && std::string(mesh_model::slotFolders[mesh_model::slotHammer]) == "Hammer/BOOOOP" &&
                       mesh_model::slotHammer < 32,
                   "THOR's hammer draws a fake stand-in without its model (MODEL MISSING: Hammer)");
         }

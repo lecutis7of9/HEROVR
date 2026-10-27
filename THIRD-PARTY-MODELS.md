@@ -53,8 +53,28 @@ model under 30 % of its source's triangles or with a texture or UV missing. Same
 | `Shield` | 22028 / 22028 | 1 | Shipped whole with its texture layer. |
 | `GrappleGun` | 10272 / 10272 | 1 | Full geometry and texture. |
 
-Awaiting the user's pick, shown in game as MODEL MISSING (no stand-in): THOR's hammer (`Hammer`) and
-the PUNISHER VAN (`Vehicle/PunisherVan`).
+| `Hammer/BOOOOP` (THOR HAMMER #1, default) | 50000 / 76028 | 5 | Quality-decimated to 66 %, textures atlased; handle end at the grip, 50 cm. |
+| `Hammer/DEVILSEYE` (THOR HAMMER #5) | 1550 / 1550 | 1 | Full geometry and texture; grip at the origin, 50 cm. |
+| `Hammer/LOVEANDTHUNDER` (THOR HAMMER #6) | 50000 / 161728 | 3 | Quality-decimated to 31 %, textures kept; grip at the origin, 50 cm. |
+| `Hammer/FCCOOPER` (THOR HAMMER #3) | 21236 / 21236 | 3 | Full geometry and textures; grip at the origin, 50 cm. |
+| `Vehicle/PunisherVan` (PUNISHER VAN, EXPERIMENTAL) | 135000 / 431452 | 4 | Quality-decimated to 31 %, painted black (the body texture's paint recoloured; chrome, rubber, lights kept), the window glass (3200 triangles) left out, real size 1.97 × 1.94 × 4.83 m. |
+| `Vehicle/PunisherVan/Interior`, `/SteeringWheel` | 840, 1848 (BUILT) | 1 (generated) | Not from the source (its cab is an empty shell): built by Agent Mulder for HERO VR; the wheel is its own part so it turns. |
+
+## Version 0.0.72 (TEST): THOR HAMMER and the PUNISHER VAN
+
+| Slot | Model | Author | Licence |
+|---|---|---|---|
+| `Hammer/BOOOOP` | [Marvel Thor's Hammer (Mjölnir)](https://sketchfab.com/3d-models/marvel-thors-hammer-mjolnir-847befafabc04998a93e4326c2eb5d94) | [Boooooop](https://sketchfab.com/boooop) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+| `Hammer/DEVILSEYE` | [Mjolnir (Thor's hammer)](https://sketchfab.com/3d-models/mjolnir-thors-hammer-ecca1232710f4721b14d64a90bba6557) | [TheDevilsEye](https://sketchfab.com/TheDevilsEye) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+| `Hammer/LOVEANDTHUNDER` | [Mjolnir - Thor love and thunder](https://sketchfab.com/3d-models/mjolnir-thor-love-and-thunder-9689a953a9724987bb962bc00104c5fd) | [Jesus Osco](https://sketchfab.com/gsus.vfx) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+| `Hammer/FCCOOPER` | [Thor's Hammer: Mjolnir](https://sketchfab.com/3d-models/thors-hammer-mjolnir-1929e65c877a48bba3b16cfa51f7a33c) | [fccooper](https://sketchfab.com/fccooper) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+| `Vehicle/PunisherVan` | [GMC Vandura1976 Van](https://sketchfab.com/3d-models/gmc-vandura1976-van-40cf97bc0f7d4bdb8135c4e9d2264923) | [snafuj](https://sketchfab.com/snafuj) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) |
+
+- This work is based on "Marvel Thor's Hammer (Mjölnir)" (https://sketchfab.com/3d-models/marvel-thors-hammer-mjolnir-847befafabc04998a93e4326c2eb5d94) by Boooooop (https://sketchfab.com/boooop) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Decimated for VR, textures atlased.
+- This work is based on "Mjolnir (Thor's hammer)" (https://sketchfab.com/3d-models/mjolnir-thors-hammer-ecca1232710f4721b14d64a90bba6557) by TheDevilsEye (https://sketchfab.com/TheDevilsEye) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-centred and scaled.
+- This work is based on "Mjolnir - Thor love and thunder" (https://sketchfab.com/3d-models/mjolnir-thor-love-and-thunder-9689a953a9724987bb962bc00104c5fd) by Jesus Osco (https://sketchfab.com/gsus.vfx) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Decimated for VR.
+- This work is based on "Thor's Hammer: Mjolnir" (https://sketchfab.com/3d-models/thors-hammer-mjolnir-1929e65c877a48bba3b16cfa51f7a33c) by fccooper (https://sketchfab.com/fccooper) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-centred and scaled.
+- This work is based on "GMC Vandura1976 Van" (https://sketchfab.com/3d-models/gmc-vandura1976-van-40cf97bc0f7d4bdb8135c4e9d2264923) by snafuj (https://sketchfab.com/snafuj) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Decimated for VR, painted black, glass left out; a cab and steering wheel added (built for HERO VR).
 
 ## Version 0.0.72 (TEST): new models (none in git; prepared on the PC from the Sketchfab downloads)
 

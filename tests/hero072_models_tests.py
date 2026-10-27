@@ -30,6 +30,11 @@ class RealModels(unittest.TestCase):
         for s in mc.SOURCES:
             self.assertIn(s, slots)
         self.assertIn('SawedOff/Assembled', slots)
+        # Version 0.0.72: the four THOR HAMMER picks and the van (real sources), its BUILT cab and wheel; no slot waits.
+        for s in ('Hammer/BOOOOP', 'Hammer/DEVILSEYE', 'Hammer/LOVEANDTHUNDER', 'Hammer/FCCOOPER', 'Vehicle/PunisherVan',
+                  'Vehicle/PunisherVan/Interior', 'Vehicle/PunisherVan/SteeringWheel'):
+            self.assertIn(s, slots)
+        self.assertFalse([r for r in rows if r.get('status') == 'MODEL MISSING'])
 
 
 class Floors(unittest.TestCase):
@@ -37,6 +42,9 @@ class Floors(unittest.TestCase):
     def test_floors(self):
         self.assertGreaterEqual(mc.FLOORS['weapon'], 3000)
         self.assertGreaterEqual(mc.FLOORS['vehicle'], 20000)
+        self.assertEqual(mc.SOURCES['Vehicle/PunisherVan'][1], 'vehicle')
+        self.assertTrue(all(mc.SOURCES[h][1] == 'prop' for h in mc.SOURCES if h.startswith('Hammer/')))
+        self.assertEqual(set(mc.BUILT), {'Vehicle/PunisherVan/Interior', 'Vehicle/PunisherVan/SteeringWheel'})
 
 
 if __name__ == '__main__':

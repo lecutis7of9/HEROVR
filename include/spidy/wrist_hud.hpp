@@ -476,6 +476,7 @@ enum class Control : uint8_t {
     combatPerchTakedown, // Version 0.0.72: BATMAN's PERCH TAKEDOWN
     combatTakedownLight,
     combatPunisherVan, // Version 0.0.72 EXPERIMENTAL
+    combatThorHammer,  // Version 0.0.72 THOR HAMMER (which Mjolnir)
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -541,8 +542,8 @@ enum class Control : uint8_t {
     section10, // Version 0.0.72: THOR
     section11, // Version 0.0.72: GREEN LANTERN
 };
-constexpr int controls = 217; // Version 0.0.72: + 39 combat rows, + 2 sections
-constexpr int combatControls = 110; // combat38::options (checked in wrist_hud.cpp)
+constexpr int controls = 218; // Version 0.0.72: + 39 combat rows, + 2 sections
+constexpr int combatControls = 111; // combat38::options (checked in wrist_hud.cpp)
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);

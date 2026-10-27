@@ -55,6 +55,7 @@
 #include "spidy/hero_modes.hpp"
 #include "spidy/hero007_play.hpp" // Version 0.0.7 HERO PROFILES
 #include "spidy/hero072_play.hpp" // Version 0.0.72 (TEST)
+#include "spidy/van072.hpp"       // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL)
 #include "spidy/captain.hpp"      // Version 0.0.7 CAPTAIN AMERICA
 #include "spidy/cape_glide.hpp"   // Version 0.0.7 BATMAN cape glide and grapple gun
 #include "spidy/mesh_model.hpp"   // Version 0.0.7 BATARANG STYLE
@@ -813,6 +814,7 @@ hero072::PlayOptions hero072Options() {
     o.perchTakedown = O::onFirst(c38(combat38::perchTakedown));
     o.takedownLight = O::onFirst(c38(combat38::takedownLight));
     o.punisherVan = O::offFirst(c38(combat38::punisherVan));
+    o.thorHammer = std::min<uint32_t>(c38(combat38::thorHammer), mesh_model::hammers - 1);
     return o;
 }
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
@@ -1900,6 +1902,17 @@ DWORD WINAPI run(void*) {
         Vec3 hero072HandAt[2]{}, hero072HandAim[2]{};
         uint32_t hero072GrappleNotes{};
         bool vanXWas{}; // Version 0.0.72 PUNISHER VAN: the X tap's edge
+        // Version 0.0.72 PUNISHER VAN SUMMON / ENGINE PREVIEW (van072.hpp): the X tap asks for a spot (vanWanted),
+        // the ray batch probes it one world ray a frame (vanProbe, tags vanTag0+), the van steps in world space.
+        static constexpr uint32_t vanTag0 = 1300, vanTags = 64;
+        van072::Van van;
+        van072::Probe vanProbe;
+        bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
+        van072::Spot vanSpot{};
+        uint32_t vanAskTag{}, vanAsks{}, vanAskFrames{};
+        uint64_t vanAnswers{};
+        float vanTrigger[2]{};
+        double vanAt = -1;
         cape_glide::Data capeNow{};
         bool capeCounted{};
         uint32_t capeGrapplesSeen{}, capeMissesSeen{}, capeGlidesSeen{}, capeArrivalsSeen{};
@@ -4325,6 +4338,29 @@ DWORD WINAPI run(void*) {
                                     ++wallCasts;
                                 }
                             }
+                            // Version 0.0.72 PUNISHER VAN SUMMON: the probe's one ray (the roof's slot, as the beam's),
+                            // from his feet along his look; asked again after 12 frames with no answer.
+                            if (vanWanted && !vanProbe.active && finite(feet)) {
+                                vanProbe.start(feet, ahead);
+                                vanWanted = vanAsking = false;
+                            }
+                            if (vanProbe.active && vanAsking && ++vanAskFrames > 12)
+                                vanAsking = false;
+                            if (vanProbe.active && !vanAsking && !sighted && aim.count < native_rays::capacity) {
+                                van072::Ray vr{};
+                                if (vanProbe.next(vr) && finite(vr.from) && std::abs(length(vr.dir) - 1) < .001f) {
+                                    vanAskTag = vanTag0 + (vanAsks++ % vanTags);
+                                    aim.rays[aim.count++] = {vr.from, std::min(vr.distance, 150.f), vr.dir, vanAskTag};
+                                    vanAsking = true;
+                                    vanAskFrames = 0;
+                                    sighted = true;
+                                } else
+                                    vanProbe = {}; // a ray it cannot ask: no spot (never a guess)
+                                if (!vanProbe.active) {
+                                    vanSpot = vanProbe.result;
+                                    vanSpotReady = true;
+                                }
+                            }
                             if (!sighted && ++sightFrame % 3 == 0 && enemiesHereCount && aim.count < native_rays::capacity)
                                 for (uint32_t tries = 0; tries < enemiesHereCount && !sighted; ++tries) {
                                     const uint32_t k = sightNext++ % enemiesHereCount;
@@ -4359,6 +4395,19 @@ DWORD WINAPI run(void*) {
                                 if (newBatch && hit.ray.tag < 2)
                                     handWallsWorld[hit.ray.tag] = bolt_walls::fromHit(hit.ray.origin, hit.ray.direction, hit.ray.distance,
                                                                                       native_rays::fixedSurface(hit), hit.fraction);
+                                // Version 0.0.72 PUNISHER VAN SUMMON: the probe's answer (anything hit, a body too).
+                                if (hit.ray.tag >= vanTag0 && hit.ray.tag < vanTag0 + vanTags) {
+                                    if (newBatch && vanAsking && hit.ray.tag == vanAskTag && vanProbe.active) {
+                                        vanAsking = false;
+                                        ++vanAnswers;
+                                        vanProbe.answer(hit.count > 0 && std::isfinite(hit.fraction), hit.fraction);
+                                        if (!vanProbe.active) {
+                                            vanSpot = vanProbe.result;
+                                            vanSpotReady = true;
+                                        }
+                                    }
+                                    continue;
+                                }
                                 if (hit.ray.tag >= bolt_walls::ballTag0) {
                                     int slot{};
                                     uint32_t low{};
@@ -5680,16 +5729,24 @@ DWORD WINAPI run(void*) {
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
                         // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL, van072.hpp): the PUNISHER's X tap summons it
                         // (his X is free: no gadget wheel; an X the game names stays the game's, above). The van
-                        // needs Models\Vehicle\PunisherVan: until the user's pick lands it self-disables with
-                        // MODEL MISSING on the wrist (no stand-in, nothing spawned, X still taken off the game).
+                        // needs Models\Vehicle\PunisherVan (the Vandura, owner pt850u): missing, it self-disables
+                        // with MODEL MISSING on the wrist (no stand-in, nothing spawned, X still taken off the game).
+                        // Loaded, the tap asks the ray batch for a spot (vanWanted; the probe, above).
                         if (c38(combat38::punisherVan) == 1 && heroNow() == hero_modes::punisher &&
                             mapping == game_pad::Mapping::gameplay) {
                             const bool vanX = (buttons.buttons & buttonX) != 0;
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
                             if (vanX && !vanXWas) {
-                                runtime.haptic(0, .15f);
-                                message(3, 0, "PUNISHER VAN (EXPERIMENTAL): MODEL MISSING: Vehicle/PunisherVan - awaiting the pick, no van");
-                                game_prompts::note("Version 0.0.72 PUNISHER VAN: X tap - MODEL MISSING (Models\\Vehicle\\PunisherVan), no van spawned");
+                                if (mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded) {
+                                    if (van.state != van072::driving && !vanProbe.active) {
+                                        vanWanted = true;
+                                        runtime.haptic(0, .1f);
+                                    }
+                                } else {
+                                    runtime.haptic(0, .15f);
+                                    message(3, 0, "PUNISHER VAN (EXPERIMENTAL): MODEL MISSING: Vehicle/PunisherVan, no van");
+                                    game_prompts::note("Version 0.0.72 PUNISHER VAN: X tap - MODEL MISSING (Models\\Vehicle\\PunisherVan), no van spawned");
+                                }
                             }
                             vanXWas = vanX;
                         } else
@@ -5747,6 +5804,10 @@ DWORD WINAPI run(void*) {
                         }
                         if (flyNow.flying && mapping == game_pad::Mapping::gameplay)
                             pad.buttons = static_cast<uint16_t>(pad.buttons & ~game_pad::y); // FLY replaces Web Wings
+                        if (vanDriving && mapping == game_pad::Mapping::gameplay) { // Version 0.0.72: the van's pedals
+                            pad.leftTrigger = {};
+                            pad.rightTrigger = {};
+                        }
                         if (mapping == game_pad::Mapping::gameplay) { // Update 38.5: FLY's R3 / L3+R3
                             if (flyNow.flying && (flyChord.claims() || frame.hands[1].stickClick))
                                 pad.buttons = static_cast<uint16_t>(pad.buttons & ~(game_pad::leftThumb | game_pad::rightThumb));
@@ -5806,6 +5867,10 @@ DWORD WINAPI run(void*) {
                                 h.busy = !h.free;
                                 h.button = u37.ball[i];
                                 h.grip = u37.other[i];
+                                // Version 0.0.72 PUNISHER VAN: driving, the trigger is the van's pedal and nothing else.
+                                vanTrigger[i] = h.button;
+                                if (vanDriving)
+                                    h.button = 0;
                                 h.position = grip.position;
                                 // Update 38.1 AIM AXIS: HAND (webShooter(grip) -Z, the swing webs'), AIM
                                 // POSE or 38's grip -Z (DIAGNOSIS §0); the glob, assist, contact fist,
@@ -6232,6 +6297,53 @@ DWORD WINAPI run(void*) {
                                                 }
                                             }
                                         }
+                                    }
+                                    // Version 0.0.72 PUNISHER VAN ENGINE PREVIEW (EXPERIMENTAL, van072.hpp stepPreview): in world
+                                    // space (the rays'); the probe's spot, the door handle, the wheel latched to the hands, the
+                                    // pedals. Nothing in the world moves (the body carry is NOT WIRED). While he drives the
+                                    // triggers are the pedals only: no shot, no hook, nothing to the game (the pad, above).
+                                    {
+                                        van072::In vin;
+                                        vin.dt = vanAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - vanAt, 0.0, .1));
+                                        vanAt = combatClock;
+                                        vin.enabled = c38(combat38::punisherVan) == 1 &&
+                                                      mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded;
+                                        vin.punisher = heroWas == hero_modes::punisher;
+                                        vin.play = cf.play;
+                                        const Pose vanW = compose(motion.headPose, inverse(frame.head));
+                                        vin.head = motion.headPose.position;
+                                        vin.look = motion.headPose.orientation.rotate({0, 0, -1});
+                                        vin.feet = vin.head - Vec3{0, 1.6f, 0};
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            vin.hands[i] = compose(vanW, Pose{cf.hands[i].position, {}}).position;
+                                            vin.tracked[i] = cf.hands[i].tracked && finite(vin.hands[i]);
+                                            vin.grip[i] = cf.hands[i].grip;
+                                            vin.trigger[i] = vanTrigger[i];
+                                        }
+                                        if (vanSpotReady) {
+                                            vanSpotReady = false;
+                                            vin.summonSpot = true;
+                                            vin.spot = vanSpot;
+                                        }
+                                        const auto flat = [&](float, float, float y) { return y; };   // the preview's street
+                                        const auto open = [](Vec3, Vec3, float) { return true; };   // (the probe checked it)
+                                        const auto clearAhead = [](Vec3, Vec3, float) { return true; };
+                                        const van072::Out vout = van.stepPreview(vin, flat, open, clearAhead);
+                                        if (vout.summoned) {
+                                            message(1, 0, "PUNISHER VAN (EXPERIMENTAL): here - grip the driver door handle to get in");
+                                            game_prompts::note("Version 0.0.72 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
+                                        } else if (vout.noSpot) {
+                                            message(2, 0, "PUNISHER VAN (EXPERIMENTAL): no safe spot here, no van");
+                                            game_prompts::note("Version 0.0.72 PUNISHER VAN: no safe spot (the probe found none)");
+                                        }
+                                        if (vout.entered)
+                                            message(1, 0, "PUNISHER VAN: in - both hands on the wheel, RT drive, LT reverse, both brake (PREVIEW)");
+                                        if (vout.exited)
+                                            message(1, 0, "PUNISHER VAN: out");
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (vout.haptic[i] > 0)
+                                                runtime.haptic(static_cast<int>(i), vout.haptic[i]);
+                                        vanDriving = van.state == van072::driving;
                                     }
                                     // Version 0.0.7 HERO PROFILES: BATMAN's batarangs, WOLVERINE's claws, SUPERMAN's
                                     // heat vision / cold breath, PUNISHER's guns (hero007_play.hpp). Every blow on
@@ -8388,12 +8500,32 @@ DWORD WINAPI run(void*) {
                             // BATMAN GRAPPLE GUN model (Models\GrappleGun): none drawn when it is missing.
                             if (hero007In.hero == hero_modes::batman || hero007In.hero == hero_modes::punisher) // 0.0.72: his hook too
                                 saved.hero007.grappleGunModel = slotModel(mesh_model::slotGrappleGun, "GRAPPLE GUN");
-                            // Version 0.0.72 THOR's hammer (Models\Hammer): the model or nothing, MODEL MISSING on the wrist.
+                            // Version 0.0.72 THOR's hammer (Models\Hammer\<THOR HAMMER's pick>): the model or nothing,
+                            // MODEL MISSING on the wrist.
                             if (saved.hero072.hammer) // (only Thor holds it)
-                                saved.hero072.hammerModel = slotModel(mesh_model::slotHammer, "THOR HAMMER");
-                            // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the model or nothing; MODEL MISSING until the pick.
-                            if (c38(combat38::punisherVan) == 1 && hero007In.hero == hero_modes::punisher)
-                                (void)slotModel(mesh_model::slotVan, "PUNISHER VAN");
+                                saved.hero072.hammerModel =
+                                    slotModel(mesh_model::hammerSlot(c38(combat38::thorHammer)), "THOR HAMMER");
+                            // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the Vandura, its built cab and its wheel - each the
+                            // model or nothing (MODEL MISSING on the wrist); drawn where the van is (world space).
+                            if (c38(combat38::punisherVan) == 1 && hero007In.hero == hero_modes::punisher) {
+                                const mesh_model::Mesh* body = slotModel(mesh_model::slotVan, "PUNISHER VAN");
+                                const mesh_model::Mesh* cab = slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
+                                const mesh_model::Mesh* wheel = slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
+                                if (body && van.state != van072::none && finite(van.frame.at) && std::isfinite(van.frame.yaw)) {
+                                    auto& L = saved.hero072;
+                                    L.van = L.any = true;
+                                    L.vanModel = body;
+                                    L.vanInterior = cab;
+                                    L.vanWheel = wheel;
+                                    L.vanAt = van.frame.at;
+                                    L.vanForward = van.frame.forward();
+                                    Vec3 up{}, toward{};
+                                    van072::wheelAxes(van.wheel.angle, up, toward);
+                                    L.wheelAt = van.frame.world(van072::wheelHub);
+                                    L.wheelForward = -van072::worldDir(van.frame, toward);
+                                    L.wheelUp = van072::worldDir(van.frame, up);
+                                }
+                            }
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
                                 saved.hero007.pistolModel = slotModel(mesh_model::slotPistol, "GUN MODELS");
                                 saved.hero007.sawedFrame = slotModel(mesh_model::slotSawedOffFrame, "GUN MODELS");
@@ -11077,6 +11209,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyOwnSuit(void* v) { return set
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerchTakedown(void* v) { return setHero007(v, combat38::perchTakedown, 5429); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyTakedownLight(void* v) { return setHero007(v, combat38::takedownLight, 5430); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherVan(void* v) { return setHero007(v, combat38::punisherVan, 5431); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorHammer(void* v) { return setHero007(v, combat38::thorHammer, 5432); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

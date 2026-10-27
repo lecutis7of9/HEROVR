@@ -27,6 +27,13 @@ It is licensed under the GNU GPL version 3.
   - **Ludus101**: "Batarang Clooney" (CC BY 4.0), batarang CLOONEY. https://sketchfab.com/Ludus101
   - **baton268**: "Batarang Joker" (CC BY-NC-ND 4.0), batarang JOKER, shipped unmodified with its own licence file
     (`Models/Batarang/JOKER/license.txt`); HERO VR is free and never sold. https://sketchfab.com/baton2
+- **3D models (0.0.72 test)**, from Sketchfab, CC BY 4.0 (links and changes in THIRD-PARTY-MODELS.md):
+  - **Boooooop**: "Marvel Thor's Hammer (Mjölnir)", THOR HAMMER #1 (default). https://sketchfab.com/boooop
+  - **TheDevilsEye**: "Mjolnir (Thor's hammer)", THOR HAMMER #5. https://sketchfab.com/TheDevilsEye
+  - **Jesus Osco**: "Mjolnir - Thor love and thunder", THOR HAMMER #6. https://sketchfab.com/gsus.vfx
+  - **fccooper**: "Thor's Hammer: Mjolnir", THOR HAMMER #3. https://sketchfab.com/fccooper
+  - **snafuj**: "GMC Vandura1976 Van", the PUNISHER VAN (painted black; its cab and wheel built by Agent Mulder).
+    https://sketchfab.com/snafuj
 - Third-party libraries, fonts and runtimes are listed with their licenses in THIRD_PARTY_NOTICES.md.
 
 Not affiliated with or endorsed by Insomniac Games, Sony Interactive Entertainment, Marvel or Valve.

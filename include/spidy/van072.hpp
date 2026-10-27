@@ -12,7 +12,15 @@
 // Game hooks: the walk's world raycast for the ground / clearance probes is the bridge's (CONFIRMED,
 // the webs use it); carrying the player's body with the van is the bridge's velocity command
 // (CONFIRMED for webs and flight) but NOT WIRED in this build: the van's motion is computed and
-// tested (PREVIEW) and moves only the drawn van; the van stays MODEL MISSING until the user picks one.
+// tested (PREVIEW) and moves only the drawn van.
+// Version 0.0.72 THE PICK (owner pt850u "For the van do 8"): the GMC Vandura 1976 by snafuj (CC BY 4.0),
+// painted black; its source is an empty shell, so the cab (seats, dash, gauges, a door card with its handle)
+// and a separate steering wheel are BUILT (tools/models072/convert_thor_van_072.py). The numbers below are
+// MEASURED on the shipped model (CONFIRMED on the model, CANDIDATE in game). ENGINE PREVIEW (stepPreview):
+// the wheel turns with the hands and the pedals drive the van's speed, but the van and the player stay put
+// until the body carry is wired - nothing in the world is moved, nothing can be driven into.
+// SUMMON in game (Probe): the ground and clearance are the bridge's world rays, one a frame in the slot the
+// roof ray lends (as BOLT WALLS' beam) - about half a second, then the van appears or a buzz says no spot.
 #include "spidy/math.hpp"
 
 #include <algorithm>
@@ -24,8 +32,9 @@ namespace spidy::van072 {
 inline constexpr const char* settingHelp = "EXPERIMENTAL: Punisher taps X to summon the van, no restart.";
 
 struct Tune {
-    float length = 5.4f, width = 2.1f, height = 2.5f; // the van's box (metres)
-    float wheelBase = 3.4f;
+    // Version 0.0.72: MEASURED on the shipped Vandura (4.85 x 2.0 x 1.95 m, 2.96 m between the axles).
+    float length = 4.85f, width = 2.0f, height = 1.95f; // the van's box (metres)
+    float wheelBase = 2.96f;
     float topSpeed = 16.f, reverseTop = 5.f, accel = 5.5f, reverseAccel = 3.f, brake = 11.f, coast = 1.2f;
     float steerMost = .6f;         // the front wheels' most angle (rad)
     float wheelLock = 2.4f * 3.14159265f; // the steering wheel's most turn (rad) either way: 1.2 turns
@@ -39,8 +48,9 @@ struct Tune {
 
 // The van's frame: x right, y up, -z forward, origin on the ground under the axles' middle.
 // The left-hand-drive cab (a US van): the driver sits left.
-inline constexpr Vec3 doorHandleOut{-1.08f, 1.12f, -.95f}, doorHandleIn{-.86f, 1.10f, -.92f};
-inline constexpr Vec3 seatEye{-.45f, 1.62f, -.55f}, wheelHub{-.45f, 1.28f, -1.02f};
+// Version 0.0.72: MEASURED on the shipped model (the door's own handle; the built cab's door card, seat, wheel).
+inline constexpr Vec3 doorHandleOut{-.98f, 1.18f, -.66f}, doorHandleIn{-.855f, 1.08f, -.83f};
+inline constexpr Vec3 seatEye{-.45f, 1.60f, -.55f}, wheelHub{-.45f, 1.18f, -1.08f};
 // The wheel faces the driver tilted back 25 degrees: its axis (towards the driver).
 inline Vec3 wheelAxis() { return normalized(Vec3{0, .42f, .91f}); }
 
@@ -106,6 +116,125 @@ Spot place(Vec3 feet, Vec3 look, Ground&& groundAt, Clear&& clear, const Tune& t
     }
     return s;
 }
+
+// Version 0.0.72: the candidate spots place() tries, in order (shared with Probe).
+inline constexpr uint32_t spots = 7;
+inline Vec3 spotOffset(uint32_t k, Vec3 f, Vec3 r) {
+    switch (k) {
+    case 0: return f * 6.f + r * 2.6f;
+    case 1: return f * 7.f;
+    case 2: return f * 6.f - r * 2.6f;
+    case 3: return r * 3.6f;
+    case 4: return -r * 3.6f;
+    case 5: return -f * 6.f;
+    default: return f * 10.f + r * 2.6f;
+    }
+}
+
+// ---- Version 0.0.72 SUMMON IN GAME: place() one world ray at a time ----
+// Per spot: four corner rays down (from 1.5 m over his feet, 3 m: the ground), then three across the van's
+// box (its length at 1.0 m, both diagonals at 1.6 m) and one from his chest to the spot's middle - any hit
+// is something in the way. The first spot that passes is the van's; none: no van.
+struct Ray {
+    Vec3 from{}, dir{};
+    float distance{};
+};
+struct Probe {
+    static constexpr uint32_t raysPerSpot = 8;
+    static constexpr float downFrom = 1.5f, downLength = 3.f;
+    bool active{}, done{};
+    Spot result{};
+    Vec3 feet{}, f{0, 0, -1}, r{1, 0, 0};
+    float yaw{};
+    uint32_t spot{}, ray{};
+    float ground[4]{};
+    Tune t{};
+    void start(Vec3 atFeet, Vec3 look, const Tune& tune = {}) {
+        *this = {};
+        t = tune;
+        if (!fine(atFeet) || !fine(look)) {
+            done = true;
+            return;
+        }
+        Vec3 h{look.x, 0, look.z};
+        if (length(h) < 1e-3f)
+            h = {0, 0, -1};
+        f = normalized(h);
+        r = {-f.z, 0, f.x};
+        yaw = std::atan2(-f.x, -f.z);
+        feet = atFeet;
+        active = true;
+    }
+    Vec3 centre() const { return feet + spotOffset(spot, f, r); }
+    float highest() const { return std::max(std::max(ground[0], ground[1]), std::max(ground[2], ground[3])); }
+    Vec3 corner(int k, float scale) const {
+        return centre() + f * ((k & 1 ? .5f : -.5f) * t.length * scale) + r * ((k & 2 ? .5f : -.5f) * t.width * scale);
+    }
+    // The ray to cast now (false: nothing to ask).
+    bool next(Ray& out) const {
+        if (!active || done || spot >= spots)
+            return false;
+        Vec3 a{}, b{};
+        if (ray < 4) {
+            const Vec3 c = corner(static_cast<int>(ray), .8f);
+            out = {{c.x, feet.y + downFrom, c.z}, {0, -1, 0}, downLength};
+            return true;
+        }
+        const float g = highest();
+        if (ray == 4) {
+            a = centre() - f * (t.length * .5f + .15f);
+            b = centre() + f * (t.length * .5f + .15f);
+            a.y = b.y = g + 1.f;
+        } else if (ray == 5 || ray == 6) {
+            const int k = ray == 5 ? 0 : 1;
+            a = corner(k, 1.f);
+            b = corner(3 - k, 1.f);
+            a.y = b.y = g + 1.6f;
+        } else {
+            a = feet + Vec3{0, 1.2f, 0};
+            b = centre();
+            b.y = g + 1.f;
+        }
+        const float d = length(b - a);
+        if (!fine(d) || d < .05f)
+            return false;
+        out = {a, (b - a) / d, d};
+        return true;
+    }
+    // The answer to next()'s ray: hit (and where along it, 0-1).
+    void answer(bool hit, float fraction) {
+        if (!active || done)
+            return;
+        bool fail = false;
+        if (ray < 4) {
+            const float g = feet.y + downFrom - (fine(fraction) ? std::clamp(fraction, 0.f, 1.f) : 1.f) * downLength;
+            ground[ray] = g;
+            fail = !hit || !fine(fraction) || std::abs(g - feet.y) > t.groundStep;
+            if (!fail && ray == 3) {
+                const float lo = std::min(std::min(ground[0], ground[1]), std::min(ground[2], ground[3]));
+                fail = highest() - lo > .35f; // not a street: a step, a kerb across it, a drop
+            }
+        } else
+            fail = hit; // something in the box, or between him and it
+        ++result.tried;
+        if (fail) {
+            ++spot;
+            ray = 0;
+            if (spot >= spots) {
+                done = true;
+                active = false;
+            }
+            return;
+        }
+        if (++ray < raysPerSpot)
+            return;
+        const Vec3 c = centre();
+        result.frame = {{c.x, highest(), c.z}, yaw};
+        result.ok = fine(result.frame.at) && fine(yaw);
+        done = true;
+        active = false;
+    }
+};
 
 // ---- THE WHEEL: a hand latched to the rim turns it round the hub ----
 struct Wheel {
@@ -181,7 +310,10 @@ struct In {
     float dt{};
     bool enabled{}, punisher{}, play{};
     bool summonPress{}; // X's press edge (game_xr: only when the game does not name X)
+    bool summonSpot{};  // Version 0.0.72: a Probe's finished answer in `spot` (game_xr), instead of place()
+    Spot spot{};
     Vec3 feet{}, look{0, 0, -1};
+    Vec3 head{};          // Version 0.0.72: his eyes (world; stepPreview)
     Vec3 hands[2]{};      // world
     bool tracked[2]{};
     float grip[2]{}, trigger[2]{}; // trigger[0] LT, trigger[1] RT
@@ -226,8 +358,8 @@ struct Van {
             speed = 0;
             return o;
         }
-        if (in.summonPress && state != driving) {
-            const Spot s = place(in.feet, in.look, groundAt, clear, t);
+        if ((in.summonPress || in.summonSpot) && state != driving) {
+            const Spot s = in.summonSpot ? in.spot : place(in.feet, in.look, groundAt, clear, t);
             if (s.ok) {
                 frame = s.frame;
                 state = parked;
@@ -303,6 +435,53 @@ struct Van {
         }
         return o;
     }
+    // Version 0.0.72 ENGINE PREVIEW: step() whole (door, wheel, pedals, speed) but nothing in the world moves
+    // (the body carry is NOT WIRED): `speed` is what it would do. Getting in brings the DRAWN van round him (its
+    // seat at his eyes, facing his look) so the cab and the wheel are in reach; getting out puts it back where
+    // it was summoned. Only the drawn van moves - never the player, never anything solid.
+    Frame home{};
+    template <class Ground, class Clear, class Ahead>
+    Out stepPreview(const In& in, Ground&& groundAt, Clear&& clear, Ahead&& ahead, const Tune& t = {}) {
+        const Frame kept = frame;
+        Out o = step(in, groundAt, clear, ahead, t);
+        if (state != none && !o.summoned)
+            frame = kept;
+        if (o.summoned)
+            home = frame;
+        if (o.entered && fine(in.head) && fine(in.look)) {
+            home = kept;
+            Vec3 h{in.look.x, 0, in.look.z};
+            if (length(h) < 1e-3f)
+                h = kept.forward();
+            h = normalized(h);
+            Frame k{{}, std::atan2(-h.x, -h.z)};
+            const Vec3 off = k.world(seatEye); // the seat from an origin at 0
+            k.at = in.head - off;
+            if (fine(k.at) && fine(k.yaw))
+                frame = k;
+        }
+        if (o.exited)
+            frame = home;
+        if (!fine(frame.at) || !fine(frame.yaw)) {
+            state = none;
+            frame = {};
+        }
+        o.velocity = {};
+        o.seat = false;
+        return o;
+    }
 };
+
+// Version 0.0.72: the steering wheel's model axes in the van's frame, turned `angle` (+ clockwise as the
+// driver sees it): `up` the model's +y (12 o'clock), `toward` its +z (to the driver).
+inline void wheelAxes(float angle, Vec3& up, Vec3& toward) {
+    const Vec3 a = wheelAxis();
+    const Vec3 up0 = normalized(Vec3{0, 1, 0} - a * a.y), right{1, 0, 0};
+    const float c = fine(angle) ? std::cos(angle) : 1.f, s = fine(angle) ? std::sin(angle) : 0.f;
+    up = up0 * c + right * s;
+    toward = a;
+}
+// A direction in the van's frame to the world.
+inline Vec3 worldDir(const Frame& k, Vec3 v) { return k.right() * v.x + Vec3{0, v.y, 0} + k.forward() * (-v.z); }
 
 } // namespace spidy::van072

@@ -28,9 +28,19 @@ struct Look {
     bool hammer{};
     Vec3 hammerAt{}, hammerForward{0, 1, 0}, hammerUp{0, 0, -1};
     float hammerSpin{};
+    bool hammerSheathed{};    // Version 0.0.72: on Thor's back (not in the hand, not flying)
+    uint32_t hammerChoice{};  // Version 0.0.72 THOR HAMMER: 0 BOOOOP .. 3 FCCOOPER (mesh_model::hammerSlot)
     // Version 0.0.72: Mjolnir is Models\Hammer (mesh_model::slotHammer) or NOTHING (no built-in stand-in;
     // the wrist says MODEL MISSING: Hammer). Library-owned; set on the render thread by game_xr.
     const mesh_model::Mesh* hammerModel{};
+    // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): world space as set (game_xr, after worldLook - never moved
+    // by it): the van's ground origin and forward (-z of its models), the wheel's hub, its -z (away from the
+    // driver) and its 12 o'clock. Each model or nothing (MODEL MISSING on the wrist; library-owned).
+    bool van{};
+    Vec3 vanAt{}, vanForward{0, 0, -1}, wheelAt{}, wheelForward{0, 0, -1}, wheelUp{0, 1, 0};
+    const mesh_model::Mesh* vanModel{};
+    const mesh_model::Mesh* vanInterior{};
+    const mesh_model::Mesh* vanWheel{};
     // Lightning: each bolt from -> to, jagged by its seed.
     uint32_t bolts{};
     Vec3 boltFrom[boltsMost]{}, boltTo[boltsMost]{};

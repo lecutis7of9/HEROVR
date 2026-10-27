@@ -35,15 +35,24 @@ SOURCES = {
     'Baton/Right': ('daredevils_baton', 'weapon'),
     'Shield': ('captain_america_shield', 'shield'),
     'GrappleGun': ('grapple_gun', 'weapon'),
+    # Version 0.0.72 THOR HAMMER (the user's order: #1 #5 #6 #3) and the PUNISHER VAN (owner pt850u: #8).
+    'Hammer/BOOOOP': ('marvel_thors_hammer_mjolnir', 'prop'),
+    'Hammer/DEVILSEYE': ('mjolnir_thors_hammer', 'prop'),
+    'Hammer/LOVEANDTHUNDER': ('mjolnir_-_thor_love_and_thunder', 'prop'),
+    'Hammer/FCCOOPER': ('thors_hammer_mjolnir', 'prop'),
+    'Vehicle/PunisherVan': ('gmc_vandura1976_van', 'vehicle'),
 }
+# Version 0.0.72: parts BUILT for a model whose source lacks them (the van's empty cab): no source to match,
+# so they are checked for real UVs, their texture and being drawn, and rendered beside their texture.
+BUILT = {'Vehicle/PunisherVan/Interior': 'the cab built for the source\'s empty shell (seats, dash, door card)',
+         'Vehicle/PunisherVan/SteeringWheel': 'the steering wheel built as its own part (turned in game)'}
 # The least a shipped model may have (it may keep fewer only when its source has fewer), by kind, and
 # never under MIN_SHARE of its source.
 FLOORS = {'weapon': 3000, 'prop': 3000, 'shield': 5000, 'vehicle': 20000, 'vehicle_part': 1500, 'body': 10000}
 MIN_SHARE = .30
-# Version 0.0.72: slots not shipped on purpose (MODEL MISSING in game, no stand-in) until the user picks a model.
-AWAITING = {'Hammer': 'awaiting the user\'s pick from hammer-candidates/mjolnir_sheet.png',
-            # Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): MODEL MISSING until the user picks from van-candidates/.
-            'Vehicle/PunisherVan': 'awaiting the user\'s pick from van-candidates/'}
+# Version 0.0.72: slots not shipped on purpose (MODEL MISSING in game, no stand-in). None now: the hammers
+# and the van are the user's picks.
+AWAITING = {}
 # slots cut from part of their source (their shape is not the whole source's)
 PART = {'SawedOff/Frame', 'SawedOff/Barrels', 'Baton/Left', 'Baton/Right'}
 # a whole model's shape (the area-weighted spread along its own axes, as ratios to the longest, so the
@@ -250,7 +259,7 @@ def render_source(tris, uv, mat, mats):
     return raster(T, shade)
 
 
-def side_by_side(path, ours, source, title, lines):
+def side_by_side(path, ours, source, title, lines, right='SOURCE (its glTF and textures)'):
     a = Image.fromarray((ours * 255).astype(np.uint8))
     b = Image.fromarray((source * 255).astype(np.uint8))
     W = SIZE * 2 + 30
@@ -259,7 +268,7 @@ def side_by_side(path, ours, source, title, lines):
     img.paste(b, (SIZE + 20, 30))
     d = ImageDraw.Draw(img)
     d.text((10, 8), 'OURS (game reader + drawer, overlay pipeline): ' + title, fill=(245, 197, 24))
-    d.text((SIZE + 20, 8), 'SOURCE (its glTF and textures)', fill=(245, 197, 24))
+    d.text((SIZE + 20, 8), right, fill=(245, 197, 24))
     for i, s in enumerate(lines):
         d.text((10, SIZE + 36 + 18 * i), s, fill=(220, 220, 220) if not s.startswith('FAIL') else (255, 90, 90))
     img.save(path)
@@ -371,6 +380,32 @@ def run(models=DEFAULT_MODELS, sources=DEFAULT_SOURCES, out=DEFAULT_OUT, dump=DU
             if slot in AWAITING and str(summary['slots'][slot].get('status', '')).upper() != 'LOADED':
                 rows.append(dict(slot=slot, kind='weapon', fails=[], triangles=0, source=0, status='MODEL MISSING',
                                  note=AWAITING[slot]))
+                continue
+            if slot in BUILT:
+                info = summary['slots'][slot]
+                v, layers = load_dump(d, i, summary)
+                fails = check(slot, info, 0, 'vehicle_part', v, True)
+                ours, _ = render_ours(v, layers) if len(v) else (np.zeros((SIZE, SIZE, 3)), None)
+                tex = np.zeros((SIZE, SIZE, 3))
+                try:  # the glb's own (first) image
+                    import io
+                    raw = open(os.path.join(models, slot, 'scene.glb'), 'rb').read()
+                    n = struct.unpack('<I', raw[12:16])[0]
+                    g = json.loads(raw[20:20 + n])
+                    bin0 = 20 + n + 8  # the JSON chunk is padded; the BIN chunk header
+                    bv = g['bufferViews'][g['images'][0]['bufferView']]
+                    data = raw[bin0 + bv.get('byteOffset', 0): bin0 + bv.get('byteOffset', 0) + bv['byteLength']]
+                    tex = np.asarray(Image.open(io.BytesIO(data)).convert('RGB').resize((SIZE, SIZE)), np.float64) / 255
+                except Exception:
+                    pass
+                lines = ['%s BUILT (%s): triangles %d  UVs %s  normals %s  textured %s  layers %d' % (
+                    slot, BUILT[slot], info.get('triangles', 0), info.get('hasUvs'), info.get('hasNormals'),
+                    info.get('textured'), info.get('layers', 0)), 'right: its texture (no source model: BUILT)']
+                lines += ['FAIL ' + f for f in fails] or ['PASS']
+                side_by_side(os.path.join(out, slot.replace('/', '_') + '.png'), ours, tex, slot, lines,
+                             right='BUILT: no source model - its texture atlas')
+                rows.append(dict(slot=slot, kind='vehicle_part', fails=fails, **info, source=0))
+                failures += fails
                 continue
             if slot not in table:
                 failures.append('%s: no source registered for the model check' % slot)

@@ -904,7 +904,7 @@ constexpr SectionDef powersSections[] = {
       C::combatShieldLook, C::combatShieldSlam}},
     // Version 0.0.72 (TEST)
     {"THOR", C::none, C::none, "", "", nullptr, 9,
-     {C::combatThor, C::combatThorLightning, C::combatThorStorm, C::combatThorChain, C::combatNaturalInvincible}},
+     {C::combatThor, C::combatThorLightning, C::combatThorStorm, C::combatThorChain, C::combatThorHammer, C::combatNaturalInvincible}},
     {"GREEN LANTERN", C::none, C::none, "", "", nullptr, 10,
      {C::combatGreenLantern, C::combatGlFlight, C::combatGlFist, C::combatGlBeam, C::combatGlBubble, C::combatGlChain,
       C::combatGlCharge}},
@@ -4227,6 +4227,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatPerchTakedown:
             case Control::combatTakedownLight:
             case Control::combatPunisherVan:
+            case Control::combatThorHammer:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

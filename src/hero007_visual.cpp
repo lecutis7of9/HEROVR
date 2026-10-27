@@ -269,7 +269,7 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
 // could not make its texture array) untextured, its light copy (Mesh::lite) when it has one.
 template <class Place>
 bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place place, Vec3 viewer) {
-    if (!full.ok() || full.triangles() > mesh_model::drawTriangles)
+    if (!full.ok() || full.triangles() > std::min(full.cap, mesh_model::vanTriangles))
         return false;
     if (gModelSink)
         return drawTextured(*gModelSink, full, place);
@@ -310,7 +310,7 @@ bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place plac
 
 bool appendBatarangModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer) {
     Frame k{};
-    if (!model.ok() || model.triangles() > mesh_model::drawTriangles || !frameOf(it, k) || !ok(viewer) ||
+    if (!model.ok() || model.triangles() > std::min(model.cap, mesh_model::vanTriangles) || !frameOf(it, k) || !ok(viewer) ||
         !inRange(k.o, viewer, 80.f))
         return false;
     const mesh_model::Fit fit = mesh_model::fit(model, .20f);
@@ -341,6 +341,23 @@ bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mes
     if (!metric(model) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 40.f))
         return false;
     return drawMesh(out, model, [&](Vec3 c) { return k.o + k.r * c.x + k.u * c.y - k.f * c.z; }, viewer);
+}
+
+// Version 0.0.72 PUNISHER VAN: a model placed by its own axes (world = at + right x + up y - forward z), any
+// size to 8 m (the van and its parts), seen to 80 m. right / up / forward are made orthonormal here (forward kept).
+bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer) {
+    const Vec3 s = model.high - model.low;
+    const float most = std::max({s.x, s.y, s.z});
+    if (!model.ok() || !(most < 8.f) || !(most > .01f) || !ok(at) || !ok(forward) || !ok(up) || !ok(viewer) ||
+        length(forward) < 1e-4f || !inRange(at, viewer, 80.f))
+        return false;
+    const Vec3 f = normalized(forward);
+    Vec3 u = up - f * dot(up, f);
+    if (length(u) < 1e-4f)
+        return false;
+    u = normalized(u);
+    const Vec3 r = cross(f, u);
+    return drawMesh(out, model, [&](Vec3 c) { return at + r * c.x + u * c.y - f * c.z; }, viewer);
 }
 
 bool grappleMuzzle(const Item& gun, const mesh_model::Mesh& model, Vec3& muzzle) {

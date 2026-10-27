@@ -73,6 +73,17 @@ inline void clawShaft(Vec3 hand, Vec3 aim, Vec3& grip, Vec3& tip) {
     grip = hand + a * .05f;
     tip = hand + a * .33f;
 }
+// Version 0.0.72 CLAWS (the user's 0.0.71 test): three slim, curved, metallic claws about 30 cm
+// long, out between the knuckles (clawKnuckle ahead of the grip, clawRise over it, clawGap apart),
+// SNIKT: out in snikt seconds, overshooting a little and settling (clawExtend).
+inline constexpr float clawLength = .30f, clawKnuckle = .075f, clawRise = .028f, clawGap = .019f, snikt = .09f;
+inline float clawExtend(float outFor) {
+    if (!std::isfinite(outFor) || outFor <= 0)
+        return 0;
+    if (outFor < snikt)
+        return 1.08f * outFor / snikt;
+    return outFor < snikt * 2 ? 1.08f - .08f * (outFor - snikt) / snikt : 1.f;
+}
 inline constexpr float healDelay = 3.f;   // s without losing health before healing starts
 inline constexpr float healShare = .10f;  // of the most a second (10 s from 0 to full)
 struct Healing {

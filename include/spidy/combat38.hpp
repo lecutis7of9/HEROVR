@@ -292,9 +292,11 @@ inline constexpr OptionInfo optionInfo[options] = {
     // HOLSTER HANDS: SAME SIDE (0, the default) or EITHER HAND (a cross draw); the back is either hand's.
     {"holster_hands", "HOLSTER HANDS", "HOLSTERS", "SAME SIDE: each hand draws only from its own hip, live.",
      2, {"SAME SIDE", "EITHER HAND", nullptr, nullptr}},
-    // BATON HOLSTERS: OFF (0, the default: 0.0.62's batons always in the hands) or ON (worn on the back).
-    {"baton_holsters", "BATON HOLSTERS", "BHOLSTER", "ON: Daredevil's batons ride on your back; grip over a shoulder to draw.",
-     2, {"OFF", "ON", nullptr, nullptr}},
+    // BATON HOLSTERS: Version 0.0.72 (the user: no magic spawning) always on - DAREDEVIL's batons
+    // ride on his back and a grip over a shoulder draws one; the trigger never spawns a baton.
+    // The value is kept for old live.txt files; both values are ON.
+    {"baton_holsters", "BATON HOLSTERS", "BHOLSTER", "Always on now: grip over a shoulder to draw, no restart needed.",
+     2, {"ON", "ALWAYS ON", nullptr, nullptr}},
     // BATON LOOK: CLASSIC (0, the default: the baton as in 0.0.62/0.0.63), CLUB (the 0.0.7 billy club) or MODEL (Anthony Yanez's
     // "Daredevil's baton", rope removed, split in two: Models\Baton\Left|Right; CLUB when missing).
     {"baton_look", "BATON LOOK", "BLOOK", "CLASSIC: the old red bar; CLUB: a billy club; MODEL: two realistic batons.",
@@ -451,7 +453,7 @@ inline bool isHeroToggle(uint32_t o) {
 }
 // Version 0.0.7 values
 inline bool holsterCrossDraw(uint32_t value) { return value == 1; }
-inline bool batonHolstersOn(uint32_t value) { return value == 1; }
+inline bool batonHolstersOn(uint32_t) { return true; } // Version 0.0.72: always (no magic spawning)
 inline bool batonClub(uint32_t value) { return value == 1; }
 inline bool batonModel(uint32_t value) { return value == 2; } // else CLUB when the files are missing
 inline bool gunModelsOn(uint32_t value) { return value == 1; }

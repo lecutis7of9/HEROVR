@@ -111,7 +111,7 @@ V0062_OPTIONS = (('hit_indicator', ('OFF', 'ON')), ('hand_flips', ('ON', 'OFF'))
 # Version 0.0.7 HERO PROFILES (not in the records either: 0.0.6's layout kept).
 V007_OPTIONS = (('batman', ('OFF', 'ON')), ('wolverine', ('OFF', 'ON')), ('superman', ('OFF', 'ON')), ('punisher', ('OFF', 'ON')),
                 ('batarang_chain', ('25%', '50%', '75%', '100%', 'OFF')), ('easy_reload', ('AUTO', 'REALISTIC')),
-                ('holster_hands', ('SAME SIDE', 'EITHER HAND')), ('baton_holsters', ('OFF', 'ON')), ('baton_look', ('CLASSIC', 'CLUB', 'MODEL')),
+                ('holster_hands', ('SAME SIDE', 'EITHER HAND')), ('baton_holsters', ('ON', 'ALWAYS ON')), ('baton_look', ('CLASSIC', 'CLUB', 'MODEL')),
                 ('batarang_style', ('DEFAULT', 'EIRA', 'CLOONEY', 'JOKER')), ('gun_models', ('BUILT-IN', 'MODELS')),
                 ('captain_america', ('OFF', 'ON')), ('shield_arm', ('RIGHT', 'LEFT')), ('shield_damage', ('35 HP', '20 HP', '50 HP', '70 HP')),
                 ('shield_chain', ('ON', 'OFF')), ('shield_block', ('OFF', 'EXPERIMENTAL')), ('shield_look', ('BUILT-IN', 'MODEL')))

@@ -4459,6 +4459,16 @@ DWORD WINAPI run(void*) {
                         // thrust and the right stick's rise ride in the command's spare word. In the
                         // air the triggers and grips fly instead of shooting webs or web balls.
                         {
+                            // Version 0.0.72 FLIGHT ON BY DEFAULT for the flyers (hero072::FlyDefault).
+                            {
+                                static hero072::FlyDefault flyDefault;
+                                const uint32_t want = flyDefault.update(heroNow(), flyModeNow.load());
+                                if (want != flyModeNow.load()) {
+                                    flyModeNow = want;
+                                    game_prompts::note(want ? "Version 0.0.72: FLY MODE on (NORMAL) for this hero - a hand up takes off"
+                                                            : "Version 0.0.72: FLY MODE back off (it was on for the last hero)");
+                                }
+                            }
                             const uint32_t fm = flyModeNow.load();
                             // Version 0.0.7 BATMAN: no flight at all (his cape glide and grapple instead).
                             const bool batmanNow = heroNow() == hero_modes::batman;
@@ -6107,6 +6117,8 @@ DWORD WINAPI run(void*) {
                                             hin.hands[i].aim = cf.hands[i].aim;
                                             hin.hands[i].tracked = cf.hands[i].tracked;
                                             hin.hands[i].trigger = cf.hands[i].button;
+                                            // Version 0.0.72 WOLVERINE: the claws come out on the grip fist.
+                                            hin.hands[i].squeeze = std::isfinite(frame.hands[i].squeeze) ? frame.hands[i].squeeze : 0.f;
                                             // Version 0.0.7 PUNISHER GUN GRIP: the held gun from the grip pose.
                                             hin.hands[i].holdGun(gun_grip::held(frame.hands[i].grip, i, runtime.controllers()[i]));
                                         }

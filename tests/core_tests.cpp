@@ -23691,7 +23691,8 @@ int main() {
         float clawHp = 0;
         for (int f = 0; f < 60; ++f) {
             const float x = -.6f + 1.2f * static_cast<float>(f) / 30.f;
-            in.hands[1] = {{std::min(x, .6f), 1.3f, -.4f}, {0, 0, -1}, true, 1, 0, false};
+            // Version 0.0.72: the claws on the GRIP fist (squeeze 1), the trigger released.
+            in.hands[1] = {{std::min(x, .6f), 1.3f, -.4f}, {0, 0, -1}, true, 0, 1, false};
             PlayOutput o;
             p.step(in, o);
             snikt |= (o.sounds >> spidy::sfx::clawSnikt) & 1;
@@ -23702,6 +23703,18 @@ int main() {
                 }
         }
         check(snikt, "snikt when the claws come out");
+        {
+            Play trig; // Version 0.0.72: a trigger alone pops nothing
+            PlayInput ti = in;
+            ti.hands[1] = {{0, 1.3f, -.4f}, {0, 0, -1}, true, 1, 0, false};
+            PlayOutput o;
+            trig.step(ti, o);
+            check(!trig.clawsOut[1] && !((o.sounds >> spidy::sfx::clawSnikt) & 1), "the trigger no longer pops the claws");
+            PlayOutput h;
+            ti.hands[1].squeeze = 1;
+            trig.holsterStep(ti, h);
+            check((h.claimed & 2u) != 0, "the claws' fist claims its grip (no web or zip from it)");
+        }
         check(clawHit().amount == 3.f * spidy::hero_modes::punchUnitHp && clawHp == 3.f * spidy::hero_modes::punchUnitHp,
               "WOLVERINE: a claws-out hit is 3x a claws-in punch: " + std::to_string(clawHp));
         check(hits >= 1, "a fast sweep through an enemy hits");
@@ -24842,6 +24855,25 @@ int main() {
         check(fin2, "a NaN look let an insane vertex through");
     });
 
+    test("Version 0.0.72 FLIGHT ON BY DEFAULT for the flyers, CLAWS SNIKT, DAREDEVIL holsters always", [] {
+        using namespace spidy;
+        hero072::FlyDefault f;
+        check(f.update(hero_modes::ironMan, 0) == hero072::flyDefaultMode, "IRON MAN equipped: FLY MODE on");
+        check(f.update(hero_modes::ironMan, 2) == 2, "kept while he stays");
+        check(f.update(hero_modes::batman, 2) == 0, "BATMAN: the FLY MODE it turned on goes off");
+        check(f.update(hero_modes::thor, 0) == 2 && f.update(hero_modes::superman, 2) == 2 &&
+                  f.update(hero_modes::greenLantern, 2) == 2, "THOR, SUPERMAN, GREEN LANTERN fly");
+        check(f.update(hero_modes::greenLantern, 3) == 3, "the player's own pick (FAST)");
+        check(f.update(hero_modes::spiderMan, 3) == 3, "a hand-picked FLY MODE stays on leaving");
+        hero072::FlyDefault g;
+        check(g.update(hero_modes::spiderMan, 0) == 0 && g.update(hero_modes::hulk, 0) == 0, "non-flyers: nothing");
+        check(g.update(hero_modes::superman, 1) == 1, "a FLY MODE already on is kept");
+        check(g.update(hero_modes::superman, 9) == 0, "odd input is off");
+        check(hero007::clawExtend(0) == 0 && hero007::clawExtend(-1) == 0 && hero007::clawExtend(NAN) == 0, "in");
+        check(hero007::clawExtend(hero007::snikt) > 1.f && hero007::clawExtend(1) == 1.f, "SNIKT overshoots and settles");
+        check(hero007::clawLength >= .28f && hero007::clawLength <= .32f, "about 30 cm");
+        check(combat38::batonHolstersOn(0) && combat38::batonHolstersOn(1), "DAREDEVIL's batons always holstered");
+    });
     test("Version 0.0.72 MODEL MISSING: a look whose MODEL is on is the model or nothing (no stand-in)", [] {
         using namespace hero007;
         check(noStandIn(modelBitGuns, lookPistol) && noStandIn(modelBitGuns, lookSawedOff) && noStandIn(modelBitGuns, lookSawedOffOpen) &&

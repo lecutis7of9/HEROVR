@@ -2062,4 +2062,43 @@ struct PerchTakedown {
     }
 };
 
+// Version 0.0.72 FLIGHT ON BY DEFAULT (the user): equipping (or loading as) IRON MAN, SUPERMAN, THOR
+// or GREEN LANTERN turns FLY MODE on at NORMAL if it was off; the take-off gestures still apply
+// (a hand up in the air). Leaving for a non-flyer turns it back off only if this turned it on;
+// a FLY MODE the player picks by hand is kept. update returns the FLY MODE to use (0-3).
+constexpr bool flyer(uint32_t hero) {
+    return hero == hero_modes::ironMan || hero == hero_modes::superman || hero == hero_modes::thor ||
+           hero == hero_modes::greenLantern;
+}
+inline constexpr uint32_t flyDefaultMode = 2; // NORMAL
+class FlyDefault {
+public:
+    uint32_t update(uint32_t hero, uint32_t fly) {
+        if (fly > 3)
+            fly = 0;
+        if (ours_ && fly != given_)
+            ours_ = false; // the player changed it: theirs now
+        if (hero == last_)
+            return fly;
+        last_ = hero;
+        if (flyer(hero)) {
+            if (fly == 0) {
+                ours_ = true;
+                given_ = flyDefaultMode;
+                ++turnedOn_;
+                return flyDefaultMode;
+            }
+        } else if (ours_) {
+            ours_ = false;
+            return 0;
+        }
+        return fly;
+    }
+    uint32_t turnedOn() const { return turnedOn_; }
+
+private:
+    uint32_t last_ = ~0u, given_{}, turnedOn_{};
+    bool ours_{};
+};
+
 } // namespace spidy::hero072

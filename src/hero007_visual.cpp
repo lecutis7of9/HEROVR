@@ -1,6 +1,7 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 // Version 0.0.7 HERO PROFILES' looks (hero007_visual.hpp).
 #include "spidy/hero007_visual.hpp"
+#include "spidy/hero007.hpp"
 #include "spidy/captain.hpp"
 #include "spidy/gun_grip.hpp"
 #include "spidy/pixel_font.hpp"
@@ -510,12 +511,26 @@ void appendClaws(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pi
     if (!frameOf(it, k) || !ok(viewer) || !std::isfinite(pixelAngle) || !inRange(k.o, viewer, 40.f))
         return;
     Guard g(out);
+    // Version 0.0.72: from the knuckles, slim, tapering and curving a little down, polished steel;
+    // it.spin is the SNIKT extension (hero007::clawExtend; 0 reads as fully out for old callers).
+    const float ext = it.spin > 0 && std::isfinite(it.spin) ? std::clamp(it.spin, 0.f, 1.1f) : 1.f;
+    const float len = hero007::clawLength * ext;
+    if (len < .01f)
+        return;
+    constexpr int segs = 5;
     for (int i = -1; i <= 1; ++i) {
-        const float x = .022f * static_cast<float>(i);
-        const Vec3 base = k.o + k.f * .06f + k.u * .015f + k.r * x;
-        const Vec3 way = normalized(k.f + k.r * (x * .4f));
-        part(out, base, base + way * .24f, viewer, pixelAngle, .0045f, bright);
-        part(out, base + way * .24f, base + way * .31f, viewer, pixelAngle, .0022f, bright);
+        const float x = hero007::clawGap * static_cast<float>(i);
+        const Vec3 base = k.o + k.f * hero007::clawKnuckle + k.u * hero007::clawRise + k.r * x;
+        const Vec3 way = normalized(k.f + k.r * (x * .25f));
+        Vec3 from = base;
+        for (int s = 1; s <= segs; ++s) {
+            const float t = static_cast<float>(s) / segs;
+            const float droop = .045f * t * t; // the curve: 4.5 cm down at the tip of 30 cm
+            const Vec3 to = base + way * (len * t) - k.u * (droop * ext);
+            const float width = .0042f - .0030f * t;
+            part(out, from, to, viewer, pixelAngle, width, s == segs ? bright : steel);
+            from = to;
+        }
     }
 }
 

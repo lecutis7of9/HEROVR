@@ -131,8 +131,8 @@ class OursBall(unittest.TestCase):
         self.assertNotIn('RB', block.replace('no RB', ''))
         self.assertIn('out.ballOurs[i] = true', block)
 
-    def test_fired_from_the_wrist_and_guarded(self):  # 0.0.62: 11000 (the baton swing, baton bounce and palm blast sit between); 0.0.7: 17000 (+ the HERO PROFILES step)
-        self.assertIn('webShooter(', XR[XR.index('fightOut.ballOurs[i]') - 17000:XR.index('fightOut.ballOurs[i]') + 2000])
+    def test_fired_from_the_wrist_and_guarded(self):  # 0.0.62: 11000 (the baton swing, baton bounce and palm blast sit between); 0.0.7: 17000 (+ the HERO PROFILES step); 0.0.72: 18000 (+ the grip squeeze)
+        self.assertIn('webShooter(', XR[XR.index('fightOut.ballOurs[i]') - 18000:XR.index('fightOut.ballOurs[i]') + 2000])
         self.assertIn('Version 0.0.2 OURS BALL', XR)
 
     def test_strengths(self):

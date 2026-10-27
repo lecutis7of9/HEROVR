@@ -155,7 +155,7 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
 
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.
 namespace budget {
-inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 1000, club = 1200,
+inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 2600 /* 0.0.72: curved, 5 segments a claw */, club = 1200,
                         holster = 400, shield = 2100, batarangModel = 3 * mesh_model::drawTriangles, model = 3 * mesh_model::drawTriangles,
                         cable = 600, grapple = 1800, pellet = 200, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
 // The whole frame's worst case: 2 held + 4 worn + 2 flying + beam + smoke + shells + 2 readouts

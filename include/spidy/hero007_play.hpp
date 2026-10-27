@@ -160,6 +160,7 @@ class Play {
     float beamFade{}, heatSoundIn{};
     hero_modes::BatonSwing claws[2];
     bool clawsOut[2]{};
+    float clawsOutFor[2]{}; // Version 0.0.72 SNIKT: seconds the claws have been out (their extension)
     Healing healing;
     holster::Rack guns;   // PUNISHER: slots 0 left hip, 1 right hip (pistols), 2 back (the sawed-off)
     Gun armory[holster::maxSlots];
@@ -196,6 +197,7 @@ class Play {
             batBody = {};
             claws[i].reset();
             clawsOut[i] = false;
+            clawsOutFor[i] = 0;
             haveLast[i] = false;
         }
         heat = {};
@@ -275,6 +277,11 @@ class Play {
                     out.sound(sfx::holsterTick);
                 }
         }
+        if (hero == hero_modes::wolverine) // Version 0.0.72: a fist's grip is the claws' (no web or zip from it)
+            for (unsigned i = 0; i < 2; ++i)
+                if (in.hands[i].tracked && !in.hands[i].busy &&
+                    (in.hands[i].squeeze >= holster::pressed || (clawsOut[i] && in.hands[i].squeeze > holster::released)))
+                    out.claimed |= 1u << i;
         if (!rack) {
             guns.stowAll();
             batons.stowAll();
@@ -399,8 +406,17 @@ class Play {
         } else if (hero == hero_modes::wolverine) {
             for (unsigned i = 0; i < 2; ++i)
                 if (clawsOut[i] && handOk(i)) {
-                    const Vec3 a = normalized(in.hands[i].aim);
-                    d.held[i] = item(lookClaws, in.hands[i].position, a, gunUp(a));
+                    // Version 0.0.72 CLAW SOCKET: from the fist's knuckles along the forearm (the grip
+                    // pose, as PUNISHER's guns), its top the back of the hand; the aim pose when the
+                    // grip pose is missing. spin carries the SNIKT extension (0-1).
+                    if (in.hands[i].gunOk && finite(in.hands[i].gunAt) && finite(in.hands[i].gunForward) &&
+                        finite(in.hands[i].gunUp))
+                        d.held[i] = item(lookClaws, in.hands[i].gunAt, in.hands[i].gunForward, in.hands[i].gunUp);
+                    else {
+                        const Vec3 a = normalized(in.hands[i].aim);
+                        d.held[i] = item(lookClaws, in.hands[i].position, a, gunUp(a));
+                    }
+                    d.held[i].spin = clawExtend(clawsOutFor[i]);
                     any = true;
                 }
         } else if (hero == hero_modes::punisher) {
@@ -630,12 +646,17 @@ class Play {
     void stepWolverine(const PlayInput& in, float dt, PlayOutput& out) {
         for (unsigned i = 0; i < 2; ++i) {
             const PlayHand& h = in.hands[i];
-            const bool outNow = h.tracked && h.trigger > .5f && finite(h.position) && finite(h.aim);
+            // Version 0.0.72 CLAWS ON A FIST (the user: off the trigger): a GRIP squeeze pops the
+            // claws (SNIKT) and they stay out while the grip is held past holster::released; the
+            // trigger is free (basic projectiles only, none for WOLVERINE).
+            const bool squeezing = h.squeeze >= holster::pressed || (clawsOut[i] && h.squeeze > holster::released);
+            const bool outNow = h.tracked && squeezing && finite(h.position) && finite(h.aim);
             if (outNow && !clawsOut[i]) {
                 out.sound(sfx::clawSnikt);
                 out.buzz(i, .25f);
             }
             clawsOut[i] = outNow;
+            clawsOutFor[i] = outNow ? std::min(clawsOutFor[i] + (std::isfinite(dt) ? std::max(dt, 0.f) : 0.f), 1.f) : 0.f;
             Vec3 grip{}, tip{};
             clawShaft(h.position, h.aim, grip, tip);
             const int hit = claws[i].update(dt, outNow, grip, tip, in.list, in.count);

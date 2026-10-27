@@ -274,6 +274,14 @@ bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mes
     return drawMesh(out, model, [&](Vec3 c) { return k.o + k.r * c.x + k.u * c.y - k.f * c.z; }, viewer);
 }
 
+bool grappleMuzzle(const Item& gun, const mesh_model::Mesh& model, Vec3& muzzle) {
+    Frame k{};
+    if (!model.hasPivot || !ok(model.pivot) || !frameOf(gun, k))
+        return false;
+    muzzle = k.o + k.r * model.pivot.x + k.u * model.pivot.y - k.f * model.pivot.z;
+    return ok(muzzle);
+}
+
 bool appendSawedOffModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& frame,
                          const mesh_model::Mesh& barrels, bool open, Vec3 viewer) {
     Frame k{};
@@ -703,6 +711,11 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
     };
     const auto item = [&](const Item& given) {
         bool drawn = false;
+        if (given.look == lookGrappleGun) { // the model or nothing (no built-in grapple gun, no empty holster)
+            if (d.grappleGunModel && appendModel(out, given, *d.grappleGunModel, viewer) && given.holster)
+                appendHolster(out, given, viewer, pixelAngle);
+            return;
+        }
         const Item it = inPalm(given, false);
         if (it.look == lookBatarang && d.batarangModel)
             drawn = appendBatarangModel(out, it, *d.batarangModel, viewer);
@@ -741,8 +754,14 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
         if (d.cable[i])
             appendBatonCable(out, d.cableFrom[i] + travel, d.cableTo[i] + travel, viewer, pixelAngle);
     for (int i = 0; i < 2; ++i)
-        if (d.grapple[i])
-            appendGrappleLine(out, d.grappleFrom[i] + travel, d.grappleTo[i] + travel, viewer, pixelAngle);
+        if (d.grapple[i]) {
+            // From the gun's muzzle when the gun model is in that hand; the hand otherwise.
+            Vec3 from = d.grappleFrom[i] + travel;
+            Vec3 muzzle{};
+            if (d.held[i].look == lookGrappleGun && d.grappleGunModel && grappleMuzzle(moved(d.held[i]), *d.grappleGunModel, muzzle))
+                from = muzzle;
+            appendGrappleLine(out, from, d.grappleTo[i] + travel, viewer, pixelAngle);
+        }
     for (int i = 0; i < 2; ++i) {
         if (!d.held[i].look)
             continue;

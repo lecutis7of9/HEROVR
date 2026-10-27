@@ -68,6 +68,7 @@ namespace Sm2VrLauncher
                  "Daredevil's batons - \"Daredevil's baton\" by Yanez Designs (Anthony Yanez), CC BY 4.0 (rope removed, split in two)\n" +
                  "Punisher's pistols - \"9mm Pistol\" by TORI106, CC BY 4.0 (decimated, recoloured)\n" +
                  "Punisher's sawed-off - \"Sawed-off Shotgun\" by LiliumLetifer, CC BY 4.0 (split at the hinge, decimated)\n" +
+                 "Batman's grapple gun - \"Batman's Grapple Gun\" by Falxx, CC BY 4.0 (decimated, recoloured)\n" +
                  "Batarang EIRA - \"Batarang\" by Eira, CC BY 4.0 (decimated, recoloured)\n" +
                  "Batarang CLOONEY - \"Batarang Clooney\" by Ludus101, CC BY 4.0 (decimated)\n" +
                  "Batarang JOKER - \"Batarang Joker\" by baton268, CC BY-NC-ND 4.0 (unmodified, non-commercial: HERO VR is free)\n" +

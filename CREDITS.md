@@ -22,6 +22,7 @@ It is licensed under the GNU GPL version 3.
   - **Yanez Designs (Anthony Yanez)**: "Daredevil's baton" (CC BY 4.0), DAREDEVIL's batons. https://sketchfab.com/paulyanez
   - **TORI106**: "9mm Pistol" (CC BY 4.0), PUNISHER's pistols. https://sketchfab.com/TORI106
   - **LiliumLetifer**: "Sawed-off Shotgun" (CC BY 4.0), PUNISHER's sawed-off. https://sketchfab.com/LiliumLetifer
+  - **Falxx**: "Batman's Grapple Gun" (CC BY 4.0), BATMAN's grapple gun. https://sketchfab.com/Falxx
   - **Eira**: "Batarang" (CC BY 4.0), batarang EIRA. https://sketchfab.com/eirav
   - **Ludus101**: "Batarang Clooney" (CC BY 4.0), batarang CLOONEY. https://sketchfab.com/Ludus101
   - **baton268**: "Batarang Joker" (CC BY-NC-ND 4.0), batarang JOKER, shipped unmodified with its own licence file

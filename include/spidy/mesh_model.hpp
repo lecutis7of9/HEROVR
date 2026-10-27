@@ -78,8 +78,8 @@ bool readFile(const std::string& path, std::vector<uint8_t>& out, size_t most = 
 // are already converted: metres, x right, y up, -z forward, the grip at the origin, colours baked).
 enum Style : uint32_t { styleDefault = 0, styleEira, styleClooney, styleJoker, styles };
 // Version 0.0.7 CAPTAIN AMERICA: slotShield (Models\Shield, CC BY, tools/models007/convert_shield.py).
-// Version 0.0.7 BATMAN: slotGrappleGun (Models\GrappleGun) is RESERVED for the grapple gun model the player is
-// still choosing: 0.0.7 ships no grapple gun model and loads nothing from it (no stand-in); the line is drawn from the hand.
+// Version 0.0.7 BATMAN: slotGrappleGun (Models\GrappleGun): the grapple gun (Falxx, CC BY 4.0), its grip middle at the
+// origin and its muzzle as extras.pivot. Missing: no gun is drawn (no stand-in) and the line starts at the hand.
 enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",

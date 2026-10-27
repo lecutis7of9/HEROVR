@@ -22,7 +22,7 @@ installs once and is not offered again.
   wear it, draw it from your back, guard, throw it so it bounces and comes back, bash with it). Find them on the wrist
   hologram's COMBAT page under HERO PROFILES. One hero at a time.
 - **Batman's grapple gun and cape glide.** Aim a hand up at a rooftop or ledge and pull the trigger: the grapple
-  line fires and zips you up and over the edge (aimed level or at an enemy, the trigger throws a batarang as before).
+  gun is in your hand (holstered on your hip otherwise), its line fires from the muzzle and zips you up and over the edge (aimed level or at an enemy, the trigger throws a batarang as before).
   In the air, hold your **arms out** to glide on the cape: dip one arm (raise the other) to turn, **tuck your arms**
   to dive, **raise your arms** to pull up and trade speed for height. Drop your arms or land to stop. Batman has no
   webs and no flying.
@@ -71,6 +71,7 @@ installs once and is not offered again.
   - **Yanez Designs (Anthony Yanez)**: "Daredevil's baton", Daredevil's batons.
   - **TORI106**: "9mm Pistol", Punisher's pistols.
   - **LiliumLetifer**: "Sawed-off Shotgun", Punisher's sawed-off.
+  - **Falxx**: "Batman's Grapple Gun", Batman's grapple gun.
   - **Eira**: "Batarang", batarang EIRA.
   - **Ludus101**: "Batarang Clooney", batarang CLOONEY.
   - **baton268**: "Batarang Joker" (CC BY-NC-ND 4.0), batarang JOKER, shipped unmodified with its licence

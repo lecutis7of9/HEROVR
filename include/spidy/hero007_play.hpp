@@ -144,6 +144,8 @@ class Play {
     hero_modes::Baton batarangs[2];
     uint32_t batarangThrowsSeen[2]{};
     bool batTrigWas[2]{}, grappling[2]{}; // Version 0.0.7 BATMAN GRAPPLE GUN: the press's kind
+    unsigned grappleHand{1};              // the hand that fired it last (its hip holsters the gun; right at first)
+    holster::BodyYaw batBody;             // BATMAN: the body's heading for the gun's hip holster
     Smoke smoke;
     Shells shells;
     HeatVision heat;
@@ -182,6 +184,8 @@ class Play {
             batarangs[i].roll.state = 0x2545f491u + 977u * i;
             batarangThrowsSeen[i] = 0;
             batTrigWas[i] = grappling[i] = false;
+            grappleHand = 1;
+            batBody = {};
             claws[i].reset();
             clawsOut[i] = false;
             haveLast[i] = false;
@@ -317,10 +321,32 @@ class Play {
         };
         bool any = false;
         if (hero == hero_modes::batman) {
+            // The GRAPPLE GUN (drawn only with its model): in the firing hand while the press is the
+            // grapple's (the grip pose, like PUNISHER's guns), else on that hand's hip.
+            bool gunHeld = false;
+            for (unsigned i = 0; i < 2; ++i) {
+                if (!grappling[i])
+                    continue;
+                if (in.hands[i].tracked && in.hands[i].gunOk && finite(in.hands[i].gunAt)) {
+                    d.held[i] = item(lookGrappleGun, in.hands[i].gunAt, in.hands[i].gunForward, in.hands[i].gunUp);
+                    d.held[i].palm = true;
+                    gunHeld = any = true;
+                } else if (handOk(i)) {
+                    const Vec3 a = normalized(in.hands[i].aim);
+                    d.held[i] = item(lookGrappleGun, in.hands[i].position, a, gunUp(a));
+                    gunHeld = any = true;
+                }
+            }
+            if (!gunHeld && batBody.valid && finite(in.head.position)) {
+                Vec3 at{}, fwd{}, up{};
+                wornPose(grappleHand == 0 ? holster::leftHip : holster::rightHip, in.head.position, batBody, at, fwd, up);
+                d.worn[0] = item(lookGrappleGun, at, fwd, up, 1);
+                any = true;
+            }
             for (unsigned i = 0; i < 2; ++i) {
                 const auto& b = batarangs[i];
                 if (b.inHandNow()) {
-                    if (handOk(i)) {
+                    if (d.held[i].look != lookGrappleGun && handOk(i)) { // not while the gun is in this hand
                         const Vec3 a = normalized(in.hands[i].aim);
                         d.held[i] = item(lookBatarang, in.hands[i].position + a * .05f, a, gunUp(a));
                         any = true;
@@ -512,6 +538,7 @@ class Play {
         }
     }
     void stepBatman(const PlayInput& in, float dt, PlayOutput& out) {
+        batBody.update(dt, in.head.orientation.rotate(Vec3{0, 0, -1}));
         for (unsigned i = 0; i < 2; ++i) {
             auto& b = batarangs[i];
             b.chainChance = batarangChance(in.chain);
@@ -527,8 +554,10 @@ class Play {
             if (!trig)
                 grappling[i] = false;
             batTrigWas[i] = trig;
-            if (grappling[i])
+            if (grappling[i]) {
                 out.grapple[i] = true;
+                grappleHand = i;
+            }
             const uint32_t throwsWas = b.throws;
             const bool hit = b.update(dt, trig && !grappling[i], h.position, h.aim, in.list, in.count, aimed);
             if (b.throws != throwsWas) {

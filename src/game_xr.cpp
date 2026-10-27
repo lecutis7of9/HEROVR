@@ -7963,6 +7963,9 @@ DWORD WINAPI run(void*) {
                             const uint32_t style = c38(combat38::batarangStyle);
                             if (style && style < mesh_model::styles && hero007In.hero == hero_modes::batman)
                                 saved.hero007.batarangModel = slotModel(style, "BATARANG STYLE");
+                            // BATMAN GRAPPLE GUN model (Models\GrappleGun): none drawn when it is missing.
+                            if (hero007In.hero == hero_modes::batman)
+                                saved.hero007.grappleGunModel = slotModel(mesh_model::slotGrappleGun, "GRAPPLE GUN");
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
                                 saved.hero007.pistolModel = slotModel(mesh_model::slotPistol, "GUN MODELS");
                                 saved.hero007.sawedFrame = slotModel(mesh_model::slotSawedOffFrame, "GUN MODELS");

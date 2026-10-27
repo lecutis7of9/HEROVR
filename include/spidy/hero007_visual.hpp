@@ -38,6 +38,7 @@ enum Look : uint32_t {
     lookBatonModel, // BATON LOOK MODEL: Draw::batonModel[side] (CLUB when it is missing)
     lookShield,     // CAPTAIN AMERICA: the shield, `at` its hand strap (on the arm or the back), side = the arm
     lookShieldSpin, // the thrown shield, `at` the disc's middle, spinning `spin` about its face
+    lookGrappleGun, // BATMAN's grapple gun: ONLY Draw::grappleGunModel (Models\GrappleGun); nothing without it
     looks
 };
 // One item: `at` its grip (world), `forward` along its barrel / blade / shaft, `up` its top.
@@ -84,7 +85,9 @@ struct Draw {
     Vec3 cableFrom[2]{}, cableTo[2]{};
     // Version 0.0.7 BATMAN GRAPPLE GUN: the taut line from the firing hand to the hook, ONLY while
     // the grapple pulls him (cape_glide::Grapple); never a web, never at rest.
-    // BATMAN GRAPPLE GUN MODEL: reserved (mesh_model::slotGrappleGun); always null in 0.0.7 - no gun is drawn yet.
+    // BATMAN GRAPPLE GUN MODEL: Models\GrappleGun (mesh_model::slotGrappleGun). Library-owned. Null: no gun
+    // is drawn at all (no stand-in) and the line starts at the hand; with it, the line starts at its muzzle
+    // (extras.pivot) when the gun is in the firing hand.
     const mesh_model::Mesh* grappleGunModel{};
     bool grapple[2]{};
     Vec3 grappleFrom[2]{}, grappleTo[2]{};
@@ -110,6 +113,9 @@ void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer,
 // surface), up to 50 m.
 void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 void appendClaws(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);
+// BATMAN GRAPPLE GUN: the muzzle (the model's extras.pivot) of a gun Item drawn with `model`. False: no
+// usable muzzle (no pivot, a bad frame) - the line starts at the hand instead.
+bool grappleMuzzle(const Item& gun, const mesh_model::Mesh& model, Vec3& muzzle);
 // CAPTAIN AMERICA BUILT-IN: the 0.61 m disc flat in its plane (red, white, red rings, the blue centre and
 // the white star) seen from the face; the steel back and the two straps from behind.
 void appendShield(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);

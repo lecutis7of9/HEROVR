@@ -23557,6 +23557,93 @@ int main() {
         r.step(in, o3);
         check(o3.blowCount == 0, "flying: the triggers are flight's");
     });
+    test("Version 0.0.7: BATMAN grapple gun model - in the firing hand, on that hand's hip, the line from its muzzle, nothing without it", [] {
+        using namespace spidy::hero007;
+        namespace mm = spidy::mesh_model;
+        // A 22 cm box-ish gun: grip middle at the origin, barrel along -z, the muzzle as the pivot.
+        mm::Mesh gun;
+        const Vec3 c[] = {{-.02f, -.03f, .04f}, {.02f, .07f, -.18f}, {0, .05f, -.18f}, {-.02f, -.03f, .04f}, {.02f, -.03f, -.1f}, {0, .07f, -.18f}};
+        for (const Vec3& p : c)
+            gun.corners.push_back(p);
+        gun.colors = {{.5f, .4f, .2f}, {.1f, .1f, .1f}};
+        gun.low = {-.02f, -.03f, -.18f};
+        gun.high = {.02f, .07f, .04f};
+        gun.pivot = {0, .0515f, -.1815f};
+        gun.hasPivot = true;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::batman;
+        in.head = {{0, 1.7f, 0}, {}};
+        PlayHand up{{.25f, 1.4f, -.3f}, normalized(Vec3{0, .7f, -1}), true, 0, 0, false};
+        up.holdGun({{.25f, 1.4f, -.3f}, normalized(Vec3{0, .7f, -1}), normalized(Vec3{0, 1, .7f}), true});
+        in.hands[0] = {{-.25f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+        in.hands[1] = up;
+        PlayOutput o;
+        p.step(in, o);
+        Draw d;
+        p.draw(d, Pose{}, in, 0);
+        check(d.any && d.worn[0].look == lookGrappleGun && d.worn[0].holster == 1 && d.worn[0].at.x > 0,
+              "at rest: the grapple gun on the right hip");
+        check(d.held[1].look == lookBatarang && d.held[0].look == lookBatarang, "at rest: a batarang in each hand");
+        in.hands[1].trigger = 1;
+        p.step(in, o);
+        p.draw(d, Pose{}, in, 0);
+        check(p.grappling[1] && d.held[1].look == lookGrappleGun && d.held[1].palm && length(d.held[1].at - Vec3{.25f, 1.4f, -.3f}) < 1e-4f,
+              "aimed up, pressed: the gun in the firing hand from its grip pose");
+        check(d.worn[0].look == lookNone && d.held[0].look == lookBatarang, "the hip is empty and the other hand keeps its batarang");
+        // The line from the muzzle with the model; from the hand without it; no gun drawn without it.
+        const Vec3 viewer{0, 1.6f, 0};
+        d.grapple[1] = true;
+        d.grappleFrom[1] = {.25f, 1.4f, -.3f};
+        d.grappleTo[1] = {0, 20, -25};
+        Vec3 muzzle{};
+        check(grappleMuzzle(d.held[1], gun, muzzle) && length(muzzle - d.held[1].at) > .15f && length(muzzle - d.held[1].at) < .25f,
+              "the muzzle is the pivot, about 19 cm from the grip");
+        std::vector<Vertex> none, line, withGun, lineFromMuzzle;
+        d.held[0] = Item{}; // just the gun hand from here
+        appendHero007(none, d, {}, viewer, .0015f);
+        appendGrappleLine(line, d.grappleFrom[1], d.grappleTo[1], viewer, .0015f);
+        check(!none.empty() && none.size() == line.size(), "no model: only the line (no stand-in gun), from the hand");
+        d.grappleGunModel = &gun;
+        appendHero007(withGun, d, {}, viewer, .0015f);
+        appendGrappleLine(lineFromMuzzle, muzzle, d.grappleTo[1], viewer, .0015f);
+        check(withGun.size() == lineFromMuzzle.size() + 3 * gun.triangles() && withGun.size() <= budget::frame,
+              "with the model: the gun and the line from its muzzle, in budget");
+        bool same = true;
+        for (size_t k = 0; k < lineFromMuzzle.size(); ++k)
+            same = same && length(withGun[k].position - lineFromMuzzle[k].position) < 1e-5f;
+        check(same, "the line (hook at its end) starts at the muzzle");
+        // Let go: back on that hand's hip; the left hand fires next: the left hip.
+        in.hands[1].trigger = 0;
+        p.step(in, o);
+        in.hands[0] = PlayHand{{-.25f, 1.4f, -.3f}, normalized(Vec3{0, .7f, -1}), true, 1, 0, false};
+        p.step(in, o);
+        check(p.grappling[0] && p.grappleHand == 0, "the left hand fires");
+        in.hands[0].trigger = 0;
+        p.step(in, o);
+        p.draw(d, Pose{}, in, 0);
+        check(d.worn[0].look == lookGrappleGun && d.worn[0].at.x < 0, "let go: the gun on the left hip");
+        // Real model when this machine has it (build/h7out/Models/GrappleGun).
+        const std::string real = "build/h7out/Models/";
+        if (std::filesystem::exists(real + "GrappleGun/scene.glb")) {
+            mm::Library lib;
+            const auto st = lib.load(mm::slotGrappleGun, real);
+            check(st == mm::loaded && lib.model(mm::slotGrappleGun) && !lib.model(mm::slotGrappleGun)->decimated &&
+                      lib.model(mm::slotGrappleGun)->hasPivot && lib.model(mm::slotGrappleGun)->triangles() <= mm::drawTriangles,
+                  "the converted grapple gun loads as shipped, with its muzzle");
+        }
+        Play other;
+        in.hero = spidy::hero_modes::punisher;
+        other.step(in, o);
+        Draw od;
+        other.draw(od, Pose{}, in, 0);
+        bool anyGun = false;
+        for (const Item& it : od.worn)
+            anyGun = anyGun || it.look == lookGrappleGun;
+        check(!anyGun && od.held[0].look != lookGrappleGun && od.held[1].look != lookGrappleGun, "nobody else carries it");
+    });
     test("Version 0.0.7: WOLVERINE claws and BATMAN smoke through Play", [] {
         using namespace spidy::hero007;
         Play p;

@@ -2978,6 +2978,11 @@ void mirrorCreate(void* manager, const Descriptor& main) {
     void* view = reinterpret_cast<Create>(base + 0x2c9c590)(manager, &args);
     if (view && (config.createViews & 16))
         giveOcclusion(view);
+    // MIRROR TEST (private): the eyes' own 0x480 (0x80 the active post profile, 0x400 the display
+    // conversion into the view's own output image) - CONFIRMED for the eyes, CANDIDATE here - so its
+    // image (+1e28, read as the eyes' in mirrorFrame) holds the finished picture. No readback.
+    if (view && (config.createViews & 4))
+        InterlockedOr(reinterpret_cast<volatile LONG*>(reinterpret_cast<uintptr_t>(view) + 0x1daec), 0x480);
     uint32_t slot = ~0u;
     for (unsigned i = 0; view && i < 8; ++i)
         if (pointer(base + 0xc2ca250 + i * 8) == reinterpret_cast<uintptr_t>(view))
@@ -2997,6 +3002,7 @@ void mirrorCreate(void* manager, const Descriptor& main) {
     OutputDebugStringA(line);
 }
 void mirrorRetire() {
+    native_gpu::registerMirror(nullptr); // MIRROR TEST: the picture stops first
     if (auto view = mirrorView.load(); view && !mirrorRetired) {
         if (owned(view))
             InterlockedOr(reinterpret_cast<volatile LONG*>(reinterpret_cast<uintptr_t>(view) + 0x1dae4), 1);
@@ -3016,15 +3022,31 @@ void mirrorFrame() {
     mirrorLastTick = now;
     auto view = mirrorView.load();
     const bool viewOwned = view && owned(view);
-    bool retire = false;
+    bool retire = false, reopen = false, show = false;
+    const auto gpu = native_gpu::mirrorGpu();
+    const bool wanted = mirrorWanted.load() != 0;
+    const bool vrUp = enabled && !stopRequested && !retiring() && eyes[0].load() && eyes[1].load() &&
+                      !retired[0] && !retired[1];
     AcquireSRWLockExclusive(&mirrorLock);
     auto& stats = mirrorStats;
     namespace mv = spidy::mirror_view;
+    stats.gpuFault = gpu.fault;
+    stats.gpuImage = gpu.image;
+    stats.gpuCopies = gpu.copies;
     if (stats.test.phase == mv::running && !mirrorRetired) {
         retire = stats.test.runFrame(ms / 1000.f, ms, viewOwned);
         if (stats.test.phase != mv::running && !viewOwned)
             mirrorView = nullptr; // left the pool: forget it, never write to it
-        retire = retire || retiring() || stopRequested;
+        // MIRROR TEST: a picture fault stops it (it goes OFF); OFF on the wrist closes it.
+        if (stats.test.phase == mv::running && gpu.fault)
+            stats.test.pictureFailed();
+        else if (stats.test.phase == mv::running && !wanted)
+            stats.test.close();
+        retire = retire || stats.test.phase != mv::running || retiring() || stopRequested;
+        show = !retire && viewOwned;
+    } else if (stats.test.phase == mv::done && mirrorRetired && wanted && viewOwned && vrUp && !gpu.fault) {
+        // MIRROR TEST: ON again in the same session: the kept view comes back (as a retired eye does).
+        reopen = stats.test.reopen();
     } else if (stats.test.phase == mv::off || stats.test.phase == mv::waiting) {
         stats.test.idleFrame(ms);
         // Asked for after the eyes were made: it waits for the next start (a restart).
@@ -3033,12 +3055,32 @@ void mirrorFrame() {
     if (stats.test.slot < 8)
         spidy::mirror_probe::slotDraws(stats.test.slot, stats.heroDraws, stats.otherDraws);
     ReleaseSRWLockExclusive(&mirrorLock);
-    if (retire && viewOwned) {
+    if (retire) {
         AcquireSRWLockExclusive(&mirrorLock);
         if (mirrorStats.test.phase == mv::running)
             mirrorStats.test.phase = mv::done;
         ReleaseSRWLockExclusive(&mirrorLock);
-        mirrorRetire();
+        if (viewOwned)
+            mirrorRetire();
+        else
+            native_gpu::registerMirror(nullptr);
+        return;
+    }
+    if (reopen) {
+        InterlockedAnd(reinterpret_cast<volatile LONG*>(reinterpret_cast<uintptr_t>(view) + 0x1dae4), ~1L);
+        mirrorRetired = false;
+        OutputDebugStringA("MIRROR TEST: view back\n");
+        return; // its image is taken from the next frame
+    }
+    // MIRROR TEST: its image, read exactly as the eyes' (+1e28 -> +40, the confirmed texture
+    // object type 8324540, +38 -> +8 the ID3D12Resource); native_gpu copies it into both eyes.
+    // Anything else: no picture this frame (nothing is registered).
+    if (show) {
+        const auto address = reinterpret_cast<uintptr_t>(view);
+        const auto texture = pointer(address + 0x1e28);
+        const auto object = texture ? pointer(texture + 0x40) : 0;
+        const auto resource = object && pointer(object) == base + 0x8324540 ? pointer(pointer(object + 0x38) + 8) : 0;
+        native_gpu::registerMirror(reinterpret_cast<ID3D12Resource*>(resource));
     }
 }
 // In placeEyes, after the eyes: the mirror camera faces the head from 1.2 m.
@@ -3048,7 +3090,7 @@ void mirrorPlace(const Descriptor& main, const Mat4& head) {
     if (!view || mirrorRetired || !owned(view))
         return;
     Mat4 pose{};
-    if (!mv::mirrorPose(head, pose))
+    if (!mv::mirrorPose(head, pose, mv::fullBodyMetres, mv::fullBodyDrop)) // MIRROR TEST: the whole body
         return;
     auto descriptor = main;
     const float x = mv::horizontalTan(), y = mv::verticalTan;

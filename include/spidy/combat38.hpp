@@ -219,8 +219,10 @@ inline constexpr OptionInfo optionInfo[options] = {
     // repulsor): OFF (0, Spider-Man) is the default; ON fires no web of any kind and sends none to the game.
     {"iron_man", "IRON MAN ABILITIES", "IRONMAN", "ON: blasts and a chest beam that hurt enemies, no webs, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"mirror_view", "MIRROR VIEW", "MIRRORCAM", "TEST: a hidden game camera looks at you for 30 s once, then goes OFF (restart).",
-     2, {"OFF", "TEST", nullptr, nullptr}},
+    // 0.0.72 MIRROR VIEW (EXPERIMENTAL, merged from the private mirror test): OFF by default; ON (live.txt
+    // "test") makes the view at the next start; it turns itself OFF on any problem (mirror_view::finished).
+    {"mirror_view", "MIRROR VIEW (EXPERIMENTAL)", "MIRRORCAM", "EXPERIMENTAL: a small picture of your suit, OFF on any problem, needs a restart.",
+     2, {"OFF", "ON", nullptr, nullptr}},
     // Version 0.0.5 (Update 38.9) HERO HEIGHT: the VR body k times the player (a Hulk skin stands
     // straight); live; 1.00X (0) the default, nothing changed.
     {"hero_height", "HERO HEIGHT", "HEIGHT", "Grows your VR body for a big skin like Hulk so its legs stand straight, live.",

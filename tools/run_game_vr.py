@@ -23,6 +23,7 @@ from bridge_game import (ROOT, HOOKS, prepare, snapshot as bridge_snapshot, Game
                          spidy_folder, staged)
 from inspect_game import PE, EXPECTED_VERSION
 import live_settings
+import std_handles
 import address_finder
 import eye_lod
 import shadow_camera
@@ -382,7 +383,7 @@ def command_text(command, timeout=10):
     in another language, an adapter's or a network's name) left no output at all, and no session of 0.2.13
     started on such a PC. A byte that is no letter there either becomes a question mark."""
     try:
-        printed = subprocess.run(command, capture_output=True, timeout=timeout,
+        printed = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout,
                                  creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)).stdout
     except (OSError, subprocess.SubprocessError):
         return ''
@@ -3589,6 +3590,8 @@ def note_start_error(text):
 
 
 if __name__ == '__main__':
+    # 0.0.70.1 hotfix: a dead standard handle from the launcher (WinError 6 at "finding the headset").
+    std_handles.repair()
     try:
         START_ERROR.unlink()
     except OSError:

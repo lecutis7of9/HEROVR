@@ -79,7 +79,10 @@ struct SuitWatch {
 // head (level), looking back at it. pose: 16 floats, rows right / down / forward (world), the
 // position at [12..14] (native_view's layout). False when the head pose is unusable.
 inline constexpr float mirrorMetres = 1.2f;
-inline bool mirrorPose(const Mat4& head, Mat4& out, float metres = mirrorMetres) {
+// MIRROR TEST (private, bare-bones): the camera stands farther (2 m) and lower (0.8 m below the
+// head, about the middle of the body) so the 70 degree portrait frame holds the whole body.
+inline constexpr float fullBodyMetres = 2.0f, fullBodyDrop = .8f;
+inline bool mirrorPose(const Mat4& head, Mat4& out, float metres = mirrorMetres, float drop = 0.f) {
     for (float v : head)
         if (!std::isfinite(v))
             return false;
@@ -95,7 +98,7 @@ inline bool mirrorPose(const Mat4& head, Mat4& out, float metres = mirrorMetres)
         out[row * 4 + 2] = -head[row * 4 + 2];
     }
     out[12] = head[12] + forward.x * metres;
-    out[13] = head[13];
+    out[13] = head[13] - drop; // y is up
     out[14] = head[14] + forward.z * metres;
     return true;
 }
@@ -109,19 +112,34 @@ enum Why : uint32_t {
     noEyes,       // the eyes are not up yet
     createFailed, // the game made no view
     lostView,     // the view left the pool
-    tooSlow,      // frames slowed by more than half
+    tooSlow,      // MIRROR TEST: under 20 frames a second (5 s average) for 5 s straight
+    pictureFault, // MIRROR TEST: the picture could not be copied (native_gpu::MirrorGpu::fault)
     whys
 };
 inline constexpr const char* whyNames[whys] = {"", "fewer than 4 view slots free", "the eyes are not up",
                                                "the game made no view", "the view left the pool",
-                                               "too slow: frames over 1.5x"};
+                                               "too slow: under 20 fps for 5 s", "the picture could not be shown"};
 inline constexpr uint32_t minFreeSlots = 4, width = 320, height = 480;
-inline constexpr float runSeconds = 30.f, slowFactor = 1.5f, slowAfter = 3.f;
+inline constexpr float runSeconds = 30.f;
+// MIRROR TEST speed guard (looser, after rep 27 Oct: its baseline came from the menus before VR, 5.6 ms,
+// so a normal VR frame of 26-29 ms read as "too slow" after 3 s). Now: no baseline compare; the average
+// of the last windowSeconds (one-second buckets) must stay over slowMs (under 20 frames a second) for
+// slowHoldSeconds in a row, after warmSeconds, before it turns itself OFF. Hitches over 200 ms (loads)
+// are left out.
+inline constexpr float slowMs = 50.f, windowSeconds = 5.f, slowHoldSeconds = 5.f, warmSeconds = 5.f;
+inline constexpr uint32_t windowBuckets = 5;
 
 struct Test {
     uint32_t phase = off, why = fine, slot = ~0u, runs{};
     float seconds{}, baseMs{}, testMs{};
     uint64_t frames{};
+    // MIRROR TEST: true keeps the view while it is wanted (no 30 s end); the player closes it.
+    bool keep{true};
+    // The rolling window: whole seconds done (sum ms, frames each), the second being filled, and how
+    // long the average has been over slowMs.
+    float bucketMs[windowBuckets]{}, bucketFrames[windowBuckets]{};
+    float nowMs{}, nowFrames{}, nowSeconds{}, slowSeconds{};
+    uint32_t bucketAt{};
     // Whether to create the view now: wanted, eyes up, enough free slots.
     bool shouldCreate(bool wanted, bool eyesUp, uint32_t freeSlots) {
         if (!wanted) {
@@ -144,6 +162,15 @@ struct Test {
         }
         return true;
     }
+    void restartTiming() {
+        seconds = 0;
+        testMs = 0;
+        frames = 0;
+        for (uint32_t i = 0; i < windowBuckets; ++i)
+            bucketMs[i] = bucketFrames[i] = 0;
+        nowMs = nowFrames = nowSeconds = slowSeconds = 0;
+        bucketAt = 0;
+    }
     void created(bool ok, uint32_t inSlot) {
         if (!ok) {
             phase = failed;
@@ -153,15 +180,22 @@ struct Test {
         phase = running;
         why = fine;
         slot = inSlot;
-        seconds = 0;
-        testMs = 0;
-        frames = 0;
+        restartTiming();
         ++runs;
     }
-    // The baseline frame time (before the test), smoothed.
+    // The frame time before the test (menus, loading; kept for the record only), smoothed.
     void idleFrame(float frameMs) {
         if (std::isfinite(frameMs) && frameMs > 0 && frameMs < 200)
             baseMs = baseMs > 0 ? baseMs + .05f * (frameMs - baseMs) : frameMs;
+    }
+    // The average frame time over the window (the finished seconds, and the current one); 0 none.
+    float windowMs() const {
+        float ms = nowMs, n = nowFrames;
+        for (uint32_t i = 0; i < windowBuckets; ++i) {
+            ms += bucketMs[i];
+            n += bucketFrames[i];
+        }
+        return n > 0 ? ms / n : 0.f;
     }
     // One frame of the test; returns true when the view must be retired now.
     bool runFrame(float dt, float frameMs, bool viewOwned) {
@@ -172,27 +206,66 @@ struct Test {
             why = lostView;
             return false; // nothing left to retire
         }
-        if (std::isfinite(dt) && dt > 0 && dt < .5f)
+        const bool timed = std::isfinite(dt) && dt > 0 && dt < .5f;
+        if (timed)
             seconds += dt;
         if (std::isfinite(frameMs) && frameMs > 0 && frameMs < 200) {
-            testMs = testMs > 0 ? testMs + .1f * (frameMs - testMs) : frameMs;
+            nowMs += frameMs;
+            nowFrames += 1;
             ++frames;
         }
-        if (seconds > slowAfter && baseMs > 0 && testMs > baseMs * slowFactor) {
+        if (timed)
+            nowSeconds += dt;
+        if (nowSeconds >= windowSeconds / windowBuckets) { // a second done: it replaces the oldest
+            bucketMs[bucketAt] = nowMs;
+            bucketFrames[bucketAt] = nowFrames;
+            bucketAt = (bucketAt + 1) % windowBuckets;
+            nowMs = nowFrames = nowSeconds = 0;
+        }
+        testMs = windowMs();
+        if (seconds > warmSeconds && testMs > slowMs) {
+            if (timed)
+                slowSeconds += dt;
+        } else {
+            slowSeconds = 0;
+        }
+        if (slowSeconds >= slowHoldSeconds) {
             phase = failed;
             why = tooSlow;
             return true;
         }
-        if (seconds >= runSeconds) {
+        if (!keep && seconds >= runSeconds) {
             phase = done;
             return true;
         }
         return false;
     }
+    // MIRROR TEST: the player turned it OFF (the view is retired, kept for a reopen).
+    void close() {
+        if (phase == running)
+            phase = done;
+    }
+    // MIRROR TEST: turned ON again with the view still ours: it runs again (timing afresh).
+    bool reopen() {
+        if (phase != done)
+            return false;
+        phase = running;
+        why = fine;
+        restartTiming();
+        return true;
+    }
+    // MIRROR TEST: the picture failed (fault from native_gpu): stop, it goes OFF.
+    void pictureFailed() {
+        if (phase == running || phase == done) {
+            phase = failed;
+            why = pictureFault;
+        }
+    }
 };
 // 0.0.7: the test has run its course (its 30 s done, or stopped by itself): MIRROR VIEW goes back
 // to OFF and is saved so, so it runs once and not at every start. Waiting (no eyes yet) is not over.
-inline bool finished(const Test& t) { return t.phase == done || (t.phase == failed && t.why != noEyes); }
+// MIRROR TEST (private): it stays while ON; only a stop on its own (failed) turns it OFF.
+inline bool finished(const Test& t) { return t.phase == failed && t.why != noEyes; }
 // Version 0.0.4: what stereo_probe.cpp's test did, copied out for game_xr.cpp's V003 record.
 // The view gets none of the eyes' extra flags (no readback, no display output, no GPU slot): the
 // game renders it into its own targets, the probe counts the draws in its slot.
@@ -203,5 +276,8 @@ struct Stats {
     Test test{};
     uint32_t wanted{}, tooLate{}, freeSlots{}, texture{};
     uint64_t heroDraws{}, otherDraws{}, posed{};
+    // MIRROR TEST: the picture (native_gpu::mirrorGpu) - its fault code and copies made.
+    uint32_t gpuFault{}, gpuImage{};
+    uint64_t gpuCopies{};
 };
 } // namespace spidy::mirror_view

@@ -431,7 +431,8 @@ LUNGE_PHASES = ('idle', 'flying', 'hanging')
 # mirror_view.hpp Phase / Why (the MIRROR VIEW TEST in the v003 record; 0.0.6 exports it).
 MIRROR_TEST_PHASES = ('off', 'waiting', 'running', 'done', 'failed')
 MIRROR_TEST_WHYS = ('', 'fewer than 4 view slots free', 'the eyes are not up', 'the game made no view',
-                    'the view left the pool', 'too slow: frames over 1.5x')
+                    'the view left the pool', 'too slow: under 20 fps for 5 s',
+                    'the picture could not be shown')
 LUNGE_MODES = ('GAME BUTTON', 'SPIDYVR MOVE')
 
 

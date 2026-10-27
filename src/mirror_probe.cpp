@@ -19,7 +19,7 @@ std::atomic<uint32_t> status{notStarted};
 std::atomic<bool> sampled{};
 std::atomic<uint64_t> heroAt{}, primaryAt{}, leftAt{}, rightAt{};
 std::atomic<uint64_t> slotAt[slots]{};
-std::atomic<uint32_t> frameJobs{}, frameDraws{}, frameViews{}; // frameViews: a bit per view (kind, or slot)
+std::atomic<uint32_t> frameJobs{}, frameDraws{}, frameViews{}, slotFrameDraws{}; // frameViews: a bit per view (kind, or slot)
 std::atomic<bool> gameJob{}; // the game's view had a render job since the last frame
 std::atomic<uint64_t> jobs[kinds]{}, heroDraws[kinds]{}, pieceDraws[kinds]{}, sampledDraws{};
 std::atomic<uint64_t> gameDrawsOfHero{}; // this sampled frame
@@ -289,6 +289,7 @@ void frameWork(const Frame& f) {
     lastRigSwitches = f.bodyRigSwitches;
     if (frameDraws.exchange(0, std::memory_order_relaxed) > drawCap)
         ++work.cappedFrames;
+    slotFrameDraws.store(0, std::memory_order_relaxed);
     const uint32_t frameJobsNow = frameJobs.exchange(0, std::memory_order_relaxed);
     work.jobsFrameMax = std::max(work.jobsFrameMax, frameJobsNow);
     const uint32_t views = frameViews.exchange(0, std::memory_order_relaxed);
@@ -392,8 +393,24 @@ void draw(uint64_t view, uint64_t owner, uint64_t instance) {
     const uint64_t hero = heroAt.load(std::memory_order_relaxed);
     if (!hero || !instance || status.load(std::memory_order_relaxed) != watching)
         return;
-    if (frameDraws.fetch_add(1, std::memory_order_relaxed) >= drawCap)
-        return; // the cost bound: a crowded sampled frame looks at its first drawCap draws only
+    if (frameDraws.fetch_add(1, std::memory_order_relaxed) >= drawCap) {
+        // The cost bound: a crowded sampled frame looks at its first drawCap draws only. MIRROR TEST:
+        // the mirror's draws come after the game's and both eyes', so a crowded frame used to stop
+        // before them (hero_draws 0 in a 79% capped run). An offscreen slot's draws (not an eye's,
+        // not the game's) get their own drawCap past the shared one.
+        const uint64_t left = leftAt.load(std::memory_order_relaxed), right = rightAt.load(std::memory_order_relaxed),
+                       primary = primaryAt.load(std::memory_order_relaxed);
+        if ((left && (view == left || owner == left)) || (right && (view == right || owner == right)) ||
+            (primary && (view == primary || owner == primary)))
+            return;
+        bool inSlot = false;
+        for (uint32_t i = 0; i < slots && !inSlot; ++i) {
+            const uint64_t v = slotAt[i].load(std::memory_order_relaxed);
+            inSlot = v && (view == v || owner == v);
+        }
+        if (!inSlot || slotFrameDraws.fetch_add(1, std::memory_order_relaxed) >= drawCap)
+            return;
+    }
     sampledDraws.fetch_add(1, std::memory_order_relaxed);
     uint64_t slotViews[slots];
     for (uint32_t i = 0; i < slots; ++i)

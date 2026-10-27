@@ -32,7 +32,7 @@ def main():
         while running() and time.monotonic() < deadline:
             time.sleep(.25)
         if running():
-            subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+            subprocess.run(['taskkill', '/F', '/PID', str(pid)], stdin=subprocess.DEVNULL, capture_output=True)
             time.sleep(1)
     # Steam drops a launch asked for while the last process is still leaving.
     time.sleep(3)

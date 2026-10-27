@@ -100,6 +100,16 @@ struct RetiredEye {
     uint64_t fence{};
 };
 std::vector<RetiredEye> retiredEyes;
+// 0.0.71 MIRROR VIEW (private test): the game's third view (stereo_probe.cpp's mirror) as a small
+// picture copied into both staged eyes. Its own state is learned from the game's barriers like
+// an eye's; anything unexpected sets mvFault and only the picture stops (never the eyes, never
+// `fault`, so VR goes on and nothing falls back to flatscreen).
+ComPtr<ID3D12Resource> mvResource;
+std::atomic<ID3D12Resource*> mvWatched{};
+D3D12_RESOURCE_STATES mvState{};
+bool mvKnown{};
+std::atomic<uint32_t> mvFault{};
+std::atomic<uint64_t> mvCopies{};
 std::array<bool, 2> eyeViewStale{};
 std::atomic<uint32_t> eyeSwapCount{}, eyesLostCode{};
 std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT, 2> layouts{};
@@ -393,10 +403,12 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
     if (enabled) {
         const auto* left = watched[0].load();
         const auto* right = watched[1].load();
+        const auto* mirror = mvWatched.load();
         bool relevant{};
         for (UINT n = 0; n < count; ++n)
             relevant |= bs[n].Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION &&
-                        (bs[n].Transition.pResource == left || bs[n].Transition.pResource == right);
+                        (bs[n].Transition.pResource == left || bs[n].Transition.pResource == right ||
+                         (mirror && bs[n].Transition.pResource == mirror));
         if (!relevant) {
             originalBarrier(list, count, bs);
             return;
@@ -412,6 +424,15 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
                         e.flags = bs[n].Flags;
                         add(list, e);
                     }
+        for (UINT n = 0; n < count; ++n) // 0.0.71 MIRROR VIEW: its image's states, as eye 2
+            if (bs[n].Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION && mvResource &&
+                bs[n].Transition.pResource == mvResource.Get()) {
+                Event e{};
+                e.eye = 2;
+                e.transition = bs[n].Transition;
+                e.flags = bs[n].Flags;
+                add(list, e);
+            }
     }
     originalBarrier(list, count, bs);
 }
@@ -1999,6 +2020,80 @@ bool settleSwappedEyes() {
     eyeViewStale = {};
     return true;
 }
+// 0.0.71 MIRROR VIEW: the mirror's picture into the lower middle of both staged eyes (they are in
+// COPY_SOURCE between uses). A copy needs the same pixel kind and a fitting size, else the picture
+// stops for good (mvFault) and the eyes go on untouched.
+bool mirrorCopyable(DXGI_FORMAT a, DXGI_FORMAT b) {
+    if (a == b)
+        return true;
+    auto family = [](DXGI_FORMAT f) -> int {
+        switch (f) {
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+            return 1;
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+        case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+            return 2;
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+        case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+            return 3;
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+            return 4;
+        default:
+            return 0;
+        }
+    };
+    return family(a) && family(a) == family(b);
+}
+void copyMirrorView(ID3D12GraphicsCommandList* list) {
+    if (!mvResource || !mvKnown || mvFault.load() || !stagedEyes[0] || !stagedEyes[1])
+        return;
+    const auto src = mvResource->GetDesc();
+    const auto dst = stagedEyes[0]->GetDesc();
+    if (src.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || src.SampleDesc.Count != 1 ||
+        !mirrorCopyable(src.Format, dst.Format)) {
+        mvFault = 1;
+        return;
+    }
+    const auto w = static_cast<UINT>(src.Width), h = src.Height;
+    const UINT shift = outWidth / 50; // a little nearer than far away: each eye sees it shifted in
+    if (w + 2 * shift + 8 > outWidth || h + 8 > outHeight) {
+        mvFault = 3;
+        return;
+    }
+    D3D12_RESOURCE_BARRIER b[3]{};
+    UINT count = 0;
+    const bool move = mvState != D3D12_RESOURCE_STATE_COPY_SOURCE;
+    if (move) {
+        b[count].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b[count++].Transition = {mvResource.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, mvState,
+                                 D3D12_RESOURCE_STATE_COPY_SOURCE};
+    }
+    for (unsigned i = 0; i < 2; ++i) {
+        b[count].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b[count++].Transition = {stagedEyes[i].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                 D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST};
+    }
+    originalBarrier(list, count, b);
+    const UINT centre = (outWidth - w) / 2;
+    const UINT top = std::min<UINT>(outHeight - h - 4, outHeight / 2 + outHeight / 20);
+    for (unsigned i = 0; i < 2; ++i) {
+        D3D12_TEXTURE_COPY_LOCATION from{}, to{};
+        from.pResource = mvResource.Get();
+        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        to.pResource = stagedEyes[i].Get();
+        to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        const UINT x = i == 0 ? centre + shift : centre - shift;
+        list->CopyTextureRegion(&to, x, top, 0, &from, nullptr);
+    }
+    for (UINT n = 0; n < count; ++n)
+        std::swap(b[n].Transition.StateBefore, b[n].Transition.StateAfter);
+    originalBarrier(list, count, b);
+    ++mvCopies;
+}
 void stagePair(EyePairState::Stamp stamp) {
     if (eyesLostCode.load() || !known[0] || !known[1] || !makeReadbacks() || !settleSwappedEyes())
         return;
@@ -2044,6 +2139,7 @@ void stagePair(EyePairState::Stamp stamp) {
         drawHistory(slot->list.Get(), index, stamp.serial);
     else
         history.valid = false;
+    copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
     if (!submitCommands(*slot)) {
         history.valid = false;
         return;
@@ -2153,6 +2249,15 @@ void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandL
         std::lock_guard recordLock(recording);
         for (UINT n = 0; n < count; ++n)
             if (auto found = lists.find(commands[n]); found != lists.end() && !found->second.empty()) {
+                // 0.0.71: the mirror's image on another queue stops only the mirror picture.
+                bool eyeEvent{};
+                for (const auto& e : found->second)
+                    eyeEvent |= e.eye < 2;
+                if (!eyeEvent) {
+                    mvFault = 4;
+                    mvKnown = false;
+                    continue;
+                }
                 fault = 3401;
                 copyReady.notify_all();
             }
@@ -2169,6 +2274,24 @@ void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandL
     for (UINT n = 0; n < count; ++n)
         if (auto found = lists.find(commands[n]); found != lists.end())
             for (const auto& e : found->second) {
+                if (e.eye == 2) { // 0.0.71 MIRROR VIEW: its own state, its own fault
+                    if (e.marker || !mvResource || e.transition.pResource != mvResource.Get())
+                        continue;
+                    if (e.flags != D3D12_RESOURCE_BARRIER_FLAG_NONE ||
+                        (e.transition.Subresource != 0 &&
+                         e.transition.Subresource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)) {
+                        mvFault = 2;
+                        mvKnown = false;
+                        continue;
+                    }
+                    if (mvKnown && mvState != e.transition.StateBefore) {
+                        mvKnown = false; // learn it again from the next barrier
+                        continue;
+                    }
+                    mvState = e.transition.StateAfter;
+                    mvKnown = true;
+                    continue;
+                }
                 relevant = true;
                 if (q != queue.Get()) {
                     fault = 3401;
@@ -3010,6 +3133,32 @@ void registerEye(unsigned eye, ID3D12Resource* resource) {
     }
     resources[eye] = resource;
     watched[eye] = resource;
+}
+// 0.0.71 MIRROR VIEW: take (or, with nullptr, let go of) the mirror view's image. The old one is
+// kept referenced until the bridge's GPU work already submitted has finished, like a swapped eye.
+void registerMirror(ID3D12Resource* resource) {
+    std::lock_guard lock(recording);
+    if (mvResource.Get() == resource)
+        return;
+    if (mvResource)
+        retiredEyes.push_back({mvResource, fenceValue});
+    mvResource = nullptr;
+    mvWatched = nullptr;
+    mvKnown = false;
+    if (!resource || !enabled || mvFault.load())
+        return;
+    ComPtr<ID3D12Device> owner;
+    ComPtr<IUnknown> a, b;
+    if (!device || FAILED(resource->GetDevice(IID_PPV_ARGS(&owner))) || FAILED(owner.As(&a)) ||
+        FAILED(device.As(&b)) || a.Get() != b.Get()) {
+        mvFault = 5;
+        return;
+    }
+    mvResource = resource;
+    mvWatched = resource;
+}
+MirrorGpu mirrorGpu() {
+    return {mvFault.load(), mvResource ? 1u : 0u, mvKnown ? 1u : 0u, mvCopies.load()};
 }
 bool arm(uint64_t serial, ID3D12Resource* left, ID3D12Resource* right) {
     std::lock_guard submitLock(submission);

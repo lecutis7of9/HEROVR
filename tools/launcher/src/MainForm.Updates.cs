@@ -279,7 +279,6 @@ namespace Sm2VrLauncher
                 psi.UseShellExecute = false;
                 psi.WorkingDirectory = Path.GetDirectoryName(exe);
                 buildLog.Line("Restarting the launcher (new version)...", Theme.Info);
-                StdHandles.ClearDead();   // 0.0.70.1 hotfix: never hand a dead standard handle to the new launcher
                 System.Diagnostics.Process.Start(psi);
                 Close();
             }

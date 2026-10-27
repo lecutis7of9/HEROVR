@@ -12,9 +12,9 @@ Checked here, on any OS:
     (and the emulation does raise WinError 6 for a call without stdin=, so the test is not empty);
   - std_handles.repair() replaces a dead standard handle with NUL and leaves good and missing ones;
   - the launcher (build 12) keeps its own standard handles valid: saved and put back around RequestStop's console
-    calls, and dead ones cleared before PowerShell starts, before the self-update restart and at its start.
-On Windows only (the CI release build, windows-2022): a real child Python whose standard input is a closed handle
-reproduces WinError 6 without the fix and starts programs with it; and tests/windows/std_handles_repro.cs runs the
+    calls, and dead ones cleared before PowerShell starts and when the launcher starts (also after a self-update).
+On Windows only (the CI release build, windows-2022): a real child Python whose standard input is a closed handle (evidence:
+handle reuse can hide it) reproduces WinError 6 without the fix and starts programs with it; and tests/windows/std_handles_repro.cs runs the
 launcher's own PsRunner after a real Stop (see windows_launcher_repro)."""
 import ast
 import io
@@ -240,8 +240,8 @@ class Launcher(unittest.TestCase):
         self.assertEqual(b.count('StdHandles.Restore('), 1)
 
     def test_restart_and_main_clear_dead_handles(self):
-        b = self.body('MainForm.Updates.cs', 'void RestartLauncher(string message, string target)')
-        self.assertLess(b.index('StdHandles.ClearDead()'), b.index('Process.Start(psi)'))
+        # The self-update backend (MainForm.Updates.cs) stays build 9's (launcher_hero_tests pins it): the launcher a
+        # self-update restarts - including one restarted by an old build 10/11 after Stop VR - clears them in Main.
         b = self.body('Program.cs', 'static int Main(')
         self.assertLess(b.index('StdHandles.ClearDead()'), b.index('new Mutex('))
 

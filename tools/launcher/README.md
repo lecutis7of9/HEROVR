@@ -9,7 +9,9 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.70.1** (launcher build 11), shipped with HERO VR 0.0.7 (mod Version 0.0.70, build Update 39.4).
+Launcher version **0.0.71.1** (launcher build 12), shipped with HERO VR 0.0.71 (mod Version 0.0.71, build Update 39.4).
+
+Build 12 fixes VR not starting after Stop VR ("handle is invalid" at finding the headset): PowerShell gets its own standard input and Stop VR keeps the launcher's own standard handles. Everything else is build 11 (0.0.70).
 
 Build 11 makes the optional HERO VR design smoother (the orb and the lag fixes) and adds 0.0.63 to Revert (USE 0.0.63, 0.0.62, 0.0.6 or 0.0.5). The classic design stays the default: the launcher asks once whether to restart with the new design, Options > Launcher design switches between the two at any time, and the launcher opens the classic design by itself if the new one fails to start. Hold Shift while starting it, or start it with `--classic`, to open the classic design.
 

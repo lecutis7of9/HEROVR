@@ -1,4 +1,4 @@
-"""0.0.70.1 hotfix gate: "[WinError 6] The handle is invalid" at stage "finding the headset" (0.0.7 report, Oct 27).
+"""0.0.71 hotfix gate: "[WinError 6] The handle is invalid" at stage "finding the headset" (0.0.7 report, Oct 27).
 
 The launcher starts PowerShell (and through it the Python session) with UseShellExecute=false, redirecting only
 stdout and stderr, so the session gets the launcher's own standard input handle. After a Stop VR (PsRunner.RequestStop:

@@ -14,7 +14,7 @@ import json, os, pathlib, re, shutil, subprocess, sys, tempfile, unittest, zipfi
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tests'))
-from regression_sweep_tests import SHIPPED, SHIPPED_B9, SHIPPED_B10, CUR, src, need, CHECKS   # noqa: E402
+from regression_sweep_tests import SHIPPED, SHIPPED_B9, SHIPPED_B10, SHIPPED_B11, CUR, src, need, CHECKS   # noqa: E402
 
 # The release assets for this tree's version (0.0.62, then 0.0.63: the same rule, one version on).
 ASSETS = pathlib.Path(os.environ.get('HEROVR_ASSETS', '/workspace/herovr-release/github/release-assets-' + CUR))
@@ -67,12 +67,17 @@ class UpdateLoop(unittest.TestCase):
                 self.assertTrue(offers(mv, '0.0.62', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
             if CUR not in ('0.0.62', '0.0.63'):   # 0.0.70: also from 0.0.63
                 self.assertTrue(offers(mv, '0.0.63', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
+            if CUR not in ('0.0.62', '0.0.63', '0.0.70'):   # 0.0.71: also from 0.0.70
+                self.assertTrue(offers(mv, '0.0.70', m['version'], lb, cur_build, 'LauncherInfo.Build'), build)
             self.assertFalse(offers(mv, CUR, m['version'], lb, cur_build, 'LauncherInfo.Build'),
                              f'launcher build {build} run from outside the install would offer {CUR} again (update loop)')
         # launcher build 9 (the 0.0.62 release's own) and, from 0.0.70, build 10 (0.0.63's), with their Math.Max rule
         later = [(SHIPPED_B9, '0.0.62')] if CUR != '0.0.62' else []
         if CUR not in ('0.0.62', '0.0.63'):
             later.append((SHIPPED_B10, '0.0.63'))
+        if CUR not in ('0.0.62', '0.0.63', '0.0.70'):   # 0.0.71: build 11 (0.0.70's), with 0.0.70 or 0.0.63 installed
+            later.append((SHIPPED_B11, '0.0.70'))
+            later.append((SHIPPED_B11, '0.0.63'))
         for (b, z), have in later:
             need(os.path.isfile(z), z)
             with zipfile.ZipFile(z) as zz:

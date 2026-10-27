@@ -1,6 +1,6 @@
 # Credits
 
-HERO VR 0.0.7 (version number 0.0.70; internal name: SM2 VR) is a port of **Spidy (SpidyVR) by Ilya Mezerowsky** to Marvel's Spider-Man 2.
+HERO VR 0.0.71 (0.0.7 with the Stop VR fix; version number 0.0.71; internal name: SM2 VR) is a port of **Spidy (SpidyVR) by Ilya Mezerowsky** to Marvel's Spider-Man 2.
 It is licensed under the GNU GPL version 3.
 
 - **Ilya Mezerowsky**: Spidy (SpidyVR), the VR mod this whole project is built on. Copyright (C) 2026 Ilya Mezerowsky, GPLv3.

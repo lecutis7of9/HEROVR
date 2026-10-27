@@ -2,6 +2,24 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.71 - HERO VR 0.0.71 (October 27, 2026)
+
+**EXPERIMENTAL BUILD: 0.0.71 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63
+goes back to it, settings kept).
+
+Version 0.0.71 (build Update 39.4), launcher build 12 (0.0.71.1). 0.0.71: fixes VR not starting after Stop VR
+("handle is invalid" at finding the headset); includes everything in 0.0.7. No new game address; the mod is 0.0.7's.
+
+- Fixed: after Stop VR, PLAY VR stopped at "finding the headset" with `[WinError 6] The handle is invalid`. Stop VR
+  left the launcher's standard handles closed, and the next start handed them on. The launcher now gives PowerShell
+  its own input, saves and restores its handles around Stop VR and clears any dead ones; the Python side starts every
+  program with its own input and repairs dead handles first.
+- New Windows test (std-handles): Stop VR, then PLAY VR again, reaches "finding the headset" without the error.
+- Revert still offers 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
+- Launcher build 12: before any update, the launcher shows that the new version is EXPERIMENTAL, may crash or have
+  issues, and that 0.0.63 is the most recent STABLE build you can go back to with Revert; it updates only after Yes
+  (No is the default). Older launchers (0.0.7, 0.0.63 and before) show the same warning in their own update window.
+
 ## v0.0.70 - HERO VR 0.0.7 (October 26, 2026)
 
 Version 0.0.70 (build Update 39.4), launcher build 11 (0.0.70.1). "0.0.7" is published as 0.0.70 because versions

@@ -1,4 +1,4 @@
-"""0.0.70.1 hotfix: the standard handles this process was given, made usable before anything starts a program.
+"""0.0.71 hotfix: the standard handles this process was given, made usable before anything starts a program.
 
 A player's 0.0.7 session ended at "finding the headset" with "[WinError 6] The handle is invalid": the launcher
 had stopped a session before (Stop VR attaches to that session's console and frees it again), which leaves its

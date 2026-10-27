@@ -46,7 +46,7 @@ namespace Sm2VrLauncher
             psi.EnvironmentVariables["SM2VR_LAUNCHER"] = "1";
             // 0.0.62.2: this launcher shows a session's start failure itself (launch-game-vr.ps1 shows it for older ones).
             psi.EnvironmentVariables["SM2VR_LAUNCHER_BUILD"] = LauncherInfo.Build.ToString();
-            // 0.0.70.1 hotfix: PowerShell (and the Python session it starts) got this launcher's standard input as is;
+            // 0.0.71 hotfix: PowerShell (and the Python session it starts) got this launcher's standard input as is;
             // a dead one (left by an earlier Stop VR, here or in the launcher that updated us) was "[WinError 6] The
             // handle is invalid" at "finding the headset". PowerShell now gets a standard input of its own (a pipe,
             // closed at once: end of input) and never this launcher's; a dead handle of ours is cleared too.
@@ -67,7 +67,7 @@ namespace Sm2VrLauncher
                     if (Exited != null) Exited(code);
                 };
                 proc.Start();
-                try { proc.StandardInput.Close(); } catch { }   // 0.0.70.1: nothing is ever typed in; end of input
+                try { proc.StandardInput.Close(); } catch { }   // 0.0.71: nothing is ever typed in; end of input
                 Started = DateTime.Now;
                 proc.BeginOutputReadLine();
                 proc.BeginErrorReadLine();
@@ -114,7 +114,7 @@ namespace Sm2VrLauncher
             if (!Running) return false;
             lock (consoleLock)
             {
-                // 0.0.70.1 hotfix: AttachConsole sets this launcher's standard handles to that console's and FreeConsole
+                // 0.0.71 hotfix: AttachConsole sets this launcher's standard handles to that console's and FreeConsole
                 // closes them, leaving the handles dead for every later PLAY VR (WinError 6). They are put back after.
                 var saved = StdHandles.Save();
                 try
@@ -181,7 +181,7 @@ namespace Sm2VrLauncher
         }
     }
 
-    /// <summary>0.0.70.1 hotfix: this process's standard handles (stdin, stdout, stderr), which every program it starts
+    /// <summary>0.0.71 hotfix: this process's standard handles (stdin, stdout, stderr), which every program it starts
     /// with UseShellExecute=false gets for the streams it does not redirect. Windows only; elsewhere nothing.</summary>
     static class StdHandles
     {

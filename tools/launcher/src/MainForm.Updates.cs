@@ -408,6 +408,7 @@ namespace Sm2VrLauncher
             if (!GameVersionAllows(m)) return;
             if (!noConfirm && MessageBox.Show(this, "Update " + (SystemInfo.PortVersion(root) ?? "the mod") + " to " + m.Version + "?\n\nThe launcher backs up this version first, then downloads, verifies and installs it with its ready-made mod files. If anything fails it puts this version back.",
                 LauncherInfo.Title, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+            if (!ConfirmExperimental(m)) return;   // build 12: the EXPERIMENTAL / STABLE notice, confirmed before any download
             var ask = AskUnverified();
             whatsNew = m.WhatsNew;
             RunInstall("Updating to " + m.Version, inst =>

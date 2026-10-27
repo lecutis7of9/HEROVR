@@ -936,12 +936,14 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     const auto bytes = vertices.size_bytes() + art.size_bytes() + translucent.size_bytes() + textured.size_bytes();
     if (bytes > capacity_) {
         vertices_.Reset();
-        // Room from the start for a fight's printed marks (some 80,000
-        // vertices at their most), so the buffer is not made anew mid-fight.
-        capacity_ = std::max<std::size_t>(bytes + bytes / 2, 4 * 1024 * 1024);
+        // Build 5: capacity_ is set only once the new buffer exists. Before, a failed creation (out of
+        // memory: THOR's 50,000-triangle hammer grows this buffer) left capacity_ large and vertices_
+        // null, and the next frame mapped the null buffer - a crash instead of a dropped frame.
+        capacity_ = 0;
+        const std::size_t wanted = std::max<std::size_t>(bytes + bytes / 2, 4 * 1024 * 1024);
         D3D12_RESOURCE_DESC d{};
         d.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        d.Width = capacity_;
+        d.Width = wanted;
         d.Height = 1;
         d.DepthOrArraySize = 1;
         d.MipLevels = 1;
@@ -951,6 +953,7 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
         hr(device_->CreateCommittedResource(&h, D3D12_HEAP_FLAG_NONE, &d, D3D12_RESOURCE_STATE_GENERIC_READ,
                                             nullptr, IID_PPV_ARGS(&vertices_)),
            "Create vertex upload buffer");
+        capacity_ = wanted;
     }
     if (bytes) {
         void* data{};

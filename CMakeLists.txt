@@ -66,6 +66,22 @@ target_include_directories(spidy_core PUBLIC include)
 if(HERO_TEST_BUILD)
     target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_BUILD=1)
 endif()
+# Build 5: the start line names the build ("HERO VR 0.0.72 test <commit>"), so a session's console says
+# which code ran (build 4 ran from an old folder and its console still said 0.0.70). HERO_TEST_COMMIT
+# overrides; else the checkout's short hash; else "unknown".
+set(HERO_TEST_COMMIT "" CACHE STRING "Commit named by the test build's start line (empty: git rev-parse)")
+set(_hero_commit "${HERO_TEST_COMMIT}")
+if(NOT _hero_commit)
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=7 HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                        OUTPUT_VARIABLE _hero_commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+endif()
+if(NOT _hero_commit MATCHES "^[0-9A-Za-z._-]+$")
+    set(_hero_commit "unknown")
+endif()
+target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}")
 # Update 36: the calibration panel's art atlas, compiled in as bytes
 # (tools/calibration_art/make_atlas.py makes the file).
 set(SPIDY_CALIBRATION_ART "${CMAKE_CURRENT_SOURCE_DIR}/assets/calibration_art.qoi")

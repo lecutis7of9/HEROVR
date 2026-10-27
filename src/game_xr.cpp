@@ -1,4 +1,7 @@
 // Bounded first-person OpenXR integration using the game's two native views.
+#ifndef SPIDY_TEST_COMMIT
+#define SPIDY_TEST_COMMIT "unknown"
+#endif
 #include "spidy/baton_grip.hpp"
 #include "spidy/gun_grip.hpp"
 #include "spidy/grapple072.hpp" // Version 0.0.72 GRAPPLE (every hero who has one)
@@ -117,6 +120,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <deque>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -1150,6 +1154,43 @@ void message(uint32_t status, uint32_t error, const char* text) {
     strncpy_s(SpidyXrData.message, text, _TRUNCATE);
     InterlockedIncrement64(&SpidyXrData.sequence);
 }
+// Build 5 (0.0.72 test): lines for the launcher console that must not be lost. message() holds one line and
+// the launcher prints it only when it changes (polled every 50-100 ms), so lines written close together
+// vanished (build 4's model notes never reached the console). consoleLine() queues; drainConsoleLines()
+// (the VR loop) shows one line every 250 ms, keeping the current status and error. Never throws.
+std::mutex consoleLinesLock;
+std::deque<std::string> consoleLinesQueue;
+void consoleLine(const std::string& text) noexcept {
+    try {
+        OutputDebugStringA((text + "\n").c_str());
+        std::lock_guard lock(consoleLinesLock);
+        if (consoleLinesQueue.size() < 64)
+            consoleLinesQueue.push_back(text.substr(0, 400));
+    } catch (...) {
+    }
+}
+void drainConsoleLines() noexcept {
+    try {
+        static auto last = std::chrono::steady_clock::time_point{};
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last < std::chrono::milliseconds(250))
+            return;
+        std::string line;
+        {
+            std::lock_guard lock(consoleLinesLock);
+            if (consoleLinesQueue.empty())
+                return;
+            line = std::move(consoleLinesQueue.front());
+            consoleLinesQueue.pop_front();
+        }
+        last = now;
+        const uint32_t status = SpidyXrData.status;
+        if (status == 4 || status == 5) // VR ended / failed: those lines stay as they are
+            return;
+        message(status, SpidyXrData.error, line.c_str());
+    } catch (...) {
+    }
+}
 bool read(uintptr_t p, void* out, size_t bytes) {
     __try {
         if (p < 0x10000)
@@ -1501,11 +1542,27 @@ DWORD WINAPI run(void*) {
         // Version 0.0.72 REAL MODELS: every drop-in model read now (not on first use), its textures
         // decoded (WIC, on a thread of its own for COM), scaled to one texture array and uploaded once;
         // should any of that fail the models are drawn untextured (their light copies) - never a crash.
-        {
+        // Build 5: build 4 made that array at 1024 px (29 layers: some 160 MB in memory, another 160 MB
+        // upload buffer, another 160 MB on the GPU) on a PC with 297 MB of commit left - the upload failed
+        // and every model was drawn as its flat-coloured light copy, said only in a report nobody saw.
+        // Now: 512 px (256 px when commit is short; about 40 / 10 MB), the encoded images freed once
+        // used, every step guarded (out of memory included) and each result on the launcher console.
+        try {
             auto& models = mesh_model::library();
             const std::string root = modelsRoot();
+            const bool rootThere = GetFileAttributesA(root.c_str()) != INVALID_FILE_ATTRIBUTES;
+            consoleLine(std::string("MODELS: folder ") + root + (rootThere ? "" : " - NOT FOUND (MODEL MISSING: the built-in looks are drawn)"));
+            uint32_t loadedCount = 0;
+            std::string missingSlots;
             for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
-                const auto status = models.load(slot, root);
+                mesh_model::Status status = mesh_model::invalid;
+                try {
+                    status = models.load(slot, root);
+                } catch (...) { // out of memory or worse: this slot is MODEL MISSING, nothing else stops
+                    models.meshes[slot] = {};
+                    models.status[slot] = mesh_model::invalid;
+                    models.error[slot] = "could not be read (out of memory?)";
+                }
                 char line[400];
                 sprintf_s(line, "Version 0.0.72 REAL MODELS %s: %s %u triangles%s%.300s", mesh_model::slotFolders[slot],
                           mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
@@ -1513,16 +1570,31 @@ DWORD WINAPI run(void*) {
                           status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
                 game_prompts::note(line);
                 OutputDebugStringA(line);
+                if (models.model(slot))
+                    ++loadedCount;
+                else {
+                    missingSlots += missingSlots.empty() ? "" : ", ";
+                    missingSlots += mesh_model::slotFolders[slot];
+                    consoleLine(line);
+                }
             }
+            consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slots - 1) + " loaded" +
+                        (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
+            MEMORYSTATUSEX memory{sizeof(memory)};
+            const uint64_t commitFree = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPageFile : 0;
+            const uint32_t size = commitFree >= (3ull << 30) ? 512u : 256u;
+            uint32_t levels = 1;
+            while ((size >> levels) >= 1)
+                ++levels;
             mesh_model::TextureArray textures;
             try {
                 std::thread decode([&] {
                     const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
                     try {
-                        textures = mesh_model::prepareTextures(models, &wicDecode);
+                        textures = mesh_model::prepareTextures(models, &wicDecode, size, levels);
                     } catch (...) {
                         textures = {};
-                        textures.notes.push_back("the textures could not be prepared");
+                        textures.notes.push_back("the textures could not be prepared (out of memory?)");
                     }
                     if (SUCCEEDED(com))
                         CoUninitialize();
@@ -1531,14 +1603,35 @@ DWORD WINAPI run(void*) {
             } catch (...) {
                 textures.notes.push_back("no thread for the textures");
             }
+            // The encoded images are not needed again (their layers are made): give the memory back.
+            for (uint32_t slot = 1; slot < mesh_model::slots; ++slot)
+                for (auto& im : models.meshes[slot].images)
+                    std::vector<uint8_t>().swap(im.bytes);
             for (const auto& note : textures.notes) {
                 game_prompts::note(("Version 0.0.72 REAL MODELS texture: " + note).c_str());
                 OutputDebugStringA(note.c_str());
+                if (note.find("layer") == std::string::npos || note.find("not") != std::string::npos)
+                    consoleLine("MODELS texture: " + note);
             }
-            if (!textures.layers.empty() && !overlay.setModelTextures(textures.size, textures.levels, textures.layers)) {
-                game_prompts::note(("Version 0.0.72 REAL MODELS untextured: " + overlay.modelFault()).c_str());
-                OutputDebugStringA(overlay.modelFault().c_str());
+            char summary[200];
+            sprintf_s(summary, "MODELS: textures %zu layers at %u px (free commit %llu MB)", textures.layers.size(), size,
+                      static_cast<unsigned long long>(commitFree >> 20));
+            consoleLine(summary);
+            bool texturedOk = false;
+            if (!textures.layers.empty()) {
+                texturedOk = overlay.setModelTextures(textures.size, textures.levels, textures.layers);
+                if (!texturedOk) {
+                    game_prompts::note(("Version 0.0.72 REAL MODELS untextured: " + overlay.modelFault()).c_str());
+                    OutputDebugStringA(overlay.modelFault().c_str());
+                }
             }
+            textures = {}; // the CPU copies: uploaded (or refused); freed now
+            consoleLine(texturedOk && overlay.modelReady()
+                            ? std::string("MODELS: TEXTURED - the real models are drawn")
+                            : "MODELS: UNTEXTURED - the flat light copies are drawn: " +
+                                  (overlay.modelFault().empty() ? std::string("no textures were read") : overlay.modelFault()));
+        } catch (...) {
+            consoleLine("MODELS: could not be prepared (out of memory?) - the built-in looks are drawn");
         }
         const auto artClock = std::chrono::steady_clock::now();
         // Update 24.1: a drawing failure (its shader, its buffers) turns Spidy's
@@ -2046,6 +2139,8 @@ DWORD WINAPI run(void*) {
         float webFrameSeconds = 1 / 90.f;
         uint32_t chargesBefore{}, leapsBefore{}, scansBefore{};
         float leapOut{};
+        bool aWas72{};
+        bool jumpBusy72{}; // build 5: see chargeJump (DAREDEVIL's cast waits)
         // The game's camera follows the head's pitch too: it offers a thing
         // at the player's feet or overhead only with that camera on it.
         game_pad::CameraPitch cameraPitch;
@@ -2313,6 +2408,7 @@ DWORD WINAPI run(void*) {
         // Version 0.0.72 TEST BUILD NOTICE: once a session after the calibration closes (test builds only).
         test_notice::Notice testNotice;
         bool testNoticeFault{};
+        double testNoticeClock{}; // build 5: the notice's clock (frame.seconds is a frame's length)
         uint64_t immersiveSince{}, calibrationShownAt{};
         // From the calibration's start until each is let go after it, the
         // triggers, grips, A and B do nothing in the game (B skips it).
@@ -4164,14 +4260,26 @@ DWORD WINAPI run(void*) {
                             runtime.haptic(1, .15f);
                         }
                     }
+                    drainConsoleLines(); // build 5: the queued console lines, one each 250 ms
+                    {
+                        static int modelsWereReady = -1; // -1: not looked yet (the start's own line said it)
+                        const int ready = overlay.modelReady() ? 1 : 0;
+                        if (modelsWereReady == 1 && !ready)
+                            consoleLine("MODELS: UNTEXTURED from now - " + overlay.modelFault());
+                        modelsWereReady = ready;
+                    }
                     // Version 0.0.72 TEST BUILD NOTICE: it reads the hands, never takes them from play.
                     if (test_notice::testBuild && !testNoticeFault) {
                         try {
                             test_notice::Input in;
-                            in.seconds = frame.seconds;
+                            // Build 5 fix (the build 4 "no popup"): frame.seconds is the frame's LENGTH
+                            // (about 0.011), never a clock, so the notice's 1 s settle never passed.
+                            // Its own clock now: the frames' lengths added up.
+                            testNoticeClock += std::isfinite(frame.seconds) ? std::clamp(static_cast<double>(frame.seconds), 0.0, .1) : 0.0;
+                            in.seconds = testNoticeClock;
                             in.immersive = immersive;
                             in.calibrating = calibration.phase() != CalibrationPhase::idle;
-                            in.calibrationDue = calibrationWanted || values.calibrate;
+                            in.calibrationDue = (calibrationWanted || values.calibrate) && testNoticeClock < 45; // build 5: never waits on a prompt forever
                             in.head = validTrackedPose(frame.head) ? frame.head : Pose{{NAN, 0, 0}, {}};
                             for (unsigned i = 0; i < 2; ++i) {
                                 const auto& hand = frame.hands[i];
@@ -4182,8 +4290,10 @@ DWORD WINAPI run(void*) {
                             }
                             const auto before = testNotice.state();
                             testNotice.update(in);
-                            if (before != testNotice.state() && testNotice.state() == test_notice::State::shown)
+                            if (before != testNotice.state() && testNotice.state() == test_notice::State::shown) {
                                 runtime.haptic(0, .2f), runtime.haptic(1, .2f);
+                                consoleLine("TEST NOTICE: shown (HERO VR 0.0.72 test " SPIDY_TEST_COMMIT ")");
+                            }
                             else if (before == test_notice::State::shown && testNotice.state() == test_notice::State::gone &&
                                      testNotice.ended() != test_notice::Ended::timedOut)
                                 runtime.haptic(testNotice.ended() == test_notice::Ended::poked ? 1 : 0, .25f);
@@ -5287,11 +5397,29 @@ DWORD WINAPI run(void*) {
                                           !swingState.owned && !mounting && !swingState.takeoff &&
                                           !swingState.takeoffPhase && !swingState.webs[0].attached &&
                                           !swingState.webs[1].attached && !calibrationInput;
-                    const auto leap = chargeJump.update(
-                        frame.seconds, (keys & swingJumpKey) && !swingState.takeoff, standing);
+                    const bool aNow = (keys & swingJumpKey) && !swingState.takeoff;
+                    if (aNow && !aWas72 && !standing && steering) {
+                        // Build 5: why a press is a plain jump, not a charge (the console, at most every 2 s).
+                        static ULONGLONG saidAt = 0;
+                        if (GetTickCount64() - saidAt > 2000) {
+                            saidAt = GetTickCount64();
+                            char why[160];
+                            sprintf_s(why, "JUMP: A is a plain jump (no charge): grounded %u owned %u takeoff %u phase %u webs %u%u pad %u",
+                                      swingState.grounded ? 1u : 0u, swingState.owned ? 1u : 0u, swingState.takeoff ? 1u : 0u,
+                                      static_cast<unsigned>(swingState.takeoffPhase), swingState.webs[0].attached ? 1u : 0u,
+                                      swingState.webs[1].attached ? 1u : 0u, padInstalled ? 1u : 0u);
+                            consoleLine(why);
+                        }
+                    }
+                    aWas72 = aNow;
+                    const auto leap = chargeJump.update(frame.seconds, aNow, standing);
                     if (!swingState.takeoff)
                         keys = (keys & ~swingJumpKey) | (leap.jump ? swingJumpKey : 0u);
                     leapOut = leap.leap;
+                    // Build 5: DAREDEVIL's baton cast waits while A is held, a leap charges or goes out,
+                    // or the swing takes off (a cast then cost the leap its velocity: a plain jump).
+                    jumpBusy72 = (keys & swingJumpKey) || chargeJump.charging() || leap.leap > 0 ||
+                                 swingState.takeoff || swingState.takeoffPhase;
                     if (chargeJump.charges() != chargesBefore) {
                         chargesBefore = chargeJump.charges();
                         runtime.haptic(1, .3f);
@@ -6622,6 +6750,7 @@ DWORD WINAPI run(void*) {
                                         in72.perched = heroWas == hero_modes::batman;
                                         in72.gliding = heroWas == hero_modes::batman && capeNow.gliding != 0;
                                         in72.faceButton = (frame.buttons & buttonY) != 0;
+                                        in72.jumpBusy = jumpBusy72 || (frame.buttons & buttonA) != 0;
                                         in72.takedownPrompt = false;
                                         in72.o = hero072Options();
                                         // HERO SUIT NEXT: one step to this hero's next unlocked suit, then back to DEFAULT.
@@ -8523,8 +8652,17 @@ DWORD WINAPI run(void*) {
                             // when missing or refused - never a crash, nothing else stops).
                             auto& models = mesh_model::library();
                             const auto slotModel = [&](uint32_t slot, const char* what) -> const mesh_model::Mesh* {
+                                if (slot == 0 || slot >= mesh_model::slots)
+                                    return nullptr; // build 5: MODEL MISSING never reads out of range
                                 if (models.status[slot] == mesh_model::notTried) {
-                                    const auto status = models.load(slot, modelsRoot());
+                                    mesh_model::Status status = mesh_model::invalid;
+                                    try {
+                                        status = models.load(slot, modelsRoot());
+                                    } catch (...) { // out of memory: MODEL MISSING, never a crash
+                                        models.meshes[slot] = {};
+                                        models.status[slot] = mesh_model::invalid;
+                                        models.error[slot] = "could not be read (out of memory?)";
+                                    }
                                     char line[400];
                                     sprintf_s(line, "Version 0.0.7 %s %s: %s%s%.300s", what, mesh_model::slotFolders[slot],
                                               mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
@@ -9337,8 +9475,17 @@ DWORD WINAPI run(void*) {
                             hero007::appendHero007(vertices, locked, travel, viewer, pixelAngle);
                         } else if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
                             hero007::appendHero007(vertices, saved->hero007, travel, viewer, pixelAngle);
-                        if (saved->hero072.any) // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
-                            hero072::appendLook(vertices, saved->hero072, travel, viewer, pixelAngle);
+                        if (saved->hero072.any) { // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
+                            // Build 5: THOR's look (the hammer, its chain, the storm) can never take the frame down:
+                            // out of memory or a bad model drops this look for this frame only.
+                            try {
+                                hero072::appendLook(vertices, saved->hero072, travel, viewer, pixelAngle);
+                            } catch (...) {
+                                static bool said = false;
+                                if (!said)
+                                    said = true, consoleLine("THOR / 0.0.72 look: not drawn this frame (out of memory?) - play goes on");
+                            }
+                        }
                         if (saved->shockFade > 0) // Version 0.0.5 SUPERSONIC's shockwave
                             appendShockwave(vertices, viewer, saved->shockWay, saved->shockAge, pixelAngle);
                         if (saved->beamRingOk > 0) { // Version 0.0.5 BEAM RING (right wrist)
@@ -10703,7 +10850,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     native_appearance::setPlayerRecord(0);
     keepAliveDeadline = GetTickCount64() + 10000;
     // Version 0.0.6: the start banner names the version and its maker.
+#if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
+    // Build 5: the first line names the code that runs (build 4's console said only 0.0.70).
+    message(1, 0, "HERO VR 0.0.72 test " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
+#else
     message(1, 0, "SM2 VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");
+#endif
     // Version 0.0.2 hotfix: the VR thread reserves its own 8 MB of stack (address space only;
     // pages are committed as used) instead of the game's default (1 MB), so its deep frame
     // has room whatever the game's own default is.

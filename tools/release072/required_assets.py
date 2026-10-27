@@ -39,10 +39,20 @@ USER_SOUNDS = {
 }
 SOUND_FILES = ['Sounds/' + k for k in USER_SOUNDS]
 DOC_FILES = ['READ-ME-FIRST.txt', 'SHA256SUMS.txt']
+# Test build 5: the zip's one top folder holds the installer and the notes; the mod files sit under payload/
+# (the installer copies them into the mod folder the player plays from; tools/run_game_vr.py reads the marker).
+INSTALLER_FILES = ['INSTALL-TEST-BUILD.bat', 'INSTALL-TEST-BUILD.ps1']
+TEST_MARKER = 'HERO-VR-TEST-BUILD.txt'
+
+
+def top_folder(build_no):
+    return 'HERO-VR-0.0.72-test%s' % build_no
 
 
 def required_zip_files():
-    return MODEL_FILES + LICENSE_FILES + SOUND_FILES + DOC_FILES
+    """Every file the zip must carry, as named inside its top folder."""
+    return (INSTALLER_FILES + ['READ-ME-FIRST.txt'] +
+            ['payload/' + f for f in MODEL_FILES + LICENSE_FILES + SOUND_FILES + [TEST_MARKER, 'SHA256SUMS.txt']])
 
 
 def source_mp3(name):

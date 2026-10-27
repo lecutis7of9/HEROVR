@@ -295,11 +295,16 @@ inline constexpr float castSpeed = 3.0f, castAbove = .05f, castRearm = .8f;
 struct BatonCast {
     float since[2]{castRearm, castRearm};
     // -> the hand that cast this frame (0 / 1), or -1.
-    int step(float dt, Vec3 head, const Vec3 hand[2], const Vec3 velocity[2], const bool tracked[2]) {
+    // jumpBusy (build 5, the user: "daredevil can't charge jump anymore"): A held, a charged leap
+    // charging or going out, or the swing's takeoff. Arms thrown up in a jump cast the baton, and the
+    // grapple that started then reset the leap's takeoff (its velocity lost: a plain jump). While busy
+    // and castRearm after it, no cast.
+    int step(float dt, Vec3 head, const Vec3 hand[2], const Vec3 velocity[2], const bool tracked[2],
+             bool jumpBusy = false) {
         dt = clampDt(dt);
         int out = -1;
         for (int i = 0; i < 2; ++i) {
-            since[i] = std::min(since[i] + dt, 10.f);
+            since[i] = jumpBusy ? 0.f : std::min(since[i] + dt, 10.f);
             if (!tracked[i] || !ok(head) || !ok(hand[i]) || !ok(velocity[i]))
                 continue;
             const float sp = length(velocity[i]);

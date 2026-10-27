@@ -25353,6 +25353,13 @@ int main() {
         Vec3 slow[2]{{}, {0, 1, 0}};
         BatonCast s2;
         check(s2.step(.016f, head, hands, slow, tr) == -1, "a slow raise grappled");
+        // Build 5: arms thrown up in a charged jump (A held, a leap going out) never cast, nor just after.
+        BatonCast jumping;
+        check(jumping.step(.016f, head, hands, vel, tr, true) == -1, "a cast fired while A was held");
+        check(jumping.step(.3f, head, hands, vel, tr) == -1, "a cast fired right after the jump");
+        for (int k = 0; k < 10; ++k)
+            jumping.step(.1f, head, lowHands, slow, tr);
+        check(jumping.step(.016f, head, hands, vel, tr) == 1, "the cast did not come back after the jump");
         const Pose face{{0, 1.7f, 0}, {}};
         check(batonsCrossed(face, {-.15f, 1.5f, -.4f}, {.15f, 1.9f, -.4f}, {.15f, 1.5f, -.4f}, {-.15f, 1.9f, -.4f}),
               "crossed batons not seen");

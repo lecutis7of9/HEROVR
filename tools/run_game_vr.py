@@ -213,6 +213,49 @@ def public_version():
 MADE_BY = 'Made by Agent Mulder'
 
 
+# HERO VR 0.0.72 test build 5: the installer (INSTALL-TEST-BUILD.ps1) writes this beside tools/ with the
+# build's commit and every DLL's sha256, so the console says which build runs, from which folder, and
+# whether its DLLs are the ones the build shipped (a mixed install is named, never guessed).
+TEST_MARKER = 'HERO-VR-TEST-BUILD.txt'
+
+
+def test_build_lines(root=None):
+    """The console's first lines: the test build and its commit, the mod folder, a backup-copy warning,
+    and MIXED INSTALL for a DLL that is not the build's. [] for a release install in a normal folder."""
+    root = pathlib.Path(root or ROOT)
+    lines = []
+    try:
+        text = (root/TEST_MARKER).read_text(encoding='utf-8')
+    except OSError:
+        text = None
+    if text is not None:
+        fields, hashes = {}, {}
+        for line in text.splitlines():
+            key, sep, value = line.partition('=')
+            if not sep:
+                continue
+            key, value = key.strip(), value.strip()
+            if key.startswith('sha256 '):
+                hashes[key[7:].strip()] = value.lower()
+            else:
+                fields[key] = value
+        lines.append(f"HERO VR {fields.get('version', '0.0.72')} test {fields.get('commit', 'unknown')}"
+                     f" (test build {fields.get('build', '?')}) - mod folder {root}")
+        mixed = []
+        for name, digest in sorted(hashes.items()):
+            try:
+                actual = hashlib.sha256((root/name).read_bytes()).hexdigest()
+            except OSError:
+                actual = None
+            if actual != digest:
+                mixed.append(name + (' missing' if actual is None else ' differs'))
+        if mixed:
+            lines.append('MIXED INSTALL: ' + ', '.join(mixed) + ' - run INSTALL-TEST-BUILD.bat from the test build again')
+    if 'backup' in str(root).lower():
+        lines.append(f'NOTE: this is a BACKUP copy of the mod ({root}). Changes made to your main folder do not run here.')
+    return lines
+
+
 def version_line():
     """The log's and the report's header: "Version 0.0.1 (build Update 38.5)"."""
     return f'Version {public_version() or "unknown (VERSION missing)"} (build {port_version() or "unknown"})'
@@ -2363,6 +2406,8 @@ def main():
     player_check.before_session(ROOT, launching=a.auto_launch and not game_running())
     keep_console(a.output)
     startup = Startup(a.output)
+    for line in test_build_lines():  # test build 5: which build, which folder, a mixed install
+        print(line, flush=True)
     print(f'SM2 VR {version_line()} - {MADE_BY}', flush=True)  # Update 38.5: the public version first  # Update 30.1 (Update 31 from PORT-VERSION)
     print(f'This session\'s report will be written to: {a.output.resolve()}', flush=True)
     try:

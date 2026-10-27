@@ -70,6 +70,7 @@ struct PlayIn {
     // BATMAN's PERCH TAKEDOWN (9:31): the game side's state (each false / nullptr when unknown).
     bool perched{}, gliding{};
     bool faceButton{};         // the takedown's face button held (never a trigger)
+    bool jumpBusy{};           // build 5: A held / a leap charging or going / a takeoff (no baton cast)
     bool takedownPrompt{};     // the game names that button in its takedown prompt (game_prompts)
     const Vec3* facings{};     // each enemy's facing, as `list` (nullptr: unknown)
     LineClear lineClear{};
@@ -343,7 +344,7 @@ class Play {
         // ---- DAREDEVIL: BATON GRAPPLE (cast up fast) and PARRY (batons crossed at the face) ----
         if (h == hero_modes::daredevil && guard[gDare].live(true)) {
             if (o.ddGrapple) {
-                const int i = cast.step(dt, head, p, v, tracked);
+                const int i = cast.step(dt, head, p, v, tracked, in.jumpBusy);
                 if (i >= 0) {
                     out.grapple[i] = true;
                     out.buzz(static_cast<unsigned>(i), .3f);

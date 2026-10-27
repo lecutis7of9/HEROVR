@@ -832,7 +832,10 @@ void visit(const native_rays::QueryContext& world) {
         const bool wasCaped = capeGlide.on() || capeGrapple.phase() != cape_glide::idle;
         for (unsigned i = 0; i < 2; ++i) {
             const bool held = free && (c.asks & cape_glide::askGrapple[i]) && in.hands[i].tracked;
-            if (held && !grappleHeldWas[i] && capeGrapple.phase() == cape_glide::idle) {
+            // Build 5: never over a takeoff already going (a charged leap's): starting the pull reset it
+            // and the leap's velocity was lost (DAREDEVIL "just jumps like a normal guy").
+            const bool takingOff = takeoffTransition.phase() != SwingTakeoff::Idle && !grappleLift;
+            if (held && !grappleHeldWas[i] && capeGrapple.phase() == cape_glide::idle && !takingOff) {
                 const Vec3 from = in.hands[i].aim.position;
                 const Vec3 dir = normalized(in.hands[i].aim.orientation.rotate({0, 0, -1}));
                 const auto hit = finite(from) && length(dir) > .5f ? world.raycast(from, dir, cape_glide::reachMost)

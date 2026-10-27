@@ -1,5 +1,8 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 // The wrist hologram (Update 14): wrist_hud.hpp.
+#ifndef SPIDY_TEST_COMMIT
+#define SPIDY_TEST_COMMIT "unknown"
+#endif
 #include "spidy/wrist_hud.hpp"
 #include "spidy/version.hpp"
 #include "spidy/extras385.hpp"
@@ -1107,6 +1110,17 @@ Layout build(int page, float k, int open) {
         c = t.v - .0045f - .002f * k;
         l.items.push_back(std::move(t));
     }
+#if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
+    // Build 5: which build runs, on the wrist (the console's first line says it too).
+    {
+        Item f = itemOf(Kind::footer);
+        f.text = "HERO VR 0.0.72 test " SPIDY_TEST_COMMIT;
+        f.h = fittedHeight(f.text, footerHeight * k, .14f);
+        f.v = c - f.h;
+        c = f.v - .002f * k;
+        l.items.push_back(std::move(f));
+    }
+#endif
     auto sliderItem = [&](Control control) {
         Item s = itemOf(Kind::slider, control);
         s.text = labelOf(control);

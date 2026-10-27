@@ -45,8 +45,10 @@ class UserSounds(unittest.TestCase):
 class ZipList(unittest.TestCase):
     def test_required_list(self):
         need = ra.required_zip_files()
-        for s in ('Sounds/user-shotgun.mp3', 'Sounds/user-pistol.mp3', 'Sounds/user-pistol-reload.mp3',
-                  'Sounds/user-lightning-1.mp3', 'Sounds/user-lightning-2.mp3', 'READ-ME-FIRST.txt', 'SHA256SUMS.txt'):
+        # test build 5: the mod files under payload/, the installer and the notes at the top
+        for s in ('payload/Sounds/user-shotgun.mp3', 'payload/Sounds/user-pistol.mp3', 'payload/Sounds/user-pistol-reload.mp3',
+                  'payload/Sounds/user-lightning-1.mp3', 'payload/Sounds/user-lightning-2.mp3', 'READ-ME-FIRST.txt',
+                  'payload/SHA256SUMS.txt', 'payload/HERO-VR-TEST-BUILD.txt', 'INSTALL-TEST-BUILD.bat', 'INSTALL-TEST-BUILD.ps1'):
             self.assertIn(s, need)
         self.assertEqual(len(need), len(set(need)))
 

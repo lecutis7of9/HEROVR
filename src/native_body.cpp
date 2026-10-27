@@ -481,18 +481,21 @@ float writer(float* out, void* job) {
 uint32_t native_body::start(uintptr_t gameBase) {
     return startAt(gameBase, game_body::candidateWriter, game_body::candidateToModel);
 }
-uint32_t native_body::startAt(uintptr_t gameBase, uintptr_t writer, uintptr_t conversion) {
+// Build 5 fix (the build 4 "no body"): the parameters were named writer/conversion, which hid the
+// detour function writer() below them, so MH_CreateHook got the RVA as the detour, refused it as
+// not executable (MH_ERROR_NOT_EXECUTABLE) and the body never started. Named writerAt/conversionAt now.
+uint32_t native_body::startAt(uintptr_t gameBase, uintptr_t writerAt, uintptr_t conversionAt) {
     AcquireSRWLockExclusive(&lifecycle);
     uint32_t result{};
     do {
         if (enabled)
             break;
-        if (hooked && (writer != writerRva || conversion != toModelRva)) {
+        if (hooked && (writerAt != writerRva || conversionAt != toModelRva)) {
             result = 7002; // already hooked elsewhere: keep that
             break;
         }
-        writerRva = writer;
-        toModelRva = conversion;
+        writerRva = writerAt;
+        toModelRva = conversionAt;
         // Spider-Man 2 2.810: the pose writer and the model-space conversion
         // are at the RVAs SM2VR 0.0.27's body uses (checked against the same
         // prologue bytes as Remastered's 1601290 and 1600770 before hooking).
@@ -512,7 +515,7 @@ uint32_t native_body::startAt(uintptr_t gameBase, uintptr_t writer, uintptr_t co
                 break;
             }
             writerHook = reinterpret_cast<void*>(base + writerRva);
-            if (const auto c = MH_CreateHook(writerHook, reinterpret_cast<void*>(writer),
+            if (const auto c = MH_CreateHook(writerHook, reinterpret_cast<void*>(&writer),
                                              reinterpret_cast<void**>(&originalWriter));
                 c != MH_OK) {
                 result = 7200 + c;

@@ -1,17 +1,31 @@
-HERO VR 0.0.72 - PRIVATE TEST BUILD (not a release; do not share)
-Made by Agent Mulder. Model credits: THIRD-PARTY-MODELS.md (in this zip).
+HERO VR 0.0.72 - PRIVATE TEST BUILD @@BUILD@@ (commit @@COMMIT@@; not a release; do not share)
+Made by Agent Mulder. Model credits: payload\THIRD-PARTY-MODELS.md.
 
-INSTALL (over your 0.0.70)
-1. Close the game and the HERO VR launcher.
-2. Back up this folder first (copy it somewhere):
-      C:\Users\candl\Downloads\HERO-VR-Launcher-0.0.70\HERO-VR-0.0.70
-3. Extract this zip INTO that folder, so that "Launch Spidy VR.cmd" and the new
-   "Models" and "Sounds" folders sit side by side. Say YES to replace the files.
-   (build\windows-ninja\*.dll are replaced; your live.txt settings are kept.)
-4. Start the launcher as usual. The launcher still says 0.0.70; the in-headset
-   test notice (after the body calibration) says this is the 0.0.72 test build.
-5. To undo: put your backup folder back (or use the launcher's Revert).
-SHA256SUMS.txt lists every file's hash, so you can check the download.
+INSTALL (2 steps - no copying by hand)
+1. Extract EVERY part zip (part1-install, part2-models, part3-models...) to the
+   SAME place, e.g. your Downloads folder: right-click > Extract All > Extract.
+   You get ONE folder, HERO-VR-0.0.72-test@@BUILD@@, with INSTALL-TEST-BUILD.bat in it.
+   (Do NOT extract it into the mod folder any more.)
+2. Close the game and the launcher, then double-click INSTALL-TEST-BUILD.bat.
+   It checks the download, lists your HERO VR mod folders (newest play first,
+   backup copies marked), and installs into the one you played from last -
+   press Enter, or type the number of another one. It keeps every file it
+   replaces in that folder's _before-0.0.72-test, checks every copied file,
+   and then starts THAT folder's own launcher.
+   Your settings (live.txt) and reports are not touched.
+
+HOW YOU KNOW THE TEST BUILD IS RUNNING
+- The launcher console's FIRST line: "HERO VR 0.0.72 test @@COMMIT@@ (test build @@BUILD@@) - mod folder ..."
+  (the launcher's own version text still says 0.0.70; that is fine).
+  "MIXED INSTALL" or "BACKUP copy" under it means the wrong folder: run the
+  installer again.
+- In the headset: the TEST NOTICE pops up within the first seconds, and the
+  wrist HUD's bottom line reads "HERO VR 0.0.72 test @@COMMIT@@".
+- The console says "MODELS: TEXTURED - the real models are drawn" (or why not).
+
+TO UNDO
+Copy the files in <mod folder>\_before-0.0.72-test back over the mod folder,
+or use the launcher's Revert.
 
 WHERE THE SETTINGS ARE
 Left wrist HUD > COMBAT page > HERO PROFILES. Only one hero can be on at a time.
@@ -30,7 +44,8 @@ and grip, and everything starts holstered or sheathed.
 - SPIDER-MAN: unchanged (vanilla).
 - IRON MAN: every trigger pull fires a repulsor. Flight is on by default.
 - DAREDEVIL: batons start on your back; reach over a shoulder and grip to draw.
-  BATON GRAPPLE: cast a baton arm up fast to grapple there.
+  BATON GRAPPLE: cast a baton arm up fast to grapple there. CHARGED JUMP: hold A
+  on the ground, let go to leap (the cast waits while A is held and just after).
 - BATMAN: batarangs from the belt (reach + grip), grapple gun, glide, smoke.
   GRAPPLE: aim at a ledge and pull the trigger; the line flies out, then
   pulls you up (from the ground too). The gun hangs on your belt. Your game
@@ -63,6 +78,6 @@ and grip, and everything starts holstered or sheathed.
 
 IF SOMETHING GOES WRONG
 A missing or broken model shows MODEL MISSING and the feature turns itself off;
-the game keeps running in VR. COMBAT > USE MY OWN OR GAME SUIT is the fallback
+the game keeps running in VR (the console says which one, and why). COMBAT > USE MY OWN OR GAME SUIT is the fallback
 for a suit glitch. With a report, please send the newest files in the mod
 folder's "reports" subfolder.

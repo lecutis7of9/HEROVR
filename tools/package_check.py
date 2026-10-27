@@ -55,11 +55,13 @@ allowed = {'pefile', 'capstone', 'numpy', 'PIL', 'scipy', 'pyfqmr'}  # research,
 # Version 0.0.7 CAPTAIN AMERICA: modules that exist only where a dev tool runs, allowed ONLY for those
 # files - Blender's own (bpy, mathutils, bmesh) for the suit scripts run inside Blender on the PC, and
 # matplotlib for the preview diagram (a box-side preview tool; nothing ships its output).
-scoped = {'bpy': 'tools/cap_suit/blender/', 'mathutils': 'tools/cap_suit/blender/', 'bmesh': 'tools/cap_suit/blender/',
-          'matplotlib': 'tools/models007/'}
+# Version 0.0.72: + the Blender-side scripts of the factions kit, the roster portraits and the models072 decimator.
+BLENDER = ('tools/cap_suit/blender/', 'tools/factions/blender_prep_factions.py', 'tools/roster/render_portraits.py',
+           'tools/models072/bpy_decimate.py')
+scoped = {'bpy': BLENDER, 'mathutils': BLENDER, 'bmesh': BLENDER, 'matplotlib': ('tools/models007/',)}
 for k in list(third):
     if k in scoped:
-        outside = [f for f in third[k] if not f.replace(os.sep, '/').startswith(scoped[k])]
+        outside = [f for f in third[k] if not f.replace(os.sep, '/').startswith(tuple(scoped[k]))]
         if outside:
             third[k] = outside
         else:

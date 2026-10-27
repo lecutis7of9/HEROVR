@@ -22,6 +22,9 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 # SM2 VR: this tree is the port of SpidyVR to Marvel's Spider-Man 2 (Spider-Man2.exe 2.810.0.0).
 add_compile_definitions(SM2_PORT=1)
 option(SPIDY_BUILD_XR "Build the Windows OpenXR / D3D12 swing lab" ${WIN32})
+# 0.0.72: a test / experimental build shows the TEST BUILD NOTICE after calibration (test_notice.hpp).
+# Turn it OFF for a public release.
+option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" ON)
 option(SPIDY_BUILD_OBSERVER "Build the opt-in camera diagnostic DLL" OFF)
 option(SPIDY_BUILD_LAUNCHER "Build the Spidy launcher window (Dear ImGui from tools/bootstrap.ps1)" ${SPIDY_BUILD_XR})
 
@@ -56,8 +59,12 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/calibration_art.cpp src/calibration_panel.cpp src/health_ring.cpp src/sfx.cpp
             src/hero007_visual.cpp
             src/hero072_visual.cpp
-            src/mesh_model.cpp)
+            src/mesh_model.cpp
+            src/test_notice.cpp)
 target_include_directories(spidy_core PUBLIC include)
+if(HERO_TEST_BUILD)
+    target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_BUILD=1)
+endif()
 # Update 36: the calibration panel's art atlas, compiled in as bytes
 # (tools/calibration_art/make_atlas.py makes the file).
 set(SPIDY_CALIBRATION_ART "${CMAKE_CURRENT_SOURCE_DIR}/assets/calibration_art.qoi")

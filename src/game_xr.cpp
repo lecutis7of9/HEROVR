@@ -12,6 +12,7 @@
 #include "spidy/body_haptics.hpp"
 #include "spidy/calibration_art.hpp"
 #include "spidy/calibration_panel.hpp"
+#include "spidy/test_notice.hpp"
 #include "spidy/health_ring.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/hand_crawl.hpp"
@@ -2281,6 +2282,9 @@ DWORD WINAPI run(void*) {
         // faced as it appeared; since when VR has shown play; when the result
         // appeared.
         Pose calibrationPanel{};
+        // Version 0.0.72 TEST BUILD NOTICE: once a session after the calibration closes (test builds only).
+        test_notice::Notice testNotice;
+        bool testNoticeFault{};
         uint64_t immersiveSince{}, calibrationShownAt{};
         // From the calibration's start until each is let go after it, the
         // triggers, grips, A and B do nothing in the game (B skips it).
@@ -4126,6 +4130,33 @@ DWORD WINAPI run(void*) {
                             // The pose counts: a light tick in both hands.
                             runtime.haptic(0, .15f);
                             runtime.haptic(1, .15f);
+                        }
+                    }
+                    // Version 0.0.72 TEST BUILD NOTICE: it reads the hands, never takes them from play.
+                    if (test_notice::testBuild && !testNoticeFault) {
+                        try {
+                            test_notice::Input in;
+                            in.seconds = frame.seconds;
+                            in.immersive = immersive;
+                            in.calibrating = calibration.phase() != CalibrationPhase::idle;
+                            in.calibrationDue = calibrationWanted || values.calibrate;
+                            in.head = validTrackedPose(frame.head) ? frame.head : Pose{{NAN, 0, 0}, {}};
+                            for (unsigned i = 0; i < 2; ++i) {
+                                const auto& hand = frame.hands[i];
+                                in.hands[i].tracked = hand.valid && validTrackedPose(hand.grip);
+                                in.hands[i].grip = hand.grip;
+                                in.hands[i].aim = hand.aim;
+                                in.hands[i].trigger = hand.trigger;
+                            }
+                            const auto before = testNotice.state();
+                            testNotice.update(in);
+                            if (before != testNotice.state() && testNotice.state() == test_notice::State::shown)
+                                runtime.haptic(0, .2f), runtime.haptic(1, .2f);
+                            else if (before == test_notice::State::shown && testNotice.state() == test_notice::State::gone &&
+                                     testNotice.ended() != test_notice::Ended::timedOut)
+                                runtime.haptic(testNotice.ended() == test_notice::Ended::poked ? 1 : 0, .25f);
+                        } catch (...) {
+                            testNoticeFault = true; // only the notice goes off
                         }
                     }
                     // The phone, which a back-pocket draw opens in the hand. It is
@@ -8446,6 +8477,8 @@ DWORD WINAPI run(void*) {
                             view.grips[i] = motion.grips[i];
                         }
                     }
+                    saved.notice = testNoticeFault ? test_notice::View{}
+                                                   : test_notice::view(testNotice, compose(motion.headPose, inverse(frame.head)));
                     history.remember(saved);
                     const auto code = SpidySetEyes(&eyes);
                     if (code && code != 4003)
@@ -9713,6 +9746,18 @@ DWORD WINAPI run(void*) {
                                 plainPanel = saved->uiStyle != UiStyle::tech;
                                 auto& panel = saved->uiStyle == UiStyle::tech ? translucent : vertices;
                                 body_calibration::appendView(panel, view, viewer, saved->uiStyle);
+                            }
+                        }
+                        // Version 0.0.72 TEST BUILD NOTICE: over everything, moved with the player as the
+                        // calibration panel is. Should it fail, only it goes off.
+                        if (!saved->flatScreen && saved->notice.opacity > 0) {
+                            const size_t from = translucent.size();
+                            try {
+                                auto notice = saved->notice;
+                                notice.panel.position += travel;
+                                test_notice::append(translucent, notice);
+                            } catch (...) {
+                                translucent.resize(from);
                             }
                         }
                         // The wrist hologram (Update 14) over its wrist, moved with the

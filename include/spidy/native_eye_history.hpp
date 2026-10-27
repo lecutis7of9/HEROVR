@@ -10,6 +10,7 @@
 #include "hero007_visual.hpp"
 #include "hero072_visual.hpp"
 #include "web_visual.hpp"
+#include "test_notice.hpp"
 
 #include <limits>
 
@@ -33,6 +34,8 @@ struct NativeEyeFrame {
     std::array<offer_pointing::Pointed, 2> offers{};
     // The T-pose calibration's panel and controller rings (phase idle: none).
     body_calibration::View calibration{};
+    // Version 0.0.72 TEST BUILD NOTICE (opacity 0: none), this frame's world.
+    test_notice::View notice{};
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

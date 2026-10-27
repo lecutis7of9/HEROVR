@@ -32,6 +32,7 @@
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
+#include "spidy/test_notice.hpp"
 #include <filesystem>
 #include "spidy/web_cocoon.hpp"
 #include "spidy/wall_stick.hpp"
@@ -26473,6 +26474,185 @@ int main() {
                 check(appendShieldModel(v, it, *lib.model(mm::slotShield), viewer) && !v.empty() && v.size() <= budget::model,
                       "the shield model in budget: " + std::to_string(v.size()));
             }
+        }
+    });
+    test("Version 0.0.72: TEST BUILD NOTICE - the exact text, after calibration, once a session, OK by poke or aimed trigger", [] {
+        namespace tn = spidy::test_notice;
+        check(tn::text == "You are on the latest test version, please be aware that some features do not work or are unfinished, "
+                          "revert to 0.0.63 if unplayable and report issues in my discord server linked on the launcher",
+              "the user's text word for word");
+        check(tn::testBuild, "this branch builds a test build (HERO_TEST_BUILD ON)");
+        for (char c : tn::text)
+            check(c == ' ' || drawable(c), std::string("the font draws '") + c + "'");
+        const auto ls = tn::lines(tn::text, tn::textHeight, tn::width - 2 * tn::margin);
+        std::string joined;
+        for (const auto& l : ls) {
+            check(textWidth(l, tn::textHeight) <= tn::width - 2 * tn::margin + 1e-4f, "each line fits");
+            joined += (joined.empty() ? "" : " ") + std::string(l);
+        }
+        check(joined == tn::text, "the lines put together are the text");
+        check(ls.size() >= 4 && (tn::height / 2 - tn::margin) - ls.size() * (tn::textHeight + tn::lineGap) > tn::buttonY + tn::buttonHeight / 2,
+              "the lines stay above the OK button: " + std::to_string(ls.size()));
+        // Play, standing at 1.7 m looking down -z.
+        const auto base = [](double t) {
+            tn::Input in;
+            in.enabled = true;
+            in.seconds = t;
+            in.immersive = true;
+            in.head = {{0, 1.7f, 0}, {}};
+            for (auto& h : in.hands) {
+                h.tracked = true;
+                h.grip = h.aim = {{.2f, 1.1f, -.3f}, Quat::around({1, 0, 0}, -1.2f)}; // pointing at the floor
+            }
+            return in;
+        };
+        {
+            tn::Notice n; // a calibration due and then running: nothing until it closes
+            auto in = base(0);
+            in.calibrationDue = true;
+            for (double t = 0; t < 5; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::waiting, "waits while a calibration is due");
+            in.calibrationDue = false;
+            in.calibrating = true;
+            in.hands[0].trigger = in.hands[1].trigger = 1; // both triggers held for the T-pose
+            for (double t = 5; t < 9; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::waiting, "waits while the calibration shows");
+            in.calibrating = false;
+            for (double t = 9; t < 9.95; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::waiting, "not before play has shown a second");
+            for (double t = 9.95; t < 10.6; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::shown, "shows right after the calibration closes");
+            check(std::abs(n.panel().position.z + 1.3f) < .01f && std::abs(n.panel().position.y - 1.6f) < .01f,
+                  "1.3 m ahead, just under the eyes");
+            for (double t = 10.6; t < 13; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::shown, "the triggers held from the calibration do not dismiss it");
+            in.hands[0].trigger = in.hands[1].trigger = 0;
+            in.seconds = 13.1;
+            n.update(in);
+            in.hands[0].trigger = 1;
+            in.seconds = 13.2;
+            n.update(in);
+            check(n.state() == tn::State::shown, "a pull aimed at the floor is play, not OK");
+            in.hands[0].trigger = 0;
+            in.hands[0].aim = {{0, 1.385f, -.4f}, Quat{}}; // aim straight at the button
+            in.seconds = 13.3;
+            n.update(in);
+            check(n.hover(), "aiming at OK lights it");
+            in.hands[0].trigger = 1;
+            in.seconds = 13.4;
+            n.update(in);
+            check(n.state() == tn::State::gone && n.ended() == tn::Ended::triggered, "an aimed pull is OK");
+            for (double t = 13.5; t < 15; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(!n.visible(), "fades out");
+            // A second calibration in the same session: never again.
+            in.calibrating = true;
+            n.update(in);
+            in.calibrating = false;
+            for (double t = 15; t < 40; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::gone, "once a session");
+        }
+        {
+            tn::Notice n; // no calibration this session: after play has shown a second; a poke is OK
+            auto in = base(0);
+            for (double t = 0; t < 1.5; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::shown, "no calibration due: shows once play has shown");
+            in.hands[1].grip.position = n.buttonCentre() + Vec3{0, 0, .2f};
+            in.seconds = 2;
+            n.update(in);
+            check(n.state() == tn::State::shown, "a hand short of the button does nothing");
+            in.hands[1].grip.position = n.buttonCentre() + Vec3{.02f, 0, .01f};
+            in.seconds = 2.1;
+            n.update(in);
+            check(n.state() == tn::State::gone && n.ended() == tn::Ended::poked, "a poke is OK");
+        }
+        {
+            tn::Notice n; // a poke in the first moment does not count (a hand already there)
+            auto in = base(0);
+            for (double t = 0; t < 1.1; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::shown, "shown");
+            in.hands[1].grip.position = n.buttonCentre();
+            in.seconds = 1.2;
+            n.update(in);
+            check(n.state() == tn::State::shown, "not armed in the first .75 s");
+            for (double t = 1.2; t < 200; t += .2) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::gone && n.ended() == tn::Ended::timedOut, "a hand left in it: gone by itself, never stuck");
+        }
+        {
+            tn::Notice n; // not a test build, or a bad head: nothing
+            auto in = base(0);
+            in.enabled = false;
+            for (double t = 0; t < 5; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::waiting && !n.visible(), "a release build never shows it");
+            in.enabled = true;
+            in.head.position = {NAN, 0, 0};
+            for (double t = 5; t < 9; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::waiting, "an untracked head: waits");
+            in.immersive = false;
+            in.head = {{0, 1.7f, 0}, {}};
+            for (double t = 9; t < 12; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            check(n.state() == tn::State::waiting, "paused or flat screen: waits");
+        }
+        {
+            tn::Notice n;
+            auto in = base(0);
+            for (double t = 0; t < 2; t += .1) {
+                in.seconds = t;
+                n.update(in);
+            }
+            const auto v = tn::view(n, {{0, 0, 0}, {}});
+            check(v.opacity > .99f, "faded in");
+            std::vector<Vertex> out;
+            tn::append(out, v);
+            check(!out.empty() && out.size() < 24000, "draws, in one call's budget: " + std::to_string(out.size()));
+            bool ok = true;
+            for (const auto& x : out)
+                ok &= finite(x.position) && x.alpha >= 0 && x.alpha <= 1;
+            check(ok, "finite and in range");
+            out.clear();
+            tn::append(out, tn::View{1, false, {{NAN, 0, 0}, {}}});
+            check(out.empty(), "a NaN panel draws nothing");
+            tn::append(out, tn::View{});
+            check(out.empty(), "opacity 0 draws nothing");
+            check(tn::view(n, {{0, 0, 0}, {NAN, 0, 0, 1}}).opacity == 0, "a bad world pose: nothing");
         }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";

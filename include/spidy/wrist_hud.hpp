@@ -436,6 +436,42 @@ enum class Control : uint8_t {
     combatShieldChain,
     combatShieldBlock,
     combatShieldLook,
+    // Version 0.0.72 (TEST): THOR, GREEN LANTERN and the 0.0.72 list (combat38's order).
+    combatThor,
+    combatThorLightning,
+    combatThorStorm,
+    combatThorChain,
+    combatGreenLantern,
+    combatGlFlight,
+    combatGlFist,
+    combatGlBeam,
+    combatGlBubble,
+    combatGlChain,
+    combatGlCharge,
+    combatSpiderClimbOnly,
+    combatUppercut,
+    combatSmokeBlind,
+    combatDdGrapple,
+    combatDdParry,
+    combatIronHud,
+    combatPunisherRage,
+    combatReputation,
+    combatSurvival,
+    combatPunisherSuit,
+    combatNaturalInvincible,
+    combatHulkRage,
+    combatRageBlood,
+    combatRageTint,
+    combatFireDouse,
+    combatShieldSlam,
+    combatPunisherHook,
+    combatClawClimb,
+    combatNpcShove,
+    combatFaction,
+    combatHeroSuit,
+    combatTestUnlocks,
+    combatUltimates,
+    combatPerkBranch,
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -498,9 +534,11 @@ enum class Control : uint8_t {
     section7,
     section8,
     section9,
+    section10, // Version 0.0.72: THOR
+    section11, // Version 0.0.72: GREEN LANTERN
 };
-constexpr int controls = 176;
-constexpr int combatControls = 71; // combat38::options (checked in wrist_hud.cpp)
+constexpr int controls = 213; // Version 0.0.72: + 35 combat rows, + 2 sections
+constexpr int combatControls = 106; // combat38::options (checked in wrist_hud.cpp)
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);
@@ -525,7 +563,7 @@ static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a liv
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
-static_assert(static_cast<int>(Control::section9) == controls - 1);
+static_assert(static_cast<int>(Control::section11) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -589,7 +627,7 @@ constexpr int musicPage = 7;
 // not laid out, so they are neither drawn nor pressed). What is open is kept for the session (not
 // in live.txt), shared by the input and the drawing side; until a section is pressed each page
 // opens its first (COLOR none; POWERS the hero being played).
-constexpr int sectionsMost = 10; // Version 0.0.7 (was 6; CAPTAIN AMERICA 10); a nibble a page still holds it
+constexpr int sectionsMost = 12; // Version 0.0.72: THOR, GREEN LANTERN (0xE/0xF still free) // Version 0.0.7 (was 6; CAPTAIN AMERICA 10); a nibble a page still holds it
 int sectionCount(int page);
 const char* sectionName(int page, int section); // "" past the page's sections
 int openSection(int page);                      // -1: none open

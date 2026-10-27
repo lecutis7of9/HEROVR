@@ -55,6 +55,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/body_haptics.cpp src/tech_marks.cpp src/wrist_hud.cpp src/music_player.cpp
             src/calibration_art.cpp src/calibration_panel.cpp src/health_ring.cpp src/sfx.cpp
             src/hero007_visual.cpp
+            src/hero072_visual.cpp
             src/mesh_model.cpp)
 target_include_directories(spidy_core PUBLIC include)
 # Update 36: the calibration panel's art atlas, compiled in as bytes

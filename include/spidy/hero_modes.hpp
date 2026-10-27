@@ -42,11 +42,13 @@ namespace spidy::hero_modes {
 
 // Version 0.0.7: BATMAN, WOLVERINE, SUPERMAN, PUNISHER after HULK (0.0.6's numbers unchanged);
 // CAPTAIN AMERICA (captain.hpp) after PUNISHER.
-enum Hero : uint32_t { spiderMan = 0, ironMan, daredevil, hulk, batman, wolverine, superman, punisher, captainAmerica, heroes };
+// Version 0.0.72: THOR and GREEN LANTERN after CAPTAIN AMERICA (hero072.hpp).
+enum Hero : uint32_t { spiderMan = 0, ironMan, daredevil, hulk, batman, wolverine, superman, punisher, captainAmerica, thor, greenLantern, heroes };
 inline constexpr const char* heroNames[heroes] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK",
-                                                  "BATMAN",     "WOLVERINE", "SUPERMAN", "PUNISHER", "CAPTAIN AMERICA"};
+                                                  "BATMAN",     "WOLVERINE", "SUPERMAN", "PUNISHER", "CAPTAIN AMERICA",
+                                                  "THOR",       "GREEN LANTERN"};
 // Which heroes have a working hologram toggle in this build (Version 0.0.6: all of them; 0.0.7: all).
-inline constexpr bool shipped[heroes] = {true, true, true, true, true, true, true, true, true};
+inline constexpr bool shipped[heroes] = {true, true, true, true, true, true, true, true, true, true, true};
 // Version 0.0.6: the hero from the three toggles (IRON MAN, DAREDEVIL, HULK); should two ever be on
 // (a hand-edited live.txt), the first wins, so exactly one hero plays.
 inline uint32_t fromToggles(bool ironMan_, bool daredevil_, bool hulk_) {
@@ -65,6 +67,13 @@ inline uint32_t fromToggles(bool ironMan_, bool daredevil_, bool hulk_, bool bat
                             bool superman_, bool punisher_, bool captain_) {
     const uint32_t seven = fromToggles(ironMan_, daredevil_, hulk_, batman_, wolverine_, superman_, punisher_);
     return seven != spiderMan ? seven : captain_ ? captainAmerica : spiderMan;
+}
+// Version 0.0.72: THOR and GREEN LANTERN after them (the ten toggles; the first on wins).
+inline uint32_t fromToggles(bool ironMan_, bool daredevil_, bool hulk_, bool batman_, bool wolverine_,
+                            bool superman_, bool punisher_, bool captain_, bool thor_, bool lantern_) {
+    const uint32_t eight =
+        fromToggles(ironMan_, daredevil_, hulk_, batman_, wolverine_, superman_, punisher_, captain_);
+    return eight != spiderMan ? eight : thor_ ? thor : lantern_ ? greenLantern : spiderMan;
 }
 
 // The toggles: only one on. Turning `which` on makes it the hero; turning the current hero off
@@ -135,7 +144,7 @@ inline uint32_t stripPad(uint32_t hero, uint16_t& buttons, uint8_t& rightTrigger
 // keep the trigger thrust. A hero added later with a trigger weapon belongs here too.
 inline bool triggerWeapon(uint32_t hero) {
     return hero == ironMan || hero == daredevil || hero == batman || hero == wolverine || hero == punisher ||
-           hero == captainAmerica;
+           hero == captainAmerica || hero == thor || hero == greenLantern; // Version 0.0.72: THOR's hammer, GREEN LANTERN's ring beam and chain (he takes off with both arms up)
 }
 // The trigger value FLY MODE's thrust gets for this hero (0 for a trigger-weapon hero; NaN is 0).
 inline float flyThrust(uint32_t hero, float trigger) {

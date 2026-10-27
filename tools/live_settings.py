@@ -321,6 +321,42 @@ SETTINGS = {
     'shield_chain': ((0, 1), 'SpidyShieldChain', 'SHIELD CHAIN {} (0 on: a thrown shield ricochets on to two more enemies like the batons, then comes back; 1 off: one enemy, then back, live)'),
     'shield_block': ((0, 1), 'SpidyShieldBlock', 'SHIELD BLOCK {} (0 off; 1 experimental: CANDIDATE, a hit taken while the shield on your arm faces the nearest enemy is given back, never a revive, never past the cap, live)'),
     'shield_look': ((0, 1), 'SpidyShieldLook', 'SHIELD LOOK {} (0 built-in: drawn rings and star; 1 model: the converted shield in Models\\Shield, built-in when missing, live)'),
+    # Version 0.0.72 (TEST): THOR, GREEN LANTERN and the 0.0.72 list
+    'thor': ((0, 1), 'SpidyThor', 'THOR ABILITIES {} (0 off; 1 on: the hammer on your back, grip over a shoulder to draw it, trigger throws it (it chains and flies back, each hit electrocutes), hold it straight up overhead 1 s for a lightning strike (a gesture, no trigger); no webs; one hero at a time, EXPERIMENTAL, live)'),
+    'thor_lightning': ((0, 1), 'SpidyThorLightning', 'THOR LIGHTNING {} (0 on: lightning on his arms and hammer in a fight; 1 off, live)'),
+    'thor_storm': ((0, 1), 'SpidyThorStorm', 'THOR STORM {} (0 on: the hammer held straight up overhead for 1 s calls a radial lightning strike, no trigger; 1 off, live)'),
+    'thor_chain': ((0, 1), 'SpidyThorChain', 'HAMMER CHAIN {} (0 on: a thrown hammer jumps to two more enemies; 1 off: one, then home, live)'),
+    'green_lantern': ((0, 1), 'SpidyGreenLantern', 'GREEN LANTERN ABILITIES {} (0 off; 1 on: ring flight, construct fist, ring beam, shield bubble, chain construct, ring charge; no webs; one hero at a time, EXPERIMENTAL, live)'),
+    'gl_flight': ((0, 1), 'SpidyGlFlight', "RING FLIGHT {} (0 on: GREEN LANTERN takes off with both arms straight up overhead, then the hands steer (FLY MODE's poses), never the triggers, even with FLY MODE off; 1 off, live)"),
+    'gl_fist': ((0, 1), 'SpidyGlFist', 'CONSTRUCT FIST {} (0 on: the right grip held and a fast punch throw a giant green fist; 1 off, live)'),
+    'gl_beam': ((0, 1), 'SpidyGlBeam', "RING BEAM {} (0 on: the right trigger fires the ring's beam (a projectile); 1 off, live)"),
+    'gl_bubble': ((0, 1), 'SpidyGlBubble', 'SHIELD BUBBLE {} (0 on: both grips held and the hands pulled apart raise a bubble that blocks hits, CANDIDATE; 1 off, live)'),
+    'gl_chain': ((0, 1), 'SpidyGlChain', 'CHAIN CONSTRUCT {} (0 on: the left trigger throws a green chain (a projectile) that yanks the enemy it hits; 1 off, live)'),
+    'gl_charge': ((0, 1), 'SpidyGlCharge', "RING CHARGE {} (0 on: the left wrist's ring charge drains with the powers (not flight) and refills at rest; 1 off: unlimited, live)"),
+    'spider_climb_only': ((0, 1), 'SpidySpiderClimbOnly', 'SPIDER CLIMB ONLY {} (0 on: only SPIDER-MAN crawls walls; 1 off: every hero, as 0.0.7, live)'),
+    'uppercut': ((0, 1), 'SpidyUppercut', 'UPPERCUT LAUNCH {} (0 on: a fast upward punch that lands launches the enemy; 1 off, live)'),
+    'smoke_blind': ((0, 1), 'SpidySmokeBlind', "SMOKE BLIND {} (0 on: enemies in BATMAN's smoke stagger blind; 1 off, live)"),
+    'dd_grapple': ((0, 1), 'SpidyDdGrapple', "BATON GRAPPLE {} (0 on: DAREDEVIL casts a baton arm up fast with no enemy aimed and grapples there, a gesture, no trigger, no glide; 1 off, live)"),
+    'dd_parry': ((0, 1), 'SpidyDdParry', 'BATON PARRY {} (0 on: batons crossed in front of the face block hits, CANDIDATE; 1 off, live)'),
+    'iron_hud': ((0, 1), 'SpidyIronHud', 'IRON MAN HUD {} (0 on: the helmet frame, a lock box, HOSTILES DETECTED, TARGET LOCKED, ALL HOSTILES NEUTRALIZED, hostiles left, speed and altitude flying; 1 off, live)'),
+    'punisher_rage': ((0, 1), 'SpidyPunisherRage', 'PUNISHER RAGE {} (0 on: damage taken or downs in a fight turn the view red and punches harder; 1 off, live)'),
+    'reputation': ((0, 1), 'SpidyReputation', "HERO REPUTATION {} (0 on: each hero's own rank on the wrist, up for downs, cleared fights and fires out, down for fights walked away from and defeats; 1 off, live)"),
+    'survival': ((0, 1), 'SpidySurvival', 'SURVIVAL MODE {} (0 off; 1 on: hits can hurt a limb (SPIDER-MAN, BATMAN, PUNISHER, DAREDEVIL, CAPTAIN AMERICA), healing over time, live)'),
+    'punisher_suit': ((0, 1), 'SpidyPunisherSuit', 'PUNISHER SUIT {} (0 vest: the VEST kit by floh; 1 warzone: the WARZONE kit by spybg; which PunisherSuit kit you installed with Overstrike, live)'),
+    'natural_invincible': ((0, 1), 'SpidyNaturalInvincible', 'NATURAL INVINCIBLE {} (0 on: THOR and SUPERMAN take no damage (fall and slam too) and no SURVIVAL injuries, never a revive; 1 off, live)'),
+    'hulk_rage': ((0, 1), 'SpidyHulkRage', 'HULK RAGE {} (0 on: health HULK loses in a fight builds his punch damage up to 2x, a green tint shows it, it fades after the fight; 1 off, live)'),
+    'rage_blood': ((0, 2), 'SpidyRageBlood', "RAGE BLOOD {} (0 extreme: lots of mod-drawn blood from enemies shot in PUNISHER RAGE, capped, off by itself on a frame drop; 1 normal; 2 off, live)"),
+    'rage_tint': ((0, 3), 'SpidyRageTint', "RAGE TINT {} (0 normal, 1 strong, 2 subtle, 3 off: PUNISHER RAGE's red view pulsing like a heartbeat at the edges, live)"),
+    'fire_douse': ((0, 1), 'SpidyFireDouse', "FIRE DOUSE {} (0 on: each hero's own way to put fires out; the game's fire hook is CANDIDATE, so a look only for now; 1 off, live)"),
+    'shield_slam': ((0, 1), 'SpidyShieldSlam', "SHIELD SLAM {} (0 on: CAP's shield driven down fast knocks back and hurts enemies near and douses fire; 1 off, live)"),
+    'punisher_hook': ((0, 1), 'SpidyPunisherHook', "GRAPPLE HOOK {} (0 on: the PUNISHER's tactical hook launcher, drawn from the chest, fired by a push, slower than BATMAN's; 1 off, live)"),
+    'claw_climb': ((0, 1), 'SpidyClawClimb', "CLAW CLIMB {} (0 on: WOLVERINE with claws out climbs walls by pulling with his hands, grip only; 1 off, live)"),
+    'npc_shove': ((0, 1), 'SpidyNpcShove', "SHOVE {} (0 on: both open hands pushed fast at a close enemy knock him back; grabbing people is CANDIDATE, not in; 1 off, live)"),
+    'faction': ((0, 3), 'SpidyFaction', "ENEMY FACTION {} (0 auto: the enemies match the hero, 1 vanilla, 2 the hand, 3 hydra; the game-side swap is CANDIDATE, so shown only; live)"),
+    'hero_suit': ((0, 1), 'SpidyHeroSuit', "HERO SUIT {} (0 the hero's default suit, 1 his next unlocked one; suits unlock with that hero's reputation, live)"),
+    'test_unlocks': ((0, 3), 'SpidyTestUnlocks', "TEST UNLOCKS {} (0 off: suits, ultimates and perks come with each hero's reputation, kept for good; 1 suits, 2 ultimates and suits, 3 all and perks, for testing; live)"),
+    'ultimates': ((0, 1), 'SpidyUltimates', "ULTIMATES {} (0 on: at max reputation both fists crossed on the chest with both grips fire the hero's ultimate, long cooldown; 1 off, live)"),
+    'perk_branch': ((0, 3), 'SpidyPerkBranch', "HERO PERKS {} (0 auto: perk points go round the hero's three branches; 1-3 that branch first; live)"),
 }
 # Update 37: the view gates share one export (SpidyViewGate): the selector in the high half.
 VIEW_GATES = {'bloom_fx': 0, 'lod_fade': 1, 'lod_reach': 2, 'impostors': 3}
@@ -379,7 +415,9 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'gun_models': 'built-in',
                      # Version 0.0.7 CAPTAIN AMERICA (off; RIGHT arm (LEFT selectable), 35 HP, chain on, block off, built-in)
                      'captain_america': 'off', 'shield_arm': 'right', 'shield_damage': '35hp', 'shield_chain': 'on',
-                     'shield_block': 'off', 'shield_look': 'built-in'}
+                     'shield_block': 'off', 'shield_look': 'built-in',
+                     # Version 0.0.72 (TEST)
+                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'on', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto'}
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Update 37.2: the startup checks (tests): these must start this way on a fresh install and over an
@@ -498,6 +536,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('on', 'off'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'branch1', 'branch2', 'branch3'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -600,6 +639,42 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'shield_chain': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'shield_block': {'off': 0, 'experimental': 1, 'on': 1, '0': 0, '1': 1},
            'shield_look': {'built-in': 0, 'builtin': 0, 'model': 1, 'models': 1, '0': 0, '1': 1},
+           # Version 0.0.72 (TEST)
+           'thor': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'thor_lightning': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'thor_storm': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'thor_chain': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'green_lantern': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'gl_flight': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'gl_fist': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'gl_beam': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'gl_bubble': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'gl_chain': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'gl_charge': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'spider_climb_only': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'uppercut': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'smoke_blind': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'dd_grapple': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'dd_parry': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'iron_hud': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'punisher_rage': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'reputation': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'survival': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'punisher_suit': {'vest': 0, 'warzone': 1, '0': 0, '1': 1},
+           'natural_invincible': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'hulk_rage': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'rage_blood': {'extreme': 0, 'normal': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
+           'rage_tint': {'normal': 0, 'strong': 1, 'subtle': 2, 'off': 3, '0': 0, '1': 1, '2': 2, '3': 3},
+           'fire_douse': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'shield_slam': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'punisher_hook': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'claw_climb': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'npc_shove': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'faction': {'auto': 0, 'vanilla': 1, 'the hand': 2, 'hydra': 3, '0': 0, '1': 1, '2': 2, '3': 3},
+           'hero_suit': {'default': 0, 'next': 1, '0': 0, '1': 1},
+           'test_unlocks': {'off': 0, 'suits': 1, 'ultimates': 2, 'all': 3, 'on': 3, '0': 0, '1': 1, '2': 2, '3': 3},
+           'ultimates': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'perk_branch': {'auto': 0, 'branch1': 1, 'branch2': 2, 'branch3': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
            'holo_open': {'forearm': 0, 'tap': 0, 'palm_look': 1, 'palm': 1, 'look': 1, 'click': 2, 'f8_only': 3,
@@ -852,10 +927,14 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  'batman', 'wolverine', 'superman', 'punisher', 'batarang_chain', 'easy_reload', 'holster_hands',
                  'baton_holsters', 'baton_look', 'batarang_style', 'gun_models',
                  # Version 0.0.7 CAPTAIN AMERICA
-                 'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look')
+                 'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
+                 # Version 0.0.72 (TEST)
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
-HERO_KEYS = ('iron_man', 'daredevil', 'hulk', 'batman', 'wolverine', 'superman', 'punisher', 'captain_america')
+# Version 0.0.72: THOR and GREEN LANTERN ten.
+HERO_KEYS = ('iron_man', 'daredevil', 'hulk', 'batman', 'wolverine', 'superman', 'punisher', 'captain_america',
+             'thor', 'green_lantern')
 START_ONLY = START_ONLY + UPDATE38_KEYS
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.

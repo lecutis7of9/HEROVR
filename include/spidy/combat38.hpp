@@ -103,6 +103,20 @@ enum Option : uint32_t {
     // Version 0.0.7 CAPTAIN AMERICA (captain.hpp): the hero toggle, SHIELD ARM, SHIELD DAMAGE, SHIELD
     // CHAIN, SHIELD BLOCK (EXPERIMENTAL, CANDIDATE) and SHIELD LOOK. Each OFF / its first value by default, live.
     captainAmerica, shieldArm, shieldDamage, shieldChain, shieldBlock, shieldLook,
+    // Version 0.0.72 (TEST, hero072.hpp): THOR and GREEN LANTERN (hero toggles, OFF), their powers
+    // (each ON by default; only matter while that hero plays) and the 0.0.72 list's rules. Each live.
+    thor, thorLightning, thorStorm, thorChain,
+    greenLantern, glFlight, glFist, glBeam, glBubble, glChain, glCharge,
+    spiderClimbOnly, uppercut, smokeBlind, ddGrapple, ddParry, ironHud, punisherRage, reputation, survival,
+    punisherSuit, naturalInvincible, hulkRage,
+    // Version 0.0.72 (the user, 8:28 - 8:35): RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB.
+    rageBlood, rageTint, fireDouse, shieldSlam, punisherHook, clawClimb,
+    // Version 0.0.72 (the user, 8:28 - 8:35): SHOVE, ENEMY FACTION.
+    npcShove, faction,
+    // Version 0.0.72 (the user, 8:28 - 8:35): HERO SUIT, UNLOCK ALL SUITS.
+    heroSuit, testUnlocks,
+    // Version 0.0.72 (the user, 8:46, 8:47): ULTIMATES and HERO PERKS (hero072_progress.hpp).
+    ultimates, perkBranch,
     options
 };
 struct OptionInfo {
@@ -307,7 +321,82 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"OFF", "EXPERIMENTAL", nullptr, nullptr}},
     // SHIELD LOOK: BUILT-IN (0, the default: drawn rings and star) or MODEL (Models\Shield; BUILT-IN when missing).
     {"shield_look", "SHIELD LOOK", "SLOOK", "MODEL: the converted 3D shield, else BUILT-IN red, white and blue rings.",
-     2, {"BUILT-IN", "MODEL", nullptr, nullptr}},
+     2, {"BUILT-IN", "MODEL", nullptr, nullptr}},    // Version 0.0.72 (TEST): THOR (hero072.hpp) - one hero at a time like the others.
+    {"thor", "THOR ABILITIES", "THOR", "ON: play as Thor with his hammer on your back, live (no restart).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"thor_lightning", "THOR LIGHTNING", "TLIGHT", "ON: lightning crawls on Thor's arms and hammer in a fight, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"thor_storm", "THOR STORM", "TSTORM", "ON: hold the hammer straight up overhead 1 s to strike enemies near, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"thor_chain", "HAMMER CHAIN", "TCHAIN", "ON: a thrown hammer jumps to two more enemies then flies back, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    // Version 0.0.72 (TEST): GREEN LANTERN and his six powers.
+    {"green_lantern", "GREEN LANTERN ABILITIES", "LANTERN", "ON: play as Green Lantern with ring constructs, no webs, live (no restart).",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"gl_flight", "RING FLIGHT", "GLFLY", "ON: raise both arms straight up to take off, hands steer, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"gl_fist", "CONSTRUCT FIST", "GLFIST", "ON: hold the right grip and punch fast for a giant green fist, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"gl_beam", "RING BEAM", "GLBEAM", "ON: the right trigger fires the ring's beam, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"gl_bubble", "SHIELD BUBBLE", "GLBUBL", "ON: hold both grips and pull your hands apart for a bubble, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"gl_chain", "CHAIN CONSTRUCT", "GLCHAN", "ON: the left trigger throws a green chain that yanks an enemy, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"gl_charge", "RING CHARGE", "GLCHRG", "ON: the left wrist's ring charge drains with powers, not flight, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    // Version 0.0.72 (TEST): the list's rules.
+    {"spider_climb_only", "SPIDER CLIMB ONLY", "SPCLMB", "ON: only Spider-Man crawls on walls, the other heroes cannot, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"uppercut", "UPPERCUT LAUNCH", "UPPER", "ON: a fast upward punch that lands launches the enemy, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"smoke_blind", "SMOKE BLIND", "SBLIND", "ON: enemies in Batman's smoke stagger blind, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"dd_grapple", "BATON GRAPPLE", "DDGRAP", "ON: cast a baton arm up fast to grapple there (no glide), no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"dd_parry", "BATON PARRY", "DDPARY", "ON (CANDIDATE): batons crossed in front of your face block hits, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"iron_hud", "IRON MAN HUD", "IRNHUD", "ON: Iron Man's helmet HUD with lock box, hostiles, speed, altitude, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"punisher_rage", "PUNISHER RAGE", "RAGE", "ON: enough damage or downs in a fight turn the Punisher's view red, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"reputation", "HERO REPUTATION", "REP", "ON: each hero's rank, up for crimes stopped, down for ones left, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"survival", "SURVIVAL MODE", "SURVIV", "ON: hits can hurt a limb that heals over time (not every hero), no restart.",
+     2, {"OFF", "ON", nullptr, nullptr}},
+    {"punisher_suit", "PUNISHER SUIT", "PSUIT", "Which Punisher suit kit you installed, VEST or WARZONE, no restart.",
+     2, {"VEST", "WARZONE", nullptr, nullptr}},
+    // Version 0.0.72 (the user, 8:23): THOR and SUPERMAN are invincible by nature (INVINCIBLE's
+    // CONFIRMED health refill while either is played; never a revive, so scripted deaths still happen).
+    {"natural_invincible", "NATURAL INVINCIBLE", "NATINV", "ON: Thor and Superman take no damage or injuries, live (no restart).",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    // Version 0.0.72 (the user, 8:24): HULK RAGE, damage taken in a fight builds his punch multiplier.
+    {"hulk_rage", "HULK RAGE", "HRAGE", "ON: Hulk hits harder the more he is hurt in a fight, up to 2x, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"rage_blood", "RAGE BLOOD", "RBLOOD", "EXTREME: enemies shot in Punisher rage bleed a lot, no restart.",
+     3, {"EXTREME", "NORMAL", "OFF", nullptr}},
+    {"rage_tint", "RAGE TINT", "RTINT", "How strong the Punisher's red heartbeat rage vision is, no restart.",
+     4, {"NORMAL", "STRONG", "SUBTLE", "OFF"}},
+    {"fire_douse", "FIRE DOUSE", "DOUSE", "ON: each hero has a way to put out fires (hook CANDIDATE), no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"shield_slam", "SHIELD SLAM", "SSLAM", "ON: slam Cap's shield down to knock enemies back and douse fire, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"punisher_hook", "GRAPPLE HOOK", "PHOOK", "ON: draw the hook from the chest, push forward to grapple up, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"claw_climb", "CLAW CLIMB", "CLAWUP", "ON: with claws out Wolverine climbs walls by pulling with hands, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"npc_shove", "SHOVE", "SHOVE", "ON: push both open hands fast at a close enemy to shove him back, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"faction", "ENEMY FACTION", "FACTN", "AUTO matches the enemies to the hero (hook CANDIDATE), no restart.",
+     4, {"AUTO", "VANILLA", "THE HAND", "HYDRA"}},
+    {"hero_suit", "HERO SUIT", "HSUIT", "Steps through this hero's unlocked suits (each artist credited), no restart.",
+     2, {"DEFAULT", "NEXT", nullptr, nullptr}},
+    {"test_unlocks", "TEST UNLOCKS", "UNLOCK", "TESTING: SUITS, ULTIMATES (+ suits) or ALL (+ perks) open now, no restart.",
+     4, {"OFF", "SUITS", "ULTIMATES", "ALL"}},
+    {"ultimates", "ULTIMATES", "ULTIMT", "ON: max reputation's ultimate, both fists crossed on the chest, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"perk_branch", "HERO PERKS", "PERKS", "Where this hero's perk points go: AUTO or a branch, live (no restart).",
+     4, {"AUTO", "BRANCH 1", "BRANCH 2", "BRANCH 3"}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }
@@ -342,7 +431,8 @@ inline InstantBlow instantBlowOf(float strength, uint32_t value) {
 // ---- Version 0.0.6 HERO TOGGLES --------------------------------------------------------------------
 // The hero toggles (IRON MAN's is shooterType, 1 ON); only one is on at a time. Version 0.0.7: eight
 // (CAPTAIN AMERICA the last).
-inline constexpr Option heroToggles[8] = {shooterType, daredevil, hulk, batman, wolverine, superman, punisher, captainAmerica};
+inline constexpr Option heroToggles[10] = {shooterType, daredevil, hulk, batman, wolverine, superman, punisher, captainAmerica,
+                                           thor, greenLantern}; // Version 0.0.72: THOR, GREEN LANTERN
 inline bool isHeroToggle(uint32_t o) {
     for (const auto t : heroToggles)
         if (o == t)

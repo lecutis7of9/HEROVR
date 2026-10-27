@@ -27,6 +27,9 @@
 #include "spidy/hero_modes.hpp"
 #include "spidy/baton_grip.hpp"
 #include "spidy/hero007_play.hpp"
+#include "spidy/hero072.hpp"
+#include "spidy/hero072_visual.hpp"
+#include "spidy/hero072_progress.hpp"
 #include "spidy/mesh_model.hpp"
 #include <filesystem>
 #include "spidy/web_cocoon.hpp"
@@ -1619,7 +1622,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 176, "controls count drifted"); // Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 213, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1959,7 +1962,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 176, "controls count drifted"); // Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 213, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18442,7 +18445,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 71, "seventy-one options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6)");
+        check(options == 106, "one hundred and six options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 35)");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18476,7 +18479,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 71, "0.0.7 has 71 COMBAT options (CAPTAIN AMERICA + 6; 0.0.62: 54, 0.0.6: 48)");
+        check(options == 106, "0.0.72 has 106 COMBAT options (0.0.72: + 35; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18740,13 +18743,13 @@ int main() {
                   openSection(controlsPage) == 0 && openSection(colorPage) == -1 && openSection(powersPage) == 1 &&
                   openSection(statusPage) == -1 && openSection(musicPage) == -1,
               "a page's default section is wrong");
-        for (int h = 0; h < 9; ++h) { // Version 0.0.7: nine heroes (CAPTAIN AMERICA)
+        for (int h = 0; h < 11; ++h) { // Version 0.0.72: eleven heroes (THOR, GREEN LANTERN)
             setActiveHero(h);
             check(openSection(powersPage) == 1 + h, "POWERS does not open the played hero's profile");
         }
         setActiveHero(99);
         check(activeHero() == 0 && openSection(powersPage) == 1, "an odd hero is not SPIDER-MAN");
-        check(sectionCount(powersPage) == 10 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 5 &&
+        check(sectionCount(powersPage) == 12 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 6 &&
                   sectionCount(graphicsPage) == 4 && sectionCount(colorPage) == 2 && sectionCount(controlsPage) == 4 &&
                   sectionCount(statusPage) == 0 && sectionCount(musicPage) == 0 && sectionCount(pages) == 0,
               "a page's section count");
@@ -18798,7 +18801,7 @@ int main() {
                 }
             }
         }
-        check(placed == 146 /* CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 181 /* 0.0.72: + 35; CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -24448,6 +24451,712 @@ int main() {
             check(js == mm::loaded || js == mm::overBudget, std::string("JOKER: drawn as downloaded or not at all: ") + mm::statusNames[js < 5 ? static_cast<int>(js) : 0]);
         }
     });
+    // ---- Version 0.0.72 (TEST): the 0.0.72 list's rules (hero072.hpp), pure ----
+    test("Version 0.0.72: GREEN LANTERN flight takes off only with both arms straight up, never a trigger", [] {
+        using namespace hero072;
+        check(hero_modes::triggerWeapon(hero_modes::greenLantern) && hero_modes::flyThrust(hero_modes::greenLantern, 1.f) == 0.f,
+              "GREEN LANTERN's triggers thrust FLY MODE");
+        check(hero_modes::triggerWeapon(hero_modes::thor) && hero_modes::flyThrust(hero_modes::thor, 1.f) == 0.f,
+              "THOR's triggers thrust FLY MODE");
+        const Vec3 head{0, 1.7f, 0};
+        check(armsStraightUp(head, {-.15f, 2.15f, 0}, {.15f, 2.15f, 0}), "both arms straight up not seen");
+        check(!armsStraightUp(head, {-.15f, 2.15f, 0}, {.3f, 1.2f, -.3f}), "one arm up took off");
+        check(!armsStraightUp(head, {-.8f, 2.05f, 0}, {.8f, 2.05f, 0}), "arms out wide took off");
+        check(!armsStraightUp(head, {NAN, 2.1f, 0}, {.1f, 2.1f, 0}), "a NaN hand took off");
+        RingFlight rf;
+        float lift = 0;
+        // On the ground: FORWARD and RISE (one hand) from FLY MODE's poses never take off.
+        check(rf.gate(.016f, false, 2u, 0, head, {-.2f, 1.5f, -.5f}, {.2f, 1.5f, -.5f}, lift) == 0u, "FORWARD took off");
+        check(rf.gate(.016f, false, 1u, .8f, head, {-.15f, 2.1f, 0}, {.3f, 1.1f, 0}, lift) == 0u && lift == 0, "one hand up took off");
+        uint32_t p = 0;
+        for (int i = 0; i < 20; ++i)
+            p = rf.gate(.016f, false, 0u, 0, head, {-.15f, 2.15f, 0}, {.15f, 2.15f, 0}, lift);
+        check(p == 1u && lift == 1.f && rf.taking, "held both-arms-up did not take off at full lift");
+        // In the air the hands steer as FLY MODE's poses say.
+        check(rf.gate(.016f, true, 2u, 0, head, {}, {}, lift) == 2u && !rf.taking, "the air poses do not pass");
+        check(rf.gate(.016f, true, 3u, 0, head, {}, {}, lift) == 3u, "the T-pose brake does not pass");
+    });
+    test("Version 0.0.72: GREEN LANTERN fist, bubble, beam, chain and charge", [] {
+        using namespace hero072;
+        FistGesture f;
+        const Vec3 look{0, 0, -1};
+        check(!f.step(.016f, 0.f, {0, 0, -4}, look), "a fast punch without the grip threw the fist");
+        check(!f.step(.016f, 1.f, {0, 0, -1}, look), "a slow punch threw the fist");
+        check(!f.step(.016f, 1.f, {4, 0, 0}, look), "a sideways swing threw the fist");
+        check(f.step(.016f, 1.f, {0, 0, -4}, look), "grip + fast punch did not throw the fist");
+        check(!f.step(.016f, 1.f, {0, 0, -4}, look), "the fist re-fired at once");
+        check(!f.step(.016f, 1.f, {NAN, 0, -4}, look), "a NaN velocity threw the fist");
+        BubbleGesture b;
+        check(!b.step(.016f, 1, 0, {-.1f, 1.3f, -.3f}, {.1f, 1.3f, -.3f}), "one grip raised the bubble");
+        check(!b.step(.016f, 1, 1, {-.1f, 1.3f, -.3f}, {.1f, 1.3f, -.3f}), "hands together raised the bubble");
+        bool up = false;
+        for (int i = 1; i <= 15 && !up; ++i) {
+            const float x = .1f + i * .03f;
+            up = b.step(.016f, 1, 1, {-x, 1.3f, -.3f}, {x, 1.3f, -.3f});
+        }
+        check(up, "pulling the hands apart with both grips did not raise the bubble");
+        check(b.step(.016f, 1, 1, {-.4f, 1.3f, -.3f}, {.4f, 1.3f, -.3f}), "the bubble dropped while held");
+        check(!b.step(.016f, 0, 1, {-.4f, 1.3f, -.3f}, {.4f, 1.3f, -.3f}), "the bubble stayed after a grip let go");
+        BubbleGesture still;
+        bool stillUp = false;
+        for (int i = 0; i < 60; ++i)
+            stillUp = stillUp || still.step(.016f, 1, 1, {-.4f, 1.3f, -.3f}, {.4f, 1.3f, -.3f});
+        check(!stillUp, "holding both grips already apart (no pull) raised the bubble");
+        Charge c;
+        check(c.spend(fistCost, true) && c.level == chargeMost - fistCost, "the fist did not cost charge");
+        check(c.spend(1000.f, false), "RING CHARGE OFF still limits");
+        check(!c.spend(1000.f, true), "more than the charge was spent");
+        while (c.spend(chainCost, true)) {
+        }
+        c.spend(c.level, true);
+        check(c.empty && !c.can(1.f, true), "an empty ring still fires");
+        for (int i = 0; i < 600; ++i)
+            c.step(.016f, false);
+        check(!c.empty && c.level >= emptyUntil, "the ring did not recharge at rest");
+        check(constructFist().amount > 0 && ringBeamTick().amount > 0 && chainGrab().amount > 0, "a construct blow is empty");
+        check(chainRange > 0 && beamRange > chainRange, "the beam's and the chain's reach");
+    });
+    test("Version 0.0.72: THOR storm by the hammer held straight up for about 1 s (no trigger)", [] {
+        using namespace hero072;
+        const Vec3 head{0, 1.7f, 0};
+        check(stormHold >= .9f && stormHold <= 1.1f, "the storm's hold is not about a second");
+        check(hammerRaised(head, {.05f, 2.1f, 0}, {0, 1, 0}), "the hammer straight up not seen");
+        check(!hammerRaised(head, {.05f, 1.8f, 0}, {0, 1, 0}), "a hammer at the eyes counted");
+        check(!hammerRaised(head, {.7f, 2.1f, 0}, {0, 1, 0}), "a hammer out to the side counted");
+        check(!hammerRaised(head, {.05f, 2.1f, 0}, {1, .4f, 0}), "a tilted hammer counted");
+        StormHold s;
+        int fired = 0, at = -1;
+        for (int i = 0; i < 100; ++i)
+            if (s.step(.016f, true)) {
+                ++fired;
+                if (at < 0)
+                    at = i;
+            }
+        check(fired == 1 && at >= 55 && at <= 70, "the storm did not fire once after about 1 s held");
+        StormHold t;
+        bool any = false;
+        for (int i = 0; i < 100; ++i)
+            any = t.step(.016f, i % 30 != 0) || any; // let go now and then
+        check(!any, "a broken hold called the storm");
+    });
+    test("Version 0.0.72: THOR MELEE - down swing bolt, up swing launch, airborne lock slam (gestures)", [] {
+        using namespace hero072;
+        HammerSwing h;
+        check(h.step(.016f, false, {0, -5, 0}) == hero072::Swing::none, "a swing with no hammer in hand counted");
+        check(h.step(.016f, true, {0, -1, 0}) == hero072::Swing::none, "a slow swing counted");
+        check(h.step(.016f, true, {4, -.5f, 0}) == hero072::Swing::none, "a flat swing counted");
+        check(h.step(.016f, true, {0, -4, -1}) == hero072::Swing::down, "a down swing not seen");
+        check(h.step(.016f, true, {0, -4, -1}) == hero072::Swing::none, "the swing re-fired at once");
+        for (int i = 0; i < 40; ++i)
+            h.step(.016f, true, {});
+        check(h.step(.016f, true, {0, 4, -1}) == hero072::Swing::up, "an up swing not seen");
+        check(h.step(.016f, true, {NAN, 4, 0}) == hero072::Swing::none, "a NaN swing counted");
+        check(thorAct(hero072::Swing::down, true, false) == ThorAct::bolt, "a landed down swing called no bolt");
+        check(thorAct(hero072::Swing::down, false, false) == ThorAct::none, "a missed down swing on the ground did something");
+        check(thorAct(hero072::Swing::down, false, true) == ThorAct::slam, "a down swing on an airborne lock did not slam (untouched)");
+        check(thorAct(hero072::Swing::down, true, true) == ThorAct::slam, "a landed down swing on an airborne lock did not slam");
+        check(thorAct(hero072::Swing::up, true, false) == ThorAct::launch, "a landed up swing did not launch");
+        check(thorAct(hero072::Swing::up, false, true) == ThorAct::none, "a missed up swing did something");
+        check(thorAct(hero072::Swing::none, true, true) == ThorAct::none, "no swing did something");
+        check(inAir(3.f, 0.f) && !inAir(.5f, 0.f) && !inAir(NAN, 0.f), "airborne enemy test");
+        check(thorBolt().amount > 0 && thorSlam().amount > thorBolt().amount && thorLaunch().knockAmount > thorBolt().knockAmount,
+              "THOR MELEE blows");
+    });
+    test("Version 0.0.72: NATURAL INVINCIBLE - THOR and SUPERMAN only, never a revive", [] {
+        using namespace hero072;
+        check(naturallyInvincible(hero_modes::thor) && naturallyInvincible(hero_modes::superman), "THOR or SUPERMAN not invincible");
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+            if (h != hero_modes::thor && h != hero_modes::superman)
+                check(!naturallyInvincible(h), "another hero is naturally invincible");
+        check(keepTopped(hero_modes::thor, true, false) && !keepTopped(hero_modes::thor, false, false) &&
+                  keepTopped(hero_modes::hulk, false, true) && !keepTopped(hero_modes::hulk, true, false),
+              "keepTopped's rule");
+        // A fall, a slam or a hit all come back; a death (0) never does.
+        check(extras385::invincible::refill(120.f, 200.f, NAN) == 200.f, "a hit was not topped up");
+        check(extras385::invincible::refill(0.f, 200.f, NAN) < 0 && extras385::invincible::refill(-5.f, 200.f, NAN) < 0,
+              "a death was revived (a scripted death could softlock)");
+        check(!survivalHero(hero_modes::thor) && !survivalHero(hero_modes::superman), "SURVIVAL injures THOR or SUPERMAN");
+        Survival s;
+        for (int i = 0; i < 200; ++i)
+            s.step(.016f, hero_modes::thor, .3f);
+        check(s.injuries == 0 && !s.brokenLeg() && !s.concussed(), "THOR got a SURVIVAL injury");
+        check(combat38::optionInfo[combat38::naturalInvincible].values[0] == std::string("ON"), "NATURAL INVINCIBLE is not ON by default");
+    });
+    test("Version 0.0.72: HULK RAGE builds with damage taken, caps at 2x, fades after the fight", [] {
+        using namespace hero072;
+        hero072::Fight f;
+        f.step(.016f, 3, .01f, 0, true);
+        check(f.on, "the fight did not start");
+        HulkRage r;
+        r.step(.016f, true, f, 0);
+        check(r.mult == 1.f && r.level() == 0, "HULK RAGE started above 1x");
+        r.step(.016f, true, f, .1f);
+        check(r.mult > 1.1f && r.mult < 1.3f, "a tenth of his health did not build about .2x");
+        for (int i = 0; i < 50; ++i)
+            r.step(.016f, true, f, .2f);
+        check(r.mult == hulkRageMost && r.level() == 1.f, "HULK RAGE passed or missed its 2x cap");
+        const sm2_damage::Blow b = r.scaled({100.f, 5, 400.f});
+        check(b.amount == 200.f && b.knockAmount > 400.f && b.knockback == 5, "the 2x blow");
+        r.step(.016f, true, f, NAN);
+        check(r.mult == hulkRageMost, "a NaN loss changed the rage");
+        for (int i = 0; i < 300; ++i)
+            f.step(.016f, 0, 0, 0, false);
+        check(!f.on, "the fight did not end");
+        for (int i = 0; i < 100; ++i)
+            r.step(.016f, true, f, 0);
+        check(r.mult < hulkRageMost && r.mult > 1.f, "the rage did not fade slowly after the fight");
+        for (int i = 0; i < 2000; ++i)
+            r.step(.016f, true, f, 0);
+        check(r.mult == 1.f, "the rage did not fade back to 1x");
+        r.mult = 1.8f;
+        r.step(.016f, false, f, 0);
+        check(r.mult == 1.f && r.scaled({50.f, 5, 100.f}).amount == 50.f, "HULK RAGE OFF still multiplies");
+        // Outside a fight a hit builds nothing.
+        HulkRage q;
+        q.step(.016f, true, f, .5f);
+        check(q.mult == 1.f, "a hit outside a fight built rage");
+        // The tint: subtle, green for HULK, red for the PUNISHER, none for the rest.
+        const RageTint g = rageTint(hero_modes::hulk, 1.f), p = rageTint(hero_modes::punisher, 1.f),
+                       n = rageTint(hero_modes::spiderMan, 1.f), z = rageTint(hero_modes::hulk, 0);
+        check(g.tint < 0 && g.vignette > 0 && g.vignette <= 40 && g.step == 10, "HULK's tint is not a subtle green");
+        check(p.warmth > 0 && p.tint > 0 && p.vignette <= 50, "the PUNISHER's tint is not red");
+        check(n.step == 0 && n.tint == 0 && z.step == 0 && z.vignette == 0, "a tint without rage");
+        check(rageTint(hero_modes::hulk, .5f).tint > g.tint, "the tint does not grow with the rage");
+        check(rageTint(hero_modes::hulk, NAN).step == 0, "a NaN rage tinted");
+    });
+    test("Version 0.0.72: UPPERCUT, SMOKE BLIND, BATON GRAPPLE cast and BATON PARRY", [] {
+        using namespace hero072;
+        check(isUppercut(2.5f) && !isUppercut(1.f) && !isUppercut(NAN), "the uppercut's speed");
+        check(uppercutBlow().knockAmount > uppercutBlow().amount, "the uppercut is a launch, not damage");
+        HandSpeed hs;
+        Vec3 pos[2]{{0, 1, 0}, {0, 1, 0}};
+        const bool tr[2]{true, true};
+        for (int i = 0; i < 10; ++i) {
+            pos[1].y += .05f;
+            hs.update(.016f, pos, tr);
+        }
+        check(hs.velocity[1].y > 2.f && hs.upPeak[1] > 2.f, "HandSpeed did not see the hand going up");
+        SmokeBlind sb;
+        BatonEnemy en[2]{{7, {1, 1.2f, 0}, false}, {8, {20, 1.2f, 0}, false}};
+        const Vec3 puff{0, 1, 0};
+        const float age = .5f;
+        BlindOut out;
+        sb.step(.016f, &puff, &age, 1, 5.f, en, 2, out);
+        check(out.count == 1 && out.ids[0] == 7 && sb.isBlind(7) && !sb.isBlind(8), "the smoke did not blind the one inside");
+        sb.step(.016f, &puff, &age, 1, 5.f, en, 2, out);
+        check(out.count == 0, "the blinded enemy was staggered every frame");
+        BatonCast cast;
+        const Vec3 head{0, 1.7f, 0};
+        Vec3 hands[2]{{-.2f, 1.2f, -.3f}, {.2f, 1.9f, -.2f}}, vel[2]{{}, {0, 4, -1}};
+        check(cast.step(.016f, head, hands, vel, tr) == 1, "a fast upward cast did not grapple");
+        check(cast.step(.016f, head, hands, vel, tr) == -1, "the cast re-fired at once");
+        BatonCast low;
+        Vec3 lowHands[2]{{-.2f, 1.2f, -.3f}, {.2f, 1.2f, -.3f}};
+        check(low.step(.016f, head, lowHands, vel, tr) == -1, "a cast that ends below the eyes grappled");
+        Vec3 slow[2]{{}, {0, 1, 0}};
+        BatonCast s2;
+        check(s2.step(.016f, head, hands, slow, tr) == -1, "a slow raise grappled");
+        const Pose face{{0, 1.7f, 0}, {}};
+        check(batonsCrossed(face, {-.15f, 1.5f, -.4f}, {.15f, 1.9f, -.4f}, {.15f, 1.5f, -.4f}, {-.15f, 1.9f, -.4f}),
+              "crossed batons not seen");
+        check(!batonsCrossed(face, {-.15f, 1.5f, -.4f}, {-.15f, 1.9f, -.4f}, {.15f, 1.5f, -.4f}, {.15f, 1.9f, -.4f}),
+              "parallel batons counted as crossed");
+        check(nearestEnemy({0, 1.2f, 0}, en, 2, parryCounterRange) == 0, "the parry's nearest enemy");
+    });
+    test("Version 0.0.72: IRON MAN HUD, PUNISHER RAGE, REPUTATION and SURVIVAL", [] {
+        using namespace hero072;
+        hero072::Fight f;
+        IronHud hud;
+        f.step(.016f, 4, 0, 0, true);
+        hud.step(.016f, f, 7, {0, 1, -5}, 4, true, 22.f, 35.f);
+        char text[IronHud::lineCount][40];
+        float a[IronHud::lineCount];
+        hud.lines(text, a);
+        check(std::string(text[0]) == "HOSTILES DETECTED" && std::string(text[1]) == "TARGET LOCKED" &&
+                  std::string(text[3]) == "HOSTILES: 4" && std::string(text[4]).find("SPD 22") == 0 &&
+                  std::string(text[4]).find("ALT 35") != std::string::npos,
+              "the HUD's fight lines");
+        for (int i = 0; i < 300; ++i) {
+            f.step(.016f, 0, 0, i == 0 ? 4u : 0u, false);
+            hud.step(.016f, f, 0, {}, 0, false, NAN, NAN);
+            if (f.justCleared)
+                break;
+        }
+        hud.lines(text, a);
+        check(std::string(text[2]) == "ALL HOSTILES NEUTRALIZED" && text[4][0] == 0 && text[1][0] == 0, "the cleared line");
+        hero072::Fight g;
+        Rage r;
+        g.step(.016f, 3, .35f, 0, false);
+        r.step(.016f, true, g);
+        check(r.raging, "a third of the health lost in a fight did not rage");
+        for (int i = 0; i < 60; ++i)
+            r.step(.016f, true, g);
+        check(r.level > .9f && rageBlow().amount > 0, "the rage did not build");
+        Rage off;
+        off.step(.016f, false, g);
+        check(!off.raging && off.level == 0, "PUNISHER RAGE OFF still raged");
+        Reputation rep;
+        check(rep.points == repStart, "reputation's start");
+        rep.add(1000);
+        rep.step(3, true, false);
+        check(rep.points == 1000 + 3 * repDown + repCleared && rep.dirty, "reputation's gains");
+        rep.step(0, false, true);
+        check(rep.points == 1000 + 3 * repDown + repCleared + repDefeated, "reputation's loss");
+        check(-repDefeated > 5 * repCleared && -repAbandoned > repCleared, "mistakes do not cost more than wins pay");
+        check(repLevel(repMost) == repLevels && repLevels >= 15 && repLevel(-5) == 0, "the levels");
+        for (int i = 0; i < 100; ++i)
+            rep.step(0, false, true);
+        check(rep.points == 0 && std::string(repRank(rep.points)) == "ROOKIE", "reputation went below 0");
+        check(Reputation::parse("x\nreputation=731\n") == 731 && Reputation::parse("reputation=99999") == repMost &&
+                  Reputation::parse(nullptr) == repStart && Reputation::parse("junk") == repStart,
+              "the saved reputation's read back");
+        Survival sv;
+        for (int i = 0; i < 400; ++i)
+            sv.step(.016f, hero_modes::punisher, .08f);
+        check(sv.rolls > 0 && sv.injuries > 0, "SURVIVAL never injured the PUNISHER");
+        float x = 0, y = 1;
+        sv.limb[leftLeg] = 10;
+        sv.legStick(x, y, 1.f);
+        check(sv.brokenLeg() && y < 1.f && std::isfinite(x), "a broken leg does not slow the walk");
+        sv.limb[head] = 10;
+        check(sv.concussed() && sv.dazed(.7f) >= 0 && sv.dazed(NAN) == 0, "the concussion's pulse");
+        sv.limb[rightArm] = 10;
+        check(sv.punchScale(1) == .5f && sv.punchScale(0) == (sv.injuredArm(0) ? .5f : 1.f), "an injured arm's punches");
+        Survival hulk;
+        hulk.step(.016f, hero_modes::hulk, .5f);
+        check(hulk.rolls == 0, "SURVIVAL rolled for a hero it leaves alone");
+    });
+    test("Version 0.0.72: roster bios, the PUNISHER SUIT line, the GUARD, the looks keep their budget", [] {
+        using namespace hero072;
+        check(rosterCount == hero_modes::heroes, "a hero without a roster tile");
+        for (uint32_t h = 0; h < rosterCount; ++h) {
+            const Bio& b = bio(h);
+            const std::string all = std::string(b.name) + b.tag + b.bio;
+            check(all.find("Marvel") == std::string::npos && all.find("DC") == std::string::npos, "a bio credits Marvel or DC");
+        }
+        check(std::string(punisherSuitLine(0)).find("FLOH") != std::string::npos &&
+                  std::string(punisherSuitLine(1)).find("SPYBG") != std::string::npos,
+              "the PUNISHER SUIT line credits the wrong artist");
+        Guard g;
+        check(g.live(true) && g.sane(true, "x") && !g.sane(false, "bad") && g.tripped && !g.live(true) &&
+                  std::string(g.why) == "bad" && g.trips == 1,
+              "the GUARD does not turn a feature off for good");
+        Look l;
+        l.any = l.hammer = true;
+        l.hammerAt = {0, 1.2f, -.5f};
+        l.bolts = boltsMost;
+        for (uint32_t i = 0; i < boltsMost; ++i) {
+            l.boltFrom[i] = {0, 6, -3};
+            l.boltTo[i] = {float(i), 0, -3};
+            l.boltSeed[i] = float(i);
+        }
+        l.ring[0] = l.ring[1] = true;
+        l.ringAt[1] = {0, 1, -.3f};
+        l.beam = l.bubble = l.chain = l.fist = l.charge = l.hud = l.lock = true;
+        l.beamFrom = {0, 1, 0};
+        l.beamTo = {0, 1, -20};
+        l.bubbleAt = {0, 1, 0};
+        l.bubbleRadius = bubbleRadius;
+        l.chainFrom = {0, 1, 0};
+        l.chainTo = {0, 1, -15};
+        l.fistAt = {0, 1, -2};
+        l.fistAlpha = 1;
+        l.chargeAt = {-.2f, 1, -.3f};
+        l.chargeLevel = .5f;
+        l.hudEye = {0, 1.7f, 0};
+        l.lockAt = {0, 1.5f, -6};
+        std::snprintf(l.hudText[0], 40, "HOSTILES DETECTED");
+        l.hudAlpha[0] = 1;
+        std::vector<Vertex> out;
+        appendLook(out, l, {}, {0, 1.7f, 0}, .001f);
+        check(!out.empty() && out.size() <= budget::frame, "the 0.0.72 looks drew nothing or broke the budget");
+        bool fin = true;
+        for (const auto& v : out)
+            fin = fin && std::isfinite(v.position.x) && std::isfinite(v.position.y) && std::isfinite(v.position.z);
+        check(fin, "a 0.0.72 look vertex is not finite");
+        Look bad = l;
+        bad.beamTo = {NAN, 0, 0};
+        bad.hammerAt = {INFINITY, 0, 0};
+        std::vector<Vertex> o2;
+        appendLook(o2, bad, {}, {0, 1.7f, 0}, .001f);
+        bool fin2 = true;
+        for (const auto& v : o2)
+            fin2 = fin2 && std::isfinite(v.position.x) && std::isfinite(v.position.y) && std::isfinite(v.position.z);
+        check(fin2, "a NaN look let an insane vertex through");
+    });
+
+    test("Version 0.0.72: PUNISHER RAGE MODE - 5 downs or heavy damage, a heartbeat red at the edges, RAGE BLOOD", [] {
+        using namespace hero072;
+        hero072::Fight f;
+        f.step(.016f, 6, 0, 0, true);
+        Rage r;
+        f.step(.016f, 6, 0, 4, true);
+        r.step(.016f, true, f);
+        check(!r.raging, "4 downs raged");
+        f.step(.016f, 6, 0, 1, true);
+        r.step(.016f, true, f);
+        check(r.raging && rageDowns == 5, "the 5th down did not rage");
+        check(rageShotScale > 1.f, "rage shots are not harder");
+        // The heartbeat: lub-dub, 90-120 bpm, modest, edges only.
+        check(heartBpm(0) == 90.f && heartBpm(1) == 120.f && heartBpm(NAN) == 90.f, "the heartbeat's bpm");
+        check(heartPulse(heartWidth * .5f) > .99f && heartPulse(heartDub + heartWidth * .5f) > .55f &&
+                  heartPulse(heartDub + heartWidth * .5f) < .65f && heartPulse(.7f) == 0 && heartPulse(NAN) == 0,
+              "lub-dub");
+        HeartBeat hb;
+        int peaks = 0;
+        float last = 0;
+        bool rising = false;
+        for (int i = 0; i < 600; ++i) { // 6 s at 100 bpm-ish
+            const float p = hb.step(.01f, .33f);
+            if (p < last && rising && last > .3f)
+                ++peaks;
+            rising = p > last;
+            last = p;
+        }
+        check(peaks >= 16 && peaks <= 22, "not about two pulses a beat at ~100 bpm: " + std::to_string(peaks));
+        const RageTint calm = rageTint(hero_modes::punisher, 1.f, 0.f), beat = rageTint(hero_modes::punisher, 1.f, 1.f);
+        check(beat.tint == calm.tint && beat.warmth == calm.warmth, "the pulse moves the whole view (a flash)");
+        check(beat.vignette > calm.vignette && beat.vignette - calm.vignette <= heartVignette, "the pulse is not modest, at the edges");
+        check(rageTint(hero_modes::punisher, 1.f, 1.f, rageTintScale(3)).vignette == 0, "RAGE TINT OFF tinted");
+        check(rageTint(hero_modes::punisher, 1.f, 0.f, rageTintScale(1)).warmth > calm.warmth &&
+                  rageTint(hero_modes::punisher, 1.f, 0.f, rageTintScale(2)).warmth < calm.warmth,
+              "RAGE TINT's STRONG / SUBTLE");
+        check(rageTint(hero_modes::punisher, 0.f, 1.f).vignette == 0, "a pulse with no rage");
+        // RAGE BLOOD: a lot on EXTREME, some on NORMAL, none OFF; capped; it falls and pools.
+        Blood b;
+        b.shot(bloodOff, {0, 1.2f, -3}, {0, 0, -1}, 0);
+        check(b.liveDrops() == 0, "RAGE BLOOD OFF bled");
+        b.shot(bloodNormal, {0, 1.2f, -3}, {0, 0, -1}, 0);
+        const uint32_t normal = b.liveDrops();
+        b.clear();
+        b.shot(bloodExtreme, {0, 1.2f, -3}, {0, 0, -1}, 0);
+        check(b.liveDrops() >= 3 * normal && b.livePools() > 0, "EXTREME is not a lot more than NORMAL");
+        for (int i = 0; i < 40; ++i)
+            b.shot(bloodExtreme, {0, 1.2f, -3}, {0, 0, -1}, 0);
+        check(b.liveDrops() <= bloodDropsMost && b.livePools() <= bloodPoolsMost, "the blood is not capped");
+        for (int i = 0; i < 200; ++i)
+            b.step(.016f);
+        check(b.liveDrops() == 0 && b.livePools() > 0, "the drops did not land");
+        b.shot(bloodExtreme, {NAN, 0, 0}, {0, 0, -1}, 0);
+        b.shot(bloodExtreme, {0, 1, 0}, {0, 0, -1}, NAN);
+        check(b.liveDrops() == 0, "a NaN shot bled");
+        b.shot(bloodExtreme, {0, 1.2f, -3}, {0, 0, -1}, 0);
+        std::vector<Vertex> out;
+        appendBlood(out, b, {0, 1.7f, 0}, .001f);
+        check(!out.empty() && out.size() <= budget::blood + 60, "the blood broke its budget: " + std::to_string(out.size()));
+        BloodPerf perf;
+        bool tripped = false;
+        for (int i = 0; i < 60 && !tripped; ++i)
+            tripped = perf.step(.03f, 1 / 90.f, true);
+        check(tripped && perf.off, "a frame drop did not turn RAGE BLOOD off");
+        BloodPerf fine;
+        for (int i = 0; i < 600; ++i)
+            fine.step(1 / 90.f, 1 / 90.f, true);
+        for (int i = 0; i < 100; ++i)
+            fine.step(.03f, 1 / 90.f, false); // slow but not drawing
+        check(!fine.off, "RAGE BLOOD turned off without a drop while drawing");
+    });
+    test("Version 0.0.72: SURVIVAL heals only at rest; WOLVERINE heals mid-fight; SUPERMAN, THOR, HULK immune", [] {
+        using namespace hero072;
+        check(!survivalHero(hero_modes::superman) && !survivalHero(hero_modes::thor) && !survivalHero(hero_modes::hulk),
+              "an immune hero gets injuries");
+        check(survivalHero(hero_modes::wolverine) && healsInFight(hero_modes::wolverine) && !healsInFight(hero_modes::punisher),
+              "WOLVERINE's healing factor");
+        Survival s;
+        s.limb[torso] = 40;
+        s.sinceHit = 99;
+        for (int i = 0; i < 600; ++i)
+            s.step(.016f, hero_modes::punisher, 0, true, 0, false); // in a fight
+        check(s.limb[torso] == 40, "healed in a fight");
+        for (int i = 0; i < 600; ++i)
+            s.step(.016f, hero_modes::punisher, 0, false, 6.f, false); // running
+        check(s.limb[torso] == 40, "healed while running");
+        for (int i = 0; i < 600; ++i)
+            s.step(.016f, hero_modes::punisher, 0, false, 1.f, true); // swinging
+        check(s.limb[torso] == 40, "healed while swinging");
+        for (int i = 0; i < 200; ++i)
+            s.step(.016f, hero_modes::punisher, 0, false, 1.f, false); // 3.2 s walking: not yet
+        check(s.limb[torso] == 40, "healed before resting long enough");
+        for (int i = 0; i < 400; ++i)
+            s.step(.016f, hero_modes::punisher, 0, false, 1.f, false);
+        check(s.limb[torso] > 40, "did not heal at rest");
+        Survival w;
+        w.limb[leftLeg] = 30;
+        w.sinceHit = 99;
+        for (int i = 0; i < 300; ++i)
+            w.step(.016f, hero_modes::wolverine, 0, true, 8.f, true);
+        Survival c;
+        c.limb[leftLeg] = 30;
+        c.sinceHit = 99;
+        c.rested = 99;
+        for (int i = 0; i < 300; ++i)
+            c.step(.016f, hero_modes::captainAmerica, 0, false, 0, false);
+        check(w.limb[leftLeg] > 30 && w.limb[leftLeg] - 30 > c.limb[leftLeg] - 30, "WOLVERINE did not heal mid-fight faster than resting");
+    });
+    test("Version 0.0.72: FIRE DOUSE per hero (gestures, no triggers), SHIELD SLAM, the PUNISHER's HOOK", [] {
+        using namespace hero072;
+        check(!fireHookConfirmed, "the fire hook is marked CONFIRMED without an address");
+        check(douseFor(hero_modes::spiderMan) == Douse::webBalls && douseFor(hero_modes::superman) == Douse::coldBreath &&
+                  douseFor(hero_modes::ironMan) == Douse::foamPalm && douseFor(hero_modes::batman) == Douse::foamGrenade &&
+                  douseFor(hero_modes::punisher) == Douse::foamGrenade && douseFor(hero_modes::thor) == Douse::hammerGust &&
+                  douseFor(hero_modes::greenLantern) == Douse::constructHose && douseFor(hero_modes::hulk) == Douse::thunderClap &&
+                  douseFor(hero_modes::captainAmerica) == Douse::shieldSlam && douseFor(hero_modes::daredevil) == Douse::batonFan,
+              "a hero's douse");
+        for (uint32_t d = 0; d < static_cast<uint32_t>(Douse::douses); ++d)
+            check(std::string(douseName(static_cast<Douse>(d))) != "?", "a douse without a name");
+        Fires fires;
+        fires.add({0, 0, -5});
+        fires.add({0, 0, 5}); // behind
+        uint32_t out = 0;
+        for (int i = 0; i < 120; ++i)
+            out += fires.douse(Douse::foamPalm, {0, 0, 0}, {0, 0, -1}, .016f);
+        check(out == 1 && fires.live() == 1, "the palm foam did not put out only the fire ahead");
+        check(fires.douse(Douse::shieldSlam, {0, 0, 3}, {}, .016f) == 1, "the SHIELD SLAM's shockwave did not douse near");
+        check(fires.douse(Douse::webBalls, {0, 0, 0}, {0, 0, -1}, .016f) == 0, "web balls are not the game's own");
+        // THOR: spin fast below the head; raised it is the storm, not a gust.
+        SpinGesture sp;
+        bool spun = false;
+        for (int i = 0; i < 90; ++i) {
+            const float a = i * .25f;
+            spun = sp.step(.016f, {3 * std::cos(a), 0, 3 * std::sin(a)}, true) || spun;
+        }
+        check(spun, "a fast spin not seen");
+        SpinGesture raised;
+        bool r2 = false;
+        for (int i = 0; i < 90; ++i) {
+            const float a = i * .25f;
+            r2 = raised.step(.016f, {3 * std::cos(a), 0, 3 * std::sin(a)}, false) || r2;
+        }
+        check(!r2, "a spin with the hammer raised made a gust");
+        SpinGesture straight;
+        bool r3 = false;
+        for (int i = 0; i < 90; ++i)
+            r3 = straight.step(.016f, {0, 0, -4}, true) || r3;
+        check(!r3, "a straight fast move counted as a spin");
+        PalmSpray ps;
+        bool sprayed = false;
+        for (int i = 0; i < 20; ++i)
+            sprayed = ps.step(.016f, 1.f, {0, 0, -1}, {0, 0, -1});
+        check(sprayed && !PalmSpray{}.step(.5f, 1.f, {0, 0, 1}, {0, 0, -1}), "IRON MAN's palm foam");
+        HoseGesture hose;
+        bool h = false;
+        for (int i = 0; i < 20; ++i)
+            h = hose.step(.016f, 1, 1, {0, 1.7f, 0}, {0, 0, -1}, {-.05f, 1.4f, -.45f}, {.05f, 1.4f, -.45f});
+        check(h, "GREEN LANTERN's hose");
+        ClapGesture clap;
+        clap.step(.016f, {-.4f, 1.3f, -.3f}, {.4f, 1.3f, -.3f});
+        check(clap.step(.016f, {-.05f, 1.3f, -.3f}, {.05f, 1.3f, -.3f}), "HULK's clap");
+        check(!clap.step(.016f, {-.05f, 1.3f, -.3f}, {.05f, 1.3f, -.3f}), "the clap re-fired");
+        ClapGesture slow;
+        slow.step(.016f, {-.1f, 1.3f, -.3f}, {.1f, 1.3f, -.3f});
+        check(!slow.step(.1f, {-.06f, 1.3f, -.3f}, {.06f, 1.3f, -.3f}), "a slow touch clapped");
+        ShieldSlam slam;
+        check(!slam.step(.016f, false, {0, 1.7f, 0}, {0, .5f, -.3f}, {0, -4, 0}), "a slam without the shield");
+        check(!slam.step(.016f, true, {0, 1.7f, 0}, {0, 1.2f, -.3f}, {0, -4, 0}), "a slam ending high");
+        check(slam.step(.016f, true, {0, 1.7f, 0}, {0, .5f, -.3f}, {0, -4, 0}), "the SHIELD SLAM not seen");
+        check(shieldSlamHit().amount > 0 && shieldSlamHit().knockAmount >= 400.f && slamRadius > 3.f, "the slam's knockback");
+        HookLauncher hk;
+        check(!hk.step(.016f, true, 1.f, false, {}, {0, 0, -1}) && hk.state == HookLauncher::stowed, "drawn off the chest");
+        hk.step(.016f, true, 0.f, false, {}, {0, 0, -1});
+        hk.step(.016f, true, 1.f, true, {}, {0, 0, -1});
+        check(hk.state == HookLauncher::held, "the hook not drawn from the chest");
+        hk.step(.016f, true, 1.f, false, {0, 0, -3}, {0, 0, -1});
+        check(hk.state == HookLauncher::winding, "the push did not fire it");
+        int bite = -1;
+        for (int i = 0; i < 100 && bite < 0; ++i)
+            if (hk.step(.016f, true, 1.f, false, {}, {0, 0, -1}))
+                bite = i;
+        check(bite >= 30 && bite <= 45, "the hook is not the slower grapple (wind-up)");
+        hk.step(.016f, true, 0.f, false, {}, {0, 0, -1});
+        check(hk.state == HookLauncher::stowed, "let go did not stow it");
+        check(wayUp(hero_modes::punisher) == WayUp::hookLauncher && wayUp(hero_modes::wolverine) == WayUp::clawClimb &&
+                  wayUp(hero_modes::batman) == WayUp::grapple && wayUp(hero_modes::thor) == WayUp::fly,
+              "the ways up");
+        check(climbAllowed(hero_modes::spiderMan, true) && !climbAllowed(hero_modes::batman, true) &&
+                  climbAllowed(hero_modes::wolverine, true, true, true) && !climbAllowed(hero_modes::wolverine, true, false, true) &&
+                  !climbAllowed(hero_modes::wolverine, true, true, false) && climbAllowed(hero_modes::batman, false),
+              "only SPIDER-MAN crawls; WOLVERINE with claws out");
+    });
+    test("Version 0.0.72: UPPERCUT per hero, GRAPPLE PULL, the PARRY's timing, SHOVE, FACTIONS, REPUTATION per hero, ROSTER", [] {
+        using namespace hero072;
+        check(!uppercutLaunches(hero_modes::punisher) && uppercutBlow(hero_modes::punisher).knockAmount < 200.f,
+              "the PUNISHER's uppercut launched");
+        check(!uppercutLaunches(hero_modes::batman) && uppercutBlow(hero_modes::batman).knockAmount < uppercutBlow().knockAmount,
+              "BATMAN got a big launch");
+        check(uppercutBlow(hero_modes::superman).knockAmount > uppercutBlow(hero_modes::spiderMan).knockAmount &&
+                  uppercutBlow(hero_modes::hulk).knockAmount == uppercutBlow(hero_modes::thor).knockAmount &&
+                  uppercutBlow(hero_modes::captainAmerica).knockAmount == uppercutBlow().knockAmount,
+              "super strength launches higher, others moderate");
+        BatonEnemy en[3]{{1, {0, 1.2f, -10}, false}, {2, {3, 1.2f, -10}, false}, {3, {0, 1.2f, -6}, true}};
+        check(pullTarget({0, 1.2f, 0}, {0, 0, -1}, en, 3) == 0, "the grapple did not pick the enemy aimed at");
+        check(pullTarget({0, 1.2f, 0}, {1, 0, 0}, en, 3) == -1, "the grapple picked one not aimed at");
+        ParryTiming pt;
+        check(pt.hit() == ParryTiming::none, "uncrossed blocked");
+        pt.step(.016f, true);
+        pt.step(.1f, true);
+        check(pt.hit() == ParryTiming::parry, "crossed right as the hit lands did not parry");
+        for (int i = 0; i < 30; ++i)
+            pt.step(.016f, true);
+        check(pt.hit() == ParryTiming::block, "held crossed did not block");
+        pt.step(.016f, false);
+        check(pt.hit() == ParryTiming::none, "let go still blocked");
+        ShoveGesture sh;
+        check(sh.step(.016f, 0, 0, {-.2f, 1.3f, -.4f}, {.2f, 1.3f, -.4f}, {0, 0, -3}, {0, 0, -3}, {0, 0, -1}), "the shove not seen");
+        check(!ShoveGesture{}.step(.016f, 1, 1, {-.2f, 1.3f, -.4f}, {.2f, 1.3f, -.4f}, {0, 0, -3}, {0, 0, -3}, {0, 0, -1}),
+              "a shove with the grips held");
+        check(!ShoveGesture{}.step(.016f, 0, 0, {-.2f, 1.3f, -.4f}, {.2f, 1.3f, -.4f}, {0, 0, -3}, {0, 0, -.5f}, {0, 0, -1}),
+              "a one-hand shove");
+        check(!factionHookConfirmed, "the faction hook is marked CONFIRMED");
+        check(factionFor(hero_modes::daredevil, 0) == theHand && factionFor(hero_modes::captainAmerica, 0) == hydra &&
+                  factionFor(hero_modes::spiderMan, 0) == vanilla && factionFor(hero_modes::captainAmerica, 1) == vanilla &&
+                  factionFor(hero_modes::spiderMan, 2) == theHand && factionFor(hero_modes::daredevil, 3) == hydra,
+              "the factions");
+        Reputation rep;
+        rep.select(hero_modes::batman);
+        rep.add(3000);
+        RepEvents e;
+        e.abandoned = true;
+        rep.step(e);
+        check(rep.points == 3000 + repAbandoned, "a crime left did not cost");
+        rep.select(hero_modes::thor);
+        check(rep.points == repStart, "reputation is not per hero");
+        e = {};
+        e.fires = 2;
+        rep.step(e);
+        check(rep.points == repStart + 2 * repFire, "fires out did not count");
+        rep.select(hero_modes::batman);
+        check(rep.points == 3000 + repAbandoned && rep.meter() > 0 && rep.meter() < 1, "BATMAN's own rank was lost");
+        char buf[512];
+        rep.save(buf, sizeof buf);
+        Reputation back;
+        back.hero = hero_modes::thor;
+        back.load(buf);
+        check(back.points == repStart + 2 * repFire && back.heroPoints[hero_modes::batman] == 3000 + repAbandoned,
+              "the per-hero save did not read back");
+        Reputation old;
+        old.load("reputation=700\n");
+        check(old.points == 700 && old.heroPoints[hero_modes::hulk] == 700, "the old shared save did not carry over");
+        hero072::Fight f;
+        f.step(.016f, 2, 0, 0, true);
+        f.standingFar = 2;
+        for (int i = 0; i < 300; ++i)
+            f.step(.016f, 0, 0, 0, false);
+        check(f.justAbandoned || f.abandoned == 1, "walking away from a fight was not a crime left");
+        RosterUi ui;
+        check(ui.confirm() == -1, "CONFIRM with no popup");
+        ui.tap(hero_modes::thor);
+        check(ui.state == RosterUi::popup && std::string(bio(ui.picked).identity) == "Thor Odinson", "the popup");
+        check(ui.confirm() == static_cast<int>(hero_modes::thor) && ui.state == RosterUi::grid, "CONFIRM did not switch");
+        ui.tap(99);
+        check(ui.state == RosterUi::grid, "a bad tile opened a popup");
+        for (uint32_t h = 0; h < rosterCount; ++h)
+            check(bio(h).identity && bio(h).identity[0] && bio(h).abilities && bio(h).abilities[0], "a bio without a name or powers");
+        for (uint32_t o = combat38::rageBlood; o < combat38::options; ++o) {
+            const std::string help = combat38::optionInfo[o].help;
+            check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1, "a 0.0.72 subtext: " + help);
+        }
+    });
+    test("Version 0.0.72: SUITS per hero - generic, credited, unlocked by that hero's reputation, kept for good", [] {
+        using namespace hero072;
+        SuitCatalog c;
+        check(c.suits(hero_modes::punisher) == 2 && c.suits(hero_modes::spiderMan) == 1 && c.suits(hero_modes::captainAmerica) == 1,
+              "the built-in suits");
+        char line[96];
+        c.line(hero_modes::punisher, 1, false, line, sizeof line);
+        check(std::string(line) == "WARZONE LOCKED: REP 2500", std::string("a locked suit's line: ") + line);
+        c.line(hero_modes::punisher, 0, false, line, sizeof line);
+        check(std::string(line) == "SUIT: VEST BY floh (CC BY-NC)", std::string("the default suit's credit: ") + line);
+        check(c.next(hero_modes::punisher, false) == 0, "SUIT stepped onto a locked suit");
+        check(c.next(hero_modes::punisher, true) == 1 && c.current(hero_modes::punisher, true) == 1, "UNLOCK ALL SUITS");
+        check(c.current(hero_modes::punisher, false) == 0, "a locked chosen suit was worn");
+        c.unlockFor(hero_modes::punisher, 2600);
+        check(c.isUnlocked(hero_modes::punisher, 1, false) && c.current(hero_modes::punisher, false) == 1, "rep 2600 did not unlock WARZONE");
+        c.unlockFor(hero_modes::punisher, 100);
+        check(c.isUnlocked(hero_modes::punisher, 1, false), "a lost reputation locked a suit again");
+        char save[1024];
+        c.save(save, sizeof save);
+        SuitCatalog d;
+        d.load(save);
+        check(d.isUnlocked(hero_modes::punisher, 1, false) && d.current(hero_modes::punisher, false) == 1, "the unlock was not saved");
+        d.load("suits.7=0\n");
+        check(d.isUnlocked(hero_modes::punisher, 1, false), "an old save locked it again");
+        // Drop-in suits.
+        const uint32_t added = d.parseList("# my suits\n9|CLASSIC|someone|CC BY|850|ThorClassic\r\nbad line\n42|X|y|z|0|f\n9|CLASSIC|dupe|CC BY|0|f\n");
+        check(added == 1 && d.suits(hero_modes::thor) == 2 && d.suit(hero_modes::thor, 1)->rep == 850, "suits.txt");
+        d.line(hero_modes::thor, 1, false, line, sizeof line);
+        check(std::string(line) == "CLASSIC LOCKED: REP 850", "a dropped-in suit's lock");
+        for (int i = 0; i < 20; ++i)
+            d.add(makeSuit(hero_modes::thor, ("S" + std::to_string(i)).c_str(), "a", "CC BY", 0, ""));
+        check(d.suits(hero_modes::thor) == suitsMost, "the suits per hero are not capped");
+        check(combat38::optionInfo[combat38::testUnlocks].values[0] == std::string("OFF"), "TEST UNLOCKS is not OFF by default");
+    });
+    test("Version 0.0.72: PERK TREES and ULTIMATES - one table, a point a level, the capstone at max reputation", [] {
+        using namespace hero072;
+        check(perkCount == hero_modes::heroes * perksPerHero && treeCost() <= static_cast<uint32_t>(repLevels), "the perk table");
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            check(std::string(ultimate(h).name).size() > 0 && ultimate(h).cooldown >= 120.f && ultimate(h).radius > 0,
+                  "an ultimate without a name, a long cooldown or a reach");
+            for (uint32_t b = 0; b < branches; ++b)
+                for (uint32_t t = 0; t < tiers; ++t)
+                    check(perk(h, b, t).hero == h && perk(h, b, t).branch == b && perk(h, b, t).tier == t && perk(h, b, t).amount > 0,
+                          "a perk out of place");
+        }
+        check(perk(hero_modes::batman, 1, 0).stat == Stat::grappleSpeed && perk(hero_modes::batman, 2, 0).stat == Stat::smokeSeconds &&
+                  perk(hero_modes::hulk, 0, 0).stat == Stat::rageDamage && perk(hero_modes::thor, 0, 1).stat == Stat::chainJumps &&
+                  perk(hero_modes::greenLantern, 1, 0).stat == Stat::chargeMost,
+              "the user's examples");
+        Perks p;
+        check(p.points(hero_modes::batman, 499, false) == 0 && p.points(hero_modes::batman, 500, false) == 1, "a point a level");
+        check(p.spend(hero_modes::batman, 1000, 2, false) == 2 && (p.owned[hero_modes::batman] & perkBit(1, 0)) &&
+                  (p.owned[hero_modes::batman] & perkBit(1, 1)),
+              "BRANCH 2 did not go first, in order");
+        check(p.scale(hero_modes::batman, Stat::grappleSpeed) > 1.05f && p.scale(hero_modes::hulk, Stat::rageDamage) == 1.f,
+              "the perks' stats are not per hero");
+        check(p.spend(hero_modes::batman, 1000, 2, false) == 0, "spent points it did not have");
+        check(p.spend(hero_modes::thor, 0, 0, true) == perksPerHero && p.count(hero_modes::thor) == perksPerHero, "ALL did not fill the tree");
+        check(p.scale(hero_modes::thor, Stat::cooldown) >= .5f && p.scale(hero_modes::thor, Stat::cooldown) <= 1.f, "the cooldown scale");
+        char buf[512];
+        p.save(buf, sizeof buf);
+        Perks q;
+        q.load(buf);
+        check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman] && q.count(hero_modes::thor) == perksPerHero, "perks not saved");
+        q.load("perks.4=0\n");
+        check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman], "an old save took perks away");
+        // The ultimate: max reputation (or TEST UNLOCKS), the crossed fists held, a long cooldown.
+        check(!ultimateUnlocked(repMost - 1, false) && ultimateUnlocked(repMost, false) && ultimateUnlocked(0, true), "the ultimate's unlock");
+        check(testSuits(1) && !testUltimates(1) && testUltimates(2) && testSuits(2) && testPerks(3) && !testSuits(0), "TEST UNLOCKS' values");
+        holster::BodyPoint l{.35f, .12f, .15f}, r{.35f, -.12f, .15f};
+        check(fistsCrossed(l, r) && !fistsCrossed(r, l) && !fistsCrossed({1.f, .12f, .15f}, r), "fists crossed on the chest");
+        UltimateMove u;
+        bool fired = false;
+        for (int i = 0; i < 100 && !fired; ++i)
+            fired = u.step(.016f, hero_modes::hulk, false, true, true, 1, 1);
+        check(!fired, "a locked ultimate fired");
+        int at = -1;
+        for (int i = 0; i < 120 && at < 0; ++i)
+            if (u.step(.016f, hero_modes::hulk, true, true, true, 1, 1))
+                at = i;
+        check(at >= 70 && at <= 80, "the ultimate's 1.2 s hold");
+        check(u.hit(hero_modes::hulk) && !u.hit(hero_modes::hulk), "WORLD SMASH is not one blow");
+        bool again = false;
+        for (int i = 0; i < 300; ++i)
+            again = u.step(.016f, hero_modes::hulk, true, true, true, 1, 1) || again;
+        check(!again && u.cooldown > 100.f, "the ultimate's long cooldown");
+        UltimateMove w;
+        for (int i = 0; i < 80; ++i)
+            w.step(.016f, hero_modes::wolverine, true, true, true, 1, 1);
+        uint32_t hits = 0;
+        for (int i = 0; i < 600; ++i) {
+            w.step(.016f, hero_modes::wolverine, true, true, false, 0, 0);
+            hits += w.hit(hero_modes::wolverine);
+        }
+        check(hits == ultimate(hero_modes::wolverine).hits, "BERSERKER's slashes: " + std::to_string(hits));
+        UltimateMove off;
+        bool o = false;
+        for (int i = 0; i < 100; ++i)
+            o = off.step(.016f, hero_modes::thor, true, false, true, 1, 1) || o;
+        check(!o, "ULTIMATES OFF fired");
+    });
     test("Version 0.0.7: CAPTAIN AMERICA settings, defaults and helpers", [] {
         using namespace spidy;
         using namespace spidy::combat38;
@@ -24459,7 +25168,7 @@ int main() {
         check(std::string(valueName(shieldBlock, 1)) == "EXPERIMENTAL" &&
                   std::string(optionInfo[shieldBlock].help).find("CANDIDATE") != std::string::npos,
               "SHIELD BLOCK is labelled EXPERIMENTAL and CANDIDATE");
-        check(isHeroToggle(captainAmerica) && !isHeroToggle(shieldArm) && std::size(heroToggles) == 8, "the eighth hero toggle");
+        check(isHeroToggle(captainAmerica) && !isHeroToggle(shieldArm) && std::size(heroToggles) == 10, "the tenth hero toggle (0.0.72: THOR, GREEN LANTERN)");
         check(hero_modes::fromToggles(false, false, false, false, false, false, false, true) == hero_modes::captainAmerica &&
                   hero_modes::fromToggles(false, false, false, false, false, false, true, true) == hero_modes::punisher &&
                   hero_modes::fromToggles(false, false, false, false, false, false, false, false) == hero_modes::spiderMan,

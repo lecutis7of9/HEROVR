@@ -503,6 +503,8 @@ int heroOf(const View& view) {
            : view.combat38[combat38::superman] != 0  ? 6
            : view.combat38[combat38::punisher] != 0  ? 7
            : view.combat38[combat38::captainAmerica] != 0 ? 8 // Version 0.0.7 CAPTAIN AMERICA
+           : view.combat38[combat38::thor] != 0           ? 9 // Version 0.0.72
+           : view.combat38[combat38::greenLantern] != 0   ? 10
                                                      : 0;
 }
 // No hero toggle on: Spider-Man (hero_modes.hpp).
@@ -692,6 +694,8 @@ const char* labelOf(Control c) {
     case Control::section7:
     case Control::section8:
     case Control::section9:
+    case Control::section10:
+    case Control::section11:
         return "SECTION";
     case Control::gestureRemapMove:
         return "REMAP MOVE";
@@ -883,22 +887,30 @@ constexpr SectionDef powersSections[] = {
      {C::flyMode, C::combatSupersonic, C::combatSupersonicSpeed, C::flyVignette, C::flyRoll, C::flyRollSpeed,
       C::flyAutoLevel}},
     {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
-    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType}},
+    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud}},
     {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2,
-     {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision, C::combatBatonHolsters, C::combatBatonLook}},
-    {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight}},
+     {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision, C::combatBatonHolsters, C::combatBatonLook,
+      C::combatDdGrapple, C::combatDdParry}},
+    {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight, C::combatHulkRage}},
     // Version 0.0.7 HERO PROFILES
-    {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle}},
-    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine}},
+    {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle, C::combatSmokeBlind}},
+    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb}},
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
-    {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels}},
+    {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
+      C::combatRageBlood, C::combatRageTint, C::combatPunisherHook}},
     {"CAPTAIN AMERICA", C::none, C::none, "", "", nullptr, 8,
      {C::combatCaptainAmerica, C::combatShieldArm, C::combatShieldDamage, C::combatShieldChain, C::combatShieldBlock,
-      C::combatShieldLook}},
+      C::combatShieldLook, C::combatShieldSlam}},
+    // Version 0.0.72 (TEST)
+    {"THOR", C::none, C::none, "", "", nullptr, 9,
+     {C::combatThor, C::combatThorLightning, C::combatThorStorm, C::combatThorChain, C::combatNaturalInvincible}},
+    {"GREEN LANTERN", C::none, C::none, "", "", nullptr, 10,
+     {C::combatGreenLantern, C::combatGlFlight, C::combatGlFist, C::combatGlBeam, C::combatGlBubble, C::combatGlChain,
+      C::combatGlCharge}},
 };
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
-     {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor}},
+     {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly}},
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -912,7 +924,7 @@ constexpr SectionDef vrSections[] = {
 constexpr SectionDef combatSections[] = {
     {"PUNCHES", C::combatPunchMode, C::none, "", "", nullptr, -1,
      {C::combatPunchMode, C::combatPunchSense, C::combatPunchAngle, C::combatMeleeAnim, C::combatZipMode,
-      C::combatHitIndicator, C::combatPunchHits}},
+      C::combatHitIndicator, C::combatPunchHits, C::combatUppercut}},
     {"WEB BALL", C::combatBallAim, C::combatBallLook, "", "", nullptr, -1,
      {C::combatBallAim, C::combatBallLook, C::combatBallFire, C::combatBallLead, C::combatAimStrength,
       C::combatBallHit}},
@@ -923,6 +935,9 @@ constexpr SectionDef combatSections[] = {
      {C::combatGadgetKeys, C::combatGadgetFeel, C::combatGadgetHint, C::combatGrabWeb, C::combatRopeGrab,
       C::combatRopeStrength, C::combatWallStick}},
     {"BLOOD", C::blood, C::combatBloodLook, "", "", nullptr, -1, {C::blood, C::combatBloodLook, C::bloodVisor}},
+    // Version 0.0.72 (TEST)
+    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroSuit, C::combatPerkBranch,
+      C::combatUltimates, C::combatFireDouse, C::combatNpcShove, C::combatFaction}},
 };
 constexpr SectionDef graphicsSections[] = {
     {"QUALITY", C::aa, C::sharpen, "", "", nullptr, -1,
@@ -1024,7 +1039,7 @@ int openSection(int page) {
     const uint32_t n = openSections.load(std::memory_order_relaxed) >> (4 * page) & 0xFu;
     if (n == 0xFu) // the default
         return page == colorPage    ? -1
-               : page == powersPage ? 1 + std::clamp(heroPlayed.load(std::memory_order_relaxed), 0, 8)
+               : page == powersPage ? 1 + std::clamp(heroPlayed.load(std::memory_order_relaxed), 0, 10)
                                     : 0;
     return static_cast<int>(n) < count ? static_cast<int>(n) : -1;
 }
@@ -1038,7 +1053,7 @@ void setOpenSection(int page, int section) {
     }
 }
 void resetSections() { openSections.store(0xFFFFFFFFu, std::memory_order_relaxed); }
-void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 8 ? hero : 0, std::memory_order_relaxed); } // 0.0.7: 9 (CAPTAIN AMERICA)
+void setActiveHero(int hero) { heroPlayed.store(hero >= 0 && hero <= 10 ? hero : 0, std::memory_order_relaxed); } // 0.0.7: 9 (CAPTAIN AMERICA)
 int activeHero() { return heroPlayed.load(std::memory_order_relaxed); }
 Place placeOf(Control c) {
     if (c == Control::none)
@@ -1237,7 +1252,7 @@ Layout build(int page, float k, int open) {
         break;
     }
     case combatPage:
-        sections(0, 5);
+        sections(0, sectionCount(combatPage)); // Version 0.0.72: + SURVIVAL AND REPUTATION
         break;
     case graphicsPage: {
         // Update 16: the FPS monitor. Update 17: its sparkline beside the
@@ -3189,6 +3204,8 @@ const char* helpText(Control c) {
     case Control::section7:
     case Control::section8:
     case Control::section9:
+    case Control::section10:
+    case Control::section11:
         return sectionHelp;
     case Control::heroPlaySpider:
         return "Turns every other hero off so you swing as Spider-Man again, live.";
@@ -3568,6 +3585,8 @@ const char* shortName(Control c) {
     case Control::section7:
     case Control::section8:
     case Control::section9:
+    case Control::section10:
+    case Control::section11:
         return "SECTION";
     case Control::gestureRemapMove:
         return "REMAP";
@@ -3921,6 +3940,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::section6:
             case Control::section7:
             case Control::section8:
+            case Control::section10:
+            case Control::section11:
             case Control::section9: {
                 // Update 39.0.2: open it (closing the page's other one), or close it; the header
                 // stays where it is under the pointer (the rows above may have closed).
@@ -4165,6 +4186,41 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatShieldChain:
             case Control::combatShieldBlock:
             case Control::combatShieldLook:
+            case Control::combatThor:
+            case Control::combatThorLightning:
+            case Control::combatThorStorm:
+            case Control::combatThorChain:
+            case Control::combatGreenLantern:
+            case Control::combatGlFlight:
+            case Control::combatGlFist:
+            case Control::combatGlBeam:
+            case Control::combatGlBubble:
+            case Control::combatGlChain:
+            case Control::combatGlCharge:
+            case Control::combatSpiderClimbOnly:
+            case Control::combatUppercut:
+            case Control::combatSmokeBlind:
+            case Control::combatDdGrapple:
+            case Control::combatDdParry:
+            case Control::combatIronHud:
+            case Control::combatPunisherRage:
+            case Control::combatReputation:
+            case Control::combatSurvival:
+            case Control::combatPunisherSuit:
+            case Control::combatNaturalInvincible:
+            case Control::combatHulkRage:
+            case Control::combatRageBlood:
+            case Control::combatRageTint:
+            case Control::combatFireDouse:
+            case Control::combatShieldSlam:
+            case Control::combatPunisherHook:
+            case Control::combatClawClimb:
+            case Control::combatNpcShove:
+            case Control::combatFaction:
+            case Control::combatHeroSuit:
+            case Control::combatTestUnlocks:
+            case Control::combatUltimates:
+            case Control::combatPerkBranch:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

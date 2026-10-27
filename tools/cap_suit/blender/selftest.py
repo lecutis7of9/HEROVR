@@ -110,7 +110,10 @@ def coords(o):
 
 def main(capsuit):
     rig, body = build_rig()
-    fit = run('fit_suit_to_rig.py', ['--suit', os.path.join(capsuit, 'cap_suit.gltf')])
+    suit_file = os.path.join(capsuit, 'cap_suit.gltf')
+    if not os.path.isfile(suit_file):  # Version 0.0.72: a PunisherSuit kit folder
+        suit_file = os.path.join(capsuit, 'punisher_suit.gltf')
+    fit = run('fit_suit_to_rig.py', ['--suit', suit_file])
     import cap_common as cc
     suit = cc.suit_objects()
     fails = []

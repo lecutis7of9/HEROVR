@@ -720,7 +720,8 @@ uint32_t heroNow() {
     return hero_modes::fromToggles(c38(combat38::shooterType) == repulsor::repulsor, c38(combat38::daredevil) == 1,
                                    c38(combat38::hulk) == 1, c38(combat38::batman) == 1, c38(combat38::wolverine) == 1,
                                    c38(combat38::superman) == 1, c38(combat38::punisher) == 1, // Version 0.0.7
-                                   c38(combat38::captainAmerica) == 1);                        // CAPTAIN AMERICA
+                                   c38(combat38::captainAmerica) == 1,                         // CAPTAIN AMERICA
+                                   c38(combat38::thor) == 1, c38(combat38::greenLantern) == 1); // Version 0.0.72
 }
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
 // hologram, the live exports, live.txt at start).
@@ -10563,6 +10564,42 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldDamage(void* v) { retur
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldChain(void* v) { return setHero007(v, combat38::shieldChain, 5390); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldBlock(void* v) { return setHero007(v, combat38::shieldBlock, 5391); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldLook(void* v) { return setHero007(v, combat38::shieldLook, 5392); }
+// Version 0.0.72 (TEST): THOR, GREEN LANTERN (hero toggles) and the 0.0.72 list's options, live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThor(void* v) { return setHero007(v, combat38::thor, 5393); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorLightning(void* v) { return setHero007(v, combat38::thorLightning, 5394); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorStorm(void* v) { return setHero007(v, combat38::thorStorm, 5395); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorChain(void* v) { return setHero007(v, combat38::thorChain, 5396); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGreenLantern(void* v) { return setHero007(v, combat38::greenLantern, 5397); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlFlight(void* v) { return setHero007(v, combat38::glFlight, 5398); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlFist(void* v) { return setHero007(v, combat38::glFist, 5399); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlBeam(void* v) { return setHero007(v, combat38::glBeam, 5400); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlBubble(void* v) { return setHero007(v, combat38::glBubble, 5401); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlChain(void* v) { return setHero007(v, combat38::glChain, 5402); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlCharge(void* v) { return setHero007(v, combat38::glCharge, 5403); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySpiderClimbOnly(void* v) { return setHero007(v, combat38::spiderClimbOnly, 5404); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyUppercut(void* v) { return setHero007(v, combat38::uppercut, 5405); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySmokeBlind(void* v) { return setHero007(v, combat38::smokeBlind, 5406); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdGrapple(void* v) { return setHero007(v, combat38::ddGrapple, 5407); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdParry(void* v) { return setHero007(v, combat38::ddParry, 5408); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyIronHud(void* v) { return setHero007(v, combat38::ironHud, 5409); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherRage(void* v) { return setHero007(v, combat38::punisherRage, 5410); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyReputation(void* v) { return setHero007(v, combat38::reputation, 5411); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySurvival(void* v) { return setHero007(v, combat38::survival, 5412); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherSuit(void* v) { return setHero007(v, combat38::punisherSuit, 5413); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyNaturalInvincible(void* v) { return setHero007(v, combat38::naturalInvincible, 5414); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHulkRage(void* v) { return setHero007(v, combat38::hulkRage, 5415); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyRageBlood(void* v) { return setHero007(v, combat38::rageBlood, 5416); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyRageTint(void* v) { return setHero007(v, combat38::rageTint, 5417); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFireDouse(void* v) { return setHero007(v, combat38::fireDouse, 5418); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldSlam(void* v) { return setHero007(v, combat38::shieldSlam, 5419); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherHook(void* v) { return setHero007(v, combat38::punisherHook, 5420); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawClimb(void* v) { return setHero007(v, combat38::clawClimb, 5421); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyNpcShove(void* v) { return setHero007(v, combat38::npcShove, 5422); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFaction(void* v) { return setHero007(v, combat38::faction, 5423); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeroSuit(void* v) { return setHero007(v, combat38::heroSuit, 5424); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyTestUnlocks(void* v) { return setHero007(v, combat38::testUnlocks, 5425); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyUltimates(void* v) { return setHero007(v, combat38::ultimates, 5426); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerkBranch(void* v) { return setHero007(v, combat38::perkBranch, 5427); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

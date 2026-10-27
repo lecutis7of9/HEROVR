@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: prebuilt-${{ inputs.tag }}
+  group: prebuilt-mirror-test
 
 defaults:
   run:
@@ -45,6 +45,7 @@ jobs:
           python-version: '3.12'
 
       - name: Check the mod's sources are the release's
+        if: github.ref_name != 'mirror-test'
         run: |
           $version = (Get-Content VERSION -TotalCount 1).Trim()
           if ("v$version" -ne $env:TAG) { throw "VERSION is $version, not $($env:TAG.TrimStart('v'))." }
@@ -164,13 +165,3 @@ jobs:
             ${{ steps.pkg.outputs.zip }}
             ${{ steps.pkg.outputs.zip }}.sha256
           retention-days: 30
-
-      - name: Upload to the release
-        if: inputs.upload
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          ZIP: ${{ steps.pkg.outputs.zip }}
-        run: |
-          gh release upload $env:TAG $env:ZIP "$env:ZIP.sha256" --clobber
-          if ($LASTEXITCODE) { throw 'Uploading to the release failed.' }

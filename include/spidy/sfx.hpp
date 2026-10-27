@@ -39,6 +39,17 @@ inline constexpr uint32_t voicesFor(uint32_t id) {
                                                         : voicesPerSound;
 }
 
+// Version 0.0.72 SOUND LOOPS (SUPERMAN's heat vision and cold breath: the 0.0.71 videos' stutter was a
+// 0.6 s one-shot re-fired every 0.55 s). loop(id, true) each frame while the beam is held keeps one voice
+// playing that sound on repeat (its WAV is a seamless 1 s loop, tools/sfx/make_loops_0072.py); loop(id,
+// false) stops it. A loop not refreshed for loopHoldMs stops by itself, so a frame path that stops asking
+// (a menu, a hero change, a fault) never leaves it humming.
+inline constexpr uint64_t loopHoldMs = 250;
+inline constexpr bool loopLive(uint64_t refreshedMs, uint64_t nowMs) {
+    return refreshedMs != 0 && nowMs >= refreshedMs && nowMs - refreshedMs <= loopHoldMs;
+}
+inline constexpr bool loopable(uint32_t id) { return id == heatVision || id == freezeBreath; }
+
 // A WAV's PCM (a view into the embedded bytes).
 struct Pcm {
     bool ok{};
@@ -70,6 +81,13 @@ public:
             dropped += n - most;
         return n > most ? most : n;
     }
+    // SOUND LOOPS: when each loop was last asked for (milliseconds; 0: stopped). Returns the previous.
+    uint64_t loop(Id id, uint64_t nowMs, bool on) {
+        if (id >= sounds || !loopable(id))
+            return 0;
+        return loopAt_[id].exchange(on ? (nowMs ? nowMs : 1) : 0, std::memory_order_relaxed);
+    }
+    uint64_t loopAt(Id id) const { return id < sounds ? loopAt_[id].load(std::memory_order_relaxed) : 0; }
     bool any() const {
         for (const auto& p : pending_)
             if (p.load(std::memory_order_relaxed))
@@ -79,6 +97,7 @@ public:
 
 private:
     std::array<std::atomic<uint32_t>, sounds> pending_{};
+    std::array<std::atomic<uint64_t>, sounds> loopAt_{};
 };
 
 // The player's state, for the log and STATUS.
@@ -97,6 +116,8 @@ struct Stats {
 // start: once, from any thread; never throws; false if the player cannot run.
 bool start();
 void play(Id id);           // never blocks
+void loop(Id id, bool on);  // never blocks (SOUND LOOPS; only loopable ids)
+uint64_t nowMs();           // the loops' clock (milliseconds, monotonic)
 void setGain(float gain);   // 0..1 (SFX VOLUME)
 Stats stats();
 Requests& requests();        // the shared queue (tests)

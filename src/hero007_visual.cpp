@@ -36,6 +36,8 @@ constexpr Material rubber{{.0f, .0f, .0f}, {.045f, .04f, .04f}, {.20f, .19f, .19
 constexpr Material brass{{.25f, .17f, .05f}, {.70f, .52f, .20f}, {1.f, .88f, .55f}, .8f};
 constexpr Material shellRed{{.20f, .02f, .02f}, {.62f, .07f, .06f}, {.95f, .45f, .40f}, .5f};
 constexpr Material batBlack{{0, 0, 0}, {.07f, .07f, .08f}, {.36f, .37f, .42f}, .6f};
+// Version 0.0.72 GRAPPLE ROPE: braided grey-black cord, a lighter rim so it reads against night sky and walls.
+constexpr Material cord{{.30f, .31f, .33f}, {.11f, .11f, .12f}, {.48f, .49f, .52f}, .45f};
 
 bool ok(Vec3 v) { return finite(v); }
 // The light comes from above and a little behind the viewer: the streak sits on that side.
@@ -399,17 +401,22 @@ void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer,
     }
 }
 
-void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {
-    if (!ok(from) || !ok(to) || !ok(viewer) || !std::isfinite(pixelAngle) || length(to - from) < .05f ||
-        length(to - from) > 50.f || !inRange(from, viewer, 50.f))
+void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 hook, Vec3 viewer, float pixelAngle, float flown) {
+    if (!ok(from) || !ok(hook) || !ok(viewer) || !std::isfinite(pixelAngle) || length(hook - from) < .05f ||
+        length(hook - from) > 50.f || !inRange(from, viewer, 50.f))
+        return;
+    // Version 0.0.72: the line flies out of the muzzle (flown 0-1) with the hook on its tip, then is taut.
+    const float f = std::isfinite(flown) ? std::clamp(flown, 0.f, 1.f) : 1.f;
+    const Vec3 to = from + (hook - from) * f;
+    if (length(to - from) < .05f)
         return;
     Guard g(out);
-    // The line: taut, in six pieces (each piece keeps its own width floor along a long line).
-    constexpr int pieces = 6;
+    // The rope: an 8 mm cord, taut, in ten pieces (each piece keeps its own width floor along a long line).
+    constexpr int pieces = 10;
     Vec3 last = from;
     for (int i = 1; i <= pieces; ++i) {
         const Vec3 p = from + (to - from) * (static_cast<float>(i) / pieces);
-        part(out, last, p, viewer, pixelAngle, .004f, batBlack, .97f);
+        part(out, last, p, viewer, pixelAngle, .004f, cord, .98f);
         last = p;
     }
     // The hook: a short steel shank along the line and three prongs bent back from its tip.
@@ -631,6 +638,18 @@ void appendHolster(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float 
         line(out, k.o + k.u * .085f + k.f * .03f, k.o + k.u * .085f + k.f * .07f, viewer, pixelAngle, .006f,
              leather.rim, .97f);
         break;
+    case 4: { // Version 0.0.72 DROP-LEG HOLSTER: the pistol's sheath down the outside of the thigh, its
+              // belt drop above and two leg straps round the front of the thigh (side: 0 left, 1 right)
+        const Vec3 in = k.r * (it.side ? -1.f : 1.f); // toward the leg's middle
+        part(out, k.o + k.u * .055f + k.f * .02f, k.o + k.u * .055f + k.f * .19f, viewer, pixelAngle, .023f, leather);
+        part(out, k.o + k.u * .02f - k.f * .03f, k.o + k.u * .03f - k.f * .14f, viewer, pixelAngle, .012f, leather); // the drop
+        for (int b = 0; b < 2; ++b) {
+            const Vec3 c = k.o + k.u * .05f + k.f * (b ? .17f : .07f);
+            line(out, c, c + in * .07f + k.u * .05f, viewer, pixelAngle, .006f, leather.rim, .97f);
+            line(out, c + in * .07f + k.u * .05f, c + in * .14f + k.u * .03f, viewer, pixelAngle, .006f, leather.rim, .97f);
+        }
+        break;
+    }
     case 2: // a back sheath over the barrels
         part(out, k.o + k.f * .12f, k.o + k.f * .40f, viewer, pixelAngle, .028f, leather);
         break;
@@ -662,10 +681,94 @@ void appendHeatBeam(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, f
     constexpr int pieces = 4; // near pieces turn to the eye on their own
     for (int i = 0; i < pieces; ++i) {
         const float t0 = static_cast<float>(i) / pieces, t1 = static_cast<float>(i + 1) / pieces;
-        heatBar(out, from + (to - from) * t0, from + (to - from) * t1, viewer, pixelAngle, .012f + .02f * t0, a);
+        // Version 0.0.72 THIN BEAMS (0.0.71 videos: thick, widening): one even thin beam from each eye.
+        heatBar(out, from + (to - from) * t0, from + (to - from) * t1, viewer, pixelAngle, heatBeamWidth, a);
+        (void)t0;
     }
-    glob(out, to, viewer, .35f, {1.f, .3f, .05f}, .5f * a); // the burn where it lands
-    glob(out, to, viewer, .12f, {1.f, .9f, .6f}, .9f * a);
+    glob(out, to, viewer, .06f, {1.f, .55f, .2f}, .7f * a); // a small hot point where it lands (sparks: appendHeatSparks)
+}
+
+namespace {
+// A repeatable 0-1 hash (the sparks' flicker without a random state).
+float hash01(uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return static_cast<float>(x & 0xffffffu) / static_cast<float>(0x1000000u);
+}
+} // namespace
+
+void appendHeatSparks(std::vector<Vertex>& out, Vec3 from, Vec3 at, float clock, Vec3 viewer, float pixelAngle) {
+    if (!ok(from) || !ok(at) || !ok(viewer) || !std::isfinite(pixelAngle) || !std::isfinite(clock) ||
+        length(at - from) < .1f || !inRange(at, viewer, 80.f))
+        return;
+    Guard g(out);
+    const Vec3 back = normalized(from - at);
+    Vec3 s = cross(back, Vec3{0, 1, 0});
+    s = length(s) > 1e-3f ? normalized(s) : Vec3{1, 0, 0};
+    const Vec3 u = normalized(cross(s, back));
+    const uint32_t tick = static_cast<uint32_t>(std::max(clock, 0.f) * 30.f); // a new spray 30 times a second
+    constexpr int sparks = 7;
+    for (int k = 0; k < sparks; ++k) {
+        const uint32_t h = tick * 131u + static_cast<uint32_t>(k) * 7919u;
+        const float ang = 6.2831853f * hash01(h), lift = hash01(h + 1), len = .05f + .12f * hash01(h + 2);
+        // thrown back out of the burn and to the sides, falling a little
+        const Vec3 way = normalized(back * (.4f + .6f * lift) + (s * std::cos(ang) + u * std::sin(ang)) * .9f);
+        const Vec3 p = at + way * (.02f + .05f * hash01(h + 3));
+        line(out, p, p + way * len - Vec3{0, .02f, 0}, viewer, pixelAngle, .0016f, {1.f, .78f, .35f}, .95f);
+    }
+    glob(out, at, viewer, .05f + .03f * hash01(tick), {1.f, .85f, .5f}, .8f);
+}
+
+void appendScorch(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer) {
+    if (!ok(at) || !ok(viewer) || !std::isfinite(age) || age < 0 || age >= scorchLife || !inRange(at, viewer, 60.f))
+        return;
+    Guard g(out);
+    const float t = age / scorchLife;
+    glob(out, at, viewer, .09f, {.05f, .03f, .02f}, .65f * (1.f - t * t));            // the burn
+    glob(out, at, viewer, .035f, {1.f, .35f, .06f}, .8f * std::max(0.f, 1.f - 2.5f * t)); // its ember, fading first
+}
+
+void appendMuzzleFlash(std::vector<Vertex>& out, Vec3 at, Vec3 way, bool shotgun, float age, Vec3 viewer, float pixelAngle) {
+    if (!ok(at) || !ok(way) || length(way) < 1e-3f || !ok(viewer) || !std::isfinite(pixelAngle) || !std::isfinite(age) ||
+        age < 0 || age >= flashLife || !inRange(at, viewer, 40.f))
+        return;
+    Guard g(out);
+    const float a = 1.f - age / flashLife, size = shotgun ? 1.6f : 1.f;
+    const Vec3 f = normalized(way);
+    Vec3 s = cross(f, Vec3{0, 1, 0});
+    s = length(s) > 1e-3f ? normalized(s) : Vec3{1, 0, 0};
+    const Vec3 u = normalized(cross(s, f));
+    glob(out, at + f * (.03f * size), viewer, .045f * size, {1.f, .80f, .40f}, .9f * a);  // the fireball
+    glob(out, at + f * (.015f * size), viewer, .02f * size, {1.f, .97f, .85f}, a);        // its white core
+    line(out, at, at + f * (.13f * size), viewer, pixelAngle, .012f * size, {1.f, .65f, .25f}, .8f * a); // the jet
+    for (int k = 0; k < 4; ++k) { // four side spikes (the muzzle's star)
+        const float ang = 1.5707963f * static_cast<float>(k) + .785f;
+        const Vec3 d = s * std::cos(ang) + u * std::sin(ang);
+        line(out, at + f * .01f, at + f * (.04f * size) + d * (.05f * size), viewer, pixelAngle, .005f * size,
+             {1.f, .72f, .3f}, .7f * a);
+    }
+}
+
+void appendImpact(std::vector<Vertex>& out, Vec3 at, Vec3 way, float age, Vec3 viewer, float pixelAngle) {
+    if (!ok(at) || !ok(way) || length(way) < 1e-3f || !ok(viewer) || !std::isfinite(pixelAngle) || !std::isfinite(age) ||
+        age < 0 || age >= impactLife || !inRange(at, viewer, 60.f))
+        return;
+    Guard g(out);
+    const float t = age / impactLife, a = 1.f - t;
+    const Vec3 back = -normalized(way);
+    Vec3 s = cross(back, Vec3{0, 1, 0});
+    s = length(s) > 1e-3f ? normalized(s) : Vec3{1, 0, 0};
+    const Vec3 u = normalized(cross(s, back));
+    glob(out, at, viewer, .04f + .06f * t, {.55f, .52f, .48f}, .6f * a); // the dust / cloth puff
+    glob(out, at, viewer, .025f, {1.f, .85f, .55f}, a * std::max(0.f, 1.f - 4.f * t)); // the hit's spark
+    for (int k = 0; k < 5; ++k) { // the spray back out of the hit
+        const float ang = 1.2566371f * static_cast<float>(k);
+        const Vec3 d = normalized(back + (s * std::cos(ang) + u * std::sin(ang)) * .7f);
+        line(out, at + d * (.02f + .12f * t), at + d * (.05f + .16f * t), viewer, pixelAngle, .003f, {.60f, .58f, .55f}, .7f * a);
+    }
 }
 
 void appendFreezeBreath(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle, float fade) {
@@ -843,7 +946,16 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
         else
             for (const Vec3& eye : d.beamFrom)
                 appendHeatBeam(out, eye + travel, d.beamTo + travel, viewer, pixelAngle, d.beamFade);
+        if (!d.beamFreeze && d.beamHit && d.beamFade > .5f) // Version 0.0.72: the hit sparks
+            appendHeatSparks(out, (d.beamFrom[0] + d.beamFrom[1]) * .5f + travel, d.beamTo + travel, d.beamClock, viewer,
+                             pixelAngle);
     }
+    for (uint32_t i = 0; i < drawScorches; ++i) // Version 0.0.72 scorch marks, PUNISHER flashes and hits
+        appendScorch(out, d.scorchAt[i] + travel, d.scorchAge[i], viewer);
+    for (int i = 0; i < 2; ++i)
+        appendMuzzleFlash(out, d.flashAt[i] + travel, d.flashWay[i], d.flashShotgun[i], d.flashAge[i], viewer, pixelAngle);
+    for (uint32_t i = 0; i < drawImpacts; ++i)
+        appendImpact(out, d.impactAt[i] + travel, d.impactWay[i], d.impactAge[i], viewer, pixelAngle);
     for (int i = 0; i < 2; ++i)
         if (d.cable[i])
             appendBatonCable(out, d.cableFrom[i] + travel, d.cableTo[i] + travel, viewer, pixelAngle);
@@ -854,7 +966,7 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
             Vec3 muzzle{};
             if (d.held[i].look == lookGrappleGun && d.grappleGunModel && grappleMuzzle(moved(d.held[i]), *d.grappleGunModel, muzzle))
                 from = muzzle;
-            appendGrappleLine(out, from, d.grappleTo[i] + travel, viewer, pixelAngle);
+            appendGrappleLine(out, from, d.grappleTo[i] + travel, viewer, pixelAngle, d.grappleOut[i]);
         }
     for (int i = 0; i < 2; ++i) {
         if (!d.held[i].look)

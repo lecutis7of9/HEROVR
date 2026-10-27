@@ -12,6 +12,8 @@
 
 namespace spidy::mesh_model { struct Mesh; }
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -68,6 +70,9 @@ struct Look {
     bool shock{};
     Vec3 shockAt{};
     float shockRadius{}, shockAge{};
+    // Version 0.0.72 SUBTLE RING (CAP's SHIELD SLAM, 0.0.71 videos: a "huge 3x3 blue reticle" on the
+    // ground): the slam's ring is drawn small and faint (shockRing); the slam's reach is unchanged.
+    bool shockSubtle{};
     bool hook{};
     Vec3 hookFrom{}, hookTo{};
     // BATMAN's PERCH TAKEDOWN (9:31, 9:32): the light over the target (GREEN safe, RED seen) and the
@@ -95,11 +100,21 @@ void appendIronHud(std::vector<Vertex>& out, const Look& l, Vec3 viewer);
 void appendBlood(std::vector<Vertex>& out, const Blood& b, Vec3 viewer, float pixelAngle);
 void appendSpray(std::vector<Vertex>& out, uint32_t kind, Vec3 from, Vec3 dir, float reach, float time, Vec3 viewer,
                  float pixelAngle);
-void appendShock(std::vector<Vertex>& out, Vec3 at, float radius, float age, Vec3 viewer);
+void appendShock(std::vector<Vertex>& out, Vec3 at, float radius, float age, Vec3 viewer, bool subtle = false);
 void appendHook(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 // Everything in `l`, moved by `travel`.
 void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewer, float pixelAngle);
 
+// Version 0.0.72 SUBTLE RING: the drawn ring's radius at age 0..1 (the full ring grows to the reach,
+// 12 m at most; the subtle one stays within subtleRing metres, a hint at the hand's slam spot).
+inline constexpr float subtleRing = .45f;
+inline float shockRing(float radius, float age, bool subtle) {
+    if (!std::isfinite(radius) || !std::isfinite(age) || radius <= 0)
+        return 0;
+    const float a = std::clamp(age, 0.f, 1.f);
+    return subtle ? std::min(radius, subtleRing) * (.5f + .5f * a) : std::min(radius, 12.f) * (.2f + .8f * a);
+}
+inline float shockAlpha(float age, bool subtle) { return (subtle ? .18f : .45f) * (1.f - std::clamp(age, 0.f, 1.f)); }
 namespace budget {
 inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1500, chain = 1700, fist = 1500,
                         charge = 2600, ring = 200, hud = 9000;

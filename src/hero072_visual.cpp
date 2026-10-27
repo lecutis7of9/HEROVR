@@ -291,13 +291,14 @@ void appendSpray(std::vector<Vertex>& out, uint32_t kind, Vec3 from, Vec3 dir, f
         softArc(out, p, aa, bb, 0, w * .6f, 0, 2 * pi, c, a * (1.f - t), w * .4f, 6);
     }
 }
-void appendShock(std::vector<Vertex>& out, Vec3 at, float radius, float age, Vec3 viewer) {
+void appendShock(std::vector<Vertex>& out, Vec3 at, float radius, float age, Vec3 viewer, bool subtle) {
     if (!okv(at) || !okv(viewer) || !std::isfinite(radius) || !std::isfinite(age) || age < 0 || age >= 1 || radius <= 0 ||
         !inRange(at, viewer, 60.f))
         return;
     VGuard g(out);
-    const float r = std::min(radius, 12.f) * (.2f + .8f * age);
-    softArc(out, at, {1, 0, 0}, {0, 0, 1}, r * .85f, r, 0, 2 * pi, {.9f, .95f, 1.f}, .45f * (1.f - age), r * .1f, 32);
+    const float r = shockRing(radius, age, subtle); // 0.0.72 SUBTLE RING: CAP's slam, small and faint
+    softArc(out, at, {1, 0, 0}, {0, 0, 1}, r * (subtle ? .92f : .85f), r, 0, 2 * pi, {.9f, .95f, 1.f}, shockAlpha(age, subtle),
+            r * (subtle ? .05f : .1f), subtle ? 24 : 32);
 }
 void appendHook(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {
     if (!okv(from) || !okv(to) || !okv(viewer) || length(to - from) < .2f || length(to - from) > 60.f ||
@@ -423,7 +424,7 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
     if (l.spray)
         appendSpray(out, l.sprayKind, T(l.sprayFrom), l.sprayDir, l.sprayReach, l.sprayTime, viewer, pixelAngle);
     if (l.shock)
-        appendShock(out, T(l.shockAt), l.shockRadius, l.shockAge, viewer);
+        appendShock(out, T(l.shockAt), l.shockRadius, l.shockAge, viewer, l.shockSubtle);
     if (l.hook)
         appendHook(out, T(l.hookFrom), T(l.hookTo), viewer, pixelAngle);
     if (l.perchLight)

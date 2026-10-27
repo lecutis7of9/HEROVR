@@ -110,6 +110,35 @@ inline ShieldPose onArm(Vec3 hand, Vec3 aim, Vec3 headForward, Vec3 bodyRight, u
     p.ok = true;
     return p;
 }
+// Version 0.0.72 SHIELD CATCH (0.0.71 videos: the thrown shield "snapped" onto the arm): for
+// catchBlend seconds after a catch the drawn shield eases from where it was caught (flat, its face
+// up as it flew) onto the arm pose: smoothstep in place, the face turned over the same time.
+// Version 0.0.72 SUBTLE RETICLE (0.0.71 videos: a "huge 3x3 blue reticle"): the right hand's target
+// marker round an enemy is sized by his radius (about 3 m across, wider while it locks on). For
+// CAPTAIN AMERICA it is held to reticleRadius and drawn at reticleOpacity; aiming is unchanged.
+inline constexpr float reticleRadius = .15f, reticleOpacity = .5f;
+inline float subtleRadius(float radius) {
+    return std::isfinite(radius) && radius > 0 ? std::min(radius, reticleRadius) : reticleRadius;
+}
+inline constexpr float catchBlend = .12f;
+inline ShieldPose catchPose(const ShieldPose& arm, Vec3 caughtAt, float since) {
+    if (!arm.ok || !finite(caughtAt) || !(since >= 0) || since >= catchBlend)
+        return arm;
+    const float x = since / catchBlend, k = x * x * (3 - 2 * x);
+    ShieldPose p = arm;
+    p.at = caughtAt + (arm.at - caughtAt) * k;
+    Vec3 f = Vec3{0, 1, 0} * (1 - k) + arm.face * k;
+    if (length(f) < 1e-3f)
+        f = arm.face;
+    p.face = normalized(f);
+    Vec3 u = arm.up - p.face * dot(arm.up, p.face);
+    if (length(u) < 1e-3f) // the forearm along the flat shield's face (an arm held up): up toward the arm's face
+        u = arm.face - p.face * dot(arm.face, p.face);
+    if (length(u) < 1e-3f)
+        return arm;
+    p.up = normalized(u);
+    return p;
+}
 // On the back: flat between the shoulder blades, the face backward, the star upright (the item's
 // up is the body's left for the LEFT arm's model, its right for the RIGHT's), the disc's middle
 // 0.40 m below and 0.22 m behind the eyes.

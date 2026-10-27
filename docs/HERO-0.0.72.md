@@ -23,8 +23,7 @@ itself off on failure. A missing model shows MODEL MISSING and is never replaced
   - takeoff works from the ground, with a sustained pull and a line drawn for every hero;
   - the gun points along the aim;
   - simulated frames are in the test folder's `grapple-frames/` (simulations, not game captures).
-  - FLAG: BATMAN's grapple fires on the trigger, which breaks the rule that triggers fire only basic
-    projectiles. It is left as in 0.0.7, pending the player's call.
+  - BATMAN's grapple stays on the trigger: the player's call (a gun that fires a line counts as a projectile).
 - **THOR'S HAMMER:** `Models\Hammer` shows MODEL MISSING until the player picks a model; the candidate
   sheets are in `hammer-candidates/`.
 - **PUNISHER VAN (EXPERIMENTAL, OFF):**
@@ -45,6 +44,26 @@ itself off on failure. A missing model shows MODEL MISSING and is never replaced
 - **SETTINGS SUBTEXT:** every COMBAT setting's note is at most 80 characters, has exactly one '.', and says
   whether a restart is needed (tests/update38_tests.py).
 - **MSVC fix:** `mesh_model.cpp` no longer names a variable `small`, which is a macro in `rpcndr.h`.
+
+- **0.0.71 VIDEOS FIX ROUND** (simulated previews in the test folder's `previews-0.0.72b/`, drawn by
+  `spidy_hero072b_preview`; simulations, not game captures):
+  - BATMAN: the line flies out of the muzzle to the hook before the pull; the grapple gun hangs on the
+    belt (0.60 m under the eyes, was 0.78 m, by the foot) and is held with the barrel along the aim; the
+    batarang is pinched in the fingers, square to the palm. The game body (Iron Spider / Spider-Man) is
+    hidden under BATMAN, which also ends the arm stretch and the vanishing hand looking down. PARTIAL: the
+    game's hands are hidden with it, and there is no BATMAN body model yet.
+  - SUPERMAN: two thin beams (under 1 cm) from the eyes, re-aimed from the rendered head each frame (no
+    lag), hit sparks, a scorch that fades, and one seamless 1 s loop (heat_vision.wav) held while firing.
+  - PUNISHER: drop-leg thigh holsters, the barrel along the aim, a muzzle flash, hit puffs, a stagger
+    (pistol 140, buckshot 160 plus a 380 shove); the ammo readout stays. The reaction kind is CONFIRMED
+    (sm2_damage); how big it looks in game is CANDIDATE.
+  - CAPTAIN AMERICA: a thrown shield always flies home (it turns back after 4 s at the latest), slows for
+    the catch and eases onto the arm. The "huge blue reticle" was the right hand's target marker, sized by
+    the enemy; under CAP it is now 0.15 m and half opacity, with no wide lock-on ring. The slam ring is
+    subtle too.
+  - WOLVERINE: a preview clip of the claws.
+  - VAN: still a clean preview. There is no van model and the velocity carry is CANDIDATE, so nothing
+    moves and nothing can crash.
 
 ## Coming soon / pending
 

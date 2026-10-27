@@ -207,7 +207,9 @@ def shield_clang():
 
 CAP = [shield_throw, shield_ricochet, shield_catch, shield_clang]
 
-ALL = [pistol_shot, shotgun_blast, dry_click, mag_drop, mag_seat, holster, claw_snikt, heat_vision, freeze_breath] + CAP
+# Version 0.0.72: heat_vision.wav and freeze_breath.wav are tools/sfx/make_loops_0072.py's seamless loops now
+# (sfx::loop); the 0.0.7 one-shots above stay for the record but are no longer written.
+ALL = [pistol_shot, shotgun_blast, dry_click, mag_drop, mag_seat, holster, claw_snikt] + CAP
 
 if __name__ == '__main__':
     args = [a for a in sys.argv[1:] if a != '--cap']

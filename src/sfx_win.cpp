@@ -30,6 +30,7 @@ struct Player {
     IXAudio2MasteringVoice* master{};
     IXAudio2SourceVoice* voices[sounds][mostVoices]{}; // voicesFor(id) of each made
     float gainSet = -1.f;
+    IXAudio2SourceVoice* looping[sounds]{}; // Version 0.0.72 SOUND LOOPS: the voice repeating each loop
     uint64_t droppedHere{};
 };
 
@@ -61,6 +62,56 @@ void playOne(Player& p, Id id) {
         return;
     }
     ++p.droppedHere;
+}
+
+// Version 0.0.72 SOUND LOOPS: start one voice repeating the sound (an idle one; none idle: the first is
+// cut short for it), or stop it - its volume eased to 0 for a few ms first, so it ends without a click.
+void loopOne(Player& p, Id id, bool on) {
+    if (!on) {
+        if (auto* v = p.looping[id]) {
+            v->SetVolume(0.f);
+            Sleep(12);
+            v->Stop(0);
+            v->FlushSourceBuffers();
+            v->SetVolume(1.f);
+            p.looping[id] = nullptr;
+        }
+        return;
+    }
+    if (p.looping[id])
+        return;
+    const Pcm& pcm = sound(id);
+    IXAudio2SourceVoice* pick{};
+    for (auto* v : p.voices[id]) {
+        if (!v)
+            continue;
+        XAUDIO2_VOICE_STATE st{};
+        v->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+        if (!st.BuffersQueued) {
+            pick = v;
+            break;
+        }
+    }
+    if (!pick && (pick = p.voices[id][0]) != nullptr) {
+        pick->Stop(0);
+        pick->FlushSourceBuffers();
+    }
+    if (!pick)
+        return;
+    XAUDIO2_BUFFER b{};
+    b.Flags = XAUDIO2_END_OF_STREAM;
+    b.AudioBytes = pcm.bytes;
+    b.pAudioData = pcm.data;
+    b.LoopBegin = 0;
+    b.LoopLength = 0; // the whole buffer
+    b.LoopCount = XAUDIO2_LOOP_INFINITE;
+    if (FAILED(pick->SubmitSourceBuffer(&b))) {
+        ++p.droppedHere;
+        return;
+    }
+    pick->Start(0);
+    p.looping[id] = pick;
+    played.fetch_add(1, std::memory_order_relaxed);
 }
 
 // The audio calls; SEH-guarded by the caller. Returns false to stop the player.
@@ -112,6 +163,13 @@ bool serve(Player& p) {
         p.master->SetVolume(g);
         p.gainSet = g;
     }
+    const uint64_t now = nowMs();
+    for (uint32_t id = 0; id < sounds; ++id)
+        if (loopable(id)) {
+            const bool live = g > 0.f && loopLive(requests().loopAt(static_cast<Id>(id)), now);
+            if (live != (p.looping[id] != nullptr))
+                loopOne(p, static_cast<Id>(id), live);
+        }
     for (uint32_t id = 0; id < sounds; ++id) {
         const uint32_t n = requests().take(static_cast<Id>(id), p.droppedHere);
         for (uint32_t k = 0; k < n; ++k)
@@ -197,6 +255,14 @@ void play(Id id) {
     }
     requests().play(id);
     if (wake)
+        SetEvent(wake);
+}
+uint64_t nowMs() { return GetTickCount64() + 1; }
+void loop(Id id, bool on) {
+    if (id >= sounds || !loopable(id))
+        return;
+    const uint64_t was = requests().loop(id, nowMs(), on);
+    if ((was != 0) != on && wake) // started or stopped: the player acts now (refreshes need no wake)
         SetEvent(wake);
 }
 void setGain(float gain) {

@@ -102,6 +102,14 @@ struct PlayOutput {
             ++plays[id];
     }
     uint32_t playsOf(uint32_t id) const { return id < sfx::sounds ? std::max<uint32_t>(plays[id], (sounds >> id) & 1u) : 0; }
+    // Version 0.0.72 SOUND LOOPS: the looping sounds (sfx::loopable) to keep playing this frame (bit
+    // 1 << sfx::Id); game_xr hands each to sfx::loop every frame, so a loop not asked for stops.
+    uint32_t loops{};
+    void loop(sfx::Id id) {
+        if (id < sfx::sounds && sfx::loopable(id))
+            loops |= 1u << id;
+    }
+    bool loopsOn(uint32_t id) const { return id < sfx::sounds && ((loops >> id) & 1u); }
 };
 static_assert(sfx::sounds <= 32, "PlayOutput::sounds is a 32-bit mask");
 
@@ -123,15 +131,32 @@ inline uint32_t reloadSoundOf(uint32_t weapon, uint32_t was, uint32_t now) {
 }
 
 // Where a holstered item sits on the body (tracking space): its grip, along it, its top.
-inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec3& at, Vec3& forward, Vec3& up) {
+// Version 0.0.72 HOLSTER PLACES (the user's 0.0.71 videos): hipThigh, the PUNISHER's pistols in drop-leg
+// holsters on the outside of each thigh (the grip at the top of the thigh, the barrel down along it, a
+// little inside the 0.0.7 hip spot so it reads as strapped to the leg); hipBelt, BATMAN's grapple gun
+// clipped high on the utility belt, tipped forward (0.0.7's hip spot hung it near the knee: "floating by
+// the foot"). Both stay inside holster::inZone's hip zone, so the draw grab is where it is drawn.
+enum HipStyle : uint32_t { hipClassic = 0, hipThigh, hipBelt };
+inline constexpr float thighBelow = .86f, thighOut = .19f, beltHang = .60f, beltOut = .18f;
+inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec3& at, Vec3& forward, Vec3& up,
+                     uint32_t hipStyle = hipClassic) {
     const Vec3 f = body.forward(), r = body.right(), down{0, -1, 0};
     switch (zone) {
     case holster::leftHip:
     case holster::rightHip: { // muzzle down, the grip up and back, the slide's top facing forward
         const float s = zone == holster::leftHip ? -1.f : 1.f;
-        at = head + down * .78f + r * (s * .22f) - f * .02f;
-        forward = normalized(down + f * .12f);
-        up = f;
+        if (hipStyle == hipThigh) {
+            at = head + down * thighBelow + r * (s * thighOut) + f * .03f;
+            forward = normalized(down + f * .08f);
+        } else if (hipStyle == hipBelt) {
+            at = head + down * beltHang + r * (s * beltOut) - f * .03f;
+            forward = normalized(down + f * .30f);
+        } else {
+            at = head + down * .78f + r * (s * .22f) - f * .02f;
+            forward = normalized(down + f * .12f);
+        }
+        const Vec3 u = f - forward * dot(f, forward);
+        up = length(u) > 1e-3f ? normalized(u) : f;
         break;
     }
     case holster::back: // the sawed-off across the back, the grip behind the right shoulder
@@ -170,6 +195,81 @@ inline Vec3 gunUp(Vec3 aim) {
     return length(u) > 1e-3f ? normalized(u) : Vec3{0, 0, 1};
 }
 
+// Version 0.0.72 BATARANG IN THE FINGERS (0.0.71 videos: it lay "flat on the back of the hand"): held
+// pinched between the thumb and the index finger, ahead of the knuckles, standing on edge (its face to
+// the side, its wings up and down through the pinch) - from the grip pose (at: the palm, forward: out of
+// the fist, up: the thumb's side) or the aim pose without one. Item forward/up for appendBatarang (its
+// up is the face's normal).
+inline constexpr float pinchAhead = .095f, pinchUp = .03f;
+inline bool batarangPinch(Vec3 palm, Vec3 forward, Vec3 thumbUp, Vec3& at, Vec3& itemForward, Vec3& itemUp) {
+    if (!finite(palm) || !finite(forward) || !finite(thumbUp) || length(forward) < 1e-4f)
+        return false;
+    const Vec3 f = normalized(forward);
+    Vec3 u = thumbUp - f * dot(thumbUp, f);
+    if (length(u) < 1e-3f)
+        return false;
+    u = normalized(u);
+    at = palm + f * pinchAhead + u * pinchUp;
+    itemForward = f;
+    itemUp = normalized(cross(f, u)); // the face's normal: square to the palm's plane
+    return true;
+}
+// Version 0.0.72 HEAT VISION HEAD LOCK: where the beams leave the eyes (or the frost the mouth) for a
+// head pose; headLockBeam redraws a Draw's beam from the head pose the frame is rendered with, along
+// where it looks now, as far as the beam reached (beamReach) - so it never trails the head.
+inline Vec3 beamEyeMid(const Pose& head) { return head.position + head.orientation.rotate(Vec3{0, 0, -.06f}); }
+inline void beamOrigins(const Pose& head, bool freeze, Vec3 to, Vec3 from[2]) {
+    if (freeze) {
+        const Vec3 mouth = head.position + head.orientation.rotate(Vec3{0, -.09f, -.08f});
+        const Vec3 d = to - mouth;
+        from[0] = from[1] = mouth + (length(d) > 1e-3f ? normalized(d) : head.orientation.rotate(Vec3{0, 0, -1})) * .2f;
+        return;
+    }
+    const Vec3 f = head.orientation.rotate(Vec3{0, 0, -1});
+    for (int e = 0; e < 2; ++e)
+        from[e] = head.position + head.orientation.rotate(Vec3{e ? .032f : -.032f, 0, -.06f}) + f * .25f;
+}
+inline bool headLockBeam(Draw& d, const Pose& head) {
+    if (!(d.beamFade > 0) || !(d.beamReach > .3f) || !std::isfinite(d.beamReach) || !finite(head.position) ||
+        !finite(Vec3{head.orientation.x, head.orientation.y, head.orientation.z}) || !std::isfinite(head.orientation.w))
+        return false;
+    const Vec3 f = head.orientation.rotate(Vec3{0, 0, -1});
+    if (!finite(f) || length(f) < .5f)
+        return false;
+    const Vec3 to = beamEyeMid(head) + normalized(f) * d.beamReach;
+    Vec3 from[2];
+    beamOrigins(head, d.beamFreeze, to, from);
+    if (!finite(from[0]) || !finite(from[1]) || !finite(to))
+        return false;
+    d.beamFrom[0] = from[0];
+    d.beamFrom[1] = from[1];
+    d.beamTo = to;
+    return true;
+}
+// Version 0.0.72 BATMAN GRAPPLE: the line shoots out of the muzzle over grappleFlight seconds (0..1 of
+// the way to the hook) before it pulls taut, instead of appearing whole.
+inline constexpr float grappleFlight = .12f;
+inline float grappleOut(float seconds) {
+    if (!std::isfinite(seconds) || seconds <= 0)
+        return 0;
+    const float x = std::min(1.f, seconds / grappleFlight);
+    return 1 - (1 - x) * (1 - x);
+}
+// Version 0.0.72 PUNISHER NPC REACTIONS (0.0.71 videos: the thugs barely reacted to being shot): the
+// knockback kind stays 5 (FlyBack, punch.hpp's names decoded from the game's reflection: CONFIRMED),
+// as every 0.0.72 hero's blow; the size of the reaction rides on knockAmount, as there (uppercutBlow's
+// 130 "a stagger, no launch"; shoveBlow's 380 a shove). How big it looks in the game is CANDIDATE.
+// A pistol hit staggers him (140); a sawed-off blast with 3+ pellets in him shoves him off his feet
+// (380), fewer staggers him (160). The damage is shotBlow's, unchanged.
+inline constexpr float pistolStagger = 140.f, buckStagger = 160.f, buckShove = 380.f;
+inline sm2_damage::Blow shotReaction(const GunSpec& g, float amount) {
+    sm2_damage::Blow b = shotBlow(g, amount);
+    const float pellets = g.amount > 0 ? amount / g.amount : 1.f;
+    b.knockback = 5;
+    b.knockAmount = g.pellets > 1 ? (pellets >= 2.5f ? buckShove : buckStagger) : pistolStagger;
+    return b;
+}
+
 class Play {
   public:
     uint32_t hero = 0xffffffffu;
@@ -190,6 +290,21 @@ class Play {
     bool freezing{}, heatWas{};
     Vec3 beamFrom{}, beamTo{};
     float beamFade{}, heatSoundIn{};
+    // Version 0.0.72 HEAT VISION: the beam's end on an enemy (the sparks), the sparks' clock, and the scorch
+    // marks on the enemies burned (each kept on its enemy by id while he is listed; age s, 1e9 none).
+    bool beamOnEnemy{};
+    float beamClock{};
+    uint64_t scorchId[drawScorches]{};
+    Vec3 scorchAt[drawScorches]{}, scorchOff[drawScorches]{};
+    float scorchAge[drawScorches]{1e9f, 1e9f, 1e9f, 1e9f};
+    uint32_t scorchNext{};
+    // Version 0.0.72 PUNISHER: each hand's last muzzle flash and the last hits (tracking space).
+    Vec3 flashAt[2]{}, flashWay[2]{};
+    float flashAge[2]{1e9f, 1e9f};
+    bool flashShotgun[2]{};
+    Vec3 impactAt[drawImpacts]{}, impactWay[drawImpacts]{};
+    float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
+    uint32_t impactNext{};
     hero_modes::BatonSwing claws[2];
     bool clawsOut[2]{};
     float clawsOutFor[2]{}; // Version 0.0.72 SNIKT: seconds the claws have been out (their extension)
@@ -203,6 +318,8 @@ class Play {
     hero_modes::Baton shield;
     hero_modes::BatonSwing shieldBash;
     uint32_t shieldHand{1};      // the SHIELD ARM's hand index (1 the right hand: SHIELD ARM RIGHT)
+    float shieldCaughtFor = 1e3f;  // Version 0.0.72 SHIELD CATCH: seconds since the last catch
+    Vec3 shieldCaughtAt{};         // where it was caught (captain::catchPose eases from here)
     bool guarding{};             // on the arm, its face at the nearest enemy (captain::covers)
     captain::ShieldPose armPose; // this frame's pose on the arm (tracking space; ok false: not on it)
     captain::Block block;        // SHIELD BLOCK (EXPERIMENTAL, CANDIDATE): game_xr's health refund
@@ -236,6 +353,14 @@ class Play {
         healing = {};
         heatWas = freezing = false;
         beamFade = 0;
+        beamOnEnemy = false;
+        beamClock = 0;
+        for (uint32_t k = 0; k < drawScorches; ++k)
+            scorchAge[k] = 1e9f, scorchId[k] = 0;
+        for (int k = 0; k < 2; ++k)
+            flashAge[k] = 1e9f;
+        for (uint32_t k = 0; k < drawImpacts; ++k)
+            impactAge[k] = 1e9f;
         smoke = {};
         pellets = {};
         pelletBody = {};
@@ -260,7 +385,10 @@ class Play {
         shieldRack = {};
         shieldRack.add(holster::back, 0, 1u << shieldHand);
         shield = {};
+        shield.flyHome = true; // Version 0.0.72: it flies home after batonMaxOut, never snaps
         shield.roll.state = 0x9e3779b9u;
+        shieldCaughtFor = 1e3f;
+        shieldCaughtAt = {};
         shieldBash.reset();
         guarding = false;
         armPose = {};
@@ -355,6 +483,20 @@ class Play {
         smoke.update(dt);
         shells.update(dt);
         beamFade = std::max(0.f, beamFade - dt * 6.f);
+        {   // Version 0.0.72: the scorches, flashes and hits age (and a scorch follows its enemy)
+            const float t = std::isfinite(dt) ? std::clamp(dt, 0.f, 1.f) : 0.f;
+            beamClock = std::fmod(beamClock + t, 1000.f);
+            for (uint32_t k = 0; k < drawScorches; ++k) {
+                scorchAge[k] = std::min(scorchAge[k] + t, 1e9f);
+                for (uint32_t e = 0; scorchId[k] && e < in.count && in.list; ++e)
+                    if (in.list[e].id == scorchId[k] && finite(in.list[e].chest))
+                        scorchAt[k] = in.list[e].chest + scorchOff[k];
+            }
+            for (int k = 0; k < 2; ++k)
+                flashAge[k] = std::min(flashAge[k] + t, 1e9f);
+            for (uint32_t k = 0; k < drawImpacts; ++k)
+                impactAge[k] = std::min(impactAge[k] + t, 1e9f);
+        }
         if (!in.play)
             return;
         switch (hero) {
@@ -411,7 +553,7 @@ class Play {
             }
             if (!gunHeld && batBody.valid && finite(in.head.position)) {
                 Vec3 at{}, fwd{}, up{};
-                wornPose(grappleHand == 0 ? holster::leftHip : holster::rightHip, in.head.position, batBody, at, fwd, up);
+                wornPose(grappleHand == 0 ? holster::leftHip : holster::rightHip, in.head.position, batBody, at, fwd, up, hipBelt);
                 d.worn[0] = item(lookGrappleGun, at, fwd, up, 1);
                 any = true;
             }
@@ -420,8 +562,16 @@ class Play {
                 if (b.inHandNow()) {
                     // BATARANG THROW: only while its trigger is held (never idle), never with the gun drawn.
                     if (batReady[i] && !grappling[i] && d.held[i].look != lookGrappleGun && handOk(i)) {
-                        const Vec3 a = normalized(in.hands[i].aim);
-                        d.held[i] = item(lookBatarang, in.hands[i].position + a * .05f, a, gunUp(a));
+                        // Version 0.0.72 BATARANG IN THE FINGERS: pinched ahead of the knuckles, on edge.
+                        const PlayHand& h = in.hands[i];
+                        Vec3 at{}, f{}, u{};
+                        const bool pinched = h.gunOk && finite(h.gunAt) &&
+                                             batarangPinch(h.gunAt, h.gunForward, h.gunUp, at, f, u);
+                        if (!pinched) {
+                            const Vec3 a = normalized(h.aim);
+                            batarangPinch(h.position, a, gunUp(a), at, f, u);
+                        }
+                        d.held[i] = item(lookBatarang, at, f, u);
                         any = true;
                     }
                 } else if (finite(b.position)) {
@@ -462,16 +612,20 @@ class Play {
                 const bool open = g.weapon == sawedOff && (g.state == opened || g.state == seating || g.state == autoLoading);
                 const uint32_t look = g.weapon == sawedOff ? (open ? lookSawedOffOpen : lookSawedOff) : lookPistol;
                 Vec3 at{}, fwd{}, up{};
-                wornPose(slot.zone, in.head.position, guns.body, at, fwd, up);
-                const uint32_t kind = slot.zone == holster::back ? 2u : 1u;
+                wornPose(slot.zone, in.head.position, guns.body, at, fwd, up, hipThigh);
+                const uint32_t kind = slot.zone == holster::back ? 2u : 4u; // Version 0.0.72: 4 the drop-leg holster
                 if (slot.heldBy < 0) {
                     d.worn[s] = item(look, at, fwd, up, kind);
                 } else {
                     d.worn[s] = item(lookNone, at, fwd, up, kind); // the empty holster stays on the body
+                }
+                d.worn[s].side = slot.zone == holster::leftHip ? 0u : 1u;
+                if (slot.heldBy >= 0) {
                     const unsigned i = static_cast<unsigned>(slot.heldBy);
-                    if (i < 2 && in.hands[i].tracked && in.hands[i].gunOk && finite(in.hands[i].gunAt)) {
-                        // Version 0.0.7 GUN GRIP: in the palm from the grip pose, the barrel along the forearm.
-                        d.held[i] = item(look, in.hands[i].gunAt, in.hands[i].gunForward, in.hands[i].gunUp);
+                    const gun_grip::Held gh = i < 2 && in.hands[i].tracked ? aimedGrip(in.hands[i]) : gun_grip::Held{};
+                    if (i < 2 && gh.ok) {
+                        // Version 0.0.72 AIMED GUNS: in the palm from the grip pose, the barrel along the aim (the shot's line).
+                        d.held[i] = item(look, gh.at, gh.forward, gh.up);
                         d.held[i].palm = true;
                         ammoText(g, d.ammo[i], sizeof d.ammo[i]);
                     } else if (i < 2 && handOk(i)) {
@@ -510,7 +664,8 @@ class Play {
                 }
             } else if (shieldRack.heldIn(i) >= 0) { // on the arm
                 if (handOk(i)) {
-                    const captain::ShieldPose p = captain::onArm(in.hands[i].position, in.hands[i].aim, headF, bodyR, i);
+                    const captain::ShieldPose p = captain::catchPose(
+                        captain::onArm(in.hands[i].position, in.hands[i].aim, headF, bodyR, i), shieldCaughtAt, shieldCaughtFor);
                     if (p.ok) {
                         d.held[i] = item(lookShield, p.at, p.face, p.up);
                         d.held[i].side = i;
@@ -551,8 +706,33 @@ class Play {
             d.beamTo = W(to);
             d.beamFade = beamFade;
             d.beamFreeze = freezing;
+            // Version 0.0.72 HEAD LOCK: the reach game_xr redraws it with from the rendered head (headLockBeam).
+            d.beamReach = length(to - beamEyeMid(in.head));
+            d.beamHit = beamOnEnemy;
+            d.beamClock = beamClock;
             any = true;
         }
+        for (uint32_t k = 0; k < drawScorches; ++k)
+            if (scorchAge[k] < scorchLife && finite(scorchAt[k])) {
+                d.scorchAt[k] = W(scorchAt[k]);
+                d.scorchAge[k] = scorchAge[k];
+                any = true;
+            }
+        for (int k = 0; k < 2; ++k)
+            if (flashAge[k] < flashLife && finite(flashAt[k])) {
+                d.flashAt[k] = W(flashAt[k]);
+                d.flashWay[k] = R(flashWay[k]);
+                d.flashAge[k] = flashAge[k];
+                d.flashShotgun[k] = flashShotgun[k];
+                any = true;
+            }
+        for (uint32_t k = 0; k < drawImpacts; ++k)
+            if (impactAge[k] < impactLife && finite(impactAt[k])) {
+                d.impactAt[k] = W(impactAt[k]);
+                d.impactWay[k] = R(impactWay[k]);
+                d.impactAge[k] = impactAge[k];
+                any = true;
+            }
         for (uint32_t k = 0; k < smokeMost && k < drawSmokes; ++k) {
             d.smokeAt[k] = W(smoke.puffs[k].at);
             d.smokeAge[k] = smoke.puffs[k].age;
@@ -598,6 +778,8 @@ class Play {
         const Vec3 aim = captain::throwAim(handVelocity[i], h.aim, headF);
         const int aimed = shield.inHandNow() ? hero_modes::batonAim(h.position, aim, in.list, in.count) : -1;
         const uint32_t throwsWas = shield.throws, catchesWas = shield.catches + shield.timeouts;
+        const Vec3 flewAt = shield.position;
+        shieldCaughtFor = std::min(shieldCaughtFor + dt, 1e3f);
         const bool hit = shield.update(dt, trig, h.position, aim, in.list, in.count, aimed);
         if (shield.throws != throwsWas) {
             out.buzz(i, .4f);
@@ -615,6 +797,10 @@ class Play {
             ++shieldHits;
         }
         if (shield.catches + shield.timeouts != catchesWas) {
+            if (finite(flewAt)) { // 0.0.72 SHIELD CATCH: drawn easing onto the arm from here
+                shieldCaughtFor = 0;
+                shieldCaughtAt = flewAt;
+            }
             out.buzz(i, .6f);
             out.sound(sfx::shieldCatch);
             ++shieldCatches;
@@ -726,6 +912,7 @@ class Play {
         const bool tick = heat.update(dt, both);
         if (!heat.firing) {
             heatWas = false;
+            beamOnEnemy = false;
             return;
         }
         Vec3 from{}, dir{};
@@ -737,19 +924,27 @@ class Play {
         if (aimed >= 0 && length(beamTo - from) > range)
             beamTo = from + dir * range;
         beamFade = 1;
-        heatSoundIn -= dt;
-        if (!heatWas || heatSoundIn <= 0) {
-            out.sound(freezing ? sfx::freezeBreath : sfx::heatVision);
-            heatSoundIn = freezing ? .65f : .55f;
-        }
+        beamOnEnemy = aimed >= 0 && length(in.list[aimed].chest - from) <= range;
+        // Version 0.0.72 SOUND LOOPS (0.0.71 videos: the beam's sound stuttered, a one-shot fired again every
+        // .55 s): one seamless loop for as long as the beam is on, stopped the frame it is not asked for.
+        out.loop(freezing ? sfx::freezeBreath : sfx::heatVision);
         heatWas = true;
         if (!tick)
             return;
         int hit[8];
         const int n = rayHits(from, dir, range, freezing ? freezeRadius : heatRadius, in.list, in.count, hit, 8);
-        for (int k = 0; k < n; ++k)
+        for (int k = 0; k < n; ++k) {
             out.blow(in.list[hit[k]].id, freezing ? freezeTick() : heatTick(), in.list[hit[k]].chest,
                      freezing ? kindFreeze : kindHeat);
+            if (!freezing) { // Version 0.0.72 SCORCH: a burn on his front where the beam hit, kept on him
+                const uint32_t m = scorchNext++ % drawScorches;
+                const float j = static_cast<float>(heatTicks % 5u) - 2.f;
+                scorchId[m] = in.list[hit[k]].id;
+                scorchOff[m] = -dir * .14f + Vec3{.03f * j, .04f * j, 0};
+                scorchAt[m] = in.list[hit[k]].chest + scorchOff[m];
+                scorchAge[m] = 0;
+            }
+        }
         (freezing ? freezeTicks : heatTicks) += 1;
         out.buzz(0, .15f);
         out.buzz(1, .15f);
@@ -770,7 +965,9 @@ class Play {
             // Version 0.0.7 GUN GRIP: from the gun as it is drawn (the muzzle, along the barrel), so the
             // sights are on the shot; 0.0.62's along the aim without a usable grip pose.
             const gun_grip::Weapon gw = g.weapon == sawedOff ? gun_grip::sawedOff : gun_grip::pistol;
-            const gun_grip::Held gh{h.gunAt, h.gunForward, h.gunUp, h.gunOk && finite(h.gunAt) && finite(h.gunForward) && finite(h.gunUp)};
+            // Version 0.0.72 AIMED GUNS (0.0.71 videos: the barrel pointed off the aim): in the palm, the barrel
+            // along the controller's aim ray (as BATMAN's grapple gun), so where you point is where it shoots.
+            const gun_grip::Held gh = aimedGrip(h);
             if (fired && gh.ok) {
                 const Vec3 a = normalized(gh.forward);
                 const Vec3 muzzle = gun_grip::from(gh, gun_grip::muzzleFromPalm(gw));
@@ -779,10 +976,11 @@ class Play {
                 const int hits = shoot(g.spec(), muzzle, a, in.list, n, amount);
                 for (uint32_t e = 0; e < n; ++e)
                     if (amount[e] > 0)
-                        out.blow(in.list[e].id, shotBlow(g.spec(), amount[e]), in.list[e].chest,
+                        out.blow(in.list[e].id, shotReaction(g.spec(), amount[e]), in.list[e].chest,
                                  g.weapon == sawedOff ? kindSawedOff : kindPistol);
                 ++shots;
                 shotHits += static_cast<uint64_t>(hits);
+                shotLook(i, g.weapon == sawedOff, muzzle, a, in, n, amount);
                 out.sound(g.weapon == sawedOff ? sfx::shotgunBlast : sfx::pistolShot);
                 out.buzz(i, g.weapon == sawedOff ? .95f : .7f);
                 if (g.weapon == pistol)
@@ -795,10 +993,11 @@ class Play {
                 const int hits = shoot(g.spec(), muzzle, a, in.list, n, amount);
                 for (uint32_t e = 0; e < n; ++e)
                     if (amount[e] > 0)
-                        out.blow(in.list[e].id, shotBlow(g.spec(), amount[e]), in.list[e].chest,
+                        out.blow(in.list[e].id, shotReaction(g.spec(), amount[e]), in.list[e].chest,
                                  g.weapon == sawedOff ? kindSawedOff : kindPistol);
                 ++shots;
                 shotHits += static_cast<uint64_t>(hits);
+                shotLook(i, g.weapon == sawedOff, muzzle, a, in, n, amount);
                 out.sound(g.weapon == sawedOff ? sfx::shotgunBlast : sfx::pistolShot);
                 out.buzz(i, g.weapon == sawedOff ? .95f : .7f);
                 if (g.weapon == pistol) {
@@ -835,6 +1034,32 @@ class Play {
         }
     }
     static constexpr uint32_t our_ball_max = 32;
+    // Version 0.0.72 AIMED GUNS: a hand's gun pose: the grip point, the barrel along the aim, its top
+    // toward the thumb (not ok: no usable grip pose - the aim pose instead).
+    static gun_grip::Held aimedGrip(const PlayHand& h) {
+        if (!h.gunOk || !finite(h.gunAt) || !finite(h.gunUp))
+            return {};
+        const auto g = grapple072::alongAim(h.gunAt, h.aim, h.gunUp);
+        return {g.at, g.forward, g.up, g.ok};
+    }
+    // Version 0.0.72 MUZZLE FLASH / HIT EFFECTS: a shot's flash at the muzzle along the barrel, and a hit
+    // puff on each enemy it hit (on his front, facing back along the shot).
+    void shotLook(unsigned hand, bool shotgun, Vec3 muzzle, Vec3 way, const PlayInput& in, uint32_t n, const float* amount) {
+        if (hand < 2 && finite(muzzle) && finite(way)) {
+            flashAt[hand] = muzzle;
+            flashWay[hand] = way;
+            flashAge[hand] = 0;
+            flashShotgun[hand] = shotgun;
+        }
+        for (uint32_t e = 0; e < n && in.list; ++e)
+            if (amount[e] > 0 && finite(in.list[e].chest)) {
+                const uint32_t m = impactNext++ % drawImpacts;
+                const Vec3 c = in.list[e].chest, toward = normalized(c - muzzle);
+                impactAt[m] = finite(toward) ? c - toward * .15f : c;
+                impactWay[m] = finite(toward) ? toward : way;
+                impactAge[m] = 0;
+            }
+    }
 };
 
 } // namespace spidy::hero007

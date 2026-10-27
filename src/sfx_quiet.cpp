@@ -2,6 +2,7 @@
 // Version 0.0.5 SOUND EFFECTS: the stand-in runtime for the tests (no audio): the requests are
 // counted and left for the test to take. The game's module links src/sfx_win.cpp instead.
 #include "spidy/sfx.hpp"
+#include <chrono>
 
 namespace spidy::sfx {
 namespace {
@@ -18,6 +19,11 @@ void play(Id id) {
     else
         requests().play(id);
 }
+uint64_t nowMs() {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now().time_since_epoch()).count()) + 1;
+}
+void loop(Id id, bool on) { requests().loop(id, nowMs(), on); } // Version 0.0.72 SOUND LOOPS (counted only)
 void setGain(float gain) { quietGain.store(gain >= 0.f && gain <= 1.f ? gain : (gain > 1.f ? 1.f : 0.f), std::memory_order_relaxed); }
 Stats stats() {
     Stats s;

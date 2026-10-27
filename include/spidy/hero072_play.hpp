@@ -173,6 +173,7 @@ class Play {
     Vec3 chainTo{}, fistAt{}, fistDir{0, 0, -1}, shockAt{}, hookFrom{}, hookTo{};
     float lastDt{};
     float shockRadius{};
+    bool shockSubtle{};
     bool hammerHeld{}, gripWas{};
     uint32_t lightningSeed = 0x9e3779b9u; // THOR's strike sound pick (xorshift; seedLightning)
     float hammerOut{}; // THOR's thrown hammer: seconds left in the air
@@ -352,7 +353,7 @@ class Play {
                 for (uint32_t e = 0; in.list && e < in.count; ++e)
                     if (!in.list[e].down && ok(in.list[e].chest) && length(in.list[e].chest - at) <= slamRadius * perks.scale(h, Stat::slamRadius))
                         out.blow(in.list[e].id, knocked(h, shieldSlamHit()), in.list[e].chest, kindShieldSlam);
-                shock(at, slamRadius);
+                shock(at, slamRadius, true); // 0.0.72: a small faint ring, not the 3 m one
                 if (o.fireDouse)
                     doused += fires.douse(Douse::shieldSlam, at, look, dt);
                 out.buzz(i, 1.f);
@@ -539,7 +540,8 @@ class Play {
         }
     }
     static int touched(Vec3 at, const BatonEnemy* list, uint32_t count) { return nearestEnemy(at, list, count, touchRange); }
-    void shock(Vec3 at, float radius) {
+    void shock(Vec3 at, float radius, bool subtle = false) {
+        shockSubtle = subtle; // Version 0.0.72 SUBTLE RING (CAP's slam)
         shockShow = .6f;
         shockAt = at;
         shockRadius = radius;
@@ -819,6 +821,7 @@ class Play {
             out.look.shock = true;
             out.look.shockAt = shockAt;
             out.look.shockRadius = shockRadius;
+            out.look.shockSubtle = shockSubtle;
             out.look.shockAge = 1.f - shockShow / .6f;
             shockShow = std::max(0.f, shockShow - dt);
         }

@@ -32,12 +32,17 @@ and grip, and everything starts holstered or sheathed.
 - DAREDEVIL: batons start on your back; reach over a shoulder and grip to draw.
   BATON GRAPPLE: cast a baton arm up fast to grapple there.
 - BATMAN: batarangs from the belt (reach + grip), grapple gun, glide, smoke.
-  GRAPPLE: aim at a ledge and fire, you are pulled up from the ground too.
+  GRAPPLE: aim at a ledge and pull the trigger; the line flies out, then
+  pulls you up (from the ground too). The gun hangs on your belt. Your game
+  body is hidden as Batman (no Iron Spider), and so are the game's hands.
+  Batarangs sit in your fingers.
   PERCH TAKEDOWN is COMING SOON (its game hooks are not confirmed yet).
 - WOLVERINE: squeeze the grip into a fist to pop the claws (SNIKT); let go to
   sheathe them.
-- SUPERMAN: flight on by default; heat vision; cold breath.
-- PUNISHER: pistols on your hips, sawed-off on your back, drawn with grip.
+- SUPERMAN: flight on by default; heat vision (two thin beams from your eyes,
+  sparks, scorch, a smooth looping sound); cold breath.
+- PUNISHER: pistols in thigh holsters, sawed-off on your back, drawn with
+  grip. Muzzle flash, hit puffs, enemies flinch; the ammo counter stays.
   Your own sounds play for the shotgun, pistols and the pistol reload.
   GRAPPLE HOOK: draw from the chest, push forward to grapple up.
   PUNISHER VAN (EXPERIMENTAL, OFF by default): tap X to summon. In this
@@ -46,6 +51,8 @@ and grip, and everything starts holstered or sheathed.
   door handle to get in and out, grip the steering wheel rim with both hands
   to steer, RT drives, LT reverses, both triggers brake.
 - CAPTAIN AMERICA: the shield is on your back (the real model); reach + grip.
+  A thrown shield flies back and eases into your hand. The aim marker is
+  small and faint.
 - THOR: lightning with your own two sounds. The hammer shows "MODEL MISSING"
   until you pick a Mjolnir model (on purpose: no fake hammer).
 - GREEN LANTERN: ring constructs (fist, beam, bubble, chain), ring flight.

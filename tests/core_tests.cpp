@@ -22551,7 +22551,7 @@ int main() {
         // Version 0.0.72: the pistols' shot (2.496 s), the sawed-off's (3.504 s) and the pistols' reload (1.752 s)
         // are the player's own sounds, decoded unchanged (tools/sfx/user_guns.py): their own rate, stereo.
         const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f,
-                                      2.496f, 3.504f, .12f, .4f, .25f, .22f, .4f, .6f, .7f, // 0.0.7's nine
+                                      2.496f, 3.504f, .12f, .4f, .25f, .22f, .4f, 1.f, 1.f, // 0.0.7's nine (Version 0.0.72: heat vision and freeze breath are 1 s seamless loops)
                                       .6f,  .7f,  .45f, 1.1f, // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang
                                       1.752f, 4.389f, 6.699f}; // 0.0.72 pistol_reload, THOR's two lightnings
         static_assert(sounds == 23);
@@ -26721,9 +26721,12 @@ int main() {
         const Quat rq = Quat::around({1, 0, 0}, (90.f - 30.f) * 3.14159265f / 180.f);
         const Quat lq{rq.x, -rq.y, -rq.z, rq.w};
         check(deg(rq.rotate(bg::localForearm(ControllerKind::touch)), {0, 0, -1}) < .05f, "the test pose aims ahead");
+        // Version 0.0.72 AIMED GUNS: the barrel and the shot follow the aim ray (the user's 0.0.71 videos: "guns aimed
+        // correctly"), the grip stays in the palm from the grip pose.
+        Vec3 aimWay{0, 0, -1};
         const auto hands = [&](Vec3 l, float sl, Vec3 r, float sr, float trig, bool gunPose) {
-            in.hands[0] = {l, {0, -1, 0}, true, trig, sl, false};
-            in.hands[1] = {r, {0, -1, 0}, true, trig, sr, false}; // the aim points at the floor: shots must not
+            in.hands[0] = {l, aimWay, true, trig, sl, false};
+            in.hands[1] = {r, aimWay, true, trig, sr, false};
             const gg::Held hl = gg::held({l, lq}, 0, ControllerKind::touch), hr = gg::held({r, rq}, 1, ControllerKind::touch);
             in.hands[0].gunOk = gunPose && hl.ok;
             in.hands[0].gunAt = hl.at;
@@ -26745,7 +26748,7 @@ int main() {
         g.draw(d, Pose{}, in, 0);
         check(d.held[0].look == lookPistol && d.held[1].look == lookPistol && d.held[0].palm && d.held[1].palm, "both pistols held in the palm");
         check(length(d.held[1].at - outR) < 1e-5f && deg(d.held[1].forward, {0, 0, -1}) < .1f && deg(d.held[1].up, {0, 1, 0}) < .1f,
-              "the right pistol: the grip in the palm, the barrel ahead along the forearm, upright with the thumb");
+              "the right pistol: the grip in the palm, the barrel ahead along the aim, upright with the thumb");
         check(length(d.held[0].at - mirror(d.held[1].at)) < 1e-5f && length(d.held[0].forward - mirror(d.held[1].forward)) < 1e-4f,
               "the left pistol mirrors the right");
         const spidy::hero_modes::BatonEnemy foe[1] = {{77, {.2f, 1.4f + gg::muzzleFromPalm(gg::pistol).up, -6.f}}};
@@ -26761,6 +26764,12 @@ int main() {
         for (uint32_t k = 0; k < d.shells; ++k)
             caseNear = caseNear || length(d.shellAt[k] - (outR + Vec3{0, .07f, -.05f})) < .15f || length(d.shellAt[k] - (outL + Vec3{0, .07f, -.05f})) < .15f;
         check(d.shells > 0 && caseNear, "the cases leave the ejection port");
+        // The aim turned to the floor: the barrel turns with it, the grip stays in the palm.
+        aimWay = {0, -1, 0};
+        hands(outL, 1, outR, 1, 0, true);
+        g.draw(d, Pose{}, in, 0);
+        check(d.held[1].palm && length(d.held[1].at - outR) < 1e-5f && deg(d.held[1].forward, {0, -1, 0}) < .1f &&
+                  std::fabs(dot(d.held[1].up, d.held[1].forward)) < 1e-3f, "the barrel did not follow the aim");
         // No usable grip pose: 0.0.62's placement along the aim, upright, not palm; still one pistol per hand.
         hands(outL, 1, outR, 1, 0, false);
         g.draw(d, Pose{}, in, 0);
@@ -27066,6 +27075,230 @@ int main() {
             check(out.empty(), "opacity 0 draws nothing");
             check(tn::view(n, {{0, 0, 0}, {NAN, 0, 0, 1}}).opacity == 0, "a bad world pose: nothing");
         }
+    });
+    test("Version 0.0.72: 0.0.71 VIDEOS FIX ROUND - holsters on the thigh / belt, the batarang pinch, the grapple line flies out", [] {
+        using namespace spidy::hero007;
+        namespace hl = spidy::holster;
+        hl::BodyYaw body;
+        const Vec3 head{0, 1.7f, 0};
+        for (const uint32_t zone : {static_cast<uint32_t>(hl::leftHip), static_cast<uint32_t>(hl::rightHip)}) {
+            Vec3 at, f, u;
+            wornPose(zone, head, body, at, f, u, hipThigh);
+            check(hl::inZone(zone, hl::bodyPoint(at, head, body)), "the thigh holster is out of its draw zone");
+            check(at.y < head.y - .8f && f.y < -.95f && std::fabs(dot(f, u)) < 1e-3f, "the thigh holster is not on the thigh, barrel down");
+            Vec3 bat, bf, bu;
+            wornPose(zone, head, body, bat, bf, bu, hipBelt);
+            check(hl::inZone(zone, hl::bodyPoint(bat, head, body)), "the belt holster is out of its draw zone");
+            check(bat.y > at.y + .2f && bat.y < head.y - .55f && std::fabs(dot(bf, bu)) < 1e-3f,
+                  "the grapple gun is not on the belt (it floated by the foot)");
+            Vec3 cat, cf, cu;
+            wornPose(zone, head, body, cat, cf, cu);
+            check(length(cat - at) > .01f, "the classic hip pose moved to the thigh too");
+        }
+        // The drop-leg holster draws, finite, in its budget.
+        Item it{lookPistol, {.19f, .84f, 0}, {0, -1, 0}, {0, 0, -1}, 0, 4, 1, false};
+        std::vector<spidy::Vertex> v;
+        appendHolster(v, it, {0, 1.6f, 0}, .002f);
+        bool ok = !v.empty() && v.size() <= budget::holster;
+        for (const auto& x : v)
+            ok &= finite(x.position);
+        check(ok, "the drop-leg holster: " + std::to_string(v.size()));
+        // The batarang between thumb and fingers: ahead of the palm, its face square to the palm's plane.
+        Vec3 at, f, u;
+        check(batarangPinch({0, 1, 0}, {0, 0, -1}, {0, 1, 0}, at, f, u), "no pinch");
+        check(length(at - Vec3{0, 1.03f, -.095f}) < 1e-4f && length(f - Vec3{0, 0, -1}) < 1e-4f && std::fabs(u.x) > .999f,
+              "the batarang is not pinched (it lay flat on the back of the hand)");
+        check(!batarangPinch({NAN, 1, 0}, {0, 0, -1}, {0, 1, 0}, at, f, u) && !batarangPinch({0, 1, 0}, {0, 0, -1}, {0, 0, -1}, at, f, u),
+              "a bad pose pinched");
+        // The line flies out of the muzzle, then it is taut.
+        check(grappleOut(0) == 0 && grappleOut(NAN) == 0 && grappleOut(grappleFlight) == 1 && grappleOut(5) == 1, "grappleOut ends");
+        check(grappleOut(grappleFlight / 2) > .5f && grappleOut(grappleFlight / 2) < 1, "grappleOut eases out");
+        std::vector<spidy::Vertex> half, full;
+        appendGrappleLine(half, {0, 1.4f, -.3f}, {0, 30, -38}, {0, 1.6f, 0}, .002f, .3f);
+        appendGrappleLine(full, {0, 1.4f, -.3f}, {0, 30, -38}, {0, 1.6f, 0}, .002f);
+        float halfTop = -1e9f, fullTop = -1e9f;
+        for (const auto& x : half)
+            halfTop = std::max(halfTop, x.position.y);
+        for (const auto& x : full)
+            fullTop = std::max(fullTop, x.position.y);
+        check(!half.empty() && halfTop < 12 && fullTop > 29, "the line does not fly out to the hook");
+        // BATMAN: the game's own body is not shown (there is no BATMAN body), every other hero's is.
+        check(!spidy::hero_modes::gameBodyShown(spidy::hero_modes::batman) && spidy::hero_modes::gameBodyShown(spidy::hero_modes::spiderMan) &&
+                  spidy::hero_modes::gameBodyShown(spidy::hero_modes::punisher), "gameBodyShown");
+    });
+    test("Version 0.0.72: 0.0.71 VIDEOS FIX ROUND - SUPERMAN's two thin beams locked to the head, sparks, scorch, a looping sound", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = .05f;
+        in.play = true;
+        in.hero = spidy::hero_modes::superman;
+        in.head = {{0, 1.7f, 0}, {}};
+        const spidy::hero_modes::BatonEnemy foe[1] = {{9, {0, 1.6f, -6}}};
+        in.list = foe;
+        in.count = 1;
+        for (auto& hand : in.hands)
+            hand = {{.2f, 1.2f, -.3f}, {0, 0, -1}, true, 1, 0, false};
+        uint32_t loopsOn = 0, oneShots = 0;
+        for (int k = 0; k < 20; ++k) {
+            PlayOutput o;
+            p.step(in, o);
+            loopsOn += o.loopsOn(spidy::sfx::heatVision);
+            oneShots += o.playsOf(spidy::sfx::heatVision);
+        }
+        check(loopsOn == 20 && oneShots == 0, "the heat sound is not one loop (it re-fired and stuttered)");
+        Draw d;
+        p.draw(d, Pose{}, in, 0);
+        check(d.beamFade > 0 && !d.beamFreeze && d.beamHit && d.beamReach > 5 && d.beamReach < 7, "the beam's reach / hit");
+        uint32_t scorches = 0;
+        for (const float a : d.scorchAge)
+            scorches += a < scorchLife;
+        check(scorches > 0, "no scorch on the enemy");
+        // Locked to the head: turned 30 degrees, the beam turns with it at once, from both eyes.
+        Pose turned{{0, 1.7f, 0}, Quat::around({0, 1, 0}, .5236f)};
+        Draw locked = d;
+        check(headLockBeam(locked, turned), "not locked");
+        const Vec3 look = turned.orientation.rotate({0, 0, -1});
+        check(length(normalized(locked.beamTo - beamEyeMid(turned)) - look) < 1e-3f, "the beam lags the head");
+        check(length(locked.beamFrom[0] - locked.beamFrom[1]) > .05f && length(locked.beamFrom[0] - locked.beamFrom[1]) < .08f,
+              "not two beams from the eyes");
+        Draw none = d;
+        none.beamFade = 0;
+        check(!headLockBeam(none, turned) && !headLockBeam(locked, Pose{{NAN, 0, 0}, {}}), "a faded beam or a NaN head locked");
+        // Thin: the heat beam's width is constant and small; sparks, a scorch draw finite, in budget.
+        check(heatBeamWidth < .01f, "the beam is not thin");
+        std::vector<spidy::Vertex> v;
+        appendHeatSparks(v, {0, 1.7f, 0}, {0, 1.6f, -6}, .3f, {0, 1.6f, 0}, .002f);
+        check(!v.empty() && v.size() <= budget::heatSparks, "the sparks: " + std::to_string(v.size()));
+        v.clear();
+        appendScorch(v, {0, 1.6f, -5.9f}, .5f, {0, 1.6f, 0});
+        check(!v.empty() && v.size() <= budget::scorch, "the scorch: " + std::to_string(v.size()));
+        v.clear();
+        appendScorch(v, {0, 1.6f, -5.9f}, scorchLife + 1, {0, 1.6f, 0});
+        check(v.empty(), "an old scorch drew");
+        // Let go: the loop is not asked for (it stops), the scorch fades.
+        for (auto& hand : in.hands)
+            hand.trigger = 0;
+        PlayOutput off;
+        p.step(in, off);
+        check(!off.loopsOn(spidy::sfx::heatVision), "the loop kept on after the triggers let go");
+        for (int k = 0; k < 80; ++k) {
+            PlayOutput o;
+            p.step(in, o);
+        }
+        p.draw(d, Pose{}, in, 0);
+        scorches = 0;
+        for (const float a : d.scorchAge)
+            scorches += a < scorchLife;
+        check(scorches == 0, "the scorch never fades");
+        // Only the loopable sounds loop; the heartbeat stops a loop not refreshed.
+        PlayOutput o;
+        o.loop(spidy::sfx::pistolShot);
+        check(o.loops == 0, "a one-shot sound looped");
+        check(spidy::sfx::loopLive(1000, 1000 + spidy::sfx::loopHoldMs) && !spidy::sfx::loopLive(1000, 1001 + spidy::sfx::loopHoldMs) &&
+                  !spidy::sfx::loopLive(0, 5), "loopLive");
+        spidy::sfx::Requests r;
+        r.loop(spidy::sfx::heatVision, 500, true);
+        check(r.loopAt(spidy::sfx::heatVision) == 500, "a loop request");
+        r.loop(spidy::sfx::heatVision, 600, false);
+        r.loop(spidy::sfx::pistolShot, 600, true);
+        check(r.loopAt(spidy::sfx::heatVision) == 0 && r.loopAt(spidy::sfx::pistolShot) == 0, "a loop stop / a one-shot loop");
+    });
+    test("Version 0.0.72: 0.0.71 VIDEOS FIX ROUND - the PUNISHER's flash, hit puffs, reactions; CAP's fly-back, catch, subtle ring", [] {
+        using namespace spidy::hero007;
+        const auto pistol = shotReaction(pistolSpec, pistolSpec.amount);
+        const auto blast = shotReaction(sawedOffSpec, sawedOffSpec.amount * 5);
+        const auto graze = shotReaction(sawedOffSpec, sawedOffSpec.amount * 2);
+        check(pistol.knockback == 5 && pistol.knockAmount == pistolStagger && blast.knockAmount == buckShove && graze.knockAmount == buckStagger,
+              "the reactions");
+        check(pistol.amount == shotBlow(pistolSpec, pistolSpec.amount).amount, "the damage changed");
+        std::vector<spidy::Vertex> v, big;
+        appendMuzzleFlash(v, {0, 1.4f, -.5f}, {0, 0, -1}, false, 0, {0, 1.6f, 0}, .002f);
+        appendMuzzleFlash(big, {0, 1.4f, -.5f}, {0, 0, -1}, true, 0, {0, 1.6f, 0}, .002f);
+        check(!v.empty() && v.size() <= budget::flash && !big.empty() && big.size() <= budget::flash, "the flash: " + std::to_string(v.size()) + " " + std::to_string(big.size()));
+        v.clear();
+        appendMuzzleFlash(v, {0, 1.4f, -.5f}, {0, 0, -1}, false, flashLife + .01f, {0, 1.6f, 0}, .002f);
+        check(v.empty(), "an old flash drew");
+        appendImpact(v, {0, 1.4f, -6}, {0, 0, 1}, .05f, {0, 1.6f, 0}, .002f);
+        check(!v.empty() && v.size() <= budget::impact, "the hit puff: " + std::to_string(v.size()));
+        // Shooting him: a flash at the muzzle, a hit puff on him.
+        Play g;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::punisher;
+        in.head = {{0, 1.7f, 0}, {}};
+        const Vec3 outR{.2f, 1.4f, -.4f};
+        const Vec3 rightHip{.25f, 1.0f, 0};
+        const spidy::hero_modes::BatonEnemy foe[1] = {{77, {.2f, 1.4f, -6.f}}};
+        in.list = foe;
+        in.count = 1;
+        const auto hand = [&](Vec3 r, float grip, float trig) {
+            in.hands[0] = {{-.4f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+            in.hands[1] = {r, {0, 0, -1}, true, trig, grip, false};
+            in.hands[1].holdGun({r, {0, 0, -1}, {0, 1, 0}, true});
+            PlayOutput o;
+            g.holsterStep(in, o);
+            g.step(in, o);
+            return o;
+        };
+        hand(rightHip, 1, 0);
+        hand(outR, 1, 0);
+        uint32_t blows = 0;
+        for (int f = 0; f < 6; ++f)
+            blows += hand(outR, 1, f % 2 ? 0.f : 1.f).blowCount;
+        Draw d;
+        g.draw(d, Pose{}, in, 0);
+        uint32_t puffs = 0;
+        for (const float a : d.impactAge)
+            puffs += a < impactLife;
+        check(blows > 0 && d.flashAge[1] < 1 && puffs > 0, "no flash / hit puff: " + std::to_string(blows));
+        check(d.held[1].look == lookPistol && std::strlen(d.ammo[1]) > 0, "the ammo counter went");
+        for (int f = 0; f < 90; ++f)
+            hand(outR, 1, 0);
+        g.draw(d, Pose{}, in, 0);
+        puffs = 0;
+        for (const float a : d.impactAge)
+            puffs += a < impactLife;
+        check(d.flashAge[1] > flashLife && puffs == 0, "the flash / puffs never fade");
+        // CAP: the shield caught eases onto the arm (no snap); his markers small and faint; the slam's ring small.
+        spidy::captain::ShieldPose arm;
+        arm.at = {.3f, 1.2f, -.2f};
+        arm.face = {1, 0, 0};
+        arm.up = {0, 1, 0};
+        arm.ok = true;
+        const Vec3 caught{.3f, 1.5f, -.8f};
+        const auto start = spidy::captain::catchPose(arm, caught, 0);
+        const auto mid = spidy::captain::catchPose(arm, caught, spidy::captain::catchBlend / 2);
+        const auto end = spidy::captain::catchPose(arm, caught, spidy::captain::catchBlend);
+        check(length(start.at - caught) < 1e-4f && length(end.at - arm.at) < 1e-5f && length(mid.at - arm.at) > .1f, "the catch snaps");
+        check(spidy::captain::subtleRadius(1.4f) == spidy::captain::reticleRadius && spidy::captain::subtleRadius(.1f) == .1f &&
+                  spidy::captain::subtleRadius(NAN) == spidy::captain::reticleRadius && spidy::captain::reticleOpacity < 1,
+              "the reticle is not small");
+        check(spidy::hero072::shockRing(8, 1, true) <= spidy::hero072::subtleRing && spidy::hero072::shockRing(8, 1, false) > 7 &&
+                  spidy::hero072::shockAlpha(0, true) < spidy::hero072::shockAlpha(0, false), "the slam ring is not subtle");
+        // Thrown and the hand runs off: out past batonMaxOut it still flies home (never snapped to the hand), slowing for the catch.
+        using spidy::hero_modes::Baton;
+        Baton b;
+        b.flyHome = true;
+        const float dt = 1 / 90.f;
+        Vec3 h{.3f, 1.2f, 0};
+        b.update(dt, true, h, {0, 0, -1}, {}, false);
+        float lastSpeed = 0;
+        Vec3 was = b.position;
+        int frames = 0;
+        for (int i = 0; i < 90 * 12 && !b.inHandNow(); ++i, ++frames) {
+            if (i < 90 * 5)
+                h.z += 17.5f * dt; // runs away faster than it can come back
+            b.update(dt, false, h, {0, 0, -1}, {}, false);
+            if (!b.inHandNow())
+                lastSpeed = length(b.position - was) / dt;
+            was = b.position;
+        }
+        check(b.inHandNow() && frames > 90 * spidy::hero_modes::batonMaxOut && b.timeouts == 0 && b.catches == 1,
+              "the shield snapped back: " + std::to_string(frames) + " " + std::to_string(b.timeouts));
+        check(lastSpeed < spidy::hero_modes::batonBackSpeed * .8f, "it does not slow for the catch: " + std::to_string(lastSpeed));
+        check(Baton::homeSpeed(0) < Baton::homeSpeed(5) && Baton::homeSpeed(5) == spidy::hero_modes::batonBackSpeed, "homeSpeed");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

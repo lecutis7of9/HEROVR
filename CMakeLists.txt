@@ -173,6 +173,8 @@ add_executable(spidy_supersonic_preview apps/supersonic_preview.cpp) # Version 0
 target_link_libraries(spidy_supersonic_preview PRIVATE spidy_core)
 add_executable(spidy_hero007_preview apps/hero007_preview.cpp) # Version 0.0.7
 target_link_libraries(spidy_hero007_preview PRIVATE spidy_core)
+add_executable(spidy_hero072b_preview apps/hero072b_preview.cpp) # Version 0.0.72 FIX ROUND
+target_link_libraries(spidy_hero072b_preview PRIVATE spidy_core)
 add_executable(spidy_phone_preview apps/phone_preview.cpp)
 target_link_libraries(spidy_phone_preview PRIVATE spidy_core)
 if(SPIDY_BUILD_OBSERVER)

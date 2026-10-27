@@ -46,13 +46,18 @@ struct Item {
     uint32_t look = lookNone;
     Vec3 at{}, forward{0, 0, -1}, up{0, 1, 0};
     float spin = 0;      // a thrown batarang's turn (radians)
-    uint32_t holster{};  // 0 none, 1 a hip holster round it, 2 a back sheath, 3 a baton tube
+    uint32_t holster{};  // 0 none, 1 a hip holster round it, 2 a back sheath, 3 a baton tube, 4 (0.0.72) a drop-leg thigh holster
     uint32_t side{};     // lookBatonModel: 0 the left baton, 1 the right; lookShield*: 0 the LEFT arm's, 1 the RIGHT's
     bool palm{};         // Version 0.0.7 GUN GRIP: at is the palm's grip point; the gun's own grip middle goes there
 };
 // CAPTAIN AMERICA's shield Items: forward = the face (the star side), up = along the forearm (elbow
 // -> hand), the model frame of captain.hpp (the hand strap at the origin, -z the face).
 inline constexpr uint32_t drawSmokes = 6, drawShells = 24;
+// Version 0.0.72: SUPERMAN's scorch marks, the PUNISHER's bullet impacts (each the newest overwriting the oldest).
+inline constexpr uint32_t drawScorches = 4, drawImpacts = 6;
+inline constexpr float scorchLife = 2.5f, impactLife = .35f, flashLife = .06f;
+// Version 0.0.72 THIN BEAMS: each eye's heat beam's half width (m), even along it (0.0.7: 1.2 cm widening to 3.2 cm).
+inline constexpr float heatBeamWidth = .0045f;
 // Everything 0.0.7 draws in one frame (NativeEyeFrame::hero007), world positions.
 // Version 0.0.72: Draw::modelWanted bits (a look's MODEL setting on).
 inline constexpr uint32_t modelBitBatarang = 1, modelBitGuns = 2, modelBitBaton = 4, modelBitShield = 8;
@@ -72,6 +77,21 @@ struct Draw {
     Vec3 beamFrom[2]{}, beamTo{};
     float beamFade = 0;      // 0: no beam
     bool beamFreeze{};       // COLD BREATH's frost instead of heat
+    // Version 0.0.72 HEAT VISION: how far the beam reaches from between the eyes (headLockBeam redraws it
+    // from the rendered head along it), whether its end is on an enemy (the hit sparks), a clock for the
+    // sparks' flicker, and the scorch marks it left (age s, 1e9: none).
+    float beamReach{};
+    bool beamHit{};
+    float beamClock{};
+    Vec3 scorchAt[drawScorches]{};
+    float scorchAge[drawScorches]{1e9f, 1e9f, 1e9f, 1e9f};
+    // Version 0.0.72 PUNISHER: each hand's muzzle flash (age s; 1e9: none) at its muzzle along the
+    // barrel, and the hit puffs on the enemies shot (age s; 1e9: none), facing back along the shot.
+    Vec3 flashAt[2]{}, flashWay[2]{};
+    float flashAge[2]{1e9f, 1e9f};
+    bool flashShotgun[2]{};
+    Vec3 impactAt[drawImpacts]{}, impactWay[drawImpacts]{};
+    float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
     Vec3 smokeAt[drawSmokes]{};
     float smokeAge[drawSmokes]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
     Vec3 shellAt[drawShells]{}, shellWay[drawShells]{};
@@ -104,6 +124,8 @@ struct Draw {
     const mesh_model::Mesh* grappleGunModel{};
     bool grapple[2]{};
     Vec3 grappleFrom[2]{}, grappleTo[2]{};
+    // Version 0.0.72: how far each line has flown out of the muzzle (0-1, grappleOut); 1: taut to the hook.
+    float grappleOut[2]{1.f, 1.f};
     // Version 0.0.7 BATMAN SMOKE PELLET: each hand's pellet, in the hand or in the air (false: none).
     bool pellet[2]{};
     Vec3 pelletAt[2]{};
@@ -127,7 +149,8 @@ bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 // BATMAN's grapple line: a taut dark line from the gun hand to the hook (three prongs on the
 // surface), up to 50 m.
-void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
+// Version 0.0.72: an 8 mm grey-black cord; flown (0-1) how far it has shot out of the muzzle, the hook on its tip.
+void appendGrappleLine(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle, float flown = 1.f);
 void appendClaws(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);
 // BATMAN GRAPPLE GUN: the muzzle (the model's extras.pivot) of a gun Item drawn with `model`. False: no
 // usable muzzle (no pivot, a bad frame) - the line starts at the hand instead.
@@ -143,6 +166,14 @@ void appendBatonClub(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, Vec3 viewer,
 void appendHolster(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float pixelAngle);
 void appendHeatBeam(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle, float fade);
 void appendFreezeBreath(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle, float fade);
+// Version 0.0.72 HEAT VISION: the sparks where a beam meets an enemy (short flickering streaks, `clock`
+// s for the flicker) and a scorch mark it leaves (a dark burn, its ember fading over scorchLife).
+void appendHeatSparks(std::vector<Vertex>& out, Vec3 from, Vec3 at, float clock, Vec3 viewer, float pixelAngle);
+void appendScorch(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer);
+// Version 0.0.72 PUNISHER: a muzzle flash (a star of short spikes ahead of the muzzle, flashLife s;
+// the sawed-off's bigger) and a hit puff on an enemy (a spray back along the shot, impactLife s).
+void appendMuzzleFlash(std::vector<Vertex>& out, Vec3 at, Vec3 way, bool shotgun, float age, Vec3 viewer, float pixelAngle);
+void appendImpact(std::vector<Vertex>& out, Vec3 at, Vec3 way, float age, Vec3 viewer, float pixelAngle);
 void appendSmoke(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer);
 // BATMAN's smoke pellet: a small dark ball (about 4 cm) with a glint.
 void appendPellet(std::vector<Vertex>& out, Vec3 at, Vec3 viewer);
@@ -163,13 +194,15 @@ inline constexpr size_t modelSinkBudget = 10 * 3 * size_t{mesh_model::drawTriang
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.
 namespace budget {
 inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 2600 /* 0.0.72: curved, 5 segments a claw */, club = 1200,
-                        holster = 400, shield = 2100, batarangModel = 3 * mesh_model::liteTriangles, model = 3 * mesh_model::liteTriangles,
-                        cable = 600, grapple = 1800, pellet = 200, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500;
+                        holster = 600 /* 0.0.72: the drop-leg holster */, shield = 2100, batarangModel = 3 * mesh_model::liteTriangles, model = 3 * mesh_model::liteTriangles,
+                        cable = 600, grapple = 2400 /* 0.0.72: the cord + the hook at the tip */, pellet = 200, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500,
+                        heatSparks = 500, scorch = 200, flash = 500, impact = 500;
 // The whole frame's worst case: 2 held + 4 worn + 2 flying + beam + smoke + shells + 2 readouts
 // (+ 2 cables, 2 grapple lines, 2 smoke pellets; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,
 // worn or flying slot).
 inline constexpr size_t frame = 2 * std::max(sawedOff, model) + 4 * (std::max(sawedOff, model) + holster) + 2 * cable + 2 * grapple + 2 * std::max(batarang, batarangModel) + freeze +
-                                drawSmokes * smoke + drawShells * shell + 2 * ammo + 2 * pellet;
+                                drawSmokes * smoke + drawShells * shell + 2 * ammo + 2 * pellet +
+                                heatSparks + drawScorches * scorch + 2 * flash + drawImpacts * impact; // 0.0.72
 static_assert(shield <= model, "the shield fits any item slot's budget");
 } // namespace budget
 } // namespace spidy::hero007

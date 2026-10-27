@@ -1894,6 +1894,9 @@ DWORD WINAPI run(void*) {
         // Version 0.0.72 GRAPPLE (grapple072.hpp): DAREDEVIL's cast and the PUNISHER's hook (hero072's
         // presses, for the next swing command), the hook launcher drawn, and the hands for the line.
         bool hero072Grapple[2]{}, hero072HookOut[2]{}, hero072HandTracked[2]{};
+        // Version 0.0.72 GRAPPLE LINE: each hand's line drawn last frame, and when its pull began (the fly-out).
+        bool grappleLineWas[2]{};
+        std::chrono::steady_clock::time_point grappleLineAt[2]{};
         Vec3 hero072HandAt[2]{}, hero072HandAim[2]{};
         uint32_t hero072GrappleNotes{};
         bool vanXWas{}; // Version 0.0.72 PUNISHER VAN: the X tap's edge
@@ -6293,7 +6296,13 @@ DWORD WINAPI run(void*) {
                                         for (uint32_t id = 0; id < sfx::sounds; ++id) // Version 0.0.72: one a shot
                                             for (uint32_t k = hout.playsOf(id); k > 0; --k)
                                                 sfx::play(static_cast<sfx::Id>(id));
+                                        // Version 0.0.72 SOUND LOOPS: HEAT VISION / COLD BREATH as one seamless loop,
+                                        // kept on each frame the beam is (a loop not refreshed stops by itself).
+                                        sfx::loop(sfx::heatVision, hout.loopsOn(sfx::heatVision));
+                                        sfx::loop(sfx::freezeBreath, hout.loopsOn(sfx::freezeBreath));
                                     } else {
+                                        sfx::loop(sfx::heatVision, false); // Version 0.0.72: no hero beam, no loop
+                                        sfx::loop(sfx::freezeBreath, false);
                                         batmanGrapple[0] = batmanGrapple[1] = false;
                                         hero007In.hero = heroWas;
                                         hero007In.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
@@ -8037,7 +8046,8 @@ DWORD WINAPI run(void*) {
                         // Standing on a wall or a ceiling - Spidy's own or the
                         // game's crawl - the body stands on it with the player,
                         // never in the air the swing keeps the hero in there.
-                        pose.flags = (flatScreen || !values.body ? 0u : native_body::bodyOn) | native_body::hideHead |
+                        pose.flags = (flatScreen || !values.body || !hero_modes::gameBodyShown(heroNow()) ? 0u : native_body::bodyOn) | // 0.0.72 BATMAN BODY
+                                     native_body::hideHead |
                                      native_body::handTurn |
                                      (swingState.owned && !motion.standing ? native_body::airborne : 0u) |
                                      (calibratedEye > 0 ? native_body::calibrated : 0u) |
@@ -8340,9 +8350,16 @@ DWORD WINAPI run(void*) {
                                     saved.hero007.grapple[h] = true;
                                     saved.hero007.grappleFrom[h] = from;
                                     saved.hero007.grappleTo[h] = capeNow.anchor;
+                                    // Version 0.0.72: the line shoots out of the muzzle as the pull starts.
+                                    if (!grappleLineWas[h])
+                                        grappleLineAt[h] = std::chrono::steady_clock::now();
+                                    saved.hero007.grappleOut[h] = hero007::grappleOut(std::chrono::duration<float>(
+                                        std::chrono::steady_clock::now() - grappleLineAt[h]).count());
                                     saved.hero007.any = true;
                                 }
                             }
+                            for (unsigned h = 0; h < 2; ++h)
+                                grappleLineWas[h] = saved.hero007.grapple[h];
                             // Version 0.0.7 BATARANG STYLE / GUN MODELS / BATON LOOK MODEL: the converted models
                             // under <Spidy folder>\Models\ (each slot read once, on first use; the built-in look
                             // when missing or refused - never a crash, nothing else stops).
@@ -9134,7 +9151,13 @@ DWORD WINAPI run(void*) {
                                 else
                                     appendBaton(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
                             }
-                        if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
+                        if (saved->hero007.any && saved->hero007.beamFade > 0 && validTrackedPose(rendered.headPose)) {
+                            // Version 0.0.72 HEAT VISION HEAD LOCK: the beams redrawn from this image's own head
+                            // pose along where it looks (0.0.71: drawn to where the beam was aimed a frame ago).
+                            hero007::Draw locked = saved->hero007;
+                            hero007::headLockBeam(locked, rendered.headPose);
+                            hero007::appendHero007(vertices, locked, travel, viewer, pixelAngle);
+                        } else if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
                             hero007::appendHero007(vertices, saved->hero007, travel, viewer, pixelAngle);
                         if (saved->hero072.any) // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
                             hero072::appendLook(vertices, saved->hero072, travel, viewer, pixelAngle);
@@ -9296,6 +9319,15 @@ DWORD WINAPI run(void*) {
                         // Update 16: reticles off hides only these drawings; the
                         // markers' motion above still runs, so turning them back on
                         // shows them where they belong at once.
+                        // Version 0.0.72 SUBTLE RETICLE (captain.hpp): CAPTAIN AMERICA's markers small and faint.
+                        if (heroNow() == hero_modes::captainAmerica)
+                            for (auto& mark : marks) {
+                                if (mark.kind == AimMark::target) {
+                                    mark.radius = captain::subtleRadius(mark.radius);
+                                    mark.lock = 1; // no wide lock-on ring
+                                }
+                                mark.opacity *= captain::reticleOpacity;
+                            }
                         if (reticlesShown.load())
                             for (const auto& mark : marks)
                                 appendAimMarker(translucent, mark, viewer, pixelAngle * markerPixels,

@@ -47,6 +47,10 @@ enum Hero : uint32_t { spiderMan = 0, ironMan, daredevil, hulk, batman, wolverin
 inline constexpr const char* heroNames[heroes] = {"SPIDER-MAN", "IRON MAN", "DAREDEVIL", "HULK",
                                                   "BATMAN",     "WOLVERINE", "SUPERMAN", "PUNISHER", "CAPTAIN AMERICA",
                                                   "THOR",       "GREEN LANTERN"};
+// Version 0.0.72 BATMAN BODY (0.0.71 videos: the IRON SPIDER / SPIDER-MAN body under BATMAN, and its right
+// hand vanishing and arm stretching looking down): the game's own body is not drawn under BATMAN (there
+// is no BATMAN body model; BODY off's view, the hands and his gear still drawn). Every other hero as before.
+constexpr bool gameBodyShown(uint32_t hero) { return hero != batman; }
 // Which heroes have a working hologram toggle in this build (Version 0.0.6: all of them; 0.0.7: all).
 inline constexpr bool shipped[heroes] = {true, true, true, true, true, true, true, true, true, true, true};
 // Version 0.0.6: the hero from the three toggles (IRON MAN, DAREDEVIL, HULK); should two ever be on
@@ -240,6 +244,13 @@ struct Baton {
     // With no target it arcs onto aimPoint (curveAim metres along the aim), then flies on straight.
     float curve = 0;
     float curveSign = 1; // +1 bends one way, -1 the other (the hand's side)
+    // Version 0.0.72 SHIELD FLIES HOME (CAPTAIN AMERICA, 0.0.71 videos: "snapped back"): with flyHome
+    // the batonMaxOut timeout turns it home in flight (homeTimeouts) instead of putting it in the hand,
+    // and the last metre slows (homeSpeed) so the catch reads as a catch. Only a shield still out at
+    // twice batonMaxOut (the hand ran away from it) is put back at once (timeouts, never lost).
+    bool flyHome{};
+    uint32_t homeTimeouts{};
+    static float homeSpeed(float len) { return std::min(batonBackSpeed, 4.f + 6.f * std::max(len, 0.f)); }
     Vec3 aimPoint{};
     bool toAimPoint{};
     Vec3 curvedVelocity(Vec3 to) const {
@@ -407,7 +418,12 @@ struct Baton {
             break;
         }
         out += dt;
-        if (out > batonMaxOut) { // never lost: back in the hand
+        if (flyHome && out > batonMaxOut && out <= 2 * batonMaxOut && state != returning) {
+            ++homeTimeouts; // 0.0.72: it turns home and flies back (no snap)
+            state = returning;
+            hasTarget = false;
+        }
+        if (out > (flyHome ? 2 * batonMaxOut : batonMaxOut)) { // never lost: back in the hand
             ++timeouts;
             state = inHand;
             position = hand;
@@ -447,12 +463,13 @@ struct Baton {
         if (state == returning) {
             const Vec3 to = hand - position;
             const float len = length(to);
-            if (len <= batonCatch + batonBackSpeed * dt) {
+            const float back = flyHome ? homeSpeed(len) : batonBackSpeed;
+            if (len <= batonCatch + back * dt) {
                 state = inHand;
                 position = hand;
                 ++catches;
             } else {
-                velocity = to / len * batonBackSpeed;
+                velocity = to / len * back;
                 position += velocity * dt;
             }
         }

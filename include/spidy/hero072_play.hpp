@@ -34,6 +34,7 @@ struct PlayOptions {
     bool ultimates = true;
     uint32_t perkBranch{};
     bool ownSuit{};
+    bool perchTakedown = true, takedownLight = true; // 9:31, 9:32: BATMAN's PERCH TAKEDOWN and its light
     // From the combat38 values (ON first: 0 is ON; SURVIVAL and OWN SUIT: OFF first).
     static bool onFirst(uint32_t v) { return v == 0; }
     static bool offFirst(uint32_t v) { return v == 1; }
@@ -64,6 +65,13 @@ struct PlayIn {
     const float* puffAges{};
     uint32_t puffCount{};
     float puffLife{};
+    // BATMAN's PERCH TAKEDOWN (9:31): the game side's state (each false / nullptr when unknown).
+    bool perched{}, gliding{};
+    bool faceButton{};         // the takedown's face button held (never a trigger)
+    bool takedownPrompt{};     // the game names that button in its takedown prompt (game_prompts)
+    const Vec3* facings{};     // each enemy's facing, as `list` (nullptr: unknown)
+    LineClear lineClear{};
+    void* lineUser{};
     PlayOptions o{};
 };
 enum BlowKind : uint32_t {
@@ -94,6 +102,7 @@ struct PlayOut {
     uint32_t faction{};        // the faction chosen (the status page)
     uint32_t factionWorn{};    // what the enemies wear: VANILLA until its models and the hook are in
     bool ultimateFired{};
+    PerchOut perch{};          // BATMAN's PERCH TAKEDOWN: the light, the button to send, the rope, the alerted
     uint32_t events{};         // bit 1 << BlowKind: what fired this frame (the log)
     Look look{};
     void blow(uint64_t id, sm2_damage::Blow b, Vec3 at, uint32_t kind) {
@@ -118,7 +127,7 @@ class Play {
   public:
     // One guard each (the status page lists the tripped ones).
     enum G : uint32_t { gUpper = 0, gShove, gSmoke, gDare, gIron, gRage, gRep, gSurvival, gDouse, gSlam, gHook, gLantern,
-                        gThor, gUltimate, gChain, guards };
+                        gThor, gUltimate, gChain, gPerch, guards };
     Guard guard[guards]{};
     HandSpeed speed;
     Fight fight;
@@ -144,6 +153,7 @@ class Play {
     StormHold storm;
     HammerSwing swing;
     ShoveGesture shove;
+    PerchTakedown perchTd;
     ShieldSlam slam;
     HookLauncher hook;
     Fires fires;
@@ -272,6 +282,33 @@ class Play {
                 out.buzz(0, .4f);
                 out.buzz(1, .4f);
             }
+        }
+        // ---- BATMAN: PERCH TAKEDOWN (a quick face-button press: the game's own hang, by its prompt) ----
+        if (h == hero_modes::batman && guard[gPerch].live(o.perchTakedown)) {
+            PerchIn pi;
+            pi.dt = dt;
+            pi.on = true;
+            pi.lightOn = o.takedownLight;
+            pi.head = in.head;
+            pi.perched = in.perched;
+            pi.gliding = in.gliding;
+            pi.button = in.faceButton;
+            pi.promptNamed = in.takedownPrompt;
+            pi.list = in.list;
+            pi.facings = in.facings;
+            pi.count = in.count;
+            pi.clear = in.lineClear;
+            pi.user = in.lineUser;
+            perchTd.step(pi, out.perch);
+            if (!guard[gPerch].sane(!out.perch.rope || (ok(out.perch.ropeFrom) && ok(out.perch.ropeTo)), "PERCH: a bad rope")) {
+                perchTd.reset();
+                out.perch = PerchOut{};
+            } else if (out.perch.sendButton) {
+                out.buzz(0, .5f);
+                out.buzz(1, .5f);
+            }
+        } else {
+            perchTd.reset();
         }
         // ---- BATMAN: SMOKE BLIND ----
         if (h == hero_modes::batman && guard[gSmoke].live(o.smokeBlind)) {
@@ -460,7 +497,7 @@ class Play {
     // How many enemies the hero's chain move hits in all (the hologram; 1: no chain).
     uint32_t chainCap(uint32_t h) const { return perks.chainCap(h); }
     // The PERK TREE lines for the settings page (4 lines; 0 for Spider-Man).
-    uint32_t tree(uint32_t h, char lines[4][96]) const {
+    uint32_t tree(uint32_t h, char lines[4][hero072::treeLine]) const {
         const uint32_t k = h < hero_modes::heroes ? h : 0u;
         return perks.tree(k, ultimateUnlocked(k, k == heroWas ? rep.points : rep.heroPoints[k], testUltimatesNow), lines);
     }

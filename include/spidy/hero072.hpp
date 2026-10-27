@@ -565,7 +565,7 @@ struct RepTuning {
     int32_t suitTier[3];                 // the 2nd, 3rd and 4th suit of a hero unlock here
 };
 inline constexpr RepTuning repTuning{0, 10000, 2, 12, 15, 20, -60, -120, -40, 500,
-                                     250, {2500, 5000, 7500}};
+                                     250, {2500, 4500, 6500}}; // 9:35: the suits at VIGILANTE, HERO, SUPERHERO (levels 5, 9, 13)
 inline constexpr int32_t repStart = repTuning.start, repMost = repTuning.most;
 inline constexpr int32_t repDown = repTuning.down, repCleared = repTuning.cleared, repDefeated = repTuning.defeated;
 // A hero's level (0 .. repMost / levelEvery = 20): one perk point each. Losing rep can drop a level.
@@ -1891,6 +1891,173 @@ class SuitCatalog {
             if (const char* v = std::strstr(text, key))
                 chosen[h] = static_cast<uint32_t>(std::strtoul(v + std::strlen(key), nullptr, 10)) % suitsMost;
             unlocked[h] |= 1u;
+        }
+    }
+};
+
+// ---------------------------------------------------------------------------------------------
+// PERCH TAKEDOWN (the user, 9:31, 9:32): BATMAN is a stealth fighter. From a ledge or perch above an
+// enemy (or gliding down at one: the SWOOP GRAB) ONE QUICK PRESS of a face button - never a trigger,
+// the triggers are projectiles only - yanks him up and leaves him hanging from the ledge by a ROPE,
+// the Arkham way. It reuses the GAME's own stealth web-hang (Spider-Man's): there is NO CONFIRMED
+// function or address to start it (perchHangHookConfirmed false; the bot state the game puts a yanked
+// enemy in, BotStateRequestTakedownYank, is CONFIRMED by name - game_targets reads it - but that only
+// SEES a takedown, it starts none). The one CONFIRMED way in is the game's own prompt: when the game
+// raises its takedown prompt it names the button (game_prompts), and the quick press sends exactly
+// that button (prompt_buttons), so the game does its own hang. With no prompt raised the press does
+// nothing (COMING SOON on the status page): never a crash, never a fake takedown.
+// The ROPE: the mod draws a rope from the ledge above to the hanging enemy. Hiding the game's own web
+// strands needs a CONFIRMED visual hook that there is not (perchWebHideConfirmed false): CANDIDATE, so
+// the rope is drawn over the game's web for now.
+// THE LIGHT over the target (TAKEDOWN LIGHT): GREEN safe - no other enemy will see it; RED unsafe -
+// another enemy can see it and will be alerted. The game's own "safe takedown" check is not found
+// (perchSafeHookConfirmed false), so it is computed: another standing enemy within perchSeeRange
+// whose view (his facing, where known; unknown counts as seeing) takes in the target, with a clear
+// line where a line test is given (none: counted clear, the safe side). Done on RED, the enemies
+// within perchAlertRange are alerted: the list is handed to the game side (CANDIDATE alert hook: until
+// one is CONFIRMED the game's own detection does it, the mod's list is shown).
+inline constexpr bool perchHangHookConfirmed = false, perchWebHideConfirmed = false, perchSafeHookConfirmed = false,
+                      perchAlertHookConfirmed = false;
+inline constexpr float perchReach = 25.f;    // the farthest enemy below a perch takedown takes, metres
+inline constexpr float perchBelow = 2.f;     // how far below the head (the ledge) he must be
+inline constexpr float perchLookCos = .85f;  // the look cone onto the target (about 32 degrees)
+inline constexpr float perchSeeRange = 18.f; // how far another enemy sees a takedown
+inline constexpr float perchSeeCos = .4f;    // his view cone (about 66 degrees each side)
+inline constexpr float perchAlertRange = 20.f;
+inline constexpr float perchQuickPress = .35f; // a press held longer is not the quick press
+inline constexpr float perchRopeSeconds = 90.f;
+inline constexpr uint32_t perchAlertMost = 16;
+enum PerchLight : uint32_t { lightNone = 0, lightGreen, lightRed };
+inline constexpr const char* perchLightNames[] = {"NONE", "GREEN", "RED"};
+// A line test (the game side's ray; nullptr: every line counts clear).
+using LineClear = bool (*)(Vec3 from, Vec3 to, void* user);
+struct PerchIn {
+    float dt{};
+    bool on{};                 // PERCH TAKEDOWN on and BATMAN in play
+    bool lightOn = true;       // TAKEDOWN LIGHT
+    Pose head{};
+    bool perched{};            // on a ledge or perch (the game's perch state; standing high counts)
+    bool gliding{};            // the SWOOP GRAB: gliding down
+    bool button{};             // the face button held this frame
+    bool promptNamed{};        // the game names that button in its takedown prompt right now
+    const BatonEnemy* list{};
+    const Vec3* facings{};     // each enemy's facing (nullptr or a zero one: unknown)
+    uint32_t count{};
+    LineClear clear{};
+    void* user{};
+};
+struct PerchOut {
+    uint64_t target{};
+    Vec3 targetAt{};
+    PerchLight light = lightNone;
+    bool sendButton{};         // send the game's prompted button now (the game's own hang)
+    bool comingSoon{};         // pressed with no prompt: nothing done
+    uint64_t alert[perchAlertMost]{};
+    uint32_t alertCount{};
+    bool rope{};
+    Vec3 ropeFrom{}, ropeTo{};
+};
+// Can another enemy (not `target`) see `at`? Pure, NaN-safe.
+inline bool perchSeen(const BatonEnemy* list, const Vec3* facings, uint32_t count, uint64_t target, Vec3 at,
+                      LineClear clear = nullptr, void* user = nullptr) {
+    if (!ok(at))
+        return true; // unknown: the unsafe side
+    for (uint32_t i = 0; list && i < count; ++i) {
+        const BatonEnemy& e = list[i];
+        if (!e.id || e.id == target || e.down || !ok(e.chest))
+            continue;
+        const Vec3 to = at - e.chest;
+        const float d = length(to);
+        if (d > perchSeeRange)
+            continue;
+        if (d > .3f && facings && ok(facings[i]) && length(facings[i]) > 1e-3f &&
+            dot(to / d, normalized(facings[i])) < perchSeeCos)
+            continue;
+        if (clear && !clear(e.chest, at, user))
+            continue;
+        return true;
+    }
+    return false;
+}
+struct PerchTakedown {
+    float held{};
+    bool was{};
+    uint64_t hanging{};
+    Vec3 anchor{};
+    float ropeAge{};
+    uint32_t takedowns{}, loud{};
+    void reset() { *this = PerchTakedown{}; }
+    void step(const PerchIn& in, PerchOut& out) {
+        out = PerchOut{};
+        const float dt = std::isfinite(in.dt) ? std::clamp(in.dt, 0.f, .1f) : 0.f;
+        if (!in.on || !ok(in.head.position)) {
+            reset();
+            return;
+        }
+        const bool down = in.button && !was;
+        held = in.button ? held + dt : 0.f;
+        was = in.button;
+        // The target: an enemy well below, in the look cone, the nearest to the look.
+        const Vec3 f = in.head.orientation.rotate(Vec3{0, 0, -1});
+        int best = -1;
+        float bestCos = perchLookCos;
+        if (in.perched || in.gliding)
+            for (uint32_t i = 0; in.list && i < in.count; ++i) {
+                const BatonEnemy& e = in.list[i];
+                if (!e.id || e.down || !ok(e.chest) || e.id == hanging)
+                    continue;
+                const Vec3 to = e.chest - in.head.position;
+                const float d = length(to);
+                if (d < .5f || d > perchReach || -to.y < perchBelow)
+                    continue;
+                const float c = dot(to / d, f);
+                if (c > bestCos) {
+                    bestCos = c;
+                    best = static_cast<int>(i);
+                }
+            }
+        if (best >= 0) {
+            const BatonEnemy& t = in.list[best];
+            out.target = t.id;
+            out.targetAt = t.chest;
+            const bool seen = perchSeen(in.list, in.facings, in.count, t.id, t.chest, in.clear, in.user);
+            out.light = in.lightOn ? (seen ? lightRed : lightGreen) : lightNone;
+            if (down && held <= perchQuickPress) {
+                if (!in.promptNamed) {
+                    out.comingSoon = true;
+                } else {
+                    out.sendButton = true;
+                    ++takedowns;
+                    hanging = t.id;
+                    anchor = {t.chest.x, in.head.position.y, t.chest.z};
+                    ropeAge = 0;
+                    if (seen) { // RED: the ones near enough are alerted
+                        ++loud;
+                        for (uint32_t i = 0; i < in.count && out.alertCount < perchAlertMost; ++i) {
+                            const BatonEnemy& e = in.list[i];
+                            if (e.id && e.id != t.id && !e.down && ok(e.chest) && length(e.chest - t.chest) <= perchAlertRange)
+                                out.alert[out.alertCount++] = e.id;
+                        }
+                    }
+                }
+            }
+        } else if (down && (in.perched || in.gliding)) {
+            out.comingSoon = !in.promptNamed;
+        }
+        // The rope to the hanging enemy while he is in the list (and up to perchRopeSeconds).
+        if (hanging) {
+            ropeAge += dt;
+            const BatonEnemy* h = nullptr;
+            for (uint32_t i = 0; in.list && i < in.count; ++i)
+                if (in.list[i].id == hanging)
+                    h = &in.list[i];
+            if (!h || !ok(h->chest) || !ok(anchor) || ropeAge > perchRopeSeconds) {
+                hanging = 0;
+            } else {
+                out.rope = true;
+                out.ropeFrom = anchor;
+                out.ropeTo = h->chest;
+            }
         }
     }
 };

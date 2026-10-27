@@ -893,7 +893,8 @@ constexpr SectionDef powersSections[] = {
       C::combatDdGrapple, C::combatDdParry}},
     {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight, C::combatHulkRage}},
     // Version 0.0.7 HERO PROFILES
-    {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle, C::combatSmokeBlind}},
+    {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle, C::combatSmokeBlind,
+      C::combatPerchTakedown, C::combatTakedownLight}},
     {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb}},
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
     {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
@@ -4223,6 +4224,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatUltimates:
             case Control::combatPerkBranch:
             case Control::combatOwnSuit:
+            case Control::combatPerchTakedown:
+            case Control::combatTakedownLight:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

@@ -1623,7 +1623,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 214, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 216, "controls count drifted"); // Version 0.0.72: + 37 COMBAT (PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1963,7 +1963,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 214, "controls count drifted"); // Version 0.0.72: + 35 COMBAT (THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 216, "controls count drifted"); // Version 0.0.72: + 37 COMBAT (PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18446,7 +18446,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 107, "one hundred and seven options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 35)");
+        check(options == 109, "one hundred and nine options (38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 37)");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18480,7 +18480,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 107, "0.0.72 has 107 COMBAT options (0.0.72: + 36; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 109, "0.0.72 has 109 COMBAT options (0.0.72: + 38; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18802,7 +18802,7 @@ int main() {
                 }
             }
         }
-        check(placed == 182 /* 0.0.72: + 36; CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 184 /* 0.0.72: + 38 (+ PERCH TAKEDOWN, TAKEDOWN LIGHT); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -25294,6 +25294,123 @@ int main() {
             }
         }
     });
+    test("Version 0.0.72: PERCH TAKEDOWN - BATMAN's quick press hangs a foe by a rope, GREEN / RED light, fail safe", [] {
+        using namespace hero072;
+        check(!perchHangHookConfirmed && !perchWebHideConfirmed && !perchSafeHookConfirmed && !perchAlertHookConfirmed,
+              "a PERCH hook marked CONFIRMED");
+        // Batman on a ledge 8 m up looking down at a thug; a second thug 30 m off (too far to see).
+        BatonEnemy foes[3]{{0x51, {0, 1.3f, -6.f}}, {0x52, {0, 1.3f, -40.f}}, {0x53, {6.f, 1.3f, -6.f}}};
+        Pose head;
+        head.position = {0, 9.f, 0};
+        head.orientation = arc(Vec3{0, 0, -1}, normalized(Vec3{0, -7.7f, -6.f}));
+        PerchIn in;
+        in.dt = .016f;
+        in.on = true;
+        in.head = head;
+        in.perched = true;
+        in.list = foes;
+        in.count = 2;
+        PerchTakedown td;
+        PerchOut out;
+        td.step(in, out);
+        check(out.target == 0x51 && out.light == lightGreen && !out.sendButton, "GREEN: the thug below, no one sees him");
+        in.button = true;
+        in.promptNamed = true;
+        td.step(in, out);
+        check(out.sendButton && out.alertCount == 0 && out.rope && out.ropeTo.y < out.ropeFrom.y, "the quick press: the game's hang, a rope");
+        td.step(in, out);
+        check(!out.sendButton, "a held press sent twice");
+        // RED: a third thug 6 m off, facing him (unknown facings count as seeing).
+        in.button = false;
+        in.count = 3;
+        PerchTakedown red;
+        red.step(in, out);
+        check(out.light == lightRed, "RED not shown with a thug looking");
+        const Vec3 facings[3]{{0, 0, -1}, {0, 0, -1}, {1, 0, 0}}; // the third looks away
+        in.facings = facings;
+        red.step(in, out);
+        check(out.light == lightGreen, "a thug looking away saw it");
+        in.facings = nullptr;
+        in.button = true;
+        red.step(in, out);
+        check(out.sendButton && out.alertCount == 1 && out.alert[0] == 0x53 && red.loud == 1, "RED: the others not alerted");
+        in.clear = [](Vec3, Vec3, void*) { return false; }; // a wall between
+        check(!perchSeen(foes, nullptr, 3, 0x51, foes[0].chest, in.clear), "seen through a wall");
+        in.clear = nullptr;
+        // No prompt from the game: COMING SOON, nothing sent.
+        PerchTakedown soon;
+        in.promptNamed = false;
+        in.button = false;
+        soon.step(in, out);
+        in.button = true;
+        soon.step(in, out);
+        check(out.comingSoon && !out.sendButton && !out.rope, "a fake takedown with no game prompt");
+        // A long hold is not the quick press; not perched or gliding: no target; the SWOOP GRAB.
+        PerchTakedown slow;
+        in.promptNamed = true;
+        in.button = false;
+        in.perched = false;
+        slow.step(in, out);
+        check(out.target == 0, "a target off a perch");
+        in.gliding = true;
+        slow.step(in, out);
+        check(out.target == 0x51, "the SWOOP GRAB has no target");
+        // The hanging foe gone: the rope goes.
+        BatonEnemy one[1]{{0x51, {0, 1.3f, -6.f}}};
+        in.list = one;
+        in.count = 1;
+        in.button = true;
+        slow.step(in, out);
+        check(out.sendButton && out.rope, "the swoop grab");
+        in.count = 0;
+        slow.step(in, out);
+        check(!out.rope && slow.hanging == 0, "a rope to nobody");
+        // NaN and nonsense: nothing.
+        PerchTakedown bad;
+        in.head.position = {NAN, 0, 0};
+        bad.step(in, out);
+        check(out.target == 0 && !out.sendButton, "a NaN head took someone");
+        in.head = head;
+        in.dt = NAN;
+        in.list = nullptr;
+        in.count = 9;
+        bad.step(in, out);
+        check(out.target == 0, "a null list");
+        // In Play: BATMAN only; OFF; Spider-Man never.
+        Play play;
+        PlayIn pin;
+        pin.dt = .016f;
+        pin.play = true;
+        pin.hero = hero_modes::batman;
+        pin.head = head;
+        pin.perched = true;
+        pin.takedownPrompt = true;
+        pin.list = foes;
+        pin.count = 2;
+        for (auto& hd : pin.hands)
+            hd.tracked = true;
+        PlayOut po;
+        play.step(pin, po);
+        pin.faceButton = true;
+        play.step(pin, po);
+        check(po.perch.sendButton && po.perch.light == lightGreen && po.blowCount == 0, "BATMAN's PERCH TAKEDOWN in Play");
+        pin.hero = hero_modes::spiderMan;
+        pin.faceButton = false;
+        play.step(pin, po);
+        pin.faceButton = true;
+        play.step(pin, po);
+        check(!po.perch.sendButton && po.perch.light == lightNone, "SPIDER-MAN got the PERCH TAKEDOWN");
+        pin.hero = hero_modes::batman;
+        pin.o.perchTakedown = false;
+        pin.faceButton = false;
+        play.step(pin, po);
+        pin.faceButton = true;
+        play.step(pin, po);
+        check(!po.perch.sendButton && po.perch.target == 0, "PERCH TAKEDOWN OFF still took him");
+        const auto& o1 = combat38::optionInfo[combat38::perchTakedown];
+        const auto& o2 = combat38::optionInfo[combat38::takedownLight];
+        check(o1.values[0] == std::string("ON") && o2.values[0] == std::string("ON"), "the PERCH settings' defaults");
+    });
     test("Version 0.0.72: CHAIN MOVES - 3 enemies from the start, 4-6 with the CHAIN perks, SPIDER-MAN vanilla", [] {
         using namespace hero072;
         BatonEnemy foes[8]{};
@@ -25340,7 +25457,7 @@ int main() {
         in.count = 8;
         for (int f = 0; f < 30; ++f)
             play.step(in, out);
-        char lines[4][96];
+        char lines[4][hero072::treeLine];
         check(out.blowCount == 0 && out.climbAllowed && !out.keepTopped && !out.ultimateFired && play.tree(hero_modes::spiderMan, lines) == 0 &&
                   play.suits.suits(hero_modes::spiderMan) == 1,
               "SPIDER-MAN got a 0.0.72 extra");
@@ -25444,7 +25561,7 @@ int main() {
         check(combat38::optionInfo[combat38::testUnlocks].values[0] == std::string("OFF"), "TEST UNLOCKS is not OFF by default");
         check(combat38::optionInfo[combat38::ownSuit].values[0] == std::string("OFF"), "USE MY OWN OR GAME SUIT is not OFF by default");
     });
-    test("Version 0.0.72: PERK TREES and ULTIMATES - T1 > T2 > T3 > ULT, the CHAIN 3 to 6, none for SPIDER-MAN", [] {
+    test("Version 0.0.72: PERK TREES and ULTIMATES - POWER / DEFENSE / MOVE x T1 > T2 > T3 > ULT, +1, RESET POINTS, the CHAIN 3 to 6, none for SPIDER-MAN", [] {
         using namespace hero072;
         check(perkCount == treeHeroes * perksPerHero && treeCost() <= static_cast<uint32_t>(repLevels), "the perk table");
         check(!hasTree(hero_modes::spiderMan) && std::string(ultimate(hero_modes::spiderMan).name).empty(),
@@ -25456,7 +25573,7 @@ int main() {
             for (uint32_t i = 0; i < perksPerHero; ++i) {
                 const Perk& k = perk(h, i);
                 const std::string sub = k.sub;
-                check(k.hero == h && k.tier == tierOf[i] && k.amount > 0 && k.cost == perkCost(i), "a perk out of place");
+                check(k.hero == h && k.tier == tierOf[i] && k.slot == columnOf[i] && (isIdea(k) || k.amount > 0) && k.cost == perkCost(i), "a perk out of place");
                 check(sub.size() <= 80 && std::count(sub.begin(), sub.end(), '.') == 1 && sub.back() == '.',
                       std::string("a perk's subtext is not one short sentence: ") + k.name);
                 chains += k.stat == Stat::chainJumps;
@@ -25468,57 +25585,91 @@ int main() {
                       perk(h, chainSlot[2]).stat == want,
                   "a CHAIN (or the damage / reload) perk in each tier");
         }
-        check(perk(hero_modes::thor, 1).stat == Stat::stormRadius && perk(hero_modes::greenLantern, 0).stat == Stat::chargeDrain &&
-                  perk(hero_modes::hulk, 1).stat == Stat::rageBuild && perk(hero_modes::batman, 1).stat == Stat::glideTime &&
+        check(perk(hero_modes::thor, 1).stat == Stat::stormRadius && perk(hero_modes::greenLantern, 2).stat == Stat::chargeDrain &&
+                  perk(hero_modes::hulk, 1).stat == Stat::rageBuild && perk(hero_modes::batman, 2).stat == Stat::glideTime &&
                   std::string(ultimate(hero_modes::thor).name) == "BIFROST STRIKE" && std::string(ultimate(hero_modes::hulk).name) == "GROUND SMASH",
               "the user's tree (9:12)");
+        // 9:35: the approved mockup (02_skill_tree_thor): POWER / DEFENSE / MOVE x T1-T3, IDEA-TBD placeholders.
+        check(std::string(perk(hero_modes::thor, 0).name) == "CHAIN LIGHTNING I" && std::string(perk(hero_modes::thor, 6).name) == "CHAIN LIGHTNING III" &&
+                  std::string(perk(hero_modes::thor, 2).name) == "FASTER HAMMER RETURN" && std::string(perk(hero_modes::thor, 4).name) == "LONGER LIGHTNING" &&
+                  isIdea(perk(hero_modes::thor, 5)) && isIdea(perk(hero_modes::thor, 7)) && isIdea(perk(hero_modes::thor, 8)) &&
+                  !isIdea(perk(hero_modes::thor, 0)) && std::string(columnNames[1]) == "DEFENSE",
+              "the mockup's THOR tree");
+        for (uint32_t h = 1; h < hero_modes::heroes; ++h) {
+            uint32_t ideas = 0;
+            for (uint32_t i = 0; i < perksPerHero; ++i) {
+                ideas += isIdea(perk(h, i));
+                check(isIdea(perk(h, i)) ? !wiredStat(perk(h, i).stat) : perk(h, i).amount > 0, "an IDEA-TBD perk wired, or a perk with no amount");
+                check(!isIdea(perk(h, chainSlot[i / 3])), "a POWER chain perk is an idea");
+            }
+            check(ideas >= 3 && ideas <= 5, "the IDEA-TBD placeholders");
+        }
         Perks p;
         check(p.chainCap(hero_modes::batman) == chainBase && p.chainCap(hero_modes::spiderMan) == 1, "the CHAIN hits 3 from the start");
         check(!hasChain(hero_modes::superman) && !hasChain(hero_modes::ironMan) && !hasChain(hero_modes::punisher) &&
                   hasChain(hero_modes::captainAmerica) && hasChain(hero_modes::daredevil) && hasChain(hero_modes::hulk) &&
                   hasChain(hero_modes::wolverine) && hasChain(hero_modes::thor) && hasChain(hero_modes::greenLantern),
               "the CHAIN heroes (9:26)");
-        check(treeCost() == 20 && perkCost(0) == 2 && perkCost(3) == 4 && perkCost(5) == 6, "the 20 levels fill the tree");
+        check(treeCost() == 18 && perkCost(0) == 1 && perkCost(3) == 2 && perkCost(8) == 3, "1 / 2 / 3 points: 18 of the 20 levels");
         check(p.points(hero_modes::batman, 499, false) == 0 && p.points(hero_modes::batman, 500, false) == 1, "a point a level");
         check(p.points(hero_modes::spiderMan, repMost, false) == 0 && p.spend(hero_modes::spiderMan, repMost, perkAuto, true) == 0,
               "SPIDER-MAN got perk points");
-        // 6 points (3000 rep): the whole of T1 (2 each), in order.
-        check(p.spend(hero_modes::batman, 2999, perkAuto, false) == 2 && !p.tierDone(hero_modes::batman, 0), "T1 in order");
-        check(p.spend(hero_modes::batman, 3000, perkAuto, false) == 1 && p.tierDone(hero_modes::batman, 0) && p.chainCap(hero_modes::batman) == 4,
+        // AUTO: DEFENSE, MOVE, then POWER in each tier; IDEA-TBD last.
+        check(p.spend(hero_modes::batman, 1000, perkAuto, false) == 2 && !p.tierDone(hero_modes::batman, 0) && p.chainCap(hero_modes::batman) == 3,
+              "T1 in order");
+        check(p.spend(hero_modes::batman, 1500, perkAuto, false) == 1 && p.tierDone(hero_modes::batman, 0) && p.chainCap(hero_modes::batman) == 4,
               "T1 in order, CHAIN 4");
-        check(!p.open(hero_modes::batman, 5), "T3 opened before T2 was full");
-        check(p.spend(hero_modes::batman, 5000, perkAuto, false) == 1 && (p.owned[hero_modes::batman] & perkBit(3)), "T2's first perk");
+        check(!p.open(hero_modes::batman, 6), "T3 opened before T2 was full");
+        check(p.spend(hero_modes::batman, 2500, perkAuto, false) == 1 && (p.owned[hero_modes::batman] & perkBit(5)) &&
+                  !(p.owned[hero_modes::batman] & perkBit(4)),
+              "T2's first wired perk (the IDEA-TBD one waits)");
         check(p.scale(hero_modes::batman, Stat::glideTime) > 1.1f && p.scale(hero_modes::hulk, Stat::glideTime) == 1.f,
               "the perks' stats are not per hero");
-        check(p.spend(hero_modes::batman, 5000, perkAuto, false) == 0, "spent points it did not have");
+        check(p.spend(hero_modes::batman, 2500, perkAuto, false) == 0, "spent points it did not have");
         Perks c;
-        c.spend(hero_modes::thor, 500 * 8, perkChainFirst, false); // 8 points: CHAIN 4, T1 a, T1 b, then 2 short of T2
-        check((c.owned[hero_modes::thor] & perkBit(2)) && c.count(hero_modes::thor) == 3, "CHAIN FIRST");
-        c.spend(hero_modes::thor, 500 * 12, perkChainFirst, false);
-        check((c.owned[hero_modes::thor] & perkBit(4)) && !(c.owned[hero_modes::thor] & perkBit(3)) && c.chainCap(hero_modes::thor) == 5,
+        c.spend(hero_modes::thor, 500 * 4, perkChainFirst, false); // 4 points: T1 (3), then 1 short of T2
+        check((c.owned[hero_modes::thor] & perkBit(0)) && c.count(hero_modes::thor) == 3, "CHAIN FIRST");
+        c.spend(hero_modes::thor, 500 * 6, perkChainFirst, false);
+        check((c.owned[hero_modes::thor] & perkBit(3)) && !(c.owned[hero_modes::thor] & perkBit(4)) && c.chainCap(hero_modes::thor) == 5,
               "CHAIN FIRST in T2");
         Perks hold;
         check(hold.spend(hero_modes::hulk, repMost, perkHold, false) == 0 && hold.points(hero_modes::hulk, repMost, false) == 20, "HOLD POINTS");
+        // +1 by hand (the SKILL TREE) and RESET POINTS.
+        check(!hold.buy(hero_modes::hulk, 3, repMost, false) && hold.buy(hero_modes::hulk, 0, repMost, false) &&
+                  !hold.buy(hero_modes::hulk, 0, repMost, false) && hold.points(hero_modes::hulk, repMost, false) == 19,
+              "+1: a locked tier, or bought twice");
+        check(hold.buy(hero_modes::hulk, 1, repMost, false) && hold.buy(hero_modes::hulk, 2, repMost, false) && hold.buy(hero_modes::hulk, 3, repMost, false) &&
+                  hold.spent(hero_modes::hulk) == 5 && hold.chainCap(hero_modes::hulk) == 5,
+              "+1 through T2");
+        check(!hold.buy(hero_modes::hulk, 0, 500, false) && !hold.buy(hero_modes::spiderMan, 0, repMost, true), "+1 with no points, or for SPIDER-MAN");
+        Perks poor;
+        check(!poor.buy(hero_modes::thor, 0, 499, false) && poor.buy(hero_modes::thor, 0, 500, false) && !poor.buy(hero_modes::thor, 1, 500, false),
+              "+1 without the point");
+        hold.dirty = false;
+        check(hold.reset(hero_modes::hulk) == 4 && hold.count(hero_modes::hulk) == 0 && hold.points(hero_modes::hulk, repMost, false) == 20 &&
+                  hold.dirty && hold.chainCap(hero_modes::hulk) == 3 && hold.reset(hero_modes::spiderMan) == 0,
+              "RESET POINTS");
         check(p.spend(hero_modes::thor, 0, perkAuto, true) == perksPerHero && p.count(hero_modes::thor) == perksPerHero &&
                   p.chainCap(hero_modes::thor) == chainMost,
               "ALL did not fill the tree, or the CHAIN is not 6");
+        check(p.statBonus(hero_modes::thor, Stat::idea) == 0.f, "an IDEA-TBD perk did something");
         p.spend(hero_modes::thor, 0, perkOff, false);
         check(p.off && p.chainCap(hero_modes::thor) == chainBase && p.scale(hero_modes::thor, Stat::stormRadius) == 1.f, "PERKS OFF");
         p.spend(hero_modes::thor, 0, perkAuto, false);
-        char lines[4][96];
-        check(p.tree(hero_modes::thor, false, lines) == 4 && std::strstr(lines[0], "[x] FAST RETURN") && std::strstr(lines[2], "LIGHTNING CHAIN 6") &&
-                  std::strstr(lines[3], "[ ] BIFROST STRIKE") && p.tree(hero_modes::spiderMan, true, lines) == 0,
+        char lines[4][hero072::treeLine];
+        check(p.tree(hero_modes::thor, false, lines) == 4 && std::strstr(lines[0], "[x] CHAIN LIGHTNING I") && std::strstr(lines[0], "FASTER HAMMER RETURN") &&
+                  std::strstr(lines[2], "CHAIN LIGHTNING III") && std::strstr(lines[3], "[ ] BIFROST STRIKE") && p.tree(hero_modes::spiderMan, true, lines) == 0,
               "the tree lines");
         char buf[512];
         p.save(buf, sizeof buf);
-        check(!std::strstr(buf, "perks.0="), "SPIDER-MAN's perks saved");
+        check(!std::strstr(buf, "tree.0=") && std::strstr(buf, "tree.9=511"), "SPIDER-MAN's perks saved, or THOR's not");
         Perks q;
         q.load(buf);
         check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman] && q.count(hero_modes::thor) == perksPerHero, "perks not saved");
-        q.load("perks.4=0\nperks.10=63\n");
+        q.load("tree.4=0\ntree.10=511\nperks.1=63\n");
         check(q.owned[hero_modes::batman] == p.owned[hero_modes::batman] && q.count(hero_modes::greenLantern) == perksPerHero &&
                   q.count(hero_modes::ironMan) == 0,
-              "an old save took perks away, or perks.1 read perks.10");
+              "an old save took perks away, tree.1 read tree.10, or the 6-perk test save was read");
         // The ultimate: max reputation (or TEST UNLOCKS), the crossed fists held, a long cooldown.
         check(!ultimateUnlocked(hero_modes::hulk, repMost - 1, false) && ultimateUnlocked(hero_modes::hulk, repMost, false) &&
                   ultimateUnlocked(hero_modes::hulk, 0, true) && !ultimateUnlocked(hero_modes::spiderMan, repMost, true),

@@ -119,6 +119,8 @@ enum Option : uint32_t {
     ultimates, perkBranch,
     // Version 0.0.72 (the user, 8:59): USE MY OWN OR GAME SUIT, the alternate suits' fallback.
     ownSuit,
+    // Version 0.0.72 (the user, 9:31, 9:32): BATMAN's PERCH TAKEDOWN and its GREEN / RED light.
+    perchTakedown, takedownLight,
     options
 };
 struct OptionInfo {
@@ -401,6 +403,10 @@ inline constexpr OptionInfo optionInfo[options] = {
      4, {"AUTO", "CHAIN FIRST", "HOLD POINTS", "PERKS OFF"}},
     {"own_suit", "USE MY OWN OR GAME SUIT", "OWNSUIT", "Fallback for a model glitch or crash: use your mod's or game's suit, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
+    {"perch_takedown", "PERCH TAKEDOWN", "PERCH", "ON: Batman quick-presses the game's prompt button to hang a foe, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"takedown_light", "TAKEDOWN LIGHT", "TLIGHT", "GREEN: no one sees the takedown; RED: others get alerted, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

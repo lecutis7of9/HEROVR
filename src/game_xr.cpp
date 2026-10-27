@@ -10601,6 +10601,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyTestUnlocks(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyUltimates(void* v) { return setHero007(v, combat38::ultimates, 5426); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerkBranch(void* v) { return setHero007(v, combat38::perkBranch, 5427); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyOwnSuit(void* v) { return setHero007(v, combat38::ownSuit, 5428); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPerchTakedown(void* v) { return setHero007(v, combat38::perchTakedown, 5429); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyTakedownLight(void* v) { return setHero007(v, combat38::takedownLight, 5430); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

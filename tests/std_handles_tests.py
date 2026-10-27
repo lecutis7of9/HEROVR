@@ -20,7 +20,6 @@ import ast
 import io
 import os
 import pathlib
-import re
 import subprocess
 import sys
 import tempfile
@@ -285,7 +284,11 @@ class RealWindows(unittest.TestCase):
     def test_dead_stdin_reproduces_winerror_6(self):
         said = self.child(False)
         print('\n  without the fix:', said.strip())
-        self.assertIn('FAILED', said); self.assertIn('WinError 6', said)
+        # Evidence only: a handle closed by the parent may be reused in the child, so this does not always fail.
+        # The faithful reproduction is WindowsLauncherRepro (the 0.0.70 launcher's real Stop VR sequence).
+        if 'FAILED' not in said:
+            self.skipTest('a closed handle did not reproduce here: ' + said.strip())
+        self.assertIn('WinError 6', said)
 
     def test_repair_starts_programs(self):
         said = self.child(True)
@@ -299,7 +302,7 @@ class WindowsLauncherRepro(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        import shutil, time
+        import time
         csc = [c for c in (os.path.expandvars(r'%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
                            os.path.expandvars(r'%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe')) if os.path.exists(c)]
         if not csc:

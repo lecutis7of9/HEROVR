@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include "body_calibration.hpp"
 #include "math.hpp"
 #include <cstddef>
@@ -126,6 +127,13 @@ struct Status {
 static_assert(sizeof(Status) == 144);
 
 uint32_t start(uintptr_t base);
+// start() with the writer and conversion at these RVAs (GAME BODY found them
+// again, game_body.hpp); 7002 if already hooked at others.
+uint32_t startAt(uintptr_t base, uintptr_t writerRva, uintptr_t toModelRva);
+// GAME BODY strict rigs: also refuse a rig whose protected joints hang under
+// a joint the body moves. refused(): why the latest rig was refused ("" none).
+void strict(bool on);
+std::string refused();
 // The local player became another actor (zero: none).
 void retarget(uintptr_t record);
 void submit(const Command&);
@@ -164,6 +172,14 @@ struct ProbeConfig {
     uint64_t base{}, record{};
 };
 static_assert(sizeof(ProbeConfig) == 32);
+// Version 0.0.72 GAME BODY (EXPERIMENTAL): version 2 also names the writer and
+// its conversion (RVAs the probe's find phase found, startAt checks them) and
+// turns on the strict rig checks (strict()).
+struct ProbeConfigV2 {
+    uint32_t magic = 0x53424346, version = 2, bytes = sizeof(ProbeConfigV2), pid{};
+    uint64_t base{}, record{}, writer{}, toModel{};
+};
+static_assert(sizeof(ProbeConfigV2) == 48);
 // SpidyBodyCapture: the next hero pose job copies its joints as the game
 // wrote them and as the body left them, with its rig and the rig's rest pose
 // in model space, into SpidyBodyPoses.

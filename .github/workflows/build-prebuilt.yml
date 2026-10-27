@@ -20,9 +20,9 @@ on:
 permissions:
   contents: write
 
-# hero-0.0.72 (private TEST branch): its own group, no source check against a tag, no upload.
+# hero-0.0.72 and its side branches (private TEST, e.g. hero-0.0.72-gamebody): a group each, no source check against a tag, no upload.
 concurrency:
-  group: prebuilt-hero-0.0.72
+  group: prebuilt-${{ github.ref_name }}
 
 defaults:
   run:
@@ -46,7 +46,7 @@ jobs:
           python-version: '3.12'
 
       - name: Check the mod's sources are the release's
-        if: github.ref_name != 'hero-0.0.72'
+        if: ${{ !startsWith(github.ref_name, 'hero-0.0.72') }}
         run: |
           $version = (Get-Content VERSION -TotalCount 1).Trim()
           if ("v$version" -ne $env:TAG) { throw "VERSION is $version, not $($env:TAG.TrimStart('v'))." }
@@ -146,7 +146,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'The new mod zip has no runnable Python of its own.' }
 
       - name: Check the release's current mod zip has a runnable Python
-        if: github.ref_name != 'hero-0.0.72'
+        if: ${{ !startsWith(github.ref_name, 'hero-0.0.72') }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

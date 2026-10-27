@@ -2,6 +2,8 @@
 
     python tools/probe_game_body.py                       every phase
     python tools/probe_game_body.py --phases rig          list the hero's rig only
+    python tools/probe_game_body.py --phases find         GAME BODY: the read-only checks only (nothing injected)
+    python tools/probe_game_body.py --phases find,solve   GAME BODY: the checks, then the spec's proof
 
 Phases:
   rig    the hero's rig as its pose job names it: every joint's name, parent and rest position, the joints the
@@ -17,6 +19,15 @@ Phases:
          and the render, and the eyes' image meanwhile
   fist   a scripted fist driven through the nearest bot's chest at 6 m/s, through the swing module's input as a
          controller's: the punch the game adapter lands, the damage request it issues, the bot's health
+  find   Version 0.0.72 GAME BODY (EXPERIMENTAL), read only, before anything is injected or hooked: the pose
+         writer and its conversion by their bytes (at the CANDIDATE addresses, else found again by bytes, one
+         place only), the HeroLocal, HeroMoverManager and MoverStandard vtables by their RTTI names, and the
+         registry giving one local hero, its manager and its registered mover three times in a row on one record.
+         Prints "FIND: PASS ..." or "FIND: FAIL <check>"
+  solve  GAME BODY: only after find passed, the body hooked at what find found, strict (every name the solve
+         needs, no protected joint under the body); a scripted headset and controllers: each wrist's and the head
+         joint's error in mm, ms per frame, hero_lag, then a 4 s walk's turn_max and a looking-down eye image.
+         Prints "SOLVE: PASS ..." or "SOLVE: FAIL <why>"
   punch  one blow straight to the game's own DamageSystem on the nearest bot (and, with --punch-hero, the hero):
          its state machine and health before and after
 
@@ -65,6 +76,187 @@ def crc(name, table=[]):
     for byte in name.encode():
         value = table[(value ^ byte) & 0xff] ^ (value >> 8)
     return value
+
+
+# Version 0.0.72 GAME BODY (EXPERIMENTAL): the multiplayer team's spec (game_body.hpp). Every address is
+# CANDIDATE (SM2 2.810): found again by bytes or checked by RTTI and live, never trusted as is.
+GB_REGISTRY, GB_REGISTRY_COUNT = 0xc2d3d20, 0xc2d3d40
+GB_HERO_LOCAL, GB_HERO_MOVER, GB_MOVER_STANDARD = 0x5424128, 0x5438988, 0x85d24d8
+GB_WRITER, GB_TO_MODEL = 0x292b880, 0x292af50
+GB_WRITER_PROLOGUE = bytes.fromhex('48895C24085556574154415541564157 4883EC20')
+GB_TO_MODEL_PROLOGUE = bytes.fromhex('488BC457 4881ECA0000000')
+GB_OWN_HANDLE, GB_OWNER_RECORD, GB_MANAGER_MOVER = 0x1c, 0x10, 0xdcc
+GB_RTTI = ((GB_HERO_LOCAL, '.?AVHeroLocal@Hero@@'), (GB_HERO_MOVER, '.?AVHeroMoverManager@Hero@@'),
+           (GB_MOVER_STANDARD, '.?AVMoverStandard@'))
+# The names the solve needs (game_body::identify), side by side.
+GB_NEEDED = ['head', 'chest'] + [s+n for s in ('LF_', 'RT_') for n in
+                                 ('uparm', 'loarm', 'wrist', 'finger_B_B', 'upleg', 'loleg', 'foot')]
+GB_PROTECTED = ('fx_root', 'sync', 'cameraTarget', 'aimTarget', 'LF_handIK', 'RT_handIK', 'LF_footIK', 'RT_footIK')
+
+
+def gb_calls(code, start, target, length=0x400):
+    """True when the function at `start` (offsets into `code`) calls or jumps to `target` within `length`."""
+    end = min(len(code)-5, start+length)
+    for at in range(start, end):
+        if code[at] in (0xE8, 0xE9) and at+5+struct.unpack_from('<i', code, at+1)[0] == target:
+            return True
+    return False
+
+
+def gb_find_functions(game, pe):
+    """The pose writer and its conversion: (writer, to_model, refound) RVAs, or a reason it failed."""
+    live = game.read(game.base+GB_WRITER, 0x400+5)
+    model = game.read(game.base+GB_TO_MODEL, len(GB_TO_MODEL_PROLOGUE))
+    if live.startswith(GB_WRITER_PROLOGUE) and model == GB_TO_MODEL_PROLOGUE:
+        target = GB_TO_MODEL-GB_WRITER
+        if any(live[a] in (0xE8, 0xE9) and a+5+struct.unpack_from('<i', live, a+1)[0] == target
+               for a in range(0, len(live)-5)):
+            return GB_WRITER, GB_TO_MODEL, False
+    # Found again by bytes over the code sections, live (the file's code may differ): exactly one writer
+    # prologue calling exactly one conversion prologue.
+    pairs = []
+    for section in pe.sections:
+        if section['flags'] & 0x20000020 == 0:
+            continue
+        size, chunk, code = section['virtual_size'], 1 << 20, bytearray()
+        for at in range(0, size, chunk):
+            part = game.read(game.base+section['rva']+at, min(chunk, size-at))
+            if len(part) != min(chunk, size-at):
+                return None, None, f'code section {section["name"]} unreadable at +{at:#x}'
+            code += part
+        code = bytes(code)
+        def every(pattern):
+            out, at = [], code.find(pattern)
+            while at >= 0:
+                out.append(at)
+                at = code.find(pattern, at+1)
+            return out
+        models = every(GB_TO_MODEL_PROLOGUE)
+        for w in every(GB_WRITER_PROLOGUE):
+            for m in models:
+                if gb_calls(code, w, m):
+                    pairs.append((section['rva']+w, section['rva']+m))
+    if len(pairs) != 1:
+        return None, None, f'writer by bytes: {len(pairs)} places, not one'
+    return pairs[0][0], pairs[0][1], True
+
+
+def gb_rtti_named(game, pe, vtable, prefix):
+    try:
+        locator = game.pointer(game.base+vtable-8)-game.base
+        signature, offset, _, descriptor, _, self_rva = struct.unpack('<6I', game.read(game.base+locator, 24))
+        if signature != 1 or offset != 0 or self_rva != locator:
+            return False
+        return game.read(game.base+descriptor+16, len(prefix)) == prefix.encode()
+    except (OSError, ValueError, struct.error):
+        return False
+
+
+def gb_player(game):
+    """game_player::find in Python (SM2 offsets): (record, hero, manager, mover) or a reason it failed."""
+    base = game.base
+    table = game.pointer(base+GB_REGISTRY)
+    count, = struct.unpack('<i', game.read(base+GB_REGISTRY_COUNT, 4))
+    if not table or not 0 < count <= 0x100000:
+        return None, 'registry'
+    raw = game.read(table, count*16)
+    if len(raw) != count*16:
+        return None, 'registry'
+
+    def handle_of(address):
+        v = game.read(address+GB_OWN_HANDLE, 4)
+        return struct.unpack('<I', v)[0] if len(v) == 4 else None
+
+    def component(handle):
+        index, generation = handle & 0xfffff, handle >> 20
+        if not generation or index >= count:
+            return 0
+        address, current = struct.unpack_from('<QI', raw, index*16)
+        return address if current == generation and handle_of(address) == handle else 0
+    heroes, managers = [], []
+    for i in range(count):
+        address, generation = struct.unpack_from('<QI', raw, i*16)
+        if address < 0x10000 or address % 8 or not 0 < generation <= 0xfff:
+            continue
+        vtable = game.pointer(address)
+        if vtable not in (base+GB_HERO_LOCAL, base+GB_HERO_MOVER) or handle_of(address) != (generation << 20 | i):
+            continue
+        record = game.pointer(address+GB_OWNER_RECORD)
+        if not record or not game.pointer(record):
+            continue
+        (heroes if vtable == base+GB_HERO_LOCAL else managers).append((address, record))
+    if len(heroes) != 1:
+        return None, f'local heroes: {len(heroes)}, not one'
+    hero, record = heroes[0]
+    mine = [a for a, r in managers if r == record]
+    if len(mine) != 1:
+        return None, f'hero managers on the hero: {len(mine)}, not one'
+    mover_handle = struct.unpack('<I', game.read(mine[0]+GB_MANAGER_MOVER, 4))[0]
+    mover = component(mover_handle)
+    if not mover or game.pointer(mover) != base+GB_MOVER_STANDARD or game.pointer(mover+GB_OWNER_RECORD) != record:
+        return None, 'mover not registered on the hero'
+    return (record, hero, mine[0], mover), None
+
+
+def find_phase(game, pe):
+    """GAME BODY's checks, read only. Returns the report; its 'pass' says whether solve may run."""
+    out = dict(addresses='CANDIDATE (SM2 2.810)')
+    try:
+        writer, to_model, refound = gb_find_functions(game, pe)
+    except (OSError, ValueError, struct.error) as error:
+        writer, to_model, refound = None, None, f'writer read: {error}'
+    if writer is None:
+        out.update({'pass': False, 'check': refound})
+        return out
+    out.update(writer=hex(writer), to_model=hex(to_model), found_again=refound)
+    for vtable, name in GB_RTTI:
+        if not gb_rtti_named(game, pe, vtable, name):
+            out.update({'pass': False, 'check': f'RTTI {name} at {vtable:#x}'})
+            return out
+    records = []
+    for _ in range(3):
+        try:
+            found, why = gb_player(game)
+        except (OSError, ValueError, struct.error) as error:
+            found, why = None, f'registry read: {error}'
+        if not found:
+            out.update({'pass': False, 'check': why})
+            return out
+        records.append(found)
+        time.sleep(.25)
+    if len({r[0] for r in records}) != 1:
+        out.update({'pass': False, 'check': 'the player record changed during the checks'})
+        return out
+    record, hero, manager, mover = records[-1]
+    out.update({'pass': True, 'record': hex(record), 'hero': hex(hero), 'manager': hex(manager), 'mover': hex(mover),
+                '_writer': writer, '_to_model': to_model, '_record': record, '_hero': hero})
+    return out
+
+
+def missing_names(names):
+    have = set(names or [])
+    lost = [n for n in GB_NEEDED if n not in have]
+    if 'a_body' not in have and 'pelvis' not in have:
+        lost.insert(0, 'a_body/pelvis')
+    if not any(n.startswith('spine') for n in have):
+        lost.append('spine')
+    if not any(n.startswith('neck') for n in have):
+        lost.append('neck')
+    return lost
+
+
+def protected_under_body(names, parents, roles):
+    """The first protected joint (or other root) under a joint the solve moves, else None."""
+    moved = {roles['pelvis'], roles['head']} | {a[k] for a in roles['arms'] for k in ('clavicle', 'upper') if a[k] >= 0} \
+        | {leg['upper'] for leg in roles['legs']}
+    index = {n: i for i, n in enumerate(names)}
+    for name in GB_PROTECTED:
+        j = index.get(name)
+        while j is not None and j >= 0:
+            if j in moved:
+                return name
+            j = parents[j]
+    return None
 
 
 def seqlock(game, address, size):
@@ -543,6 +735,48 @@ def fist_phase(game, process, pe, hero, feet):
                 pass
 
 
+def gb_appearance(game, stereo):
+    """The eye views' hero_lag (SpidyAppearanceData, run_game_vr's reader), or None."""
+    try:
+        from run_game_vr import appearance_snapshot
+        return appearance_snapshot(game, stereo['SpidyAppearanceData'])
+    except Exception as error:  # informational: the proof stands on the body's own numbers
+        return dict(error=str(error))
+
+
+def solve_report(report, before, after, appearance, appearance_before):
+    """GAME BODY's proof from the ik, eyes and walk phases, printed as one PASS or FAIL line."""
+    ik = report.get('ik') or {}
+    wrists = [ik.get(f'wrist_{side}', {}).get('error') for side in (0, 1)]
+    wrist_mm = [round(w*1000, 1) if w is not None else None for w in wrists]
+    head_mm = round(after['head_error']*1000, 2) if after else None
+    jobs = (after['hero_jobs']-before['hero_jobs']) if after and before else 0
+    ms = round((after['solve_ms']-before['solve_ms'])/jobs, 4) if jobs > 0 else None
+    lag = (appearance or {}).get('hero_lag_mean_m')
+    walk = report.get('walk') or {}
+    eyes = report.get('eyes') or {}
+    image = (eyes.get('body') or {}).get('image')
+    out = dict(wrist_mm=wrist_mm, head_mm=head_mm, ms_per_frame=ms, hero_lag_m=lag,
+               turn_max=walk.get('turn_max'), eye_image=image, head_scale=ik.get('head_scale'),
+               appearance=appearance, appearance_before=appearance_before)
+    fails = []
+    if None in wrist_mm or max(wrist_mm) > 10:
+        fails.append(f'wrists {wrist_mm} mm (want under 10)')
+    if head_mm is None or head_mm > 1:
+        fails.append(f'head {head_mm} mm (want under 1)')
+    if ms is None or ms > 1:
+        fails.append(f'{ms} ms per frame (want under 1)')
+    if lag is not None and abs(lag) > .05:
+        fails.append(f'hero_lag {lag} m (want about 0)')
+    if not image:
+        fails.append('no looking-down eye image')
+    out['pass'] = not fails
+    line = (f'wrists {wrist_mm} mm, head {head_mm} mm, {ms} ms/frame, hero_lag {lag}, '
+            f"turn_max {walk.get('turn_max')}, eye image {image}")
+    print(f"SOLVE: {'PASS' if not fails else 'FAIL ' + '; '.join(fails)} ({line})", flush=True)
+    return out
+
+
 def main():
     try:
         c.windll.user32.SetProcessDpiAwarenessContext(c.c_void_p(-4))
@@ -562,6 +796,8 @@ def main():
     parser.add_argument('--output', type=pathlib.Path, default=ROOT/'reports/body-probe.json')
     args = parser.parse_args()
     phases = args.phases.split(',')
+    if 'solve' in phases and 'find' not in phases:
+        phases.insert(0, 'find')  # solve never runs without find passing first
     fists = [min(1., max(0., float(v))) for v in args.fists.split(',')]
     if len(fists) != 2:
         parser.error('--fists takes two values, left and right')
@@ -575,12 +811,32 @@ def main():
     body_active = views_active = gpu_active = punch_active = False
     try:
         pe = PE(game.path.read_bytes())
+        found = None
+        if 'find' in phases:
+            # Version 0.0.72 GAME BODY: read only, before anything is injected or hooked.
+            found = find_phase(game, pe)
+            report['find'] = {k: v for k, v in found.items() if not k.startswith('_')}
+            if found['pass']:
+                print(f"FIND: PASS writer {found['writer']} conversion {found['to_model']}"
+                      f"{' (found again by bytes)' if found['found_again'] else ''} record {found['record']}",
+                      flush=True)
+            else:
+                print(f"FIND: FAIL {found['check']}", flush=True)
+                if 'solve' in phases:
+                    print('SOLVE: FAIL find did not pass, nothing hooked', flush=True)
+                    report['solve'] = dict(refused='find did not pass')
+                return 1
+            if set(phases) <= {'find'}:
+                return 0
         front = bring_to_front(game.pid)
         components = list(registry(game))
-        heroes = [(a, r) for a, v, r, _ in components if v == HERO_LOCAL]
-        if len(heroes) != 1:
-            raise RuntimeError('Exactly one local hero is required: load free roam first')
-        hero = heroes[0][1]
+        if found:
+            hero = found['_record']
+        else:
+            heroes = [(a, r) for a, v, r, _ in components if v == HERO_LOCAL]
+            if len(heroes) != 1:
+                raise RuntimeError('Exactly one local hero is required: load free roam first')
+            hero = heroes[0][1]
         report.update(pid=game.pid, base=hex(game.base), hero=hex(hero), front=front)
         process = open_process(0x0400 | 0x0010 | 0x0020 | 0x0008 | 0x0002, False, game.pid)
         if not process:
@@ -591,8 +847,17 @@ def main():
                                   'SpidySetEyes', 'SpidyGpuStart', 'SpidyGpuStop', 'SpidyGpuData',
                                   'SpidyGpuFreeze', 'SpidyAppearanceData', 'SpidyStereoData'))
         report['stereo_dll'] = digest
-        code = call_with_payload(process, stereo['SpidyBodyStart'],
-                                 struct.pack('<4I2Q', 0x53424346, 1, 32, game.pid, game.base, hero))
+        if 'solve' in phases:
+            # GAME BODY: hooked at what find found, strict rig checks on.
+            start = struct.pack('<4I4Q', 0x53424346, 2, 48, game.pid, game.base, hero, found['_writer'],
+                                found['_to_model'])
+        else:
+            start = struct.pack('<4I2Q', 0x53424346, 1, 32, game.pid, game.base, hero)
+        code = call_with_payload(process, stereo['SpidyBodyStart'], start)
+        if code and 'solve' in phases:
+            print(f'SOLVE: FAIL hook {code}', flush=True)
+            report['solve'] = dict(refused=f'hook {code}')
+            return 1
         if code:
             raise RuntimeError(f'Body start: {code}')
         body_active = True
@@ -642,7 +907,24 @@ def main():
         roles = roles_from(names, parents, rest) if names and rest else None
         report['roles'] = roles
         print('Roles:', json.dumps(roles), flush=True)
-        if 'ik' in phases or 'eyes' in phases:
+        if 'solve' in phases:
+            # GAME BODY: refused when a name is missing or a protected joint is under the body (no override).
+            lost = missing_names(names)
+            hit = protected_under_body(names, parents, roles) if roles and not lost else None
+            status = body_status(game, stereo['SpidyBodyData'])
+            why = (f"missing: {', '.join(lost)}" if lost else
+                   f'protected joint under the body: {hit}' if hit else
+                   f"rig {status['problem']}" if status['problem'] != 'none' else None)
+            if why:
+                print(f'SOLVE: FAIL {why}', flush=True)
+                report['solve'] = dict(refused=why)
+                return 1
+            for phase in ('ik', 'eyes', 'walk'):
+                if phase not in phases:
+                    phases.append(phase)
+            solve_before = status
+            appearance_before = gb_appearance(game, stereo)
+        if ('ik' in phases or 'eyes' in phases) and 'solve' not in phases:
             status = body_status(game, stereo['SpidyBodyData'])
             report['builtin_identification'] = status['problem']
             if roles and roles['spine'] is not None and roles['neck'] is not None and status['problem'] != 'none':
@@ -870,6 +1152,9 @@ def main():
             call_remote(process, stereo['SpidyGpuStop'])
             gpu_active = False
         report['status_end'] = body_status(game, stereo['SpidyBodyData'])
+        if 'solve' in phases:
+            report['solve'] = solve_report(report, solve_before, report['status_end'],
+                                           gb_appearance(game, stereo), appearance_before)
         if 'fist' in phases:
             report['fist'] = fist_phase(game, process, pe, hero, feet)
         if 'punch' in phases:

@@ -60,7 +60,7 @@ def check(path, run=False):
                 z.extractall(tmp)
                 exe = os.path.join(tmp, *pys[0].split("/"))
                 p = subprocess.run([exe, "-c", IMPORTS + "; assert sys.version_info >= (3, 11); print(sys.version.split()[0])"],
-                                   capture_output=True, text=True, timeout=120)
+                                   stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
                 if p.returncode: errors.append("python/python.exe did not run: " + (p.stderr or p.stdout).strip()[-400:])
                 else: version = p.stdout.strip()
     return errors, version

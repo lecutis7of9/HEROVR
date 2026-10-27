@@ -127,7 +127,8 @@ def probe(manifest, timeout=60, program=PROBE):
     # is not UTF-8 must not cost the answer (read strictly, it leaves no output at all).
     try:
         result = subprocess.run([str(program)], env={**os.environ, 'XR_RUNTIME_JSON': str(manifest)},
-                                capture_output=True, encoding='utf-8', errors='replace', timeout=timeout)
+                                stdin=subprocess.DEVNULL, capture_output=True, encoding='utf-8', errors='replace',
+                                timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f'no answer within {timeout} seconds'
     said = result.stdout if result.returncode == 0 else (result.stderr or result.stdout)
@@ -198,4 +199,6 @@ def main():
 
 
 if __name__ == '__main__':
+    import std_handles   # 0.0.70.1 hotfix: a dead standard handle from the launcher (WinError 6)
+    std_handles.repair()
     sys.exit(main())

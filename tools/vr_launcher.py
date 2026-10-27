@@ -327,7 +327,7 @@ def wait_for_game(timeout=180,prepare=None,early=None,ready=None):
             raise NeedsAdministrator(STEAM_AS_ADMINISTRATOR)
         if prepare: prepare()
         # -nolauncher is present in the supported Spider-Man executable.
-        try: subprocess.Popen([str(steam),'-applaunch',STEAM_APP_ID,'-nolauncher'])
+        try: subprocess.Popen([str(steam),'-applaunch',STEAM_APP_ID,'-nolauncher'],stdin=subprocess.DEVNULL)
         except OSError as error:
             # ERROR_ELEVATION_REQUIRED: a Steam that is not running yet, set to run as administrator.
             if getattr(error,'winerror',None)!=740: raise

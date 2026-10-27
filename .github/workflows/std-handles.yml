@@ -1,0 +1,26 @@
+# 0.0.70.1 hotfix gate on real Windows: "[WinError 6] The handle is invalid" at "finding the headset".
+# Runs tests/std_handles_tests.py on windows-2022: a child Python with a closed standard input (without and with
+# std_handles.repair()), and the launcher's own PsRunner after a real Stop VR (tests/windows/std_handles_repro.cs,
+# compiled with Windows' .NET Framework csc and started like Explorer starts the launcher).
+# The release build (build-prebuilt.yml) runs the same suite with every other one.
+name: Std handles (Windows)
+on:
+  push:
+    branches: ['hotfix-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  std-handles:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: tests/std_handles_tests.py
+        shell: pwsh
+        run: |
+          python -B tests/std_handles_tests.py -v
+          if ($LASTEXITCODE) { throw "std_handles_tests failed ($LASTEXITCODE)" }

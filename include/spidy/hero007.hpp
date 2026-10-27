@@ -45,7 +45,9 @@ using hero_modes::BatonEnemy;
 
 // ---- blows (sm2_damage's CONFIRMED path; amounts are estimates) -------------------------------
 inline sm2_damage::Blow batarangHit() { return {20.f, 5, 80.f}; }  // ~5 a thug (a batarang is light)
-inline sm2_damage::Blow clawHit() { return {24.f, 5, 90.f}; }      // ~4 slashes a thug
+// A claws-OUT hit is 3x a punch with the claws in (the game's own punch, hero_modes::punchUnitHp).
+inline constexpr float clawPunches = 3.f;
+inline sm2_damage::Blow clawHit() { return {clawPunches * hero_modes::punchUnitHp, 5, 90.f}; } // 3x a punch
 inline sm2_damage::Blow heatTick() { return {12.f, 0, 0.f}; }      // no knock: a burn, ~1.7 s a thug
 inline sm2_damage::Blow pistolHit() { return {18.f, 5, 60.f}; }    // ~6 shots a thug
 

@@ -18,7 +18,7 @@ installs once and is not offered again.
 - **New heroes:** **BATMAN** (batarangs in each hand that bounce between enemies and come back, smoke, a grapple gun and
   a cape glide - see below),
   **SUPERMAN** (heat vision, COLD BREATH, super strength, the SUPERSONIC dash), **PUNISHER** (two pistols and a
-  sawed-off, hip and back holsters, reload), **WOLVERINE** (claws and healing) and **CAPTAIN AMERICA** (his shield:
+  sawed-off, hip and back holsters, reload), **WOLVERINE** (claws - a claws-out hit is 3x a punch - and healing) and **CAPTAIN AMERICA** (his shield:
   wear it, draw it from your back, guard, throw it so it bounces and comes back, bash with it). Find them on the wrist
   hologram's COMBAT page under HERO PROFILES. One hero at a time.
 - **Batman's grapple gun and cape glide.** Aim a hand up at a rooftop or ledge and pull the trigger: the grapple

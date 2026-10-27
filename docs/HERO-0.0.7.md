@@ -58,7 +58,7 @@ CONFIRMED HeroHealth record. The damage amounts are the mod's own estimates.
 | Reload, EASY RELOAD | Mod-side ammo state | Magazine and shells are drawn |
 | Shell ejection | — | Visual, capped at shellsMost |
 | Holsters (hips and back) | Grip arbitration, so a drawn grip never webs, zips or climbs, and haptic ticks | Items drawn on the body |
-| Claws | Real blows (the 0.0.62 baton swing path) | Claws |
+| Claws | Real blows (the 0.0.62 baton swing path), 3x a claws-in punch | Claws |
 | Healing | Real: HeroHealth refill, never above the game's cap and never a revive | — |
 | Shield throw (backhand, flat spin 8 rev/s, ricochet, return) | Each hit is a real throwHit blow (SHIELD DAMAGE) | Flight, spin and return are drawn |
 | Shield bash (a swing with it on the arm) | Real: an 18 HP bashHit through the baton swing path | — |

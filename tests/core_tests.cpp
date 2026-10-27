@@ -23570,6 +23570,7 @@ int main() {
         in.count = 1;
         bool snikt = false;
         int hits = 0;
+        float clawHp = 0;
         for (int f = 0; f < 60; ++f) {
             const float x = -.6f + 1.2f * static_cast<float>(f) / 30.f;
             in.hands[1] = {{std::min(x, .6f), 1.3f, -.4f}, {0, 0, -1}, true, 1, 0, false};
@@ -23577,9 +23578,14 @@ int main() {
             p.step(in, o);
             snikt |= (o.sounds >> spidy::sfx::clawSnikt) & 1;
             for (uint32_t b = 0; b < o.blowCount; ++b)
-                hits += o.blows[b].kind == kindClaw;
+                if (o.blows[b].kind == kindClaw) {
+                    ++hits;
+                    clawHp = o.blows[b].blow.amount;
+                }
         }
         check(snikt, "snikt when the claws come out");
+        check(clawHit().amount == 3.f * spidy::hero_modes::punchUnitHp && clawHp == 3.f * spidy::hero_modes::punchUnitHp,
+              "WOLVERINE: a claws-out hit is 3x a claws-in punch: " + std::to_string(clawHp));
         check(hits >= 1, "a fast sweep through an enemy hits");
         Play bat;
         in.hero = spidy::hero_modes::batman;

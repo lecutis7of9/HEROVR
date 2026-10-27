@@ -16,7 +16,7 @@ No new game address: every blow uses the CONFIRMED damage path, healing and SHIE
   and no Y web strike (a far punch lunges without a line). Live, no restart.
 - New heroes, all OFF by default (one hero at a time): BATMAN (batarangs with BATARANG CHAIN, grapple gun, cape glide,
   smoke as a look only), SUPERMAN (heat vision, COLD BREATH - real tick blows, nobody is frozen -, super strength, the SUPERSONIC
-  dash), PUNISHER (two pistols and a sawed-off, holsters, EASY RELOAD), WOLVERINE (claws, healing) and CAPTAIN AMERICA
+  dash), PUNISHER (two pistols and a sawed-off, holsters, EASY RELOAD), WOLVERINE (claws hitting 3x a punch, healing) and CAPTAIN AMERICA
   (shield worn, drawn, thrown with SHIELD CHAIN, bash; SHIELD BLOCK is an OFF-by-default experiment).
 - Guns fire along the barrel: pistols and sawed-off sit in the palm from the OpenXR grip pose and shots leave the drawn
   muzzle. Daredevil's batons sit in the fist. Valve Index 15-degree tilt: unconfirmed (CANDIDATE).

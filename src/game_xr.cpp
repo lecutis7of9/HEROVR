@@ -52,6 +52,7 @@
 #include "spidy/repulsor_mcu.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/hero007_play.hpp" // Version 0.0.7 HERO PROFILES
+#include "spidy/hero072_play.hpp" // Version 0.0.72 (TEST)
 #include "spidy/captain.hpp"      // Version 0.0.7 CAPTAIN AMERICA
 #include "spidy/cape_glide.hpp"   // Version 0.0.7 BATMAN cape glide and grapple gun
 #include "spidy/mesh_model.hpp"   // Version 0.0.7 BATARANG STYLE
@@ -723,6 +724,47 @@ uint32_t heroNow() {
                                    c38(combat38::captainAmerica) == 1,                         // CAPTAIN AMERICA
                                    c38(combat38::thor) == 1, c38(combat38::greenLantern) == 1); // Version 0.0.72
 }
+// Version 0.0.72 (TEST): every 0.0.72 option (hero072_play.hpp PlayOptions) from combat38, live.
+hero072::PlayOptions hero072Options() {
+    using O = hero072::PlayOptions;
+    O o;
+    o.thorLightning = O::onFirst(c38(combat38::thorLightning));
+    o.thorStorm = O::onFirst(c38(combat38::thorStorm));
+    o.thorChain = O::onFirst(c38(combat38::thorChain));
+    o.glFlight = O::onFirst(c38(combat38::glFlight));
+    o.glFist = O::onFirst(c38(combat38::glFist));
+    o.glBeam = O::onFirst(c38(combat38::glBeam));
+    o.glBubble = O::onFirst(c38(combat38::glBubble));
+    o.glChain = O::onFirst(c38(combat38::glChain));
+    o.glCharge = O::onFirst(c38(combat38::glCharge));
+    o.spiderClimbOnly = O::onFirst(c38(combat38::spiderClimbOnly));
+    o.uppercut = O::onFirst(c38(combat38::uppercut));
+    o.smokeBlind = O::onFirst(c38(combat38::smokeBlind));
+    o.ddGrapple = O::onFirst(c38(combat38::ddGrapple));
+    o.ddParry = O::onFirst(c38(combat38::ddParry));
+    o.ironHud = O::onFirst(c38(combat38::ironHud));
+    o.punisherRage = O::onFirst(c38(combat38::punisherRage));
+    o.reputation = O::onFirst(c38(combat38::reputation));
+    o.survival = O::offFirst(c38(combat38::survival));
+    o.punisherSuit = c38(combat38::punisherSuit);
+    o.naturalInvincible = O::onFirst(c38(combat38::naturalInvincible));
+    o.hulkRage = O::onFirst(c38(combat38::hulkRage));
+    o.rageBlood = c38(combat38::rageBlood);
+    o.rageTint = c38(combat38::rageTint);
+    o.fireDouse = O::onFirst(c38(combat38::fireDouse));
+    o.shieldSlam = O::onFirst(c38(combat38::shieldSlam));
+    o.punisherHook = O::onFirst(c38(combat38::punisherHook));
+    o.clawClimb = O::onFirst(c38(combat38::clawClimb));
+    o.shove = O::onFirst(c38(combat38::npcShove));
+    o.faction = c38(combat38::faction);
+    o.testUnlocks = c38(combat38::testUnlocks);
+    o.ultimates = O::onFirst(c38(combat38::ultimates));
+    o.perkBranch = c38(combat38::perkBranch);
+    o.ownSuit = O::offFirst(c38(combat38::ownSuit));
+    o.perchTakedown = O::onFirst(c38(combat38::perchTakedown));
+    o.takedownLight = O::onFirst(c38(combat38::takedownLight));
+    return o;
+}
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
 // hologram, the live exports, live.txt at start).
 void heroOnly(uint32_t option) {
@@ -1256,6 +1298,32 @@ gesture_remap::Store loadGestures() {
         return {}; // a bad file: the built-in moves, never a crash
     }
 }
+// Version 0.0.72 (TEST) HERO PROGRESS: reputation, suits and perks kept beside spidy_vr.ini
+// (%APPDATA%\\Spidy\\hero072_progress.txt), outside the mod's folder, so an update keeps them.
+std::wstring hero072ProgressPath() {
+    const auto ini = tabOnlyPath();
+    return ini.empty() ? ini : ini.substr(0, ini.find_last_of(L'\\')) + L"\\hero072_progress.txt";
+}
+std::string readHero072Progress() {
+    try {
+        const auto path = hero072ProgressPath();
+        if (path.empty())
+            return {};
+        const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                        OPEN_EXISTING, 0, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+            return {};
+        std::string text(16384, '\0');
+        DWORD size{};
+        if (!ReadFile(file, text.data(), static_cast<DWORD>(text.size() - 1), &size, nullptr))
+            size = 0;
+        CloseHandle(file);
+        text.resize(size);
+        return text;
+    } catch (...) {
+        return {}; // a bad file: a fresh start, never a crash
+    }
+}
 // REALISTIC FLIPS and the rows under it, as the rig takes them.
 RealisticFlipSettings realisticFlips(const vr_settings::Values& v) {
     return {v.realisticFlips,         v.automaticReleaseFlip,  v.automaticStrength,
@@ -1718,6 +1786,16 @@ DWORD WINAPI run(void*) {
         // DAREDEVIL's BATON HOLSTERS; the last frame's input (tracking space) for the draw.
         hero007::Play hero007Play;
         hero007::PlayInput hero007In;
+        // Version 0.0.72 (TEST) (hero072_play.hpp): THOR, GREEN LANTERN, the list's rules, reputation,
+        // suits, perks, ultimates and BATMAN's PERCH TAKEDOWN, for every hero. The health lost since the
+        // last step (the health read is after the combat step), NATURAL INVINCIBLE's ask, the progress
+        // file's load and last save, the last frame's look (tracking space) for the draw.
+        hero072::Play hero072Play;
+        hero072::Look hero072Look{};
+        double hero072At = -1, hero072SavedAt = -1;
+        float hero072Lost{}, hero072ShareWas = std::numeric_limits<float>::quiet_NaN();
+        bool hero072LostKnown{}, hero072KeepTopped{}, hero072Loaded{};
+        uint64_t hero072Sent{}, hero072Unsent{}, hero072Refills{}, hero072Perches{};
         // Version 0.0.7 BATMAN (cape_glide.hpp): the grapple presses for the next swing command, and
         // the bridge's glide / grapple state (counts seen: a new grapple, miss or glide buzzes once).
         bool batmanGrapple[2]{};
@@ -6179,6 +6257,122 @@ DWORD WINAPI run(void*) {
                                         repTrigger.clear();
                                         beamWait.waiting = false; // Version 0.0.62: no held beam outlives IRON MAN
                                     }
+                                    // Version 0.0.72 (TEST) (hero072_play.hpp): THOR, GREEN LANTERN, the list's
+                                    // rules, reputation, suits, perks, ultimates and PERCH TAKEDOWN, every hero.
+                                    // Every blow on sm2_damage's path (CONFIRMED) as hero007's; each feature's
+                                    // guard turns only that feature off on a bad input (never a crash).
+                                    {
+                                        if (!hero072Loaded) {
+                                            hero072Loaded = true;
+                                            const std::string kept = readHero072Progress();
+                                            if (!kept.empty())
+                                                hero072Play.load(kept.c_str());
+                                        }
+                                        hero_modes::BatonEnemy list72[our_ball::maxEnemies];
+                                        std::array<world_trace::Vital, world_trace::enemySlots> vit72{};
+                                        const uint32_t vn72 = world_trace::enemyVitals(vit72);
+                                        const uint32_t n72 = std::min<uint32_t>(foes.count, our_ball::maxEnemies);
+                                        for (uint32_t e = 0; e < n72; ++e) {
+                                            list72[e] = {foes.list[e].id, foes.list[e].feet + Vec3{0, 1.2f, 0}};
+                                            for (uint32_t v = 0; v < vn72 && v < vit72.size(); ++v)
+                                                if (vit72[v].id == foes.list[e].id && vit72[v].have && vit72[v].hp <= 0.f)
+                                                    list72[e].down = true;
+                                        }
+                                        Vec3 puffs72[hero007::smokeMost]{};
+                                        float ages72[hero007::smokeMost]{};
+                                        for (uint32_t k = 0; k < hero007::smokeMost; ++k) {
+                                            puffs72[k] = hero007Play.smoke.puffs[k].at;
+                                            ages72[k] = hero007Play.smoke.puffs[k].age;
+                                        }
+                                        hero072::PlayIn in72;
+                                        in72.dt = hero072At < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - hero072At, 0.0, .1));
+                                        hero072At = combatClock;
+                                        in72.play = cf.play;
+                                        in72.hero = heroWas;
+                                        in72.head = frame.head;
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            in72.hands[i].position = cf.hands[i].position;
+                                            in72.hands[i].aim = cf.hands[i].aim;
+                                            in72.hands[i].tracked = cf.hands[i].tracked;
+                                            in72.hands[i].trigger = cf.hands[i].button;
+                                            in72.hands[i].grip = cf.hands[i].grip;
+                                        }
+                                        in72.list = list72;
+                                        in72.count = n72;
+                                        // The health lost since the last step (NaN: the health is not read).
+                                        in72.lostShare = hero072LostKnown ? hero072Lost : std::numeric_limits<float>::quiet_NaN();
+                                        hero072Lost = 0;
+                                        in72.flying = cf.flightTriggers;
+                                        in72.speed = in72.altitude = std::numeric_limits<float>::quiet_NaN();
+                                        in72.clawsOut = hero007Play.clawsOut[0] || hero007Play.clawsOut[1];
+                                        in72.shieldHand = hero007Play.shieldHand;
+                                        in72.puffs = puffs72;
+                                        in72.puffAges = ages72;
+                                        in72.puffCount = hero007::smokeMost;
+                                        in72.puffLife = hero007::smokeSeconds;
+                                        // PERCH TAKEDOWN: a high spot is the target's height under the head (the
+                                        // CANDIDATE stand-in for the game's perch, not found); the glide is the
+                                        // cape bridge's. The quick press is Y, which reaches the game as always;
+                                        // the game's takedown prompt is not read yet, so the press is COMING SOON.
+                                        in72.perched = heroWas == hero_modes::batman;
+                                        in72.gliding = heroWas == hero_modes::batman && capeNow.gliding != 0;
+                                        in72.faceButton = (frame.buttons & buttonY) != 0;
+                                        in72.takedownPrompt = false;
+                                        in72.o = hero072Options();
+                                        // HERO SUIT NEXT: one step to this hero's next unlocked suit, then back to DEFAULT.
+                                        if (c38(combat38::heroSuit) == 1) {
+                                            combat38Values[combat38::heroSuit].store(0);
+                                            const uint32_t h72 = heroWas < hero_modes::heroes ? heroWas : 0u;
+                                            const uint32_t worn = hero072Play.suits.next(h72, hero072::testSuits(in72.o.testUnlocks));
+                                            hero072Play.progressDirty = true;
+                                            char line[96];
+                                            sprintf_s(line, "VERSION 0.0.72 HERO SUIT: suit %u of hero %u", worn, h72);
+                                            game_prompts::note(line);
+                                        }
+                                        hero072::PlayOut out72;
+                                        hero072Play.step(in72, out72);
+                                        hero072KeepTopped = out72.keepTopped;
+                                        for (uint32_t k = 0; k < out72.blowCount; ++k) {
+                                            const auto& b72 = out72.blows[k];
+                                            const bool sent = sm2_damage::queue(b72.id, b72.blow);
+                                            (sent ? hero072Sent : hero072Unsent) += 1;
+                                            hitMarks.add(b72.at);
+                                            if (hero072Sent + hero072Unsent <= 8 || !sent) {
+                                                char line[160];
+                                                sprintf_s(line, "VERSION 0.0.72 %s HIT 0x%llx: %.0f HP blow %s",
+                                                          hero072::blowKindNames[b72.kind < hero072::blowKinds ? b72.kind : 0],
+                                                          static_cast<unsigned long long>(b72.id), static_cast<double>(b72.blow.amount),
+                                                          sent ? "sent (CONFIRMED path)" : "not sent (damage path off)");
+                                                game_prompts::note(line);
+                                            }
+                                        }
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (out72.haptic[i] > 0)
+                                                runtime.haptic(static_cast<int>(i), out72.haptic[i]);
+                                        if (out72.perch.comingSoon || out72.perch.sendButton) {
+                                            ++hero072Perches;
+                                            if (hero072Perches <= 8) {
+                                                char line[128];
+                                                sprintf_s(line, "VERSION 0.0.72 PERCH TAKEDOWN 0x%llx: %s",
+                                                          static_cast<unsigned long long>(out72.perch.target),
+                                                          out72.perch.comingSoon ? "COMING SOON (the game's prompt not read)"
+                                                                                 : "the game's prompt button");
+                                                game_prompts::note(line);
+                                            }
+                                        }
+                                        if (out72.ultimateFired)
+                                            game_prompts::note("VERSION 0.0.72 ULTIMATE fired");
+                                        hero072Look = out72.look;
+                                        hero072Look.blood = nullptr; // the draw never reads the game thread's blood
+                                        // The progress kept: at most every 10 s, written whole (a crash keeps the last).
+                                        if (hero072Play.progressDirty && (hero072SavedAt < 0 || combatClock - hero072SavedAt > 10.0)) {
+                                            hero072SavedAt = combatClock;
+                                            static char kept[16384];
+                                            hero072Play.save(kept, sizeof kept);
+                                            if (writeWhole(hero072ProgressPath(), kept))
+                                                hero072Play.progressDirty = false;
+                                        }
+                                    }
                                     for (unsigned i = 0; i < 2 && heroWas == hero_modes::spiderMan; ++i) {
                                         if (!fightOut.ballOurs[i])
                                             continue;
@@ -7179,6 +7373,15 @@ DWORD WINAPI run(void*) {
                                     ++invincibleRefills;
                                     hitPoints = to;
                                 }
+                            } else if (record && hero072KeepTopped) {
+                                // Version 0.0.72 NATURAL INVINCIBLE (THOR, SUPERMAN): INVINCIBLE's refill, through
+                                // the same CONFIRMED record and cap (never above it, never a revive).
+                                read(h + extras385::invincible::reduceAt, &reduce, sizeof(reduce));
+                                const float to = extras385::invincible::refill(hitPoints, mostHitPoints, reduce);
+                                if (to >= 0 && writeFloatIf(h + game_player::hitPointsAt, hitPoints, to)) {
+                                    ++hero072Refills;
+                                    hitPoints = to;
+                                }
                             } else if (record && heroNow() == hero_modes::wolverine) {
                                 // Version 0.0.7 WOLVERINE HEALING: 3 s unhurt, then 10%/s back, through the same
                                 // CONFIRMED record and cap as INVINCIBLE (never above it, never a revive).
@@ -7208,6 +7411,12 @@ DWORD WINAPI run(void*) {
                             invincibleNa = 1u;
                         }
                         heroShare = health_ring::healthShare(hitPoints, mostHitPoints);
+                        // Version 0.0.72: the share lost since the last hero072 step (SURVIVAL, RAGE, rep).
+                        hero072LostKnown = std::isfinite(heroShare);
+                        if (hero072LostKnown && std::isfinite(hero072ShareWas) && heroShare < hero072ShareWas &&
+                            heroShare > 0)
+                            hero072Lost += hero072ShareWas - heroShare;
+                        hero072ShareWas = hero072LostKnown ? heroShare : std::numeric_limits<float>::quiet_NaN();
                         // Update 38 WALL TILT: the share reaching 0 (a death) or rising from it
                         // (the respawn) levels the view.
                         if (std::isfinite(heroShare)) {
@@ -7927,6 +8136,7 @@ DWORD WINAPI run(void*) {
                         if (!oursFault)
                         {
                             hero007Play.draw(saved.hero007, saved.worldFromTracking, hero007In, batonLookNow);
+                            saved.hero072 = hero072::worldLook(hero072Look, saved.worldFromTracking); // Version 0.0.72
                             // Version 0.0.7 BATMAN GRAPPLE GUN: the line from the firing hand to the hook (game
                             // world, the bridge's) while it pulls him; never a web.
                             if (hero007In.hero == hero_modes::batman && capeNow.grappling == cape_glide::pull &&
@@ -7993,8 +8203,10 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                         }
-                        else
+                        else {
                             saved.hero007 = hero007::Draw{};
+                            saved.hero072 = hero072::Look{};
+                        }
                     }
                     {   // Version 0.0.5 SUPERSONIC: the shockwave around the head, the way the hands point.
                         saved.shockFade = fly_boost::shock(static_cast<float>(combatClock - flyBoomAt));
@@ -8709,6 +8921,8 @@ DWORD WINAPI run(void*) {
                             }
                         if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
                             hero007::appendHero007(vertices, saved->hero007, travel, viewer, pixelAngle);
+                        if (saved->hero072.any) // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
+                            hero072::appendLook(vertices, saved->hero072, travel, viewer, pixelAngle);
                         if (saved->shockFade > 0) // Version 0.0.5 SUPERSONIC's shockwave
                             appendShockwave(vertices, viewer, saved->shockWay, saved->shockAge, pixelAngle);
                         if (saved->beamRingOk > 0) { // Version 0.0.5 BEAM RING (right wrist)

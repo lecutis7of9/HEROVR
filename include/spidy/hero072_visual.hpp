@@ -65,7 +65,19 @@ struct Look {
     float shockRadius{}, shockAge{};
     bool hook{};
     Vec3 hookFrom{}, hookTo{};
+    // BATMAN's PERCH TAKEDOWN (9:31, 9:32): the light over the target (GREEN safe, RED seen) and the
+    // rope of the swoop (a dark rope, never a web).
+    bool perchLight{}, perchRed{};
+    Vec3 perchAt{};
+    bool rope{};
+    Vec3 ropeFrom{}, ropeTo{};
 };
+// The Look moved from tracking space into the game's world by `worldFromTracking` (game_xr's
+// saved frame). Every point and way turned; the blood is not copied (the game thread owns it).
+// A non-finite pose leaves an empty Look (nothing drawn).
+Look worldLook(const Look& l, const Pose& worldFromTracking);
+void appendPerchLight(std::vector<Vertex>& out, Vec3 at, bool red, Vec3 viewer);
+void appendRope(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 
 void appendHammer(std::vector<Vertex>& out, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer, float pixelAngle);
 void appendBolt(std::vector<Vertex>& out, Vec3 from, Vec3 to, float seed, Vec3 viewer, float pixelAngle);
@@ -87,8 +99,8 @@ namespace budget {
 inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1500, chain = 1700, fist = 1500,
                         charge = 2600, ring = 200, hud = 9000;
 // RAGE BLOOD: drops are one soft bar each (54), pools a soft disc (10 segments) - drawn until full.
-inline constexpr size_t blood = 16000, spray = 2600, shock = 1200, hook = 1200;
+inline constexpr size_t blood = 16000, spray = 2600, shock = 1200, hook = 1200, perch = 900, rope = 400;
 inline constexpr size_t frame = hammer + boltsMost * bolt + beam + bubble + chain + fist + charge + 2 * ring + hud +
-                                blood + spray + shock + hook;
+                                blood + spray + shock + hook + perch + rope;
 } // namespace budget
 } // namespace spidy::hero072

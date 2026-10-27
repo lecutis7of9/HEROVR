@@ -311,6 +311,72 @@ void appendHook(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float
     }
 }
 
+// PERCH TAKEDOWN's light: a small diamond with a soft ring, just over the target's head.
+void appendPerchLight(std::vector<Vertex>& out, Vec3 at, bool red, Vec3 viewer) {
+    if (!okv(at) || !okv(viewer) || !inRange(at, viewer, 40.f))
+        return;
+    VGuard g(out);
+    const Vec3 c = red ? Vec3{1.f, .12f, .08f} : Vec3{.15f, 1.f, .35f};
+    const Vec3 v = viewOf(at, viewer), up{0, 1, 0};
+    Vec3 side = cross(up, v);
+    side = length(side) > 1e-3f ? normalized(side) : perpendicular(v);
+    const float range = std::max(length(viewer - at), .5f), s = std::clamp(.012f * range, .05f, .35f);
+    const Vec3 top = at + up * s, bottom = at - up * s, l = at - side * s * .7f, r = at + side * s * .7f;
+    for (const auto& e : {std::pair{top, r}, std::pair{r, bottom}, std::pair{bottom, l}, std::pair{l, top}})
+        softBar(out, e.first, e.second, v, s * .12f, c, .95f, s * .08f);
+    softArc(out, at, side, normalized(cross(v, side)), s * 1.1f, s * 1.3f, 0, 2 * pi, c, .35f, s * .1f, 16);
+}
+// The swoop's rope: a dark braided line (never a web).
+void appendRope(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {
+    if (!okv(from) || !okv(to) || !okv(viewer) || length(to - from) < .2f || length(to - from) > 60.f ||
+        !inRange(from, viewer, 60.f))
+        return;
+    VGuard g(out);
+    bar(out, from, to, viewer, pixelAngle, .006f, {.16f, .13f, .1f}, .95f);
+    bar(out, from, to, viewer, pixelAngle, .0025f, {.3f, .26f, .2f}, .9f);
+}
+Look worldLook(const Look& l, const Pose& w) {
+    Look o{};
+    if (!l.any || !okv(w.position) || !std::isfinite(w.orientation.w) || !std::isfinite(w.orientation.x) ||
+        !std::isfinite(w.orientation.y) || !std::isfinite(w.orientation.z))
+        return o;
+    o = l;
+    o.blood = nullptr;
+    const auto P = [&](Vec3 p) { return w.position + w.orientation.rotate(p); };
+    const auto D = [&](Vec3 d) { return w.orientation.rotate(d); };
+    o.hammerAt = P(l.hammerAt);
+    o.hammerForward = D(l.hammerForward);
+    o.hammerUp = D(l.hammerUp);
+    for (uint32_t i = 0; i < std::min(l.bolts, boltsMost); ++i) {
+        o.boltFrom[i] = P(l.boltFrom[i]);
+        o.boltTo[i] = P(l.boltTo[i]);
+    }
+    for (int i = 0; i < 2; ++i)
+        o.ringAt[i] = P(l.ringAt[i]);
+    o.beamFrom = P(l.beamFrom);
+    o.beamTo = P(l.beamTo);
+    o.bubbleAt = P(l.bubbleAt);
+    o.chainFrom = P(l.chainFrom);
+    o.chainTo = P(l.chainTo);
+    o.fistAt = P(l.fistAt);
+    o.fistForward = D(l.fistForward);
+    o.chargeAt = P(l.chargeAt);
+    o.chargeUp = D(l.chargeUp);
+    o.hudEye = P(l.hudEye);
+    o.hudForward = D(l.hudForward);
+    o.hudUp = D(l.hudUp);
+    o.lockAt = P(l.lockAt);
+    o.sprayFrom = P(l.sprayFrom);
+    o.sprayDir = D(l.sprayDir);
+    o.shockAt = P(l.shockAt);
+    o.hookFrom = P(l.hookFrom);
+    o.hookTo = P(l.hookTo);
+    o.perchAt = P(l.perchAt);
+    o.ropeFrom = P(l.ropeFrom);
+    o.ropeTo = P(l.ropeTo);
+    return o;
+}
+
 void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewer, float pixelAngle) {
     if (!l.any || !okv(travel) || !okv(viewer) || !std::isfinite(pixelAngle))
         return;
@@ -350,5 +416,9 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
         appendShock(out, T(l.shockAt), l.shockRadius, l.shockAge, viewer);
     if (l.hook)
         appendHook(out, T(l.hookFrom), T(l.hookTo), viewer, pixelAngle);
+    if (l.perchLight)
+        appendPerchLight(out, T(l.perchAt), l.perchRed, viewer);
+    if (l.rope)
+        appendRope(out, T(l.ropeFrom), T(l.ropeTo), viewer, pixelAngle);
 }
 } // namespace spidy::hero072

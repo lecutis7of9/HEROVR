@@ -795,7 +795,17 @@ class Play {
             out.look.hookTo = hookTo;
             hookShow = std::max(0.f, hookShow - dt);
         }
-        out.look.any = out.look.hammer || out.look.bolts || out.look.ring[0] || out.look.ring[1] || out.look.beam ||
+        if (out.perch.light != lightNone && ok(out.perch.targetAt)) { // PERCH TAKEDOWN: over the target's head
+            out.look.perchLight = true;
+            out.look.perchRed = out.perch.light == lightRed;
+            out.look.perchAt = out.perch.targetAt + Vec3{0, .75f, 0};
+        }
+        if (out.perch.rope) {
+            out.look.rope = true;
+            out.look.ropeFrom = out.perch.ropeFrom;
+            out.look.ropeTo = out.perch.ropeTo;
+        }
+        out.look.any = out.look.perchLight || out.look.rope || out.look.hammer || out.look.bolts || out.look.ring[0] || out.look.ring[1] || out.look.beam ||
                        out.look.bubble || out.look.chain || out.look.fist || out.look.charge || out.look.hud ||
                        out.look.blood || out.look.spray || out.look.shock || out.look.hook;
     }

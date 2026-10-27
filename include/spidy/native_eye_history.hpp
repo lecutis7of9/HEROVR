@@ -8,6 +8,7 @@
 #include "presentation_gate.hpp"
 #include "web_cocoon.hpp"
 #include "hero007_visual.hpp"
+#include "hero072_visual.hpp"
 #include "web_visual.hpp"
 
 #include <limits>
@@ -81,6 +82,9 @@ struct NativeEyeFrame {
     // looks (hero007_visual.hpp; any false: nothing - always nothing while the 0.0.7 options are OFF).
     bool batonClub{};
     hero007::Draw hero007{};
+    // Version 0.0.72 (TEST): THOR, GREEN LANTERN, the IRON MAN HUD, PERCH TAKEDOWN's light and rope (this
+    // frame's world, hero072::worldLook; any false: nothing). Its blood is never set (the game thread's).
+    hero072::Look hero072{};
     // Version 0.0.62 HIT INDICATOR: the hit marks (this frame's world; fade 0: none - always 0 while OFF).
     std::array<Vec3, 8> markAt{};
     std::array<float, 8> markFade{};

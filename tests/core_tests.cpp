@@ -24822,6 +24822,58 @@ int main() {
         check(fin2, "a NaN look let an insane vertex through");
     });
 
+    test("Version 0.0.72: the looks into the world (worldLook), PERCH TAKEDOWN's light and rope", [] {
+        using namespace hero072;
+        Look l;
+        l.any = l.perchLight = l.rope = true;
+        l.perchAt = {0, 1, -5};
+        l.ropeFrom = {0, 4, -5};
+        l.ropeTo = {0, 1, -5};
+        l.bolts = 1;
+        l.boltFrom[0] = {0, 0, -1};
+        Blood blood;
+        l.blood = &blood;
+        Pose w;
+        w.position = {10, 0, 0};
+        w.orientation = arc({0, 0, -1}, {1, 0, 0}); // a quarter turn: -z to +x
+        const Look o = worldLook(l, w);
+        check(o.any && o.blood == nullptr, "the world look kept the game thread's blood");
+        check(length(o.perchAt - Vec3{15, 1, 0}) < 1e-3f && length(o.boltFrom[0] - Vec3{11, 0, 0}) < 1e-3f,
+              "the world look's points are not turned and moved");
+        check(length(o.ropeFrom - Vec3{15, 4, 0}) < 1e-3f, "the rope is not moved into the world");
+        Pose bad = w;
+        bad.orientation.w = NAN;
+        check(!worldLook(l, bad).any, "a NaN pose drew a look");
+        Look none;
+        check(!worldLook(none, w).any, "an empty look became one");
+        std::vector<Vertex> green, red;
+        appendPerchLight(green, {0, 1, -5}, false, {0, 1.7f, 0});
+        appendPerchLight(red, {0, 1, -5}, true, {0, 1.7f, 0});
+        check(!green.empty() && green.size() == red.size() && green.size() <= budget::perch, "the perch light drew nothing");
+        check(std::fabs(green[0].color.y - red[0].color.y) > .5f, "GREEN and RED look alike");
+        std::vector<Vertex> rope, none2;
+        appendRope(rope, {0, 4, -5}, {0, 1, -5}, {0, 1.7f, 0}, .001f);
+        appendRope(none2, {NAN, 4, -5}, {0, 1, -5}, {0, 1.7f, 0}, .001f);
+        appendPerchLight(none2, {0, 1, -500}, false, {0, 1.7f, 0});
+        check(!rope.empty() && rope.size() <= budget::rope && none2.empty(), "the rope or its guards are wrong");
+        // Play: a perch target's light reaches the look, above his head.
+        Play p;
+        PlayIn in;
+        in.dt = .016f;
+        in.play = true;
+        in.hero = hero_modes::batman;
+        in.head.position = {0, 8, 0};
+        in.head.orientation = arc({0, 0, -1}, normalized(Vec3{0, -1, -1}));
+        BatonEnemy e[1]{{0x51, {0, 1.2f, -6}}};
+        in.list = e;
+        in.count = 1;
+        in.perched = true;
+        PlayOut out;
+        p.step(in, out);
+        check(out.perch.light == lightGreen && out.look.perchLight && !out.look.perchRed &&
+                  out.look.perchAt.y > e[0].chest.y, "the perch light did not reach the look");
+    });
+
     test("Version 0.0.72: PUNISHER RAGE MODE - 5 downs or heavy damage, a heartbeat red at the edges, RAGE BLOOD", [] {
         using namespace hero072;
         hero072::Fight f;

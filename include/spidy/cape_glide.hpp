@@ -343,7 +343,7 @@ class Grapple {
 
 // ---- The bridge's sample (SpidyCapeSample) ----
 struct Data {
-    uint32_t magic = 0x45504143; // "CAPE"
+    uint32_t magic = 'C' | 'A' << 8 | 'P' << 16 | uint32_t('E') << 24; // "CAPE" (FourCC, not an address)
     uint32_t version = 1;
     uint32_t bytes = sizeof(Data);
     uint32_t gliding{}, pose{}, grappling{}, hand{};

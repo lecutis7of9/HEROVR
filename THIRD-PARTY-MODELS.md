@@ -35,6 +35,27 @@ overlay cannot sample textures. No texture ships for the converted models.
 - This work is based on "Captain America Shield" (https://sketchfab.com/3d-models/captain-america-shield-cbcf4fa7d4464b65a5bf051340f626ab) by Digital Goblin (https://sketchfab.com/DigitalGoblin) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Disc remeshed, straps decimated and recoloured for VR.
 - This work is based on "Captain America" (https://sketchfab.com/3d-models/captain-america-d4898ea3aac3474fa0661de3ade9b7c6) by iqbalmulyawan (https://sketchfab.com/Iqbal.Mulyawan.Putera) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-oriented, rescaled and welded; rigged on the player's PC.
 
+## Version 0.0.72 (TEST): the shipped models are the real ones
+
+0.0.72 replaces the 0.0.7 conversions above (decimated to ~700 triangles, colours baked, textures dropped) with
+the artists' real geometry, UVs, normals and base-colour textures (`tools/models072/convert_models_072.py`).
+The side-by-side gate (`tools/models072/model_check.py`, pictures in the test build's `model-check/`) fails a
+model under 30 % of its source's triangles or with a texture or UV missing. Same authors and licences as above.
+
+| Slot | Triangles shipped / source | Textures | Changes in 0.0.72 |
+|---|---|---|---|
+| `Batarang/EIRA` | 6998 / 13570 | 1 | Decimated to 52 % for VR; texture kept. |
+| `Batarang/CLOONEY` | 1428 / 1428 | none in the download | Unchanged geometry (the source is untextured). |
+| `Batarang/JOKER` | 396 / 396 | 3 | None: copied byte for byte (CC BY-NC-ND). |
+| `Pistol` | 4707 / 4707 | 2 | Full geometry and textures; scaled to 19 cm. |
+| `SawedOff/Frame`, `SawedOff/Barrels` | 9000 / 14180, 12000 / 24160 | 2 | Split at the hinge; decimated to 63 % and 50 %. |
+| `Baton/Left`, `Baton/Right` | 2486 / 2486, 2546 / 2546 | 3 | Cord removed, split in two; full geometry. |
+| `Shield` | 22028 / 22028 | 1 | Shipped whole with its texture layer. |
+| `GrappleGun` | 10272 / 10272 | 1 | Full geometry and texture. |
+
+Awaiting the user's pick, shown in game as MODEL MISSING (no stand-in): THOR's hammer (`Hammer`) and
+the PUNISHER VAN (`Vehicle/PunisherVan`).
+
 ## Version 0.0.72 (TEST): new models (none in git; prepared on the PC from the Sketchfab downloads)
 
 The 0.0.72 test build adds these artists: floh, spybg (Valentin Yovchev), Bugawuga, RITIKA_87, klava88

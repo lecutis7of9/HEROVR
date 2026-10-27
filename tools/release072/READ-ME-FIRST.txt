@@ -1,0 +1,60 @@
+HERO VR 0.0.72 - PRIVATE TEST BUILD (not a release; do not share)
+Made by Agent Mulder. Model credits: THIRD-PARTY-MODELS.md (in this zip).
+
+INSTALL (over your 0.0.70)
+1. Close the game and the HERO VR launcher.
+2. Back up this folder first (copy it somewhere):
+      C:\Users\candl\Downloads\HERO-VR-Launcher-0.0.70\HERO-VR-0.0.70
+3. Extract this zip INTO that folder, so that "Launch Spidy VR.cmd" and the new
+   "Models" and "Sounds" folders sit side by side. Say YES to replace the files.
+   (build\windows-ninja\*.dll are replaced; your live.txt settings are kept.)
+4. Start the launcher as usual. The launcher still says 0.0.70; the in-headset
+   test notice (after the body calibration) says this is the 0.0.72 test build.
+5. To undo: put your backup folder back (or use the launcher's Revert).
+SHA256SUMS.txt lists every file's hash, so you can check the download.
+
+WHERE THE SETTINGS ARE
+Left wrist HUD > COMBAT page > HERO PROFILES. Only one hero can be on at a time.
+Every setting has a one-line note saying whether it needs a restart (none do,
+except LENS FLARES, which applies when VR next starts).
+
+TEST UNLOCKS (for testing only)
+COMBAT > TEST UNLOCKS: SUITS opens every suit, ULTIMATES opens ultimates and
+suits, ALL also opens every perk. OFF puts your real progress back.
+
+WHAT TO TRY, HERO BY HERO
+Rule everywhere: the triggers fire only basic projectiles; everything else is a
+gesture, grip or face button. Nothing appears from nowhere: you reach for it
+and grip, and everything starts holstered or sheathed.
+
+- SPIDER-MAN: unchanged (vanilla).
+- IRON MAN: every trigger pull fires a repulsor. Flight is on by default.
+- DAREDEVIL: batons start on your back; reach over a shoulder and grip to draw.
+  BATON GRAPPLE: cast a baton arm up fast to grapple there.
+- BATMAN: batarangs from the belt (reach + grip), grapple gun, glide, smoke.
+  GRAPPLE: aim at a ledge and fire, you are pulled up from the ground too.
+  PERCH TAKEDOWN is COMING SOON (its game hooks are not confirmed yet).
+- WOLVERINE: squeeze the grip into a fist to pop the claws (SNIKT); let go to
+  sheathe them.
+- SUPERMAN: flight on by default; heat vision; cold breath.
+- PUNISHER: pistols on your hips, sawed-off on your back, drawn with grip.
+  Your own sounds play for the shotgun, pistols and the pistol reload.
+  GRAPPLE HOOK: draw from the chest, push forward to grapple up.
+  PUNISHER VAN (EXPERIMENTAL, OFF by default): tap X to summon. In this
+  build it shows "MODEL MISSING: Vehicle/PunisherVan" and no van appears,
+  because the van model has not been picked yet. Once it ships: grip the driver
+  door handle to get in and out, grip the steering wheel rim with both hands
+  to steer, RT drives, LT reverses, both triggers brake.
+- CAPTAIN AMERICA: the shield is on your back (the real model); reach + grip.
+- THOR: lightning with your own two sounds. The hammer shows "MODEL MISSING"
+  until you pick a Mjolnir model (on purpose: no fake hammer).
+- GREEN LANTERN: ring constructs (fist, beam, bubble, chain), ring flight.
+- COMING SOON suits are labelled COMING SOON in the suit list.
+- ENEMY FACTION: the Hand, Hydra and the Joker Gang stay the game's own enemies
+  in this build (the enemy swap hook is not confirmed yet).
+
+IF SOMETHING GOES WRONG
+A missing or broken model shows MODEL MISSING and the feature turns itself off;
+the game keeps running in VR. COMBAT > USE MY OWN OR GAME SUIT is the fallback
+for a suit glitch. With a report, please send the newest files in the mod
+folder's "reports" subfolder.

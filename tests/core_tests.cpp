@@ -21858,9 +21858,40 @@ int main() {
         bool retire = false;
         for (int i = 0; i < 90 * 31 && !retire; ++i)
             retire = t.runFrame(1.f / 90, 11.5f, true);
-        check(retire && t.phase == done, "did not finish after 30 s");
-        check(finished(t), "0.0.7: the finished 30 s test did not turn MIRROR VIEW back OFF");
+        // MIRROR TEST (private): it stays while wanted - no 30 s end, not finished.
+        check(!retire && t.phase == running && !finished(t), "MIRROR TEST: the mirror ended by itself after 30 s");
+        t.close();
+        check(t.phase == done && !finished(t), "MIRROR TEST: closing it turned it OFF as a failure");
         check(!t.shouldCreate(true, true, 8), "ran twice in a session");
+        check(t.reopen() && t.phase == running && t.seconds == 0, "MIRROR TEST: it did not reopen");
+        t.pictureFailed();
+        check(t.phase == spidy::mirror_view::failed && t.why == pictureFault && finished(t),
+              "MIRROR TEST: a picture fault did not turn it OFF");
+        check(!t.reopen(), "MIRROR TEST: a failed mirror reopened");
+        Test timed;
+        timed.keep = false; // the 0.0.4 30 s test, still there
+        timed.shouldCreate(true, true, 8);
+        timed.created(true, 1);
+        retire = false;
+        for (int i = 0; i < 90 * 31 && !retire; ++i)
+            retire = timed.runFrame(1.f / 90, 11.5f, true);
+        check(retire && timed.phase == done, "did not finish after 30 s");
+        Test paced; // MIRROR TEST: 11 -> 18 ms is a headset's pace, not too slow
+        paced.shouldCreate(true, true, 8);
+        for (int i = 0; i < 90; ++i)
+            paced.idleFrame(11);
+        paced.created(true, 2);
+        retire = false;
+        for (int i = 0; i < 90 * 10 && !retire; ++i)
+            retire = paced.runFrame(1.f / 90, 18, true);
+        check(!retire && paced.phase == running, "MIRROR TEST: under 20 ms was called too slow");
+        Mat4 whole{};
+        check(mirrorPose(head, whole, fullBodyMetres, fullBodyDrop), "the full-body pose failed");
+        near(whole[13], 1.7f - fullBodyDrop);
+        near(whole[14], 3 - fullBodyMetres);
+        // The 70 degree frame from 2 m holds 1.4 m above and below the camera: feet to over the head.
+        check(whole[13] - fullBodyMetres * verticalTan < 0 && whole[13] + fullBodyMetres * verticalTan > 1.9f,
+              "MIRROR TEST: the frame does not hold the whole body");
         Test slow;
         slow.shouldCreate(true, true, 8);
         for (int i = 0; i < 90; ++i)
@@ -21868,7 +21899,7 @@ int main() {
         slow.created(true, 2);
         retire = false;
         for (int i = 0; i < 90 * 10 && !retire; ++i)
-            retire = slow.runFrame(1.f / 90, 20, true);
+            retire = slow.runFrame(1.f / 90, 25, true);
         check(retire && slow.phase == spidy::mirror_view::failed && slow.why == tooSlow, "a slow test was not stopped");
         Test lost;
         lost.shouldCreate(true, true, 8);

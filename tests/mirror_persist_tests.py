@@ -60,7 +60,7 @@ class FakeMod:
             self.mirror_wanted = value  # 0.0.7: forwarded at once (SpidyMirrorViewWant)
         return 0
 
-    def test_ran(self):  # 0.0.7: the 30 s test ran its course (mirror_view::finished): back to OFF, saved
+    def test_ran(self):  # MIRROR TEST: it stopped by itself (mirror_view::finished, failed): back to OFF, saved
         if self.mirror_view_made and self.values['mirror_view']:
             self.values['mirror_view'] = 0
             self.mirror_wanted = 0
@@ -129,12 +129,22 @@ class MirrorPersist(unittest.TestCase):
             self.assertEqual(third.values['mirror_view'], 0)
             self.assertEqual(session(folder).values['mirror_view'], 0)
 
-    def test_mirror_view_runs_once_then_turns_itself_off(self):
-        """0.0.7: after its 30 s test MIRROR VIEW goes back to OFF and stays OFF (no rerun at every launch)."""
+    def test_working_mirror_stays_on(self):
+        """MIRROR TEST (private): a mirror that works stays ON while the player keeps it ON, restarts too."""
         with tempfile.TemporaryDirectory() as d:
             folder = pathlib.Path(d)
             session(folder, wrist=['mirror_view'])
-            second = session(folder, test_runs=True)  # the restart: the view is made and the 30 s test runs
+            second = session(folder)  # the restart: the view is made and shown; nothing stops it
+            self.assertTrue(second.mirror_view_made)
+            self.assertEqual(second.values['mirror_view'], 1)
+            self.assertTrue(session(folder).mirror_view_made, 'a working mirror was not made at the next start')
+
+    def test_mirror_view_runs_once_then_turns_itself_off(self):
+        """After it stopped by itself, MIRROR VIEW goes back to OFF and stays OFF (no rerun at every launch)."""
+        with tempfile.TemporaryDirectory() as d:
+            folder = pathlib.Path(d)
+            session(folder, wrist=['mirror_view'])
+            second = session(folder, test_runs=True)  # the restart: the view is made, then stops by itself
             self.assertTrue(second.mirror_view_made)
             self.assertEqual(second.values['mirror_view'], 0, 'MIRROR VIEW stayed on after its test')
             self.assertIn('mirror_view = off', (folder / 'live.txt').read_text())

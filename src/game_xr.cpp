@@ -6883,14 +6883,20 @@ DWORD WINAPI run(void*) {
                                         game_prompts::note("VERSION 0.0.4 MIRROR VIEW TEST: asked after the eyes were made; "
                                                            "restart the game to run it");
                                     mirrorTooLate = late;
-                                    // 0.0.7: MIRROR VIEW runs once. When its 30 s test has run its course (done, or
-                                    // stopped by itself), it switches back to OFF and the launcher saves OFF
-                                    // (SpidyHudSettings 3 bit 21, as a press does), so it does not run at every start.
+                                    // MIRROR TEST (private): MIRROR VIEW stays while ON (OFF on the wrist closes it).
+                                    // When it stopped by itself (no slots, no view, too slow, no picture), it
+                                    // switches back to OFF and the launcher saves OFF (SpidyHudSettings 3 bit 21,
+                                    // as a press does), so a failing mirror does not come back at every start.
                                     if (mirrorWant && mirror_view::finished(mirrorStats.test)) {
                                         combat38Values[combat38::mirrorView] = 0;
                                         SpidyMirrorViewWant(0);
                                         wristChanged |= 1u << 21;
-                                        game_prompts::note("0.0.7 MIRROR VIEW: the test ran once and turned itself OFF (saved)");
+                                        game_prompts::note(
+                                            (std::string("MIRROR TEST: turned itself OFF (saved): ") +
+                                             mirror_view::whyNames[mirrorStats.test.why < mirror_view::whys
+                                                                       ? mirrorStats.test.why
+                                                                       : 0])
+                                                .c_str());
                                     }
                                     if (player.hero != suitHeroWas) { // another hero: start the watch again
                                         suitWatch.forget();
@@ -7644,7 +7650,14 @@ DWORD WINAPI run(void*) {
                         // Standing on a wall or a ceiling - Spidy's own or the
                         // game's crawl - the body stands on it with the player,
                         // never in the air the swing keeps the hero in there.
-                        pose.flags = (flatScreen || !values.body ? 0u : native_body::bodyOn) | native_body::hideHead |
+                        // MIRROR TEST (private): while the mirror picture is up (copies made), the head
+                        // is not shrunk away, so the mirror shows the whole suit (CANDIDATE: bits of the
+                        // mask's inside may show at the edge of the view meanwhile).
+                        const bool mirrorShows = c38(combat38::mirrorView) &&
+                                                 mirrorStats.test.phase == mirror_view::running &&
+                                                 mirrorStats.gpuCopies > 0 && !mirrorStats.gpuFault;
+                        pose.flags = (flatScreen || !values.body ? 0u : native_body::bodyOn) |
+                                     (mirrorShows ? 0u : native_body::hideHead) |
                                      native_body::handTurn |
                                      (swingState.owned && !motion.standing ? native_body::airborne : 0u) |
                                      (calibratedEye > 0 ? native_body::calibrated : 0u) |

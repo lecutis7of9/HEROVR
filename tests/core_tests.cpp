@@ -21876,15 +21876,27 @@ int main() {
         for (int i = 0; i < 90 * 31 && !retire; ++i)
             retire = timed.runFrame(1.f / 90, 11.5f, true);
         check(retire && timed.phase == done, "did not finish after 30 s");
-        Test paced; // MIRROR TEST: 11 -> 18 ms is a headset's pace, not too slow
+        Test paced; // MIRROR TEST (rep 27 Oct): menus at 5.6 ms, VR with the mirror at 29 ms: not too slow
         paced.shouldCreate(true, true, 8);
         for (int i = 0; i < 90; ++i)
-            paced.idleFrame(11);
+            paced.idleFrame(5.6f);
         paced.created(true, 2);
         retire = false;
-        for (int i = 0; i < 90 * 10 && !retire; ++i)
-            retire = paced.runFrame(1.f / 90, 18, true);
-        check(!retire && paced.phase == running, "MIRROR TEST: under 20 ms was called too slow");
+        for (int i = 0; i < 35 * 60 && !retire; ++i)
+            retire = paced.runFrame(.029f, 29, true);
+        check(!retire && paced.phase == running, "MIRROR TEST: a 29 ms VR frame was called too slow");
+        check(paced.testMs > 28 && paced.testMs < 30, "MIRROR TEST: the rolling average is off");
+        Test hitch; // a 3 s dip to 80 ms (a load, a crowd) and back: not stopped
+        hitch.shouldCreate(true, true, 8);
+        hitch.created(true, 2);
+        retire = false;
+        for (int i = 0; i < 400 && !retire; ++i)
+            retire = hitch.runFrame(.025f, 25, true);
+        for (int i = 0; i < 37 && !retire; ++i)
+            retire = hitch.runFrame(.08f, 80, true);
+        for (int i = 0; i < 400 && !retire; ++i)
+            retire = hitch.runFrame(.025f, 25, true);
+        check(!retire && hitch.phase == running, "MIRROR TEST: a 3 s dip turned it off");
         Mat4 whole{};
         check(mirrorPose(head, whole, fullBodyMetres, fullBodyDrop), "the full-body pose failed");
         near(whole[13], 1.7f - fullBodyDrop);
@@ -21898,9 +21910,13 @@ int main() {
             slow.idleFrame(11);
         slow.created(true, 2);
         retire = false;
-        for (int i = 0; i < 90 * 10 && !retire; ++i)
-            retire = slow.runFrame(1.f / 90, 25, true);
+        float slowAt = 0;
+        for (int i = 0; i < 600 && !retire; ++i) {
+            retire = slow.runFrame(.06f, 60, true); // under 17 frames a second
+            slowAt = slow.seconds;
+        }
         check(retire && slow.phase == spidy::mirror_view::failed && slow.why == tooSlow, "a slow test was not stopped");
+        check(slowAt > 9 && slowAt < 16, "MIRROR TEST: a slow test stopped too soon or too late");
         Test lost;
         lost.shouldCreate(true, true, 8);
         lost.created(true, 2);

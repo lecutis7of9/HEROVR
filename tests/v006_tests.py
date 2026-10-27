@@ -129,7 +129,7 @@ class MirrorExport(unittest.TestCase):
         self.assertIn('hero draws 41', text)
         struct.pack_into('<4I', raw, 784, 4, 5, 2, 1)
         mt = rec.parse_v003(bytes(raw))['mirror_view_test']
-        self.assertEqual((mt['phase'], mt['why']), ('failed', 'too slow: frames over 1.5x'))
+        self.assertEqual((mt['phase'], mt['why']), ('failed', 'too slow: under 20 fps for 5 s'))
 
 
 class PrebuiltBridge(unittest.TestCase):

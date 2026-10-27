@@ -112,17 +112,22 @@ enum Why : uint32_t {
     noEyes,       // the eyes are not up yet
     createFailed, // the game made no view
     lostView,     // the view left the pool
-    tooSlow,      // frames slowed by more than half
+    tooSlow,      // MIRROR TEST: under 20 frames a second (5 s average) for 5 s straight
     pictureFault, // MIRROR TEST: the picture could not be copied (native_gpu::MirrorGpu::fault)
     whys
 };
 inline constexpr const char* whyNames[whys] = {"", "fewer than 4 view slots free", "the eyes are not up",
                                                "the game made no view", "the view left the pool",
-                                               "too slow: frames over 1.5x", "the picture could not be shown"};
+                                               "too slow: under 20 fps for 5 s", "the picture could not be shown"};
 inline constexpr uint32_t minFreeSlots = 4, width = 320, height = 480;
-inline constexpr float runSeconds = 30.f, slowFactor = 1.5f, slowAfter = 3.f;
-// MIRROR TEST: slow only when also under 50 frames a second (a headset's own pace is not "slow").
-inline constexpr float slowFloorMs = 20.f;
+inline constexpr float runSeconds = 30.f;
+// MIRROR TEST speed guard (looser, after rep 27 Oct: its baseline came from the menus before VR, 5.6 ms,
+// so a normal VR frame of 26-29 ms read as "too slow" after 3 s). Now: no baseline compare; the average
+// of the last windowSeconds (one-second buckets) must stay over slowMs (under 20 frames a second) for
+// slowHoldSeconds in a row, after warmSeconds, before it turns itself OFF. Hitches over 200 ms (loads)
+// are left out.
+inline constexpr float slowMs = 50.f, windowSeconds = 5.f, slowHoldSeconds = 5.f, warmSeconds = 5.f;
+inline constexpr uint32_t windowBuckets = 5;
 
 struct Test {
     uint32_t phase = off, why = fine, slot = ~0u, runs{};
@@ -130,6 +135,11 @@ struct Test {
     uint64_t frames{};
     // MIRROR TEST: true keeps the view while it is wanted (no 30 s end); the player closes it.
     bool keep{true};
+    // The rolling window: whole seconds done (sum ms, frames each), the second being filled, and how
+    // long the average has been over slowMs.
+    float bucketMs[windowBuckets]{}, bucketFrames[windowBuckets]{};
+    float nowMs{}, nowFrames{}, nowSeconds{}, slowSeconds{};
+    uint32_t bucketAt{};
     // Whether to create the view now: wanted, eyes up, enough free slots.
     bool shouldCreate(bool wanted, bool eyesUp, uint32_t freeSlots) {
         if (!wanted) {
@@ -152,6 +162,15 @@ struct Test {
         }
         return true;
     }
+    void restartTiming() {
+        seconds = 0;
+        testMs = 0;
+        frames = 0;
+        for (uint32_t i = 0; i < windowBuckets; ++i)
+            bucketMs[i] = bucketFrames[i] = 0;
+        nowMs = nowFrames = nowSeconds = slowSeconds = 0;
+        bucketAt = 0;
+    }
     void created(bool ok, uint32_t inSlot) {
         if (!ok) {
             phase = failed;
@@ -161,15 +180,22 @@ struct Test {
         phase = running;
         why = fine;
         slot = inSlot;
-        seconds = 0;
-        testMs = 0;
-        frames = 0;
+        restartTiming();
         ++runs;
     }
-    // The baseline frame time (before the test), smoothed.
+    // The frame time before the test (menus, loading; kept for the record only), smoothed.
     void idleFrame(float frameMs) {
         if (std::isfinite(frameMs) && frameMs > 0 && frameMs < 200)
             baseMs = baseMs > 0 ? baseMs + .05f * (frameMs - baseMs) : frameMs;
+    }
+    // The average frame time over the window (the finished seconds, and the current one); 0 none.
+    float windowMs() const {
+        float ms = nowMs, n = nowFrames;
+        for (uint32_t i = 0; i < windowBuckets; ++i) {
+            ms += bucketMs[i];
+            n += bucketFrames[i];
+        }
+        return n > 0 ? ms / n : 0.f;
     }
     // One frame of the test; returns true when the view must be retired now.
     bool runFrame(float dt, float frameMs, bool viewOwned) {
@@ -180,13 +206,30 @@ struct Test {
             why = lostView;
             return false; // nothing left to retire
         }
-        if (std::isfinite(dt) && dt > 0 && dt < .5f)
+        const bool timed = std::isfinite(dt) && dt > 0 && dt < .5f;
+        if (timed)
             seconds += dt;
         if (std::isfinite(frameMs) && frameMs > 0 && frameMs < 200) {
-            testMs = testMs > 0 ? testMs + .1f * (frameMs - testMs) : frameMs;
+            nowMs += frameMs;
+            nowFrames += 1;
             ++frames;
         }
-        if (seconds > slowAfter && baseMs > 0 && testMs > baseMs * slowFactor && testMs > slowFloorMs) {
+        if (timed)
+            nowSeconds += dt;
+        if (nowSeconds >= windowSeconds / windowBuckets) { // a second done: it replaces the oldest
+            bucketMs[bucketAt] = nowMs;
+            bucketFrames[bucketAt] = nowFrames;
+            bucketAt = (bucketAt + 1) % windowBuckets;
+            nowMs = nowFrames = nowSeconds = 0;
+        }
+        testMs = windowMs();
+        if (seconds > warmSeconds && testMs > slowMs) {
+            if (timed)
+                slowSeconds += dt;
+        } else {
+            slowSeconds = 0;
+        }
+        if (slowSeconds >= slowHoldSeconds) {
             phase = failed;
             why = tooSlow;
             return true;
@@ -208,8 +251,7 @@ struct Test {
             return false;
         phase = running;
         why = fine;
-        seconds = 0;
-        testMs = 0;
+        restartTiming();
         return true;
     }
     // MIRROR TEST: the picture failed (fault from native_gpu): stop, it goes OFF.

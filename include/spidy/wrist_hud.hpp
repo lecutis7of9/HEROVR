@@ -912,6 +912,7 @@ struct View {
     uint32_t farShadows{}; // Update 35: far_shadows::pack(mode, why it changed on its own)
     uint32_t eyeBloom{};   // Update 36: eye_bloom::pack(mode, why it changed on its own)
     uint32_t mirror{};     // Update 37: bit 0 on, bits 8-31 the drawing's cost in microseconds
+    uint32_t mirrorViewWhy{}; // MIRROR TEST: why MIRROR VIEW turned itself OFF (mirror_view::Why; 0 it did not)
     uint32_t worldLog{};   // Update 37: bit 0 on, bit 1 stopped (a fault), bits 8-31 events logged
     uint32_t blood{};      // Update 37: BLOOD SPLATTER intensity percent (0 OFF)
     bool bloodVisor{};     // Update 38.5: EXTREME's VISOR DROPS on

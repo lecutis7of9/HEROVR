@@ -11774,7 +11774,9 @@ int main() {
         check(ringStatus(later, larger) == 3, "a later session does not recognize the installed ring");
     });
     test("delayed native images retain their own tracking and overlay poses", [] {
-        NativeEyeHistory history;
+        // 0.0.7: the history is over 1 MB now, past the Windows main stack: on the heap, as game_xr.cpp holds it
+        const auto historyOwner = std::make_unique<NativeEyeHistory>();
+        NativeEyeHistory& history = *historyOwner;
         auto tracked=trackedFrame();
         tracked.predictedDisplayTime=1000000000;
         GameTrackingRig rig;
@@ -11805,7 +11807,9 @@ int main() {
               "repeated projection lost its original render pose");
     });
     test("native image history rejects stale, overwritten and recentered poses", [] {
-        NativeEyeHistory history;
+        // 0.0.7: the history is over 1 MB now, past the Windows main stack: on the heap, as game_xr.cpp holds it
+        const auto historyOwner = std::make_unique<NativeEyeHistory>();
+        NativeEyeHistory& history = *historyOwner;
         NativeEyeFrame frame;
         frame.serial=7;
         frame.motion.predictedDisplayTime=1000000000;

@@ -54,6 +54,12 @@ class StackFrames(unittest.TestCase):
         self.assertNotRegex(src, r'\n\s*NativeEyeHistory history;')
         self.assertIn('CreateThread(nullptr, xrThreadStackReserve, run, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION', src)
 
+    def test_tests_keep_history_off_the_stack(self):
+        # 0.0.7: 256 frames of NativeEyeFrame are over 1 MB, the Windows main thread's whole stack
+        src = (ROOT / 'tests/core_tests.cpp').read_text(encoding='utf-8')
+        self.assertNotRegex(src, r'\n\s*NativeEyeHistory \w+;')
+        self.assertNotRegex(src, r'\n\s*NativeEyeHistory \w+\{')
+
 
 if __name__ == '__main__':
     unittest.main()

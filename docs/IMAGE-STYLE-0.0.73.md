@@ -1,4 +1,4 @@
-# 0.0.73 test 4: IMAGE STYLE, shown as GAME TAA (GRAPHICS > QUALITY, under IMAGE)
+# 0.0.73 test 4: IMAGE STYLE, shown as GAME TAA (GRAPHICS > QUALITY, under IMAGE and AA)
 
 **GAME TAA: SPIDYVR (default) / OFF.** Subtext: "SPIDYVR: the game's TAA in each eye as SpidyVR; OFF: IMAGE's look;
 no restart." Live (wrist, `live.txt image_style = spidyvr | off`; `hero_0.0.73`/`classic` are accepted for OFF).

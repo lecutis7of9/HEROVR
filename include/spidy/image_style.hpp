@@ -1,7 +1,7 @@
 #pragma once
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 //
-// 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (GRAPHICS > QUALITY under IMAGE, combat38::imageStyle,
+// 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (GRAPHICS > QUALITY under IMAGE and AA, combat38::imageStyle,
 // live.txt image_style; live).
 // The owner, on test 3: "the aliasing is still just too noticeable and if you smooth it ... it just looks
 // smudged and blurry ... whatever SpidyVR does to handle it works and it needs to look as good as that."

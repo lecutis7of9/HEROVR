@@ -404,7 +404,7 @@ class Hero073Test4ImageStyle(unittest.TestCase):
         self.assertIn('no restart', m.group(1))
         self.assertEqual(m.group(1).count('.'), 1)
         self.assertIn("('image_style', ('SPIDYVR', 'OFF'))", src('tools/update37_records.py'))
-        self.assertIn('{C::combatImage, C::combatImageStyle, C::aa,', src('src/wrist_hud.cpp'))  # under IMAGE
+        self.assertIn('{C::combatImage, C::aa, C::combatImageStyle, C::sharpen,', src('src/wrist_hud.cpp'))  # under IMAGE and AA (AA keeps its spot)
         self.assertEqual(L.UPDATE38_DEFAULTS['image'], 'spidyvr')  # IMAGE's own default kept
     def test_code_5460_is_its_own(self):
         hits = []

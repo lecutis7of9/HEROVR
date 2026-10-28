@@ -154,6 +154,9 @@ enum Option : uint32_t {
     repLog,
     // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (on: a trigger drives only while its hand grips the wheel) or CLASSIC (0.0.72)
     vanPedals,
+    // 0.0.73 IMAGE: SPIDYVR (sharp: no FXAA, no sharpen, the history read Catmull-Rom, mip bias 0 at the
+    // next start) or HERO VR CLASSIC (test 3: FXAA, sharpen 140, bilinear history, mip bias 0.5)
+    image,
     options
 };
 struct OptionInfo {
@@ -481,7 +484,24 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"van_pedals", "VAN PEDALS", "VPEDL", "WHEEL HAND: the wheel hand's trigger drives, the free hand fires, no restart.",
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
+    {"image", "IMAGE", "IMAGE", "SPIDYVR is sharp with no smear, CLASSIC is test 3's; textures change on restart.",
+     2, {"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr}},
 };
+// 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
+// good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
+// 0.6.0) runs the game's own TAA per eye with the game's sharpening at its lowest and no FXAA, CAS or mip
+// bias of its own; HERO VR's engine TAA still shakes distant buildings (CANDIDATE: jitter units, per-eye
+// motion vectors), so SPIDYVR here is the nearest we can run: EYE AA's history kept, read sharp
+// (Catmull-Rom), with the smoothing (FXAA), the sharpening (140) and the softer textures (+0.5) taken off.
+// Live but the textures (the mip bias is set when the game starts).
+struct ImageLook {
+    uint32_t aa;       // SpidyEyeAA: 0 off, 1 FXAA
+    uint32_t sharpen;  // SpidyEyeSharpen, 0-200
+    bool sharpHistory; // SpidyEyeHistorySharp
+};
+inline ImageLook imageLook(uint32_t value) {
+    return value == 1 ? ImageLook{1, 140, false} : ImageLook{0, 0, true};
+}
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }
 // 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).

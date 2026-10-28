@@ -610,6 +610,8 @@ DWORD WINAPI SpidyShadowMatchOn(void* on);
 // 0.0.73 test 3 LIGHT HOLD (native_eye_gpu.cpp): the history shader's bright hold, and the history
 // share its last pass kept (JITTER CALM).
 DWORD WINAPI SpidyEyeLightHold(void* percent);
+// 0.0.73 IMAGE (native_eye_gpu.cpp): the history read sharp (1, SPIDYVR) or bilinear (0, CLASSIC).
+DWORD WINAPI SpidyEyeHistorySharp(void* sharp);
 float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
@@ -2287,7 +2289,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightHoldApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightHoldApplied{~0u}, imageApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -3808,6 +3810,16 @@ DWORD WINAPI run(void*) {
                                     // a press the pages never mark changed (as 29 is MUSIC SEEK's).
                                     if (o == combat38::mirrorView)
                                         wristChanged |= 1u << 21;
+                                    // 0.0.73 IMAGE: the look's eye AA (FXAA) and sharpening now; the history
+                                    // read follows in the per-frame apply. Kept for the next start with the
+                                    // two sliders (SpidyHudSettings 3 bits 6 and 11, and 22 with 10 bit 2).
+                                    if (o == combat38::image) {
+                                        const auto look = combat38::imageLook(c38(o));
+                                        SpidyEyeAA(reinterpret_cast<void*>(static_cast<uintptr_t>(look.aa)));
+                                        SpidyEyeSharpen(reinterpret_cast<void*>(static_cast<uintptr_t>(look.sharpen)));
+                                        wristChanged |= 1u << static_cast<unsigned>(wrist_hud::Control::aa) |
+                                                        1u << static_cast<unsigned>(wrist_hud::Control::sharpen) | 1u << 22;
+                                    }
                                 }
                                 if (result.heroRoster && !rosterFault) { // Build 8: the roster page, in front of the head
                                     if (validTrackedPose(frame.head) && rosterPage.open(frame.head, rosterClock))
@@ -10906,6 +10918,13 @@ DWORD WINAPI run(void*) {
                                 lightHoldApplied = holdWant;
                                 SpidyEyeLightHold(reinterpret_cast<void*>(static_cast<uintptr_t>(holdWant)));
                             }
+                            // 0.0.73 IMAGE: the history read (SPIDYVR sharp, CLASSIC bilinear) when it changes;
+                            // the eye AA and sharpening are the launcher's (live.txt) and the wrist press's.
+                            if (const uint32_t sharpWant = combat38::imageLook(c38(combat38::image)).sharpHistory ? 1u : 0u;
+                                sharpWant != imageApplied) {
+                                imageApplied = sharpWant;
+                                SpidyEyeHistorySharp(reinterpret_cast<void*>(static_cast<uintptr_t>(sharpWant)));
+                            }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)
                                 auto_perf::status(perfStatusText, sizeof perfStatusText, autoPerf, target);
@@ -12769,6 +12788,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeroMenu(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyRepLog(void* v) { return setHero007(v, combat38::repLog, 5447); }
 // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (0) or CLASSIC (1, the 0.0.72 pedals) (live.txt van_pedals).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanPedals(void* v) { return setHero007(v, combat38::vanPedals, 5448); }
+// 0.0.73 IMAGE: 0 SPIDYVR (default), 1 HERO VR CLASSIC; the history read follows live (the launcher sends
+// the look's aa and sharpen beside it, and its mip bias when the game starts).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHero007(v, combat38::image, 5449); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;
@@ -12935,7 +12957,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
     case 3:
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29));
+        // 0.0.73 IMAGE (22), the same.
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 22 | 1u << 27 | 1u << 28 | 1u << 29));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -12957,7 +12980,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(sessionFpsHigh.load(), 2047) | std::min<DWORD>(sessionFpsLow.load(), 2047) << 11;
     case 10: // Version 0.0.62: LENS FLARES (0 GAME, 1 OFF IN VR), for live.txt and the next start;
              // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
-        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1;
+             // 0.0.73 IMAGE (bit 2: 0 SPIDYVR, 1 HERO VR CLASSIC), the same (its textures change at the start)
+        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
+               std::min<DWORD>(c38(combat38::image), 1) << 2;
     default:
         return 3970;
     }

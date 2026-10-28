@@ -24165,6 +24165,96 @@ int main() {
         bare.skinJoints.pop_back();
         check(!bare.hasSkin() && !sw::makeRig(bare, rig), "a broken skin: not worn");
     });
+    test("Build 12 CAPE: found behind the suit, hangs from the chest, fans out to the wrists while gliding", [] {
+        namespace mm = spidy::mesh_model;
+        namespace sw = spidy::suit_wear;
+        const Vec3 J[sw::ends] = {{0, 1.6f, 0},      {0, 1.5f, 0},     {0, 1.3f, 0},      {0, 1.0f, 0},     {.18f, 1.45f, 0},
+                                  {.45f, 1.4f, 0},   {.7f, 1.35f, 0},  {-.18f, 1.45f, 0}, {-.45f, 1.4f, 0}, {-.7f, 1.35f, 0},
+                                  {.1f, .95f, 0},    {.1f, .5f, 0},    {.1f, .08f, 0},    {-.1f, .95f, 0},  {-.1f, .5f, 0},
+                                  {-.1f, .08f, 0},   {0, 1.8f, 0},     {.88f, 1.32f, 0},  {-.88f, 1.32f, 0}};
+        const auto suit = [&](float capeLow) {
+            mm::Mesh m;
+            for (uint32_t e = 0; e < sw::ends; ++e)
+                m.suitEnds[e * 3] = J[e].x, m.suitEnds[e * 3 + 1] = J[e].y, m.suitEnds[e * 3 + 2] = J[e].z;
+            m.suitHandBack[1] = 1, m.suitHandBack[4] = 1;
+            m.hasSuit = true;
+            const auto tri = [&](const Vec3 (&p)[3], uint8_t b, Vec3 n) {
+                for (int k = 0; k < 3; ++k) {
+                    m.corners.push_back(p[k]);
+                    m.normals.push_back(n);
+                    m.uvs.push_back(0), m.uvs.push_back(0);
+                    for (int q = 0; q < 4; ++q)
+                        m.skinJoints.push_back(q ? 0 : b), m.skinWeights.push_back(q ? 0 : 255);
+                }
+                m.colors.push_back({1, 1, 1});
+                m.tints.push_back({1, 1, 1});
+                m.image.push_back(-1);
+            };
+            for (uint32_t b = 0; b < sw::bones; ++b) {
+                const Vec3 c = (J[sw::boneEnds[b][0]] + J[sw::boneEnds[b][1]]) * .5f;
+                tri({c + Vec3{0, 0, .05f}, c + Vec3{.02f, 0, .05f}, c + Vec3{0, .02f, .05f}}, static_cast<uint8_t>(b), {0, 0, 1});
+            }
+            if (capeLow < 2) { // an 8 x 12 cloth 30 cm behind the back, weighted to the chest (and the arms, as the real ones are)
+                const auto at = [&](int i, int j) { return Vec3{-.4f + .1f * i, 1.4f - (1.4f - capeLow) * j / 12.f, -.3f}; };
+                for (int j = 0; j < 12; ++j)
+                    for (int i = 0; i < 8; ++i) {
+                        const uint8_t b = j < 2 ? static_cast<uint8_t>(i < 4 ? sw::boneUpperR : sw::boneUpperL) : sw::boneChest;
+                        tri({at(i, j), at(i + 1, j), at(i, j + 1)}, b, {0, 0, -1});
+                        tri({at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)}, b, {0, 0, -1});
+                    }
+            }
+            return m;
+        };
+        sw::Rig plain, cloak, collar;
+        check(sw::makeRig(suit(9), plain) && !plain.hasCape && plain.capeTriangles == 0, "no cloth behind: no cape (Beyond, 1989)");
+        check(sw::makeRig(suit(1.2f), collar) && !collar.hasCape, "a short collar behind the neck is not a cape");
+        check(sw::makeRig(suit(.2f), cloak) && cloak.hasCape && cloak.capeTriangles == 192 && cloak.capeHang.size() == cloak.rest.size(),
+              "the cloak reaching the calves is the cape: all 192 of its triangles");
+        size_t body = 0;
+        for (size_t v = 0; v < cloak.rest.size(); ++v)
+            body += cloak.capeHang[v] < 0 && cloak.rest[v].z > 0;
+        check(body == size_t{sw::bones} * 3, "the body is never taken for the cape");
+        sw::BoneMove mv[sw::bones];
+        sw::Skinned sk, still;
+        check(sw::moves(cloak, cloak.skeleton, mv) && sw::skin(cloak, mv, sk), "the cloak suit skins");
+        still = sk;
+        check(sw::cape(cloak, mv, cloak.skeleton, 0, still), "standing, the cape hangs");
+        float worst = 0;
+        for (size_t v = 0; v < sk.p.size(); ++v)
+            worst = std::max(worst, length(still.p[v] - cloak.rest[v]));
+        check(worst < 1e-4f, "standing at rest, the cape stays exactly as made (not flattened)");
+        // the arms swing up: the cape (hung from the chest) does not swing with them
+        sw::Skeleton up = cloak.skeleton;
+        up.at[sw::elbowL] = up.at[sw::shoulderL] + Vec3{.1f, .25f, 0}, up.at[sw::wristL] = up.at[sw::elbowL] + Vec3{.05f, .25f, 0};
+        up.at[sw::tipL] = up.at[sw::wristL] + Vec3{0, .18f, 0};
+        sw::Skinned lifted;
+        check(sw::moves(cloak, up, mv) && sw::skin(cloak, mv, lifted) && sw::cape(cloak, mv, up, 0, lifted), "arm raised, skinned");
+        float lowMove = 0;
+        for (size_t v = 0; v < lifted.p.size(); ++v)
+            if (cloak.capeHang[v] > .99f)
+                lowMove = std::max(lowMove, length(lifted.p[v] - cloak.rest[v]));
+        check(lowMove < 1e-3f, "the cape below the shoulders does not ride up with a raised arm");
+        // gliding: the cape fans into wings from the wrists to the knees, behind the back
+        sw::Skinned wing = sk;
+        check(sw::moves(cloak, cloak.skeleton, mv) && sw::cape(cloak, mv, cloak.skeleton, 1, wing), "gliding, the cape spreads");
+        float reachL = 0, reachR = 0, front = -1;
+        for (size_t v = 0; v < wing.p.size(); ++v)
+            if (cloak.capeHang[v] >= 0) {
+                reachL = std::max(reachL, wing.p[v].x), reachR = std::min(reachR, wing.p[v].x);
+                front = std::max(front, wing.p[v].z);
+                check(std::isfinite(wing.p[v].x) && std::isfinite(wing.n[v].y), "the wing is finite");
+            }
+        check(reachL > .6f && reachR < -.6f, "the wings reach out to the wrists (both sides)");
+        check(front < 0, "the wings stay behind the body");
+        sw::Skinned nan = sk;
+        check(sw::cape(cloak, mv, cloak.skeleton, std::numeric_limits<float>::quiet_NaN(), nan), "a NaN spread is treated as 0");
+        float off = 0;
+        for (size_t v = 0; v < sk.p.size(); ++v)
+            off = std::max(off, length(nan.p[v] - cloak.rest[v]));
+        check(off < 1e-4f, "a NaN spread leaves the cape hanging");
+        const auto mid = sw::capeWing(cloak.skeleton, 1, 0, 0, 1);
+        check(length(mid - (cloak.skeleton.at[sw::wristL] + Vec3{0, 0, -.06f})) < 1e-3f, "the wing's outer top corner is at the left wrist");
+    });
     test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
         using namespace spidy::hero007;
         Play p;

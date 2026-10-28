@@ -97,7 +97,23 @@ struct Rig {
     Skeleton skeleton;                  // the rest skeleton (the model's: facing +z, its left at +x)
     float height = 1.8f;                // the head's top above the feet
     float handThumb[2]{};               // Test build 12: each rest hand's thumb found (+-1 across it; 0 none)
+    // Test build 12 CAPE (findCape): the suit's own cape - the sheet hanging behind its back (the triangles
+    // reached from the ones well behind it, below the shoulders), only when there is one (Arkham Origins' and
+    // Year One's BATMAN; Beyond's and 1989's have none in their models). Per rest vertex: how much of it hangs
+    // from the torso (-1 not the cape, 0 none .. 1: the cape's lower part, never dragged about by the arms it was weighted to),
+    // and where it sits on the cape: across (-1 its right edge .. +1 its left), down (0 the shoulders .. 1 the
+    // hem) and its fold (the rest depth off the cape's mean at that height: kept, so it is never flattened).
+    bool hasCape{};
+    std::vector<float> capeHang;
+    std::vector<Vec3> capeAt; // x across, y down, z fold
+    uint32_t capeTriangles{};
 };
+// Test build 12 CAPE: the cape's thresholds (metres at a 1.8 m suit).
+inline constexpr float capeSeedBehind = .18f;   // a triangle this far behind the suit's middle starts the cape
+inline constexpr float capeKeepBehind = .10f;   // and the cape spreads over its neighbours this far behind
+inline constexpr float capeMinArea = .25f;      // m^2: less is back armour, not a cape (Beyond's .01)
+inline constexpr float capeReachDown = .25f;    // the cape reaches under this share of the height (Beyond: no)
+void findCape(const mesh_model::Mesh& mesh, Rig& rig);
 bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name = nullptr); // name: the suit's folder (Suit_...)
 
 // The tracked player (world): the head (the eyes' middle) and its axes, each grip (OpenXR: -z the fingers,
@@ -147,6 +163,15 @@ struct Skinned {
     std::vector<Vec3> p, n;
 };
 bool skin(const Rig& rig, const BoneMove m[bones], Skinned& out);
+// Test build 12 CAPE: the cape on the skinned suit (after skin, nothing without one). Its lower part hangs
+// from the torso (the chest bone), not from the arms its weights follow; `spread` (0 .. 1, BATMAN's cape glide
+// eased in and out) fans it out into a wing on each side - across from the neck along the arm to the wrist
+// (the top edge), down to the knee (the outer edge), a hand's width behind the arms and billowing - its own
+// mesh and folds kept, so it is seen in first person from the arms out to the sides.
+bool cape(const Rig& rig, const BoneMove m[bones], const Skeleton& live, float spread, Skinned& s);
+// A point on the glide's wing: across a (0 the spine .. 1 the outer edge), down t (0 top .. 1 hem), side 0 the
+// suit's left (+x at rest), 1 its right; and the wing's normal there.
+Vec3 capeWing(const Skeleton& live, float a, float t, int side, float scale);
 // Triangles of `mesh` whose bone is in `boneMask` into `sink` (hero007's model sink: shape = u, v, layer, 1),
 // each point through `place` (a 3 x 4 affine map, row-major: the mirror's reflection; null: none). false (and
 // nothing added) when it would pass `budget` vertices or came out insane.

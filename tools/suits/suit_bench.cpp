@@ -99,6 +99,23 @@ int main(int argc, char** argv) {
             t.curl[i] = static_cast<float>(std::atof(c));
     }
     t.standingEye = 1.65f;
+    // Test build 12 CAPE: SUIT_BENCH_POSE=glide - both arms out to the sides at the shoulders (BATMAN's cape
+    // glide), looking ahead and a little down; SUIT_BENCH_SPREAD the cape's spread (glide: 1).
+    float spread = 0;
+    if (const char* g = std::getenv("SUIT_BENCH_POSE"); g && std::string(g) == "glide") {
+        spread = 1;
+        t.eyeForward = normalized(Vec3{0, -.5f, -1});
+        t.eyeUp = normalized(cross(cross(t.eyeForward, Vec3{0, 1, 0}), t.eyeForward));
+        for (int i = 0; i < 2; ++i) {
+            const float x = i == 0 ? -1.f : 1.f;
+            t.grip[i] = {x * .72f, 1.36f, -.12f};
+            t.gripUp[i] = {-x, 0, 0}; // the grip's -Y (the forearm's way) out to the side
+            t.gripForward[i] = {0, 0, -1};
+            t.gripX[i] = cross(t.gripUp[i], Vec3{0, 0, 1});
+        }
+    }
+    if (const char* g = std::getenv("SUIT_BENCH_SPREAD"))
+        spread = static_cast<float>(std::atof(g));
     // A mirror 1.4 m ahead facing the player (its normal +z), life size.
     const Vec3 n{0, 0, 1}, c{0, 1.f, -1.4f};
     float place[12];
@@ -141,6 +158,19 @@ int main(int argc, char** argv) {
             ok = ok && sw::moves(rig, live, mv);
             const auto a2 = Clock::now();
             ok = ok && sw::skin(rig, mv, sk);
+            if (ok && rig.hasCape)
+                sw::cape(rig, mv, live, spread, sk);
+            if (ok && rig.hasCape && f == frames - 1 && std::getenv("SUIT_BENCH_DEBUG")) {
+                float lo[3]{1e9f, 1e9f, 1e9f}, hi[3]{-1e9f, -1e9f, -1e9f};
+                for (size_t v = 0; v < sk.p.size(); ++v)
+                    if (rig.capeHang[v] >= 0)
+                        for (int a = 0; a < 3; ++a)
+                            lo[a] = std::min(lo[a], (&sk.p[v].x)[a]), hi[a] = std::max(hi[a], (&sk.p[v].x)[a]);
+                std::fprintf(stderr, "%s wristL %.2f %.2f %.2f wristR %.2f %.2f %.2f neck %.2f %.2f %.2f cape %.2f..%.2f %.2f..%.2f %.2f..%.2f\n",
+                             mm::suitFolders[k], live.at[sw::wristL].x, live.at[sw::wristL].y, live.at[sw::wristL].z, live.at[sw::wristR].x,
+                             live.at[sw::wristR].y, live.at[sw::wristR].z, live.at[sw::neck].x, live.at[sw::neck].y, live.at[sw::neck].z, lo[0], hi[0],
+                             lo[1], hi[1], lo[2], hi[2]);
+            }
             const auto a3 = Clock::now();
             sink.clear();
             ok = ok && sw::draw(sink, hero007::modelSinkBudget, *m, rig, sk, sw::armBones);
@@ -165,10 +195,10 @@ int main(int argc, char** argv) {
         std::snprintf(line, sizeof line,
                       "%s\n  \"%s\": {\"ok\": %s, \"triangles\": %u, \"vertices\": %zu, \"rigUs\": %.1f, \"estimateUs\": %.2f, \"movesUs\": %.2f, "
                       "\"skinUs\": %.1f, \"drawArmsUs\": %.1f, \"drawBodyUs\": %.1f, \"drawMirrorUs\": %.1f, \"frameArmsMirrorUs\": %.1f, "
-                      "\"worstFrameUs\": %.1f, \"armsVertices\": %zu, \"bodyVertices\": %zu, \"mirrorVertices\": %zu}",
+                      "\"worstFrameUs\": %.1f, \"armsVertices\": %zu, \"bodyVertices\": %zu, \"mirrorVertices\": %zu, \"capeTriangles\": %u}",
                       k ? "," : "", mm::suitFolders[k], ok ? "true" : "false", m ? m->triangles() : 0u, rig.rest.size(), rigUs, tEst / F,
                       tMove / F, tSkin / F, tArms / F, tBody / F, tMirror / F, (tEst + tMove + tSkin + tArms + tMirror) / F, worst, vArms,
-                      vBody, vMirror);
+                      vBody, vMirror, rig.capeTriangles);
         js += line;
     }
     js += "\n }\n}\n";

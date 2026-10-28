@@ -744,6 +744,9 @@ std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
 // Test build 10 ONE BODY: when the render thread last drew the worn suit's SUIT BODY part (GetTickCount64; 0 never):
 // the game's own body and the fallback gloves are off while it is fresh (suit_wear::shownNow).
 std::atomic<uint64_t> suitShownAtMs{0};
+// Test build 12 CAPE: BATMAN's cape glide on (the game thread, from the bridge's cape_glide::Data): the render
+// thread fans the worn suit's cape out into wings while it is (suit_wear::cape).
+std::atomic<bool> capeGlidingNow{false};
 std::atomic<bool> suitsRigged{false}; // Test build 10: suitRigs made (the game thread reads them after)
 bool suitShownNow() { return suit_wear::shownNow(GetTickCount64(), suitShownAtMs.load(std::memory_order_relaxed)); }
 // Version 0.0.72 REAL MODELS: a model texture (PNG, JPEG, anything Windows reads) to RGBA8 with WIC, its
@@ -5097,6 +5100,7 @@ DWORD WINAPI run(void*) {
                                 capeGlidesSeen = capeNow.glides;
                                 capeArrivalsSeen = capeNow.arrivals;
                             }
+                            capeGlidingNow.store(capeNow.gliding != 0 && heroNow() == hero_modes::batman, std::memory_order_relaxed);
                         }
                         if (!sampleClimb || sampleClimb(&climbState) || climbState.magic != 0x53434c44 ||
                             climbState.version != 1 || climbState.bytes != sizeof(climbState))
@@ -10278,6 +10282,17 @@ DWORD WINAPI run(void*) {
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
                                     suitWorn = (mask || (mirrorOn.load() && !mirrorReuse)) && suit_wear::estimate(*suitRig, t, live) &&
                                                suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);
+                                    // Test build 12 CAPE: the cape hangs from the torso, and fans out while gliding (eased:
+                                    // about a fifth of a second in, a third out)
+                                    static float capeSpread = 0;
+                                    {
+                                        const bool gl = capeGlidingNow.load(std::memory_order_relaxed);
+                                        capeSpread += ((gl ? 1.f : 0.f) - capeSpread) * (gl ? .12f : .07f);
+                                        if (!std::isfinite(capeSpread))
+                                            capeSpread = 0;
+                                    }
+                                    if (suitWorn && suitRig->hasCape)
+                                        suit_wear::cape(*suitRig, mv, live, capeSpread, suitSkinned);
                                     // Test build 10 ONE BODY: drawn, it stands in for the game's body (suitShownAtMs).
                                     if (suitWorn && mask &&
                                         suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask))

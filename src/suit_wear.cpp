@@ -248,6 +248,7 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name) {
         out.corner[c] = found;
     }
     restHands(out, name);
+    findCape(mesh, out);
     out.triangleBone.resize(n);
     for (uint32_t t = 0; t < n; ++t) {
         uint32_t sum[bones]{};
@@ -422,6 +423,158 @@ void curlFinger(const BoneMove& b, Vec3& d, Vec3& n) {
     n = b.x0 * nx + b.y0 * (ny * cs + nz * sn) + b.z0 * (-ny * sn + nz * cs);
 }
 } // namespace
+
+// Test build 12 CAPE.
+void findCape(const mesh_model::Mesh& mesh, Rig& rig) {
+    rig.hasCape = false, rig.capeTriangles = 0;
+    rig.capeHang.clear(), rig.capeAt.clear();
+    const uint32_t n = mesh.triangles();
+    const Skeleton& k = rig.skeleton;
+    if (!n || rig.corner.size() != size_t{n} * 3 || !(rig.height > .3f))
+        return;
+    const float f = rig.height / 1.8f;
+    const float mid = k.at[pelvis].z, top = std::max(k.at[shoulderL].y, k.at[shoulderR].y);
+    // the triangles through each place (welded by position only: a seam's sides are one cloth)
+    std::unordered_map<uint64_t, uint32_t> placeOf;
+    placeOf.reserve(rig.rest.size() * 2);
+    std::vector<uint32_t> place(rig.rest.size());
+    for (size_t v = 0; v < rig.rest.size(); ++v) {
+        const Vec3 p = rig.rest[v];
+        const uint64_t h = bits(p.x) * 0x9E3779B97F4A7C15ull ^ bits(p.y) * 0xC2B2AE3D27D4EB4Full ^ bits(p.z) * 0x165667B19E3779F9ull;
+        place[v] = placeOf.emplace(h, static_cast<uint32_t>(placeOf.size())).first->second;
+    }
+    std::vector<std::vector<uint32_t>> through(placeOf.size());
+    std::vector<Vec3> centre(n);
+    for (uint32_t t = 0; t < n; ++t) {
+        Vec3 c{};
+        for (uint32_t q = 0; q < 3; ++q) {
+            c += rig.rest[rig.corner[t * 3 + q]];
+            through[place[rig.corner[t * 3 + q]]].push_back(t);
+        }
+        centre[t] = c * (1.f / 3.f);
+    }
+    std::vector<uint8_t> in(n);
+    std::vector<uint32_t> todo;
+    for (uint32_t t = 0; t < n; ++t)
+        if (mid - centre[t].z > capeSeedBehind * f && centre[t].y < top)
+            in[t] = 1, todo.push_back(t);
+    while (!todo.empty()) {
+        const uint32_t t = todo.back();
+        todo.pop_back();
+        for (uint32_t q = 0; q < 3; ++q)
+            for (uint32_t u : through[place[rig.corner[t * 3 + q]]])
+                if (!in[u] && mid - centre[u].z > capeKeepBehind * f && centre[u].y < top + .05f * f)
+                    in[u] = 1, todo.push_back(u);
+    }
+    float area = 0, low = rig.height;
+    uint32_t count = 0;
+    std::vector<uint8_t> vin(rig.rest.size());
+    for (uint32_t t = 0; t < n; ++t)
+        if (in[t]) {
+            const Vec3 a = rig.rest[rig.corner[t * 3]], b = rig.rest[rig.corner[t * 3 + 1]], c = rig.rest[rig.corner[t * 3 + 2]];
+            area += length(cross(b - a, c - a)) * .5f;
+            ++count;
+            for (uint32_t q = 0; q < 3; ++q) {
+                vin[rig.corner[t * 3 + q]] = 1;
+                low = std::min(low, rig.rest[rig.corner[t * 3 + q]].y);
+            }
+        }
+    if (!(area > capeMinArea * f * f) || !(low < capeReachDown * rig.height) || !(top - low > .3f * f))
+        return;
+    // each height band's width and mean depth (16 bands down the cape)
+    constexpr int bands = 16;
+    float half[bands]{}, depth[bands]{}, weight[bands]{};
+    const auto down = [&](float y) { return std::clamp((top - y) / (top - low), 0.f, 1.f); };
+    const auto band = [&](float t) { return std::min(bands - 1, static_cast<int>(t * bands)); };
+    for (size_t v = 0; v < rig.rest.size(); ++v)
+        if (vin[v]) {
+            const int b = band(down(rig.rest[v].y));
+            half[b] = std::max(half[b], std::abs(rig.rest[v].x - k.at[pelvis].x));
+            depth[b] += rig.rest[v].z, weight[b] += 1;
+        }
+    for (int b = 0; b < bands; ++b) {
+        depth[b] = weight[b] > 0 ? depth[b] / weight[b] : mid - capeKeepBehind * f;
+        if (b && half[b] < half[b - 1] * .5f)
+            half[b] = half[b - 1];
+        half[b] = std::max(half[b], .05f * f);
+    }
+    rig.capeHang.assign(rig.rest.size(), -1.f); // -1: not the cape
+    rig.capeAt.assign(rig.rest.size(), Vec3{});
+    for (size_t v = 0; v < rig.rest.size(); ++v)
+        if (vin[v]) {
+            const Vec3 p = rig.rest[v];
+            const float t = down(p.y);
+            const int b = band(t);
+            const float e = std::clamp((t - .02f) / .13f, 0.f, 1.f);
+            rig.capeHang[v] = e * e * (3 - 2 * e);
+            rig.capeAt[v] = {std::clamp((p.x - k.at[pelvis].x) / half[b], -1.f, 1.f), t, p.z - depth[b]};
+        }
+    rig.hasCape = true;
+    rig.capeTriangles = count;
+}
+
+Vec3 capeWing(const Skeleton& k, float a, float t, int side, float scale) {
+    const uint32_t sh = side ? shoulderR : shoulderL, el = side ? elbowR : elbowL, wr = side ? wristR : wristL,
+                   kn = side ? kneeR : kneeL;
+    a = std::clamp(a, 0.f, 1.f), t = std::clamp(t, 0.f, 1.f);
+    const auto mix = [](Vec3 p, Vec3 q, float u) { return p + (q - p) * u; };
+    Vec3 top;
+    if (a < .25f)
+        top = mix(k.at[neck], k.at[sh], a / .25f);
+    else if (a < .6f)
+        top = mix(k.at[sh], k.at[el], (a - .25f) / .35f);
+    else
+        top = mix(k.at[el], k.at[wr], (a - .6f) / .4f);
+    Vec3 out = k.at[sh] - k.at[side ? shoulderL : shoulderR];
+    out = length(out) > 1e-4f ? normalized(out) : Vec3{};
+    const Vec3 hem = mix((k.at[kneeL] + k.at[kneeR]) * .5f, k.at[kn] + out * (.12f * scale), a);
+    const Vec3 back = facing(k) * -1.f;
+    const float billow = .10f * scale * std::sin(3.14159265f * t) * std::sin(3.14159265f * std::min(1.f, a * 1.2f));
+    return mix(top, hem, t) + back * (.06f * scale + billow);
+}
+
+bool cape(const Rig& rig, const BoneMove m[bones], const Skeleton& live, float spread, Skinned& s) {
+    if (!rig.ok || !rig.hasCape || s.p.size() != rig.rest.size() || rig.capeHang.size() != rig.rest.size())
+        return false;
+    spread = std::isfinite(spread) ? std::clamp(spread, 0.f, 1.f) : 0.f;
+    const BoneMove& c = m[boneChest];
+    const Skeleton& r = rig.skeleton;
+    const float scale = std::clamp(length(live.at[neck] - live.at[pelvis]) / std::max(1e-4f, length(r.at[neck] - r.at[pelvis])), .5f, 2.f) *
+                        rig.height / 1.8f;
+    const Vec3 back = facing(live) * -1.f;
+    Vec3 wingNormal[2];
+    for (int side = 0; side < 2; ++side) {
+        const Vec3 o = capeWing(live, 0, .3f, side, scale), across = capeWing(live, 1, .3f, side, scale) - o,
+                   dn = capeWing(live, .5f, .9f, side, scale) - capeWing(live, .5f, .1f, side, scale);
+        const Vec3 nn = cross(across, dn);
+        wingNormal[side] = length(nn) > 1e-6f ? normalized(nn) : back;
+        if (dot(wingNormal[side], back) < 0)
+            wingNormal[side] = wingNormal[side] * -1.f;
+    }
+    for (size_t v = 0; v < rig.rest.size(); ++v) {
+        const float hang = rig.capeHang[v];
+        if (!(hang >= 0))
+            continue;
+        const Vec3 d = rig.rest[v] - c.a0, rn = rig.restNormal[v];
+        const Vec3 hung = c.a1 + Vec3{c.m[0] * d.x + c.m[1] * d.y + c.m[2] * d.z, c.m[3] * d.x + c.m[4] * d.y + c.m[5] * d.z,
+                                      c.m[6] * d.x + c.m[7] * d.y + c.m[8] * d.z};
+        const Vec3 hn{c.n[0] * rn.x + c.n[1] * rn.y + c.n[2] * rn.z, c.n[3] * rn.x + c.n[4] * rn.y + c.n[5] * rn.z,
+                      c.n[6] * rn.x + c.n[7] * rn.y + c.n[8] * rn.z};
+        Vec3 p = s.p[v] + (hung - s.p[v]) * hang, q = s.n[v] + (hn - s.n[v]) * hang;
+        if (spread > 0) {
+            const Vec3 at = rig.capeAt[v];
+            const int side = at.x < 0; // +x at rest: the suit's left
+            const Vec3 w = capeWing(live, std::abs(at.x), at.y, side, scale) + wingNormal[side] * (-at.z * .6f);
+            const float e = std::clamp(at.y / .06f, 0.f, 1.f); // the top edge too: it runs out along the arms
+            const float k = spread * e * e * (3 - 2 * e);
+            p = p + (w - p) * k;
+            q = q + (wingNormal[side] - q) * k;
+        }
+        if (ok(p) && ok(q))
+            s.p[v] = p, s.n[v] = q;
+    }
+    return true;
+}
 
 bool skin(const Rig& rig, const BoneMove m[bones], Skinned& out) {
     if (!rig.ok)

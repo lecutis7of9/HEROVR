@@ -19,6 +19,7 @@ inline constexpr float palmHalf = .036f;   // the palm's half width (drawn)
 inline constexpr float fingerLength = .075f;
 inline constexpr float fingerHalf = .0085f;
 inline constexpr Vec3 suitRed{.62f, .03f, .04f};
+inline constexpr Vec3 batDark{.10f, .10f, .12f}; // Test build 10: BATMAN's gloves (no suit model shown)
 // Whether the fallback gloves show: GAME BODY wanted for this hero, a headset picture (not the
 // flat screen), and the hero's body not drawn right now (native_body::drawn).
 constexpr bool wanted(bool gameBodyOn, bool heroShowsBody, bool flatScreen, bool bodyDrawn) {
@@ -34,7 +35,8 @@ inline bool usable(const Pose& grip) {
 // 0 open .. 1 closed (curls the fingers toward the palm), seen from `viewer`; `soft` the edge
 // fade (about a pixel's width at that distance). Returns how many vertices it added (0: none
 // for an unusable pose or input).
-inline size_t append(std::vector<Vertex>& out, const Pose& grip, bool right, float fist, Vec3 viewer, float soft) {
+inline size_t append(std::vector<Vertex>& out, const Pose& grip, bool right, float fist, Vec3 viewer, float soft,
+                     Vec3 colour = suitRed) {
     if (!usable(grip) || !std::isfinite(soft) || !std::isfinite(viewer.x) || !std::isfinite(viewer.y) ||
         !std::isfinite(viewer.z))
         return 0;
@@ -47,19 +49,19 @@ inline size_t append(std::vector<Vertex>& out, const Pose& grip, bool right, flo
     const Vec3 wrist = grip.position - forward * palmBack;
     const Vec3 knuckles = grip.position + forward * palmFront;
     const Vec3 view = normalized(grip.position - viewer);
-    soft::softBar(out, wrist, knuckles, view, palmHalf, suitRed, .95f, soft);
+    soft::softBar(out, wrist, knuckles, view, palmHalf, colour, .95f, soft);
     // Four fingers from the knuckle line; a fist folds them down past the palm.
     const float bend = fist * 1.9f;
     const Vec3 along = forward * std::cos(bend) - back * std::sin(bend);
     for (int f = 0; f < 4; ++f) {
         const float across = (f - 1.5f) * (palmHalf * 2 / 4);
         const Vec3 base = knuckles - thumbSide * across;
-        soft::softBar(out, base, base + along * fingerLength, view, fingerHalf, suitRed * .85f, .95f, soft);
+        soft::softBar(out, base, base + along * fingerLength, view, fingerHalf, colour * .85f, .95f, soft);
     }
     // The thumb from the palm's thumb side, closing in over the fingers with the fist.
     const Vec3 thumbBase = grip.position + thumbSide * palmHalf - forward * .015f;
     const Vec3 thumbWay = normalized(forward * (.6f + .3f * fist) + thumbSide * (.5f - .6f * fist) - back * .3f * fist);
-    soft::softBar(out, thumbBase, thumbBase + thumbWay * .055f, view, fingerHalf * 1.1f, suitRed * .8f, .95f, soft);
+    soft::softBar(out, thumbBase, thumbBase + thumbWay * .055f, view, fingerHalf * 1.1f, colour * .8f, .95f, soft);
     return out.size() - before;
 }
 } // namespace spidy::glove_overlay

@@ -33,6 +33,7 @@
 #include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/suit_wear.hpp"
+#include "spidy/glove_overlay.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/roster_page.hpp"
 #include <filesystem>
@@ -27859,6 +27860,58 @@ int main() {
         // BATMAN: the game's own body is not shown (there is no BATMAN body), every other hero's is.
         check(!spidy::hero_modes::gameBodyShown(spidy::hero_modes::batman) && spidy::hero_modes::gameBodyShown(spidy::hero_modes::spiderMan) &&
                   spidy::hero_modes::gameBodyShown(spidy::hero_modes::punisher), "gameBodyShown");
+    });
+    test("Test build 10: ONE BODY - a worn suit replaces the game's body and gloves; BATMAN always has one", [] {
+        using namespace spidy;
+        namespace sw = suit_wear;
+        // A suit drawn within 250 ms is shown; older, never drawn, or a clock gone back is not.
+        check(sw::shownNow(1000, 1000) && sw::shownNow(1249, 1000) && !sw::shownNow(1250, 1000) && !sw::shownNow(5, 0) &&
+                  !sw::shownNow(900, 1000), "shownNow");
+        // Build 9's two bodies: BODY on and a suit shown drew both. Now the suit replaces the game's body, every hero.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            const bool has = hero_modes::gameBodyShown(h);
+            check(!sw::gameBodyDrawn(true, has, true), "the game's body drawn under a worn suit, hero " + std::to_string(h));
+            check(sw::gameBodyDrawn(true, has, false) == has, "the game's body without a suit, hero " + std::to_string(h));
+            check(!sw::gameBodyDrawn(false, has, false), "BODY off drew the game's body");
+            check(!sw::glovesShown(true, has, false, false, true), "the gloves drawn over a worn suit");
+            check(!sw::glovesShown(true, has, true, false, false), "the gloves on the flat screen");
+        }
+        // The gloves: GAME BODY's fallback as before; BATMAN (no game body) without a suit shown always has them.
+        check(sw::glovesShown(true, true, false, false, false) && !sw::glovesShown(true, true, false, true, false) &&
+                  !sw::glovesShown(false, true, false, false, false), "GAME BODY's fallback gloves changed");
+        check(sw::glovesShown(false, false, false, false, false) && sw::glovesShown(true, false, false, true, false),
+              "BATMAN without his suit has no hands");
+        // SUIT BODY: OFF is OFF for a hero with a game body; BATMAN keeps his suit's arms.
+        check(sw::partOf(0) == sw::partArms && sw::partOf(1) == sw::partBody && sw::partOf(2) == sw::partOff, "partOf");
+        check(sw::firstPersonPart(sw::partOff, true) == sw::partOff && sw::firstPersonPart(sw::partOff, false) == sw::partArms &&
+                  sw::firstPersonPart(sw::partBody, false) == sw::partBody && sw::partBones(sw::partArms) != 0,
+              "firstPersonPart");
+        // BATMAN BODY: his DEFAULT ("THE GAME'S OWN", no model) wears his first unlocked suit with a model.
+        hero072::SuitCatalog c;
+        const auto all = [](const char*) { return true; };
+        const auto none = [](const char*) { return false; };
+        const hero072::Suit* w = c.worn(hero_modes::batman, 0, false, all);
+        check(w && std::string(w->folder) == "Suit_batman_2", std::string("BATMAN's DEFAULT wears ") + (w ? w->folder : "nothing"));
+        const auto noTwo = [](const char* f) { return std::string(f) != "Suit_batman_2"; };
+        w = c.worn(hero_modes::batman, 0, false, noTwo);
+        check(w && std::string(w->folder) == "Suit_batman_3", "a missing model is not skipped");
+        check(!c.worn(hero_modes::batman, 0, false, none), "a missing model was worn");
+        w = c.worn(hero_modes::batman, 0, true, all);
+        check(w && std::string(w->folder) == "Suit_batman_1", "UNLOCK ALL SUITS: BATMAN's first suit");
+        w = c.worn(hero_modes::batman, 3, false, all);
+        check(w && std::string(w->folder) == "Suit_batman_3", "BATMAN's pick not worn");
+        // Every other hero's DEFAULT stays the game's own (nothing worn); their picks are worn.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+            if (h != hero_modes::batman && h != hero_modes::captainAmerica) {
+                check(!c.worn(h, 0, true, all), "a DEFAULT wore a model, hero " + std::to_string(h));
+                if (c.suits(h) > 1)
+                    check(c.worn(h, 1, true, all) == c.suit(h, 1), "a pick not worn, hero " + std::to_string(h));
+            }
+        check(!c.worn(hero_modes::heroes, 0, true, all), "a hero out of range");
+        // The gloves BATMAN falls back to are his dark ones, not SPIDER-MAN's red.
+        std::vector<Vertex> g;
+        check(glove_overlay::append(g, Pose{{.2f, 1.2f, -.3f}, {}}, true, 0, {0, 1.6f, 0}, .002f, glove_overlay::batDark) > 0 &&
+                  g[0].color.x < .2f, "BATMAN's gloves");
     });
     test("Version 0.0.72: 0.0.71 VIDEOS FIX ROUND - SUPERMAN's two thin beams locked to the head, sparks, scorch, a looping sound", [] {
         using namespace spidy::hero007;

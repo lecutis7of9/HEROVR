@@ -736,6 +736,11 @@ std::string modelMissingNote(uint32_t mask) {
 std::atomic<uint32_t> wornSuitSlot{0};
 suit_wear::Rig suitRigs[mesh_model::suitSlots];
 std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
+// Test build 10 ONE BODY: when the render thread last drew the worn suit's SUIT BODY part (GetTickCount64; 0 never):
+// the game's own body and the fallback gloves are off while it is fresh (suit_wear::shownNow).
+std::atomic<uint64_t> suitShownAtMs{0};
+std::atomic<bool> suitsRigged{false}; // Test build 10: suitRigs made (the game thread reads them after)
+bool suitShownNow() { return suit_wear::shownNow(GetTickCount64(), suitShownAtMs.load(std::memory_order_relaxed)); }
 // Version 0.0.72 REAL MODELS: a model texture (PNG, JPEG, anything Windows reads) to RGBA8 with WIC, its
 // sRGB values kept; false (that image left untextured) on any failure. COM is set up by the caller.
 bool wicDecode(const uint8_t* data, size_t size, mesh_model::Picture& out) {
@@ -1597,6 +1602,7 @@ DWORD WINAPI run(void*) {
             {
                 uint32_t rigged = 0;
                 std::string unrigged;
+                suitsRigged = false;
                 for (uint32_t k = 0; k < mesh_model::suitSlots; ++k) {
                     suitRigs[k] = {};
                     const mesh_model::Mesh* m = models.model(mesh_model::slotSuitFirst + k);
@@ -1610,6 +1616,7 @@ DWORD WINAPI run(void*) {
                     if (m && !ok)
                         unrigged += (unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
                 }
+                suitsRigged = true;
                 consoleLine("SUITS: " + std::to_string(rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
                             (unrigged.empty() ? "" : " (NOT WEARABLE: " + unrigged + ")"));
             }
@@ -6938,8 +6945,15 @@ DWORD WINAPI run(void*) {
                                         hero072Play.step(in72, out72);
                                         { // Build 9 SUITS: the picked suit's model worn (the render thread draws it)
                                             uint32_t ws = 0;
+                                            // Test build 10 BATMAN BODY: the model worn (SuitCatalog::worn) - BATMAN's DEFAULT
+                                            // wears his first unlocked loaded suit (the game has no BATMAN body).
                                             if (heroWas < hero_modes::heroes && heroWas != hero_modes::spiderMan)
-                                                if (const hero072::Suit* x = hero072Play.suits.suit(heroWas, out72.suit))
+                                                if (const hero072::Suit* x = hero072Play.suits.worn(
+                                                        heroWas, out72.suit, hero072::testSuits(in72.o.testUnlocks), [](const char* f) {
+                                                            const uint32_t k = mesh_model::suitSlot(f);
+                                                            return k && suitsRigged.load() && mesh_model::library().model(k) &&
+                                                                   suitRigs[k - mesh_model::slotSuitFirst].ok;
+                                                        }))
                                                     ws = mesh_model::suitSlot(x->folder);
                                             if (wornSuitSlot.exchange(ws) != ws && ws) {
                                                 char line[160];
@@ -8571,8 +8585,10 @@ DWORD WINAPI run(void*) {
                         const bool mirrorShows = c38(combat38::mirrorView) &&
                                                  mirrorStats.test.phase == mirror_view::running &&
                                                  mirrorStats.gpuCopies > 0 && !mirrorStats.gpuFault;
-                        pose.flags = (flatScreen || !(values.body || strictBody) || (strictBody && !strictVerified) ||
-                                              !hero_modes::gameBodyShown(heroNow())
+                        // Test build 10 ONE BODY: a worn suit shown in first person replaces the game's body (its arms too).
+                        pose.flags = (flatScreen || (strictBody && !strictVerified) ||
+                                              !suit_wear::gameBodyDrawn(values.body || strictBody, hero_modes::gameBodyShown(heroNow()),
+                                                                        suitShownNow())
                                           ? 0u
                                           : native_body::bodyOn) | // 0.0.72 BATMAN BODY, GAME BODY
                                      (mirrorShows ? 0u : native_body::hideHead) |
@@ -8718,8 +8734,9 @@ DWORD WINAPI run(void*) {
                     saved.slow = moments.view(slowMotion.view());
                     // Version 0.0.72 GAME BODY fallback (spec point 3): while the hero is not drawn as the
                     // body (the game's switch hides him), a glove on each tracked controller (glove_overlay.hpp).
-                    if (glove_overlay::wanted(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen,
-                                              native_body::drawn()))
+                    // Test build 10: never over a shown suit; always for BATMAN without one (suit_wear::glovesShown).
+                    if (suit_wear::glovesShown(strictBody, hero_modes::gameBodyShown(heroNow()), flatScreen, native_body::drawn(),
+                                               suitShownNow()))
                         for (unsigned i = 0; i < 2; ++i) {
                             saved.gloveOn[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) ? 1.f : 0.f;
                             saved.gloveFist[i] = gloveFist[i];
@@ -9728,7 +9745,8 @@ DWORD WINAPI run(void*) {
                                 Pose grip = rendered.grips[i];
                                 grip.position += travel;
                                 glove_overlay::append(vertices, grip, i == 1, saved->gloveFist[i], viewer,
-                                                      pixelAngle * length(grip.position - viewer));
+                                                      pixelAngle * length(grip.position - viewer),
+                                                      heroNow() == hero_modes::batman ? glove_overlay::batDark : glove_overlay::suitRed);
                             }
                         for (unsigned i = 0; i < 2; ++i) // Version 0.0.6 DAREDEVIL's batons
                             if (saved->batonOn[i] > 0) {
@@ -10188,14 +10206,16 @@ DWORD WINAPI run(void*) {
                                     t.standingEye = suitStanding;
                                     suit_wear::Skeleton live;
                                     suit_wear::BoneMove mv[suit_wear::bones];
-                                    const uint32_t body = c38(combat38::suitBody);
-                                    const uint32_t mask =
-                                        suit_wear::partBones(body == 0 ? suit_wear::partArms : body == 1 ? suit_wear::partBody : suit_wear::partOff);
+                                    // Test build 10: BATMAN (no game body) never OFF - his suit's arms at least.
+                                    const uint32_t mask = suit_wear::partBones(suit_wear::firstPersonPart(
+                                        suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow())));
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
                                     suitWorn = (mask || mirrorOn.load()) && suit_wear::estimate(*suitRig, t, live) &&
                                                suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);
-                                    if (suitWorn && mask)
-                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask);
+                                    // Test build 10 ONE BODY: drawn, it stands in for the game's body (suitShownAtMs).
+                                    if (suitWorn && mask &&
+                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask))
+                                        suitShownAtMs.store(GetTickCount64(), std::memory_order_relaxed);
                                 }
                             } catch (...) {
                                 suitWorn = false;

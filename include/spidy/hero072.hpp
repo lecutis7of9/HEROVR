@@ -1815,6 +1815,24 @@ class SuitCatalog {
         chosen[hero] = i;
         return true;
     }
+    // Test build 10 BATMAN BODY: the suit whose MODEL hero wears for suit i (inUse's), or nullptr (the game's own
+    // look). Suit i's own model when it has one (a folder, not COMING SOON, `ready`: loaded); a hero the game has
+    // no body for (hero_modes::gameBodyShown false: BATMAN, whose DEFAULT is "THE GAME'S OWN" - a SPIDER-MAN body,
+    // hidden) wears his first unlocked suit with a ready model instead, so he is never left with no body at all.
+    template <class Ready>
+    const Suit* worn(uint32_t hero, uint32_t i, bool all, Ready ready) const {
+        if (hero >= hero_modes::heroes)
+            return nullptr;
+        const auto usable = [&](const Suit* x) { return x && x->folder[0] && !x->soon && ready(x->folder); };
+        if (const Suit* x = suit(hero, i); usable(x))
+            return x;
+        if (hero_modes::gameBodyShown(hero))
+            return nullptr;
+        for (uint32_t k = 0; k < suits(hero); ++k)
+            if (const Suit* x = suit(hero, k); isUnlocked(hero, k, all) && usable(x))
+                return x;
+        return nullptr;
+    }
     // The suit in use: the chosen one if unlocked, else the default.
     uint32_t current(uint32_t hero, bool all) const {
         if (hero >= hero_modes::heroes)

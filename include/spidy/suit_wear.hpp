@@ -42,6 +42,34 @@ inline constexpr uint32_t bodyBones = 0xffffu & ~((1u << boneHead) | (1u << bone
 inline constexpr uint32_t allBones = 0xffffu;
 constexpr uint32_t partBones(uint32_t part) { return part == partArms ? armBones : part == partBody ? bodyBones : 0u; }
 
+// SUIT BODY's setting (combat38::suitBody: 0 ARMS, the default, 1 FULL BODY, 2 OFF) as a Part.
+constexpr uint32_t partOf(uint32_t setting) { return setting == 0 ? partArms : setting == 1 ? partBody : partOff; }
+
+// Test build 10 ONE BODY (build 9 test: "all you see is the arms overlayed whatever your suit is, so its like two
+// bodies in one"): a suit drawn in first person REPLACES the game's own hero body (BODY / GAME BODY) and the
+// fallback gloves - never both. The render thread stamps the time it last drew the suit's SUIT BODY part; the
+// body's command (the game thread) reads it: shown within shownFreshMs, the game's body is off (its arms with it).
+// A suit that stops drawing (taken off, SUIT BODY OFF, a failed draw) gives the body back within shownFreshMs.
+inline constexpr uint64_t shownFreshMs = 250;
+constexpr bool shownNow(uint64_t nowMs, uint64_t shownAtMs) {
+    return shownAtMs != 0 && nowMs >= shownAtMs && nowMs - shownAtMs < shownFreshMs;
+}
+// The game's own hero body is posed and drawn: BODY (or GAME BODY) wanted, a hero the game has a body for
+// (hero_modes::gameBodyShown: not BATMAN), and no suit shown in its place.
+constexpr bool gameBodyDrawn(bool bodyWanted, bool heroHasGameBody, bool suitShown) {
+    return bodyWanted && heroHasGameBody && !suitShown;
+}
+// The fallback gloves (glove_overlay): never over a suit shown, never on the flat screen; GAME BODY's (the hero's
+// body wanted but not drawn), and - Test build 10 BATMAN BODY - always for a hero with no game body (BATMAN) whose
+// suit is not shown (its model missing or not tracked), so the player never loses his hands.
+constexpr bool glovesShown(bool gameBodyOn, bool heroHasGameBody, bool flatScreen, bool bodyDrawn, bool suitShown) {
+    return !flatScreen && !suitShown && (heroHasGameBody ? gameBodyOn && !bodyDrawn : true);
+}
+// SUIT BODY in first person: a hero with no game body (BATMAN) never has OFF - his suit's arms at least.
+constexpr uint32_t firstPersonPart(uint32_t part, bool heroHasGameBody) {
+    return !heroHasGameBody && part == partOff ? partArms : part;
+}
+
 // A skeleton: its ends, the head's facing and up, each hand's back (unit; left, right), and the body's up.
 struct Skeleton {
     Vec3 at[ends]{};

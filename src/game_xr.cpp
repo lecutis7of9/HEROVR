@@ -11342,7 +11342,6 @@ DWORD WINAPI run(void*) {
                             try {
                                 auto dash = saved->vanScreen;
                                 dash.centre += travel;
-                                dash.foot += travel;
                                 van_screen::append(translucent, dash, viewer);
                             } catch (...) {
                                 translucent.resize(from);

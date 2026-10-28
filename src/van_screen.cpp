@@ -346,16 +346,17 @@ void drawLocker(Painter& p, const View&) {
 Mount mountLocal() {
     Mount m;
     m.centre = mountAt;
-    m.normal = normalized(van072::seatEye - mountAt);
-    m.right = normalized(cross(Vec3{0, 1, 0}, m.normal));
-    m.up = cross(m.normal, m.right);
+    // Flush in the dash: square to the van, whatever the seat (no turn toward the eye).
+    m.right = {1, 0, 0};
+    m.up = {0, 1, 0};
+    m.normal = {0, 0, 1};
     return m;
 }
 
 Vec3 onFace(Vec3 local) {
     const Mount m = mountLocal();
     const Vec3 d = local - m.centre;
-    return {dot(d, m.right), dot(d, m.up), dot(d, m.normal)};
+    return Vec3{dot(d, m.right), dot(d, m.up), dot(d, m.normal)} * (1 / faceScale);
 }
 
 void Screen::reset() {
@@ -445,7 +446,7 @@ View view(const van072::Frame& frame, const Screen& s, float speed, float topSpe
     v.centre = frame.world(m.centre);
     v.right = van072::worldDir(frame, m.right);
     v.up = van072::worldDir(frame, m.up);
-    v.foot = frame.world(bracketFoot);
+    v.scale = faceScale;
     v.page = s.page();
     v.file = s.file();
     v.speed = ok(speed) ? speed : 0.f;
@@ -462,7 +463,7 @@ View view(const van072::Frame& frame, const Screen& s, float speed, float topSpe
 }
 
 bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
-    if (!v.on || !van072::fine(v.centre) || !van072::fine(v.right) || !van072::fine(v.up) || !van072::fine(v.foot) ||
+    if (!v.on || !van072::fine(v.centre) || !van072::fine(v.right) || !van072::fine(v.up) || !ok(v.scale) || v.scale < .5f || v.scale > 2.f ||
         !ok(v.speed) || !ok(v.heading) || !ok(v.rpm) || !ok(v.gridX) || !ok(v.gridZ) || !ok(v.flash) || v.page >= pages)
         return false;
     const Vec3 r = normalized(v.right), u = normalized(v.up), n = cross(r, u);
@@ -474,16 +475,11 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
         return false;
     const size_t from = out.size();
     try {
-        Painter p{out, v.centre, r, u, n, v.driving ? 1.f : .7f};
+        Painter p{out, v.centre, r * v.scale, u * v.scale, n * v.scale, v.driving ? 1.f : .7f};
         const float b = .010f; // the bezel
-        // the bracket: a post from the dash top to the screen's back, and its foot
-        {
-            const Vec3 top = p.P(0, -H * .4f, -.012f), foot = v.foot;
-            const Vec3 side = r * .009f;
-            p.tri(top - side, top + side, foot + side, gunmetal * 1.4f, 1);
-            p.tri(top - side, foot + side, foot - side, gunmetal * 1.4f, 1);
-        }
-        p.quad(-W - b, -H - b, W + b, H + b, -.008f, gunmetal, 1);
+        // built into the dash: a flat trim plate flush on the fascia round the bezel (no bracket, no tilt)
+        p.quad(-W - b * 1.8f, -H - b * 1.8f, W + b * 1.8f, H + b * 1.8f, -bezelDepth, gunmetal * .7f, 1);
+        p.quad(-W - b, -H - b, W + b, H + b, -bezelDepth + .0005f, gunmetal, 1);
         p.quad(-W - b * .6f, -H - b * .6f, W + b * .6f, H + b * .6f, -.006f, gunmetal * 1.6f, 1);
         p.frame(-W - b, -H - b, W + b, H + b, .0016f, -.0058f, olive * 1.4f, 1);
         for (int sx = -1; sx <= 1; sx += 2) // the bolts

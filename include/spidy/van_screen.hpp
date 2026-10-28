@@ -10,8 +10,8 @@
 //   CASES   seven short case files (original text): Jigsaw, Kingpin, Bullseye, Barracuda, the
 //           Russian, Ma Gnucci, Microchip.
 //   LOCKER  the weapons locker (flavour text).
-// It stands on a bracket over the dash, right of the wheel, turned to the driver's eye (MEASURED on
-// the built cab; in game CANDIDATE). Paged by X while driving (X is the van's and does nothing then)
+// It is built into the dash face, centre dash right of the wheel, flush and square to the van (MEASURED
+// on the built cab; in game CANDIDATE). Paged by X while driving (X is the van's and does nothing then)
 // or by a poke with an open hand (grip under pokeGripMost, not on the wheel): the tab row picks a
 // page; on CASES the left third goes back a file, the rest on. It never takes the wheel's grip or the
 // triggers. Pure: no game reads, no addresses. Everything it draws is checked: anything non-finite
@@ -43,20 +43,28 @@ inline constexpr uint32_t files = 7;
 extern const CaseFile caseFiles[files];
 
 // The screen's size and place in the van's frame (van072: x right, y up, -z forward, the ground under
-// the axles' middle). MEASURED against the built cab (convert_thor_van_072.py: the dash top y 1.27 at
-// z -1.28..-1.60, the cluster hood to x -.18, the wheel's rim to x -.26); in game CANDIDATE.
+// the axles' middle). Built into the dash face (the user, 0.0.73 test 3: "flush with the dash ... facing
+// straight not an angle"): parallel to the fascia, square to the van (no tilt, no yaw, no pitch), its face
+// toward the cab's back (+z). MEASURED against the built cab's triangles (the Interior model as the game
+// places it): the dash's driver-side face is the plane z -1.28 (normal +z), flat from y .98 to 1.25, the
+// cluster hood's side x -.18..-.19 above y 1.23, a part's side at x .25 (y 1.08..1.13); the wheel's rim to
+// x -.26. In game: CANDIDATE (the game draws its own cab).
+// The art is laid out in `width` x `height` design units; on the dash each is faceScale metres (so the
+// built-in face is .364 x .221 m, the page art itself unchanged and flat).
 inline constexpr float width = .28f, height = .17f;
-inline constexpr Vec3 mountAt{-.02f, 1.31f, -1.13f};
-inline constexpr Vec3 bracketFoot{-.02f, 1.255f, -1.30f}; // on the dash top
+inline constexpr float faceScale = 1.3f;
+inline constexpr float dashFaceZ = -1.28f, dashFaceBottom = .98f, dashFaceTop = 1.25f;
+inline constexpr float bezelDepth = .008f; // design units behind the face: the bezel's back sits on the dash
+inline constexpr Vec3 mountAt{.04f, 1.115f, dashFaceZ + bezelDepth * faceScale + .002f};
 inline constexpr float tabHeight = .028f;
 inline constexpr float pokeDepth = .035f, pokeThrough = .05f, pokeSlack = .012f, pokeGripMost = .3f;
 
-// The screen's frame in the van's (unit right / up across the face, normal toward the driver's eye).
+// The screen's frame in the van's: unit right (+x) / up (+y) across the face, normal +z (the cab's back).
 struct Mount {
     Vec3 centre, right, up, normal;
 };
 Mount mountLocal();
-// Where a van-local point lies on the face: x right, y up (metres from the centre), z toward the eye.
+// Where a van-local point lies on the face, in design units (metres / faceScale): x right, y up, z out of it.
 Vec3 onFace(Vec3 local);
 
 // One frame's input, van-local hands (van072::Frame::local).
@@ -93,7 +101,8 @@ private:
 // What the renderer draws: world space (this frame's), every number checked by append.
 struct View {
     bool on{};
-    Vec3 centre{}, right{1, 0, 0}, up{0, 1, 0}, foot{};
+    Vec3 centre{}, right{1, 0, 0}, up{0, 1, 0};
+    float scale{faceScale}; // metres a design unit (.5 .. 2)
     uint32_t page{}, file{};
     float speed{};    // m/s, + forward
     float topSpeed{16.f};

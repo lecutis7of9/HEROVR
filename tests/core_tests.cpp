@@ -30332,7 +30332,7 @@ int main() {
         namespace vs = van_screen;
         using vs::Screen;
         const vs::Mount m = vs::mountLocal();
-        const auto at = [&](float x, float y, float z) { return m.centre + m.right * x + m.up * y + m.normal * z; };
+        const auto at = [&](float x, float y, float z) { return m.centre + (m.right * x + m.up * y + m.normal * z) * vs::faceScale; };
         const Vec3 away{-.45f, 1.0f, -.4f}; // a hand in his lap
         const auto in = [&](bool driving, bool x, Vec3 hand, float grip = 0, bool onWheel = false) {
             vs::In i;
@@ -30385,14 +30385,31 @@ int main() {
         vs::In bad = in(true, false, Vec3{std::nanf(""), 1, 1});
         bad.dt = std::nanf("");
         check(!p.step(bad) && std::isfinite(p.flash()), "a bad hand or clock: nothing");
-        // Where it hangs: clear of the wheel's rim, in the driver's reach and sight.
+        // Where it sits (the user: "flush with the dash ... facing straight not an angle"): built into the
+        // dash face, square to the van - no tilt, no yaw, no pitch - in the centre dash, clear of the wheel.
+        check(m.normal.x == 0 && m.normal.y == 0 && m.normal.z == 1 && m.right.x == 1 && m.right.y == 0 && m.right.z == 0 &&
+                  m.up.x == 0 && m.up.y == 1 && m.up.z == 0, "square to the van: no tilt, yaw or pitch");
+        const float S = vs::faceScale, halfW = vs::width / 2 * S, halfH = vs::height / 2 * S;
+        const float back = m.centre.z - vs::bezelDepth * S;
+        check(back > vs::dashFaceZ && back - vs::dashFaceZ < .004f, "flush: the bezel's back on the dash face");
+        check(m.centre.y - halfH > vs::dashFaceBottom && m.centre.y + halfH < vs::dashFaceTop, "inside the dash face's flat");
+        check(std::abs(m.centre.x) < .06f, "in the centre dash");
+        check(m.centre.x + halfW + .018f * S < .25f, "clear of the part right of it");
         const float rimRight = van072::wheelHub.x + van072::Tune{}.wheelRadius;
-        check((m.centre - m.right * (vs::width / 2)).x > rimRight + .05f &&
-                  (m.centre - m.right * (vs::width / 2) - m.up * (vs::height / 2)).x > rimRight + .05f, "its left edge clears the wheel's rim");
+        check(m.centre.x - halfW - .018f * S > rimRight + .05f, "its left edge (the trim) clears the wheel's rim");
+        // Seen past the wheel: the eye's line to every corner passes the rim's plane outside the rim.
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sy = -1; sy <= 1; sy += 2) {
+                const Vec3 c = m.centre + Vec3{sx * halfW, sy * halfH, 0};
+                const float t = (van072::wheelHub.z - van072::seatEye.z) / (c.z - van072::seatEye.z);
+                const Vec3 cross = van072::seatEye + (c - van072::seatEye) * t;
+                check(t > 0 && t < 1 && length(Vec3{cross.x - van072::wheelHub.x, cross.y - van072::wheelHub.y, 0}) >
+                                           van072::Tune{}.wheelRadius + .02f, "a corner hidden by the wheel");
+            }
         const float eye = length(van072::seatEye - m.centre);
-        check(eye > .5f && eye < .9f, "readable from the seat");
-        check(dot(m.normal, normalized(van072::seatEye - m.centre)) > .999f, "it faces his eye");
-        check(length(Vec3{-.25f, 1.45f, -.6f} - m.centre) < .7f, "a reach from his right shoulder");
+        check(eye > .6f && eye < 1.1f, "readable from the seat");
+        check(dot(m.normal, normalized(van072::seatEye - m.centre)) > .6f, "seen from the seat well under 55 degrees off");
+        check(length(Vec3{-.25f, 1.45f, -.6f} - m.centre) < .85f, "a reach (a lean) from his right shoulder");
         // Drawn: finite and not empty, on every page; nothing for a NaN or a behind eye; a bad view leaves out alone.
         van072::Frame f;
         f.at = {120, 3, -40};

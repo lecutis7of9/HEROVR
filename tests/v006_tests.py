@@ -19,7 +19,7 @@ def tracked():
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.70')  # 0.0.70 = "0.0.7" (build 39.4; 0.0.63 was 39.3, 0.0.62 was 39.2)
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.71')  # 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
         self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.4')
 
 

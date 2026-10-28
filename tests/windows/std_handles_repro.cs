@@ -1,4 +1,4 @@
-// 0.0.70.1 hotfix gate (Windows only, run by tests/std_handles_tests.py on the CI release build): the launcher's own
+// 0.0.71 hotfix gate (Windows only, run by tests/std_handles_tests.py on the CI release build): the launcher's own
 // PsRunner, after a Stop VR, starting the session's Python. Compiled with the launcher's src\*.cs (/main: this class)
 // and started like Explorer starts the launcher (no console, no standard handles). Writes "key: value" lines.
 //   legacy-handles  the launcher's standard handles after 0.0.70's Stop (FreeConsole, AttachConsole, Ctrl+C, FreeConsole)

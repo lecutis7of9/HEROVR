@@ -11,7 +11,7 @@ namespace Sm2VrLauncher
         [STAThread]
         static int Main(string[] args)
         {
-            StdHandles.ClearDead();   // 0.0.70.1 hotfix: dead standard handles from an older launcher that restarted us
+            StdHandles.ClearDead();   // 0.0.71 hotfix: dead standard handles from an older launcher that restarted us
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (s, e) => Crash(e.Exception, true);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Crash(e.ExceptionObject as Exception, false);

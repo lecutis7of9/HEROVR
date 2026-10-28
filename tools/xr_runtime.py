@@ -199,6 +199,6 @@ def main():
 
 
 if __name__ == '__main__':
-    import std_handles   # 0.0.70.1 hotfix: a dead standard handle from the launcher (WinError 6)
+    import std_handles   # 0.0.71 hotfix: a dead standard handle from the launcher (WinError 6)
     std_handles.repair()
     sys.exit(main())

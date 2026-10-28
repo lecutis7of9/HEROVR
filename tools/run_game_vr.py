@@ -3635,7 +3635,7 @@ def note_start_error(text):
 
 
 if __name__ == '__main__':
-    # 0.0.70.1 hotfix: a dead standard handle from the launcher (WinError 6 at "finding the headset").
+    # 0.0.71 hotfix: a dead standard handle from the launcher (WinError 6 at "finding the headset").
     std_handles.repair()
     try:
         START_ERROR.unlink()

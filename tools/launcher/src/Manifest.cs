@@ -29,6 +29,8 @@ namespace Sm2VrLauncher
         public string ManifestUrl;
         public int LauncherBuild;   // "launcher_build": the launcher build inside the release zip (0 when not given)
         public string WhatsNew;     // "whats_new": one line shown in the update prompt
+        public bool Experimental = true;   // build 12: "experimental" (default true): updating asks to confirm the EXPERIMENTAL notice
+        public string StableVersion;       // build 12: "stable_version": the most recent STABLE build named in that notice (default 0.0.63)
         /// <summary>launcher.ini UpdateManifestUrl=...: read version.json from here instead of GitHub (testing).</summary>
         public static string OverrideUrl;
 
@@ -64,6 +66,7 @@ namespace Sm2VrLauncher
             m.ReleaseDate = S(d, "release_date"); m.MinGameVersion = S(d, "min_game_version"); m.InstallSubfolder = S(d, "install_subfolder");
             int lb; if (int.TryParse(S(d, "launcher_build") ?? "0", out lb)) m.LauncherBuild = lb;
             m.WhatsNew = S(d, "whats_new");
+            m.Experimental = !string.Equals(S(d, "experimental"), "false", StringComparison.OrdinalIgnoreCase); m.StableVersion = S(d, "stable_version");   // build 12
             m.ChangelogUrl = S(d, "changelog_url"); m.SourceUrl = S(d, "source_url"); m.License = S(d, "license");
             object files;
             if (d.TryGetValue("files", out files) && files is ArrayList)

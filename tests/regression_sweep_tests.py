@@ -33,6 +33,8 @@ SHIPPED = [(2, '/workspace/live-before/HERO-VR-Launcher-0.0.5.zip'),   # launche
 SHIPPED_B9 = (9, '/workspace/herovr-release/github/release-assets-0.0.62/HERO-VR-Launcher-0.0.62.zip')
 # Version 0.0.70: launcher build 10 (the 0.0.63 release) too, with the same Math.Max rule as build 9.
 SHIPPED_B10 = (10, '/workspace/herovr-release/github/release-assets-0.0.63/HERO-VR-Launcher-0.0.63.zip')
+# Version 0.0.71: launcher build 11 (the 0.0.70 release, the one with the Stop VR "handle is invalid" bug) too, same rule.
+SHIPPED_B11 = (11, '/workspace/herovr-release/github/release-assets-0.0.70/HERO-VR-Launcher-0.0.70.zip')
 # This tree's mod version (VERSION, PORT-VERSION): 0.0.62 (build 39.2) for the 0.0.62 release, 0.0.63 (39.3) after.
 CUR = (ROOT / 'VERSION').read_text(encoding='utf-8').strip()
 CUR_PORT = (ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip()

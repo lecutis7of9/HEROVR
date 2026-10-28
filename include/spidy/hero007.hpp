@@ -571,6 +571,67 @@ struct SmokePellets {
     }
 };
 
+// ---- BATMAN: BATARANG DRAW (test build 12) --------------------------------------------------------
+// The user: batarangs and the grapple shared the trigger. Now the TRIGGER is always the grapple gun and
+// the batarangs come from the utility belt's pouches: a GRIP pressed with the hand at a pouch (either
+// side of the buckle, along the belt toward the hips: pouch* below) takes a batarang into the hand
+// (a haptic tick); it stays in the hand while the grip is held (the grip is the batarang's - claimed:
+// no web, zip or climb) and is THROWN as the grip lets go. A hand coming into a pouch's reach gets a
+// soft pulse first. The buckle itself (atBelt) stays the SMOKE PELLET's: the pouches begin past it.
+inline constexpr float pouchBelow = .48f, pouchLow = .98f, pouchSide = beltSide, pouchOut = .34f, pouchBack = .15f,
+                       pouchFar = .42f;
+inline bool atPouch(holster::BodyPoint p) {
+    if (!std::isfinite(p.below) || !std::isfinite(p.side) || !std::isfinite(p.ahead))
+        return false;
+    const float s = std::abs(p.side);
+    return p.below >= pouchBelow && p.below <= pouchLow && s > pouchSide && s <= pouchOut && p.ahead >= -pouchBack &&
+           p.ahead <= pouchFar;
+}
+struct BatarangDraw {
+    enum Event : uint32_t { none = 0, nearPouch = 1, took = 2, letGo = 4 };
+    bool drawn[2]{}, down[2]{}, nearWas[2]{};
+    uint32_t events[2]{};
+    uint64_t draws{}, releases{};
+    // ready[i]: hand i's batarang is back (in the hand's keeping, not flying). Returns the claimed hands.
+    uint32_t update(bool play, Vec3 head, const holster::BodyYaw& body, const Vec3* hand, const bool* tracked,
+                    const float* squeeze, const bool* busy, const bool* ready) {
+        uint32_t claimed = 0;
+        for (unsigned i = 0; i < 2; ++i) {
+            events[i] = none;
+            const bool live = tracked[i] && finite(hand[i]) && body.valid && finite(head);
+            const float sq = std::isfinite(squeeze[i]) ? squeeze[i] : 0.f;
+            const bool wasDown = down[i];
+            down[i] = sq >= holster::pressed || (wasDown && sq > holster::released);
+            const bool at = live && atPouch(holster::bodyPoint(hand[i], head, body));
+            if (drawn[i]) {
+                if (!down[i] || !play) {
+                    drawn[i] = false;
+                    events[i] = play ? letGo : none; // a menu or pause: back in the pouch, no throw
+                    releases += play;
+                } else {
+                    claimed |= 1u << i;
+                }
+                nearWas[i] = at;
+                continue;
+            }
+            if (at && !nearWas[i] && play && !busy[i] && ready[i])
+                events[i] |= nearPouch;
+            nearWas[i] = at;
+            if (!play || !at || !down[i] || wasDown || busy[i] || !ready[i])
+                continue;
+            drawn[i] = true;
+            events[i] |= took;
+            ++draws;
+            claimed |= 1u << i;
+        }
+        return claimed;
+    }
+    void reset() {
+        for (unsigned i = 0; i < 2; ++i)
+            drawn[i] = down[i] = nearWas[i] = false, events[i] = none;
+    }
+};
+
 // ---- PUNISHER: SHELL EJECTION (a visual, capped) -------------------------------------------------
 // Each shot throws a spent case out of the gun's right side (the sawed-off: two shells when it is
 // broken open). They fall under gravity and vanish after shellSeconds; never more than shellsMost

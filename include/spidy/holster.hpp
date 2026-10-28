@@ -38,6 +38,9 @@ struct BodyYaw {
     static constexpr float yawDeadZone = .6f, yawSpeed = 6.f, yawDrift = .5f;
     float yaw = 0;
     bool valid{};
+    // Test build 12 BODY SCALE: the heights below the head are for a standingEye (1.62 m) player and scale
+    // with the calibrated eye height (scaleFor), so the hips sit at the player's own hips.
+    float scale = 1;
     static float headYaw(Vec3 forward) { return std::atan2(forward.x, -forward.z); } // 0: -z ahead
     static float wrap(float a) {
         while (a > 3.14159265f)
@@ -65,20 +68,30 @@ struct BodyYaw {
     Vec3 forward() const { return {std::sin(yaw), 0, -std::cos(yaw)}; }
     Vec3 right() const { return {std::cos(yaw), 0, std::sin(yaw)}; }
 };
-// Where the hand is in the body frame: below (+ under the head), side (+ right), ahead (+ in front).
+// Test build 12: the body scale for an eye height (metres; 0 or out of range: 1, the standing average).
+inline constexpr float standingEye = 1.62f;
+inline float scaleFor(float eyeHeight) {
+    return std::isfinite(eyeHeight) && eyeHeight >= 1.f && eyeHeight <= 2.5f ? std::clamp(eyeHeight / standingEye, .7f, 1.35f) : 1.f;
+}
+// Where the hand is in the body frame: below (+ under the head, in standingEye metres: divided by the
+// body's scale), side (+ right), ahead (+ in front).
 struct BodyPoint {
     float below, side, ahead;
 };
 inline BodyPoint bodyPoint(Vec3 hand, Vec3 head, const BodyYaw& body) {
     const Vec3 r = hand - head;
-    return {-r.y, dot(r, body.right()), dot(r, body.forward())};
+    const float k = std::isfinite(body.scale) && body.scale > .5f ? body.scale : 1.f;
+    return {-r.y / k, dot(r, body.right()), dot(r, body.forward())};
 }
 
 // ---- zones --------------------------------------------------------------------------------------
 // backLeft / backRight: the back split at the spine (DAREDEVIL's two batons over the shoulders).
 enum Zone : uint32_t { leftHip = 0, rightHip, back, backLeft, backRight, zones };
 inline constexpr const char* zoneNames[zones] = {"LEFT HIP", "RIGHT HIP", "BACK", "BACK LEFT", "BACK RIGHT"};
-inline constexpr float hipBelow = .55f, hipLow = 1.05f, hipSide = .10f, hipOut = .45f, hipBack = .12f, hipFront = .25f;
+// Test build 12 HOLSTERS HIGHER (the user: the PUNISHER's holsters "too low"): the hip zone runs from the
+// waist (.45 under the eyes) to mid-thigh (.95), generous to the side and ahead (the pistols' grips now sit
+// at hipGrip, the hip bone, not .86 m down by the knee).
+inline constexpr float hipBelow = .45f, hipLow = .95f, hipSide = .10f, hipOut = .45f, hipBack = .16f, hipFront = .30f;
 inline constexpr float backAbove = .10f, backBelow = .50f, backSide = .35f, backBehind = .10f;
 inline bool inZone(uint32_t zone, BodyPoint p) {
     if (!std::isfinite(p.below) || !std::isfinite(p.side) || !std::isfinite(p.ahead))
@@ -124,7 +137,8 @@ struct Hand {
     bool busy{}; // a web attached, climbing, the hologram's or the phone's: no new draw
     bool keep{}; // its item is out of the hand (a thrown baton): a release waits until it is back
 };
-enum Event : uint32_t { none = 0, drew = 1, holstered = 2, returnedAway = 4 };
+// near (test build 12): an empty hand came into a slot's zone (a soft haptic pulse: "you can draw here").
+enum Event : uint32_t { none = 0, drew = 1, holstered = 2, returnedAway = 4, near = 8 };
 class Rack {
   public:
     Slot slots[maxSlots]{};
@@ -181,6 +195,14 @@ class Rack {
             if (release)
                 down_[i] = false;
             const int held = heldIn(i);
+            // Test build 12: a soft pulse as an empty hand comes into a holstered slot's zone.
+            bool nearNow = false;
+            for (uint32_t s = 0; held < 0 && pointOk && s < count; ++s)
+                nearNow |= slots[s].heldBy < 0 && inZone(slots[s].zone, point_[i]) &&
+                           ((slots[s].hands ? slots[s].hands : handsFor(slots[s].zone, crossDraw)) & (1u << i));
+            if (nearNow && !near_[i] && play && !h.busy)
+                events_[i] |= near;
+            near_[i] = nearNow;
             if (held >= 0) {
                 // A released grip lets go now, or - while the item is out of the hand (thrown) - as
                 // soon as it is back: never a second copy on the body while one is in the air.
@@ -224,6 +246,7 @@ class Rack {
             }
             slots[pick].heldBy = static_cast<int>(i);
             events_[i] = drew;
+            near_[i] = false;
             eventSlot_[i] = pick;
             claimed_ |= 1u << i;
             ++draws;
@@ -233,12 +256,12 @@ class Rack {
   private:
     BodyPoint point_[2]{};
     float pointAge_[2]{1e9f, 1e9f};
-    bool down_[2]{};
+    bool down_[2]{}, near_[2]{};
     uint32_t claimed_{}, events_[2]{};
     int eventSlot_[2]{-1, -1};
 };
 // The haptic tick for an event (strength 0-1; 0: none): a firm one on a draw, a lighter one on a
 // holster, none for a return from away.
-inline float tickFor(uint32_t event) { return event & drew ? .45f : event & holstered ? .3f : 0.f; }
+inline float tickFor(uint32_t event) { return event & drew ? .45f : event & holstered ? .3f : event & near ? .15f : 0.f; }
 
 } // namespace spidy::holster

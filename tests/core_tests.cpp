@@ -23509,7 +23509,7 @@ int main() {
         Data d;
         check(d.magic == 0x45504143 && d.bytes == sizeof(Data), "the sample's header");
     });
-    test("Version 0.0.7: BATMAN trigger - grapple aimed up with no enemy, batarang otherwise", [] {
+    test("Test build 12: BATMAN BUTTONS - the trigger is always the grapple; batarangs from the belt pouches by the grip", [] {
         using namespace spidy::hero007;
         Play p;
         PlayInput in;
@@ -23518,33 +23518,107 @@ int main() {
         in.hero = spidy::hero_modes::batman;
         in.head = {{0, 1.7f, 0}, {}};
         p.setHero(in.hero);
-        const auto frame = [&](Vec3 aim, float trig) {
-            in.hands[1] = {{.2f, 1.4f, -.3f}, aim, true, trig, 0, false};
+        const Vec3 front{.2f, 1.4f, -.3f}, pouch{.25f, .95f, -.1f}, buckle{0, .95f, -.2f};
+        const auto frame = [&](Vec3 at, Vec3 aim, float trig, float grip) {
+            in.hands[1] = {at, aim, true, trig, grip, false};
             in.hands[0] = {{-.2f, 1.4f, -.3f}, {0, 0, -1}, true, 0, 0, false};
             PlayOutput o;
-            p.step(in, o);
-            return o;
+            p.holsterStep(in, o);
+            PlayOutput s2;
+            p.step(in, s2);
+            s2.claimed = o.claimed;
+            s2.haptic[1] = std::max(s2.haptic[1], o.haptic[1]);
+            return s2;
         };
-        frame({0, .6f, -1}, 0);
-        PlayOutput o = frame({0, .6f, -1}, 1);
-        check(o.grapple[1] && !o.grapple[0], "aimed up, no enemy: the grapple");
-        o = frame({0, 0, -1}, 1);
-        check(o.grapple[1], "held: still the grapple's press (the hand may come down)");
+        frame(front, {0, .6f, -1}, 0, 0);
+        PlayOutput o = frame(front, {0, .6f, -1}, 1, 0);
+        check(o.grapple[1] && !o.grapple[0], "aimed up: the grapple");
+        frame(front, {0, 0, -1}, 0, 0);
+        o = frame(front, {0, -.1f, -1}, 1, 0);
+        check(o.grapple[1], "aimed level or down: still the grapple (the trigger never throws a batarang now)");
         for (int i = 0; i < 30; ++i)
-            frame({0, 0, -1}, 1);
-        check(p.batarangs[1].throws == 0, "no batarang for a grapple press");
-        o = frame({0, 0, -1}, 0);
-        check(!o.grapple[1], "let go: off");
-        o = frame({0, -.1f, -1}, 1);
-        check(!o.grapple[1], "aimed level or down: a batarang, not the grapple");
-        for (int i = 0; i < 30; ++i)
-            frame({0, -.1f, -1}, 0);
-        check(p.batarangs[1].throws >= 1, "the batarang went");
+            frame(front, {0, 0, -1}, i < 10 ? 1.f : 0.f, 0);
+        check(p.batarangs[1].throws == 0, "no batarang from the trigger");
+        o = frame(front, {0, 0, -1}, 0, 1);
+        check(!p.batDraw.drawn[1] && !(o.claimed & 2u), "a grip in front of the body (not at the belt) draws nothing");
+        frame(front, {0, 0, -1}, 0, 0);
+        o = frame(pouch, {0, 0, -1}, 0, 0);
+        check(o.haptic[1] > 0 && o.haptic[1] < .3f, "reaching a pouch: a soft pulse");
+        o = frame(pouch, {0, 0, -1}, 0, 1);
+        check(p.batDraw.drawn[1] && (o.claimed & 2u) && p.batReady[1] && o.haptic[1] >= .3f,
+              "a grip at the pouch: a batarang in the hand, the grip claimed, a firmer tick");
+        o = frame(pouch, {0, 0, -1}, 1, 1);
+        check(!o.grapple[1], "the trigger of a hand holding a batarang does not grapple (no clash)");
+        o = frame(front, {0, 0, -1}, 0, 0);
+        check(p.batarangs[1].throws == 1 && !p.batDraw.drawn[1], "the grip let go: thrown");
+        for (int i = 0; i < 300 && !p.batarangs[1].inHandNow(); ++i)
+            frame(front, {0, 0, -1}, 0, 0);
+        frame(buckle, {0, 0, -1}, 0, 0);
+        frame(buckle, {0, 0, -1}, 0, 1);
+        check(!p.batDraw.drawn[1] && p.pellets.hands[1].state == SmokePellets::held, "the buckle is still the SMOKE PELLET's");
+        frame(buckle, {0, 0, -1}, 0, 0);
+        for (float b = pouchBelow; b <= pouchLow; b += .02f)
+            for (float sd = -pouchOut; sd <= pouchOut; sd += .01f)
+                for (float a = -pouchBack; a <= pouchFar; a += .02f)
+                    check(!(atPouch({b, sd, a}) && atBelt({b, sd, a})), "a pouch overlaps the buckle");
+        // Taller and shorter players: the pouches follow the calibrated eye height.
+        {
+            spidy::holster::BodyYaw body;
+            body.update(0, {0, 0, -1});
+            body.scale = spidy::holster::scaleFor(1.85f);
+            const Vec3 head{0, 1.85f, 0};
+            check(atPouch(spidy::holster::bodyPoint({.25f, 1.85f - .75f * 1.85f / 1.62f, -.1f}, head, body)) &&
+                      spidy::holster::scaleFor(0) == 1.f && spidy::holster::scaleFor(9.f) == 1.f,
+                  "the pouch height scales with the eye height");
+        }
         in.hero = spidy::hero_modes::wolverine;
         p.setHero(in.hero);
-        o = frame({0, .6f, -1}, 0);
-        o = frame({0, .6f, -1}, 1);
+        frame(front, {0, .6f, -1}, 0, 0);
+        o = frame(front, {0, .6f, -1}, 1, 0);
         check(!o.grapple[0] && !o.grapple[1], "nobody else grapples");
+    });
+    test("Test build 12: HOLSTERS HIGHER - PUNISHER's pistols at the hip bone, scaled to the player, a pulse in reach", [] {
+        using namespace spidy::hero007;
+        namespace hl = spidy::holster;
+        for (float eye : {1.45f, 1.62f, 1.85f}) {
+            hl::BodyYaw body;
+            body.update(0, {0, 0, -1});
+            body.scale = hl::scaleFor(eye);
+            const Vec3 head{0, eye, 0};
+            Vec3 at, f, u;
+            wornPose(hl::rightHip, head, body, at, f, u, hipThigh);
+            // a body of eye/0.936 stature: the hip bone (greater trochanter) ~.52 of it, the knee ~.28
+            const float stature = eye / .936f;
+            check(at.y > stature * .50f && at.y < stature * .62f, "the pistol grip is not at the hip: " + std::to_string(at.y));
+            check(hl::inZone(hl::rightHip, hl::bodyPoint(at, head, body)), "the pistol is out of its draw zone");
+            check(hl::inZone(hl::rightHip, hl::bodyPoint(at + Vec3{0, .12f, 0}, head, body)) &&
+                      hl::inZone(hl::rightHip, hl::bodyPoint(at - Vec3{0, .15f, 0}, head, body)) &&
+                      hl::inZone(hl::rightHip, hl::bodyPoint(at + Vec3{.1f, 0, -.15f}, head, body)),
+                  "the draw zone is generous around the grip");
+        }
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::punisher;
+        in.head = {{0, 1.62f, 0}, {}};
+        in.eyeHeight = 1.62f;
+        in.hands[0] = {{-.2f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+        in.hands[1] = {{.2f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+        PlayOutput o;
+        p.holsterStep(in, o);
+        check(o.haptic[1] == 0, "away from a holster: no pulse");
+        in.hands[1].position = {.19f, 1.62f - .66f, -.03f};
+        PlayOutput o2;
+        p.holsterStep(in, o2);
+        check(o2.haptic[1] > 0 && o2.haptic[1] < .3f && p.guns.heldIn(1) < 0, "in reach of the right holster: a soft pulse, nothing drawn");
+        PlayOutput o3;
+        p.holsterStep(in, o3);
+        check(o3.haptic[1] == 0, "the pulse is once on the way in");
+        in.hands[1].squeeze = 1;
+        PlayOutput o4;
+        p.holsterStep(in, o4);
+        check(p.guns.heldIn(1) == 1 && o4.haptic[1] >= .4f, "grip: drawn, a firm tick");
     });
     // Version 0.0.72 GRAPPLE FOR EVERY HERO WHO HAS ONE (the user, 11:09): the bridge's pull as
     // game_swing runs it - a pull from the ground holds (clock too) while the game's jump takes him off
@@ -24139,7 +24213,8 @@ int main() {
         in.hero = spidy::hero_modes::batman;
         frame(away, 0, rightHip, 0);
         o = frame(away, 0, rightHip, 1);
-        check(o.claimed == 0, "no rack for other heroes");
+        check(p.guns.heldIn(1) < 0 && (o.claimed == 0 || p.batDraw.drawn[1]),
+              "no rack for other heroes (test build 12: BATMAN's grip by the hip is a batarang pouch's)");
         in.hero = spidy::hero_modes::daredevil;
         in.batonHolsters = false;
         check(p.batonDrawn(0, false) && p.batonDrawn(1, false), "BATON HOLSTERS OFF: batons in the hands as 0.0.62");
@@ -24393,8 +24468,11 @@ int main() {
         in.list = target;
         int batHits = 0;
         for (int f = 0; f < 200; ++f) {
-            in.hands[0] = {{-.2f, 1.3f, -.3f}, {0, 0, -1}, true, f == 2 ? 1.f : 0.f, 0, false};
+            // test build 12: the batarang from the left pouch (grip frames 2-4), thrown as the grip lets go
+            in.hands[0] = {{-.25f, .95f, -.1f}, {0, 0, -1}, true, 0, f >= 2 && f <= 4 ? 1.f : 0.f, false};
             in.hands[1] = {{.2f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
+            PlayOutput g;
+            bat.holsterStep(in, g);
             PlayOutput o;
             bat.step(in, o);
             batHits += static_cast<int>(o.blowCount);
@@ -24416,7 +24494,7 @@ int main() {
         const BatonEnemy foe[1] = {{41, {1.f, 1.3f, -9}}};
         in.list = foe;
         in.count = 1;
-        const Vec3 hand{.2f, 1.3f, -.3f};
+        const Vec3 hand{.25f, .95f, -.1f}; // test build 12: at the right belt pouch
         const Vec3 aim = normalized(foe[0].chest - hand);
         in.hands[0] = {{-.2f, 1.3f, -.3f}, {0, 0, -1}, true, 0, 0, false};
         in.hands[1] = {hand, aim, true, 0, 0, false};
@@ -24429,18 +24507,20 @@ int main() {
             idleShown = idleShown || d.held[0].look == lookBatarang || d.held[1].look == lookBatarang;
         }
         check(!idleShown && p.batarangs[1].inHandNow(), "idle: never shown, still in hand (ready)");
-        in.hands[1].trigger = 1;
+        in.hands[1].squeeze = 1; // test build 12: the pouch grip (the trigger is the grapple's)
         bool shownHeld = true;
         for (int f = 0; f < 20; ++f) {
             PlayOutput ho;
+            p.holsterStep(in, ho);
             p.step(in, ho);
             p.draw(d, Pose{}, in, 0);
             shownHeld = shownHeld && d.held[1].look == lookBatarang && d.held[0].look == lookNone;
         }
         check(shownHeld && p.batarangs[1].inHandNow() && p.batarangs[1].throws == 0,
               "press and hold: the batarang appears in that hand and is NOT thrown yet");
-        in.hands[1].trigger = 0;
+        in.hands[1].squeeze = 0;
         PlayOutput ro;
+        p.holsterStep(in, ro);
         p.step(in, ro);
         p.draw(d, Pose{}, in, 0);
         check(p.batarangs[1].throws == 1 && !p.batarangs[1].inHandNow() && p.batarangs[1].targetId == 41 &&
@@ -24481,10 +24561,12 @@ int main() {
             PlayInput qi = in;
             qi.list = nullptr;
             qi.count = 0;
-            qi.hands[1] = {hand, {0, 0, -1}, true, 1, 0, false};
+            qi.hands[1] = {hand, {0, 0, -1}, true, 0, 1, false}; // the pouch grip
             PlayOutput qo;
+            q.holsterStep(qi, qo);
             q.step(qi, qo);
-            qi.hands[1].trigger = 0;
+            qi.hands[1].squeeze = 0;
+            q.holsterStep(qi, qo);
             q.step(qi, qo);
             float side = 0;
             for (int f = 0; f < 50; ++f) {
@@ -24608,7 +24690,8 @@ int main() {
             q.holsterStep(qi, a);
             PlayOutput b;
             q.holsterStep(qi, b);
-            check(q.pellets.grabs == 0 && b.claimed == 0, "no pellet from a hip or a busy hand");
+            check(q.pellets.grabs == 0 && !(b.claimed & 2u) && q.batDraw.drawn[0] && !q.batDraw.drawn[1],
+                  "no pellet from a hip or a busy hand (test build 12: the hip is a batarang pouch)");
             Play w;
             PlayInput wi = in;
             wi.hands[1] = {{.3f, 1.2f, -.5f}, {0, 0, -1}, true, 0, 1, false};
@@ -27825,11 +27908,11 @@ int main() {
             Vec3 at, f, u;
             wornPose(zone, head, body, at, f, u, hipThigh);
             check(hl::inZone(zone, hl::bodyPoint(at, head, body)), "the thigh holster is out of its draw zone");
-            check(at.y < head.y - .8f && f.y < -.95f && std::fabs(dot(f, u)) < 1e-3f, "the thigh holster is not on the thigh, barrel down");
+            check(at.y < head.y - .6f && at.y > head.y - .72f && f.y < -.95f && std::fabs(dot(f, u)) < 1e-3f, "the thigh holster is not at the hip bone (test build 12: not by the knee), barrel down");
             Vec3 bat, bf, bu;
             wornPose(zone, head, body, bat, bf, bu, hipBelt);
             check(hl::inZone(zone, hl::bodyPoint(bat, head, body)), "the belt holster is out of its draw zone");
-            check(bat.y > at.y + .2f && bat.y < head.y - .55f && std::fabs(dot(bf, bu)) < 1e-3f,
+            check(bat.y > at.y && bat.y < head.y - .55f && std::fabs(dot(bf, bu)) < 1e-3f,
                   "the grapple gun is not on the belt (it floated by the foot)");
             Vec3 cat, cf, cu;
             wornPose(zone, head, body, cat, cf, cu);

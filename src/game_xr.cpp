@@ -3951,7 +3951,7 @@ DWORD WINAPI run(void*) {
                             hin.play = drawPlay;
                             hin.hero = heroNow();
                             hin.head = frame.head;
-                            hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands));
+                            hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
                             hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                             hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                             for (unsigned i = 0; i < 2; ++i) {
@@ -6685,7 +6685,7 @@ DWORD WINAPI run(void*) {
                                         hin.flying = cf.flightTriggers;
                                         hin.chain = c38(combat38::batarangChain);
                                         hin.reload = c38(combat38::easyReload);
-                                        hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands));
+                                        hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
                                         hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                                         hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                                         hin.shieldChain = captain::chainOn(c38(combat38::shieldChain));

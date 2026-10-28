@@ -56,6 +56,7 @@ struct PlayInput {
     uint32_t chain{};       // BATARANG CHAIN value
     uint32_t reload{};      // EASY RELOAD value
     bool crossDraw{};       // HOLSTER HANDS EITHER HAND
+    float eyeHeight{};      // test build 12: the T-pose calibration's eye height (m; 0: the standing average)
     bool batonHolsters{};   // BATON HOLSTERS ON
     uint32_t shieldArm{};   // CAPTAIN AMERICA SHIELD ARM value (0 RIGHT, the default; 1 LEFT)
     // Version 0.0.72 GRAPPLE: this hand's grapple gun is out (the bridge pulling on this hand's line, or
@@ -137,23 +138,29 @@ inline uint32_t reloadSoundOf(uint32_t weapon, uint32_t was, uint32_t now) {
 // clipped high on the utility belt, tipped forward (0.0.7's hip spot hung it near the knee: "floating by
 // the foot"). Both stay inside holster::inZone's hip zone, so the draw grab is where it is drawn.
 enum HipStyle : uint32_t { hipClassic = 0, hipThigh, hipBelt };
-inline constexpr float thighBelow = .86f, thighOut = .19f, beltHang = .60f, beltOut = .18f;
+// Test build 12 HOLSTERS HIGHER: thighBelow .86 hung the PUNISHER's grips by the knee ("too low"); now .66
+// under the eyes - the hip bone of a standingEye player - and every height scales with body.scale (the
+// calibrated eye height), so a tall or short player finds them at his own hip.
+inline constexpr float thighBelow = .66f, thighOut = .19f, beltHang = .60f, beltOut = .18f, classicBelow = .68f;
 inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec3& at, Vec3& forward, Vec3& up,
                      uint32_t hipStyle = hipClassic) {
-    const Vec3 f = body.forward(), r = body.right(), down{0, -1, 0};
+    const Vec3 f = body.forward(), r = body.right();
+    const float k = std::isfinite(body.scale) && body.scale > .5f ? body.scale : 1.f;
+    const Vec3 down{0, -k, 0}; // the heights below scale with the player (directions use dn)
+    const Vec3 dn{0, -1, 0};
     switch (zone) {
     case holster::leftHip:
     case holster::rightHip: { // muzzle down, the grip up and back, the slide's top facing forward
         const float s = zone == holster::leftHip ? -1.f : 1.f;
         if (hipStyle == hipThigh) {
             at = head + down * thighBelow + r * (s * thighOut) + f * .03f;
-            forward = normalized(down + f * .08f);
+            forward = normalized(dn + f * .08f);
         } else if (hipStyle == hipBelt) {
             at = head + down * beltHang + r * (s * beltOut) - f * .03f;
-            forward = normalized(down + f * .30f);
+            forward = normalized(dn + f * .30f);
         } else {
-            at = head + down * .78f + r * (s * .22f) - f * .02f;
-            forward = normalized(down + f * .12f);
+            at = head + down * classicBelow + r * (s * .22f) - f * .02f;
+            forward = normalized(dn + f * .12f);
         }
         const Vec3 u = f - forward * dot(f, forward);
         up = length(u) > 1e-3f ? normalized(u) : f;
@@ -161,13 +168,13 @@ inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec
     }
     case holster::back: // the sawed-off across the back, the grip behind the right shoulder
         at = head + down * .12f + r * .14f - f * .17f;
-        forward = normalized(down + r * -.65f);
+        forward = normalized(dn + r * -.65f);
         up = -f;
         break;
     default: { // a baton over each shoulder, crossed
         const float s = zone == holster::backLeft ? -1.f : 1.f;
         at = head + down * .10f + r * (s * .13f) - f * .16f;
-        forward = normalized(down + r * (-s * .5f));
+        forward = normalized(dn + r * (-s * .5f));
         up = -f;
         break;
     }
@@ -278,9 +285,11 @@ class Play {
     bool batTrigWas[2]{}, grappling[2]{}; // Version 0.0.7 BATMAN GRAPPLE GUN: the press's kind
     unsigned grappleHand{1};              // the hand that fired it last (its hip holsters the gun; right at first)
     holster::BodyYaw batBody;             // BATMAN: the body's heading for the gun's hip holster
-    // Version 0.0.7 BATARANG THROW: the batarang is in the hand only while a (non-grapple) trigger is
-    // held; letting go throws it. Never in an idle hand.
+    // Version 0.0.7 BATARANG THROW (test build 12: drawn from a belt pouch by the grip): the batarang is in
+    // the hand only while that grip is held; letting go throws it. Never in an idle hand.
     bool batReady[2]{};
+    // Test build 12 BATARANG DRAW: the belt pouches' grips (hero007.hpp BatarangDraw); the trigger is the grapple's.
+    BatarangDraw batDraw;
     // Version 0.0.7 SMOKE PELLET: the belt buckle's pellets (grip there, let go to throw).
     SmokePellets pellets;
     holster::BodyYaw pelletBody; // the body's heading at the grip arbitration (the belt's front)
@@ -340,6 +349,7 @@ class Play {
             batarangs[i].roll.state = 0x2545f491u + 977u * i;
             batarangThrowsSeen[i] = 0;
             batTrigWas[i] = grappling[i] = batReady[i] = false;
+            batDraw.reset();
             batarangs[i].curve = batarangCurve;
             batarangs[i].curveSign = i == 0 ? -1.f : 1.f;
             grappleHand = 1;
@@ -410,6 +420,10 @@ class Play {
     // The racks, at the grip arbitration. Fills out.claimed, the draw / holster ticks and sounds.
     void holsterStep(const PlayInput& in, PlayOutput& out) {
         setHero(in.hero);
+        { // test build 12 BODY SCALE: every holster, belt and pouch height from the player's own eye height
+            const float k = holster::scaleFor(in.eyeHeight);
+            guns.body.scale = batons.body.scale = shieldRack.body.scale = batBody.scale = pelletBody.scale = k;
+        }
         if (captain::armHand(in.shieldArm) != shieldHand) { // SHIELD ARM changed: the shield to the back
             shieldHand = captain::armHand(in.shieldArm);
             resetShield();
@@ -430,12 +444,29 @@ class Play {
                 squeeze[i] = in.hands[i].squeeze;
             }
             uint32_t took = 0;
-            out.claimed |= pellets.grip(in.dt, in.play, in.head.position, pelletBody, at, tracked, squeeze, busy, &took);
+            const uint32_t pelletHands = pellets.grip(in.dt, in.play, in.head.position, pelletBody, at, tracked, squeeze, busy, &took);
+            out.claimed |= pelletHands;
             for (unsigned i = 0; i < 2; ++i)
                 if (took & (1u << i)) {
                     out.buzz(i, .2f);
                     out.sound(sfx::holsterTick);
                 }
+            // Test build 12 BATARANG DRAW: a grip at a belt pouch (beside the buckle) takes a batarang.
+            bool drawBusy[2], ready[2];
+            for (unsigned i = 0; i < 2; ++i) {
+                drawBusy[i] = busy[i] || (pelletHands & (1u << i)) || pellets.hands[i].state == SmokePellets::held ||
+                              grappling[i] || in.grappleHeld[i];
+                ready[i] = batarangs[i].inHandNow();
+            }
+            out.claimed |= batDraw.update(in.play, in.head.position, pelletBody, at, tracked, squeeze, drawBusy, ready);
+            for (unsigned i = 0; i < 2; ++i) {
+                if (batDraw.events[i] & BatarangDraw::took) {
+                    out.buzz(i, .35f);
+                    out.sound(sfx::holsterTick);
+                } else if (batDraw.events[i] & BatarangDraw::nearPouch) {
+                    out.buzz(i, .15f); // in reach of a pouch
+                }
+            }
         }
         if (hero == hero_modes::wolverine) // Version 0.0.72: a fist's grip is the claws' (no web or zip from it)
             for (unsigned i = 0; i < 2; ++i)
@@ -461,12 +492,18 @@ class Play {
             if (e & (holster::drew | holster::holstered)) {
                 out.buzz(i, holster::tickFor(e));
                 out.sound(sfx::holsterTick);
+            } else if (e & holster::near) {
+                out.buzz(i, holster::tickFor(e)); // in reach of a holster: a soft pulse, no sound
             }
         }
     }
 
     void step(const PlayInput& in, PlayOutput& out) {
         setHero(in.hero);
+        { // test build 12 BODY SCALE: every holster, belt and pouch height from the player's own eye height
+            const float k = holster::scaleFor(in.eyeHeight);
+            guns.body.scale = batons.body.scale = shieldRack.body.scale = batBody.scale = pelletBody.scale = k;
+        }
         const float dt = std::isfinite(in.dt) ? std::clamp(in.dt, 0.f, .1f) : 0.f;
         for (unsigned i = 0; i < 2; ++i) { // the hands' speed (REALISTIC's flick)
             const Vec3 p = in.hands[i].position;
@@ -560,7 +597,7 @@ class Play {
             for (unsigned i = 0; i < 2; ++i) {
                 const auto& b = batarangs[i];
                 if (b.inHandNow()) {
-                    // BATARANG THROW: only while its trigger is held (never idle), never with the gun drawn.
+                    // BATARANG THROW: only while its pouch grip is held (never idle), never with the gun drawn.
                     if (batReady[i] && !grappling[i] && d.held[i].look != lookGrappleGun && handOk(i)) {
                         // Version 0.0.72 BATARANG IN THE FINGERS: pinched ahead of the knuckles, on edge.
                         const PlayHand& h = in.hands[i];
@@ -844,11 +881,12 @@ class Play {
             const bool trig = h.tracked && h.trigger > .5f;
             if (!finite(h.position) || !finite(h.aim))
                 continue;
-            const int aimed = b.inHandNow() ? hero_modes::batonAim(h.position, h.aim, in.list, in.count) : -1;
-            // Version 0.0.7 BATMAN GRAPPLE GUN: a press that starts with no enemy in the batarang's
-            // sights and the hand aimed above level is the grapple's, held until the trigger lets go.
+            // Test build 12 BATMAN BUTTONS (the user: batarangs and the grapple shared the trigger): the
+            // TRIGGER is always the grapple gun (a press grapples wherever it aims, held until let go) - except
+            // in a hand holding a batarang, whose trigger waits; the GRIP at a belt pouch draws a batarang
+            // (BatarangDraw) and letting the grip go throws it; the grip at the buckle is the SMOKE PELLET.
             if (trig && !batTrigWas[i])
-                grappling[i] = cape_glide::grappleAim(h.aim, hero_modes::batonAim(h.position, h.aim, in.list, in.count) >= 0);
+                grappling[i] = !batDraw.drawn[i] && !batReady[i];
             if (!trig)
                 grappling[i] = false;
             batTrigWas[i] = trig;
@@ -856,13 +894,18 @@ class Play {
                 out.grapple[i] = true;
                 grappleHand = i;
             }
-            // BATARANG THROW: held while the (non-grapple) trigger is down - in the hand only now - and
-            // thrown on the frame it is let go, at the enemy the aim assist picks THEN (aimed).
+            // BATARANG THROW: in the hand while its pouch grip is held, thrown on the frame the grip lets go -
+            // along the hand's sweep when it is a throwing motion (captain::throwAim), else straight along the
+            // aim - at the enemy the aim assist picks on that line THEN.
             const bool readyWas = batReady[i];
-            batReady[i] = trig && !grappling[i] && (readyWas || b.inHandNow());
-            const bool release = readyWas && !trig && b.inHandNow();
+            batReady[i] = batDraw.drawn[i] && b.inHandNow();
+            const bool release = readyWas && (batDraw.events[i] & BatarangDraw::letGo) && b.inHandNow();
+            const Vec3 throwWay = release ? captain::throwAim(pellets.handVelocity[i], h.aim,
+                                                               in.head.orientation.rotate(Vec3{0, 0, -1}))
+                                          : h.aim;
+            const int aimed = b.inHandNow() ? hero_modes::batonAim(h.position, throwWay, in.list, in.count) : -1;
             const uint32_t throwsWas = b.throws;
-            const bool hit = b.update(dt, release, h.position, h.aim, in.list, in.count, aimed);
+            const bool hit = b.update(dt, release, h.position, throwWay, in.list, in.count, aimed);
             if (b.throws != throwsWas) {
                 out.buzz(i, .3f);
                 out.sound(sfx::batonWhoosh);

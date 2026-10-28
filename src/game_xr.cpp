@@ -887,6 +887,7 @@ std::atomic<float> perfHeroX{std::numeric_limits<float>::quiet_NaN()}, perfHeroZ
     perfHeroSpeed{0.f}, perfEnemyMetres{std::numeric_limits<float>::infinity()};
 // Update 38.5 EXTRAS (extras385.hpp), each OFF by default and live; the cheats start OFF each session.
 std::atomic<bool> invincibleOn{false}, flyVignetteOn{false}, symbioteOn{false};
+std::atomic<float> vanBoardShade{0.f}; // Version 0.0.73 test 3: the van's boarding blink (van072 CarryOut::shade)
 std::atomic<uint32_t> flyModeNow{0};       // extras385::fly::Speed
 // Update 38.5 FLY ROLL (extras385::fly::RollMode, 1 COMFORT), its speed (degrees a second) and AUTO LEVEL.
 std::atomic<uint32_t> flyRollNow{1}, flyRollSpeedNow{90};
@@ -7045,7 +7046,7 @@ DWORD WINAPI run(void*) {
                                             vout = vanDriver.step(vin, ci, vanCarry, flat, open, clearAhead);
                                         } catch (...) { // never: it allocates nothing; parked, the carry off
                                             van.park();
-                                            vanDriver.carried = false;
+                                            vanDriver.carried = vanDriver.boarding = false;
                                             vanCarry = {};
                                         }
                                         // Version 0.0.73 test 3 VAN SCREEN: X or a poke (an open hand off the wheel)
@@ -7080,8 +7081,9 @@ DWORD WINAPI run(void*) {
                                             message(2, 0, "PUNISHER VAN (EXPERIMENTAL): no safe spot here, no van");
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: no safe spot (the probe found none)");
                                         }
+                                        vanBoardShade = std::isfinite(vanCarry.shade) ? std::clamp(vanCarry.shade, 0.f, 1.f) : 0.f;
                                         if (vout.entered)
-                                            message(1, 0, vanDriver.carried
+                                            message(1, 0, vanDriver.carried || (vanDriver.boarding && ci.ready)
                                                               ? "PUNISHER VAN: in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out"
                                                               : "PUNISHER VAN: in - parked (the drive is not ready here); the inside handle gets you out");
                                         if (vout.exited) {
@@ -11196,9 +11198,13 @@ DWORD WINAPI run(void*) {
                             // FLY ROLL COMFORT forces it while rolled, with a level horizon line 1.5 m ahead.
                             const bool rollComfort = flyRollNow.load() == extras385::fly::rollComfort &&
                                                      flyRollState.comfort() > .01f;
+                            // the van's blink: set by the van's step each frame it runs, else it fades here
+                            const float vanShade = vanBoardShade.load();
+                            vanBoardShade = vanShade * .85f;
                             const float flyShade = std::max(flyVignetteOn.load() && std::isfinite(flyNow.vignette)
                                                                 ? flyNow.vignette : 0.f,
-                                                            rollComfort ? flyRollState.comfort() : 0.f);
+                                                            std::max(rollComfort ? flyRollState.comfort() : 0.f,
+                                                                     vanShade)); // 0.0.73 test 3: the van's boarding blink
                             if (rollComfort && !saved->flatScreen && validTrackedPose(rendered.headPose)) {
                                 Vec3 ahead = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
                                 ahead.y = 0;

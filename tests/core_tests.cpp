@@ -25339,10 +25339,15 @@ int main() {
             tick(r);
             r.in.summonPress = false;
             r.in.hands[0] = r.d.van.frame.world(v::doorHandleOut);
+            // Version 0.0.73 test 3: he stands at the door (his hand is on its handle)
+            r.room.position = Vec3{r.in.hands[0].x, 0, r.in.hands[0].z} -
+                              r.room.orientation.rotate(Vec3{r.headRoom.x, 0, r.headRoom.z}) + r.d.van.frame.right() * -.35f;
             r.in.grip[0] = 1;
             const v::Out e = tick(r);
             r.in.grip[0] = 0;
             tick(r);
+            for (int f = 0; f < 120 && r.d.boarding; ++f) // Version 0.0.73 test 3 BOARDING: into the seat
+                tick(r);
             return e.entered;
         };
         auto latch = [&](Rig& r) { // both hands on the rim at 9 and 3, gripped (world, the van's own frame)
@@ -25352,6 +25357,86 @@ int main() {
             r.in.hands[1] = rim(1.5708f);
             r.in.grip[0] = r.in.grip[1] = 1;
         };
+        // Version 0.0.73 test 3 BOARDING (the user's headset video: the van snapped round to his look). At the
+        // driver door facing any way: the van keeps its place and yaw; HE ends in the seat facing its forward.
+        auto lookOf = [](const Pose& room) { // the head looks down the room's -z (headRoom has no turn of its own)
+            const Vec3 f = room.orientation.rotate(Vec3{0, 0, -1});
+            return std::atan2(-f.x, -f.z);
+        };
+        for (const float heading : {0.f, 1.5708f, -1.5708f, 3.1f, -2.4f, .7f}) {
+            Rig r;
+            setUp(r);
+            r.in.summonSpot = true;
+            r.in.spot.ok = true;
+            r.in.spot.frame = {{3, 0, -2}, .4f};
+            tick(r);
+            r.in.summonSpot = false;
+            const v::Frame parked = r.d.van.frame;
+            // stand at the door: the head just outside the driver door, looking `heading`
+            r.room.orientation = Quat::yaw(heading);
+            const Vec3 door = parked.world(v::doorHandleOut);
+            r.room.position = Vec3{door.x, 0, door.z} - r.room.orientation.rotate(Vec3{r.headRoom.x, 0, r.headRoom.z}) +
+                              parked.right() * -.35f;
+            r.in.look = r.room.orientation.rotate(Vec3{0, 0, -1});
+            r.in.hands[0] = door;
+            r.in.grip[0] = 1;
+            const v::Out e = tick(r);
+            r.in.grip[0] = 0;
+            bool still = length(r.d.van.frame.at - parked.at) < 1e-5f && r.d.van.frame.yaw == parked.yaw;
+            float shade = r.co.shade, turnMost = std::abs(r.co.turn);
+            int frames = 0;
+            for (; frames < 120 && r.d.boarding; ++frames) {
+                r.in.look = r.room.orientation.rotate(Vec3{0, 0, -1});
+                tick(r);
+                still = still && length(r.d.van.frame.at - parked.at) < 1e-5f && r.d.van.frame.yaw == parked.yaw;
+                shade = std::min(shade, r.co.boarding ? r.co.shade : 1.f);
+                turnMost = std::max(turnMost, std::abs(r.co.turn));
+            }
+            const Vec3 head = compose(r.room, Pose{r.headRoom, {}}).position, seat = parked.world(v::seatEye);
+            const float off = std::abs(std::remainder(lookOf(r.room) - parked.yaw, 6.2831853f));
+            check(e.entered && still, "BOARDING: the door handle at any heading - the van keeps its place and its yaw");
+            check(r.d.carried && r.d.van.state == v::driving && !r.d.boarding && frames < 60,
+                  "BOARDING: in the seat within a moment, then the room carries the van");
+            check(off < 1e-3f, "BOARDING: he faces the van's forward");
+            check(std::hypot(head.x - seat.x, head.z - seat.z) <= v::CarryTune{}.boardNear + .01f, "BOARDING: his eyes at the seat");
+            check(shade >= 1.f && turnMost <= v::CarryTune{}.boardTurnStep + 1e-5f, "BOARDING: under the comfort blink, the turn a snap of a few frames");
+            // a few frames on: the van has not moved (the room's frame matches the parked van)
+            for (int f = 0; f < 10; ++f)
+                tick(r);
+            check(length(r.d.van.frame.at - parked.at) < 1e-3f && std::abs(std::remainder(r.d.van.frame.yaw - parked.yaw, 6.2831853f)) < 1e-3f,
+                  "BOARDING: carried, the van still where it was parked");
+            // out at once (the inside handle): the van stays, he walks out beside the door
+            r.in.hands[0] = r.d.van.frame.world(v::doorHandleIn);
+            r.in.grip[0] = 1;
+            const v::Out x = tick(r);
+            r.in.grip[0] = 0;
+            for (int f = 0; f < 200; ++f)
+                tick(r);
+            const Vec3 body = r.ci.body, step = parked.world(v::exitStep);
+            check(x.exited && r.d.van.state == v::parked && length(r.d.van.frame.at - parked.at) < 1e-3f &&
+                      std::abs(std::remainder(r.d.van.frame.yaw - parked.yaw, 6.2831853f)) < 1e-3f,
+                  "BOARDING: out - the van untouched");
+            check(std::hypot(body.x - step.x, body.z - step.z) < .25f, "BOARDING: out - he is beside the driver door");
+        }
+        {   // the setting off: the 0.0.72 entry (the drawn van comes round him)
+            Rig r;
+            setUp(r);
+            r.in.summonSpot = true;
+            r.in.spot.ok = true;
+            r.in.spot.frame = {{3, 0, -2}, .4f};
+            tick(r);
+            r.in.summonSpot = false;
+            v::Tune old;
+            old.boardPlayer = false;
+            r.in.look = {1, 0, 0};
+            r.in.hands[0] = r.d.van.frame.world(v::doorHandleOut);
+            r.in.grip[0] = 1;
+            r.in.head = compose(r.room, Pose{r.headRoom, {}}).position;
+            r.ci.roomToWorld = r.room;
+            const v::Out e = r.d.step(r.in, r.ci, r.co, flat, open, clearAhead, old);
+            check(e.entered && !r.d.boarding && dot(r.d.van.frame.forward(), Vec3{1, 0, 0}) > .999f,
+                  "boardPlayer off: the 0.0.72 entry (the van faces his look)");
+        }
         {   // driving: the van and the player move through the world, steered by the wheel
             Rig r;
             setUp(r);
@@ -25596,6 +25681,7 @@ int main() {
         in.spot.frame = {{2.6f, 0, -6}, 0};
         v::Tune pedals072; // the preview, not the pedals: the 0.0.72 pedals - WHEEL-HAND PEDALS has its own test
         pedals072.wheelHandPedals = false;
+        pedals072.boardPlayer = false; // the 0.0.72 preview: the drawn van comes round him (BOARDING has its own test)
         auto tick = [&] { return van.stepPreview(in, flat, open, open, pedals072); };
         check(tick().summoned && van.state == v::parked && length(van.frame.at - Vec3{2.6f, 0, -6}) < 1e-4f,
               "the probe's spot: summoned there");

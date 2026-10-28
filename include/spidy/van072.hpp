@@ -50,6 +50,9 @@ struct Tune {
     // Version 0.0.73 test 3: WHEEL-HAND PEDALS (on; false: the 0.0.72 pedals - either trigger, wheel or not)
     bool wheelHandPedals = true;
     float stickBack = .5f;         // a stick pulled back past this (y < -stickBack) with the trigger: reverse
+    // Version 0.0.73 test 3: BOARD THE PLAYER (on; false: 0.0.72 - the drawn van swings round him on entry).
+    // On: getting in never moves the van; HE is turned to its forward and carried into the seat (Driver).
+    bool boardPlayer = true;
     float groundStep = .6f;        // the ground under the van within this of the player's feet
 };
 
@@ -499,8 +502,9 @@ struct Van {
             frame = kept;
         if (o.summoned)
             home = frame;
-        if (o.entered && fine(in.head) && fine(in.look)) {
+        if (o.entered)
             home = kept;
+        if (o.entered && !t.boardPlayer && fine(in.head) && fine(in.look)) { // 0.0.72: the van comes round him
             Vec3 h{in.look.x, 0, in.look.z};
             if (length(h) < 1e-3f)
                 h = kept.forward();
@@ -542,6 +546,11 @@ struct CarryTune {
     uint32_t refusedFrames = 24;  // frames the bridge may not carry before the van parks (about 0.25 s)
     float alightSeconds = 1.2f, alightSpeed = 2.5f, alightNear = .15f;
     float rpmSeconds = .25f;      // the engine's sound follows the van this fast
+    // Version 0.0.73 test 3 BOARDING (Tune::boardPlayer): his room turned to the van's forward in steps of
+    // at most boardTurnStep a frame (a 180 is 4 frames, a snap under a blink), his body carried to the seat
+    // (boardSpeed at most, slowing in the last metre) until within boardNear or boardSeconds; then a
+    // boardFade-second fade of the comfort blink.
+    float boardTurnStep = .9f, boardSpeed = 6.f, boardNear = .06f, boardSeconds = .6f, boardFade = .15f;
 };
 struct CarryIn {
     bool ready{};        // the bridge runs, its state fresh, gameplay: a carry can be asked
@@ -558,6 +567,8 @@ struct CarryOut {
     bool lockStick{};   // no stick turning (it would swing the van with the room)
     bool fellBack{};    // this frame the carry was given up: the van parked where it is
     bool alighting{};
+    bool boarding{};    // Version 0.0.73 test 3: getting him into the seat (the van stays put)
+    float shade{};      // Version 0.0.73 test 3: the comfort blink 0..1 (game_xr: the vignette ring)
     float rpm{};        // the engine's sound, 0 idle .. 1 flat out
 };
 inline bool fine(Quat q) {
@@ -578,6 +589,9 @@ struct Driver {
     uint32_t stuck{}, refused{}, sinceEntry{};
     float alightLeft{}, rpm{};
     Vec3 alightTo{};
+    // Version 0.0.73 test 3 BOARDING: the room's turn still to give, the time so far, the blink's fade
+    bool boarding{}, boarded{};
+    float boardTurn{}, boardTime{}, shadeLeft{};
     uint64_t fallbacks{}, bumps{}, alights{};
     template <class Ground, class Clear, class Ahead>
     Out step(const In& in, const CarryIn& ci, CarryOut& co, Ground&& groundAt, Clear&& clear, Ahead&& ahead,
@@ -616,6 +630,7 @@ struct Driver {
                 alightTo = before.world(exitStep);
                 alightLeft = ct.alightSeconds;
                 ++alights;
+                boarded = false;
             } else if (van.state == driving) {
                 Vec3 v = dt > 0 ? (van.frame.world(seatEye) - before.world(seatEye)) * (1 / dt) : Vec3{};
                 v.y = 0;
@@ -656,7 +671,18 @@ struct Driver {
         } else {
             const bool wasDriving = van.state == driving;
             o = van.stepPreview(in, groundAt, clear, bumperAhead, t);
-            if (o.entered && ci.ready && poseOk) {
+            if (o.entered && t.boardPlayer) {
+                // Version 0.0.73 test 3: the van stays exactly where it is parked; he turns to its forward
+                // (the room about his head) and is carried to the seat (below).
+                Vec3 h{in.look.x, 0, in.look.z};
+                const float headYaw = fine(h) && length(h) > 1e-3f ? std::atan2(-h.x, -h.z) : van.frame.yaw;
+                boardTurn = std::remainder(van.frame.yaw - headYaw, 6.2831853f);
+                if (!fine(boardTurn))
+                    boardTurn = 0;
+                boarding = true;
+                boarded = false;
+                boardTime = 0;
+            } else if (o.entered && ci.ready && poseOk) {
                 // the preview brought the drawn van round him; from here the room carries it
                 const Pose back = inverse(ci.roomToWorld);
                 const Frame r = frameIn(back, van.frame);
@@ -670,6 +696,54 @@ struct Driver {
             (void)wasDriving;
             if (van.state == driving && !carried)
                 co.lockStick = true; // the preview's wheel: no turning away from it
+            if (o.exited && boarded) { // carried in, not driven (the carry gave up): walked out beside the door
+                alightTo = van.frame.world(exitStep);
+                alightLeft = ct.alightSeconds;
+                ++alights;
+                boarded = false;
+            }
+            if (boarding && van.state != driving)
+                boarding = false;
+            if (boarding) {
+                boardTime += dt;
+                Vec3 d = van.frame.world(seatEye) - in.head;
+                d.y = 0;
+                const float n = fine(d) ? length(d) : 0.f;
+                const bool canCarry = ci.ready && poseOk && fine(in.head);
+                const bool there = !canCarry || n <= ct.boardNear || boardTime >= ct.boardSeconds;
+                if (boardTurn == 0 && there && !o.entered) {
+                    // In the seat, facing the van's forward: from here the room carries the van (this frame's
+                    // room has every turn and carry asked before - nothing is asked now).
+                    boarding = false;
+                    shadeLeft = ct.boardFade;
+                    if (canCarry) {
+                        const Frame r = frameIn(inverse(ci.roomToWorld), van.frame);
+                        if (fine(r.at) && fine(r.yaw)) {
+                            room = r;
+                            carried = true;
+                            stuck = refused = sinceEntry = 0;
+                            alightLeft = 0;
+                        }
+                    }
+                } else {
+                    if (boardTurn != 0) {
+                        const float step = std::clamp(boardTurn, -ct.boardTurnStep, ct.boardTurnStep);
+                        co.turn = step;
+                        boardTurn = std::abs(boardTurn - step) < 1e-5f ? 0.f : boardTurn - step;
+                    }
+                    if (canCarry && n > ct.boardNear && boardTime < ct.boardSeconds) {
+                        co.carry = true;
+                        co.velocity = d * (std::min(ct.boardSpeed, n * 10.f) / n);
+                        boarded = true;
+                    }
+                    co.boarding = co.lockStick = true;
+                    co.shade = 1;
+                }
+            }
+        }
+        if (shadeLeft > 0 && !co.boarding) {
+            co.shade = std::max(co.shade, std::clamp(shadeLeft / ct.boardFade, 0.f, 1.f));
+            shadeLeft -= dt;
         }
         // Getting out: walked to the street beside the driver door.
         if (alightLeft > 0) {

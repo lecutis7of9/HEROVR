@@ -377,7 +377,7 @@ SETTINGS = {
     'rep_log': ((0, 1), 'SpidyRepLog', "REP LOG {} (0 on: each rep change is logged, with its hero and time, for the hologram's REP tab, kept in hero_rep_log.txt; 1 off; live)"),  # Version 0.0.73 test 3
     'van_pedals': ((0, 1), 'SpidyVanPedals', "VAN PEDALS {} (0 wheel_hand: a trigger drives only while its hand grips the wheel, the free hand's trigger fires its gun; 1 classic: 0.0.72 - either trigger is a pedal, no shots from the seat; live)"),  # Version 0.0.73 test 3
     'streamer_mode': ((0, 1), 'SpidyStreamerMode', "STREAMER MODE {} (0 on: the monitor shows the headset's eye with all the mod's drawings, cut to the window, RECORDING FOV set aside; 1 off: the monitor as before; live)"),  # Version 0.0.73 STREAMER MODE
-    'streamer_smooth': ((0, 1, 2), 'SpidyStreamerSmooth', "STREAMER SMOOTH {} (0 low: head shake steadied in the monitor's view; 1 off: follows the head at once; 2 high: a slow camera; live)"),  # Version 0.0.73 STREAMER MODE
+    'streamer_smooth': ((0, 2), 'SpidyStreamerSmooth', "STREAMER SMOOTH {} (0 low: head shake steadied in the monitor's view; 1 off: follows the head at once; 2 high: a slow camera; live)"),  # Version 0.0.73 STREAMER MODE
     'streamer_eye': ((0, 1), 'SpidyStreamerEye', "STREAMER EYE {} (0 left_eye, 1 right_eye: the headset eye the monitor shows in STREAMER MODE; live)"),  # Version 0.0.73 STREAMER MODE
     'thor_flight': ((0, 1), 'SpidyThorFlight', "THOR FLIGHT {} (0 on: Thor takes off with both arms up and flies; 1 off: no flight for Thor, a crash bisect key, live)"),
     'thor_hammer': ((0, 3), 'SpidyThorHammer', "THOR HAMMER {} (0 boooop: Boooooop's Mjolnir; 1 devilseye: TheDevilsEye's; 2 love_thunder: Jesus Osco's Love and Thunder; 3 fccooper: fccooper's; live)"),

@@ -158,6 +158,7 @@
 #include "spidy/cape_glide.hpp"
 #include "spidy/grapple073.hpp"
 #include "spidy/van072.hpp"
+#include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
@@ -19189,7 +19190,7 @@ int main() {
                 }
             }
         }
-        check(placed == 203 /* 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 206 /* 0.0.73 STREAMER MODE: + STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -31427,6 +31428,135 @@ int main() {
             appendWristHud(out, v, {0, 1.6f, 0}, .001f);
             check(!out.empty() && sane(out, 0, {0, 1, -.4f}, 1), "the page after CLOSE");
         }
+    });
+    test("0.0.73 STREAMER MODE: ON (default), STREAMER SMOOTH LOW (default), STREAMER EYE LEFT; one sentence each, no restart", [] {
+        namespace sv = streamer_view;
+        const auto& m = combat38::optionInfo[combat38::streamerMode];
+        const auto& s = combat38::optionInfo[combat38::streamerSmooth];
+        const auto& e = combat38::optionInfo[combat38::streamerEye];
+        check(std::string(m.key) == "streamer_mode" && std::string(m.label) == "STREAMER MODE" && m.count == 2 &&
+                  std::string(m.values[0]) == "ON" && std::string(m.values[1]) == "OFF",
+              "STREAMER MODE: ON first (the default), OFF");
+        check(std::string(s.key) == "streamer_smooth" && s.count == 3 && std::string(s.values[0]) == "LOW" &&
+                  std::string(s.values[1]) == "OFF" && std::string(s.values[2]) == "HIGH",
+              "STREAMER SMOOTH: LOW first (the default), OFF, HIGH");
+        check(std::string(e.key) == "streamer_eye" && e.count == 2 && std::string(e.values[0]) == "LEFT EYE" &&
+                  std::string(e.values[1]) == "RIGHT EYE",
+              "STREAMER EYE: LEFT EYE first (the default), RIGHT EYE");
+        for (const auto* o : {&m, &s, &e}) {
+            const std::string h = o->help;
+            check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
+                  std::string(o->label) + ": its subtext is one sentence and says no restart");
+            check(std::string(o->shortName).size() == 5, std::string(o->label) + ": a five-letter code");
+        }
+        check(sv::modeOn(0) && !sv::modeOn(1), "value 0 is ON");
+        check(sv::smoothSeconds(sv::smoothOff) == 0 && sv::smoothSeconds(sv::smoothLow) > 0 &&
+                  sv::smoothSeconds(sv::smoothHigh) > sv::smoothSeconds(sv::smoothLow),
+              "OFF follows at once, HIGH steadies most");
+        check(sv::eyeIndex(0) == 0 && sv::eyeIndex(1) == 1 && sv::eyeIndex(7) == 0, "LEFT EYE is eye 0, RIGHT EYE eye 1");
+        // On the wrist: BODY AND VIEW, in option order after VAN PEDALS.
+        using C = wrist_hud::Control;
+        check(static_cast<int>(C::combatStreamerMode) - static_cast<int>(C::combatCrawlCap) == combat38::streamerMode &&
+                  static_cast<int>(C::combatStreamerEye) - static_cast<int>(C::combatCrawlCap) == combat38::streamerEye,
+              "the wrist rows are the options");
+        const std::string help = wrist_hud::helpText(C::combatStreamerMode);
+        check(help.find("no restart") != std::string::npos, "the wrist shows STREAMER MODE's subtext");
+    });
+    test("0.0.73 STREAMER MODE: the crop fits the window's shape about the eye's axis, inside the eye", [] {
+        namespace sv = streamer_view;
+        const sv::Fov quest{-.942f, .698f, -.960f, .838f}; // a lopsided eye: wider outward and down
+        for (uint32_t smooth = 0; smooth < sv::smoothChoices; ++smooth) {
+            const auto c = sv::fitCrop(quest, sv::windowAspect(1920, 1080), sv::marginOf(smooth));
+            check(c.valid && std::abs(c.aspect() - 16.f / 9.f) < 1e-4f, "16:9 on a 16:9 window");
+            check(c.left == -c.right && c.down == -c.up, "centred on the eye's axis");
+            check(std::atan(c.right) < quest.right && std::atan(-c.left) < -quest.left && std::atan(c.up) < quest.up &&
+                      std::atan(-c.down) < -quest.down,
+                  "inside the eye's field");
+            check(sv::slack(quest, c) > 0, "room for the smoothing's lag");
+        }
+        check(sv::marginOf(sv::smoothHigh) > sv::marginOf(sv::smoothLow) &&
+                  sv::marginOf(sv::smoothLow) > sv::marginOf(sv::smoothOff),
+              "more smoothing keeps more room");
+        const auto tall = sv::fitCrop(quest, sv::windowAspect(1080, 1920), .1f);
+        check(tall.valid && std::abs(tall.aspect() - 9.f / 16.f) < 1e-4f, "a portrait window gets a portrait crop");
+        check(sv::windowAspect(0, 0) == 16.f / 9.f && sv::windowAspect(10000, 1) == 16.f / 9.f,
+              "a minimised or absurd window is taken as 16:9");
+        check(!sv::fitCrop({}, 1.7f, .1f).valid && !sv::fitCrop({-.9f, .7f, -.9f, std::nanf("")}, 1.7f, .1f).valid &&
+                  !sv::fitCrop({.1f, .7f, -.9f, .8f}, 1.7f, .1f).valid && !sv::fitCrop(quest, 0, .1f).valid,
+              "no crop for a bad lens or aspect (the old mirror stays)");
+        check(sv::slack(quest, {}) == 0, "no crop, no slack");
+    });
+    test("0.0.73 STREAMER MODE: the smoothing lags a shake, settles, stays inside the image and restarts on a jump", [] {
+        namespace sv = streamer_view;
+        auto yaw = [](float a) { return Quat{0, std::sin(a / 2), 0, std::cos(a / 2)}; };
+        sv::Smoother off;
+        off.step(yaw(0), 1.f / 30, 0, 1);
+        check(sv::angleBetween(off.step(yaw(.2f), 1.f / 30, 0, 1), yaw(.2f)) < 1e-4f, "OFF: the head at once");
+        sv::Smoother low;
+        check(sv::angleBetween(low.step(yaw(.3f), 1.f / 30, .12f, 1), yaw(.3f)) < 1e-4f, "the first picture is the head's");
+        low.reset();
+        low.step(yaw(0), 1.f / 30, .12f, 1);
+        const float lag = sv::angleBetween(low.step(yaw(.2f), 1.f / 30, .12f, 1), yaw(.2f));
+        check(lag > .1f && lag < .2f, "LOW: a shake is followed part of the way");
+        Quat v{};
+        for (int i = 0; i < 60; ++i)
+            v = low.step(yaw(.2f), 1.f / 30, .12f, 1);
+        check(sv::angleBetween(v, yaw(.2f)) < 1e-3f, "and settles on the head in two seconds");
+        sv::Smoother high;
+        high.step(yaw(0), 1.f / 30, .30f, 1);
+        check(sv::angleBetween(high.step(yaw(.2f), 1.f / 30, .30f, 1), yaw(.2f)) > lag, "HIGH lags more than LOW");
+        sv::Smoother held;
+        held.step(yaw(0), 1.f / 30, .30f, .05f);
+        check(sv::angleBetween(held.step(yaw(.4f), 1.f / 30, .30f, .05f), yaw(.4f)) <= .05f + 1e-4f,
+              "never further behind than the crop's slack");
+        sv::Smoother jump;
+        jump.step(yaw(0), 1.f / 30, .12f, 1);
+        check(sv::angleBetween(jump.step(yaw(1.2f), 1.f / 30, .12f, 1), yaw(1.2f)) < 1e-4f, "a recentre restarts at the head");
+        jump.step(yaw(0), 1.f / 30, .12f, 1);
+        check(sv::angleBetween(jump.step(yaw(.2f), 2.f, .12f, 1), yaw(.2f)) < 1e-4f, "so does a gap");
+        check(sv::angleBetween(jump.step(yaw(.1f), std::nanf(""), .12f, 1), yaw(.1f)) < 1e-4f, "and a bad time step");
+        const auto q = jump.step(yaw(.12f), 1.f / 30, .12f, 1);
+        check(std::isfinite(q.x + q.y + q.z + q.w), "the view stays finite");
+    });
+    test("0.0.73 STREAMER MODE: the shader's mapping - straight through without lag, turned with it, black off the image", [] {
+        namespace sv = streamer_view;
+        auto yaw = [](float a) { return Quat{0, std::sin(a / 2), 0, std::cos(a / 2)}; };
+        const sv::Fov f{-.942f, .698f, -.960f, .838f};
+        const auto c = sv::fitCrop(f, 16.f / 9.f, sv::marginOf(sv::smoothLow));
+        const auto still = sv::turnOf(yaw(.3f), yaw(.3f));
+        for (int i = 0; i < 9; ++i)
+            check(std::abs(still.m[i] - (i % 4 == 0 ? 1.f : 0.f)) < 1e-5f, "no lag: no turn");
+        float s = 0, t = 0;
+        const float l = std::tan(f.left), r = std::tan(f.right), d = std::tan(f.down), u = std::tan(f.up);
+        check(sv::sample(still, c, f, .5f, .5f, s, t) && std::abs(s - (-l) / (r - l)) < 1e-5f &&
+                  std::abs(t - u / (u - d)) < 1e-5f,
+              "the window's middle is the eye's axis");
+        for (float x : {0.f, 1.f})
+            for (float y : {0.f, 1.f})
+                check(sv::sample(still, c, f, x, y, s, t), "the crop's corners are on the image");
+        check(sv::sample(still, c, f, 0, 0, s, t) && s > 0 && t > 0 && sv::sample(still, c, f, 1, 1, s, t) && s < 1 &&
+                  t < 1,
+              "top-left to top-left, bottom-right to bottom-right");
+        // The head turned left of the window's (smoothed) view: straight ahead is right of the eye's axis.
+        const float a = .05f;
+        const auto turned = sv::turnOf(yaw(a), yaw(0));
+        check(sv::sample(turned, c, f, .5f, .5f, s, t) && std::abs(l + s * (r - l) - std::tan(a)) < 1e-4f,
+              "a lag moves the picture by the lag's angle");
+        for (float x : {0.f, 1.f})
+            for (float y : {0.f, 1.f})
+                check(sv::sample(sv::turnOf(yaw(sv::slack(f, c)), yaw(0)), c, f, x, y, s, t),
+                      "within the slack the corners stay on the image");
+        check(!sv::sample(sv::turnOf(yaw(1.2f), yaw(0)), c, f, .5f, .5f, s, t), "far off: black, not a smear");
+        check(!sv::sample(sv::turnOf(yaw(3.1f), yaw(0)), c, f, .5f, .5f, s, t), "behind the eye: black");
+        // The root constants the shader reads.
+        const auto k = sv::constantsOf(turned, c, f, 1920, 1080);
+        check(k.c[0] == turned.m[0] && k.c[2] == turned.m[2] && k.c[4] == turned.m[3] && k.c[10] == turned.m[8] &&
+                  k.c[3] == 0 && k.c[7] == 0 && k.c[11] == 0,
+              "the turn's rows in the first three float4s");
+        check(k.c[12] == c.left && k.c[13] == c.right && k.c[14] == c.down && k.c[15] == c.up, "then the crop");
+        check(k.c[16] == l && k.c[17] == r && k.c[18] == d && k.c[19] == u, "then the lens");
+        check(std::abs(k.c[20] * 1920 - 1) < 1e-6f && std::abs(k.c[21] * 1080 - 1) < 1e-6f, "then the pixel size");
+        check(sv::constantsOf(turned, c, f, 0, 0).c[20] == 0, "no window, no division by zero");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

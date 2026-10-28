@@ -11495,7 +11495,7 @@ DWORD WINAPI run(void*) {
                             if (!saved->flatScreen && !ringHide && hudOpacity > 0 && wristHudOn.load() && !wristHudFault.load() &&
                                 rendered.swing.hands[hudHand].tracked && validTrackedPose(rendered.grips[hudHand]) &&
                                 validTrackedPose(rendered.headPose)) {
-                                const size_t from = translucent.size();
+                                const size_t from = translucent.size(), portraitsFrom = modelVertices.size();
                                 try {
                                     // Update 38.1 RING LAYER NEWEST: the newest grip in this image's world.
                                     const auto newest = [&](unsigned h) {
@@ -11523,6 +11523,22 @@ DWORD WINAPI run(void*) {
                                     hud.page = wristMenu.page();
                                     hud.scroll = wristMenu.scroll();
                                     hud.roster = wristMenu.roster(); // 0.0.73 test 3 HOLO ROSTER (closed: the page)
+                                    // 0.0.73 test 3 PORTRAITS: the tiles' portraits, the old popup's (Models\Roster),
+                                    // into the textured pass; none (no textures, no Roster): the initials discs.
+                                    static thread_local roster_page::Picture holoPictures[roster_page::pictureCount];
+                                    static thread_local const mesh_model::Mesh* holoPicturesOf = nullptr;
+                                    static thread_local bool holoPicturesOk = false;
+                                    if (hud.roster.screen != holo_roster::Screen::closed && overlay.modelReady()) {
+                                        const mesh_model::Mesh* rosterMesh = mesh_model::library().model(mesh_model::slotRoster);
+                                        if (rosterMesh != holoPicturesOf) {
+                                            holoPicturesOf = rosterMesh;
+                                            holoPicturesOk = roster_page::pictures(rosterMesh, holoPictures);
+                                        }
+                                        if (holoPicturesOk) {
+                                            hud.rosterPictures = holoPictures;
+                                            hud.rosterImages = &modelVertices;
+                                        }
+                                    }
                                     if (!wristMenuFault.load()) {
                                         hud.settings = wristShown;
                                         hud.fps = wristFps.fps();
@@ -11679,7 +11695,10 @@ DWORD WINAPI run(void*) {
                                                     static_cast<uint32_t>(hud.scale * 100.f) << 8 |
                                                     static_cast<uint32_t>(hud.textScale * 100.f) << 20;
                                         key.pointing = hud.pointing;
-                                        const bool reuse = holoReuseOn.load() && holoReuse.mayReuse(key, f);
+                                        // 0.0.73 test 3: the heroes on it (their hover, screen, portraits in the
+                                        // textured pass) are not in the key: rebuilt every frame while they show.
+                                        const bool reuse = holoReuseOn.load() && hud.roster.screen == holo_roster::Screen::closed &&
+                                                           holoReuse.mayReuse(key, f);
                                         if (reuse) {
                                             holoReuse.replay(translucent, f);
                                             ++holoReused;
@@ -11700,6 +11719,7 @@ DWORD WINAPI run(void*) {
                                         throw std::runtime_error("unfit vertices");
                                 } catch (...) {
                                     translucent.resize(from);
+                                    modelVertices.resize(portraitsFrom); // 0.0.73 test 3 PORTRAITS
                                     holoReuse.reset();
                                     wristHudFault = true;
                                     message(3, 0, "Wrist hologram failed and is off (save hud = 0, then "

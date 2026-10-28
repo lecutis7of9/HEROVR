@@ -1015,6 +1015,12 @@ struct View {
     // ever), drawn from rosterData (tests, previews) or else holo_roster::latest.
     holo_roster::State roster{};
     const holo_roster::Data* rosterData{};
+    // 0.0.73 test 3 PORTRAITS: the heroes' tiles show their portraits - the old popup's (the Roster model,
+    // Models/Roster: roster_page::pictures, picture k hero k) - as textured quads into rosterImages (the
+    // overlay's textured pass, depth-tested, drawn after the translucent one). rosterPictures: an array of
+    // roster_page::pictureCount; null, no sink, a layer under 0 or a bad UV box: the initials disc as before.
+    const roster_page::Picture* rosterPictures{};
+    std::vector<Vertex>* rosterImages{};
     std::array<float, FpsMeter::history> fpsTrail = [] {
         std::array<float, FpsMeter::history> a{};
         a.fill(std::numeric_limits<float>::quiet_NaN());

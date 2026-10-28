@@ -94,10 +94,11 @@ struct Out {
         x.u0 = u0, x.v0 = v0, x.u1 = u1, x.v1 = v1, x.role = r, x.alpha = a;
         p.push_back(x);
     }
-    void disc(float u, float v, float radius, Vec3 c) {
+    void disc(float u, float v, float radius, Vec3 c, int portrait = -1) {
         Piece x;
         x.kind = Piece::disc;
         x.u0 = u - radius, x.v0 = v - radius, x.u1 = u + radius, x.v1 = v + radius, x.role = Role::custom, x.color = c;
+        x.portrait = portrait;
         p.push_back(x);
     }
     // Left from u0 (or centred between u0 and u1), fitted to their room.
@@ -308,8 +309,11 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
             const hero072::Bio& bio = hero072::bio(h);
             const Vec3 c{bio.color[0], bio.color[1], bio.color[2]};
             const float cu = (b->u0 + b->u1) / 2, cv = b->v1 - .0175f;
-            o.disc(cu, cv, .0115f, c);
+            // 0.0.73 test 3 PORTRAITS: the hero's portrait (the old popup's, the Roster model's picture h)
+            // where the disc is; the disc and its initials when there is none.
+            o.disc(cu, cv, .0115f, c, static_cast<int>(h));
             o.text(initials(h), cu - .011f, cv - .0026f, cu + .011f, .0052f, Role::custom, true, Vec3{1, 1, 1});
+            o.p.back().portrait = static_cast<int>(h), o.p.back().fallback = true;
             o.text(bio.name, b->u0 + .0015f, b->v1 - .039f, b->u1 - .0015f, .0042f, hov ? Role::line : Role::text, true);
             const std::string sub = now ? std::string("PLAYING") : rep_log::rankText(d.heroPoints[h]);
             o.text(sub, b->u0 + .002f, b->v1 - .049f, b->u1 - .002f, .0031f, now ? Role::good : Role::value, true);

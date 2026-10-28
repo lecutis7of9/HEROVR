@@ -45,7 +45,9 @@
 // Version 0.0.73 test 3:
 //   roster   the HOLO ROSTER on the wrist: MARVEL tiles (one pointed at), DC tiles, BATMAN's page on CONTROLS,
 //            OUTFITS and STATS, the REP page (meter and log) and the REP LOG filtered to BATMAN (STATS' button);
-//            a made-up log and rep (not a play session)
+//            a made-up log and rep (not a play session). PORTRAITS: with SPIDY_ROSTER_GLB (a shipped
+//            Models/Roster/scene.glb) and SPIDY_ROSTER_LAYERS (tools/roster/preview_layers.py over it) the tiles
+//            show the old popup's portraits as the game draws them; without, the initials discs (the fallback)
 //
 //   spidy_hud_preview <path.bmp> [pages|scroll|themes|webstyle|music|raimi|subtext|remap|v002|heroes|holo|roster]
 //   spidy_hud_preview <path.bmp> v0062 <page>   (Update 39.0.2: a page, each section opened, the end)
@@ -56,10 +58,14 @@
 #include "spidy/gesture_session.hpp"
 #include "spidy/hero072.hpp"
 #include "spidy/holo_roster.hpp"
+#include "spidy/mesh_model.hpp"
+#include "spidy/roster_page.hpp"
 #include "preview_image.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
+#include <fstream>
 #include <string>
 #include <vector>
 using namespace spidy;
@@ -141,6 +147,53 @@ int homeOf(wrist_hud::Control c) {
         wrist_hud::setOpenSection(place.page, place.section);
     return place.page < 0 ? 0 : place.page;
 }
+// 0.0.73 test 3 PORTRAITS ("roster" sheet): the old popup's pictures, as the game has them - the shipped
+// Models/Roster/scene.glb (SPIDY_ROSTER_GLB) read by mesh_model, roster_page::pictures over it, and its images
+// decoded (no JPEG here: SPIDY_ROSTER_LAYERS, "RGBA w h n\n" then the n images' pixels in the glb's order,
+// tools/roster/preview_layers.py) stacked into one texture, layer k its band k. Either missing: the discs.
+struct Portraits {
+    roster_page::Picture pictures[roster_page::pictureCount];
+    Texture texture;
+    int layers = 0;
+    bool ok = false;
+};
+const Portraits& portraits() {
+    static const Portraits p = [] {
+        Portraits x;
+        const char* glb = std::getenv("SPIDY_ROSTER_GLB");
+        const char* raw = std::getenv("SPIDY_ROSTER_LAYERS");
+        if (!glb || !raw)
+            return x;
+        std::vector<uint8_t> bytes;
+        mesh_model::Mesh m;
+        std::string error;
+        if (!mesh_model::readFile(glb, bytes) || !mesh_model::parseGlb(bytes.data(), bytes.size(), m, error)) {
+            std::fprintf(stderr, "roster glb: %s\n", error.c_str());
+            return x;
+        }
+        std::ifstream in(raw, std::ios::binary);
+        std::string tag;
+        int w = 0, h = 0, n = 0;
+        in >> tag >> w >> h >> n;
+        in.get();
+        if (tag != "RGBA" || w <= 0 || h <= 0 || n <= 0 || n != static_cast<int>(m.images.size()))
+            return x;
+        Texture::Level l{w, h * n, std::vector<float>(static_cast<size_t>(w) * h * n * 4)};
+        std::vector<uint8_t> px(l.rgba.size());
+        if (!in.read(reinterpret_cast<char*>(px.data()), static_cast<std::streamsize>(px.size())))
+            return x;
+        for (size_t i = 0; i < px.size(); ++i)
+            l.rgba[i] = i % 4 == 3 ? px[i] / 255.f : decode(px[i] / 255.f);
+        x.texture.levels.push_back(std::move(l));
+        for (int i = 0; i < n; ++i)
+            m.images[static_cast<size_t>(i)].layer = i;
+        x.layers = n;
+        x.ok = roster_page::pictures(&m, x.pictures);
+        std::printf("roster portraits: %s (%d layers)\n", x.ok ? "read" : "NOT read", n);
+        return x;
+    }();
+    return p;
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -178,6 +231,7 @@ int main(int argc, char** argv) {
         soft::softBar(arm, elbow + Vec3{0, .02f, 0}, wristAt + Vec3{.04f, .03f, 0}, normalized(wristAt - eye),
                       .008f, {.02f, .04f, .25f}, 1, .001f);
         wrist_hud::View view;
+        std::vector<Vertex> images; // the roster's portraits (the textured pass)
         view.emitter = wristAt + Vec3{0, .03f, 0};
         view.seconds = .3f;
         wrist_hud::resetSections();
@@ -389,6 +443,8 @@ int main(int argc, char** argv) {
             view.page = wrist_hud::powersPage;
             view.roster = st;
             view.rosterData = &d;
+            if (portraits().ok)
+                view.rosterPictures = portraits().pictures, view.rosterImages = &images;
             madeUpRun(view);
         } else if (sheet == "heroes") {
             // Update 39.0.2 (5 cells): POWERS with FLYING, then each hero profile opened - IRON MAN is the
@@ -441,6 +497,12 @@ int main(int argc, char** argv) {
         const Camera camera{1 / pixelAngle, size * .5f, height * .5f};
         draw(image, look(arm, eye, target), camera, 0, 0, x0, 0, size, height);
         draw(image, look(hud, eye, target), camera, 0, 0, x0, 0, size, height);
+        if (!images.empty()) { // the textured pass after the translucent one, as the overlay draws it
+            for (Vertex& v : images)
+                v.shape.y = (v.shape.z + std::clamp(v.shape.y, 0.f, 1.f)) / static_cast<float>(portraits().layers);
+            drawArt(image, look(images, eye, target), portraits().texture, camera, 0, 0, x0, 0, size, height, 0);
+            std::printf("cell %d: %zu portrait vertices\n", cell, images.size());
+        }
         std::printf("cell %d: %zu vertices\n", cell, hud.size());
     }
     return save(image, argv[1]) ? 0 : 1;

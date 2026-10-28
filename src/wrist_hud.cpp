@@ -4839,9 +4839,59 @@ void holoRoster(const Painter& p, const View& view) {
         }
         return finite(x.color) ? x.color : p.c.text;
     };
+    // 0.0.73 test 3 PORTRAITS: which heroes' portraits are drawn (their initials then are not).
+    const float opacity = std::isfinite(view.opacity) ? std::clamp(view.opacity, 0.f, 1.f) : 0.f;
+    bool drawn[hero_modes::heroes]{};
+    const auto portrait = [&](const hr::Piece& x) {
+        if (!view.rosterImages || !view.rosterPictures || opacity <= .55f || x.portrait < 0 ||
+            x.portrait >= static_cast<int>(hero_modes::heroes) || x.portrait >= static_cast<int>(roster_page::pictureCount))
+            return false;
+        const roster_page::Picture& q = view.rosterPictures[x.portrait];
+        const bool box = std::isfinite(q.u0) && std::isfinite(q.v0) && std::isfinite(q.u1) && std::isfinite(q.v1) &&
+                         q.u0 >= -.01f && q.v0 >= -.01f && q.u1 <= 1.01f && q.v1 <= 1.01f && q.u1 - q.u0 > 1e-4f &&
+                         q.v1 - q.v0 > 1e-4f;
+        if (q.layer < 0 || q.layer > 4095 || !box)
+            return false;
+        // A square on the disc's centre (a touch wider than the disc), framed in the theme's colours.
+        const float cu = (x.u0 + x.u1) / 2, cv = (x.v0 + x.v1) / 2, h = (x.u1 - x.u0) / 2 * 1.08f;
+        const float u0 = cu - h, u1 = cu + h, v0 = cv - h, v1 = cv + h;
+        const float layer = static_cast<float>(q.layer);
+        const Vec3 tint{.93f, .98f, 1.f}; // the faint holo blue over the picture
+        const Vec3 lift = p.normal * (.0006f * p.s); // a hair toward the eye, as the popup's pictures sit
+        const auto at = [&](float u, float v) { return p.at(u, v) + lift; };
+        const Vertex tl{at(u0, v1), tint, 1.f, {q.u0, q.v0, layer, 1}}, tr{at(u1, v1), tint, 1.f, {q.u1, q.v0, layer, 1}},
+            br{at(u1, v0), tint, 1.f, {q.u1, q.v1, layer, 1}}, bl{at(u0, v0), tint, 1.f, {q.u0, q.v1, layer, 1}};
+        for (const Vertex* y : {&tl, &tr, &br, &bl})
+            if (!finite(y->position))
+                return false;
+        auto& out = *view.rosterImages;
+        out.insert(out.end(), {tl, bl, br, tl, br, tr});
+        // The frame just outside it (the translucent pass is drawn first: never under the picture).
+        const float w = .0008f, e = w;
+        p.bar(u0 - e, v1 + e, u1 + e, v1 + e, w, p.c.frame, 1);
+        p.bar(u0 - e, v0 - e, u1 + e, v0 - e, w, p.c.frame, 1);
+        p.bar(u0 - e, v0 - e, u0 - e, v1 + e, w, p.c.frame, 1);
+        p.bar(u1 + e, v0 - e, u1 + e, v1 + e, w, p.c.frame, 1);
+        p.rect(u0 - e * 3, v0 - e * 3, u1 + e * 3, v0 - e * 1.6f, p.c.accent, .35f); // a glow under it
+        return true;
+    };
     for (const hr::Piece& x : ps) {
         const Vec3 c = colour(x);
         const float a = std::isfinite(x.alpha) ? std::clamp(x.alpha, 0.f, 1.f) : 1.f;
+        if (x.kind == hr::Piece::disc && x.portrait >= 0 && x.portrait < static_cast<int>(hero_modes::heroes)) {
+            bool ok = false;
+            try {
+                ok = portrait(x);
+            } catch (...) {
+                ok = false;
+            }
+            if (ok) {
+                drawn[x.portrait] = true;
+                continue;
+            }
+        }
+        if (x.fallback && x.portrait >= 0 && x.portrait < static_cast<int>(hero_modes::heroes) && drawn[x.portrait])
+            continue;
         switch (x.kind) {
         case hr::Piece::fill: p.rect(x.u0, x.v0, x.u1, x.v1, c, a * (x.role == hr::Role::backing ? p.c.backingAlpha : 1.f)); break;
         case hr::Piece::outline: {

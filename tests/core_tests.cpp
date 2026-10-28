@@ -31216,6 +31216,76 @@ int main() {
                 check(found, "a tile has no name: " + name);
             }
         }
+        // 0.0.73 test 3 PORTRAITS: each tile's disc carries its hero, its initials the fallback; with the
+        // Roster model's pictures and a textured sink each tile is its portrait (6 vertices, its layer,
+        // its UV box), the initials not drawn; with none, a layer under 0 or a bad box: the disc as before.
+        {
+            hr::State g0;
+            g0.screen = Screen::grid;
+            std::vector<hr::Piece> ps;
+            hr::pieces(g0, d, ps);
+            uint32_t discs = 0, fallbacks = 0;
+            for (const hr::Piece& p : ps) {
+                if (p.kind == hr::Piece::disc)
+                    ++discs, check(p.portrait >= 0 && p.portrait < static_cast<int>(hero_modes::heroes), "a disc without its hero");
+                if (p.fallback)
+                    ++fallbacks, check(p.kind == hr::Piece::text && !p.words.empty() && p.words.size() <= 3,
+                                       "the fallback is not the initials");
+            }
+            check(discs == hr::marvelCount && fallbacks == hr::marvelCount, "a MARVEL tile without its portrait spot");
+            roster_page::Picture pics[roster_page::pictureCount];
+            for (uint32_t k = 0; k < roster_page::pictureCount; ++k)
+                pics[k] = roster_page::Picture{static_cast<int>(20 + k / 9), (k % 3) / 3.f, (k / 3 % 3) / 3.f,
+                                               (k % 3) / 3.f + .3f, (k / 3 % 3) / 3.f + .3f};
+            wrist_hud::View v;
+            v.emitter = {0, 1, -.4f};
+            v.opacity = 1;
+            v.page = wrist_hud::powersPage;
+            v.roster = g0;
+            v.rosterData = &d;
+            std::vector<Vertex> plain, out, images;
+            wrist_hud::appendWristHud(plain, v, {0, 1.6f, 0}, .001f);
+            v.rosterPictures = pics, v.rosterImages = &images;
+            wrist_hud::appendWristHud(out, v, {0, 1.6f, 0}, .001f);
+            check(images.size() == 6 * hr::marvelCount && wrist_hud::sane(out, 0, {0, 1, -.4f}, 1) && out.size() != plain.size(),
+                  "the MARVEL tiles are not their portraits");
+            for (size_t i = 0; i < images.size(); ++i) {
+                const Vertex& x = images[i];
+                const uint32_t h = hr::marvelHeroes[i / 6];
+                check(finite(x.position) && length(x.position - Vec3{0, 1, -.4f}) < .5f && x.shape.w == 1 &&
+                          x.shape.z == static_cast<float>(pics[h].layer) && x.shape.x >= pics[h].u0 - 1e-6f &&
+                          x.shape.x <= pics[h].u1 + 1e-6f && x.shape.y >= pics[h].v0 - 1e-6f && x.shape.y <= pics[h].v1 + 1e-6f,
+                      "a portrait vertex not its hero's picture");
+            }
+            // DC: three.
+            images.clear(), out.clear();
+            v.roster.group = 1;
+            wrist_hud::appendWristHud(out, v, {0, 1.6f, 0}, .001f);
+            check(images.size() == 6 * hr::dcCount, "the DC tiles are not their portraits");
+            // One missing (Thor's layer under 0), one with a broken box (Hulk): those two the disc, never a crash.
+            v.roster.group = 0;
+            pics[hero_modes::thor].layer = -1;
+            pics[hero_modes::hulk].u1 = std::numeric_limits<float>::quiet_NaN();
+            images.clear(), out.clear();
+            wrist_hud::appendWristHud(out, v, {0, 1.6f, 0}, .001f);
+            check(images.size() == 6 * (hr::marvelCount - 2) && wrist_hud::sane(out, 0, {0, 1, -.4f}, 1),
+                  "a missing portrait was not the initials disc");
+            // No sink, no pictures, faded: none (as the popup's, the textured pass is opaque).
+            images.clear();
+            std::vector<Vertex> none;
+            wrist_hud::View w = v;
+            w.rosterImages = nullptr;
+            wrist_hud::appendWristHud(none, w, {0, 1.6f, 0}, .001f);
+            w = v, w.rosterPictures = nullptr;
+            wrist_hud::appendWristHud(none, w, {0, 1.6f, 0}, .001f);
+            w = v, w.opacity = .4f;
+            wrist_hud::appendWristHud(none, w, {0, 1.6f, 0}, .001f);
+            check(images.empty(), "a portrait drawn without its sink, its pictures or faded");
+            // The hero page has no tiles: no portraits.
+            w = v, w.roster.screen = Screen::hero;
+            wrist_hud::appendWristHud(none, w, {0, 1.6f, 0}, .001f);
+            check(images.empty(), "a portrait on the hero page");
+        }
         s.screen = Screen::hero;
         for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
             s.hero = h;

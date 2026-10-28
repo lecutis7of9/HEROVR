@@ -106,6 +106,11 @@ struct Piece {
     std::string words;
     float height{};               // text: capital height
     bool centred{};
+    // 0.0.73 test 3 PORTRAITS: a hero tile's disc carries its hero (hero_modes::Hero; its portrait,
+    // roster_page picture `portrait`, is drawn in its place when there is one); its initials are
+    // `fallback`, drawn only when that portrait is not.
+    int portrait = -1;
+    bool fallback{};
 };
 // Every piece of `s`'s screen. Text is fitted to its room (overlay_text's stroke widths).
 void pieces(const State&, const Data&, std::vector<Piece>& out);

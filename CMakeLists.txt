@@ -184,6 +184,8 @@ target_link_libraries(spidy_mp_tests PRIVATE spidy_core)
 add_test(NAME mp COMMAND spidy_mp_tests)
 add_executable(spidy_mp_probe apps/mp_probe.cpp)
 target_link_libraries(spidy_mp_probe PRIVATE spidy_core)
+add_executable(spidy_mp_preview apps/mp_preview.cpp src/sfx_quiet.cpp) # 0.0.73 MP SOLO TEST: desktop previews
+target_link_libraries(spidy_mp_preview PRIVATE spidy_core)
 # Version 0.0.72 GAME BODY (EXPERIMENTAL): the multiplayer team's spec offline, a synthetic 237-joint rig.
 add_executable(spidy_game_body_tests tests/game_body_tests.cpp src/sfx_quiet.cpp)
 target_link_libraries(spidy_game_body_tests PRIVATE spidy_core)

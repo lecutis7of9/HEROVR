@@ -11,6 +11,7 @@
 // (PIL) and run again.
 //
 //   spidy_model_dump <Models folder/> <cache folder/> <out folder/> [texture size]
+#include "spidy/roster_page.hpp"
 #include "spidy/hero007_visual.hpp"
 #include "spidy/mesh_model.hpp"
 
@@ -107,6 +108,17 @@ int main(int argc, char** argv) {
             bool placed = mm::slotIsVehicle(s);
             for (uint32_t h = 0; h < mm::hammers; ++h)
                 placed = placed || s == mm::hammerSlot(h);
+            if (s == mm::slotRoster) { // Build 8: the ROSTER page's own drawer (its grid, faded in), pictures into the sink
+                roster_page::Page page;
+                page.open(Pose{{0, 0, 0}, {}}, 0);
+                roster_page::Input in;
+                for (int f = 1; f <= 30; ++f)
+                    in.seconds = f * .02, page.update(in);
+                roster_page::Cache cache;
+                std::vector<Vertex> plate;
+                roster_page::append(plate, &sink, roster_page::view(page, 0, Pose{}), cache, model);
+                drawn = !sink.empty();
+            } else
             drawn = placed ? hero007::appendPlacedModel(plain, *model, {0, 0, 0}, {0, 0, -1}, {0, 1, 0}, viewer)
                     : s < mm::styles ? hero007::appendBatarangModel(plain, it, *model, viewer)
                                      : hero007::appendModel(plain, it, *model, viewer);

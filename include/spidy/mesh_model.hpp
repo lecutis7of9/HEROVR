@@ -55,7 +55,9 @@ inline constexpr uint32_t liteTriangles = 2400;
 // game_xr gives: WIC), scaled to textureSize x textureSize and put in one layer of the overlay's
 // texture array (D3D12Renderer::setModelTextures). Equal images share a layer.
 // Version 0.0.72 THOR HAMMERS + PUNISHER VAN: 32 layers (the four hammers and the van take 15; about 160 MB at 1024 px with mips).
-inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 32;
+// Test build 8 ROSTER page: 40 (the roster's six picture atlases on top of the 28 images; the game uses
+// 512 px layers - about 1.4 MB each with mips - so the roster adds about 8 MB).
+inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 40;
 inline constexpr size_t mostImageBytes = 48u << 20;
 
 struct Mesh {
@@ -128,16 +130,19 @@ enum Style : uint32_t { styleDefault = 0, styleEira, styleClooney, styleJoker, s
 // ground under the axles' middle at the origin; slotVanInterior (.../Interior) the cab BUILT for the empty source
 // shell (the same frame); slotVanWheel (.../SteeringWheel) the hub at the origin, the rim in the xy plane, +z
 // toward the driver, +y 12 o'clock (turned by the hands).
+// Test build 8 ROSTER page: slotRoster (Models\Roster, tools/roster/make_roster_glb.py) is not a model that is
+// drawn: it carries the ROSTER page's profile pictures and suit previews (picture k = triangles 2k, 2k+1, their
+// UVs its box in an atlas); roster_page draws them as flat quads. Missing: the page shows PICTURE MISSING.
 enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slotVan,
-                       slotVanInterior, slotVanWheel, slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper, slots };
+                       slotVanInterior, slotVanWheel, slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper, slotRoster, slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
                                                    "Baton/Right", "Shield",           "GrappleGun",       "Hammer/BOOOOP",
                                                    "Vehicle/PunisherVan", "Vehicle/PunisherVan/Interior", "Vehicle/PunisherVan/SteeringWheel",
-                                                   "Hammer/DEVILSEYE", "Hammer/LOVEANDTHUNDER", "Hammer/FCCOOPER"};
+                                                   "Hammer/DEVILSEYE", "Hammer/LOVEANDTHUNDER", "Hammer/FCCOOPER", "Roster"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
-                                                vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles};
+                                                vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -146,7 +151,7 @@ inline constexpr uint32_t hammerSlot(uint32_t choice) {
 // The van's parts (drawn by hero007::appendPlacedModel: up to 8 m, seen to 80 m).
 inline constexpr bool slotIsVehicle(uint32_t slot) { return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel; }
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
-inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true};
+inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false};
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

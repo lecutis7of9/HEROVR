@@ -45,10 +45,12 @@ SOURCES = {
 # Version 0.0.72: parts BUILT for a model whose source lacks them (the van's empty cab): no source to match,
 # so they are checked for real UVs, their texture and being drawn, and rendered beside their texture.
 BUILT = {'Vehicle/PunisherVan/Interior': 'the cab built for the source\'s empty shell (seats, dash, door card)',
-         'Vehicle/PunisherVan/SteeringWheel': 'the steering wheel built as its own part (turned in game)'}
+         'Vehicle/PunisherVan/SteeringWheel': 'the steering wheel built as its own part (turned in game)',
+         # Build 8 ROSTER page: 48 picture quads (2 triangles each) over 6 atlases, no source model (make_roster_glb.py).
+         'Roster': 'the ROSTER page\'s 48 pictures (each artist\'s Sketchfab thumbnail), 6 atlases'}
 # The least a shipped model may have (it may keep fewer only when its source has fewer), by kind, and
 # never under MIN_SHARE of its source.
-FLOORS = {'weapon': 3000, 'prop': 3000, 'shield': 5000, 'vehicle': 20000, 'vehicle_part': 1500, 'body': 10000}
+FLOORS = {'pictures': 96, 'weapon': 3000, 'prop': 3000, 'shield': 5000, 'vehicle': 20000, 'vehicle_part': 1500, 'body': 10000}
 MIN_SHARE = .30
 # Version 0.0.72: slots not shipped on purpose (MODEL MISSING in game, no stand-in). None now: the hammers
 # and the van are the user's picks.
@@ -384,7 +386,7 @@ def run(models=DEFAULT_MODELS, sources=DEFAULT_SOURCES, out=DEFAULT_OUT, dump=DU
             if slot in BUILT:
                 info = summary['slots'][slot]
                 v, layers = load_dump(d, i, summary)
-                fails = check(slot, info, 0, 'vehicle_part', v, True)
+                fails = check(slot, info, 0, 'pictures' if slot == 'Roster' else 'vehicle_part', v, True)
                 ours, _ = render_ours(v, layers) if len(v) else (np.zeros((SIZE, SIZE, 3)), None)
                 tex = np.zeros((SIZE, SIZE, 3))
                 try:  # the glb's own (first) image
@@ -404,7 +406,7 @@ def run(models=DEFAULT_MODELS, sources=DEFAULT_SOURCES, out=DEFAULT_OUT, dump=DU
                 lines += ['FAIL ' + f for f in fails] or ['PASS']
                 side_by_side(os.path.join(out, slot.replace('/', '_') + '.png'), ours, tex, slot, lines,
                              right='BUILT: no source model - its texture atlas')
-                rows.append(dict(slot=slot, kind='vehicle_part', fails=fails, **info, source=0))
+                rows.append(dict(slot=slot, kind='pictures' if slot == 'Roster' else 'vehicle_part', fails=fails, **info, source=0))
                 failures += fails
                 continue
             if slot not in table:

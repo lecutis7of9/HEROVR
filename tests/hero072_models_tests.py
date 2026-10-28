@@ -44,7 +44,7 @@ class Floors(unittest.TestCase):
         self.assertGreaterEqual(mc.FLOORS['vehicle'], 20000)
         self.assertEqual(mc.SOURCES['Vehicle/PunisherVan'][1], 'vehicle')
         self.assertTrue(all(mc.SOURCES[h][1] == 'prop' for h in mc.SOURCES if h.startswith('Hammer/')))
-        self.assertEqual(set(mc.BUILT), {'Vehicle/PunisherVan/Interior', 'Vehicle/PunisherVan/SteeringWheel'})
+        self.assertEqual(set(mc.BUILT), {'Vehicle/PunisherVan/Interior', 'Vehicle/PunisherVan/SteeringWheel', 'Roster'})
 
 
 if __name__ == '__main__':

@@ -19,6 +19,7 @@
 #include "spidy/calibration_art.hpp"
 #include "spidy/calibration_panel.hpp"
 #include "spidy/test_notice.hpp"
+#include "spidy/roster_page.hpp"
 #include "spidy/health_ring.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/hand_crawl.hpp"
@@ -826,6 +827,8 @@ hero072::PlayOptions hero072Options() {
 }
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
 // hologram, the live exports, live.txt at start).
+// Build 8 ROSTER page: a suit picked on it (tracking thread), taken by the game thread: hero * 16 + suit + 1 (0: none).
+std::atomic<uint32_t> rosterSuitRequest{0};
 void heroOnly(uint32_t option) {
     if (!combat38::isHeroToggle(option) || combat38Values[option].load() == 0)
         return;
@@ -2423,6 +2426,10 @@ DWORD WINAPI run(void*) {
         test_notice::Notice testNotice;
         bool testNoticeFault{};
         double testNoticeClock{}; // build 5: the notice's clock (frame.seconds is a frame's length)
+        // Build 8 ROSTER page (ROSTER: HEROES AND SUITS on the POWERS page). Should it fail, only it goes off.
+        roster_page::Page rosterPage;
+        bool rosterFault{};
+        double rosterClock{};
         uint64_t immersiveSince{}, calibrationShownAt{};
         // From the calibration's start until each is let go after it, the
         // triggers, grips, A and B do nothing in the game (B skips it).
@@ -2761,6 +2768,58 @@ DWORD WINAPI run(void*) {
                     // or the A that closed it is still held, A / X reach nothing else: the
                     // closing press is never a jump (nor a charged leap on its release).
                     const bool noticeA[2]{(frame.buttons & buttonX) != 0, frame.jump};
+                    // Build 8 ROSTER page: it reads the raw hands (laser + trigger / A, or a poke; B / Y back),
+                    // and while it is open, or a press it saw is still held, the triggers, A / B / X / Y reach
+                    // nothing else (no web, no jump, no wrist press under it).
+                    if (!rosterFault && (rosterPage.holdsInput() || rosterPage.opacity() > 0)) { // and its fade out
+                        try {
+                            rosterClock += std::isfinite(frame.seconds) ? std::clamp(static_cast<double>(frame.seconds), 0.0, .1) : 0.0;
+                            roster_page::Input rin;
+                            rin.seconds = rosterClock;
+                            rin.head = validTrackedPose(frame.head) ? frame.head : Pose{{NAN, 0, 0}, {}};
+                            rin.playing = static_cast<uint32_t>(wrist_hud::activeHero());
+                            for (unsigned i = 0; i < 2; ++i) {
+                                const auto& hand = frame.hands[i];
+                                rin.hands[i].tracked = hand.valid && validTrackedPose(hand.grip);
+                                rin.hands[i].grip = hand.grip;
+                                rin.hands[i].aim = hand.aim;
+                                rin.hands[i].trigger = hand.trigger;
+                                rin.hands[i].a = noticeA[i];
+                                rin.hands[i].b = (frame.buttons & (i ? buttonB : buttonY)) != 0;
+                            }
+                            const uint32_t pressesBefore = rosterPage.presses();
+                            const auto act = rosterPage.update(rin);
+                            if (rosterPage.presses() != pressesBefore)
+                                runtime.haptic(0, .12f), runtime.haptic(1, .12f);
+                            if (act.playAs >= 0 && act.playAs < static_cast<int>(hero_modes::heroes)) {
+                                if (act.playAs == 0)
+                                    for (const auto o : combat38::heroToggles)
+                                        combat38Values[o] = 0;
+                                else {
+                                    const auto o = combat38::heroToggles[act.playAs - 1];
+                                    combat38Values[o] = 1;
+                                    heroOnly(o);
+                                }
+                                consoleLine(std::string("ROSTER: PLAY AS ") + wrist_hud::activeHeroName(act.playAs));
+                            }
+                            if (act.suitHero >= 0 && act.suitIndex >= 0) {
+                                rosterSuitRequest = static_cast<uint32_t>(act.suitHero) * 16 + static_cast<uint32_t>(act.suitIndex) + 1;
+                                consoleLine("ROSTER: suit " + std::to_string(act.suitIndex) + " of hero " + std::to_string(act.suitHero) + " picked");
+                            }
+                            if (act.closed)
+                                consoleLine("ROSTER: closed");
+                        } catch (...) {
+                            rosterFault = true;
+                            rosterPage.close();
+                            consoleLine("ROSTER: off for this session (a fault)");
+                        }
+                        if (!rosterFault && rosterPage.holdsInput()) {
+                            frame.jump = false;
+                            frame.buttons &= ~static_cast<uint32_t>(buttonA | buttonB | buttonX | buttonY);
+                            for (auto& hand : frame.hands)
+                                hand.trigger = 0;
+                        }
+                    }
                     if (test_notice::testBuild && !testNoticeFault && testNotice.holdsA()) {
                         frame.jump = false;
                         frame.buttons &= ~static_cast<uint32_t>(buttonA | buttonX);
@@ -3587,6 +3646,10 @@ DWORD WINAPI run(void*) {
                                     // a press the pages never mark changed (as 29 is MUSIC SEEK's).
                                     if (o == combat38::mirrorView)
                                         wristChanged |= 1u << 21;
+                                }
+                                if (result.heroRoster && !rosterFault) { // Build 8: the roster page, in front of the head
+                                    if (validTrackedPose(frame.head) && rosterPage.open(frame.head, rosterClock))
+                                        consoleLine("ROSTER: opened");
                                 }
                                 if (result.heroSpider) // Update 39.0.1: PLAY AS SPIDER-MAN, every hero toggle off (live)
                                     for (const auto o : combat38::heroToggles)
@@ -6813,6 +6876,26 @@ DWORD WINAPI run(void*) {
                                         in72.jumpBusy = jumpBusy72 || (frame.buttons & buttonA) != 0;
                                         in72.takedownPrompt = false;
                                         in72.o = hero072Options();
+                                        // Build 8 ROSTER page: the suits it shows (published only when they change), and
+                                        // a suit picked on it (row 0: the player's own mod or the game's suit).
+                                        {
+                                            const bool all72 = hero072::testSuits(in72.o.testUnlocks);
+                                            if (const uint32_t req = rosterSuitRequest.exchange(0)) {
+                                                const uint32_t h = (req - 1) / 16, i = (req - 1) % 16;
+                                                char line[128];
+                                                if (hero072Play.suits.choose(h, i, all72)) {
+                                                    if (i > 0 && in72.o.ownSuit) { // a suit of ours picked: OWN SUIT off to wear it
+                                                        combat38Values[combat38::ownSuit].store(0);
+                                                        in72.o.ownSuit = false;
+                                                    }
+                                                    hero072Play.progressDirty = true;
+                                                    sprintf_s(line, "BUILD 8 ROSTER: suit %u of hero %u chosen", i, h);
+                                                } else
+                                                    sprintf_s(line, "BUILD 8 ROSTER: suit %u of hero %u refused (locked or MODEL MISSING)", i, h);
+                                                game_prompts::note(line);
+                                            }
+                                            roster_page::publish(roster_page::snapshotOf(hero072Play.suits, all72, in72.o.ownSuit));
+                                        }
                                         // HERO SUIT NEXT: one step to this hero's next unlocked suit, then back to DEFAULT.
                                         if (c38(combat38::heroSuit) == 1) {
                                             combat38Values[combat38::heroSuit].store(0);
@@ -9013,6 +9096,10 @@ DWORD WINAPI run(void*) {
                     }
                     saved.notice = testNoticeFault ? test_notice::View{}
                                                    : test_notice::view(testNotice, compose(motion.headPose, inverse(frame.head)));
+                    saved.roster = rosterFault || (!rosterPage.isOpen() && rosterPage.opacity() <= 0)
+                                       ? roster_page::View{}
+                                       : roster_page::view(rosterPage, static_cast<uint32_t>(wrist_hud::activeHero()),
+                                                           compose(motion.headPose, inverse(frame.head)));
                     history.remember(saved);
                     const auto code = SpidySetEyes(&eyes);
                     if (code && code != 4003)
@@ -10327,6 +10414,23 @@ DWORD WINAPI run(void*) {
                                 test_notice::append(translucent, notice);
                             } catch (...) {
                                 translucent.resize(from);
+                            }
+                        }
+                        // Build 8 ROSTER page: its plate and text blended, its pictures in the textured models'
+                        // pass (depth-tested, after). Nothing at all while it is closed.
+                        if (!saved->flatScreen && saved->roster.opacity > 0) {
+                            static thread_local roster_page::Cache rosterCache;
+                            const size_t from = translucent.size(), modelsFrom = modelVertices.size();
+                            try {
+                                auto roster = saved->roster;
+                                roster.panel.position += travel;
+                                const mesh_model::Mesh* rosterMesh =
+                                    overlay.modelReady() ? mesh_model::library().model(mesh_model::slotRoster) : nullptr;
+                                roster_page::append(translucent, overlay.modelReady() ? &modelVertices : nullptr, roster,
+                                                    rosterCache, rosterMesh);
+                            } catch (...) {
+                                translucent.resize(from);
+                                modelVertices.resize(modelsFrom);
                             }
                         }
                         // The wrist hologram (Update 14) over its wrist, moved with the

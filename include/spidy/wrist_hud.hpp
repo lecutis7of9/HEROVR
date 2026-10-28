@@ -544,8 +544,10 @@ enum class Control : uint8_t {
     section9,
     section10, // Version 0.0.72: THOR
     section11, // Version 0.0.72: GREEN LANTERN
+    heroRoster, // Build 8: ROSTER: HEROES AND SUITS (opens the roster page, roster_page.hpp)
 };
-constexpr int controls = 221; // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
+constexpr int controls = 222; // build 8: + ROSTER
+// Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
 constexpr int combatControls = 114; // combat38::options (checked in wrist_hud.cpp)
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
@@ -571,7 +573,7 @@ static_assert(static_cast<int>(Control::colorStrength) >= maskedControls, "a liv
 static_assert(static_cast<int>(Control::foveaInner) >= maskedControls, "a live slider past the mask");
 static_assert(static_cast<int>(Control::heroTabSpider) >= maskedControls, "only presses past the mask");
 static_assert(static_cast<int>(Control::section0) >= maskedControls, "only presses past the mask");
-static_assert(static_cast<int>(Control::section11) == controls - 1);
+static_assert(static_cast<int>(Control::heroRoster) == controls - 1);
 // Each the value of the live.txt key it is named for, as the mod runs now.
 struct Settings {
     float widthCm = 1.3f; // web_width
@@ -1090,6 +1092,7 @@ class Menu {
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed
         bool trainMove{};                                           // Version 0.0.2: TRAIN MOVE pressed
+        bool heroRoster{};  // Build 8: ROSTER: HEROES AND SUITS pressed (open the roster page)
         bool heroSpider{};  // Update 39.0.1: PLAY AS SPIDER-MAN pressed (every hero toggle off)
         bool section{};     // Update 39.0.2: a section header pressed (opened or closed)
         bool remapMove{}, remapRecord{}, remapKeep{}, remapAgain{}, remapCancel{}; // Update 38.5 GESTURE REMAP

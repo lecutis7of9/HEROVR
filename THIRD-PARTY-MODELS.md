@@ -120,3 +120,60 @@ Albin and Mayess. No Marvel or DC credit: only the artists. The model files are 
 The Sketchfab "Daredevil batons" page the player linked was a style reference only. Nothing was
 downloaded from it. Following it, the mod shows no permanent cord: a cable is drawn only while a
 baton is thrown or bouncing.
+
+## Test build 8: ROSTER page pictures (Models/Roster/scene.glb)
+
+Each picture is a cropped, scaled Sketchfab thumbnail (a render of the artist's model). The suit models themselves are not shipped in build 8 (the page shows MODEL MISSING for them). Spider-Man's picture is drawn for HERO VR.
+
+Licences: CC BY 4.0, CC BY-NC 4.0, CC BY-NC-SA 4.0; "Free Standard" = the Sketchfab Standard licence.
+
+```
+ 0 portrait_spiderman: drawn for HERO VR (the game's own suit; no artist's model)
+ 1 portrait_ironman: "Iron-Man Mark 85 | Rigged" by Nihar-9Afilms (CC Attribution) https://sketchfab.com/3d-models/iron-man-mark-85-rigged-dde1085c464d4f8da259fe6669ae4dd2
+ 2 portrait_daredevil: "Daredevil - DAREDEVIL: BORN AGAIN SEASON 2" by YEEZY_YE (CC Attribution) https://sketchfab.com/3d-models/daredevil-daredevil-born-again-season-2-dbed252cbc624fd7ae43ec0c49f23a3a
+ 3 portrait_hulk: "Hulk Maestro" by YEEZY_YE (CC Attribution) https://sketchfab.com/3d-models/hulk-maestro-8a22bab80de94ef18372f338ec51a691
+ 4 portrait_batman: "Batman 1989" by hl_models (CC Attribution) https://sketchfab.com/3d-models/batman-1989-28717167aead4010b774b67d56aedbe0
+ 5 portrait_wolverine: "Wolverine - Jacket - Jeans (Rigged and Textured)" by Light.k (CC Attribution) https://sketchfab.com/3d-models/wolverine-jacket-jeans-rigged-and-textured-57c7193d711b4c5eb0c172a238d20dd3
+ 6 portrait_superman: "Superman" by alen60303 (CC Attribution) https://sketchfab.com/3d-models/superman-fb13b58823cb4c908d2a1cc8327b1f01
+ 7 portrait_punisher: "Punisher Warzone" by spybg (CC Attribution) https://sketchfab.com/3d-models/punisher-warzone-20b5eba6b24c463cb3a2666cd1ab4ba6
+ 8 portrait_captainamerica: "Captain America" by alexseagle2004 (CC Attribution) https://sketchfab.com/3d-models/captain-america-5bf43af9198f46318d96e23587338913
+ 9 portrait_thor: "Thor - Reborn from Ragnarok" by YEEZY_YE (CC Attribution) https://sketchfab.com/3d-models/thor-reborn-from-ragnarok-3d8d4c561c644142bd2af29ae395f94d
+10 portrait_greenlantern: "Green Lantern (Ryan Reynolds)" by DavidA3D (CC Attribution-NonCommercial) https://sketchfab.com/3d-models/green-lantern-ryan-reynolds-b5753ab691134b3898df8bd2d501c759
+11 CapSuit: "Captain America" by Iqbal.Mulyawan.Putera (CC Attribution) https://sketchfab.com/3d-models/captain-america-d4898ea3aac3474fa0661de3ade9b7c6
+12 Suit_batman_1: "Batman Beyond - Textured and Rigged" by Light.k (CC Attribution) https://sketchfab.com/3d-models/batman-beyond-textured-and-rigged-d44a1aae7c444d18a5fe23c5081e6152
+13 Suit_batman_2: "Batman 1989" by hl_models (CC Attribution) https://sketchfab.com/3d-models/batman-1989-28717167aead4010b774b67d56aedbe0
+14 Suit_batman_3: "Bruce Wayne Batman Year One" by allanromanreyes (Free Standard) https://sketchfab.com/3d-models/bruce-wayne-batman-year-one-7d29d9da765043e0b36256de31c8c027
+15 Suit_batman_5: "Batman Origins Suit - Textured and Rigged" by Light.k (CC Attribution) https://sketchfab.com/3d-models/batman-origins-suit-textured-and-rigged-ce83e407d259482c9ba284bced828933
+16 Suit_ironMan_1: "Iron-Man Mark 85 | Rigged" by Nihar-9Afilms (CC Attribution) https://sketchfab.com/3d-models/iron-man-mark-85-rigged-dde1085c464d4f8da259fe6669ae4dd2
+17 Suit_ironMan_2: "Iron Man - Mark 1" by Nathang30 (CC Attribution-NonCommercial-ShareAlike) https://sketchfab.com/3d-models/iron-man-mark-1-57b18282c1a84c5899fcc7f67762a386
+18 Suit_ironMan_3: "Iron Man Mark-7(Subsurf)" by benjamin.borromeo (CC Attribution) https://sketchfab.com/3d-models/iron-man-mark-7subsurf-a13c067e70814dc7b2ebc3f0ace10961
+19 Suit_ironMan_4: "Marvel™ Iron Man Mark 6 Blender Model" by 3774428638 (CC Attribution) https://sketchfab.com/3d-models/marveltm-iron-man-mark-6-blender-model-9865dc82c37542ef8d5bd8769e58cb59
+20 Suit_captainAmerica_1: "Captain America  (The Winter Soldier)" by Zeztz777 (CC Attribution) https://sketchfab.com/3d-models/captain-america-the-winter-soldier-fdc76dc10f354f5a860d41f8ce1f40bd
+21 Suit_captainAmerica_2: "Captain_america__ww2" by Manuel.41 (Free Standard) https://sketchfab.com/3d-models/captain-america--ww2-a66cbde864f147d89c6c4b319f64a79e
+22 Suit_captainAmerica_4: "Captain America" by alexseagle2004 (CC Attribution) https://sketchfab.com/3d-models/captain-america-5bf43af9198f46318d96e23587338913
+23 Suit_daredevil_1: "Daredevil - DAREDEVIL: BORN AGAIN SEASON 2" by YEEZY_YE (CC Attribution) https://sketchfab.com/3d-models/daredevil-daredevil-born-again-season-2-dbed252cbc624fd7ae43ec0c49f23a3a
+24 Suit_daredevil_2: "Daredevil Netflix Marvel Rivals" by VLTXD (CC Attribution) https://sketchfab.com/3d-models/daredevil-netflix-marvel-rivals-d2872ea0ac4647a38281c85d1c4fa347
+25 Suit_daredevil_3: "DareDevil Yellow and Red Suit" by officialsupremefilms (CC Attribution) https://sketchfab.com/3d-models/daredevil-yellow-and-red-suit-efa459b17014459db4bb95c6bd4882a0
+26 Suit_hulk_1: "Hulk(Grey)" by 3dworldz (CC Attribution) https://sketchfab.com/3d-models/hulkgrey-d2ce3d6d15cf4a39a9898cfcc9716314
+27 Suit_hulk_2: "Professor Hulk Endgame" by Shivam.Yadav (CC Attribution) https://sketchfab.com/3d-models/professor-hulk-endgame-8708949dd0204d3b9084da311743e8a3
+28 Suit_hulk_4: "Hulk Maestro" by YEEZY_YE (CC Attribution) https://sketchfab.com/3d-models/hulk-maestro-8a22bab80de94ef18372f338ec51a691
+29 Suit_wolverine_1: "Wolverine Rigged" by stokissout (CC Attribution) https://sketchfab.com/3d-models/wolverine-rigged-af65afa536854dfebf93e8f342501c5c
+30 Suit_wolverine_2: "Legendary Wolverine (XMO Wolverine Game)" by LombaxLover2K (CC Attribution) https://sketchfab.com/3d-models/legendary-wolverine-xmo-wolverine-game-5bc6a65ef349441bb2d3118f7ed2a32d
+31 Suit_wolverine_3: "Wolverine - Jacket - Jeans (Rigged and Textured)" by Light.k (CC Attribution) https://sketchfab.com/3d-models/wolverine-jacket-jeans-rigged-and-textured-57c7193d711b4c5eb0c172a238d20dd3
+32 Suit_wolverine_4: "Weapon X Wolverine" by assetgoat (CC Attribution) https://sketchfab.com/3d-models/weapon-x-wolverine-6788d2a1b330480a97cc13be606eb7e9
+33 Suit_wolverine_5: "BlendAtlas Wolverine (D&W suit)" by BlendAtlas (image from the artist's page) https://blendatlas.com (not on Sketchfab)
+34 Suit_punisher_1: "The Punisher (Vest-Version)" by floh (CC Attribution-NonCommercial) https://sketchfab.com/3d-models/the-punisher-vest-version-2d7deb3b811e42419f71263871dd7139
+35 Suit_punisher_2: "The Punisher" by floh (CC Attribution-NonCommercial) https://sketchfab.com/3d-models/the-punisher-0ec6a71b0c1e4e5fa07e567b06c8b99b
+36 Suit_thor_1: "Thor(Textured)(Rigged)" by 3dworldz (CC Attribution) https://sketchfab.com/3d-models/thortexturedrigged-7fc395b9b26c4d40bafa0d5221b26e9c
+37 Suit_thor_2: "Thor (Textured) (No Rig)" by 3dworldz (CC Attribution) https://sketchfab.com/3d-models/thor-textured-no-rig-266488af3874414a8dfa9f488e738aed
+38 Suit_thor_3: "Thor - Reborn from Ragnarok" by YEEZY_YE (CC Attribution) https://sketchfab.com/3d-models/thor-reborn-from-ragnarok-3d8d4c561c644142bd2af29ae395f94d
+39 Suit_greenLantern_1: "Green Lantern (Ryan Reynolds)" by DavidA3D (CC Attribution-NonCommercial) https://sketchfab.com/3d-models/green-lantern-ryan-reynolds-b5753ab691134b3898df8bd2d501c759
+40 Suit_greenLantern_2: "Injustice 2 - Green Lantern Hal Jordan" by Neut2000 (CC Attribution) https://sketchfab.com/3d-models/injustice-2-green-lantern-hal-jordan-ed81b5682e7e455d9527023eaa36d209
+41 Suit_greenLantern_3: "Green Lantern (Renegade)" by 3dworldz (CC Attribution) https://sketchfab.com/3d-models/green-lantern-renegade-8aa2691803f04468846f51c6e265bb92
+42 Suit_greenLantern_4: "Green Lantern(Textured)(Rigged)" by 3dworldz (CC Attribution) https://sketchfab.com/3d-models/green-lanterntexturedrigged-89362a83a6834d068d05ee5c7589cf33
+43 Suit_superman_1: "SUPERMAN SSKTJL" by 20062020year (CC Attribution) https://sketchfab.com/3d-models/superman-ssktjl-cc59403f1a9347e89cfbe662e0acdc5a
+44 Suit_superman_2: "Superman" by alen60303 (CC Attribution) https://sketchfab.com/3d-models/superman-fb13b58823cb4c908d2a1cc8327b1f01
+45 Suit_superman_3: "Superman (Henry Cavill) - rigged" by DavidA3D (CC Attribution-NonCommercial) https://sketchfab.com/3d-models/superman-henry-cavill-rigged-05b390aab06b42c1b9c656063812107e
+46 Suit_superman_4: "Superman - DC" by Chechorams16 (CC Attribution) https://sketchfab.com/3d-models/superman-dc-ccad133a5a684003a059a01c89216780
+47 PunisherWarzone: "Punisher Warzone" by spybg (CC Attribution) https://sketchfab.com/3d-models/punisher-warzone-20b5eba6b24c463cb3a2666cd1ab4ba6
+```

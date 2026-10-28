@@ -24,6 +24,8 @@ MODEL_FILES = [
     'Models/Vehicle/PunisherVan/scene.glb',
     'Models/Vehicle/PunisherVan/Interior/scene.glb',
     'Models/Vehicle/PunisherVan/SteeringWheel/scene.glb',
+    # Build 8 ROSTER page: every profile picture and suit preview (tools/roster/make_roster_glb.py; credits in license.txt).
+    'Models/Roster/scene.glb',
 ]
 # Version 0.0.72: the CC BY credit beside each new model (the artist's own license.txt; the built parts' note).
 LICENSE_FILES = [os.path.dirname(m) + '/license.txt' for m in MODEL_FILES[10:]]

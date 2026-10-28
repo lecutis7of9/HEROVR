@@ -36,6 +36,8 @@ struct NativeEyeFrame {
     body_calibration::View calibration{};
     // Version 0.0.72 TEST BUILD NOTICE (opacity 0: none), this frame's world.
     test_notice::View notice{};
+    // Build 8 ROSTER page (opacity 0: closed), this frame's world.
+    roster_page::View roster{};
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

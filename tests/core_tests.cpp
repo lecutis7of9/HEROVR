@@ -33,6 +33,7 @@
 #include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/test_notice.hpp"
+#include "spidy/roster_page.hpp"
 #include <filesystem>
 #include "spidy/web_cocoon.hpp"
 #include "spidy/wall_stick.hpp"
@@ -1625,7 +1626,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 221, "controls count drifted"); // Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 222, "controls count drifted"); // Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1965,7 +1966,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 221, "controls count drifted"); // Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 222, "controls count drifted"); // Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18804,7 +18805,7 @@ int main() {
                 }
             }
         }
-        check(placed == 189 /* build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 190 /* build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -26352,15 +26353,190 @@ int main() {
         c.step(.1f, true, fight, .1f, 1.25f);
         check(c.mult > a.mult && a.mult > 1.f, "FAST RAGE");
     });
+    test("Build 8: ROSTER page - pictures, poke and laser presses, B back, MODEL MISSING disabled, per-frame cost", [] {
+        namespace rp = roster_page;
+        using rp::Screen;
+        // Every picture folder found by name (the GLB tool and required_assets are checked in roster_page_tests.py).
+        for (uint32_t k = 0; k < rp::pictureCount; ++k)
+            check(rp::pictureOf(rp::pictureFolders[k]) == static_cast<int>(k), std::string("a picture folder: ") + rp::pictureFolders[k]);
+        check(rp::pictureOf("Nope/Nope") < 0 && rp::pictureOf(nullptr) < 0, "an unknown picture folder found");
+        // The suits as the game thread publishes them.
+        hero072::SuitCatalog cat;
+        rp::Snapshot snap = rp::snapshotOf(cat, false, false);
+        check(snap.count[hero_modes::batman] == 5 && snap.rows[hero_modes::batman][0].status == rp::Status::inUse &&
+                  snap.rows[hero_modes::batman][1].status == rp::Status::missing && snap.rows[hero_modes::batman][1].final,
+              "BATMAN's rows: DEFAULT in use, BEYOND MODEL MISSING (FINAL)");
+        for (uint32_t h = 0; h < rp::heroes; ++h)
+            for (uint32_t i = 0; i < snap.count[h]; ++i)
+                check(snap.rows[h][i].artist[0] != 0 || i == 0, "a row without its artist");
+        check(rp::snapshotOf(cat, false, true).ownSuit, "OWN SUIT lost");
+        rp::publish(snap);
+        const uint32_t v0 = rp::version();
+        rp::publish(snap);
+        check(rp::version() == v0 && v0 > 0, "an unchanged snapshot bumped the version");
+        // Buttons: every one inside the panel; MODEL MISSING rows disabled, row 0 (OWN SUIT) enabled.
+        rp::Button bs[rp::buttonsMost];
+        const uint32_t ng = rp::buttons(Screen::grid, 0, &snap, bs);
+        check(ng == rp::heroes + 1, "the grid's buttons: 11 tiles and CLOSE");
+        for (uint32_t i = 0; i < ng; ++i)
+            check(bs[i].x0 >= -rp::width / 2 && bs[i].x1 <= rp::width / 2 && bs[i].y0 >= -rp::height / 2 && bs[i].y1 <= rp::height / 2 &&
+                      bs[i].x1 > bs[i].x0 && bs[i].y1 > bs[i].y0,
+                  "a grid button off the panel");
+        rp::Button hb[rp::buttonsMost];
+        const uint32_t nh = rp::buttons(Screen::hero, hero_modes::batman, &snap, hb);
+        const rp::Button* own = nullptr;
+        const rp::Button* missing = nullptr;
+        const rp::Button* play = nullptr;
+        for (uint32_t i = 0; i < nh; ++i) {
+            own = hb[i].id == rp::row ? &hb[i] : own;
+            missing = hb[i].id == rp::row + 1 ? &hb[i] : missing;
+            play = hb[i].id == rp::playButton ? &hb[i] : play;
+        }
+        check(own && own->enabled && missing && !missing->enabled && play, "BATMAN's page: OWN SUIT on, BEYOND (MODEL MISSING) off");
+        for (const int id : {static_cast<int>(rp::tile), static_cast<int>(rp::closeButton), static_cast<int>(rp::backButton),
+                             static_cast<int>(rp::playButton), static_cast<int>(rp::row), static_cast<int>(rp::row) + 1})
+            check(rp::helpFor(id >= rp::closeButton && id != rp::closeButton ? Screen::hero : Screen::grid, hero_modes::batman, id, &snap)
+                          .find("No restart needed.") != std::string::npos,
+                  "a button's help has no restart note: " + std::to_string(id));
+        // The page, opened in front of the head (identity, at the origin): panel space = tracking space less the panel's place.
+        rp::Page page;
+        check(page.open(Pose{}, 0) && page.isOpen() && page.screen() == Screen::grid && page.holdsInput(), "the page did not open");
+        const Pose panel = page.panel();
+        auto centre = [&](const rp::Button& b) { return Vec3{(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 0}; };
+        auto aimAt = [&](rp::Input& in, unsigned hand, const rp::Button& b, float trigger) {
+            const Vec3 c = panel.position + panel.orientation.rotate(centre(b));
+            in.hands[hand].tracked = true;
+            in.hands[hand].aim = Pose{c + panel.orientation.rotate(Vec3{0, 0, .6f}), panel.orientation};
+            in.hands[hand].grip = Pose{c + panel.orientation.rotate(Vec3{0, 0, .5f}), panel.orientation};
+            in.hands[hand].trigger = trigger;
+        };
+        const rp::Button* batTile = nullptr;
+        for (uint32_t i = 0; i < ng; ++i)
+            batTile = bs[i].id == rp::tile + static_cast<int>(hero_modes::batman) ? &bs[i] : batTile;
+        check(batTile != nullptr, "no BATMAN tile");
+        rp::Input in;
+        in.playing = hero_modes::spiderMan;
+        // The trigger still held from the wrist press, and too soon: nothing.
+        in.seconds = .1, aimAt(in, 1, *batTile, 1.f);
+        page.update(in);
+        in.seconds = .6;
+        page.update(in);
+        check(page.screen() == Screen::grid && page.presses() == 0, "a held trigger (or one too soon) pressed a tile");
+        check(page.hover() == rp::tile + static_cast<int>(hero_modes::batman), "the laser did not hover the tile");
+        Vec3 a{}, b{};
+        check(page.laser(1, a, b) && !page.laser(0, a, b), "the right hand's laser not shown (or the left's shown)");
+        in.seconds = .7, in.hands[1].trigger = 0;
+        page.update(in);
+        in.seconds = .8, in.hands[1].trigger = 1;
+        page.update(in);
+        check(page.screen() == Screen::hero && page.hero() == hero_modes::batman && page.presses() == 1, "a fresh pull did not open BATMAN");
+        // MODEL MISSING row: a pull does nothing; OWN SUIT row: picked; PLAY AS: BATMAN.
+        in.seconds = .9, aimAt(in, 1, *missing, 0);
+        page.update(in);
+        in.seconds = 1;
+        in.hands[1].trigger = 1;
+        auto act = page.update(in);
+        check(act.suitIndex < 0 && page.presses() == 1, "a MODEL MISSING suit was picked");
+        in.seconds = 1.1, aimAt(in, 1, *own, 0);
+        page.update(in);
+        in.seconds = 1.2, in.hands[1].trigger = 1;
+        act = page.update(in);
+        check(act.suitHero == static_cast<int>(hero_modes::batman) && act.suitIndex == 0, "OWN SUIT not picked");
+        in.seconds = 1.3, aimAt(in, 1, *play, 0);
+        page.update(in);
+        in.seconds = 1.4, in.hands[1].a = true; // A presses the aimed button too
+        act = page.update(in);
+        check(act.playAs == static_cast<int>(hero_modes::batman), "PLAY AS BATMAN not pressed with A");
+        in.hands[1].a = false;
+        // B: back to the grid, then closed; the input held until B is let go.
+        in.hands[1] = {};
+        in.seconds = 1.5, in.hands[0].b = true;
+        page.update(in);
+        check(page.screen() == Screen::grid, "B did not go back");
+        in.seconds = 1.6, in.hands[0].b = false;
+        page.update(in);
+        in.seconds = 1.7, in.hands[0].b = true;
+        act = page.update(in);
+        check(act.closed && !page.isOpen() && page.holdsInput(), "B on the grid did not close (or let the held B through)");
+        in.seconds = 1.8, in.hands[0].b = false;
+        page.update(in);
+        check(!page.holdsInput(), "the page still holds the input after B was let go");
+        // A poke: the hand pushed onto a tile (from clear of it) opens that hero.
+        check(page.open(Pose{}, 2), "the page did not reopen");
+        in = {};
+        in.seconds = 2.5;
+        aimAt(in, 0, *batTile, 0);
+        in.hands[0].aim.orientation = Quat::yaw(1.57f); // not aimed at the panel
+        page.update(in);
+        in.seconds = 2.6;
+        in.hands[0].grip.position = panel.position + panel.orientation.rotate(centre(*batTile) + Vec3{0, 0, .02f});
+        page.update(in);
+        check(page.screen() == Screen::hero && page.hero() == hero_modes::batman, "a poke did not press the tile");
+        // Walked away: closed.
+        in.seconds = 2.7, in.head = Pose{{0, 0, 6}, {}};
+        check(page.update(in).closed && !page.isOpen(), "walking away did not close the page");
+        // The Roster model's pictures: picture k is triangles 2k, 2k + 1, its UV box in its image's layer.
+        mesh_model::Mesh m;
+        m.colors.assign(2 * rp::pictureCount, Vec3{1, 1, 1});
+        m.corners.assign(6 * rp::pictureCount, Vec3{});
+        m.image.resize(2 * rp::pictureCount);
+        m.uvs.resize(12 * rp::pictureCount);
+        m.images.resize(6);
+        for (int i = 0; i < 6; ++i)
+            m.images[static_cast<size_t>(i)].layer = 10 + i;
+        for (uint32_t k = 0; k < rp::pictureCount; ++k) {
+            m.image[2 * k] = m.image[2 * k + 1] = static_cast<int16_t>(k / 9);
+            const float u0 = (k % 3) / 3.f, v0 = (k / 3 % 3) / 3.f;
+            const float uv[12] = {u0, v0, u0 + .3f, v0, u0 + .3f, v0 + .3f, u0, v0, u0 + .3f, v0 + .3f, u0, v0 + .3f};
+            for (int c = 0; c < 12; ++c)
+                m.uvs[12 * k + static_cast<uint32_t>(c)] = uv[c];
+        }
+        rp::Picture pics[rp::pictureCount];
+        check(rp::pictures(&m, pics) && pics[13].layer == 11 && std::abs(pics[13].u0 - 1 / 3.f) < 1e-5f &&
+                  std::abs(pics[13].v1 - (1 / 3.f + .3f)) < 1e-5f,
+              "a picture's layer or UV box");
+        check(!rp::pictures(nullptr, pics) && pics[0].layer < 0, "no Roster model gave pictures");
+        // Drawn: finite, the pictures only into the textured pass, rebuilt only when it changes; a frame's cost bounded.
+        check(page.open(Pose{}, 3), "the page did not open to draw");
+        in = {};
+        for (int f = 1; f <= 30; ++f) { // faded in (.2 s)
+            in.seconds = 3 + f * .02;
+            page.update(in);
+        }
+        rp::Cache cache;
+        std::vector<Vertex> plate, models;
+        const auto v = rp::view(page, hero_modes::spiderMan, Pose{});
+        check(v.opacity > 0 && v.screen == Screen::grid, "the view of an open page");
+        rp::append(plate, &models, v, cache, &m, &snap);
+        check(!plate.empty() && !models.empty() && cache.rebuilds == 1, "the grid drew nothing (or no pictures)");
+        for (const auto& x : models)
+            check(x.shape.w == 1 && x.shape.z >= 10 && x.shape.z <= 15, "a picture vertex not textured from the Roster layers");
+        const size_t platesize = plate.size();
+        const auto start = std::chrono::steady_clock::now();
+        for (int f = 0; f < 200; ++f) {
+            plate.clear(), models.clear();
+            rp::append(plate, &models, v, cache, &m, &snap);
+        }
+        const double perFrame = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / 200;
+        check(cache.rebuilds == 1 && plate.size() == platesize, "an unchanged page was rebuilt");
+        check(perFrame < 3000, "the page costs " + std::to_string(perFrame) + " us a frame");
+        for (const auto& x : plate)
+            check(std::isfinite(x.position.x) && std::isfinite(x.position.y) && std::isfinite(x.position.z), "a vertex not finite");
+        plate.clear(), models.clear();
+        rp::append(plate, nullptr, v, cache, nullptr, &snap); // untextured: PICTURE MISSING boxes, nothing textured
+        check(!plate.empty(), "the untextured page drew nothing");
+        page.close();
+        check(rp::view(page, 0, Pose{}).opacity == 0, "a closed page is drawn");
+    });
     test("Version 0.0.72: SUITS per hero - the user's picks, FINAL at max reputation, COMING SOON never worn", [] {
         using namespace hero072;
         SuitCatalog c;
-        // The user's picks (8:59): Batman 4, Iron Man 4, Cap 3 (+ the 0.0.7 suit), Daredevil 3, Hulk 4 (GLADIATOR the FINAL),
+        // The user's picks (8:59): Batman 4, Iron Man 4, Cap 3 (+ the 0.0.7 suit), Daredevil 3, Hulk 3 (build 8: 1, 2 and 4, MAESTRO the FINAL),
         // Wolverine 5, the Punisher 2 (+ WARZONE), Thor 3, Green Lantern 4, Superman 4; each after DEFAULT.
-        const uint32_t want[hero_modes::heroes] = {1, 5, 4, 5, 5, 6, 5, 4, 4, 4, 5};
+        const uint32_t want[hero_modes::heroes] = {1, 5, 4, 4, 5, 6, 5, 4, 4, 4, 5};
         for (uint32_t h = 0; h < hero_modes::heroes; ++h)
             check(c.suits(h) == want[h], "the built-in suits of hero " + std::to_string(h));
-        const uint32_t finals[hero_modes::heroes] = {0, 2, 3, 3, 1, 4, 4, 0, 1, 2, 3}; // the sheets' numbers (0: none)
+        const uint32_t finals[hero_modes::heroes] = {0, 2, 3, 4, 1, 4, 4, 0, 1, 2, 3}; // the sheets' numbers (0: none)
         for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
             uint32_t f = 0, n = 0;
             for (uint32_t i = 0; i < c.suits(h); ++i)
@@ -26382,7 +26558,8 @@ int main() {
         // Nothing fetched in this build (Sketchfab 401): every pick COMING SOON, never stepped onto, never worn.
         char line[96];
         c.line(hero_modes::batman, 1, true, line, sizeof line);
-        check(std::string(line) == "BEYOND: COMING SOON", std::string("a COMING SOON line: ") + line);
+        check(std::string(line) == "BEYOND: MODEL MISSING", std::string("a MODEL MISSING line: ") + line);
+        check(!c.choose(hero_modes::batman, 1, true) && c.chosen[hero_modes::batman] == 0, "the roster chose a MODEL MISSING suit");
         check(c.next(hero_modes::batman, true) == 0 && c.current(hero_modes::batman, true) == 0, "a COMING SOON suit was picked");
         c.chosen[hero_modes::batman] = 3;
         check(c.current(hero_modes::batman, true) == 0, "a COMING SOON suit was worn");

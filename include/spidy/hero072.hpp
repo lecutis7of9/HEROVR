@@ -1748,8 +1748,8 @@ class SuitCatalog {
         add(makeSuit(hero_modes::daredevil, "YELLOW AND RED", "AtoMichael Editz", "CC BY", repMost, "Suit_daredevil_3", true, true));
         add(makeSuit(hero_modes::hulk, "GREY", "3D MODELS", "CC BY", 0, "Suit_hulk_1", false, true));
         add(makeSuit(hero_modes::hulk, "PROFESSOR", "Shivam.Yadav", "CC BY", 0, "Suit_hulk_2", false, true));
-        add(makeSuit(hero_modes::hulk, "GLADIATOR", "aredjune", "CC BY", repMost, "Suit_hulk_3", true, true));
-        add(makeSuit(hero_modes::hulk, "MAESTRO", "YE YE", "CC BY", 0, "Suit_hulk_4", false, true));
+        // Build 8: the user's HULK picks are 1, 2 and 4 with 4 (MAESTRO) the final - sheet #3 was never picked.
+        add(makeSuit(hero_modes::hulk, "MAESTRO", "YE YE", "CC BY", repMost, "Suit_hulk_4", true, true));
         add(makeSuit(hero_modes::wolverine, "CLASSIC", "stokissout", "CC BY", 0, "Suit_wolverine_1", false, true));
         add(makeSuit(hero_modes::wolverine, "LEGENDARY", "LombaxLover2K", "CC BY", 0, "Suit_wolverine_2", false, true));
         add(makeSuit(hero_modes::wolverine, "JACKET AND JEANS", "Light.k", "CC BY", 0, "Suit_wolverine_3", false, true));
@@ -1820,6 +1820,15 @@ class SuitCatalog {
         chosen[hero] = c;
         return c;
     }
+    // Build 8 ROSTER page: pick suit i of the hero directly (only an unlocked one; i 0 is the fallback,
+    // the player's own mod or the game's suit). True when it is now the hero's suit.
+    bool choose(uint32_t hero, uint32_t i, bool all) {
+        if (hero >= hero_modes::heroes || !isUnlocked(hero, i, all))
+            return false;
+        dirty = dirty || chosen[hero] != i;
+        chosen[hero] = i;
+        return true;
+    }
     // The suit in use: the chosen one if unlocked, else the default.
     uint32_t current(uint32_t hero, bool all) const {
         if (hero >= hero_modes::heroes)
@@ -1834,7 +1843,7 @@ class SuitCatalog {
             return;
         }
         if (x->soon)
-            std::snprintf(out, n, "%s: COMING SOON", x->name);
+            std::snprintf(out, n, "%s: MODEL MISSING", x->name);
         else if (!isUnlocked(hero, i, all) && x->final)
             std::snprintf(out, n, "%s LOCKED: MAX REP (FINAL)", x->name);
         else if (!isUnlocked(hero, i, all))

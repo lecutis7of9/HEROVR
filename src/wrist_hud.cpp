@@ -689,6 +689,8 @@ const char* labelOf(Control c) {
         return "HULK";
     case Control::heroPlaySpider:
         return "PLAY AS SPIDER-MAN";
+    case Control::heroRoster:
+        return "ROSTER: HEROES AND SUITS";
     case Control::section0:
     case Control::section1:
     case Control::section2:
@@ -1003,9 +1005,9 @@ int rowsIn(const SectionDef& d) {
     return n;
 }
 // The rows outside every section, per page (STATUS and the arrows: none).
-constexpr Control alwaysShown[] = {C::invincible, C::recalibrate, C::fpsReset, C::supersample,
+constexpr Control alwaysShown[] = {C::invincible, C::heroRoster, C::recalibrate, C::fpsReset, C::supersample,
                                    C::colorFx,    C::colorFilter, C::colorStrength};
-constexpr int alwaysShownPage[] = {powersPage, vrPage, graphicsPage, graphicsPage, colorPage, colorPage, colorPage};
+constexpr int alwaysShownPage[] = {powersPage, powersPage, vrPage, graphicsPage, graphicsPage, colorPage, colorPage, colorPage};
 static_assert(std::size(alwaysShown) == std::size(alwaysShownPage));
 bool isSliderRow(Control c) {
     switch (c) {
@@ -1263,6 +1265,7 @@ Layout build(int page, float k, int open) {
         helpUnder(activeHeroHelp, b.help);
         l.items.push_back(std::move(b));
         row(Control::invincible);
+        row(Control::heroRoster); // Build 8: the roster page (pictures, stories, PLAY AS, suits)
         section(0);
         heading(heroProfilesHeading);
         sections(1, sectionCount(powersPage)); // Version 0.0.7: nine heroes (CAPTAIN AMERICA)
@@ -2379,6 +2382,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::playOnMonitor ? std::string(view.monitorArmed ? extras385::view::confirm : "PRESS")
            : c == Control::gestureMoves ? std::string(gestures385::modeName(view.gestureMoves))
            : c == Control::trainMove    ? std::string(view.trainMove) + (view.trainMine ? " (MINE)" : "")
+           : c == Control::heroRoster   ? std::string("OPEN")
            : c == Control::heroPlaySpider ? std::string(spiderActive(view) ? "ACTIVE" : "PRESS")
            : remapRow(c)                ? remapValue(c, view)
            : c == Control::mirrorAnchor ? mirrorAnchorValue(view)
@@ -3245,6 +3249,8 @@ const char* helpText(Control c) {
         return sectionHelp;
     case Control::heroPlaySpider:
         return "Turns every other hero off so you swing as Spider-Man again, live.";
+    case Control::heroRoster:
+        return "Opens the roster: each hero's picture, story and suits. No restart needed.";
     case Control::gestureRemapMove:
         return gesture_session::helpMove;
     case Control::gestureRecord:
@@ -3611,6 +3617,8 @@ const char* shortName(Control c) {
         return "HULK";
     case Control::heroPlaySpider:
         return "SPIDER-MAN";
+    case Control::heroRoster:
+        return "ROSTER";
     case Control::section0:
     case Control::section1:
     case Control::section2:
@@ -4114,6 +4122,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::heroPlaySpider:
                 r.heroSpider = true;
+                break;
+            case Control::heroRoster:
+                r.heroRoster = true;
                 break;
             case Control::gestureRemapMove:
                 r.remapMove = true;

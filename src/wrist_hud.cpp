@@ -897,7 +897,7 @@ constexpr SectionDef powersSections[] = {
      {C::flyMode, C::combatSupersonic, C::combatSupersonicSpeed, C::flyVignette, C::flyRoll, C::flyRollSpeed,
       C::flyAutoLevel, C::combatFlyPose}},
     {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
-    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud}},
+    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud, C::combatPalmBlast}},
     {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2,
      {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision, C::combatBatonHolsters, C::combatBatonLook,
       C::combatDdGrapple, C::combatDdParry}},
@@ -4299,6 +4299,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatWeaponCollision:
             case Control::combatLightHold:
             case Control::combatVanScreen:
+            case Control::combatPalmBlast:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

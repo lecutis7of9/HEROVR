@@ -146,6 +146,8 @@ enum Option : uint32_t {
     lightHold,
     // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen (van_screen.hpp) ON or OFF
     vanScreen,
+    // 0.0.73 test 3 PALM BLAST: IRON MAN's blast straight out of the open palm (PALM, on) or along the hand (AIM, fix 15)
+    palmBlast,
     options
 };
 struct OptionInfo {
@@ -465,6 +467,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      3, {"ON", "STRONG", "OFF", nullptr}},
     {"van_screen", "VAN SCREEN", "VSCRN", "Shows a Punisher dash screen in the van - X or a poke pages it, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"palm_blast", "PALM BLAST", "PALMB", "PALM fires straight out of your open palm, AIM along the hand, no restart.",
+     2, {"PALM", "AIM", nullptr, nullptr}},
 };
 // 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).
 inline bool shadowMatchOn(uint32_t value) { return value == 0; }

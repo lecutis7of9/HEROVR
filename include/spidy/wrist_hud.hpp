@@ -489,6 +489,7 @@ enum class Control : uint8_t {
     combatWeaponCollision, // 0.0.73 test 3 WEAPON COLLISION: thrown and held weapons meet walls, cars and the ground, ON
     combatLightHold, // 0.0.73 test 3 LIGHT HOLD: steadier street lights (EYE AA step + bright history hold), ON, STRONG, OFF
     combatVanScreen, // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen ON or OFF
+    combatPalmBlast, // 0.0.73 test 3 PALM BLAST: IRON MAN fires out of the open palm (PALM, on) or along the hand (AIM)
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -555,9 +556,9 @@ enum class Control : uint8_t {
     section11, // Version 0.0.72: GREEN LANTERN
     heroRoster, // Build 8: ROSTER: HEROES AND SUITS (opens the roster page, roster_page.hpp)
 };
-constexpr int controls = 231; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 232; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
-constexpr int combatControls = 123; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
+constexpr int combatControls = 124; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);

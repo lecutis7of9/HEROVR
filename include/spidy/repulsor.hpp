@@ -244,6 +244,28 @@ inline Vec3 palmFrom(const Pose& grip, unsigned hand, Vec3 aim) {
         return palmCentre(grip, hand);
     return grip.position + a * palmAhead;
 }
+// 0.0.73 test 3 PALM BLAST (the user: "palm out, the blast goes upward"). Root cause: fix 15 fired along
+// the controller's AIM, and with the wrist bent back palm out (the Iron Man pose) the controller's aim
+// runs up the fingers, so the blast went up. PALM (on, the default): the blast leaves the palm's face,
+// palmAhead out along the palm's normal (grip +X left, -X right: the OpenXR grip pose), and flies along
+// that normal (the strong aim assist still bends it onto a foe from the palm); a pose with no usable
+// rotation falls back to the aim. AIM (off): fix 15 exactly (palmAim / palmFrom).
+inline Vec3 blastAim(const Pose& grip, unsigned hand, Vec3 aim, bool palmOut) {
+    if (!palmOut)
+        return palmAim(grip, hand, aim);
+    const Vec3 n = palmNormal(grip, hand);
+    if (finite(n) && length(n) > .5f)
+        return n;
+    return finite(aim) && length(aim) > .5f ? normalized(aim) : Vec3{};
+}
+inline Vec3 blastFrom(const Pose& grip, unsigned hand, Vec3 aim, bool palmOut) {
+    if (!palmOut)
+        return palmFrom(grip, hand, aim);
+    const Vec3 n = palmNormal(grip, hand);
+    if (!finite(grip.position) || !(length(n) > .5f))
+        return palmFrom(grip, hand, aim);
+    return grip.position + n * palmAhead;
+}
 // The hand's frame for the suit's rig (suit_wear::Tracked): the back of the hand away from the aim,
 // the hand's way (wrist to knuckles) up across the aim; false when the aim is not usable.
 struct PalmFrame {

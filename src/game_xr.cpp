@@ -806,6 +806,8 @@ uint32_t c38(uint32_t option) {
 // 0.0.73 test 3 WEAPON COLLISION: ON (the default) - thrown props bounce / stop off walls, cars and the
 // ground, held ones are drawn short of them.
 bool weaponCollisionOn() { return c38(combat38::weaponCollision) == 0; }
+// 0.0.73 test 3 PALM BLAST: IRON MAN fires out of the open palm (0, the default) or along the aim (1, fix 15).
+bool palmBlastOn() { return c38(combat38::palmBlast) == 0; }
 // Version 0.0.4 HERO ABILITIES (hero_modes.hpp): any hero but SPIDER-MAN has no web path at all.
 // Version 0.0.6: IRON MAN (shooterType 1), DAREDEVIL and HULK; only one on (heroOnly).
 uint32_t heroNow() {
@@ -6819,9 +6821,11 @@ DWORD WINAPI run(void*) {
                                     };
                                     // Version 0.0.62 PALM BLAST: Iron Man's hand blasts leave the palm's centre.
                                     // Version 0.0.73 (fix 15): from the palm turned to the controller's aim.
+                                    // 0.0.73 test 3 PALM BLAST (on): from the open palm's face, out of its normal.
+                                    const bool palmOn = palmBlastOn();
                                     const auto palmOf = [&](unsigned i) {
                                         const Pose& grip = frame.hands[i].grip;
-                                        return validTrackedPose(grip) ? repulsor::palmFrom(grip, i, cf.hands[i].aim) : cf.hands[i].position;
+                                        return validTrackedPose(grip) ? repulsor::blastFrom(grip, i, cf.hands[i].aim, palmOn) : cf.hands[i].position;
                                     };
                                     // Version 0.0.6 DAREDEVIL ABILITIES: the trigger throws that hand's baton at the enemy
                                     // the strong aim assist picks (35 deg, 25 m); a hit sends sm2_damage's batonHit
@@ -7206,7 +7210,8 @@ DWORD WINAPI run(void*) {
                                             // the strong aim assist (oursBalls.fire) bending it onto a foe from the palm.
                                             // Version 0.0.73 (fix 15): the palm faces the aim, so the blast goes along it.
                                             const Pose& g = frame.hands[i].grip;
-                                            const Vec3 palm = validTrackedPose(g) ? repulsor::palmAim(g, i, cf.hands[i].aim) : Vec3{};
+                                            // 0.0.73 test 3 PALM BLAST (on): straight out of the palm's normal.
+                                            const Vec3 palm = validTrackedPose(g) ? repulsor::blastAim(g, i, cf.hands[i].aim, palmOn) : Vec3{};
                                             aim[i] = length(palm) > .5f ? palm : fightOut.ballDirection[i];
                                             held[i] = cf.hands[i].tracked && cf.hands[i].button > .5f;
                                         }
@@ -9364,16 +9369,19 @@ DWORD WINAPI run(void*) {
                                                                       repTrigger.sinceBlast(static_cast<int>(i)));
                             // Version 0.0.62 PALM BLAST: the charge and its flash on the palm, facing out of it.
                             // Version 0.0.73 (fix 15): the palm turned to the aim (the hand's aim, this frame's tracking).
-                            const Vec3 aimT = repulsor::palmAim(motion.grips[i], i, cf73Aim[i]);
+                            // 0.0.73 test 3 PALM BLAST (on): the glow on the open palm, facing out of it; the hand is
+                            // drawn as held (the real palm already faces the blast: no turn to the aim).
+                            const bool palmOn = palmBlastOn();
+                            const Vec3 aimT = repulsor::blastAim(motion.grips[i], i, cf73Aim[i], palmOn);
                             const Vec3 at = compose(saved.worldFromTracking,
-                                                    Pose{repulsor::palmFrom(motion.grips[i], i, cf73Aim[i]), {0, 0, 0, 1}}).position;
+                                                    Pose{repulsor::blastFrom(motion.grips[i], i, cf73Aim[i], palmOn), {0, 0, 0, 1}}).position;
                             const Vec3 way = saved.worldFromTracking.orientation.rotate(aimT);
                             {
                                 const float charging = repTrigger.chargingFor(static_cast<int>(i));
                                 const float since = repTrigger.sinceBlast(static_cast<int>(i));
                                 const bool posing = (std::isfinite(charging) && charging >= 0) ||
                                                     (std::isfinite(since) && since >= 0 && since < repulsor::palmPoseSeconds);
-                                saved.palmPose[i] = posing && finite(way) && length(way) > .5f ? 1.f : 0.f;
+                                saved.palmPose[i] = !palmOn && posing && finite(way) && length(way) > .5f ? 1.f : 0.f;
                                 saved.palmPoseAim[i] = saved.palmPose[i] > 0 ? normalized(way) : Vec3{};
                             }
                             if (glow > 0 && finite(at) && finite(way) && length(way) > .5f) {
@@ -12587,6 +12595,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyPose(void* v) { return set
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeaponCollision(void* v) { return setHero007(v, combat38::weaponCollision, 5442); }
 // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen ON or OFF (live.txt van_screen).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanScreen(void* v) { return setHero007(v, combat38::vanScreen, 5442); }
+// 0.0.73 test 3 PALM BLAST: IRON MAN fires out of the open palm (PALM, on) or along the hand (AIM, fix 15) (live.txt palm_blast).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPalmBlast(void* v) { return setHero007(v, combat38::palmBlast, 5444); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

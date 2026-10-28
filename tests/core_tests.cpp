@@ -24175,7 +24175,7 @@ int main() {
                         in7.eyeHeight = eye;
                         in7.batonHolsters = true;
                         p7.setHero(in7.hero);
-                        g73::TapOrHold tap;
+                        g73::FireGate tap; // test 3: game_xr's DAREDEVIL trigger (TapOrHold retired)
                         bool drawn = false, thrown = false;
                         int firstAsk = -1;
                         for (int f = 0; f < 120; ++f) {
@@ -24191,9 +24191,9 @@ int main() {
                             p7.holsterStep(in7, o7);
                             drawn |= p7.batonDrawn(hand, true);
                             const auto press = oldRoute ? oldPress(triggerWebs, trigger, squeeze) : g73::heroPress(trigger, squeeze, false, false);
-                            const auto t = tap.step(hand, dt, p7.batonDrawn(hand, true), press.trigger, false);
-                            thrown |= t.tap;
-                            const uint32_t asks = grapple072::asks(hero_modes::daredevil, true, hand == 0 && t.hold, hand == 1 && t.hold);
+                            const bool fire = tap.step(hand, p7.batonDrawn(hand, true), press.trigger, false);
+                            thrown |= false; // test 3: the trigger never throws (a grip release mid-throw does)
+                            const uint32_t asks = grapple072::asks(hero_modes::daredevil, true, hand == 0 && fire, hand == 1 && fire);
                             if (asks & cape_glide::askGrappleOnly && asks & cape_glide::askGrapple[hand] && firstAsk < 0)
                                 firstAsk = f;
                         }
@@ -24266,6 +24266,222 @@ int main() {
                         check((firstAsk >= 50) == shouldWork, "the PUNISHER's trigger fires the hook" + tag);
                     }
                 }
+    });
+    test("0.0.73 test 3 DEFAULT PATH GRAPPLE: DAREDEVIL, BATMAN and the PUNISHER - grip draws, a NORMAL trigger press grapples and the pull carries him; DD's baton throws only on a grip release mid-throw", [] {
+        using namespace spidy;
+        namespace g73 = spidy::grapple073;
+        // the defaults: every combat38 value 0 (the wrist's first choice): DD GRAPPLE and GRAPPLE HOOK ON
+        check(std::string(combat38::optionInfo[combat38::ddGrapple].values[0]) == "ON", "DD GRAPPLE: ON is the default");
+        check(std::string(combat38::optionInfo[combat38::punisherHook].values[0]) == "ON", "GRAPPLE HOOK: ON is the default");
+        check(hero072::PlayOptions::onFirst(0) && hero072::PlayOptions{}.punisherHook && hero072::PlayOptions{}.ddGrapple,
+              "hero072's defaults: the hook and the baton grapple on");
+        check(combat38::batonHolstersOn(0), "BATON HOLSTERS on (always)");
+        static_assert(g73::throwGripPress == holster::pressed && g73::throwGripRelease == holster::released,
+                      "BatonThrow's grip is the rack's grip");
+        const float eye = holster::standingEye;
+        const Pose level{{0, eye, 0}, {}};
+        const float dt = 1 / 90.f;
+        // test 2's TapOrHold, the confirmed default-path cause: a normal press (8 frames, ~.09 s) THREW the baton
+        {
+            g73::TapOrHold old;
+            bool tapped = false, held = false;
+            for (int f = 0; f < 30; ++f) {
+                const auto o = old.step(0, dt, true, f < 8 ? 1.f : 0.f, false);
+                tapped |= o.tap;
+                held |= o.hold;
+            }
+            check(tapped && !held, "test 2: a normal press threw the baton and never grappled (the user's report)");
+        }
+        // the bridge's pull (game_swing: cape_glide::Grapple started on the ask's rising edge, carried on while
+        // askGrappleOnly / askBatman comes every live frame): the body flies to the point the aim hits
+        auto pulls = [&](uint32_t hero, int fires, Vec3 aimDir, const std::vector<uint32_t>& asks, std::string tag) {
+            cape_glide::Grapple g;
+            Vec3 body{0, 0, 0}, vel{};
+            const Vec3 anchor = body + normalized(aimDir) * 14.f; // the CANDIDATE-free model: a ledge 14 m up the line
+            bool was = false, started = false, arrived = false;
+            float nearest = length(anchor - body);
+            for (size_t f = 0; f < asks.size() + 400; ++f) {
+                const uint32_t a = f < asks.size() ? asks[f] : (hero == hero_modes::batman ? cape_glide::askBatman
+                                                                                           : cape_glide::askGrappleOnly);
+                const bool free = (a & (cape_glide::askBatman | cape_glide::askGrappleOnly)) != 0;
+                const bool heldNow = free && (a & (cape_glide::askGrapple[0] | cape_glide::askGrapple[1]));
+                if (heldNow && !was && g.phase() == cape_glide::idle)
+                    started |= g.start(body, anchor, {0, 1, 0}, 0);
+                was = heldNow;
+                const auto o = g.update(dt, body, vel, free);
+                if (o.drive) {
+                    vel = o.velocity;
+                    body = body + vel * dt;
+                }
+                arrived |= o.arrived;
+                nearest = std::min(nearest, length(anchor + Vec3{0, 1.1f, 0} - body));
+            }
+            check(fires >= 1 && started, grapple072::heroName(hero) + std::string(" grappled") + tag);
+            check(nearest < 2.f, grapple072::heroName(hero) + std::string(" was pulled to the point") + tag);
+            (void)arrived;
+        };
+        for (unsigned hand = 0; hand < 2; ++hand) {
+            const std::string tag = " (default settings, hand " + std::to_string(hand) + ")";
+            const Vec3 back{hand ? .15f : -.15f, eye - .15f, .2f}, out{hand ? .25f : -.25f, eye - .25f, -.55f};
+            const Vec3 up{0, .5f, -.87f};
+            // a session: grip from frame 10, the hand out to aim by 30, a NORMAL press (8 frames) at 50
+            auto trig = [](int f) { return f >= 50 && f < 58 ? 1.f : 0.f; };
+            // ---- DAREDEVIL: game_xr's frame (the holster step's BatonThrow + rack, then the hero step's FireGate) ----
+            {
+                hero007::Play p7;
+                hero007::PlayInput in7;
+                in7.dt = dt;
+                in7.play = true;
+                in7.hero = hero_modes::daredevil;
+                in7.head = level;
+                in7.eyeHeight = eye;
+                in7.batonHolsters = combat38::batonHolstersOn(0);
+                p7.setHero(in7.hero);
+                g73::FireGate gate;
+                g73::BatonThrow bt;
+                hero_modes::Baton baton[2];
+                std::vector<uint32_t> asks;
+                int fires = 0;
+                bool drawn = false;
+                for (int f = 0; f < 120; ++f) {
+                    bool throwNow[2]{};
+                    for (unsigned i = 0; i < 2; ++i) {
+                        in7.hands[i].tracked = true;
+                        in7.hands[i].position = i == hand ? (f < 30 ? back : out) : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                        in7.hands[i].aim = up;
+                        in7.hands[i].squeeze = i == hand && f >= 10 ? 1.f : 0.f;
+                        const bool armed = baton[i].inHandNow() && p7.batonDrawn(i, true);
+                        throwNow[i] = bt.step(i, dt, armed, true, in7.hands[i].position, in7.hands[i].squeeze).throwNow;
+                        in7.hands[i].thrown = !baton[i].inHandNow() || throwNow[i];
+                    }
+                    hero007::PlayOutput o7;
+                    p7.holsterStep(in7, o7);
+                    drawn |= p7.batonDrawn(hand, true);
+                    bool fire[2]{};
+                    for (unsigned i = 0; i < 2; ++i) {
+                        fire[i] = gate.step(i, p7.batonDrawn(i, true) && baton[i].inHandNow(), i == hand ? trig(f) : 0.f, false);
+                        baton[i].update(dt, throwNow[i] && !fire[i], in7.hands[i].position, up, nullptr, 0, -1);
+                    }
+                    fires += f == 50 && fire[hand];
+                    asks.push_back(grapple072::asks(hero_modes::daredevil, true, fire[0], fire[1]));
+                }
+                check(drawn, "DAREDEVIL drew the baton from his back" + tag);
+                check(fires == 1, "DAREDEVIL's normal press grappled on its first frame (no .3 s hold)" + tag);
+                check(baton[hand].throws == 0 && baton[hand].inHandNow(), "the trigger never threw the baton" + tag);
+                check(g73::batonAim(true, out, out + up * .5f, {0, 0, -1}).y > .4f, "the line runs along the pointed baton" + tag);
+                pulls(hero_modes::daredevil, fires, up, asks, tag);
+            }
+            // ---- DAREDEVIL's throw: a swing with the grip let go mid-throw throws; a still release puts it back ----
+            for (const bool swing : {true, false}) {
+                hero007::Play p7;
+                hero007::PlayInput in7;
+                in7.dt = dt;
+                in7.play = true;
+                in7.hero = hero_modes::daredevil;
+                in7.head = level;
+                in7.eyeHeight = eye;
+                in7.batonHolsters = true;
+                p7.setHero(in7.hero);
+                g73::FireGate gate;
+                g73::BatonThrow bt;
+                hero_modes::Baton baton[2];
+                bool heldWhileOut = true, everOut = false, backOnBack = false;
+                for (int f = 0; f < 400; ++f) {
+                    // drawn at 10, out at 30, from 40 a 3 m/s swing forward (or still), the grip let go at 50
+                    Vec3 at = f < 30 ? back : out;
+                    if (swing && f >= 40 && f <= 50)
+                        at = out + Vec3{0, 0, -3.f * (f - 40) * dt};
+                    else if (swing && f > 50)
+                        at = out + Vec3{0, 0, -3.f * 10 * dt};
+                    bool throwNow = false;
+                    for (unsigned i = 0; i < 2; ++i) {
+                        in7.hands[i].tracked = true;
+                        in7.hands[i].position = i == hand ? at : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                        in7.hands[i].aim = {0, 0, -1};
+                        in7.hands[i].squeeze = i == hand && f >= 10 && f < 50 ? 1.f : 0.f;
+                        const bool armed = baton[i].inHandNow() && p7.batonDrawn(i, true);
+                        const bool t = bt.step(i, dt, armed, true, in7.hands[i].position, in7.hands[i].squeeze).throwNow;
+                        if (i == hand)
+                            throwNow = t;
+                        in7.hands[i].thrown = !baton[i].inHandNow() || t;
+                    }
+                    hero007::PlayOutput o7;
+                    p7.holsterStep(in7, o7);
+                    const bool fire = gate.step(hand, p7.batonDrawn(hand, true) && baton[hand].inHandNow(), 0.f, false);
+                    baton[hand].update(dt, throwNow && !fire, in7.hands[hand].position, {0, 0, -1}, nullptr, 0, -1);
+                    if (!baton[hand].inHandNow()) {
+                        everOut = true;
+                        heldWhileOut &= p7.batonDrawn(hand, true); // never a second baton on the back meanwhile
+                    }
+                    if (f > 60 && baton[hand].inHandNow() && !p7.batonDrawn(hand, true))
+                        backOnBack = true;
+                }
+                if (swing) {
+                    check(baton[hand].throws == 1 && everOut, "a grip let go mid-throw threw the baton" + tag);
+                    check(heldWhileOut, "the rack kept it while it flew (never 3 batons)" + tag);
+                    check(baton[hand].inHandNow() && backOnBack, "it came home and went back on the back" + tag);
+                } else {
+                    check(baton[hand].throws == 0 && backOnBack, "a still grip release only put it back on the back" + tag);
+                }
+            }
+            // ---- BATMAN: the grip holds the gun, a normal press fires it ----
+            {
+                hero007::Play p7;
+                hero007::PlayInput in7;
+                in7.dt = dt;
+                in7.play = true;
+                in7.hero = hero_modes::batman;
+                in7.head = level;
+                in7.eyeHeight = eye;
+                p7.setHero(in7.hero);
+                std::vector<uint32_t> asks;
+                int fires = 0;
+                for (int f = 0; f < 120; ++f) {
+                    for (unsigned i = 0; i < 2; ++i) {
+                        in7.hands[i].tracked = true;
+                        in7.hands[i].position = i == hand ? out : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                        in7.hands[i].aim = up;
+                        in7.hands[i].squeeze = i == hand && f >= 10 ? 1.f : 0.f;
+                        in7.hands[i].trigger = i == hand ? g73::heroPress(trig(f), in7.hands[i].squeeze, false, false).trigger : 0.f;
+                    }
+                    hero007::PlayOutput hold, o7;
+                    p7.holsterStep(in7, hold);
+                    p7.step(in7, o7);
+                    fires += f == 50 && o7.grapple[hand];
+                    asks.push_back(grapple072::asks(hero_modes::batman, true, o7.grapple[0], o7.grapple[1]));
+                }
+                check(fires == 1, "BATMAN's normal press fired the drawn gun at once" + tag);
+                pulls(hero_modes::batman, fires, up, asks, tag);
+            }
+            // ---- the PUNISHER: the grip at the chest rig draws the hook, a normal press fires it ----
+            {
+                hero072::Play p72;
+                hero072::PlayIn in;
+                in.dt = dt;
+                in.play = true;
+                in.hero = hero_modes::punisher;
+                in.head = level;
+                in.eyeHeight = eye;
+                const Vec3 sternum{hand ? .07f : -.07f, eye - .31f, -.05f};
+                std::vector<uint32_t> asks;
+                int fires = 0;
+                for (int f = 0; f < 120; ++f) {
+                    for (unsigned i = 0; i < 2; ++i) {
+                        in.hands[i].tracked = true;
+                        in.hands[i].position = i == hand ? (f < 30 ? sternum : out) : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                        in.hands[i].aim = up;
+                        in.hands[i].grip = i == hand && f >= 10 ? 1.f : 0.f;
+                        in.hands[i].trigger = i == hand ? trig(f) : 0.f;
+                    }
+                    hero072::PlayOut o;
+                    p72.step(in, o);
+                    fires += o.grapple[hand] ? 1 : 0;
+                    asks.push_back(grapple072::asks(hero_modes::punisher, true, o.grapple[0], o.grapple[1]));
+                }
+                check(fires >= 1, "the PUNISHER's normal press fired the hook" + tag);
+                pulls(hero_modes::punisher, fires, up, asks, tag);
+            }
+        }
     });
     test("Version 0.0.73 test 3: PUNISHER HOOK GRAB - the chest rig is found looking down, either hand, a high hip fit, and the hook wins over the pistols", [] {
         using namespace spidy::hero072;

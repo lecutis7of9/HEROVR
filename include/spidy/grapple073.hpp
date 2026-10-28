@@ -6,8 +6,8 @@
 //    pull fires once, on the ask's rising edge). A press that began anywhere else (a holo click, the
 //    device not out yet) never fires, not even when the grip comes after it - so the grapple never fires
 //    on every trigger press and never on a holo click (fix 3).
-//  - TapOrHold (DAREDEVIL, fix 5): his trigger throws the baton on a TAP (let go inside holdSeconds) and
-//    fires the grapple along the baton on a HOLD (held past holdSeconds; the throw is then skipped).
+//  - TapOrHold (DAREDEVIL, fix 5; test 3: no longer wired, see BatonThrow): a TAP threw, a HOLD grappled.
+//  - BatonThrow (DAREDEVIL, test 3): his trigger is a FireGate; the baton throws on a grip release mid-throw.
 //  - Enemy reel (fix 6): a grapple aimed at an enemy (enemyOnLine) closes to reelGap (about 2 ft) of him.
 //    NO game write moves an enemy in SM2 (rope_grab.hpp: BotStateFlung is CANDIDATE, unconfirmed), so the
 //    reel is the pull of the hero to 2 ft of the enemy along the line; the enemy is never touched.
@@ -76,7 +76,7 @@ inline HeroPress heroPress(float trigger, float squeeze, bool holoZone, bool dri
     return {driving ? 0.f : pressOf(trigger), pressOf(squeeze)};
 }
 
-// DAREDEVIL's trigger: a tap throws, a hold grapples.
+// DAREDEVIL's trigger in test 2: a tap threw, a hold grappled (test 3: no longer wired; kept for its tests).
 inline constexpr float holdSeconds = .3f;
 class TapOrHold {
   public:
@@ -117,6 +117,67 @@ class TapOrHold {
   private:
     bool down_[2]{}, counting_[2]{};
     float held_[2]{};
+};
+
+// Version 0.0.73 test 3 (the user: "grip draws or holds it from the back, then trigger fires the grapple on a
+// normal press; throwing the baton is a throw motion with a grip release, never a trigger press"):
+// DAREDEVIL's TRIGGER is now a FireGate (a normal press grapples at once, no hold); TapOrHold above is no
+// longer wired (test 2's root cause on the default path: a normal press under holdSeconds THREW the baton,
+// and while it flew the hand had no baton to grapple with). BatonThrow throws on the frame the GRIP lets
+// go of a baton held last frame while the hand moves at least throwSpeed (the fastest of the last
+// throwMemory s): a throw motion. A grip opened still (or slowly) only puts the baton back.
+// Its grip hysteresis is holster::pressed / released (.6 / .3; core_tests pins them equal), so the
+// throw is decided on the very frame the back rack lets the baton go (game_xr then keeps it held, thrown).
+inline constexpr float throwGripPress = .6f, throwGripRelease = .3f;
+inline constexpr float throwSpeed = 1.5f, throwMemory = .15f;
+class BatonThrow {
+  public:
+    struct Out {
+        bool throwNow{};   // this frame: throw the baton
+        Vec3 velocity{};   // the hand's velocity at its fastest in the last throwMemory s (tracking space)
+    };
+    // armed: the baton was in this hand LAST frame (drawn, not thrown); squeeze: the real grip.
+    Out step(unsigned hand, float dt, bool armed, bool tracked, Vec3 position, float squeeze) {
+        Out o;
+        if (hand > 1)
+            return o;
+        const float t = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+        // the hand's speed (a lost or jumping hand never counts)
+        if (tracked && fineV(position) && have_[hand] && t > 1e-4f) {
+            const Vec3 v = (position - last_[hand]) / t;
+            if (fineV(v) && length(v) < 25.f && (length(v) >= length(peak_[hand]) || age_[hand] > throwMemory)) {
+                peak_[hand] = v;
+                age_[hand] = 0;
+            } else {
+                age_[hand] += t;
+            }
+        } else {
+            age_[hand] += t;
+        }
+        if (age_[hand] > throwMemory * 2)
+            peak_[hand] = {};
+        have_[hand] = tracked && fineV(position);
+        if (have_[hand])
+            last_[hand] = position;
+        const float sq = std::isfinite(squeeze) ? squeeze : 0.f;
+        const bool down = sq > throwGripPress || (down_[hand] && sq >= throwGripRelease);
+        const bool letGo = down_[hand] && !down;
+        down_[hand] = down;
+        if (letGo && armed && tracked && length(peak_[hand]) >= throwSpeed) {
+            o.throwNow = true;
+            o.velocity = peak_[hand];
+            ++throws_;
+        }
+        return o;
+    }
+    uint64_t throws() const { return throws_; }
+    void reset() { *this = BatonThrow{}; }
+
+  private:
+    bool down_[2]{}, have_[2]{};
+    Vec3 last_[2]{}, peak_[2]{};
+    float age_[2]{};
+    uint64_t throws_{};
 };
 
 // The direction along a held baton (butt to tip), else the controller aim.

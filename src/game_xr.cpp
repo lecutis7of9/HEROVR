@@ -2107,9 +2107,14 @@ DWORD WINAPI run(void*) {
         van072::Driver vanDriver;
         van072::Van& van = vanDriver.van;
         van072::CarryOut vanCarry{};
-        // Version 0.0.73 (fix 5): DAREDEVIL's trigger - a tap throws, a hold grapples along the baton
-        // (tracking space; the command turns it to the world with the CONFIRMED ray bridge).
-        grapple073::TapOrHold ddTrigger;
+        // Version 0.0.73 test 3: DAREDEVIL's trigger is a FireGate - a normal press with the drawn baton
+        // grapples along it (tracking space; the command turns it to the world with the CONFIRMED ray
+        // bridge); test 2's TapOrHold threw on a press under .3 s. The baton throws on a grip release
+        // mid-throw (BatonThrow, decided at the holster step so the rack keeps it while it flies).
+        grapple073::FireGate ddTrigger;
+        grapple073::BatonThrow ddThrow;
+        bool ddThrowNow[2]{};
+        Vec3 ddThrowVel[2]{};
         bool ddAimHeld[2]{};
         Vec3 cf73Aim[2]{}; // Version 0.0.73 (fix 15): each hand's combat aim (tracking)
         Vec3 ddAimFrom[2]{}, ddAimDir[2]{};
@@ -4039,6 +4044,17 @@ DWORD WINAPI run(void*) {
                                 hin.hands[i].busy = swingState.webs[i].attached != 0 || u37.climbing[i] ||
                                                     (pocketDraw.hands() & (1u << i)) != 0;
                                 hin.hands[i].thrown = !batons[i].inHandNow(); // Version 0.0.7: never 3 batons
+                                // Version 0.0.73 test 3 DAREDEVIL THROW: a grip let go mid-throw (BatonThrow) of
+                                // the baton this hand held last frame throws it; the rack keeps it (thrown) so it
+                                // goes back to the back only once it has come home. DD GRAPPLE off: 0.0.6's trigger.
+                                const bool ddThrowOn = heroNow() == hero_modes::daredevil && c38(combat38::ddGrapple) == 0;
+                                const bool armed = ddThrowOn && drawPlay && batons[i].inHandNow() &&
+                                                   hero007Play.batonDrawn(i, hin.batonHolsters);
+                                const auto thrw = ddThrow.step(i, hin.dt, armed, hin.hands[i].tracked, grips[i].position, squeezes[i]);
+                                ddThrowNow[i] = thrw.throwNow;
+                                ddThrowVel[i] = thrw.velocity;
+                                if (ddThrowNow[i])
+                                    hin.hands[i].thrown = true;
                             }
                             hero007::PlayOutput hout;
                             hero007Play.holsterStep(hin, hout);
@@ -6841,7 +6857,7 @@ DWORD WINAPI run(void*) {
                                         batonAt = -1;
                                         char line[240];
                                         sprintf_s(line, "VERSION 0.0.6 HERO: %s (%s)", hero_modes::heroNames[heroIs < hero_modes::heroes ? heroIs : 0],
-                                                  heroIs == hero_modes::daredevil ? "a baton in each hand, trigger throws, punches x DAREDEVIL PUNCH, sonar look, no webs"
+                                                  heroIs == hero_modes::daredevil ? "batons drawn from the back, trigger grapples, a throw lets one fly, sonar look, no webs"
                                                   : heroIs == hero_modes::hulk    ? "4x charged jump, one-punch knockouts, brutes 2-3, no webs"
                                                   : heroIs == hero_modes::ironMan ? "repulsors and the chest beam, no webs"
                                                   : heroIs == hero_modes::batman  ? "0.0.7: hold, let go to throw a batarang; grip at the belt for smoke; no webs"
@@ -6882,22 +6898,30 @@ DWORD WINAPI run(void*) {
                                         for (unsigned i = 0; i < 2; ++i) {
                                             auto& b = batons[i];
                                             const bool batonOut = hero007Play.batonDrawn(i, ddHolsters);
-                                            // Version 0.0.73 (fix 5): with DD GRAPPLE on, a tap throws, a held trigger
-                                            // grapples along the baton; never a press begun on the hologram.
+                                            // Version 0.0.73 test 3: with DD GRAPPLE on (the default) a normal trigger
+                                            // press with the drawn baton grapples along it at once (FireGate, held
+                                            // until let go; never a press begun on the hologram) and the baton throws
+                                            // only on a grip release mid-throw (the holster step's BatonThrow). Test 2
+                                            // threw on any press under .3 s (TapOrHold): the user's "doesn't work".
                                             const bool ddHolo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
-                                            const auto ddT = ddTrigger.step(i, static_cast<float>(frame.seconds),
-                                                                            cf.hands[i].tracked && batonOut && b.inHandNow(),
-                                                                            heroPress[i].trigger, ddHolo);
-                                            const bool trig = ddGrappleOn ? ddT.tap
+                                            const bool ddFire = ddTrigger.step(i, cf.hands[i].tracked && batonOut && b.inHandNow(),
+                                                                               heroPress[i].trigger, ddHolo);
+                                            const bool ddThrown = ddThrowNow[i];
+                                            ddThrowNow[i] = false;
+                                            const bool trig = ddGrappleOn ? ddThrown && !ddFire
                                                                           : cf.hands[i].tracked && heroPress[i].trigger > .5f && batonOut;
-                                            ddAimHeld[i] = ddGrappleOn && ddT.hold;
+                                            ddAimHeld[i] = ddGrappleOn && ddFire;
                                             if (ddAimHeld[i]) {
                                                 ddAimDir[i] = grapple073::batonAim(batonShaftOk[i], batonButt[i], batonTipHeld[i], cf.hands[i].aim);
                                                 ddAimFrom[i] = batonShaftOk[i] && finite(batonTipHeld[i]) ? batonTipHeld[i] : cf.hands[i].position;
                                                 hero072Grapple[i] = true;
                                             }
                                             const Vec3 hand = cf.hands[i].position;
-                                            const Vec3 aimDir = cf.hands[i].aim;
+                                            // test 3: a thrown baton flies along the throw (captain::throwAim), else the aim
+                                            const Vec3 aimDir = trig && ddGrappleOn
+                                                                    ? captain::throwAim(ddThrowVel[i], cf.hands[i].aim,
+                                                                                        frame.head.orientation.rotate(Vec3{0, 0, -1}))
+                                                                    : cf.hands[i].aim;
                                             batonHand[i] = hand;
                                             batonAimNow[i] = aimDir;
                                             batonTracked[i] = cf.hands[i].tracked;

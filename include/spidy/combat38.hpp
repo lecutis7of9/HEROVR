@@ -387,7 +387,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"smoke_blind", "SMOKE BLIND", "SBLIND", "ON: enemies in Batman's smoke stagger blind, live (no restart).",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"dd_grapple", "BATON GRAPPLE", "DDGRAP", "ON: hold the trigger to grapple along the baton, tap to throw it, no restart.",
+    {"dd_grapple", "BATON GRAPPLE", "DDGRAP", "ON: grip draws the baton, trigger grapples, a throw lets it fly, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"dd_parry", "BATON PARRY", "DDPARY", "ON (CANDIDATE): batons crossed in front of your face block hits, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
@@ -416,7 +416,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"shield_slam", "SHIELD SLAM", "SSLAM", "ON: slam Cap's shield down to knock enemies back and douse fire, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"punisher_hook", "GRAPPLE HOOK", "PHOOK", "ON: draw the hook from the chest, push forward to grapple up, no restart.",
+    {"punisher_hook", "GRAPPLE HOOK", "PHOOK", "ON: grip at the chest draws the hook, trigger fires it, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.73 (fixes 11 + 18): OFF by default - only SPIDER-MAN climbs walls unless this is turned on.
     {"claw_climb", "CLAW CLIMB", "CLAWUP", "OFF by default; ON lets Wolverine climb walls with claws out, no restart.",

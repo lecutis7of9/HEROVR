@@ -10188,11 +10188,12 @@ DWORD WINAPI run(void*) {
                                     t.standingEye = suitStanding;
                                     suit_wear::Skeleton live;
                                     suit_wear::BoneMove mv[suit_wear::bones];
-                                    suitWorn = suit_wear::estimate(*suitRig, t, live) && suit_wear::moves(*suitRig, live, mv) &&
-                                               suit_wear::skin(*suitRig, mv, suitSkinned);
                                     const uint32_t body = c38(combat38::suitBody);
                                     const uint32_t mask =
                                         suit_wear::partBones(body == 0 ? suit_wear::partArms : body == 1 ? suit_wear::partBody : suit_wear::partOff);
+                                    // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
+                                    suitWorn = (mask || mirrorOn.load()) && suit_wear::estimate(*suitRig, t, live) &&
+                                               suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);
                                     if (suitWorn && mask)
                                         suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask);
                                 }
@@ -10266,7 +10267,7 @@ DWORD WINAPI run(void*) {
                                 }
                                 // Build 9 SUITS: the worn suit's whole model reflected (the frame drawn, not the FIGURE).
                                 mf.frameOnly = false;
-                                if (suitWorn && plane.valid) {
+                                if (suitWorn && plane.valid && mirrorInSight) { // out of sight: the FIGURE (build 7's cost)
                                     const Vec3 n = plane.normal, c = plane.centre;
                                     const float s = plane.scale;
                                     float place[12];

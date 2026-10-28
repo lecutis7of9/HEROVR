@@ -298,7 +298,21 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
                             place[8] * n.x + place[9] * n.y + place[10] * n.z}
                      : n;
     };
-    sink.reserve(from + size_t{count} * 3);
+    // Each welded vertex placed and lit once (not once per corner: about 4x fewer), then the corners copied.
+    thread_local std::vector<Vec3> placed;
+    thread_local std::vector<float> lights;
+    const size_t nv = s.p.size();
+    const bool once = size_t{count} * 3 >= nv * 2; // most of the suit drawn (the mirror): else per corner (the arms)
+    if (once) {
+        placed.resize(nv);
+        lights.resize(nv);
+        for (size_t v = 0; v < nv; ++v) {
+            placed[v] = P(s.p[v]);
+            lights[v] = .32f + .68f * std::abs(dot(normalized(N(s.n[v])), light));
+        }
+    }
+    sink.resize(from + size_t{count} * 3);
+    Vertex* o = sink.data() + from;
     for (uint32_t t = 0; t < mesh.triangles(); ++t) {
         if (!((boneMask >> rig.triangleBone[t]) & 1u))
             continue;
@@ -308,10 +322,9 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
         const Vec3 tint = at >= 0 && t < mesh.tints.size() ? mesh.tints[t] : mesh.colors[t];
         for (uint32_t k = 0; k < 3; ++k) {
             const uint32_t v = rig.corner[t * 3 + k];
-            const Vec3 n = normalized(N(s.n[v]));
-            const float lit = .32f + .68f * std::abs(dot(n, light));
             const float u = uvs ? mesh.uvs[t * 6 + k * 2] : 0.f, w = uvs ? mesh.uvs[t * 6 + k * 2 + 1] : 0.f;
-            sink.push_back(Vertex{P(s.p[v]), tint * lit, 1.f, {u, w, layer, 1.f}});
+            const float lit = once ? lights[v] : .32f + .68f * std::abs(dot(normalized(N(s.n[v])), light));
+            *o++ = Vertex{once ? placed[v] : P(s.p[v]), tint * lit, 1.f, {u, w, layer, 1.f}};
         }
     }
     for (size_t i = from; i < sink.size(); ++i)

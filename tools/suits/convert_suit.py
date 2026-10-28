@@ -55,7 +55,7 @@ SUITS = [
     dict(folder='Suit_wolverine_4', zip='1073e863', drop=INNER),
     dict(folder='Suit_punisher_1', zip='f642847d', drop=INNER),
     dict(folder='Suit_punisher_2', zip='3a9db847', drop=INNER),
-    dict(folder='Suit_thor_1', zip='9cba5a01', drop=INNER),
+    dict(folder='Suit_thor_1', zip='9cba5a01', drop=INNER, prop_bones='^Bone010'),  # the hammer
     dict(folder='Suit_thor_2', zip='0d36fd1f', drop=INNER),
     dict(folder='Suit_greenLantern_2', zip='10895eb2', drop=INNER),
     dict(folder='Suit_greenLantern_3', zip='75f1e3c7', drop=INNER),
@@ -345,6 +345,14 @@ def convert(s, downloads, out_models, work):
         elif s.get('props') and re.search(s['props'], m['name'], re.I):  # held / carried, not worn (Cap's shield)
             keep &= mat != i
             notes.append('dropped %s (%d triangles, a prop not worn: the game draws its own)' % (m['name'], int((mat == i).sum())))
+    if s.get('prop_bones') and meta['bones'] and sj.size:  # a prop modelled in the mesh, on its own bone (Thor 1's hammer)
+        names = [b['name'] if isinstance(b, dict) else str(b) for b in meta['bones']]
+        top = np.take_along_axis(sj[:, 0, :], np.argmax(sw[:, 0, :], 1)[:, None], 1)[:, 0]
+        on = np.array([t >= 0 and bool(re.search(s['prop_bones'], names[t], re.I)) for t in top])
+        if on.any():
+            keep &= ~on
+            notes.append('dropped %d triangles on bone %s (a prop not worn: the game draws its own)' % (
+                int(on.sum()), ', '.join(sorted({names[t] for t in top[on]}))))
     tris, uv, mat, sj, sw = tris[keep], uv[keep], mat[keep], sj[keep], sw[keep]
     resolve_images(src, mats, notes, scene)
     P = tris.reshape(-1, 3)
@@ -352,6 +360,18 @@ def convert(s, downloads, out_models, work):
     scale = HEIGHT / (hi[1] - lo[1])
     bones = meta['bones']
     rig = sk.rig_joints(bones) if bones else None
+    if rig is not None:  # the game wears a suit facing +z, its left at +x: turn one modelled facing elsewhere
+        sides = [rig[4] - rig[7], rig[10] - rig[13]]  # shoulderL - shoulderR, hipL - hipR
+        turn = float(np.arctan2(sum(d[2] for d in sides), sum(d[0] for d in sides)))
+        if abs(np.degrees(turn)) > 3:
+            c, si = np.cos(turn), np.sin(turn)
+            Ry = np.array([[c, 0, si], [0, 1, 0], [-si, 0, c]])
+            tris = tris @ Ry.T
+            rig = np.asarray(rig) @ Ry.T
+            P = tris.reshape(-1, 3)
+            lo, hi = P.min(0), P.max(0)
+            notes.append('turned %d degrees to face the player\'s way (modelled facing %s)' % (
+                round(np.degrees(turn)), 'sideways' if abs(abs(np.degrees(turn)) - 90) < 15 else 'off-axis'))
     P0 = (P - [0, lo[1], 0]) * scale
     band = P0[(P0[:, 1] > .55 * HEIGHT) & (P0[:, 1] < .75 * HEIGHT)]
     cx = np.median(band[:, 0])

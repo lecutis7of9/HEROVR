@@ -46,6 +46,23 @@ class Floors(unittest.TestCase):
         self.assertTrue(all(mc.SOURCES[h][1] == 'prop' for h in mc.SOURCES if h.startswith('Hammer/')))
         self.assertEqual(set(mc.BUILT), {'Vehicle/PunisherVan/Interior', 'Vehicle/PunisherVan/SteeringWheel', 'Roster'})
 
+    @unittest.skipIf(mc is None, 'needs numpy')
+    def test_suits_checked(self):
+        # Build 9: every suit in the game's slot list is model-checked as a body beside its download and shipped.
+        import re
+        sys.path.insert(0, str(ROOT / 'tools' / 'release072'))
+        import required_assets as ra
+        h = (ROOT / 'include' / 'spidy' / 'mesh_model.hpp').read_text()
+        block = h[h.index('suitFolders[suitSlots]'):]
+        cpp = re.findall(r'"(Suit_[A-Za-z]+_\d)"', block[:block.index('};')])
+        self.assertEqual(len(cpp), 23)
+        self.assertEqual(cpp, mc.SUIT_FOLDERS)
+        self.assertEqual(cpp, ra.SUIT_FOLDERS)
+        for f in cpp:
+            self.assertEqual(mc.SOURCES['Suits/' + f][1], 'body')
+            self.assertIn('Models/Suits/%s/scene.glb' % f, ra.MODEL_FILES)
+            self.assertIn('Models/Suits/%s/license.txt' % f, ra.LICENSE_FILES)
+
 
 if __name__ == '__main__':
     unittest.main()

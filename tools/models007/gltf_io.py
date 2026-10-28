@@ -43,7 +43,11 @@ def node_matrix(n):
 
 def load(folder):
     """-> list of parts: dict(mesh=index, material=index, pos=(T,3,3) world, uv=(T,3,2) or None), and the glTF."""
-    g = json.load(open(os.path.join(folder, 'scene.gltf'), encoding='utf-8'))
+    name = 'scene.gltf'
+    if not os.path.exists(os.path.join(folder, name)):  # build 9: a zip with its own name (Superman.gltf)
+        named = sorted(f for f in os.listdir(folder) if f.lower().endswith('.gltf'))
+        name = named[0] if len(named) == 1 else name
+    g = json.load(open(os.path.join(folder, name), encoding='utf-8'))
     bin_ = open(os.path.join(folder, g['buffers'][0]['uri']), 'rb').read()
     parts = []
 

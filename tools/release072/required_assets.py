@@ -27,6 +27,12 @@ MODEL_FILES = [
     # Build 8 ROSTER page: every profile picture and suit preview (tools/roster/make_roster_glb.py; credits in license.txt).
     'Models/Roster/scene.glb',
 ]
+# Build 9 SUITS: the 23 suits the user sent (tools/suits/convert_suit.py; mesh_model::suitFolders' order).
+SUIT_FOLDERS = ['Suit_batman_1', 'Suit_batman_2', 'Suit_batman_3', 'Suit_batman_5', 'Suit_ironMan_1', 'Suit_ironMan_2',
+                'Suit_ironMan_3', 'Suit_ironMan_4', 'Suit_captainAmerica_1', 'Suit_captainAmerica_2', 'Suit_daredevil_1',
+                'Suit_daredevil_3', 'Suit_hulk_2', 'Suit_wolverine_1', 'Suit_wolverine_3', 'Suit_wolverine_4', 'Suit_punisher_1',
+                'Suit_punisher_2', 'Suit_thor_1', 'Suit_thor_2', 'Suit_greenLantern_2', 'Suit_greenLantern_3', 'Suit_superman_4']
+MODEL_FILES += ['Models/Suits/%s/scene.glb' % f for f in SUIT_FOLDERS]
 # Version 0.0.72: the CC BY credit beside each new model (the artist's own license.txt; the built parts' note).
 LICENSE_FILES = [os.path.dirname(m) + '/license.txt' for m in MODEL_FILES[10:]]
 

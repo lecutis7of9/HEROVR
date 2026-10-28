@@ -45,6 +45,14 @@ def main(src, dst):
     inv = inv.ravel()
     verts = pts[first]
     faces = inv.reshape(-1, 3)
+    # A triangle welded onto two of its own corners, or one twice over, makes an invalid mesh Blender's
+    # collapse decimation never finishes on (batman_2: 6 and 11 of 69,965): dropped first.
+    keep = (faces[:, 0] != faces[:, 1]) & (faces[:, 1] != faces[:, 2]) & (faces[:, 0] != faces[:, 2])
+    _, once = np.unique(np.sort(faces, 1), axis=0, return_index=True)
+    single = np.zeros(len(faces), bool)
+    single[once] = True
+    keep &= single
+    faces, uv, mat = faces[keep], uv[keep], mat[keep]
     bpy.ops.wm.read_factory_settings(use_empty=True)
     me = bpy.data.meshes.new('suit')
     me.from_pydata(verts.tolist(), [], faces.tolist())

@@ -42,6 +42,14 @@ SOURCES = {
     'Hammer/FCCOOPER': ('thors_hammer_mjolnir', 'prop'),
     'Vehicle/PunisherVan': ('gmc_vandura1976_van', 'vehicle'),
 }
+# Build 9 SUITS: each suit the user sent beside its own download (tools/suits/convert_suit.py SOURCES).
+SUIT_SOURCES = os.environ.get('SUITS_SOURCES', '/workspace/hero-0.0.9-suits')
+SUIT_FOLDERS = ['Suit_batman_1', 'Suit_batman_2', 'Suit_batman_3', 'Suit_batman_5', 'Suit_ironMan_1', 'Suit_ironMan_2',
+                'Suit_ironMan_3', 'Suit_ironMan_4', 'Suit_captainAmerica_1', 'Suit_captainAmerica_2', 'Suit_daredevil_1',
+                'Suit_daredevil_3', 'Suit_hulk_2', 'Suit_wolverine_1', 'Suit_wolverine_3', 'Suit_wolverine_4', 'Suit_punisher_1',
+                'Suit_punisher_2', 'Suit_thor_1', 'Suit_thor_2', 'Suit_greenLantern_2', 'Suit_greenLantern_3', 'Suit_superman_4']
+for _f in SUIT_FOLDERS:
+    SOURCES['Suits/' + _f] = (os.path.join(SUIT_SOURCES, _f), 'body')
 # Version 0.0.72: parts BUILT for a model whose source lacks them (the van's empty cab): no source to match,
 # so they are checked for real UVs, their texture and being drawn, and rendered beside their texture.
 BUILT = {'Vehicle/PunisherVan/Interior': 'the cab built for the source\'s empty shell (seats, dash, door card)',

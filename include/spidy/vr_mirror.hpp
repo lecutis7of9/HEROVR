@@ -76,6 +76,7 @@ struct Frame {
     bool suit{};
     Vec3 joints[16]{};
     SuitPalette palette{}; // Update 38.3: the suit's colours (learned from the eye, or the default)
+    bool frameOnly{};      // Build 9 SUITS: the worn suit's model is in the mirror - the frame only, no FIGURE
 };
 inline constexpr uint32_t suitJointCount = 16;
 // Where it was put, in the anchor's frame (playspace: about the feet, tracking axes).
@@ -474,6 +475,8 @@ inline size_t append(std::vector<Vertex>& out, const Plane& m, const Frame& f, c
         for (int i = 0; i < 4; ++i)
             soft::softBar(out, corner[i], corner[(i + 1) % 4], m.normal, .004f * s, frameColour, .5f, soft);
     }
+    if (f.frameOnly) // Build 9 SUITS: the suit's own model is drawn reflected (suit_wear)
+        return out.size() - from;
     const Vec3 view = m.normal; // the figure faces the player, flat across the line of sight
     const auto disc = [&](Vec3 at, float radius, Vec3 colour, float alpha) {
         soft::softArc(out, at, m.right, m.up, 0, radius, 0, 6.2831853f, colour, alpha, soft, 20);

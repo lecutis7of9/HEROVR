@@ -126,6 +126,8 @@ enum Option : uint32_t {
     gameBody,    // Version 0.0.72 GAME BODY (EXPERIMENTAL): strict checks (native_game_body.hpp), off by default
     // Version 0.0.72 build 6 (THOR crash bisect, the user 9:37): THOR HAMMER MODEL and THOR FLIGHT, ON by default.
     thorHammerModel, thorFlight,
+    // Build 9 SUITS (suit_wear.hpp): SUIT BODY - the worn suit model in first person (ARMS, FULL BODY, OFF).
+    suitBody,
     options
 };
 struct OptionInfo {
@@ -426,6 +428,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"thor_flight", "THOR FLIGHT", "TFLY", "ON: Thor flies with both arms up; OFF: he stays on the ground, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"suit_body", "SUIT BODY", "SBODY", "Your picked suit model on your arms or body, live; the mirror shows it whole.",
+     3, {"ARMS", "FULL BODY", "OFF", nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

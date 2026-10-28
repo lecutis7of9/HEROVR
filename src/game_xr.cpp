@@ -110,6 +110,7 @@
 #include "spidy/mirror_view.hpp" // Version 0.0.3
 #include "spidy/rope_grab.hpp"
 #include "spidy/v003.hpp"
+#include "spidy/suit_wear.hpp"
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
@@ -724,11 +725,17 @@ std::atomic<uint32_t> combat38Values[combat38::options]{};
 std::atomic<uint32_t> modelMissingMask{0};
 std::string modelMissingNote(uint32_t mask) {
     std::string t;
-    for (uint32_t s = 0; s < mesh_model::slots; ++s)
+    for (uint32_t s = 0; s < mesh_model::slots && s < 32; ++s) // build 9: 42 slots, the mask's 32 bits
         if (mask >> s & 1u)
             t += (t.empty() ? "MODEL MISSING: " : ", ") + std::string(mesh_model::slotFolders[s]);
     return t;
 }
+// Build 9 SUITS (suit_wear.hpp): the active hero's picked suit's mesh_model slot (0: none - DEFAULT, the
+// game's own or OWN SUIT; the game thread sets it each step), each suit's rig (made once at load, read by
+// the render thread after) and the wear's cost (the render thread's mean, microseconds a frame).
+std::atomic<uint32_t> wornSuitSlot{0};
+suit_wear::Rig suitRigs[mesh_model::suitSlots];
+std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
 // Version 0.0.72 REAL MODELS: a model texture (PNG, JPEG, anything Windows reads) to RGBA8 with WIC, its
 // sRGB values kept; false (that image left untextured) on any failure. COM is set up by the caller.
 bool wicDecode(const uint8_t* data, size_t size, mesh_model::Picture& out) {
@@ -1586,6 +1593,26 @@ DWORD WINAPI run(void*) {
             }
             consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slots - 1) + " loaded" +
                         (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
+            // Build 9 SUITS: each loaded suit made ready to wear (its skin welded, each triangle's bone).
+            {
+                uint32_t rigged = 0;
+                std::string unrigged;
+                for (uint32_t k = 0; k < mesh_model::suitSlots; ++k) {
+                    suitRigs[k] = {};
+                    const mesh_model::Mesh* m = models.model(mesh_model::slotSuitFirst + k);
+                    bool ok = false;
+                    try {
+                        ok = m && suit_wear::makeRig(*m, suitRigs[k]);
+                    } catch (...) {
+                        suitRigs[k] = {};
+                    }
+                    rigged += ok;
+                    if (m && !ok)
+                        unrigged += (unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
+                }
+                consoleLine("SUITS: " + std::to_string(rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
+                            (unrigged.empty() ? "" : " (NOT WEARABLE: " + unrigged + ")"));
+            }
             MEMORYSTATUSEX memory{sizeof(memory)};
             const uint64_t commitFree = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPageFile : 0;
             // Build 7: 512 px from 768 MB of free commit (29 layers: about 40 MB with mips). Builds 5-6 asked
@@ -6909,6 +6936,17 @@ DWORD WINAPI run(void*) {
                                         }
                                         hero072::PlayOut out72;
                                         hero072Play.step(in72, out72);
+                                        { // Build 9 SUITS: the picked suit's model worn (the render thread draws it)
+                                            uint32_t ws = 0;
+                                            if (heroWas < hero_modes::heroes && heroWas != hero_modes::spiderMan)
+                                                if (const hero072::Suit* x = hero072Play.suits.suit(heroWas, out72.suit))
+                                                    ws = mesh_model::suitSlot(x->folder);
+                                            if (wornSuitSlot.exchange(ws) != ws && ws) {
+                                                char line[160];
+                                                sprintf_s(line, "BUILD 9 SUIT: wearing %s", mesh_model::slotFolders[ws]);
+                                                game_prompts::note(line);
+                                            }
+                                        }
                                         for (uint32_t k = 0; k < 2; ++k) // Version 0.0.72: THOR's lightning, one sound a strike
                                             for (uint32_t n = out72.lightning[k]; n > 0; --n)
                                                 sfx::play(k ? sfx::thorLightning2 : sfx::thorLightning1);
@@ -10114,6 +10152,57 @@ DWORD WINAPI run(void*) {
                         if (validTrackedPose(rendered.headPose)) // Update 37: the WORLD LOG's gaze (3 stores)
                             world_trace::look(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
                         mirrorInSight = false; // set again below while the mirror is drawn
+                        // Build 9 SUITS: the picked suit's model on the player - skinned once from the headset
+                        // and the grips (suit_wear::estimate), its SUIT BODY part drawn in first person now and
+                        // the whole suit reflected in the mirror below (in place of the FIGURE). Textured into
+                        // the model sink; any failure: nothing drawn, never a crash.
+                        static suit_wear::Skinned suitSkinned;
+                        static float suitStanding = 0, suitMean = 0;
+                        const mesh_model::Mesh* suitMesh = nullptr;
+                        const suit_wear::Rig* suitRig = nullptr;
+                        bool suitWorn = false;
+                        if (const uint32_t ws = wornSuitSlot.load(); !saved->flatScreen && mesh_model::slotIsSuit(ws) &&
+                                                                     overlay.modelReady() && validTrackedPose(rendered.headPose)) {
+                            const auto suitStart = std::chrono::steady_clock::now();
+                            try {
+                                suitMesh = mesh_model::library().model(ws);
+                                suitRig = &suitRigs[ws - mesh_model::slotSuitFirst];
+                                if (suitMesh && suitRig->ok) {
+                                    suit_wear::Tracked t;
+                                    const Quat turn = trackingTurn(rendered.swing);
+                                    t.up = normalized(turn.rotate(Vec3{0, 1, 0}));
+                                    t.feet = rendered.anchor + travel;
+                                    t.eye = rendered.headPose.position + travel;
+                                    t.eyeForward = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
+                                    t.eyeUp = rendered.headPose.orientation.rotate(Vec3{0, 1, 0});
+                                    for (unsigned i = 0; i < 2; ++i) {
+                                        t.hand[i] = rendered.swing.hands[i].tracked && validTrackedPose(rendered.grips[i]);
+                                        t.grip[i] = rendered.grips[i].position + travel;
+                                        t.gripForward[i] = rendered.grips[i].orientation.rotate(Vec3{0, 0, -1});
+                                        t.gripX[i] = rendered.grips[i].orientation.rotate(Vec3{1, 0, 0});
+                                    }
+                                    // The standing eye height: the highest lately (a crouch does not shrink the suit).
+                                    const float eyeUp = dot(t.eye - t.feet, t.up);
+                                    if (std::isfinite(eyeUp) && eyeUp > .8f && eyeUp < 2.4f)
+                                        suitStanding = eyeUp > suitStanding ? eyeUp : suitStanding + (eyeUp - suitStanding) * .0004f;
+                                    t.standingEye = suitStanding;
+                                    suit_wear::Skeleton live;
+                                    suit_wear::BoneMove mv[suit_wear::bones];
+                                    suitWorn = suit_wear::estimate(*suitRig, t, live) && suit_wear::moves(*suitRig, live, mv) &&
+                                               suit_wear::skin(*suitRig, mv, suitSkinned);
+                                    const uint32_t body = c38(combat38::suitBody);
+                                    const uint32_t mask =
+                                        suit_wear::partBones(body == 0 ? suit_wear::partArms : body == 1 ? suit_wear::partBody : suit_wear::partOff);
+                                    if (suitWorn && mask)
+                                        suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned, mask);
+                                }
+                            } catch (...) {
+                                suitWorn = false;
+                            }
+                            const float us = std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - suitStart).count();
+                            suitMean = suitMean > 0 ? suitMean * .98f + us * .02f : us;
+                            suitWearMicros = static_cast<uint32_t>(suitMean + .5f);
+                        }
                         if (!saved->flatScreen && mirrorOn.load() && validTrackedPose(rendered.headPose)) {
                             static vr_mirror::Placement mirrorPlace;
                             static float mirrorMean{}, mirrorPeak{};
@@ -10174,6 +10263,30 @@ DWORD WINAPI run(void*) {
                                     const Vec3 gaze = mf.head.orientation.rotate(Vec3{0, 0, -1});
                                     mirrorInView = d > .1f && d < 4.f && dot(to / d, gaze) > std::cos(35.f * .0174532925f);
                                     mirrorInSight = d > .1f && dot(to / d, gaze) > std::cos(70.f * .0174532925f);
+                                }
+                                // Build 9 SUITS: the worn suit's whole model reflected (the frame drawn, not the FIGURE).
+                                mf.frameOnly = false;
+                                if (suitWorn && plane.valid) {
+                                    const Vec3 n = plane.normal, c = plane.centre;
+                                    const float s = plane.scale;
+                                    float place[12];
+                                    const float nn[3] = {n.x, n.y, n.z}, cc[3] = {c.x, c.y, c.z};
+                                    for (int r = 0; r < 3; ++r) {
+                                        float t = cc[r];
+                                        for (int q = 0; q < 3; ++q) {
+                                            const float m = s * ((r == q ? 1.f : 0.f) - 2.f * nn[r] * nn[q]);
+                                            place[r * 4 + q] = m;
+                                            t -= m * cc[q];
+                                        }
+                                        place[r * 4 + 3] = t;
+                                    }
+                                    const auto reflStart = std::chrono::steady_clock::now();
+                                    const size_t before = modelVertices.size();
+                                    mf.frameOnly = suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned,
+                                                                   suit_wear::allBones, place);
+                                    suitWearVertices = static_cast<uint32_t>(modelVertices.size() - before);
+                                    const float us = std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - reflStart).count();
+                                    suitMean += us * .02f;
                                 }
                                 const size_t mirrorMade = vr_mirror::append(translucent, plane, mf, mc, viewer);
                                 const float ms = std::chrono::duration<float, std::milli>(
@@ -11668,6 +11781,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameBody(void* v) { return se
 // Version 0.0.72 build 6: the THOR crash bisect keys (live.txt thor_hammer_model / thor_flight).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorHammerModel(void* v) { return setHero007(v, combat38::thorHammerModel, 5434); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorFlight(void* v) { return setHero007(v, combat38::thorFlight, 5435); }
+// Build 9 SUITS: SUIT BODY (live.txt suit_body = arms / full_body / off).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitBody(void* v) { return setHero007(v, combat38::suitBody, 5436); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

@@ -101,6 +101,7 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/image_style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/shared_lod.hpp"
@@ -30757,6 +30758,70 @@ int main() {
             check(v::Wheel::onRim(v::wheelHub + up * .19f, a, off, v::Tune{}), "a hand on the rim");
             check(!v::Wheel::onRim(v::wheelHub + Vec3{.5f, .2f, .3f}, a, off, v::Tune{}), "a hand in the lap: off the rim");
         }
+    });
+    test("0.0.73 test 4 IMAGE STYLE: SPIDYVR (default) runs the game's TAA per eye clean, HERO 0.0.73 is test 3", [] {
+        namespace is = spidy::image_style;
+        namespace et = spidy::engine_taa;
+        using namespace wrist_hud;
+        const auto& o = combat38::optionInfo[combat38::imageStyle];
+        const std::string h = o.help;
+        check(std::string(o.key) == "image_style" && std::string(o.label) == "IMAGE STYLE" && o.count == 2 &&
+                  std::string(o.values[0]) == "SPIDYVR" && std::string(o.values[1]) == "HERO 0.0.73",
+              "IMAGE STYLE: SPIDYVR first (the default), HERO 0.0.73");
+        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
+              "its subtext: one sentence, no restart");
+        check(is::defaultStyle == is::spidyvr && is::spidy(0) && !is::spidy(1), "value 0 SPIDYVR");
+        check((resetSections(), controlSpot(graphicsPage, Control::combatImageStyle)).found, "on the GRAPHICS page");
+        // NONE skips the game's TemporalAa (exe-confirmed): SPIDYVR's jitter is OURS then; the rest as asked.
+        check(is::jitterMode(is::spidyvr, et::noJitter) == et::ours && is::jitterMode(is::spidyvr, et::game) == et::game &&
+                  is::jitterMode(is::spidyvr, et::pixels) == et::pixels && is::jitterMode(is::spidyvr, et::ours) == et::ours,
+              "SPIDYVR never NONE");
+        check(is::jitterMode(is::hero073, et::noJitter) == et::noJitter, "HERO 0.0.73 keeps test 3's NONE");
+        const uint32_t off = et::pack(et::off, et::none), on = et::pack(et::on, 0);
+        {   // A new session: waits for the eyes, then turns it on; on: EYE AA off, the clean picture.
+            is::Controller c;
+            auto s = c.update(is::spidyvr, et::pack(et::off, 0), et::noEyes, true);
+            check(!s.tryOn && !s.clean && s.note, "waits while blocked (EYE AA keeps the picture)");
+            s = c.update(is::spidyvr, off, et::none, true);
+            check(s.tryOn && !s.clean && !s.eyeAaOn, "tries when nothing blocks it");
+            c.tried(true);
+            s = c.update(is::spidyvr, on, et::none, true);
+            check(s.clean && s.eyeAaOff && !s.tryOn && c.owned(), "on: clean, EYE AA off");
+            // The FPS guard turns it off (slow): EYE AA in its place, no retry this session.
+            s = c.update(is::spidyvr, et::pack(et::off, et::slow), et::none, false);
+            check(s.eyeAaOn && !s.clean && !s.tryOn && c.gaveUp(), "slow: EYE AA instead");
+            s = c.update(is::spidyvr, off, et::none, true);
+            check(!s.tryOn && !s.clean, "and stays given up");
+            // The player turns it on by hand: SpidyVR's picture again.
+            s = c.update(is::spidyvr, on, et::none, true);
+            check(s.clean && s.eyeAaOff && !c.gaveUp(), "the player's on is honoured");
+            // VR ends: a new start tries again.
+            s = c.update(is::spidyvr, et::pack(et::off, et::vrEnded), et::noEyes, false);
+            check(!s.eyeAaOn && !c.gaveUp() && !c.owned(), "VR ended: not a failure");
+            s = c.update(is::spidyvr, off, et::none, false);
+            check(s.tryOn, "the next VR start tries");
+        }
+        {   // Needs a restart (the game's AA not TAA): no retries, EYE AA (HERO's picture) until then.
+            is::Controller c;
+            auto s = c.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
+            check(!s.tryOn && !s.clean && s.note && c.gaveUp(), "game AA: a hint, no tries");
+            s = c.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
+            check(!s.tryOn && !s.note, "said once");
+            s = c.update(is::spidyvr, et::pack(et::unavailable, et::noTargets), et::noTargets, true);
+            check(!s.tryOn, "no targets: no tries");
+        }
+        {   // HERO 0.0.73: test 3's picture; switching from SPIDYVR turns ENGINE TAA off and EYE AA on.
+            is::Controller c;
+            auto s = c.update(is::hero073, off, et::none, true);
+            check(!s.tryOn && !s.clean && !s.engineOff && !s.eyeAaOn, "HERO from the start: nothing touched");
+            s = c.update(is::spidyvr, on, et::none, false);
+            check(s.clean, "SPIDYVR");
+            s = c.update(is::hero073, on, et::none, false);
+            check(s.engineOff && s.eyeAaOn && !s.clean && !s.tryOn, "back to test 3's picture");
+            s = c.update(is::hero073, on, et::none, false);
+            check(!s.engineOff && !s.clean && !s.eyeAaOn, "then the player's own presses rule");
+        }
+        check(is::spidyMipBias == 0.f && is::heroMipBias == .5f, "mip bias 0 (SpidyVR), 0.5 (test 3)");
     });
     test("0.0.73 test 3 VAN PEDALS: WHEEL HAND (default) or CLASSIC, one sentence, no restart; CLASSIC is the 0.0.72 pedals", [] {
         namespace v = van072;

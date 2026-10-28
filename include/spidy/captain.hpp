@@ -110,6 +110,30 @@ inline ShieldPose onArm(Vec3 hand, Vec3 aim, Vec3 headForward, Vec3 bodyRight, u
     p.ok = true;
     return p;
 }
+// Test build 12 SHIELD ON THE FOREARM (the build 11 video: the shield "clips through the centre of the
+// fist and wrist" and sat too far back): onArm stood the shield's elbow->hand line on the AIM (the grip's
+// -Y, 30 degrees below the forearm on Touch) with its face toward the look, and its strap (the model's
+// origin, in the disc's own plane: centreLeft z -.004) on the grip point - the palm's middle - so the disc
+// cut through the fist and the wrist. Now from the controller's grip frame, the same one the drawn hand
+// uses (suit_wear::handWay / handBackOf, gun_grip::held): up along the FOREARM (wrist -> knuckles), the
+// face out of the BACK of the hand (grip +X on the right hand, -X on the left: the palm grips the
+// handle, the disc lies over the back of the fist and the forearm), the disc moved fistOut that way off
+// the palm's middle (clear of the knuckles) and gripForward along the forearm (the handle in the fist).
+// forearm / thumb: gun_grip::Held forward / up (grip-derived, tracking space).
+inline constexpr float fistOut = .055f, gripForward = .03f;
+inline ShieldPose onForearm(Vec3 hand, Vec3 forearm, Vec3 thumb, uint32_t side) {
+    ShieldPose p;
+    if (!finite(hand) || !finite(forearm) || !finite(thumb) || !(length(forearm) > 1e-4f))
+        return p;
+    p.up = normalized(forearm);
+    const Vec3 right = cross(p.up, thumb); // the grip's +X (right on both hands)
+    if (!(length(right) > 1e-3f))
+        return p;
+    p.face = normalized(side == 1 ? right : -right);
+    p.at = hand + p.face * fistOut + p.up * gripForward;
+    p.ok = finite(p.at) && finite(p.face);
+    return p;
+}
 // Version 0.0.72 SHIELD CATCH (0.0.71 videos: the thrown shield "snapped" onto the arm): for
 // catchBlend seconds after a catch the drawn shield eases from where it was caught (flat, its face
 // up as it flew) onto the arm pose: smoothstep in place, the face turned over the same time.

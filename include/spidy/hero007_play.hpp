@@ -664,8 +664,7 @@ class Play {
                 }
             } else if (shieldRack.heldIn(i) >= 0) { // on the arm
                 if (handOk(i)) {
-                    const captain::ShieldPose p = captain::catchPose(
-                        captain::onArm(in.hands[i].position, in.hands[i].aim, headF, bodyR, i), shieldCaughtAt, shieldCaughtFor);
+                    const captain::ShieldPose p = captain::catchPose(armOf(in.hands[i], headF, bodyR, i), shieldCaughtAt, shieldCaughtFor);
                     if (p.ok) {
                         d.held[i] = item(lookShield, p.at, p.face, p.up);
                         d.held[i].side = i;
@@ -753,6 +752,16 @@ class Play {
     }
 
   private:
+    // Test build 12: the shield on the forearm from the grip frame (captain::onForearm); onArm's
+    // aim-and-look placement only with no usable grip pose.
+    static captain::ShieldPose armOf(const PlayHand& h, Vec3 headF, Vec3 bodyR, unsigned i) {
+        if (h.gunOk && finite(h.gunAt)) {
+            const captain::ShieldPose p = captain::onForearm(h.gunAt, h.gunForward, h.gunUp, i);
+            if (p.ok)
+                return p;
+        }
+        return captain::onArm(h.position, h.aim, headF, bodyR, i);
+    }
     // CAPTAIN AMERICA: the SHIELD ARM's trigger throws the drawn shield (backhand: along a fast
     // forward sweep, else the aim, the aim assist's enemy first); it chains like the batons (SHIELD
     // CHAIN) and comes back to the hand. On the arm a swing of its rim is a bash.
@@ -810,7 +819,7 @@ class Play {
             return;
         }
         const Vec3 bodyR = shieldRack.body.valid ? shieldRack.body.right() : cross(headF, Vec3{0, 1, 0});
-        armPose = captain::onArm(h.position, h.aim, headF, bodyR, i);
+        armPose = armOf(h, headF, bodyR, i);
         if (!armPose.ok) {
             shieldBash.update(dt, false, {}, {}, in.list, in.count);
             return;

@@ -696,11 +696,12 @@ class Play {
             charge.spend(beamDrain * drainScale * dt, o.glCharge);
             used = true;
             const Vec3 aim = normalized(in.hands[1].aim);
-            const int e = pullTarget(p[1], aim, in.list, in.count);
-            const bool inReach = e >= 0 && length(in.list[e].chest - p[1]) <= beamRange;
+            float along = 0; // test build 12: straight along the aim, stopping on the man it hits
+            const int e = lineTarget(p[1], aim, in.list, in.count, beamRange, &along);
+            const bool inReach = e >= 0;
             out.look.beam = true;
             out.look.beamFrom = p[1];
-            out.look.beamTo = inReach ? in.list[e].chest : p[1] + aim * beamRange;
+            out.look.beamTo = p[1] + aim * (inReach ? along : beamRange);
             if (inReach && beamTick <= 0) {
                 beamTick = beamTickEvery;
                 out.blow(in.list[e].id, ringBeamTick(), in.list[e].chest, kindBeam);
@@ -714,12 +715,13 @@ class Play {
         if (o.glChain && tracked[0] && press && !chainWas && charge.spend(chainCost * drain, o.glCharge)) {
             used = true;
             const Vec3 aim = normalized(in.hands[0].aim);
-            const int e = pullTarget(p[0], aim, in.list, in.count);
+            float along = 0; // test build 12: straight along the aim
+            const int e = lineTarget(p[0], aim, in.list, in.count, chainRange, &along);
             chainShow = chainSeconds;
-            if (e >= 0 && length(in.list[e].chest - p[0]) <= chainRange) {
-                chainTo = in.list[e].chest;
-                out.blow(in.list[e].id, chainGrab(), chainTo, kindChain);
-                carry(h, in.list[e].id, chainTo, chainGrab(), in.list, in.count, out, kindChain);
+            if (e >= 0) {
+                chainTo = p[0] + aim * along;
+                out.blow(in.list[e].id, chainGrab(), in.list[e].chest, kindChain);
+                carry(h, in.list[e].id, in.list[e].chest, chainGrab(), in.list, in.count, out, kindChain);
             } else {
                 chainTo = p[0] + aim * chainRange;
             }
@@ -916,13 +918,14 @@ class Play {
             blastCool = blastEvery;
             const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : look;
             const Vec3 from = p[1] + aim * .35f; // the hammer's head
-            const int e = pullTarget(p[1], aim, in.list, in.count);
+            float along = 0; // test build 12: straight along the aim
+            const int e = lineTarget(p[1], aim, in.list, in.count, blastRange, &along);
             Vec3 to = p[1] + aim * blastRange;
-            if (e >= 0 && length(in.list[e].chest - p[1]) <= blastRange) {
-                to = in.list[e].chest;
-                out.blow(in.list[e].id, thorBolt(), to, kindBolt);
+            if (e >= 0) {
+                to = p[1] + aim * along;
+                out.blow(in.list[e].id, thorBolt(), in.list[e].chest, kindBolt);
                 if (o.thorChain)
-                    carry(h, in.list[e].id, to, thorBolt(), in.list, in.count, out, kindBolt);
+                    carry(h, in.list[e].id, in.list[e].chest, thorBolt(), in.list, in.count, out, kindBolt);
             }
             liveBolt(from, to, boltSeconds);
             liveBolt(from, to, boltSeconds * .7f);

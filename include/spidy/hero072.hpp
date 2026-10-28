@@ -181,6 +181,40 @@ inline sm2_damage::Blow uppercutBlow(uint32_t hero) {
 // (pullTarget only picks; the game_xr side staggers him).
 inline constexpr float pullRange = 22.f, pullCone = .97f /* ~14 deg */;
 inline sm2_damage::Blow pullStagger() { return {6.f, 5, 140.f}; }
+// Test build 12 STRAIGHT SHOTS (the build 11 videos: GL's bolt "sometimes goes right"): pullTarget takes the
+// NEAREST enemy anywhere in a 14-degree cone and the beam was drawn to his chest, so a man off to the side
+// bent the shot up to 14 degrees. A shot now flies straight along the aim; it hits the enemy whose chest
+// the line passes closest to (within lineRadius, or lineSlope of the distance: about 4 degrees far out),
+// and it stops on that line at his distance. along: metres down the line to him (0 with no hit).
+inline constexpr float lineRadius = .55f, lineSlope = .07f;
+inline int lineTarget(Vec3 from, Vec3 aim, const BatonEnemy* list, uint32_t count, float range, float* along) {
+    if (along)
+        *along = 0;
+    if (!ok(from) || !ok(aim) || length(aim) < 1e-3f || !(range > 0))
+        return -1;
+    const Vec3 n = normalized(aim);
+    int best = -1;
+    float bestScore = 1e9f;
+    for (uint32_t i = 0; list && i < count; ++i) {
+        if (!list[i].id || list[i].down || !ok(list[i].chest))
+            continue;
+        const Vec3 to = list[i].chest - from;
+        const float t = dot(to, n);
+        if (t < .3f || t > range)
+            continue;
+        const float off = length(to - n * t), allowed = std::max(lineRadius, t * lineSlope);
+        if (off > allowed)
+            continue;
+        const float score = off / allowed + t / range * .25f;
+        if (score < bestScore) {
+            bestScore = score;
+            best = static_cast<int>(i);
+            if (along)
+                *along = t;
+        }
+    }
+    return best;
+}
 inline int pullTarget(Vec3 from, Vec3 aim, const BatonEnemy* list, uint32_t count) {
     if (!ok(from) || !ok(aim) || length(aim) < 1e-3f)
         return -1;

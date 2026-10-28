@@ -73,7 +73,7 @@ public:
             return s; // HERO 0.0.73: the player's own presses rule
         const uint32_t state = et::stateOf(enginePacked), reason = et::reasonOf(enginePacked);
         if (state == et::on) { // on (by us, the player or the auto): SpidyVR's picture
-            if (!owned_ && !s.note)
+            if (!owned_)
                 s.note = "IMAGE STYLE SPIDYVR: ENGINE TAA on, FXAA/history/sharpening stand aside";
             owned_ = true;
             gaveUp_ = false;
@@ -87,8 +87,7 @@ public:
                 return s; // a new VR start tries again
             gaveUp_ = true;
             s.eyeAaOn = !eyeAaOn;
-            if (!s.note)
-                s.note = reason == et::slow ? "IMAGE STYLE SPIDYVR: ENGINE TAA off (frame rate halved), EYE AA instead"
+            s.note = reason == et::slow ? "IMAGE STYLE SPIDYVR: ENGINE TAA off (frame rate halved), EYE AA instead"
                          : reason == et::targetsGone ? "IMAGE STYLE SPIDYVR: ENGINE TAA lost its targets, EYE AA instead"
                                                      : "IMAGE STYLE SPIDYVR: ENGINE TAA turned off, EYE AA instead";
             return s;
@@ -97,8 +96,7 @@ public:
             return s;
         if (state == et::unavailable && (et::needsRestart(reason) || reason == et::maskDiffers)) {
             gaveUp_ = true;
-            if (!s.note)
-                s.note = reason == et::gameAa
+            s.note = reason == et::gameAa
                              ? "IMAGE STYLE SPIDYVR: set the game's Anti-Aliasing to TAA (or DLAA) and restart; EYE AA until then"
                          : reason == et::notPrepared
                              ? "IMAGE STYLE SPIDYVR: launch with ENGINE TAA (-EngineTaa) and restart; EYE AA until then"

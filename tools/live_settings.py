@@ -385,7 +385,8 @@ UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 140, 'trail': 0, 'taa_jitter': 3,
                      # the swing's wall); the medium web bend; the new 37.2 settings' defaults.
                      'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 1, 'shared_lod': 2, 'bloom_fx': 0,
                      'aim_steer': 0, 'ring_face': 0, 'wall_crawl': 0, 'web_bend': 100, 'wall_body': 0,
-                     'zip_strike': 1, 'web_yank': 1, 'npc_fade': 'off', 'color_fx': 0, 'foveated': 'off'}
+                     'zip_strike': 1, 'web_yank': 1, 'npc_fade': 'off', 'color_fx': 0, 'foveated': 'off',
+                     'lod_fade': 0}  # Build 12 WINDOW LIGHTS: LOD FADE OFF
 # Update 38: the COMBAT defaults, each the recommended fix (combat38.hpp index 0), sent at the start for
 # whatever live.txt does not keep. All live: none needs a restart.
 UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': 'spidyvr', 'ball_look': 'ours',

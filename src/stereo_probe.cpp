@@ -2029,9 +2029,11 @@ bool heroPosition(Vec3& position) {
 // what the view culls for and what it renders agree.
 native_eyes::Bounds viewLens(const native_eyes::Bounds& head) {
     const int degrees = recordingFov.load(std::memory_order_relaxed);
+    // Build 12 WINDOW LIGHTS: never narrower than the head's lens plus the cull margin.
+    const auto wide = recording_fov::widened(head);
     return degrees && live.load() == 2 && !native_gpu::screenRequested()
-               ? recording_fov::covering(head, degrees, flatAspect.load())
-               : head;
+               ? recording_fov::covering(wide, degrees, flatAspect.load())
+               : wide;
 }
 // The engine's active view (ViewContextManager +f8) is its first pool view: the
 // stock camera. Offscreen eyes are never active, and the "drawn in any view"
@@ -2567,14 +2569,15 @@ void placeEyes() {
                                                shadowCamera::nearUsable(flatNearZ.load())
                                            ? flatNearZ.load()
                                            : near_clip::metres();
-                const bool wider = recordingFov.load(std::memory_order_relaxed);
-                auto viewed = wider || gameNear != near_clip::metres()
-                                  ? onHead(wider ? viewLens(lens) : lens, gameNear)
-                                  : aligned;
+                // Build 12 WINDOW LIGHTS: always viewLens (the cull margin), as at the
+                // first submit; the eyes' shadow lens stays `aligned`.
+                auto viewed = onHead(viewLens(lens), gameNear);
                 if (gameNear != near_clip::metres() && !native_view::valid(viewed)) {
                     shadowCameraFail(shadowCamera::lensRejected);
-                    viewed = wider ? onHead(viewLens(lens), near_clip::metres()) : aligned;
+                    viewed = onHead(viewLens(lens), near_clip::metres());
                 }
+                if (!native_view::valid(viewed))
+                    viewed = aligned;
                 if (shadowCamera::flatGameView(shadowMode)) {
                     shadowCameraApplied(shadowMode);
                 } else if ((config.createViews & 8) && native_view::valid(viewed)) {

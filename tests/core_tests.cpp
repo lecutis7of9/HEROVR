@@ -24255,6 +24255,30 @@ int main() {
         const auto mid = sw::capeWing(cloak.skeleton, 1, 0, 0, 1);
         check(length(mid - (cloak.skeleton.at[sw::wristL] + Vec3{0, 0, -.06f})) < 1e-3f, "the wing's outer top corner is at the left wrist");
     });
+    test("Build 12 WINDOW LIGHTS: the game view's lens covers both eyes plus the margin, LOD FADE off", [] {
+        namespace rf = spidy::recording_fov;
+        namespace vg = spidy::view_gates;
+        const native_eyes::Bounds quest{-std::tan(54 * .0174532925f), std::tan(54 * .0174532925f),
+                                        -std::tan(48 * .0174532925f), std::tan(48 * .0174532925f)};
+        const auto w = rf::widened(quest);
+        auto deg = [](float t) { return std::atan(std::abs(t)) * 57.2957795f; };
+        check(std::abs(deg(w.left) - 60) < .01f && std::abs(deg(w.right) - 60) < .01f &&
+                  std::abs(deg(w.top) - 54) < .01f && std::abs(deg(w.bottom) - 54) < .01f,
+              "the margin is not 6 degrees a side");
+        check(w.left < 0 && w.top < 0 && w.right > 0 && w.bottom > 0, "the margin flipped a side");
+        const native_eyes::Bounds wide{-std::tan(85 * .0174532925f), 1, -1, 1};
+        check(rf::widened(wide).left <= wide.left, "the margin narrowed a lens past its cap");
+        check(std::abs(deg(rf::widened(native_eyes::Bounds{-1, 1, -1, 1}, -5).right) - 45) < .01f,
+              "a negative margin narrowed the lens");
+        for (int degrees : {0, 130, 150}) {
+            const auto c = rf::covering(w, degrees ? degrees : 130, 16.f / 9);
+            check(c.left <= w.left && c.right >= w.right && c.top <= w.top && c.bottom >= w.bottom,
+                  "RECORDING FOV lost the margin");
+        }
+        check(vg::defaultFade == vg::fadeOff && !vg::fadeAnswers(vg::defaultFade, 0) &&
+                  !vg::fadeAnswers(vg::defaultFade, 1),
+              "LOD FADE still lets an eye advance the shared fade by default");
+    });
     test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
         using namespace spidy::hero007;
         Play p;

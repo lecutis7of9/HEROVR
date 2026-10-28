@@ -71,7 +71,10 @@ inline constexpr uint32_t callTarget(uint32_t callRva, const unsigned char* b) {
 }
 static_assert(callTarget(fadeCallRva, fadeCallBytes) == isActiveViewRva);
 enum Fade : uint32_t { fadeOff = 0, leftEye = 1, bothEyes = 2, fadeModes = 3 };
-inline constexpr uint32_t defaultFade = leftEye, nextFade = 3;
+// Build 12 WINDOW LIGHTS: OFF by default. LEFT let the left eye (its own lens and
+// LOD scale) advance the instances' shared LOD cross-fade state beside the game's
+// view every frame, two views writing one state; live lod_fade 1/2 still offer it.
+inline constexpr uint32_t defaultFade = fadeOff, nextFade = 3;
 inline uint32_t fadeNext(uint32_t m) { return (m + 1) % fadeModes; }
 enum FadeWhy : uint32_t { fadeFine = 0, fadeNoHook = 1, fadeUnseen = 2 };
 // Calls through isActiveView (any caller) after which no eye has reached 0x2b4f9bd: back to OFF.

@@ -32,6 +32,22 @@ inline native_eyes::Bounds covering(const native_eyes::Bounds& eyes, int degrees
         std::max({across / aspect, -eyes.top, eyes.bottom, -eyes.left / aspect, eyes.right / aspect});
     return {-halfHeight * aspect, halfHeight * aspect, -halfHeight, halfHeight};
 }
+// Build 12 WINDOW LIGHTS: the game's view decides, for both eyes, which far
+// buildings get their lit full models (ImpostorHQModelRegJob through IsActiveView
+// 0x2c991a0) from visibility queries that answer frames later. Its lens is the
+// head's lens covering both eyes, plus this margin on every side, so a building
+// turning into either eye's edge was already in the game's view: never less.
+inline constexpr float cullMarginDegrees = 6.f, widestDegrees = 80.f;
+inline float widenedTangent(float t, float degrees) {
+    if (!std::isfinite(t))
+        return t;
+    const float a = std::min(std::abs(std::atan(t)) * 57.2957795f + std::max(degrees, 0.f), widestDegrees);
+    return std::copysign(std::max(std::tan(a * .0174532925f), std::abs(t)), t);
+}
+inline native_eyes::Bounds widened(const native_eyes::Bounds& head, float degrees = cullMarginDegrees) {
+    return {widenedTangent(head.left, degrees), widenedTangent(head.right, degrees),
+            widenedTangent(head.top, degrees), widenedTangent(head.bottom, degrees)};
+}
 // From the VR settings (game_xr.cpp), as they start and whenever they change.
 void set(int degrees);
 } // namespace spidy::recording_fov

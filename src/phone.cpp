@@ -476,6 +476,8 @@ Phone::Use Phone::take(XrFrame& frame, int gearRows) {
     const auto& stick = h[use.stick];
     use.controls = controls_.update(stick.stickX, stick.stickY, a, b, h[0].trigger, h[1].trigger);
     use.action = ui_.update(use.controls, gearRows);
+    use.squeeze[0] = h[0].squeeze;
+    use.squeeze[1] = h[1].squeeze;
     if (use.action == PhoneAction::close)
         open_ = live_ = false;
     return use;
@@ -568,6 +570,17 @@ bool PocketDraw::update(float seconds, bool play, const Pose& head, const Pose g
         }
     }
     return out;
+}
+
+bool PocketDraw::atPocket(const Pose& head, Vec3 hand) const {
+    if (!validTrackedPose(head) || !finite(hand))
+        return false;
+    const Vec3 forward{-std::sin(yaw_), 0, -std::cos(yaw_)};
+    const Vec3 right = cross(forward, {0, 1, 0});
+    const Vec3 d = hand - head.position;
+    const float x = dot(d, right), y = d.y, z = dot(d, forward);
+    return -y >= pocketAbove && -y <= pocketBelow && std::abs(x) >= pocketSide && std::abs(x) <= pocketOut &&
+           z <= -behind;
 }
 
 std::string phoneSongName(const std::string& fileName, int track) {

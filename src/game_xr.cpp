@@ -1881,6 +1881,7 @@ DWORD WINAPI run(void*) {
         // told the phone has the hands (Settings::noBlows).
         Phone phone;
         PocketDraw pocketDraw;
+        PhonePutBack phonePutBack; // test build 12
         PhoneMusic phoneMusic;
         // Update 19: the hologram's MUSIC page player (music_audio.hpp: its
         // own threads; every call returns at once, nothing it does can
@@ -2876,8 +2877,11 @@ DWORD WINAPI run(void*) {
                     // while it is live the stick picks a button, A presses it, B
                     // puts it away and the triggers step the volume, and none of
                     // its controls reaches the swing or the game.
+                    float phoneGrips[2]{}; // test build 12 PUT BACK: the grips the phone has
                     {
                         const auto use = phone.take(frame, phoneShown.gearCount);
+                        phoneGrips[0] = use.squeeze[0];
+                        phoneGrips[1] = use.squeeze[1];
                         const auto& e = use.controls;
                         if (e.x || e.y)
                             runtime.haptic(use.stick, .08f);
@@ -3943,6 +3947,8 @@ DWORD WINAPI run(void*) {
                             if (hudZone & (1u << i))
                                 squeezes[i] = 0; // Update 38.1: the holo zone's grip
                         const bool drawPlay = gesturesPlay && !phone.open() && !padLayer.latched();
+                        // Test build 12: the phone is SPIDER-MAN's only (the others' belts are their gadgets').
+                        const bool phoneDrawPlay = drawPlay && heroNow() == hero_modes::spiderMan;
                         // Version 0.0.7 HOLSTERS (holster.hpp): PUNISHER's hips and back, DAREDEVIL's
                         // BATON HOLSTERS. A grip at a holster draws or holsters there and is the rack's
                         // (no web, zip or climb from it) until let go; a hand on a web or a wall is busy
@@ -3979,7 +3985,7 @@ DWORD WINAPI run(void*) {
                             if (hout.sounds & (1u << sfx::holsterTick))
                                 sfx::play(sfx::holsterTick);
                         }
-                        if (pocketDraw.update(frame.seconds, drawPlay, frame.head, grips, gripsTracked,
+                        if (pocketDraw.update(frame.seconds, phoneDrawPlay, frame.head, grips, gripsTracked,
                                               squeezes))
                             phoneDrawnWith = pocketDraw.drewWith();
                         for (unsigned i = 0; i < 2; ++i)
@@ -4475,6 +4481,18 @@ DWORD WINAPI run(void*) {
                     // one begun under it could be neither finished nor skipped).
                     {
                         const bool phonePlay = immersive && calibration.phase() == CalibrationPhase::idle;
+                        // Test build 12 PUT BACK: the phone's grip at a back pocket puts it back; any hero
+                        // but SPIDER-MAN has none (one switched to puts it away).
+                        {
+                            const int h = phone.hand();
+                            const bool atPocket = (h == 0 || h == 1) && pocketDraw.atPocket(frame.head, pocketDraw.seen(h));
+                            if (phonePutBack.update(phone.open(), phone.age(), h, static_cast<uint32_t>(heroNow()), phoneGrips, atPocket)) {
+                                phone.putAway();
+                                if (h == 0 || h == 1)
+                                    runtime.haptic(h, .2f);
+                                message(3, 0, "Phone put away");
+                            }
+                        }
                         if (phone.update(frame.seconds, phonePlay, frame.head, grips, gripsTracked,
                                          phoneDrawnWith, pocketDraw.hand())) {
                             phoneMusic.load();
@@ -4482,7 +4500,7 @@ DWORD WINAPI run(void*) {
                             runtime.haptic(1, .2f);
                             feel(body_haptics::Kind::phone, pocketDraw.drewWith());
                             message(3, 0, "Phone out - the stick, A, B and the triggers are the phone's "
-                                          "until B puts it away");
+                                          "until B, or its grip at the back pocket, puts it away");
                         }
                     }
                     // While it is out its hands land no blow (Settings::noBlows),

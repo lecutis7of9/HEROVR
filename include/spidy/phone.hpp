@@ -3,6 +3,7 @@
 #include "math.hpp"
 #include "tracking.hpp"
 #include "vertex.hpp"
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -159,6 +160,7 @@ class Phone {
         PhoneControls::Event controls;
         PhoneAction action = PhoneAction::none;
         unsigned stick{}; // the hand whose stick it read
+        float squeeze[2]{}; // test build 12 PUT BACK: the grips the phone has (0 when the game has one)
     };
     // First thing each frame: the phone takes its controls out of `frame`
     // (PhoneHold) and, live, works its screens with them. gearRows: how many
@@ -172,6 +174,10 @@ class Phone {
                 int drawHand = -1, Vec3 drawnAt = {});
     bool open() const {
         return open_;
+    }
+    // Test build 12 PUT BACK: away at once (back in the pocket, a hero with no phone).
+    void putAway() {
+        open_ = live_ = false;
     }
     bool live() const {
         return live_;
@@ -253,6 +259,12 @@ class PocketDraw {
     unsigned draws() const {
         return draws_;
     }
+    // Test build 12 PUT BACK: whether `hand` (the space of update's head) is at a back pocket, as a draw
+    // begins (the body's way, from the latest update). seen(i): hand i where the headset last had it.
+    bool atPocket(const Pose& head, Vec3 hand) const;
+    Vec3 seen(int i) const {
+        return i == 0 || i == 1 ? seen_[i] : Vec3{};
+    }
     // The way the body faces: radians about the up from -z toward -x, as
     // Quat::yaw turns -z.
     float yaw() const {
@@ -265,6 +277,33 @@ class PocketDraw {
     int drawing_ = -1, drewWith_{};
     float time_{}, yaw_{}, lost_[2]{lostSeconds + 1, lostSeconds + 1};
     Vec3 hand_{}, seen_[2]{};
+};
+// Test build 12 PUT BACK (the user: the phone "must not get stuck in the hand and must be able to go
+// back"): only SPIDER-MAN has the phone (the other heroes' belts and hips are their gadgets'); out, a grip
+// pressed by the phone's hand at a back pocket puts it back (after putBackAfter, so the draw's own grip
+// is no put-back), as B does. Edges: pressed / released as PocketDraw's.
+class PhonePutBack {
+  public:
+    static constexpr float putBackAfter = .5f;
+    // True on the frame the phone should go away. hero: hero_modes::Hero (0 SPIDER-MAN).
+    bool update(bool open, float age, int hand, uint32_t hero, const float squeeze[2], bool atPocket) {
+        bool press{};
+        for (int i = 0; i < 2; ++i) {
+            const float q = std::isfinite(squeeze[i]) ? squeeze[i] : 0.f;
+            const bool down = q > (down_[i] ? PocketDraw::released : PocketDraw::pressed);
+            if (i == hand)
+                press = down && !down_[i];
+            down_[i] = down;
+        }
+        if (!open)
+            return false;
+        if (hero != 0)
+            return true;
+        return press && atPocket && age >= putBackAfter;
+    }
+
+  private:
+    bool down_[2]{true, true};
 };
 void appendPhone(std::vector<Vertex>& out, const PhoneView& view);
 // What the phone shows for a song's file name (UTF-8): no folder or extension,

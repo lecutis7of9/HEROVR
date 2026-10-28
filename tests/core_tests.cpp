@@ -24255,6 +24255,45 @@ int main() {
         const auto mid = sw::capeWing(cloak.skeleton, 1, 0, 0, 1);
         check(length(mid - (cloak.skeleton.at[sw::wristL] + Vec3{0, 0, -.06f})) < 1e-3f, "the wing's outer top corner is at the left wrist");
     });
+    test("Build 12 PHONE: SPIDER-MAN's only, and its grip at the back pocket puts it back", [] {
+        const Pose head{{0,1.7f,0},{}};
+        const Pose pocket{{.2f,.9f,.2f},{}}, front{{.1f,1.25f,-.3f},{}};
+        PocketDraw d;
+        const bool tracked[2]{true,true};
+        const Pose grips[2]{Pose{{-.3f,1.f,0},{}},pocket};
+        const float none[2]{0,0}, right[2]{0,1}, left[2]{1,0};
+        d.update(1.f/90,true,head,grips,tracked,none);
+        check(d.atPocket(head,pocket.position),"the back pocket is no pocket to put it back in");
+        check(!d.atPocket(head,front.position),"in front is a pocket");
+        check(!d.atPocket(head,Vec3{NAN,0,0}),"a NaN hand is at a pocket");
+        check(length(d.seen(1)-pocket.position)<1e-4f,"seen is not where the headset had the hand");
+        PhonePutBack p;
+        // The draw's grip, still held as it opens, is no put-back; nor before putBackAfter.
+        check(!p.update(true,0,1,hero_modes::spiderMan,right,true),"the draw's own grip put it back");
+        p.update(true,.1f,1,hero_modes::spiderMan,none,true);
+        check(!p.update(true,.2f,1,hero_modes::spiderMan,right,true),"put back before putBackAfter");
+        p.update(true,.6f,1,hero_modes::spiderMan,none,true);
+        check(!p.update(true,.7f,1,hero_modes::spiderMan,right,false),"a grip in front put it back");
+        p.update(true,.8f,1,hero_modes::spiderMan,none,false);
+        check(!p.update(true,.9f,1,hero_modes::spiderMan,left,true),"the other hand's grip put it back");
+        p.update(true,1.f,1,hero_modes::spiderMan,none,true);
+        check(p.update(true,1.1f,1,hero_modes::spiderMan,right,true),"its grip at the back pocket did not put it back");
+        check(!p.update(true,1.2f,1,hero_modes::spiderMan,right,true),"a grip held put it back again");
+        // Any other hero has no phone: one out goes away.
+        check(p.update(true,2,1,hero_modes::batman,none,false),"BATMAN kept the phone");
+        check(!p.update(false,2,1,hero_modes::batman,none,false),"a phone away was put away");
+        const float bad[2]{NAN,NAN};
+        check(!p.update(true,3,1,hero_modes::spiderMan,bad,true),"a NaN grip put it back");
+        Phone phone;
+        XrFrame f{};
+        phone.update(1.f/90,true,head,grips,tracked,1,front.position);
+        check(phone.open(),"the drawn phone did not open");
+        phone.take(f,3);
+        f.hands[1].squeeze=1;
+        check(phone.take(f,3).squeeze[1]==1.f,"the phone's grip is not in its Use");
+        phone.putAway();
+        check(!phone.open()&&!phone.live(),"putAway left it out");
+    });
     test("Build 12 HAND POSE: the hand down the forearm, the back of the fist out, straight shots, the shield on the forearm", [] {
         namespace sw = spidy::suit_wear;
         // Touch grip: -Z little finger -> thumb (the handle's axis), +Y up the thumb, the forearm below -Y.

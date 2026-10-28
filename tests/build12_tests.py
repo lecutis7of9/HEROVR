@@ -20,6 +20,11 @@ class Build12(unittest.TestCase):
         self.assertIn('shadowLens = aligned;', s)  # the eyes' shadows keep the eyes' own lens
     def test_cape_found_on_the_suit(self):
         self.assertIn('findCape', src('src/suit_wear.cpp'))
+    def test_phone_spider_man_only_and_put_back(self):
+        s = src('src/game_xr.cpp')
+        self.assertIn('phoneDrawPlay = drawPlay && heroNow() == hero_modes::spiderMan', s)
+        self.assertIn('pocketDraw.update(frame.seconds, phoneDrawPlay,', s)
+        self.assertIn('phonePutBack.update(phone.open()', s)
     def test_popup_wording_kept(self):
         self.assertIn('TEST NOTICE', src('src/game_xr.cpp'))
 

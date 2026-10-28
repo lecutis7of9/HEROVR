@@ -75,6 +75,67 @@ Vec3 bend(Vec3 from, Vec3 to, float l1, float l2, Vec3 pole) {
         p = square(std::abs(u.y) < .9f ? Vec3{0, 1, 0} : Vec3{0, 0, 1}, u);
     return from + u * x + normalized(p) * h;
 }
+// Test build 12 HANDS: the back of each rest hand from the hand's own vertices (the converter's handBack took the
+// projected-out bone axis for the palm's normal: a random way on every suit, the hand turned off the controller).
+// The palm's normal is the hand's thinnest axis square to the bone (its vertices weighted mostly to the hand
+// bone, 15..95% along it); signed out and up from the body (the rest hands hang palms in or down); the two
+// hands made mirror images (x flipped) weighted by how flat each is, so a left and a right hand turn alike.
+void restHands(Rig& rig) {
+    Skeleton& k = rig.skeleton;
+    Vec3 found[2]{};
+    float flat[2]{};
+    for (int side = 0; side < 2; ++side) {
+        const uint32_t b = side ? boneHandR : boneHandL, wr = side ? wristR : wristL, tp = side ? tipR : tipL;
+        Vec3 ax = k.at[tp] - k.at[wr];
+        const float L = length(ax);
+        if (!(L > 1e-4f))
+            continue;
+        ax = ax / L;
+        const Vec3 u = normalized(square(std::abs(ax.y) < .9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0}, ax)), v = cross(ax, u);
+        double su = 0, sv = 0, suu = 0, svv = 0, suv = 0, n = 0;
+        for (size_t i = 0; i < rig.rest.size(); ++i) {
+            uint32_t w = 0;
+            for (int c = 0; c < 4; ++c)
+                if ((rig.joint[i * 4 + c] & 15) == b)
+                    w += rig.weight[i * 4 + c];
+            if (w < 128)
+                continue;
+            const Vec3 d = rig.rest[i] - k.at[wr];
+            const float along = dot(d, ax);
+            if (along < .15f * L || along > .95f * L)
+                continue;
+            const double a = dot(d, u), c = dot(d, v);
+            su += a, sv += c, suu += a * a, svv += c * c, suv += a * c, n += 1;
+        }
+        if (n < 12)
+            continue;
+        const double cu = suu / n - (su / n) * (su / n), cv = svv / n - (sv / n) * (sv / n), cuv = suv / n - (su / n) * (sv / n);
+        // the 2 x 2 covariance's smaller eigenvalue's vector
+        const double tr = cu + cv, det = cu * cv - cuv * cuv, disc = std::sqrt(std::max(0.0, tr * tr / 4 - det));
+        const double lo = tr / 2 - disc, hi = tr / 2 + disc;
+        Vec3 nrm = std::abs(cuv) > 1e-12 ? u * static_cast<float>(cuv) + v * static_cast<float>(lo - cu)
+                                         : (cu < cv ? u : v);
+        if (!(length(nrm) > 1e-6f) || !(hi > 0))
+            continue;
+        nrm = normalized(nrm);
+        Vec3 out = square(Vec3{side ? -1.f : 1.f, 1.f, 0.f}, ax);
+        if (dot(nrm, out) < 0)
+            nrm = nrm * -1.f;
+        found[side] = nrm;
+        flat[side] = static_cast<float>(1.0 - lo / hi); // 0 round, 1 flat
+    }
+    const auto mirror = [](Vec3 a) { return Vec3{-a.x, a.y, a.z}; };
+    Vec3 both = found[0] * flat[0] + mirror(found[1]) * flat[1];
+    if (!(length(both) > 1e-3f))
+        return; // keep the model's own
+    both = normalized(both);
+    for (int side = 0; side < 2; ++side) {
+        const Vec3 ax = normalized(k.at[side ? tipR : tipL] - k.at[side ? wristR : wristL]);
+        const Vec3 h = square(side ? mirror(both) : both, ax);
+        if (length(h) > .2f)
+            k.handBack[side] = normalized(h);
+    }
+}
 } // namespace
 
 bool makeRig(const mesh_model::Mesh& mesh, Rig& out) {
@@ -127,6 +188,7 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out) {
         }
         out.corner[c] = found;
     }
+    restHands(out);
     out.triangleBone.resize(n);
     for (uint32_t t = 0; t < n; ++t) {
         uint32_t sum[bones]{};

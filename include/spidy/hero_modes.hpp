@@ -257,18 +257,41 @@ struct Baton {
     // Version 0.0.73 PROP BOUNCE (fix 7, prop_bounce.hpp): the surface ahead of it on this throw (the
     // caller's, this frame's space; serial: the throw's low 4 bits) - out, it bounces off it and comes
     // home after batonRicochet. Coming home it never bounces (it flies home, as in 0.0.72).
+    // Test 3 WEAPON COLLISION: the step is swept (from where it was this frame: no tunnelling), each
+    // prop has its feel (DAREDEVIL's batons clatter, the shield ricochets, BATMAN's batarangs stick for
+    // feel.rest and come home), and coming home it slides along / over a surface for at most
+    // prop_bounce::ghostAfter seconds, then passes through as before (the timeouts still bring it home).
+    // WEAPON COLLISION OFF: the caller gives no wall at all (0.0.73 test 2's flight).
     prop_bounce::Plane wall{};
-    uint32_t wallBounces{};
-    bool wallBounce() {
-        if (!wall.known || wall.serial != (throws & 15u) || !prop_bounce::bounce(position, velocity, wall))
+    uint32_t wallBounces{}, wallStops{}, wallSlides{};
+    prop_bounce::Feel feel{prop_bounce::batonFeel};
+    float blockedHome{}, ricochetFor = batonRicochet;
+    bool wallBounce(Vec3 from) {
+        if (!wall.known || wall.serial != (throws & 15u) ||
+            !prop_bounce::sweep(from, position, velocity, wall, prop_bounce::radius, feel.keep))
             return false;
         ++wallBounces;
         state = ricochet;
         bounce = 0;
+        ricochetFor = batonRicochet;
+        if (!(feel.keep > 0)) { // stuck in it, then home
+            ++wallStops;
+            ricochetFor = std::max(batonRicochet, feel.rest);
+        }
         hasTarget = toAimPoint = false;
         targetId = 0;
         wall.known = false; // one bounce a plane (the next cast finds the next surface)
         return true;
+    }
+    bool wallBounce() { return wallBounce(position); }
+    // Coming home: held on its side of the surface (along it, over it) - never longer than ghostAfter.
+    void wallSlide(float dt) {
+        if (!wall.known || wall.serial != (throws & 15u) || blockedHome >= prop_bounce::ghostAfter)
+            return;
+        if (prop_bounce::slide(position, velocity, wall, prop_bounce::radius)) {
+            blockedHome += std::max(dt, 0.f);
+            ++wallSlides;
+        }
     }
     Vec3 curvedVelocity(Vec3 to) const {
         const float len = length(to);
@@ -417,6 +440,8 @@ struct Baton {
                 ++throws;
                 out = 0;
                 wall = {};
+                blockedHome = 0;
+                ricochetFor = batonRicochet;
                 hasTarget = haveEnemy;
                 target = enemy;
                 const Vec3 to = haveEnemy ? enemy - hand : aim;
@@ -469,15 +494,17 @@ struct Baton {
                 else
                     velocity = curvedVelocity(to);
             }
+            const Vec3 was = position;
             position += velocity * dt;
-            if (!wallBounce() && length(position - hand) > batonReach)
+            if (!wallBounce(was) && length(position - hand) > batonReach)
                 state = returning;
         } else if (state == ricochet) {
             bounce += dt;
+            const Vec3 was = position;
             position += velocity * dt;
-            if (wallBounce())
+            if (wallBounce(was))
                 bounce = 0;
-            else if (bounce >= batonRicochet)
+            else if (bounce >= ricochetFor)
                 state = returning;
         }
         if (state == returning) {
@@ -490,6 +517,8 @@ struct Baton {
                 ++catches;
             } else {
                 velocity = to / len * back;
+                if (len > 1.5f) // test 3: along / over a surface in the way (never at the catch: his own body)
+                    wallSlide(dt);
                 position += velocity * dt;
             }
         }
@@ -512,6 +541,19 @@ inline void batonSounds(uint32_t& throwsSeen, const Baton& b, bool hit) {
 // Version 0.0.6 DAREDEVIL BATON AIM (strong aim assist, as the shooters'): the enemy whose chest is
 // nearest the hand's aim within batonAssistDeg and batonReach (-1 none; ties: the nearer one).
 inline constexpr float batonAssistDeg = 35.f;
+// 0.0.73 test 3 WEAPON COLLISION (held): how far the hero's held prop reaches past the hand along the aim
+// (m; 0: nothing held there to draw short of a wall) - prop_bounce::heldWant's reach.
+inline float heldReach(uint32_t hero) {
+    switch (hero) {
+    case daredevil: return .45f; // the baton's tip
+    case punisher: return .3f;   // a gun's muzzle
+    case wolverine: return .3f;  // the claws
+    case thor: return .35f;      // the hammer's head
+    case captainAmerica: return .2f; // the shield's rim
+    case batman: return .15f;    // a batarang / the grapple gun
+    default: return 0.f;
+    }
+}
 inline int batonAim(Vec3 hand, Vec3 aim, const BatonEnemy* list, uint32_t count) {
     const float aimLen = length(aim);
     if (!list || !(aimLen > 1e-4f))

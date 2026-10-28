@@ -370,6 +370,7 @@ class Play {
             gunDrawn[i] = gunGripWas[i] = false; // Version 0.0.73
             batDraw.reset();
             batarangs[i].curve = batarangCurve;
+            batarangs[i].feel = prop_bounce::batarangFeel; // 0.0.73 test 3 WEAPON COLLISION: it sticks, then home
             batarangs[i].curveSign = i == 0 ? -1.f : 1.f;
             grappleHand = 1;
             batBody = {};
@@ -415,6 +416,7 @@ class Play {
         shieldRack.add(holster::back, 0, 1u << shieldHand, true); // 0.0.73 fix 2: sticky (stays on the arm)
         shield = {};
         shield.flyHome = true; // Version 0.0.72: it flies home after batonMaxOut, never snaps
+        shield.feel = prop_bounce::shieldFeel; // 0.0.73 test 3 WEAPON COLLISION: a ricochet
         shield.roll.state = 0x9e3779b9u;
         shieldCaughtFor = 1e3f;
         shieldCaughtAt = {};

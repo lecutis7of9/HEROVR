@@ -841,6 +841,7 @@ class Play {
                 hammerFlying = true;
                 hammerBack = false;
                 hammerAge = 0;
+                hammerBlocked = 0;
                 hammerPos = p[1];
                 hammerFrom = p[1];
                 hammerVel = dir * throwSpeed;
@@ -867,12 +868,17 @@ class Play {
                         if (length(to) > .05f && length(hammerVel) > 1e-3f)
                             hammerVel = steer(normalized(hammerVel), normalized(to), homingTurn * dt) * throwSpeed;
                     }
+                const Vec3 stepFrom = hammerPos;
                 hammerPos = hammerPos + hammerVel * dt;
                 // Version 0.0.73 PROP BOUNCE: off a wall, the floor or a car (and no more homing into it).
+                // Test 3 WEAPON COLLISION: this frame's whole step swept (a fast throw never tunnels), a
+                // heavy bounce (hammerFeel), and the hammer comes back from there.
                 if (in.hammerWall.known && in.hammerWall.serial == (throws & 15u) &&
-                    prop_bounce::bounce(hammerPos, hammerVel, in.hammerWall)) {
+                    prop_bounce::sweep(stepFrom, hammerPos, hammerVel, in.hammerWall, prop_bounce::radius,
+                                       prop_bounce::hammerFeel.keep)) {
                     hammerAim = 0;
                     ++hammerBounces;
+                    hammerBack = true; // Mjolnir comes back off what it hit
                 }
                 if (hammerAge >= throwSeconds || length(hammerPos - hammerFrom) >= throwRange)
                     hammerBack = true;
@@ -892,6 +898,16 @@ class Play {
                     const Vec3 way = d <= returnStraight ? want : steer(now, want, returnTurn * dt);
                     const float speed = std::clamp(d * returnNear, returnSlowest, returnSpeed);
                     hammerVel = way * speed;
+                    // Test 3 WEAPON COLLISION: coming back it goes along / over a wall, a car or the
+                    // ground in its way - for at most ghostAfter seconds, then through it as before (it
+                    // ALWAYS comes back: the throwSeconds + 4 s recall above is unchanged). Not in the
+                    // last 1.5 m (the catch, at his own body).
+                    if (d > 1.5f && hammerBlocked < prop_bounce::ghostAfter && in.hammerWall.known &&
+                        in.hammerWall.serial == (throws & 15u) &&
+                        prop_bounce::slide(hammerPos, hammerVel, in.hammerWall, prop_bounce::radius)) {
+                        hammerBlocked += dt;
+                        ++hammerSlides;
+                    }
                     hammerPos = hammerPos + hammerVel * dt;
                 }
             }
@@ -1091,6 +1107,9 @@ class Play {
     Vec3 hammerAirVelocity() const { return hammerVel; }
     bool hammerGoingOut() const { return hammerFlying && !hammerBack; }
     uint32_t hammerBounces{}; // Version 0.0.73 PROP BOUNCE
+    uint32_t hammerSlides{};  // 0.0.73 test 3 WEAPON COLLISION: frames held off a surface coming back
+    float hammerBlocked{};    // its seconds of those this throw (ghostAfter: then through)
+    bool hammerComingBack() const { return hammerFlying && hammerBack; }
     // THOR's events since the last take (game_xr logs them): bits of ThorEvent.
     enum ThorEvent : uint32_t { thorDrawn = 1, thorThrown = 2, thorRecalled = 4, thorCaught = 8, thorStowed = 16,
                                 thorHammerHit = 32, thorBlast = 64, thorStorm = 128, thorMelee = 256 };

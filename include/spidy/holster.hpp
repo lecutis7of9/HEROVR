@@ -35,7 +35,10 @@ namespace spidy::holster {
 
 // ---- the body frame ------------------------------------------------------------------------------
 struct BodyYaw {
-    static constexpr float yawDeadZone = .6f, yawSpeed = 6.f, yawDrift = .5f;
+    // Version 0.0.73 HOLSTERS TURN WITH THE BODY (fix 8): the dead zone halved (34 to 17 degrees) and the
+    // drift three times as quick (the body re-centres under the head in about 0.7 s), so the hip and back
+    // holsters follow the player's facing instead of staying where he stood.
+    static constexpr float yawDeadZone = .3f, yawSpeed = 6.f, yawDrift = 1.5f;
     float yaw = 0;
     bool valid{};
     // Test build 12 BODY SCALE: the heights below the head are for a standingEye (1.62 m) player and scale
@@ -129,6 +132,10 @@ struct Slot {
     uint32_t item{};   // the caller's: what lives there (e.g. hero007::pistol)
     int heldBy = -1;   // -1: holstered (on the body)
     uint32_t hands{};  // Version 0.0.7 CAPTAIN AMERICA: the hands (1 << hand) that may draw it; 0: handsFor's
+    // Version 0.0.73 SHIELD STAYS ON THE ARM (fix 2): a sticky slot's item stays in the hand when the grip
+    // opens (and comes back to that hand after a throw); it goes back on the body only when the hand
+    // reaches into its zone and presses the grip again.
+    bool sticky{};
 };
 struct Hand {
     Vec3 position{};
@@ -147,10 +154,10 @@ class Rack {
     BodyYaw body{};
     uint64_t draws{}, holsters{}, returns{}, refusedSide{}, refusedBusy{};
 
-    uint32_t add(uint32_t zone, uint32_t item, uint32_t hands = 0) {
+    uint32_t add(uint32_t zone, uint32_t item, uint32_t hands = 0, bool sticky = false) {
         if (count >= maxSlots)
             return maxSlots;
-        slots[count] = Slot{zone, item, -1, hands & 3u};
+        slots[count] = Slot{zone, item, -1, hands & 3u, sticky};
         return count++;
     }
     // The slot hand i holds (-1 none).
@@ -206,6 +213,19 @@ class Rack {
             if (held >= 0) {
                 // A released grip lets go now, or - while the item is out of the hand (thrown) - as
                 // soon as it is back: never a second copy on the body while one is in the air.
+                Slot& sh = slots[held];
+                if (sh.sticky) {
+                    if (press && !h.keep && pointOk && inZone(sh.zone, point_[i])) {
+                        sh.heldBy = -1;
+                        eventSlot_[i] = held;
+                        events_[i] = holstered;
+                        ++holsters;
+                        claimed_ |= 1u << i;
+                    } else if (down_[i]) {
+                        claimed_ |= 1u << i;
+                    }
+                    continue;
+                }
                 if (!down_[i] && !h.keep) {
                     Slot& s = slots[held];
                     s.heldBy = -1;

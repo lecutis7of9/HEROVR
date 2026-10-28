@@ -74,6 +74,7 @@
 #include "spidy/sm2_damage.hpp" // Version 0.0.5
 #include "spidy/hit_marks.hpp"  // Version 0.0.62 HIT INDICATOR
 #include "spidy/bolt_walls.hpp" // Version 0.0.62 BOLT WALLS
+#include "spidy/prop_bounce.hpp" // Version 0.0.73 PROP BOUNCE
 #include "spidy/v005.hpp"       // Version 0.0.5
 #include "spidy/v006.hpp"       // Version 0.0.6
 #include "spidy/sfx.hpp"        // Version 0.0.5 SOUND EFFECTS
@@ -2014,6 +2015,13 @@ DWORD WINAPI run(void*) {
         bolt_walls::Wall shotWallsWorld[our_ball::Pool::balls]{}, handWallsWorld[2]{};
         uint32_t shotWallSerial[our_ball::Pool::balls]{}, shotAskedSerial[our_ball::Pool::balls]{};
         uint64_t shotAskedFrame[our_ball::Pool::balls]{}, wallFrame{};
+        // Version 0.0.73 PROP BOUNCE (fix 7, prop_bounce.hpp): each thrown prop's surface ahead (WORLD space, the
+        // bridge's own; its throw's low 4 bits in serial), the ray last asked for it, and the counts.
+        prop_bounce::Plane propWallsWorld[prop_bounce::slots]{};
+        uint32_t propAskedSerial[prop_bounce::slots]{};
+        uint64_t propAskedFrame[prop_bounce::slots]{};
+        Vec3 propAskedDir[prop_bounce::slots]{};
+        uint64_t propAsks{}, propAnswers{}, propBounces{};
         uint32_t shotCastNext{};
         uint64_t wallCasts{}, wallAnswers{}, wallBlocked{}, beamClipped{}, beamUnclipped{};
         struct BeamWait {
@@ -4653,6 +4661,42 @@ DWORD WINAPI run(void*) {
                                     sighted = true;
                                     ++wallCasts;
                                 }
+                                // Version 0.0.73 PROP BOUNCE: a thrown prop going out (not coming home) takes the
+                                // slot next - one not asked within 6 frames along much the same way.
+                                const uint32_t propHero = heroNow();
+                                for (uint32_t k = 0; k < prop_bounce::slots && !sighted && finite(shotToWorld.position); ++k) {
+                                    Vec3 at{}, vel{};
+                                    uint32_t serial{};
+                                    bool out = false;
+                                    if (k <= prop_bounce::batonRight) {
+                                        const auto& b = batons[k];
+                                        out = propHero == hero_modes::daredevil && !b.inHandNow() && b.state != hero_modes::returning;
+                                        at = b.position, vel = b.velocity, serial = b.throws;
+                                    } else if (k == prop_bounce::shield) {
+                                        const auto& b = hero007Play.shield;
+                                        out = propHero == hero_modes::captainAmerica && !b.inHandNow() && b.state != hero_modes::returning;
+                                        at = b.position, vel = b.velocity, serial = b.throws;
+                                    } else {
+                                        out = propHero == hero_modes::thor && hero072Play.hammerGoingOut();
+                                        at = hero072Play.hammerAirAt(), vel = hero072Play.hammerAirVelocity(), serial = hero072Play.throws;
+                                    }
+                                    if (!out)
+                                        continue;
+                                    const Vec3 atW = compose(shotToWorld, Pose{at, {}}).position;
+                                    Vec3 dirW{};
+                                    float metres{};
+                                    if (!prop_bounce::ask(atW, shotToWorld.orientation.rotate(vel), dirW, metres))
+                                        continue;
+                                    if (propAskedSerial[k] == (serial & 15u) + 1u && wallFrame - propAskedFrame[k] < 6 &&
+                                        dot(propAskedDir[k], dirW) > .985f)
+                                        continue;
+                                    aim.rays[aim.count++] = {atW, metres, dirW, prop_bounce::tag(k, serial)};
+                                    propAskedSerial[k] = (serial & 15u) + 1u;
+                                    propAskedFrame[k] = wallFrame;
+                                    propAskedDir[k] = dirW;
+                                    ++propAsks;
+                                    sighted = true;
+                                }
                             }
                             // Version 0.0.72 PUNISHER VAN SUMMON: the probe's one ray (the roof's slot, as the beam's),
                             // from his feet along his look; asked again after 12 frames with no answer.
@@ -4745,6 +4789,27 @@ DWORD WINAPI run(void*) {
                                         }
                                     }
                                     continue;
+                                }
+                                // Version 0.0.73 PROP BOUNCE: a thrown prop's surface (never one at an enemy or at him).
+                                {
+                                    uint32_t propSlot{}, propLow{};
+                                    if (prop_bounce::ofTag(hit.ray.tag, propSlot, propLow)) {
+                                        if (newBatch) {
+                                            const auto plane = prop_bounce::fromHit(hit.ray.origin, hit.ray.direction, hit.ray.distance,
+                                                                                    hit.count, hit.fraction, hit.normal, propLow);
+                                            Vec3 chests[world_trace::enemySlots];
+                                            uint32_t nc = 0;
+                                            for (uint32_t e = 0; e < enemiesHereCount && nc < world_trace::enemySlots; ++e)
+                                                chests[nc++] = motion.anchor + enemiesHere[e] + Vec3{0, 1.1f, 0};
+                                            if (plane.known && !prop_bounce::nearBody(plane.point, chests, nc, motion.headPose.position, motion.anchor)) {
+                                                propWallsWorld[propSlot] = plane;
+                                                ++propAnswers;
+                                            } else if (!hit.count) {
+                                                propWallsWorld[propSlot] = {}; // clear ahead
+                                            }
+                                        }
+                                        continue;
+                                    }
                                 }
                                 if (hit.ray.tag >= bolt_walls::ballTag0) {
                                     int slot{};
@@ -6641,9 +6706,19 @@ DWORD WINAPI run(void*) {
                                                 batonTipHeld[i] = held.tip;
                                             }
                                             const int batonAimed = b.inHandNow() ? hero_modes::batonAim(hand, aimDir, batonList, foes.count) : -1;
+                                            // Version 0.0.73 PROP BOUNCE: this throw's surface ahead, in this frame's tracking space.
+                                            const uint32_t bouncesWas = b.wallBounces;
+                                            b.wall = propWallsWorld[i].serial == (b.throws & 15u)
+                                                         ? prop_bounce::moved(propWallsWorld[i], inverse(compose(motion.headPose, inverse(frame.head))))
+                                                         : prop_bounce::Plane{};
                                             const uint32_t throwsWas = b.throws;
                                             const bool hit = finite(hand) && finite(aimDir) &&
                                                              b.update(batonDt, trig, hand, aimDir, batonList, foes.count, batonAimed);
+                                            if (b.wallBounces != bouncesWas) {
+                                                propWallsWorld[i] = {};
+                                                ++propBounces;
+                                                runtime.haptic(static_cast<int>(i), .2f);
+                                            }
                                             if (b.throws != throwsWas)
                                                 runtime.haptic(static_cast<int>(i), .3f);
                                             hero_modes::batonSounds(batonThrowsSeen[i], b, hit);
@@ -6821,8 +6896,18 @@ DWORD WINAPI run(void*) {
                                             // Version 0.0.7 PUNISHER GUN GRIP: the held gun from the grip pose.
                                             hin.hands[i].holdGun(gun_grip::held(frame.hands[i].grip, i, runtime.controllers()[i]));
                                         }
+                                        // Version 0.0.73 PROP BOUNCE: the thrown shield's surface ahead (this frame's tracking space).
+                                        const uint32_t shieldBouncesWas = hero007Play.shield.wallBounces;
+                                        hero007Play.shield.wall =
+                                            propWallsWorld[prop_bounce::shield].serial == (hero007Play.shield.throws & 15u)
+                                                ? prop_bounce::moved(propWallsWorld[prop_bounce::shield], inverse(compose(motion.headPose, inverse(frame.head))))
+                                                : prop_bounce::Plane{};
                                         hero007::PlayOutput hout;
                                         hero007Play.step(hin, hout);
+                                        if (hero007Play.shield.wallBounces != shieldBouncesWas) {
+                                            propWallsWorld[prop_bounce::shield] = {};
+                                            ++propBounces;
+                                        }
                                         for (unsigned i = 0; i < 2; ++i) // Version 0.0.7 BATMAN GRAPPLE GUN
                                             batmanGrapple[i] = hout.grapple[i];
                                         for (uint32_t k = 0; k < hout.blowCount; ++k) {
@@ -7086,8 +7171,18 @@ DWORD WINAPI run(void*) {
                                             sprintf_s(line, "VERSION 0.0.72 HERO SUIT: suit %u of hero %u", worn, h72);
                                             game_prompts::note(line);
                                         }
+                                        // Version 0.0.73 PROP BOUNCE: THOR's thrown hammer's surface ahead (tracking space).
+                                        in72.hammerWall = propWallsWorld[prop_bounce::hammer].serial == (hero072Play.throws & 15u)
+                                                              ? prop_bounce::moved(propWallsWorld[prop_bounce::hammer],
+                                                                                   inverse(compose(motion.headPose, inverse(frame.head))))
+                                                              : prop_bounce::Plane{};
+                                        const uint32_t hammerBouncesWas = hero072Play.hammerBounces;
                                         hero072::PlayOut out72;
                                         hero072Play.step(in72, out72);
+                                        if (hero072Play.hammerBounces != hammerBouncesWas) {
+                                            propWallsWorld[prop_bounce::hammer] = {};
+                                            ++propBounces;
+                                        }
                                         { // Build 9 SUITS: the picked suit's model worn (the render thread draws it)
                                             uint32_t ws = 0;
                                             // Test build 10 BATMAN BODY: the model worn (SuitCatalog::worn) - BATMAN's DEFAULT
@@ -9156,18 +9251,8 @@ DWORD WINAPI run(void*) {
                                 saved.hero007.modelWanted |= hero007::modelBitBaton;
                                 for (unsigned i = 0; i < 2; ++i) {
                                     saved.hero007.batonModel[i] = slotModel(i ? mesh_model::slotBatonRight : mesh_model::slotBatonLeft, "BATON LOOK");
-                                    // The chain: ONLY while this baton is out of the hand (thrown, bouncing, coming back).
-                                    const auto& b = batons[i];
-                                    if (saved.hero007.batonModel[i] && saved.batonOn[i] > 0 && !b.inHandNow() && batonTracked[i]) {
-                                        const Vec3 from = compose(saved.worldFromTracking, Pose{batonHand[i], {}}).position;
-                                        const Vec3 to = compose(saved.worldFromTracking, Pose{b.position, {}}).position;
-                                        if (finite(from) && finite(to)) {
-                                            saved.hero007.cable[i] = true;
-                                            saved.hero007.cableFrom[i] = from;
-                                            saved.hero007.cableTo[i] = to;
-                                            saved.hero007.any = true;
-                                        }
-                                    }
+                                    // Version 0.0.73 BATON FREE THROW (fix 4): a thrown baton flies free - no chain
+                                    // or rope from the hand (0.0.7 drew one while it was out of the hand).
                                 }
                             }
                         }

@@ -89,9 +89,10 @@ def model(tris, cols, butt, tip):
     u = np.array([0, 1., 0]) - f * f[1]
     u = nz(u) if np.linalg.norm(u) > 1e-3 else np.array([0, 0, 1.])
     r = np.cross(f, u)
-    hi = max(0., tris[..., 2].max())
-    at = butt + f * hi
-    t = at + tris[..., :1] * r + tris[..., 1:2] * u - tris[..., 2:3] * f
+    # 0.0.73 BATON FLIP: the model's -z end at the butt, +z toward the tip (turned half about up).
+    lo = max(0., -tris[..., 2].min())
+    at = butt + f * lo
+    t = at - tris[..., :1] * r + tris[..., 1:2] * u + tris[..., 2:3] * f
     return [(t, cols)]
 
 

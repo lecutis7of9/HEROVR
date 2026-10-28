@@ -15,6 +15,7 @@
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_visual.hpp"
 #include "spidy/holster.hpp"
+#include "spidy/prop_bounce.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -78,6 +79,9 @@ struct PlayIn {
     LineClear lineClear{};
     void* lineUser{};
     PlayOptions o{};
+    // Version 0.0.73 PROP BOUNCE (fix 7): the surface ahead of THOR's thrown hammer (this frame's
+    // tracking space; serial: the throw's low 4 bits). Unknown: it flies as in 0.0.72.
+    prop_bounce::Plane hammerWall{};
 };
 enum BlowKind : uint32_t {
     kindUppercut = 0, kindShove, kindSmoke, kindParry, kindShieldSlam, kindFist, kindBeam, kindChain, kindHammer,
@@ -850,6 +854,12 @@ class Play {
                             hammerVel = steer(normalized(hammerVel), normalized(to), homingTurn * dt) * throwSpeed;
                     }
                 hammerPos = hammerPos + hammerVel * dt;
+                // Version 0.0.73 PROP BOUNCE: off a wall, the floor or a car (and no more homing into it).
+                if (in.hammerWall.known && in.hammerWall.serial == (throws & 15u) &&
+                    prop_bounce::bounce(hammerPos, hammerVel, in.hammerWall)) {
+                    hammerAim = 0;
+                    ++hammerBounces;
+                }
                 if (hammerAge >= throwSeconds || length(hammerPos - hammerFrom) >= throwRange)
                     hammerBack = true;
             } else {
@@ -1064,6 +1074,9 @@ class Play {
     bool hammerInHandOrOut() const { return hammerHeld || hammerFlying; }
     bool hammerInAir() const { return hammerFlying; }
     Vec3 hammerAirAt() const { return hammerPos; }
+    Vec3 hammerAirVelocity() const { return hammerVel; }
+    bool hammerGoingOut() const { return hammerFlying && !hammerBack; }
+    uint32_t hammerBounces{}; // Version 0.0.73 PROP BOUNCE
     // THOR's events since the last take (game_xr logs them): bits of ThorEvent.
     enum ThorEvent : uint32_t { thorDrawn = 1, thorThrown = 2, thorRecalled = 4, thorCaught = 8, thorStowed = 16,
                                 thorHammerHit = 32, thorBlast = 64, thorStorm = 128, thorMelee = 256 };

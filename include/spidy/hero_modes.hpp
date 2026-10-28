@@ -33,6 +33,7 @@
 // Pure; no game memory.
 #include "spidy/math.hpp"
 #include "spidy/sfx.hpp"
+#include "spidy/prop_bounce.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -253,6 +254,22 @@ struct Baton {
     static float homeSpeed(float len) { return std::min(batonBackSpeed, 4.f + 6.f * std::max(len, 0.f)); }
     Vec3 aimPoint{};
     bool toAimPoint{};
+    // Version 0.0.73 PROP BOUNCE (fix 7, prop_bounce.hpp): the surface ahead of it on this throw (the
+    // caller's, this frame's space; serial: the throw's low 4 bits) - out, it bounces off it and comes
+    // home after batonRicochet. Coming home it never bounces (it flies home, as in 0.0.72).
+    prop_bounce::Plane wall{};
+    uint32_t wallBounces{};
+    bool wallBounce() {
+        if (!wall.known || wall.serial != (throws & 15u) || !prop_bounce::bounce(position, velocity, wall))
+            return false;
+        ++wallBounces;
+        state = ricochet;
+        bounce = 0;
+        hasTarget = toAimPoint = false;
+        targetId = 0;
+        wall.known = false; // one bounce a plane (the next cast finds the next surface)
+        return true;
+    }
     Vec3 curvedVelocity(Vec3 to) const {
         const float len = length(to);
         const Vec3 d = len > 1e-4f ? to / len : Vec3{0, 0, -1};
@@ -399,6 +416,7 @@ struct Baton {
                 state = flying;
                 ++throws;
                 out = 0;
+                wall = {};
                 hasTarget = haveEnemy;
                 target = enemy;
                 const Vec3 to = haveEnemy ? enemy - hand : aim;
@@ -452,12 +470,14 @@ struct Baton {
                     velocity = curvedVelocity(to);
             }
             position += velocity * dt;
-            if (length(position - hand) > batonReach)
+            if (!wallBounce() && length(position - hand) > batonReach)
                 state = returning;
         } else if (state == ricochet) {
             bounce += dt;
             position += velocity * dt;
-            if (bounce >= batonRicochet)
+            if (wallBounce())
+                bounce = 0;
+            else if (bounce >= batonRicochet)
                 state = returning;
         }
         if (state == returning) {

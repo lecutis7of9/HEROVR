@@ -393,7 +393,7 @@ class Play {
     // The shield back on the back, its rack for the SHIELD ARM's hand (a hero or arm change).
     void resetShield() {
         shieldRack = {};
-        shieldRack.add(holster::back, 0, 1u << shieldHand);
+        shieldRack.add(holster::back, 0, 1u << shieldHand, true); // 0.0.73 fix 2: sticky (stays on the arm)
         shield = {};
         shield.flyHome = true; // Version 0.0.72: it flies home after batonMaxOut, never snaps
         shield.roll.state = 0x9e3779b9u;

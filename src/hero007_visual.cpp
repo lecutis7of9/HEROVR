@@ -404,8 +404,11 @@ BatonFit batonFit(Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, bool inHan
     f.across = std::clamp(batonDiameter / thick, .1f, 4.f);
     f.along = std::clamp(span / s.z, .1f, 4.f);
     const Vec3 way = (tip - grip) * (1.f / span);
-    f.at = inHand ? grip + way * (span / 3.f)                         // the model's grip on the hand (gripShare)
-                  : grip + way * (std::max(0.f, model.high.z) * f.along); // the butt at the grip end
+    // Version 0.0.73 BATON FLIP (fix 4): the model was drawn upside down (its +z end, the striking end,
+    // at the butt in the hand). Now its -z end is the butt, at the grip end, held or holstered alike;
+    // the hand closes gripShare of the way up, on the model's handle.
+    (void)inHand;
+    f.at = grip + way * (std::max(0.f, -model.low.z) * f.along);
     f.ok = ok(f.at);
     return f;
 }
@@ -420,7 +423,8 @@ bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_
     Vec3 up = Vec3{0, 1, 0} - f * f.y;
     up = length(up) > 1e-3f ? normalized(up) : Vec3{0, 0, 1};
     const Vec3 r = cross(f, up) * fit.across, u = up * fit.across, fz = f * fit.along;
-    return drawMesh(out, model, [&](Vec3 c) { return fit.at + r * c.x + u * c.y - fz * c.z; }, viewer);
+    // Turned half about its up (x and z both flipped: a turn, never a mirror): +z toward the tip.
+    return drawMesh(out, model, [&](Vec3 c) { return fit.at - r * c.x + u * c.y + fz * c.z; }, viewer);
 }
 
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {

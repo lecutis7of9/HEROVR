@@ -5799,6 +5799,75 @@ int main() {
         f.predictedDisplayTime=3;const auto held=rig.update(f,{},{0,0,-1},true);
         for(int i=0;i<16;++i)near(held.head[i],b.head[i]);
     });
+    test("Version 0.0.73 fixes 2, 7, 8: the shield stays on the arm; thrown props bounce; holsters turn with the body", [] {
+        namespace pb = spidy::prop_bounce;
+        // Fix 7: a hit is a plane facing the prop; a bounce reflects it and keeps `keep` of its speed.
+        const pb::Plane wall = pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 1, .5f, {0, 0, 1}, 3);
+        check(wall.known && std::abs(wall.point.z + 5) < 1e-4f && wall.normal.z > .99f && wall.serial == 3, "plane from a hit");
+        check(!pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 0, .5f, {0, 0, 1}, 3).known &&
+                  !pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 1, 1.f, {0, 0, 1}, 3).known &&
+                  !pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 1, .5f, {0, 0, 0}, 3).known &&
+                  pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 1, .5f, {0, 0, -1}, 3).normal.z > .99f,
+              "no hit, a miss or a bad normal: no plane; a normal facing away is turned to face the prop");
+        Vec3 at{0, 1, -4.95f}, v{0, 0, -20};
+        check(pb::bounce(at, v, wall) && v.z > 11.9f && v.z < 12.1f && at.z > -4.89f, "it bounces back, slower");
+        check(!pb::bounce(at, v, wall), "moving away: no second bounce");
+        uint32_t slot{}, low{};
+        check(pb::ofTag(pb::tag(pb::hammer, 0x23), slot, low) && slot == pb::hammer && low == 3 && !pb::ofTag(1299, slot, low) &&
+                  pb::tag(pb::batonLeft, 0) >= 1300,
+              "its tags round-trip and stay clear of the BOLT WALLS tags");
+        const Vec3 chest{0, 1.2f, -5};
+        check(pb::nearBody({0, 1.2f, -5.5f}, &chest, 1, {0, 1.6f, 0}, {0, 0, 0}) &&
+                  pb::nearBody({.3f, 1, 0}, nullptr, 0, {0, 1.6f, 0}, {0, 0, 0}) &&
+                  !pb::nearBody({0, 1, -3}, &chest, 1, {0, 1.6f, 0}, {0, 0, 0}),
+              "never a wall at an enemy or at the player");
+        Vec3 dir{};
+        float metres{};
+        check(pb::ask({0, 1, 0}, {0, 0, -20}, dir, metres) && metres > 5 && dir.z < -.99f && !pb::ask({0, 1, 0}, {0, 0, -.1f}, dir, metres),
+              "the ray ahead of it");
+        // A thrown baton (or the shield) off a wall: it ricochets, then comes home to the hand.
+        hero_modes::Baton b;
+        b.update(.02f, true, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+        b.wall = pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 1, .3f, {0, 0, 1}, b.throws);
+        bool bounced = false;
+        for (int k = 0; k < 300 && !b.inHandNow(); ++k) {
+            b.update(.02f, false, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            if (b.wallBounces && !bounced) {
+                bounced = true;
+                check(b.state == hero_modes::ricochet && b.velocity.z > 0 && b.position.z > -3.01f, "off the wall at 3 m");
+            }
+        }
+        check(bounced && b.wallBounces == 1 && b.inHandNow() && b.catches == 1, "it bounced once and was caught");
+        b.update(.02f, true, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+        check(!b.wall.known, "a new throw forgets the last throw's wall");
+        // Fix 2: a sticky slot (the shield) stays in the hand when the grip opens; reaching back and
+        // pressing the grip again puts it on the back.
+        spidy::holster::Rack rack;
+        rack.add(spidy::holster::back, 0, 2u, true);
+        const Pose head{{0, 1.6f, 0}, {}};
+        auto step = [&](Vec3 hand, float squeeze, bool keep = false) {
+            spidy::holster::Hand hs[2];
+            hs[1] = {hand, true, squeeze, false, keep};
+            rack.update(1 / 90.f, true, head, hs);
+        };
+        const Vec3 behind{0, 1.4f, .3f}, ahead{.2f, 1.2f, -.4f};
+        step(behind, 0), step(behind, 1);
+        check(rack.heldIn(1) == 0 && rack.events(1) == spidy::holster::drew, "drawn from the back");
+        step(ahead, 0), step(ahead, 0);
+        check(rack.heldIn(1) == 0, "the grip opened: still on the arm");
+        step(ahead, 1), step(ahead, 0);
+        check(rack.heldIn(1) == 0, "a grip in front: still on the arm");
+        step(behind, 1, true), step(behind, 0, true);
+        check(rack.heldIn(1) == 0, "out of the hand (thrown): never put on the back");
+        step(behind, 1);
+        check(rack.heldIn(1) < 0 && rack.events(1) == spidy::holster::holstered, "reached back and gripped: on the back");
+        // Fix 8: the holsters' body turns with the player within about a second.
+        spidy::holster::BodyYaw body;
+        body.update(.02f, {0, 0, -1});
+        for (int k = 0; k < 60; ++k)
+            body.update(.02f, {std::sin(.5f), 0, -std::cos(.5f)});
+        check(std::abs(body.yaw - .5f) < .1f, "the body caught up with a 29 degree turn");
+    });
     test("Version 0.0.73 fix 1 ROSTER FLICKER: padding never bumps the version; a lit button holds over gaps and edges", [] {
         namespace rp = roster_page;
         using rp::Screen;
@@ -28869,8 +28938,21 @@ int main() {
         check(held.ok && std::abs(held.across - .036f / .066f) < 1e-3f && std::abs(held.along - 1) < 1e-3f, "the baton's size");
         check(std::abs(.066f * held.across - hero007::batonDiameter) < 1e-4f && hero007::batonDiameter >= .025f &&
                   hero007::batonDiameter <= .04f, "not an escrima stick's 1-1.5 inch");
-        check(length(held.at - (butt + Vec3{0, 0, -.19f})) < 1e-4f, "the held baton's grip not on the hand");
-        check(worn.ok && length(worn.at - (butt + Vec3{0, 0, -.068f})) < 1e-4f, "the holstered baton's butt not at its end");
+        // Version 0.0.73 BATON FLIP: the model's -z end (-.502) is the butt, held or holstered; +z toward the tip.
+        check(length(held.at - (butt + Vec3{0, 0, -.502f})) < 1e-4f, "the held baton's butt not at the grip end (flipped)");
+        check(worn.ok && length(worn.at - (butt + Vec3{0, 0, -.502f})) < 1e-4f, "the holstered baton's butt not at its end");
+        {
+            std::vector<Vertex> fv;
+            mesh_model::Mesh one = stick;
+            one.corners = {Vec3{0, 0, -.502f}, Vec3{.01f, 0, .068f}, Vec3{0, .01f, .068f}};
+            one.colors = {Vec3{1, 1, 1}};
+            if (hero007::appendBatonModel(fv, butt, tip, one, {0, 1.6f, 1}, true) && fv.size() >= 3) {
+                float nearest = 1e9f, farthest = 0;
+                for (const auto& v : fv)
+                    nearest = std::min(nearest, length(v.position - butt)), farthest = std::max(farthest, length(v.position - butt));
+                check(nearest < .02f && farthest > .5f, "the flipped baton does not run butt to tip");
+            }
+        }
         check(!hero007::batonFit({NAN, 0, 0}, tip, stick, true).ok, "a NaN baton fitted");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";

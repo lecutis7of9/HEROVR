@@ -7,6 +7,7 @@
 #include "spidy/pixel_font.hpp"
 #include "spidy/soft_shapes.hpp"
 #include "spidy/web_visual.hpp"
+#include "spidy/van_fps.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -227,6 +228,10 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
     const size_t from = sink.size();
     if (from + size_t{model.triangles()} * 3 > modelSinkBudget)
         return false;
+    // Version 0.0.73 VAN FPS: a big model placed by a turn and one scale (the van, the hammers) takes the
+    // prepared path (its model-space normals kept once): the same vertices, about a fifth of the time.
+    if (vanfps::drawPrepared(sink, model, o, ex, ey, ez))
+        return true;
     const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
     const bool smooth = model.hasNormals(), uvs = model.hasUvs();
     sink.reserve(from + size_t{model.triangles()} * 3); // build 7: one growth, not a dozen

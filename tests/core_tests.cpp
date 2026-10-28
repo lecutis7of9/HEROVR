@@ -158,6 +158,7 @@
 #include "spidy/cape_glide.hpp"
 #include "spidy/grapple073.hpp"
 #include "spidy/van072.hpp"
+#include "spidy/van_fps.hpp"
 #include "spidy/hit_marks.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
@@ -31427,6 +31428,71 @@ int main() {
             appendWristHud(out, v, {0, 1.6f, 0}, .001f);
             check(!out.empty() && sane(out, 0, {0, 1, -.4f}, 1), "the page after CLOSE");
         }
+    });
+    test("Version 0.0.73 VAN FPS: a big model's prepared path writes the old path's vertices", [] {
+        // A synthetic 'van': 6000 triangles, smooth normals (some zero), uvs, two images (one layer-less),
+        // a few slivers - drawn by appendPlacedModel at several turns with the path on and off.
+        mesh_model::Mesh m;
+        uint32_t seed = 7;
+        auto rnd = [&] { seed = seed * 1664525u + 1013904223u; return static_cast<float>(seed >> 8) / 16777216.f; };
+        const uint32_t n = 6000;
+        for (uint32_t t = 0; t < n; ++t) {
+            const Vec3 a{rnd() * 4 - 2, rnd() * 2, rnd() * 5 - 2.5f};
+            Vec3 b = a + Vec3{rnd() * .2f, rnd() * .2f, rnd() * .2f}, c = a + Vec3{rnd() * .2f, rnd() * .2f, rnd() * .2f};
+            if (t % 997 == 0)
+                b = a, c = a; // a sliver
+            m.corners.insert(m.corners.end(), {a, b, c});
+            m.colors.push_back({rnd(), rnd(), rnd()});
+            m.tints.push_back({rnd(), rnd(), rnd()});
+            m.image.push_back(static_cast<int16_t>(t % 3 == 0 ? -1 : t % 3 - 1));
+            for (int k = 0; k < 3; ++k) {
+                m.normals.push_back(t % 50 == 0 ? Vec3{} : Vec3{rnd() - .5f, rnd() - .5f, rnd() - .5f} * 3.f);
+                m.uvs.push_back(rnd());
+                m.uvs.push_back(rnd());
+            }
+        }
+        m.images.resize(2);
+        m.images[0].layer = 4;
+        m.images[1].layer = -1;
+        m.low = {-2, 0, -2.5f};
+        m.high = {2.2f, 2.2f, 2.7f};
+        m.cap = mesh_model::vanTriangles;
+        check(m.ok() && m.hasNormals() && m.hasUvs(), "the model");
+        vanfps::forget();
+        std::vector<Vertex> sink, ref, out;
+        hero007::setModelSink(&sink);
+        for (const float yaw : {0.f, .7f, 2.4f, -1.9f}) {
+            const Vec3 at{30, 1, -12}, f{std::sin(yaw), 0, std::cos(yaw)}, viewer{31, 1.5f, -11};
+            vanfps::setEnabled(false);
+            sink.clear();
+            check(hero007::appendPlacedModel(out, m, at, f, {0, 1, 0}, viewer, 1.f), "old path drew");
+            ref = sink;
+            vanfps::setEnabled(true);
+            sink.clear();
+            check(hero007::appendPlacedModel(out, m, at, f, {0, 1, 0}, viewer, 1.f), "prepared path drew");
+            check(sink.size() == ref.size() && ref.size() == (n - 7) * 3u, "the same vertices (slivers left out)");
+            float dp = 0, dc = 0, ds = 0;
+            for (size_t i = 0; i < ref.size(); ++i) {
+                dp = std::max(dp, length(ref[i].position - sink[i].position));
+                dc = std::max(dc, length(ref[i].color - sink[i].color));
+                ds = std::max({ds, std::abs(ref[i].shape.x - sink[i].shape.x), std::abs(ref[i].shape.y - sink[i].shape.y),
+                               std::abs(ref[i].shape.z - sink[i].shape.z), std::abs(ref[i].alpha - sink[i].alpha)});
+            }
+            check(dp == 0 && dc < 1e-3f && ds == 0, "positions exact, colours to float rounding (under a quarter of an 8-bit step)");
+        }
+        const auto st = vanfps::stats();
+        check(st.prepared == 1 && st.drawn == 4, "prepared once, drawn four times");
+        // A stretched placement (the claws' extension) and a small model keep the old path.
+        check(!vanfps::drawPrepared(sink, m, {0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1.5f}), "stretched: old path");
+        mesh_model::Mesh small = m;
+        small.colors.resize(100), small.corners.resize(300), small.tints.resize(100), small.image.resize(100);
+        small.normals.resize(300), small.uvs.resize(600);
+        check(!vanfps::drawPrepared(sink, small, {0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}), "small: old path");
+        float scale = 0;
+        check(vanfps::uniformPlace({1, 2, 3}, {0, 0, -2}, {0, 2, 0}, {2, 0, 0}, scale) && scale == 2, "a turn and a scale");
+        check(!vanfps::uniformPlace({1, 2, 3}, {1, 0, 0}, {.5f, 1, 0}, {0, 0, 1}, scale), "sheared: no");
+        hero007::setModelSink(nullptr);
+        vanfps::forget();
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

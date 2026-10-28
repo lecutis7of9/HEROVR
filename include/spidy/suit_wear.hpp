@@ -85,6 +85,7 @@ struct Skeleton {
     Vec3 handBack[2]{{0, 1, 0}, {0, 1, 0}};
     Vec3 up{0, 1, 0};
     float curl[2]{}; // Test build 12 FIST: each hand's fingers curled (0 open, 1 a fist round a handle)
+    bool fistFit[2]{}; // Version 0.0.73 test 3 FIST: Tracked::fistFit (and the hand tracked)
     bool ok{};
 };
 // A worn suit made ready (once, at load): its unique vertices, each corner's vertex, each triangle's bone.
@@ -97,6 +98,15 @@ struct Rig {
     Skeleton skeleton;                  // the rest skeleton (the model's: facing +z, its left at +x)
     float height = 1.8f;                // the head's top above the feet
     float handThumb[2]{};               // Test build 12: each rest hand's thumb found (+-1 across it; 0 none)
+    // Version 0.0.73 test 3 FIST ("the fingers dont wrap the batons"): each rest hand's fingers as a line in the
+    // hand bone's frame past the knuckles - their depth toward the back (z) at the knuckles and its change along
+    // them (rest metres; 0 0: straight down the bone). A suit whose rest fingers sit under the bone or droop
+    // (Daredevil's: 3 cm under it, bent 25 degrees) curled about the bone threw the fingertips out through the back
+    // of the fist; now each finger is straightened off its own line and curled round a handle under it.
+    float fingerDepth[2]{}, fingerSlope[2]{};
+    // and the handle's hole in that fist (fully curled), from the curl's centre (knuckle, fingerDepth - radius) in
+    // the bone's (y, z) (rest metres): where a 36 mm handle shows least through the skin and is wrapped all round.
+    float fistHole[2][2]{};
     // Test build 12 CAPE (findCape): the suit's own cape - the sheet hanging behind its back (the triangles
     // reached from the ones well behind it, below the shoulders), only when there is one (Arkham Origins' and
     // Year One's BATMAN; Beyond's and 1989's have none in their models). Per rest vertex: how much of it hangs
@@ -128,6 +138,9 @@ struct Tracked {
     Vec3 gripUp[2]{{0, 1, 0}, {0, 1, 0}};
     float handleTiltDeg[2]{30.f, 30.f};
     float curl[2]{};
+    // Version 0.0.73 test 3 FIST: the hand fits its fist round a held Daredevil baton (Rig::fingerDepth, fistHole);
+    // false: Version 0.0.73 test 3's fist exactly (the dd_baton_tip switch OFF)
+    bool fistFit[2]{};
     Vec3 feet{}, up{0, 1, 0};
     float standingEye = 0; // the player's standing eye height above the feet (0: this frame's, crouching shrinks him)
 };
@@ -144,6 +157,7 @@ struct BoneMove {
     // reach (rest metres from a0), and the curl's angle (radians, 0: none).
     Vec3 x0{}, y0{}, z0{};
     float knuckle{}, fingers{}, curl{};
+    float depth{}, slope{}; // Version 0.0.73 test 3 FIST: Rig::fingerDepth, fingerSlope (the hands only)
 };
 // Test build 12 HANDS. The hand bone's way (wrist -> knuckles) and the wrist from an OpenXR grip pose:
 // the grip's -Y turned tiltDeg toward its -Z (the forearm through a fist round a controller's handle; the grip's

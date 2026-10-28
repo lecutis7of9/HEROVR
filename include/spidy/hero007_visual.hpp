@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace spidy::hero007 {
@@ -170,6 +171,20 @@ struct BatonFit {
 BatonFit batonFit(Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, bool inHand);
 bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer,
                       bool inHand = false);
+// Version 0.0.73 DAREDEVIL BATON TIP (dd_baton073.hpp): the model cut at its seam - the triangles whose middle
+// is in the last tipShare of its length (the silver striking end, z from -.08 m on the Yanez model) - kept
+// once per model (its own corners, uvs, normals and texture layers: nothing flattened). part true: the tip.
+// Null: no usable model (the club look then).
+std::shared_ptr<const mesh_model::Mesh> batonPart(const mesh_model::Mesh& model, bool tip, float tipShare);
+// The held baton with its tip flown: the body where appendBatonModel draws it (butt `grip`, `tip` its seated
+// tip) and the cut-off tip with its back on tipBack and its point at tipFront. False (nothing drawn): no cut.
+bool appendBatonModelSplit(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer,
+                           Vec3 tipBack, Vec3 tipFront, float tipShare);
+// The club look's split: the club from the butt to the seam and its steel tip flown (tipBack -> tipFront).
+void appendBatonClubSplit(std::vector<Vertex>& out, Vec3 grip, Vec3 seam, Vec3 viewer, float pixelAngle, Vec3 tipBack,
+                          Vec3 tipFront);
+// The rope between the baton's seam and its flown tip: a 6 mm grey cord, taut, no hook (up to 80 m).
+void appendBatonRope(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 // The thrown baton's chain: a thin steel cable from the hand to the baton, sagging a little.
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 // BATMAN's grapple line: a taut dark line from the gun hand to the hook (three prongs on the

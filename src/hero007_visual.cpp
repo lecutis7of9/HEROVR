@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <memory>
+#include <mutex>
 
 namespace spidy::hero007 {
 namespace {
@@ -443,6 +445,128 @@ bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_
     const Vec3 r = cross(f, up) * fit.across, u = up * fit.across, fz = f * fit.along;
     // Turned half about its up (x and z both flipped: a turn, never a mirror): +z toward the tip.
     return drawMesh(out, model, [&](Vec3 c) { return fit.at - r * c.x + u * c.y + fz * c.z; }, viewer);
+}
+
+namespace {
+// Version 0.0.73 DAREDEVIL BATON TIP: one triangle of `from` copied into `to` (every per-triangle field it has).
+void copyTriangle(const mesh_model::Mesh& from, uint32_t t, mesh_model::Mesh& to) {
+    for (uint32_t k = 0; k < 3; ++k)
+        to.corners.push_back(from.corners[t * 3 + k]);
+    to.colors.push_back(from.colors[t]);
+    if (from.hasUvs())
+        to.uvs.insert(to.uvs.end(), from.uvs.begin() + t * 6, from.uvs.begin() + t * 6 + 6);
+    if (from.hasNormals())
+        for (uint32_t k = 0; k < 3; ++k)
+            to.normals.push_back(from.normals[t * 3 + k]);
+    if (from.tints.size() == from.colors.size())
+        to.tints.push_back(from.tints[t]);
+    if (from.image.size() == from.colors.size())
+        to.image.push_back(from.image[t]);
+}
+// Splits `m` at model z `seam` (a triangle's middle at or past it: the tip). Both keep m's bounds (the fit is
+// the whole model's), its images' layers (not their bytes) and its cap; the lite copy split alike.
+void splitMesh(const mesh_model::Mesh& m, float seam, mesh_model::Mesh& body, mesh_model::Mesh& tip, int depth = 0) {
+    for (uint32_t t = 0; t < m.triangles(); ++t) {
+        const float z = (m.corners[t * 3].z + m.corners[t * 3 + 1].z + m.corners[t * 3 + 2].z) * (1.f / 3);
+        copyTriangle(m, t, z >= seam ? tip : body);
+    }
+    for (mesh_model::Mesh* p : {&body, &tip}) {
+        p->low = m.low, p->high = m.high, p->cap = m.cap, p->sourceTriangles = p->triangles();
+        p->images.clear();
+        for (const auto& im : m.images)
+            p->images.push_back({im.uri, {}, im.cutout, im.layer});
+        if (p->uvs.size() != p->colors.size() * 6)
+            p->uvs.clear();
+        if (p->normals.size() != p->colors.size() * 3)
+            p->normals.clear();
+    }
+    if (m.lite && m.lite->ok() && depth == 0) {
+        auto b = std::make_shared<mesh_model::Mesh>(), t = std::make_shared<mesh_model::Mesh>();
+        splitMesh(*m.lite, seam, *b, *t, 1);
+        body.lite = b, tip.lite = t;
+    }
+}
+struct BatonCut {
+    const mesh_model::Mesh* source{};
+    uint32_t triangles{};
+    float share{};
+    std::shared_ptr<const mesh_model::Mesh> body, tip;
+};
+std::mutex batonCutLock;
+BatonCut batonCuts[4];
+uint32_t batonCutNext = 0;
+} // namespace
+
+std::shared_ptr<const mesh_model::Mesh> batonPart(const mesh_model::Mesh& model, bool tip, float tipShare) {
+    if (!metric(model) || !(tipShare > .05f && tipShare < .6f) || model.triangles() > mesh_model::vanTriangles)
+        return nullptr;
+    std::lock_guard<std::mutex> hold(batonCutLock);
+    for (const BatonCut& c : batonCuts)
+        if (c.source == &model && c.triangles == model.triangles() && c.share == tipShare)
+            return tip ? c.tip : c.body;
+    auto body = std::make_shared<mesh_model::Mesh>(), end = std::make_shared<mesh_model::Mesh>();
+    splitMesh(model, model.high.z - (model.high.z - model.low.z) * tipShare, *body, *end);
+    if (!body->ok() || !end->ok())
+        return nullptr; // nothing past the seam (or nothing before it): no cut
+    BatonCut& c = batonCuts[batonCutNext++ % 4];
+    c = BatonCut{&model, model.triangles(), tipShare, body, end};
+    return tip ? c.tip : c.body;
+}
+
+bool appendBatonModelSplit(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer,
+                           Vec3 tipBack, Vec3 tipFront, float tipShare) {
+    if (!ok(grip) || !ok(tip) || !ok(tipBack) || !ok(tipFront) || length(tip - grip) < .05f || !metric(model) ||
+        !ok(viewer) || length(tipFront - tipBack) < .01f)
+        return false;
+    const auto body = batonPart(model, false, tipShare), end = batonPart(model, true, tipShare);
+    if (!body || !end)
+        return false;
+    const BatonFit fit = batonFit(grip, tip, model, true);
+    if (!fit.ok || !inRange(fit.at, viewer, 40.f))
+        return false;
+    const auto axes = [&](Vec3 f, Vec3& r, Vec3& u) {
+        Vec3 up = Vec3{0, 1, 0} - f * f.y;
+        up = length(up) > 1e-3f ? normalized(up) : Vec3{0, 0, 1};
+        r = cross(f, up) * fit.across, u = up * fit.across;
+    };
+    const Vec3 f = normalized(tip - grip);
+    Vec3 r{}, u{};
+    axes(f, r, u);
+    const Vec3 fz = f * fit.along;
+    if (!drawMesh(out, *body, [&](Vec3 c) { return fit.at - r * c.x + u * c.y + fz * c.z; }, viewer))
+        return false;
+    // The tip: the seam (model z) on tipBack, the same scale, its own way (tipBack -> tipFront).
+    const float seamZ = model.high.z - (model.high.z - model.low.z) * tipShare;
+    const Vec3 f2 = normalized(tipFront - tipBack);
+    Vec3 r2{}, u2{};
+    axes(f2, r2, u2);
+    const Vec3 fz2 = f2 * fit.along;
+    drawMesh(out, *end, [&](Vec3 c) { return tipBack - r2 * c.x + u2 * c.y + fz2 * (c.z - seamZ); }, viewer);
+    return true;
+}
+
+void appendBatonClubSplit(std::vector<Vertex>& out, Vec3 grip, Vec3 seam, Vec3 viewer, float pixelAngle, Vec3 tipBack,
+                          Vec3 tipFront) {
+    if (!ok(tipBack) || !ok(tipFront) || !ok(viewer) || !std::isfinite(pixelAngle))
+        return;
+    appendBatonClub(out, grip, seam, viewer, pixelAngle);
+    if (length(tipFront - tipBack) < .01f || !inRange(tipBack, viewer, 80.f))
+        return;
+    Guard g(out);
+    part(out, tipBack, tipFront, viewer, pixelAngle, .019f, steel);
+}
+
+void appendBatonRope(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {
+    if (!ok(from) || !ok(to) || !ok(viewer) || !std::isfinite(pixelAngle) || length(to - from) < .02f ||
+        length(to - from) > 80.f || !inRange(from, viewer, 80.f))
+        return;
+    Guard g(out);
+    constexpr int pieces = 10; // each piece keeps its own width floor along a long rope
+    for (int i = 0; i < pieces; ++i) {
+        const Vec3 a = from + (to - from) * (static_cast<float>(i) / pieces);
+        const Vec3 b = from + (to - from) * (static_cast<float>(i + 1) / pieces);
+        part(out, a, b, viewer, pixelAngle, .003f, cord);
+    }
 }
 
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {

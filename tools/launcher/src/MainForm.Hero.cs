@@ -519,7 +519,7 @@ namespace Sm2VrLauncher
             area.Controls.Add(lh);
             y += 34;
             designLoading = true;
-            designToggle = new ToggleRow("New launcher design", "Opens the HERO VR design with its orb and sound; off opens the classic launcher (restarts the launcher).",
+            designToggle = new ToggleRow("New launcher design", "Opens the HERO VR design with its orb and sound, which can feel slower on some PCs; off opens the classic launcher, the default (restarts the launcher).",
                 LauncherMode.IsHero(settings));
             designToggle.Bounds = Theme.R(0, y, colW, 70);
             designToggle.Changed += (a, e) => DesignToggled(designToggle.Checked);
@@ -622,7 +622,7 @@ namespace Sm2VrLauncher
             LauncherMode.Restart(this, null);
         }
 
-        /// <summary>The classic design's one-time questions: why the new design was turned off, else the new-design offer.</summary>
+        /// <summary>The classic design's one-time notice: why the new design was turned off (0.0.73 test 3: no new-design offer).</summary>
         void DesignStartupNotices()
         {
             if (hero) return;
@@ -635,16 +635,8 @@ namespace Sm2VrLauncher
                 LauncherMode.NoticeShown(settings);
                 return;
             }
-            if (LauncherMode.Forced || settings.GetBool(LauncherMode.KeyOfferShown, false) || LauncherMode.IsHero(settings)) return;
-            settings.SetBool(LauncherMode.KeyOfferShown, true); settings.Save();
-            var r = NoticeDialog.Show(this, "HERO VR launcher redesign",
-                "New launcher design available. Would you like to restart now with the new design? You can safely switch back to the original anytime if you prefer it or run into issues.",
-                "Restart with new design", "Not now");
-            if (r != DialogResult.OK) { LauncherMode.Log("offer: not now"); return; }
-            settings.Set(LauncherMode.KeyDesign, LauncherMode.Hero); settings.Save();
-            LauncherMode.Log("offer: restart with the new design");
-            if (job != Job.None) { NoticeDialog.Show(this, "Saved", "The new design opens the next time the launcher starts.", "OK", null); return; }
-            LauncherMode.Restart(this, null);
+            // 0.0.73 test 3: no "new launcher design available" question any more. Players found the new design slow, so
+            // classic is the default and the new design is only the opt-in switch in Options > Launcher.
         }
 
         void HeroClosed()

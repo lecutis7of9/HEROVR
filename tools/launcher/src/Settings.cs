@@ -51,7 +51,9 @@ namespace Sm2VrLauncher
             }
             catch { }
             s.ReadFile(FilePath);
-            if (s.Migrate073t3()) s.Save();
+            bool moved = s.Migrate073t3();
+            if (s.MigrateClassic073()) moved = true;
+            if (moved) s.Save();
             return s;
         }
 
@@ -67,6 +69,22 @@ namespace Sm2VrLauncher
             if (Get(Migrated073t3Key, null) != null) return false;
             if (Get("opt.SmoothTurn", null) == "0") Set("opt.SmoothTurn", SmoothTurnDefault);
             Set(Migrated073t3Key, "1");
+            return true;
+        }
+
+        /// <summary>The marker of the one-time 0.0.73 test 3 move back to the classic launcher design.</summary>
+        public const string MigratedClassic073Key = "opt.migrated073classic";
+        /// <summary>0.0.73 test 3, once: players found the new launcher design (LauncherDesign=hero, build 10) slow and
+        /// laggy, so CLASSIC is the default again and anyone on the new design moves to classic, then the marker; the new
+        /// design stays an opt-in switch (Options > Launcher), and turned on after the marker it stays. The one-time
+        /// "new design available" question is never asked (HeroOfferShown=1). True when the file must be saved.</summary>
+        public bool MigrateClassic073()
+        {
+            if (Get(MigratedClassic073Key, null) != null) return false;
+            string d = (Get("LauncherDesign", null) ?? "").Trim();
+            if (d.Length > 0 && !d.Equals("classic", StringComparison.OrdinalIgnoreCase)) Set("LauncherDesign", "classic");
+            Set("HeroOfferShown", "1");
+            Set(MigratedClassic073Key, "1");
             return true;
         }
 

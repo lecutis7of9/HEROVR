@@ -222,13 +222,22 @@ namespace Sm2VrLauncher { static class MigrationTest {
         s = Fresh(null);
         Check(s.Get("opt.SmoothTurn", "120") == "120" && File.ReadAllText(Settings.FilePath).Contains("opt.migrated073t3=1"), "new install starts migrated");
         Check(!s.Migrate073t3(), "once only");
+        s = Fresh("LauncherDesign=hero\nopt.SmoothTurn=0\n");
+        Check(s.Get("LauncherDesign", null) == "classic" && s.Get("opt.SmoothTurn", null) == "120", "new design moves to classic (and smooth) once");
+        Check(File.ReadAllText(Settings.FilePath).Contains("opt.migrated073classic=1") && File.ReadAllText(Settings.FilePath).Contains("HeroOfferShown=1"), "classic marker saved, no offer");
+        s.Set("LauncherDesign", "hero"); s.Save();
+        Check(Settings.Load().Get("LauncherDesign", null) == "hero", "the new design turned on after the marker stays (opt-in)");
+        s = Fresh("LauncherDesign=classic\n");
+        Check(s.Get("LauncherDesign", null) == "classic" && !s.MigrateClassic073(), "classic stays, once only");
         Console.WriteLine(fails == 0 ? "ALL PASS" : "FAILED"); return fails == 0 ? 0 : 1; } } }
 '''
     def test_source(self):
         s = src('tools/launcher/src/Settings.cs')
         self.assertIn('public const string Migrated073t3Key = "opt.migrated073t3";', s)
         i = s.index('s.ReadFile(FilePath);')
-        self.assertLess(i, s.index('if (s.Migrate073t3()) s.Save();'))
+        self.assertLess(i, s.index('bool moved = s.Migrate073t3();'))
+        self.assertLess(s.index('bool moved = s.Migrate073t3();'), s.index('if (s.MigrateClassic073()) moved = true;'))
+        self.assertIn('if (moved) s.Save();', s)
         d = re.search(r'SmoothTurnDefault = "(\d+)"', s).group(1)
         self.assertRegex(src('tools/launcher/src/LaunchOptions.cs'), r'"SmoothTurn", "SMOOTH TURN", "[^"]*", 0, 360, 10, %s,' % d)
         self.assertIn('if($SmoothTurn -eq 0 -and -not $SnapTurning) { $SmoothTurn=%s }' % d, src('tools/launch-game-vr.ps1'))
@@ -246,8 +255,19 @@ namespace Sm2VrLauncher { static class MigrationTest {
         r = subprocess.run(['mono', exe], capture_output=True, text=True, cwd=d, timeout=120)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn('ALL PASS', r.stdout)
-        self.assertEqual(r.stdout.count('PASS '), 8)
+        self.assertEqual(r.stdout.count('PASS '), 12)
         self.assertTrue(os.path.isfile(os.path.join(d, 'launcher-data', 'settings.ini')))   # portable: never the user's own
+
+class Hero073Test3ClassicLauncher(unittest.TestCase):
+    """0.0.73 test 3: players found the new launcher design laggy - CLASSIC is the default, the new design is opt-in only."""
+    def test_classic_default_and_no_offer(self):
+        m = src('tools/launcher/src/LauncherMode.cs'); h = src('tools/launcher/src/MainForm.Hero.cs')
+        self.assertIn('if (raw == null) return Design.Classic;', m)
+        i = h.index('void DesignStartupNotices()'); body = h[i:h.index('void HeroClosed()', i)]
+        self.assertNotIn('Restart with new design', body); self.assertNotIn('LauncherMode.Restart', body)
+        self.assertNotIn('KeyDesign, LauncherMode.Hero', body)
+        self.assertIn('designToggle = new ToggleRow("New launcher design"', h)   # still reachable, opt-in
+        self.assertIn('MigratedClassic073Key = "opt.migrated073classic"', src('tools/launcher/src/Settings.cs'))
 
 class Hero073Test3ExportCodes(unittest.TestCase):
     """0.0.73 test 3: every setting export refuses with its own code (VAN SCREEN shared WEAPON COLLISION's 5442)."""

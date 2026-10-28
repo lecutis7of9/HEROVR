@@ -601,6 +601,19 @@ inline bool calibrated(const SessionOptions& options) {
            within(options.armLengthMm, body_calibration::minArmLengthMm, body_calibration::maxArmLengthMm);
 }
 
+// Version 0.0.73 test 3: smooth turning is the default (smoothTurn 120), but a launcher.ini saved by an older
+// launcher holds smooth_turn=0 (snap) whether or not the player chose it. Once, on the first load without
+// the marker key, a 0 becomes the default; the marker is then saved, so a 0 picked afterwards stays.
+inline constexpr std::string_view kSmoothTurnMigratedKey = "smooth_turn_migrated_073";
+// True when this load did the migration (the caller saves the marker); `migrated`: the marker was read.
+inline bool migrateSmoothTurn(SessionOptions& options, bool migrated) {
+    if (migrated)
+        return false;
+    if (options.smoothTurn == 0)
+        options.smoothTurn = SessionOptions{}.smoothTurn;
+    return true;
+}
+
 // Arguments after the script for tools/run_game_vr.py, for an untimed session
 // that starts the game itself (or uses the one already running). closeGame:
 // the player agreed to close a running game that already holds Spidy

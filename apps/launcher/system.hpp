@@ -82,6 +82,8 @@ struct Settings {
     bool updateCheck = true;
     // The settings profile last used or saved (its name), to which changes made since can be saved.
     std::string profile;
+    // Version 0.0.73 test 3: launcher.ini's one-time smooth turn migration is done (text::migrateSmoothTurn).
+    bool smoothTurnMigrated{};
 };
 Settings loadSettings();
 void saveSettings(const Settings& settings);

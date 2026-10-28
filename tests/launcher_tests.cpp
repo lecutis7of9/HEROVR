@@ -648,6 +648,19 @@ int main() {
         t.automaticFalloff = 1000;
         t.automaticHandThreshold = 200;
     }
+    test("0.0.73 test 3: an older launcher.ini's smooth_turn=0 becomes smooth turning once, behind a marker", [] {
+        check(kSmoothTurnMigratedKey == "smooth_turn_migrated_073", "the marker key");
+        SessionOptions old;
+        old.smoothTurn = 0; // what an older launcher saved
+        check(migrateSmoothTurn(old, false) && old.smoothTurn == 120, "no marker: 0 becomes the default 120");
+        SessionOptions picked;
+        picked.smoothTurn = 0; // snap turning chosen after the migration, marker saved
+        check(!migrateSmoothTurn(picked, true) && picked.smoothTurn == 0, "with the marker a chosen 0 stays");
+        SessionOptions custom;
+        custom.smoothTurn = 90;
+        check(migrateSmoothTurn(custom, false) && custom.smoothTurn == 90, "a chosen speed is never touched");
+        check(SessionOptions{}.smoothTurn == 120, "smooth turning is the default");
+    });
     test("a profile's text: what it is, its name, its Spidy, then each setting in the tab's order", [&] {
         check(profileText(profileOf(PlaySettings{}, "Spidy's own"), "0.4.1") ==
                   "# Spidy settings profile. To use it, in the Spidy launcher: Profile > Paste a profile, "

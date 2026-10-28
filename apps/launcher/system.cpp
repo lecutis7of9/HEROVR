@@ -601,6 +601,7 @@ Settings loadSettings() {
         else if (key == "shortcuts_asked") settings.shortcutsAsked = number() != 0;
         else if (key == "update_check") settings.updateCheck = number() != 0;
         else if (key == "profile") settings.profile = value;
+        else if (key == text::kSmoothTurnMigratedKey) settings.smoothTurnMigrated = number() != 0;
     }
     if (weight)
         settings.options.weight = weight;
@@ -611,6 +612,15 @@ Settings loadSettings() {
     // A calibration is both measurements within their ranges, or none.
     if (!text::calibrated(settings.options))
         settings.options.eyeHeightMm = settings.options.armLengthMm = 0;
+    // Version 0.0.73 test 3: an older launcher.ini's smooth_turn=0 becomes smooth turning, once; the marker is
+    // saved at once so a later choice of snap turning stays. Only a launcher.ini that exists is migrated.
+    std::error_code missing;
+    const bool hadFile = !settingsPath().empty() && fs::exists(settingsPath(), missing);
+    if (text::migrateSmoothTurn(settings.options, settings.smoothTurnMigrated)) {
+        settings.smoothTurnMigrated = true;
+        if (hadFile)
+            saveSettings(settings);
+    }
     return settings;
 }
 
@@ -642,7 +652,8 @@ void saveSettings(const Settings& settings) {
          << "\nhash_path=" << narrow(settings.hashPath)
          << "\nhash_size=" << settings.hashSize << "\nhash_time=" << settings.hashTime
          << "\nhash=" << settings.hashValue << "\nshortcuts_asked=" << settings.shortcutsAsked
-         << "\nupdate_check=" << settings.updateCheck << "\nprofile=" << settings.profile << "\n";
+         << "\nupdate_check=" << settings.updateCheck << "\nprofile=" << settings.profile
+         << "\n" << text::kSmoothTurnMigratedKey << "=" << (settings.smoothTurnMigrated ? 1 : 0) << "\n";
 }
 
 // --- Profiles ------------------------------------------------------------------

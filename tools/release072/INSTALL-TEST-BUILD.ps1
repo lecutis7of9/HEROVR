@@ -1,4 +1,4 @@
-# HERO VR 0.0.72 PRIVATE TEST BUILD installer (build 5). Started by INSTALL-TEST-BUILD.bat.
+# HERO VR 0.0.72 PRIVATE TEST BUILD installer (build 5; build 11 names the wrist line and the folders NOT updated). Started by INSTALL-TEST-BUILD.bat.
 #  1. Checks the files beside it (payload\, every one against SHA256SUMS.txt): a part zip not extracted is named.
 #  2. Finds every HERO VR mod folder (a folder with tools\launch-game-vr.ps1) in Downloads, Desktop, Documents
 #     and C:\sm2-port, and picks the one the game was played from last (its newest report).
@@ -109,7 +109,14 @@ if ($wrong.Count) { Fail "$($wrong.Count) files did not copy (is a file open or 
 Say ''
 Say "INSTALLED into $root" 'Green'
 Say "  $($entries.Count) files copied and checked (sha256). $kept replaced files kept in $keep" 'Green'
-Say ('  In the console and on the wrist you will see: ' + ($title -replace ' - .*', '')) 'Cyan'
+Say ('  In the console you will see: ' + ($title -replace ' - .*', '')) 'Cyan'
+# Test build 11: build 10's report came from a session that still ran build 9 (same DLL hashes), so the
+# wrist's number is named here, and every other mod folder is listed as NOT updated.
+if ($title -match 'test (\S+) - private test build (\d+)') {
+    Say ("  On the wrist (bottom line) you must see: TEST {0} {1}" -f $matches[2], $matches[1]) 'Cyan'
+    Say '  If the wrist shows anything else, the game started from another folder.' 'Yellow'
+}
+foreach ($o in $roots) { if ($o -ne $root) { Say "  NOT updated (do not start HERO VR from here): $o" 'Yellow' } }
 
 # 4. That folder's own launcher
 if ($NoLaunch) { exit 0 }

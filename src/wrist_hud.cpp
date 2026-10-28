@@ -3,6 +3,9 @@
 #ifndef SPIDY_TEST_COMMIT
 #define SPIDY_TEST_COMMIT "unknown"
 #endif
+#ifndef SPIDY_TEST_NUMBER
+#define SPIDY_TEST_NUMBER "0"
+#endif
 #include "spidy/wrist_hud.hpp"
 #include "spidy/version.hpp"
 #include "spidy/extras385.hpp"
@@ -1126,7 +1129,7 @@ Layout build(int page, float k, int open) {
     // Build 5: which build runs, on the wrist (the console's first line says it too).
     {
         Item f = itemOf(Kind::footer);
-        f.text = "HERO VR 0.0.72 test " SPIDY_TEST_COMMIT;
+        f.text = "TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - HERO VR 0.0.72 test"; // Test build 11
         f.h = fittedHeight(f.text, footerHeight * k, .14f);
         f.v = c - f.h;
         c = f.v - .002f * k;

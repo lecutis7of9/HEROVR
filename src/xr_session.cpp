@@ -1,5 +1,6 @@
 #include "spidy/xr_session.hpp"
 #include "spidy/eye_resolution.hpp"
+#include "spidy/eye_margin.hpp"
 #include "spidy/swapchain_ladder.hpp"
 #include <chrono>
 #include <cstring>
@@ -789,7 +790,13 @@ bool XrRuntime::frameOnce(const std::function<bool(const XrFrame&)>& prepare,
         tracked.predictedDisplayTime = state.predictedDisplayTime;
         if (tracked.valid)
             for (unsigned i = 0; i < 2; ++i) {
-                const auto& fov = views[i].fov;
+                // Test build 11 EYE MARGIN (eye_margin.hpp): the picture and its layer both get the
+                // wider fov, so the runtime's re-aimed frames find pixels past the view's edge.
+                auto& fov = views[i].fov;
+                fov.angleLeft = eye_margin::widen(fov.angleLeft);
+                fov.angleRight = eye_margin::widen(fov.angleRight);
+                fov.angleUp = eye_margin::widen(fov.angleUp);
+                fov.angleDown = eye_margin::widen(fov.angleDown);
                 tracked.eyes[i] = {pose(views[i].pose),
                                    {fov.angleLeft, fov.angleRight, fov.angleDown, fov.angleUp},
                                    eyes_[i].width,

@@ -2,6 +2,9 @@
 #ifndef SPIDY_TEST_COMMIT
 #define SPIDY_TEST_COMMIT "unknown"
 #endif
+#ifndef SPIDY_TEST_NUMBER
+#define SPIDY_TEST_NUMBER "0"
+#endif
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
@@ -6978,7 +6981,7 @@ DWORD WINAPI run(void*) {
                                                     ws = mesh_model::suitSlot(x->folder);
                                             if (wornSuitSlot.exchange(ws) != ws && ws) {
                                                 char line[160];
-                                                sprintf_s(line, "BUILD 9 SUIT: wearing %s", mesh_model::slotFolders[ws]);
+                                                sprintf_s(line, "TEST " SPIDY_TEST_NUMBER " SUIT: wearing %s", mesh_model::slotFolders[ws]);
                                                 game_prompts::note(line);
                                             }
                                         }
@@ -11324,7 +11327,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     // Version 0.0.6: the start banner names the version and its maker.
 #if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
     // Build 5: the first line names the code that runs (build 4's console said only 0.0.70).
-    message(1, 0, "HERO VR 0.0.72 test " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
+    message(1, 0, "HERO VR 0.0.72 TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
 #else
     message(1, 0, "SM2 VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");
 #endif

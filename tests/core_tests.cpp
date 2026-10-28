@@ -32,6 +32,7 @@
 #include "spidy/hero007_visual.hpp"
 #include "spidy/construct_fist.hpp"
 #include "spidy/thor_grip.hpp"
+#include "spidy/eye_margin.hpp"
 #include "spidy/mirror_guard.hpp"
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
@@ -27865,6 +27866,16 @@ int main() {
         check(!spidy::hero_modes::gameBodyShown(spidy::hero_modes::batman) && spidy::hero_modes::gameBodyShown(spidy::hero_modes::spiderMan) &&
                   spidy::hero_modes::gameBodyShown(spidy::hero_modes::punisher), "gameBodyShown");
     });
+    test("Test build 11: EYE MARGIN - each eye's fov is 8% wider in tangent on every side, sign kept, bounded", [] {
+        const float l = -0.96f, r = 0.75f;
+        check(std::fabs(std::tan(eye_margin::widen(l)) - std::tan(l) * 1.08f) < 1e-5f, "the left tangent not 8% wider");
+        check(std::fabs(std::tan(eye_margin::widen(r)) - std::tan(r) * 1.08f) < 1e-5f, "the right tangent not 8% wider");
+        check(eye_margin::widen(l) < l && eye_margin::widen(r) > r, "a side narrowed");
+        check(eye_margin::widen(0.f) == 0.f, "a centred edge moved");
+        check(eye_margin::widen(1.5f) <= eye_margin::maxAngle && eye_margin::widen(-1.5f) >= -eye_margin::maxAngle,
+              "a wide fov ran past 85 degrees");
+        check(std::isnan(eye_margin::widen(NAN)), "a bad angle was invented");
+    });
     test("Test build 10: ONE BODY - a worn suit replaces the game's body and gloves; BATMAN always has one", [] {
         using namespace spidy;
         namespace sw = suit_wear;
@@ -27888,7 +27899,7 @@ int main() {
         // SUIT BODY: OFF is OFF for a hero with a game body; BATMAN keeps his suit's arms.
         check(sw::partOf(0) == sw::partArms && sw::partOf(1) == sw::partBody && sw::partOf(2) == sw::partOff, "partOf");
         check(sw::firstPersonPart(sw::partOff, true, false) == sw::partOff && sw::firstPersonPart(sw::partOff, true, true) == sw::partOff &&
-                  sw::firstPersonPart(sw::partOff, false, false) == sw::partArms &&
+                  sw::firstPersonPart(sw::partOff, false, false) == sw::partBody && sw::firstPersonPart(sw::partArms, false, false) == sw::partBody &&
                   sw::firstPersonPart(sw::partOff, false, true) == sw::partBody &&
                   sw::firstPersonPart(sw::partArms, true, false) == sw::partArms &&
                   sw::firstPersonPart(sw::partBody, false, false) == sw::partBody && sw::partBones(sw::partArms) != 0,

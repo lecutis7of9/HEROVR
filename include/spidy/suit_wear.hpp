@@ -68,9 +68,13 @@ constexpr bool glovesShown(bool gameBodyOn, bool heroHasGameBody, bool flatScree
 // SUIT BODY in first person. With BODY (or GAME BODY) wanted the suit stands in for the whole game body, so ARMS
 // grows to FULL BODY (the player keeps his legs, now the suit's). A hero with no game body (BATMAN) never has OFF:
 // his suit's arms at least (its full body with BODY wanted).
+// Test build 11 (bodies first): a hero with no game body (BATMAN) ALWAYS shows his suit's FULL BODY - BODY on or
+// off, any SUIT BODY setting - so he is never arms only ("batman ... doesnt have abody at all").
 constexpr uint32_t firstPersonPart(uint32_t part, bool heroHasGameBody, bool bodyWanted) {
+    if (!heroHasGameBody)
+        return partBody;
     if (part == partOff)
-        return heroHasGameBody ? partOff : bodyWanted ? partBody : partArms;
+        return partOff;
     return bodyWanted ? partBody : part;
 }
 

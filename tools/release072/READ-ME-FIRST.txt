@@ -20,7 +20,7 @@ HOW YOU KNOW THE TEST BUILD IS RUNNING
   "MIXED INSTALL" or "BACKUP copy" under it means the wrong folder: run the
   installer again.
 - In the headset: the TEST NOTICE pops up within the first seconds, and the
-  wrist HUD's bottom line reads "HERO VR 0.0.72 test @@COMMIT@@".
+  wrist HUD's bottom line reads "TEST @@BUILD@@ @@COMMIT@@ - HERO VR 0.0.72 test".
 - The console says "MODELS: TEXTURED - the real models are drawn" (or why not).
 
 TO UNDO

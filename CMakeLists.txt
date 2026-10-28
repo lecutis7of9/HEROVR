@@ -84,6 +84,13 @@ if(NOT _hero_commit MATCHES "^[0-9A-Za-z._-]+$")
     set(_hero_commit "unknown")
 endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}")
+# Test build 11: the wrist's bottom line and the start line say "TEST <n> <commit>" (build 10's log
+# showed build 9 still running; the number makes that plain). Bump per test build.
+set(HERO_TEST_NUMBER "11" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
+    set(HERO_TEST_NUMBER "0")
+endif()
+target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_NUMBER="${HERO_TEST_NUMBER}")
 # Update 36: the calibration panel's art atlas, compiled in as bytes
 # (tools/calibration_art/make_atlas.py makes the file).
 set(SPIDY_CALIBRATION_ART "${CMAKE_CURRENT_SOURCE_DIR}/assets/calibration_art.qoi")

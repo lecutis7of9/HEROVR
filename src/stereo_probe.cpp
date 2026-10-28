@@ -463,6 +463,12 @@ std::atomic<uint32_t> impostorReach{150};
 //     the bytes above at 2a6bc60/2a6bcad/2a6bded in this exe; else it never writes (UNAVAILABLE).
 std::atomic<uint32_t> farWindowsPercent{100};
 bool farWindowsReady{};
+// Test build 11: write 2 (the CANDIDATE +88) is gated OFF. The Oct 28 build 9 log had it
+// writing every eye query (31497 writes, 145 m -> 290 m) and the window lights flickering;
+// the game reads +88 per view and region changes rewrite it, so the eyes' far models could
+// switch between impostor and full model from one picture to the next. FAR WINDOWS keeps
+// write 1 (LOD REACH, CONFIRMED) only.
+constexpr bool farWindowsCandidateWrite = false;
 std::atomic<uint64_t> farWindowsCalls{}, farWindowsWrites{};
 std::atomic<float> farWindowsGame{}, farWindowsOurs{};
 // The HUD panel (native_hud.hpp): PlayerModelHudFollower's placement 73ab80,
@@ -2379,7 +2385,7 @@ void* impostorQueries(void* view, void* cull) {
         read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4) && std::isfinite(reach) && reach > 0)
         writeFloat(reinterpret_cast<uintptr_t>(result) + 0x88, reach * impostorReach.load() / 100.f);
     else if (const uint32_t farPercent = farWindowsPercent.load(std::memory_order_relaxed);
-             result && farWindowsReady && enabled && farPercent > 100 && eyeView(reinterpret_cast<uintptr_t>(view)) >= 0) {
+             farWindowsCandidateWrite && result && farWindowsReady && enabled && farPercent > 100 && eyeView(reinterpret_cast<uintptr_t>(view)) >= 0) {
         // Update 38.3 FAR WINDOWS (CANDIDATE, byte-checked above).
         farWindowsCalls.fetch_add(1, std::memory_order_relaxed);
         if (read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4) && std::isfinite(reach) && reach > 1.f &&

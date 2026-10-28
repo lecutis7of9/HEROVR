@@ -125,8 +125,8 @@ class Graphics(unittest.TestCase):
     def test_graphics_defaults_unchanged(self):
         # EYE AA, FAR SHADOWS EYES+CACHE, sharpen 140, SHARED LOD HIGHER, eye_bloom COPY: 38.2's values.
         d = ls.UPDATE37_DEFAULTS
-        self.assertEqual((d['aa'], d['far_shadows'], d['sharpen'], d['shared_lod'], d['eye_bloom']), (1, 2, 140, 2, 1))
-        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140})
+        self.assertEqual((d['aa'], d['far_shadows'], d['sharpen'], d['shared_lod'], d['eye_bloom']), (0, 2, 0, 2, 1))  # 0.0.73 IMAGE SPIDYVR
+        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2})  # 0.0.73 IMAGE: sharpen follows the look (IMAGE_LOOKS)
         self.assertNotIn('far_windows', d)  # FAR WINDOWS is a COMBAT-page live setting, not a graphics default
 
 

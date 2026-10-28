@@ -2528,7 +2528,17 @@ def session(a, startup, session_off=()):
         print('You may also set these yourself in Settings > Graphics (the launcher leaves them as you set them): ' + ', '.join(UNCONFIRMED_COMFORT) + '.', flush=True)
 
     render_module = {}
-    mip_bias = encode_mip_bias(a.mip_bias, a.anisotropy)
+    # 0.0.73 IMAGE: SPIDYVR (live.txt image, the default) starts the textures at mip bias 0 when the launcher
+    # passes the old default 0.5; CLASSIC keeps 0.5; any other -MipBias is the player's and is kept.
+    image_look = live_settings.image_in_file(ROOT/'live.txt')
+    mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look)
+    if mip_bias_asked != a.mip_bias:
+        print(f'0.0.73 IMAGE {image_look.upper()}: texture mip bias {mip_bias_asked} (the launcher passed '
+              f'{a.mip_bias}; image = classic keeps it).', flush=True)
+    try:
+        mip_bias = encode_mip_bias(mip_bias_asked, a.anisotropy)
+    except (ValueError, TypeError):
+        mip_bias = encode_mip_bias(a.mip_bias, a.anisotropy)
 
     def render_memory_module(pid):
         # In time only in a game that has just started: it creates its render memory once. That is the graphics
@@ -2792,6 +2802,10 @@ def session(a, startup, session_off=()):
         migrated_073t3 = live_settings.migrate_073t3(ROOT/'live.txt')
         if migrated_073t3:
             print(migrated_073t3, flush=True)
+        # 0.0.73 IMAGE: the test 2/3 AA values the build wrote (aa 1, sharpen 140) move to SPIDYVR's once.
+        migrated_073t4 = live_settings.migrate_073t4(ROOT/'live.txt')
+        if migrated_073t4:
+            print(migrated_073t4, flush=True)
         # Update 15: the settings the wrist hologram (or live.txt) kept last time, applied now.
         kept, _ = live_settings.persisted(ROOT/'live.txt')
         for name, value in kept.items():
@@ -2807,7 +2821,10 @@ def session(a, startup, session_off=()):
                 live_file.applied(name, value)
                 print(f'live.txt (kept): {text.format(value)}', flush=True)
         # Update 37: the run36 closing settings are the new defaults, for whatever live.txt does not keep.
-        for name, value in live_settings.UPDATE37_DEFAULTS.items():
+        # 0.0.73 IMAGE: aa and sharpen follow the look (SPIDYVR 0 and 0, CLASSIC 1 and 140).
+        image_now = live_settings.image_of(kept)
+        update37_defaults = live_settings.image_defaults(live_settings.UPDATE37_DEFAULTS, image_now)
+        for name, value in update37_defaults.items():
             if name in kept:
                 continue
             _, export, text = live_settings.SETTINGS[name]
@@ -2816,7 +2833,7 @@ def session(a, startup, session_off=()):
             else:
                 live_file.applied(name, value)
         print('Update 37 defaults (unless live.txt keeps others): ' + ', '.join(
-            f'{k} = {v}' for k, v in live_settings.UPDATE37_DEFAULTS.items()), flush=True)
+            f'{k} = {v}' for k, v in update37_defaults.items()), flush=True)
         # Update 38: the COMBAT defaults (the recommended fixes), for whatever live.txt does not keep.
         for name, value in live_settings.UPDATE38_DEFAULTS.items():
             if name in kept:
@@ -2834,6 +2851,7 @@ def session(a, startup, session_off=()):
             f'{k} = {v}' for k, v in live_settings.UPDATE38_DEFAULTS.items()), flush=True)
         # Update 37.2: the settings that must start on, as the session now runs them.
         print(live_settings.startup_line(live_file.current), flush=True)
+        print(live_settings.image_line(image_now, live_file.current), flush=True)
         # Update 24: what makes far detail shimmer that the player set (strong sharpening), and a flicker
         # test (eye_debug) still in live.txt.
         for line in live_settings.start_notes(ROOT/'live.txt'):

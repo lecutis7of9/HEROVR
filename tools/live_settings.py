@@ -376,6 +376,7 @@ SETTINGS = {
     'hero_menu': ((0, 1), 'SpidyHeroMenu', "HERO MENU {} (0 holo_tiles: the wrist's ROSTER row opens the hero tiles on the hologram; 1 classic: the big roster popup, 0.0.73 fix 28; live)"),  # Version 0.0.73 test 3
     'rep_log': ((0, 1), 'SpidyRepLog', "REP LOG {} (0 on: each rep change is logged, with its hero and time, for the hologram's REP tab, kept in hero_rep_log.txt; 1 off; live)"),  # Version 0.0.73 test 3
     'van_pedals': ((0, 1), 'SpidyVanPedals', "VAN PEDALS {} (0 wheel_hand: a trigger drives only while its hand grips the wheel, the free hand's trigger fires its gun; 1 classic: 0.0.72 - either trigger is a pedal, no shots from the seat; live)"),  # Version 0.0.73 test 3
+    'image': ((0, 1), 'SpidyImage', "IMAGE {} (0 spidyvr: sharp like SpidyVR - no FXAA, no sharpening, the eye history read Catmull-Rom, texture mip bias 0 from the next start; 1 classic: HERO VR test 3's look - FXAA, sharpen 140, bilinear history, mip bias 0.5; live but the textures)"),  # Version 0.0.73
     'thor_flight': ((0, 1), 'SpidyThorFlight', "THOR FLIGHT {} (0 on: Thor takes off with both arms up and flies; 1 off: no flight for Thor, a crash bisect key, live)"),
     'thor_hammer': ((0, 3), 'SpidyThorHammer', "THOR HAMMER {} (0 boooop: Boooooop's Mjolnir; 1 devilseye: TheDevilsEye's; 2 love_thunder: Jesus Osco's Love and Thunder; 3 fccooper: fccooper's; live)"),
 }
@@ -389,8 +390,9 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'lens_flares': 'RESTART NOTICE: lens_flares takes effect the next time VR starts.'}
 # Update 37: the run36 closing settings, the defaults now (reach and monitor are the launcher's own
 # -BuildingReach 150 and -MonitorRate 30 again in Update 37.2); applied at the start for any setting live.txt does not keep.
-UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 140, 'trail': 0, 'taa_jitter': 3, 'hud_theme': 'raimi',
-                     'web_width': 1.8, 'web_speed': 70, 'reticles': 0, 'aa': 1,
+UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 0,  # 0.0.73 IMAGE SPIDYVR (was 140; CLASSIC: image_defaults)
+                      'trail': 0, 'taa_jitter': 3, 'hud_theme': 'raimi',
+                     'web_width': 1.8, 'web_speed': 70, 'reticles': 0, 'aa': 0,  # 0.0.73 IMAGE SPIDYVR: no FXAA (was 1)
                      # Update 37.2: web_width 1.8 cm (SM1's thick rope); EYE AA, FAR SHADOWS EYES+CACHE, EYE BLOOM
                      # COPY and SHARED LOD HIGHER started on every start (run371 started them OFF or low); the
                      # Update 36 values back (bloom_fx off, aim_steer off, the ring facing the eyes, wall_crawl
@@ -439,7 +441,8 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'captain_america': 'off', 'shield_arm': 'right', 'shield_damage': '35hp', 'shield_chain': 'on',
                      'shield_block': 'off', 'shield_look': 'built-in',
                      # Version 0.0.72 (TEST)
-                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'on', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on', 'cull_margin': '10deg', 'shadow_match': 'on', 'calib_look': 'holo', 'fly_pose': 'lean', 'weapon_collision': 'on', 'light_hold': 'on', 'van_screen': 'on', 'palm_blast': 'palm', 'hero_menu': 'holo_tiles', 'rep_log': 'on', 'van_pedals': 'wheel_hand'}
+                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'on', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on', 'cull_margin': '10deg', 'shadow_match': 'on', 'calib_look': 'holo', 'fly_pose': 'lean', 'weapon_collision': 'on', 'light_hold': 'on', 'van_screen': 'on', 'palm_blast': 'palm', 'hero_menu': 'holo_tiles', 'rep_log': 'on', 'van_pedals': 'wheel_hand',
+                     'image': 'spidyvr'}  # 0.0.73 IMAGE: SPIDYVR (the owner after test 3)
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
@@ -450,7 +453,8 @@ MODEL_LOOKS_072 = {'gun_models': 'models', 'shield_look': 'model', 'baton_look':
 UPDATE38_DEFAULTS.update(MODEL_LOOKS_072)
 # Update 37.2: the startup checks (tests): these must start this way on a fresh install and over an
 # existing live.txt (migrate_372, once).
-STARTUP_ON = {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140}
+# 0.0.73 IMAGE: sharpen 140 is no longer forced on: SPIDYVR (the default) runs none, CLASSIC 140 (IMAGE_LOOKS).
+STARTUP_ON = {'eye_temporal': 1, 'far_shadows': 2}
 # Update 37.2: what migrate_372 sets once in an existing live.txt (the settings above whose old value
 # the player saw in run371, and the Update 36 values back).
 MIGRATE_372 = {'sharpen': 140, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 1, 'shared_lod': 2,
@@ -462,7 +466,7 @@ def startup_line(current):
             return export_value(name, value)
         except Exception:
             return value
-    names = {'eye_temporal': 'EYE AA', 'far_shadows': 'FAR SHADOWS EYES+CACHE', 'sharpen': 'sharpen 140'}
+    names = {'eye_temporal': 'EYE AA', 'far_shadows': 'FAR SHADOWS EYES+CACHE'}
     parts, off = [], []
     for name, want in STARTUP_ON.items():
         ok = name in current and norm(name, current[name]) == norm(name, want)
@@ -564,7 +568,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
-                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -723,6 +727,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'hero_menu': {'holo_tiles': 0, 'classic': 1, 'holo': 0, 'tiles': 0, 'on': 0, 'popup': 1, 'off': 1, '0': 0, '1': 1},
            'rep_log': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'van_pedals': {'wheel_hand': 0, 'wheel': 0, 'classic': 1, 'on': 0, 'off': 1, '0': 0, '1': 1},
+           'image': {'spidyvr': 0, 'spidy': 0, 'sharp': 0, 'classic': 1, 'hero_vr_classic': 1, 'hero_classic': 1, 'test3': 1, '0': 0, '1': 1},
            'thor_hammer': {'boooop': 0, 'devilseye': 1, 'love_thunder': 2, 'love+thunder': 2, 'fccooper': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
@@ -929,7 +934,8 @@ PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sha
              'web_style', *(f'web_color_{style}' for style in WEB_STYLES),
              'music_volume', 'music_visualizer', 'music_track',
              'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART: kept for the next start)
-             'mirror_view')  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
+             'mirror_view',  # 0.0.7 MIRROR PERSIST FIX: the hologram's MIRROR VIEW (RESTART), the same
+             'image')  # 0.0.73 IMAGE: the hologram's IMAGE (its textures at the next start), the same
 # Update 23: live.txt-only settings (no hologram control) also applied when a session starts, so they keep.
 START_ONLY = ('web_start', 'trail')  # Update 34.2: trail kept from live.txt
 # Update 37: every new live.txt setting applies at the start too (a file written before the launch
@@ -980,7 +986,7 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.7 CAPTAIN AMERICA
                  'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
                  # Version 0.0.72 (TEST)
-                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals')
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
 # Version 0.0.72: THOR and GREEN LANTERN ten.
@@ -994,14 +1000,15 @@ CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach
                 15: 'hud_text', 16: 'hud_theme', 17: 'hud_text_color', 18: 'web_style', 19: 'web_color',
                 20: 'music_track', 27: 'music_volume', 28: 'music_visualizer',
                 29: 'lens_flares',  # Version 0.0.62: the hologram's LENS FLARES (RESTART), kept in live.txt
-                21: 'mirror_view'}  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
+                21: 'mirror_view',  # 0.0.7: MIRROR VIEW (RESTART), kept in live.txt (was lost at every restart)
+                22: 'image'}  # 0.0.73 IMAGE, kept in live.txt (its mip bias is set when the game starts)
 # Update 18: WEB COLOR sets the chosen style's shade; the launcher keeps every style's.
 WEB_COLOR_KEYS = tuple(f'web_color_{style}' for style in WEB_STYLES)
 SELECTOR = {'web_width': 0, 'web_speed': 0, 'aa': 1, 'history': 1, 'reach': 1, 'monitor': 1, 'supersample': 2,
             'sharpen': 4, 'reticles': 4, 'hud_height': 5, 'hud_scale': 5, 'hud_text': 5, 'hud_theme': 5,
             'hud_text_color': 5, 'web_style': 6, **{key: 6 for key in WEB_COLOR_KEYS},
             'music_volume': 7, 'music_visualizer': 7, 'music_track': 7, 'lens_flares': 10,
-            'mirror_view': 10}
+            'mirror_view': 10, 'image': 10}
 CHANGED_SELECTOR = 3
 MARKER = 1 << 30
 SUPERSAMPLES = (100, 200)
@@ -1026,7 +1033,8 @@ def decode_hud_settings(selector, code):
         return {'supersample': code & 1023}
     if selector == 10:  # Version 0.0.62: LENS FLARES (0 game, 1 off in vr); 0.0.7: MIRROR VIEW in bit 1
         return {'lens_flares': ('game', 'off_in_vr')[min(code & 1, 1)],
-                'mirror_view': ('off', 'test')[code >> 1 & 1]}
+                'mirror_view': ('off', 'test')[code >> 1 & 1],
+                'image': CHOICE_NAMES['image'][code >> 2 & 1]}  # 0.0.73 IMAGE in bit 2
     if selector == CHANGED_SELECTOR:
         changed = {CONTROL_KEYS[bit]: True for bit in CONTROL_KEYS if code >> bit & 1}
         if changed.pop('web_color', None):
@@ -1520,6 +1528,114 @@ def migrate_073t3(path):
 
 
 HEADER += MIGRATED_073T3 + '\n'
+
+
+# 0.0.73 IMAGE (combat38 image; the owner after test 3: "streetlights still flicker ... the aliasing is still
+# just too noticeable and if you smooth it ... it just looks smudged and blurry", "whatever spidyVR does to
+# handle it works and it needs to look as good as that"). SpidyVR (upstream 0.6.0) runs the game's own TAA
+# per eye, the game's sharpening at its lowest, no FXAA, no CAS, no mip bias of its own. HERO VR's test 3
+# image stacked FXAA (aa 1), sharpen 140 (past CAS's top), a +0.5 texture mip bias and a bilinear history
+# read on EYE AA. SPIDYVR (the default) takes the three smoothing / ringing steps off and reads the history
+# sharp (Catmull-Rom); CLASSIC is test 3. EYE AA, history 80, LIGHT HOLD, SHADOW MATCH, CULL MARGIN and FAR
+# SHADOWS stay as they are under both.
+IMAGE_LOOKS = {'spidyvr': {'aa': 0, 'sharpen': 0}, 'classic': {'aa': 1, 'sharpen': 140}}
+# The texture mip bias each look starts the game with, when the launcher passes the old default (0.5, the
+# launcher's own -MipBias since Update 23); any other -MipBias is the player's and is kept.
+IMAGE_MIP_BIAS = {'spidyvr': '0', 'classic': '0.5'}
+OLD_MIP_BIAS_DEFAULT = '0.5'
+
+
+def image_of(values):
+    """'spidyvr' or 'classic' from parsed live.txt values ({name: value}); spidyvr when unset or unknown."""
+    try:
+        return CHOICE_NAMES['image'][CHOICES['image'][str(values.get('image', 'spidyvr')).strip().lower()]]
+    except (KeyError, IndexError, AttributeError):
+        return 'spidyvr'
+
+
+def image_in_file(path):
+    """image_of the live.txt at `path` (spidyvr without one). Never raises."""
+    try:
+        text = pathlib.Path(path).read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return 'spidyvr'
+    try:
+        values, _ = parse(text)
+    except Exception:
+        return 'spidyvr'
+    return image_of(values)
+
+
+def image_defaults(defaults, image):
+    """`defaults` (UPDATE37_DEFAULTS) with the look's aa and sharpen."""
+    out = dict(defaults)
+    out.update(IMAGE_LOOKS.get(image, IMAGE_LOOKS['spidyvr']))
+    return out
+
+
+def image_mip_bias(requested, image):
+    """The --mip-bias to start the game with: the look's when `requested` is the old default, else it."""
+    if str(requested).strip() == OLD_MIP_BIAS_DEFAULT:
+        return IMAGE_MIP_BIAS.get(image, IMAGE_MIP_BIAS['spidyvr'])
+    return requested
+
+
+def image_line(image, current):
+    """One console line: the look and what the session runs (current: LiveFile.current)."""
+    want = IMAGE_LOOKS.get(image, IMAGE_LOOKS['spidyvr'])
+    parts = [f"{k} {current.get(k)}" + ('' if current.get(k) == v else f' (the look is {v}: live.txt keeps it)')
+             for k, v in want.items()]
+    name = 'SPIDYVR (sharp: no FXAA, no sharpening, history read sharp)' if image == 'spidyvr' else \
+        'HERO VR CLASSIC (test 3: FXAA, sharpen 140, bilinear history)'
+    return f'0.0.73 IMAGE: {name}; ' + ', '.join(parts) + '.'
+
+
+# 0.0.73 IMAGE, once: a live.txt written before this marker holding the test 2 / test 3 AA values the build
+# wrote (aa 1 FXAA, sharpen 140: migrate_372 and the hologram wrote them back as defaults) moves to SPIDYVR's
+# (aa 0, sharpen 0), unless it picks image = classic. Any other value (a sharpen the player set) stays.
+MIGRATE_073T4 = {'aa': (1, 0), 'sharpen': (140, 0)}
+MIGRATED_073T4 = ('# Version 0.0.73 IMAGE: test 2/3 AA values (aa 1, sharpen 140) moved once to IMAGE SPIDYVR\'s '
+                  '(aa 0, sharpen 0) (migrated; a value chosen after this line stays)')
+
+
+def migrate_073t4(path):
+    """0.0.73 IMAGE, once: MIGRATE_073T4 over an existing live.txt (not when it picks image = classic),
+    then the MIGRATED_073T4 marker. No live.txt: nothing (HEADER carries the marker). The line to show, or
+    None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_073T4 in text:
+        return None
+    try:
+        values, _ = parse(text)
+        changed = {}
+        if image_of(values) == 'spidyvr':
+            for name, (old, new) in MIGRATE_073T4.items():
+                try:
+                    if name in values and float(values[name]) == old:
+                        changed[name] = new
+                except (TypeError, ValueError):
+                    continue
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_073T4 + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to 0.0.73 IMAGE SPIDYVR (sharp, like SpidyVR): ' +
+            ', '.join(f'{k} = {v}' for k, v in changed.items()) +
+            ' (image = classic brings test 3\'s look back; change them again and they stay).')
+
+
+HEADER += MIGRATED_073T4 + '\n'
 
 
 def next_launch_supersample(path):

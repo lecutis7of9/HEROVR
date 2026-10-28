@@ -20,7 +20,7 @@ LAUNCHER = (ROOT / 'tools/run_game_vr.py').read_text(encoding='utf-8')
 
 class StartupOn(unittest.TestCase):
     def test_required_values(self):
-        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140})
+        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2})  # 0.0.73 IMAGE: sharpen follows the look (IMAGE_LOOKS)
 
     def test_defaults_hold_them(self):
         for k, v in ls.STARTUP_ON.items():
@@ -47,7 +47,9 @@ class StartupOn(unittest.TestCase):
 
     def test_sent_at_start(self):
         """The launcher sends UPDATE37_DEFAULTS for whatever live.txt does not keep, after the migration."""
-        self.assertIn('for name, value in live_settings.UPDATE37_DEFAULTS.items()', LAUNCHER)
+        # 0.0.73 IMAGE: the defaults take the look's aa and sharpen
+        self.assertIn('update37_defaults = live_settings.image_defaults(live_settings.UPDATE37_DEFAULTS, image_now)', LAUNCHER)
+        self.assertIn('for name, value in update37_defaults.items()', LAUNCHER)
         self.assertLess(LAUNCHER.index('live_settings.migrate_372(ROOT/'),
                         LAUNCHER.index("kept, _ = live_settings.persisted(ROOT/'live.txt')"))
 

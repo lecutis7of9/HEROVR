@@ -2507,3 +2507,29 @@ button, so it cannot be part of a recorded motion.
 "Update 38.5" (gates G4 and the update tests read it). Shown top right on the hologram's STATUS page ("VERSION 0.0.1"), run_game_vr's first log line, the
 reports' `version`, the address finder, launch/build/collect-reports windows and the guide's title. tools/release.ps1 and
 release.yml raise CMakeLists.txt and VERSION together; tests/version_tests.py checks they agree. Rule: docs/VERSIONING.md.
+
+## 55. Version 0.0.73: IMAGE (SPIDYVR, the default, or HERO VR CLASSIC)
+
+After test 3 the owner reported that streetlights still flicker (even with LIGHT HOLD), the shadows are good, and the aliasing is too
+noticeable while the smoothing looks smudged and blurry. He asked that it look as good as SpidyVR does. **SpidyVR (upstream 0.6.0)**
+runs the game's own TAA per eye, each eye with its own history, Halton jitter and a 67% render scale. It sets the game's
+Sharpness to its lowest, turns DoF off and uses an anisotropic 8x copy. It has no FXAA, no CAS and no mip bias of its own (stereo_probe.cpp,
+game_xr.cpp, eye_resolution.hpp, launcher_text.hpp, tools/vr_display.py). HERO VR's ENGINE TAA (opt-in) still shakes distant
+buildings (CANDIDATE: its jitter units and per-eye motion vectors), so it cannot be the default.
+
+**Root causes in test 3's image.** These are CONFIRMED from the 0.0.73 export:
+- EYE AA read its history bilinearly while the head moved in 32577 of 32652 pairs and kept 80% of it, so the image smudged.
+- FXAA (aa 1) smoothed on top of that.
+- A +0.5 texture mip bias replaced the game's −1.0.
+- Sharpen 140 (past CAS's top) brought back ringing and shimmer.
+
+The streetlight flicker is CANDIDATE: the history was cut in 26% of pairs, and sharpening and EYE BLOOM COPY amplify aliased bulbs.
+
+**IMAGE** (combat38 `image`, wrist GRAPHICS > QUALITY, live.txt `image`, export SpidyImage 5449):
+- **SPIDYVR** (0, the default): aa 0, sharpen 0, the history read Catmull-Rom (native_eye_gpu.cpp `sharpOld`, SpidyEyeHistorySharp),
+  and texture mip bias 0 from the next start when the launcher passes its old default 0.5.
+- **HERO VR CLASSIC** (1): test 3's look (aa 1, sharpen 140, bilinear read, mip bias 0.5).
+
+Under both, EYE AA, history 80, LIGHT HOLD, SHADOW MATCH, CULL MARGIN, FAR SHADOWS and EYE BLOOM are unchanged. The
+history read, FXAA and sharpening change live; the textures change on restart. `migrate_073t4` (marker MIGRATED_073T4) moves a
+live.txt's test 2/3 values (aa 1, sharpen 140) to 0 once, unless it picks `image = classic`. STARTUP_ON no longer forces sharpen 140.

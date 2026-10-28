@@ -114,9 +114,9 @@ class HologramPersistence(unittest.TestCase):
         self.assertIsNone(live.decode_hud_settings(11, self.M))
         # Version 0.0.62: selector 10 is the hologram's LENS FLARES
         # 0.0.7 MIRROR PERSIST FIX: selector 10 carries MIRROR VIEW in bit 1 too
-        self.assertEqual(live.decode_hud_settings(10, self.M), {'lens_flares': 'game', 'mirror_view': 'off'})
-        self.assertEqual(live.decode_hud_settings(10, self.M | 1), {'lens_flares': 'off_in_vr', 'mirror_view': 'off'})
-        self.assertEqual(live.decode_hud_settings(10, self.M | 3), {'lens_flares': 'off_in_vr', 'mirror_view': 'test'})
+        self.assertEqual(live.decode_hud_settings(10, self.M), {'lens_flares': 'game', 'mirror_view': 'off', 'image': 'spidyvr'})
+        self.assertEqual(live.decode_hud_settings(10, self.M | 1), {'lens_flares': 'off_in_vr', 'mirror_view': 'off', 'image': 'spidyvr'})
+        self.assertEqual(live.decode_hud_settings(10, self.M | 3), {'lens_flares': 'off_in_vr', 'mirror_view': 'test', 'image': 'spidyvr'})  # 0.0.73 IMAGE: bit 2
         self.assertIsNone(live.decode_hud_settings(10, 1))
 
     def test_sharpen_and_reticles(self):

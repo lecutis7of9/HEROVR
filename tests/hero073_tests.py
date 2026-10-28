@@ -155,8 +155,6 @@ class Hero073(unittest.TestCase):
         v = src('src/van_screen.cpp')
         self.assertIn('if (!van072::fine(viewer) || dot(viewer - v.centre, n) <= 0)', v)
 
-if __name__ == '__main__':
-    unittest.main()
 
 class Hero073Test3SmoothTurn(unittest.TestCase):
     """Fix 26: smooth turning is the default everywhere; snap stays one setting away (SMOOTH TURN 0)."""
@@ -288,3 +286,100 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5442'), ['SpidyWeaponCollision'])
         self.assertEqual(uses.get('5445'), ['SpidyVanScreen'])
         self.assertEqual(uses.get('5448'), ['SpidyVanPedals'])  # 0.0.73 test 3 VAN PEDALS
+        self.assertEqual(uses.get('5449'), ['SpidyImage'])  # 0.0.73 IMAGE
+
+
+class Hero073Image(unittest.TestCase):
+    """0.0.73 IMAGE (the owner after test 3: sharp and clear like SpidyVR, no smudge): SPIDYVR (default) /
+    HERO VR CLASSIC (test 3's look), and the one-time move of the test 2/3 AA values."""
+    def setUp(self):
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings
+        self.L = live_settings
+
+    def test_option_and_subtext(self):
+        c = src('include/spidy/combat38.hpp')
+        m = re.search(r'\{"image", "IMAGE", "IMAGE", "([^"]*)",\s*2,\s*\{"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr\}\}', c)
+        self.assertIsNotNone(m)
+        help = m.group(1)
+        self.assertLessEqual(len(help), 80)
+        self.assertEqual(help.count('.'), 1)
+        self.assertTrue(help.endswith('.'))
+        self.assertIn('restart', help)  # one sentence saying what needs a restart
+        self.assertIn('value == 1 ? ImageLook{1, 140, false} : ImageLook{0, 0, true}', c)
+
+    def test_defaults_are_spidyvr(self):
+        L = self.L
+        self.assertEqual(L.UPDATE38_DEFAULTS['image'], 'spidyvr')
+        d = L.UPDATE37_DEFAULTS
+        self.assertEqual((d['aa'], d['sharpen']), (0, 0))
+        c = L.image_defaults(d, 'classic')
+        self.assertEqual((c['aa'], c['sharpen']), (1, 140))
+        # the shadows and the rest stay (EYE AA, history 80, FAR SHADOWS, EYE BLOOM)
+        for k in ('eye_temporal', 'history', 'far_shadows', 'eye_bloom', 'shared_lod'):
+            self.assertEqual(c[k], d[k], k)
+        self.assertEqual(L.UPDATE38_DEFAULTS['shadow_match'], 'on')
+        self.assertEqual(L.image_mip_bias('0.5', 'spidyvr'), '0')
+        self.assertEqual(L.image_mip_bias('0.5', 'classic'), '0.5')
+        self.assertEqual(L.image_mip_bias('-0.25', 'spidyvr'), '-0.25')  # the player's own stays
+        self.assertEqual(L.image_of({}), 'spidyvr')
+        self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
+        self.assertEqual(L.export_value('image', 'classic'), 1)
+
+    def test_wired(self):
+        g, r, n = src('src/game_xr.cpp'), src('tools/run_game_vr.py'), src('src/native_eye_gpu.cpp')
+        self.assertIn('std::min<DWORD>(c38(combat38::image), 1) << 2', g)
+        self.assertIn('SpidyEyeHistorySharp(', g)
+        self.assertIn('row1.w > 0.5 ? sharpOld(old) : previous.SampleLevel(bilinear, old, 0).rgb', n)
+        self.assertIn('std::atomic<bool> sharpHistory{true};', n)
+        self.assertIn("live_settings.image_mip_bias(a.mip_bias, image_look)", r)
+        self.assertLess(r.index('migrate_073t3('), r.index('migrate_073t4('))
+        self.assertLess(r.index('migrate_073t4('), r.index("kept, _ = live_settings.persisted(ROOT/'live.txt')"))
+        self.assertIn('image_defaults(live_settings.UPDATE37_DEFAULTS, image_now)', r)
+        self.assertEqual(self.L.SELECTOR['image'], 10)
+        self.assertEqual(self.L.CONTROL_KEYS[22], 'image')
+        self.assertIn('image', self.L.PERSISTED)
+
+    def test_migration_once(self):
+        import tempfile, pathlib
+        L = self.L
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / 'live.txt'
+            p.write_text('# old\naa = 1\nsharpen = 140\nhistory = 80\n', encoding='utf-8')
+            line = L.migrate_073t4(p)
+            self.assertIn('sharpen = 0', line)
+            kept, _ = L.persisted(p)
+            self.assertEqual((kept['aa'], kept['sharpen'], kept['history']), (0, 0, 80))
+            self.assertIn(L.MIGRATED_073T4, p.read_text(encoding='utf-8'))
+            self.assertIsNone(L.migrate_073t4(p))  # once
+            # chosen after the marker: stays
+            p.write_text(L.HEADER + 'sharpen = 140\naa = 1\n', encoding='utf-8')
+            self.assertIsNone(L.migrate_073t4(p))
+            self.assertEqual(L.persisted(p)[0]['sharpen'], 140)
+            # image = classic keeps test 3's values
+            p.write_text('image = classic\naa = 1\nsharpen = 140\n', encoding='utf-8')
+            self.assertIsNone(L.migrate_073t4(p))
+            self.assertEqual(L.persisted(p)[0]['sharpen'], 140)
+            self.assertIn(L.MIGRATED_073T4, p.read_text(encoding='utf-8'))
+            # a sharpen the player set stays
+            p.write_text('sharpen = 60\n', encoding='utf-8')
+            self.assertIsNone(L.migrate_073t4(p))
+            self.assertEqual(L.persisted(p)[0]['sharpen'], 60)
+            # no live.txt: nothing made; a new one carries the marker
+            q = pathlib.Path(d) / 'none.txt'
+            self.assertIsNone(L.migrate_073t4(q))
+            self.assertFalse(q.exists())
+            self.assertIn(L.MIGRATED_073T4, L.HEADER)
+            # the launcher's look reads the file; nothing raises on junk
+            p.write_text('image = classic\n', encoding='utf-8')
+            self.assertEqual(L.image_in_file(p), 'classic')
+            self.assertEqual(L.image_in_file(q), 'spidyvr')
+            p.write_bytes(b'\xff\xfe junk = = \n')
+            self.assertEqual(L.image_in_file(p), 'spidyvr')
+            L.migrate_073t4(p)
+
+
+# 0.0.73 IMAGE: at the end, so every class above runs (it stood after the first class).
+if __name__ == '__main__':
+    unittest.main()

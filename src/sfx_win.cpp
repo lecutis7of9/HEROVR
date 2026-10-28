@@ -32,6 +32,11 @@ struct Player {
     float gainSet = -1.f;
     IXAudio2SourceVoice* looping[sounds]{}; // Version 0.0.72 SOUND LOOPS: the voice repeating each loop
     uint64_t droppedHere{};
+    // Version 0.0.73 PUNISHER VAN ENGINE: its voice (made for van_engine's format, which van_start shares),
+    // fading out since fadeFrom (ms; 0: not fading), and the pitch and volume last set.
+    IXAudio2SourceVoice* engineVoice{};
+    uint64_t fadeFrom{};
+    float pitchSet = -1.f, volumeSet = -1.f;
 };
 
 void fail(uint32_t s, uint32_t code) {
@@ -57,6 +62,7 @@ void playOne(Player& p, Id id) {
             ++p.droppedHere;
             return;
         }
+        v->SetVolume(id == vanDoorSlam ? slamGain : 1.f); // 0.0.73: the van's recording is quiet (kept as it is)
         v->Start(0);
         played.fetch_add(1, std::memory_order_relaxed);
         return;
@@ -114,6 +120,86 @@ void loopOne(Player& p, Id id, bool on) {
     played.fetch_add(1, std::memory_order_relaxed);
 }
 
+// Version 0.0.73 PUNISHER VAN ENGINE: on, the start-up then the loop queued on one voice (they join at the
+// recording's own sample A); off, faded over engineFadeMs (never blocking: served every 20 ms while it runs),
+// then stopped. Running, the throttle pitches and swells the loop - never the start-up, played as recorded.
+bool sameFormat(const Pcm& a, const Pcm& b) { return a.ok && b.ok && a.rate == b.rate && a.channels == b.channels && a.bits == b.bits; }
+void engineOne(Player& p, bool on, uint64_t now) {
+    if (!p.engineVoice)
+        return;
+    if (on) {
+        if (p.fadeFrom) { // asked again while fading: back up to full, the loop goes on
+            p.fadeFrom = 0;
+            p.volumeSet = -1.f;
+        }
+        if (p.looping[vanEngine])
+            return;
+        const Pcm &start = sound(vanStart), &run = sound(vanEngine);
+        XAUDIO2_BUFFER a{};
+        a.AudioBytes = start.bytes;
+        a.pAudioData = start.data;
+        XAUDIO2_BUFFER b{};
+        b.Flags = XAUDIO2_END_OF_STREAM;
+        b.AudioBytes = run.bytes;
+        b.pAudioData = run.data;
+        b.LoopBegin = 0;
+        b.LoopLength = 0;
+        b.LoopCount = XAUDIO2_LOOP_INFINITE;
+        p.engineVoice->Stop(0);
+        p.engineVoice->FlushSourceBuffers();
+        p.engineVoice->SetFrequencyRatio(1.f);
+        p.engineVoice->SetVolume(engineIdleGain);
+        p.pitchSet = 1.f;
+        p.volumeSet = engineIdleGain;
+        const bool withStart = sameFormat(start, run);
+        if ((withStart && FAILED(p.engineVoice->SubmitSourceBuffer(&a))) || FAILED(p.engineVoice->SubmitSourceBuffer(&b))) {
+            p.engineVoice->FlushSourceBuffers();
+            ++p.droppedHere;
+            return;
+        }
+        p.engineVoice->Start(0);
+        p.looping[vanEngine] = p.engineVoice;
+        played.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (!p.looping[vanEngine])
+        return;
+    if (!p.fadeFrom)
+        p.fadeFrom = now;
+}
+// Each serve while the engine runs: its fade, or its throttle.
+void engineServe(Player& p, uint64_t now) {
+    if (!p.engineVoice || !p.looping[vanEngine])
+        return;
+    XAUDIO2_VOICE_STATE st{};
+    p.engineVoice->GetState(&st, XAUDIO2_VOICE_NOSAMPLESPLAYED);
+    const bool inStartUp = st.BuffersQueued >= 2; // van_start not yet done
+    const float rpm = inStartUp ? 0.f : requests().engineRpm();
+    float volume = engineGain(rpm);
+    if (p.fadeFrom) {
+        const uint64_t gone = now > p.fadeFrom ? now - p.fadeFrom : 0;
+        if (gone >= engineFadeMs) {
+            p.engineVoice->SetVolume(0.f);
+            p.engineVoice->Stop(0);
+            p.engineVoice->FlushSourceBuffers();
+            p.looping[vanEngine] = nullptr;
+            p.fadeFrom = 0;
+            p.volumeSet = p.pitchSet = -1.f;
+            return;
+        }
+        volume *= 1.f - static_cast<float>(gone) / static_cast<float>(engineFadeMs);
+    }
+    const float pitch = inStartUp ? 1.f : enginePitch(rpm);
+    if (pitch != p.pitchSet) {
+        p.engineVoice->SetFrequencyRatio(pitch);
+        p.pitchSet = pitch;
+    }
+    if (volume != p.volumeSet) {
+        p.engineVoice->SetVolume(volume);
+        p.volumeSet = volume;
+    }
+}
+
 // The audio calls; SEH-guarded by the caller. Returns false to stop the player.
 bool setUp(Player& p, HMODULE dll) {
     const auto create = reinterpret_cast<CreateFn>(reinterpret_cast<void*>(GetProcAddress(dll, "XAudio2Create")));
@@ -154,6 +240,19 @@ bool setUp(Player& p, HMODULE dll) {
             }
         }
     }
+    { // Version 0.0.73 PUNISHER VAN ENGINE: its own voice (pitch up to engineFullPitch; a failure: no engine
+      // sound, everything else plays)
+        const Pcm& pcm = sound(vanEngine);
+        WAVEFORMATEX wf{};
+        wf.wFormatTag = WAVE_FORMAT_PCM;
+        wf.nChannels = static_cast<WORD>(pcm.channels);
+        wf.nSamplesPerSec = pcm.rate;
+        wf.wBitsPerSample = static_cast<WORD>(pcm.bits);
+        wf.nBlockAlign = static_cast<WORD>(pcm.channels * pcm.bits / 8);
+        wf.nAvgBytesPerSec = pcm.rate * wf.nBlockAlign;
+        if (FAILED(p.engine->CreateSourceVoice(&p.engineVoice, &wf, 0, engineFullPitch + .1f)))
+            p.engineVoice = nullptr;
+    }
     state.store(playing, std::memory_order_relaxed);
     return true;
 }
@@ -164,8 +263,15 @@ bool serve(Player& p) {
         p.gainSet = g;
     }
     const uint64_t now = nowMs();
+    { // Version 0.0.73 PUNISHER VAN ENGINE
+        const bool live = g > 0.f && loopLive(requests().loopAt(vanEngine), now);
+        const bool running = p.looping[vanEngine] != nullptr && !p.fadeFrom;
+        if (live != running)
+            engineOne(p, live, now);
+        engineServe(p, now);
+    }
     for (uint32_t id = 0; id < sounds; ++id)
-        if (loopable(id)) {
+        if (loopable(id) && !engineLoop(id)) {
             const bool live = g > 0.f && loopLive(requests().loopAt(static_cast<Id>(id)), now);
             if (live != (p.looping[id] != nullptr))
                 loopOne(p, static_cast<Id>(id), live);
@@ -218,7 +324,7 @@ void run() {
         return;
     }
     for (;;) {
-        WaitForSingleObject(wake, 100);
+        WaitForSingleObject(wake, p.looping[vanEngine] ? 20 : 100); // 0.0.73: the engine's throttle and fade
         if (!sehServe(p)) {
             fail(voiceFailed, 0xC0000005u);
             return;
@@ -265,6 +371,7 @@ void loop(Id id, bool on) {
     if ((was != 0) != on && wake) // started or stopped: the player acts now (refreshes need no wake)
         SetEvent(wake);
 }
+void engineRpm(float rpm) { requests().engineRpm(rpm); } // Version 0.0.73 PUNISHER VAN ENGINE (read by the player)
 void setGain(float gain) {
     gainNow.store(gain >= 0.f && gain <= 1.f ? gain : (gain > 1.f ? 1.f : 0.f), std::memory_order_relaxed);
 }

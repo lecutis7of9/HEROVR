@@ -21,11 +21,13 @@ namespace spidy::sfx {
 // CAPTAIN AMERICA: the shield's throw, ricochet, catch and clang (bash). Version 0.0.72: pistol_reload.
 enum Id : uint32_t { sonicBoom, repulsorFire, chestBeam, beamReady, batonWhoosh, batonHit, repulsorCharge,
                      pistolShot, shotgunBlast, dryClick, magDrop, magSeat, holsterTick, clawSnikt, heatVision, freezeBreath,
-                     shieldThrow, shieldRicochet, shieldCatch, shieldClang, pistolReload, thorLightning1, thorLightning2, sounds };
+                     shieldThrow, shieldRicochet, shieldCatch, shieldClang, pistolReload, thorLightning1, thorLightning2,
+                     vanStart, vanEngine, vanDoorSlam, sounds };
 inline constexpr const char* names[sounds] = {"sonic_boom", "repulsor_fire", "chest_beam",
                                               "beam_ready", "baton_whoosh", "baton_hit", "repulsor_charge",
                                               "pistol_shot", "shotgun_blast", "dry_click", "mag_drop", "mag_seat", "holster", "claw_snikt", "heat_vision", "freeze_breath",
-                                              "shield_throw", "shield_ricochet", "shield_catch", "shield_clang", "pistol_reload", "thor_lightning_1", "thor_lightning_2"};
+                                              "shield_throw", "shield_ricochet", "shield_catch", "shield_clang", "pistol_reload", "thor_lightning_1", "thor_lightning_2",
+                                              "van_start", "van_engine", "van_door_slam"};
 // Voices playing one sound at most at once (a fast run of blasts layers up to this).
 inline constexpr uint32_t voicesPerSound = 4;
 // Version 0.0.72: the Punisher's guns fire the player's own sounds (tools/sfx/user_guns.py): the sawed-off
@@ -36,6 +38,7 @@ inline constexpr uint32_t mostVoices = 28;
 inline constexpr uint32_t voicesFor(uint32_t id) {
     return id == pistolShot ? 28u : id == shotgunBlast ? 12u : id == pistolReload ? 12u
          : id == thorLightning1 || id == thorLightning2 ? 24u // THOR: a strike each stormEvery (.35 s) over 6.7 s
+         : id == vanStart || id == vanEngine ? 1u // 0.0.73: played on the engine's own voice (sfx_win.cpp)
                                                         : voicesPerSound;
 }
 
@@ -48,7 +51,24 @@ inline constexpr uint64_t loopHoldMs = 250;
 inline constexpr bool loopLive(uint64_t refreshedMs, uint64_t nowMs) {
     return refreshedMs != 0 && nowMs >= refreshedMs && nowMs - refreshedMs <= loopHoldMs;
 }
-inline constexpr bool loopable(uint32_t id) { return id == heatVision || id == freezeBreath; }
+inline constexpr bool loopable(uint32_t id) { return id == heatVision || id == freezeBreath || id == vanEngine; }
+// Version 0.0.73 PUNISHER VAN ENGINE (the player's own recording, owner t996u; tools/sfx/van_engine_0073.py,
+// its split points measured on the waveform): loop(vanEngine, true) while he sits in the van. Its voice plays
+// van_start ONCE (the door slam and the start-up, the recording's first 3.25 s) and then, queued on the same
+// voice so the two join at the recording's own sample, van_engine (the running engine, 11.52 s, a seamless
+// crossfaded loop) on repeat until loop(vanEngine, false) - or no refresh for loopHoldMs - fades it out over
+// engineFadeMs (never a click). engineRpm(0..1) while it runs pitches and swells the loop with the throttle
+// (the start-up plays as recorded). The recording is quiet (its peak -20 dBFS, kept as it is): the voice's
+// own gain makes up for it, never the samples. Getting out (owner t997u): the engine fades, THEN van_door_slam
+// (the same recording's slam alone) plays once - game_xr asks for it engineFadeMs after the stop.
+inline constexpr bool engineLoop(uint32_t id) { return id == vanEngine; }
+inline constexpr uint32_t engineFadeMs = 600;
+inline constexpr float engineIdleGain = 6.f, engineFullGain = 8.f;   // the voice's volume, idle and flat out
+inline constexpr float engineFullPitch = 1.6f;                      // the loop's frequency ratio flat out
+inline constexpr float slamGain = 6.f;                              // vanDoorSlam's voice volume (as quiet)
+inline float engineClamp(float rpm) { return rpm >= 0.f && rpm <= 1.f ? rpm : (rpm > 1.f ? 1.f : 0.f); } // NaN: idle
+inline float enginePitch(float rpm) { return 1.f + (engineFullPitch - 1.f) * engineClamp(rpm); }
+inline float engineGain(float rpm) { return engineIdleGain + (engineFullGain - engineIdleGain) * engineClamp(rpm); }
 
 // A WAV's PCM (a view into the embedded bytes).
 struct Pcm {
@@ -88,6 +108,9 @@ public:
         return loopAt_[id].exchange(on ? (nowMs ? nowMs : 1) : 0, std::memory_order_relaxed);
     }
     uint64_t loopAt(Id id) const { return id < sounds ? loopAt_[id].load(std::memory_order_relaxed) : 0; }
+    // Version 0.0.73 PUNISHER VAN ENGINE: the throttle's 0..1 (NaN or out of range: clamped, idle for NaN).
+    void engineRpm(float rpm) { rpm_.store(engineClamp(rpm), std::memory_order_relaxed); }
+    float engineRpm() const { return rpm_.load(std::memory_order_relaxed); }
     bool any() const {
         for (const auto& p : pending_)
             if (p.load(std::memory_order_relaxed))
@@ -98,6 +121,7 @@ public:
 private:
     std::array<std::atomic<uint32_t>, sounds> pending_{};
     std::array<std::atomic<uint64_t>, sounds> loopAt_{};
+    std::atomic<float> rpm_{0.f};
 };
 
 // The player's state, for the log and STATUS.
@@ -117,6 +141,7 @@ struct Stats {
 bool start();
 void play(Id id);           // never blocks
 void loop(Id id, bool on);  // never blocks (SOUND LOOPS; only loopable ids)
+void engineRpm(float rpm);  // never blocks (0.0.73 PUNISHER VAN ENGINE: the throttle, 0..1)
 uint64_t nowMs();           // the loops' clock (milliseconds, monotonic)
 void setGain(float gain);   // 0..1 (SFX VOLUME)
 Stats stats();

@@ -1,0 +1,31 @@
+{
+ "rate": 24000,
+ "channels": 2,
+ "samples": 1348416,
+ "seconds": 56.184,
+ "opening_floor_db": -70.7,
+ "slam_s": 0.31,
+ "slam_clip_samples": [
+  6956,
+  13188
+ ],
+ "slam_clip_s": [
+  0.28983,
+  0.5495
+ ],
+ "slam_gap_db": -50.3,
+ "startup_settled_s": 3.25,
+ "steady_db": -44.93,
+ "steady_centroid_hz": 2243.0,
+ "loop_start_sample": 77998,
+ "loop_start_s": 3.24992,
+ "loop_samples": 276448,
+ "loop_s": 11.51867,
+ "crossfade_samples": 4800,
+ "crossfade": "split 120 Hz: low linear, rest equal-power",
+ "join_correlation": 0.8797,
+ "loop_level_range_db": [
+  -46.1,
+  -42.9
+ ]
+}

@@ -31,6 +31,9 @@ SPIDY_SFX(shield_clang)
 SPIDY_SFX(thor_lightning_1) // Version 0.0.72: THOR's lightning, the player's own
 SPIDY_SFX(thor_lightning_2)
 SPIDY_SFX(pistol_reload) // Version 0.0.72: the player's own (tools/sfx/user_guns.py)
+SPIDY_SFX(van_start)  // Version 0.0.73: the PUNISHER VAN, the player's own (tools/sfx/van_engine_0073.py)
+SPIDY_SFX(van_engine)
+SPIDY_SFX(van_door_slam)
 #undef SPIDY_SFX
 } // namespace spidy::sfx_data
 
@@ -98,7 +101,10 @@ const Pcm& sound(Id id) {
         parseWav(sfx_data::shield_clang, sfx_data::shield_clangSize),
         parseWav(sfx_data::pistol_reload, sfx_data::pistol_reloadSize),
         parseWav(sfx_data::thor_lightning_1, sfx_data::thor_lightning_1Size),
-        parseWav(sfx_data::thor_lightning_2, sfx_data::thor_lightning_2Size)};
+        parseWav(sfx_data::thor_lightning_2, sfx_data::thor_lightning_2Size),
+        parseWav(sfx_data::van_start, sfx_data::van_startSize),   // 0.0.73: the player's van (van_engine_0073.py)
+        parseWav(sfx_data::van_engine, sfx_data::van_engineSize),
+        parseWav(sfx_data::van_door_slam, sfx_data::van_door_slamSize)};
     static const Pcm none{};
     return id < sounds ? table[id] : none;
 }

@@ -896,11 +896,23 @@ void visit(const native_rays::QueryContext& world) {
         capeData.anchor = capeGrapple.anchor();
         ReleaseSRWLockExclusive(&output);
     }
+    // Version 0.0.73 PUNISHER VAN (van072::Driver, Command v7): the body rides in the van - ahead of the
+    // flight and the cape (he drives; game_xr asks neither meanwhile); never while it yields to the game.
+    // Level from the van; the street holds the body down (grounded), else it falls as the game's would.
+    const bool carried = live && c.carry == 1 && !yielding && !gameRun && collidable;
+    if (carried) {
+        Vec3 v = limited(Vec3{c.carryVelocity.x, 0, c.carryVelocity.z}, carryMost);
+        v.y = body.grounded ? -1.5f : std::max(-30.f, body.velocity.y - 9.81f * motion.dt);
+        requested = limited(v, cap);
+        flown.drive = false;
+        caped = false;
+        solver.releaseAll();
+    }
     // Nor does the swing take the body the game runs up its wall (gameRun).
-    const bool drive = !grasped && !handing && !gameRun && !yielding &&
+    const bool drive = carried || (!grasped && !handing && !gameRun && !yielding &&
                        (striking || flown.drive || caped ||
                         (collidable && !body.grounded && !transition.waiting &&
-                         (attached || owned || transition.resumed || wall.on)));
+                         (attached || owned || transition.resumed || wall.on))));
     if (drive) {
         native_movement::Command request;
         request.enabled = 1;
@@ -922,7 +934,8 @@ void visit(const native_rays::QueryContext& world) {
         // speed cap and takeoff launch applied to it as to the request; a
         // strike's own in real time, at rest once it has arrived.
         inFlight.issued(request.serial, requested,
-                        striking ? limited(flightVelocity, config.maxSpeed)
+                        carried ? requested
+                        : striking ? limited(flightVelocity, config.maxSpeed)
                         : flown.drive || caped ? requested
                                  : limited(predicted.velocity + requested - average, config.maxSpeed));
         owned = true;
@@ -1234,13 +1247,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySwingSubmit(void* input) {
     uint32_t header[3]{};
     if (!copy(header, input, sizeof(header)) ||
         (header[2] != commandBytesV2 && header[2] != commandBytesV3 && header[2] != commandBytesV4 &&
-         header[2] != commandBytesV5 && header[2] != sizeof(c)) ||
+         header[2] != commandBytesV5 && header[2] != commandBytesV6 && header[2] != sizeof(c)) ||
         !copy(&c, input, header[2]))
         return 2001;
-    if (header[2] < sizeof(c)) { // an older command: no lunge, no enemies (V5's padding is not one)
+    if (header[2] < commandBytesV6) { // an older command: no lunge, no enemies (V5's padding is not one)
         c.lungeMode = 0;
         c.enemyCount = 0;
         c.reserved6 = 0;
+    }
+    if (header[2] < sizeof(c)) { // Version 0.0.73: before 7, no van carry
+        c.carry = 0;
+        c.carryVelocity = {};
     }
     if (!valid(c))
         return 2001;

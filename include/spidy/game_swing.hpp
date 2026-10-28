@@ -127,7 +127,7 @@ struct LungeEnemy {
 };
 constexpr uint32_t lungeEnemies = 8;
 struct Command {
-    uint32_t magic = 0x5357434d, version = 6, bytes = sizeof(Command), focused{};
+    uint32_t magic = 0x5357434d, version = 7, bytes = sizeof(Command), focused{};
     uint64_t serial{};
     uint32_t leaseMs = 100, jump{};
     Hand hands[2];
@@ -165,8 +165,16 @@ struct Command {
     uint32_t lungeMode{};
     uint32_t enemyCount{}, reserved6{};
     LungeEnemy enemies[lungeEnemies]{};
+    // Version 7 (0.0.73 PUNISHER VAN, van072::Driver): 1 - the body rides in the van: the bridge drives it at
+    // carryVelocity (world, level; the bridge adds the street's hold or the fall), ahead of the flight and the
+    // cape, never while it yields the hero to the game. Version 6 (commandBytesV6) ends before it: no carry.
+    uint32_t carry{};
+    Vec3 carryVelocity{};
+    uint32_t reserved7[2]{};
 };
-constexpr uint32_t commandBytesV2 = 168, commandBytesV3 = 184, commandBytesV4 = 200, commandBytesV5 = 240;
+constexpr uint32_t commandBytesV2 = 168, commandBytesV3 = 184, commandBytesV4 = 200, commandBytesV5 = 240,
+                   commandBytesV6 = 440;
+constexpr float carryMost = 20.f; // m/s: a carry faster is no command
 // attached: 0 none, else bits: 1 a web; 2 both hands hold it (Swing::shared:
 // the other hand's web is the same one); 4 this hand took hold of it and did
 // not shoot it (Web::taken; it stays when the other hand lets go).
@@ -206,7 +214,8 @@ struct Data {
     float wallDistance{};
     uint32_t walls{}, wallJumps{}, mount{};
 };
-static_assert(sizeof(Config) == 64 && sizeof(Hand) == 52 && sizeof(Command) == 440 && sizeof(LungeEnemy) == 24 &&
+static_assert(sizeof(Config) == 64 && sizeof(Hand) == 52 && sizeof(Command) == 464 && sizeof(LungeEnemy) == 24 &&
+              offsetof(Command, carry) == commandBytesV6 &&
               offsetof(Command, tilt) == commandBytesV2 && offsetof(Command, leap) == commandBytesV3 &&
               offsetof(Command, wallPositions) == commandBytesV4 && offsetof(Command, wallRotate) == 232 &&
               offsetof(Command, lungeMode) == 236 && offsetof(Command, enemies) == 248);
@@ -394,7 +403,8 @@ inline bool valid(const Command& c) {
     if (c.magic != 0x5357434d ||
         !((c.version == 2 && c.bytes == commandBytesV2) || (c.version == 3 && c.bytes == commandBytesV3) ||
           (c.version == 4 && c.bytes == commandBytesV4) || (c.version == 5 && c.bytes == commandBytesV5) ||
-          (c.version == 6 && c.bytes == sizeof(c))) ||
+          (c.version == 6 && c.bytes == commandBytesV6) || (c.version == 7 && c.bytes == sizeof(c))) ||
+        c.carry > 1 || !finite(c.carryVelocity) || length(c.carryVelocity) > carryMost ||
         !std::isfinite(c.leap) || c.leap < 0 || c.leap > 1 || !finite(c.look) || length(c.look) > 1.01f ||
         !c.serial || c.focused > 1 || c.jump > 1 || c.leaseMs > 250 || (c.focused && !c.leaseMs) ||
         !finite(c.move) || length(c.move) > 1.001f || !std::isfinite(c.trackingYaw) || c.asks > asksMost ||

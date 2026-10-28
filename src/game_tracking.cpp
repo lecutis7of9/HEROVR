@@ -289,6 +289,7 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         !lens(f.eyes[1].fov))
         out.inactive |= noEyes;
     if (out.inactive) {
+        vehicleTurn_ = 0.f; // Version 0.0.73: a van's turn is for a frame that plays
         wallRoll_.suspend();
         wasActive_ = false;
         // Menus and scenes find the player level, and so does a break as
@@ -363,7 +364,11 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         }
     }
     // Update 38.5: while FLY ROLL has the right stick it rolls the view (below), it turns nothing.
-    const float turn = handValid(f.hands[1]) && !flyStick_ ? f.hands[1].stickX : 0;
+    const float turn = handValid(f.hands[1]) && !flyStick_ && !stickLocked_ ? f.hands[1].stickX : 0;
+    // Version 0.0.73 PUNISHER VAN: the van's turn (asked last frame, with its carry), once.
+    if (vehicleTurn_ != 0.f && gameplay)
+        rig_.turn(vehicleTurn_, f.head.position);
+    vehicleTurn_ = 0.f;
     // A stick held into play turns nothing until it is let go: out of a menu,
     // or through a stutter after a snap it already made. A smooth turn goes
     // on through a stutter.

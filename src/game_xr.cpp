@@ -2065,7 +2065,16 @@ DWORD WINAPI run(void*) {
         // Version 0.0.72 PUNISHER VAN SUMMON / ENGINE PREVIEW (van072.hpp): the X tap asks for a spot (vanWanted),
         // the ray batch probes it one world ray a frame (vanProbe, tags vanTag0+), the van steps in world space.
         static constexpr uint32_t vanTag0 = 1300, vanTags = 64;
-        van072::Van van;
+        // Version 0.0.73 DRIVING (van072::Driver, owner t995u): the van and the body carry; its ask for the next
+        // swing command and the rig (one frame on, together), the bumper ray (vanBumperTag) and the door slam
+        // after the engine's fade (vanSlamAt, the combat clock).
+        van072::Driver vanDriver;
+        van072::Van& van = vanDriver.van;
+        van072::CarryOut vanCarry{};
+        bool vanCarryAsked{}, vanCarriedNow{}, vanBumperHit{}, vanBumperAsked{};
+        static constexpr uint32_t vanBumperTag = vanTag0 + vanTags; // 1364 (answered before the balls' tags)
+        uint64_t vanBumperHits{};
+        double vanSlamAt = -1;
         van072::Probe vanProbe;
         bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
         van072::Spot vanSpot{};
@@ -4240,6 +4249,9 @@ DWORD WINAPI run(void*) {
                         }
                         rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
                     }
+                    // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
+                    rig.vehicleTurn(vanCarry.turn, vanCarry.lockStick);
+                    vanCarry.turn = 0;
                     motion = rig.update(controller, feet, {camera[8], camera[9], camera[10]}, gameplay,
                                         swingState.owned ? Vec3{0, 1, 0} : heroUp,
                                         game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart), hold,
@@ -4648,6 +4660,20 @@ DWORD WINAPI run(void*) {
                                 vanProbe.start(feet, ahead);
                                 vanWanted = vanAsking = false;
                             }
+                            // Version 0.0.73 DRIVING: the bumper's ray each frame he drives (from the front bumper
+                            // along the way the van goes, as far as it goes in 0.4 s and half a metre more).
+                            vanBumperAsked = false;
+                            if (vanDriver.carried && van.state == van072::driving && std::abs(van.speed) > .3f &&
+                                aim.count < native_rays::capacity) {
+                                const van072::Tune vt{};
+                                const Vec3 way = van.speed > 0 ? van.frame.forward() : van.frame.forward() * -1.f;
+                                const Vec3 from = van.frame.at + way * (vt.length * .5f) + Vec3{0, .8f, 0};
+                                const float reach = std::clamp(std::abs(van.speed) * .4f + .5f, .5f, 8.f);
+                                if (finite(from) && finite(way)) {
+                                    aim.rays[aim.count++] = {from, reach, way, vanBumperTag};
+                                    vanBumperAsked = sighted = true;
+                                }
+                            }
                             if (vanProbe.active && vanAsking && ++vanAskFrames > 12)
                                 vanAsking = false;
                             if (vanProbe.active && !vanAsking && !sighted && aim.count < native_rays::capacity) {
@@ -4699,6 +4725,14 @@ DWORD WINAPI run(void*) {
                                 if (newBatch && hit.ray.tag < 2)
                                     handWallsWorld[hit.ray.tag] = bolt_walls::fromHit(hit.ray.origin, hit.ray.direction, hit.ray.distance,
                                                                                       native_rays::fixedSurface(hit), hit.fraction);
+                                // Version 0.0.73 DRIVING: the bumper's answer (anything hit: a wall, a car, a body).
+                                if (hit.ray.tag == vanBumperTag) {
+                                    if (newBatch && hit.count > 0 && std::isfinite(hit.fraction) && hit.fraction < 1.f) {
+                                        vanBumperHit = true;
+                                        ++vanBumperHits;
+                                    }
+                                    continue;
+                                }
                                 // Version 0.0.72 PUNISHER VAN SUMMON: the probe's answer (anything hit, a body too).
                                 if (hit.ray.tag >= vanTag0 && hit.ray.tag < vanTag0 + vanTags) {
                                     if (newBatch && vanAsking && hit.ray.tag == vanAskTag && vanProbe.active) {
@@ -5035,6 +5069,22 @@ DWORD WINAPI run(void*) {
                                 for (auto& h : input.hands)
                                     h.trigger = h.grip = 0;
                         }
+                        // Version 0.0.73 DRIVING (Command v7): the body rides in the van - the van's seat velocity
+                        // (van072::Driver, last frame); no walk, no jump, no hand of his to the swing meanwhile.
+                        vanCarryAsked = false;
+                        if (vanCarry.carry && input.focused && finite(vanCarry.velocity) &&
+                            length(vanCarry.velocity) <= game_swing::carryMost) {
+                            input.carry = 1;
+                            input.carryVelocity = vanCarry.velocity;
+                            input.move = {};
+                            input.jump = 0;
+                            input.leap = 0;
+                            input.reserved6 = 0;
+                            input.asks &= 1u; // no fly, no cape, no grapple (the game's own ask stays)
+                            for (auto& h : input.hands)
+                                h.trigger = h.grip = 0;
+                            vanCarryAsked = true;
+                        }
                         if (const auto code = submitSwing(&input)) {
                             // 2002: the bridge switched itself off; its own
                             // error (SpidySwingSample keeps it) says why.
@@ -5049,6 +5099,7 @@ DWORD WINAPI run(void*) {
                         else if (const auto feedback = sampleSwing(&swingState))
                             swingOff(feedback, "the swing bridge's feedback could not be read");
                         else {
+                            vanCarriedNow = vanCarryAsked && swingState.status == 2; // Version 0.0.73: it drove the body
                             // Version 0.0.62 REAL ANCHORS: a web that met no world geometry within reach (the
                             // swing's own world ray, Swing::shot) misses; with webs in open air off, the hand
                             // that just shot gets a short buzz so the miss is felt. Air webs on: as before.
@@ -6134,6 +6185,9 @@ DWORD WINAPI run(void*) {
                         if (vanDriving && mapping == game_pad::Mapping::gameplay) { // Version 0.0.72: the van's pedals
                             pad.leftTrigger = {};
                             pad.rightTrigger = {};
+                            // Version 0.0.73 DRIVING: no walk, no jump, no attack from the seat (pause stays).
+                            pad.thumbLX = pad.thumbLY = pad.thumbRX = pad.thumbRY = 0;
+                            pad.buttons = static_cast<uint16_t>(pad.buttons & (game_pad::start | game_pad::back));
                         }
                         if (mapping == game_pad::Mapping::gameplay) { // Update 38.5: FLY's R3 / L3+R3
                             if (flyNow.flying && (flyChord.claims() || frame.hands[1].stickClick))
@@ -6636,10 +6690,12 @@ DWORD WINAPI run(void*) {
                                             }
                                         }
                                     }
-                                    // Version 0.0.72 PUNISHER VAN ENGINE PREVIEW (EXPERIMENTAL, van072.hpp stepPreview): in world
-                                    // space (the rays'); the probe's spot, the door handle, the wheel latched to the hands, the
-                                    // pedals. Nothing in the world moves (the body carry is NOT WIRED). While he drives the
-                                    // triggers are the pedals only: no shot, no hook, nothing to the game (the pad, above).
+                                    // Version 0.0.73 PUNISHER VAN DRIVING (EXPERIMENTAL, van072::Driver; owner t995u): the
+                                    // probe's spot, the door handle, the wheel latched to the hands, the pedals - and now the van
+                                    // and he move: the cab rides in his tracking space, the van's motion carries his body (the
+                                    // swing command's carry, next frame) and turns his room (the rig). While he drives the
+                                    // triggers are the pedals only: no shot, no hook, nothing to the game (the pad, above). A
+                                    // bridge that does not carry parks the van where it is (the 0.0.72 preview's van).
                                     {
                                         van072::In vin;
                                         vin.dt = vanAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - vanAt, 0.0, .1));
@@ -6663,25 +6719,68 @@ DWORD WINAPI run(void*) {
                                             vin.summonSpot = true;
                                             vin.spot = vanSpot;
                                         }
-                                        const auto flat = [&](float, float, float y) { return y; };   // the preview's street
-                                        const auto open = [](Vec3, Vec3, float) { return true; };   // (the probe checked it)
-                                        const auto clearAhead = [](Vec3, Vec3, float) { return true; };
-                                        const van072::Out vout = van.stepPreview(vin, flat, open, clearAhead);
+                                        van072::CarryIn ci;
+                                        const bool swingNow = swingStarted && swingState.status && swingState.qpc &&
+                                                              static_cast<int64_t>(swingState.qpc) > now.QuadPart - frequency.QuadPart / 10;
+                                        ci.ready = swingNow && motion.active && !flatScreen && cf.play;
+                                        ci.carried = vanCarriedNow;
+                                        ci.bodyKnown = swingNow && finite(swingState.position) && finite(swingState.velocity);
+                                        ci.body = swingState.position;
+                                        ci.bodyVelocity = swingState.velocity;
+                                        ci.bumper = vanBumperHit;
+                                        vanBumperHit = false;
+                                        ci.roomToWorld = vanW;
+                                        const auto flat = [&](float, float, float y) { return y; }; // the body keeps the street
+                                        const auto open = [](Vec3, Vec3, float) { return true; };  // (the probe checked it)
+                                        const auto clearAhead = [](Vec3, Vec3, float) { return true; }; // the bumper ray (ci)
+                                        const bool wasDriving = van.state == van072::driving;
+                                        van072::Out vout{};
+                                        try {
+                                            vout = vanDriver.step(vin, ci, vanCarry, flat, open, clearAhead);
+                                        } catch (...) { // never: it allocates nothing; parked, the carry off
+                                            van.park();
+                                            vanDriver.carried = false;
+                                            vanCarry = {};
+                                        }
                                         if (vout.summoned) {
                                             message(1, 0, "PUNISHER VAN (EXPERIMENTAL): here - grip the driver door handle to get in");
-                                            game_prompts::note("Version 0.0.72 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
+                                            game_prompts::note("Version 0.0.73 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
                                         } else if (vout.noSpot) {
                                             message(2, 0, "PUNISHER VAN (EXPERIMENTAL): no safe spot here, no van");
-                                            game_prompts::note("Version 0.0.72 PUNISHER VAN: no safe spot (the probe found none)");
+                                            game_prompts::note("Version 0.0.73 PUNISHER VAN: no safe spot (the probe found none)");
                                         }
                                         if (vout.entered)
-                                            message(1, 0, "PUNISHER VAN: in - both hands on the wheel, RT drive, LT reverse, both brake (PREVIEW)");
-                                        if (vout.exited)
+                                            message(1, 0, vanDriver.carried
+                                                              ? "PUNISHER VAN: in - hands on the wheel, RT drive, LT reverse, both brake; the inside handle gets you out"
+                                                              : "PUNISHER VAN: in - parked (the drive is not ready here); the inside handle gets you out");
+                                        if (vout.exited) {
                                             message(1, 0, "PUNISHER VAN: out");
+                                            vanSlamAt = combatClock + (sfx::engineFadeMs + 40) / 1000.0; // after the fade (loop off: it starts at once)
+                                        }
+                                        if (vanCarry.fellBack) {
+                                            message(2, 0, "PUNISHER VAN: the drive could not carry you here - parked (get out by the inside handle)");
+                                            char line[160];
+                                            sprintf_s(line, "Version 0.0.73 PUNISHER VAN: carry given up, parked (fallbacks %llu, bridge status %u)",
+                                                      static_cast<unsigned long long>(vanDriver.fallbacks), swingState.status);
+                                            game_prompts::note(line);
+                                        }
+                                        if (vout.bumped)
+                                            game_prompts::note("Version 0.0.73 PUNISHER VAN: bumped into something - stopped");
                                         for (unsigned i = 0; i < 2; ++i)
                                             if (vout.haptic[i] > 0)
                                                 runtime.haptic(static_cast<int>(i), vout.haptic[i]);
                                         vanDriving = van.state == van072::driving;
+                                        // Version 0.0.73 VAN SOUND (owner t996u/t997u): the slam and the start-up once, the
+                                        // engine on repeat while he sits in it (pitched with the throttle), faded as he gets
+                                        // out - then the door slams again.
+                                        sfx::loop(sfx::vanEngine, vanDriving);
+                                        sfx::engineRpm(vanDriving ? vanCarry.rpm : 0.f);
+                                        if (vanDriving && !wasDriving)
+                                            vanSlamAt = -1;
+                                        if (vanSlamAt >= 0 && combatClock >= vanSlamAt) {
+                                            vanSlamAt = -1;
+                                            sfx::play(sfx::vanDoorSlam);
+                                        }
                                     }
                                     // Version 0.0.7 HERO PROFILES: BATMAN's batarangs, WOLVERINE's claws, SUPERMAN's
                                     // heat vision / cold breath, PUNISHER's guns (hero007_play.hpp). Every blow on
@@ -8115,7 +8214,8 @@ DWORD WINAPI run(void*) {
                                     ++invincibleRefills;
                                     hitPoints = to;
                                 }
-                            } else if (record && hero072KeepTopped) {
+                            } else if (record && (hero072KeepTopped || vanDriving)) {
+                                // Version 0.0.73: in the PUNISHER VAN he is bulletproof (the same refill).
                                 // Version 0.0.72 NATURAL INVINCIBLE (THOR, SUPERMAN): INVINCIBLE's refill, through
                                 // the same CONFIRMED record and cap (never above it, never a revive).
                                 read(h + extras385::invincible::reduceAt, &reduce, sizeof(reduce));

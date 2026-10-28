@@ -5799,6 +5799,26 @@ int main() {
         f.predictedDisplayTime=3;const auto held=rig.update(f,{},{0,0,-1},true);
         for(int i=0;i<16;++i)near(held.head[i],b.head[i]);
     });
+    test("Version 0.0.73 PUNISHER VAN: the van's turn turns the room about the head once, the stick locked", [] {
+        GameTrackingRig rig;auto f=trackedFrame();f.head.position.x=.4f;
+        auto a=rig.update(f,{},{0,0,-1},true);
+        f.predictedDisplayTime=2;f.hands[1].stickX=1; // the stick pushed: locked, it turns nothing
+        rig.vehicleTurn(0,true);
+        auto b=rig.update(f,{},{0,0,-1},true);
+        for(int i=0;i<16;++i)near(a.head[i],b.head[i]);
+        rig.vehicleTurn(.5235988f,true); // the van turned 30 degrees left this frame
+        f.predictedDisplayTime=3;auto c=rig.update(f,{},{0,0,-1},true);
+        for(int i=12;i<15;++i)near(a.head[i],c.head[i]); // about the head
+        near(std::abs(c.head[8]),.5f);
+        check(c.head[8]*b.head[8]<=0.f||std::abs(b.head[8])<1e-4f,"turned");
+        rig.vehicleTurn(0,true);
+        f.predictedDisplayTime=4;auto d=rig.update(f,{},{0,0,-1},true);
+        for(int i=0;i<16;++i)near(c.head[i],d.head[i]); // once, not every frame
+        rig.vehicleTurn(NAN,true);
+        f.predictedDisplayTime=5;auto e=rig.update(f,{},{0,0,-1},true);
+        for(int i=0;i<16;++i)near(d.head[i],e.head[i]); // a NaN turns nothing
+        check(std::isfinite(e.head[0]),"a NaN turn reached the view");
+    });
     test("game rig stands the head off a wall the game holds the player on", [] {
         // The feet on a wall whose normal is +x: placed upright from them, the
         // head is on the wall's plane.
@@ -15350,7 +15370,30 @@ int main() {
         game_swing::Command c;
         c.focused = 1;
         c.serial = 1;
-        check(c.version == 6 && c.bytes == 440 && game_swing::valid(c), "a level version 6 command was rejected");
+        check(c.version == 7 && c.bytes == 464 && game_swing::valid(c), "a level version 7 command was rejected");
+        {   // Version 0.0.73 PUNISHER VAN: version 6 (0.0.72's, no carry) still goes; a carry past its limits does not
+            game_swing::Command v6 = c;
+            v6.version = 6;
+            v6.bytes = game_swing::commandBytesV6;
+            check(game_swing::valid(v6), "a version 6 command was rejected");
+            game_swing::Command carried = c;
+            carried.carry = 1;
+            carried.carryVelocity = {12, 0, -9};
+            check(game_swing::valid(carried), "a van's carry was rejected");
+            game_swing::Command bad = carried;
+            bad.carry = 2;
+            check(!game_swing::valid(bad), "a carry mode past 1 went");
+            bad = carried;
+            bad.carryVelocity = {NAN, 0, 0};
+            check(!game_swing::valid(bad), "a NaN carry went");
+            bad = carried;
+            bad.carryVelocity = {game_swing::carryMost + 1, 0, 0};
+            check(!game_swing::valid(bad), "a carry faster than carryMost went");
+            bad = carried;
+            bad.version = 7;
+            bad.bytes = game_swing::commandBytesV6;
+            check(!game_swing::valid(bad), "a version 7 command of version 6's size went");
+        }
         {   // Update 38: version 5 (Update 37's) still goes, and a lunge or enemy past the
             // limits does not.
             game_swing::Command v5 = c;
@@ -19175,9 +19218,10 @@ int main() {
         }
         check(sizeof(LungeData) == 64 && LungeData{}.magic == 0x4c4e4753 && LungeData{}.bytes == 64,
               "SpidyLungeSample layout");
-        check(sizeof(game_swing::Command) == 440 && game_swing::Command{}.version == 6 &&
-                  game_swing::commandBytesV5 == 240 && offsetof(game_swing::Command, enemies) == 248,
-              "swing command v6 layout");
+        check(sizeof(game_swing::Command) == 464 && game_swing::Command{}.version == 7 && game_swing::commandBytesV6 == 440 &&
+                  game_swing::commandBytesV5 == 240 && offsetof(game_swing::Command, enemies) == 248 &&
+                  offsetof(game_swing::Command, carry) == 440,
+              "swing command v7 layout (0.0.73: the van's carry after v6's 440 bytes)");
         check(fightTarget(9, {}).height == 1.8f && punchTarget(9, {}).radius == .3f, "the body capsule");
     });
     // A combat frame with one enemy 5 m ahead (id 42), looked at.
@@ -22608,11 +22652,13 @@ int main() {
         const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f,
                                       2.496f, 3.504f, .12f, .4f, .25f, .22f, .4f, 1.f, 1.f, // 0.0.7's nine (Version 0.0.72: heat vision and freeze breath are 1 s seamless loops)
                                       .6f,  .7f,  .45f, 1.1f, // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang
-                                      1.752f, 4.389f, 6.699f}; // 0.0.72 pistol_reload, THOR's two lightnings
-        static_assert(sounds == 23);
+                                      1.752f, 4.389f, 6.699f, // 0.0.72 pistol_reload, THOR's two lightnings
+                                      3.25f, 11.519f, .26f}; // 0.0.73 the PUNISHER VAN: start-up, engine loop, door slam
+        static_assert(sounds == 26);
         for (uint32_t i = 0; i < sounds; ++i) {
             const Pcm& p = sound(static_cast<Id>(i));
-            const bool user = i == pistolShot || i == shotgunBlast || i == pistolReload || i == thorLightning1 || i == thorLightning2;
+            const bool van = i == vanStart || i == vanEngine || i == vanDoorSlam; // 0.0.73: the player's quiet recording
+            const bool user = van || i == pistolShot || i == shotgunBlast || i == pistolReload || i == thorLightning1 || i == thorLightning2;
             const uint32_t rate = i == thorLightning1 ? 44100u : i == shotgunBlast || i == thorLightning2 ? 48000u : user ? 24000u : 48000u;
             check(p.ok && p.rate == rate && p.channels == (user ? 2u : 1u) && p.bits == 16 && p.data && p.bytes % 2 == 0,
                   std::string(names[i]) + " is not its rate, channels and 16-bit PCM");
@@ -22623,7 +22669,12 @@ int main() {
                 peak = std::max(peak, v < 0 ? -v : v);
             }
             // the player's own sounds are full scale as given (-32768 included): kept as they are
-            check(peak > 10000 && peak <= (user ? 32768 : 32767), std::string(names[i]) + " is silent or clipped");
+            // 0.0.73: the van's recording is kept as it is (peak -20 dBFS); its voice's gain lifts it, never past full scale
+            const float lift = i == vanDoorSlam ? slamGain : i == vanEngine ? engineFullGain : engineIdleGain;
+            if (van)
+                check(peak > 800 && peak * lift > 8000.f && peak * lift < 32768.f, std::string(names[i]) + " is silent or clips at its gain");
+            else
+                check(peak > 10000 && peak <= (user ? 32768 : 32767), std::string(names[i]) + " is silent or clipped");
         }
     });
     test("Version 0.0.72: the Punisher's guns play the player's own sounds, once a shot and once a pistol reload, never dropped", [] {
@@ -23897,6 +23948,208 @@ int main() {
         in.summonPress = true;
         check(tick().summoned, "outside, X again: the van comes to him");
     });
+    test("Version 0.0.73 PUNISHER VAN DRIVING: the room carries the van and him, smooth, and every fault parks it", [] {
+        namespace v = spidy::van072;
+        auto flat = [](float, float, float) { return 0.f; };
+        auto open = [](Vec3, Vec3, float) { return true; };
+        auto clearAhead = [](Vec3, Vec3, float) { return true; };
+        struct Rig {
+            v::Driver d;
+            v::In in;
+            v::CarryIn ci;
+            v::CarryOut co;
+            Pose room{}; // the tracking space in the world
+            Vec3 headRoom{0, 1.6f, 0};
+            bool carriedBody = true;
+            uint64_t frames{};
+            float worstStep{}; // the largest change of the seat's step in the world from one frame to the next (judder)
+            Vec3 seatWas{}, stepWas{};
+            int seatKnown{};
+        };
+        auto setUp = [&](Rig& r) {
+            r.in.dt = 1.f / 90;
+            r.in.enabled = r.in.punisher = r.in.play = true;
+            r.in.tracked[0] = r.in.tracked[1] = true;
+            r.ci.ready = r.ci.bodyKnown = true;
+        };
+        auto tick = [&](Rig& r) {
+            r.in.head = compose(r.room, Pose{r.headRoom, {}}).position;
+            r.ci.roomToWorld = r.room;
+            r.ci.body = r.in.head - Vec3{0, 1.6f, 0};
+            const v::Out o = r.d.step(r.in, r.ci, r.co, flat, open, clearAhead);
+            // the bridge and the rig, one frame on: the body moves, the room turns about the head
+            const float dt = r.in.dt;
+            if (r.co.carry && r.carriedBody) {
+                r.room.position = r.room.position + r.co.velocity * dt;
+                r.ci.bodyVelocity = r.co.velocity;
+            } else
+                r.ci.bodyVelocity = {};
+            r.ci.carried = r.co.carry && r.carriedBody;
+            if (r.co.turn != 0.f) {
+                const Vec3 head = compose(r.room, Pose{r.headRoom, {}}).position;
+                const Quat q = Quat::yaw(r.co.turn);
+                r.room.orientation = q * r.room.orientation;
+                r.room.position = head + q.rotate(r.room.position - head);
+            }
+            if (r.d.carried && r.d.van.state == v::driving) { // the seat in the world: its step changes smoothly
+                const Vec3 seatNow = r.d.van.frame.world(v::seatEye);
+                const Vec3 stepNow = seatNow - r.seatWas;
+                if (r.seatKnown >= 2)
+                    r.worstStep = std::max(r.worstStep, length(stepNow - r.stepWas));
+                r.stepWas = stepNow;
+                r.seatWas = seatNow;
+                ++r.seatKnown;
+            } else
+                r.seatKnown = 0;
+            ++r.frames;
+            return o;
+        };
+        auto enter = [&](Rig& r) {
+            r.in.summonPress = true;
+            tick(r);
+            r.in.summonPress = false;
+            r.in.hands[0] = r.d.van.frame.world(v::doorHandleOut);
+            r.in.grip[0] = 1;
+            const v::Out e = tick(r);
+            r.in.grip[0] = 0;
+            tick(r);
+            return e.entered;
+        };
+        auto latch = [&](Rig& r) { // both hands on the rim at 9 and 3, gripped (world, the van's own frame)
+            const Vec3 axis = v::wheelAxis(), up = normalized(Vec3{0, 1, 0} - axis * axis.y);
+            auto rim = [&](float a) { return r.d.van.frame.world(v::wheelHub + (up * std::cos(a) + Vec3{1, 0, 0} * std::sin(a)) * .19f); };
+            r.in.hands[0] = rim(-1.5708f);
+            r.in.hands[1] = rim(1.5708f);
+            r.in.grip[0] = r.in.grip[1] = 1;
+        };
+        {   // driving: the van and the player move through the world, steered by the wheel
+            Rig r;
+            setUp(r);
+            check(enter(r) && r.d.carried && r.d.van.state == v::driving, "in the seat: the carry starts");
+            const Vec3 at0 = r.d.van.frame.at;
+            r.in.trigger[1] = 1;
+            float fastest = 0;
+            bool locked = true;
+            for (int f = 0; f < 180; ++f) {
+                latch(r);
+                tick(r);
+                fastest = std::max(fastest, length(r.co.velocity));
+                locked = locked && r.co.carry && r.co.lockStick && !r.co.fellBack;
+            }
+            check(length(r.d.van.frame.at - at0) > 8.f && r.d.carried, "RT: the van drives him through the world");
+            check(locked && fastest > 9.f && fastest <= v::CarryTune{}.bodyMost, "the body carried at the van's speed, the stick locked");
+            check(r.worstStep < 2e-3f, "the van moves him smoothly (no step jumps a frame)");
+            check(r.co.rpm > .5f, "the engine's sound follows the throttle");
+            // the wheel turned right a quarter: the van and the room turn right together
+            const float yaw0 = r.d.van.frame.yaw;
+            for (int f = 1; f <= 90; ++f) {
+                const Vec3 axis = v::wheelAxis(), up = normalized(Vec3{0, 1, 0} - axis * axis.y);
+                const float a = 1.5708f * f / 90;
+                auto rim = [&](float b) { return r.d.van.frame.world(v::wheelHub + (up * std::cos(b) + Vec3{1, 0, 0} * std::sin(b)) * .19f); };
+                r.in.hands[0] = rim(-1.5708f + a);
+                r.in.hands[1] = rim(1.5708f + a);
+                tick(r);
+            }
+            check(r.d.van.frame.yaw < yaw0 - .1f && r.worstStep < 2e-3f, "the wheel steers right, the room turning with the van");
+            // both triggers: a stop; the inside handle: out, beside the driver door
+            r.in.trigger[0] = 1;
+            for (int f = 0; f < 270; ++f) {
+                latch(r);
+                tick(r);
+            }
+            check(r.d.van.speed == 0.f, "both triggers: stopped");
+            r.in.trigger[0] = r.in.trigger[1] = 0;
+            r.in.grip[0] = r.in.grip[1] = 0; // off the wheel
+            tick(r);
+            r.in.hands[0] = r.d.van.frame.world(v::doorHandleIn);
+            r.in.grip[0] = 1;
+            const Vec3 vanAt = r.d.van.frame.at;
+            const v::Out x = tick(r);
+            r.in.grip[0] = 0;
+            check(x.exited && !r.d.carried && r.d.van.state == v::parked && length(r.d.van.frame.at - vanAt) < 1e-3f,
+                  "the inside handle: out, the van parked where it is");
+            check(r.co.alighting && r.co.carry && r.d.alights == 1, "he is walked out beside the door");
+            for (int f = 0; f < 200 && r.d.alightLeft > 0; ++f)
+                tick(r);
+            const Vec3 to = r.d.van.frame.world(v::exitStep), feet = r.ci.body;
+            check(std::hypot(to.x - feet.x, to.z - feet.z) < .3f && !r.co.carry, "on the street beside the driver door, the carry done");
+            check(r.co.rpm < r.d.rpm + 1e-6f, "the engine winds down");
+        }
+        {   // a body held by something (a wall, a car): the van stops
+            Rig r;
+            setUp(r);
+            enter(r);
+            r.carriedBody = false; // the bridge says it drove it, but the body does not move
+            r.in.trigger[1] = 1;
+            for (int f = 0; f < 120; ++f) {
+                latch(r);
+                r.ci.carried = true;
+                tick(r);
+                r.ci.carried = true;
+            }
+            check(r.d.bumps >= 1 && r.d.van.speed < 6.f, "the body held: the van stops");
+        }
+        {   // the bridge refuses the carry: the van parks where it is - the preview, never a crash
+            Rig r;
+            setUp(r);
+            enter(r);
+            r.in.trigger[1] = 1;
+            for (int f = 0; f < 60; ++f) {
+                latch(r);
+                tick(r);
+                r.ci.carried = false;
+            }
+            check(r.d.fallbacks == 1 && !r.d.carried && r.d.van.state == v::parked, "a refused carry: parked, one fall-back");
+            check(!r.co.carry, "no carry after the fall-back");
+        }
+        {   // a NaN tracking pose or a bridge gone: parked
+            Rig r;
+            setUp(r);
+            enter(r);
+            r.in.trigger[1] = 1;
+            latch(r);
+            tick(r);
+            r.room.position.x = NAN;
+            tick(r);
+            check(r.d.fallbacks == 1 && r.d.van.state == v::parked && !r.co.carry, "a NaN pose: parked");
+            Rig b;
+            setUp(b);
+            enter(b);
+            b.ci.ready = false;
+            tick(b);
+            check(b.d.fallbacks == 1 && b.d.van.state == v::parked, "the bridge gone: parked");
+        }
+        {   // the bumper ray's hit: the van stops at the wall
+            Rig r;
+            setUp(r);
+            enter(r);
+            r.in.trigger[1] = 1;
+            for (int f = 0; f < 90; ++f) {
+                latch(r);
+                tick(r);
+            }
+            r.ci.bumper = true;
+            latch(r);
+            tick(r);
+            check(r.d.van.speed == 0.f && length(r.co.velocity) < 1e-4f, "the bumper's hit: stopped, never through it");
+        }
+        {   // a turn across the yaw's wrap is a small turn (never a fall-back)
+            Rig r;
+            setUp(r);
+            r.room.orientation = Quat::yaw(3.1f);
+            enter(r);
+            r.in.trigger[1] = 1;
+            for (int f = 0; f < 400; ++f) {
+                const Vec3 axis = v::wheelAxis(), up = normalized(Vec3{0, 1, 0} - axis * axis.y);
+                auto rim = [&](float b) { return r.d.van.frame.world(v::wheelHub + (up * std::cos(b) + Vec3{1, 0, 0} * std::sin(b)) * .19f); };
+                r.in.hands[0] = rim(-1.5708f - .8f);
+                r.in.hands[1] = rim(1.5708f - .8f);
+                r.in.grip[0] = r.in.grip[1] = 1;
+                tick(r);
+            }
+            check(r.d.fallbacks == 0 && r.d.carried && std::abs(r.co.turn) < .1f, "driving round the wrap: still carried");
+        }
+    });
     test("Version 0.0.72 PUNISHER VAN: walls stop it, NaN parks it, other heroes / off remove it", [] {
         namespace v = spidy::van072;
         auto flat = [](float, float, float) { return 0.f; };
@@ -24979,7 +25232,7 @@ int main() {
         check(v.empty(), "a NaN item draws nothing");
     });
     test("Version 0.0.7: the new sounds and defaults", [] {
-        check(spidy::sfx::sounds == 23, "twenty-three sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2)");
+        check(spidy::sfx::sounds == 26, "twenty-six sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2, 0.0.73 the van's 3)");
         using namespace spidy::combat38;
         for (uint32_t o = batman; o <= shieldLook; ++o) { // CAPTAIN AMERICA: through SHIELD LOOK
             const std::string help = optionInfo[o].help;

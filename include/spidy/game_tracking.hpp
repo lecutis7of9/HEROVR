@@ -272,6 +272,13 @@ class GameTrackingRig {
     void smoothTurn(float radiansPerSecond) {
         smooth_ = std::isfinite(radiansPerSecond) ? std::clamp(radiansPerSecond, 0.f, 6.2831853f) : 0.f;
     }
+    // Version 0.0.73 PUNISHER VAN (van072::Driver): the van's own turn this frame, radians (+: left), turns
+    // the tracking space about the head next update (the cab rides in it); `lockStick`: the right stick turns
+    // nothing (it would swing the van with the room). Set every frame; reset() clears both.
+    void vehicleTurn(float radians, bool lockStick) {
+        vehicleTurn_ = std::isfinite(radians) ? std::clamp(radians, -1.f, 1.f) : 0.f;
+        stickLocked_ = lockStick;
+    }
     // Update 38.5 FLY ROLL (extras385::fly::Roll): the view rolled `radians` about the head's level
     // look (+ the right side down), the tracking space tilted the way WALL ROLL tilts it; a mod-side
     // view transform, not the game's camera. `stickRolls`: the right stick rolls, so it turns nothing.
@@ -395,6 +402,8 @@ class GameTrackingRig {
     // The trigger webs, and the web button changed since the last frame of play.
     bool triggerWebs_{}, buttonsChanged_{};
     float snap_ = .5235988f, smooth_{};
+    float vehicleTurn_{}; // Version 0.0.73 PUNISHER VAN
+    bool stickLocked_{};
     // The stand-off wanted along the surface's normal, and the time on it.
     float surfaceDepth_{}, surfaceSeconds_{};
     // Standing on a wall: the turn of the level tracking space about the

@@ -215,7 +215,9 @@ class Records(unittest.TestCase):
 class SwingLayouts(unittest.TestCase):
     def test_command_v6_and_v5(self):
         self.assertIn('commandBytesV5 = 240', SWING_H)
-        self.assertIn('sizeof(Command) == 440', SWING_H)
+        # Version 0.0.73: version 7 adds the van's carry after version 6's 440 bytes
+        self.assertIn('sizeof(Command) == 464', SWING_H)
+        self.assertIn('commandBytesV6 = 440', SWING_H)
         self.assertIn('commandBytesV5', SWING)
 
     def test_data_v4_unchanged(self):

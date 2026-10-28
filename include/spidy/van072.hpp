@@ -11,8 +11,8 @@
 //  - Everything fails safe: a NaN, a lost hand or the setting off parks it; nothing here can crash.
 // Game hooks: the walk's world raycast for the ground / clearance probes is the bridge's (CONFIRMED,
 // the webs use it); carrying the player's body with the van is the bridge's velocity command
-// (CONFIRMED for webs and flight) but NOT WIRED in this build: the van's motion is computed and
-// tested (PREVIEW) and moves only the drawn van.
+// (CONFIRMED for webs and flight; CANDIDATE for a body on the street) - Version 0.0.73: WIRED (Driver,
+// below); the 0.0.72 preview (stepPreview) stays as its fall-back.
 // Version 0.0.72 THE PICK (owner pt850u "For the van do 8"): the GMC Vandura 1976 by snafuj (CC BY 4.0),
 // painted black; its source is an empty shell, so the cab (seats, dash, gauges, a door card with its handle)
 // and a separate steering wheel are BUILT (tools/models072/convert_thor_van_072.py). The numbers below are
@@ -468,6 +468,181 @@ struct Van {
         }
         o.velocity = {};
         o.seat = false;
+        return o;
+    }
+};
+
+// ---- Version 0.0.73 DRIVING: THE BODY CARRY (owner t995u "do the van first") ----
+// The van rides in the TRACKING space while he drives: the cab is fixed to his room, so it can never judder
+// against his head or hands. The van's motion moves the room instead: its seat's velocity is the player's
+// body's (the bridge's velocity command - game_swing Command v7 `carry`, CONFIRMED for webs and flight,
+// CANDIDATE for a body on the street), and its yaw rate turns the tracking space about his head
+// (GameTrackingRig::vehicleTurn), both one frame on, together. The game's own collision has the body: a
+// wall stops it, and a body far slower than the van asked (stuckFrames) or the bumper ray's hit stops the
+// van. Getting out (the inside handle, at a crawl): the van parks where it is in the WORLD and the body is
+// walked out beside the driver door (exitStep) over at most alightSeconds. Fail-safe: a bridge that does
+// not carry (refusedFrames), a bad pose or a NaN parks the van where it is (the preview's parked van), the
+// player standing - never a crash, never the flatscreen.
+inline constexpr Vec3 exitStep{-1.75f, 0.f, -.55f}; // on the street, 0.75 m out from the driver's side
+struct CarryTune {
+    float bodyMost = 18.f;        // m/s: a carry asked faster than this is a fault (topSpeed 16 + the swing)
+    float stuckRatio = .35f;      // the body under this share of the van's speed ...
+    uint32_t stuckFrames = 8;     // ... this many frames: something holds it (a wall, a car) - the van stops
+    uint32_t refusedFrames = 24;  // frames the bridge may not carry before the van parks (about 0.25 s)
+    float alightSeconds = 1.2f, alightSpeed = 2.5f, alightNear = .15f;
+    float rpmSeconds = .25f;      // the engine's sound follows the van this fast
+};
+struct CarryIn {
+    bool ready{};        // the bridge runs, its state fresh, gameplay: a carry can be asked
+    bool carried{};      // the bridge drove the body with the last carry (its Data's status)
+    bool bodyKnown{};
+    Vec3 body{}, bodyVelocity{}; // the player's body (world; the bridge's)
+    bool bumper{};       // the bumper ray hit within its reach (its answer this frame)
+    Pose roomToWorld{};  // the tracking space in the world, this frame
+};
+struct CarryOut {
+    bool carry{};       // ask the bridge to drive the body at `velocity`
+    Vec3 velocity{};    // world, level (the bridge adds the fall / the street)
+    float turn{};       // the tracking space's turn this frame, radians (+: to the left)
+    bool lockStick{};   // no stick turning (it would swing the van with the room)
+    bool fellBack{};    // this frame the carry was given up: the van parked where it is
+    bool alighting{};
+    float rpm{};        // the engine's sound, 0 idle .. 1 flat out
+};
+inline bool fine(Quat q) {
+    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    return std::isfinite(n) && std::abs(n - 1) < .01f;
+}
+inline Frame frameIn(const Pose& to, const Frame& f) { // a frame carried by `to` (its yaw only)
+    Frame w;
+    w.at = compose(to, Pose{f.at, {}}).position;
+    const Vec3 a = to.orientation.rotate(f.forward());
+    w.yaw = std::atan2(-a.x, -a.z);
+    return w;
+}
+struct Driver {
+    Van van;
+    Frame room{};              // the van in the tracking space while carried
+    bool carried{};            // driving with the body carry (else the preview: nothing moves)
+    uint32_t stuck{}, refused{}, sinceEntry{};
+    float alightLeft{}, rpm{};
+    Vec3 alightTo{};
+    uint64_t fallbacks{}, bumps{}, alights{};
+    template <class Ground, class Clear, class Ahead>
+    Out step(const In& in, const CarryIn& ci, CarryOut& co, Ground&& groundAt, Clear&& clear, Ahead&& ahead,
+             const Tune& t = {}, const CarryTune& ct = {}) {
+        co = {};
+        const float dt = fine(in.dt) ? std::clamp(in.dt, 0.f, .1f) : 0.f;
+        const bool poseOk = fine(ci.roomToWorld.position) && fine(ci.roomToWorld.orientation);
+        const auto fallBack = [&] {
+            if (carried && van.state == driving) {
+                van.park(); // where it is in the world
+                ++fallbacks;
+                co.fellBack = true;
+            }
+            carried = false;
+        };
+        if (van.state == driving && carried) {
+            if (!poseOk || !ci.ready)
+                fallBack();
+            else {
+                const Frame w = frameIn(ci.roomToWorld, room);
+                if (fine(w.at) && fine(w.yaw))
+                    van.frame = w;
+                else
+                    fallBack();
+            }
+        }
+        const auto bumperAhead = [&](Vec3 from, Vec3 dir, float d) { return !ci.bumper && ahead(from, dir, d); };
+        Out o;
+        if (carried && van.state == driving) {
+            const Frame before = van.frame;
+            const float speedWas = van.speed;
+            o = van.step(in, groundAt, clear, bumperAhead, t);
+            if (o.exited) {
+                van.frame = before; // parked where it is
+                carried = false;
+                alightTo = before.world(exitStep);
+                alightLeft = ct.alightSeconds;
+                ++alights;
+            } else if (van.state == driving) {
+                Vec3 v = dt > 0 ? (van.frame.world(seatEye) - before.world(seatEye)) * (1 / dt) : Vec3{};
+                v.y = 0;
+                float turn = van.frame.yaw - before.yaw;
+                if (fine(turn)) // the yaw's wrap at +-pi is no turn
+                    turn = std::remainder(turn, 6.2831853f);
+                van.frame = before; // the room carries it
+                // the body far slower than the van: held by something
+                const float s = std::abs(van.speed);
+                if (ci.bodyKnown && fine(ci.bodyVelocity) && s > 2.f && sinceEntry > 6) {
+                    const Vec3 dir = van.speed > 0 ? before.forward() : before.forward() * -1.f;
+                    const float along = dot(Vec3{ci.bodyVelocity.x, 0, ci.bodyVelocity.z}, dir);
+                    stuck = along < ct.stuckRatio * s ? stuck + 1 : 0;
+                } else
+                    stuck = 0;
+                if (stuck >= ct.stuckFrames) {
+                    o.bumped = std::abs(speedWas) > 3.f;
+                    o.haptic[0] = o.haptic[1] = o.bumped ? 1.f : .3f;
+                    van.speed = 0;
+                    v = {};
+                    turn = 0;
+                    stuck = 0;
+                    ++bumps;
+                }
+                refused = ci.carried || sinceEntry < 4 ? 0 : refused + 1;
+                ++sinceEntry;
+                if (!fine(v) || length(v) > ct.bodyMost || !fine(turn) || std::abs(turn) > 1.f || refused >= ct.refusedFrames)
+                    fallBack();
+                else {
+                    co.carry = true;
+                    co.velocity = v;
+                    co.turn = turn;
+                    co.lockStick = true;
+                    o.seat = false;
+                }
+            } else
+                carried = false; // parked by step() (the setting, the play gate, a NaN): no carry
+        } else {
+            const bool wasDriving = van.state == driving;
+            o = van.stepPreview(in, groundAt, clear, bumperAhead, t);
+            if (o.entered && ci.ready && poseOk) {
+                // the preview brought the drawn van round him; from here the room carries it
+                const Pose back = inverse(ci.roomToWorld);
+                const Frame r = frameIn(back, van.frame);
+                if (fine(r.at) && fine(r.yaw)) {
+                    room = r;
+                    carried = true;
+                    stuck = refused = sinceEntry = 0;
+                    alightLeft = 0;
+                }
+            }
+            (void)wasDriving;
+            if (van.state == driving && !carried)
+                co.lockStick = true; // the preview's wheel: no turning away from it
+        }
+        // Getting out: walked to the street beside the driver door.
+        if (alightLeft > 0) {
+            alightLeft -= dt;
+            Vec3 d = alightTo - ci.body;
+            d.y = 0;
+            const float n = length(d);
+            if (!ci.ready || !ci.bodyKnown || !fine(d) || n < ct.alightNear || alightLeft <= 0 || van.state == driving)
+                alightLeft = 0;
+            else {
+                co.carry = true;
+                co.velocity = d * (std::min(ct.alightSpeed, n * 4.f) / n);
+                co.alighting = co.lockStick = true;
+            }
+        }
+        // The engine's sound: the speed and the pedal.
+        const bool on = van.state == driving;
+        const float target = on ? std::clamp(.65f * std::abs(van.speed) / t.topSpeed +
+                                                 ((o.pedal == Pedal::drive || o.pedal == Pedal::reverse) ? .35f : 0.f), 0.f, 1.f)
+                                : 0.f;
+        rpm += (target - rpm) * (dt > 0 ? 1 - std::exp(-dt / ct.rpmSeconds) : 0.f);
+        if (!fine(rpm))
+            rpm = 0;
+        co.rpm = rpm;
         return o;
     }
 };

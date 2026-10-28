@@ -7016,6 +7016,9 @@ DWORD WINAPI run(void*) {
                                             vin.tracked[i] = cf.hands[i].tracked && finite(vin.hands[i]);
                                             vin.grip[i] = cf.hands[i].grip;
                                             vin.trigger[i] = vanTrigger[i];
+                                            // Version 0.0.73 test 3 WHEEL-HAND PEDALS: each controller's own stick (back + its
+                                            // trigger: reverse, only while that hand grips the wheel - van072::wheelPedal)
+                                            vin.stickY[i] = std::isfinite(frame.hands[i].stickY) ? frame.hands[i].stickY : 0.f;
                                         }
                                         if (vanSpotReady) {
                                             vanSpotReady = false;
@@ -7079,7 +7082,7 @@ DWORD WINAPI run(void*) {
                                         }
                                         if (vout.entered)
                                             message(1, 0, vanDriver.carried
-                                                              ? "PUNISHER VAN: in - hands on the wheel, RT drive, LT reverse, both brake; the inside handle gets you out"
+                                                              ? "PUNISHER VAN: in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out"
                                                               : "PUNISHER VAN: in - parked (the drive is not ready here); the inside handle gets you out");
                                         if (vout.exited) {
                                             message(1, 0, "PUNISHER VAN: out");

@@ -25142,19 +25142,38 @@ int main() {
         in.grip[0] = 1;
         check(!tick().exited && van.state == v::driving, "no exit at speed");
         in.grip[0] = 0;
-        // Both triggers: brake to a stop.
+        // Version 0.0.73 test 3 WHEEL-HAND PEDALS: hands off the wheel, RT held - the van only coasts.
+        tick();
+        const float coastFrom = van.speed;
+        o = tick();
+        check(o.pedal == v::Pedal::none && van.speed < coastFrom, "RT with no hand on the wheel: no throttle, it coasts");
+        // Both hands back on the rim (the driver rides with the van): both triggers brake to a stop.
+        auto onRim = [&] {
+            in.hands[0] = rim(0);
+            in.hands[1] = rim(3.14159f);
+        };
+        onRim();
+        in.grip[0] = in.grip[1] = 1;
         in.trigger[0] = 1;
-        for (int f = 0; f < 180; ++f)
+        for (int f = 0; f < 180; ++f) {
+            onRim();
             o = tick();
-        check(o.pedal == v::Pedal::brake && van.speed == 0.f, "both triggers brake to a stop");
+        }
+        check(van.wheel.latched[0] && van.wheel.latched[1] && o.pedal == v::Pedal::brake && van.speed == 0.f, "both triggers brake to a stop");
         // LT alone: reverse.
         in.trigger[1] = 0;
-        for (int f = 0; f < 90; ++f)
+        for (int f = 0; f < 90; ++f) {
+            onRim();
             o = tick();
+        }
         check(o.pedal == v::Pedal::reverse && van.speed < -1.f && van.speed >= -5.f, "LT reverses (slow)");
         in.trigger[0] = 0;
-        for (int f = 0; f < 400; ++f)
+        for (int f = 0; f < 400; ++f) {
+            onRim();
             tick();
+        }
+        in.grip[0] = in.grip[1] = 0;
+        tick();
         in.hands[0] = van.frame.world(v::doorHandleIn);
         in.grip[0] = 1;
         const auto x = tick();
@@ -25163,6 +25182,101 @@ int main() {
         tick();
         in.summonPress = true;
         check(tick().summoned, "outside, X again: the van comes to him");
+    });
+    test("Version 0.0.73 test 3 WHEEL-HAND PEDALS: only the hand on the wheel drives; its stick back reverses", [] {
+        namespace v = spidy::van072;
+        const float none[2]{0, 0};
+        // The rule itself (wheelPedal), for either hand.
+        {
+            const bool off[2]{false, false};
+            const float both[2]{1, 1}, back[2]{-1, -1};
+            check(v::wheelPedal(off, both, none).pedal == v::Pedal::none && v::wheelPedal(off, both, back).pedal == v::Pedal::none,
+                  "no hand on the wheel: the triggers do nothing (coast)");
+        }
+        for (int h = 0; h < 2; ++h) {
+            bool on[2]{};
+            on[h] = true;
+            float trig[2]{}, stick[2]{};
+            trig[h] = 1;
+            check(v::wheelPedal(on, trig, stick).pedal == v::Pedal::drive, h ? "right hand on the wheel: its trigger drives" : "left hand on the wheel: its trigger drives");
+            trig[h] = 0;
+            trig[1 - h] = 1;
+            check(v::wheelPedal(on, trig, stick).pedal == v::Pedal::none, h ? "the free left hand's trigger: no throttle" : "the free right hand's trigger: no throttle");
+            stick[1 - h] = -1;
+            check(v::wheelPedal(on, trig, stick).pedal == v::Pedal::none, "the free hand's trigger and stick back: nothing");
+            trig[1 - h] = 0;
+            stick[1 - h] = 0;
+            trig[h] = 1;
+            stick[h] = -1;
+            const auto r = v::wheelPedal(on, trig, stick);
+            check(r.pedal == v::Pedal::reverse && r.strength == 1.f, h ? "right: trigger + its own stick back reverses" : "left: trigger + its own stick back reverses");
+            trig[h] = .575f;
+            const auto half = v::wheelPedal(on, trig, stick);
+            check(half.pedal == v::Pedal::reverse && std::abs(half.strength - .5f) < .01f, "a half pull reverses at half strength");
+            stick[h] = -.3f;
+            check(v::wheelPedal(on, trig, stick).pedal == v::Pedal::drive, "a stick barely back: still forward");
+            trig[h] = .1f;
+            stick[h] = -1;
+            check(v::wheelPedal(on, trig, stick).pedal == v::Pedal::none, "a trigger under the press point: nothing");
+        }
+        {
+            const bool on[2]{true, true};
+            const float rt[2]{0, 1}, lt[2]{1, 0}, both[2]{1, 1}, rBack[2]{0, -1};
+            check(v::wheelPedal(on, rt, none).pedal == v::Pedal::drive && v::wheelPedal(on, lt, none).pedal == v::Pedal::reverse &&
+                      v::wheelPedal(on, both, none).pedal == v::Pedal::brake && v::wheelPedal(on, rt, rBack).pedal == v::Pedal::reverse,
+                  "both hands on: RT drives, LT reverses, both brake, RT + right stick back reverses");
+            const float nan[2]{std::nanf(""), std::nanf("")};
+            check(v::wheelPedal(on, nan, nan).pedal == v::Pedal::none, "NaN triggers and sticks: nothing");
+        }
+        // The van: the right hand alone on the rim. Its trigger drives; the left (free) hand's trigger does not.
+        auto flat = [](float, float, float) { return 0.f; };
+        auto open = [](Vec3, Vec3, float) { return true; };
+        v::Van van;
+        van.state = v::driving;
+        van.frame.at = {0, 0, 0};
+        const Vec3 axis = v::wheelAxis(), up = normalized(Vec3{0, 1, 0} - axis * axis.y);
+        auto rim = [&](float a) { return van.frame.world(v::wheelHub + (up * std::cos(a) + Vec3{1, 0, 0} * std::sin(a)) * .19f); };
+        v::In in;
+        in.dt = 1.f / 90;
+        in.enabled = in.punisher = in.play = true;
+        in.tracked[0] = in.tracked[1] = true;
+        v::Out o{};
+        v::Tune tune;
+        auto tick = [&](int n) {
+            for (int f = 0; f < n; ++f) {
+                in.hands[1] = rim(1.5708f);
+                in.hands[0] = van.frame.world(v::seatEye) + Vec3{-.3f, -.4f, -.2f}; // the free hand, by his side
+                in.feet = van.frame.world(v::seatEye) - Vec3{0, 1.6f, 0};
+                in.head = van.frame.world(v::seatEye);
+                o = van.step(in, flat, open, open, tune);
+            }
+        };
+        in.trigger[0] = 1; // a gun's trigger on the free hand, no grip on the wheel at all
+        tick(90);
+        check(o.pedal == v::Pedal::none && van.speed == 0.f, "a trigger with no hand on the wheel: the van does not move");
+        in.grip[1] = 1;
+        tick(90);
+        check(van.wheel.latched[1] && !van.wheel.latched[0] && o.pedal == v::Pedal::none && van.speed == 0.f,
+              "right hand on the wheel, the free left hand's trigger held: the van does not move");
+        in.trigger[0] = 0;
+        in.trigger[1] = 1;
+        tick(90);
+        check(o.pedal == v::Pedal::drive && van.speed > 3.f, "the wheel hand's trigger drives");
+        in.stickY[1] = -1;
+        tick(400);
+        check(o.pedal == v::Pedal::reverse && van.speed < -4.f && van.speed >= -5.f, "the wheel hand's trigger + its stick back: brakes, then reverses");
+        in.trigger[1] = .575f;
+        tick(400);
+        check(o.pedal == v::Pedal::reverse && std::abs(van.speed + 2.5f) < .1f, "a half pull: reverse at half strength (half reverseTop)");
+        in.trigger[1] = 0;
+        in.stickY[1] = 0;
+        tick(400);
+        check(o.pedal == v::Pedal::none && van.speed == 0.f, "trigger let go: it coasts to a stop");
+        tune.wheelHandPedals = false;
+        in.grip[1] = 0;
+        in.trigger[1] = 1;
+        tick(30);
+        check(o.pedal == v::Pedal::drive, "wheelHandPedals off: the 0.0.72 pedals (RT drives with no hand on the wheel)");
     });
     test("Version 0.0.73 PUNISHER VAN DRIVING: the room carries the van and him, smooth, and every fault parks it", [] {
         namespace v = spidy::van072;
@@ -25381,8 +25495,10 @@ int main() {
         in.trigger[1] = 1;
         wallZ = -20;
         bool bumped = false;
+        v::Tune pedals072; // the walls, not the pedals: the 0.0.72 pedals (no hand on the wheel) - WHEEL-HAND PEDALS has its own test
+        pedals072.wheelHandPedals = false;
         for (int f = 0; f < 900; ++f)
-            bumped |= van.step(in, flat, open, ahead).bumped;
+            bumped |= van.step(in, flat, open, ahead, pedals072).bumped;
         check(bumped && van.frame.at.z > -20.f + 2.7f - .5f && van.speed == 0.f, "a wall: stops at it, never through");
         in.hands[0] = {NAN, NAN, NAN};
         in.grip[0] = 1;
@@ -25478,7 +25594,9 @@ int main() {
         in.summonSpot = true;
         in.spot.ok = true;
         in.spot.frame = {{2.6f, 0, -6}, 0};
-        auto tick = [&] { return van.stepPreview(in, flat, open, open); };
+        v::Tune pedals072; // the preview, not the pedals: the 0.0.72 pedals - WHEEL-HAND PEDALS has its own test
+        pedals072.wheelHandPedals = false;
+        auto tick = [&] { return van.stepPreview(in, flat, open, open, pedals072); };
         check(tick().summoned && van.state == v::parked && length(van.frame.at - Vec3{2.6f, 0, -6}) < 1e-4f,
               "the probe's spot: summoned there");
         in.summonSpot = false;

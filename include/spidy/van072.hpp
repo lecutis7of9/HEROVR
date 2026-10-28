@@ -8,6 +8,10 @@
 //    This is the van's only way in or out (no wrist or menu exit).
 //  - DRIVING: a real steering wheel - each grip latches that hand to the rim and the wheel turns with
 //    the hands round its hub; RT drives forward, LT reverses, both triggers brake (the van's pedals).
+//    Version 0.0.73 test 3 (WHEEL-HAND PEDALS, on): a trigger counts only while ITS hand grips the wheel
+//    (wheelPedal() below): one hand on the wheel - its trigger drives, its trigger with ITS OWN stick
+//    pulled back reverses at the trigger's strength; the free hand's trigger never moves the van; no
+//    hand on the wheel - the triggers do nothing and the van coasts. Both hands on: the rule above.
 //  - Everything fails safe: a NaN, a lost hand or the setting off parks it; nothing here can crash.
 // Game hooks: the walk's world raycast for the ground / clearance probes is the bridge's (CONFIRMED,
 // the webs use it); carrying the player's body with the van is the bridge's velocity command
@@ -43,6 +47,9 @@ struct Tune {
     float wheelRadius = .19f;
     float exitSpeed = 1.5f;        // out only at a crawl
     float pedal = .15f;            // a trigger past this is pressed
+    // Version 0.0.73 test 3: WHEEL-HAND PEDALS (on; false: the 0.0.72 pedals - either trigger, wheel or not)
+    bool wheelHandPedals = true;
+    float stickBack = .5f;         // a stick pulled back past this (y < -stickBack) with the trigger: reverse
     float groundStep = .6f;        // the ground under the van within this of the player's feet
 };
 
@@ -303,6 +310,39 @@ inline Pedal pedal(float lt, float rt, const Tune& t = {}) {
     return l && r ? Pedal::brake : r ? Pedal::drive : l ? Pedal::reverse : Pedal::none;
 }
 
+// Version 0.0.73 test 3: WHEEL-HAND PEDALS. Only a hand latched to the wheel works a pedal.
+//  - no hand on the wheel: none (the van coasts; the triggers are the free hands').
+//  - one hand on (either - left or right is specced the same): its trigger drives forward; its trigger with
+//    ITS OWN controller's stick pulled back (y < -stickBack) reverses, at the trigger's strength. The other
+//    hand's trigger and stick are ignored (a gun or the screen there never moves the van).
+//  - both hands on: the 0.0.72 pedals (RT forward, LT reverse, both brake) - and either trigger with its own
+//    stick back reverses too.
+// Reverse while rolling forward brakes, as before. strength 0..1: the reverse's share of reverseTop and
+// reverseAccel (1 for the pedals' LT reverse, as in 0.0.72; forward stays full, as before).
+struct Drive {
+    Pedal pedal{Pedal::none};
+    float strength{};
+};
+inline Drive wheelPedal(const bool onWheel[2], const float trigger[2], const float stickY[2], const Tune& t = {}) {
+    bool press[2], back[2];
+    for (int i = 0; i < 2; ++i) {
+        press[i] = onWheel[i] && fine(trigger[i]) && trigger[i] > t.pedal;
+        back[i] = press[i] && fine(stickY[i]) && stickY[i] < -t.stickBack;
+    }
+    auto pull = [&](int i) { return std::clamp((trigger[i] - t.pedal) / (1 - t.pedal), .05f, 1.f); };
+    if (press[0] && press[1])
+        return {Pedal::brake, 1};
+    for (int i = 0; i < 2; ++i)
+        if (press[i]) {
+            if (back[i])
+                return {Pedal::reverse, pull(i)};
+            if (onWheel[0] && onWheel[1] && i == 0)
+                return {Pedal::reverse, 1}; // both hands on: LT reverses (0.0.72)
+            return {Pedal::drive, 1};
+        }
+    return {};
+}
+
 // ---- THE VAN ----
 enum State : uint32_t { none = 0, parked, driving };
 inline constexpr const char* stateNames[] = {"NONE", "PARKED", "DRIVING"};
@@ -317,6 +357,7 @@ struct In {
     Vec3 hands[2]{};      // world
     bool tracked[2]{};
     float grip[2]{}, trigger[2]{}; // trigger[0] LT, trigger[1] RT
+    float stickY[2]{};    // Version 0.0.73 test 3: each controller's own thumbstick y (+ forward, - pulled back)
 };
 struct Out {
     bool summoned{}, noSpot{}, entered{}, exited{}, bumped{};
@@ -324,6 +365,7 @@ struct Out {
     Vec3 seatAt{}, velocity{};
     float wheelAngle{}, steer{};
     Pedal pedal{Pedal::none};
+    float pedalStrength{}; // Version 0.0.73 test 3: the reverse's strength (wheelPedal)
     float haptic[2]{};
 };
 struct Van {
@@ -401,13 +443,22 @@ struct Van {
         const float a = wheel.step(local, in.grip, in.tracked, t);
         o.wheelAngle = a;
         o.steer = a / t.wheelLock * t.steerMost;
-        o.pedal = pedal(in.trigger[0], in.trigger[1], t);
+        Drive dr{pedal(in.trigger[0], in.trigger[1], t), 1};
+        if (t.wheelHandPedals)
+            dr = wheelPedal(wheel.latched, in.trigger, in.stickY, t);
+        o.pedal = dr.pedal;
+        o.pedalStrength = dr.strength;
         switch (o.pedal) {
         case Pedal::drive:
             speed = speed < 0 ? std::min(0.f, speed + t.brake * dt) : std::min(t.topSpeed, speed + t.accel * dt);
             break;
         case Pedal::reverse:
-            speed = speed > 0 ? std::max(0.f, speed - t.brake * dt) : std::max(-t.reverseTop, speed - t.reverseAccel * dt);
+            if (speed > 0)
+                speed = std::max(0.f, speed - t.brake * dt);
+            else if (speed > -t.reverseTop * dr.strength)
+                speed = std::max(-t.reverseTop * dr.strength, speed - t.reverseAccel * dr.strength * dt);
+            else
+                speed = std::min(-t.reverseTop * dr.strength, speed + t.coast * dt); // a lighter pull: ease off
             break;
         case Pedal::brake:
             speed = speed > 0 ? std::max(0.f, speed - t.brake * dt) : std::min(0.f, speed + t.brake * dt);

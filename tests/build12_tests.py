@@ -14,7 +14,7 @@ class Build12(unittest.TestCase):
     def test_game_view_lens_widened_at_both_submits(self):
         s = src('src/stereo_probe.cpp')
         i = s.index('native_eyes::Bounds viewLens(')
-        self.assertIn('recording_fov::widened(head)', s[i:i + 600])
+        self.assertRegex(s[i:i + 600], r'recording_fov::widened\(head[,)]')  # 0.0.73 test 2: + the CULL MARGIN
         self.assertIn('const auto lens = viewLens(head.lens);', s)
         self.assertIn('auto viewed = onHead(viewLens(lens), gameNear);', s)
         self.assertIn('shadowLens = aligned;', s)  # the eyes' shadows keep the eyes' own lens

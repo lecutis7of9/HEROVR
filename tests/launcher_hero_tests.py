@@ -43,6 +43,7 @@ class Sources(unittest.TestCase):
         self.assertIn('(restarts the launcher)', h)
 
     def test_opt_in_prompt_text(self):
+        # 0.0.73 test 3: the offer is no longer asked at start (DesignStartupNotices); its text stays for the preview only
         h = src('MainForm.Hero.cs')
         self.assertIn('New launcher design available. Would you like to restart now with the new design? You can safely '
                       'switch back to the original anytime if you prefer it or run into issues.', h)
@@ -243,7 +244,8 @@ class RealExe(unittest.TestCase):
         (d/'launcher-data').mkdir(parents=True)
         shutil.copy(LAUNCHER/'out/SM2VRLauncher.exe', d)
         (d/'launcher.ini').write_text('Portable=1\n')
-        (d/'launcher-data/settings.ini').write_text('LauncherDesign=%s\n' % design)
+        # opt.migrated073classic: past the 0.0.73 one-time move to classic, so the opt-in choice under test stays
+        (d/'launcher-data/settings.ini').write_text('LauncherDesign=%s\nopt.migrated073classic=1\n' % design)
         return d
 
     def settings(self, d):

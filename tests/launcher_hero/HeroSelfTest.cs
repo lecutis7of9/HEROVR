@@ -200,7 +200,8 @@ namespace Sm2VrLauncher
         {
             Directory.CreateDirectory(Settings.Folder);
             if (content == null) { if (File.Exists(Settings.FilePath)) File.Delete(Settings.FilePath); }
-            else File.WriteAllText(Settings.FilePath, content);
+            // past the 0.0.73 test 3 one-time move to classic (opt.migrated073classic), so the saved design under test stays
+            else File.WriteAllText(Settings.FilePath, content + "\nopt.migrated073classic=1\n");
             LauncherMode.ClearMarker();
             return Settings.Load();
         }
@@ -210,6 +211,8 @@ namespace Sm2VrLauncher
             var none = new string[0];
             Check(LauncherMode.Decide(Fresh(null), none, false) == Design.Classic, "no choice yet: classic (the new design is opt-in)");
             Check(LauncherMode.Decide(Fresh("LauncherDesign=hero\n"), none, false) == Design.Hero, "LauncherDesign=hero: new design");
+            Directory.CreateDirectory(Settings.Folder); File.WriteAllText(Settings.FilePath, "LauncherDesign=hero\n"); LauncherMode.ClearMarker();
+            Check(LauncherMode.Decide(Settings.Load(), none, false) == Design.Classic, "0.0.73 test 3: the new design before the one-time move opens classic");
             Check(LauncherMode.Decide(Fresh("LauncherDesign= HERO \n"), none, false) == Design.Hero, "case and spaces do not matter");
             Check(LauncherMode.Decide(Fresh("LauncherDesign=classic\n"), none, false) == Design.Classic, "LauncherDesign=classic: classic");
             foreach (var bad in new[] { "her0", "1", "hero\u0000", "\u00ff\u00fe", "h\u0131ro" })

@@ -346,6 +346,19 @@ bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mes
     return drawMesh(out, model, [&](Vec3 c) { return k.o + k.r * c.x + k.u * c.y - k.f * c.z; }, viewer);
 }
 
+bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer) {
+    Frame k{};
+    const Vec3 s = model.high - model.low;
+    if (!model.ok() || !(std::max({s.x, s.y, s.z}) < .8f) || !(s.z > .05f) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 40.f))
+        return false;
+    const float ext = it.spin > 0 && std::isfinite(it.spin) ? std::clamp(it.spin, 0.f, 1.1f) : 1.f;
+    if (ext < .02f)
+        return true; // still in the hand: nothing shows (and no built-in claws either)
+    const Vec3 base = k.o + k.f * hero007::clawKnuckle + k.u * hero007::clawRise;
+    // Out of the knuckles: the length grows with the extension (only along the claws; the shape kept when out).
+    return drawMesh(out, model, [&](Vec3 c) { return base + k.r * c.x + k.u * c.y - k.f * (c.z * ext); }, viewer);
+}
+
 // Version 0.0.72 PUNISHER VAN: a model placed by its own axes (world = at + right x + up y - forward z), any
 // size to 8 m (the van and its parts), seen to 80 m. right / up / forward are made orthonormal here (forward kept).
 bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,
@@ -961,6 +974,8 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
             drawn = appendBatonModel(out, it.at, it.at + normalized(it.forward) * .57f, *d.batonModel[it.side], viewer);
         else if ((it.look == lookShield || it.look == lookShieldSpin) && d.shieldModel)
             drawn = appendShieldModel(out, it, *d.shieldModel, viewer);
+        else if (it.look == lookClaws && it.side < 2 && d.clawModel[it.side]) // Version 0.0.73 (fix 10)
+            drawn = appendClawModel(out, it, *d.clawModel[it.side], viewer);
         if (!drawn && noStandIn(d.modelWanted, it.look)) {
             // Version 0.0.72 MODEL MISSING: no fake lookalike (the wrist names the missing model).
         } else if (!drawn) {

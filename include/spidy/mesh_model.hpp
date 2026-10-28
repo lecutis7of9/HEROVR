@@ -157,7 +157,12 @@ inline constexpr const char* suitFolders[suitSlots] = {
     "Suit_thor_1",    "Suit_thor_2",           "Suit_greenLantern_2",   "Suit_greenLantern_3", "Suit_superman_4"};
 enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slotVan,
                        slotVanInterior, slotVanWheel, slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper, slotRoster, slotSuitFirst,
-                       slots = slotSuitFirst + suitSlots };
+                       slotSuitEnd = slotSuitFirst + suitSlots,
+                       // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: Models\Claws\Left|Right (tools/claws073/extract_claws.py: the
+                       // JACKET AND JEANS Wolverine's own claws, Light.k, CC BY 4.0), the claws' base at the origin, -z along
+                       // them, +y the back of the hand. Missing: 0.0.72's built-in claws.
+                       slotClawsLeft = slotSuitEnd, slotClawsRight,
+                       slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
                                                    "Baton/Right", "Shield",           "GrappleGun",       "Hammer/BOOOOP",
@@ -168,14 +173,15 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Suits/Suit_captainAmerica_1", "Suits/Suit_captainAmerica_2", "Suits/Suit_daredevil_1",
                                                    "Suits/Suit_daredevil_3", "Suits/Suit_hulk_2", "Suits/Suit_wolverine_1", "Suits/Suit_wolverine_3",
                                                    "Suits/Suit_wolverine_4", "Suits/Suit_punisher_1", "Suits/Suit_punisher_2", "Suits/Suit_thor_1",
-                                                   "Suits/Suit_thor_2", "Suits/Suit_greenLantern_2", "Suits/Suit_greenLantern_3", "Suits/Suit_superman_4"};
+                                                   "Suits/Suit_thor_2", "Suits/Suit_greenLantern_2", "Suits/Suit_greenLantern_3", "Suits/Suit_superman_4",
+                                                   "Claws/Left", "Claws/Right"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles};
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -186,7 +192,7 @@ inline constexpr bool slotIsVehicle(uint32_t slot) { return slot == slotVan || s
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
 // Build 9: the suits never (vertex clustering would lose their skin and flatten them).
 inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false};
-inline constexpr bool slotIsSuit(uint32_t slot) { return slot >= slotSuitFirst && slot < slots; }
+inline constexpr bool slotIsSuit(uint32_t slot) { return slot >= slotSuitFirst && slot < slotSuitEnd; }
 // A suit's slot by its folder ("Suit_batman_1"), 0 when it is not one.
 inline uint32_t suitSlot(const char* folder) {
     if (!folder)
@@ -200,7 +206,7 @@ inline uint32_t suitSlot(const char* folder) {
     }
     return 0;
 }
-static_assert(slotSuitFirst == 19 && slots == 42, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slots == 44, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

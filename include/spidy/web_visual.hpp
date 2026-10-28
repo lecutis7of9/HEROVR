@@ -117,6 +117,9 @@ void appendWebSplash(std::vector<Vertex>& out, Vec3 at, Vec3 viewer, float pixel
 void appendRepulsorBolt(std::vector<Vertex>& out, Vec3 bolt, Vec3 tail, Vec3 viewer, float pixelAngle, float fade);
 void appendRepulsorFlash(std::vector<Vertex>& out, Vec3 at, Vec3 viewer, float pixelAngle, float fade, float size);
 void appendChestBeam(std::vector<Vertex>& out, Vec3 chest, Vec3 end, Vec3 viewer, float pixelAngle, float fade);
+// Version 0.0.73 (fix 16): a hand repulsor's visible beam - a thin blue-white glow bar from the palm to the
+// bolt (6 cm wide, tapering), a small glow at the palm; nothing under 10 cm or anything not finite.
+void appendRepulsorBeam(std::vector<Vertex>& out, Vec3 palm, Vec3 end, Vec3 viewer, float pixelAngle, float fade);
 // Version 0.0.6 DAREDEVIL ABILITIES: a billy club from `grip` to `tip` (dark red, a black grip wrap on
 // the grip's third, a light streak), turned to the eye, at least a pixel and a half wide.
 void appendBaton(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, Vec3 viewer, float pixelAngle);

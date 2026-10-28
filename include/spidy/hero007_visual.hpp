@@ -106,6 +106,9 @@ struct Draw {
     const mesh_model::Mesh* sawedFrame{};
     const mesh_model::Mesh* sawedBarrels{};
     const mesh_model::Mesh* batonModel[2]{};
+    // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: Models\Claws\Left|Right (the JACKET AND JEANS suit's own claws) for
+    // every Wolverine suit, by lookClaws' side (null: 0.0.72's built-in claws). Library-owned.
+    const mesh_model::Mesh* clawModel[2]{};
     // SHIELD LOOK MODEL: Models\Shield (null: the BUILT-IN look). Library-owned.
     const mesh_model::Mesh* shieldModel{};
     // Version 0.0.72 MODEL MISSING (the user, 27 Oct: "not a fake lookalike"): the looks whose MODEL
@@ -140,6 +143,10 @@ bool appendBatarangModel(std::vector<Vertex>& out, const Item& it, const mesh_mo
 // GUN MODELS / BATON LOOK MODEL: a converted model (metres, x right, y up, -z forward, the grip at
 // the origin) at the item. False (nothing added) when it cannot be drawn: the built-in look instead.
 bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
+// Version 0.0.73 (fix 10) RETRACTABLE CLAWS: a hand's claws model (the claws' base at its origin, -z along them, +y the
+// back of the hand) at the knuckles of lookClaws' frame (clawKnuckle ahead, clawRise up, as the built-in claws),
+// sliding out with it.spin (the SNIKT extension 0-1.1; 0 reads as out). False: not drawn (the built-in claws then).
+bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
 // Version 0.0.72 PUNISHER VAN: a model up to 8 m placed by its axes (world = at + right x + up y - forward z).
 // Test build 10: `scale` the model's size (1: as made).
 bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,

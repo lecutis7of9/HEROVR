@@ -940,6 +940,12 @@ combat_input::Config combatConfig() {
     // (SPIDYVR MOVE at the zip strike's reach), never the game's Y web strike: no web line.
     if (flyModeNow.load())
         c.lungeMode = combat38::lungeSpidyMove;
+    // Version 0.0.73 (fix 19): only SPIDER-MAN zips on a web line; every other hero's jump-to-target
+    // punch is the bridge's own mover (no game Y web strike, so no zip line).
+    if (heroNow() != hero_modes::spiderMan) {
+        c.lungeMode = combat38::lungeSpidyMove;
+        c.webZip = false;
+    }
     c.ballOnPress = c38(combat38::ballFire) == 0;
     // Version 0.0.2 BALL LOOK OURS: a web-shooter press fires our own ball, no RB to the game.
     c.ballOurs = c38(combat38::ballLook) == combat38::lookOurs;
@@ -2083,6 +2089,7 @@ DWORD WINAPI run(void*) {
         // (tracking space; the command turns it to the world with the CONFIRMED ray bridge).
         grapple073::TapOrHold ddTrigger;
         bool ddAimHeld[2]{};
+        Vec3 cf73Aim[2]{}; // Version 0.0.73 (fix 15): each hand's combat aim (tracking)
         Vec3 ddAimFrom[2]{}, ddAimDir[2]{};
         // Version 0.0.73 (fix 17): CAPTAIN AMERICA's SPRINT - pumped arms with the left stick pushed.
         grapple073::ArmPump capPump;
@@ -5028,8 +5035,14 @@ DWORD WINAPI run(void*) {
                             }
                             input.wallPositions[i] = motion.grips[i].position;
                             // Update 37: climb_grip, the button that holds the wall.
+                            // Version 0.0.73 (fix 11/18): ONLY SPIDER-MAN wall-climbs (SPIDER CLIMB ONLY, on by
+                            // default); WOLVERINE only with his claws out and CLAW CLIMB on (off by default). Every
+                            // other hero's grip is the UNIVERSAL GRAPPLE's draw, never a hold on the wall.
+                            const bool climbOk = hero072::climbAllowed(heroNow(), c38(combat38::spiderClimbOnly) == 0,
+                                                                       hero007Play.clawsOut[0] || hero007Play.clawsOut[1],
+                                                                       c38(combat38::clawClimb) == 1);
                             input.wallGrips[i] =
-                                hand.tracked ? hand_crawl::buttonOf({true, true, frame.hands[i].squeeze,
+                                hand.tracked && climbOk ? hand_crawl::buttonOf({true, true, frame.hands[i].squeeze,
                                                                      frame.hands[i].trigger, {}, {}},
                                                                     climbGrip.load())
                                              : 0.f;
@@ -6370,6 +6383,7 @@ DWORD WINAPI run(void*) {
                                 // POSE or 38's grip -Z (DIAGNOSIS §0); the glob, assist, contact fist,
                                 // yank, low aim, flick and blood all take this ray.
                                 h.aim = combat38::aimOf(grip, frame.hands[i].aim, c38(combat38::aimAxis));
+                                cf73Aim[i] = h.aim; // Version 0.0.73 (fix 15): the palm turns to this aim
                                 h.palm = grip.orientation.rotate({0, -1, 0});
                                 // Update 38 ZIP MODE AIMED: the wrist's web ray on a character.
                                 h.onCharacter = aimed.hands[i].kind == static_cast<uint32_t>(game_swing::AimKind::character);
@@ -6430,7 +6444,8 @@ DWORD WINAPI run(void*) {
                             }
                             {   // Update 38 LUNGE SPIDYVR MOVE: the bridge's lunges; the X on a landing.
                                 const bool wantsMove = c38(combat38::lunge) == combat38::lungeSpidyMove ||
-                                                       flyModeNow.load() != 0; // Update 38.5 FLY's lunge
+                                                       flyModeNow.load() != 0 || // Update 38.5 FLY's lunge
+                                                       heroNow() != hero_modes::spiderMan; // 0.0.73 fix 19: no zip line
                                 cf.bridgeLunge = wantsMove && sampleLunge && swingStarted;
                                 if (sampleLunge && !sampleLunge(&lungeState) && lungeState.magic == 0x4c4e4753 &&
                                     lungeState.version == 1 && lungeState.bytes == sizeof(lungeState)) {
@@ -6682,9 +6697,10 @@ DWORD WINAPI run(void*) {
                                         return validTrackedPose(grip) ? spidy::webShooter(grip, i).position : cf.hands[i].position;
                                     };
                                     // Version 0.0.62 PALM BLAST: Iron Man's hand blasts leave the palm's centre.
+                                    // Version 0.0.73 (fix 15): from the palm turned to the controller's aim.
                                     const auto palmOf = [&](unsigned i) {
                                         const Pose& grip = frame.hands[i].grip;
-                                        return validTrackedPose(grip) ? repulsor::palmCentre(grip, i) : cf.hands[i].position;
+                                        return validTrackedPose(grip) ? repulsor::palmFrom(grip, i, cf.hands[i].aim) : cf.hands[i].position;
                                     };
                                     // Version 0.0.6 DAREDEVIL ABILITIES: the trigger throws that hand's baton at the enemy
                                     // the strong aim assist picks (35 deg, 25 m); a hit sends sm2_damage's batonHit
@@ -7024,8 +7040,9 @@ DWORD WINAPI run(void*) {
                                             press[i] = fightOut.ballOurs[i];
                                             // Version 0.0.62 PALM BLAST: along the palm's normal (repulsor::palmNormal),
                                             // the strong aim assist (oursBalls.fire) bending it onto a foe from the palm.
+                                            // Version 0.0.73 (fix 15): the palm faces the aim, so the blast goes along it.
                                             const Pose& g = frame.hands[i].grip;
-                                            const Vec3 palm = validTrackedPose(g) ? repulsor::palmNormal(g, i) : Vec3{};
+                                            const Vec3 palm = validTrackedPose(g) ? repulsor::palmAim(g, i, cf.hands[i].aim) : Vec3{};
                                             aim[i] = length(palm) > .5f ? palm : fightOut.ballDirection[i];
                                             held[i] = cf.hands[i].tracked && cf.hands[i].button > .5f;
                                         }
@@ -9147,14 +9164,25 @@ DWORD WINAPI run(void*) {
                         // place, facing along the hand's aim), this frame's world; glow 0: none.
                         for (unsigned i = 0; i < 2; ++i) {
                             saved.palmGlow[i] = 0;
+                            saved.palmPose[i] = 0;
                             if (!rep || !validTrackedPose(motion.grips[i]) || !motion.swing.hands[i].tracked)
                                 continue;
                             const float glow = repulsor_mcu::palmGlow(repTrigger.chargingFor(static_cast<int>(i)),
                                                                       repTrigger.sinceBlast(static_cast<int>(i)));
                             // Version 0.0.62 PALM BLAST: the charge and its flash on the palm, facing out of it.
+                            // Version 0.0.73 (fix 15): the palm turned to the aim (the hand's aim, this frame's tracking).
+                            const Vec3 aimT = repulsor::palmAim(motion.grips[i], i, cf73Aim[i]);
                             const Vec3 at = compose(saved.worldFromTracking,
-                                                    Pose{repulsor::palmCentre(motion.grips[i], i), {0, 0, 0, 1}}).position;
-                            const Vec3 way = saved.worldFromTracking.orientation.rotate(repulsor::palmNormal(motion.grips[i], i));
+                                                    Pose{repulsor::palmFrom(motion.grips[i], i, cf73Aim[i]), {0, 0, 0, 1}}).position;
+                            const Vec3 way = saved.worldFromTracking.orientation.rotate(aimT);
+                            {
+                                const float charging = repTrigger.chargingFor(static_cast<int>(i));
+                                const float since = repTrigger.sinceBlast(static_cast<int>(i));
+                                const bool posing = (std::isfinite(charging) && charging >= 0) ||
+                                                    (std::isfinite(since) && since >= 0 && since < repulsor::palmPoseSeconds);
+                                saved.palmPose[i] = posing && finite(way) && length(way) > .5f ? 1.f : 0.f;
+                                saved.palmPoseAim[i] = saved.palmPose[i] > 0 ? normalized(way) : Vec3{};
+                            }
                             if (glow > 0 && finite(at) && finite(way) && length(way) > .5f) {
                                 saved.palmGlow[i] = glow;
                                 saved.palmAt[i] = at;
@@ -9317,6 +9345,11 @@ DWORD WINAPI run(void*) {
                                 saved.hero007.sawedBarrels = slotModel(mesh_model::slotSawedOffBarrels, "GUN MODELS");
                                 saved.hero007.modelWanted |= hero007::modelBitGuns;
                             }
+                            // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: the JACKET AND JEANS claws for every Wolverine suit
+                            // (Models\Claws; 0.0.72's built-in claws when missing). The worn suit carries none (no double claws).
+                            if (hero007In.hero == hero_modes::wolverine)
+                                for (unsigned i = 0; i < 2; ++i)
+                                    saved.hero007.clawModel[i] = slotModel(i ? mesh_model::slotClawsRight : mesh_model::slotClawsLeft, "CLAWS");
                             // Version 0.0.7 CAPTAIN AMERICA SHIELD LOOK MODEL (Models\Shield; BUILT-IN when missing).
                             if (captain::lookModel(c38(combat38::shieldLook)) && hero007In.hero == hero_modes::captainAmerica)
                             {
@@ -9356,6 +9389,7 @@ DWORD WINAPI run(void*) {
                         for (size_t b = 0; b < saved.oursAt.size() && b < static_cast<size_t>(our_ball::Pool::balls); ++b) {
                             const auto& ball = oursBalls.ball(static_cast<int>(b));
                             if (ball.alive) {
+                                saved.oursFrom[b] = compose(saved.worldFromTracking, Pose{ball.from, {}}).position;
                                 saved.oursAt[b] = compose(saved.worldFromTracking, Pose{ball.at, {}}).position;
                                 saved.oursTail[b] = compose(saved.worldFromTracking, Pose{ball.tail(), {}}).position;
                                 saved.oursFade[b] = 1;
@@ -10130,6 +10164,14 @@ DWORD WINAPI run(void*) {
                                 repulsor_mcu::appendCharge(vertices, saved->palmAt[i] + travel, saved->palmWay[i], viewer, pixelAngle,
                                                            saved->palmGlow[i], saved->palmSpin);
                         for (size_t b = 0; b < saved->oursAt.size() && saved->repulsorLook; ++b) {
+                            // Version 0.0.73 (fix 16): the blast's beam from the palm to the bolt, fading as it flies.
+                            if (saved->oursFade[b] > 0) {
+                                const float flown = length(saved->oursAt[b] - saved->oursFrom[b]);
+                                const float beamFade = std::isfinite(flown) ? std::clamp(1.f - flown / 40.f, .2f, 1.f) : 0.f;
+                                appendRepulsorBeam(vertices, saved->oursFrom[b] + travel, saved->oursTail[b] + travel, viewer, pixelAngle,
+                                                   beamFade * saved->oursFade[b] *
+                                                       repulsor_mcu::plasmaFlicker(plasmaNow, static_cast<unsigned>(b) + 13u));
+                            }
                             if (saved->oursFade[b] > 0)
                                 repulsor_mcu::appendBolt(vertices, saved->oursAt[b] + travel, saved->oursTail[b] + travel, viewer,
                                                          pixelAngle,
@@ -10513,8 +10555,9 @@ DWORD WINAPI run(void*) {
                         static std::vector<Vertex> mirrorKept;
                         static Vec3 mirrorKeptTravel{};
                         static uint32_t mirrorKeptSlot = 0;
+                        static std::vector<Vertex> mirrorKeptSoft; // Version 0.0.73 (fix 14): the props' glows, kept too
                         if (!mirrorOn.load())
-                            mirrorGuard = {}, mirrorKept.clear(), mirrorHalfRate = false;
+                            mirrorGuard = {}, mirrorKept.clear(), mirrorKeptSoft.clear(), mirrorHalfRate = false;
                         const bool mirrorReuse = mirrorOn.load() && mirror_guard::reuse(mirrorGuard) && !mirrorKept.empty() &&
                                                  mirrorKeptSlot == wornSuitSlot.load();
                         const mesh_model::Mesh* suitMesh = nullptr;
@@ -10543,6 +10586,16 @@ DWORD WINAPI run(void*) {
                                         // tilt) and the FIST: the trigger or the grip held, or a prop in this hand
                                         t.gripUp[i] = rendered.grips[i].orientation.rotate(Vec3{0, 1, 0});
                                         t.handleTiltDeg[i] = baton_grip::handleTiltDeg(runtime.controllers()[i]);
+                                        // Version 0.0.73 (fix 15): IRON MAN firing - the palm turned to the aim.
+                                        if (saved->palmPose[i] > 0 && saved->repulsorLook) {
+                                            repulsor::PalmFrame pf;
+                                            if (repulsor::palmFrame(saved->palmPoseAim[i], t.up, i, pf)) {
+                                                t.gripForward[i] = pf.forward;
+                                                t.gripX[i] = pf.x;
+                                                t.gripUp[i] = pf.up;
+                                                t.handleTiltDeg[i] = 0.f;
+                                            }
+                                        }
                                         const auto& sh = rendered.swing.hands[i];
                                         float want = std::max({sh.trigger, sh.grip, sh.wallGrip});
                                         if (saved->batonHeld[i] || (i == 1 && saved->hero072.hammerInHand))
@@ -10651,6 +10704,8 @@ DWORD WINAPI run(void*) {
                                 }
                                 // Build 9 SUITS: the worn suit's whole model reflected (the frame drawn, not the FIGURE).
                                 mf.frameOnly = false;
+                                std::vector<Vertex> mirrorProps; // Version 0.0.73 (fix 14): the props' glows, reflected
+                                bool mirrorKeptNow = false, mirrorReused = false;
                                 if (mirrorReuse && plane.valid && mirrorInSight &&
                                     modelVertices.size() + mirrorKept.size() <= hero007::modelSinkBudget) {
                                     // 45 Hz: the last reflection, moved as the player moved (a WORLD mirror reflects the move).
@@ -10661,7 +10716,11 @@ DWORD WINAPI run(void*) {
                                     modelVertices.insert(modelVertices.end(), mirrorKept.begin(), mirrorKept.end());
                                     for (size_t v = before; v < modelVertices.size(); ++v)
                                         modelVertices[v].position += d;
+                                    mirrorProps = mirrorKeptSoft;
+                                    for (Vertex& v : mirrorProps)
+                                        v.position += d;
                                     mf.frameOnly = true;
+                                    mirrorReused = true;
                                 } else if (suitWorn && plane.valid && mirrorInSight) { // out of sight: the FIGURE (build 7's cost)
                                     const Vec3 n = plane.normal, c = plane.centre;
                                     const float s = plane.scale;
@@ -10683,13 +10742,45 @@ DWORD WINAPI run(void*) {
                                     suitWearVertices = static_cast<uint32_t>(modelVertices.size() - before);
                                     if (mf.frameOnly && mirrorGuard.half) // kept for the next (reused) frame
                                         mirrorKept.assign(modelVertices.begin() + static_cast<std::ptrdiff_t>(before), modelVertices.end()),
-                                            mirrorKeptTravel = travel, mirrorKeptSlot = wornSuitSlot.load();
+                                            mirrorKeptTravel = travel, mirrorKeptSlot = wornSuitSlot.load(), mirrorKeptNow = true;
                                     else
                                         mirrorKept.clear();
+                                    mirrorKeptSoft.clear();
                                     const float us = std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - reflStart).count();
                                     suitMean += us * .02f;
                                 }
+                                // Version 0.0.73 (fix 14) PROPS IN THE MIRROR: what the hero holds and wears (guns, shield,
+                                // claws, batarangs, grapple gun, holsters, the batons) drawn as in the world, then
+                                // reflected - for Spider-Man's figure and every suit alike. Any failure: no props there.
+                                if (!mirrorReused && plane.valid && mirrorInSight) {
+                                    const size_t modelFrom = modelVertices.size();
+                                    try {
+                                        const Vec3 seenFrom = vr_mirror::unreflect(plane, viewer);
+                                        if (saved->hero007.any)
+                                            hero007::appendHero007(mirrorProps, saved->hero007, travel, seenFrom, pixelAngle);
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (saved->batonOn[i] > 0) {
+                                                if (!(saved->hero007.batonModel[i] &&
+                                                      hero007::appendBatonModel(mirrorProps, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
+                                                                                *saved->hero007.batonModel[i], seenFrom, saved->batonHeld[i])))
+                                                    hero007::appendBatonClub(mirrorProps, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
+                                                                             seenFrom, pixelAngle);
+                                            }
+                                        if (!vr_mirror::reflectVertices(plane, modelVertices, modelFrom) ||
+                                            !vr_mirror::reflectVertices(plane, mirrorProps, 0))
+                                            modelVertices.resize(modelFrom), mirrorProps.clear();
+                                    } catch (...) {
+                                        modelVertices.resize(std::min(modelFrom, modelVertices.size()));
+                                        mirrorProps.clear();
+                                    }
+                                    if (mirrorKeptNow) { // the half-rate frame shows them too (no flicker)
+                                        mirrorKept.insert(mirrorKept.end(), modelVertices.begin() + static_cast<std::ptrdiff_t>(modelFrom),
+                                                          modelVertices.end());
+                                        mirrorKeptSoft = mirrorProps;
+                                    }
+                                }
                                 const size_t mirrorMade = vr_mirror::append(translucent, plane, mf, mc, viewer);
+                                translucent.insert(translucent.end(), mirrorProps.begin(), mirrorProps.end());
                                 const float ms = std::chrono::duration<float, std::milli>(
                                                      std::chrono::steady_clock::now() - mirrorStart)
                                                      .count();

@@ -79,6 +79,11 @@ struct NativeEyeFrame {
     // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK: each palm's charge glow (0: none), place and way out.
     std::array<Vec3, 2> palmAt{}, palmWay{};
     std::array<float, 2> palmGlow{};
+    // Version 0.0.73 (fix 15/16): each repulsor bolt's start (the palm, world) for its visible beam; and
+    // each hand turned palm-to-the-aim while IRON MAN fires (pose 0: the hand as the controller holds it).
+    std::array<Vec3, 6> oursFrom{};
+    std::array<Vec3, 2> palmPoseAim{};
+    std::array<float, 2> palmPose{};
     float palmSpin{};
     // Version 0.0.6 DAREDEVIL ABILITIES: each hand's baton (this frame's world; on 0: none), grip to tip.
     std::array<Vec3, 2> batonGrip{}, batonTip{};

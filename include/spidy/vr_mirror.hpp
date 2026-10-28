@@ -148,6 +148,25 @@ inline Vec3 reflect(const Plane& m, Vec3 p) {
     return m.centre + (r - m.centre) * m.scale;
 }
 inline Vec3 reflectDirection(const Plane& m, Vec3 d) { return d - m.normal * (2 * dot(d, m.normal)); }
+// Version 0.0.73 (fix 14) PROPS IN THE MIRROR: the point whose reflection is p (reflect's inverse): where the
+// viewer stands for what is drawn before it is reflected (its glows then face the real eye).
+inline Vec3 unreflect(const Plane& m, Vec3 p) {
+    const Vec3 q = m.centre + (p - m.centre) * (m.scale > 1e-3f ? 1.f / m.scale : 1.f);
+    return q - m.normal * (2 * dot(q - m.centre, m.normal));
+}
+// Every vertex from `from` on reflected (the props drawn in the world, then put in the mirror). False (and
+// those vertices dropped) when one is not finite: nothing half-reflected is ever drawn.
+template <class V>
+inline bool reflectVertices(const Plane& m, std::vector<V>& v, size_t from) {
+    if (!m.valid)
+        return v.resize(std::min(from, v.size())), false;
+    for (size_t i = from; i < v.size(); ++i) {
+        v[i].position = reflect(m, v[i].position);
+        if (!finite(v[i].position))
+            return v.resize(from), false;
+    }
+    return true;
+}
 
 // Update 38.3 SUIT COLOURS: the suit's colours as the game itself drew it. What is read,
 // honestly: NOT the equipped suit's identity - no address or save field holding it is

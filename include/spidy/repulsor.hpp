@@ -228,6 +228,44 @@ inline Vec3 palmNormal(const Pose& grip, unsigned hand) {
 inline Vec3 palmCentre(const Pose& grip, unsigned hand) {
     return compose(grip, {{hand == 0 ? palmOut : -palmOut, 0, 0}, {0, 0, 0, 1}}).position;
 }
+// Version 0.0.73 (fix 15) PALM TO THE AIM: while IRON MAN fires, the hand bends back at the wrist so the
+// palm faces along the controller's aim (fingers up), and the blast leaves the middle of that palm,
+// palmAhead in front of the grip along the aim. palmAim: the aim (unit), else the palm's normal, else none.
+inline constexpr float palmAhead = .06f;
+inline constexpr float palmPoseSeconds = .45f; // the palm stays to the aim this long after a blast
+inline Vec3 palmAim(const Pose& grip, unsigned hand, Vec3 aim) {
+    if (finite(aim) && length(aim) > .5f)
+        return normalized(aim);
+    return palmNormal(grip, hand);
+}
+inline Vec3 palmFrom(const Pose& grip, unsigned hand, Vec3 aim) {
+    const Vec3 a = palmAim(grip, hand, aim);
+    if (!finite(grip.position) || !(length(a) > .5f))
+        return palmCentre(grip, hand);
+    return grip.position + a * palmAhead;
+}
+// The hand's frame for the suit's rig (suit_wear::Tracked): the back of the hand away from the aim,
+// the hand's way (wrist to knuckles) up across the aim; false when the aim is not usable.
+struct PalmFrame {
+    Vec3 forward{}, x{}, up{};
+};
+inline bool palmFrame(Vec3 aim, Vec3 worldUp, unsigned hand, PalmFrame& f) {
+    if (!finite(aim) || !finite(worldUp) || length(aim) < .5f || length(worldUp) < .5f)
+        return false;
+    const Vec3 a = normalized(aim);
+    Vec3 way = worldUp - a * dot(worldUp, a);
+    if (length(way) < .2f) // aimed straight up or down: the fingers point ahead of the body instead
+        return false;
+    way = normalized(way);
+    // suit_wear: the hand's back is the grip's -X on the left, +X on the right; the back faces away
+    // from the aim, so the left grip's X is the aim, the right's minus the aim.
+    f.x = hand == 0 ? a : a * -1.f;
+    // suit_wear::handWay with no handle tilt: the grip's -Y is the hand's way.
+    f.up = way * -1.f;
+    // A right-handed frame: -Z (forward) = -(X x Y).
+    f.forward = cross(f.x, f.up) * -1.f;
+    return finite(f.forward) && length(f.forward) > .5f;
+}
 
 // The chest and where it faces: the head's level forward (the torso is not tracked), the chest
 // chestBelowHead under the head and 0.1 m ahead of it.

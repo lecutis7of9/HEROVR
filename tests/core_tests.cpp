@@ -22311,6 +22311,109 @@ int main() {
         const Vec3 from = repulsor::palmCentre(rightFwd, 1);
         check(shooter.fire(1, from, repulsor::palmNormal(rightFwd, 1), foes, 0, 0), "the palm blast fired");
     });
+    test("Version 0.0.73 (fix 14): the mirror shows the hero's props, reflected (Spider-Man's figure and every suit)", [] {
+        namespace vm = spidy::vr_mirror;
+        vm::Plane m;
+        m.valid = true;
+        m.centre = {0, 1, -2};
+        m.normal = {0, 0, 1};
+        m.up = {0, 1, 0};
+        m.right = {1, 0, 0};
+        m.scale = .8f;
+        const Vec3 p{.3f, 1.2f, -.5f};
+        const Vec3 back = vm::unreflect(m, vm::reflect(m, p));
+        check(length(back - p) < 1e-5f, "unreflect undoes reflect");
+        check(vm::reflect(m, p).z < m.centre.z, "a prop in front of the mirror is seen behind it");
+        std::vector<Vertex> v{{p, {1, 1, 1}}, {{0, 1, 0}, {1, 1, 1}}};
+        check(vm::reflectVertices(m, v, 1) && length(v[0].position - p) < 1e-6f && v[1].position.z < -2.f,
+              "only the props' vertices are reflected");
+        v.push_back({{std::nanf(""), 0, 0}, {1, 1, 1}});
+        check(!vm::reflectVertices(m, v, 1) && v.size() == 1, "a broken vertex: none of them drawn");
+        m.valid = false;
+        v.push_back({p, {1, 1, 1}});
+        check(!vm::reflectVertices(m, v, 1) && v.size() == 1, "no mirror: nothing reflected");
+    });
+    test("Version 0.0.73 (fix 10): every Wolverine suit's claws are the JACKET AND JEANS claws, retractable, never doubled", [] {
+        namespace mm = spidy::mesh_model;
+        namespace h7 = spidy::hero007;
+        check(std::string(mm::slotFolders[mm::slotClawsLeft]) == "Claws/Left" && std::string(mm::slotFolders[mm::slotClawsRight]) == "Claws/Right" &&
+                  !mm::slotIsSuit(mm::slotClawsLeft) && !mm::slotIsSuit(mm::slotClawsRight) && mm::slotIsSuit(mm::slotSuitEnd - 1),
+              "the claws' folders follow the suits, and are not suits");
+        // A claw in its own frame: base at the origin, 0.36 m along -z.
+        mm::Mesh claw;
+        claw.corners = {{0, 0, 0}, {.01f, 0, -.36f}, {-.01f, .01f, -.36f}};
+        claw.colors = {{.8f, .8f, .8f}};
+        claw.low = {-.01f, 0, -.36f};
+        claw.high = {.01f, .01f, 0};
+        h7::Item it{};
+        it.look = h7::lookClaws;
+        it.at = {0, 1, 0};
+        it.forward = {0, 0, -1};
+        it.up = {0, 1, 0};
+        it.spin = 1.f;
+        const Vec3 viewer{0, 1.6f, 1};
+        std::vector<Vertex> out;
+        check(h7::appendClawModel(out, it, claw, viewer) && !out.empty(), "out: drawn");
+        float reach = 0;
+        for (const Vertex& v : out)
+            reach = std::max(reach, -v.position.z);
+        check(reach > .36f && reach < .36f + h7::clawKnuckle + .05f, "out: the full claw past the knuckles");
+        out.clear();
+        it.spin = .5f;
+        check(h7::appendClawModel(out, it, claw, viewer), "half out: drawn");
+        float half = 0;
+        for (const Vertex& v : out)
+            half = std::max(half, -v.position.z);
+        check(half < reach - .1f, "half out: shorter (it slides out of the knuckles)");
+        out.clear();
+        it.spin = .01f;
+        check(h7::appendClawModel(out, it, claw, viewer) && out.empty(), "in: nothing shows, and no built-in claws either");
+        mm::Mesh huge = claw;
+        huge.high.z = 5;
+        check(!h7::appendClawModel(out, it, huge, viewer), "not a claws model (too big): the built-in claws instead");
+        // The draw: lookClaws by its side's model; a missing model keeps the built-in claws.
+        h7::Draw d{};
+        d.any = true;
+        d.held[0] = it;
+        d.held[0].spin = 1.f;
+        d.held[0].side = 0;
+        std::vector<Vertex> built, modelled;
+        h7::appendHero007(built, d, {}, viewer, .002f);
+        d.clawModel[0] = &claw;
+        h7::appendHero007(modelled, d, {}, viewer, .002f);
+        check(!built.empty() && !modelled.empty() && built.size() != modelled.size(), "the model replaces the built-in claws (never both)");
+    });
+    test("Version 0.0.73 (fix 15/16): Iron Man's palm faces the aim, the blast leaves the palm, a visible beam", [] {
+        using namespace spidy;
+        auto near = [](Vec3 a, Vec3 b) { return length(a - b) < 1e-3f; };
+        const Pose level{{0, 1, 0}, {0, 0, 0, 1}};
+        const Vec3 ahead{0, 0, -1};
+        check(near(repulsor::palmAim(level, 1, ahead), ahead), "the blast goes along the controller's aim");
+        check(near(repulsor::palmAim(level, 0, {0, 0, 0}), repulsor::palmNormal(level, 0)), "no aim: the palm's normal");
+        check(near(repulsor::palmFrom(level, 1, ahead), {0, 1, -repulsor::palmAhead}), "from the palm, ahead of the grip");
+        for (unsigned hand = 0; hand < 2; ++hand) {
+            repulsor::PalmFrame f;
+            check(repulsor::palmFrame(ahead, {0, 1, 0}, hand, f), "a palm frame");
+            // suit_wear: the back of the hand is -X (left) / +X (right): it must face away from the aim.
+            const Vec3 back = hand == 0 ? f.x * -1.f : f.x;
+            check(near(back, {0, 0, 1}), "the back of the hand faces away from the aim (palm to the aim)");
+            check(near(f.up * -1.f, {0, 1, 0}), "the fingers point up");
+            check(std::fabs(dot(f.forward, f.x)) < 1e-3f && std::fabs(dot(f.forward, f.up)) < 1e-3f &&
+                      near(cross(f.x, f.up), f.forward * -1.f),
+                  "a right-handed grip frame");
+        }
+        repulsor::PalmFrame f;
+        check(!repulsor::palmFrame({0, 1, 0}, {0, 1, 0}, 1, f), "aimed straight up: the hand as held");
+        check(!repulsor::palmFrame({NAN, 0, 0}, {0, 1, 0}, 1, f), "a broken aim: the hand as held");
+        std::vector<Vertex> v;
+        appendRepulsorBeam(v, {0, 1, -.1f}, {0, 1, -20}, {0, 1.6f, 0}, .001f, 1.f);
+        check(!v.empty(), "the repulsor beam is drawn");
+        const size_t n = v.size();
+        appendRepulsorBeam(v, {0, 1, 0}, {0, 1, -.05f}, {0, 1.6f, 0}, .001f, 1.f);
+        appendRepulsorBeam(v, {NAN, 1, 0}, {0, 1, -5}, {0, 1.6f, 0}, .001f, 1.f);
+        appendRepulsorBeam(v, {0, 1, 0}, {0, 1, -5}, {0, 1.6f, 0}, .001f, 0.f);
+        check(v.size() == n, "nothing for a short, broken or faded beam");
+    });
     test("Version 0.0.62: BATON BOUNCE - 3 enemies at most within 5 m, no repeats, none down, always home", [] {
         using namespace spidy::hero_modes;
         check(batonChainRange == 5.f && batonMaxChains + 1 == 3, "3 enemies in all, 5 m");
@@ -24670,7 +24773,8 @@ int main() {
     });
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
-        check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slots == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23,
+        check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
+                  mm::slots == mm::slotSuitEnd + 2 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;

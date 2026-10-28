@@ -1439,6 +1439,24 @@ void appendChestBeam(std::vector<Vertex>& out, Vec3 chest, Vec3 end, Vec3 viewer
     if (!web_style::sane(out, from))
         out.resize(from);
 }
+void appendRepulsorBeam(std::vector<Vertex>& out, Vec3 palm, Vec3 end, Vec3 viewer, float pixelAngle, float fade) {
+    if (!finite(palm) || !finite(end) || !finite(viewer) || !std::isfinite(pixelAngle) || !std::isfinite(fade))
+        return;
+    const float a = std::clamp(fade, 0.f, 1.f);
+    if (a < .01f || length(end - palm) < .1f)
+        return;
+    const size_t from = out.size();
+    constexpr int pieces = 6;
+    for (int i = 0; i < pieces; ++i) {
+        const float t0 = static_cast<float>(i) / pieces, t1 = static_cast<float>(i + 1) / pieces;
+        const Vec3 p = palm + (end - palm) * t0, q = palm + (end - palm) * t1;
+        glowBar(out, p, q, viewer, pixelAngle, .06f * (1 - .4f * t0), a * (1 - .3f * t0));
+    }
+    softGlob(out, palm, viewer, .12f, repGlow, .5f * a);
+    softGlob(out, palm, viewer, .05f, repCore, .9f * a);
+    if (!web_style::sane(out, from))
+        out.resize(from);
+}
 void appendBaton(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, Vec3 viewer, float pixelAngle) {
     if (!finite(grip) || !finite(tip) || !finite(viewer) || !std::isfinite(pixelAngle) || length(tip - grip) < .05f)
         return;

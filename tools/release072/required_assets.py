@@ -26,6 +26,9 @@ MODEL_FILES = [
     'Models/Vehicle/PunisherVan/SteeringWheel/scene.glb',
     # Build 8 ROSTER page: every profile picture and suit preview (tools/roster/make_roster_glb.py; credits in license.txt).
     'Models/Roster/scene.glb',
+    # Version 0.0.73 (fix 10) RETRACTABLE CLAWS: the JACKET AND JEANS suit's own claws (tools/claws073/extract_claws.py).
+    'Models/Claws/Left/scene.glb',
+    'Models/Claws/Right/scene.glb',
 ]
 # Build 9 SUITS: the 23 suits the user sent (tools/suits/convert_suit.py; mesh_model::suitFolders' order).
 SUIT_FOLDERS = ['Suit_batman_1', 'Suit_batman_2', 'Suit_batman_3', 'Suit_batman_5', 'Suit_ironMan_1', 'Suit_ironMan_2',

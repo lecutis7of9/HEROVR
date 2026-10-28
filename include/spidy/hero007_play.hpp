@@ -694,6 +694,7 @@ class Play {
                         d.held[i] = item(lookClaws, in.hands[i].position, a, gunUp(a));
                     }
                     d.held[i].spin = clawExtend(clawsOutFor[i]);
+                    d.held[i].side = i; // Version 0.0.73 (fix 10): its hand's claws model
                     any = true;
                 }
         } else if (hero == hero_modes::punisher) {

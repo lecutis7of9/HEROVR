@@ -126,6 +126,9 @@ struct Config {
     bool assistSpidy = true;        // Update 38 aim_assist SPIDYVR (Shooter::aim's rule)
     float assistDegrees = 0.f;      // Update 38 aim_assist CONE 20 / WIDE 35: the web ball's cone (0 none)
     uint32_t lungeMode = combat38::lungeGameButton; // Update 38 lunge: 0 GAME BUTTON (Y), 1 SPIDYVR MOVE
+    // Version 0.0.73 (fix 19): false for every hero but SPIDER-MAN - never the game's Y web strike
+    // (its web line); the bridge's own lunge (SPIDYVR MOVE) or a plain punch instead.
+    bool webZip = true;
     bool ballOnPress = true;        // Update 38 ball_fire: PRESS (SpidyVR) or RELEASE (37.2's tap)
     // Version 0.0.2 BALL LOOK OURS: a web-shooter press is the mod's own ball only (our_ball.hpp,
     // Out::ballOurs) - no RB, no stick: the game fires no web ball for it.
@@ -775,7 +778,7 @@ class Machine {
                 farApplied_ = c.farLunge;
             }
         }
-        if (spidyZip && !bridgeFlies) {
+        if (spidyZip && !bridgeFlies && c.webZip) {
             std::array<FightFist, 2> fists{};
             for (unsigned i = 0; i < 2; ++i) {
                 const auto& h = f.hands[i];
@@ -992,7 +995,7 @@ class Machine {
                         if (std::isfinite(e.strength))
                             out.punchStrength[i] = std::clamp(e.strength, 0.f, 1.f);
                     }
-                if (zipsNow(f, c, i)) {
+                if (c.webZip && zipsNow(f, c, i)) {
                     out.zip = true;
                     startZip(f, c, locked, fightList);
                     ++fired_[zipStrike];

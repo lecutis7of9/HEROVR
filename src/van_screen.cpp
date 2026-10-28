@@ -363,6 +363,7 @@ void Screen::reset() {
     page_ = file_ = 0;
     flash_ = 0;
     near_[0] = near_[1] = hover_ = false;
+    aimed_[0] = aimed_[1] = trigWas_[0] = trigWas_[1] = false;
 }
 
 bool Screen::next() {
@@ -393,6 +394,39 @@ bool Screen::pick(uint32_t page) {
     return true;
 }
 
+bool Screen::pokeAt(Vec3 f) {
+    if (f.y >= H - tabHeight) {
+        const float share = std::clamp((f.x + W) / width, 0.f, .999f);
+        return pick(static_cast<uint32_t>(share * pages));
+    }
+    if (page_ == cases && f.x < -W / 3)
+        return previousFile();
+    return next();
+}
+
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit) {
+    hit = {};
+    if (!van072::fine(from) || !van072::fine(dir))
+        return false;
+    const float n = length(dir);
+    if (!ok(n) || n < .5f)
+        return false;
+    const Mount m = mountLocal();
+    const Vec3 d = dir * (1 / n);
+    const Vec3 f0 = onFace(from);
+    const Vec3 df{dot(d, m.right), dot(d, m.up), dot(d, m.normal)}; // unit, the face's axes
+    if (!van072::fine(f0) || !van072::fine(df) || f0.z <= 0 || df.z > -rayFacing)
+        return false; // behind the face, or pointing away / along it
+    const float t = -f0.z / df.z; // design units along the ray
+    if (!ok(t) || t * faceScale > rayReach)
+        return false;
+    const Vec3 h = f0 + df * t;
+    if (!van072::fine(h) || std::abs(h.x) > W + raySlack || std::abs(h.y) > H + raySlack)
+        return false;
+    hit = {std::clamp(h.x, -W, W), std::clamp(h.y, -H, H), 0};
+    return true;
+}
+
 bool Screen::step(const In& in) {
     if (ok(in.dt) && in.dt > 0)
         flash_ = std::max(0.f, flash_ - in.dt * 4.f);
@@ -400,11 +434,19 @@ bool Screen::step(const In& in) {
     bool changed = false;
     if (!in.driving) {
         near_[0] = near_[1] = false;
+        aimed_[0] = aimed_[1] = false;
+        trigWas_[0] = trigWas_[1] = false;
         return false;
     }
     if (in.x)
         changed |= next();
     for (unsigned i = 0; i < 2; ++i) {
+        // the trigger's press, with its own re-arm (a held trigger pages once)
+        const float tr = ok(in.trigger[i]) ? in.trigger[i] : 0.f;
+        const bool pressed = trigWas_[i] ? tr > rayRelease : tr > rayPress;
+        const bool fresh = pressed && !trigWas_[i];
+        trigWas_[i] = pressed;
+        aimed_[i] = false;
         if (!in.tracked[i] || !van072::fine(in.hand[i])) {
             near_[i] = false;
             continue;
@@ -416,16 +458,17 @@ bool Screen::step(const In& in) {
         // An open hand, off the wheel: a hand that grips (the wheel, a door) never pages it.
         const bool open = ok(in.grip[i]) && in.grip[i] < pokeGripMost && !in.onWheel[i];
         hover_ |= near && open;
-        if (near && !near_[i] && open) {
-            if (f.y >= H - tabHeight) {
-                const float share = std::clamp((f.x + W) / width, 0.f, .999f);
-                changed |= pick(static_cast<uint32_t>(share * pages));
-            } else if (page_ == cases && f.x < -W / 3)
-                changed |= previousFile();
-            else
-                changed |= next();
-        }
+        if (near && !near_[i] && open)
+            changed |= pokeAt(f);
         near_[i] = near; // a hand already in (or gripping in) must come out first
+        // RAY POKE: the free hand pointed at the face (not already touching it); a fresh trigger pages it there.
+        Vec3 hit{};
+        if (in.ray && !near && !in.onWheel[i] && rayOnFace(in.hand[i], in.aim[i], hit)) {
+            aimed_[i] = true;
+            hover_ = true;
+            if (fresh)
+                changed |= pokeAt(hit);
+        }
     }
     return changed;
 }

@@ -2172,6 +2172,8 @@ DWORD WINAPI run(void*) {
         uint32_t vanAskTag{}, vanAsks{}, vanAskFrames{};
         uint64_t vanAnswers{};
         float vanTrigger[2]{};
+        // 0.0.73 test 3 FREE-HAND GUNS: last frame's hand with its grip held on the wheel's rim (about to latch)
+        bool vanRimGrip[2]{};
         double vanAt = -1;
         cape_glide::Data capeNow{};
         bool capeCounted{};
@@ -4380,7 +4382,7 @@ DWORD WINAPI run(void*) {
                         rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
                     }
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
-                    rig.vehicleTurn(vanCarry.turn, vanCarry.lockStick);
+                    rig.vehicleTurn(vanCarry.turn, van072::seatStickLock(van.state, vanCarry.lockStick)); // 0.0.73 test 3: no stick turn seated
                     vanCarry.turn = 0;
                     motion = rig.update(controller, feet, {camera[8], camera[9], camera[10]}, gameplay,
                                         swingState.owned ? Vec3{0, 1, 0} : heroUp,
@@ -6555,8 +6557,16 @@ DWORD WINAPI run(void*) {
                             // 0.0.73 test 3: the heroes' own trigger and grip (never WEBS ON TRIGGER's swap).
                             grapple073::HeroPress heroPress[2]{};
                             for (unsigned i = 0; i < 2; ++i) {
+                                // 0.0.73 test 3 FREE-HAND GUNS (VAN PEDALS WHEEL HAND): in the seat the free hand's
+                                // trigger reaches the hero's own weapons (the PUNISHER's drawn pistol: the mod's guns,
+                                // shots by sm2_damage - CONFIRMED path; from the seat CANDIDATE); the wheel's hand (last
+                                // frame's latch or a grip on the rim), a hand pointed at the dash screen and CLASSIC
+                                // pedals keep the 0.0.72 block. The game's own pad triggers stay cut (below).
+                                const bool seatBlock =
+                                    vanDriving && !van072::freeTrigger(true, combat38::vanWheelHandPedals(c38(combat38::vanPedals)),
+                                                                       van.wheel.latched[i], vanRimGrip[i], vanDash.aimed(i));
                                 heroPress[i] = grapple073::heroPress(frame.hands[i].trigger, frame.hands[i].squeeze,
-                                                                     (hudZone & (1u << i)) != 0, vanDriving);
+                                                                     (hudZone & (1u << i)) != 0, seatBlock);
                                 auto& h = cf.hands[i];
                                 const auto& grip = frame.hands[i].grip;
                                 h.tracked = gripsTracked[i];
@@ -7051,7 +7061,7 @@ DWORD WINAPI run(void*) {
                                     // probe's spot, the door handle, the wheel latched to the hands, the pedals - and now the van
                                     // and he move: the cab rides in his tracking space, the van's motion carries his body (the
                                     // swing command's carry, next frame) and turns his room (the rig). While he drives the
-                                    // triggers are the pedals only: no shot, no hook, nothing to the game (the pad, above). A
+                                    // triggers are the pedals only: no shot, no hook, nothing to the game (the pad, above) - 0.0.73 test 3: but the free hand's gun (heroPress, above). A
                                     // bridge that does not carry parks the van where it is (the 0.0.72 preview's van).
                                     {
                                         van072::In vin;
@@ -7094,9 +7104,12 @@ DWORD WINAPI run(void*) {
                                         const auto open = [](Vec3, Vec3, float) { return true; };  // (the probe checked it)
                                         const auto clearAhead = [](Vec3, Vec3, float) { return true; }; // the bumper ray (ci)
                                         const bool wasDriving = van.state == van072::driving;
+                                        // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (0, the default) or CLASSIC (0.0.72), live.
+                                        van072::Tune vanTune{};
+                                        vanTune.wheelHandPedals = combat38::vanWheelHandPedals(c38(combat38::vanPedals));
                                         van072::Out vout{};
                                         try {
-                                            vout = vanDriver.step(vin, ci, vanCarry, flat, open, clearAhead);
+                                            vout = vanDriver.step(vin, ci, vanCarry, flat, open, clearAhead, vanTune);
                                         } catch (...) { // never: it allocates nothing; parked, the carry off
                                             van.park();
                                             vanDriver.carried = vanDriver.boarding = false;
@@ -7115,6 +7128,11 @@ DWORD WINAPI run(void*) {
                                                     si.hand[i] = vin.tracked[i] ? van.frame.local(vin.hands[i]) : Vec3{};
                                                     si.grip[i] = vin.grip[i];
                                                     si.onWheel[i] = van.wheel.latched[i];
+                                                    // 0.0.73 test 3 RAY POKE: the free hand's aim (van-local) and trigger
+                                                    const Vec3 aimW = vanW.orientation.rotate(cf.hands[i].aim);
+                                                    const Vec3 aimL = van.frame.local(van.frame.at + aimW);
+                                                    si.aim[i] = vin.tracked[i] && finite(aimL) ? aimL : Vec3{};
+                                                    si.trigger[i] = std::isfinite(frame.hands[i].trigger) ? frame.hands[i].trigger : 0.f;
                                                 }
                                                 if (vanDash.step(si)) { // a tick: X's hand, or both for a poke
                                                     runtime.haptic(0, .05f);
@@ -7156,6 +7174,11 @@ DWORD WINAPI run(void*) {
                                             if (vout.haptic[i] > 0)
                                                 runtime.haptic(static_cast<int>(i), vout.haptic[i]);
                                         vanDriving = van.state == van072::driving;
+                                        for (unsigned i = 0; i < 2; ++i) { // 0.0.73 test 3 FREE-HAND GUNS: next frame's rim grip
+                                            float a = 0, off = 0;
+                                            vanRimGrip[i] = vanDriving && vin.tracked[i] && std::isfinite(vin.grip[i]) && vin.grip[i] >= .6f &&
+                                                            van072::Wheel::onRim(van.frame.local(vin.hands[i]), a, off, vanTune);
+                                        }
                                         // Version 0.0.73 VAN SOUND (owner t996u/t997u): the slam and the start-up once, the
                                         // engine on repeat while he sits in it (pitched with the throttle), faded as he gets
                                         // out - then the door slams again.
@@ -7460,7 +7483,9 @@ DWORD WINAPI run(void*) {
                                             hero072HandAt[i] = cf.hands[i].position; // 0.0.72 GRAPPLE's line
                                             hero072HandAim[i] = cf.hands[i].aim;
                                             hero072HandTracked[i] = cf.hands[i].tracked;
-                                            in72.hands[i].trigger = heroPress[i].trigger; // test 3: the real trigger
+                                            // test 3: the real trigger (0.0.73 test 3: never the hook from the van's seat -
+                                            // a free-hand trigger there is the gun's only)
+                                            in72.hands[i].trigger = vanDriving ? 0.f : heroPress[i].trigger;
                                             in72.hands[i].grip = heroPress[i].grip;       // and grip
                                             // Test build 10 THOR HAMMER GRIP: Mjolnir in the fist from the grip pose.
                                             in72.hands[i].hammer = thor_grip::held(frame.hands[i].grip, runtime.controllers()[i]);
@@ -12722,6 +12747,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPalmBlast(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeroMenu(void* v) { return setHero007(v, combat38::heroMenu, 5446); }
 // 0.0.73 test 3 REP PAGE: each rep change logged for the hologram's REP tab (ON) or not (OFF) (live.txt rep_log).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyRepLog(void* v) { return setHero007(v, combat38::repLog, 5447); }
+// 0.0.73 test 3 VAN PEDALS: WHEEL HAND (0) or CLASSIC (1, the 0.0.72 pedals) (live.txt van_pedals).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanPedals(void* v) { return setHero007(v, combat38::vanPedals, 5448); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

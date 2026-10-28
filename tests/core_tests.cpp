@@ -1639,7 +1639,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 234, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 235, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1979,7 +1979,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 234, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 235, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18833,7 +18833,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 126, "one hundred and twenty-six options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 127, "one hundred and twenty-seven options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18867,7 +18867,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 126, "0.0.73 test 3 has 126 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 127, "0.0.73 test 3 has 127 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19189,7 +19189,7 @@ int main() {
                 }
             }
         }
-        check(placed == 202 /* 0.0.73 test 3: + HERO MENU, REP LOG, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 203 /* 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -25564,6 +25564,52 @@ int main() {
             }
             check(r.d.fallbacks == 0 && r.d.carried && std::abs(r.co.turn) < .1f, "driving round the wrap: still carried");
         }
+        {   // 0.0.73 test 3 SEATED STICK: in the seat the right stick never turns the view - every frame, boarding,
+            // carried, reversing with the stick pulled back, and a preview seat the bridge could not carry
+            check(v::seatStickLock(v::driving, false) && !v::seatStickLock(v::parked, false) &&
+                      !v::seatStickLock(v::none, false) && v::seatStickLock(v::parked, true),
+                  "the lock: asked, or in the seat");
+            Rig r;
+            setUp(r);
+            r.in.summonPress = true;
+            tick(r);
+            r.in.summonPress = false;
+            r.in.hands[0] = r.d.van.frame.world(v::doorHandleOut);
+            r.room.position = Vec3{r.in.hands[0].x, 0, r.in.hands[0].z} - Vec3{r.headRoom.x, 0, r.headRoom.z} +
+                              r.d.van.frame.right() * -.35f;
+            r.in.grip[0] = 1;
+            tick(r);
+            r.in.grip[0] = 0;
+            int seated = 0, unlocked = 0;
+            for (int f = 0; f < 240; ++f) {
+                if (!r.d.boarding)
+                    latch(r);
+                r.in.trigger[0] = f > 60 ? 1.f : 0.f; // the left hand on the wheel drives, then reverses
+                r.in.stickY[0] = f > 150 ? -1.f : 0.f;
+                tick(r);
+                if (r.d.van.state == v::driving) {
+                    ++seated;
+                    unlocked += r.co.lockStick ? 0 : 1;
+                }
+            }
+            check(seated > 200 && unlocked == 0, "every seated frame locks the stick (" + std::to_string(unlocked) + " did not)");
+            check(r.d.carried, "carried in the seat");
+            Rig p; // the bridge not ready as he gets in: a seat that is never carried, still locked
+            setUp(p);
+            p.ci.ready = false;
+            enter(p);
+            tick(p);
+            check(p.d.van.state == v::driving && !p.d.carried && p.co.lockStick, "a preview seat: the stick locked");
+            Rig q; // out again: the stick is his
+            setUp(q);
+            enter(q);
+            q.d.van.park();
+            q.d.carried = false;
+            tick(q);
+            for (int f = 0; f < 200 && q.co.lockStick; ++f)
+                tick(q);
+            check(!q.co.lockStick, "parked and out: the stick turns again");
+        }
     });
     test("Version 0.0.72 PUNISHER VAN: walls stop it, NaN parks it, other heroes / off remove it", [] {
         namespace v = spidy::van072;
@@ -30673,6 +30719,155 @@ int main() {
                   std::string(van.help).find("no restart.") != std::string::npos && std::string(van.help).size() <= 80,
               "PUNISHER VAN is ON by default, OFF in the settings");
         check(hero072::PlayOptions{}.punisherVan, "the 0.0.72 options start with the van on");
+    });
+    test("0.0.73 test 3 FREE-HAND GUNS: from the seat the free hand fires, the wheel hand's trigger is only ever the throttle", [] {
+        namespace v = van072;
+        // off the seat: every trigger is the hero's
+        check(v::freeTrigger(false, true, false, false, false) && v::freeTrigger(false, false, true, true, true), "on foot: fires");
+        // in the seat, WHEEL HAND pedals: the free hand fires; the wheel's hand, a grip on the rim, a hand on the screen never
+        check(v::freeTrigger(true, true, false, false, false), "the free hand fires from the seat");
+        check(!v::freeTrigger(true, true, true, false, false), "the wheel's hand: never a shot");
+        check(!v::freeTrigger(true, true, false, true, false), "a grip on the rim (about to latch): never a shot");
+        check(!v::freeTrigger(true, true, false, false, true), "pointed at the dash screen: it pages, no shot");
+        check(!v::freeTrigger(true, false, false, false, false), "CLASSIC pedals: either trigger is a pedal, no shot (0.0.72)");
+        // the hero's press: the block is per hand now (heroPress's `driving` is the seat's block for that hand)
+        check(grapple073::heroPress(1, 0, false, false).trigger > .9f && grapple073::heroPress(1, 0, false, true).trigger == 0,
+              "the press passes only unblocked");
+        check(grapple073::heroPress(1, 0, true, false).trigger == 0, "the hologram's zone still takes it");
+        check(grapple073::heroPress(NAN, NAN, false, false).trigger == 0, "a NaN trigger: no shot");
+        // the free hand's trigger never moves the van; the wheel hand's drives (WHEEL HAND), every combination
+        for (int wheel = 0; wheel < 2; ++wheel)
+            for (float t : {0.f, .3f, 1.f}) {
+                bool on[2]{};
+                on[wheel] = true;
+                float trig[2]{}, stick[2]{};
+                trig[1 - wheel] = 1; // the free hand fires
+                trig[wheel] = t;
+                const v::Drive d = v::wheelPedal(on, trig, stick);
+                check(t > v::Tune{}.pedal ? d.pedal == v::Pedal::drive : d.pedal == v::Pedal::none,
+                      "only the wheel hand's trigger drives (hand " + std::to_string(wheel) + ")");
+                check(v::freeTrigger(true, true, on[1 - wheel], false, false) && !v::freeTrigger(true, true, on[wheel], false, false),
+                      "and only the free hand's fires");
+            }
+        // the rim test the seat uses for "about to latch"
+        {
+            const Vec3 axis = v::wheelAxis(), up = normalized(Vec3{0, 1, 0} - axis * axis.y);
+            float a = 0, off = 0;
+            check(v::Wheel::onRim(v::wheelHub + up * .19f, a, off, v::Tune{}), "a hand on the rim");
+            check(!v::Wheel::onRim(v::wheelHub + Vec3{.5f, .2f, .3f}, a, off, v::Tune{}), "a hand in the lap: off the rim");
+        }
+    });
+    test("0.0.73 test 3 VAN PEDALS: WHEEL HAND (default) or CLASSIC, one sentence, no restart; CLASSIC is the 0.0.72 pedals", [] {
+        namespace v = van072;
+        const auto& o = combat38::optionInfo[combat38::vanPedals];
+        const std::string h = o.help;
+        check(std::string(o.key) == "van_pedals" && std::string(o.label) == "VAN PEDALS" && o.count == 2 &&
+                  std::string(o.values[0]) == "WHEEL HAND" && std::string(o.values[1]) == "CLASSIC",
+              "VAN PEDALS: WHEEL HAND first, CLASSIC");
+        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos, "its subtext: one sentence, no restart");
+        check(combat38::vanWheelHandPedals(0) && !combat38::vanWheelHandPedals(1), "value 0 is WHEEL HAND (the default)");
+        check(v::Tune{}.wheelHandPedals && v::Tune{}.boardPlayer, "ON by default (and the boarding stays internal, on)");
+        // The van: a free hand's RT drives under CLASSIC, never under WHEEL HAND.
+        auto flat = [](float, float, float) { return 0.f; };
+        auto open = [](Vec3, Vec3, float) { return true; };
+        for (int classic = 0; classic < 2; ++classic) {
+            v::Tune t;
+            t.wheelHandPedals = !classic;
+            auto ahead = [](Vec3, Vec3, float) { return true; };
+            v::Van van;
+            v::In in;
+            in.dt = 1.f / 90;
+            in.enabled = in.punisher = in.play = true;
+            in.tracked[0] = in.tracked[1] = true;
+            in.summonPress = true;
+            van.step(in, flat, open, ahead, t);
+            in.summonPress = false;
+            in.hands[0] = van.frame.world(v::doorHandleOut);
+            in.grip[0] = 1;
+            van.step(in, flat, open, ahead, t);
+            in.grip[0] = 0;
+            van.step(in, flat, open, ahead, t);
+            check(van.state == v::driving, "in the seat");
+            in.hands[0] = in.hands[1] = van.frame.world(Vec3{.3f, 1.f, -.4f}); // in his lap, off the wheel
+            in.trigger[1] = 1;                                                    // RT, the free hand
+            for (int f = 0; f < 90; ++f)
+                van.step(in, flat, open, ahead, t);
+            check(classic ? van.speed > 1.f : std::abs(van.speed) < 1e-3f,
+                  classic ? "CLASSIC: RT drives without the wheel (0.0.72)" : "WHEEL HAND: a free hand's RT never drives");
+        }
+    });
+    test("0.0.73 test 3 RAY POKE: the free hand pointed at the dash screen pages it on a trigger press, from the seat", [] {
+        namespace vs = van_screen;
+        const vs::Mount m = vs::mountLocal();
+        const auto at = [&](float x, float y) { return m.centre + (m.right * x + m.up * y) * vs::faceScale; };
+        const Vec3 shoulder{-.2f, 1.35f, -.45f}; // the right hand from the seat, not leaning: ~0.8-0.9 m away
+        check(length(at(0, 0) - shoulder) > .7f, "out of a touch's reach");
+        const auto in = [&](Vec3 target, float trigger, bool onWheel = false, Vec3 from = Vec3{-.2f, 1.35f, -.45f}) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = true;
+            i.hand[1] = from;
+            i.tracked[1] = true;
+            i.aim[1] = normalized(target - from);
+            i.trigger[1] = trigger;
+            i.onWheel[1] = onWheel;
+            i.grip[1] = .9f; // a hand holding a gun points too
+            return i;
+        };
+        const float tabY = vs::height / 2 - vs::tabHeight / 2;
+        vs::Screen s;
+        check(!s.step(in(at(vs::width * .125f, tabY), 0)) && s.aimed(1) && s.hover(), "aimed at the CASES tab: hover, no page yet");
+        check(s.step(in(at(vs::width * .125f, tabY), 1)) && s.page() == vs::cases, "the trigger picks CASES");
+        check(!s.step(in(at(vs::width * .125f, tabY), 1)), "held: once");
+        check(!s.step(in(at(0, -.02f), .5f)), "not re-armed yet (under the release)");
+        s.step(in(at(0, -.02f), 0));
+        check(s.step(in(at(.05f, -.02f), 1)) && s.file() == 1, "on a case: the next file");
+        s.step(in(at(0, 0), 0));
+        check(s.step(in(at(-vs::width * .4f, -.02f), 1)) && s.file() == 0, "its left third: back a file");
+        s.step(in(at(0, 0), 0));
+        // forgiving: a little off the edge still pages (clamped onto the face); well off does not
+        check(s.step(in(at(vs::width / 2 + .02f, 0), 1)), "2 cm off the edge: still the screen");
+        s.step(in(at(0, 0), 0));
+        vs::Screen o;
+        check(!o.step(in(at(vs::width, 0), 0)) && !o.aimed(1) && !o.step(in(at(vs::width, 0), 1)) && o.page() == vs::map,
+              "well off the face: nothing (that trigger is the gun's)");
+        // the wheel's hand, a trigger held as the ray swept on, pointing away, from behind, too far, a NaN: nothing
+        vs::Screen w;
+        check(!w.step(in(at(0, 0), 1, true)) && !w.aimed(1), "the wheel's hand never pages it");
+        vs::Screen held;
+        held.step(in(at(vs::width * 2, 0), 1));
+        check(!held.step(in(at(0, 0), 1)) && held.aimed(1) && held.page() == vs::map, "a held trigger swept on: no page");
+        vs::Screen away;
+        vs::In ia = in(at(0, 0), 1);
+        ia.aim[1] = ia.aim[1] * -1.f;
+        check(!away.step(ia) && !away.aimed(1), "pointing away: nothing");
+        vs::Screen far;
+        check(!far.step(in(at(0, 0), 1, false, at(0, 0) + m.normal * 2.5f)), "beyond its reach: nothing");
+        vs::Screen behind;
+        check(!behind.step(in(at(0, 0), 1, false, at(0, 0) - m.normal * .3f)), "from behind the dash: nothing");
+        vs::Screen bad;
+        vs::In ib = in(at(0, 0), NAN);
+        ib.aim[1] = {NAN, 0, -1};
+        check(!bad.step(ib) && !bad.aimed(1), "a NaN aim: nothing");
+        vs::In iz = in(at(0, 0), 1);
+        iz.aim[1] = {};
+        check(!bad.step(iz), "no aim: nothing");
+        vs::Screen off;
+        vs::In ir = in(at(0, 0), 0);
+        ir.ray = false;
+        off.step(ir);
+        ir.trigger[1] = 1;
+        check(!off.step(ir) && !off.aimed(1), "the ray off: touch and X only");
+        vs::Screen parked;
+        vs::In ip = in(at(0, 0), 0);
+        ip.driving = false;
+        parked.step(ip);
+        ip.trigger[1] = 1;
+        check(!parked.step(ip) && !parked.aimed(1), "parked: nothing");
+        Vec3 hit{};
+        check(vs::rayOnFace(shoulder, normalized(at(0, 0) - shoulder), hit) && length(hit) < 1e-3f, "the ray's spot: the face's centre");
+        // still flush and straight (unmoved): the VAN SCREEN test checks its place
+        check(m.normal.z == 1 && m.right.x == 1 && m.up.y == 1, "square to the van");
     });
     test("0.0.73 test 2 BUTTON GUIDE (fix 23): every hero's controls on his page, the SUITS / CONTROLS tabs, B back", [] {
         namespace rp = roster_page;

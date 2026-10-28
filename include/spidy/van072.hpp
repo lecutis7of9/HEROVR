@@ -346,8 +346,21 @@ inline Drive wheelPedal(const bool onWheel[2], const float trigger[2], const flo
     return {};
 }
 
+// Version 0.0.73 test 3 FREE-HAND GUNS: may hand i's trigger reach the hero's own weapons (the PUNISHER's
+// drawn pistol) this frame? Off the seat: always. In the seat: never with the 0.0.72 pedals (either trigger
+// is a pedal there), never the wheel's hand (latched, or its grip held on the rim - about to latch: its
+// trigger is the throttle), never a hand pointed at the dash screen (that trigger pages it). Everything
+// else - the free hand - fires. Fails safe: anything unsure is "no fire", never a throttle.
+inline bool freeTrigger(bool driving, bool wheelHandPedals, bool latched, bool gripOnRim, bool onScreen) {
+    if (!driving)
+        return true;
+    return wheelHandPedals && !latched && !gripOnRim && !onScreen;
+}
+
 // ---- THE VAN ----
 enum State : uint32_t { none = 0, parked, driving };
+// 0.0.73 test 3 SEATED STICK: the rig's stick lock - asked (boarding, alighting, the carry) or in the seat.
+inline bool seatStickLock(State s, bool asked) { return asked || s == driving; }
 inline constexpr const char* stateNames[] = {"NONE", "PARKED", "DRIVING"};
 struct In {
     float dt{};
@@ -768,6 +781,10 @@ struct Driver {
         if (!fine(rpm))
             rpm = 0;
         co.rpm = rpm;
+        // 0.0.73 test 3 SEATED STICK: in the seat the right stick never turns the view (smooth or snap) - every
+        // driving frame, carried or not (the preview, a carry given up), so a stick pulled back to reverse
+        // cannot drift it. The van's own turn (co.turn) still turns the room.
+        co.lockStick = seatStickLock(van.state, co.lockStick);
         return o;
     }
 };

@@ -267,3 +267,4 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual({c: f for c, f in uses.items() if len(f) > 1}, {})
         self.assertEqual(uses.get('5442'), ['SpidyWeaponCollision'])
         self.assertEqual(uses.get('5445'), ['SpidyVanScreen'])
+        self.assertEqual(uses.get('5448'), ['SpidyVanPedals'])  # 0.0.73 test 3 VAN PEDALS

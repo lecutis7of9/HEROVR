@@ -152,6 +152,8 @@ enum Option : uint32_t {
     heroMenu,
     // 0.0.73 test 3 REP PAGE: each rep change logged for the hologram's REP tab (ON) or not (OFF)
     repLog,
+    // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (on: a trigger drives only while its hand grips the wheel) or CLASSIC (0.0.72)
+    vanPedals,
     options
 };
 struct OptionInfo {
@@ -477,7 +479,11 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"HOLO TILES", "CLASSIC", nullptr, nullptr}},
     {"rep_log", "REP LOG", "REPLG", "ON logs each rep change on the hologram's REP tab, OFF stops it, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"van_pedals", "VAN PEDALS", "VPEDL", "WHEEL HAND: the wheel hand's trigger drives, the free hand fires, no restart.",
+     2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
 };
+// 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
+inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }
 // 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).
 inline bool shadowMatchOn(uint32_t value) { return value == 0; }
 // Version 0.0.62 HAND FLIPS / LENS FLARES values

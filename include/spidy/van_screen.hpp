@@ -12,7 +12,8 @@
 //   LOCKER  the weapons locker (flavour text).
 // It is built into the dash face, centre dash right of the wheel, flush and square to the van (MEASURED
 // on the built cab; in game CANDIDATE). Paged by X while driving (X is the van's and does nothing then)
-// or by a poke with an open hand (grip under pokeGripMost, not on the wheel): the tab row picks a
+// or by a poke with an open hand (grip under pokeGripMost, not on the wheel), or (RAY POKE) by the free
+// hand pointed at it and its trigger pulled: the tab row picks a
 // page; on CASES the left third goes back a file, the rest on. It never takes the wheel's grip or the
 // triggers. Pure: no game reads, no addresses. Everything it draws is checked: anything non-finite
 // (or a throw) and it draws nothing at all.
@@ -58,6 +59,11 @@ inline constexpr float bezelDepth = .008f; // design units behind the face: the 
 inline constexpr Vec3 mountAt{.04f, 1.115f, dashFaceZ + bezelDepth * faceScale + .002f};
 inline constexpr float tabHeight = .028f;
 inline constexpr float pokeDepth = .035f, pokeThrough = .05f, pokeSlack = .012f, pokeGripMost = .3f;
+// 0.0.73 test 3 RAY POKE (the screen sits ~0.8-1.0 m from the seat, out of reach without leaning): the free
+// hand's aim ray on the face (raySlack design units of margin all round, up to rayReach metres out, not
+// grazing: the ray's cosine to the face's normal past rayFacing) plus a fresh trigger press (past rayPress,
+// re-armed under rayRelease) pages it as a touch would at that spot. Never a hand on the wheel.
+inline constexpr float rayReach = 2.f, raySlack = .03f, rayFacing = .2f, rayPress = .6f, rayRelease = .3f;
 
 // The screen's frame in the van's: unit right (+x) / up (+y) across the face, normal +z (the cab's back).
 struct Mount {
@@ -76,7 +82,14 @@ struct In {
     bool tracked[2]{};
     float grip[2]{};
     bool onWheel[2]{}; // van072::Wheel::latched
+    // 0.0.73 test 3 RAY POKE: each hand's aim (van-local unit direction; zero: none) and trigger (0-1)
+    Vec3 aim[2]{};
+    float trigger[2]{};
+    bool ray{true}; // false: touch pokes and X only (the 0.0.73 test 3 first cut)
 };
+// Where hand `from`'s ray along `dir` (van-local) meets the face, in design units (x, y; z 0), when it does
+// within the face (+ raySlack) and rayReach, from in front, not grazing. False otherwise (or non-finite).
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit);
 
 class Screen {
 public:
@@ -91,11 +104,15 @@ public:
     uint32_t file() const { return file_; }
     float flash() const { return flash_; }
     bool hover() const { return hover_; }
+    // 0.0.73 test 3 RAY POKE: hand i's ray was on the face last step (its trigger is the screen's then).
+    bool aimed(unsigned i) const { return i < 2 && aimed_[i]; }
 
 private:
     uint32_t page_{}, file_{};
     float flash_{};
     bool near_[2]{}, hover_{};
+    bool aimed_[2]{}, trigWas_[2]{};
+    bool pokeAt(Vec3 f); // a touch at face point f (design units): the tab row, CASES' back third, else next
 };
 
 // What the renderer draws: world space (this frame's), every number checked by append.

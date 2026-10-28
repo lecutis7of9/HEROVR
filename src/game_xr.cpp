@@ -3998,7 +3998,12 @@ DWORD WINAPI run(void*) {
                         // (never draws). Any other hero: nothing claimed, the grips as in 0.0.62.
                         {
                             hero007::PlayInput hin;
-                            hin.dt = hero007HoldAt < 0 ? 0.f : static_cast<float>(std::clamp(frame.seconds - hero007HoldAt, 0.0, .1));
+                            // Version 0.0.73 test 3: frame.seconds is the frame's LENGTH, not a clock (Update 17).
+                            // 0.0.7 to test 2 took the difference of two frame lengths here, about 0 every
+                            // frame, so the racks' BodyYaw never turned with the player (the holsters stayed
+                            // where he faced on the first frame: fix 8's hips and DAREDEVIL's back batons
+                            // were behind or beside him once he turned) and every timed rack step stood still.
+                            hin.dt = std::isfinite(frame.seconds) ? std::clamp(static_cast<float>(frame.seconds), 0.f, .1f) : 0.f;
                             hero007HoldAt = frame.seconds;
                             hin.play = drawPlay;
                             hin.hero = heroNow();
@@ -8476,7 +8481,8 @@ DWORD WINAPI run(void*) {
                                 // Version 0.0.7 WOLVERINE HEALING: 3 s unhurt, then 10%/s back, through the same
                                 // CONFIRMED record and cap as INVINCIBLE (never above it, never a revive).
                                 read(h + extras385::invincible::reduceAt, &reduce, sizeof(reduce));
-                                const float healDt = healAt < 0 ? 0.f : static_cast<float>(std::clamp(frame.seconds - healAt, 0.0, .1));
+                                // 0.0.73 test 3: frame.seconds is the frame's length (was the difference of two, about 0)
+                                const float healDt = std::isfinite(frame.seconds) ? std::clamp(static_cast<float>(frame.seconds), 0.f, .1f) : 0.f;
                                 const float to = hero007Play.healing.step(healDt, hitPoints, mostHitPoints, reduce);
                                 if (to >= 0 && writeFloatIf(h + game_player::hitPointsAt, hitPoints, to)) {
                                     ++hero007Heals;

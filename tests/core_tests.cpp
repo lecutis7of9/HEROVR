@@ -23859,6 +23859,33 @@ int main() {
             check(length(sprintVelocity({NAN, 0, 0}, 0, 1)) == 0 && length(sprintVelocity({0, 0, -1}, 0, 0)) == 0, "NaN / no stick: none");
         }
     });
+    test("Version 0.0.73 test 3: HOLSTER BODY TURN - the racks follow the body with the frame's real dt (test 2 passed about 0: frozen)", [] {
+        using namespace spidy::holster;
+        // game_xr's holsterStep took dt = frame.seconds - the last frame.seconds: two frame LENGTHS, about 0.
+        // A rack's body yaw then never turned from the first frame's facing: after the player turned, the hips
+        // and the back sat where the body no longer was (DAREDEVIL's back batons, the PUNISHER's pistols).
+        const Pose ahead{{0, 1.62f, 0}, {}};
+        const Pose right{{0, 1.62f, 0}, spidy::arc({0, 0, -1}, {1, 0, 0})};
+        Rack live, frozen;
+        live.add(back, 1);
+        frozen.add(back, 1);
+        Hand none[2]{};
+        live.update(1 / 90.f, true, ahead, none);
+        frozen.update(1 / 90.f, true, ahead, none);
+        for (int f = 0; f < 270; ++f) { // 3 s facing +x
+            live.update(1 / 90.f, true, right, none);
+            frozen.update(0, true, right, none);
+        }
+        check(std::abs(live.body.forward().x - 1) < .05f, "the real dt: the body turned with the player");
+        check(frozen.body.forward().z < -.95f, "dt 0: frozen at the first facing (test 2's bug)");
+        // the back draw after the turn: behind the turned player (at -x)
+        Hand reach[2]{};
+        reach[0] = {{-.25f, 1.45f, 0}, true, 0, false, false};
+        live.update(1 / 90.f, true, right, reach);
+        reach[0].squeeze = 1;
+        live.update(1 / 90.f, true, right, reach);
+        check(live.heldIn(0) == 0, "a reach over the shoulder after a turn draws from the back");
+    });
     test("Version 0.0.73: PUNISHER hook - its own chest zone (never a holster's), grip draws, trigger fires", [] {
         using namespace spidy::hero072;
         for (float b = 0; b <= 1.2f; b += .02f)

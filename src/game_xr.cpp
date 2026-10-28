@@ -599,6 +599,8 @@ uint32_t SpidyImpostorReachNow();
 // Update 38.3 FAR WINDOWS (stereo_probe.cpp): the impostor (far building windows) reach as a
 // percent of the game's, and its counts (calls, writes, the game's metres, ours).
 DWORD WINAPI SpidyFarWindows(void* percent);
+DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
+DWORD WINAPI SpidyShadowMatch(void* on);
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
 void SpidyMirrorViewWant(uint32_t on);
@@ -2218,7 +2220,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -10505,6 +10507,18 @@ DWORD WINAPI run(void*) {
                                 farAppliedPercent = farWant;
                                 SpidyFarWindows(reinterpret_cast<void*>(static_cast<uintptr_t>(farWant)));
                             }
+                            // 0.0.73 test 2 CULL MARGIN: its degrees to the game's view lens when they change.
+                            if (const uint32_t cullWant = recording_fov::cullMarginOf(c38(combat38::cullMargin));
+                                cullWant != cullAppliedDegrees) {
+                                cullAppliedDegrees = cullWant;
+                                SpidyCullMarginDegrees(reinterpret_cast<void*>(static_cast<uintptr_t>(cullWant)));
+                            }
+                            // 0.0.73 test 2 SHADOW MATCH (EXPERIMENTAL): on or off when it changes.
+                            if (const uint32_t matchWant = c38(combat38::shadowMatch) == 1 ? 1u : 0u;
+                                matchWant != shadowMatchApplied) {
+                                shadowMatchApplied = matchWant;
+                                SpidyShadowMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
+                            }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)
                                 auto_perf::status(perfStatusText, sizeof perfStatusText, autoPerf, target);
@@ -12294,6 +12308,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorFlight(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitBody(void* v) { return setHero007(v, combat38::suitBody, 5436); }
 // Version 0.0.73: CAP SPRINT (live.txt cap_sprint = on / off).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCapSprint(void* v) { return setHero007(v, combat38::capSprint, 5437); }
+// 0.0.73 test 2 (fixes 9, 13): CULL MARGIN, the game view's degrees past the head's lens, 10 by default (live.txt cull_margin).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCullMargin(void* v) { return setHero007(v, combat38::cullMargin, 5438); }
+// 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default (live.txt shadow_match).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatch(void* v) { return setHero007(v, combat38::shadowMatch, 5439); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

@@ -482,6 +482,8 @@ enum class Control : uint8_t {
     combatThorFlight,
     combatSuitBody, // Build 9 SUITS: SUIT BODY
     combatCapSprint, // Version 0.0.73: CAP SPRINT
+    combatCullMargin, // 0.0.73 test 2 (fixes 9, 13): CULL MARGIN, the game view's degrees past the head's lens, 10 by default
+    combatShadowMatch, // 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -548,9 +550,9 @@ enum class Control : uint8_t {
     section11, // Version 0.0.72: GREEN LANTERN
     heroRoster, // Build 8: ROSTER: HEROES AND SUITS (opens the roster page, roster_page.hpp)
 };
-constexpr int controls = 224; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 226; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
-constexpr int combatControls = 116; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
+constexpr int combatControls = 118; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);

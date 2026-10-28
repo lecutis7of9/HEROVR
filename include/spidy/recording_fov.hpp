@@ -38,6 +38,12 @@ inline native_eyes::Bounds covering(const native_eyes::Bounds& eyes, int degrees
 // head's lens covering both eyes, plus this margin on every side, so a building
 // turning into either eye's edge was already in the game's view: never less.
 inline constexpr float cullMarginDegrees = 6.f, widestDegrees = 80.f;
+// 0.0.73 test 2 (fixes 9 and 13: "a little flicker remains on far-away buildings", "street lights flicker"):
+// CULL MARGIN (combat38::cullMargin) picks the margin, 10 by default; 6 is build 12's. CONFIRMED: the view and
+// its lens path (build 12). CANDIDATE: that the street lights' cull follows the game's view as the windows do.
+inline constexpr uint32_t cullMarginChoices[4] = {10, 6, 15, 20};
+inline constexpr uint32_t cullMarginMaxDegrees = 30;
+constexpr uint32_t cullMarginOf(uint32_t value) { return value < 4 ? cullMarginChoices[value] : cullMarginChoices[0]; }
 inline float widenedTangent(float t, float degrees) {
     if (!std::isfinite(t))
         return t;

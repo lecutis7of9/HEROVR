@@ -27,6 +27,22 @@ class Hero073(unittest.TestCase):
         g = src('src/game_xr.cpp')
         self.assertIn('vr_mirror::unreflect(plane, viewer)', g)
         self.assertIn('vr_mirror::reflectVertices(plane, mirrorProps, 0)', g)
+    def test_test2_cull_margin_and_shadow_match(self):
+        s = src('src/stereo_probe.cpp')
+        self.assertIn('recording_fov::widened(head, static_cast<float>(cullMarginDegrees.load(', s)
+        i = s.index('uint64_t csmFit(')
+        body = s[i:i + 2500]
+        # SHADOW MATCH: the eye's own descriptor is put back after the fit, nothing is shared between the eyes.
+        self.assertIn('std::memcpy(view, &lens, sizeof lens);', body)
+        self.assertLess(body.index('std::memcpy(view, &lens, sizeof lens);'), body.index('std::memcpy(view, &own, sizeof own);'))
+        self.assertIn('std::atomic<uint32_t> shadowMatchOn{};', s)
+        self.assertNotIn('eyeShadows = 1', s)
+        g = src('src/game_xr.cpp')
+        self.assertIn('SpidyCullMarginDegrees(reinterpret_cast<void*>', g)
+        self.assertIn('SpidyShadowMatch(reinterpret_cast<void*>', g)
+        ls = src('tools/live_settings.py')
+        self.assertIn("'shadow_match': 'off'", ls)
+        self.assertIn("'cull_margin': '10deg'", ls)
 
 if __name__ == '__main__':
     unittest.main()

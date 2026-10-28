@@ -130,6 +130,10 @@ enum Option : uint32_t {
     suitBody,
     // Version 0.0.73 (fix 17): CAPTAIN AMERICA's SUPER SPRINT (grapple073::ArmPump), ON by default.
     capSprint,
+    // 0.0.73 test 2 (fixes 9, 13): CULL MARGIN, the game view's degrees past the head's lens, 10 by default
+    cullMargin,
+    // 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default
+    shadowMatch,
     options
 };
 struct OptionInfo {
@@ -435,6 +439,10 @@ inline constexpr OptionInfo optionInfo[options] = {
      3, {"ARMS", "FULL BODY", "OFF", nullptr}},
     {"cap_sprint", "CAP SPRINT", "SPRINT", "Cap pumps his arms, left stick pushed, to super-sprint on foot, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"cull_margin", "CULL MARGIN", "CULL", "Wider stops far window and street light flicker, costs a little FPS, no restart.",
+     4, {"10 DEG", "6 DEG", "15 DEG", "20 DEG"}},
+    {"shadow_match", "SHADOW MATCH", "SMATCH", "EXPERIMENTAL: both eyes' shadows fit one lens for less shimmer, no restart.",
+     2, {"OFF", "ON", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

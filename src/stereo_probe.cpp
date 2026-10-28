@@ -462,6 +462,8 @@ std::atomic<uint32_t> impostorReach{150};
 //     a CANDIDATE: farWindowsReady only when the function's prologue and both +88 stores read
 //     the bytes above at 2a6bc60/2a6bcad/2a6bded in this exe; else it never writes (UNAVAILABLE).
 std::atomic<uint32_t> farWindowsPercent{100};
+// 0.0.73 test 2 CULL MARGIN (recording_fov::cullMarginOf): the degrees the game's view reaches past the head's lens.
+std::atomic<uint32_t> cullMarginDegrees{recording_fov::cullMarginChoices[0]};
 bool farWindowsReady{};
 // Test build 11: write 2 (the CANDIDATE +88) is gated OFF. The Oct 28 build 9 log had it
 // writing every eye query (31497 writes, 145 m -> 290 m) and the window lights flickering;
@@ -808,9 +810,53 @@ void farShadowsSet(uint32_t mode, uint32_t reason, bool automatic) {
                   automatic ? " - on its own: " : "", automatic ? fs::reasonText(reason) : "");
     OutputDebugStringA(line);
 }
+// 0.0.73 test 2 SHADOW MATCH (fix 21, combat38::shadowMatch, EXPERIMENTAL, off by default): SpidyVR's and the
+// Miles VR mod's shadow fix - both eyes' sun cascades fitted to ONE lens, the head's lens covering both eyes
+// (shadowLens), so the two eyes' shadow maps agree (no shimmer that differs between the eyes). Each eye still
+// makes its own maps: nothing is shared between the eyes (sharing crashed the render thread in SM2VR 0.0.4).
+// CONFIRMED: the fit 0x2a8dc80 (far_shadows, csmFit) and the head lens (built every frame for the game view).
+// CANDIDATE: that 0x2a8dc80 fits to the view descriptor's pose and lens, as SM1's fit did (SpidyVR's swap).
+std::atomic<uint32_t> shadowMatchOn{};
+std::atomic<uint64_t> shadowMatchFits{}, shadowMatchSkipped{};
+SRWLOCK matchLock = SRWLOCK_INIT;
+Descriptor matchLens{};    // matchLock
+uint64_t matchLensMs{};     // matchLock: when it was made (GetTickCount64)
+bool matchLensUsable{};     // matchLock: false on the flat screen (both eyes one lens)
+constexpr uint64_t matchFreshMs = 60;
+void publishMatchLens(const Descriptor& lens, bool usable) {
+    AcquireSRWLockExclusive(&matchLock);
+    matchLens = lens;
+    matchLensMs = GetTickCount64();
+    matchLensUsable = usable;
+    ReleaseSRWLockExclusive(&matchLock);
+}
 uint64_t csmFit(void* csm, void* view, void* lights, void* settings) {
     namespace fs = spidy::far_shadows;
-    const auto result = originalCsmFit(csm, view, lights, settings);
+    uint64_t result{};
+    bool matched{};
+    if (enabled && view && shadowMatchOn.load(std::memory_order_relaxed) &&
+        (view == eyes[0].load(std::memory_order_relaxed) || view == eyes[1].load(std::memory_order_relaxed))) {
+        Descriptor lens{}, own{};
+        bool have{};
+        AcquireSRWLockShared(&matchLock);
+        const uint64_t now = GetTickCount64();
+        if (matchLensUsable && now >= matchLensMs && now - matchLensMs <= matchFreshMs) {
+            lens = matchLens;
+            have = true;
+        }
+        ReleaseSRWLockShared(&matchLock);
+        if (have && native_view::valid(lens) && read(reinterpret_cast<uintptr_t>(view), &own, sizeof own)) {
+            std::memcpy(view, &lens, sizeof lens);
+            result = originalCsmFit(csm, view, lights, settings);
+            std::memcpy(view, &own, sizeof own);
+            matched = true;
+            shadowMatchFits.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            shadowMatchSkipped.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    if (!matched)
+        result = originalCsmFit(csm, view, lights, settings);
     if (!enabled || !csm || !view)
         return result;
     void* l = eyes[0].load(std::memory_order_relaxed);
@@ -2030,7 +2076,8 @@ bool heroPosition(Vec3& position) {
 native_eyes::Bounds viewLens(const native_eyes::Bounds& head) {
     const int degrees = recordingFov.load(std::memory_order_relaxed);
     // Build 12 WINDOW LIGHTS: never narrower than the head's lens plus the cull margin.
-    const auto wide = recording_fov::widened(head);
+    const auto wide =
+        recording_fov::widened(head, static_cast<float>(cullMarginDegrees.load(std::memory_order_relaxed)));
     return degrees && live.load() == 2 && !native_gpu::screenRequested()
                ? recording_fov::covering(wide, degrees, flatAspect.load())
                : wide;
@@ -2559,6 +2606,7 @@ void placeEyes() {
                 // Covers both eyes: what the first eye fits its shadow cascades to.
                 shadowLens = aligned;
                 shadowLensPass = offscreenPass;
+                publishMatchLens(aligned, !shadowLensSame);
                 // The game's view takes RECORDING FOV's wider lens (viewLens), as
                 // at the frame's first submit. The eyes' shadows keep this one:
                 // rendering, the view fits cascades of its own to its own lens.
@@ -3808,6 +3856,28 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarWindows(void* percent) {
     if (value < 100 || value > 300)
         return 4402;
     farWindowsPercent = static_cast<uint32_t>(value);
+    return 0;
+}
+// 0.0.73 test 2 SHADOW MATCH: 0 off, 1 on; 4404 otherwise. Live; *fits / *skipped for the COMBAT record.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatch(void* on) {
+    const auto value = reinterpret_cast<uintptr_t>(on);
+    if (value > 1)
+        return 4404;
+    shadowMatchOn = static_cast<uint32_t>(value);
+    return 0;
+}
+extern "C" void SpidyShadowMatchStats(uint64_t* fits, uint64_t* skipped) {
+    if (fits)
+        *fits = shadowMatchFits.load();
+    if (skipped)
+        *skipped = shadowMatchSkipped.load();
+}
+// 0.0.73 test 2 CULL MARGIN: 0-30 degrees on every side of the head's lens; 4403 out of range. Live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCullMarginDegrees(void* degrees) {
+    const auto value = reinterpret_cast<uintptr_t>(degrees);
+    if (value > recording_fov::cullMarginMaxDegrees)
+        return 4403;
+    cullMarginDegrees = static_cast<uint32_t>(value);
     return 0;
 }
 // Its counts for the COMBAT record; *calls bit 63: write 2's bytes matched (farWindowsReady).

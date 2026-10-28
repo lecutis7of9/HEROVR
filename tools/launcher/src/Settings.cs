@@ -51,7 +51,23 @@ namespace Sm2VrLauncher
             }
             catch { }
             s.ReadFile(FilePath);
+            if (s.Migrate073t3()) s.Save();
             return s;
+        }
+
+        /// <summary>The marker of the one-time 0.0.73 test 3 move below; once written, the player's choices stay.</summary>
+        public const string Migrated073t3Key = "opt.migrated073t3";
+        /// <summary>SMOOTH TURN's default (LaunchOptions.cs, tests/hero073_tests.py keeps the two equal).</summary>
+        public const string SmoothTurnDefault = "120";
+        /// <summary>0.0.73 test 3, once: a launcher before 0.0.73 saved opt.SmoothTurn=0 as its own default (snap), which
+        /// the 0.0.73 launcher reads as the player picking snap (-SnapTurning), so such a settings.ini moves to smooth
+        /// turning, then the marker; a SMOOTH TURN off picked after the marker stays. True when the file must be saved.</summary>
+        public bool Migrate073t3()
+        {
+            if (Get(Migrated073t3Key, null) != null) return false;
+            if (Get("opt.SmoothTurn", null) == "0") Set("opt.SmoothTurn", SmoothTurnDefault);
+            Set(Migrated073t3Key, "1");
+            return true;
         }
 
         void ReadFile(string path)

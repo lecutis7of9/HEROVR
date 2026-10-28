@@ -198,3 +198,53 @@ class Hero073Test3FlightPose(unittest.TestCase):
         self.assertIn("'fly_pose': ('lean', 'upright')", ls)
         self.assertIn("'fly_pose': 'lean'", ls)
 
+
+class Hero073Test3SmoothTurnMigration(unittest.TestCase):
+    """0.0.73 test 3: an older launcher's settings.ini kept opt.SmoothTurn=0 (its default, snap), which the 0.0.73
+    launcher reads as the player picking snap (-SnapTurning); once, on load, it moves to smooth (opt.migrated073t3)."""
+    HARNESS = r'''
+using System; using System.IO;
+namespace Sm2VrLauncher { static class MigrationTest {
+    static int fails;
+    static void Check(bool ok, string what) { Console.WriteLine((ok ? "PASS " : "FAIL ") + what); if (!ok) fails++; }
+    static Settings Fresh(string text) { if (text == null) { if (File.Exists(Settings.FilePath)) File.Delete(Settings.FilePath); }
+        else { Directory.CreateDirectory(Settings.Folder); File.WriteAllText(Settings.FilePath, text); } return Settings.Load(); }
+    static int Main() {
+        var s = Fresh("opt.SmoothTurn=0\nopt.SnapTurn=45\n");
+        Check(s.Get("opt.SmoothTurn", null) == "120", "an older launcher's 0 becomes smooth 120");
+        Check(s.Get("opt.SnapTurn", null) == "45", "other options stay");
+        Check(File.ReadAllText(Settings.FilePath).Contains("opt.migrated073t3=1"), "marker saved");
+        Check(File.ReadAllText(Settings.FilePath).Contains("opt.SmoothTurn=120"), "smooth saved");
+        s.Set("opt.SmoothTurn", "0"); s.Save();
+        Check(Settings.Load().Get("opt.SmoothTurn", null) == "0", "snap picked after the marker stays");
+        s = Fresh("opt.SmoothTurn=90\n");
+        Check(s.Get("opt.SmoothTurn", null) == "90", "a chosen speed stays");
+        s = Fresh(null);
+        Check(s.Get("opt.SmoothTurn", "120") == "120" && File.ReadAllText(Settings.FilePath).Contains("opt.migrated073t3=1"), "new install starts migrated");
+        Check(!s.Migrate073t3(), "once only");
+        Console.WriteLine(fails == 0 ? "ALL PASS" : "FAILED"); return fails == 0 ? 0 : 1; } } }
+'''
+    def test_source(self):
+        s = src('tools/launcher/src/Settings.cs')
+        self.assertIn('public const string Migrated073t3Key = "opt.migrated073t3";', s)
+        i = s.index('s.ReadFile(FilePath);')
+        self.assertLess(i, s.index('if (s.Migrate073t3()) s.Save();'))
+        d = re.search(r'SmoothTurnDefault = "(\d+)"', s).group(1)
+        self.assertRegex(src('tools/launcher/src/LaunchOptions.cs'), r'"SmoothTurn", "SMOOTH TURN", "[^"]*", 0, 360, 10, %s,' % d)
+        self.assertIn('if($SmoothTurn -eq 0 -and -not $SnapTurning) { $SmoothTurn=%s }' % d, src('tools/launch-game-vr.ps1'))
+        self.assertIn('int smoothTurn = %s;' % d, src('include/spidy/vr_settings.hpp'))
+    @unittest.skipUnless(__import__('shutil').which('mcs') and __import__('shutil').which('mono'), 'needs mono (mcs)')
+    def test_migration_runs(self):
+        import subprocess, tempfile
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, 'launcher.ini'), 'w') as f: f.write('Portable=1\n')
+        with open(os.path.join(d, 't.cs'), 'w') as f: f.write(self.HARNESS)
+        exe = os.path.join(d, 't.exe')
+        r = subprocess.run(['mcs', '-langversion:5', '-target:exe', '-main:Sm2VrLauncher.MigrationTest', '-out:' + exe,
+                            os.path.join(ROOT, 'tools/launcher/src/Settings.cs'), os.path.join(d, 't.cs')], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r = subprocess.run(['mono', exe], capture_output=True, text=True, cwd=d, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('ALL PASS', r.stdout)
+        self.assertEqual(r.stdout.count('PASS '), 8)
+        self.assertTrue(os.path.isfile(os.path.join(d, 'launcher-data', 'settings.ini')))   # portable: never the user's own

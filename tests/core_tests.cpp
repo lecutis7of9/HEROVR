@@ -24255,6 +24255,35 @@ int main() {
         const auto mid = sw::capeWing(cloak.skeleton, 1, 0, 0, 1);
         check(length(mid - (cloak.skeleton.at[sw::wristL] + Vec3{0, 0, -.06f})) < 1e-3f, "the wing's outer top corner is at the left wrist");
     });
+    test("Build 12 HAND POSE: the hand down the forearm, the back of the fist out, straight shots, the shield on the forearm", [] {
+        namespace sw = spidy::suit_wear;
+        // Touch grip: -Z little finger -> thumb (the handle's axis), +Y up the thumb, the forearm below -Y.
+        const Vec3 gripForward{0, 0, -1}, gripUp{0, 1, 0};
+        const Vec3 w = sw::handWay(gripForward, gripUp, 0);
+        check(std::abs(w.y + 1) < 1e-4f, "the hand does not run down the forearm (it pointed up the handle)");
+        const Vec3 t = sw::handWay(gripForward, gripUp, 30);
+        check(std::abs(length(t) - 1) < 1e-4f && t.y < -.8f && t.z < -.45f, "the handle tilt is not 30 degrees");
+        check(sw::handWay(gripForward, gripUp, NAN).y < -.8f && length(sw::handWay({}, gripUp, 0)) == 0,
+              "a bad grip gave a hand");
+        check(sw::handBackOf({1, 0, 0}, 1).x == 1 && sw::handBackOf({1, 0, 0}, 0).x == -1,
+              "the back of the hand is not grip +X right, -X left");
+        using spidy::hero072::BatonEnemy;
+        // One man 30 m straight ahead and one nearer man 10 degrees off: the shot takes the line, not the nearest.
+        const BatonEnemy men[] = {{1, {0, 0, -30}, false}, {2, {1.4f, 0, -8}, false}, {3, {0, 0, -5}, true}};
+        float along = -1;
+        check(spidy::hero072::lineTarget({}, {0, 0, -1}, men, 3, 60, &along) == 0 && std::abs(along - 30) < 1e-3f,
+              "the straight shot bent to a man off the line or hit a downed one");
+        check(spidy::hero072::lineTarget({}, {0, 0, -1}, men, 3, 20, &along) == -1 && along == 0,
+              "a shot past its range still hit");
+        check(spidy::hero072::lineTarget({}, {NAN, 0, 0}, men, 3, 60, nullptr) == -1, "a NaN aim hit");
+        // The forearm up +Y, the thumb +Z: right = cross(up, thumb) is +X, the back of the right hand.
+        const auto r = spidy::captain::onForearm({0, 0, 0}, {0, 1, 0}, {0, 0, 1}, 1);
+        const auto l = spidy::captain::onForearm({0, 0, 0}, {0, 1, 0}, {0, 0, 1}, 0);
+        check(r.ok && l.ok && r.face.x > .99f && l.face.x < -.99f, "the shield's face is not out of the back of the hand");
+        check(std::abs(dot(r.at, r.face) - spidy::captain::fistOut) < 1e-4f && r.at.y > 0,
+              "the shield sits in the fist, not on the forearm strap");
+        check(!spidy::captain::onForearm({0, 0, 0}, {0, 0, 0}, {0, 0, -1}, 1).ok, "no forearm gave a shield pose");
+    });
     test("Build 12 WINDOW LIGHTS: the game view's lens covers both eyes plus the margin, LOD FADE off", [] {
         namespace rf = spidy::recording_fov;
         namespace vg = spidy::view_gates;

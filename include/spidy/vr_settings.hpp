@@ -26,8 +26,9 @@ struct Values {
     bool airWebs = true;   // a web that meets nothing within reach holds in open air there
     bool webShooter = true; // a free hand's trigger shoots web balls
     // Degrees a second the right stick turns you while held over; 0: it snap
-    // turns instead.
-    int smoothTurn = 0;
+    // turns instead. Version 0.0.73: smooth turning is the default (snap turn
+    // stays one choice away: SMOOTH TURN off).
+    int smoothTurn = 120;
     // How heavy you are while webs fly you (swinging, and after letting go
     // until you land), percent of real gravity: the swing's gravity. 100, real
     // gravity, since October 12; 80 from October 9; before, 60 (the 6 m/s^2

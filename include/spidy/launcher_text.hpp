@@ -558,7 +558,7 @@ struct SessionOptions {
     int bodyHaptics = 100; // a bHaptics vest, sleeves and visor (body_haptics.hpp), percent; 0 off
     int screenSize = 1; // the game screen in the headset: 0 small, 1 medium, 2 large
     int screenDepth = 2; // the depth cutscenes have on that screen: 0 off (flat), 1 low, 2 medium, 3 high
-    int smoothTurn = 0; // degrees a second the right stick turns you while held over; 0: it snap turns
+    int smoothTurn = 120; // Version 0.0.73: smooth by default. Degrees a second the right stick turns you while held over; 0: it snap turns
     int weight = 100;   // how heavy you are while webs fly you, percent of real gravity
     bool flips = false; // experimental: in the air the left stick turns you over, and a tap of A flips you
     int flipSpeed = 180; // degrees a second a flip turns you at full tilt of the left stick
@@ -647,7 +647,7 @@ inline std::vector<std::wstring> sessionArguments(const SessionOptions& options,
         {std::clamp(options.upscale, static_cast<int>(minimumEyeUpscale), static_cast<int>(maximumEyeUpscale)),
          {L"--upscale", static_cast<int>(defaultEyeUpscale)}},
         {std::clamp(options.snapTurn, 0, 90), {L"--snap-turn", 30}},
-        {std::clamp(options.smoothTurn, 0, 360), {L"--smooth-turn", 0}},
+        {std::clamp(options.smoothTurn, 0, 360), {L"--smooth-turn", 120}},
         {std::clamp(options.haptics, 0, 100), {L"--haptics", 100}},
         {std::clamp(options.bodyHaptics, 0, 100), {L"--body-haptics", 100}},
         {std::clamp(options.screenSize, 0, 2), {L"--screen-size", 1}},

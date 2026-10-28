@@ -56,11 +56,15 @@ Snapshot snapshotOf(const hero072::SuitCatalog&, bool all, bool ownSuit);
 void publish(const Snapshot&);
 uint32_t version();
 uint32_t latest(Snapshot& out); // its version (0: nothing published yet)
+bool same(const Snapshot&, const Snapshot&); // 0.0.73: what they show (never their padding)
 
 // ---- the page (tracking thread) ----
 inline constexpr float width = 1.24f, height = .92f, distance = 1.2f, drop = .12f;
 inline constexpr float pokeDepth = .05f, pokeSlack = .015f, aimSlack = .01f;
 inline constexpr float triggerOn = .75f, triggerOff = .35f, armSeconds = .4f, fadeSeconds = .2f;
+// 0.0.73 fix 1 (ROSTER FLICKER): a lit button stays lit within stickySlack of it, or for hoverHoldSeconds
+// after the laser leaves it (across a gap between tiles).
+inline constexpr float stickySlack = .02f, hoverHoldSeconds = .15f;
 enum class Screen : uint8_t { closed, grid, hero };
 // What can be pressed: the tiles, CLOSE, BACK, PLAY AS, and suit row i (row + i).
 enum Id : int { none = -1, tile = 0, closeButton = 20, backButton = 21, playButton = 22, row = 30 };
@@ -115,7 +119,8 @@ class Page {
     double openedAt_{}, last_{};
     float opacity_{};
     bool released_[2]{}, aReleased_[2]{}, bReleased_[2]{}, wasNear_[2]{}, latch_{};
-    bool laserOn_[2]{};
+    bool laserOn_[2]{}, laserWas_[2]{};
+    double hoverSeen_{};
     Vec3 laserFrom_[2]{}, laserTo_[2]{};
     Snapshot snap_{};
     uint32_t snapVersion_{};

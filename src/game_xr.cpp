@@ -202,7 +202,7 @@ struct XrConfig {
     // degrees per snap turn (0: none), controller vibration in percent, the
     // game screen's size (0-2), degrees a second of smooth turning (0: the
     // stick snap turns).
-    uint32_t snapTurn = 30, haptics = 100, screenSize = 1, smoothTurn{};
+    uint32_t snapTurn = 30, haptics = 100, screenSize = 1, smoothTurn = 120; // 0.0.73: smooth turning by default
     // Eye resolution in percent of the runtime's recommendation, per side
     // (eye_resolution.hpp; with eyeSize set, 100), and the player's weight
     // while webs fly them, in percent of real gravity (40-300).

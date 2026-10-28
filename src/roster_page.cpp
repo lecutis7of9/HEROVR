@@ -97,9 +97,28 @@ Snapshot snapshotOf(const hero072::SuitCatalog& c, bool all, bool ownSuit) {
     }
     return s;
 }
+bool same(const Snapshot& a, const Snapshot& b) {
+    // 0.0.73 fix 1 (ROSTER FLICKER): field by field. memcmp read the structs' padding too, which the
+    // game thread's fresh snapshot leaves unset: it "differed" every frame, so the version grew every
+    // frame and the render thread rebuilt the whole page (plate, text, pictures) every frame.
+    if (a.ownSuit != b.ownSuit || a.all != b.all)
+        return false;
+    for (uint32_t h = 0; h < heroes; ++h) {
+        if (a.count[h] != b.count[h])
+            return false;
+        for (uint32_t i = 0; i < suitsMost; ++i) {
+            const Row &x = a.rows[h][i], &y = b.rows[h][i];
+            if (x.status != y.status || x.final != y.final || x.rep != y.rep || std::memcmp(x.name, y.name, sizeof x.name) ||
+                std::memcmp(x.artist, y.artist, sizeof x.artist) || std::memcmp(x.licence, y.licence, sizeof x.licence) ||
+                std::memcmp(x.folder, y.folder, sizeof x.folder))
+                return false;
+        }
+    }
+    return true;
+}
 void publish(const Snapshot& s) {
     std::lock_guard<std::mutex> g(gLock);
-    if (gVersion && std::memcmp(&s, &gSnap, sizeof s) == 0)
+    if (gVersion && same(s, gSnap))
         return;
     gSnap = s;
     ++gVersion;
@@ -204,8 +223,9 @@ bool Page::open(Pose head, double seconds) {
     for (unsigned i = 0; i < 2; ++i) {
         released_[i] = aReleased_[i] = bReleased_[i] = false; // what is held as it opens is not a press
         wasNear_[i] = true;
-        laserOn_[i] = false;
+        laserOn_[i] = laserWas_[i] = false;
     }
+    hoverSeen_ = seconds;
     return true;
 }
 void Page::close() {
@@ -214,7 +234,7 @@ void Page::close() {
     screen_ = Screen::closed;
     hover_ = none;
     opacity_ = 0;
-    laserOn_[0] = laserOn_[1] = false;
+    laserOn_[0] = laserOn_[1] = laserWas_[0] = laserWas_[1] = false;
 }
 bool Page::laser(unsigned hand, Vec3& from, Vec3& to) const {
     if (hand > 1 || !laserOn_[hand])
@@ -241,6 +261,8 @@ Actions Page::update(const Input& in) {
     const Snapshot* s = snapVersion_ ? &snap_ : nullptr;
     Button bs[buttonsMost];
     const uint32_t n = buttons(screen_, hero_, s, bs);
+    const int hoverWas = hover_;
+    const Screen screenWas = screen_;
     hover_ = none;
     int pressed = none;
     bool back = false;
@@ -276,13 +298,22 @@ Actions Page::update(const Input& in) {
         const Vec3 way = h.aim.orientation.rotate({0, 0, -1});
         const bool onPlane = hitPlane(panel_, h.aim.position, way, hit);
         const Button* aimed = onPlane ? find(bs, n, hit, aimSlack) : nullptr;
+        // 0.0.73 fix 1: the button already lit stays lit while the laser is still within stickySlack
+        // of it, before any neighbour (a shaking hand on a button's edge, or on the gap between two
+        // tiles, no longer flips it, its frame and the help line).
+        if (onPlane && hoverWas != none && (!aimed || aimed->id != hoverWas))
+            for (uint32_t k = 0; k < n; ++k)
+                if (bs[k].id == hoverWas && find(&bs[k], 1, hit, stickySlack))
+                    aimed = &bs[k];
         if (aimed && hover_ == none)
             hover_ = aimed->id;
-        if (onPlane && std::abs(hit.x) <= W + .1f && std::abs(hit.y) <= H + .1f) {
+        const float edge = laserWas_[i] ? .16f : .1f; // the laser too: on at .1 past the edge, off past .16
+        if (onPlane && std::abs(hit.x) <= W + edge && std::abs(hit.y) <= H + edge) {
             laserOn_[i] = true;
             laserFrom_[i] = h.aim.position;
             laserTo_[i] = panel_.position + panel_.orientation.rotate({hit.x, hit.y, .008f});
         }
+        laserWas_[i] = laserOn_[i];
         bool pull = false;
         if (h.trigger < triggerOff)
             released_[i] = true;
@@ -293,6 +324,12 @@ Actions Page::update(const Input& in) {
         if (armed && aimed && aimed->enabled && (pull || aEdge) && pressed == none)
             pressed = aimed->id;
     }
+    // 0.0.73 fix 1: crossing a gap between two tiles (or a dropped frame of tracking) keeps the last
+    // lit button for hoverHoldSeconds rather than blinking everything off for a frame or two.
+    if (hover_ != none)
+        hoverSeen_ = in.seconds;
+    else if (hoverWas != none && screen_ == screenWas && in.seconds - hoverSeen_ < hoverHoldSeconds)
+        hover_ = hoverWas;
     if (pressed != none) {
         ++presses_;
         if (pressed == closeButton) {

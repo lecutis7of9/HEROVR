@@ -206,7 +206,7 @@ int main() {
         options = {};
         options.renderScale = 125;
         options.snapTurn = 45;
-        options.smoothTurn = 120;
+        options.smoothTurn = 0; // Version 0.0.73: smooth turning is the default; snap turning (0) is said
         options.haptics = 0;
         options.bodyHaptics = 50;
         options.screenSize = 7;
@@ -214,7 +214,7 @@ int main() {
         args = sessionArguments(options, L"r.json", L"", L"");
         const std::vector<std::wstring> settings{L"--auto-launch", L"--seconds", L"0", L"--swing-speed", L"32",
                                                  L"--output", L"r.json", L"--render-scale", L"125", L"--snap-turn",
-                                                 L"45", L"--smooth-turn", L"120", L"--haptics", L"0",
+                                                 L"45", L"--smooth-turn", L"0", L"--haptics", L"0",
                                                  L"--body-haptics", L"50", L"--screen-size", L"2", L"--weight",
                                                  L"150"};
         check(args == settings, "the VR settings, the screen size capped at large");
@@ -379,7 +379,7 @@ int main() {
         check(!calibrated(options) && options.calibrationPrompt, "a new launcher has one");
         // Calibrated in the headset: eyes 1.63 m high, arms 0.59 m.
         check(headsetSettings("VR settings from the headset: aim_markers=1 air_webs=1 swing_speed=32 weight=100 "
-                              "snap_turn=30 smooth_turn=0 haptics=100 screen_size=1 eye_height_mm=1630 "
+                              "snap_turn=30 smooth_turn=120 haptics=100 screen_size=1 eye_height_mm=1630 "
                               "arm_length_mm=590 calibration_prompt=1",
                               options) &&
                   calibrated(options) && options.eyeHeightMm == 1630 && options.armLengthMm == 590,
@@ -626,7 +626,7 @@ int main() {
         o.swingSpeed = 47;
         o.weight = 125;
         o.snapTurn = 45;
-        o.smoothTurn = 120;
+        o.smoothTurn = 0; // 0.0.73: away from the default (120)
         o.haptics = 50;
         o.bodyHaptics = 25;
         o.screenSize = 2;
@@ -653,7 +653,7 @@ int main() {
                   "# Spidy settings profile. To use it, in the Spidy launcher: Profile > Paste a profile, "
                   "or Import a file.\nname=Spidy's own\nspidy=0.4.1\narcade_webs=0\ntrigger_webs=0\n"
                   "aim_markers=1\nair_webs=1\nswing_speed=32\nweight=100\nwall_run=1\nsnap_turn=30\n"
-                  "smooth_turn=0\nhaptics=100\nbody_haptics=100\nbody_haptics_webs=1\nbody_haptics_wind=1\n"
+                  "smooth_turn=120\nhaptics=100\nbody_haptics=100\nbody_haptics_webs=1\nbody_haptics_wind=1\n"
                   "body_haptics_combat=1\nbody_haptics_movement=1\nscreen_size=1\nscreen_depth=2\nhud=2\n"
                   "ui_style=0\nnear_clip_mm=20\nflips=0\nflip_speed=180\nhand_climb=0\nwall_distance_cm=40\n"
                   "realistic_flips=0\nrotation_strength=50\nrotation_speed=240\nflight_speed_min=3\n"
@@ -752,7 +752,7 @@ int main() {
         change.tab.automaticFalloff = 1000;
         const std::vector<ProfileChange> expected{
             {"WEB STYLE", "REALISTIC", "ARCADE"},          {"SWING SPEED LIMIT", "32 M/S", "47 M/S"},
-            {"WALL RUNNING", "ON", "OFF"},                 {"SMOOTH TURN", "OFF", "90\xC2\xB0/S"},
+            {"WALL RUNNING", "ON", "OFF"},                 {"SMOOTH TURN", "120\xC2\xB0/S", "90\xC2\xB0/S"},
             {"WEB HAPTICS", "ON", "OFF"},                  {"UI STYLE", "COMIC", "TECH"},
             {"NEAR CLIP", "2 CM", "1 CM"},                 {"ANGULAR DRAG", "VERY SLOW", "QUICK"}};
         check(profileChanges(profileOf(change), PlaySettings{}) == expected,

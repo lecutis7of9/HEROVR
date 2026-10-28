@@ -2302,9 +2302,9 @@ def main():
                         'in the game\'s Settings still offers it)')
     p.add_argument('--snap-turn', type=int, default=30,
                    help='Degrees a flick of the right stick turns you (0: no snap turning; default 30)')
-    p.add_argument('--smooth-turn', type=int, default=0,
+    p.add_argument('--smooth-turn', type=int, default=120,  # 0.0.73: smooth turning by default
                    help='Degrees a second the right stick turns you while held over, at full tilt '
-                        '(0: it snap turns instead; default 0)')
+                        '(0: it snap turns instead; default 120)')
     p.add_argument('--haptics', type=int, default=100, help='Controller vibration in percent (default 100)')
     p.add_argument('--body-haptics', type=int, default=100,
                    help='How strongly a bHaptics vest, sleeves and visor play, in percent (0: off; default 100). '

@@ -5799,6 +5799,78 @@ int main() {
         f.predictedDisplayTime=3;const auto held=rig.update(f,{},{0,0,-1},true);
         for(int i=0;i<16;++i)near(held.head[i],b.head[i]);
     });
+    test("Version 0.0.73 fix 1 ROSTER FLICKER: padding never bumps the version; a lit button holds over gaps and edges", [] {
+        namespace rp = roster_page;
+        using rp::Screen;
+        hero072::SuitCatalog cat;
+        // The same suits in structs whose padding differs: the same snapshot (memcmp said not, every frame).
+        alignas(rp::Snapshot) unsigned char ra[sizeof(rp::Snapshot)], rb[sizeof(rp::Snapshot)];
+        std::memset(ra, 0x00, sizeof ra);
+        std::memset(rb, 0xA5, sizeof rb);
+        auto* a = new (ra) rp::Snapshot(rp::snapshotOf(cat, false, false));
+        auto* b = new (rb) rp::Snapshot(rp::snapshotOf(cat, false, false));
+        check(rp::same(*a, *b), "two snapshots of the same suits differ");
+        rp::publish(*a);
+        const uint32_t v0 = rp::version();
+        for (int f = 0; f < 10; ++f)
+            rp::publish(f % 2 ? *a : *b);
+        check(rp::version() == v0, "republishing the same suits bumped the version (a rebuild every frame)");
+        b->rows[1][0].rep += 1;
+        check(!rp::same(*a, *b), "a changed row looked the same");
+        rp::publish(*b);
+        check(rp::version() == v0 + 1, "a real change did not bump the version");
+        rp::publish(*a);
+        rp::Button bs[rp::buttonsMost];
+        const uint32_t ng = rp::buttons(Screen::grid, 0, a, bs);
+        const rp::Button* t0 = nullptr;
+        for (uint32_t i = 0; i < ng; ++i)
+            t0 = bs[i].id == rp::tile ? &bs[i] : t0;
+        check(t0 != nullptr, "no first tile");
+        rp::Page page;
+        check(page.open(Pose{}, 0), "the page did not open");
+        const Pose panel = page.panel();
+        auto aimAtPoint = [&](rp::Input& in, Vec3 local) {
+            const Vec3 c = panel.position + panel.orientation.rotate(local);
+            in.hands[1].tracked = true;
+            in.hands[1].aim = Pose{c + panel.orientation.rotate(Vec3{0, 0, .6f}), panel.orientation};
+            in.hands[1].grip = Pose{c + panel.orientation.rotate(Vec3{0, 0, .5f}), panel.orientation};
+        };
+        rp::Input in;
+        const Vec3 mid{(t0->x0 + t0->x1) / 2, (t0->y0 + t0->y1) / 2, 0};
+        in.seconds = .5, aimAtPoint(in, mid);
+        page.update(in);
+        check(page.hover() == rp::tile, "the laser did not light the tile");
+        // Shaking just past its edge (within stickySlack, beyond aimSlack): it stays lit, frame after frame.
+        int flips = 0, was = page.hover();
+        for (int f = 0; f < 40; ++f) {
+            in.seconds = .5 + .011 * (f + 1);
+            aimAtPoint(in, Vec3{t0->x1 + (f % 2 ? .005f : rp::aimSlack + .006f), mid.y, 0});
+            page.update(in);
+            flips += page.hover() != was;
+            was = page.hover();
+        }
+        check(flips == 0 && page.hover() == rp::tile, "a shaking laser on the tile's edge made it blink");
+        // Off the panel altogether: held a moment (a gap, a lost frame), then let go.
+        in.seconds = 1.0, aimAtPoint(in, Vec3{0, 5, 0});
+        page.update(in);
+        check(page.hover() == rp::tile, "the lit tile went off at once over a gap");
+        in.seconds = 1.0 + rp::hoverHoldSeconds + .05;
+        page.update(in);
+        check(page.hover() == rp::none, "the lit tile never let go");
+        // The laser itself: on within .1 of the panel's edge, kept until .16 (no blinking at .1).
+        in.seconds = 1.5, aimAtPoint(in, Vec3{rp::width / 2 + .05f, 0, 0});
+        page.update(in);
+        Vec3 f0{}, f1{};
+        check(page.laser(1, f0, f1), "the laser not shown just past the edge");
+        in.seconds = 1.6, aimAtPoint(in, Vec3{rp::width / 2 + .13f, 0, 0});
+        page.update(in);
+        check(page.laser(1, f0, f1), "the laser blinked off between .1 and .16 past the edge");
+        in.seconds = 1.7, aimAtPoint(in, Vec3{rp::width / 2 + .2f, 0, 0});
+        page.update(in);
+        check(!page.laser(1, f0, f1), "the laser shown far off the panel");
+        a->~Snapshot();
+        b->~Snapshot();
+    });
     test("Version 0.0.73 PUNISHER VAN: the van's turn turns the room about the head once, the stick locked", [] {
         GameTrackingRig rig;auto f=trackedFrame();f.head.position.x=.4f;
         auto a=rig.update(f,{},{0,0,-1},true);
@@ -14480,10 +14552,10 @@ int main() {
         using namespace vr_settings;
         const Values defaults;
         check(choice(Item::aimMarkers, defaults) == 1 && choice(Item::swingSpeed, defaults) == 4 &&
-                  choice(Item::snapTurn, defaults) == 2 && choice(Item::smoothTurn, defaults) == 0 &&
+                  choice(Item::snapTurn, defaults) == 2 && choice(Item::smoothTurn, defaults) == 3 &&
                   choice(Item::haptics, defaults) == 4 && choice(Item::screenSize, defaults) == 1 &&
                   choice(Item::weight, defaults) == 3,
-              "the defaults as the tab shows them: ON, 32 m/s, 30 degrees, no smooth turning, 100%, medium, 100%");
+              "the defaults as the tab shows them: ON, 32 m/s, 30 degrees, smooth turning 120/s (0.0.73), 100%, medium, 100%");
         check(defaults.weight == 100, "the default weight is real gravity");
         Values v;
         check(choose(Item::swingSpeed, 5, v) && v.swingSpeed == 40, "faster");
@@ -14497,9 +14569,10 @@ int main() {
         v.swingSpeed = 37;
         check(choice(Item::swingSpeed, v) == 5, "past halfway shows the higher step");
         check(choose(Item::snapTurn, 0, v) && v.snapTurn == 0 && choice(Item::snapTurn, v) == 0, "snap turning off");
-        check(choose(Item::smoothTurn, 3, v) && v.smoothTurn == 120 && choice(Item::smoothTurn, v) == 3 &&
+        check(choose(Item::smoothTurn, 0, v) && v.smoothTurn == 0 && choice(Item::smoothTurn, v) == 0 &&
+                  choose(Item::smoothTurn, 3, v) && v.smoothTurn == 120 && choice(Item::smoothTurn, v) == 3 &&
                   !choose(Item::smoothTurn, 6, v),
-              "smooth turning at 120 degrees a second; 240 is the last");
+              "smooth turning off (0.0.73: snap turning, one choice away) and back at 120 degrees a second; 240 is the last");
         v.smoothTurn = 100;
         check(choice(Item::smoothTurn, v) == 2, "a launcher speed shows the step nearest to it");
         check(choose(Item::haptics, 1, v) && v.haptics == 25, "a quarter of the vibration");

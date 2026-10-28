@@ -256,7 +256,7 @@ const std::array<Row, 43>& rows() {
         {Item::none, "COMFORT", nullptr, {}},
         {Item::snapTurn, "SNAP TURN", "How far a flick of the right stick turns you. Off: no snap turning.",
          snapChoices},
-        {Item::smoothTurn, "SMOOTH TURN", "Turn steadily while you hold the right stick. Off: it snap turns.",
+        {Item::smoothTurn, "SMOOTH TURN", "Turn steadily while you hold the right stick (default). Off: it snap turns.",
          smoothChoices},
         {Item::none, "HAPTICS", nullptr, {}},
         {Item::haptics, "CONTROLLER VIBRATION", "How strongly webs, grabs and punches buzz in your hands.",

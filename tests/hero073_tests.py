@@ -41,8 +41,29 @@ class Hero073(unittest.TestCase):
         self.assertIn('SpidyCullMarginDegrees(reinterpret_cast<void*>', g)
         self.assertIn('SpidyShadowMatchOn(reinterpret_cast<void*>', g)
         ls = src('tools/live_settings.py')
-        self.assertIn("'shadow_match': 'off'", ls)
+        self.assertIn("'shadow_match': 'on'", ls)  # test 3: every fix ON by default
         self.assertIn("'cull_margin': '10deg'", ls)
+
+    def test_test3_light_hold(self):
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings as L
+        self.assertEqual(L.UPDATE38_DEFAULTS['light_hold'], 'on')
+        self.assertEqual(L.export_value('light_hold', 'on'), 0)
+        self.assertEqual(L.export_value('light_hold', 'strong'), 1)
+        self.assertEqual(L.export_value('light_hold', 'off'), 2)
+        self.assertEqual(L.export_value('shadow_match', L.UPDATE38_DEFAULTS['shadow_match']), 0)
+        self.assertEqual(L.export_value('shadow_match', 'off'), 1)
+        self.assertEqual(L.SETTINGS['light_hold'][1], 'SpidyLightHold')
+        g = src('src/game_xr.cpp')
+        self.assertIn('combat38::shadowMatchOn(c38(combat38::shadowMatch))', g)
+        self.assertIn('SpidyEyeLightHold(reinterpret_cast<void*>', g)
+        self.assertIn('eye_history::jitterScale(', g)
+        n = src('src/native_eye_gpu.cpp')
+        self.assertIn('saturate(row0.w)', n)
+        self.assertIn('std::atomic<uint32_t> lightHoldPercent{spidy::eye_history::lightHoldOn};', n)
+        h = src('include/spidy/combat38.hpp')
+        self.assertIn('{"ON", "STRONG", "OFF", nullptr}', h)
 
     def test_exports_unique_in_the_probe(self):
         # CI caught 'SpidyShadowMatch': redefinition (game_xr.cpp's live setter and stereo_probe.cpp's

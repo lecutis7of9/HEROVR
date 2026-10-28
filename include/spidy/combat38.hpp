@@ -132,7 +132,8 @@ enum Option : uint32_t {
     capSprint,
     // 0.0.73 test 2 (fixes 9, 13): CULL MARGIN, the game view's degrees past the head's lens, 10 by default
     cullMargin,
-    // 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default
+    // 0.0.73 test 2 (fix 21): SHADOW MATCH (CANDIDATE), both eyes' cascades fitted to one lens; test 3: ON by default
+    // (value 0 ON, 1 OFF - shadowMatchOn)
     shadowMatch,
     // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): HOLO checklist with belt, back and hip touches, or CLASSIC
     calibLook,
@@ -140,6 +141,9 @@ enum Option : uint32_t {
     flyPose,
     // 0.0.73 test 3 WEAPON COLLISION (prop_bounce.hpp): thrown and held weapons meet walls, cars and the ground, ON
     weaponCollision,
+    // 0.0.73 test 3 LIGHT HOLD (eye_history.hpp): steadier street lights - EYE AA's step no larger than the
+    // history can average, and bright history held; ON by default, STRONG (no step, full hold), OFF = test 2
+    lightHold,
     options
 };
 struct OptionInfo {
@@ -447,15 +451,19 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"cull_margin", "CULL MARGIN", "CULL", "Wider stops far window and street light flicker, costs a little FPS, no restart.",
      4, {"10 DEG", "6 DEG", "15 DEG", "20 DEG"}},
-    {"shadow_match", "SHADOW MATCH", "SMATCH", "EXPERIMENTAL: both eyes' shadows fit one lens for less shimmer, no restart.",
-     2, {"OFF", "ON", nullptr, nullptr}},
+    {"shadow_match", "SHADOW MATCH", "SMATCH", "Both eyes' shadows fit one lens for less shimmer, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
     {"calib_look", "CALIBRATION LOOK", "CALIB", "HOLO adds belt, back and hip touches that fit your holsters, no restart.",
      2, {"HOLO", "CLASSIC", nullptr, nullptr}},
     {"fly_pose", "FLIGHT POSE", "FPOSE", "LEAN tips the body with flight speed, upright to hover, no restart.",
      2, {"LEAN", "UPRIGHT", nullptr, nullptr}},
     {"weapon_collision", "WEAPON COLLISION", "WCOLL", "Thrown and held weapons meet walls, cars and the ground, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"light_hold", "LIGHT HOLD", "LHOLD", "Steadies flickering street lights, STRONG steadies more, no restart.",
+     3, {"ON", "STRONG", "OFF", nullptr}},
 };
+// 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).
+inline bool shadowMatchOn(uint32_t value) { return value == 0; }
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }
 inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }

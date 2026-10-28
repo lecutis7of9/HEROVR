@@ -172,4 +172,59 @@ inline float cutMotion(float motion, uint32_t cut) {
     const uint32_t c = cut < minimumCut ? minimumCut : cut > maximumCut ? maximumCut : cut;
     return motion * 100.f / static_cast<float>(c);
 }
+// 0.0.73 test 3 LIGHT HOLD (combat38 lightHold; ON by default, STRONG, OFF = test 2): street lights and
+// other small bright lights flickered in test 2 (owner, test 2 run). CANDIDATE cause: EYE AA moves both
+// lenses by a sub-pixel step every frame, but the history that averages the steps is cut while the eyes
+// travel or turn (movedWeight: none at swing speed), so a bulb smaller than a pixel lands in and out of
+// its pixel each frame unaveraged; and while still, the 3 x 3 clamp and the 0.0.62 anti-ghost cut throw
+// away a bulb's own old brightness whenever this frame's step missed it. LIGHT HOLD:
+//  - JITTER CALM: the step is scaled by the share of history the last pass kept (none kept: no step), so
+//    nothing is jittered that the history cannot average. STRONG: no step at all.
+//  - BRIGHT HOLD (the history shader, row0.w): a bright old pixel may stay above this frame's 3 x 3 by
+//    part of its excess, the anti-ghost cut eased for it, and the blend weighted 1 / (1 + luma) (Karis),
+//    so one frame's bright miss or hit moves the result less. Only while still (none at half swing speed).
+inline constexpr uint32_t lightHoldOn = 50, lightHoldStrong = 100;
+// The setting's choices: 0 ON, 1 STRONG, 2 OFF (anything else ON).
+inline uint32_t lightHoldPercentOf(uint32_t choice) {
+    return choice == 1 ? lightHoldStrong : choice == 2 ? 0u : lightHoldOn;
+}
+// The shader's hold (0..1) for this pair's motion.
+inline float lightHoldInForce(uint32_t percent, float travel, float turn) {
+    const float p = static_cast<float>(percent > 100 ? 100 : percent) / 100.f;
+    return p * std::fmax(0.f, 1.f - 2.f * motionShare(travel, turn));
+}
+// JITTER CALM: the share of EYE AA's sub-pixel step to use, from the history share the last pass kept
+// (0..1) and the share asked for (percent). OFF: the whole step (test 2); STRONG: none.
+inline float jitterScale(uint32_t holdPercent, float lastKeep, uint32_t historyPercent) {
+    if (!holdPercent)
+        return 1.f;
+    if (holdPercent >= lightHoldStrong || !historyPercent || !(lastKeep > 0))
+        return 0.f;
+    const float s = lastKeep * 100.f / static_cast<float>(historyPercent);
+    return s >= 1.f ? 1.f : s;
+}
+// The shader's sum for one grey channel (tests; native_eye_gpu.cpp historyShader is the same).
+inline float heldBrightness(float raw) {
+    const float b = (raw - .35f) * 2.f;
+    return b < 0 ? 0.f : b > 1 ? 1.f : b;
+}
+inline float heldPixel(float here, float lo, float hi, float raw, float keep, float loosen, float hold) {
+    const float sat = [](float x) { return x < 0 ? 0.f : x > 1 ? 1.f : x; }(loosen);
+    const float give = (hi - lo) * sat;
+    const float bright = heldBrightness(raw) * (hold < 0 ? 0.f : hold > 1 ? 1.f : hold);
+    const float lift = std::fmax(raw - (hi + give), 0.f) * bright * .8f;
+    const float before = std::fmin(std::fmax(raw, std::fmax(lo - give, 0.f)), hi + give + lift);
+    const float outside = std::fmax(std::fmax(lo - raw, raw - hi), 0.f);
+    const float miss = outside / ((hi - lo) + .03f);
+    float cut = 1.5f - miss * .75f;
+    cut = cut < 0 ? 0.f : cut > 1 ? 1.f : cut;
+    cut += (1.f - cut) * bright * .6f;
+    const float k = keep * cut;
+    const float plain = here + (before - here) * k;
+    if (!(bright > 0))
+        return plain;
+    const float a = (1.f - k) / (1.f + here), b = k / (1.f + before);
+    const float karis = a + b > 0 ? (here * a + before * b) / (a + b) : here;
+    return plain + (karis - plain) * bright;
+}
 } // namespace spidy::eye_history

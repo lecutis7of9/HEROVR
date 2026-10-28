@@ -483,10 +483,11 @@ enum class Control : uint8_t {
     combatSuitBody, // Build 9 SUITS: SUIT BODY
     combatCapSprint, // Version 0.0.73: CAP SPRINT
     combatCullMargin, // 0.0.73 test 2 (fixes 9, 13): CULL MARGIN, the game view's degrees past the head's lens, 10 by default
-    combatShadowMatch, // 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default
+    combatShadowMatch, // 0.0.73 test 2 (fix 21): SHADOW MATCH (CANDIDATE), both eyes' cascades fitted to one lens, ON by default since test 3
     combatCalibLook, // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): HOLO checklist with belt, back and hip touches, or CLASSIC
     combatFlyPose, // Version 0.0.73 test 2 FLIGHT POSE (fix 27): LEAN by speed (fly_lean.hpp) or UPRIGHT (0.0.72)
     combatWeaponCollision, // 0.0.73 test 3 WEAPON COLLISION: thrown and held weapons meet walls, cars and the ground, ON
+    combatLightHold, // 0.0.73 test 3 LIGHT HOLD: steadier street lights (EYE AA step + bright history hold), ON, STRONG, OFF
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -553,9 +554,9 @@ enum class Control : uint8_t {
     section11, // Version 0.0.72: GREEN LANTERN
     heroRoster, // Build 8: ROSTER: HEROES AND SUITS (opens the roster page, roster_page.hpp)
 };
-constexpr int controls = 229; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 230; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
-constexpr int combatControls = 121; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
+constexpr int combatControls = 122; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);

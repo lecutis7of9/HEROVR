@@ -1638,7 +1638,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 229, "controls count drifted"); // 0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 230, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1978,7 +1978,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 229, "controls count drifted"); // 0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 230, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18832,7 +18832,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 121, "one hundred and twenty-one options (0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 122, "one hundred and twenty-two options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18866,7 +18866,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 121, "0.0.73 test 3 has 121 COMBAT options (test 3: + WEAPON COLLISION; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 122, "0.0.73 test 3 has 122 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19188,7 +19188,7 @@ int main() {
                 }
             }
         }
-        check(placed == 197 /* 0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 198 /* 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -29790,15 +29790,69 @@ int main() {
         check(std::atan(most.right) * 57.2957795f <= rf::widestDegrees + .01f, "never past 80 degrees");
         check(rf::cullMarginMaxDegrees >= 20, "the export takes every choice");
     });
-    test("0.0.73 test 2: SHADOW MATCH (fix 21) - EXPERIMENTAL, off by default, one sentence", [] {
+    test("0.0.73 test 3: SHADOW MATCH (fix 21) - ON by default (the user's rule), OFF one press away, one sentence", [] {
         const auto& o = combat38::optionInfo[combat38::shadowMatch];
-        check(o.count == 2 && std::string(o.values[0]) == "OFF" && std::string(combat38::valueName(combat38::shadowMatch, 0)) == "OFF",
-              "off by default (CANDIDATE: never on by itself)");
+        check(o.count == 2 && std::string(o.values[0]) == "ON" && std::string(o.values[1]) == "OFF" &&
+                  std::string(combat38::valueName(combat38::shadowMatch, 0)) == "ON",
+              "ON by default");
+        check(combat38::shadowMatchOn(0) && !combat38::shadowMatchOn(1), "value 0 ON, 1 OFF (test 2's off)");
         const std::string h = o.help;
-        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos &&
-                  h.find("EXPERIMENTAL") == 0, "its subtext");
+        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos, "its subtext");
         const std::string c = combat38::optionInfo[combat38::cullMargin].help;
         check(c.size() <= 80 && c.find('.') == c.size() - 1 && c.find("restart") != std::string::npos, "CULL MARGIN's subtext");
+    });
+    test("0.0.73 test 3 LIGHT HOLD: ON by default, STRONG fallback, OFF exactly test 2's history and jitter", [] {
+        namespace eh = spidy::eye_history;
+        const auto& o = combat38::optionInfo[combat38::lightHold];
+        check(std::string(o.key) == "light_hold" && o.count == 3 && std::string(o.values[0]) == "ON" &&
+                  std::string(o.values[1]) == "STRONG" && std::string(o.values[2]) == "OFF", "ON, STRONG, OFF");
+        const std::string h = o.help;
+        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos, "its subtext");
+        check(eh::lightHoldPercentOf(0) == eh::lightHoldOn && eh::lightHoldPercentOf(1) == eh::lightHoldStrong &&
+                  eh::lightHoldPercentOf(2) == 0 && eh::lightHoldPercentOf(9) == eh::lightHoldOn, "the choices' holds");
+        // OFF: the step whole and the history pixel exactly test 2's (clamp, anti-ghost, plain blend).
+        check(eh::jitterScale(0, 0.f, 88) == 1.f && eh::jitterScale(0, .9f, 88) == 1.f, "OFF keeps the whole step");
+        for (const float raw : {0.f, .3f, .9f, 3.f, 8.f}) {
+            const float here = .2f, lo = .1f, hi = .4f, keep = .8f;
+            const float give = (hi - lo) * .25f;
+            const float before = std::clamp(raw, std::max(lo - give, 0.f), hi + give);
+            const float outside = std::max(std::max(lo - raw, raw - hi), 0.f);
+            const float k = keep * std::clamp(1.5f - outside / (hi - lo + .03f) * .75f, 0.f, 1.f);
+            check(std::abs(eh::heldPixel(here, lo, hi, raw, keep, .25f, 0.f) - (here + (before - here) * k)) < 1e-6f,
+                  "OFF's pixel is test 2's");
+        }
+        // JITTER CALM: no step while the history keeps nothing (moving), the whole step when it keeps all.
+        check(eh::jitterScale(eh::lightHoldOn, 0.f, 88) == 0.f && eh::jitterScale(eh::lightHoldOn, .88f, 88) == 1.f &&
+                  std::abs(eh::jitterScale(eh::lightHoldOn, .44f, 88) - .5f) < 1e-5f, "ON's step follows the keep");
+        check(eh::jitterScale(eh::lightHoldStrong, .88f, 88) == 0.f, "STRONG never steps");
+        check(eh::jitterScale(eh::lightHoldOn, std::nanf(""), 88) == 0.f, "a bad keep never jitters");
+        // The hold goes with motion (a fast swing leaves no trail), and a street light's history survives.
+        check(eh::lightHoldInForce(50, 0.f, 0.f) == .5f && eh::lightHoldInForce(100, 0.f, 0.f) == 1.f &&
+                  eh::lightHoldInForce(100, 1.f, 1.f) == 0.f, "hold in force");
+        // A bulb (raw 6) the step missed this frame (here .2 in a dark 3x3): OFF drops it to the clamp,
+        // ON keeps more, STRONG most - never past the bulb itself, never negative.
+        const float off = eh::heldPixel(.2f, .1f, .4f, 6.f, .88f, .25f, 0.f),
+                    on = eh::heldPixel(.2f, .1f, .4f, 6.f, .88f, .25f, .5f),
+                    strong = eh::heldPixel(.2f, .1f, .4f, 6.f, .88f, .25f, 1.f);
+        check(on > off && strong > on && strong < 6.f && off >= 0.f, "the bulb's brightness held");
+        // A dim pixel (below the bright knee) is untouched by the hold.
+        check(std::abs(eh::heldPixel(.2f, .1f, .3f, .3f, .88f, .25f, 1.f) - eh::heldPixel(.2f, .1f, .3f, .3f, .88f, .25f, 0.f)) < 1e-6f,
+              "dim history as test 2");
+        // A blinking bulb over 16 frames (lit 1 frame in 2 as the step crosses it): ON's swing is smaller.
+        auto swing = [](float hold) {
+            float history = 0, most = 0, least = 1e9f;
+            for (int f = 0; f < 32; ++f) {
+                const float here = f % 2 ? 4.f : .2f;
+                const float lo = .1f, hi = f % 2 ? 4.f : .4f;
+                history = eh::heldPixel(here, lo, hi, history, .88f, .25f, hold);
+                if (f >= 16) {
+                    most = std::max(most, history);
+                    least = std::min(least, history);
+                }
+            }
+            return most - least;
+        };
+        check(swing(.5f) < swing(0.f) && swing(1.f) < swing(.5f), "less blink ON, less again STRONG");
     });
     test("0.0.73 test 2 HOLO CALIBRATION (fix 25): a TRUE T-pose, belt, back, hips, confirm, B keeps the defaults", [] {
         namespace hc = spidy::holo_calibration;

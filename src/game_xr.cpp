@@ -603,6 +603,10 @@ uint32_t SpidyImpostorReachNow();
 DWORD WINAPI SpidyFarWindows(void* percent);
 DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
 DWORD WINAPI SpidyShadowMatchOn(void* on);
+// 0.0.73 test 3 LIGHT HOLD (native_eye_gpu.cpp): the history shader's bright hold, and the history
+// share its last pass kept (JITTER CALM).
+DWORD WINAPI SpidyEyeLightHold(void* percent);
+float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
 void SpidyMirrorViewWant(uint32_t on);
@@ -2233,7 +2237,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightHoldApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -9168,6 +9172,12 @@ DWORD WINAPI run(void*) {
                         engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on) {
                         float jx{}, jy{};
                         eye_taa::step(eyes.serial, jx, jy);
+                        // 0.0.73 test 3 JITTER CALM (LIGHT HOLD): no more of the step than the history
+                        // kept last pair to average it (street lights blinked unaveraged while moving).
+                        const float calm = eye_history::jitterScale(
+                            eye_history::lightHoldPercentOf(c38(combat38::lightHold)), SpidyEyeHistoryKept(), 100);
+                        jx *= calm;
+                        jy *= calm;
                         for (unsigned i = 0; i < 2; ++i) {
                             auto& f = motion.fovs[i];
                             float dx{}, dy{};
@@ -10696,11 +10706,18 @@ DWORD WINAPI run(void*) {
                                 cullAppliedDegrees = cullWant;
                                 SpidyCullMarginDegrees(reinterpret_cast<void*>(static_cast<uintptr_t>(cullWant)));
                             }
-                            // 0.0.73 test 2 SHADOW MATCH (EXPERIMENTAL): on or off when it changes.
-                            if (const uint32_t matchWant = c38(combat38::shadowMatch) == 1 ? 1u : 0u;
+                            // 0.0.73 test 2 SHADOW MATCH: on or off when it changes (test 3: ON by default,
+                            // value 0 ON, 1 OFF).
+                            if (const uint32_t matchWant = combat38::shadowMatchOn(c38(combat38::shadowMatch)) ? 1u : 0u;
                                 matchWant != shadowMatchApplied) {
                                 shadowMatchApplied = matchWant;
                                 SpidyShadowMatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
+                            }
+                            // 0.0.73 test 3 LIGHT HOLD: the history shader's hold when it changes.
+                            if (const uint32_t holdWant = eye_history::lightHoldPercentOf(c38(combat38::lightHold));
+                                holdWant != lightHoldApplied) {
+                                lightHoldApplied = holdWant;
+                                SpidyEyeLightHold(reinterpret_cast<void*>(static_cast<uintptr_t>(holdWant)));
                             }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)
@@ -12507,8 +12524,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitBody(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCapSprint(void* v) { return setHero007(v, combat38::capSprint, 5437); }
 // 0.0.73 test 2 (fixes 9, 13): CULL MARGIN, the game view's degrees past the head's lens, 10 by default (live.txt cull_margin).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCullMargin(void* v) { return setHero007(v, combat38::cullMargin, 5438); }
-// 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default (live.txt shadow_match).
+// 0.0.73 test 2 (fix 21): SHADOW MATCH (CANDIDATE), both eyes' cascades fitted to one lens, ON by default since test 3 (live.txt shadow_match).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatch(void* v) { return setHero007(v, combat38::shadowMatch, 5439); }
+// 0.0.73 test 3 LIGHT HOLD: steadier street lights (EYE AA's step and the history's bright hold), ON by
+// default, STRONG, OFF = test 2 (live.txt light_hold).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightHold(void* v) { return setHero007(v, combat38::lightHold, 5443); }
 // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): HOLO checklist with belt, back and hip touches, or CLASSIC (live.txt calib_look).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCalibLook(void* v) { return setHero007(v, combat38::calibLook, 5440); }
 // Version 0.0.73 test 2 FLIGHT POSE (fix 27): LEAN by speed (fly_lean.hpp) or UPRIGHT (0.0.72) (live.txt fly_pose).

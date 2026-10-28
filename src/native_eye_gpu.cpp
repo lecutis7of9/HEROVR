@@ -1643,6 +1643,10 @@ std::atomic<uint32_t> historyPercent{}, historyFault{};
 std::atomic<bool> temporalOn{};
 std::atomic<uint32_t> trailPercent{spidy::eye_history::defaultTrail}; // Update 34.2: EYE AA TRAIL
 std::atomic<uint32_t> cutPercent{spidy::eye_history::defaultCut};     // Update 37: HISTORY CUT
+// 0.0.73 test 3 LIGHT HOLD (eye_history.hpp): the shader's bright hold, ON by default (0 = test 2), and
+// the history share the last pass kept (thousandths, eye 0; 0 when it kept none) for JITTER CALM.
+std::atomic<uint32_t> lightHoldPercent{spidy::eye_history::lightHoldOn};
+std::atomic<uint32_t> keptMilli{};
 uint32_t historyNow() {
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
 }
@@ -1701,7 +1705,12 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     // Update 21: extra.w widens the clamp (eye_history.hpp historyLoosen).
     const float3 give = (hi - lo) * saturate(extra.w);
     const float3 raw = previous.SampleLevel(bilinear, old, 0).rgb;
-    const float3 before = clamp(raw, max(lo - give, 0), hi + give);
+    // 0.0.73 test 3 LIGHT HOLD (eye_history.hpp heldPixel, row0.w the hold, 0 = test 2's sum): a bright
+    // old pixel (a street light this frame's sub-pixel step missed) may stay above the 3x3 by part of
+    // its excess, its anti-ghost cut eased, and the blend weighted 1 / (1 + luma).
+    const float bright = saturate((max(raw.r, max(raw.g, raw.b)) - 0.35) * 2.0) * saturate(row0.w);
+    const float3 lift = max(raw - (hi + give), 0) * (bright * 0.8);
+    const float3 before = clamp(raw, max(lo - give, 0), hi + give + lift);
     // Version 0.0.62 ANTI-GHOST: the history follows the head only, so a hand (or anything that
     // moved on its own) leaves its old picture behind - the "ghost hand copies". History far outside
     // this pixel's own 3x3 colours is such a thing, not edge shimmer: keep less of it (none at
@@ -1709,8 +1718,15 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     const float3 outside = max(max(lo - raw, raw - hi), 0);
     const float spread = max(max(hi.r - lo.r, hi.g - lo.g), hi.b - lo.b) + 0.03;
     const float miss = max(outside.r, max(outside.g, outside.b)) / spread;
-    keep *= saturate(1.5 - miss * 0.75);
-    return float4(lerp(here.rgb, before, keep), here.a);
+    const float cut = saturate(1.5 - miss * 0.75);
+    keep *= cut + (1 - cut) * (bright * 0.6);
+    const float3 plain = lerp(here.rgb, before, keep);
+    if (!(bright > 0))
+        return float4(plain, here.a);
+    const float3 weights = float3(0.2126, 0.7152, 0.0722);
+    const float a = (1 - keep) / (1 + dot(here.rgb, weights)), b = keep / (1 + dot(before, weights));
+    const float3 karis = (here.rgb * a + before * b) / max(a + b, 1e-6);
+    return float4(lerp(plain, karis, bright), here.a);
 }
 )";
 bool failHistory(uint32_t code) {
@@ -1880,7 +1896,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
     float frame[2][16]{};
     bool blended = false, cut = false, moving = false;
-    float maxTravel = 0, leastKeep = 1;
+    float maxTravel = 0, leastKeep = 1, leastStill = 0;
     for (unsigned i = 0; i < 2; ++i) {
         std::array<float, 9> h{};
         const bool both = viewed && history.valid &&
@@ -1899,6 +1915,9 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];
         frame[i][12] = keep;
+        frame[i][3] = keep > 0 ? eye_history::lightHoldInForce(lightHoldPercent.load(std::memory_order_relaxed),
+                                                               travelCut, turnCut)
+                               : 0.f; // 0.0.73 test 3 LIGHT HOLD (row0.w)
         frame[i][13] = 1.f / static_cast<float>(outWidth);
         frame[i][14] = 1.f / static_cast<float>(outHeight);
         frame[i][15] = eye_history::movedLoosen(
@@ -1911,6 +1930,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             cut = still > 0 && !(keep > 0);
             moving = keep > 0 && eye_history::motionShare(travelCut, turnCut) > .5f;
             leastKeep = keep;
+            leastStill = still;
         }
     }
     const unsigned read = history.parity, write = 1 - read;
@@ -1972,6 +1992,12 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         history.timed[slot] = true;
     }
     history.parity = write;
+    // 0.0.73 test 3 JITTER CALM: the share of its still-head history this pass kept (1 still, 0 when a
+    // swing cut it), for the next pair's sub-pixel step.
+    keptMilli.store(blended && viewed && std::isfinite(leastKeep) && leastKeep > 0 && leastStill > 0
+                        ? static_cast<uint32_t>(std::min(leastKeep / leastStill, 1.f) * 1000.f + .5f)
+                        : 0u,
+                    std::memory_order_relaxed);
     // Without its view the picture is still kept, but it cannot be turned to
     // the next pair's: that one starts again.
     history.valid = viewed;
@@ -2137,8 +2163,10 @@ void stagePair(EyePairState::Stamp stamp) {
     // The history after AA: it blends what the headset is shown.
     if (historyNow() && prepareHistory())
         drawHistory(slot->list.Get(), index, stamp.serial);
-    else
+    else {
         history.valid = false;
+        keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
+    }
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
     if (!submitCommands(*slot)) {
         history.valid = false;
@@ -3038,6 +3066,13 @@ bool setEyeTrail(uint32_t percent) {
     SpidyEyeHistoryData.trail = percent;
     return true;
 }
+// 0.0.73 test 3 LIGHT HOLD: 0 off (test 2), 50 ON, 100 STRONG.
+bool setEyeLightHold(uint32_t percent) {
+    if (percent > eye_history::lightHoldStrong)
+        return false;
+    lightHoldPercent = percent;
+    return true;
+}
 bool setEyeHistoryCut(uint32_t percent) {
     if (percent < eye_history::minimumCut || percent > eye_history::maximumCut)
         return false;
@@ -3522,6 +3557,18 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeAAQuality(void* quality) {
         return 3997;
     native_gpu::aaQuality = static_cast<uint32_t>(value);
     return 0;
+}
+// 0.0.73 test 3 LIGHT HOLD (combat38 light_hold, eye_history.hpp): the history shader's bright hold,
+// 0 off, 50 ON (default), 100 STRONG; refused (3996) past 100.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeLightHold(void* percent) {
+    return native_gpu::setEyeLightHold(
+               static_cast<uint32_t>(std::min<uintptr_t>(reinterpret_cast<uintptr_t>(percent), 1000)))
+               ? 0
+               : 3996;
+}
+// JITTER CALM: the share of its still-head history the last pass kept (0..1; 0 while none was kept or none ran).
+extern "C" float SpidyEyeHistoryKept() {
+    return static_cast<float>(native_gpu::keptMilli.load(std::memory_order_relaxed)) / 1000.f;
 }
 // Update 37: HISTORY CUT (live.txt history_cut, eye_history::cutMotion), 25-400 percent;
 // refused (3998) outside.

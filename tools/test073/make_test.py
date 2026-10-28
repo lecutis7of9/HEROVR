@@ -40,6 +40,10 @@ shutil.copytree(os.path.join(NEWMODELS, 'Suits/Suit_wolverine_3'), os.path.join(
 shutil.copytree(os.path.join(INST72, 'Sounds'), os.path.join(pay, 'Sounds'))
 for f in ('user-van-enter-start-engine.mp3',):
     shutil.copy(os.path.join(REPO, 'assets/sfx/source', f), os.path.join(pay, 'Sounds', f))
+# 0.0.73 test 2 (fix 20): the desktop shortcut's own icon (make_hero_icon.py), installed at the mod folder's top.
+ICON = os.path.join(REPO, 'tools/test073/HERO-VR.ico')
+if os.path.exists(ICON):
+    shutil.copy(ICON, os.path.join(pay, 'HERO-VR.ico'))
 for f in ('THIRD-PARTY-MODELS.md', 'CREDITS.md'):
     shutil.copy(os.path.join(REPO, f), os.path.join(pay, f))
 os.makedirs(os.path.join(pay, 'Music'), exist_ok=True)
@@ -51,9 +55,10 @@ open(os.path.join(pay, 'HERO-VR-TEST-BUILD.txt'), 'w', newline='\r\n').write('\n
 files = sorted(os.path.relpath(os.path.join(r, f), pay).replace(os.sep, '/') for r, _, fs in os.walk(pay) for f in fs)
 open(os.path.join(pay, 'SHA256SUMS.txt'), 'w', newline='\n').write(
     ''.join(f"{sha(open(os.path.join(pay, p), 'rb').read())}  {p}\n" for p in files))
-# installer, from test 12's, renamed
+# installer: tools/test073's (from test 12's), renamed
 for f in ('INSTALL-TEST-BUILD.bat', 'INSTALL-TEST-BUILD.ps1'):
-    s = open(os.path.join(T12, f), encoding='utf-8').read().replace('0.0.72', '0.0.73')
+    own = os.path.join(REPO, 'tools/test073', f)  # 0.0.73 test 2: the installer with the shortcut popup (fix 20)
+    s = open(own if os.path.exists(own) else os.path.join(T12, f), encoding='utf-8').read().replace('0.0.72', '0.0.73')
     s = s.replace("extract part 2 and part 3 into this same folder", "extract ALL 4 part zips into this same folder")
     open(os.path.join(stage, f), 'w', encoding='utf-8', newline='\r\n').write(s.replace('\r\n', '\n'))
 shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), f'READ-ME-FIRST-test{N}.txt'), os.path.join(stage, 'READ-ME-FIRST.txt'))

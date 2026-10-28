@@ -1,7 +1,8 @@
 #pragma once
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 //
-// 0.0.73 test 4 IMAGE STYLE (GRAPHICS > QUALITY, combat38::imageStyle, live.txt image_style; live).
+// 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (GRAPHICS > QUALITY under IMAGE, combat38::imageStyle,
+// live.txt image_style; live).
 // The owner, on test 3: "the aliasing is still just too noticeable and if you smooth it ... it just looks
 // smudged and blurry ... whatever SpidyVR does to handle it works and it needs to look as good as that."
 //
@@ -17,32 +18,30 @@
 //   and -EngineTaa, the launcher's default), the jitter OURS whenever live.txt says NONE, and the
 //   clean picture (native_gpu::setCleanImage: FXAA, history and CAS stand aside, sliders kept).
 //   Until it is on, and if it fails (targets gone, frame rate halved, needs a restart), the picture
-//   is HERO 0.0.73's (EYE AA), so it is never raw and never flat.
-// - HERO 0.0.73 (1): exactly test 3's picture (ENGINE TAA off, EYE AA on, the sliders as set).
-// The mip bias (run_game_vr.py, read at the game's start) is 0 under SPIDYVR, +0.5 under HERO 0.0.73.
+//   is IMAGE's (EYE AA: SPIDYVR's sharp history read, or HERO VR CLASSIC), so it is never raw or flat.
+// - OFF (1): ENGINE TAA off, EYE AA on: the picture is IMAGE's alone (0.0.73 IMAGE, combat38::image).
+// The mip bias is IMAGE's (live_settings.image_mip_bias: 0 under its SPIDYVR, read at the game's start).
 #include <cstdint>
 
 #include "spidy/engine_taa.hpp"
 
 namespace spidy::image_style {
-enum Style : uint32_t { spidyvr = 0, hero073 = 1, styles = 2 };
+enum Style : uint32_t { spidyvr = 0, gameTaaOff = 1, styles = 2 };
 inline constexpr uint32_t defaultStyle = spidyvr;
-inline bool spidy(uint32_t style) { return style != hero073; } // anything unknown: the default
+inline bool spidy(uint32_t style) { return style != gameTaaOff; } // anything unknown: the default
 
 // The lens jitter mode used while ENGINE TAA is on: SPIDYVR never leaves the jitter at NONE, which
 // switches the game's TemporalAa off (it is OURS, SpidyVR's own); GAME and PIXELS stay as asked.
 inline uint32_t jitterMode(uint32_t style, uint32_t asked) {
     return spidy(style) && asked == engine_taa::noJitter ? static_cast<uint32_t>(engine_taa::ours) : asked;
 }
-// The mip bias SPIDYVR starts the game with (SpidyVR leaves the game's own, 0), HERO 0.0.73's (+0.5).
-inline constexpr float spidyMipBias = 0.f, heroMipBias = .5f;
 
 // What the controller (game_xr, about once a second) does this time.
 struct Step {
     bool tryOn{};     // SpidyEngineTaa(1); on success: EYE AA off, the FPS guard armed (tried(true))
     bool engineOff{}; // SpidyEngineTaa(0)
     bool eyeAaOff{};  // EYE AA off (the game's TAA has the picture)
-    bool eyeAaOn{};   // EYE AA on (HERO 0.0.73's picture), if it is off and can
+    bool eyeAaOn{};   // EYE AA on (IMAGE's picture), if it is off and can
     bool clean{};     // native_gpu::setCleanImage
     const char* note{}; // a line for the log (once per change)
 };
@@ -60,21 +59,21 @@ public:
             spidy_ = wantSpidy;
             owned_ = gaveUp_ = false;
             if (!wantSpidy) {
-                s.note = "IMAGE STYLE: HERO 0.0.73 (FXAA, EYE AA history, sharpening as set)";
-                if (wasSpidy) { // back to test 3's picture
+                s.note = "GAME TAA: OFF (EYE AA, IMAGE's look)";
+                if (wasSpidy) { // back to IMAGE's picture
                     s.engineOff = et::stateOf(enginePacked) == et::on;
                     s.eyeAaOn = !eyeAaOn;
                 }
                 return s;
             }
-            s.note = "IMAGE STYLE: SPIDYVR (the game's TAA in each eye, nothing over it)";
+            s.note = "GAME TAA: SPIDYVR (the game's TAA in each eye, nothing over it)";
         }
         if (!wantSpidy)
-            return s; // HERO 0.0.73: the player's own presses rule
+            return s; // OFF: the player's own presses rule
         const uint32_t state = et::stateOf(enginePacked), reason = et::reasonOf(enginePacked);
         if (state == et::on) { // on (by us, the player or the auto): SpidyVR's picture
             if (!owned_)
-                s.note = "IMAGE STYLE SPIDYVR: ENGINE TAA on, FXAA/history/sharpening stand aside";
+                s.note = "GAME TAA SPIDYVR: ENGINE TAA on, FXAA/history/sharpening stand aside";
             owned_ = true;
             gaveUp_ = false;
             s.eyeAaOff = eyeAaOn;
@@ -87,9 +86,9 @@ public:
                 return s; // a new VR start tries again
             gaveUp_ = true;
             s.eyeAaOn = !eyeAaOn;
-            s.note = reason == et::slow ? "IMAGE STYLE SPIDYVR: ENGINE TAA off (frame rate halved), EYE AA instead"
-                         : reason == et::targetsGone ? "IMAGE STYLE SPIDYVR: ENGINE TAA lost its targets, EYE AA instead"
-                                                     : "IMAGE STYLE SPIDYVR: ENGINE TAA turned off, EYE AA instead";
+            s.note = reason == et::slow ? "GAME TAA SPIDYVR: ENGINE TAA off (frame rate halved), EYE AA instead"
+                         : reason == et::targetsGone ? "GAME TAA SPIDYVR: ENGINE TAA lost its targets, EYE AA instead"
+                                                     : "GAME TAA SPIDYVR: ENGINE TAA turned off, EYE AA instead";
             return s;
         }
         if (gaveUp_)
@@ -97,10 +96,10 @@ public:
         if (state == et::unavailable && (et::needsRestart(reason) || reason == et::maskDiffers)) {
             gaveUp_ = true;
             s.note = reason == et::gameAa
-                             ? "IMAGE STYLE SPIDYVR: set the game's Anti-Aliasing to TAA (or DLAA) and restart; EYE AA until then"
+                             ? "GAME TAA SPIDYVR: set the game's Anti-Aliasing to TAA (or DLAA) and restart; EYE AA until then"
                          : reason == et::notPrepared
-                             ? "IMAGE STYLE SPIDYVR: launch with ENGINE TAA (-EngineTaa) and restart; EYE AA until then"
-                             : "IMAGE STYLE SPIDYVR: this game build differs; EYE AA instead";
+                             ? "GAME TAA SPIDYVR: launch with ENGINE TAA (-EngineTaa) and restart; EYE AA until then"
+                             : "GAME TAA SPIDYVR: this game build differs; EYE AA instead";
             return s;
         }
         s.tryOn = blocked == et::none;

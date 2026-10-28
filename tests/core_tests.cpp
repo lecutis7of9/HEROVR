@@ -30759,15 +30759,16 @@ int main() {
             check(!v::Wheel::onRim(v::wheelHub + Vec3{.5f, .2f, .3f}, a, off, v::Tune{}), "a hand in the lap: off the rim");
         }
     });
-    test("0.0.73 test 4 IMAGE STYLE: SPIDYVR (default) runs the game's TAA per eye clean, HERO 0.0.73 is test 3", [] {
+    test("0.0.73 test 4 IMAGE STYLE (GAME TAA): SPIDYVR (default) runs the game's TAA per eye clean, OFF is IMAGE's look", [] {
         namespace is = spidy::image_style;
         namespace et = spidy::engine_taa;
         using namespace wrist_hud;
         const auto& o = combat38::optionInfo[combat38::imageStyle];
         const std::string h = o.help;
-        check(std::string(o.key) == "image_style" && std::string(o.label) == "IMAGE STYLE" && o.count == 2 &&
-                  std::string(o.values[0]) == "SPIDYVR" && std::string(o.values[1]) == "HERO 0.0.73",
-              "IMAGE STYLE: SPIDYVR first (the default), HERO 0.0.73");
+        check(std::string(o.key) == "image_style" && std::string(o.label) == "GAME TAA" && o.count == 2 &&
+                  std::string(o.values[0]) == "SPIDYVR" && std::string(o.values[1]) == "OFF",
+              "GAME TAA: SPIDYVR first (the default), OFF");
+        check(combat38::imageStyle != combat38::image && combat38::imageLook(0).sharpHistory, "beside IMAGE, its look kept");
         check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
               "its subtext: one sentence, no restart");
         check(is::defaultStyle == is::spidyvr && is::spidy(0) && !is::spidy(1), "value 0 SPIDYVR");
@@ -30776,7 +30777,7 @@ int main() {
         check(is::jitterMode(is::spidyvr, et::noJitter) == et::ours && is::jitterMode(is::spidyvr, et::game) == et::game &&
                   is::jitterMode(is::spidyvr, et::pixels) == et::pixels && is::jitterMode(is::spidyvr, et::ours) == et::ours,
               "SPIDYVR never NONE");
-        check(is::jitterMode(is::hero073, et::noJitter) == et::noJitter, "HERO 0.0.73 keeps test 3's NONE");
+        check(is::jitterMode(is::gameTaaOff, et::noJitter) == et::noJitter, "OFF keeps the NONE asked");
         const uint32_t off = et::pack(et::off, et::none), on = et::pack(et::on, 0);
         {   // A new session: waits for the eyes, then turns it on; on: EYE AA off, the clean picture.
             is::Controller c;
@@ -30810,18 +30811,17 @@ int main() {
             s = c.update(is::spidyvr, et::pack(et::unavailable, et::noTargets), et::noTargets, true);
             check(!s.tryOn, "no targets: no tries");
         }
-        {   // HERO 0.0.73: test 3's picture; switching from SPIDYVR turns ENGINE TAA off and EYE AA on.
+        {   // OFF: IMAGE's picture; switching from SPIDYVR turns ENGINE TAA off and EYE AA on.
             is::Controller c;
-            auto s = c.update(is::hero073, off, et::none, true);
-            check(!s.tryOn && !s.clean && !s.engineOff && !s.eyeAaOn, "HERO from the start: nothing touched");
+            auto s = c.update(is::gameTaaOff, off, et::none, true);
+            check(!s.tryOn && !s.clean && !s.engineOff && !s.eyeAaOn, "OFF from the start: nothing touched");
             s = c.update(is::spidyvr, on, et::none, false);
             check(s.clean, "SPIDYVR");
-            s = c.update(is::hero073, on, et::none, false);
-            check(s.engineOff && s.eyeAaOn && !s.clean && !s.tryOn, "back to test 3's picture");
-            s = c.update(is::hero073, on, et::none, false);
+            s = c.update(is::gameTaaOff, on, et::none, false);
+            check(s.engineOff && s.eyeAaOn && !s.clean && !s.tryOn, "back to IMAGE's picture");
+            s = c.update(is::gameTaaOff, on, et::none, false);
             check(!s.engineOff && !s.clean && !s.eyeAaOn, "then the player's own presses rule");
         }
-        check(is::spidyMipBias == 0.f && is::heroMipBias == .5f, "mip bias 0 (SpidyVR), 0.5 (test 3)");
     });
     test("0.0.73 test 3 VAN PEDALS: WHEEL HAND (default) or CLASSIC, one sentence, no restart; CLASSIC is the 0.0.72 pedals", [] {
         namespace v = van072;

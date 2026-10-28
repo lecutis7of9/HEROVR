@@ -495,7 +495,7 @@ enum class Control : uint8_t {
     combatRepLog, // 0.0.73 test 3 REP PAGE: each rep change logged for the hologram's REP tab (ON) or not (OFF)
     combatVanPedals, // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (on) or CLASSIC (the 0.0.72 pedals)
     combatImage,     // 0.0.73 IMAGE: SPIDYVR (sharp, the default) or HERO VR CLASSIC (test 3)
-    combatImageStyle, // 0.0.73 test 4 IMAGE STYLE: SPIDYVR (the game's TAA per eye, default) or HERO 0.0.73 (test 3)
+    combatImageStyle, // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA: SPIDYVR (the game's TAA per eye, default) or OFF (IMAGE's look)
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.

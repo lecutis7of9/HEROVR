@@ -626,7 +626,7 @@ uint32_t SpidyShadowCameraNow();        // Update 31: SHADOW CAMERA mode | rever
 uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, reason)
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
-DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE: 0 SPIDYVR, 1 HERO 0.0.73
+DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
@@ -10153,7 +10153,7 @@ DWORD WINAPI run(void*) {
                             previous = engine;
                             // 0.0.73 test 4 IMAGE STYLE (image_style.hpp): SPIDYVR (default) runs the game's
                             // own TAA in each eye and sends it clean (no FXAA, history or CAS), as SpidyVR;
-                            // HERO 0.0.73 is test 3's picture. The clean picture follows ENGINE TAA every
+                            // OFF leaves the picture to IMAGE (EYE AA). The clean picture follows ENGINE TAA every
                             // frame (never a raw frame when it goes off); the rest about once a second.
                             static image_style::Controller styleControl;
                             static uint32_t styleSent = UINT32_MAX;
@@ -10161,7 +10161,7 @@ DWORD WINAPI run(void*) {
                             const uint32_t style = c38(combat38::imageStyle);
                             if (style != styleSent && SpidyImageStyle(reinterpret_cast<void*>(uintptr_t{
                                                           image_style::spidy(style) ? image_style::spidyvr
-                                                                                    : image_style::hero073})) == 0)
+                                                                                    : image_style::gameTaaOff})) == 0)
                                 styleSent = style;
                             if (const ULONGLONG nowTick = GetTickCount64(); nowTick - styleTick >= 1000 || style != styleSent) {
                                 styleTick = nowTick;

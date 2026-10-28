@@ -63,6 +63,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/mesh_model.cpp
             src/suit_wear.cpp
             src/test_notice.cpp
+            src/van_screen.cpp
             src/roster_page.cpp)
 target_include_directories(spidy_core PUBLIC include)
 if(HERO_TEST_BUILD)
@@ -212,6 +213,8 @@ add_executable(spidy_hero007_preview apps/hero007_preview.cpp) # Version 0.0.7
 target_link_libraries(spidy_hero007_preview PRIVATE spidy_core)
 add_executable(spidy_hero072b_preview apps/hero072b_preview.cpp) # Version 0.0.72 FIX ROUND
 target_link_libraries(spidy_hero072b_preview PRIVATE spidy_core)
+add_executable(spidy_van_screen_preview apps/van_screen_preview.cpp) # Version 0.0.73 test 3 VAN SCREEN
+target_link_libraries(spidy_van_screen_preview PRIVATE spidy_core)
 add_executable(spidy_phone_preview apps/phone_preview.cpp)
 target_link_libraries(spidy_phone_preview PRIVATE spidy_core)
 if(SPIDY_BUILD_OBSERVER)

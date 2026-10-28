@@ -348,10 +348,11 @@ bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mes
 
 // Version 0.0.72 PUNISHER VAN: a model placed by its own axes (world = at + right x + up y - forward z), any
 // size to 8 m (the van and its parts), seen to 80 m. right / up / forward are made orthonormal here (forward kept).
-bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer) {
+bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,
+                       float scale) {
     const Vec3 s = model.high - model.low;
     const float most = std::max({s.x, s.y, s.z});
-    if (!model.ok() || !(most < 8.f) || !(most > .01f) || !ok(at) || !ok(forward) || !ok(up) || !ok(viewer) ||
+    if (!model.ok() || !(most < 8.f) || !(most > .01f) || !(scale > .01f) || !(scale < 8.f) || !ok(at) || !ok(forward) || !ok(up) || !ok(viewer) ||
         length(forward) < 1e-4f || !inRange(at, viewer, 80.f))
         return false;
     const Vec3 f = normalized(forward);
@@ -359,8 +360,8 @@ bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, 
     if (length(u) < 1e-4f)
         return false;
     u = normalized(u);
-    const Vec3 r = cross(f, u);
-    return drawMesh(out, model, [&](Vec3 c) { return at + r * c.x + u * c.y - f * c.z; }, viewer);
+    const Vec3 r = cross(f, u) * scale, us = u * scale, fs = f * scale;
+    return drawMesh(out, model, [&](Vec3 c) { return at + r * c.x + us * c.y - fs * c.z; }, viewer);
 }
 
 bool grappleMuzzle(const Item& gun, const mesh_model::Mesh& model, Vec3& muzzle) {
@@ -394,15 +395,32 @@ bool appendSawedOffModel(std::vector<Vertex>& out, const Item& it, const mesh_mo
     return true;
 }
 
-bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer) {
-    if (!ok(grip) || !ok(tip) || length(tip - grip) < .05f || !metric(model))
+BatonFit batonFit(Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, bool inHand) {
+    BatonFit f{};
+    const Vec3 s = model.high - model.low;
+    const float span = length(tip - grip), thick = std::min(s.x, s.y);
+    if (!ok(grip) || !ok(tip) || span < .05f || !(s.z > .05f) || !(thick > .005f))
+        return f;
+    f.across = std::clamp(batonDiameter / thick, .1f, 4.f);
+    f.along = std::clamp(span / s.z, .1f, 4.f);
+    const Vec3 way = (tip - grip) * (1.f / span);
+    f.at = inHand ? grip + way * (span / 3.f)                         // the model's grip on the hand (gripShare)
+                  : grip + way * (std::max(0.f, model.high.z) * f.along); // the butt at the grip end
+    f.ok = ok(f.at);
+    return f;
+}
+
+bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer, bool inHand) {
+    if (!ok(grip) || !ok(tip) || length(tip - grip) < .05f || !metric(model) || !ok(viewer))
         return false;
-    Item it;
-    it.forward = normalized(tip - grip);
-    Vec3 up = Vec3{0, 1, 0} - it.forward * it.forward.y;
-    it.up = length(up) > 1e-3f ? normalized(up) : Vec3{0, 0, 1};
-    it.at = grip + it.forward * std::max(0.f, model.high.z); // the butt at the grip end
-    return appendModel(out, it, model, viewer);
+    const BatonFit fit = batonFit(grip, tip, model, inHand);
+    if (!fit.ok || !inRange(fit.at, viewer, 40.f))
+        return false;
+    const Vec3 f = normalized(tip - grip);
+    Vec3 up = Vec3{0, 1, 0} - f * f.y;
+    up = length(up) > 1e-3f ? normalized(up) : Vec3{0, 0, 1};
+    const Vec3 r = cross(f, up) * fit.across, u = up * fit.across, fz = f * fit.along;
+    return drawMesh(out, model, [&](Vec3 c) { return fit.at + r * c.x + u * c.y - fz * c.z; }, viewer);
 }
 
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle) {

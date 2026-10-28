@@ -3,6 +3,7 @@
 // Version 0.0.72 (TEST) looks (hero072_visual.hpp).
 #include "spidy/hero072_visual.hpp"
 #include "spidy/hero072.hpp"
+#include "spidy/construct_fist.hpp"
 #include "spidy/hero007_visual.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/pixel_font.hpp"
@@ -156,20 +157,18 @@ void appendChain(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, floa
 
 void appendFist(std::vector<Vertex>& out, Vec3 at, Vec3 forward, float alpha, Vec3 viewer, float pixelAngle) {
     if (!okv(at) || !okv(forward) || !okv(viewer) || !std::isfinite(alpha) || alpha <= .01f || length(forward) < 1e-3f ||
-        !inRange(at, viewer, 60.f))
+        !inRange(at, viewer, 60.f) || !std::isfinite(pixelAngle))
         return;
-    VGuard g(out);
-    const Vec3 f = normalized(forward), s = perpendicular(f), u = normalized(cross(s, f));
+    // Test build 10 CONSTRUCT FIST: the real 3D fist (construct_fist.hpp), lit, palm down, the knuckles along
+    // `forward`; it drives out a little and shrinks away as it fades (a model has no fade). Was billboards.
     const float a = std::clamp(alpha, 0.f, 1.f);
-    // A 0.9 m construct fist: the back of the hand, four knuckles and the thumb, glowing green.
-    const Vec3 c = at + f * .35f;
-    bar(out, c - f * .25f, c + f * .15f, viewer, pixelAngle, .30f, greenDeep, .35f * a);
-    for (int k = 0; k < 4; ++k) {
-        const Vec3 k0 = c + f * .15f + s * (-.24f + .16f * k);
-        bar(out, k0, k0 + f * .14f, viewer, pixelAngle, .075f, green, .8f * a);
-    }
-    bar(out, c - s * .30f - f * .05f, c - s * .18f + f * .12f + u * -.08f, viewer, pixelAngle, .06f, green, .8f * a);
-    bar(out, c - f * .45f, c - f * .25f, viewer, pixelAngle, .16f, green, .5f * a); // the wrist
+    const Vec3 f = normalized(forward);
+    Vec3 up = Vec3{0, 1, 0} - f * f.y;
+    up = length(up) > 1e-3f ? normalized(up) : soft::perpendicular(f);
+    const float scale = std::min(1.f, a / .3f);
+    if (scale < .05f)
+        return;
+    hero007::appendPlacedModel(out, construct_fist::mesh(), at + f * (.20f + .25f * (1 - a)), f, up, viewer, scale);
 }
 
 void appendCharge(std::vector<Vertex>& out, Vec3 at, Vec3 up, float level, bool empty, Vec3 viewer) {
@@ -350,6 +349,9 @@ Look worldLook(const Look& l, const Pose& w) {
     o.hammerAt = P(l.hammerAt);
     o.hammerForward = D(l.hammerForward);
     o.hammerUp = D(l.hammerUp);
+    o.hammerVel = D(l.hammerVel);
+    o.aimHintFrom = P(l.aimHintFrom);
+    o.aimHintTo = P(l.aimHintTo);
     for (uint32_t i = 0; i < std::min(l.bolts, boltsMost); ++i) {
         o.boltFrom[i] = P(l.boltFrom[i]);
         o.boltTo[i] = P(l.boltTo[i]);
@@ -380,7 +382,7 @@ Look worldLook(const Look& l, const Pose& w) {
     return o;
 }
 
-void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewer, float pixelAngle) {
+void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewer, float pixelAngle, float ahead) {
     if (!l.any || !okv(travel) || !okv(viewer) || !std::isfinite(pixelAngle))
         return;
     const auto T = [&](Vec3 p) { return p + travel; };
@@ -395,12 +397,34 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
         Vec3 face = l.hammerUp - along * dot(l.hammerUp, along);
         face = length(face) > 1e-3f ? normalized(face) : soft::perpendicular(along);
         Vec3 handle = along;
-        if (l.hammerSpin != 0 && std::isfinite(l.hammerSpin)) {
-            const float c = std::cos(l.hammerSpin), s = std::sin(l.hammerSpin);
+        // Test build 10: a flying hammer carried on to this image's time along its velocity (never past the hand).
+        Vec3 at = l.hammerAt;
+        float spin = l.hammerSpin;
+        const float sp = length(l.hammerVel);
+        if (!l.hammerInHand && std::isfinite(ahead) && ahead > 0 && okv(l.hammerVel) && sp > 1e-3f && std::isfinite(l.hammerAheadMost)) {
+            const float t = std::min(ahead, .06f);
+            at = at + l.hammerVel * (std::min(sp * t, std::max(0.f, l.hammerAheadMost)) / sp);
+            if (std::isfinite(l.hammerSpinRate))
+                spin += l.hammerSpinRate * t;
+        }
+        if (spin != 0 && std::isfinite(spin)) {
+            const float c = std::cos(spin), s = std::sin(spin);
             handle = along * c + face * s;
             face = face * c - along * s;
         }
-        hero007::appendPlacedModel(out, *l.hammerModel, T(l.hammerAt), face, handle, viewer);
+        hero007::appendPlacedModel(out, *l.hammerModel, T(at), face, handle, viewer);
+    }
+    // Test build 10 AIM HINT: a faint dashed line where the hammer would fly (gold when it is on an enemy).
+    if (l.aimHint && okv(l.aimHintFrom) && okv(l.aimHintTo) && std::isfinite(l.aimHintAlpha) && l.aimHintAlpha > .01f &&
+        length(l.aimHintTo - l.aimHintFrom) > .2f && length(l.aimHintTo - l.aimHintFrom) < 40.f) {
+        VGuard g(out);
+        const Vec3 a = T(l.aimHintFrom), d = T(l.aimHintTo) - a;
+        const Vec3 colour = l.aimHintLocked ? Vec3{1.f, .78f, .3f} : Vec3{.6f, .8f, 1.f};
+        constexpr int dashes = 14;
+        for (int k = 0; k < dashes; ++k) {
+            const float t0 = static_cast<float>(k) / dashes, t1 = t0 + .55f / dashes;
+            bar(out, a + d * t0, a + d * t1, viewer, pixelAngle, .004f, colour, .35f * l.aimHintAlpha * (1.f - .5f * t0));
+        }
     }
     // Version 0.0.72 PUNISHER VAN: the Vandura, its built cab and its wheel (turned with the hands); each the
     // real model or nothing.

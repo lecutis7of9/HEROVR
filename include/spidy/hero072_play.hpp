@@ -10,6 +10,7 @@
 // Every feature has its own Guard: a non-finite number trips it off for the session, never the mod.
 // Gestures only, except the basic projectiles (GREEN LANTERN's beam and chain, as the user's 8:3x
 // list asked): no trigger is ever a movement or a special.
+#include "spidy/thor_grip.hpp"
 #include "spidy/hero072.hpp"
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_visual.hpp"
@@ -45,6 +46,7 @@ struct PlayHand {
     Vec3 position{}, aim{0, 0, -1};
     bool tracked{};
     float trigger{}, grip{};
+    thor_grip::Held hammer{}; // test build 10: a hammer held in this fist, from the grip pose (ok false: none)
 };
 struct PlayIn {
     float dt{};
@@ -137,7 +139,64 @@ inline constexpr float throwSeconds = 1.f, throwRange = 26.f, returnSpeed = 24.f
 inline constexpr float blastRange = 30.f, blastEvery = .6f, boltSeconds = .3f;
 // Version 0.0.72 THOR HAMMER: the grip 6 cm up the handle; SHEATHED, the handle's end 20 cm under the head,
 // 15 cm behind and 12 cm right (inside the draw reach: below <= .25, ahead <= .05, side >= -.05).
-inline constexpr float hammerGrip = .06f;
+inline constexpr float hammerGrip = .06f; // (only with no grip pose: thor_grip.hpp places a held hammer)
+// Test build 10 THOR THROW ("throwing the hammer could be smoother and it's kind of hard to aim"):
+//  - AIM: along the controller's pointing (aimShare of the way) blended with the swing's own direction;
+//    an enemy within assistCone (12 degrees) of that line takes it (the nearest to the line, not the
+//    nearest to Thor) - a gentle assist, nothing outside the cone is pulled in.
+//  - FLIGHT: one cruise speed (throwSpeed, whatever the swing - a weak flick no longer flies slowly), a
+//    homing hammer turns at most homingTurn rad/s toward its target (build 7-9 snapped onto it each step).
+//  - RECALL: it turns back at returnTurn rad/s (no instant about-face), straight in once within
+//    returnStraight m, slowing near the hand (returnNear m/s per metre, at least returnSlowest) to the catch.
+//  - SPIN: spinPerMetre radians per metre flown (steady with the speed); the image extrapolates the
+//    flight to its own time (no stutter at the game's step rate).
+//  - HINT: winding up (the grip held, the hand over hintSpeed m/s) a faint line shows where it would go.
+inline constexpr float aimShare = .7f, assistCone = .978f /* 12 deg */, throwSpeed = 22.f, homingTurn = 7.f;
+inline constexpr float returnTurn = 9.f, returnStraight = 2.5f, returnNear = 8.f, returnSlowest = 6.f, spinPerMetre = .8f;
+inline constexpr float hintSpeed = 1.f, hintLength = 12.f;
+// The throw's line: the pointing (aim) blended with the swing (both unit or zero); the aim alone when the
+// swing goes backwards from it.
+inline Vec3 throwLine(Vec3 aim, Vec3 swing) {
+    const bool a = length(aim) > .5f, w = length(swing) > .5f;
+    if (!a)
+        return w ? normalized(swing) : Vec3{0, 0, -1};
+    const Vec3 n = normalized(aim);
+    if (!w || dot(n, normalized(swing)) < 0.f)
+        return n;
+    const Vec3 b = n * aimShare + normalized(swing) * (1.f - aimShare);
+    return length(b) > 1e-3f ? normalized(b) : n;
+}
+// The enemy closest to the line from `from` along `dir` within assistCone (and pullRange), or -1.
+inline int assistTarget(Vec3 from, Vec3 dir, const BatonEnemy* list, uint32_t count) {
+    int best = -1;
+    float bestDot = assistCone;
+    for (uint32_t i = 0; list && i < count; ++i) {
+        if (!list[i].id || list[i].down || !ok(list[i].chest))
+            continue;
+        const Vec3 to = list[i].chest - from;
+        const float d = length(to);
+        if (d < .5f || d > pullRange)
+            continue;
+        const float c = dot(to / d, dir);
+        if (c >= bestDot)
+            bestDot = c, best = static_cast<int>(i);
+    }
+    return best;
+}
+// `now` (unit) turned toward `want` (unit) by at most `most` radians.
+inline Vec3 steer(Vec3 now, Vec3 want, float most) {
+    const float c = std::clamp(dot(now, want), -1.f, 1.f), a = std::acos(c);
+    if (!(a > most) || !(most >= 0.f))
+        return want;
+    Vec3 side = want - now * c;
+    if (!(length(side) > 1e-5f)) { // straight back: turn about any side
+        side = cross(now, Vec3{0, 1, 0});
+        if (!(length(side) > 1e-5f))
+            side = cross(now, Vec3{1, 0, 0});
+    }
+    side = normalized(side);
+    return normalized(now * std::cos(most) + side * std::sin(most));
+}
 inline Vec3 sheathAt(Vec3 head, Vec3 bodyForward, Vec3 bodyRight) {
     return head + Vec3{0, -.20f, 0} - bodyForward * .15f + bodyRight * .12f;
 }
@@ -750,15 +809,12 @@ class Play {
             hammerHeld = false;
             const float sp = length(swingPeak);
             if (tracked[1] && ok(swingPeak) && sp >= throwMinSpeed) {
-                Vec3 dir = normalized(swingPeak);
+                // Test build 10: along the pointing blended with the swing, a 12-degree assist.
+                const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : Vec3{};
+                Vec3 dir = throwLine(aim, swingPeak * (1.f / sp));
                 hammerAim = 0;
-                const int e = pullTarget(p[1], dir, in.list, in.count);
-                if (e < 0) { // the aim helps: the controller's pointing, when it is near the swing
-                    const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : dir;
-                    const int a = pullTarget(p[1], aim, in.list, in.count);
-                    if (a >= 0 && dot(aim, dir) > .5f)
-                        dir = normalized(in.list[a].chest - p[1]), hammerAim = in.list[a].id;
-                } else {
+                const int e = assistTarget(p[1], dir, in.list, in.count);
+                if (e >= 0) {
                     dir = normalized(in.list[e].chest - p[1]);
                     hammerAim = in.list[e].id;
                 }
@@ -767,7 +823,7 @@ class Play {
                 hammerAge = 0;
                 hammerPos = p[1];
                 hammerFrom = p[1];
-                hammerVel = dir * std::clamp(sp * throwGain, throwSpeedLow, throwSpeedHigh);
+                hammerVel = dir * throwSpeed;
                 for (auto& id : hammerHitIds)
                     id = 0;
                 lastThrowSpeed = length(hammerVel);
@@ -783,12 +839,13 @@ class Play {
         if (hammerFlying) {
             hammerAge += dt;
             const Vec3 was = hammerPos;
+            hammerTurn = std::fmod(hammerTurn + length(hammerVel) * dt * spinPerMetre, 6.2831853f * 64.f);
             if (!hammerBack) {
-                for (uint32_t k = 0; in.list && k < in.count && hammerAim; ++k) // straight at its target
+                for (uint32_t k = 0; in.list && k < in.count && hammerAim; ++k) // turning toward its target
                     if (in.list[k].id == hammerAim && !in.list[k].down && ok(in.list[k].chest)) {
                         const Vec3 to = in.list[k].chest - hammerPos;
-                        if (length(to) > .05f)
-                            hammerVel = normalized(to) * length(hammerVel);
+                        if (length(to) > .05f && length(hammerVel) > 1e-3f)
+                            hammerVel = steer(normalized(hammerVel), normalized(to), homingTurn * dt) * throwSpeed;
                     }
                 hammerPos = hammerPos + hammerVel * dt;
                 if (hammerAge >= throwSeconds || length(hammerPos - hammerFrom) >= throwRange)
@@ -803,7 +860,12 @@ class Play {
                     if (hammerHeld)
                         out.buzz(1, 1.f);
                 } else {
-                    hammerVel = to * (returnSpeed / d);
+                    // Test build 10: turning back smoothly, straight in near the hand, slowing to the catch.
+                    const Vec3 want = to * (1.f / d);
+                    const Vec3 now = length(hammerVel) > 1e-3f ? normalized(hammerVel) : want;
+                    const Vec3 way = d <= returnStraight ? want : steer(now, want, returnTurn * dt);
+                    const float speed = std::clamp(d * returnNear, returnSlowest, returnSpeed);
+                    hammerVel = way * speed;
                     hammerPos = hammerPos + hammerVel * dt;
                 }
             }
@@ -934,7 +996,14 @@ class Play {
         // the right shoulder blade - exactly where the right grip reaches to draw it; build 7: not drawn
         // there, it is behind the head and out of view, and it cost 150,000 vertices a frame).
         out.look.hammerChoice = o.thorHammer;
-        if (hammerHeld && tracked[1]) {
+        if (hammerHeld && tracked[1] && in.hands[1].hammer.ok) { // test build 10: in the fist (thor_grip.hpp)
+            out.look.hammer = true;
+            out.look.hammerInHand = true;
+            out.look.hammerAt = in.hands[1].hammer.at;
+            out.look.hammerForward = in.hands[1].hammer.handle;
+            out.look.hammerUp = in.hands[1].hammer.face;
+            out.look.hammerSpin = 0;
+        } else if (hammerHeld && tracked[1]) { // no grip pose: along the aim, as before
             const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : look;
             out.look.hammer = true;
             out.look.hammerAt = p[1] - aim * hammerGrip;
@@ -947,7 +1016,12 @@ class Play {
             out.look.hammerAt = hammerPos;
             out.look.hammerForward = way;
             out.look.hammerUp = faceOf(way, look);
-            out.look.hammerSpin = clock * 18.f;
+            out.look.hammerSpin = hammerTurn;
+            // Test build 10: the image carries the flight on to its own time (no farther than the hand).
+            out.look.hammerVel = hammerVel;
+            out.look.hammerSpinRate = length(hammerVel) * spinPerMetre;
+            out.look.hammerAheadMost = hammerBack ? std::max(0.f, length((tracked[1] ? p[1] : hd) - hammerPos) - catchRange)
+                                                  : std::max(0.f, throwRange - length(hammerPos - hammerFrom));
         } else if (ok(hd)) {
             const Vec3 f = body.forward(), r = body.right();
             out.look.hammer = true;
@@ -956,6 +1030,17 @@ class Play {
             out.look.hammerUp = r;
             out.look.hammerSpin = 0;
             out.look.hammerSheathed = true;
+        }
+        // Test build 10 AIM HINT: winding up with the hammer in hand, a faint line along where it would fly.
+        if (hammerHeld && tracked[1] && grip && ok(v[1]) && length(v[1]) > hintSpeed && length(v[1]) < 25.f) {
+            const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : Vec3{};
+            const Vec3 dir = throwLine(aim, normalized(v[1]));
+            const int e = assistTarget(p[1], dir, in.list, in.count);
+            out.look.aimHint = true;
+            out.look.aimHintFrom = p[1] + dir * .35f;
+            out.look.aimHintTo = e >= 0 ? in.list[e].chest : p[1] + dir * hintLength;
+            out.look.aimHintLocked = e >= 0;
+            out.look.aimHintAlpha = std::clamp((length(v[1]) - hintSpeed) / 2.f, 0.f, 1.f);
         }
         // The bolts alive (each flickers: a new jag each frame), then the crackle on the hammer.
         for (uint32_t k = 0; k < liveBoltsMost; ++k) {
@@ -1018,6 +1103,7 @@ class Play {
     }
     bool hammerFlying{}, hammerBack{}, blastWas{};
     Vec3 hammerPos{}, hammerVel{}, hammerFrom{}, swingPeak{};
+    float hammerTurn{}; // test build 10: the flying hammer's tumble (radians, by distance flown)
     float hammerAge{}, swingAge{}, blastCool{};
     uint64_t hammerAim{};
     uint64_t hammerHitIds[chainMost]{};

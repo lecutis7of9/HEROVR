@@ -2,6 +2,7 @@
 #ifndef SPIDY_TEST_COMMIT
 #define SPIDY_TEST_COMMIT "unknown"
 #endif
+#include "spidy/thor_grip.hpp"
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
 #include "spidy/baton_grip.hpp"
 #include "spidy/gun_grip.hpp"
@@ -6887,6 +6888,8 @@ DWORD WINAPI run(void*) {
                                             hero072HandTracked[i] = cf.hands[i].tracked;
                                             in72.hands[i].trigger = cf.hands[i].button;
                                             in72.hands[i].grip = cf.hands[i].grip;
+                                            // Test build 10 THOR HAMMER GRIP: Mjolnir in the fist from the grip pose.
+                                            in72.hands[i].hammer = thor_grip::held(frame.hands[i].grip, runtime.controllers()[i]);
                                         }
                                         in72.list = list72;
                                         in72.count = n72;
@@ -7018,6 +7021,7 @@ DWORD WINAPI run(void*) {
                                         if (out72.ultimateFired)
                                             game_prompts::note("VERSION 0.0.72 ULTIMATE fired");
                                         hero072Look = out72.look;
+                                        hero072Look.hammerStamp = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
                                         hero072Look.blood = nullptr; // the draw never reads the game thread's blood
                                         // The progress kept: at most every 10 s, written whole (a crash keeps the last).
                                         if (hero072Play.progressDirty && (hero072SavedAt < 0 || combatClock - hero072SavedAt > 10.0)) {
@@ -8846,6 +8850,7 @@ DWORD WINAPI run(void*) {
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& b = batons[i];
                             saved.batonOn[i] = 0;
+                            saved.batonHeld[i] = false;
                             if (!dd || (b.inHandNow() && (!batonTracked[i] || !(length(batonAimNow[i]) > .5f))))
                                 continue;
                             // Version 0.0.7 BATON HOLSTERS: a holstered baton is drawn on the back (hero007).
@@ -8875,6 +8880,7 @@ DWORD WINAPI run(void*) {
                                 saved.batonGrip[i] = grip;
                                 saved.batonTip[i] = tip;
                                 saved.batonOn[i] = 1;
+                                saved.batonHeld[i] = b.inHandNow();
                             }
                         }
                         // Version 0.0.7 BATON LOOK (MODEL: the converted batons, CLUB when they are missing).
@@ -9753,7 +9759,7 @@ DWORD WINAPI run(void*) {
                             if (saved->batonOn[i] > 0) {
                                 if (saved->hero007.batonModel[i] && // Version 0.0.7 BATON LOOK MODEL
                                     hero007::appendBatonModel(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
-                                                              *saved->hero007.batonModel[i], viewer))
+                                                              *saved->hero007.batonModel[i], viewer, saved->batonHeld[i]))
                                     ;
                                 else if (saved->batonClub) // Version 0.0.7 BATON LOOK CLUB (MODEL's fallback too)
                                     hero007::appendBatonClub(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
@@ -9772,7 +9778,23 @@ DWORD WINAPI run(void*) {
                             // Build 5: THOR's look (the hammer, its chain, the storm) can never take the frame down:
                             // out of memory or a bad model drops this look for this frame only.
                             try {
-                                hero072::appendLook(vertices, saved->hero072, travel, viewer, pixelAngle);
+                                // Test build 10: the hammer in the fist from this image's own grip pose (no lag
+                                // behind the hand), a flying one carried on to this image's time.
+                                const hero072::Look* look72 = &saved->hero072;
+                                hero072::Look held72;
+                                if (look72->hammerInHand && validTrackedPose(rendered.grips[1])) {
+                                    const thor_grip::Held h = thor_grip::held(rendered.grips[1], runtime.controllers()[1]);
+                                    if (h.ok) {
+                                        held72 = *look72;
+                                        held72.hammerAt = h.at;
+                                        held72.hammerForward = h.handle;
+                                        held72.hammerUp = h.face;
+                                        look72 = &held72;
+                                    }
+                                }
+                                const double now72 = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                                const float ahead72 = look72->hammerStamp > 0 ? static_cast<float>(std::clamp(now72 - look72->hammerStamp, 0.0, .06)) : 0.f;
+                                hero072::appendLook(vertices, *look72, travel, viewer, pixelAngle, ahead72);
                             } catch (...) {
                                 static bool said = false;
                                 if (!said)

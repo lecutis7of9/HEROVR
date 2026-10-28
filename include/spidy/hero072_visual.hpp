@@ -29,6 +29,16 @@ struct Look {
     Vec3 hammerAt{}, hammerForward{0, 1, 0}, hammerUp{0, 0, -1};
     float hammerSpin{};
     bool hammerSheathed{};    // Version 0.0.72: on Thor's back (not in the hand, not flying)
+    // Test build 10: in the fist (game_xr re-places it from the image's own grip pose: thor_grip.hpp); flying:
+    // its velocity, tumble rate (rad/s) and the farthest it may be carried on (m) to the image's time, and the
+    // step's time (steady seconds). AIM HINT: a faint line from -> to (locked: onto an enemy).
+    bool hammerInHand{};
+    Vec3 hammerVel{};
+    float hammerSpinRate{}, hammerAheadMost{};
+    double hammerStamp{};
+    bool aimHint{}, aimHintLocked{};
+    Vec3 aimHintFrom{}, aimHintTo{};
+    float aimHintAlpha{};
     uint32_t hammerChoice{};  // Version 0.0.72 THOR HAMMER: 0 BOOOOP .. 3 FCCOOPER (mesh_model::hammerSlot)
     // Version 0.0.72: Mjolnir is Models\Hammer (mesh_model::slotHammer) or NOTHING (no built-in stand-in;
     // the wrist says MODEL MISSING: Hammer). Library-owned; set on the render thread by game_xr.
@@ -113,7 +123,8 @@ void appendSpray(std::vector<Vertex>& out, uint32_t kind, Vec3 from, Vec3 dir, f
 void appendShock(std::vector<Vertex>& out, Vec3 at, float radius, float age, Vec3 viewer, bool subtle = false);
 void appendHook(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 // Everything in `l`, moved by `travel`.
-void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewer, float pixelAngle);
+// ahead: seconds from the step that made `l` to this image (test build 10: a flying hammer carried on).
+void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewer, float pixelAngle, float ahead = 0);
 
 // Version 0.0.72 SUBTLE RING: the drawn ring's radius at age 0..1 (the full ring grows to the reach,
 // 12 m at most; the subtle one stays within subtleRing metres, a hint at the hand's slam spot).

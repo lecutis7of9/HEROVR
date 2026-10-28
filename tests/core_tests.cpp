@@ -29,6 +29,9 @@
 #include "spidy/hero007_play.hpp"
 #include "spidy/hero072.hpp"
 #include "spidy/hero072_visual.hpp"
+#include "spidy/hero007_visual.hpp"
+#include "spidy/construct_fist.hpp"
+#include "spidy/thor_grip.hpp"
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
@@ -28092,6 +28095,149 @@ int main() {
               "the shield snapped back: " + std::to_string(frames) + " " + std::to_string(b.timeouts));
         check(lastSpeed < spidy::hero_modes::batonBackSpeed * .8f, "it does not slow for the catch: " + std::to_string(lastSpeed));
         check(Baton::homeSpeed(0) < Baton::homeSpeed(5) && Baton::homeSpeed(5) == spidy::hero_modes::batonBackSpeed, "homeSpeed");
+    });
+    test("Test build 10: a 3D punch glove; Thor's hammer in the fist, a smooth aimed throw; batons at an escrima stick's size", [] {
+        using namespace spidy;
+        // THE PUNCH GLOVE: a real solid fist (smooth normals), not the flat bars of builds 3-9.
+        const auto& fist = construct_fist::mesh();
+        const Vec3 fs = fist.high - fist.low;
+        check(!fist.corners.empty() && fist.corners.size() % 3 == 0 && fist.corners.size() / 3 < 2400 &&
+                  fist.normals.size() == fist.corners.size(), "the fist mesh: " + std::to_string(fist.corners.size() / 3));
+        check(fs.x > .15f && fs.y > .15f && fs.z > .15f, "the fist is flat: " + std::to_string(fs.x) + " " + std::to_string(fs.y) + " " + std::to_string(fs.z));
+        {
+            std::vector<Vertex> out;
+            check(hero007::appendPlacedModel(out, fist, {0, 1.5f, -1}, {0, 0, -1}, {0, 1, 0}, {0, 1.6f, 0}, .5f) && !out.empty(),
+                  "the fist not drawn");
+            Vec3 lo{1e9f, 1e9f, 1e9f}, hi{-1e9f, -1e9f, -1e9f};
+            for (const auto& v : out)
+                lo = {std::min(lo.x, v.position.x), std::min(lo.y, v.position.y), std::min(lo.z, v.position.z)},
+                hi = {std::max(hi.x, v.position.x), std::max(hi.y, v.position.y), std::max(hi.z, v.position.z)};
+            const Vec3 d = hi - lo;
+            check(d.x > .07f && d.y > .07f && d.z > .07f && d.x < fs.x * .51f + .01f, "the drawn fist not 3D or not at half scale");
+        }
+        // THE HAMMER IN THE FIST: the grip pose facing ahead (-Z forward): the handle along the fist's tube (10 deg off
+        // toward the forearm), the hand 13 cm up it, a face square to it.
+        Pose g{{.25f, 1.2f, -.3f}, {}};
+        const auto h = thor_grip::held(g, ControllerKind::touch);
+        check(h.ok, "held from a good pose");
+        check(dot(h.handle, Vec3{0, 0, -1}) > .98f && dot(h.handle, Vec3{0, 0, -1}) < .99f && h.handle.y < 0, "the handle not along the tube");
+        check(length(h.at + h.handle * thor_grip::gripAlong - g.position) < 1e-4f, "the palm not 13 cm up the handle");
+        check(std::abs(dot(h.face, h.handle)) < 1e-3f && std::abs(length(h.face) - 1) < 1e-3f, "the face not square to the handle");
+        // The grip pitched up 90 degrees: the head straight up.
+        g.orientation = Quat::around({1, 0, 0}, 3.14159265f / 2);
+        check(thor_grip::held(g, ControllerKind::touch).handle.y > .98f, "a raised fist: the head not up");
+        check(!thor_grip::held(Pose{{NAN, 0, 0}, {}}, ControllerKind::touch).ok && !thor_grip::held(Pose{{}, {0, 0, 0, 0}}, ControllerKind::touch).ok,
+              "a bad pose held");
+        // THE AIM: the pointing blended with the swing; an enemy within 12 degrees takes it.
+        using namespace hero072;
+        const Vec3 tl = throwLine({0, 0, -1}, normalized(Vec3{1, 0, -1}));
+        check(tl.z < -.9f && tl.x > 0 && tl.x < .3f, "throwLine blend");
+        check(length(throwLine({0, 0, -1}, {0, 0, 1}) - Vec3{0, 0, -1}) < 1e-5f, "a backward swing: the aim");
+        const float a10 = 10 * 3.14159265f / 180, a20 = 20 * 3.14159265f / 180;
+        BatonEnemy two[2] = {{1, {std::sin(a20) * 8, 1.2f, -std::cos(a20) * 8}}, {2, {std::sin(a10) * 8, 1.2f, -std::cos(a10) * 8}}};
+        check(assistTarget({0, 1.2f, 0}, {0, 0, -1}, two, 2) == 1, "the 10 degree enemy not assisted");
+        check(assistTarget({0, 1.2f, 0}, {0, 0, -1}, two, 1) == -1, "a 20 degree enemy assisted");
+        const Vec3 st = steer({0, 0, -1}, {1, 0, 0}, .1f);
+        check(std::abs(std::acos(std::clamp(dot(st, Vec3{0, 0, -1}), -1.f, 1.f)) - .1f) < 1e-3f, "steer turns by at most");
+        check(length(steer({0, 0, -1}, {0, 0, 1}, .1f)) > .99f, "steer straight back");
+        // THE THROW: held in the fist, a swing, let go: 22 m/s every time, no snap turns, no jump, caught.
+        PlayIn in;
+        in.dt = 1 / 72.f;
+        in.play = true;
+        in.hero = hero_modes::thor;
+        in.head.position = {0, 1.7f, 0};
+        for (auto& hh : in.hands)
+            hh.tracked = true;
+        in.hands[0].position = {-.25f, 1.2f, -.2f};
+        in.hands[1].position = {.25f, 1.2f, -.2f};
+        in.hands[1].aim = {0, 0, -1};
+        BatonEnemy foes[1] = {{0x44, {1.99f, 1.45f, -10.15f}}}; // 10 degrees off the aim, 10 m: 1.7 m wide of a straight throw
+        in.list = foes;
+        in.count = 1;
+        Play play;
+        PlayOut out;
+        play.step(in, out);
+        in.hands[1].position = {.2f, 1.6f, .1f};
+        in.hands[1].grip = 1;
+        play.step(in, out);
+        in.hands[1].position = {.25f, 1.45f, 0};
+        in.hands[1].hammer = thor_grip::held(Pose{in.hands[1].position, {}}, ControllerKind::touch);
+        out = PlayOut{};
+        play.step(in, out);
+        check(play.hammerHeld && out.look.hammerInHand && length(out.look.hammerAt - in.hands[1].hammer.at) < 1e-5f &&
+                  length(out.look.hammerForward - in.hands[1].hammer.handle) < 1e-5f, "the held hammer not in the fist");
+        bool hinted = false;
+        for (int f = 0; f < 6; ++f) {
+            in.hands[1].position.z -= .05f;
+            in.hands[1].hammer = thor_grip::held(Pose{in.hands[1].position, {}}, ControllerKind::touch);
+            out = PlayOut{};
+            play.step(in, out);
+            hinted = hinted || (out.look.aimHint && out.look.aimHintAlpha > 0 && ok(out.look.aimHintTo));
+        }
+        check(hinted, "no aim hint on the wind-up");
+        in.hands[1].position.z -= .01f;
+        in.hands[1].grip = 0;
+        out = PlayOut{};
+        play.step(in, out);
+        check(play.hammerInAir() && std::abs(play.lastThrowSpeed - throwSpeed) < 1e-3f, "not thrown at 22 m/s: " + std::to_string(play.lastThrowSpeed));
+        check(out.look.hammer && !out.look.hammerInHand && length(out.look.hammerVel) > 20.f && out.look.hammerAheadMost > 0, "the flight not handed to the image");
+        Vec3 was = play.hammerAirAt(), lastWay{};
+        float worstTurn = 0, worstStep = 0, lastSpin = out.look.hammerSpin, worstSpin = 0;
+        uint32_t hits = 0, frames = 0;
+        for (; frames < 400 && play.hammerInAir(); ++frames) {
+            if (frames == 30)
+                in.hands[1].grip = 1;
+            out = PlayOut{};
+            play.step(in, out);
+            for (uint32_t k = 0; k < out.blowCount; ++k)
+                hits += out.blows[k].kind == kindHammer && out.blows[k].id == 0x44;
+            if (!play.hammerInAir())
+                break;
+            const Vec3 now = play.hammerAirAt(), d = now - was;
+            worstStep = std::max(worstStep, length(d));
+            if (length(d) > 1e-4f && length(lastWay) > .5f && frames < 25)
+                worstTurn = std::max(worstTurn, std::acos(std::clamp(dot(normalized(d), lastWay), -1.f, 1.f)));
+            if (length(d) > 1e-4f)
+                lastWay = normalized(d);
+            worstSpin = std::max(worstSpin, std::abs(out.look.hammerSpin - lastSpin));
+            lastSpin = out.look.hammerSpin;
+            was = now;
+        }
+        check(hits == 1, "the assisted throw did not hit the enemy 10 degrees off the aim");
+        check(worstStep < returnSpeed * in.dt * 1.05f, "the hammer jumped: " + std::to_string(worstStep));
+        check(worstTurn < homingTurn * in.dt * 1.5f + .01f, "a snap turn on the way out: " + std::to_string(worstTurn));
+        check(worstSpin < 1.f, "the spin jumped: " + std::to_string(worstSpin));
+        check(!play.hammerInAir() && play.hammerHeld, "not caught back in the fist");
+        // The image's own time: a flying hammer carried on, never past the reach given.
+        {
+            Look l{};
+            l.hammer = true;
+            l.hammerAt = {0, 1.5f, -3};
+            l.hammerForward = {0, 0, -1};
+            l.hammerUp = {0, 1, 0};
+            l.hammerVel = {0, 0, -22};
+            l.hammerAheadMost = .5f;
+            std::vector<Vertex> a, b;
+            appendLook(a, l, {}, {0, 1.6f, 0}, .002f, 0);
+            appendLook(b, l, {}, {0, 1.6f, 0}, .002f, .05f);
+            bool fine = true;
+            for (const auto& v : b)
+                fine &= finite(v.position);
+            check(fine, "the carried-on hammer not finite");
+        }
+        // DAREDEVIL'S BATONS: the new model drawn 3.6 cm thick (the old sticks' 3.2-3.8 cm), its 57 cm kept, its
+        // grip on the hand when held.
+        mesh_model::Mesh stick;
+        stick.low = {-.035f, -.033f, -.502f};
+        stick.high = {.036f, .033f, .068f};
+        const Vec3 butt{0, 1, 0}, tip{0, 1, -.57f};
+        const auto held = hero007::batonFit(butt, tip, stick, true), worn = hero007::batonFit(butt, tip, stick, false);
+        check(held.ok && std::abs(held.across - .036f / .066f) < 1e-3f && std::abs(held.along - 1) < 1e-3f, "the baton's size");
+        check(std::abs(.066f * held.across - hero007::batonDiameter) < 1e-4f && hero007::batonDiameter >= .025f &&
+                  hero007::batonDiameter <= .04f, "not an escrima stick's 1-1.5 inch");
+        check(length(held.at - (butt + Vec3{0, 0, -.19f})) < 1e-4f, "the held baton's grip not on the hand");
+        check(worn.ok && length(worn.at - (butt + Vec3{0, 0, -.068f})) < 1e-4f, "the holstered baton's butt not at its end");
+        check(!hero007::batonFit({NAN, 0, 0}, tip, stick, true).ok, "a NaN baton fitted");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

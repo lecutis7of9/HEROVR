@@ -141,12 +141,28 @@ bool appendBatarangModel(std::vector<Vertex>& out, const Item& it, const mesh_mo
 // the origin) at the item. False (nothing added) when it cannot be drawn: the built-in look instead.
 bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
 // Version 0.0.72 PUNISHER VAN: a model up to 8 m placed by its axes (world = at + right x + up y - forward z).
-bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer);
+// Test build 10: `scale` the model's size (1: as made).
+bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,
+                       float scale = 1);
 // The sawed-off as its frame and barrels; open: the barrels turned 35 degrees down about the pivot.
 bool appendSawedOffModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& frame,
                          const mesh_model::Mesh& barrels, bool open, Vec3 viewer);
 // A held or thrown baton model from its butt (grip) to its tip.
-bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer);
+// Test build 10 BATON SIZE ("daredevils batons is too large now, visually it was a good size before"): the
+// Yanez model is 57 cm long but 6.7 cm thick (twice the 0.0.62 red bar's 3.2 cm, the CLUB's 3.4-3.8 cm), so
+// it is drawn round its own axis at batonDiameter (an escrima stick's 1.4 inches) and along it at the
+// butt-to-tip span given (the old baton's 57 cm). inHand: the model's own grip (its origin, a hand-width in
+// from the ridged butt) on the hand, gripShare up the span from the butt (baton_grip.hpp); else the butt on
+// `grip` (holstered, thrown).
+inline constexpr float batonDiameter = .036f;
+struct BatonFit {
+    float across{1}, along{1}; // the model's scale round its axis and along it
+    Vec3 at{};                 // where the model's origin goes
+    bool ok{};
+};
+BatonFit batonFit(Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, bool inHand);
+bool appendBatonModel(std::vector<Vertex>& out, Vec3 grip, Vec3 tip, const mesh_model::Mesh& model, Vec3 viewer,
+                      bool inHand = false);
 // The thrown baton's chain: a thin steel cable from the hand to the baton, sagging a little.
 void appendBatonCable(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewer, float pixelAngle);
 // BATMAN's grapple line: a taut dark line from the gun hand to the hook (three prongs on the

@@ -83,6 +83,7 @@ struct NativeEyeFrame {
     // Version 0.0.6 DAREDEVIL ABILITIES: each hand's baton (this frame's world; on 0: none), grip to tip.
     std::array<Vec3, 2> batonGrip{}, batonTip{};
     std::array<float, 2> batonOn{};
+    std::array<bool, 2> batonHeld{}; // test build 10: in the fist (the model's grip on the hand)
     // Version 0.0.72 GAME BODY fallback (glove_overlay.hpp): each tracked hand's glove (0: none) and fist.
     std::array<float, 2> gloveOn{}, gloveFist{};
     // Version 0.0.7: BATON LOOK CLUB (the billy club instead of the 0.0.62 baton) and the 0.0.7 heroes'

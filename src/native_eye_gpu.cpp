@@ -697,7 +697,7 @@ eye_taa::MsMedian historyMedian;
 std::atomic<uint32_t> aaMode{}, aaFault{};
 // 0.0.73 test 4 IMAGE STYLE SPIDYVR (image_style.hpp): while the game's own TAA resolves each eye
 // (ENGINE TAA on), the picture goes to the headset as SpidyVR sends it: no FXAA, no history blend, no
-// CAS. The sliders keep their values (HERO 0.0.73 and the fallback get them back). game_xr sets it.
+// CAS. The sliders keep their values (GAME TAA OFF and the fallback get them back). game_xr sets it.
 std::atomic<bool> cleanImage{};
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;

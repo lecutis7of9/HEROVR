@@ -4111,15 +4111,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
     return spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()); // 0.0.73 test 4: in force
 }
-// 0.0.73 test 4 IMAGE STYLE (image_style.hpp): 0 SPIDYVR, 1 HERO 0.0.73; refused (4605) otherwise.
+// 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): 0 SPIDYVR, 1 OFF; refused (4605) otherwise.
 // game_xr's controller sends it when the option changes; it does the rest (ENGINE TAA, the clean picture).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyle(void* style) {
     const auto value = reinterpret_cast<uintptr_t>(style);
     if (value >= spidy::image_style::styles)
         return 4605;
     if (imageStyle.exchange(static_cast<uint32_t>(value)) != value)
-        OutputDebugStringA(value == spidy::image_style::spidyvr ? "IMAGE STYLE: SPIDYVR (jitter never NONE)\n"
-                                                                : "IMAGE STYLE: HERO 0.0.73\n");
+        OutputDebugStringA(value == spidy::image_style::spidyvr ? "GAME TAA: SPIDYVR (jitter never NONE)\n"
+                                                                : "GAME TAA: OFF\n");
     return 0;
 }
 // 0.0.73 test 4: why ENGINE TAA could not go on now (engine_taa::Reason; none: it could), without

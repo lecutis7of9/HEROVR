@@ -923,7 +923,7 @@ constexpr SectionDef powersSections[] = {
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
      {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly,
-      C::combatGameBody, C::combatCalibLook}},
+      C::combatGameBody, C::combatCalibLook, C::combatWeaponCollision}},
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -4295,6 +4295,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatShadowMatch:
             case Control::combatCalibLook:
             case Control::combatFlyPose:
+            case Control::combatWeaponCollision:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

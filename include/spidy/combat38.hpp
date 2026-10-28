@@ -138,6 +138,8 @@ enum Option : uint32_t {
     calibLook,
     // Version 0.0.73 test 2 FLIGHT POSE (fix 27): LEAN by speed (fly_lean.hpp) or UPRIGHT (0.0.72)
     flyPose,
+    // 0.0.73 test 3 WEAPON COLLISION (prop_bounce.hpp): thrown and held weapons meet walls, cars and the ground, ON
+    weaponCollision,
     options
 };
 struct OptionInfo {
@@ -451,6 +453,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"HOLO", "CLASSIC", nullptr, nullptr}},
     {"fly_pose", "FLIGHT POSE", "FPOSE", "LEAN tips the body with flight speed, upright to hover, no restart.",
      2, {"LEAN", "UPRIGHT", nullptr, nullptr}},
+    {"weapon_collision", "WEAPON COLLISION", "WCOLL", "Thrown and held weapons meet walls, cars and the ground, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

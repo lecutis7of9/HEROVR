@@ -151,6 +151,7 @@
 #include <vector>
 #include "spidy/bolt_walls.hpp"
 #include "spidy/cape_glide.hpp"
+#include "spidy/grapple073.hpp"
 #include "spidy/van072.hpp"
 #include "spidy/hit_marks.hpp"
 #ifdef _WIN32
@@ -1633,7 +1634,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 223, "controls count drifted"); // Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 224, "controls count drifted"); // 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1973,7 +1974,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 223, "controls count drifted"); // Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 224, "controls count drifted"); // 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18641,7 +18642,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 115, "one hundred and fifteen options (build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 116, "one hundred and sixteen options (0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18675,7 +18676,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 115, "0.0.72 has 115 COMBAT options (build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 116, "0.0.73 has 116 COMBAT options (0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -18997,7 +18998,7 @@ int main() {
                 }
             }
         }
-        check(placed == 191 /* build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 192 /* 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -23637,6 +23638,191 @@ int main() {
                   std::string(grappleHelp).find('.') == std::string(grappleHelp).size() - 1,
               "one sentence each");
     });
+    test("Version 0.0.73: UNIVERSAL GRAPPLE - FireGate, TapOrHold, baton aim, enemy reel, ARM PUMP sprint", [] {
+        using namespace spidy::grapple073;
+        {
+            FireGate g;
+            check(!g.step(1, false, 1, false), "no device out: the trigger never fires");
+            check(!g.step(1, true, 1, false), "the press began before the draw: still nothing");
+            check(!g.step(1, true, 0, false) && g.step(1, true, 1, false) && g.step(1, true, 1, false) && g.fires() == 1,
+                  "drawn, pressed: fires, held on, one fire");
+            check(!g.step(1, true, 0, false), "let go: off");
+            check(!g.step(1, true, 1, true) && !g.step(1, true, 1, false), "a hologram click never fires, not after either");
+            check(!g.step(1, true, 0, false) && g.step(1, true, NAN, false) == false, "NaN is let go");
+            check(!g.step(0, true, 0, false) && g.step(0, true, 1, false) && !g.step(0, false, 1, false),
+                  "stowed mid-press: off");
+            check(!g.step(7, true, 1, false), "a bad hand: nothing");
+        }
+        {
+            TapOrHold t;
+            const float dt = 1 / 90.f;
+            TapOrHold::Out o{};
+            for (int f = 0; f < 10; ++f)
+                o = t.step(1, dt, true, 1, false);
+            check(!o.tap && !o.hold, "a short press: nothing yet");
+            o = t.step(1, dt, true, 0, false);
+            check(o.tap && !o.hold, "let go quickly: the TAP (the throw)");
+            bool held = false;
+            for (int f = 0; f < 40; ++f) {
+                o = t.step(1, dt, true, 1, false);
+                held |= o.hold;
+                check(!o.tap, "never a tap while held");
+            }
+            check(held && o.hold, "held past .3 s: the HOLD (the grapple)");
+            o = t.step(1, dt, true, 0, false);
+            check(!o.tap && !o.hold, "let go after a hold: no throw");
+            o = t.step(1, dt, true, 1, true);
+            o = t.step(1, dt, true, 0, false);
+            check(!o.tap && !o.hold, "a holo press: neither");
+            o = t.step(1, dt, false, 1, false);
+            o = t.step(1, dt, true, 0, false);
+            check(!o.tap, "unarmed press: no throw");
+        }
+        check(length(batonAim(true, {0, 1, 0}, {0, 1.5f, -.5f}, {0, 0, -1}) - normalized(Vec3{0, .5f, -.5f})) < 1e-4f,
+              "along the baton, butt to tip");
+        check(length(batonAim(false, {0, 1, 0}, {0, 2, 0}, {1, 0, 0}) - Vec3{1, 0, 0}) < 1e-4f &&
+                  length(batonAim(true, {NAN, 0, 0}, {0, 0, 0}, {NAN, 0, 0}) - Vec3{0, 0, -1}) < 1e-4f,
+              "no shaft: the aim; nothing finite: ahead");
+        {
+            const Vec3 feet[3] = {{0, 0, -10}, {5, 0, -6}, {NAN, 0, 0}};
+            check(enemyOnLine({0, 1.4f, 0}, {0, 0, -1}, feet, 3, 100) == 0, "the enemy on the line");
+            check(enemyOnLine({0, 1.4f, 0}, {0, 0, -1}, feet, 3, 5) == -1, "a wall before him: none");
+            check(enemyOnLine({0, 1.4f, 0}, {0, 1, -.2f}, feet, 3, 100) == -1, "aimed at the sky: none");
+            check(enemyOnLine({0, 1.4f, 0}, normalized(Vec3{5, -.2f, -6}), feet, 3, 100) == 1, "the other one");
+            check(enemyOnLine({NAN, 0, 0}, {0, 0, -1}, feet, 3, 100) == -1 && enemyOnLine({0, 1, 0}, {0, 0, -1}, nullptr, 3, 100) == -1,
+                  "NaN safe");
+            const Vec3 stop = reelStop({0, 0, 0}, feet[0]);
+            check(std::abs(length(stop - feet[0]) - reelGap) < 1e-4f && stop.z > feet[0].z, "the stop: 2 ft short, on our side");
+            spidy::cape_glide::Grapple gr;
+            Vec3 body{0, 0, 0}, v{};
+            check(gr.startReel(body, stop, feet[0] + Vec3{0, chestUp, 0}, 1) && gr.reeling(), "the reel started");
+            bool vaulted = false, arrived = false;
+            float t = 0;
+            for (; t < 5 && gr.phase() != spidy::cape_glide::idle; t += 1 / 90.f) {
+                const auto o = gr.update(1 / 90.f, body, v, true);
+                vaulted |= o.phase == spidy::cape_glide::vault;
+                arrived |= o.arrived;
+                if (o.drive) {
+                    check(finite(o.velocity), "a sane reel");
+                    v = o.velocity;
+                    body = body + v * (1 / 90.f);
+                }
+            }
+            check(arrived && !vaulted && !gr.reeling(), "reeled in, no vault over him");
+            check(length(body - feet[0]) < reelGap + .4f && length(body - feet[0]) > .3f,
+                  "about 2 ft from him: " + std::to_string(length(body - feet[0])));
+            check(!gr.startReel({NAN, 0, 0}, stop, feet[0], 0) && !gr.startReel({0, 0, 0}, {NAN, 0, 0}, feet[0], 0), "NaN: no reel");
+        }
+        {
+            ArmPump p;
+            const bool tr[2] = {true, true};
+            const float dt = 1 / 90.f;
+            bool on = false;
+            float y[2] = {1.f, 1.f};
+            for (int f = 0; f < 180; ++f) { // 2.5 swings a second, the hands opposite
+                const float ph = f * dt * 2.5f * 6.2831853f;
+                y[0] = 1.f + .2f * std::sin(ph);
+                y[1] = 1.f - .2f * std::sin(ph);
+                on = p.step(dt, y, tr, 1.f, true);
+            }
+            check(on, "pumping with the stick pushed: SPRINT");
+            check(!p.step(dt, y, tr, 0.f, true), "the stick let go: stops");
+            ArmPump q;
+            for (int f = 0; f < 180; ++f) {
+                const float ph = f * dt * 2.5f * 6.2831853f;
+                y[0] = y[1] = 1.f + .2f * std::sin(ph); // both together: not running arms
+                on = q.step(dt, y, tr, 1.f, true);
+            }
+            check(!on, "both hands together: no sprint");
+            ArmPump r;
+            for (int f = 0; f < 180; ++f) {
+                const float ph = f * dt * 2.5f * 6.2831853f;
+                y[0] = 1.f + .2f * std::sin(ph);
+                y[1] = 1.f - .2f * std::sin(ph);
+                on = r.step(dt, y, tr, 1.f, false);
+            }
+            check(!on, "not allowed (setting off, airborne, the van): no sprint");
+            for (int f = 0; f < 90; ++f)
+                on = p.step(dt, y, tr, 1.f, true);
+            check(!on, "the arms stopped: the sprint stops");
+            const Vec3 sv = sprintVelocity({0, -.3f, -1}, 0, 1);
+            check(std::abs(sv.y) < 1e-5f && sv.z < 0 && std::abs(length(sv) - sprintSpeed) < 1e-3f && sprintSpeed <= 20.f,
+                  "forward on the level heading, under the carry's 20 m/s");
+            const Vec3 sr = sprintVelocity({0, 0, -1}, 1, 0);
+            check(sr.x > 0, "stick right: right");
+            check(length(sprintVelocity({NAN, 0, 0}, 0, 1)) == 0 && length(sprintVelocity({0, 0, -1}, 0, 0)) == 0, "NaN / no stick: none");
+        }
+    });
+    test("Version 0.0.73: PUNISHER hook - its own chest zone (never a holster's), grip draws, trigger fires", [] {
+        using namespace spidy::hero072;
+        for (float b = 0; b <= 1.2f; b += .02f)
+            for (float sd = -.6f; sd <= .6f; sd += .02f)
+                for (float a = -.5f; a <= .6f; a += .02f) {
+                    const spidy::holster::BodyPoint p{b, sd, a};
+                    if (atRig(p))
+                        for (uint32_t z = 0; z < spidy::holster::zones; ++z)
+                            check(!spidy::holster::inZone(z, p), "the rig overlaps a holster zone");
+                }
+        check(atRig({.3f, 0, .2f}) && !atRig({.6f, .3f, 0}) && !atRig({NAN, 0, .2f}), "the rig is the chest, not the hip");
+        HookLauncher h;
+        const float dt = 1 / 90.f;
+        check(!h.stepTrigger(dt, true, 1, 0, true, true, false) && h.state == HookLauncher::stowed, "a gun in the hand: no draw");
+        h.stepTrigger(dt, true, 0, 0, true, false, false);
+        h.stepTrigger(dt, true, 1, 0, true, false, false);
+        check(h.state == HookLauncher::held, "grip at the rig: drawn");
+        h.stepTrigger(dt, true, 1, 1, false, false, true);
+        check(h.state == HookLauncher::held, "a hologram press: no fire");
+        h.stepTrigger(dt, true, 1, 0, false, false, false);
+        bool bit = false;
+        for (int f = 0; f < 60; ++f)
+            bit |= h.stepTrigger(dt, true, 1, 1, false, false, false);
+        check(bit && h.fires == 1, "the trigger fires it once (the line bites after the windup)");
+        h.stepTrigger(dt, true, 0, 0, false, false, false);
+        check(h.state == HookLauncher::stowed, "let go: stowed");
+        HookLauncher k;
+        k.stepTrigger(dt, true, 0, 0, false, false, false);
+        k.stepTrigger(dt, true, 1, 0, false, false, false);
+        check(k.state == HookLauncher::stowed, "a grip away from the rig: nothing");
+    });
+    test("Version 0.0.73: CAPTAIN AMERICA grapple - the free hand's grip draws, the trigger fires, the shield arm stays the shield's", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::captainAmerica;
+        in.head = {{0, 1.7f, 0}, {}};
+        in.shieldArm = spidy::captain::armRight;
+        p.setHero(in.hero);
+        const auto frame = [&](float trig, float grip, bool holo = false) {
+            in.hands[0] = {{-.25f, 1.3f, -.35f}, normalized(Vec3{0, .6f, -1}), true, trig, grip, false};
+            in.hands[0].holo = holo;
+            in.hands[1] = {{.25f, 1.3f, -.35f}, {0, 0, -1}, true, 0, 0, false};
+            PlayOutput h, o;
+            p.holsterStep(in, h);
+            p.step(in, o);
+            o.claimed = h.claimed;
+            return o;
+        };
+        for (int f = 0; f < 3; ++f)
+            frame(0, 0);
+        PlayOutput o = frame(1, 0);
+        check(!o.grapple[0], "the trigger alone: nothing");
+        frame(0, 0);
+        o = frame(0, 1);
+        check(p.gunDrawn[0] && (o.claimed & 1u) && !o.grapple[0], "the left (free) hand's grip: the grapple gun drawn");
+        o = frame(1, 1);
+        check(o.grapple[0] && !o.grapple[1], "then the trigger: the grapple");
+        frame(0, 1);
+        o = frame(1, 1, true);
+        check(!o.grapple[0], "a hologram press: never");
+        Draw d;
+        p.draw(d, Pose{}, in, 0);
+        check(d.held[0].look == lookGrappleGun, "the gun in the left hand");
+        frame(0, 0);
+        p.draw(d, Pose{}, in, 0);
+        check(!p.gunDrawn[0] && d.held[0].look != lookGrappleGun, "let go: back on the hip");
+    });
     test("Version 0.0.7: BATMAN grapple gun (aim, reach, pull, vault, timeout, stuck, asks)", [] {
         using namespace spidy::cape_glide;
         check(pack(true, false, true) == (askBatman | askGrapple[1]) && pack(false, true, true) == 0, "the asks bits");
@@ -23723,17 +23909,34 @@ int main() {
             s2.haptic[1] = std::max(s2.haptic[1], o.haptic[1]);
             return s2;
         };
+        // Version 0.0.73 (fix 3, UNIVERSAL GRAPPLE): the grip draws the gun, THEN the trigger fires it.
         frame(front, {0, .6f, -1}, 0, 0);
         PlayOutput o = frame(front, {0, .6f, -1}, 1, 0);
-        check(o.grapple[1] && !o.grapple[0], "aimed up: the grapple");
-        frame(front, {0, 0, -1}, 0, 0);
-        o = frame(front, {0, -.1f, -1}, 1, 0);
+        check(!o.grapple[1] && !o.grapple[0], "0.0.73: the trigger alone never grapples (no gun drawn)");
+        frame(front, {0, .6f, -1}, 0, 0);
+        o = frame(front, {0, .6f, -1}, 0, 1);
+        check(p.gunDrawn[1] && (o.claimed & 2u) && !o.grapple[1], "0.0.73: a grip away from the pouches draws the GRAPPLE GUN");
+        o = frame(front, {0, .6f, -1}, 1, 1);
+        check(o.grapple[1] && !o.grapple[0], "aimed up, gun drawn: the trigger is the grapple");
+        frame(front, {0, 0, -1}, 0, 1);
+        o = frame(front, {0, -.1f, -1}, 1, 1);
         check(o.grapple[1], "aimed level or down: still the grapple (the trigger never throws a batarang now)");
+        frame(front, {0, 0, -1}, 0, 1);
+        {
+            in.hands[1] = {front, {0, 0, -1}, true, 1, 1, false};
+            in.hands[1].holo = true;
+            PlayOutput h1, h2;
+            p.holsterStep(in, h1);
+            p.step(in, h2);
+            check(!h2.grapple[1], "0.0.73: a hologram click never grapples");
+        }
+        o = frame(front, {0, 0, -1}, 1, 1);
+        check(!o.grapple[1], "0.0.73: the press begun on the hologram does not fire when it leaves it");
+        frame(front, {0, 0, -1}, 0, 0);
+        check(!p.gunDrawn[1], "0.0.73: the grip let go: the gun back on the hip");
         for (int i = 0; i < 30; ++i)
             frame(front, {0, 0, -1}, i < 10 ? 1.f : 0.f, 0);
         check(p.batarangs[1].throws == 0, "no batarang from the trigger");
-        o = frame(front, {0, 0, -1}, 0, 1);
-        check(!p.batDraw.drawn[1] && !(o.claimed & 2u), "a grip in front of the body (not at the belt) draws nothing");
         frame(front, {0, 0, -1}, 0, 0);
         o = frame(pouch, {0, 0, -1}, 0, 0);
         check(o.haptic[1] > 0 && o.haptic[1] < .3f, "reaching a pouch: a soft pulse");
@@ -23865,10 +24068,12 @@ int main() {
         p.setHero(in.hero);
         PlayOutput o;
         const Vec3 aim = normalized(Vec3{0, .6f, -1});
-        for (float t : {0.f, 1.f}) {
-            in.hands[1] = {{.2f, 1.4f, -.3f}, aim, true, t, 0, false};
+        for (float t : {0.f, 1.f}) { // 0.0.73: the grip draws the gun, then the trigger
+            in.hands[1] = {{.2f, 1.4f, -.3f}, aim, true, t, 1, false};
             in.hands[0] = {{-.2f, 1.4f, -.3f}, {0, 0, -1}, true, 0, 0, false};
             o = {};
+            PlayOutput h;
+            p.holsterStep(in, h);
             p.step(in, o);
         }
         check(o.grapple[1], "the press is the grapple's");
@@ -24939,6 +25144,11 @@ int main() {
         check(d.any && d.worn[0].look == lookGrappleGun && d.worn[0].holster == 1 && d.worn[0].at.x > 0,
               "at rest: the grapple gun on the right hip");
         check(d.held[1].look == lookNone && d.held[0].look == lookNone, "at rest: both hands empty (no batarang idle)");
+        in.hands[1].squeeze = 1; // 0.0.73: the grip draws it
+        {
+            PlayOutput h;
+            p.holsterStep(in, h);
+        }
         in.hands[1].trigger = 1;
         p.step(in, o);
         p.draw(d, Pose{}, in, 0);
@@ -24969,11 +25179,26 @@ int main() {
         check(same, "the line (hook at its end) starts at the muzzle");
         // Let go: back on that hand's hip; the left hand fires next: the left hip.
         in.hands[1].trigger = 0;
+        in.hands[1].squeeze = 0; // 0.0.73: the grip let go, the gun back on the hip
+        {
+            PlayOutput h;
+            p.holsterStep(in, h);
+        }
         p.step(in, o);
-        in.hands[0] = PlayHand{{-.25f, 1.4f, -.3f}, normalized(Vec3{0, .7f, -1}), true, 1, 0, false};
+        in.hands[0] = PlayHand{{-.25f, 1.4f, -.3f}, normalized(Vec3{0, .7f, -1}), true, 0, 1, false};
+        {
+            PlayOutput h;
+            p.holsterStep(in, h); // 0.0.73: the left grip draws, then its trigger
+        }
+        in.hands[0].trigger = 1;
         p.step(in, o);
         check(p.grappling[0] && p.grappleHand == 0, "the left hand fires");
         in.hands[0].trigger = 0;
+        in.hands[0].squeeze = 0; // 0.0.73: the grip let go too: holstered
+        {
+            PlayOutput h;
+            p.holsterStep(in, h);
+        }
         p.step(in, o);
         p.draw(d, Pose{}, in, 0);
         check(d.worn[0].look == lookGrappleGun && d.worn[0].at.x < 0, "let go: the gun on the left hip");
@@ -25277,7 +25502,8 @@ int main() {
             wi.hands[1].position = belt; // squeezed elsewhere, slid onto the belt: no grab
             PlayOutput c2;
             w.holsterStep(wi, c2);
-            check(w.pellets.grabs == 0 && c2.claimed == 0, "a grip must START at the belt");
+            // Version 0.0.73 (fix 3): that grip away from every pouch draws the GRAPPLE GUN instead.
+            check(w.pellets.grabs == 0 && c2.claimed == 2u && w.gunDrawn[1], "a grip must START at the belt");
             Play o2;
             PlayInput oi = in;
             oi.hero = spidy::hero_modes::punisher;
@@ -26740,6 +26966,9 @@ int main() {
             in.hero = hero_modes::wolverine;
             in.clawsOut = true;
             play.step(in, out);
+            check(!out.climbAllowed, "0.0.73 (fixes 11 + 18): WOLVERINE claws out, CLAW CLIMB off by default: no climb");
+            in.o.clawClimb = true;
+            play.step(in, out);
             check(out.climbAllowed, "WOLVERINE claws out: CLAW CLIMB");
         }
         // UPPERCUT: a fast upward punch into the enemy.
@@ -27719,7 +27948,8 @@ int main() {
         in.hands[0] = {back, {0, 0, -1}, true, 0, 1, false, false};
         o = {};
         g.holsterStep(in, o);
-        check(o.claimed == 0 && g.shieldRack.heldIn(0) < 0, "another hero: no shield");
+        // 0.0.73: BATMAN's grip there draws his grapple gun (fix 3) - never a shield.
+        check((o.claimed == 0 || g.gunDrawn[0]) && g.shieldRack.heldIn(0) < 0, "another hero: no shield");
         // NaN never draws or throws.
         Play n;
         in.hero = spidy::hero_modes::captainAmerica;

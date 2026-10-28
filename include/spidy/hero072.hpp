@@ -1302,6 +1302,22 @@ inline bool atChest(holster::BodyPoint p) {
            p.below <= chestLow && std::abs(p.side) <= chestSide && p.ahead >= chestNear && p.ahead <= chestFar;
 }
 inline constexpr float hookPush = 2.2f, hookWindup = .6f, hookReach = 35.f, hookRearm = 1.5f;
+// Version 0.0.73 (fixes 24 + UNIVERSAL GRAPPLE): the chest rig's grab zone is its own - narrower and higher
+// than 0.0.72's (no part of it inside a hip holster's or the back's zone: the shotgun goes over the
+// shoulder, the pistols at the hips), and never while the hand holds a gun. The grip draws the launcher,
+// the TRIGGER fires it (hookWindup073 to bite; the push gesture is gone).
+inline constexpr float rigBelow = .22f, rigLow = .42f, rigSide = .15f, rigNear = .04f, rigFar = .32f;
+inline constexpr float hookWindup073 = .25f;
+inline bool atRig(holster::BodyPoint p) {
+    if (!std::isfinite(p.below) || !std::isfinite(p.side) || !std::isfinite(p.ahead))
+        return false;
+    if (p.below < rigBelow || p.below > rigLow || std::abs(p.side) > rigSide || p.ahead < rigNear || p.ahead > rigFar)
+        return false;
+    for (uint32_t z = 0; z < holster::zones; ++z)
+        if (holster::inZone(z, p))
+            return false;
+    return true;
+}
 struct HookLauncher {
     enum State : uint32_t { stowed = 0, held, winding };
     uint32_t state{stowed};
@@ -1344,6 +1360,50 @@ struct HookLauncher {
                 return false;
             state = down ? held : stowed;
             rearm = hookRearm;
+            return true;
+        }
+    }
+    // Version 0.0.73: the grip at the rig draws, a trigger PRESS while drawn (never one begun on the hologram
+    // or before the draw) fires; true the frame the line bites. gunInHand: the hand holds a pistol / shotgun.
+    bool trigDown{}, trigCounts{};
+    bool stepTrigger(float dt, bool play, float grip, float trigger, bool atRigNow, bool gunInHand, bool blocked) {
+        dt = clampDt(dt);
+        rearm = std::max(0.f, rearm - dt);
+        const float g = std::isfinite(grip) ? grip : 0.f;
+        const bool was = down;
+        down = g >= holster::pressed || (was && g > holster::released);
+        const float t = std::isfinite(trigger) ? trigger : 0.f;
+        const bool tWas = trigDown;
+        trigDown = t >= .6f || (tWas && t > .35f);
+        const bool press = trigDown && !tWas;
+        if (!play) {
+            state = stowed;
+            return false;
+        }
+        switch (state) {
+        case stowed:
+            if (down && !was && atRigNow && !gunInHand && !blocked) {
+                state = held;
+                ++draws;
+            }
+            return false;
+        case held:
+            if (!down) {
+                state = stowed;
+                return false;
+            }
+            if (press && !blocked && rearm <= 0) {
+                state = winding;
+                timer = hookWindup073;
+                ++fires;
+            }
+            return false;
+        default: // winding
+            timer -= dt;
+            if (timer > 0)
+                return false;
+            state = down ? held : stowed;
+            rearm = .4f;
             return true;
         }
     }

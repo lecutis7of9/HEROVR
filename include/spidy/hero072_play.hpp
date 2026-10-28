@@ -31,7 +31,7 @@ struct PlayOptions {
     uint32_t punisherSuit{};
     bool naturalInvincible = true, hulkRage = true;
     uint32_t rageBlood{}, rageTint{};
-    bool fireDouse = true, shieldSlam = true, punisherHook = true, clawClimb = true, shove = true;
+    bool fireDouse = true, shieldSlam = true, punisherHook = true, clawClimb = false /* 0.0.73: off by default */, shove = true;
     uint32_t faction{}, testUnlocks{};
     bool ultimates = true;
     uint32_t perkBranch{};
@@ -55,6 +55,10 @@ struct PlayIn {
     uint32_t hero{};
     Pose head{};
     PlayHand hands[2]{};
+    // Version 0.0.73: the hand's trigger is the hologram's / phone's (no hook fire), the hand holds a gun (no
+    // hook draw), and DAREDEVIL's 0.0.72 cast-up gesture (off: the held trigger grapples, game_xr).
+    bool handBusy[2]{}, gunInHand[2]{};
+    bool ddCastGesture{};
     const BatonEnemy* list{};
     uint32_t count{};
     float lostShare{};       // health lost this frame / the most health (0: none, NaN: unknown)
@@ -416,7 +420,9 @@ class Play {
         }
         // ---- DAREDEVIL: BATON GRAPPLE (cast up fast) and PARRY (batons crossed at the face) ----
         if (h == hero_modes::daredevil && guard[gDare].live(true)) {
-            if (o.ddGrapple) {
+            // Version 0.0.73 (fix 5): DAREDEVIL's grapple is the held trigger along the baton (game_xr's
+            // grapple073::TapOrHold); 0.0.72's cast-up gesture no longer fires it.
+            if (o.ddGrapple && in.ddCastGesture) {
                 const int i = cast.step(dt, head, p, v, tracked, in.jumpBusy);
                 if (i >= 0) {
                     out.grapple[i] = true;
@@ -453,8 +459,9 @@ class Play {
         // ---- THE PUNISHER: the grapple hook from the chest rig ----
         if (h == hero_modes::punisher && guard[gHook].live(o.punisherHook)) {
             for (unsigned i = 0; i < 1; ++i) { // the left hand (the right holds the gun)
-                const bool chest = tracked[i] && atChest(holster::bodyPoint(p[i], head, body));
-                if (hook.step(dt, true, in.hands[i].grip, chest, v[i], look)) {
+                // Version 0.0.73 (fix 24 + UNIVERSAL GRAPPLE): the rig's own zone; grip draws, trigger fires.
+                const bool rig = tracked[i] && atRig(holster::bodyPoint(p[i], head, body));
+                if (hook.stepTrigger(dt, true, in.hands[i].grip, in.hands[i].trigger, rig, in.gunInHand[i], in.handBusy[i])) {
                     // Version 0.0.72: the line is the bridge's real one (game_xr, to the raycast's hit);
                     // 0.0.71's 12 m stand-in line to nowhere is gone.
                     out.grapple[i] = true;

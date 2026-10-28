@@ -128,6 +128,8 @@ enum Option : uint32_t {
     thorHammerModel, thorFlight,
     // Build 9 SUITS (suit_wear.hpp): SUIT BODY - the worn suit model in first person (ARMS, FULL BODY, OFF).
     suitBody,
+    // Version 0.0.73 (fix 17): CAPTAIN AMERICA's SUPER SPRINT (grapple073::ArmPump), ON by default.
+    capSprint,
     options
 };
 struct OptionInfo {
@@ -367,7 +369,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"smoke_blind", "SMOKE BLIND", "SBLIND", "ON: enemies in Batman's smoke stagger blind, live (no restart).",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"dd_grapple", "BATON GRAPPLE", "DDGRAP", "ON: cast a baton arm up fast to grapple there (no glide), no restart.",
+    {"dd_grapple", "BATON GRAPPLE", "DDGRAP", "ON: hold the trigger to grapple along the baton, tap to throw it, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"dd_parry", "BATON PARRY", "DDPARY", "ON (CANDIDATE): batons crossed in front of your face block hits, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
@@ -398,8 +400,9 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"punisher_hook", "GRAPPLE HOOK", "PHOOK", "ON: draw the hook from the chest, push forward to grapple up, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"claw_climb", "CLAW CLIMB", "CLAWUP", "ON: with claws out Wolverine climbs walls by pulling with hands, no restart.",
-     2, {"ON", "OFF", nullptr, nullptr}},
+    // Version 0.0.73 (fixes 11 + 18): OFF by default - only SPIDER-MAN climbs walls unless this is turned on.
+    {"claw_climb", "CLAW CLIMB", "CLAWUP", "OFF by default; ON lets Wolverine climb walls with claws out, no restart.",
+     2, {"OFF", "ON", nullptr, nullptr}},
     {"npc_shove", "SHOVE", "SHOVE", "ON: push both open hands fast at a close enemy to shove him back, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"faction", "ENEMY FACTION", "FACTN", "AUTO matches the enemies to the hero (hook CANDIDATE), no restart.",
@@ -430,6 +433,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"suit_body", "SUIT BODY", "SBODY", "Your picked suit model on your arms or body, live; the mirror shows it whole.",
      3, {"ARMS", "FULL BODY", "OFF", nullptr}},
+    {"cap_sprint", "CAP SPRINT", "SPRINT", "Cap pumps his arms, left stick pushed, to super-sprint on foot, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

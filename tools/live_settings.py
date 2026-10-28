@@ -336,7 +336,7 @@ SETTINGS = {
     'spider_climb_only': ((0, 1), 'SpidySpiderClimbOnly', 'SPIDER CLIMB ONLY {} (0 on: only SPIDER-MAN crawls walls; 1 off: every hero, as 0.0.7, live)'),
     'uppercut': ((0, 1), 'SpidyUppercut', 'UPPERCUT LAUNCH {} (0 on: a fast upward punch that lands launches the enemy; 1 off, live)'),
     'smoke_blind': ((0, 1), 'SpidySmokeBlind', "SMOKE BLIND {} (0 on: enemies in BATMAN's smoke stagger blind; 1 off, live)"),
-    'dd_grapple': ((0, 1), 'SpidyDdGrapple', "BATON GRAPPLE {} (0 on: DAREDEVIL casts a baton arm up fast with no enemy aimed and grapples there, a gesture, no trigger, no glide; 1 off, live)"),
+    'dd_grapple': ((0, 1), 'SpidyDdGrapple', "BATON GRAPPLE {} (0 on: DAREDEVIL holds the trigger to grapple along the baton, a tap throws it, no glide; 1 off, live)"),
     'dd_parry': ((0, 1), 'SpidyDdParry', 'BATON PARRY {} (0 on: batons crossed in front of the face block hits, CANDIDATE; 1 off, live)'),
     'iron_hud': ((0, 1), 'SpidyIronHud', 'IRON MAN HUD {} (0 on: the helmet frame, a lock box, HOSTILES DETECTED, TARGET LOCKED, ALL HOSTILES NEUTRALIZED, hostiles left, speed and altitude flying; 1 off, live)'),
     'punisher_rage': ((0, 1), 'SpidyPunisherRage', 'PUNISHER RAGE {} (0 on: damage taken or downs in a fight turn the view red and punches harder; 1 off, live)'),
@@ -350,7 +350,7 @@ SETTINGS = {
     'fire_douse': ((0, 1), 'SpidyFireDouse', "FIRE DOUSE {} (0 on: each hero's own way to put fires out; the game's fire hook is CANDIDATE, so a look only for now; 1 off, live)"),
     'shield_slam': ((0, 1), 'SpidyShieldSlam', "SHIELD SLAM {} (0 on: CAP's shield driven down fast knocks back and hurts enemies near and douses fire; 1 off, live)"),
     'punisher_hook': ((0, 1), 'SpidyPunisherHook', "GRAPPLE HOOK {} (0 on: the PUNISHER's tactical hook launcher, drawn from the chest, fired by a push, slower than BATMAN's; 1 off, live)"),
-    'claw_climb': ((0, 1), 'SpidyClawClimb', "CLAW CLIMB {} (0 on: WOLVERINE with claws out climbs walls by pulling with his hands, grip only; 1 off, live)"),
+    'claw_climb': ((0, 1), 'SpidyClawClimb', "CLAW CLIMB {} (0 off, the default: only SPIDER-MAN climbs walls; 1 on: WOLVERINE with claws out climbs walls by pulling with his hands, grip only; live)"),
     'npc_shove': ((0, 1), 'SpidyNpcShove', "SHOVE {} (0 on: both open hands pushed fast at a close enemy knock him back; grabbing people is CANDIDATE, not in; 1 off, live)"),
     'faction': ((0, 4), 'SpidyFaction', "ENEMY FACTION {} (0 auto: the enemies match the hero, Batman the joker gang; 1 vanilla, 2 the hand, 3 hydra, 4 joker gang (no model yet: vanilla); the game-side swap is CANDIDATE, so shown only; live)"),
     'hero_suit': ((0, 1), 'SpidyHeroSuit', "HERO SUIT {} (0 the hero's default suit, 1 his next unlocked one; suits unlock with that hero's reputation, live)"),
@@ -364,6 +364,7 @@ SETTINGS = {
     'game_body': ((0, 1), 'SpidyGameBody', "GAME BODY (EXPERIMENTAL) {} (0 off: the body as before; 1 on: the game's own body only while every safety check passes, else hidden with gloves; live)"),
     'thor_hammer_model': ((0, 1), 'SpidyThorHammerModel', "THOR HAMMER MODEL {} (0 on: Thor draws the THOR HAMMER model; 1 off: no hammer model drawn (the hammer still works), a crash bisect key, live)"),
     'suit_body': ((0, 2), 'SpidySuitBody', "SUIT BODY {} (0 arms: your picked suit model's arms in first person; 1 full_body: everything below the neck; 2 off: none in first person - the mirror always shows the whole suit; live)"),
+    'cap_sprint': ((0, 1), 'SpidyCapSprint', "CAP SPRINT {} (0 on: Captain America pumps his arms and pushes the left stick to super-sprint on the ground; 1 off: normal running; live)"),  # Version 0.0.73
     'thor_flight': ((0, 1), 'SpidyThorFlight', "THOR FLIGHT {} (0 on: Thor takes off with both arms up and flies; 1 off: no flight for Thor, a crash bisect key, live)"),
     'thor_hammer': ((0, 3), 'SpidyThorHammer', "THOR HAMMER {} (0 boooop: Boooooop's Mjolnir; 1 devilseye: TheDevilsEye's; 2 love_thunder: Jesus Osco's Love and Thunder; 3 fccooper: fccooper's; live)"),
 }
@@ -427,7 +428,7 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'captain_america': 'off', 'shield_arm': 'right', 'shield_damage': '35hp', 'shield_chain': 'on',
                      'shield_block': 'off', 'shield_look': 'built-in',
                      # Version 0.0.72 (TEST)
-                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'on', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'off', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms'}
+                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'off', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on'}
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
@@ -552,7 +553,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
-                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('on', 'off'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('off', 'on'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('off', 'on'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -684,7 +685,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'fire_douse': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'shield_slam': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'punisher_hook': {'on': 0, 'off': 1, '0': 0, '1': 1},
-           'claw_climb': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'claw_climb': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'npc_shove': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'faction': {'auto': 0, 'vanilla': 1, 'the hand': 2, 'hydra': 3, 'joker gang': 4, 'joker_gang': 4, 'joker': 4, '0': 0, '1': 1, '2': 2, '3': 3, '4': 4},
            'hero_suit': {'default': 0, 'next': 1, '0': 0, '1': 1},
@@ -699,6 +700,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'thor_hammer_model': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'thor_flight': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'suit_body': {'arms': 0, 'full_body': 1, 'full body': 1, 'body': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
+           'cap_sprint': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'thor_hammer': {'boooop': 0, 'devilseye': 1, 'love_thunder': 2, 'love+thunder': 2, 'fccooper': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
@@ -954,7 +956,7 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.7 CAPTAIN AMERICA
                  'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
                  # Version 0.0.72 (TEST)
-                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body')
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
 # Version 0.0.72: THOR and GREEN LANTERN ten.

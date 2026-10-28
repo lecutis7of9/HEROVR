@@ -22,14 +22,16 @@
 namespace spidy::grapple072 {
 
 enum class Device : uint32_t { none = 0, gun, baton };
+// Version 0.0.73 (fix 17): CAPTAIN AMERICA has the grapple gun too (grip draws it, trigger fires).
 inline Device deviceOf(uint32_t hero) {
-    return hero == hero_modes::batman || hero == hero_modes::punisher ? Device::gun
+    return hero == hero_modes::batman || hero == hero_modes::punisher || hero == hero_modes::captainAmerica ? Device::gun
            : hero == hero_modes::daredevil                            ? Device::baton
                                                                       : Device::none;
 }
 inline bool grappler(uint32_t hero) { return deviceOf(hero) != Device::none; }
 inline const char* heroName(uint32_t hero) {
-    return hero == hero_modes::batman ? "BATMAN" : hero == hero_modes::punisher ? "PUNISHER" : hero == hero_modes::daredevil ? "DAREDEVIL" : "";
+    return hero == hero_modes::batman ? "BATMAN" : hero == hero_modes::punisher ? "PUNISHER" : hero == hero_modes::daredevil ? "DAREDEVIL"
+           : hero == hero_modes::captainAmerica ? "CAPTAIN AMERICA" : "";
 }
 // The swing command's asks bits for this hero's grapple (live: the hero's input reaches the bridge).
 inline uint32_t asks(uint32_t hero, bool live, bool left, bool right) {

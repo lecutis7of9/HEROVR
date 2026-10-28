@@ -254,6 +254,7 @@ struct GrappleOut {
     Vec3 anchor{};
     bool started{}, arrived{}, ended{};
 };
+inline constexpr float reelNear = .25f; // 0.0.73: a reel's stop is reached within this
 class Grapple {
   public:
     GrappleTune tune{};
@@ -275,6 +276,7 @@ class Grapple {
             Vec3 toward{anchor.x - body.x, 0, anchor.z - body.z};
             over_ = length(toward) > .1f ? normalized(toward) : Vec3{};
         }
+        reel_ = false;
         phase_ = pull;
         t_ = 0;
         speed_ = 0;
@@ -314,7 +316,13 @@ class Grapple {
                 progressD_ = d;
                 progressT_ = 0;
             }
-            if (d <= tune.near || dot(to, first_) < 0 || stuck) {
+            if (reel_ && (d <= reelNear || dot(to, first_) < 0 || stuck)) { // 0.0.73: a reel ends at the enemy
+                stop();
+                o.arrived = !stuck;
+                o.ended = true;
+                return o;
+            }
+            if (!reel_ && (d <= tune.near || dot(to, first_) < 0 || stuck)) { // a reel never vaults
                 phase_ = vault;
                 t_ = 0;
                 o.arrived = !stuck;
@@ -344,6 +352,32 @@ class Grapple {
         }
         return o;
     }
+    // Version 0.0.73 ENEMY REEL (grapple073.hpp, fix 6): the line on an enemy (anchor: his chest) closes to
+    // `stop` (reelGap short of him) and ends there - no vault over him. False: no start.
+    bool startReel(Vec3 body, Vec3 stop, Vec3 enemyChest, uint32_t hand) {
+        if (!start(body, enemyChest, Vec3{0, 1, 0}, hand) || !finite(stop))
+            return false;
+        reel_ = true;
+        roof_ = false;
+        over_ = {};
+        target_ = stop;
+        first_ = normalized(target_ - body);
+        progressD_ = length(target_ - body);
+        allowed_ = std::max(tune.timeout, progressD_ / std::max(tune.speed, 1.f) + tune.timeoutSpare);
+        if (!finite(first_)) {
+            phase_ = idle;
+            return false;
+        }
+        return true;
+    }
+    // The enemy moved: the line follows him (a reel only).
+    void retarget(Vec3 stop, Vec3 enemyChest) {
+        if (!reel_ || phase_ != pull || !finite(stop) || !finite(enemyChest))
+            return;
+        target_ = stop;
+        anchor_ = enemyChest;
+    }
+    bool reeling() const { return reel_ && phase_ != idle; }
     void stop() { phase_ = idle; }
     uint32_t phase() const { return phase_; }
     uint32_t hand() const { return hand_; }
@@ -354,7 +388,7 @@ class Grapple {
   private:
     uint32_t phase_{}, hand_{};
     Vec3 anchor_{}, target_{}, over_{}, first_{}, progressAt_{};
-    bool roof_{};
+    bool roof_{}, reel_{};
     float t_{}, speed_{}, progressT_{}, progressD_{}, allowed_{3.f};
 };
 

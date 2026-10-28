@@ -19,6 +19,7 @@
 #include "spidy/gun_grip.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/grapple072.hpp"
+#include "spidy/grapple073.hpp"
 #include "spidy/holster.hpp"
 #include "spidy/sfx.hpp"
 
@@ -33,6 +34,7 @@ struct PlayHand {
     float squeeze{};  // the grip, 0-1 (holsterStep)
     bool busy{};      // a web attached, climbing, the hologram's or the phone's (holsterStep)
     bool thrown{};    // DAREDEVIL: this hand's baton is in the air (no holstering it until it is back)
+    bool holo{};      // Version 0.0.73: this hand's trigger is the hologram's / phone's / a menu's (never a grapple)
     // Version 0.0.7 PUNISHER GUN GRIP: a held gun from the controller's grip pose (gun_grip::held);
     // gunOk false: 0.0.62's placement along the aim, upright.
     Vec3 gunAt{}, gunForward{0, 0, -1}, gunUp{0, 1, 0};
@@ -283,6 +285,11 @@ class Play {
     hero_modes::Baton batarangs[2];
     uint32_t batarangThrowsSeen[2]{};
     bool batTrigWas[2]{}, grappling[2]{}; // Version 0.0.7 BATMAN GRAPPLE GUN: the press's kind
+    // Version 0.0.73 UNIVERSAL GRAPPLE (grapple073.hpp): BATMAN's and CAPTAIN AMERICA's grapple gun is in the
+    // hand while a grip that did not take a batarang, a pellet or the shield is held; the trigger fires it
+    // only then (FireGate: a press begun on the hologram or before the gun was out never fires).
+    bool gunDrawn[2]{}, gunGripWas[2]{};
+    grapple073::FireGate grappleGate;
     unsigned grappleHand{1};              // the hand that fired it last (its hip holsters the gun; right at first)
     holster::BodyYaw batBody;             // BATMAN: the body's heading for the gun's hip holster
     // Version 0.0.7 BATARANG THROW (test build 12: drawn from a belt pouch by the grip): the batarang is in
@@ -349,6 +356,7 @@ class Play {
             batarangs[i].roll.state = 0x2545f491u + 977u * i;
             batarangThrowsSeen[i] = 0;
             batTrigWas[i] = grappling[i] = batReady[i] = false;
+            gunDrawn[i] = gunGripWas[i] = false; // Version 0.0.73
             batDraw.reset();
             batarangs[i].curve = batarangCurve;
             batarangs[i].curveSign = i == 0 ? -1.f : 1.f;
@@ -417,6 +425,25 @@ class Play {
         return !inHand || batonDrawn(hand, holstersOn);
     }
 
+    // Version 0.0.73 GRAPPLE GUN DRAW: a grip pressed in hand i with `free` (nothing else took it) draws the
+    // gun; it stays out while the grip is held and goes back to the hip when it lets go.
+    void gunGrip(const PlayInput& in, unsigned i, bool free, PlayOutput& out) {
+        const PlayHand& h = in.hands[i];
+        const bool sq = h.tracked && grapple073::held(h.squeeze, gunGripWas[i], holster::pressed, holster::released);
+        const bool press = sq && !gunGripWas[i];
+        gunGripWas[i] = sq;
+        if (!in.play || !sq) {
+            gunDrawn[i] = false;
+            return;
+        }
+        if (press && free && !h.busy && !h.holo && !gunDrawn[i]) {
+            gunDrawn[i] = true;
+            out.buzz(i, .25f);
+            out.sound(sfx::holsterTick);
+        }
+        if (gunDrawn[i])
+            out.claimed |= 1u << i;
+    }
     // The racks, at the grip arbitration. Fills out.claimed, the draw / holster ticks and sounds.
     void holsterStep(const PlayInput& in, PlayOutput& out) {
         setHero(in.hero);
@@ -455,7 +482,7 @@ class Play {
             bool drawBusy[2], ready[2];
             for (unsigned i = 0; i < 2; ++i) {
                 drawBusy[i] = busy[i] || (pelletHands & (1u << i)) || pellets.hands[i].state == SmokePellets::held ||
-                              grappling[i] || in.grappleHeld[i];
+                              grappling[i] || in.grappleHeld[i] || gunDrawn[i];
                 ready[i] = batarangs[i].inHandNow();
             }
             out.claimed |= batDraw.update(in.play, in.head.position, pelletBody, at, tracked, squeeze, drawBusy, ready);
@@ -467,6 +494,13 @@ class Play {
                     out.buzz(i, .15f); // in reach of a pouch
                 }
             }
+            // Version 0.0.73 (fix 3): any other grip draws the grapple gun (a pouch's or the buckle's took it first).
+            for (unsigned i = 0; i < 2; ++i) {
+                const bool other = (out.claimed & (1u << i)) && !gunDrawn[i];
+                gunGrip(in, i, !other && !batDraw.drawn[i] && !batReady[i] && pellets.hands[i].state != SmokePellets::held, out);
+            }
+        } else if (hero != hero_modes::captainAmerica) {
+            gunDrawn[0] = gunDrawn[1] = gunGripWas[0] = gunGripWas[1] = false;
         }
         if (hero == hero_modes::wolverine) // Version 0.0.72: a fist's grip is the claws' (no web or zip from it)
             for (unsigned i = 0; i < 2; ++i)
@@ -494,6 +528,26 @@ class Play {
                 out.sound(sfx::holsterTick);
             } else if (e & holster::near) {
                 out.buzz(i, holster::tickFor(e)); // in reach of a holster: a soft pulse, no sound
+            }
+        }
+        // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the hand that is not the SHIELD ARM's draws the
+        // grapple gun with its grip (never a grip the shield rack took); the shield arm's grip stays the shield's.
+        if (captainAmerica()) {
+            for (unsigned i = 0; i < 2; ++i) {
+                if (i == shieldHand) {
+                    gunDrawn[i] = false;
+                    gunGripWas[i] = in.hands[i].squeeze >= holster::pressed;
+                    continue;
+                }
+                const bool rackHas = (out.claimed & (1u << i)) && !gunDrawn[i];
+                // never a grip reaching for the back (the shield's place: the wrong hand takes nothing there)
+                bool atBack = false;
+                if (shieldRack.body.valid && finite(in.hands[i].position) && finite(in.head.position)) {
+                    const holster::BodyPoint bp = holster::bodyPoint(in.hands[i].position, in.head.position, shieldRack.body);
+                    atBack = holster::inZone(holster::back, bp) || holster::inZone(holster::backLeft, bp) ||
+                             holster::inZone(holster::backRight, bp);
+                }
+                gunGrip(in, i, !rackHas && !atBack, out);
             }
         }
     }
@@ -572,7 +626,7 @@ class Play {
             // grapple's (the grip pose, like PUNISHER's guns), else on that hand's hip.
             bool gunHeld = false;
             for (unsigned i = 0; i < 2; ++i) {
-                if (!grappling[i] && !in.grappleHeld[i])
+                if (!grappling[i] && !in.grappleHeld[i] && !gunDrawn[i]) // 0.0.73: out while its grip holds it
                     continue;
                 // Version 0.0.72: the barrel ALONG THE AIM (the ray the line fires on), not the forearm.
                 const auto g = in.hands[i].tracked && in.hands[i].gunOk && finite(in.hands[i].gunAt) && handOk(i)
@@ -716,6 +770,23 @@ class Play {
                     any = true;
                 }
             }
+            // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the grapple gun in the free hand while its grip
+            // holds it (barrel along the aim), else on that hand's hip.
+            const unsigned g = 1 - i;
+            if ((gunDrawn[g] || grappling[g] || in.grappleHeld[g]) && handOk(g)) {
+                const auto gh = in.hands[g].gunOk && finite(in.hands[g].gunAt)
+                                    ? grapple072::alongAim(in.hands[g].gunAt, in.hands[g].aim, in.hands[g].gunUp)
+                                    : grapple072::Held{};
+                const Vec3 a = normalized(in.hands[g].aim);
+                d.held[g] = gh.ok ? item(lookGrappleGun, gh.at, gh.forward, gh.up) : item(lookGrappleGun, in.hands[g].position, a, gunUp(a));
+                d.held[g].palm = gh.ok;
+                any = true;
+            } else if (shieldRack.body.valid && finite(in.head.position)) {
+                Vec3 at{}, fwd{}, up{};
+                wornPose(g == 0 ? holster::leftHip : holster::rightHip, in.head.position, shieldRack.body, at, fwd, up, hipBelt);
+                d.worn[1] = item(lookGrappleGun, at, fwd, up, 1);
+                any = true;
+            }
         } else if (hero == hero_modes::daredevil && in.batonHolsters) {
             for (uint32_t s = 0; s < batons.count; ++s) {
                 Vec3 at{}, fwd{}, up{};
@@ -803,6 +874,15 @@ class Play {
     // forward sweep, else the aim, the aim assist's enemy first); it chains like the batons (SHIELD
     // CHAIN) and comes back to the hand. On the arm a swing of its rim is a bash.
     void stepCaptain(const PlayInput& in, float dt, PlayOutput& out) {
+        // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the free hand's drawn gun fires on its trigger.
+        for (unsigned k = 0; k < 2; ++k) {
+            const bool fire = k != shieldHand && grappleGate.step(k, gunDrawn[k] && in.hands[k].tracked, in.hands[k].trigger, in.hands[k].holo);
+            grappling[k] = fire;
+            if (fire) {
+                out.grapple[k] = true;
+                grappleHand = k;
+            }
+        }
         const unsigned i = shieldHand;
         const PlayHand& h = in.hands[i];
         guarding = false;
@@ -885,10 +965,9 @@ class Play {
             // TRIGGER is always the grapple gun (a press grapples wherever it aims, held until let go) - except
             // in a hand holding a batarang, whose trigger waits; the GRIP at a belt pouch draws a batarang
             // (BatarangDraw) and letting the grip go throws it; the grip at the buckle is the SMOKE PELLET.
-            if (trig && !batTrigWas[i])
-                grappling[i] = !batDraw.drawn[i] && !batReady[i];
-            if (!trig)
-                grappling[i] = false;
+            // Version 0.0.73 (fix 3, the user: "grip draws it, then trigger fires; never on every trigger press
+            // or on holo clicks"): the trigger grapples only with the gun drawn by the grip (FireGate).
+            grappling[i] = grappleGate.step(i, gunDrawn[i] && h.tracked && !batDraw.drawn[i] && !batReady[i], h.trigger, h.holo);
             batTrigWas[i] = trig;
             if (grappling[i]) {
                 out.grapple[i] = true;

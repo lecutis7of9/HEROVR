@@ -833,7 +833,7 @@ hero072::PlayOptions hero072Options() {
     o.fireDouse = O::onFirst(c38(combat38::fireDouse));
     o.shieldSlam = O::onFirst(c38(combat38::shieldSlam));
     o.punisherHook = O::onFirst(c38(combat38::punisherHook));
-    o.clawClimb = O::onFirst(c38(combat38::clawClimb));
+    o.clawClimb = c38(combat38::clawClimb) == 1; // Version 0.0.73: 0 OFF (the default), 1 ON
     o.shove = O::onFirst(c38(combat38::npcShove));
     o.faction = c38(combat38::faction);
     o.testUnlocks = c38(combat38::testUnlocks);
@@ -2079,6 +2079,15 @@ DWORD WINAPI run(void*) {
         van072::Driver vanDriver;
         van072::Van& van = vanDriver.van;
         van072::CarryOut vanCarry{};
+        // Version 0.0.73 (fix 5): DAREDEVIL's trigger - a tap throws, a hold grapples along the baton
+        // (tracking space; the command turns it to the world with the CONFIRMED ray bridge).
+        grapple073::TapOrHold ddTrigger;
+        bool ddAimHeld[2]{};
+        Vec3 ddAimFrom[2]{}, ddAimDir[2]{};
+        // Version 0.0.73 (fix 17): CAPTAIN AMERICA's SPRINT - pumped arms with the left stick pushed.
+        grapple073::ArmPump capPump;
+        bool capSprinting{};
+        uint64_t capSprints{};
         bool vanCarryAsked{}, vanCarriedNow{}, vanBumperHit{}, vanBumperAsked{};
         static constexpr uint32_t vanBumperTag = vanTag0 + vanTags; // 1364 (answered before the balls' tags)
         uint64_t vanBumperHits{};
@@ -5008,6 +5017,15 @@ DWORD WINAPI run(void*) {
                             }
                             input.hands[i] = {hand.aim, hand.gripRelativeToHead, hand.tracked, hand.trigger,
                                               u37.holdsGrip[i] || grabWebs[i].on ? 0.f : hand.grip};
+                            // Version 0.0.73 (fix 5): DAREDEVIL's held grapple aims along the baton, from its tip.
+                            if (ddAimHeld[i] && heroNow() == hero_modes::daredevil && finite(ddAimFrom[i]) && finite(ddAimDir[i]) &&
+                                validTrackedPose(frame.head) && validTrackedPose(motion.headPose)) {
+                                const Pose toWorld = compose(motion.headPose, inverse(frame.head));
+                                const Vec3 from = toWorld.position + toWorld.orientation.rotate(ddAimFrom[i]);
+                                const Vec3 dir = toWorld.orientation.rotate(ddAimDir[i]);
+                                if (finite(from) && finite(dir) && length(dir) > .5f)
+                                    input.hands[i].aim = {from, arc({0, 0, -1}, normalized(dir))};
+                            }
                             input.wallPositions[i] = motion.grips[i].position;
                             // Update 37: climb_grip, the button that holds the wall.
                             input.wallGrips[i] =
@@ -5137,6 +5155,36 @@ DWORD WINAPI run(void*) {
                         // Version 0.0.73 DRIVING (Command v7): the body rides in the van - the van's seat velocity
                         // (van072::Driver, last frame); no walk, no jump, no hand of his to the swing meanwhile.
                         vanCarryAsked = false;
+                        // Version 0.0.73 (fix 17): CAPTAIN AMERICA's SPRINT on the van's CONFIRMED carry path
+                        // (Command v7): on foot only, never in the van, never flying, swinging or grappling.
+                        {
+                            const bool capHere = heroNow() == hero_modes::captainAmerica && c38(combat38::capSprint) == 0;
+                            const bool onFoot = capHere && input.focused && !vanCarry.carry && !vanDriving &&
+                                                !game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart) &&
+                                                !hero072Grapple[0] && !hero072Grapple[1] && !phone.open() && !padLayer.latched();
+                            float ys[2]{};
+                            bool tr[2]{};
+                            for (unsigned i = 0; i < 2; ++i) {
+                                tr[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip);
+                                ys[i] = tr[i] ? frame.hands[i].grip.position.y : 0.f;
+                            }
+                            const Vec3 mv = motion.swing.move;
+                            const float stick = finite(mv) ? length(Vec3{mv.x, 0, mv.z}) : 0.f;
+                            const bool was = capSprinting;
+                            capSprinting = capPump.step(static_cast<float>(frame.seconds), ys, tr, stick, onFoot);
+                            if (capSprinting && !was)
+                                ++capSprints;
+                            if (capSprinting) {
+                                const Vec3 v = grapple073::sprintVelocity(mv, 0.f, 1.f);
+                                if (finite(v) && length(v) > 0.f && length(v) <= game_swing::carryMost) {
+                                    input.carry = 1;
+                                    input.carryVelocity = v;
+                                    input.jump = 0;
+                                    input.leap = 0;
+                                } else
+                                    capSprinting = false;
+                            }
+                        }
                         if (vanCarry.carry && input.focused && finite(vanCarry.velocity) &&
                             length(vanCarry.velocity) <= game_swing::carryMost) {
                             input.carry = 1;
@@ -6689,10 +6737,24 @@ DWORD WINAPI run(void*) {
                                         batonAt = combatClock;
                                         // Version 0.0.7 BATON HOLSTERS ON: a baton throws and swings only once drawn.
                                         const bool ddHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
+                                        const bool ddGrappleOn = c38(combat38::ddGrapple) == 0;
                                         for (unsigned i = 0; i < 2; ++i) {
                                             auto& b = batons[i];
                                             const bool batonOut = hero007Play.batonDrawn(i, ddHolsters);
-                                            const bool trig = cf.hands[i].tracked && cf.hands[i].button > .5f && batonOut;
+                                            // Version 0.0.73 (fix 5): with DD GRAPPLE on, a tap throws, a held trigger
+                                            // grapples along the baton; never a press begun on the hologram.
+                                            const bool ddHolo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
+                                            const auto ddT = ddTrigger.step(i, static_cast<float>(frame.seconds),
+                                                                            cf.hands[i].tracked && batonOut && b.inHandNow(),
+                                                                            cf.hands[i].button, ddHolo);
+                                            const bool trig = ddGrappleOn ? ddT.tap
+                                                                          : cf.hands[i].tracked && cf.hands[i].button > .5f && batonOut;
+                                            ddAimHeld[i] = ddGrappleOn && ddT.hold;
+                                            if (ddAimHeld[i]) {
+                                                ddAimDir[i] = grapple073::batonAim(batonShaftOk[i], batonButt[i], batonTipHeld[i], cf.hands[i].aim);
+                                                ddAimFrom[i] = batonShaftOk[i] && finite(batonTipHeld[i]) ? batonTipHeld[i] : cf.hands[i].position;
+                                                hero072Grapple[i] = true;
+                                            }
                                             const Vec3 hand = cf.hands[i].position;
                                             const Vec3 aimDir = cf.hands[i].aim;
                                             batonHand[i] = hand;
@@ -6895,6 +6957,9 @@ DWORD WINAPI run(void*) {
                                             hin.hands[i].squeeze = std::isfinite(frame.hands[i].squeeze) ? frame.hands[i].squeeze : 0.f;
                                             // Version 0.0.7 PUNISHER GUN GRIP: the held gun from the grip pose.
                                             hin.hands[i].holdGun(gun_grip::held(frame.hands[i].grip, i, runtime.controllers()[i]));
+                                            // Version 0.0.73 UNIVERSAL GRAPPLE: this trigger is the hologram's / a menu's /
+                                            // the phone's / the pad layer's - never a grapple (fix 3).
+                                            hin.hands[i].holo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
                                         }
                                         // Version 0.0.73 PROP BOUNCE: the thrown shield's surface ahead (this frame's tracking space).
                                         const uint32_t shieldBouncesWas = hero007Play.shield.wallBounces;
@@ -6908,8 +6973,14 @@ DWORD WINAPI run(void*) {
                                             propWallsWorld[prop_bounce::shield] = {};
                                             ++propBounces;
                                         }
-                                        for (unsigned i = 0; i < 2; ++i) // Version 0.0.7 BATMAN GRAPPLE GUN
-                                            batmanGrapple[i] = hout.grapple[i];
+                                        for (unsigned i = 0; i < 2; ++i) { // Version 0.0.7 BATMAN GRAPPLE GUN
+                                            // Version 0.0.73 (fix 17): CAPTAIN AMERICA's gun is the cape-less grapple
+                                            // (askGrappleOnly, like the PUNISHER's), never BATMAN's cape asks.
+                                            const bool capGun = heroWas == hero_modes::captainAmerica;
+                                            batmanGrapple[i] = !capGun && hout.grapple[i];
+                                            if (capGun)
+                                                hero072Grapple[i] = hero072Grapple[i] || hout.grapple[i];
+                                        }
                                         for (uint32_t k = 0; k < hout.blowCount; ++k) {
                                             const auto& hb = hout.blows[k];
                                             const bool sent = sm2_damage::queue(hb.id, hb.blow);
@@ -7117,7 +7188,12 @@ DWORD WINAPI run(void*) {
                                             in72.hands[i].grip = cf.hands[i].grip;
                                             // Test build 10 THOR HAMMER GRIP: Mjolnir in the fist from the grip pose.
                                             in72.hands[i].hammer = thor_grip::held(frame.hands[i].grip, runtime.controllers()[i]);
+                                            // Version 0.0.73 (fix 24, UNIVERSAL GRAPPLE): the PUNISHER's hook never fires on a
+                                            // hologram press and is never drawn into a hand holding a gun.
+                                            in72.handBusy[i] = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
+                                            in72.gunInHand[i] = hero007Play.guns.heldIn(i) >= 0;
                                         }
+                                        in72.ddCastGesture = false; // Version 0.0.73 (fix 5): DAREDEVIL grapples on a held trigger
                                         in72.list = list72;
                                         in72.count = n72;
                                         // The health lost since the last step (NaN: the health is not read).
@@ -12125,6 +12201,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorHammerModel(void* v) { re
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThorFlight(void* v) { return setHero007(v, combat38::thorFlight, 5435); }
 // Build 9 SUITS: SUIT BODY (live.txt suit_body = arms / full_body / off).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitBody(void* v) { return setHero007(v, combat38::suitBody, 5436); }
+// Version 0.0.73: CAP SPRINT (live.txt cap_sprint = on / off).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCapSprint(void* v) { return setHero007(v, combat38::capSprint, 5437); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

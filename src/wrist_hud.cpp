@@ -911,7 +911,7 @@ constexpr SectionDef powersSections[] = {
       C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan}},
     {"CAPTAIN AMERICA", C::none, C::none, "", "", nullptr, 8,
      {C::combatCaptainAmerica, C::combatShieldArm, C::combatShieldDamage, C::combatShieldChain, C::combatShieldBlock,
-      C::combatShieldLook, C::combatShieldSlam}},
+      C::combatShieldLook, C::combatShieldSlam, C::combatCapSprint}},
     // Version 0.0.72 (TEST)
     {"THOR", C::none, C::none, "", "", nullptr, 9,
      {C::combatThor, C::combatThorLightning, C::combatThorStorm, C::combatThorChain, C::combatThorHammer, C::combatThorHammerModel, C::combatThorFlight,
@@ -4290,6 +4290,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatThorHammerModel:
             case Control::combatThorFlight:
             case Control::combatSuitBody:
+            case Control::combatCapSprint:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

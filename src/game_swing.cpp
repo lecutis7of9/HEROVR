@@ -4,6 +4,7 @@
 #include "spidy/combat_spidy.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/cape_glide.hpp"
+#include "spidy/grapple073.hpp"
 #include "spidy/extras385.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/air_watch.hpp"
@@ -63,6 +64,7 @@ cape_glide::Glide capeGlide;
 cape_glide::Grapple capeGrapple;
 cape_glide::Data capeData; // under `output`
 bool grappleHeldWas[2]{};
+uint64_t reelId{}; // Version 0.0.73 ENEMY REEL: the enemy the line is on (0: a surface)
 InFlightStep inFlight;
 SRWLOCK lifecycle = SRWLOCK_INIT, control = SRWLOCK_INIT, output = SRWLOCK_INIT, simulation = SRWLOCK_INIT;
 std::atomic<bool> enabled{};
@@ -844,8 +846,28 @@ void visit(const native_rays::QueryContext& world) {
                     fault(world.error());
                     return;
                 }
-                if (hit && cape_glide::hookable(from, hit->point, false, hit->fixed) &&
+                // Version 0.0.73 ENEMY REEL (grapple073.hpp, fix 6): the line on an enemy nearer than the
+                // surface it hit closes to about 2 ft of him (no game write moves an enemy: the hero goes).
+                Vec3 reelFeet[lungeEnemies]{};
+                uint64_t reelIds[lungeEnemies]{};
+                const uint32_t reelCount = std::min(c.enemyCount, lungeEnemies);
+                for (uint32_t e = 0; e < reelCount; ++e) {
+                    reelFeet[e] = c.enemies[e].feet;
+                    reelIds[e] = c.enemies[e].id;
+                }
+                const float wallAt = hit && finite(hit->point) ? length(hit->point - from) : cape_glide::reachMost;
+                const int reelOn = grappleOnly || batman
+                                       ? grapple073::enemyOnLine(from, dir, reelFeet, reelCount, wallAt + .5f)
+                                       : -1;
+                if (reelOn >= 0 &&
+                    capeGrapple.startReel(body.position, grapple073::reelStop(body.position, reelFeet[reelOn]),
+                                          reelFeet[reelOn] + Vec3{0, grapple073::chestUp, 0}, i)) {
+                    reelId = reelIds[reelOn];
+                    capeGlide.reset();
+                    ++capeData.grapples;
+                } else if (hit && cape_glide::hookable(from, hit->point, false, hit->fixed) &&
                     capeGrapple.start(body.position, hit->point, hit->normal, i)) {
+                    reelId = 0;
                     capeGlide.reset();
                     ++capeData.grapples;
                 } else {
@@ -854,6 +876,12 @@ void visit(const native_rays::QueryContext& world) {
             }
             grappleHeldWas[i] = held;
         }
+        // Version 0.0.73 ENEMY REEL: the line follows the enemy it is on (gone from the list: where he was).
+        if (capeGrapple.reeling() && reelId)
+            for (uint32_t e = 0; e < std::min(c.enemyCount, lungeEnemies); ++e)
+                if (c.enemies[e].id == reelId && finite(c.enemies[e].feet))
+                    capeGrapple.retarget(grapple073::reelStop(body.position, c.enemies[e].feet),
+                                         c.enemies[e].feet + Vec3{0, grapple073::chestUp, 0});
         // 0.0.72: the pull holds (its clock too) while the game's jump takes him off the ground.
         const bool liftWait = transition.waiting && capeGrapple.phase() == cape_glide::pull && free;
         const auto pulled = liftWait ? cape_glide::GrappleOut{false, {}, cape_glide::pull, capeGrapple.anchor()}

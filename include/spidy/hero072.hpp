@@ -1720,10 +1720,8 @@ class SuitCatalog {
         return true;
     }
     // Suit 0 of each hero: the game's own (or whatever suit another mod applies) - always there. Then
-    // the user's picks (8:59, tools/alt_suits/alt_suits.py makes these lines; the numbers on the sheets
-    // are in the folder names). Every pick is COMING SOON in this build: Sketchfab refused the
-    // downloads (401), so none is fetched, rigged or decimated yet. A suits.txt line with the same
-    // hero and NAME (a converted model dropped in) replaces the COMING SOON entry.
+    // the user's picks that he sent (8:59, the numbers on the sheets are in the folder names), each a
+    // converted model in Models\\Suits (build 9). A suits.txt line with the same hero and NAME replaces one.
     void builtIn() {
         count = 0;
         const char* game = "THE GAME'S OWN";
@@ -1731,44 +1729,32 @@ class SuitCatalog {
             if (h != hero_modes::captainAmerica)
                 add(makeSuit(h, "DEFAULT", game, "", 0, ""));
         add(makeSuit(hero_modes::captainAmerica, "CAPTAIN AMERICA", "iqbalmulyawan", "CC BY", 0, "CapSuit"));
-        // The PUNISHER's (the user, 8:59: 1 and 2, no final) and WARZONE (8:35), all from the start.
-        add(makeSuit(hero_modes::batman, "BEYOND", "Light.k", "CC BY", repMost, "Suit_batman_1", true, true));
-        add(makeSuit(hero_modes::batman, "1989", "Homeless_Models (hl_models)", "CC BY", 0, "Suit_batman_2", false, true));
-        add(makeSuit(hero_modes::batman, "YEAR ONE", "Tigerar1 (allanromanreyes)", "SF STANDARD", 0, "Suit_batman_3", false, true));
-        add(makeSuit(hero_modes::batman, "ORIGINS", "Light.k", "CC BY", 0, "Suit_batman_5", false, true));
-        add(makeSuit(hero_modes::ironMan, "MARK 85", "9A Films / Nihar Arora", "CC BY", 0, "Suit_ironMan_1", false, true));
-        add(makeSuit(hero_modes::ironMan, "MARK 1", "Nathang30", "CC BY-NC-SA", repMost, "Suit_ironMan_2", true, true));
-        add(makeSuit(hero_modes::ironMan, "MARK 7", "benjamin.borromeo", "CC BY", 0, "Suit_ironMan_3", false, true));
-        add(makeSuit(hero_modes::ironMan, "MARK 6", "Mittergen", "CC BY", 0, "Suit_ironMan_4", false, true));
-        add(makeSuit(hero_modes::captainAmerica, "WINTER SOLDIER", "Zeztz777", "CC BY", repMost, "Suit_captainAmerica_1", true, true));
-        add(makeSuit(hero_modes::captainAmerica, "WW2", "Marco.41", "SF STANDARD", 0, "Suit_captainAmerica_2", false, true));
-        add(makeSuit(hero_modes::captainAmerica, "CLASSIC", "alexseagle2004", "CC BY", 0, "Suit_captainAmerica_4", false, true));
-        add(makeSuit(hero_modes::daredevil, "BORN AGAIN S2", "YE YE", "CC BY", 0, "Suit_daredevil_1", false, true));
-        add(makeSuit(hero_modes::daredevil, "NETFLIX", "VLTXD", "CC BY", 0, "Suit_daredevil_2", false, true));
-        add(makeSuit(hero_modes::daredevil, "YELLOW AND RED", "AtoMichael Editz", "CC BY", repMost, "Suit_daredevil_3", true, true));
-        add(makeSuit(hero_modes::hulk, "GREY", "3D MODELS", "CC BY", 0, "Suit_hulk_1", false, true));
-        add(makeSuit(hero_modes::hulk, "PROFESSOR", "Shivam.Yadav", "CC BY", 0, "Suit_hulk_2", false, true));
-        // Build 8: the user's HULK picks are 1, 2 and 4 with 4 (MAESTRO) the final - sheet #3 was never picked.
-        add(makeSuit(hero_modes::hulk, "MAESTRO", "YE YE", "CC BY", repMost, "Suit_hulk_4", true, true));
-        add(makeSuit(hero_modes::wolverine, "CLASSIC", "stokissout", "CC BY", 0, "Suit_wolverine_1", false, true));
-        add(makeSuit(hero_modes::wolverine, "LEGENDARY", "LombaxLover2K", "CC BY", 0, "Suit_wolverine_2", false, true));
-        add(makeSuit(hero_modes::wolverine, "JACKET AND JEANS", "Light.k", "CC BY", 0, "Suit_wolverine_3", false, true));
-        add(makeSuit(hero_modes::wolverine, "WEAPON X", "AssetGoat", "CC BY", repMost, "Suit_wolverine_4", true, true));
-        add(makeSuit(hero_modes::wolverine, "D AND W", "BlendAtlas", "UNKNOWN", 0, "Suit_wolverine_5", false, true));
-        add(makeSuit(hero_modes::punisher, "VEST", "floh", "CC BY-NC", 0, "Suit_punisher_1", false, true));
-        add(makeSuit(hero_modes::punisher, "CLASSIC", "floh", "CC BY-NC", 0, "Suit_punisher_2", false, true));
-        add(makeSuit(hero_modes::thor, "RIGGED", "3D MODELS", "CC BY", 0, "Suit_thor_1", false, true));
-        add(makeSuit(hero_modes::thor, "CLASSIC", "3D MODELS", "CC BY", repMost, "Suit_thor_2", true, true));
-        add(makeSuit(hero_modes::thor, "RAGNAROK", "YE YE", "CC BY", 0, "Suit_thor_3", false, true));
-        add(makeSuit(hero_modes::greenLantern, "FILM", "DavidA3D", "CC BY-NC", 0, "Suit_greenLantern_1", false, true));
-        add(makeSuit(hero_modes::greenLantern, "INJUSTICE 2", "Neut2000", "CC BY", 0, "Suit_greenLantern_2", false, true));
-        add(makeSuit(hero_modes::greenLantern, "RENEGADE", "3D MODELS", "CC BY", repMost, "Suit_greenLantern_3", true, true));
-        add(makeSuit(hero_modes::greenLantern, "RIGGED", "3D MODELS", "CC BY", 0, "Suit_greenLantern_4", false, true));
-        add(makeSuit(hero_modes::superman, "SSKTJL", "20062020year", "CC BY", 0, "Suit_superman_1", false, true));
-        add(makeSuit(hero_modes::superman, "CLASSIC", "Allen Tseng", "CC BY", 0, "Suit_superman_2", false, true));
-        add(makeSuit(hero_modes::superman, "CAVILL", "DavidA3D", "CC BY-NC", 0, "Suit_superman_3", false, true));
-        add(makeSuit(hero_modes::superman, "DC", "Chechorams16", "CC BY", repMost, "Suit_superman_4", true, true));
-        add(makeSuit(hero_modes::punisher, "WARZONE", "spybg (Valentin Yovchev)", "CC BY", 0, "PunisherWarzone", false, true));
+        // Build 9: only the models the user sent (t893u: "any not included i dont want"), each converted
+        // by tools/suits/convert_suit.py and worn (suit_wear); the artists from each zip's license.txt.
+        // HULK's final (MAESTRO) was not sent: PROFESSOR from the start. The PUNISHER: 1 and 2, no final.
+        add(makeSuit(hero_modes::batman, "BEYOND", "Light.k", "CC BY", repMost, "Suit_batman_1", true));
+        add(makeSuit(hero_modes::batman, "1989", "H.E.C.U Models", "CC BY", 0, "Suit_batman_2"));
+        add(makeSuit(hero_modes::batman, "YEAR ONE", "Tigerar1 (allanromanreyes)", "SF STANDARD", 0, "Suit_batman_3"));
+        add(makeSuit(hero_modes::batman, "ORIGINS", "Light.k", "CC BY", 0, "Suit_batman_5"));
+        add(makeSuit(hero_modes::ironMan, "MARK 85", "9A Films / Nihar Arora", "CC BY", 0, "Suit_ironMan_1"));
+        add(makeSuit(hero_modes::ironMan, "MARK 1", "Nathang30", "CC BY-NC-SA", repMost, "Suit_ironMan_2", true));
+        add(makeSuit(hero_modes::ironMan, "MARK 7", "benjamin.borromeo", "CC BY", 0, "Suit_ironMan_3"));
+        add(makeSuit(hero_modes::ironMan, "MARK 6", "Mittergen", "CC BY", 0, "Suit_ironMan_4"));
+        add(makeSuit(hero_modes::captainAmerica, "WINTER SOLDIER", "mikomagallona", "CC BY", repMost, "Suit_captainAmerica_1", true));
+        add(makeSuit(hero_modes::captainAmerica, "WW2", "Marco.41", "SF STANDARD", 0, "Suit_captainAmerica_2"));
+        add(makeSuit(hero_modes::daredevil, "BORN AGAIN S2", "YE YE", "CC BY", 0, "Suit_daredevil_1"));
+        add(makeSuit(hero_modes::daredevil, "YELLOW AND RED", "officialsupremefilms", "CC BY", repMost, "Suit_daredevil_3", true));
+        add(makeSuit(hero_modes::hulk, "PROFESSOR", "Shivam.Yadav", "CC BY", 0, "Suit_hulk_2"));
+        add(makeSuit(hero_modes::wolverine, "CLASSIC", "Stokissout", "CC BY", 0, "Suit_wolverine_1"));
+        add(makeSuit(hero_modes::wolverine, "JACKET AND JEANS", "Light.k", "CC BY", 0, "Suit_wolverine_3"));
+        add(makeSuit(hero_modes::wolverine, "WEAPON X", "AssetGoat", "CC BY", repMost, "Suit_wolverine_4", true));
+        add(makeSuit(hero_modes::punisher, "VEST", "floh", "CC BY-NC", 0, "Suit_punisher_1"));
+        add(makeSuit(hero_modes::punisher, "CLASSIC", "floh", "CC BY-NC", 0, "Suit_punisher_2"));
+        add(makeSuit(hero_modes::thor, "RIGGED", "CAPTAAINR", "CC BY", 0, "Suit_thor_1"));
+        add(makeSuit(hero_modes::thor, "CLASSIC", "CAPTAAINR", "CC BY", repMost, "Suit_thor_2", true));
+        add(makeSuit(hero_modes::greenLantern, "INJUSTICE 2", "Neut2000", "CC BY", 0, "Suit_greenLantern_2"));
+        add(makeSuit(hero_modes::greenLantern, "RENEGADE", "CAPTAAINR", "CC BY", repMost, "Suit_greenLantern_3", true));
+        add(makeSuit(hero_modes::superman, "DC", "Chechorams16", "CC BY", repMost, "Suit_superman_4", true));
     }
     uint32_t suits(uint32_t hero) const {
         uint32_t n = 0;

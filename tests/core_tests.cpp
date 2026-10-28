@@ -26460,6 +26460,8 @@ int main() {
         check(rp::pictureOf("Nope/Nope") < 0 && rp::pictureOf(nullptr) < 0, "an unknown picture folder found");
         // The suits as the game thread publishes them.
         hero072::SuitCatalog cat;
+        for (uint32_t k = 0; k < cat.count; ++k) // build 9: every suit has its model - BEYOND's taken away here
+            cat.list[k].soon = cat.list[k].soon || std::string(cat.list[k].folder) == "Suit_batman_1";
         rp::Snapshot snap = rp::snapshotOf(cat, false, false);
         check(snap.count[hero_modes::batman] == 5 && snap.rows[hero_modes::batman][0].status == rp::Status::inUse &&
                   snap.rows[hero_modes::batman][1].status == rp::Status::missing && snap.rows[hero_modes::batman][1].final,
@@ -26629,12 +26631,12 @@ int main() {
     test("Version 0.0.72: SUITS per hero - the user's picks, FINAL at max reputation, COMING SOON never worn", [] {
         using namespace hero072;
         SuitCatalog c;
-        // The user's picks (8:59): Batman 4, Iron Man 4, Cap 3 (+ the 0.0.7 suit), Daredevil 3, Hulk 3 (build 8: 1, 2 and 4, MAESTRO the FINAL),
-        // Wolverine 5, the Punisher 2 (+ WARZONE), Thor 3, Green Lantern 4, Superman 4; each after DEFAULT.
-        const uint32_t want[hero_modes::heroes] = {1, 5, 4, 4, 5, 6, 5, 4, 4, 4, 5};
+        // Build 9: the user's picks he sent: Batman 4, Iron Man 4, Cap 2 (+ the 0.0.7 suit), Daredevil 2, Hulk 1 (no FINAL),
+        // Wolverine 3, the Punisher 2, Thor 2, Green Lantern 2, Superman 1; each after DEFAULT.
+        const uint32_t want[hero_modes::heroes] = {1, 5, 3, 2, 5, 4, 2, 3, 3, 3, 3};
         for (uint32_t h = 0; h < hero_modes::heroes; ++h)
             check(c.suits(h) == want[h], "the built-in suits of hero " + std::to_string(h));
-        const uint32_t finals[hero_modes::heroes] = {0, 2, 3, 4, 1, 4, 4, 0, 1, 2, 3}; // the sheets' numbers (0: none)
+        const uint32_t finals[hero_modes::heroes] = {0, 2, 3, 0, 1, 4, 4, 0, 1, 2, 3}; // the sheets' numbers (0: none)
         for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
             uint32_t f = 0, n = 0;
             for (uint32_t i = 0; i < c.suits(h); ++i)
@@ -26645,7 +26647,7 @@ int main() {
                 } else {
                     check(c.suit(h, i)->rep == 0, "a picked suit is not unlocked from the start");
                 }
-            check(f == (finals[h] ? 1u : 0u), "one FINAL suit per hero (none for the Punisher)");
+            check(f == (finals[h] ? 1u : 0u), "one FINAL suit per hero (none for the Punisher or HULK)");
             if (finals[h]) {
                 const std::string folder = c.suit(h, n)->folder;
                 check(folder.substr(folder.size() - 2) == "_" + std::to_string(finals[h]), "the FINAL is the user's number: " + folder);
@@ -26653,20 +26655,27 @@ int main() {
             for (uint32_t i = 0; i < c.suits(h); ++i)
                 check(i == 0 ? c.suit(h, i)->artist[0] != 0 : c.suit(h, i)->artist[0] && c.suit(h, i)->licence[0], "a suit without its credit");
         }
-        // Nothing fetched in this build (Sketchfab 401): every pick COMING SOON, never stepped onto, never worn.
+        // Build 9: every pick has its model (none COMING SOON); a COMING SOON one is never stepped onto or worn.
         char line[96];
-        c.line(hero_modes::batman, 1, true, line, sizeof line);
-        check(std::string(line) == "BEYOND: MODEL MISSING", std::string("a MODEL MISSING line: ") + line);
-        check(!c.choose(hero_modes::batman, 1, true) && c.chosen[hero_modes::batman] == 0, "the roster chose a MODEL MISSING suit");
-        check(c.next(hero_modes::batman, true) == 0 && c.current(hero_modes::batman, true) == 0, "a COMING SOON suit was picked");
-        c.chosen[hero_modes::batman] = 3;
-        check(c.current(hero_modes::batman, true) == 0, "a COMING SOON suit was worn");
+        for (uint32_t k = 0; k < c.count; ++k)
+            check(!c.list[k].soon, std::string("a COMING SOON suit in build 9: ") + c.list[k].folder);
+        {
+            SuitCatalog g;
+            for (uint32_t k = 0; k < g.count; ++k)
+                g.list[k].soon = std::string(g.list[k].folder) == "Suit_batman_1";
+            g.line(hero_modes::batman, 1, true, line, sizeof line);
+            check(std::string(line) == "BEYOND: MODEL MISSING", std::string("a MODEL MISSING line: ") + line);
+            check(!g.choose(hero_modes::batman, 1, true) && g.chosen[hero_modes::batman] == 0, "the roster chose a MODEL MISSING suit");
+            g.chosen[hero_modes::batman] = 1;
+            check(g.current(hero_modes::batman, true) == 0, "a COMING SOON suit was worn");
+            // A converted model dropped in (suits.txt, the same NAME) replaces the COMING SOON entry and keeps its rule.
+            check(g.parseList("4|BEYOND|Light.k|CC BY|0|Suit_batman_1\n") == 1 && g.suits(hero_modes::batman) == 5 &&
+                      g.suit(hero_modes::batman, 1)->final && !g.suit(hero_modes::batman, 1)->soon,
+                  "a converted pick did not replace its COMING SOON entry");
+        }
         c.line(hero_modes::captainAmerica, 0, false, line, sizeof line);
         check(std::string(line) == "SUIT: CAPTAIN AMERICA BY iqbalmulyawan (CC BY)", std::string("the 0.0.7 suit: ") + line);
-        // A converted model dropped in (suits.txt, the same NAME) replaces the COMING SOON entry and keeps its rule.
-        check(c.parseList("4|BEYOND|Light.k|CC BY|0|Suit_batman_1\n4|1989|Homeless_Models|CC BY|0|Suit_batman_2\n") == 2 &&
-                  c.suits(hero_modes::batman) == 5,
-              "a converted pick did not replace its COMING SOON entry");
+        check(c.parseList("4|BEYOND|Light.k|CC BY|0|Suit_batman_1\n") == 0 && c.suits(hero_modes::batman) == 5, "a suits.txt line doubled a suit");
         check(c.suit(hero_modes::batman, 1)->final && c.suit(hero_modes::batman, 1)->rep == repMost, "the dropped-in FINAL lost its rule");
         check(c.isUnlocked(hero_modes::batman, 2, false), "a picked suit is locked at the start");
         c.line(hero_modes::batman, 1, false, line, sizeof line);
@@ -26693,8 +26702,8 @@ int main() {
         check(d.isUnlocked(hero_modes::batman, 1, false), "an old save locked it again");
         // Drop-in suits of its own.
         const uint32_t added = d.parseList("# my suits\n9|STORM|someone|CC BY|850|ThorStorm\r\nbad line\n42|X|y|z|0|f\n9|STORM|dupe|CC BY|0|f\n");
-        check(added == 1 && d.suits(hero_modes::thor) == 5 && d.suit(hero_modes::thor, 4)->rep == 850, "suits.txt");
-        d.line(hero_modes::thor, 4, false, line, sizeof line);
+        check(added == 1 && d.suits(hero_modes::thor) == 4 && d.suit(hero_modes::thor, 3)->rep == 850, "suits.txt");
+        d.line(hero_modes::thor, 3, false, line, sizeof line);
         check(std::string(line) == "STORM LOCKED: REP 850", std::string("a dropped-in suit's lock: ") + line);
         for (int i = 0; i < 20; ++i)
             d.add(makeSuit(hero_modes::thor, ("S" + std::to_string(i)).c_str(), "a", "CC BY", 0, ""));

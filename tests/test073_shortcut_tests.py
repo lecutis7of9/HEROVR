@@ -52,13 +52,25 @@ class Shortcut(unittest.TestCase):
             with open(os.path.join(stage, 'payload', 'SHA256SUMS.txt'), 'w') as f:
                 for n in ('HERO-VR.ico', 'HERO-VR-TEST-BUILD.txt'):
                     f.write(hashlib.sha256(open(os.path.join(stage, 'payload', n), 'rb').read()).hexdigest() + '  ' + n + '\n')
-            for extra, stdin in ((['-Yes'], ''), (['-Yes', '-Shortcut'], ''), ([], '\nn\n'), ([], '\ny\n')):
+            runs = [(['-Yes'], ''), (['-Yes', '-Shortcut'], '')]
+            if os.name != 'nt':  # Windows shows the real popup without -Yes, with no one to press it (CI)
+                runs += [([], '\nn\n'), ([], '\ny\n')]
+            for extra, stdin in runs:
                 r = subprocess.run([os.environ.get('PWSH', 'pwsh'), '-NoProfile', '-File', os.path.join(stage, 'INSTALL-TEST-BUILD.ps1'),
                                     '-Target', mod, '-NoLaunch'] + extra, input=stdin, capture_output=True, text=True,
                                    env=dict(os.environ, HOME=home), timeout=120)
                 self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
                 self.assertIn('INSTALLED into', r.stdout)
                 self.assertIn('Desktop shortcut', r.stdout)
+                if os.name == 'nt' and '-Shortcut' in extra:
+                    # Windows (CI): the .lnk is really made, with the icon, then removed again
+                    import re
+                    m = re.search(r'Desktop shortcut made: (.+?\.lnk) \(delete it to undo\)', r.stdout)
+                    self.assertTrue(m, r.stdout + r.stderr)
+                    self.assertTrue(os.path.exists(m.group(1)))
+                    with open(m.group(1), 'rb') as f:
+                        self.assertEqual(f.read(4), b'L\x00\x00\x00')  # a shell link
+                    os.remove(m.group(1))
             self.assertTrue(os.path.exists(os.path.join(mod, 'HERO-VR.ico')))
 
 

@@ -65,6 +65,55 @@ class Hero073(unittest.TestCase):
         h = src('include/spidy/combat38.hpp')
         self.assertIn('{"ON", "STRONG", "OFF", nullptr}', h)
 
+    def test_test3_migration_old_defaults(self):
+        # A test 2 live.txt holding shadow_match at test 2's default (OFF, written by the build, not picked)
+        # gets ON once; old numbers keep test 2's meaning (0 OFF -> default -> ON, 1 was ON); a value set
+        # after the marker stays, and a live.txt made by this build starts with the marker.
+        import sys, tempfile, pathlib
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings as L
+        cases = {'shadow_match = off': 'on', 'shadow_match = 0': 'on', 'shadow_match = 1': 'on',
+                 'shadow_match = experimental': 'on', 'shadow_match = on': 'on'}
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / 'live.txt'
+            for line, want in cases.items():
+                p.write_text('# old\nsharpen = 140\n' + line + '  # kept\n', encoding='utf-8')
+                first = L.migrate_073t3(p)
+                kept, _ = L.persisted(p)
+                self.assertEqual(kept['shadow_match'], want, line)
+                self.assertEqual(L.export_value('shadow_match', kept['shadow_match']), 0, line)
+                self.assertIn(L.MIGRATED_073T3, p.read_text(encoding='utf-8'))
+                self.assertIn('sharpen = 140', p.read_text(encoding='utf-8'))
+                if line.endswith(('= on',)):
+                    self.assertIsNone(first)
+                else:
+                    self.assertIn('shadow_match = on', first)
+                self.assertIsNone(L.migrate_073t3(p))  # once
+            # chosen after the marker: stays, numbers in the new order (1 = OFF)
+            for line, want in (('shadow_match = off', 'off'), ('shadow_match = 1', 1)):
+                p.write_text(L.HEADER + line + '\n', encoding='utf-8')
+                self.assertIsNone(L.migrate_073t3(p))
+                kept, _ = L.persisted(p)
+                self.assertEqual(L.export_value('shadow_match', kept['shadow_match']), 1, line)
+            # no live.txt: nothing made; a new one from the hologram carries the marker
+            q = pathlib.Path(d) / 'none.txt'
+            self.assertIsNone(L.migrate_073t3(q))
+            self.assertFalse(q.exists())
+            f = L.LiveFile(q, {})
+            self.assertTrue(f.adopt({'shadow_match': 'off'}))
+            self.assertIn(L.MIGRATED_073T3, q.read_text(encoding='utf-8'))
+            self.assertIsNone(L.migrate_073t3(q))
+            self.assertEqual(L.persisted(q)[0]['shadow_match'], 'off')
+            # unreadable values are left alone, nothing raises
+            p.write_text('shadow_match = 7\nshadow_match_x = off\n', encoding='utf-8')
+            self.assertIsNone(L.migrate_073t3(p))
+            self.assertIn('shadow_match = 7', p.read_text(encoding='utf-8'))
+        self.assertEqual(L.migrate_old_defaults('turn = 0\n', {'turn': (('snap', 'smooth'), 'snap', 'smooth')}),
+                         {'turn': 'smooth'})  # the helper is generic (any key: old names, old and new default)
+        r = src('tools/run_game_vr.py')
+        self.assertLess(r.index('migrate_386('), r.index('migrate_073t3('))
+        self.assertLess(r.index('migrate_073t3('), r.index("kept, _ = live_settings.persisted(ROOT/'live.txt')"))
+
     def test_exports_unique_in_the_probe(self):
         # CI caught 'SpidyShadowMatch': redefinition (game_xr.cpp's live setter and stereo_probe.cpp's
         # switch, both in spidy_stereo_probe): every exported name is defined once across the two.

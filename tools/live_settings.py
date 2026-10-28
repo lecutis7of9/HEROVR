@@ -912,6 +912,8 @@ class LiveFile:
 
 # Update 15: what the wrist hologram's pages set.
 HEADER = '# Live settings (tools/live_settings.py). Save to apply; the wrist hologram writes its own here.\n'
+# Version 0.0.73 test 3: HEADER gains the MIGRATED_073T3 marker below, so a live.txt made from now on starts
+# migrated (a SHADOW MATCH OFF the player picks in it is never reset).
 PERSISTED = ('web_width', 'web_speed', 'aa', 'history', 'reach', 'monitor', 'sharpen', 'reticles',
              'hud_height', 'hud_scale', 'hud_text', 'hud_theme', 'hud_text_color',
              'web_style', *(f'web_color_{style}' for style in WEB_STYLES),
@@ -1438,6 +1440,74 @@ def migrate_386(path):
         return None
     return ('live.txt: set once to the Version 0.0.2 fix: ' +
             ', '.join(f'{k} = {v}' for k, v in changed.items()) + ' (change it again and it stays).')
+
+
+# Version 0.0.73 test 3, once: a fix the player asked for ships ON, even over a live.txt an earlier build
+# wrote. A key at its OLD default (written before this marker: a test 2 live.txt can hold shadow_match = off
+# saved as the old default, never picked) moves to the new default; any other value keeps what it meant then.
+# A number is read with the OLD build's order (test 2's shadow_match 0 was OFF, 1 ON), so hand-typed numbers
+# keep their meaning; after the marker, numbers follow the new order. Every key a fix makes default is listed
+# here: {key: (old choice names in their old order, old default word, new default word)}.
+MIGRATE_073T3 = {'shadow_match': (('off', 'on'), 'off', 'on')}
+MIGRATE_073T3_ALIASES = {'shadow_match': {'experimental': 'on'}}
+MIGRATED_073T3 = ('# Version 0.0.73 test 3: settings at an older build\'s default moved to the new default once '
+                  '(SHADOW MATCH ON; migrated; a value chosen after this line stays, numbers follow the new order)')
+
+
+def migrate_old_defaults(text, moves, aliases=None):
+    """`moves` ({key: (old names in old order, old default, new default)}) applied to live.txt `text`
+    written before the marker: {key: word} to write back. A value at the old default (word or old number)
+    becomes the new default; another value is written as the word it meant then (an old number turned into
+    its old word); an unknown value is left alone. Pure, never raises."""
+    aliases = aliases or {}
+    changed = {}
+    for line in text.splitlines():
+        name, sep, value = line.split('#', 1)[0].partition('=')
+        name, value = name.strip().lower().lstrip('-'), value.strip().lower()
+        name = ALIASES.get(name, name)
+        if not sep or name not in moves:
+            continue
+        old_names, old_default, new_default = moves[name]
+        word = aliases.get(name, {}).get(value, value)
+        if word.isdigit():
+            word = old_names[int(word)] if int(word) < len(old_names) else None
+        if word is None or word not in old_names:
+            continue
+        target = new_default if word == old_default else word
+        if target != value:
+            changed[name] = target
+    return changed
+
+
+def migrate_073t3(path):
+    """Version 0.0.73 test 3, once: MIGRATE_073T3 applied to an existing live.txt (migrate_old_defaults),
+    then the MIGRATED_073T3 marker. No live.txt: nothing (the new defaults apply, HEADER carries the
+    marker). The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_073T3 in text:
+        return None
+    try:
+        changed = migrate_old_defaults(text, MIGRATE_073T3, MIGRATE_073T3_ALIASES)
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_073T3 + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to the 0.0.73 test 3 defaults: ' +
+            ', '.join(f'{k} = {v}' for k, v in changed.items()) + ' (change it again and it stays).')
+
+
+HEADER += MIGRATED_073T3 + '\n'
 
 
 def next_launch_supersample(path):

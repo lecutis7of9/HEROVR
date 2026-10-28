@@ -110,6 +110,7 @@ struct NativeEyeFrame {
     // How Spidy's marks look in this image (the tab's UI STYLE).
     UiStyle uiStyle{};
     bool flatScreen{};
+    bool bodyWanted{}; // Test build 10: BODY (or GAME BODY) wanted - a worn suit then shows its FULL BODY in its place
     // The game screen in stereo (eye command 3): the pair goes on the screen,
     // the left image for the left eye and the right one for the right.
     bool stereoScreen{};

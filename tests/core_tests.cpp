@@ -27883,9 +27883,15 @@ int main() {
               "BATMAN without his suit has no hands");
         // SUIT BODY: OFF is OFF for a hero with a game body; BATMAN keeps his suit's arms.
         check(sw::partOf(0) == sw::partArms && sw::partOf(1) == sw::partBody && sw::partOf(2) == sw::partOff, "partOf");
-        check(sw::firstPersonPart(sw::partOff, true) == sw::partOff && sw::firstPersonPart(sw::partOff, false) == sw::partArms &&
-                  sw::firstPersonPart(sw::partBody, false) == sw::partBody && sw::partBones(sw::partArms) != 0,
+        check(sw::firstPersonPart(sw::partOff, true, false) == sw::partOff && sw::firstPersonPart(sw::partOff, true, true) == sw::partOff &&
+                  sw::firstPersonPart(sw::partOff, false, false) == sw::partArms &&
+                  sw::firstPersonPart(sw::partOff, false, true) == sw::partBody &&
+                  sw::firstPersonPart(sw::partArms, true, false) == sw::partArms &&
+                  sw::firstPersonPart(sw::partBody, false, false) == sw::partBody && sw::partBones(sw::partArms) != 0,
               "firstPersonPart");
+        // With BODY on, the suit replaces the whole game body: ARMS grows to FULL BODY (legs kept), every hero.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+            check(sw::firstPersonPart(sw::partArms, hero_modes::gameBodyShown(h), true) == sw::partBody, "the suit lost the legs");
         // BATMAN BODY: his DEFAULT ("THE GAME'S OWN", no model) wears his first unlocked suit with a model.
         hero072::SuitCatalog c;
         const auto all = [](const char*) { return true; };

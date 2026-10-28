@@ -8728,6 +8728,7 @@ DWORD WINAPI run(void*) {
                             eye_taa::shiftLens(f.left, f.right, f.down, f.up, aaShift[i][0], aaShift[i][1]);
                         }
                     saved.flatScreen = flatScreen;
+                    saved.bodyWanted = (values.body || strictBody) && !(strictBody && !strictVerified);
                     saved.uiStyle = values.uiStyle == 1 ? UiStyle::tech : UiStyle::comic;
                     saved.screenPose = screenPose;
                     saved.screenAspect = SpidyFlatAspect();
@@ -10206,9 +10207,9 @@ DWORD WINAPI run(void*) {
                                     t.standingEye = suitStanding;
                                     suit_wear::Skeleton live;
                                     suit_wear::BoneMove mv[suit_wear::bones];
-                                    // Test build 10: BATMAN (no game body) never OFF - his suit's arms at least.
+                                    // Test build 10: BODY on - the suit's FULL BODY in the game body's place; BATMAN never OFF.
                                     const uint32_t mask = suit_wear::partBones(suit_wear::firstPersonPart(
-                                        suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow())));
+                                        suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow()), saved->bodyWanted));
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
                                     suitWorn = (mask || mirrorOn.load()) && suit_wear::estimate(*suitRig, t, live) &&
                                                suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);

@@ -65,9 +65,13 @@ constexpr bool gameBodyDrawn(bool bodyWanted, bool heroHasGameBody, bool suitSho
 constexpr bool glovesShown(bool gameBodyOn, bool heroHasGameBody, bool flatScreen, bool bodyDrawn, bool suitShown) {
     return !flatScreen && !suitShown && (heroHasGameBody ? gameBodyOn && !bodyDrawn : true);
 }
-// SUIT BODY in first person: a hero with no game body (BATMAN) never has OFF - his suit's arms at least.
-constexpr uint32_t firstPersonPart(uint32_t part, bool heroHasGameBody) {
-    return !heroHasGameBody && part == partOff ? partArms : part;
+// SUIT BODY in first person. With BODY (or GAME BODY) wanted the suit stands in for the whole game body, so ARMS
+// grows to FULL BODY (the player keeps his legs, now the suit's). A hero with no game body (BATMAN) never has OFF:
+// his suit's arms at least (its full body with BODY wanted).
+constexpr uint32_t firstPersonPart(uint32_t part, bool heroHasGameBody, bool bodyWanted) {
+    if (part == partOff)
+        return heroHasGameBody ? partOff : bodyWanted ? partBody : partArms;
+    return bodyWanted ? partBody : part;
 }
 
 // A skeleton: its ends, the head's facing and up, each hand's back (unit; left, right), and the body's up.

@@ -956,7 +956,7 @@ constexpr SectionDef combatSections[] = {
 };
 constexpr SectionDef graphicsSections[] = {
     {"QUALITY", C::aa, C::sharpen, "", "", nullptr, -1,
-     {C::combatImage, C::aa, C::sharpen, C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::eyeAa, C::eyeTrail, C::history}},
+     {C::combatImage, C::combatImageStyle, C::aa, C::sharpen, C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::eyeAa, C::eyeTrail, C::history}},
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
      {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
     {"DISPLAY AND DETAIL", C::monitor, C::none, "WINDOW ", "", nullptr, -1,
@@ -4353,6 +4353,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatRepLog:
             case Control::combatVanPedals:
             case Control::combatImage:
+            case Control::combatImageStyle:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

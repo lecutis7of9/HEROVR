@@ -41,6 +41,7 @@
 #include "spidy/glove_overlay.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/roster_page.hpp"
+#include "spidy/hero_controls.hpp"
 #include <filesystem>
 #include "spidy/web_cocoon.hpp"
 #include "spidy/wall_stick.hpp"
@@ -29473,6 +29474,106 @@ int main() {
         const auto& o = combat38::optionInfo[combat38::flyPose];
         const std::string h = o.help;
         check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos, "its subtext");
+    });
+    test("0.0.73 test 2 BUTTON GUIDE (fix 23): every hero's controls on his page, the SUITS / CONTROLS tabs, B back", [] {
+        namespace rp = roster_page;
+        namespace hc = hero_controls;
+        using rp::Screen;
+        // Every hero has his own lines, short enough for one row, never empty.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            const hc::Guide& g = hc::guideOf(h);
+            check(g.count >= 4 && g.count <= hc::linesMost, "a hero's guide has too few or too many lines: " + std::to_string(h));
+            for (uint32_t i = 0; i < g.count; ++i) {
+                const std::string n = g.lines[i].name ? g.lines[i].name : "", w = g.lines[i].how ? g.lines[i].how : "";
+                check(!n.empty() && !w.empty() && n.size() <= hc::nameMost && w.size() <= hc::howMost,
+                      "a guide line is empty or too long: " + n + " / " + w);
+            }
+        }
+        check(&hc::guideOf(99) == &hc::guideOf(hero_modes::spiderMan), "an unknown hero did not fall back to SPIDER-MAN's guide");
+        // Heroes' own moves are where they belong.
+        auto has = [](uint32_t h, const char* name) {
+            const hc::Guide& g = hc::guideOf(h);
+            for (uint32_t i = 0; i < g.count; ++i)
+                if (std::string(g.lines[i].name) == name)
+                    return true;
+            return false;
+        };
+        check(has(hero_modes::spiderMan, "WEB SWING") && has(hero_modes::ironMan, "REPULSOR") && has(hero_modes::batman, "BATARANG") &&
+                  has(hero_modes::thor, "HAMMER") && has(hero_modes::punisher, "PISTOLS") && has(hero_modes::superman, "HEAT VISION") &&
+                  has(hero_modes::greenLantern, "RING BEAM") && has(hero_modes::captainAmerica, "SHIELD") &&
+                  has(hero_modes::hulk, "BIG JUMP") && has(hero_modes::wolverine, "CLAWS") && has(hero_modes::daredevil, "BATONS"),
+              "a hero's own move is missing from his guide");
+        check(!has(hero_modes::batman, "WEB SWING") && !has(hero_modes::hulk, "FLY"), "a move shown for a hero who has not got it");
+        // The tabs: on SUITS the CONTROLS tab presses (SUITS is lit), on CONTROLS the other way; no suit rows on CONTROLS.
+        hero072::SuitCatalog cat;
+        const rp::Snapshot snap = rp::snapshotOf(cat, false, false);
+        auto find = [](const rp::Button* bs, uint32_t n, int id) -> const rp::Button* {
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == id)
+                    return &bs[i];
+            return nullptr;
+        };
+        rp::Button hb[rp::buttonsMost], cb[rp::buttonsMost];
+        const uint32_t nh = rp::buttons(Screen::hero, hero_modes::batman, &snap, hb);
+        const uint32_t nc = rp::buttons(Screen::controls, hero_modes::batman, &snap, cb);
+        check(nh <= rp::buttonsMost && nc <= rp::buttonsMost && find(hb, nh, rp::row) && !find(cb, nc, rp::row), "the suit rows on the wrong tab");
+        const rp::Button* sT = find(hb, nh, rp::suitsTab);
+        const rp::Button* cT = find(hb, nh, rp::controlsTab);
+        check(sT && cT && !sT->enabled && cT->enabled && find(cb, nc, rp::suitsTab)->enabled && !find(cb, nc, rp::controlsTab)->enabled,
+              "the open tab presses, or the other does not");
+        check(find(cb, nc, rp::backButton) && find(cb, nc, rp::playButton) && find(cb, nc, rp::closeButton), "CONTROLS lost BACK, PLAY or CLOSE");
+        check(sT->x1 < cT->x0 && cT->x1 < .42f && sT->y0 > .325f, "the tabs overlap each other, CLOSE or the rows");
+        for (const int id : {static_cast<int>(rp::suitsTab), static_cast<int>(rp::controlsTab)})
+            check(rp::helpFor(Screen::hero, hero_modes::thor, id, &snap).find("No restart needed.") != std::string::npos,
+                  "a tab's help has no restart note");
+        // The flow: the page on BATMAN's suits, CONTROLS pressed, B back to his suits, B again to the heroes.
+        rp::Page page;
+        check(page.open(Pose{}, 0), "the page did not open");
+        const Pose panel = page.panel();
+        auto aimAt = [&](rp::Input& in, const rp::Button& b, float trigger) {
+            const Vec3 c = panel.position + panel.orientation.rotate(Vec3{(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 0});
+            in.hands[1].tracked = true;
+            in.hands[1].aim = Pose{c + panel.orientation.rotate(Vec3{0, 0, .6f}), panel.orientation};
+            in.hands[1].grip = Pose{c + panel.orientation.rotate(Vec3{0, 0, .5f}), panel.orientation};
+            in.hands[1].trigger = trigger;
+        };
+        rp::Button gb[rp::buttonsMost];
+        const uint32_t ng = rp::buttons(Screen::grid, 0, &snap, gb);
+        const rp::Button* bat = find(gb, ng, rp::tile + static_cast<int>(hero_modes::batman));
+        check(bat != nullptr, "no BATMAN tile");
+        rp::Input in;
+        double t = .5;
+        auto press = [&](const rp::Button& b) {
+            in.seconds = t, aimAt(in, b, 0), page.update(in);
+            in.seconds = t + .1, aimAt(in, b, 1), page.update(in);
+            in.seconds = t + .2, aimAt(in, b, 0), page.update(in);
+            t += .3;
+        };
+        press(*bat);
+        check(page.screen() == Screen::hero && page.hero() == hero_modes::batman, "BATMAN's page did not open");
+        press(*cT);
+        check(page.screen() == Screen::controls && page.hero() == hero_modes::batman, "CONTROLS did not open");
+        rp::Input none;
+        none.seconds = t, none.hands[0].b = true, page.update(none);
+        none.seconds = t + .1, none.hands[0].b = false, page.update(none);
+        check(page.screen() == Screen::hero, "B on CONTROLS did not go back to the suits");
+        t += .3;
+        press(*cT);
+        press(*find(cb, nc, rp::suitsTab));
+        check(page.screen() == Screen::hero, "the SUITS tab did not go back");
+        press(*cT);
+        press(*find(cb, nc, rp::backButton));
+        check(page.screen() == Screen::grid, "BACK on CONTROLS did not go to the heroes");
+        // Drawn: the guide's lines on CONTROLS, more than the suits page (the rows), never a crash on any hero.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            rp::View v;
+            v.opacity = 1, v.hero = h;
+            std::vector<Vertex> a, b;
+            rp::Cache ca, cc;
+            v.screen = Screen::hero, rp::append(a, nullptr, v, ca, nullptr, &snap);
+            v.screen = Screen::controls, rp::append(b, nullptr, v, cc, nullptr, &snap);
+            check(!a.empty() && !b.empty() && a.size() != b.size(), "a hero's CONTROLS tab drew nothing new: " + std::to_string(h));
+        }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

@@ -65,9 +65,11 @@ inline constexpr float triggerOn = .75f, triggerOff = .35f, armSeconds = .4f, fa
 // 0.0.73 fix 1 (ROSTER FLICKER): a lit button stays lit within stickySlack of it, or for hoverHoldSeconds
 // after the laser leaves it (across a gap between tiles).
 inline constexpr float stickySlack = .02f, hoverHoldSeconds = .15f;
-enum class Screen : uint8_t { closed, grid, hero };
+// 0.0.73 test 2 BUTTON GUIDE (fix 23): controls is the hero's page with its CONTROLS tab open
+// (hero_controls.hpp) in place of his suits; B goes back to SUITS, BACK to the heroes.
+enum class Screen : uint8_t { closed, grid, hero, controls };
 // What can be pressed: the tiles, CLOSE, BACK, PLAY AS, and suit row i (row + i).
-enum Id : int { none = -1, tile = 0, closeButton = 20, backButton = 21, playButton = 22, row = 30 };
+enum Id : int { none = -1, tile = 0, closeButton = 20, backButton = 21, playButton = 22, suitsTab = 23, controlsTab = 24, row = 30 };
 struct Button {
     int id = none;
     float x0{}, y0{}, x1{}, y1{}; // panel space, metres (x right, y up)

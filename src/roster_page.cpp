@@ -1,4 +1,5 @@
 #include "spidy/roster_page.hpp"
+#include "spidy/hero_controls.hpp"
 #include "spidy/overlay_text.hpp"
 #include "spidy/test_notice.hpp"
 
@@ -45,6 +46,8 @@ constexpr float gridX = -.58f, gridTop = .31f, cellW = .29f, cellH = .238f, tile
 constexpr float portX0 = -.58f, portX1 = -.25f, portY1 = .40f, portY0 = .07f;
 constexpr float playY0 = -.335f, playY1 = -.265f, backY0 = -.43f, backY1 = -.36f;
 constexpr float rowsX0 = -.21f, rowsX1 = .58f, rowsTop = .325f, rowsBottom = -.245f;
+// 0.0.73 test 2 (fix 23): the SUITS and CONTROLS tabs, in the title row left of CLOSE.
+constexpr float tabY0 = .338f, tabY1 = .405f, suitsX0 = -.21f, suitsX1 = .03f, controlsX0 = .05f, controlsX1 = .37f;
 float rowHeight(uint32_t n) {
     return std::min(.095f, (rowsTop - rowsBottom) / static_cast<float>(std::max(1u, n)));
 }
@@ -149,7 +152,9 @@ uint32_t buttons(Screen screen, uint32_t hero, const Snapshot* s, Button (&out)[
     hero = std::min(hero, heroes - 1);
     out[n++] = Button{playButton, portX0, playY0, portX1, playY1, true};
     out[n++] = Button{backButton, portX0, backY0, portX1, backY1, true};
-    if (s) {
+    out[n++] = Button{suitsTab, suitsX0, tabY0, suitsX1, tabY1, screen == Screen::controls};
+    out[n++] = Button{controlsTab, controlsX0, tabY0, controlsX1, tabY1, screen == Screen::hero};
+    if (s && screen == Screen::hero) {
         const uint32_t rows = std::min(suitsMost, s->count[hero]);
         const float rh = rowHeight(rows);
         for (uint32_t i = 0; i < rows && n < buttonsMost; ++i) {
@@ -177,6 +182,12 @@ std::string helpFor(Screen screen, uint32_t hero, int id, const Snapshot* s) {
         return "Switches you to " + who + " right now, the same as his hero toggle on the wrist. No restart needed.";
     if (id == backButton)
         return "Back to every hero's picture (B or Y does the same). No restart needed.";
+    if (id == suitsTab)
+        return "Shows " + who + "'s suits to pick from. No restart needed.";
+    if (id == controlsTab)
+        return "Shows how to play " + who + ": every move and the button or gesture for it. No restart needed.";
+    if (screen == Screen::controls)
+        return "How to play " + who + ". B or Y goes back to his suits. No restart needed.";
     if (id >= row && s && static_cast<uint32_t>(id - row) < s->count[hero]) {
         const uint32_t i = static_cast<uint32_t>(id - row);
         const Row& r = s->rows[hero][i];
@@ -337,20 +348,26 @@ Actions Page::update(const Input& in) {
             act.closed = true;
             return act;
         }
-        if (screen_ == Screen::grid && pressed >= tile && pressed < tile + static_cast<int>(heroes)) {
+        if (pressed == suitsTab && screen_ == Screen::controls) {
+            screen_ = Screen::hero;
+        } else if (pressed == controlsTab && screen_ == Screen::hero) {
+            screen_ = Screen::controls;
+        } else if (screen_ == Screen::grid && pressed >= tile && pressed < tile + static_cast<int>(heroes)) {
             screen_ = Screen::hero;
             hero_ = static_cast<uint32_t>(pressed - tile);
         } else if (pressed == backButton) {
             screen_ = Screen::grid;
         } else if (pressed == playButton) {
             act.playAs = static_cast<int>(hero_);
-        } else if (pressed >= row) {
+        } else if (pressed >= row && screen_ == Screen::hero) {
             act.suitHero = static_cast<int>(hero_);
             act.suitIndex = pressed - row;
         }
         hover_ = none;
     } else if (back) {
-        if (screen_ == Screen::hero)
+        if (screen_ == Screen::controls)
+            screen_ = Screen::hero, hover_ = none;
+        else if (screen_ == Screen::hero)
             screen_ = Screen::grid, hover_ = none;
         else {
             close();
@@ -557,8 +574,38 @@ void build(Cache& c, const View& v, const Snapshot* s, const mesh_model::Mesh* r
         }
         if (const Button* x = byId(backButton))
             b.button(*x, "BACK", v.hover == backButton, true);
-        b.text(std::string("SUITS - ") + bio.name, rowsX0, .355f, .032f, gold, closeX0 - rowsX0 - .03f, false, .15f);
-        if (!s)
+        // 0.0.73 test 2 (fix 23): the SUITS and CONTROLS tabs; the open one is lit gold, the other a button.
+        const bool guide = v.screen == Screen::controls;
+        const auto tab = [&](int id, const char* label, bool open) {
+            const Button* x = byId(id);
+            if (!x)
+                return;
+            if (open) {
+                b.quad(x->x0, x->y0, x->x1, x->y1, .002f, gold * .85f, .97f);
+                b.text(label, (x->x0 + x->x1) / 2, (x->y0 + x->y1) / 2 - .014f, .028f, Vec3{.02f, .02f, .03f},
+                       x->x1 - x->x0 - .02f, true, .16f);
+            } else {
+                const bool hov = v.hover == id;
+                b.quad(x->x0, x->y0, x->x1, x->y1, .002f, hov ? Vec3{.16f, .2f, .32f} : Vec3{.06f, .08f, .14f}, .95f);
+                b.frame(x->x0, x->y0, x->x1, x->y1, .004f, .0025f, hov ? Vec3{1, 1, 1} : gold * .7f, 1.f);
+                b.text(label, (x->x0 + x->x1) / 2, (x->y0 + x->y1) / 2 - .014f, .028f, hov ? Vec3{1, 1, 1} : ink,
+                       x->x1 - x->x0 - .02f, true, .16f);
+            }
+        };
+        tab(suitsTab, "SUITS", !guide);
+        tab(controlsTab, "CONTROLS", guide);
+        if (guide) {
+            const hero_controls::Guide& g = hero_controls::guideOf(h);
+            const uint32_t lines = std::min(g.count, hero_controls::linesMost);
+            const float lh = std::min(.062f, (rowsTop - rowsBottom) / static_cast<float>(std::max(1u, lines)));
+            for (uint32_t i = 0; i < lines; ++i) {
+                const float top = rowsTop - static_cast<float>(i) * lh, y0 = top - lh + .006f;
+                b.quad(rowsX0, y0, rowsX1, top, .001f, i % 2 ? Vec3{.04f, .05f, .09f} : Vec3{.06f, .08f, .13f}, .9f);
+                const float ty = (y0 + top) / 2 - .011f;
+                b.text(g.lines[i].name, rowsX0 + .015f, ty, .022f, gold, .25f, false, .14f);
+                b.text(g.lines[i].how, rowsX0 + .28f, ty, .02f, ink, rowsX1 - rowsX0 - .295f);
+            }
+        } else if (!s)
             b.text("READING THE SUITS...", rowsX0, .25f, .024f, dim, rowsX1 - rowsX0);
         else {
             const uint32_t rows = std::min(suitsMost, s->count[h]);

@@ -45,9 +45,9 @@ SUITS = [
     dict(folder='Suit_ironMan_3', zip='iron_man_mark-7subsurf', drop=INNER),
     # build 9: the user's own downloads (chat attachments, named by their sha256)
     dict(folder='Suit_ironMan_4', zip='b0c9a19f', drop=INNER),
-    dict(folder='Suit_captainAmerica_1', zip='b3506424', drop=INNER, drop_flat_behind=True),
-    dict(folder='Suit_captainAmerica_2', zip='0b6963a5', drop=INNER + '|shield'),
-    dict(folder='Suit_daredevil_1', zip='9ca17e23', drop=INNER + '|fire'),
+    dict(folder='Suit_captainAmerica_1', zip='b3506424', drop=INNER, props='^group_0$'),
+    dict(folder='Suit_captainAmerica_2', zip='0b6963a5', drop=INNER, props='shield'),
+    dict(folder='Suit_daredevil_1', zip='9ca17e23', drop=INNER, props='fire'),
     dict(folder='Suit_daredevil_3', zip='16335a77', drop=INNER),
     dict(folder='Suit_hulk_2', zip='97935ec8', drop=INNER),
     dict(folder='Suit_wolverine_1', zip='ce04af29', drop=INNER),
@@ -97,10 +97,36 @@ def unpack(downloads, s):
     return dst, g
 
 
-def resolve_images(src, mats, notes):
-    """A material whose base colour the importer could not follow (a node in between) gets its texture by name."""
+def gltf_images(scene):
+    """-> {material name: its base colour image path} read straight from a .gltf (the importer shares one image
+    between materials and leaves the others without it: Superman's cape, hair and head)."""
+    out = {}
+    if not scene.lower().endswith('.gltf'):
+        return out
+    try:
+        g = json.load(open(scene, encoding='utf-8'))
+        for m in g.get('materials', []):
+            t = m.get('pbrMetallicRoughness', {}).get('baseColorTexture')
+            if t is not None:
+                uri = g['images'][g['textures'][t['index']]['source']].get('uri')
+                p = os.path.join(os.path.dirname(scene), uri) if uri else None
+                if p and os.path.exists(p):
+                    out[m.get('name', '')] = p
+    except Exception:
+        pass
+    return out
+
+
+def resolve_images(src, mats, notes, scene=''):
+    """A material whose base colour the importer could not follow (a node in between, or an image it shared
+    with another material) gets its texture from the glTF itself, else by name."""
+    direct = gltf_images(scene)
     for m in mats:
         if m['image']:
+            continue
+        if m['name'] in direct:
+            m['image'] = direct[m['name']]
+            notes.append('%s: its base colour from the glTF (%s)' % (m['name'], os.path.basename(m['image'])))
             continue
         core = re.sub(r'\W+', '', m['name'].lower())
         for p in glob.glob(os.path.join(src, 'textures', '*_baseColor.*')):
@@ -310,11 +336,17 @@ def convert(s, downloads, out_models, work):
     src_tris = len(tris)
     keep = np.ones(len(tris), bool)
     for i, m in enumerate(mats):
-        if re.search(s['drop'], m['name'], re.I):
+        share = float((mat == i).mean()) if len(mat) else 0
+        if re.search(s['drop'], m['name'], re.I) and share >= .09:  # named like an eye, big as a head or a cape
+            notes.append('kept %s (%d triangles: named like a hidden part, too big to be one)' % (m['name'], int((mat == i).sum())))
+        elif re.search(s['drop'], m['name'], re.I):
             keep &= mat != i
             notes.append('dropped %s (%d triangles, hidden inside the suit)' % (m['name'], int((mat == i).sum())))
+        elif s.get('props') and re.search(s['props'], m['name'], re.I):  # held / carried, not worn (Cap's shield)
+            keep &= mat != i
+            notes.append('dropped %s (%d triangles, a prop not worn: the game draws its own)' % (m['name'], int((mat == i).sum())))
     tris, uv, mat, sj, sw = tris[keep], uv[keep], mat[keep], sj[keep], sw[keep]
-    resolve_images(src, mats, notes)
+    resolve_images(src, mats, notes, scene)
     P = tris.reshape(-1, 3)
     lo, hi = P.min(0), P.max(0)
     scale = HEIGHT / (hi[1] - lo[1])

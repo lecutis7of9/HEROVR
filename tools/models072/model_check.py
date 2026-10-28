@@ -8,7 +8,8 @@ this is the overlay's pipeline in numpy (orthographic, z-buffered).
 
   python3 tools/models072/model_check.py [Models/] [sources/] [out/]
 Returns non-zero when a check fails (see check())."""
-import json, os, struct, subprocess, sys, tempfile, shutil
+import json
+import re, os, struct, subprocess, sys, tempfile, shutil
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -60,6 +61,10 @@ BUILT = {'Vehicle/PunisherVan/Interior': 'the cab built for the source\'s empty 
 # never under MIN_SHARE of its source.
 FLOORS = {'pictures': 96, 'weapon': 3000, 'prop': 3000, 'shield': 5000, 'vehicle': 20000, 'vehicle_part': 1500, 'body': 10000}
 MIN_SHARE = .30
+# Build 9 SUITS: a worn suit ships at most mesh_model::drawTriangles (collapse decimation, the shape kept), so a
+# suit from a dense download passes the share rule when it keeps (nearly) that whole budget; its shape is still
+# held to its source's (SHAPE_TOLERANCE) without the props the converter leaves out on purpose (Cap's shield).
+SUIT_TRIANGLES = 24000
 # Version 0.0.72: slots not shipped on purpose (MODEL MISSING in game, no stand-in). None now: the hammers
 # and the van are the user's picks.
 AWAITING = {}
@@ -130,7 +135,7 @@ def load_source(folder):
                 img = np.asarray(im)
             except Exception:
                 img = None
-        mats.append(dict(factor=np.array(p.get('baseColorFactor', [1, 1, 1, 1]), np.float64), image=img,
+        mats.append(dict(name=m.get('name', ''), factor=np.array(p.get('baseColorFactor', [1, 1, 1, 1]), np.float64), image=img,
                          cutout=m.get('alphaMode', 'OPAQUE') != 'OPAQUE'))
     tris = np.concatenate([p['pos'] for p in parts])
     uv = np.concatenate([p['uv'] if p['uv'] is not None else np.zeros((len(p['pos']), 3, 2)) for p in parts])
@@ -301,8 +306,8 @@ def shape(tris):
     return e / e[0] if e[0] > 0 else e
 
 
-def check(slot, info, source_tris, kind, v, has_source_textures, source_shape=None):
-    """-> list of failure strings (empty: passes)."""
+def check(slot, info, source_tris, kind, v, has_source_textures, source_shape=None, cap=None):
+    """-> list of failure strings (empty: passes). cap: the most the game ships of this slot (the suits')."""
     fails = []
     if info.get('status') != 'LOADED':
         return ['%s: %s %s' % (slot, info.get('status'), info.get('error', ''))]
@@ -310,7 +315,7 @@ def check(slot, info, source_tris, kind, v, has_source_textures, source_shape=No
     floor = min(src, FLOORS[kind])
     if n < floor:
         fails.append('%s: %d triangles, under the %s floor %d' % (slot, n, kind, floor))
-    if n < MIN_SHARE * src:
+    if n < MIN_SHARE * src and not (cap and n >= .95 * min(src, cap)):
         fails.append('%s: %d triangles, under %d%% of the source %d' % (slot, n, MIN_SHARE * 100, src))
     if not info['hasUvs']:
         fails.append('%s: no UVs' % slot)
@@ -336,6 +341,16 @@ def check(slot, info, source_tris, kind, v, has_source_textures, source_shape=No
                 and not info['hasNormals']:
             fails.append('%s: flat per-triangle colour, no normals' % slot)
     return fails
+
+
+def suit_props(models):
+    """-> {slot: material names the suit converter left out (hidden inside, or a prop not worn)}."""
+    p = os.path.join(models, 'Suits', 'conversion-report.json')
+    out = {}
+    for r in (json.load(open(p)) if os.path.exists(p) else []):
+        out['Suits/' + r['folder']] = {re.match(r'dropped (\S+) \(', n).group(1) for n in r.get('notes', [])
+                                       if re.match(r'dropped (\S+) \(', n)}
+    return out
 
 
 def report_triangles(models):
@@ -380,6 +395,7 @@ def run(models=DEFAULT_MODELS, sources=DEFAULT_SOURCES, out=DEFAULT_OUT, dump=DU
         d, summary = run_dump(models, work, dump=dump)
         names = list(summary['slots'].keys())
         rep = report_triangles(models)
+        props = suit_props(models)
         table = dict(SOURCES)
         for k, (src, kind) in (extra or {}).items():
             table[k] = (src, kind)
@@ -427,8 +443,13 @@ def run(models=DEFAULT_MODELS, sources=DEFAULT_SOURCES, out=DEFAULT_OUT, dump=DU
             tris, uv, mat, mats = load_source(folder)
             src_tris = rep.get(slot, {}).get('source_triangles') or len(tris)
             has_tex = bool(rep.get(slot, {}).get('textures')) if slot in rep else any(m['image'] is not None for m in mats)
-            src_shape = None if slot in PART else shape(tris)
-            fails = check(slot, info, src_tris, kind, v, has_tex, src_shape)
+            worn = np.ones(len(tris), bool)
+            for k, m in enumerate(mats):
+                if m['name'] in props.get(slot, ()):
+                    worn &= mat != k
+            src_shape = None if slot in PART else shape(tris[worn])
+            fails = check(slot, info, src_tris, kind, v, has_tex, src_shape,
+                          cap=SUIT_TRIANGLES if slot.startswith('Suits/') else None)
             ours, _ = render_ours(v, layers) if len(v) else (np.zeros((SIZE, SIZE, 3)), None)
             source, _ = render_source(tris, uv, mat, mats)
             lines = ['%s triangles %d (source %d, floor %d, %s)  UVs %s  normals %s  textured %s  layers %d  images %d' % (

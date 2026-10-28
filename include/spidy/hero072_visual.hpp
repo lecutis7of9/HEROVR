@@ -137,7 +137,7 @@ inline float shockRing(float radius, float age, bool subtle) {
 }
 inline float shockAlpha(float age, bool subtle) { return (subtle ? .18f : .45f) * (1.f - std::clamp(age, 0.f, 1.f)); }
 namespace budget {
-inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1500, chain = 1700, fist = 1500,
+inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1500, chain = 1700, fist = 5400,
                         charge = 2600, ring = 200, hud = 9000;
 // RAGE BLOOD: drops are one soft bar each (54), pools a soft disc (10 segments) - drawn until full.
 inline constexpr size_t blood = 16000, spray = 2600, shock = 1200, hook = 1200, perch = 900, rope = 400;

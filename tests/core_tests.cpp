@@ -32,6 +32,7 @@
 #include "spidy/hero007_visual.hpp"
 #include "spidy/construct_fist.hpp"
 #include "spidy/thor_grip.hpp"
+#include "spidy/mirror_guard.hpp"
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
@@ -28096,6 +28097,37 @@ int main() {
         check(lastSpeed < spidy::hero_modes::batonBackSpeed * .8f, "it does not slow for the catch: " + std::to_string(lastSpeed));
         check(Baton::homeSpeed(0) < Baton::homeSpeed(5) && Baton::homeSpeed(5) == spidy::hero_modes::batonBackSpeed, "homeSpeed");
     });
+    test("Test build 10: MIRROR VIEW - the worn suit's mirror stays in budget: 45 Hz, then OFF with a note, OFF by default", [] {
+        namespace mg = spidy::mirror_guard;
+        check(!vr_mirror::Config{}.on, "the mirror is not OFF by default");
+        mg::Guard g;
+        for (int f = 0; f < 600; ++f) // a cheap mirror (0.9 ms): every frame, never off
+            check(!mg::step(g, .9f, 1 / 90.f) && !g.half, "a 0.9 ms mirror was slowed or turned off");
+        check(!mg::reuse(g), "a full-rate mirror reused a frame");
+        mg::Guard h;
+        bool off = false;
+        for (int f = 0; f < 600 && !off; ++f) // 2.5 ms: 45 Hz, still on
+            off = mg::step(h, mg::reuse(h) ? .3f : 2.5f, 1 / 90.f);
+        check(!off && h.half, "a 2.5 ms mirror did not go to 45 Hz, or turned off");
+        int reused = 0;
+        for (int f = 0; f < 10; ++f)
+            reused += mg::reuse(h), mg::step(h, mg::reuse(h) ? .3f : 2.5f, 1 / 90.f);
+        check(reused == 5, "45 Hz did not reuse every other frame");
+        mg::Guard k;
+        int frames = 0;
+        for (; frames < 2000 && !mg::step(k, 9.f, 1 / 90.f); ++frames) {
+        }
+        check(frames < 2000 && frames > 90 * mg::offSeconds, "a 9 ms mirror was not turned off after its seconds");
+        mg::Guard n;
+        for (int f = 0; f < 200; ++f)
+            check(!mg::step(n, f % 50 ? .8f : 40.f, 1 / 90.f), "lone hitches turned the mirror off");
+        check(!mg::step(n, NAN, NAN) && !mg::step(n, -1, 1), "a bad sample broke the guard");
+        // The wrist: the subtext one sentence that says no restart.
+        const std::string help = wrist_hud::helpText(wrist_hud::Control::mirror);
+        check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1 && help.find("suit you wear") != std::string::npos &&
+                  help.find("no restart") != std::string::npos,
+              "the MIRROR subtext");
+    });
     test("Test build 10: a 3D punch glove; Thor's hammer in the fist, a smooth aimed throw; batons at an escrima stick's size", [] {
         using namespace spidy;
         // THE PUNCH GLOVE: a real solid fist (smooth normals), not the flat bars of builds 3-9.
@@ -28115,12 +28147,12 @@ int main() {
             const Vec3 d = hi - lo;
             check(d.x > .07f && d.y > .07f && d.z > .07f && d.x < fs.x * .51f + .01f, "the drawn fist not 3D or not at half scale");
         }
-        // THE HAMMER IN THE FIST: the grip pose facing ahead (-Z forward): the handle along the fist's tube (10 deg off
-        // toward the forearm), the hand 13 cm up it, a face square to it.
+        // THE HAMMER IN THE FIST: the grip pose facing ahead (-Z forward): the handle along the fist's tube (the
+        // controller's handle), the hand 13 cm up it, a face square to it.
         Pose g{{.25f, 1.2f, -.3f}, {}};
         const auto h = thor_grip::held(g, ControllerKind::touch);
         check(h.ok, "held from a good pose");
-        check(dot(h.handle, Vec3{0, 0, -1}) > .98f && dot(h.handle, Vec3{0, 0, -1}) < .99f && h.handle.y < 0, "the handle not along the tube");
+        check(dot(h.handle, Vec3{0, 0, -1}) > .999f, "the handle not along the controller grip's tube");
         check(length(h.at + h.handle * thor_grip::gripAlong - g.position) < 1e-4f, "the palm not 13 cm up the handle");
         check(std::abs(dot(h.face, h.handle)) < 1e-3f && std::abs(length(h.face) - 1) < 1e-3f, "the face not square to the handle");
         // The grip pitched up 90 degrees: the head straight up.

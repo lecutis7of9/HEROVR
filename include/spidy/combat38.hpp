@@ -186,7 +186,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      3, {"38.2", "GAME DEFAULT", "CUSTOM", nullptr}},
     {"grab_web", "GRAB WEB", "GRAB", "Grip toward an enemy to web him, pull back to yank him, no restart.", 3,
      {"ASSIST", "EXACT", "OFF", nullptr}},
-    {"mirror_look", "MIRROR LOOK", "MIRROR", "SUIT: a Spider-Man on your pose; FIGURE is the older look, no restart.", 2,
+    {"mirror_look", "MIRROR LOOK", "MIRROR", "SUIT: your worn suit on your pose; FIGURE is the older look, no restart.", 2,
      {"SUIT", "FIGURE", nullptr, nullptr}},
     {"gadget_feel", "GADGET FEEL", "FEEL", "EASY: simpler, looser gadget moves with a buzz, no restart.", 2,
      {"EASY", "38.1", nullptr, nullptr}},
@@ -225,7 +225,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"OFF", "ON", nullptr, nullptr}},
     // 0.0.72 MIRROR VIEW (EXPERIMENTAL, merged from the private mirror test): OFF by default; ON (live.txt
     // "test") makes the view at the next start; it turns itself OFF on any problem (mirror_view::finished).
-    {"mirror_view", "MIRROR VIEW (EXPERIMENTAL)", "MIRRORCAM", "EXPERIMENTAL: a small picture of your suit, OFF on any problem, needs a restart.",
+    {"mirror_view", "MIRROR VIEW (EXPERIMENTAL)", "MIRRORCAM", "EXPERIMENTAL: the game's own Spider-Man image, not mod suits; needs a restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     // Version 0.0.5 (Update 38.9) HERO HEIGHT: the VR body k times the player (a Hulk skin stands
     // straight); live; 1.00X (0) the default, nothing changed.

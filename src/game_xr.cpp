@@ -3,6 +3,7 @@
 #define SPIDY_TEST_COMMIT "unknown"
 #endif
 #include "spidy/thor_grip.hpp"
+#include "spidy/mirror_guard.hpp"
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
 #include "spidy/baton_grip.hpp"
 #include "spidy/gun_grip.hpp"
@@ -1003,6 +1004,11 @@ std::atomic<bool> mirrorRecentreAsked{false};
 std::atomic<uint32_t> testAsked{0};
 std::atomic<uint32_t> slotTestPacked{0}, webBallPacked{0};
 std::atomic<uint32_t> mirrorMicros{0}; // the drawing's mean cost, for the holo
+// Test build 10 MIRROR VIEW (mirror_guard.hpp): the reflection at 45 Hz (the wrist's HALF), and when the
+// mirror turned itself OFF (GetTickCount64, 0 never) with its cost then (us; 0: it failed) for the wrist note.
+std::atomic<bool> mirrorHalfRate{false};
+std::atomic<uint64_t> mirrorAutoOffAtMs{0};
+std::atomic<uint32_t> mirrorAutoOffMicros{0};
 // Update 37: BLOOD SPLATTER (blood_splatter.hpp), intensity percent, 0 OFF (the default).
 std::atomic<uint32_t> bloodIntensity{0};
 // Update 38.5: EXTREME's VISOR DROPS (live.txt blood_visor), default OFF; nothing below EXTREME.
@@ -3584,7 +3590,7 @@ DWORD WINAPI run(void*) {
                                     const bool on = !mirrorOn.load();
                                     mirrorOn = on;
                                     if (on)
-                                        mirrorRecentreAsked = true;
+                                        mirrorRecentreAsked = true, mirrorAutoOffAtMs = 0; // ON again: the old note goes
                                 }
                                 if (result.blood) // Update 37: BLOOD SPLATTER, the next step (OFF -> ON -> BRUTAL -> EXTREME)
                                     bloodIntensity = blood_splatter::nextStep(bloodIntensity.load());
@@ -3656,6 +3662,7 @@ DWORD WINAPI run(void*) {
                                 if (result.mirrorRecentre) { // Update 37: RECENTRE MIRROR (shows it too)
                                     mirrorOn = true;
                                     mirrorRecentreAsked = true;
+                                    mirrorAutoOffAtMs = 0;
                                 }
                                 if (result.mirrorAnchor) // Update 37.2: MIRROR ANCHOR, PLAYSPACE <-> WORLD (placed again)
                                 {
@@ -3859,6 +3866,17 @@ DWORD WINAPI run(void*) {
                                     wristNote = "RESTART THE GAME TO RUN MIRROR VIEW TEST";
                                 if (wristNote.empty() && modelMissingMask.load())
                                     wristNote = modelMissingNote(modelMissingMask.load());
+                                // Test build 10 MIRROR VIEW: it turned itself OFF - the wrist says why (20 s).
+                                if (const uint64_t at = mirrorAutoOffAtMs.load();
+                                    wristNote.empty() && at && GetTickCount64() - at < mirror_guard::noteSeconds * 1000) {
+                                    char why[96];
+                                    if (const uint32_t us = mirrorAutoOffMicros.load())
+                                        std::snprintf(why, sizeof why, "MIRROR OFF: TOO SLOW (%.1f MS A FRAME), PRESS MIRROR TO RETRY",
+                                                      static_cast<double>(us) / 1000.0);
+                                    else
+                                        std::snprintf(why, sizeof why, "MIRROR OFF: IT FAILED, PRESS MIRROR TO RETRY");
+                                    wristNote = why;
+                                }
                                 if (wristNote.empty() && mirrorOffWhy && wristClock < mirrorOffNoteUntil &&
                                     mirrorOffWhy < mirror_view::whys) {
                                     wristNote = std::string("MIRROR TEST OFF: ") + mirror_view::whyNames[mirrorOffWhy];
@@ -8880,7 +8898,7 @@ DWORD WINAPI run(void*) {
                                 saved.batonGrip[i] = grip;
                                 saved.batonTip[i] = tip;
                                 saved.batonOn[i] = 1;
-                                saved.batonHeld[i] = b.inHandNow();
+                                saved.batonHeld[i] = b.inHandNow() && batonShaftOk[i]; // the hand at the shaft's third
                             }
                         }
                         // Version 0.0.7 BATON LOOK (MODEL: the converted batons, CLUB when they are missing).
@@ -10199,6 +10217,16 @@ DWORD WINAPI run(void*) {
                         // the model sink; any failure: nothing drawn, never a crash.
                         static suit_wear::Skinned suitSkinned;
                         static float suitStanding = 0, suitMean = 0;
+                        // Test build 10 MIRROR VIEW: the frame budget (mirror_guard.hpp) - at 45 Hz every other
+                        // frame reuses the last reflection (kept with the travel and suit it was drawn at).
+                        static mirror_guard::Guard mirrorGuard;
+                        static std::vector<Vertex> mirrorKept;
+                        static Vec3 mirrorKeptTravel{};
+                        static uint32_t mirrorKeptSlot = 0;
+                        if (!mirrorOn.load())
+                            mirrorGuard = {}, mirrorKept.clear(), mirrorHalfRate = false;
+                        const bool mirrorReuse = mirrorOn.load() && mirror_guard::reuse(mirrorGuard) && !mirrorKept.empty() &&
+                                                 mirrorKeptSlot == wornSuitSlot.load();
                         const mesh_model::Mesh* suitMesh = nullptr;
                         const suit_wear::Rig* suitRig = nullptr;
                         bool suitWorn = false;
@@ -10233,7 +10261,7 @@ DWORD WINAPI run(void*) {
                                     const uint32_t mask = suit_wear::partBones(suit_wear::firstPersonPart(
                                         suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow()), saved->bodyWanted));
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
-                                    suitWorn = (mask || mirrorOn.load()) && suit_wear::estimate(*suitRig, t, live) &&
+                                    suitWorn = (mask || (mirrorOn.load() && !mirrorReuse)) && suit_wear::estimate(*suitRig, t, live) &&
                                                suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);
                                     // Test build 10 ONE BODY: drawn, it stands in for the game's body (suitShownAtMs).
                                     if (suitWorn && mask &&
@@ -10310,7 +10338,18 @@ DWORD WINAPI run(void*) {
                                 }
                                 // Build 9 SUITS: the worn suit's whole model reflected (the frame drawn, not the FIGURE).
                                 mf.frameOnly = false;
-                                if (suitWorn && plane.valid && mirrorInSight) { // out of sight: the FIGURE (build 7's cost)
+                                if (mirrorReuse && plane.valid && mirrorInSight &&
+                                    modelVertices.size() + mirrorKept.size() <= hero007::modelSinkBudget) {
+                                    // 45 Hz: the last reflection, moved as the player moved (a WORLD mirror reflects the move).
+                                    Vec3 d = travel - mirrorKeptTravel;
+                                    if (mc.anchor == vr_mirror::world)
+                                        d = d - plane.normal * (2.f * dot(d, plane.normal));
+                                    const size_t before = modelVertices.size();
+                                    modelVertices.insert(modelVertices.end(), mirrorKept.begin(), mirrorKept.end());
+                                    for (size_t v = before; v < modelVertices.size(); ++v)
+                                        modelVertices[v].position += d;
+                                    mf.frameOnly = true;
+                                } else if (suitWorn && plane.valid && mirrorInSight) { // out of sight: the FIGURE (build 7's cost)
                                     const Vec3 n = plane.normal, c = plane.centre;
                                     const float s = plane.scale;
                                     float place[12];
@@ -10329,6 +10368,11 @@ DWORD WINAPI run(void*) {
                                     mf.frameOnly = suit_wear::draw(modelVertices, hero007::modelSinkBudget, *suitMesh, *suitRig, suitSkinned,
                                                                    suit_wear::allBones, place);
                                     suitWearVertices = static_cast<uint32_t>(modelVertices.size() - before);
+                                    if (mf.frameOnly && mirrorGuard.half) // kept for the next (reused) frame
+                                        mirrorKept.assign(modelVertices.begin() + static_cast<std::ptrdiff_t>(before), modelVertices.end()),
+                                            mirrorKeptTravel = travel, mirrorKeptSlot = wornSuitSlot.load();
+                                    else
+                                        mirrorKept.clear();
                                     const float us = std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - reflStart).count();
                                     suitMean += us * .02f;
                                 }
@@ -10339,6 +10383,20 @@ DWORD WINAPI run(void*) {
                                 mirrorMean = mirrorMean > 0 ? mirrorMean * .95f + ms * .05f : ms;
                                 mirrorPeak = std::max(mirrorPeak * .999f, ms);
                                 mirrorMicros = static_cast<uint32_t>(mirrorMean * 1000.f + .5f);
+                                // Test build 10 MIRROR VIEW: over budget - 45 Hz, then OFF with the wrist's note.
+                                {
+                                    static auto guardLast = std::chrono::steady_clock::now();
+                                    const auto guardNow = std::chrono::steady_clock::now();
+                                    const float dt = std::chrono::duration<float>(guardNow - guardLast).count();
+                                    guardLast = guardNow;
+                                    if (mirror_guard::step(mirrorGuard, ms, dt)) {
+                                        mirrorOn = false;
+                                        mirrorAutoOffMicros = std::max<uint32_t>(1, static_cast<uint32_t>(mirrorGuard.meanMs * 1000.f + .5f));
+                                        mirrorAutoOffAtMs = GetTickCount64();
+                                        game_prompts::note("Test build 10: the mirror was too slow and turned itself off");
+                                    }
+                                    mirrorHalfRate = mirrorGuard.half;
+                                }
                                 publish(SpidyMirrorData, [&](vr_mirror::Data& d) {
                                     d.on = 1;
                                     d.anchor = mc.anchor;
@@ -10356,6 +10414,8 @@ DWORD WINAPI run(void*) {
                                 // Never the flat screen, never a crash: the mirror turns itself off.
                                 mirrorOn = false;
                                 mirrorInView = mirrorInSight = false;
+                                mirrorAutoOffMicros = 0;
+                                mirrorAutoOffAtMs = GetTickCount64();
                                 game_prompts::note("Update 37: the mirror failed and turned itself off");
                             }
                         }
@@ -10679,7 +10739,8 @@ DWORD WINAPI run(void*) {
                                             hud.farShadows = SpidyFarShadowsNow(); // Update 35
                                             hud.eyeBloom = SpidyEyeBloomNow();     // Update 36
                                             hud.sharedLod = SpidySharedLodNow();   // Update 36
-                                            hud.mirror = (mirrorOn.load() ? 1u : 0u) |
+                                            hud.mirror = (mirrorOn.load() ? 1u : 0u) | (mirrorOn.load() && mirrorHalfRate.load() ? 2u : 0u) |
+                                                         (!mirrorOn.load() && mirrorAutoOffAtMs.load() ? 4u : 0u) |
                                                          std::min<uint32_t>(mirrorMicros.load(), 0xffffffu) << 8;
                                             hud.blood = bloodIntensity.load(); // Update 37
                                             hud.bloodVisor = bloodVisor.load(); // Update 38.5

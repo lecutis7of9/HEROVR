@@ -2091,9 +2091,9 @@ std::string eyeBloomValue(const View& view) {
 }
 std::string mirrorValue(const View& view) {
     if (!(view.mirror & 1))
-        return "OFF";
+        return view.mirror & 4 ? "AUTO OFF" : "OFF"; // Test build 10: it turned itself off (the note says why)
     char text[32];
-    std::snprintf(text, sizeof text, "ON %.2f MS", static_cast<double>(view.mirror >> 8) / 1000.0);
+    std::snprintf(text, sizeof text, view.mirror & 2 ? "45HZ %.2f MS" : "ON %.2f MS", static_cast<double>(view.mirror >> 8) / 1000.0);
     return text;
 }
 std::string worldLogValue(const View& view) {
@@ -3196,7 +3196,7 @@ const char* helpText(Control c) {
     case Control::sharedLod:
         return shared_lod::help;
     case Control::mirror:
-        return "Your body reflected in front of you, see-through; OFF costs nothing.";
+        return "Shows your body in the hero suit you wear; press again to close, no restart.";
     case Control::mirrorRecentre:
         return "Puts the mirror in front of where you face now; it then stays put when you look away.";
     case Control::worldLog:

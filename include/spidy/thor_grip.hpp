@@ -8,8 +8,8 @@
 //
 // Now from the controller's GRIP pose (OpenXR /input/grip/pose, see baton_grip.hpp): its -Z runs through the
 // curled fingers' tube from the little finger toward the thumb - the line a held hammer's handle takes.
-// The handle runs along that tube tilted handleOffTubeDeg toward the forearm (a hammer held ready, the
-// wrist cocked a little), the head UP past the thumb, the handle's end below the little finger; the hand
+// The handle runs along that tube (handleOffTubeDeg 0: exactly the controller handle's own line, so the
+// hammer's handle IS the controller's handle in the hand), the head UP past the thumb, the handle's end below the little finger; the hand
 // gripAlong up the handle from its end (every hammer's grip wrap or shaft above its pommel / strap:
 // BOOOOP 0-8 cm pommel, DEVILSEYE shaft from 0, LOVEANDTHUNDER wrap from -15 cm, FCCOOPER strap -4..4 cm,
 // conversion-report.json); a striking face toward the knuckles (along the forearm), the other face back.
@@ -17,7 +17,7 @@
 #include "spidy/baton_grip.hpp"
 
 namespace spidy::thor_grip {
-inline constexpr float handleOffTubeDeg = 10.f; // off the grip's -Z toward the forearm (-Y)
+inline constexpr float handleOffTubeDeg = 0.f; // off the grip's -Z toward the forearm (-Y): along it
 inline constexpr float gripAlong = .13f;        // m up the handle from its end to the palm's centre
 // The handle's way (end -> head) in the grip frame: the grip's -Y turned (90 - handleOffTubeDeg) toward -Z.
 inline Vec3 localHandle() { return baton_grip::localDirection(90.f - handleOffTubeDeg); }

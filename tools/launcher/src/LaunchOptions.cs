@@ -71,7 +71,7 @@ namespace Sm2VrLauncher
             Opt.Num("WEBS & MOVEMENT", "FlipSpeed", "FLIP SPEED", "Degrees a second at full tilt of the left stick.", 90, 480, 10, 180, "\u00B0/s"),
             // Comfort
             Opt.Num("COMFORT", "SnapTurn", "SNAP TURN", "Angle of each snap turn. 0 = off.", 0, 90, 5, 30, "\u00B0"),
-            Opt.Num("COMFORT", "SmoothTurn", "SMOOTH TURN", "Smooth turning speed (the default); set it to 0 to snap turn instead. No restart needed.", 0, 360, 10, 120, "\u00B0/s"),
+            Opt.Num("COMFORT", "SmoothTurn", "SMOOTH TURN", "Smooth turning speed, on by default; 0 snap turns instead, no restart.", 0, 360, 10, 120, "\u00B0/s"),
             Opt.Num("COMFORT", "Haptics", "VIBRATION", "Controller vibration strength.", 0, 100, 5, 100, "%"),
             Opt.Pick("COMFORT", "ScreenSize", "GAME SCREEN SIZE", "The screen for menus, cutscenes and flat mode.", new[] { "Small", "Medium", "Large" }, "Medium"),
             Opt.Pick("COMFORT", "ScreenDepth", "CUTSCENE 3D DEPTH", "Cutscene depth. Spider-Man 2 cutscenes stay flat for now: the HUD hook is not found yet.", new[] { "Off", "Low", "Medium", "High" }, "Medium"),
@@ -137,6 +137,13 @@ namespace Sm2VrLauncher
                         if (scriptParams != null) scriptParams.TryGetValue(o.Param, out scriptDefault);
                         bool same = scriptDefault != null && string.Equals(scriptDefault, v, StringComparison.OrdinalIgnoreCase);
                         if (o.AlwaysPass || !same) { args.Add("-" + o.Param); args.Add(Quote(v)); }
+                        // 0.0.73 fix 26: the script reads -SmoothTurn 0 alone as an older launcher's default (smooth), so
+                        // a player's own SMOOTH TURN off also says -SnapTurning.
+                        if (o.Param == "SmoothTurn" && v == "0" && (scriptParams == null || scriptParams.ContainsKey("SnapTurning")))
+                        {
+                            if (same) { args.Add("-" + o.Param); args.Add(Quote(v)); }
+                            args.Add("-SnapTurning");
+                        }
                         break;
                 }
             }

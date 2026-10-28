@@ -57,3 +57,29 @@ class Hero073(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class Hero073Test3SmoothTurn(unittest.TestCase):
+    """Fix 26: smooth turning is the default everywhere; snap stays one setting away (SMOOTH TURN 0)."""
+    def test_script_default_is_smooth(self):
+        p = src('tools/launch-game-vr.ps1')
+        self.assertIn('[ValidateRange(0,360)][int]$SmoothTurn=120,', p)
+        self.assertIn('[switch]$SnapTurning,', p)
+        self.assertIn('if($SmoothTurn -eq 0 -and -not $SnapTurning) { $SmoothTurn=120 }', p)
+        self.assertLess(p.index('$SmoothTurn=120 }'), p.index("'--smooth-turn',$SmoothTurn"))
+    @staticmethod
+    def script(smooth, snap):
+        # launch-game-vr.ps1's rule, as the session gets it (--smooth-turn).
+        if smooth == 0 and not snap: smooth = 120
+        return 0 if snap else smooth
+    def test_every_launcher_gets_smooth_unless_snap_was_picked(self):
+        self.assertEqual(self.script(120, False), 120)   # nothing passed (0.0.73 launcher, default)
+        self.assertEqual(self.script(0, False), 120)     # a 0.0.72 launcher's default 0
+        self.assertEqual(self.script(0, True), 0)        # SMOOTH TURN off in the 0.0.73 launcher
+        self.assertEqual(self.script(90, False), 90)
+    def test_launcher_and_session_defaults(self):
+        l = src('tools/launcher/src/LaunchOptions.cs')
+        self.assertRegex(l, r'Opt\.Num\("COMFORT", "SmoothTurn", "SMOOTH TURN", "[^".]*\.", 0, 360, 10, 120,')
+        self.assertIn('args.Add("-SnapTurning");', l)
+        self.assertIn('int smoothTurn = 120', src('include/spidy/vr_settings.hpp'))
+        self.assertRegex(src('tools/run_game_vr.py'), r"'--smooth-turn'[^\n]*default=120")
+

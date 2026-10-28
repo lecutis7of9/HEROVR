@@ -13,7 +13,8 @@ param(
     [ValidateRange(40,300)][int]$Weight=80,
     [ValidateRange(90,480)][int]$FlipSpeed=180,
     [ValidateRange(0,90)][int]$SnapTurn=30,
-    [ValidateRange(0,360)][int]$SmoothTurn=0,
+    [ValidateRange(0,360)][int]$SmoothTurn=120,  # 0.0.73 fix 26: smooth turning is the default
+    [switch]$SnapTurning,  # 0.0.73 fix 26: -SmoothTurn 0 snaps only with this (older launchers sent 0 as their default)
     [ValidateRange(0,100)][int]$Haptics=100,
     [ValidateSet('Small','Medium','Large')][string]$ScreenSize='Medium',
     [ValidateSet('Off','Small','Medium','Large')][string]$Hud='Medium',
@@ -381,7 +382,11 @@ if(-not $AttachOnly) { $captureArgs+=@('--auto-launch') }
 if($XrRuntime) { $captureArgs+=@('--xr-runtime',$XrRuntime) }
 if($CloseGame) { $captureArgs+=@('--close-game') }
 if($SnapTurn -ne 30) { Write-Host "Snap turn: $SnapTurn degrees (0: off)." }
-if($SmoothTurn -ne 0) { Write-Host "Smooth turn: $SmoothTurn degrees a second (replaces snap turning)." }
+# 0.0.73 fix 26: a launcher before 0.0.73 sent -SmoothTurn 0 as its own default, so 0 alone means "the default"
+# (smooth); a player who picks snap turning gets -SnapTurning from the 0.0.73 launcher (SMOOTH TURN off).
+if($SmoothTurn -eq 0 -and -not $SnapTurning) { $SmoothTurn=120 }
+if($SnapTurning) { $SmoothTurn=0; Write-Host "Snap turning (SMOOTH TURN off)." }
+elseif($SmoothTurn -ne 120) { Write-Host "Smooth turn: $SmoothTurn degrees a second (replaces snap turning)." }
 if($Weight -ne 80) { Write-Host "Weight: $Weight% of real gravity while webs fly you." }
 if($Haptics -ne 100) { Write-Host "Controller vibration: $Haptics%." }
 if($Hud -ne 'Medium') { Write-Host "HUD: $Hud." }

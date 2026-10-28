@@ -1,0 +1,77 @@
+HERO VR 0.0.73 - PRIVATE TEST BUILD 1 (commit 7e8ef60; not a release; do not share)
+Made by Agent Mulder. Model credits: payload\THIRD-PARTY-MODELS.md.
+
+INSTALL (2 steps - no copying by hand)
+1. Extract ALL 4 part zips (part1-install, part2-models, part3-models,
+   part4-models) to the SAME place, e.g. your Downloads folder:
+   right-click > Extract All > Extract. You get ONE folder,
+   HERO-VR-0.0.73-test1, with INSTALL-TEST-BUILD.bat in it.
+2. Close the game and the launcher, then double-click INSTALL-TEST-BUILD.bat.
+   It checks the download, lists your HERO VR mod folders (newest play first,
+   backup copies marked) and installs into the one you pick (Enter = [1]).
+   Every file it replaces is kept in that folder's _before-0.0.73-test.
+   Your settings (live.txt) and reports are not touched.
+
+HOW YOU KNOW THE TEST BUILD IS RUNNING
+- Launcher console, first line: "HERO VR 0.0.73 test 7e8ef60 (test build 1) - mod folder ..."
+- Wrist HUD bottom line: "TEST 1 7e8ef60".
+- The TEST NOTICE pops up after calibration.
+
+TO UNDO
+Copy <mod folder>\_before-0.0.73-test back over the mod folder, or use the
+launcher's Revert. Every new setting can be turned back on the wrist HUD.
+
+WHAT IS NEW IN TEST 1
+- PUNISHER VAN (EXPERIMENTAL, OFF by default; COMBAT > HERO PROFILES >
+  PUNISHER): tap X to summon it, grip the driver door handle to get in. You
+  now really drive: the van carries your body through the city. Hold the
+  wheel rim to steer, RT throttle, LT reverse, both triggers brake. You are
+  bulletproof inside. Grip the inside door handle (at a crawl) to get out;
+  you are walked out beside the driver door. If driving is not safe the van
+  parks where it is (the old parked van) - never a crash.
+  Sound: door slam + start-up once, then the engine loop (pitch and volume
+  follow the throttle); getting out fades the engine, then the door slams.
+- UNIVERSAL GRAPPLE: grip draws the grapple device, THEN the trigger fires.
+  A trigger pressed on the hologram/menus never fires it.
+  BATMAN: grip away from the pouches draws the grapple gun.
+  CAPTAIN AMERICA: has a grapple gun in the hand that is NOT the shield arm.
+  PUNISHER: the chest hook has its own zone (higher, narrower than the
+  shotgun's); grip at the chest draws it, trigger fires. No push gesture.
+  DAREDEVIL: tap the trigger to throw a baton, HOLD it to grapple along the
+  baton (from its tip).
+  Grappling an ENEMY reels you to about 2 ft of him.
+- CAPTAIN AMERICA: the thrown shield comes back to the forearm it left;
+  it goes on your back only when you reach back and grip. SUPER SPRINT:
+  pump your arms with the left stick pushed (COMBAT > CAP SPRINT).
+- DAREDEVIL: batons the right way round; a thrown baton has no rope - it
+  flies free and comes back.
+- Thrown props bounce off buildings, the floor and cars.
+- Holsters turn with your body.
+- WOLVERINE: the Jacket-and-Jeans suit's real claws are now the claws of
+  EVERY Wolverine suit, sliding out with the grip (never double claws).
+- Only SPIDER-MAN climbs walls. Wolverine CLAW CLIMB is OFF by default.
+- No web lines for heroes other than Spider-Man.
+- IRON MAN: the palm turns to the aim and blasts leave the palm, with a
+  visible repulsor beam.
+- MIRROR: shows your held and holstered props too.
+- Roster page flicker fix.
+- SMOOTH TURN is the default (set SMOOTH TURN to OFF for snap turning).
+
+KNOWN LIMITS IN TEST 1
+- A claw_climb=on or smooth_turn=0 already saved in your live.txt from
+  0.0.72 is kept (change it on the wrist).
+- Enemy reel pulls YOU to the enemy (pulling him to you is not hooked yet).
+- Props bounce on the way out; the return flight does not bounce.
+- Iron Man's palm pose shows while charging and just after a blast.
+- Spider-Man in the mirror is still the stylised figure (no real model).
+  Thor's hammer is not in the mirror yet.
+- Cap's sprint blocks jumping while it runs.
+- The roster flicker fix still needs your headset check.
+- Coming in TEST 2: far window flicker, street light flicker, desktop
+  shortcut, quality toggles, heroes in cutscenes, button guides, the new
+  calibration screen, flying heroes upright.
+
+IF SOMETHING GOES WRONG
+A missing or broken model shows MODEL MISSING and the feature turns itself
+off; the game keeps running in VR. Send the newest files in the mod
+folder's "reports" subfolder.

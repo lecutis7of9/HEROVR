@@ -950,7 +950,7 @@ constexpr SectionDef combatSections[] = {
       C::combatRopeStrength, C::combatWallStick}},
     {"BLOOD", C::blood, C::combatBloodLook, "", "", nullptr, -1, {C::blood, C::combatBloodLook, C::bloodVisor}},
     // Version 0.0.72 (TEST)
-    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroMenu, C::combatRepLog, C::combatHeroSuit, C::combatOwnSuit, C::combatSuitBody, C::combatPerkBranch,
+    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroMenu, C::combatRepLog, C::combatMpSoloTest, C::combatHeroSuit, C::combatOwnSuit, C::combatSuitBody, C::combatPerkBranch,
       C::combatUltimates}},
     {"FIRES, SHOVES AND FACTIONS", C::none, C::none, "", "", nullptr, -1, {C::combatFireDouse, C::combatNpcShove, C::combatFaction}},
 };
@@ -1130,7 +1130,11 @@ Layout build(int page, float k, int open) {
     // Build 5: which build runs, on the wrist (the console's first line says it too).
     {
         Item f = itemOf(Kind::footer);
+#ifdef SPIDY_TEST_TAG
+        f.text = SPIDY_TEST_TAG " " SPIDY_TEST_COMMIT " - HERO VR 0.0.73 test"; // 0.0.73 MP SOLO TEST: "MP SOLO <commit>"
+#else
         f.text = "TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - HERO VR 0.0.72 test"; // Test build 11
+#endif
         f.h = fittedHeight(f.text, footerHeight * k, .14f);
         f.v = c - f.h;
         c = f.v - .002f * k;
@@ -4352,6 +4356,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatHeroMenu:
             case Control::combatRepLog:
             case Control::combatVanPedals:
+            case Control::combatMpSoloTest:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

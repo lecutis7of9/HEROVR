@@ -20,9 +20,9 @@ on:
 permissions:
   contents: write
 
-# hero-0.0.73 (private TEST builds): its own group, no source check against a tag, never uploaded.
+# hero-0.0.73 and mp-solo-test (private TEST builds): their own group, no source check against a tag, never uploaded.
 concurrency:
-  group: prebuilt-${{ startsWith(github.ref_name, 'hero-0.0.73') && github.ref_name || inputs.tag }}
+  group: prebuilt-${{ (startsWith(github.ref_name, 'hero-0.0.73') || startsWith(github.ref_name, 'mp-solo-test')) && github.ref_name || inputs.tag }}
 
 defaults:
   run:
@@ -46,7 +46,7 @@ jobs:
           python-version: '3.12'
 
       - name: Check the mod's sources are the release's
-        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') }}
+        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'mp-solo-test') }}
         run: |
           $version = (Get-Content VERSION -TotalCount 1).Trim()
           if ("v$version" -ne $env:TAG) { throw "VERSION is $version, not $($env:TAG.TrimStart('v'))." }
@@ -146,7 +146,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'The new mod zip has no runnable Python of its own.' }
 
       - name: Check the release's current mod zip has a runnable Python
-        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') }}
+        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'mp-solo-test') }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -169,7 +169,7 @@ jobs:
           retention-days: 30
 
       - name: Upload to the release
-        if: ${{ inputs.upload && !startsWith(github.ref_name, 'hero-0.0.73') }}
+        if: ${{ inputs.upload && !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'mp-solo-test') }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

@@ -154,6 +154,8 @@ enum Option : uint32_t {
     repLog,
     // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (on: a trigger drives only while its hand grips the wheel) or CLASSIC (0.0.72)
     vanPedals,
+    // 0.0.73 MP SOLO TEST: a loopback ghost of you (or the MP Test Buddy) as PLAYER 2 over the UDP net code (ON) or not (OFF)
+    mpSoloTest,
     options
 };
 struct OptionInfo {
@@ -481,6 +483,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"van_pedals", "VAN PEDALS", "VPEDL", "WHEEL HAND: the wheel hand's trigger drives, the free hand fires, no restart.",
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
+    {"mp_solo_test", "MP SOLO TEST", "MPSOL", "ON shows you 3 m ahead as PLAYER 2 over the UDP loopback test, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }

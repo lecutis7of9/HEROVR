@@ -3859,7 +3859,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarWindows(void* percent) {
     return 0;
 }
 // 0.0.73 test 2 SHADOW MATCH: 0 off, 1 on; 4404 otherwise. Live; *fits / *skipped for the COMBAT record.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatch(void* on) {
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatchOn(void* on) {
     const auto value = reinterpret_cast<uintptr_t>(on);
     if (value > 1)
         return 4404;

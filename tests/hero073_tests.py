@@ -39,10 +39,21 @@ class Hero073(unittest.TestCase):
         self.assertNotIn('eyeShadows = 1', s)
         g = src('src/game_xr.cpp')
         self.assertIn('SpidyCullMarginDegrees(reinterpret_cast<void*>', g)
-        self.assertIn('SpidyShadowMatch(reinterpret_cast<void*>', g)
+        self.assertIn('SpidyShadowMatchOn(reinterpret_cast<void*>', g)
         ls = src('tools/live_settings.py')
         self.assertIn("'shadow_match': 'off'", ls)
         self.assertIn("'cull_margin': '10deg'", ls)
+
+    def test_exports_unique_in_the_probe(self):
+        # CI caught 'SpidyShadowMatch': redefinition (game_xr.cpp's live setter and stereo_probe.cpp's
+        # switch, both in spidy_stereo_probe): every exported name is defined once across the two.
+        import re
+        names = {}
+        for f in ('src/game_xr.cpp', 'src/stereo_probe.cpp'):
+            for n in set(re.findall(r'__declspec\(dllexport\)[^(;{]*?\b(Spidy\w+)\s*\(', src(f))):
+                names.setdefault(n, []).append(f)
+        twice = {n: fs for n, fs in names.items() if len(fs) > 1}
+        self.assertEqual(twice, {})
 
 if __name__ == '__main__':
     unittest.main()

@@ -602,7 +602,7 @@ uint32_t SpidyImpostorReachNow();
 // percent of the game's, and its counts (calls, writes, the game's metres, ours).
 DWORD WINAPI SpidyFarWindows(void* percent);
 DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
-DWORD WINAPI SpidyShadowMatch(void* on);
+DWORD WINAPI SpidyShadowMatchOn(void* on);
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
 void SpidyMirrorViewWant(uint32_t on);
@@ -10592,7 +10592,7 @@ DWORD WINAPI run(void*) {
                             if (const uint32_t matchWant = c38(combat38::shadowMatch) == 1 ? 1u : 0u;
                                 matchWant != shadowMatchApplied) {
                                 shadowMatchApplied = matchWant;
-                                SpidyShadowMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
+                                SpidyShadowMatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
                             }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)

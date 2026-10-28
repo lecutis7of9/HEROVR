@@ -145,6 +145,8 @@ target_link_libraries(spidy_tests PRIVATE spidy_core)
 # Version 0.0.72 MODEL CHECK: dumps what the overlay gets of every shipped model (tests/hero072_models_tests.py).
 add_executable(spidy_model_dump tools/models072/model_dump.cpp src/sfx_quiet.cpp)
 target_link_libraries(spidy_model_dump PRIVATE spidy_core)
+add_executable(spidy_suit_bench tools/suits/suit_bench.cpp src/sfx_quiet.cpp)
+target_link_libraries(spidy_suit_bench PRIVATE spidy_core)
 if(WIN32)
   # The game target scan's class rules, tried on the test's own classes.
   target_sources(spidy_tests PRIVATE src/game_targets.cpp)

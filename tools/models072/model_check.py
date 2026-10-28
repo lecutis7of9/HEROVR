@@ -313,6 +313,8 @@ def check(slot, info, source_tris, kind, v, has_source_textures, source_shape=No
         return ['%s: %s %s' % (slot, info.get('status'), info.get('error', ''))]
     n, src = info['triangles'], source_tris
     floor = min(src, FLOORS[kind])
+    if cap:  # a suit: the converter drops the source's degenerate / doubled faces (hulk_2 has one)
+        floor = min(int(.99 * src), FLOORS[kind])
     if n < floor:
         fails.append('%s: %d triangles, under the %s floor %d' % (slot, n, kind, floor))
     if n < MIN_SHARE * src and not (cap and n >= .95 * min(src, cap)):

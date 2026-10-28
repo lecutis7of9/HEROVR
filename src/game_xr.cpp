@@ -12594,7 +12594,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyPose(void* v) { return set
 // 0.0.73 test 3 WEAPON COLLISION (prop_bounce.hpp): thrown and held weapons meet walls, cars and the ground, ON (live.txt weapon_collision).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeaponCollision(void* v) { return setHero007(v, combat38::weaponCollision, 5442); }
 // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen ON or OFF (live.txt van_screen).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanScreen(void* v) { return setHero007(v, combat38::vanScreen, 5442); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanScreen(void* v) { return setHero007(v, combat38::vanScreen, 5445); }
 // 0.0.73 test 3 PALM BLAST: IRON MAN fires out of the open palm (PALM, on) or along the hand (AIM, fix 15) (live.txt palm_blast).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPalmBlast(void* v) { return setHero007(v, combat38::palmBlast, 5444); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {

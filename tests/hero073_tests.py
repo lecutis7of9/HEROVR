@@ -248,3 +248,22 @@ namespace Sm2VrLauncher { static class MigrationTest {
         self.assertIn('ALL PASS', r.stdout)
         self.assertEqual(r.stdout.count('PASS '), 8)
         self.assertTrue(os.path.isfile(os.path.join(d, 'launcher-data', 'settings.ini')))   # portable: never the user's own
+
+class Hero073Test3ExportCodes(unittest.TestCase):
+    """0.0.73 test 3: every setting export refuses with its own code (VAN SCREEN shared WEAPON COLLISION's 5442)."""
+    def test_every_export_code_is_unique(self):
+        s = src('src/game_xr.cpp')
+        starts = list(re.finditer(r'extern "C" __declspec\(dllexport\) DWORD WINAPI (\w+)\(', s))
+        self.assertGreater(len(starts), 200)
+        uses = {}
+        for i, m in enumerate(starts):
+            body = s[m.end():starts[i + 1].start() if i + 1 < len(starts) else len(s)]
+            first = body.split('\n')[0]
+            if '{ return' in first: body = first
+            else:
+                k = re.search(r'\n\}', body)
+                if k: body = body[:k.start()]
+            for c in set(re.findall(r'\b(5\d{3})\b', body)): uses.setdefault(c, []).append(m.group(1))
+        self.assertEqual({c: f for c, f in uses.items() if len(f) > 1}, {})
+        self.assertEqual(uses.get('5442'), ['SpidyWeaponCollision'])
+        self.assertEqual(uses.get('5445'), ['SpidyVanScreen'])

@@ -3596,6 +3596,7 @@ DWORD WINAPI run(void*) {
                                 in.shadowDistanceOff = !shadow_distance::sliderMoves(native_shadow_distance::now());
                                 // 0.0.73 test 3 HOLO ROSTER: HERO MENU 0 HOLO TILES (the default), 1 CLASSIC (the popup).
                                 in.heroMenuClassic = c38(combat38::heroMenu) == 1;
+                                in.heroTiles = !in.heroMenuClassic; // 0.0.73 test 4: POWERS is the tiles
                                 const auto result = wristMenu.update(in, wristShown);
                                 // Update 33: SHADOW DISTANCE follows the pointer while held; the
                                 // search's thread is asked once it is let go (it tests, then keeps
@@ -11542,6 +11543,7 @@ DWORD WINAPI run(void*) {
                                     hud.page = wristMenu.page();
                                     hud.scroll = wristMenu.scroll();
                                     hud.roster = wristMenu.roster(); // 0.0.73 test 3 HOLO ROSTER (closed: the page)
+                                    hud.heroTiles = c38(combat38::heroMenu) != 1; // 0.0.73 test 4: never the old list
                                     // 0.0.73 test 3 PORTRAITS: the tiles' portraits, the old popup's (Models\Roster),
                                     // into the textured pass; none (no textures, no Roster): the initials discs.
                                     static thread_local roster_page::Picture holoPictures[roster_page::pictureCount];
@@ -11717,6 +11719,7 @@ DWORD WINAPI run(void*) {
                                         // 0.0.73 test 3: the heroes on it (their hover, screen, portraits in the
                                         // textured pass) are not in the key: rebuilt every frame while they show.
                                         const bool reuse = holoReuseOn.load() && hud.roster.screen == holo_roster::Screen::closed &&
+                                                           !(hud.heroTiles && hud.page == wrist_hud::powersPage) &&
                                                            holoReuse.mayReuse(key, f);
                                         if (reuse) {
                                             holoReuse.replay(translucent, f);

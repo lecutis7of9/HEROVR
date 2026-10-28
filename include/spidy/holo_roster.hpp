@@ -10,6 +10,10 @@
 //                 suits, picked the same way: IN USE / UNLOCKED / LOCKED / MODEL MISSING) and STATS (only
 //                 what the mod really keeps: his rep, level and rank, and the REP LOG's counts), whose
 //                 REP LOG button opens the log with only his entries
+//   SETTINGS      (0.0.73 test 4, the user: "it should just be like the tiles with subpages not all the
+//                 dropdowns"): the hero's own settings (the old POWERS page's dropdown rows) a short page at a
+//                 time, then EVERY HERO (INVINCIBLE and FLYING); PREV / NEXT page them. wrist_hud lays out and
+//                 works the rows (its own controls) and tells the roster how many pages there are.
 //   REP           (the user, 2:13 PM) the rep meter - the played hero's level, title and step, the way to the
 //                 next level - and the log (rep_log.hpp), scrolled with the stick
 // HERO MENU (combat38::heroMenu) CLASSIC brings the old big ROSTER panel (roster_page.hpp) back instead.
@@ -37,7 +41,7 @@ inline constexpr uint32_t dcHeroes[dcCount] = {hero_modes::batman, hero_modes::s
 uint32_t groupOf(uint32_t hero);
 
 enum class Screen : uint8_t { closed, grid, hero, rep };
-enum class Tab : uint8_t { controls, outfits, stats };
+enum class Tab : uint8_t { controls, outfits, stats, settings };
 enum Id : int {
     none = -1,
     tabMarvel = 1,
@@ -53,6 +57,9 @@ enum Id : int {
     logFilter,   // REP: ALL HEROES <-> the filtered hero
     logNewer,
     logOlder,
+    subSettings,   // 0.0.73 test 4: the SETTINGS sub-tab
+    settingsPrev,  // its pages
+    settingsNext,
     tile = 20,   // + hero
     outfit = 40, // + suit row
 };
@@ -65,6 +72,11 @@ struct State {
     float logFirst{};                   // the log's first row shown (rows, fractional while scrolling)
     int hover = none;
     uint32_t presses{};
+    // 0.0.73 test 4 SETTINGS: the page shown and how many there are (wrist_hud's, set every update), and
+    // the help of the setting row pointed at (wrist_hud's static text; null: the roster's own help).
+    uint32_t settingsPage{};
+    uint32_t settingsPages = 1;
+    const char* settingHelp{};
 };
 // What the roster shows, as the game thread has it (publish / latest; tests pass their own).
 struct Data {
@@ -85,6 +97,8 @@ inline constexpr float left = -.084f, right = .084f, top = .093f, bottom = -.104
 inline constexpr float tabY0 = .080f, tabY1 = .093f;
 inline constexpr float logRowPitch = .0094f;
 inline constexpr uint32_t logRows = 11; // the 12th met NEWER / OLDER (seen in roster-holo-rep.png)
+// 0.0.73 test 4 SETTINGS: the band wrist_hud lays the setting rows in (above PREV / NEXT).
+inline constexpr float settingsTop = .047f, settingsBottom = -.068f;
 struct Button {
     int id = none;
     float u0{}, v0{}, u1{}, v1{};

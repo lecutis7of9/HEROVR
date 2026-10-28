@@ -798,6 +798,14 @@ struct Spot {
     bool visible = true;
 };
 Spot controlSpot(int page, Control, float scroll = 0, float text = 1);
+// 0.0.73 test 4 HERO SETTINGS: with the holo tiles the old POWERS list (a dropdown per hero) is gone and
+// its rows are on each hero's tile page, SETTINGS sub-tab: the hero's own rows (his old profile's but
+// its ON switch - PLAY AS is that), then EVERY HERO's (INVINCIBLE and FLYING), a short page at a time.
+uint32_t heroSettingsPages(uint32_t hero);
+std::vector<Control> heroSettingsRows(uint32_t hero, uint32_t page);
+bool heroSettingsEveryHero(uint32_t hero, uint32_t page); // the page is EVERY HERO's
+Control heroSettingAt(uint32_t hero, uint32_t page, float u, float v);
+Spot heroSettingSpot(uint32_t hero, uint32_t page, Control); // where to point to press it
 // Every piece drawn on a page's panel (titles, labels, tracks, buttons,
 // explanation lines, headings), as rectangles: none may overlap another.
 struct Area {
@@ -1016,6 +1024,9 @@ struct View {
     // ever), drawn from rosterData (tests, previews) or else holo_roster::latest.
     holo_roster::State roster{};
     const holo_roster::Data* rosterData{};
+    // 0.0.73 test 4: HERO MENU HOLO TILES (Menu::Input::heroTiles): POWERS shows the tiles (closed roster:
+    // the grid of the hero played), never the old dropdown list.
+    bool heroTiles{};
     // 0.0.73 test 3 PORTRAITS: the heroes' tiles show their portraits - the old popup's (the Roster model,
     // Models/Roster: roster_page::pictures, picture k hero k) - as textured quads into rosterImages (the
     // overlay's textured pass, depth-tested, drawn after the translucent one). rosterPictures: an array of
@@ -1091,6 +1102,9 @@ class Menu {
         // 0.0.73 test 3 HOLO ROSTER (fix 28): HERO MENU CLASSIC (combat38::heroMenu 1): the ROSTER row
         // asks for the old big popup (Result::heroRoster) instead of opening the heroes on the hologram.
         bool heroMenuClassic{};
+        // 0.0.73 test 4: HERO MENU HOLO TILES (the game: !heroMenuClassic): POWERS is the tiles - the
+        // roster opens on it and closes off it - and the old dropdown list is never shown.
+        bool heroTiles{};
         // The roster's data (tests); null: holo_roster::latest, as the game thread published it.
         const holo_roster::Data* rosterData{};
     };

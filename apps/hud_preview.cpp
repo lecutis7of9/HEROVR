@@ -204,7 +204,8 @@ int main(int argc, char** argv) {
     const std::string sheet = argc > 2 ? argv[2] : "";
     if (!sheet.empty() && sheet != "pages" && sheet != "scroll" && sheet != "themes" && sheet != "webstyle" &&
         sheet != "music" && sheet != "raimi" && sheet != "subtext" &&
-        sheet != "remap" && sheet != "v002" && sheet != "heroes" && sheet != "holo" && sheet != "v0062" && sheet != "roster") {
+        sheet != "remap" && sheet != "v002" && sheet != "heroes" && sheet != "holo" && sheet != "v0062" && sheet != "roster" &&
+        sheet != "rosterclean") {
         std::fprintf(stderr, "unknown sheet %s (pages, scroll, themes, webstyle, music or raimi)\n", sheet.c_str());
         return 2;
     }
@@ -217,7 +218,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "v0062 needs a page 0..%d\n", wrist_hud::pages - 1);
         return 2;
     }
-    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "roster" ? 7 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
+    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "roster" ? 7 : sheet == "rosterclean" ? 1 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
     Image image(size * cells, height); // Update 15: pages 2 and 3 in cells 2 and 3
     const Vec3 eye{0, 1.62f, 0};
     for (int cell = 0; cell < cells; ++cell) {
@@ -402,7 +403,7 @@ int main(int argc, char** argv) {
                 const auto spot = wrist_hud::controlSpot(view.page, view.hover, view.scroll);
                 pointAt(view, eye, spot.u, spot.v);
             }
-        } else if (sheet == "roster") {
+        } else if (sheet == "roster" || sheet == "rosterclean") {
             namespace hr = holo_roster;
             static hr::Data d = [] {
                 hr::Data x;
@@ -440,6 +441,33 @@ int main(int argc, char** argv) {
                 st.hover = hr::tile + static_cast<int>(hero_modes::thor);
             if (cell == 6)
                 st.filter = hero_modes::batman;
+            if (sheet == "rosterclean") {
+                // 0.0.73 test 4 (one cell): "grid" - HOLO TILES' POWERS, the roster not yet opened (never the
+                // old list); "hero" - PUNISHER's page; "settings [page]" - his SETTINGS sub-tab.
+                const std::string what = argc > 3 ? argv[3] : "grid";
+                const uint32_t pg = argc > 4 ? static_cast<uint32_t>(std::max(0, std::atoi(argv[4]))) : 0u;
+                const uint32_t who = hero_modes::punisher;
+                wrist_hud::setActiveHero(static_cast<int>(who));
+                view.heroTiles = true;
+                st = hr::State{};
+                if (what == "hero" || what == "settings") {
+                    st.screen = hr::Screen::hero;
+                    st.hero = who;
+                    st.group = hr::groupOf(who);
+                    st.tab = what == "settings" ? hr::Tab::settings : hr::Tab::controls;
+                    st.settingsPages = wrist_hud::heroSettingsPages(who);
+                    st.settingsPage = std::min(pg, st.settingsPages - 1);
+                    if (what == "settings") {
+                        const auto rows = wrist_hud::heroSettingsRows(who, st.settingsPage);
+                        if (rows.size() > 1) {
+                            view.hover = rows[1];
+                            st.settingHelp = wrist_hud::helpText(rows[1]);
+                        }
+                    } else {
+                        st.hover = hr::subSettings;
+                    }
+                }
+            }
             view.page = wrist_hud::powersPage;
             view.roster = st;
             view.rosterData = &d;

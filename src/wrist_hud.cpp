@@ -1549,6 +1549,137 @@ const Item* itemOf(const Layout& l, Control c) {
     return nullptr;
 }
 
+// 0.0.73 test 4 HERO SETTINGS (the user: "those are still part of the hero page and they should be gone it
+// should just be like the tiles with subpages not all the dropdowns its too much you know cluttered"): with
+// the holo tiles (HERO MENU HOLO TILES) the old POWERS list - a dropdown per hero - is gone; every row it
+// had lives on the hero's tile page, SETTINGS sub-tab, a short page at a time: first the hero's own rows
+// (his profile's, but its ON switch: PLAY AS is that), then EVERY HERO's (INVINCIBLE and FLYING), each
+// group starting a fresh page. HERO MENU CLASSIC keeps the old list as it was.
+constexpr float heroRowPitch = .0165f, heroRowH = .0135f, heroHeadingH = .0095f;
+constexpr float heroBoxU0 = .028f, heroBoxU1 = .074f;
+constexpr uint32_t heroPageUnits = 6; // a row 1, a slider 2
+constexpr Control everyHeroRows[] = {C::invincible,  C::flyMode,      C::combatSupersonic, C::combatSupersonicSpeed,
+                                     C::flyVignette, C::flyRoll,      C::flyRollSpeed,     C::flyAutoLevel,
+                                     C::combatFlyPose};
+struct HeroSettingsPage {
+    std::vector<Control> rows;
+    bool everyHero{};
+};
+// A hero's own rows: his old profile's, without its first (the hero's ON switch / PLAY AS SPIDER-MAN).
+std::vector<Control> heroOwnRows(uint32_t hero) {
+    std::vector<Control> out;
+    const SectionDef* def = nullptr;
+    for (int s = 0; s < sectionCount(powersPage); ++s)
+        if (sectionsOf(powersPage)[s].hero == static_cast<int>(hero))
+            def = &sectionsOf(powersPage)[s];
+    if (!def)
+        return out;
+    bool first = true;
+    for (const Control c : def->rows) {
+        if (c == Control::none)
+            break;
+        if (first) {
+            first = false;
+            continue;
+        }
+        out.push_back(c);
+    }
+    return out;
+}
+const std::vector<HeroSettingsPage>& heroPagesOf(uint32_t hero) {
+    thread_local std::array<std::vector<HeroSettingsPage>, hero_modes::heroes> cache;
+    thread_local std::array<bool, hero_modes::heroes> made{};
+    const uint32_t h = std::min<uint32_t>(hero, hero_modes::heroes - 1);
+    if (made[h])
+        return cache[h];
+    auto& pagesOut = cache[h];
+    const auto group = [&](const std::vector<Control>& rows, bool every) {
+        HeroSettingsPage pg;
+        pg.everyHero = every;
+        uint32_t units = 0;
+        for (const Control c : rows) {
+            const uint32_t u = isSliderRow(c) ? 2u : 1u;
+            if (units + u > heroPageUnits && !pg.rows.empty()) {
+                pagesOut.push_back(pg);
+                pg.rows.clear();
+                units = 0;
+            }
+            pg.rows.push_back(c);
+            units += u;
+        }
+        if (!pg.rows.empty())
+            pagesOut.push_back(pg);
+    };
+    group(heroOwnRows(h), false);
+    group(std::vector<Control>(std::begin(everyHeroRows), std::end(everyHeroRows)), true);
+    made[h] = true;
+    return pagesOut;
+}
+// The SETTINGS page's rows as Items (content() draws them): a heading, then a row each - its name at the
+// left, its value button at the right (a press steps it, as the old rows did); a slider its track under it.
+Layout heroSettingsLayout(uint32_t hero, uint32_t page) {
+    Layout l;
+    const auto& all = heroPagesOf(hero);
+    if (all.empty())
+        return l;
+    const HeroSettingsPage& pg = all[std::min<size_t>(page, all.size() - 1)];
+    float c = holo_roster::settingsTop;
+    {
+        Item h = itemOf(Kind::heading);
+        static const std::array<std::string, hero_modes::heroes> only = [] {
+            std::array<std::string, hero_modes::heroes> a;
+            for (uint32_t i = 0; i < hero_modes::heroes; ++i)
+                a[i] = std::string(hero_modes::heroNames[i]) + " ONLY";
+            return a;
+        }();
+        h.text = pg.everyHero ? "EVERY HERO: INVINCIBLE AND FLYING"
+                              : only[std::min<uint32_t>(hero, hero_modes::heroes - 1)].c_str();
+        h.track = c - .001f;
+        h.h = fittedHeight(h.text, .0040f, trackRight - trackLeft);
+        h.v = h.track - .0030f - h.h;
+        c -= heroHeadingH;
+        l.items.push_back(std::move(h));
+    }
+    for (const Control control : pg.rows) {
+        if (isSliderRow(control)) {
+            Item s = itemOf(Kind::slider, control);
+            s.text = labelOf(control);
+            s.numberH = fittedHeight(widestNumber(control), .0040f, .050f);
+            s.numberW = textWidth(widestNumber(control), s.numberH);
+            s.h = fittedHeight(s.text, .0040f, trackRight - trackLeft - s.numberW - .006f);
+            s.v = c - .002f - std::max(s.h, s.numberH);
+            s.track = s.v - .0085f;
+            c -= 2 * heroRowPitch;
+            l.items.push_back(std::move(s));
+        } else {
+            Item t = itemOf(Kind::toggle, control);
+            t.text = labelOf(control);
+            t.box = {control, heroBoxU0, c - .0015f - heroRowH, heroBoxU1, c - .0015f};
+            t.h = fittedHeight(t.text, .0040f, heroBoxU0 - .003f - trackLeft);
+            t.v = (t.box.v0 + t.box.v1) / 2 - t.h / 2;
+            c -= heroRowPitch;
+            l.items.push_back(std::move(t));
+        }
+    }
+    l.bottom = c;
+    return l;
+}
+// The setting row under (u, v) on that page (a toggle's box or its name; a slider's band), else none.
+Control heroSettingUnder(uint32_t hero, uint32_t page, float u, float v) {
+    if (!std::isfinite(u) || !std::isfinite(v))
+        return Control::none;
+    for (const Item& it : heroSettingsLayout(hero, page).items) {
+        if (it.kind == Kind::toggle) {
+            if (u >= trackLeft - .006f && u <= it.box.u1 && v >= it.box.v0 && v <= it.box.v1)
+                return it.control;
+        } else if (it.kind == Kind::slider) {
+            if (u >= trackLeft - .008f && u <= trackRight + .008f && v >= it.track - .0065f && v <= it.v + it.h + .001f)
+                return it.control;
+        }
+    }
+    return Control::none;
+}
+
 // Update 38.5: `shown`'s lines in `room`'s rows (the layout's), scrolled by
 // `scroll` lines: they slide up through the rows and are clipped to them
 // (clipBand), so nothing moves outside its rows and nothing pops. When more
@@ -2664,7 +2795,7 @@ void strip(const Painter& p, const View& view, int page) {
         p.triangle(c + d * .0060f, mid, c - d * .0040f, mid + .0060f, c - d * .0040f, mid - .0060f, color, .95f);
     }
     char label[48];
-    std::snprintf(label, sizeof label, "%d/%d %s", page + 1, pages, pageName(page));
+    std::snprintf(label, sizeof label, "%d/%d %s", page + 1, pages, view.heroTiles && page == powersPage ? "HEROES" : pageName(page)); // 0.0.73 test 4: the tiles
     // A refused setting's note takes the page's place for a while, in red.
     const std::string t = view.note.empty() ? std::string(label) : view.note;
     const float h = fittedHeight(t, .0046f, .084f);
@@ -2965,6 +3096,27 @@ Control helpAt(int page, float u, float v, float scroll, float text) {
             return it.control;
     }
     return Control::none;
+}
+uint32_t heroSettingsPages(uint32_t hero) { return static_cast<uint32_t>(std::max<size_t>(1, heroPagesOf(hero).size())); }
+std::vector<Control> heroSettingsRows(uint32_t hero, uint32_t page) {
+    const auto& all = heroPagesOf(hero);
+    return page < all.size() ? all[page].rows : std::vector<Control>{};
+}
+bool heroSettingsEveryHero(uint32_t hero, uint32_t page) {
+    const auto& all = heroPagesOf(hero);
+    return page < all.size() && all[page].everyHero;
+}
+Control heroSettingAt(uint32_t hero, uint32_t page, float u, float v) { return heroSettingUnder(hero, page, u, v); }
+Spot heroSettingSpot(uint32_t hero, uint32_t page, Control c) {
+    for (const Item& it : heroSettingsLayout(hero, page).items) {
+        if (it.control != c || c == Control::none)
+            continue;
+        if (it.kind == Kind::toggle)
+            return {true, (it.box.u0 + it.box.u1) / 2, (it.box.v0 + it.box.v1) / 2};
+        if (it.kind == Kind::slider)
+            return {true, (trackLeft + trackRight) / 2, it.track};
+    }
+    return {false, 0, 0, false};
 }
 Spot controlSpot(int page, Control c, float scroll, float text) {
     const int p = page >= 0 && page < pages ? page : 0;
@@ -3884,6 +4036,24 @@ void Menu::setScroll(int page, float scroll, float text) {
     const int p = page >= 0 && page < pages ? page : 0;
     scroll_[static_cast<size_t>(p)] = clampScroll(p, scroll, textFactor(text));
 }
+namespace {
+// 0.0.73 test 4 SETTINGS: a press on a hero's setting row asks what the old POWERS row asked.
+void pressHeroSetting(Control c, Menu::Result& r) {
+    switch (c) {
+    case Control::invincible: r.invincible = true; break;
+    case Control::flyMode: r.flyMode = true; break;
+    case Control::flyVignette: r.flyVignette = true; break;
+    case Control::flyRoll: r.flyRoll = true; break;
+    case Control::flyAutoLevel: r.flyAutoLevel = true; break;
+    case Control::symbiote: r.symbiote = true; break;
+    case Control::heroPlaySpider: r.heroSpider = true; break;
+    default:
+        if (combatOption(c) >= 0)
+            r.combat38 = combatOption(c);
+        break;
+    }
+}
+} // namespace
 Menu::Result Menu::update(const Input& in, Settings& settings) {
     Result r;
     const float t = std::isfinite(in.trigger) ? std::clamp(in.trigger, 0.f, 1.f) : 0.f;
@@ -3901,6 +4071,19 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
     const bool relaid = layoutSeen_ && in.layout != layout_;
     layout_ = in.layout;
     layoutSeen_ = true;
+    // 0.0.73 test 4 (the user: "it should just be like the tiles with subpages not all the dropdowns"):
+    // HERO MENU HOLO TILES: POWERS is the tiles - open on it, closed off it; CLASSIC keeps the old list.
+    const bool tiles = in.heroTiles && !in.heroMenuClassic;
+    if (roster_.isOpen() && tiles && page_ != powersPage) {
+        roster_.close();
+        r.rosterClosed = true;
+    } else if (!roster_.isOpen() && tiles && page_ == powersPage) {
+        roster_.open(in.hero >= 0 ? static_cast<uint32_t>(in.hero) : static_cast<uint32_t>(activeHero()));
+        hover_ = held_ = Control::none;
+        helpFor_ = Control::none;
+        drag_ = Drag::none;
+        closeList();
+    }
     // 0.0.73 test 3 HOLO ROSTER (fix 28): while the heroes are open on the hologram, the panel is theirs:
     // the pointer and a fresh pull work their tiles and tabs, the stick scrolls the REP log.
     if (roster_.isOpen()) {
@@ -3908,7 +4091,18 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             roster_.close();
             r.rosterClosed = true;
         }
-        hover_ = held_ = Control::none;
+        // 0.0.73 test 4 SETTINGS: a hero's setting rows are the menu's own controls, worked here; a
+        // slider held keeps following the pointer.
+        holo_roster::State& rs = roster_.state();
+        const bool settingsTab = rs.screen == holo_roster::Screen::hero && rs.tab == holo_roster::Tab::settings;
+        const bool sliding = settingsTab && claim_ && down && in.active && !relaid && dragged(held_);
+        const Control hoverWasRow = hover_;
+        hover_ = Control::none;
+        if (!sliding)
+            held_ = Control::none;
+        rs.settingsPages = rs.screen == holo_roster::Screen::hero ? heroSettingsPages(rs.hero) : 1u;
+        rs.settingsPage = std::min(rs.settingsPage, rs.settingsPages - 1);
+        rs.settingHelp = nullptr;
         helpFor_ = Control::none;
         drag_ = Drag::none;
         closeList();
@@ -3916,10 +4110,25 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             claim_ = false;
         const bool onIt = in.active && in.pointer.hit && std::isfinite(in.pointer.u) && std::isfinite(in.pointer.v) &&
                           std::abs(in.pointer.u) <= halfW && std::abs(in.pointer.v) <= halfH;
-        if (first && onIt)
+        const bool onStrip = tiles && in.active && in.pointer.hit && std::isfinite(in.pointer.u) &&
+                             std::isfinite(in.pointer.v) &&
+                             (previousBox.in(in.pointer.u, in.pointer.v) || nextBox.in(in.pointer.u, in.pointer.v));
+        if (first && (onIt || onStrip))
             claim_ = true;
         if (!roster_.isOpen() || !in.active)
             return r;
+        // The arrow strip under the panel: off POWERS (the tiles close).
+        if (onStrip && claim_ && press && !relaid) {
+            setPage(previousBox.in(in.pointer.u, in.pointer.v) ? (page_ + pages - 1) % pages : (page_ + 1) % pages);
+            roster_.close();
+            r.rosterClosed = r.pressed = true;
+            hover_ = held_ = Control::none;
+            return r;
+        }
+        Control row = settingsTab && onIt && !relaid && !sliding
+                           ? heroSettingAt(rs.hero, rs.settingsPage, in.pointer.u, in.pointer.v)
+                           : Control::none;
+        const bool rowOff = row != Control::none && (bit(row) & in.disabled) != 0;
         const holo_roster::Data* d = in.rosterData;
         if (!d) {
             if (holo_roster::version() != rosterVersion_)
@@ -3931,15 +4140,41 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             shown.playing = static_cast<uint32_t>(in.hero);
         const int hoverWas = roster_.state().hover;
         const float stick = std::isfinite(in.stick) && std::abs(in.stick) > stickDead ? in.stick : 0.f;
-        const holo_roster::Actions a =
-            roster_.update(onIt && !relaid, in.pointer.u, in.pointer.v, claim_ && press && !relaid, stick, in.seconds, shown);
+        const bool onRow = row != Control::none || sliding;
+        const holo_roster::Actions a = roster_.update(onIt && !relaid && !onRow, in.pointer.u, in.pointer.v,
+                                                      claim_ && press && !relaid && !onRow, stick, in.seconds, shown);
         r.stick = onIt && stick != 0;
         r.hovered = roster_.state().hover != holo_roster::none && roster_.state().hover != hoverWas;
-        r.pressed = claim_ && press && hoverWas != holo_roster::none;
+        r.pressed = claim_ && press && hoverWas != holo_roster::none && !onRow;
         r.rosterPlayAs = a.playAs;
         r.rosterSuitHero = a.suitHero;
         r.rosterSuitIndex = a.suitIndex;
         r.rosterClosed = r.rosterClosed || a.closed;
+        if (onRow) {
+            hover_ = sliding ? held_ : row;
+            r.hovered = r.hovered || (hover_ != hoverWasRow);
+            roster_.state().settingHelp = helpText(hover_);
+            if (claim_ && press && !relaid && row != Control::none) {
+                r.pressed = true;
+                if (!rowOff) {
+                    if (dragged(row))
+                        held_ = row;
+                    else
+                        pressHeroSetting(row, r);
+                }
+            }
+            if (claim_ && down && dragged(held_) && in.pointer.hit && std::isfinite(in.pointer.u)) {
+                const float value = sliderValue(held_, in.pointer.u);
+                if (!(std::abs(value - settings[held_]) < 1e-4f)) {
+                    settings[held_] = value;
+                    r.changed |= bit(held_);
+                    r.flyRollSpeed = r.flyRollSpeed || held_ == Control::flyRollSpeed;
+                }
+            }
+        }
+        // CLOSE on the tiles' POWERS: back to STATUS (the tiles would only open again).
+        if (a.closed && tiles && page_ == powersPage)
+            setPage(0);
         return r;
     }
     for (int i = 0; i < pages; ++i)
@@ -4822,7 +5057,19 @@ void holoRoster(const Painter& p, const View& view) {
     }
     thread_local std::vector<hr::Piece> ps;
     ps.clear();
-    hr::pieces(view.roster, *d, ps);
+    // 0.0.73 test 4: the tiles' POWERS before the menu has opened them: the grid of the hero played.
+    hr::State st = view.roster;
+    if (st.screen == hr::Screen::closed) {
+        st.screen = hr::Screen::grid;
+        st.hero = std::min(static_cast<uint32_t>(activeHero()), hr::heroes - 1);
+        st.group = hr::groupOf(st.hero);
+    }
+    const bool settingsRows = st.screen == hr::Screen::hero && st.tab == hr::Tab::settings;
+    if (st.screen == hr::Screen::hero) {
+        st.settingsPages = heroSettingsPages(st.hero);
+        st.settingsPage = std::min(st.settingsPage, st.settingsPages - 1);
+    }
+    hr::pieces(st, *d, ps);
     const auto colour = [&](const hr::Piece& x) {
         switch (x.role) {
         case hr::Role::text: return p.c.text;
@@ -4912,6 +5159,9 @@ void holoRoster(const Painter& p, const View& view) {
         case hr::Piece::text: p.text(x.words, x.u0, x.v0, x.height, c); break;
         }
     }
+    // 0.0.73 test 4 SETTINGS: the hero's setting rows (the old POWERS list's), the menu's own rows.
+    if (settingsRows)
+        content(p, heroSettingsLayout(st.hero, st.settingsPage), view);
 }
 
 void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, float pixelAngle) {
@@ -4936,7 +5186,8 @@ void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, flo
     backing(p, top);
     if (p.pixel)
         spiderMark(p, 0, (top - halfH) / 2 - .01f, .085f);
-    if (view.roster.screen != holo_roster::Screen::closed) {
+    const bool tilesHere = view.heroTiles && page == powersPage; // 0.0.73 test 4: never the old list
+    if (view.roster.screen != holo_roster::Screen::closed || tilesHere) {
         // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes in place of the page, clipped to its inner area.
         const size_t clipFrom = out.size();
         holoRoster(p, view);

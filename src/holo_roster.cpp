@@ -199,11 +199,18 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
         const uint32_t h = std::min(s.hero, heroes - 1);
         out[n++] = Button{backButton, left, rowY0, backU1, rowY1, true};
         out[n++] = Button{playButton, playU0, rowY0, right, rowY1, d.playing != h};
-        const float third = (right - left - .006f) / 3;
-        out[n++] = Button{subControls, left, subY0, left + third, subY1, true};
-        out[n++] = Button{subOutfits, left + third + .003f, subY0, left + 2 * third + .003f, subY1, true};
-        out[n++] = Button{subStats, left + 2 * third + .006f, subY0, right, subY1, true};
-        if (s.tab == Tab::outfits) {
+        // 0.0.73 test 4: four sub-tabs, CONTROLS, OUTFITS, STATS and SETTINGS.
+        const float gap = .003f, quarter = (right - left - 3 * gap) / 4;
+        const auto at = [&](int k) { return left + static_cast<float>(k) * (quarter + gap); };
+        out[n++] = Button{subControls, at(0), subY0, at(0) + quarter, subY1, true};
+        out[n++] = Button{subOutfits, at(1), subY0, at(1) + quarter, subY1, true};
+        out[n++] = Button{subStats, at(2), subY0, at(2) + quarter, subY1, true};
+        out[n++] = Button{subSettings, at(3), subY0, right, subY1, true};
+        if (s.tab == Tab::settings) {
+            const uint32_t pages = std::max(1u, s.settingsPages);
+            out[n++] = Button{settingsPrev, left, pageY0, -.030f, pageY1, s.settingsPage > 0};
+            out[n++] = Button{settingsNext, .030f, pageY0, right, pageY1, s.settingsPage + 1 < pages};
+        } else if (s.tab == Tab::outfits) {
             const uint32_t rows = outfitRows(d, h);
             const float pitch = outfitPitch(rows);
             for (uint32_t i = 0; i < rows && n < buttonsMost; ++i) {
@@ -247,6 +254,9 @@ std::string helpFor(const State& s, const Data& d, int id) {
     case subControls: return "How to play " + who + ": each move and its button or gesture.";
     case subOutfits: return "Pick " + who + "'s outfit; locked ones open with his rep. No restart needed.";
     case subStats: return "What the mod has counted for " + who + ": his rep, level and fights.";
+    case subSettings: return who + "'s own settings, then INVINCIBLE and FLYING for every hero.";
+    case settingsPrev: return "The previous page of settings. No restart needed.";
+    case settingsNext: return "The next page of settings. No restart needed.";
     case seeLog: return "Opens the REP log with only " + who + "'s entries. No restart needed.";
     case logFilter: return "Shows every hero's entries, or only one hero's. No restart needed.";
     case logNewer: return "Scrolls to newer entries (or push the stick up). No restart needed.";
@@ -254,7 +264,7 @@ std::string helpFor(const State& s, const Data& d, int id) {
     default: break;
     }
     if (id >= tile && id < tile + static_cast<int>(heroes))
-        return std::string("Opens ") + nameOf(static_cast<uint32_t>(id - tile)) + "'s page: controls, outfits, stats.";
+        return std::string("Opens ") + nameOf(static_cast<uint32_t>(id - tile)) + "'s page: controls, outfits, stats, settings.";
     if (id >= outfit && d.suitsKnown && static_cast<uint32_t>(id - outfit) < outfitRows(d, h)) {
         const uint32_t i = static_cast<uint32_t>(id - outfit);
         const roster_page::Row& r = d.suits.rows[h][i];
@@ -332,7 +342,17 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         tabBtn(subControls, "CONTROLS", s.tab == Tab::controls);
         tabBtn(subOutfits, "OUTFITS", s.tab == Tab::outfits);
         tabBtn(subStats, "STATS", s.tab == Tab::stats);
-        if (s.tab == Tab::controls) {
+        tabBtn(subSettings, "SETTINGS", s.tab == Tab::settings);
+        if (s.tab == Tab::settings) {
+            // The rows are wrist_hud's (drawn over this); here only PREV, the page and NEXT.
+            const uint32_t pages = std::max(1u, s.settingsPages);
+            if (const Button* b = byId(settingsPrev))
+                o.button(*b, "PREV", s.hover == settingsPrev, false, .0036f);
+            if (const Button* b = byId(settingsNext))
+                o.button(*b, "NEXT", s.hover == settingsNext, false, .0036f);
+            o.text("PAGE " + std::to_string(std::min(s.settingsPage, pages - 1) + 1) + " OF " + std::to_string(pages), -.028f,
+                   (pageY0 + pageY1) / 2 - .0018f, .028f, .0036f, Role::value, true);
+        } else if (s.tab == Tab::controls) {
             const hero_controls::Guide& g = hero_controls::guideOf(h);
             const uint32_t lines = std::min(g.count, hero_controls::linesMost);
             const float pitch = std::min(.0124f, (contentTop - contentBottom - .004f) / static_cast<float>(std::max(1u, lines)));
@@ -457,7 +477,8 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
             o.button(*b, "OLDER", s.hover == logOlder, false, .0036f);
     }
     // The help line at the foot: the hovered button's, else what to do here.
-    const auto lines = wrap(helpFor(s, d, s.hover), helpH, right - left, 3);
+    const auto lines = wrap(s.settingHelp && s.hover == none ? std::string(s.settingHelp) : helpFor(s, d, s.hover), helpH,
+                            right - left, 3);
     for (size_t i = 0; i < lines.size(); ++i)
         o.text(lines[i], left, helpTop - static_cast<float>(i) * helpPitch, right, helpH, Role::help);
 }
@@ -479,6 +500,7 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     if (s_.screen == Screen::closed)
         return a;
     const bool ok = hit && std::isfinite(u) && std::isfinite(v);
+    s_.settingsPage = std::min(s_.settingsPage, std::max(1u, s_.settingsPages) - 1);
     s_.hover = ok ? buttonAt(s_, d, u, v) : none;
     const float most = logMost(s_, d);
     if (s_.screen == Screen::rep && ok && std::isfinite(stick) && std::abs(stick) > .25f && std::isfinite(seconds))
@@ -522,6 +544,12 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     case subControls: s_.tab = Tab::controls; break;
     case subOutfits: s_.tab = Tab::outfits; break;
     case subStats: s_.tab = Tab::stats; break;
+    case subSettings:
+        s_.tab = Tab::settings;
+        s_.settingsPage = 0;
+        break;
+    case settingsPrev: s_.settingsPage = s_.settingsPage > 0 ? s_.settingsPage - 1 : 0; break;
+    case settingsNext: s_.settingsPage = std::min(s_.settingsPage + 1, std::max(1u, s_.settingsPages) - 1); break;
     case seeLog:
         s_.screen = Screen::rep;
         s_.filter = std::min(s_.hero, heroes - 1);
@@ -537,6 +565,7 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
         if (id >= tile && id < tile + static_cast<int>(heroes)) {
             s_.screen = Screen::hero;
             s_.hero = static_cast<uint32_t>(id - tile);
+            s_.settingsPage = 0;
         } else if (id >= outfit) {
             a.suitHero = static_cast<int>(std::min(s_.hero, heroes - 1));
             a.suitIndex = id - outfit;

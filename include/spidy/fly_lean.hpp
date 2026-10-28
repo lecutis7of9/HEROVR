@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace spidy::fly_lean {
 inline constexpr float pi = 3.14159265f;
@@ -39,6 +40,26 @@ inline float target(Vec3 velocity, Vec3 facing) {
     if (along >= 0)
         return mostForward * smooth(hoverSpeed, fullForward, along);
     return -mostBack * smooth(hoverSpeed, fullBack, -along);
+}
+
+// Version 0.0.73 test 3: when the lean is wanted - FLIGHT POSE LEAN (option 0), FLY MODE on, in flight, not on a
+// surface, and the swing bridge's velocity live.
+inline bool wanted(uint32_t flyPose, uint32_t flyMode, uint32_t flying, bool standing, bool liveSwing) {
+    return flyPose == 0 && flyMode != 0 && flying != 0 && !standing && liveSwing;
+}
+// Version 0.0.73 test 3 (fix 27): the root cause of "the bodies still fly like they are standing straight up" -
+// a worn suit (IRON MAN, SUPERMAN, ...) stands in for the game's body (suit_wear::gameBodyDrawn), which turns
+// native_body off, so test 2's lean (native_body's tilt) never reached the body the player sees. This leans the
+// suit's estimate the same way: its up and its feet turned about the eyes. The identity (upright): no change;
+// anything not finite: no change.
+inline void leanSuit(Quat lean, Vec3 eye, Vec3& up, Vec3& feet) {
+    if (std::abs(lean.x) < 1e-6f && std::abs(lean.y) < 1e-6f && std::abs(lean.z) < 1e-6f)
+        return;
+    const float n = lean.x * lean.x + lean.y * lean.y + lean.z * lean.z + lean.w * lean.w;
+    if (!std::isfinite(n) || std::abs(n - 1) > .01f || !finite(eye) || !finite(up) || !finite(feet))
+        return;
+    up = lean.rotate(up);
+    feet = eye + lean.rotate(feet - eye);
 }
 
 class Lean {

@@ -83,3 +83,18 @@ class Hero073Test3SmoothTurn(unittest.TestCase):
         self.assertIn('int smoothTurn = 120', src('include/spidy/vr_settings.hpp'))
         self.assertRegex(src('tools/run_game_vr.py'), r"'--smooth-turn'[^\n]*default=120")
 
+class Hero073Test3FlightPose(unittest.TestCase):
+    """Fix 27: the lean reaches the body the player sees - the worn suit too - and LEAN is the default."""
+    def test_lean_worked_out_for_every_body(self):
+        g = src('src/game_xr.cpp')
+        i = g.index('Quat flyTiltNow{};')
+        self.assertLess(i, g.index('if (bodyStarted) {', i))
+        self.assertIn('fly_lean::wanted(c38(combat38::flyPose)', g[i:i + 800])
+        self.assertIn('saved.flyLean = flyTiltNow;', g)
+        j = g.index('fly_lean::leanSuit(saved->flyLean, t.eye, t.up, t.feet);')
+        self.assertLess(j, g.index('suit_wear::estimate(*suitRig, t, live)', j))
+    def test_lean_is_the_default(self):
+        ls = src('tools/live_settings.py')
+        self.assertIn("'fly_pose': ('lean', 'upright')", ls)
+        self.assertIn("'fly_pose': 'lean'", ls)
+

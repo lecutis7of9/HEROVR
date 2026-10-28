@@ -29828,6 +29828,42 @@ int main() {
         const std::string h = o.help;
         check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos, "its subtext");
     });
+    test("0.0.73 test 3 FLIGHT POSE (fix 27): the worn suit leans too, LEAN on by default, UPRIGHT still upright", [] {
+        using namespace fly_lean;
+        // The default (option 0) is LEAN; every gate of the flight.
+        check(wanted(0, 1, 1, false, true), "LEAN, FLY on, flying, in the air: leans");
+        check(!wanted(1, 1, 1, false, true), "UPRIGHT never leans");
+        check(!wanted(0, 0, 1, false, true) && !wanted(0, 1, 0, false, true), "no FLY or not flying: upright");
+        check(!wanted(0, 1, 1, true, true) && !wanted(0, 1, 1, false, false), "on a surface or no swing: upright");
+        // Flying forward at full speed, the suit's estimate leans as the game's body does.
+        Lean lean;
+        for (int i = 0; i < 900; ++i)
+            lean.update(1.f / 90, wanted(0, 1, 1, false, true), {0, 0, -30}, {0, 0, -1});
+        const Vec3 eye{3, 101.7f, -4};
+        Vec3 up{0, 1, 0}, feet{3, 100, -4};
+        leanSuit(lean.tilt(), eye, up, feet);
+        check(up.z < -.99f, "the suit's up points where he flies: " + std::to_string(up.z));
+        check(feet.z - eye.z > 1.6f && std::abs(feet.y - eye.y) < .05f, "the suit's feet trail behind the eyes");
+        check(std::abs(length(feet - eye) - 1.7f) < 1e-3f, "the suit keeps its height");
+        // Hovering, landed or UPRIGHT: the suit stands as before (no change at all).
+        Lean still;
+        Vec3 up2{0, 1, 0}, feet2{3, 100, -4};
+        for (int i = 0; i < 90; ++i)
+            still.update(1.f / 90, wanted(0, 1, 1, false, true), {0, 0, 0}, {0, 0, -1});
+        leanSuit(still.tilt(), eye, up2, feet2);
+        check(up2.y == 1 && feet2.y == 100 && feet2.z == -4, "hovering: the suit is upright, unchanged");
+        Vec3 up3{0, 1, 0}, feet3{3, 100, -4};
+        leanSuit({std::nanf(""), 0, 0, 1}, eye, up3, feet3);
+        leanSuit({.5f, 0, 0, .5f}, eye, up3, feet3);
+        check(up3.y == 1 && feet3.y == 100, "a bad lean changes nothing");
+        // Flying back: the suit leans back a little, never over.
+        Lean back;
+        for (int i = 0; i < 900; ++i)
+            back.update(1.f / 90, true, {0, 0, 20}, {0, 0, -1});
+        Vec3 up4{0, 1, 0}, feet4{3, 100, -4};
+        leanSuit(back.tilt(), eye, up4, feet4);
+        check(up4.z > .3f && up4.y > .85f && feet4.z < eye.z, "flying back: the suit leans back, feet ahead");
+    });
     test("0.0.73 test 2 BUTTON GUIDE (fix 23): every hero's controls on his page, the SUITS / CONTROLS tabs, B back", [] {
         namespace rp = roster_page;
         namespace hc = hero_controls;

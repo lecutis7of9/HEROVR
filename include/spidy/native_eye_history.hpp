@@ -85,6 +85,9 @@ struct NativeEyeFrame {
     std::array<Vec3, 2> palmPoseAim{};
     std::array<float, 2> palmPose{};
     float palmSpin{};
+    // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the flight's lean of the body (world axes, about the eyes;
+    // the identity upright), for the worn suit that stands in for the game's body.
+    Quat flyLean{};
     // Version 0.0.6 DAREDEVIL ABILITIES: each hand's baton (this frame's world; on 0: none), grip to tip.
     std::array<Vec3, 2> batonGrip{}, batonTip{};
     std::array<float, 2> batonOn{};

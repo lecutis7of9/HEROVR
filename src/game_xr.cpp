@@ -9029,6 +9029,18 @@ DWORD WINAPI run(void*) {
                             OutputDebugStringA((line + "\n").c_str());
                         }
                     }
+                    // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the lean is worked out every frame, body or
+                    // not - a worn suit (IRON MAN, SUPERMAN...) stands in for the game's body and turns
+                    // off native_body, so the lean goes to the suit too (saved.flyLean below).
+                    Quat flyTiltNow{};
+                    {
+                        const bool liveSwing = swingStarted && swingState.status && finite(swingState.velocity);
+                        const bool leanOn = fly_lean::wanted(c38(combat38::flyPose), flyModeNow.load(), flyNow.flying,
+                                                             motion.standing, liveSwing);
+                        const Vec3 facing = motion.headPose.orientation.rotate({0, 0, -1});
+                        flyLean.update(frame.seconds, leanOn, liveSwing ? swingState.velocity : Vec3{}, facing);
+                        flyTiltNow = flyLean.tilt();
+                    }
                     if (bodyStarted) {
                         // The hero's body follows the headset and the controllers,
                         // placed from the same feet as the eyes.
@@ -9132,12 +9144,7 @@ DWORD WINAPI run(void*) {
                         // along its facing (forward to horizontal, back a little, upright hovering or
                         // strafing), eased; UPRIGHT, landed or on a surface: back to upright.
                         {
-                            const bool liveSwing = swingStarted && swingState.status && finite(swingState.velocity);
-                            const bool leanOn = c38(combat38::flyPose) == 0 && flyModeNow.load() != 0 && flyNow.flying &&
-                                                !motion.standing && liveSwing;
-                            const Vec3 facing = pose.facing.rotate({0, 0, -1});
-                            flyLean.update(frame.seconds, leanOn, liveSwing ? swingState.velocity : Vec3{}, facing);
-                            const Quat lean = flyLean.tilt();
+                            const Quat lean = flyTiltNow; // worked out above
                             if (lean.x != 0 || lean.y != 0 || lean.z != 0)
                                 pose.tilt = lean * pose.tilt;
                         }
@@ -9278,6 +9285,7 @@ DWORD WINAPI run(void*) {
                     {   // Version 0.0.4 IRON MAN ABILITIES (REPULSOR): the blasts' look, the beam, the cooldown line.
                         const bool rep = !oursFault && c38(combat38::shooterType) == repulsor::repulsor;
                         saved.repulsorLook = rep;
+                        saved.flyLean = flyTiltNow; // Version 0.0.73 test 3 (fix 27): the worn suit leans too
                         saved.beamFade = rep ? repulsor::beamFade(static_cast<float>(combatClock - repBeamAt)) : 0.f;
                         if (saved.beamFade > 0) {
                             saved.beamFrom = compose(saved.worldFromTracking, Pose{repBeamFrom, {}}).position;
@@ -10760,6 +10768,9 @@ DWORD WINAPI run(void*) {
                                     t.up = normalized(turn.rotate(Vec3{0, 1, 0}));
                                     t.feet = rendered.anchor + travel;
                                     t.eye = rendered.headPose.position + travel;
+                                    // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the suit leans with the flight about
+                                    // the eyes, as the game's body does (fly_lean::leanSuit); upright: unchanged.
+                                    fly_lean::leanSuit(saved->flyLean, t.eye, t.up, t.feet);
                                     t.eyeForward = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
                                     t.eyeUp = rendered.headPose.orientation.rotate(Vec3{0, 1, 0});
                                     for (unsigned i = 0; i < 2; ++i) {

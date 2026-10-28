@@ -17,6 +17,7 @@
 // pairs) or a pair without its view starts the history again.
 #include <array>
 #include <cmath>
+#include <vector>
 #include <cstdint>
 
 namespace spidy::eye_history {
@@ -226,5 +227,32 @@ inline float heldPixel(float here, float lo, float hi, float raw, float keep, fl
     const float a = (1.f - k) / (1.f + here), b = k / (1.f + before);
     const float karis = a + b > 0 ? (here * a + before * b) / (a + b) : here;
     return plain + (karis - plain) * bright;
+}
+// 0.0.73 IMAGE SPIDYVR: the old picture read with a Catmull-Rom filter (native_eye_gpu.cpp historyShader
+// sharpOld) instead of a bilinear one. CONFIRMED in our code (test 3, 0.0.73 export 17:15): the history
+// was read bilinearly at the reprojected point while the head nearly always moved (32577 of 32652 pairs),
+// so each pair blurred the kept picture by a fraction of a pixel and 80% of it was kept: the smudge.
+// The four weights for a fractional offset f (0..1) between taps 1 and 2 (taps 0..3); they sum to 1.
+inline void catmullRomWeights(float f, float w[4]) {
+    w[0] = f * (-.5f + f * (1.f - .5f * f));
+    w[1] = 1.f + f * f * (-2.5f + 1.5f * f);
+    w[2] = f * (.5f + f * (2.f - 1.5f * f));
+    w[3] = f * f * (-.5f + .5f * f);
+}
+// One row of pixels read at `shift` (0..1) to the right, Catmull-Rom (sharp) or bilinear, edges clamped
+// (tests: how much of a one-pixel light a chain of reads keeps).
+inline std::vector<float> resampleRow(const std::vector<float>& row, float shift, bool sharp) {
+    const int n = static_cast<int>(row.size());
+    std::vector<float> out(row.size());
+    auto at = [&](int i) { return row[static_cast<size_t>(i < 0 ? 0 : i >= n ? n - 1 : i)]; };
+    for (int i = 0; i < n; ++i) {
+        if (sharp) {
+            float w[4];
+            catmullRomWeights(shift, w);
+            out[static_cast<size_t>(i)] = w[0] * at(i - 1) + w[1] * at(i) + w[2] * at(i + 1) + w[3] * at(i + 2);
+        } else
+            out[static_cast<size_t>(i)] = at(i) * (1.f - shift) + at(i + 1) * shift;
+    }
+    return out;
 }
 } // namespace spidy::eye_history

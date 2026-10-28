@@ -1647,6 +1647,9 @@ std::atomic<uint32_t> cutPercent{spidy::eye_history::defaultCut};     // Update 
 // the history share the last pass kept (thousandths, eye 0; 0 when it kept none) for JITTER CALM.
 std::atomic<uint32_t> lightHoldPercent{spidy::eye_history::lightHoldOn};
 std::atomic<uint32_t> keptMilli{};
+// 0.0.73 IMAGE (combat38 image): the old picture read sharp (Catmull-Rom, SPIDYVR, the default) or
+// bilinear (CLASSIC, test 3). Live.
+std::atomic<bool> sharpHistory{true};
 uint32_t historyNow() {
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
 }
@@ -1681,6 +1684,32 @@ float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
 }
+// 0.0.73 IMAGE SPIDYVR (eye_history.hpp catmullRomWeights): the old picture read with a Catmull-Rom
+// filter (5 bilinear reads) instead of one bilinear read, so the reprojection's fractional step does not
+// blur it frame after frame (the test 3 smudge). Its overshoot is clamped by the 3 x 3 below.
+float3 sharpOld(float2 uv) {
+    float pw, ph;
+    previous.GetDimensions(pw, ph);
+    const float2 size = float2(pw, ph);
+    const float2 at = uv * size;
+    const float2 t1 = floor(at - 0.5) + 0.5;
+    const float2 f = at - t1;
+    const float2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    const float2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    const float2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    const float2 w3 = f * f * (-0.5 + 0.5 * f);
+    const float2 w12 = w1 + w2;
+    const float2 t0 = (t1 - 1.0) / size;
+    const float2 t3 = (t1 + 2.0) / size;
+    const float2 t12 = (t1 + w2 / max(w12, 1e-5)) / size;
+    const float a0 = w12.x * w0.y, a1 = w0.x * w12.y, a2 = w12.x * w12.y, a3 = w3.x * w12.y, a4 = w12.x * w3.y;
+    const float3 sum = previous.SampleLevel(bilinear, float2(t12.x, t0.y), 0).rgb * a0 +
+                       previous.SampleLevel(bilinear, float2(t0.x, t12.y), 0).rgb * a1 +
+                       previous.SampleLevel(bilinear, t12, 0).rgb * a2 +
+                       previous.SampleLevel(bilinear, float2(t3.x, t12.y), 0).rgb * a3 +
+                       previous.SampleLevel(bilinear, float2(t12.x, t3.y), 0).rgb * a4;
+    return max(sum / max(a0 + a1 + a2 + a3 + a4, 1e-5), 0);
+}
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
     current.GetDimensions(w, h);
@@ -1704,7 +1733,8 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
         return here;
     // Update 21: extra.w widens the clamp (eye_history.hpp historyLoosen).
     const float3 give = (hi - lo) * saturate(extra.w);
-    const float3 raw = previous.SampleLevel(bilinear, old, 0).rgb;
+    // 0.0.73 IMAGE: row1.w 1 SPIDYVR (Catmull-Rom, sharp), 0 CLASSIC (test 3's bilinear read).
+    const float3 raw = row1.w > 0.5 ? sharpOld(old) : previous.SampleLevel(bilinear, old, 0).rgb;
     // 0.0.73 test 3 LIGHT HOLD (eye_history.hpp heldPixel, row0.w the hold, 0 = test 2's sum): a bright
     // old pixel (a street light this frame's sub-pixel step missed) may stay above the 3x3 by part of
     // its excess, its anti-ghost cut eased, and the blend weighted 1 / (1 + luma).
@@ -1918,6 +1948,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         frame[i][3] = keep > 0 ? eye_history::lightHoldInForce(lightHoldPercent.load(std::memory_order_relaxed),
                                                                travelCut, turnCut)
                                : 0.f; // 0.0.73 test 3 LIGHT HOLD (row0.w)
+        frame[i][7] = sharpHistory.load(std::memory_order_relaxed) ? 1.f : 0.f; // 0.0.73 IMAGE (row1.w)
         frame[i][13] = 1.f / static_cast<float>(outWidth);
         frame[i][14] = 1.f / static_cast<float>(outHeight);
         frame[i][15] = eye_history::movedLoosen(
@@ -3066,6 +3097,13 @@ bool setEyeTrail(uint32_t percent) {
     SpidyEyeHistoryData.trail = percent;
     return true;
 }
+// 0.0.73 IMAGE: the history read sharp (SPIDYVR) or bilinear (CLASSIC).
+void setEyeHistorySharp(bool sharp) {
+    sharpHistory = sharp;
+}
+bool eyeHistorySharp() {
+    return sharpHistory.load();
+}
 // 0.0.73 test 3 LIGHT HOLD: 0 off (test 2), 50 ON, 100 STRONG.
 bool setEyeLightHold(uint32_t percent) {
     if (percent > eye_history::lightHoldStrong)
@@ -3565,6 +3603,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeLightHold(void* percent) {
                static_cast<uint32_t>(std::min<uintptr_t>(reinterpret_cast<uintptr_t>(percent), 1000)))
                ? 0
                : 3996;
+}
+// 0.0.73 IMAGE (combat38 image): 1 the history read sharp (Catmull-Rom, SPIDYVR), 0 bilinear (CLASSIC,
+// test 3); refused (3995) above 1. Live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeHistorySharp(void* sharp) {
+    const auto value = reinterpret_cast<uintptr_t>(sharp);
+    if (value > 1)
+        return 3995;
+    native_gpu::setEyeHistorySharp(value == 1);
+    return 0;
 }
 // JITTER CALM: the share of its still-head history the last pass kept (0..1; 0 while none was kept or none ran).
 extern "C" float SpidyEyeHistoryKept() {

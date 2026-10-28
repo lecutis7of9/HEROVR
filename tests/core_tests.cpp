@@ -19190,7 +19190,7 @@ int main() {
                 }
             }
         }
-        check(placed == 203 /* 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 204 /* 0.0.73: + IMAGE (QUALITY); 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -31529,6 +31529,247 @@ int main() {
         check(!vanfps::uniformPlace({1, 2, 3}, {1, 0, 0}, {.5f, 1, 0}, {0, 0, 1}, scale), "sheared: no");
         hero007::setModelSink(nullptr);
         vanfps::forget();
+    });
+    test("0.0.73 test 4 hero tiles only: every old POWERS row is reachable from its hero's page, no dropdowns", [] {
+        // The user (0.0.73 test 3): "those are still part of the hero page and they should be gone it should
+        // just be like the tiles with subpages not all the dropdowns". Every control the old POWERS list had
+        // (its sections and its always-shown rows) is enumerated and pressed from a hero's tile page.
+        using namespace wrist_hud;
+        namespace hr = holo_roster;
+        hr::Data d;
+        d.playing = hero_modes::batman;
+        // PLAY AS covers a hero's ON switch (the old profile's first row); the tiles are the ROSTER row.
+        auto heroOfSwitch = [](Control c) -> int {
+            if (c == Control::heroPlaySpider)
+                return static_cast<int>(hero_modes::spiderMan);
+            for (uint32_t i = 0; i < std::size(combat38::heroToggles); ++i)
+                if (combatOption(c) == static_cast<int>(combat38::heroToggles[i]))
+                    return static_cast<int>(i) + 1; // heroToggles: IRON MAN on, in hero_modes order
+            return -1;
+        };
+        check(heroOfSwitch(Control::combatShooterType) == static_cast<int>(hero_modes::ironMan) &&
+                  heroOfSwitch(Control::combatGreenLantern) == static_cast<int>(hero_modes::greenLantern),
+              "the hero switches' order");
+        std::vector<Control> former;
+        for (int i = 0; i < controls; ++i) {
+            const auto c = static_cast<Control>(i);
+            if (placeOf(c).page == powersPage)
+                former.push_back(c);
+        }
+        check(former.size() >= 70, "the old POWERS list's rows: " + std::to_string(former.size()));
+        uint32_t viaSettings = 0, viaPlayAs = 0;
+        for (const Control c : former) {
+            if (c == Control::heroRoster)
+                continue; // the tiles themselves
+            const int sw = heroOfSwitch(c);
+            // Where it lives now: a hero whose SETTINGS has it (its own hero's for a profile row).
+            const Place pl = placeOf(c);
+            const std::string section = pl.section >= 0 ? sectionName(powersPage, pl.section) : "";
+            int home = -1;
+            uint32_t homePage = 0;
+            for (uint32_t h = 0; h < hero_modes::heroes && home < 0; ++h)
+                for (uint32_t pg = 0; pg < heroSettingsPages(h) && home < 0; ++pg) {
+                    const auto rows = heroSettingsRows(h, pg);
+                    if (std::find(rows.begin(), rows.end(), c) != rows.end()) {
+                        home = static_cast<int>(h);
+                        homePage = pg;
+                    }
+                }
+            if (sw >= 0) {
+                check(home < 0, std::string("a hero's ON switch is in SETTINGS: ") + shortName(c));
+                ++viaPlayAs;
+                continue;
+            }
+            check(home >= 0, std::string("not on any hero's SETTINGS: ") + shortName(c));
+            if (section != "FLYING" && c != Control::invincible)
+                check(std::string(hero_modes::heroNames[home]) == section && !heroSettingsEveryHero(home, homePage),
+                      std::string("not on its own hero's SETTINGS: ") + shortName(c));
+            else
+                for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+                    bool on = false;
+                    for (uint32_t pg = 0; pg < heroSettingsPages(h); ++pg) {
+                        const auto rows = heroSettingsRows(h, pg);
+                        on = on || (heroSettingsEveryHero(h, pg) && std::find(rows.begin(), rows.end(), c) != rows.end());
+                    }
+                    check(on, std::string("an EVERY HERO row missing for a hero: ") + shortName(c));
+                }
+            // Pressed through the menu: POWERS (the tiles), the hero's tile, SETTINGS, NEXT to its page, the row.
+            resetSections();
+            Menu m;
+            Settings st;
+            m.setPage(powersPage);
+            auto step = [&](float trigger, float u, float v) {
+                Menu::Input in;
+                in.active = true;
+                in.pointer.hit = true;
+                in.pointer.u = u;
+                in.pointer.v = v;
+                in.trigger = trigger;
+                in.hero = hero_modes::batman;
+                in.heroTiles = true;
+                in.rosterData = &d;
+                return m.update(in, st);
+            };
+            auto pressAt = [&](float u, float v) {
+                step(0, u, v);
+                step(.3f, u, v);
+                const auto x = step(.9f, u, v);
+                step(0, u, v);
+                return x;
+            };
+            step(0, 0, 0);
+            check(m.rosterOpen() && m.roster().screen == hr::Screen::grid, "POWERS did not open the tiles");
+            hr::Button bs[hr::buttonsMost];
+            auto pressId = [&](int id) {
+                const uint32_t n = hr::buttons(m.roster(), d, bs);
+                for (uint32_t i = 0; i < n; ++i)
+                    if (bs[i].id == id && bs[i].enabled)
+                        return pressAt((bs[i].u0 + bs[i].u1) / 2, (bs[i].v0 + bs[i].v1) / 2);
+                check(false, "no button " + std::to_string(id));
+                return Menu::Result{};
+            };
+            pressId(hr::groupOf(static_cast<uint32_t>(home)) == 1 ? hr::tabDc : hr::tabMarvel);
+            pressId(hr::tile + home);
+            check(m.roster().screen == hr::Screen::hero && m.roster().hero == static_cast<uint32_t>(home), "the hero's tile");
+            pressId(hr::subSettings);
+            check(m.roster().tab == hr::Tab::settings && m.roster().settingsPage == 0 &&
+                      m.roster().settingsPages == heroSettingsPages(home),
+                  "the SETTINGS sub-tab");
+            for (uint32_t k = 0; k < homePage; ++k)
+                pressId(hr::settingsNext);
+            check(m.roster().settingsPage == homePage, "NEXT did not page SETTINGS");
+            const Spot at = heroSettingSpot(home, homePage, c);
+            check(at.found && at.v <= hr::settingsTop && at.v >= hr::settingsBottom && std::abs(at.u) < .07f,
+                  std::string("a row outside the SETTINGS band: ") + shortName(c));
+            check(heroSettingAt(home, homePage, at.u, at.v) == c, std::string("the row's spot: ") + shortName(c));
+            step(0, at.u, at.v);
+            check(m.hover() == c && m.roster().settingHelp == helpText(c), std::string("pointing at it: ") + shortName(c));
+            if (c == Control::flyRollSpeed) {
+                step(.3f, at.u, at.v);
+                step(.9f, at.u, at.v);
+                const auto dragged = step(.9f, .060f, at.v);
+                check(dragged.flyRollSpeed && st[c] > .9f, "ROLL SPEED did not follow the pointer");
+                step(0, .060f, at.v);
+            } else {
+                const auto r = pressAt(at.u, at.v);
+                const bool asked = combatOption(c) >= 0 ? r.combat38 == combatOption(c)
+                                   : c == Control::invincible   ? r.invincible
+                                   : c == Control::flyMode      ? r.flyMode
+                                   : c == Control::flyVignette  ? r.flyVignette
+                                   : c == Control::flyRoll      ? r.flyRoll
+                                   : c == Control::flyAutoLevel ? r.flyAutoLevel
+                                   : c == Control::symbiote     ? r.symbiote
+                                                                : false;
+                check(r.pressed && asked, std::string("pressing it asked nothing: ") + shortName(c));
+                check(m.rosterOpen() && m.roster().tab == hr::Tab::settings, "the press left SETTINGS");
+            }
+            ++viaSettings;
+        }
+        check(viaPlayAs == hero_modes::heroes, "every hero's ON switch is PLAY AS: " + std::to_string(viaPlayAs));
+        check(viaSettings + viaPlayAs + 1 == former.size(), "a POWERS row went nowhere");
+        // Short pages (a row 1, a slider 2: at most 6), each hero's own rows first, then EVERY HERO.
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            bool every = false;
+            for (uint32_t pg = 0; pg < heroSettingsPages(h); ++pg) {
+                uint32_t units = 0;
+                for (const Control c : heroSettingsRows(h, pg))
+                    units += c == Control::flyRollSpeed ? 2u : 1u;
+                check(units >= 1 && units <= 6, "a SETTINGS page too long or empty");
+                check(!every || heroSettingsEveryHero(h, pg), "a hero's own row after EVERY HERO");
+                every = heroSettingsEveryHero(h, pg);
+            }
+            check(every, "no EVERY HERO page");
+        }
+        check(heroSettingsEveryHero(hero_modes::superman, 0), "SUPERMAN has rows of his own?");
+    });
+    test("0.0.73 test 4 hero tiles only: POWERS is the tiles (never the list), the strip leaves it, CLASSIC keeps it", [] {
+        using namespace wrist_hud;
+        namespace hr = holo_roster;
+        hr::Data d;
+        for (int classic = 0; classic < 2; ++classic) {
+            resetSections();
+            Menu m;
+            Settings st;
+            m.setPage(powersPage);
+            auto step = [&](float trigger, float u, float v) {
+                Menu::Input in;
+                in.active = true;
+                in.pointer.hit = true;
+                in.pointer.u = u;
+                in.pointer.v = v;
+                in.trigger = trigger;
+                in.hero = hero_modes::thor;
+                in.heroTiles = true; // as the game sets it: and CLASSIC overrides it
+                in.heroMenuClassic = classic;
+                in.rosterData = &d;
+                return m.update(in, st);
+            };
+            auto pressAt = [&](float u, float v) {
+                step(0, u, v);
+                step(.3f, u, v);
+                const auto x = step(.9f, u, v);
+                step(0, u, v);
+                return x;
+            };
+            step(0, 0, 0);
+            if (classic) {
+                check(!m.rosterOpen(), "CLASSIC: the old list stays");
+                Spot at{false, 0, 0};
+                for (float scroll = 0; scroll < 3 && !(at.found && at.visible); scroll += .01f) {
+                    m.setScroll(powersPage, scroll, 1);
+                    at = controlSpot(powersPage, Control::heroRoster, m.scroll());
+                }
+                const auto r = pressAt(at.u, at.v);
+                check(r.heroRoster && !m.rosterOpen(), "CLASSIC: ROSTER asks for the popup");
+                continue;
+            }
+            check(m.rosterOpen() && m.roster().screen == hr::Screen::grid && m.roster().hero == hero_modes::thor,
+                  "POWERS is not the tiles");
+            // The strip's NEXT: on to VR SETTINGS (the tiles close), PREVIOUS back (they open again).
+            const Spot next = controlSpot(powersPage, Control::next);
+            check(next.found, "the strip's NEXT");
+            auto r = pressAt(next.u, next.v);
+            check(r.pressed && m.page() == powersPage + 1 && !m.rosterOpen(), "NEXT off the tiles");
+            const Spot prev = controlSpot(m.page(), Control::previous);
+            pressAt(prev.u, prev.v);
+            check(m.page() == powersPage && m.rosterOpen(), "PREVIOUS back to the tiles");
+            // A page jump away closes them too.
+            m.setPage(0);
+            step(0, 0, 0);
+            check(!m.rosterOpen(), "the tiles stayed open off POWERS");
+            m.setPage(powersPage);
+            step(0, 0, 0);
+            // CLOSE: back to STATUS, not the old list.
+            hr::Button bs[hr::buttonsMost];
+            const uint32_t n = hr::buttons(m.roster(), d, bs);
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == hr::closeButton)
+                    r = pressAt((bs[i].u0 + bs[i].u1) / 2, (bs[i].v0 + bs[i].v1) / 2);
+            check(r.rosterClosed && !m.rosterOpen() && m.page() == 0, "CLOSE on the tiles");
+            // Drawn: POWERS with heroTiles shows the tiles even before the menu has opened them; every
+            // hero's SETTINGS page draws inside the panel; HEROES on the strip.
+            View v;
+            v.emitter = {0, 1, -.4f};
+            v.opacity = 1;
+            v.page = powersPage;
+            v.heroTiles = true;
+            v.rosterData = &d;
+            std::vector<Vertex> tiles;
+            appendWristHud(tiles, v, {0, 1.6f, 0}, .001f);
+            check(!tiles.empty() && sane(tiles, 0, {0, 1, -.4f}, 1), "the tiles' POWERS");
+            for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+                for (uint32_t pg = 0; pg < heroSettingsPages(h); ++pg) {
+                    v.roster = hr::State{};
+                    v.roster.screen = hr::Screen::hero;
+                    v.roster.hero = h;
+                    v.roster.tab = hr::Tab::settings;
+                    v.roster.settingsPage = pg;
+                    v.hover = heroSettingsRows(h, pg).front();
+                    std::vector<Vertex> out;
+                    appendWristHud(out, v, {0, 1.6f, 0}, .001f);
+                    check(!out.empty() && sane(out, 0, {0, 1, -.4f}, 1), "a SETTINGS page drew badly");
+                }
+        }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

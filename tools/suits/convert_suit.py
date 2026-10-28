@@ -56,7 +56,7 @@ SUITS = [
     dict(folder='Suit_punisher_1', zip='f642847d', drop=INNER),
     dict(folder='Suit_punisher_2', zip='3a9db847', drop=INNER),
     dict(folder='Suit_thor_1', zip='9cba5a01', drop=INNER, prop_bones='^Bone010'),  # the hammer
-    dict(folder='Suit_thor_2', zip='0d36fd1f', drop=INNER),
+    dict(folder='Suit_thor_2', zip='0d36fd1f', drop=INNER, props='^07___Default$'),  # the hammer
     dict(folder='Suit_greenLantern_2', zip='10895eb2', drop=INNER),
     dict(folder='Suit_greenLantern_3', zip='75f1e3c7', drop=INNER),
     # Superman - DC (Chechorams16, CC BY; 19,926 triangles as its page says): the zip has no license.txt,

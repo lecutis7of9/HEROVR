@@ -114,6 +114,20 @@ int main(int argc, char** argv) {
             t.gripX[i] = cross(t.gripUp[i], Vec3{0, 0, 1});
         }
     }
+    // Test build 12 BATARANG DRAW previews: SUIT_BENCH_RGRIP="x,y,z" and SUIT_BENCH_RFWD="x,y,z" (the grip's -Z)
+    // place the right hand (its grip +X stays right, +Y = Z x X).
+    if (const char* g = std::getenv("SUIT_BENCH_RGRIP"))
+        std::sscanf(g, "%f,%f,%f", &t.grip[1].x, &t.grip[1].y, &t.grip[1].z);
+    if (const char* g = std::getenv("SUIT_BENCH_RFWD")) {
+        Vec3 f{};
+        if (std::sscanf(g, "%f,%f,%f", &f.x, &f.y, &f.z) == 3 && length(f) > 1e-3f) {
+            t.gripForward[1] = normalized(f);
+            t.gripX[1] = normalized(cross(t.gripForward[1], Vec3{0, 1, 0}));
+            if (!(length(t.gripX[1]) > .5f))
+                t.gripX[1] = {1, 0, 0};
+            t.gripUp[1] = normalized(cross(t.gripX[1] * -1.f, t.gripForward[1]) * -1.f);
+        }
+    }
     if (const char* g = std::getenv("SUIT_BENCH_SPREAD"))
         spread = static_cast<float>(std::atof(g));
     // A mirror 1.4 m ahead facing the player (its normal +z), life size.

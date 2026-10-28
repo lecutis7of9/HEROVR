@@ -23,6 +23,8 @@
 #include "spidy/body_haptics.hpp"
 #include "spidy/calibration_art.hpp"
 #include "spidy/calibration_panel.hpp"
+#include "spidy/holo_calibration.hpp"
+#include "spidy/fly_lean.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/roster_page.hpp"
 #include "spidy/health_ring.hpp"
@@ -1815,6 +1817,7 @@ DWORD WINAPI run(void*) {
         extras385::view::Switch viewSwitch;
         extras385::view::Confirm monitorConfirm;
         extras385::fly::Data flyNow{};
+        fly_lean::Lean flyLean; // Version 0.0.73 test 2 FLIGHT POSE (fix 27)
         // Update 38.5 FLY's poses (a hand up, both hands in front, a T-pose; arms down hovers), R3's
         // drop and L3+R3's ultimate, and FLY ROLL (a mod-side view roll, GameTrackingRig::flyRoll).
         extras385::fly::Poses flyPoses;
@@ -2506,6 +2509,10 @@ DWORD WINAPI run(void*) {
         // faced as it appeared; since when VR has shown play; when the result
         // appeared.
         Pose calibrationPanel{};
+        // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): the touch steps after the T-pose (CALIBRATION LOOK
+        // HOLO). Should it fail, only it goes off: the T-pose's measure is kept, the holsters stay put.
+        holo_calibration::Flow holoFlow;
+        bool holoFault{}, holoA{}, holoLook{};
         // Version 0.0.72 TEST BUILD NOTICE: once a session after the calibration closes (test builds only).
         test_notice::Notice testNotice;
         bool testNoticeFault{};
@@ -2852,6 +2859,7 @@ DWORD WINAPI run(void*) {
                     // or the A that closed it is still held, A / X reach nothing else: the
                     // closing press is never a jump (nor a charged leap on its release).
                     const bool noticeA[2]{(frame.buttons & buttonX) != 0, frame.jump};
+                    holoA = noticeA[0] || noticeA[1] || (frame.buttons & buttonA) != 0; // 0.0.73 test 2: CONFIRM
                     // Build 8 ROSTER page: it reads the raw hands (laser + trigger / A, or a poke; B / Y back),
                     // and while it is open, or a press it saw is still held, the triggers, A / B / X / Y reach
                     // nothing else (no web, no jump, no wrist press under it).
@@ -4411,17 +4419,65 @@ DWORD WINAPI run(void*) {
                     if (calibration.phase() == CalibrationPhase::idle && (calibrationWanted || values.calibrate) &&
                         immersive && nowMs - immersiveSince >= 1500 && !swingState.owned) {
                         calibration.start();
+                        holoFlow.stop();
+                        holoLook = !holoFault && c38(combat38::calibLook) == 0; // HOLO (the default)
                         calibrationPanel = body_calibration::panelPose(frame.head);
                         calibrationInput = true;
                         values.calibrate = false; // the tab shows NO again
                         runtime.haptic(0, .3f);
                         runtime.haptic(1, .3f);
                         message(3, 0, "Body calibration: stand in a T-pose and hold both triggers (B skips)");
+                    } else if (calibration.phase() == CalibrationPhase::done && holoFlow.active()) {
+                        // Version 0.0.73 test 2 HOLO CALIBRATION: belt, back, hips, confirm (B skips them).
+                        try {
+                            if (immersive && skipPressed) {
+                                holoFlow.skip();
+                                calibrationShownAt = nowMs;
+                                runtime.haptic(1, .25f);
+                                message(3, 0, "Holster touches skipped - eye height and arms are kept");
+                            } else if (immersive) {
+                                holo_calibration::Input in;
+                                in.headTracked = validTrackedPose(frame.head);
+                                in.head = frame.head;
+                                for (unsigned i = 0; i < 2; ++i) {
+                                    const auto& hand = frame.hands[i];
+                                    in.tracked[i] = hand.valid && validTrackedPose(hand.grip);
+                                    in.hands[i] = hand.grip.position;
+                                    in.grips[i] = hand.squeeze;
+                                    in.triggers[i] = hand.trigger;
+                                }
+                                in.a = holoA;
+                                const uint32_t stepBefore = holoFlow.step();
+                                const auto touchesBefore = holoFlow.touches();
+                                if (holoFlow.update(in)) {
+                                    holster::fitted() = holoFlow.fit();
+                                    calibrationShownAt = nowMs;
+                                    runtime.haptic(0, .7f);
+                                    runtime.haptic(1, .7f);
+                                    const auto f = holster::fitted();
+                                    char text[160];
+                                    sprintf_s(text, "Holo calibration: belt %+.0f cm, back %+.0f cm, hips %+.0f cm down %+.0f cm out",
+                                              f.beltBelow * 100, f.backBelow * 100, f.hipBelow * 100, f.hipSide * 100);
+                                    message(3, 0, text);
+                                } else {
+                                    const auto& t = holoFlow.touches();
+                                    for (unsigned i = 0; i < 2; ++i)
+                                        if (holoFlow.step() != stepBefore || t.hips[i] != touchesBefore.hips[i])
+                                            runtime.haptic(i, .2f);
+                                }
+                            }
+                        } catch (...) {
+                            holoFault = true;
+                            holoFlow.stop();
+                            holster::fitted() = {};
+                            calibrationShownAt = nowMs;
+                        }
                     } else if (calibration.phase() == CalibrationPhase::done) {
                         if (nowMs - calibrationShownAt >= 3500)
                             calibration.stop();
                     } else if (calibration.phase() != CalibrationPhase::idle && immersive && skipPressed) {
                         calibration.stop();
+                        holoFlow.stop();
                         ++calibrationSkips;
                         // Nor at the next sessions' first gameplay (the launcher keeps it).
                         calibrationWanted = calibrationPrompt = false;
@@ -4460,6 +4516,8 @@ DWORD WINAPI run(void*) {
                             sprintf_s(text, "Body calibrated: eye height %.2f m, arm length %.2f m (left %.2f, right %.2f)",
                                       calibratedEye, calibratedArm, lastCalibration.reach[0], lastCalibration.reach[1]);
                             message(3, 0, text);
+                            if (holoLook && !holoFault) // HOLO: the touch steps follow
+                                holoFlow.start(calibratedEye);
                         } else if (before == CalibrationPhase::waiting &&
                                    calibration.phase() == CalibrationPhase::holding) {
                             // The pose counts: a light tick in both hands.
@@ -9005,6 +9063,19 @@ DWORD WINAPI run(void*) {
                             if (lay.x != 0 || lay.y != 0 || lay.z != 0)
                                 pose.tilt = lay * pose.tilt;
                         }
+                        // Version 0.0.73 test 2 FLIGHT POSE (fix 27): in flight the body leans with the speed
+                        // along its facing (forward to horizontal, back a little, upright hovering or
+                        // strafing), eased; UPRIGHT, landed or on a surface: back to upright.
+                        {
+                            const bool liveSwing = swingStarted && swingState.status && finite(swingState.velocity);
+                            const bool leanOn = c38(combat38::flyPose) == 0 && flyModeNow.load() != 0 && flyNow.flying &&
+                                                !motion.standing && liveSwing;
+                            const Vec3 facing = pose.facing.rotate({0, 0, -1});
+                            flyLean.update(frame.seconds, leanOn, liveSwing ? swingState.velocity : Vec3{}, facing);
+                            const Quat lean = flyLean.tilt();
+                            if (lean.x != 0 || lean.y != 0 || lean.z != 0)
+                                pose.tilt = lean * pose.tilt;
+                        }
                         native_body::submit(pose);
                     }
                     perfSections.mark(perf37::screen); // Update 37: where the CPU time goes
@@ -9496,6 +9567,10 @@ DWORD WINAPI run(void*) {
                         view.result.eyeHeight = calibratedEye;
                         view.result.armLength = calibratedArm;
                         view.panel = compose(compose(motion.headPose, inverse(frame.head)), calibrationPanel);
+                        view.holo = holoLook && !holoFault;
+                        view.holoStep = holoFlow.step();
+                        view.holoDone = holoFlow.doneMask();
+                        view.holoHint = holoFlow.hint();
                         for (unsigned i = 0; i < 2; ++i) {
                             view.handTracked[i] = frame.hands[i].valid && validTrackedPose(frame.hands[i].grip);
                             view.grips[i] = motion.grips[i];
@@ -11032,7 +11107,18 @@ DWORD WINAPI run(void*) {
                                     std::chrono::duration<float>(std::chrono::steady_clock::now() - artClock)
                                         .count(),
                                     1000.f);
-                                calibration_panel::append(art, view, clock);
+                                bool holoDrawn = false;
+                                if (view.holo) { // Version 0.0.73 test 2 HOLO CALIBRATION; its fault: the comic panel
+                                    const size_t from = art.size();
+                                    try {
+                                        holo_calibration::append(art, view, clock);
+                                        holoDrawn = true;
+                                    } catch (...) {
+                                        art.resize(from);
+                                    }
+                                }
+                                if (!holoDrawn)
+                                    calibration_panel::append(art, view, clock);
                                 body_calibration::appendRings(vertices, view, viewer);
                             } else {
                                 plainPanel = saved->uiStyle != UiStyle::tech;
@@ -12312,6 +12398,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCapSprint(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCullMargin(void* v) { return setHero007(v, combat38::cullMargin, 5438); }
 // 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default (live.txt shadow_match).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatch(void* v) { return setHero007(v, combat38::shadowMatch, 5439); }
+// Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): HOLO checklist with belt, back and hip touches, or CLASSIC (live.txt calib_look).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCalibLook(void* v) { return setHero007(v, combat38::calibLook, 5440); }
+// Version 0.0.73 test 2 FLIGHT POSE (fix 27): LEAN by speed (fly_lean.hpp) or UPRIGHT (0.0.72) (live.txt fly_pose).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyPose(void* v) { return setHero007(v, combat38::flyPose, 5441); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

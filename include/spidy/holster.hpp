@@ -96,19 +96,35 @@ inline constexpr const char* zoneNames[zones] = {"LEFT HIP", "RIGHT HIP", "BACK"
 // at hipGrip, the hip bone, not .86 m down by the knee).
 inline constexpr float hipBelow = .45f, hipLow = .95f, hipSide = .10f, hipOut = .45f, hipBack = .16f, hipFront = .30f;
 inline constexpr float backAbove = .10f, backBelow = .50f, backSide = .35f, backBehind = .10f;
+// Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): where the player touched his belt, back and hips, as
+// shifts from the standing average (standingEye metres, the body frame; 0 with no calibration: the zones and
+// the worn places are exactly as before). Set on the game thread by the calibration, read there; each shift
+// is clamped (fitLimit, fitSideLimit) so a mis-touch can never move a holster off the body.
+inline constexpr float fitLimit = .15f, fitSideLimit = .08f;
+struct Fit {
+    float hipBelow{}, hipSide{}, backBelow{}, beltBelow{};
+};
+inline Fit& fitted() {
+    static Fit fit;
+    return fit;
+}
+inline float fitShift(float v, float limit) { return std::isfinite(v) ? std::clamp(v, -limit, limit) : 0.f; }
 inline bool inZone(uint32_t zone, BodyPoint p) {
     if (!std::isfinite(p.below) || !std::isfinite(p.side) || !std::isfinite(p.ahead))
         return false;
     switch (zone) {
     case leftHip:
     case rightHip: {
-        const float out = zone == leftHip ? -p.side : p.side;
+        const Fit& fit = fitted();
+        const float out = (zone == leftHip ? -p.side : p.side) - fitShift(fit.hipSide, fitSideLimit);
+        p.below -= fitShift(fit.hipBelow, fitLimit);
         return p.below >= hipBelow && p.below <= hipLow && out >= hipSide && out <= hipOut && p.ahead >= -hipBack &&
                p.ahead <= hipFront;
     }
     case back:
     case backLeft:
     case backRight: {
+        p.below -= fitShift(fitted().backBelow, fitLimit);
         const bool backOk =
             p.below >= -backAbove && p.below <= backBelow && std::abs(p.side) <= backSide && p.ahead <= -backBehind;
         return backOk && (zone == back || (zone == backLeft ? p.side <= .02f : p.side >= -.02f));

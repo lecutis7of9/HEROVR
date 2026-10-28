@@ -12,11 +12,14 @@
 //   holding   the hold at 60 percent (HOLD STILL)
 //   done      CALIBRATED with the measurements
 //   fallback  the previous panel, which shows if the art can't be used
+//   holo-*    Version 0.0.73 test 2 HOLO CALIBRATION (holo_calibration.hpp): stand, tpose, belt, back,
+//             holsters, confirm, done - the blue and white checklist with the TRUE T-pose figure
 //
 //   spidy_calibration_preview <prefix>
 #include "spidy/body_calibration.hpp"
 #include "spidy/calibration_art.hpp"
 #include "spidy/calibration_panel.hpp"
+#include "spidy/holo_calibration.hpp"
 #include "preview_image.hpp"
 #include <cstdio>
 #include <string>
@@ -89,6 +92,52 @@ int main(int argc, char** argv) {
             calibration_panel::append(art, view, .1923f);
             drawArt(image, art, texture, camera, 0, 0, 0, 0, W, H);
         }
+        if (!save(image, std::string(argv[1]) + "-" + s.name + ".bmp"))
+            ++failed;
+    }
+    // Version 0.0.73 test 2: the holo checklist, one image a step.
+    namespace hc = holo_calibration;
+    struct HoloState {
+        const char* name;
+        bc::Phase phase;
+        bc::Hint hint;
+        bool left, right;
+        float progress;
+        uint32_t step, done, touch;
+    };
+    const HoloState holos[] = {
+        {"holo-stand", bc::Phase::waiting, bc::Hint::standUp, false, false, 0, hc::stand, 0, 0},
+        {"holo-tpose", bc::Phase::holding, bc::Hint::none, true, true, .5f, hc::tpose, 1, 0},
+        {"holo-belt", bc::Phase::done, bc::Hint::none, true, true, 1, hc::belt, 3, hc::touchSqueeze},
+        {"holo-back", bc::Phase::done, bc::Hint::none, true, true, 1, hc::back, 7, hc::touchBehind},
+        {"holo-holsters", bc::Phase::done, bc::Hint::none, true, true, 1, hc::holsters, 15, hc::touchSides},
+        {"holo-confirm", bc::Phase::done, bc::Hint::none, true, true, 1, hc::confirm, 31, hc::touchConfirm},
+        {"holo-done", bc::Phase::done, bc::Hint::none, true, true, 1, hc::finished, 63, 0},
+    };
+    for (const auto& s : holos) {
+        Image image(W, H);
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x) {
+                const float v = static_cast<float>(y) / H;
+                float* o = image.at(x, y);
+                o[0] = decode(.42f + .3f * v);
+                o[1] = decode(.58f + .22f * v);
+                o[2] = decode(.86f + .08f * v);
+            }
+        auto view = base;
+        view.phase = s.phase;
+        view.hint = s.hint;
+        view.ready = {s.left, s.right};
+        view.progress = s.progress;
+        view.result.eyeHeight = 1.71f;
+        view.result.armLength = .62f;
+        view.holo = true;
+        view.holoStep = s.step;
+        view.holoDone = s.done;
+        view.holoHint = s.touch;
+        std::vector<Vertex> art;
+        hc::append(art, view, .1923f);
+        drawArt(image, art, texture, camera, 0, 0, 0, 0, W, H);
         if (!save(image, std::string(argv[1]) + "-" + s.name + ".bmp"))
             ++failed;
     }

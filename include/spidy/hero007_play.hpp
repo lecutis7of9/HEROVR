@@ -150,10 +150,18 @@ inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec
     const float k = std::isfinite(body.scale) && body.scale > .5f ? body.scale : 1.f;
     const Vec3 down{0, -k, 0}; // the heights below scale with the player (directions use dn)
     const Vec3 dn{0, -1, 0};
+    // Version 0.0.73 test 2 HOLO CALIBRATION: the player's own belt, back and hips (holster::fitted; all 0
+    // without one, as before), the same shifts inZone uses, so the grab stays where the item is drawn.
+    const holster::Fit& fit = holster::fitted();
+    const float hipDrop = holster::fitShift(fit.hipBelow, holster::fitLimit),
+                hipOutShift = holster::fitShift(fit.hipSide, holster::fitSideLimit),
+                backDrop = holster::fitShift(fit.backBelow, holster::fitLimit),
+                beltDrop = holster::fitShift(fit.beltBelow, holster::fitLimit);
     switch (zone) {
     case holster::leftHip:
     case holster::rightHip: { // muzzle down, the grip up and back, the slide's top facing forward
         const float s = zone == holster::leftHip ? -1.f : 1.f;
+        head += down * (hipStyle == hipBelt ? beltDrop : hipDrop) + r * (s * hipOutShift);
         if (hipStyle == hipThigh) {
             at = head + down * thighBelow + r * (s * thighOut) + f * .03f;
             forward = normalized(dn + f * .08f);
@@ -169,12 +177,14 @@ inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec
         break;
     }
     case holster::back: // the sawed-off across the back, the grip behind the right shoulder
+        head += down * backDrop;
         at = head + down * .12f + r * .14f - f * .17f;
         forward = normalized(dn + r * -.65f);
         up = -f;
         break;
     default: { // a baton over each shoulder, crossed
         const float s = zone == holster::backLeft ? -1.f : 1.f;
+        head += down * backDrop;
         at = head + down * .10f + r * (s * .13f) - f * .16f;
         forward = normalized(dn + r * (-s * .5f));
         up = -f;

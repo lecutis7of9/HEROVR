@@ -134,6 +134,10 @@ enum Option : uint32_t {
     cullMargin,
     // 0.0.73 test 2 (fix 21): SHADOW MATCH (EXPERIMENTAL, CANDIDATE), both eyes' cascades fitted to one lens, off by default
     shadowMatch,
+    // Version 0.0.73 test 2 HOLO CALIBRATION (fix 25): HOLO checklist with belt, back and hip touches, or CLASSIC
+    calibLook,
+    // Version 0.0.73 test 2 FLIGHT POSE (fix 27): LEAN by speed (fly_lean.hpp) or UPRIGHT (0.0.72)
+    flyPose,
     options
 };
 struct OptionInfo {
@@ -443,6 +447,10 @@ inline constexpr OptionInfo optionInfo[options] = {
      4, {"10 DEG", "6 DEG", "15 DEG", "20 DEG"}},
     {"shadow_match", "SHADOW MATCH", "SMATCH", "EXPERIMENTAL: both eyes' shadows fit one lens for less shimmer, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
+    {"calib_look", "CALIBRATION LOOK", "CALIB", "HOLO adds belt, back and hip touches that fit your holsters, no restart.",
+     2, {"HOLO", "CLASSIC", nullptr, nullptr}},
+    {"fly_pose", "FLIGHT POSE", "FPOSE", "LEAN tips the body with flight speed, upright to hover, no restart.",
+     2, {"LEAN", "UPRIGHT", nullptr, nullptr}},
 };
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }

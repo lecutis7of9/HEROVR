@@ -895,7 +895,7 @@ using C = Control;
 constexpr SectionDef powersSections[] = {
     {"FLYING", C::flyMode, C::none, "FLY ", "", nullptr, -1,
      {C::flyMode, C::combatSupersonic, C::combatSupersonicSpeed, C::flyVignette, C::flyRoll, C::flyRollSpeed,
-      C::flyAutoLevel}},
+      C::flyAutoLevel, C::combatFlyPose}},
     {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
     {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud}},
     {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2,
@@ -923,7 +923,7 @@ constexpr SectionDef powersSections[] = {
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
      {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly,
-      C::combatGameBody}},
+      C::combatGameBody, C::combatCalibLook}},
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -4293,6 +4293,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatCapSprint:
             case Control::combatCullMargin:
             case Control::combatShadowMatch:
+            case Control::combatCalibLook:
+            case Control::combatFlyPose:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

@@ -172,6 +172,12 @@ struct View {
     Pose panel{};
     std::array<bool, 2> handTracked{};
     std::array<Pose, 2> grips{};
+    // Version 0.0.73 test 2 HOLO CALIBRATION (holo_calibration.hpp): drawn as the blue and white checklist
+    // with the T-pose figure; its touch steps (belt, back, hips, confirm) once the T-pose is measured.
+    bool holo{};
+    uint32_t holoStep{};  // holo_calibration::Step
+    uint32_t holoDone{};  // bit per Step met
+    uint32_t holoHint{};  // holo_calibration::TouchHint
 };
 // The panel (instructions, what to change, the hold's bar; the result once
 // measured) and a ring at each tracked controller that turns green while its

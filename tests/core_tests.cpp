@@ -1638,7 +1638,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 228, "controls count drifted"); // 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 229, "controls count drifted"); // 0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1978,7 +1978,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 228, "controls count drifted"); // 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 229, "controls count drifted"); // 0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -5803,6 +5803,192 @@ int main() {
         near(b.head[8],.5f);
         f.predictedDisplayTime=3;const auto held=rig.update(f,{},{0,0,-1},true);
         for(int i=0;i<16;++i)near(held.head[i],b.head[i]);
+    });
+    test("0.0.73 test 3 WEAPON COLLISION: thrown props bounce or stop off walls, cars and the ground, never tunnel, always come home", [] {
+        namespace pb = spidy::prop_bounce;
+        // The root cause: the props' ray tags sat in the PUNISHER VAN probe's 1300-1364, whose answer
+        // branch came first and swallowed them. Now 1400+, every slot and throw clear of them.
+        bool clear = true;
+        for (uint32_t s = 0; s < pb::slots; ++s)
+            for (uint32_t n = 0; n < 16; ++n) {
+                const uint32_t t = pb::tag(s, n);
+                uint32_t slot{}, low{};
+                clear = clear && !(t >= 1300 && t <= 1364) && !(t >= 1000 && t < 1300) && pb::ofTag(t, slot, low) && slot == s && low == n;
+            }
+        check(clear && pb::tag(pb::batonLeft, 0) == 1400 && pb::slots == 6, "prop tags clear of the van's 1300-1364 and the bolts', round-tripping");
+        // No tunnelling: an 80 m/s prop at 30 fps whose answer came late - already 2.5 m through the wall.
+        const pb::Plane wall = pb::fromHit({0, 1, 0}, {0, 0, -1}, 20, 1, .15f, {0, 0, 1}, 1); // the wall at z -3
+        check(wall.known && std::abs(wall.reach - 20) < 1e-4f, "the plane keeps its ray's length");
+        Vec3 at{0, 1, -5.5f}, v{0, 0, -80};
+        Vec3 old = at, oldV = v;
+        check(!pb::bounce(old, oldV, wall), "(fix 7's bounce let it through: more than 2 m in)");
+        check(pb::sweep({0, 1, -2.83f}, at, v, wall, pb::radius, pb::shieldFeel.keep) && at.z > -3.f && at.z < -2.8f &&
+                  v.z > 47.f && v.z < 49.f,
+              "the swept step catches it at the wall and it ricochets back");
+        at = {0, 1, -1}, v = {0, 0, -80};
+        check(pb::sweep({0, 1, -1}, at, v, wall, pb::radius, pb::shieldFeel.keep) == false && at.z == -1, "short of the wall: nothing");
+        Vec3 from{0, 1, -2.f};
+        at = {0, 1, -4.67f}, v = {0, 0, -80};
+        check(pb::sweep(from, at, v, wall) && std::abs(at.z - (-3 + pb::radius)) < 1e-3f, "a crossing step stops at the contact");
+        at = {6, 1, -4}, v = {0, 0, -80};
+        check(!pb::sweep({6, 1, -2}, at, v, wall), "past the surface's extent (the ray hit 6 m away): no ghost bounce");
+        at = {0, 1, -3.05f}, v = {0, 0, -20};
+        check(pb::sweep({0, 1, -2.7f}, at, v, wall, pb::radius, pb::batarangFeel.keep) && length(v) < 1e-6f, "a batarang's feel: it stops dead");
+        // The ground under him and a car next to him count; his own body and an enemy's never do.
+        const Vec3 head{0, 1.6f, 0}, feet{0, 0, 0}, chest{0, 1.2f, -5};
+        check(pb::wallHit({0, 0, -.3f}, {0, 1, 0}, &chest, 1, head, feet) && pb::wallHit({.8f, 1, 0}, {-1, 0, 0}, &chest, 1, head, feet) &&
+                  pb::wallHit({0, .05f, -5}, {0, 1, 0}, &chest, 1, head, feet) && pb::wallHit({0, 1, -6.f}, {0, 0, 1}, &chest, 1, head, feet),
+              "the ground under him, a car beside him, the street under an enemy, a wall behind him: surfaces");
+        check(!pb::wallHit({.3f, 1, 0}, {-1, 0, 0}, &chest, 1, head, feet) && !pb::wallHit({0, 1.2f, -4.6f}, {0, 0, 1}, &chest, 1, head, feet),
+              "his own body or an enemy's body: never a surface");
+        // DAREDEVIL's baton, the shield, BATMAN's batarang: bounce / stop, then home to the hand.
+        auto throwAt = [&](pb::Feel feel, bool flyHome, uint32_t& stops) {
+            hero_modes::Baton b;
+            b.feel = feel;
+            b.flyHome = flyHome;
+            b.update(.02f, true, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            b.wall = pb::fromHit({0, 1, 0}, {0, 0, -1}, 10, 1, .4f, {0, 0, 1}, b.throws); // z -4
+            bool off = false;
+            float stuckFor = 0;
+            for (int k = 0; k < 600 && !b.inHandNow(); ++k) {
+                b.update(.02f, false, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+                off = off || (b.wallBounces && b.position.z > -4.f);
+                if (b.wallStops && b.state == hero_modes::ricochet && length(b.velocity) < 1e-6f)
+                    stuckFor += .02f;
+            }
+            stops = b.wallStops;
+            check(off && b.wallBounces == 1 && b.inHandNow() && b.catches == 1 && b.timeouts == 0, "met the wall once, never through it, caught");
+            return stuckFor;
+        };
+        uint32_t stops{};
+        throwAt(pb::batonFeel, false, stops);
+        check(stops == 0, "the baton clatters off");
+        throwAt(pb::shieldFeel, true, stops);
+        check(stops == 0, "the shield ricochets");
+        const float stuck = throwAt(pb::batarangFeel, false, stops);
+        check(stops == 1 && stuck > .3f && stuck < .45f, "the batarang sticks for a moment, then comes home");
+        // Coming home through a wall: along / over it for ghostAfter, then through - always home.
+        {
+            hero_modes::Baton b;
+            b.update(.02f, true, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            for (int k = 0; k < 400 && b.state != hero_modes::returning; ++k)
+                b.update(.02f, false, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            const float outZ = b.position.z;
+            b.wall = pb::fromHit({0, 1, outZ + 1}, {0, 0, 1}, 2, 1, .5f, {0, 0, -1}, b.throws); // z outZ + 2: between it and the hand
+            const float wallZ = b.wall.point.z;
+            bool heldBack = false;
+            for (int k = 0; k < 2000 && !b.inHandNow(); ++k) {
+                b.update(.02f, false, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+                if (b.wallSlides && b.position.z < wallZ + 1.f && b.position.y < 1 + pb::extent - .1f)
+                    heldBack = heldBack || b.position.z <= wallZ - pb::radius + 1e-3f;
+            }
+            check(b.wallSlides > 0 && heldBack && b.blockedHome > 0 && b.blockedHome <= pb::ghostAfter + .03f,
+                  "held on its side of the wall coming home (up and over it), never longer than ghostAfter");
+            check(b.inHandNow() && b.catches == 1 && b.timeouts == 0, "it came home to the hand");
+        }
+        {
+            hero_modes::Baton b; // blocked ghostAfter already: through the wall, as before
+            b.update(.02f, true, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            for (int k = 0; k < 400 && b.state != hero_modes::returning; ++k)
+                b.update(.02f, false, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            b.wall = pb::fromHit({0, 1, b.position.z + 1}, {0, 0, 1}, 2, 1, .5f, {0, 0, -1}, b.throws);
+            b.blockedHome = pb::ghostAfter;
+            for (int k = 0; k < 2000 && !b.inHandNow(); ++k)
+                b.update(.02f, false, Vec3{0, 1, 0}, Vec3{0, 0, -1}, Vec3{}, false);
+            check(b.wallSlides == 0 && b.inHandNow() && b.catches == 1, "after ghostAfter it goes through and home");
+        }
+        // THOR's hammer: off the wall and home; a wall on the way home holds it a moment, it always comes back.
+        {
+            using namespace hero072;
+            PlayIn in;
+            in.dt = 1 / 72.f;
+            in.play = true;
+            in.hero = hero_modes::thor;
+            in.head.position = {0, 1.7f, 0};
+            for (auto& h : in.hands)
+                h.tracked = true;
+            in.hands[0].position = {-.25f, 1.2f, -.2f};
+            in.hands[1].position = {.2f, 1.6f, .1f};
+            in.hands[1].aim = {0, 0, -1};
+            Play play;
+            PlayOut out;
+            play.step(in, out);
+            in.hands[1].grip = 1;
+            play.step(in, out);
+            in.hands[1].position = {.25f, 1.45f, 0};
+            play.step(in, out);
+            for (int f = 0; f < 6; ++f) {
+                in.hands[1].position.z -= .05f;
+                out = PlayOut{};
+                play.step(in, out);
+            }
+            in.hands[1].position.z -= .01f;
+            in.hands[1].grip = 0;
+            out = PlayOut{};
+            play.step(in, out);
+            check(play.throws == 1 && play.hammerInAir(), "the hammer thrown");
+            in.hammerWall = pb::fromHit({.25f, 1.45f, 0}, {0, 0, -1}, 20, 1, .2f, {0, 0, 1}, play.throws); // z -4
+            bool off = false;
+            float farthest = 0;
+            int frames = 0;
+            for (; frames < 1500 && play.hammerInAir(); ++frames) {
+                if (frames == 30)
+                    in.hands[1].grip = 1;
+                if (play.hammerBounces)
+                    in.hammerWall = {};
+                out = PlayOut{};
+                play.step(in, out);
+                farthest = std::min(farthest, play.hammerAirAt().z);
+                off = off || (play.hammerBounces == 1 && play.hammerComingBack());
+            }
+            check(off && farthest > -4.f, "the hammer bounced off the wall at 4 m, never through it");
+            check(!play.hammerInAir() && play.hammerHeld, "the hammer came back to the hand");
+            // Second throw: a wall between it and the hand on the way home.
+            in.hands[1].position = {.25f, 1.45f, 0};
+            play.step(in, out);
+            for (int f = 0; f < 6; ++f) {
+                in.hands[1].position.z -= .05f;
+                out = PlayOut{};
+                play.step(in, out);
+            }
+            in.hands[1].position.z -= .01f;
+            in.hands[1].grip = 0;
+            out = PlayOut{};
+            play.step(in, out);
+            check(play.throws == 2 && play.hammerInAir(), "the second throw");
+            for (frames = 0; frames < 1500 && play.hammerInAir() && !play.hammerComingBack(); ++frames) {
+                out = PlayOut{};
+                play.step(in, out);
+            }
+            check(play.hammerComingBack(), "it turned home");
+            const float z = play.hammerAirAt().z;
+            in.hammerWall = pb::fromHit({.25f, 1.45f, z + 1.5f}, {0, 0, 1}, 20, 1, .1f, {0, 0, -1}, play.throws);
+            in.hands[1].grip = 1;
+            for (frames = 0; frames < 1500 && play.hammerInAir(); ++frames) {
+                out = PlayOut{};
+                play.step(in, out);
+            }
+            check(play.hammerSlides > 0 && play.hammerBlocked <= pb::ghostAfter + .03f, "held back by the wall on the way home, at most ghostAfter");
+            check(!play.hammerInAir() && play.hammerHeld, "and it still came back (the hammer always returns)");
+        }
+        // HELD: drawn short of the surface ahead, eased, at most maxPush; nothing ahead, nothing.
+        check(std::abs(pb::heldWant(.45f, .2f) - (.45f + pb::radius * .5f - .2f)) < 1e-5f && pb::heldWant(.45f, 5.f) == 0 &&
+                  pb::heldWant(.45f, -1.f) == 0 && pb::heldWant(0, .1f) == 0 && pb::heldWant(2.f, 0) == pb::maxPush,
+              "the held push: the reach that would sink in, capped");
+        float push = 0;
+        push = pb::heldEase(push, .3f, 1 / 90.f);
+        check(push > 0 && push < .1f, "eased in (never a pop)");
+        for (int k = 0; k < 90; ++k)
+            push = pb::heldEase(push, .3f, 1 / 90.f);
+        check(std::abs(push - .3f) < 1e-3f, "settles on the push");
+        check(hero_modes::heldReach(hero_modes::daredevil) > .4f && hero_modes::heldReach(hero_modes::spiderMan) == 0 &&
+                  hero_modes::heldReach(hero_modes::thor) > 0 && hero_modes::heldReach(hero_modes::punisher) > 0,
+              "each hero's held reach");
+        // The wrist setting: WEAPON COLLISION, ON by default (choice 0), live.
+        const auto& o = combat38::optionInfo[combat38::weaponCollision];
+        check(std::string(o.key) == "weapon_collision" && std::string(o.values[0]) == "ON" && std::string(o.values[1]) == "OFF" && o.count == 2 &&
+                  std::string(o.help).find("no restart") != std::string::npos,
+              "WEAPON COLLISION ON / OFF, no restart");
     });
     test("Version 0.0.73 fixes 2, 7, 8: the shield stays on the arm; thrown props bounce; holsters turn with the body", [] {
         namespace pb = spidy::prop_bounce;
@@ -18646,7 +18832,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 120, "one hundred and twenty options (0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 121, "one hundred and twenty-one options (0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18680,7 +18866,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 120, "0.0.73 test 2 has 120 COMBAT options (test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 121, "0.0.73 test 3 has 121 COMBAT options (test 3: + WEAPON COLLISION; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19002,7 +19188,7 @@ int main() {
                 }
             }
         }
-        check(placed == 196 /* 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 197 /* 0.0.73 test 3: + WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&

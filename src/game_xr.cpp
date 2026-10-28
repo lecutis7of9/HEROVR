@@ -1618,7 +1618,7 @@ DWORD WINAPI run(void*) {
                     const mesh_model::Mesh* m = models.model(mesh_model::slotSuitFirst + k);
                     bool ok = false;
                     try {
-                        ok = m && suit_wear::makeRig(*m, suitRigs[k]);
+                        ok = m && suit_wear::makeRig(*m, suitRigs[k], mesh_model::suitFolders[k]);
                     } catch (...) {
                         suitRigs[k] = {};
                     }
@@ -10252,6 +10252,18 @@ DWORD WINAPI run(void*) {
                                         t.grip[i] = rendered.grips[i].position + travel;
                                         t.gripForward[i] = rendered.grips[i].orientation.rotate(Vec3{0, 0, -1});
                                         t.gripX[i] = rendered.grips[i].orientation.rotate(Vec3{1, 0, 0});
+                                        // Test build 12 HANDS: the forearm through the fist (the controller's handle
+                                        // tilt) and the FIST: the trigger or the grip held, or a prop in this hand
+                                        t.gripUp[i] = rendered.grips[i].orientation.rotate(Vec3{0, 1, 0});
+                                        t.handleTiltDeg[i] = baton_grip::handleTiltDeg(runtime.controllers()[i]);
+                                        const auto& sh = rendered.swing.hands[i];
+                                        float want = std::max({sh.trigger, sh.grip, sh.wallGrip});
+                                        if (saved->batonHeld[i] || (i == 1 && saved->hero072.hammerInHand))
+                                            want = 1.f;
+                                        static float curlNow[2]{};
+                                        want = std::isfinite(want) ? std::clamp(want, 0.f, 1.f) : 0.f;
+                                        curlNow[i] += (want - curlNow[i]) * .35f;
+                                        t.curl[i] = curlNow[i];
                                     }
                                     // The standing eye height: the highest lately (a crouch does not shrink the suit).
                                     const float eyeUp = dot(t.eye - t.feet, t.up);

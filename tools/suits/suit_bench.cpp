@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <fstream>
 #include <set>
@@ -88,8 +89,14 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 2; ++i) {
         t.hand[i] = true;
         t.grip[i] = {i == 0 ? -.22f : .22f, 1.22f, -.38f};
-        t.gripForward[i] = normalized(Vec3{0, .25f, -1});
+        // Test build 12 HANDS: a real OpenXR grip (Touch) for a hand held out level ahead, its palm in: the grip's
+        // -Z up the fist's tube (60 degrees up), +Y = Z x X, +X right on both hands
+        t.gripForward[i] = Vec3{0, .8660254f, -.5f};
+        t.gripUp[i] = Vec3{0, .5f, .8660254f};
         t.gripX[i] = {1, 0, 0};
+        t.handleTiltDeg[i] = 30.f;
+        if (const char* c = std::getenv("SUIT_BENCH_CURL"))
+            t.curl[i] = static_cast<float>(std::atof(c));
     }
     t.standingEye = 1.65f;
     // A mirror 1.4 m ahead facing the player (its normal +z), life size.
@@ -116,7 +123,7 @@ int main(int argc, char** argv) {
         const mm::Mesh* m = lib.model(s);
         sw::Rig rig;
         const auto r0 = Clock::now();
-        const bool rigged = m && sw::makeRig(*m, rig);
+        const bool rigged = m && sw::makeRig(*m, rig, mm::suitFolders[k]);
         const double rigUs = us(r0, Clock::now());
         double tEst = 0, tMove = 0, tSkin = 0, tArms = 0, tBody = 0, tMirror = 0, worst = 0;
         size_t vArms = 0, vBody = 0, vMirror = 0;

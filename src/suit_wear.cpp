@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
+#include <vector>
 
 namespace spidy::suit_wear {
 namespace {
@@ -75,70 +76,128 @@ Vec3 bend(Vec3 from, Vec3 to, float l1, float l2, Vec3 pole) {
         p = square(std::abs(u.y) < .9f ? Vec3{0, 1, 0} : Vec3{0, 0, 1}, u);
     return from + u * x + normalized(p) * h;
 }
-// Test build 12 HANDS: the back of each rest hand from the hand's own vertices (the converter's handBack took the
+// Test build 12 HANDS: the back of each rest hand from the hand's own shape (the converter's handBack took the
 // projected-out bone axis for the palm's normal: a random way on every suit, the hand turned off the controller).
-// The palm's normal is the hand's thinnest axis square to the bone (its vertices weighted mostly to the hand
-// bone, 15..95% along it); signed out and up from the body (the rest hands hang palms in or down); the two
-// hands made mirror images (x flipped) weighted by how flat each is, so a left and a right hand turn alike.
-void restHands(Rig& rig) {
-    Skeleton& k = rig.skeleton;
-    Vec3 found[2]{};
-    float flat[2]{};
-    for (int side = 0; side < 2; ++side) {
-        const uint32_t b = side ? boneHandR : boneHandL, wr = side ? wristR : wristL, tp = side ? tipR : tipL;
-        Vec3 ax = k.at[tp] - k.at[wr];
-        const float L = length(ax);
-        if (!(L > 1e-4f))
+// The palm's axis: the hand's thinnest way across the bone (its palm half, 5..55% along, is a slab). Its sign by
+// three votes: the fingers' ends (70%+ along) sit toward the palm (a rest hand is a little curled), the thumb (the side
+// reaching furthest across the width 15..60% along) is at -x of a right hand's frame and +x of a left's (x = y x back,
+// y wrist -> fingers), and, weakly, the rest hands hang palms in or down (backs out, up and ahead). Both hands' votes
+// summed and the hands made mirror images (x flipped), so a left and a right turn alike. Checked by eye on every suit
+// (tools/suits/suit_hands SUIT_HANDS_DUMP, tools/suits/suit_bench); any the votes get wrong go in flipHands.
+struct HandVote {
+    Vec3 n{};
+    float vote = 0;
+    bool ok = false;
+};
+HandVote voteHand(const Rig& rig, int side) {
+    HandVote out;
+    const Skeleton& k = rig.skeleton;
+    const uint32_t b = side ? boneHandR : boneHandL, wr = side ? wristR : wristL, tp = side ? tipR : tipL;
+    Vec3 ax = k.at[tp] - k.at[wr];
+    const float L = length(ax);
+    if (!(L > 1e-4f))
+        return out;
+    ax = ax / L;
+    const Vec3 u = normalized(square(std::abs(ax.y) < .9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0}, ax)), v = cross(ax, u);
+    std::vector<Vec3> pts;
+    std::vector<float> along;
+    double mu = 0, mv = 0, cu = 0, cv = 0, cuv = 0, n = 0;
+    for (size_t i = 0; i < rig.rest.size(); ++i) {
+        uint32_t w = 0;
+        for (int c = 0; c < 4; ++c)
+            if ((rig.joint[i * 4 + c] & 15) == b)
+                w += rig.weight[i * 4 + c];
+        if (w < 128)
             continue;
-        ax = ax / L;
-        const Vec3 u = normalized(square(std::abs(ax.y) < .9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0}, ax)), v = cross(ax, u);
-        double su = 0, sv = 0, suu = 0, svv = 0, suv = 0, n = 0;
-        for (size_t i = 0; i < rig.rest.size(); ++i) {
-            uint32_t w = 0;
-            for (int c = 0; c < 4; ++c)
-                if ((rig.joint[i * 4 + c] & 15) == b)
-                    w += rig.weight[i * 4 + c];
-            if (w < 128)
-                continue;
-            const Vec3 d = rig.rest[i] - k.at[wr];
-            const float along = dot(d, ax);
-            if (along < .15f * L || along > .95f * L)
-                continue;
-            const double a = dot(d, u), c = dot(d, v);
-            su += a, sv += c, suu += a * a, svv += c * c, suv += a * c, n += 1;
+        const Vec3 d = rig.rest[i] - k.at[wr];
+        const float a = dot(d, ax);
+        const Vec3 q = d - ax * a;
+        pts.push_back(q);
+        along.push_back(a);
+        if (a > .05f * L && a < .55f * L) {
+            const double x = dot(q, u), y = dot(q, v);
+            mu += x, mv += y, cu += x * x, cv += y * y, cuv += x * y, n += 1;
         }
-        if (n < 12)
-            continue;
-        const double cu = suu / n - (su / n) * (su / n), cv = svv / n - (sv / n) * (sv / n), cuv = suv / n - (su / n) * (sv / n);
-        // the 2 x 2 covariance's smaller eigenvalue's vector
-        const double tr = cu + cv, det = cu * cv - cuv * cuv, disc = std::sqrt(std::max(0.0, tr * tr / 4 - det));
-        const double lo = tr / 2 - disc, hi = tr / 2 + disc;
-        Vec3 nrm = std::abs(cuv) > 1e-12 ? u * static_cast<float>(cuv) + v * static_cast<float>(lo - cu)
-                                         : (cu < cv ? u : v);
-        if (!(length(nrm) > 1e-6f) || !(hi > 0))
-            continue;
-        nrm = normalized(nrm);
-        Vec3 out = square(Vec3{side ? -1.f : 1.f, 1.f, 0.f}, ax);
-        if (dot(nrm, out) < 0)
-            nrm = nrm * -1.f;
-        found[side] = nrm;
-        flat[side] = static_cast<float>(1.0 - lo / hi); // 0 round, 1 flat
     }
+    if (n < 12)
+        return out;
+    mu /= n, mv /= n;
+    cu = cu / n - mu * mu, cv = cv / n - mv * mv, cuv = cuv / n - mu * mv;
+    // the 2 x 2 covariance's smaller eigenvalue's vector: the palm's normal
+    const double tr = cu + cv, det = cu * cv - cuv * cuv, disc = std::sqrt(std::max(0.0, tr * tr / 4 - det));
+    const double lo = tr / 2 - disc;
+    Vec3 nrm = std::abs(cuv) > 1e-14 ? u * static_cast<float>(cuv) + v * static_cast<float>(lo - cu) : (cu < cv ? u : v);
+    if (!(length(nrm) > 1e-9f))
+        return out;
+    nrm = normalized(nrm);
+    double palm = 0, np = 0, tips = 0, nt = 0;
+    const Vec3 wd = cross(ax, nrm);
+    std::vector<float> across;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        const float a = along[i], h = dot(pts[i], nrm);
+        if (a > .05f * L && a < .55f * L)
+            palm += h, np += 1;
+        if (a > .7f * L)
+            tips += h, nt += 1;
+        if (a > .15f * L && a < .6f * L)
+            across.push_back(dot(pts[i], wd));
+    }
+    float vote = 0;
+    if (nt > 0 && np > 0)
+        vote += -static_cast<float>(tips / nt - palm / np) / L; // the tips toward -nrm: nrm is the back
+    if (across.size() > 20) {
+        std::sort(across.begin(), across.end());
+        const size_t m = across.size();
+        const float mid = across[m / 2], lo1 = across[m / 100], hi1 = across[m - 1 - m / 100];
+        const float th = ((hi1 - mid) - (mid - lo1)) / L; // > 0: the thumb at +wd
+        vote += side ? -th : th;
+    }
+    out.n = nrm;
+    out.vote = vote;
+    out.ok = true;
+    return out;
+}
+// Suits whose rest hands the votes turn the wrong way (by eye): their backs flipped.
+bool flipHands(const char* name) {
+    static const char* const flip[] = {nullptr}; // none at build 12 (Iron Man 4's repulsor checked in its palm)
+    if (!name)
+        return false;
+    for (const char* f : flip)
+        if (f && std::strcmp(name, f) == 0)
+            return true;
+    return false;
+}
+void restHands(Rig& rig, const char* name) {
+    Skeleton& k = rig.skeleton;
+    const HandVote l = voteHand(rig, 0), r = voteHand(rig, 1);
     const auto mirror = [](Vec3 a) { return Vec3{-a.x, a.y, a.z}; };
-    Vec3 both = found[0] * flat[0] + mirror(found[1]) * flat[1];
-    if (!(length(both) > 1e-3f))
+    if (!l.ok && !r.ok)
         return; // keep the model's own
-    both = normalized(both);
+    // the right hand's way, with the left's mirrored onto it
+    Vec3 nR = r.ok ? r.n : mirror(l.n);
+    float vote = r.ok ? r.vote : 0;
+    if (l.ok) {
+        const float s = dot(mirror(l.n), nR) < 0 ? -1.f : 1.f;
+        nR = r.ok ? normalized(nR + mirror(l.n) * s) : nR;
+        vote += l.vote * s;
+    }
+    const Vec3 prior = normalized(Vec3{-.5f, .6f, .45f}); // a right rest hand's back: out, up and ahead
+    vote += .3f * dot(nR, prior);
+    if (vote < 0)
+        nR = nR * -1.f;
+    if (flipHands(name))
+        nR = nR * -1.f;
     for (int side = 0; side < 2; ++side) {
         const Vec3 ax = normalized(k.at[side ? tipR : tipL] - k.at[side ? wristR : wristL]);
-        const Vec3 h = square(side ? mirror(both) : both, ax);
+        const Vec3 h = square(side ? nR : mirror(nR), ax);
         if (length(h) > .2f)
             k.handBack[side] = normalized(h);
+        rig.handThumb[side] = vote;
     }
 }
 } // namespace
 
-bool makeRig(const mesh_model::Mesh& mesh, Rig& out) {
+bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name) {
     out = {};
     if (!mesh.ok() || !mesh.hasSuit || !mesh.hasSkin() || !mesh.hasNormals())
         return false;
@@ -188,7 +247,7 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out) {
         }
         out.corner[c] = found;
     }
-    restHands(out);
+    restHands(out, name);
     out.triangleBone.resize(n);
     for (uint32_t t = 0; t < n; ++t) {
         uint32_t sum[bones]{};
@@ -200,6 +259,27 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out) {
     out.ok = true;
     return true;
 }
+
+Vec3 handWay(Vec3 gripForward, Vec3 gripUp, float tiltDeg) {
+    const Vec3 f = normalized(gripForward), u = normalized(square(gripUp, f));
+    if (!(length(f) > .5f) || !(length(u) > .5f))
+        return {};
+    const float a = std::clamp(std::isfinite(tiltDeg) ? tiltDeg : 30.f, 0.f, 60.f) * 3.14159265f / 180.f;
+    return normalized(u * -std::cos(a) + f * std::sin(a));
+}
+Vec3 handBackOf(Vec3 gripX, int side) {
+    const Vec3 x = normalized(gripX);
+    return side ? x : x * -1.f;
+}
+namespace {
+// The rest hand's knuckles (from the wrist) and its fingers' reach past them (rest metres).
+void handReach(const Rig& rig, int side, float& knuckle, float& fingers) {
+    const Skeleton& r = rig.skeleton;
+    const float L = length(r.at[side ? tipR : tipL] - r.at[side ? wristR : wristL]), h = rig.height / 1.8f;
+    knuckle = std::min(L * knuckleShare, knuckleMax * h);
+    fingers = std::max(.02f * h, std::min(L - knuckle, fingersMax * h));
+}
+} // namespace
 
 bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
     out = {};
@@ -242,15 +322,21 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
         const float l1 = length(r.at[el] - r.at[sh]) * s, l2 = length(r.at[wr] - r.at[el]) * s,
                     hand = length(r.at[tip] - r.at[wr]) * s;
         const Vec3 fwd = normalized(t.gripForward[side]), gx = normalized(t.gripX[side]);
-        if (t.hand[side] && ok(t.grip[side]) && length(fwd) > .5f && length(gx) > .5f) {
-            // OpenXR grips: x is the palm's normal; the back of the left hand is -x, of the right +x
-            const Vec3 back = side ? gx : gx * -1.f;
-            const Vec3 wrist = t.grip[side] - fwd * (.07f * s) + back * (.015f * s);
+        const Vec3 way = handWay(t.gripForward[side], t.gripUp[side], t.handleTiltDeg[side]);
+        out.curl[side] = std::clamp(std::isfinite(t.curl[side]) ? t.curl[side] : 0.f, 0.f, 1.f);
+        if (t.hand[side] && ok(t.grip[side]) && length(fwd) > .5f && length(gx) > .5f && length(way) > .5f) {
+            // Test build 12 HANDS: the hand along the forearm through the fist (handWay), its back the grip's
+            // -x (left) or +x (right); the knuckles' line just past the handle's axis (the grip point) and the
+            // hand's middle a curled finger's radius behind it, so the fist closes round the handle
+            const Vec3 back = handBackOf(gx, side);
+            float kn = 0, fi = 0;
+            handReach(rig, side, kn, fi);
+            const Vec3 wrist = t.grip[side] - way * (kn * s) + back * (fi * s / fistRadians);
             const Vec3 out_ = side ? fx * -1.f : fx;
             out.at[wr] = wrist;
-            out.at[tip] = wrist + fwd * hand;
+            out.at[tip] = wrist + way * hand;
             out.at[el] = bend(out.at[sh], wrist, l1, l2, up * -.8f + out_ * .45f - fz * .3f);
-            out.handBack[side] = back;
+            out.handBack[side] = normalized(square(back, way));
         } else { // untracked: the rest arm, turned with the body
             out.at[el] = out.at[sh] + B(r.at[el] - r.at[sh]) * s;
             out.at[wr] = out.at[sh] + B(r.at[wr] - r.at[sh]) * s;
@@ -307,9 +393,35 @@ bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
             }
         out[b].a0 = r.at[boneEnds[b][0]];
         out[b].a1 = live.at[boneEnds[b][0]];
+        if (b == boneHandL || b == boneHandR) { // Test build 12 FIST
+            const int side = b == boneHandR;
+            out[b].x0 = x0, out[b].y0 = y0, out[b].z0 = z0;
+            handReach(rig, side, out[b].knuckle, out[b].fingers);
+            const float c = std::isfinite(live.curl[side]) ? std::clamp(live.curl[side], 0.f, 1.f) : 0.f;
+            out[b].curl = c * fistRadians;
+        }
     }
     return true;
 }
+
+namespace {
+// Test build 12 FIST: a rest point past the knuckles bent round the palm's side (-z0) about the knuckles' line
+// (x0), evenly along the fingers (a curl of b.curl radians over b.fingers), so the fingers wrap a handle; past
+// the fingertips it carries on straight. Its normal turned the same.
+void curlFinger(const BoneMove& b, Vec3& d, Vec3& n) {
+    const float lx = dot(d, b.x0), ly = dot(d, b.y0), lz = dot(d, b.z0);
+    const float s = ly - b.knuckle;
+    if (!(s > 0))
+        return;
+    const float R = b.fingers / b.curl, phi = std::min(s, b.fingers) / R, extra = std::max(0.f, s - b.fingers);
+    const float cs = std::cos(phi), sn = std::sin(phi);
+    // (y, z) about the curl's centre (knuckle, -R): (0, R + lz) turned by phi, then on along the tangent
+    const float y = b.knuckle + (R + lz) * sn + extra * cs, z = -R + (R + lz) * cs - extra * sn;
+    d = b.x0 * lx + b.y0 * y + b.z0 * z;
+    const float nx = dot(n, b.x0), ny = dot(n, b.y0), nz = dot(n, b.z0);
+    n = b.x0 * nx + b.y0 * (ny * cs + nz * sn) + b.z0 * (-ny * sn + nz * cs);
+}
+} // namespace
 
 bool skin(const Rig& rig, const BoneMove m[bones], Skinned& out) {
     if (!rig.ok)
@@ -326,11 +438,14 @@ bool skin(const Rig& rig, const BoneMove m[bones], Skinned& out) {
                 continue;
             const float w = w8 * (1.f / 255.f);
             const BoneMove& b = m[rig.joint[v * 4 + c] & 15];
-            const Vec3 d = r - b.a0;
+            Vec3 d = r - b.a0;
+            Vec3 rn_ = rn;
+            if (b.curl > 1e-3f && b.fingers > 1e-4f)
+                curlFinger(b, d, rn_);
             p += (b.a1 + Vec3{b.m[0] * d.x + b.m[1] * d.y + b.m[2] * d.z, b.m[3] * d.x + b.m[4] * d.y + b.m[5] * d.z,
                               b.m[6] * d.x + b.m[7] * d.y + b.m[8] * d.z}) * w;
-            q += Vec3{b.n[0] * rn.x + b.n[1] * rn.y + b.n[2] * rn.z, b.n[3] * rn.x + b.n[4] * rn.y + b.n[5] * rn.z,
-                      b.n[6] * rn.x + b.n[7] * rn.y + b.n[8] * rn.z} * w;
+            q += Vec3{b.n[0] * rn_.x + b.n[1] * rn_.y + b.n[2] * rn_.z, b.n[3] * rn_.x + b.n[4] * rn_.y + b.n[5] * rn_.z,
+                      b.n[6] * rn_.x + b.n[7] * rn_.y + b.n[8] * rn_.z} * w;
         }
         out.p[v] = p;
         out.n[v] = q;

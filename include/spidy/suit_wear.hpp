@@ -84,6 +84,7 @@ struct Skeleton {
     Vec3 face{0, 0, 1}, faceUp{0, 1, 0};
     Vec3 handBack[2]{{0, 1, 0}, {0, 1, 0}};
     Vec3 up{0, 1, 0};
+    float curl[2]{}; // Test build 12 FIST: each hand's fingers curled (0 open, 1 a fist round a handle)
     bool ok{};
 };
 // A worn suit made ready (once, at load): its unique vertices, each corner's vertex, each triangle's bone.
@@ -95,8 +96,9 @@ struct Rig {
     std::vector<uint8_t> triangleBone;  // the bone with the most of the triangle's weight
     Skeleton skeleton;                  // the rest skeleton (the model's: facing +z, its left at +x)
     float height = 1.8f;                // the head's top above the feet
+    float handThumb[2]{};               // Test build 12: each rest hand's thumb found (+-1 across it; 0 none)
 };
-bool makeRig(const mesh_model::Mesh& mesh, Rig& out);
+bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name = nullptr); // name: the suit's folder (Suit_...)
 
 // The tracked player (world): the head (the eyes' middle) and its axes, each grip (OpenXR: -z the fingers,
 // x across the palm), the floor under the feet and up.
@@ -104,6 +106,12 @@ struct Tracked {
     Vec3 eye{}, eyeForward{0, 0, -1}, eyeUp{0, 1, 0};
     bool hand[2]{};
     Vec3 grip[2]{}, gripForward[2]{{0, 0, -1}, {0, 0, -1}}, gripX[2]{{1, 0, 0}, {1, 0, 0}};
+    // Test build 12 HANDS: the grip's +Y and how far the controller's handle tilts the forearm off it (toward +Z:
+    // baton_grip::handleTiltDeg, Touch 30 CONFIRMED); each hand's fingers curled (0 open .. 1 a fist: the trigger,
+    // the grip, or a held prop).
+    Vec3 gripUp[2]{{0, 1, 0}, {0, 1, 0}};
+    float handleTiltDeg[2]{30.f, 30.f};
+    float curl[2]{};
     Vec3 feet{}, up{0, 1, 0};
     float standingEye = 0; // the player's standing eye height above the feet (0: this frame's, crouching shrinks him)
 };
@@ -116,7 +124,23 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out);
 struct BoneMove {
     float m[9]{}, n[9]{};
     Vec3 a0{}, a1{};
+    // Test build 12 FIST (the hands only): the rest bone's axes, where its knuckles are and how far its fingers
+    // reach (rest metres from a0), and the curl's angle (radians, 0: none).
+    Vec3 x0{}, y0{}, z0{};
+    float knuckle{}, fingers{}, curl{};
 };
+// Test build 12 HANDS. The hand bone's way (wrist -> knuckles) and the wrist from an OpenXR grip pose:
+// the grip's -Y turned tiltDeg toward its -Z (the forearm through a fist round a controller's handle; the grip's
+// -Z runs through that fist from the little finger to the thumb, NOT along the fingers - build 9 to 11 laid the
+// hand along -Z: fingers up the handle, "the hand ... doesnt match ... my IRL hand"). The back of the hand: the
+// grip's -X on the left hand, +X on the right (+X points right on both: OpenXR "away from the palm in the left
+// hand, into the palm in the right hand").
+inline constexpr float fistRadians = 3.3f;  // the fingers' whole curl round a handle (about 190 degrees)
+inline constexpr float knuckleShare = .5f;  // the knuckles half way down the hand bone (at most knuckleMax)
+inline constexpr float knuckleMax = .1f;    // m at 1.8 m
+inline constexpr float fingersMax = .095f;  // m at 1.8 m
+Vec3 handWay(Vec3 gripForward, Vec3 gripUp, float tiltDeg);
+Vec3 handBackOf(Vec3 gripX, int side);
 bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]);
 // Skins every vertex (positions and normals, world) once a frame; then draw() places triangles from it.
 struct Skinned {

@@ -1590,6 +1590,7 @@ DWORD WINAPI run(void*) {
             const uint64_t commitFree = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPageFile : 0;
             // Build 7: 512 px from 768 MB of free commit (29 layers: about 40 MB with mips). Builds 5-6 asked
             // for 3 GB, so the user's 1228 MB got 256 px and every model looked blurred (the test-6 log).
+            // Build 9: with the suits about 110 layers (about 150 MB at 512 px, the same again while uploading).
             const uint32_t size = commitFree >= (768ull << 20) ? 512u : 256u;
             uint32_t levels = 1;
             while ((size >> levels) >= 1)

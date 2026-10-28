@@ -32,6 +32,7 @@
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
 #include "spidy/mesh_model.hpp"
+#include "spidy/suit_wear.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/roster_page.hpp"
 #include <filesystem>
@@ -23986,6 +23987,103 @@ int main() {
                   mm::slotIsVehicle(mm::slotVan) && mm::slotIsVehicle(mm::slotVanInterior) && mm::slotIsVehicle(mm::slotVanWheel) &&
                   !mm::slotIsVehicle(mm::slotHammer) && mm::slotDrawCap[mm::slotVan] == mm::vanTriangles,
               "the van, its cab and its wheel: their folders, drawn placed");
+    });
+    test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
+        namespace mm = spidy::mesh_model;
+        check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slots == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23,
+              "the suits follow the roster");
+        for (uint32_t k = 0; k < mm::suitSlots; ++k) {
+            const uint32_t s = mm::slotSuitFirst + k;
+            check(std::string(mm::slotFolders[s]) == std::string("Suits/") + mm::suitFolders[k] && !mm::slotMayDecimate[s] &&
+                      mm::slotDrawCap[s] == mm::drawTriangles && mm::slotIsSuit(s) && mm::suitSlot(mm::suitFolders[k]) == s,
+                  std::string("suit slot ") + mm::suitFolders[k]);
+        }
+        check(mm::suitSlot("Suit_hulk_1") == 0 && mm::suitSlot("") == 0 && mm::suitSlot(nullptr) == 0 && !mm::slotIsSuit(mm::slotRoster),
+              "a dropped suit (Hulk Grey) has no slot");
+    });
+    test("Build 9 SUITS: a skinned suit worn (rest = itself, an arm raised moves only the arm, the mirror reflects)", [] {
+        namespace mm = spidy::mesh_model;
+        namespace sw = spidy::suit_wear;
+        // the rest skeleton: a 1.8 m T-ish pose facing +z, its left at +x
+        const Vec3 J[sw::ends] = {{0, 1.6f, 0},      {0, 1.5f, 0},     {0, 1.3f, 0},      {0, 1.0f, 0},     {.18f, 1.45f, 0},
+                                  {.45f, 1.4f, 0},   {.7f, 1.35f, 0},  {-.18f, 1.45f, 0}, {-.45f, 1.4f, 0}, {-.7f, 1.35f, 0},
+                                  {.1f, .95f, 0},    {.1f, .5f, 0},    {.1f, .08f, 0},    {-.1f, .95f, 0},  {-.1f, .5f, 0},
+                                  {-.1f, .08f, 0},   {0, 1.8f, 0},     {.88f, 1.32f, 0},  {-.88f, 1.32f, 0}};
+        mm::Mesh m;
+        for (uint32_t e = 0; e < sw::ends; ++e)
+            m.suitEnds[e * 3] = J[e].x, m.suitEnds[e * 3 + 1] = J[e].y, m.suitEnds[e * 3 + 2] = J[e].z;
+        m.suitHandBack[1] = 1, m.suitHandBack[4] = 1;
+        m.hasSuit = true;
+        // one small triangle at the middle of every bone, all its weight on that bone
+        for (uint32_t b = 0; b < sw::bones; ++b) {
+            const Vec3 c = (J[sw::boneEnds[b][0]] + J[sw::boneEnds[b][1]]) * .5f;
+            const Vec3 p[3] = {c + Vec3{0, 0, .05f}, c + Vec3{.02f, 0, .05f}, c + Vec3{0, .02f, .05f}};
+            for (int k = 0; k < 3; ++k) {
+                m.corners.push_back(p[k]);
+                m.normals.push_back({0, 0, 1});
+                m.uvs.push_back(0), m.uvs.push_back(0);
+                for (int q = 0; q < 4; ++q)
+                    m.skinJoints.push_back(q ? 0 : static_cast<uint8_t>(b)), m.skinWeights.push_back(q ? 0 : 255);
+            }
+            m.colors.push_back({1, 1, 1});
+            m.tints.push_back({1, 1, 1});
+            m.image.push_back(-1);
+        }
+        check(m.hasSkin() && m.ok(), "the test suit is skinned");
+        sw::Rig rig;
+        check(sw::makeRig(m, rig) && rig.rest.size() == size_t{sw::bones} * 3 && rig.triangleBone[sw::boneForeL] == sw::boneForeL,
+              "the rig: 48 vertices, each triangle its bone");
+        sw::BoneMove mv[sw::bones];
+        sw::Skinned sk;
+        check(sw::moves(rig, rig.skeleton, mv) && sw::skin(rig, mv, sk), "the rest pose skins");
+        float worst = 0;
+        for (size_t v = 0; v < rig.rest.size(); ++v)
+            worst = std::max(worst, length(sk.p[v] - rig.rest[v]));
+        check(worst < 1e-4f, "the rest pose leaves every vertex where it is");
+        // the left forearm and hand raised straight up from the elbow
+        sw::Skeleton live = rig.skeleton;
+        live.at[sw::wristL] = live.at[sw::elbowL] + Vec3{0, .25f, 0};
+        live.at[sw::tipL] = live.at[sw::wristL] + Vec3{0, .18f, 0};
+        check(sw::moves(rig, live, mv) && sw::skin(rig, mv, sk), "the raised arm skins");
+        const Vec3 fore = sk.p[sw::boneForeL * 3], torso = sk.p[sw::boneChest * 3];
+        check(std::abs(fore.x - .45f) < .05f && fore.y > 1.45f && length(torso - rig.rest[sw::boneChest * 3]) < 1e-4f,
+              "the forearm went up with the wrist; the chest stayed");
+        check(std::abs(sk.p[sw::boneForeL * 3].z - .05f) < .02f, "the forearm's front stays in front");
+        // first person ARMS: 6 bones' triangles; the mirror (x -> -x) reflects them
+        std::vector<spidy::Vertex> sink;
+        check(sw::draw(sink, 1000, m, rig, sk, sw::partBones(sw::partArms)) && sink.size() == 18, "ARMS: the arms' 6 triangles");
+        const float mirror[12] = {-1, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0};
+        sink.clear();
+        check(sw::draw(sink, 1000, m, rig, sk, sw::allBones, mirror) && sink.size() == 48 &&
+                  std::abs(sink[sw::boneChest * 3].position.x - (2 - rig.rest[sw::boneChest * 3].x)) < 1e-4f,
+              "the mirror: all 16 reflected");
+        sink.clear();
+        check(!sw::draw(sink, 10, m, rig, sk, sw::allBones) && sink.empty() && !sw::draw(sink, 1000, m, rig, sk, 0),
+              "over the budget (or no bones): nothing");
+        // the tracked estimate: a 1.8 m player, his hands ahead
+        sw::Tracked t;
+        t.eye = {0, 1.68f, 0};
+        t.eyeForward = {0, 0, -1};
+        t.feet = {0, 0, 0};
+        for (int s = 0; s < 2; ++s) {
+            t.hand[s] = true;
+            t.grip[s] = {s ? .2f : -.2f, 1.2f, -.4f};
+            t.gripForward[s] = {0, 0, -1};
+        }
+        sw::Skeleton est;
+        check(sw::estimate(rig, t, est) && est.ok, "the estimate");
+        // facing -z: the model's left (+x) is the player's left (-x)
+        check(est.at[sw::shoulderL].x < -.1f && est.at[sw::footL].y < .2f && est.at[sw::footL].y > 0 && est.at[sw::wristL].z < -.25f &&
+                  std::abs(length(est.at[sw::elbowL] - est.at[sw::shoulderL]) - .27f) < .05f,
+              "the shoulders turned to the facing, the feet on the floor, the wrists at the grips");
+        check(sw::moves(rig, est, mv) && sw::skin(rig, mv, sk), "the estimate skins");
+        check(sk.p[sw::boneChest * 3].z < est.at[sw::chest].z - .03f, "the chest's front turned toward -z");
+        t.eye = {std::nanf(""), 0, 0};
+        check(!sw::estimate(rig, t, est), "an insane head: no estimate");
+        // a mesh without its skin is not worn
+        mm::Mesh bare = m;
+        bare.skinJoints.pop_back();
+        check(!bare.hasSkin() && !sw::makeRig(bare, rig), "a broken skin: not worn");
     });
     test("Version 0.0.7: PUNISHER holsters (same side, cross draw, back, busy, return away)", [] {
         using namespace spidy::hero007;

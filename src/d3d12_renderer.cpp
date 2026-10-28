@@ -674,9 +674,9 @@ bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
     try {
         if (!device_ || !queue_ || !list_)
             throw std::runtime_error("Overlay not initialized");
-        if (layers.empty() || layers.size() > 64 || !size || size > 4096 || !levels || levels > 13 ||
+        if (layers.empty() || layers.size() > 128 || !size || size > 4096 || !levels || levels > 13 ||
             (size >> (levels - 1)) < 1)
-            throw std::runtime_error("Model textures need 1 to 64 layers of 1 to 4096 texels, 1 to 13 levels");
+            throw std::runtime_error("Model textures need 1 to 128 layers of 1 to 4096 texels, 1 to 13 levels");
         size_t layerBytes = 0;
         for (unsigned l = 0; l < levels; ++l)
             layerBytes += size_t{size >> l} * (size >> l) * 4;

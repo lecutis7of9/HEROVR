@@ -422,6 +422,69 @@ struct Doc {
         }
         return true;
     }
+    // Build 9 SUITS: JOINTS_0 (UNSIGNED_BYTE / SHORT VEC4, each under 16: suit_wear's bones) or WEIGHTS_0 (FLOAT,
+    // or normalized UNSIGNED_BYTE / SHORT VEC4: summed to 255 here). false: the skin is not read (the mesh still is).
+    bool skinAccessor(uint32_t index, size_t want, bool weights, std::vector<uint8_t>& out_) {
+        const Json* list = root.get("accessors");
+        const Json* a = list ? list->at(index) : nullptr;
+        if (!a || a->kind != Json::object || a->get("sparse"))
+            return false;
+        const Json* bv = a->get("bufferView");
+        const Json* type = a->get("componentType");
+        const Json* count = a->get("count");
+        const Json* kind = a->get("type");
+        const Json* off = a->get("byteOffset");
+        if (!bv || !bv->isInt() || !type || !type->isInt() || !count || !count->isInt() || !kind || kind->kind != Json::string ||
+            (off && !off->isInt()) || static_cast<size_t>(count->num) != want || kind->text != "VEC4")
+            return false;
+        const auto component = static_cast<uint32_t>(type->num);
+        const Json* norm = a->get("normalized");
+        const bool normal = norm && norm->yes;
+        const size_t one = component == 5121 ? 1 : component == 5123 ? 2 : component == 5126 && weights ? 4 : 0;
+        if (!one || (weights && one != 4 && !normal) || (!weights && normal))
+            return false;
+        size_t offset{}, length{}, stride{};
+        if (!view(static_cast<uint32_t>(bv->num), offset, length, stride))
+            return false;
+        const size_t extra = off ? static_cast<size_t>(off->num) : 0, size = 4 * one, step = stride ? stride : size;
+        if (want == 0 || step < size || extra > length || (want - 1) * step + size > length - extra)
+            return false;
+        out_.resize(want * 4);
+        for (size_t i = 0; i < want; ++i) {
+            const uint8_t* at = bin.data() + offset + extra + i * step;
+            float f[4];
+            for (size_t k = 0; k < 4; ++k) {
+                if (one == 4)
+                    std::memcpy(&f[k], at + k * 4, 4);
+                else if (one == 2)
+                    f[k] = static_cast<float>(at[k * 2] | (at[k * 2 + 1] << 8));
+                else
+                    f[k] = at[k];
+                if (!std::isfinite(f[k]) || f[k] < 0)
+                    return false;
+            }
+            if (!weights) {
+                for (size_t k = 0; k < 4; ++k) {
+                    if (f[k] >= 16)
+                        return false;
+                    out_[i * 4 + k] = static_cast<uint8_t>(f[k]);
+                }
+                continue;
+            }
+            const float sum = f[0] + f[1] + f[2] + f[3];
+            if (!(sum > 0))
+                return false;
+            int given = 0;
+            for (size_t k = 0; k < 4; ++k) {
+                const int w = static_cast<int>(f[k] / sum * 255.f + .5f);
+                out_[i * 4 + k] = static_cast<uint8_t>(std::clamp(w, 0, 255));
+                given += out_[i * 4 + k];
+            }
+            const size_t top = static_cast<size_t>(std::max_element(f, f + 4) - f); // the rounding onto the heaviest
+            out_[i * 4 + top] = static_cast<uint8_t>(std::clamp(out_[i * 4 + top] + 255 - given, 0, 255));
+        }
+        return true;
+    }
     // Version 0.0.72: the material's base-colour image (an index into out.images, -1 none) and its cut.
     int16_t materialImage(const Json* index, bool& cutout) {
         cutout = false;
@@ -541,6 +604,11 @@ struct Doc {
                 if (!nn->isInt() || !floatAccessor(static_cast<uint32_t>(nn->num), points.size(), 3, nrm))
                     return error.empty() ? refuse(error, "bad NORMAL") : false;
             }
+            std::vector<uint8_t> sj, sw; // Build 9 SUITS: the skin (both, or neither)
+            if (const Json* j0 = attrs->get("JOINTS_0"), *w0 = attrs->get("WEIGHTS_0"); j0 && w0 && j0->isInt() && w0->isInt())
+                if (!skinAccessor(static_cast<uint32_t>(j0->num), points.size(), false, sj) ||
+                    !skinAccessor(static_cast<uint32_t>(w0->num), points.size(), true, sw))
+                    sj.clear(), sw.clear();
             bool cutout = false;
             const int16_t image = uv.empty() ? int16_t{-1} : materialImage(prim.get("material"), cutout);
             // normals go through the inverse transpose (the cofactors) of the node's 3 x 3
@@ -576,6 +644,9 @@ struct Doc {
                             n = normalized(w);
                     }
                     out.normals.push_back(n);
+                    if (!sj.empty())
+                        for (size_t q = 0; q < 4; ++q)
+                            out.skinJoints.push_back(sj[v * 4 + q]), out.skinWeights.push_back(sw[v * 4 + q]);
                 }
                 out.image.push_back(image);
                 out.tints.push_back(painted.empty() ? tint : Vec3{1, 1, 1});
@@ -638,6 +709,24 @@ struct Doc {
                 out.hasLayer = true;
             }
         }
+        // Build 9 SUITS: asset.extras.suit {joints: 48, ends: 9 (head top, fingertips), handBack: 6}
+        if (const Json* extras = asset->get("extras"); extras && extras->get("suit")) {
+            const Json* suit = extras->get("suit");
+            float j[48], e[9], hb[6];
+            bool sane = numbers(suit->get("joints"), j, 48) && numbers(suit->get("ends"), e, 9) && numbers(suit->get("handBack"), hb, 6);
+            for (int k = 0; sane && k < 48; ++k)
+                sane = std::abs(j[k]) < 100.f;
+            for (int k = 0; sane && k < 9; ++k)
+                sane = std::abs(e[k]) < 100.f;
+            for (int k = 0; sane && k < 6; ++k)
+                sane = std::abs(hb[k]) <= 2.f;
+            if (sane) {
+                std::memcpy(out.suitEnds, j, sizeof j);
+                std::memcpy(out.suitEnds + 48, e, sizeof e);
+                std::memcpy(out.suitHandBack, hb, sizeof hb);
+                out.hasSuit = true;
+            }
+        }
         if (!readImages())
             return false;
         if (const Json* req = root.get("extensionsRequired"); req && req->kind == Json::array && !req->items.empty())
@@ -684,6 +773,10 @@ bool finish(Mesh& out, std::string& error) {
         out.normals.clear();
         out.image.clear();
         out.tints.clear();
+    }
+    if (!out.hasSkin()) { // Build 9 SUITS: a primitive without its skin (or a bad one): none worn
+        out.skinJoints.clear();
+        out.skinWeights.clear();
     }
     if (out.hasLayer && !(out.layerSplit < out.triangles())) // a layer that does not fit the triangles: none
         out.hasLayer = false;

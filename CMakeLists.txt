@@ -61,6 +61,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/hero072_visual.cpp
             src/game_body.cpp
             src/mesh_model.cpp
+            src/suit_wear.cpp
             src/test_notice.cpp
             src/roster_page.cpp)
 target_include_directories(spidy_core PUBLIC include)

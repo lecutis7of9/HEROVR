@@ -57,7 +57,8 @@ inline constexpr uint32_t liteTriangles = 2400;
 // Version 0.0.72 THOR HAMMERS + PUNISHER VAN: 32 layers (the four hammers and the van take 15; about 160 MB at 1024 px with mips).
 // Test build 8 ROSTER page: 40 (the roster's six picture atlases on top of the 28 images; the game uses
 // 512 px layers - about 1.4 MB each with mips - so the roster adds about 8 MB).
-inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 40;
+// Build 9 SUITS: 112 (the 23 suits take at most 3 layers each, 69 at most; the game's 512 px layers: about 160 MB).
+inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 112;
 inline constexpr size_t mostImageBytes = 48u << 20;
 
 struct Mesh {
@@ -87,12 +88,23 @@ struct Mesh {
         int32_t layer = -1;         // its layer in the overlay's texture array (Library::prepareTextures)
     };
     std::vector<Image> images;
+    // Build 9 SUITS (suit_wear.hpp; tools/suits/convert_suit.py): JOINTS_0 / WEIGHTS_0, 4 a corner (12 a triangle):
+    // suit_wear's 16 bones, the weights summing to 255. Kept only when every primitive has both.
+    std::vector<uint8_t> skinJoints, skinWeights;
+    // asset.extras.suit: the rest skeleton (suit_wear::ends: the 16 joints, the head's top, the fingertips; metres,
+    // +y up, facing +z, its left at +x) and the backs of the hands (left xyz, right xyz). hasSuit: all of it read.
+    float suitEnds[19 * 3]{};
+    float suitHandBack[6]{};
+    bool hasSuit{};
     uint32_t cap = drawTriangles; // Version 0.0.72: its slot's draw cap (loadFolder; slotDrawCap)
     std::shared_ptr<const Mesh> lite; // Library::load: a copy at most liteTriangles (when this is over), untextured
     uint32_t triangles() const { return static_cast<uint32_t>(colors.size()); }
     bool ok() const { return !colors.empty() && corners.size() == colors.size() * 3; }
     bool hasUvs() const { return uvs.size() == colors.size() * 6 && !uvs.empty(); }
     bool hasNormals() const { return normals.size() == colors.size() * 3 && !normals.empty(); }
+    bool hasSkin() const {
+        return !skinJoints.empty() && skinJoints.size() == colors.size() * 12 && skinWeights.size() == skinJoints.size();
+    }
     // Drawn textured: UVs, and every triangle with an image has its layer.
     bool textured() const;
 };
@@ -133,16 +145,37 @@ enum Style : uint32_t { styleDefault = 0, styleEira, styleClooney, styleJoker, s
 // Test build 8 ROSTER page: slotRoster (Models\Roster, tools/roster/make_roster_glb.py) is not a model that is
 // drawn: it carries the ROSTER page's profile pictures and suit previews (picture k = triangles 2k, 2k+1, their
 // UVs its box in an atlas); roster_page draws them as flat quads. Missing: the page shows PICTURE MISSING.
+// Build 9 SUITS: slotSuitFirst + k (Models\Suits\<suitFolders[k]>, tools/suits/convert_suit.py) the roster's suits,
+// skinned (Mesh::hasSkin, hasSuit) and worn by suit_wear (the mirror, the first-person arms / body). Never decimated
+// here (the converter ships at most drawTriangles: collapse decimation, the shape kept). Missing: the suit is
+// listed MODEL MISSING and the game's own look stays.
+inline constexpr uint32_t suitSlots = 23;
+inline constexpr const char* suitFolders[suitSlots] = {
+    "Suit_batman_1",  "Suit_batman_2",         "Suit_batman_3",         "Suit_batman_5",   "Suit_ironMan_1",   "Suit_ironMan_2",
+    "Suit_ironMan_3", "Suit_ironMan_4",        "Suit_captainAmerica_1", "Suit_captainAmerica_2", "Suit_daredevil_1", "Suit_daredevil_3",
+    "Suit_hulk_2",    "Suit_wolverine_1",      "Suit_wolverine_3",      "Suit_wolverine_4", "Suit_punisher_1", "Suit_punisher_2",
+    "Suit_thor_1",    "Suit_thor_2",           "Suit_greenLantern_2",   "Suit_greenLantern_3", "Suit_superman_4"};
 enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarrels, slotBatonLeft, slotBatonRight, slotShield, slotGrappleGun, slotHammer, slotVan,
-                       slotVanInterior, slotVanWheel, slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper, slotRoster, slots };
+                       slotVanInterior, slotVanWheel, slotHammerDevilsEye, slotHammerLoveThunder, slotHammerFccooper, slotRoster, slotSuitFirst,
+                       slots = slotSuitFirst + suitSlots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
                                                    "Baton/Right", "Shield",           "GrappleGun",       "Hammer/BOOOOP",
                                                    "Vehicle/PunisherVan", "Vehicle/PunisherVan/Interior", "Vehicle/PunisherVan/SteeringWheel",
-                                                   "Hammer/DEVILSEYE", "Hammer/LOVEANDTHUNDER", "Hammer/FCCOOPER", "Roster"};
+                                                   "Hammer/DEVILSEYE", "Hammer/LOVEANDTHUNDER", "Hammer/FCCOOPER", "Roster",
+                                                   "Suits/Suit_batman_1", "Suits/Suit_batman_2", "Suits/Suit_batman_3", "Suits/Suit_batman_5",
+                                                   "Suits/Suit_ironMan_1", "Suits/Suit_ironMan_2", "Suits/Suit_ironMan_3", "Suits/Suit_ironMan_4",
+                                                   "Suits/Suit_captainAmerica_1", "Suits/Suit_captainAmerica_2", "Suits/Suit_daredevil_1",
+                                                   "Suits/Suit_daredevil_3", "Suits/Suit_hulk_2", "Suits/Suit_wolverine_1", "Suits/Suit_wolverine_3",
+                                                   "Suits/Suit_wolverine_4", "Suits/Suit_punisher_1", "Suits/Suit_punisher_2", "Suits/Suit_thor_1",
+                                                   "Suits/Suit_thor_2", "Suits/Suit_greenLantern_2", "Suits/Suit_greenLantern_3", "Suits/Suit_superman_4"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
-                                                vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles};
+                                                vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -151,7 +184,23 @@ inline constexpr uint32_t hammerSlot(uint32_t choice) {
 // The van's parts (drawn by hero007::appendPlacedModel: up to 8 m, seen to 80 m).
 inline constexpr bool slotIsVehicle(uint32_t slot) { return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel; }
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
+// Build 9: the suits never (vertex clustering would lose their skin and flatten them).
 inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false};
+inline constexpr bool slotIsSuit(uint32_t slot) { return slot >= slotSuitFirst && slot < slots; }
+// A suit's slot by its folder ("Suit_batman_1"), 0 when it is not one.
+inline uint32_t suitSlot(const char* folder) {
+    if (!folder)
+        return 0;
+    for (uint32_t k = 0; k < suitSlots; ++k) {
+        const char *a = suitFolders[k], *b = folder;
+        while (*a && *a == *b)
+            ++a, ++b;
+        if (!*a && !*b)
+            return slotSuitFirst + k;
+    }
+    return 0;
+}
+static_assert(slotSuitFirst == 19 && slots == 42, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

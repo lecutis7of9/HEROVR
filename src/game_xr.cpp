@@ -798,6 +798,9 @@ uint32_t c38(uint32_t option) {
         return 0u;
     return option < combat38::options ? combat38::clampValue(option, combat38Values[option].load()) : 0u;
 }
+// 0.0.73 test 3 WEAPON COLLISION: ON (the default) - thrown props bounce / stop off walls, cars and the
+// ground, held ones are drawn short of them.
+bool weaponCollisionOn() { return c38(combat38::weaponCollision) == 0; }
 // Version 0.0.4 HERO ABILITIES (hero_modes.hpp): any hero but SPIDER-MAN has no web path at all.
 // Version 0.0.6: IRON MAN (shooterType 1), DAREDEVIL and HULK; only one on (heroOnly).
 uint32_t heroNow() {
@@ -2033,6 +2036,13 @@ DWORD WINAPI run(void*) {
         uint64_t propAskedFrame[prop_bounce::slots]{};
         Vec3 propAskedDir[prop_bounce::slots]{};
         uint64_t propAsks{}, propAnswers{}, propBounces{};
+        uint32_t propCastNext{}; // 0.0.73 test 3: the props take turns at the one slot
+        // 0.0.73 test 3 WEAPON COLLISION (held): each hand ray's surface ahead (m from the controller; < 0:
+        // none near), its way (world), when it came, and each hand's eased draw push.
+        float handHitMetres[2]{-1.f, -1.f};
+        Vec3 handHitDir[2]{};
+        std::chrono::steady_clock::time_point handHitWhen[2]{}, heldPushWhen{};
+        float heldPushNow[2]{};
         uint32_t shotCastNext{};
         uint64_t wallCasts{}, wallAnswers{}, wallBlocked{}, beamClipped{}, beamUnclipped{};
         struct BeamWait {
@@ -4744,22 +4754,30 @@ DWORD WINAPI run(void*) {
                                 }
                                 // Version 0.0.73 PROP BOUNCE: a thrown prop going out (not coming home) takes the
                                 // slot next - one not asked within 6 frames along much the same way.
+                                // Test 3 WEAPON COLLISION: coming home too, and BATMAN's batarangs; the props
+                                // take turns (propCastNext); none at all with WEAPON COLLISION OFF.
                                 const uint32_t propHero = heroNow();
-                                for (uint32_t k = 0; k < prop_bounce::slots && !sighted && finite(shotToWorld.position); ++k) {
+                                const bool propsCollide = weaponCollisionOn();
+                                for (uint32_t kk = 0; kk < prop_bounce::slots && propsCollide && !sighted && finite(shotToWorld.position); ++kk) {
+                                    const uint32_t k = (propCastNext + kk) % prop_bounce::slots;
                                     Vec3 at{}, vel{};
                                     uint32_t serial{};
                                     bool out = false;
                                     if (k <= prop_bounce::batonRight) {
                                         const auto& b = batons[k];
-                                        out = propHero == hero_modes::daredevil && !b.inHandNow() && b.state != hero_modes::returning;
+                                        out = propHero == hero_modes::daredevil && !b.inHandNow();
                                         at = b.position, vel = b.velocity, serial = b.throws;
                                     } else if (k == prop_bounce::shield) {
                                         const auto& b = hero007Play.shield;
-                                        out = propHero == hero_modes::captainAmerica && !b.inHandNow() && b.state != hero_modes::returning;
+                                        out = propHero == hero_modes::captainAmerica && !b.inHandNow();
                                         at = b.position, vel = b.velocity, serial = b.throws;
-                                    } else {
-                                        out = propHero == hero_modes::thor && hero072Play.hammerGoingOut();
+                                    } else if (k == prop_bounce::hammer) {
+                                        out = propHero == hero_modes::thor && hero072Play.hammerInAir();
                                         at = hero072Play.hammerAirAt(), vel = hero072Play.hammerAirVelocity(), serial = hero072Play.throws;
+                                    } else {
+                                        const auto& b = hero007Play.batarangs[k - prop_bounce::batarangLeft];
+                                        out = propHero == hero_modes::batman && !b.inHandNow();
+                                        at = b.position, vel = b.velocity, serial = b.throws;
                                     }
                                     if (!out)
                                         continue;
@@ -4775,6 +4793,7 @@ DWORD WINAPI run(void*) {
                                     propAskedSerial[k] = (serial & 15u) + 1u;
                                     propAskedFrame[k] = wallFrame;
                                     propAskedDir[k] = dirW;
+                                    propCastNext = k + 1;
                                     ++propAsks;
                                     sighted = true;
                                 }
@@ -4847,9 +4866,26 @@ DWORD WINAPI run(void*) {
                                 const auto& hit = rayResults->hits[i];
                                 // Version 0.0.62 BOLT WALLS: the hands' aim walls, a shot's and the beam's
                                 // (world space, as cast).
-                                if (newBatch && hit.ray.tag < 2)
+                                if (newBatch && hit.ray.tag < 2) {
                                     handWallsWorld[hit.ray.tag] = bolt_walls::fromHit(hit.ray.origin, hit.ray.direction, hit.ray.distance,
                                                                                       native_rays::fixedSurface(hit), hit.fraction);
+                                    // 0.0.73 test 3 WEAPON COLLISION (held): anything solid within 2 m ahead of
+                                    // the hand - a wall, a car, the ground (CANDIDATE: cars) - never an enemy or him.
+                                    const auto ahead = prop_bounce::fromHit(hit.ray.origin, hit.ray.direction, hit.ray.distance,
+                                                                            hit.count, hit.fraction, hit.normal, 0);
+                                    float metres = -1.f;
+                                    if (ahead.known && hit.fraction * hit.ray.distance < 2.f) {
+                                        Vec3 chests[world_trace::enemySlots];
+                                        uint32_t nc = 0;
+                                        for (uint32_t e = 0; e < enemiesHereCount && nc < world_trace::enemySlots; ++e)
+                                            chests[nc++] = motion.anchor + enemiesHere[e] + Vec3{0, 1.1f, 0};
+                                        if (prop_bounce::wallHit(ahead.point, ahead.normal, chests, nc, motion.headPose.position, motion.anchor))
+                                            metres = hit.fraction * hit.ray.distance;
+                                    }
+                                    handHitMetres[hit.ray.tag] = metres;
+                                    handHitDir[hit.ray.tag] = hit.ray.direction;
+                                    handHitWhen[hit.ray.tag] = std::chrono::steady_clock::now();
+                                }
                                 // Version 0.0.73 DRIVING: the bumper's answer (anything hit: a wall, a car, a body).
                                 if (hit.ray.tag == vanBumperTag) {
                                     if (newBatch && hit.count > 0 && std::isfinite(hit.fraction) && hit.fraction < 1.f) {
@@ -4882,7 +4918,11 @@ DWORD WINAPI run(void*) {
                                             uint32_t nc = 0;
                                             for (uint32_t e = 0; e < enemiesHereCount && nc < world_trace::enemySlots; ++e)
                                                 chests[nc++] = motion.anchor + enemiesHere[e] + Vec3{0, 1.1f, 0};
-                                            if (plane.known && !prop_bounce::nearBody(plane.point, chests, nc, motion.headPose.position, motion.anchor)) {
+                                            // Test 3 WEAPON COLLISION: the ground under him and walls / cars beside
+                                            // him and behind enemies count now (fix 7 threw away all within 1 m of
+                                            // him and 1.6 m of an enemy's chest - the street at his feet included).
+                                            if (plane.known && prop_bounce::wallHit(plane.point, plane.normal, chests, nc,
+                                                                                    motion.headPose.position, motion.anchor)) {
                                                 propWallsWorld[propSlot] = plane;
                                                 ++propAnswers;
                                             } else if (!hit.count) {
@@ -6851,7 +6891,8 @@ DWORD WINAPI run(void*) {
                                             const int batonAimed = b.inHandNow() ? hero_modes::batonAim(hand, aimDir, batonList, foes.count) : -1;
                                             // Version 0.0.73 PROP BOUNCE: this throw's surface ahead, in this frame's tracking space.
                                             const uint32_t bouncesWas = b.wallBounces;
-                                            b.wall = propWallsWorld[i].serial == (b.throws & 15u)
+                                            // Test 3 WEAPON COLLISION OFF: none (test 2's flight).
+                                            b.wall = weaponCollisionOn() && propWallsWorld[i].serial == (b.throws & 15u)
                                                          ? prop_bounce::moved(propWallsWorld[i], inverse(compose(motion.headPose, inverse(frame.head))))
                                                          : prop_bounce::Plane{};
                                             const uint32_t throwsWas = b.throws;
@@ -7044,16 +7085,33 @@ DWORD WINAPI run(void*) {
                                         }
                                         // Version 0.0.73 PROP BOUNCE: the thrown shield's surface ahead (this frame's tracking space).
                                         const uint32_t shieldBouncesWas = hero007Play.shield.wallBounces;
+                                        const bool propsCollide = weaponCollisionOn(); // test 3 WEAPON COLLISION
+                                        const Pose propToTracking = inverse(compose(motion.headPose, inverse(frame.head)));
                                         hero007Play.shield.wall =
-                                            propWallsWorld[prop_bounce::shield].serial == (hero007Play.shield.throws & 15u)
-                                                ? prop_bounce::moved(propWallsWorld[prop_bounce::shield], inverse(compose(motion.headPose, inverse(frame.head))))
+                                            propsCollide && propWallsWorld[prop_bounce::shield].serial == (hero007Play.shield.throws & 15u)
+                                                ? prop_bounce::moved(propWallsWorld[prop_bounce::shield], propToTracking)
                                                 : prop_bounce::Plane{};
+                                        // 0.0.73 test 3 WEAPON COLLISION: BATMAN's batarangs too (they stop on what they hit).
+                                        uint32_t batarangBouncesWas[2]{};
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            auto& bat = hero007Play.batarangs[i];
+                                            const uint32_t k = prop_bounce::batarangLeft + i;
+                                            batarangBouncesWas[i] = bat.wallBounces;
+                                            bat.wall = propsCollide && propWallsWorld[k].serial == (bat.throws & 15u)
+                                                           ? prop_bounce::moved(propWallsWorld[k], propToTracking)
+                                                           : prop_bounce::Plane{};
+                                        }
                                         hero007::PlayOutput hout;
                                         hero007Play.step(hin, hout);
                                         if (hero007Play.shield.wallBounces != shieldBouncesWas) {
                                             propWallsWorld[prop_bounce::shield] = {};
                                             ++propBounces;
                                         }
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (hero007Play.batarangs[i].wallBounces != batarangBouncesWas[i]) {
+                                                propWallsWorld[prop_bounce::batarangLeft + i] = {};
+                                                ++propBounces;
+                                            }
                                         for (unsigned i = 0; i < 2; ++i) { // Version 0.0.7 BATMAN GRAPPLE GUN
                                             // Version 0.0.73 (fix 17): CAPTAIN AMERICA's gun is the cape-less grapple
                                             // (askGrappleOnly, like the PUNISHER's), never BATMAN's cape asks.
@@ -7331,7 +7389,7 @@ DWORD WINAPI run(void*) {
                                             game_prompts::note(line);
                                         }
                                         // Version 0.0.73 PROP BOUNCE: THOR's thrown hammer's surface ahead (tracking space).
-                                        in72.hammerWall = propWallsWorld[prop_bounce::hammer].serial == (hero072Play.throws & 15u)
+                                        in72.hammerWall = weaponCollisionOn() && propWallsWorld[prop_bounce::hammer].serial == (hero072Play.throws & 15u)
                                                               ? prop_bounce::moved(propWallsWorld[prop_bounce::hammer],
                                                                                    inverse(compose(motion.headPose, inverse(frame.head))))
                                                               : prop_bounce::Plane{};
@@ -9271,6 +9329,26 @@ DWORD WINAPI run(void*) {
                         }
                         saved.palmSpin = static_cast<float>(std::fmod(combatClock * 9.0, 2.0 * 3.14159265));
                     }
+                    {   // 0.0.73 test 3 WEAPON COLLISION (held): the held prop drawn back off a wall / car / the
+                        // ground ahead of the hand, eased; the hand itself is never moved (no lag, no nausea).
+                        const auto now = std::chrono::steady_clock::now();
+                        const float dt = heldPushWhen.time_since_epoch().count() != 0
+                                             ? std::clamp(std::chrono::duration<float>(now - heldPushWhen).count(), 0.f, .1f)
+                                             : 0.f;
+                        heldPushWhen = now;
+                        const bool on = !oursFault && weaponCollisionOn();
+                        const float reach = hero_modes::heldReach(heroWas);
+                        for (unsigned i = 0; i < 2; ++i) {
+                            const bool fresh = handHitMetres[i] >= 0 &&
+                                               std::chrono::duration<float>(now - handHitWhen[i]).count() < .25f;
+                            const float want = on && fresh ? prop_bounce::heldWant(reach, handHitMetres[i]) : 0.f;
+                            heldPushNow[i] = prop_bounce::heldEase(heldPushNow[i], want, dt);
+                            const Vec3 d = handHitDir[i];
+                            saved.heldPush[i] = heldPushNow[i] > .001f && finite(d) && length(d) > .5f
+                                                    ? normalized(d) * -heldPushNow[i]
+                                                    : Vec3{};
+                        }
+                    }
                     {   // Version 0.0.6 DAREDEVIL ABILITIES: the batons, in the hand (0.0.7: in the fist) or spinning in flight.
                         const bool dd = !oursFault && heroWas == hero_modes::daredevil;
                         for (unsigned i = 0; i < 2; ++i) {
@@ -9302,6 +9380,10 @@ DWORD WINAPI run(void*) {
                             }
                             grip = compose(saved.worldFromTracking, Pose{grip, {}}).position;
                             tip = compose(saved.worldFromTracking, Pose{tip, {}}).position;
+                            if (b.inHandNow() && finite(saved.heldPush[i])) { // 0.0.73 test 3: short of a wall
+                                grip += saved.heldPush[i];
+                                tip += saved.heldPush[i];
+                            }
                             if (finite(grip) && finite(tip)) {
                                 saved.batonGrip[i] = grip;
                                 saved.batonTip[i] = tip;
@@ -9322,6 +9404,13 @@ DWORD WINAPI run(void*) {
                                                             (hero007In.hero == hero_modes::punisher && hero072HookOut[h]));
                             hero007Play.draw(saved.hero007, saved.worldFromTracking, hero007In, batonLookNow);
                             saved.hero072 = hero072::worldLook(hero072Look, saved.worldFromTracking); // Version 0.0.72
+                            // 0.0.73 test 3 WEAPON COLLISION (held): guns, batarangs, claws, the shield and the
+                            // hammer in the hand drawn short of the surface ahead (the drawing only).
+                            for (unsigned i = 0; i < 2; ++i)
+                                if (saved.hero007.held[i].look != hero007::lookNone && finite(saved.heldPush[i]))
+                                    saved.hero007.held[i].at += saved.heldPush[i];
+                            if (saved.hero072.hammerInHand && finite(saved.heldPush[1]))
+                                saved.hero072.hammerAt += saved.heldPush[1];
                             // Version 0.0.7 BATMAN GRAPPLE GUN: the line from the firing hand to the hook (game
                             // world, the bridge's) while it pulls him; never a web.
                             // Version 0.0.72: every grappler's - from the gun's muzzle (BATMAN, the PUNISHER:
@@ -10212,7 +10301,7 @@ DWORD WINAPI run(void*) {
                                     const thor_grip::Held h = thor_grip::held(rendered.grips[1], runtime.controllers()[1]);
                                     if (h.ok) {
                                         held72 = *look72;
-                                        held72.hammerAt = h.at;
+                                        held72.hammerAt = h.at + (finite(saved->heldPush[1]) ? saved->heldPush[1] : Vec3{});
                                         held72.hammerForward = h.handle;
                                         held72.hammerUp = h.face;
                                         look72 = &held72;
@@ -12409,6 +12498,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatch(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCalibLook(void* v) { return setHero007(v, combat38::calibLook, 5440); }
 // Version 0.0.73 test 2 FLIGHT POSE (fix 27): LEAN by speed (fly_lean.hpp) or UPRIGHT (0.0.72) (live.txt fly_pose).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyPose(void* v) { return setHero007(v, combat38::flyPose, 5441); }
+// 0.0.73 test 3 WEAPON COLLISION (prop_bounce.hpp): thrown and held weapons meet walls, cars and the ground, ON (live.txt weapon_collision).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeaponCollision(void* v) { return setHero007(v, combat38::weaponCollision, 5442); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

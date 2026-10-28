@@ -7,7 +7,7 @@ def src(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
 class Build12(unittest.TestCase):
     def test_test_number(self):
-        self.assertRegex(src('CMakeLists.txt'), r'set\(HERO_TEST_NUMBER "12"')
+        self.assertRegex(src("CMakeLists.txt"), r"set\(HERO_TEST_NUMBER \"[0-9]+\"")  # 0.0.73: its own test numbers
     def test_lod_fade_off_by_default(self):
         self.assertIn('inline constexpr uint32_t defaultFade = fadeOff', src('include/spidy/view_gates.hpp'))
         self.assertIn("'lod_fade': 0}", src('tools/live_settings.py'))

@@ -24,7 +24,7 @@ add_compile_definitions(SM2_PORT=1)
 option(SPIDY_BUILD_XR "Build the Windows OpenXR / D3D12 swing lab" ${WIN32})
 # 0.0.72: a test / experimental build shows the TEST BUILD NOTICE after calibration (test_notice.hpp).
 # Turn it OFF for a public release.
-option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" OFF) # the public 0.0.72 release: OFF
+option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" ON) # 0.0.73 private test builds: ON
 option(SPIDY_BUILD_OBSERVER "Build the opt-in camera diagnostic DLL" OFF)
 option(SPIDY_BUILD_LAUNCHER "Build the Spidy launcher window (Dear ImGui from tools/bootstrap.ps1)" ${SPIDY_BUILD_XR})
 
@@ -86,7 +86,7 @@ endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}")
 # Test build 11: the wrist's bottom line and the start line say "TEST <n> <commit>" (build 10's log
 # showed build 9 still running; the number makes that plain). Bump per test build.
-set(HERO_TEST_NUMBER "12" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+set(HERO_TEST_NUMBER "1" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()

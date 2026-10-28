@@ -900,7 +900,7 @@ constexpr SectionDef powersSections[] = {
     {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud, C::combatPalmBlast}},
     {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2,
      {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision, C::combatBatonHolsters, C::combatBatonLook,
-      C::combatDdGrapple, C::combatDdParry}},
+      C::combatDdGrapple, C::combatDdParry, C::combatDdBatonTip}},
     {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight, C::combatHulkRage}},
     // Version 0.0.7 HERO PROFILES
     {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle, C::combatSmokeBlind,
@@ -4588,6 +4588,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatRepLog:
             case Control::combatVanPedals:
             case Control::combatImage:
+            case Control::combatDdBatonTip:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

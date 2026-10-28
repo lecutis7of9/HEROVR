@@ -157,6 +157,9 @@ enum Option : uint32_t {
     // 0.0.73 IMAGE: SPIDYVR (sharp: no FXAA, no sharpen, the history read Catmull-Rom, mip bias 0 at the
     // next start) or HERO VR CLASSIC (test 3: FXAA, sharpen 140, bilinear history, mip bias 0.5)
     image,
+    // 0.0.73 DD BATON: ON (the held baton seated in the fist, the grapple fired from its silver tip, the tip flying
+    // to the anchor on a rope and reeled back) or OFF (test 3's held baton and grapple line)
+    ddBatonTip,
     options
 };
 struct OptionInfo {
@@ -486,6 +489,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
     {"image", "IMAGE", "IMAGE", "SPIDYVR is sharp with no smear, CLASSIC is test 3's; textures change on restart.",
      2, {"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr}},
+    {"dd_baton_tip", "BATON TIP", "DDTIP", "ON: the baton sits in the fist, its silver tip flies on a rope, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

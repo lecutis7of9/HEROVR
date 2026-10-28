@@ -421,7 +421,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"takedown_light", "TAKEDOWN LIGHT", "TLIGHT", "GREEN: no one sees the takedown; RED: others get alerted, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"punisher_van", "PUNISHER VAN (EXPERIMENTAL)", "VAN", "EXPERIMENTAL: Punisher taps X to summon the van, no restart.",
+    {"punisher_van", "PUNISHER VAN (EXPERIMENTAL)", "VAN", "EXPERIMENTAL, OFF by default: Punisher taps X to drive the van, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     {"thor_hammer", "THOR HAMMER", "HAMMER", "Picks which Mjolnir model Thor draws from his back, no restart.",
      4, {"BOOOOP", "DEVILSEYE", "LOVE THUNDER", "FCCOOPER"}},

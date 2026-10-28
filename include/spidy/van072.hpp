@@ -29,7 +29,7 @@
 
 namespace spidy::van072 {
 
-inline constexpr const char* settingHelp = "EXPERIMENTAL: Punisher taps X to summon the van, no restart.";
+inline constexpr const char* settingHelp = "EXPERIMENTAL, OFF by default: Punisher taps X to drive the van, no restart.";
 
 struct Tune {
     // Version 0.0.72: MEASURED on the shipped Vandura (4.85 x 2.0 x 1.95 m, 2.96 m between the axles).

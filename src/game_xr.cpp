@@ -100,6 +100,7 @@
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/image_style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_color.hpp"
@@ -625,6 +626,8 @@ uint32_t SpidyShadowCameraNow();        // Update 31: SHADOW CAMERA mode | rever
 uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, reason)
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
+DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE: 0 SPIDYVR, 1 HERO 0.0.73
+uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
 uint32_t SpidyFarShadowsNow();            // Update 35: far_shadows::pack(mode, reason)
@@ -10147,6 +10150,53 @@ DWORD WINAPI run(void*) {
                                 engine_taa::stateOf(engine) != engine_taa::on)
                                 engineTaaFallback(engine_taa::reasonOf(engine));
                             previous = engine;
+                            // 0.0.73 test 4 IMAGE STYLE (image_style.hpp): SPIDYVR (default) runs the game's
+                            // own TAA in each eye and sends it clean (no FXAA, history or CAS), as SpidyVR;
+                            // HERO 0.0.73 is test 3's picture. The clean picture follows ENGINE TAA every
+                            // frame (never a raw frame when it goes off); the rest about once a second.
+                            static image_style::Controller styleControl;
+                            static uint32_t styleSent = UINT32_MAX;
+                            static ULONGLONG styleTick{};
+                            const uint32_t style = c38(combat38::imageStyle);
+                            if (style != styleSent && SpidyImageStyle(reinterpret_cast<void*>(uintptr_t{
+                                                          image_style::spidy(style) ? image_style::spidyvr
+                                                                                    : image_style::hero073})) == 0)
+                                styleSent = style;
+                            if (const ULONGLONG nowTick = GetTickCount64(); nowTick - styleTick >= 1000 || style != styleSent) {
+                                styleTick = nowTick;
+                                const bool eyeAaOn = (eyeAaNow() & 0xff) == eye_taa::on;
+                                const auto step = styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn);
+                                if (step.note) {
+                                    OutputDebugStringA(step.note);
+                                    OutputDebugStringA("\n");
+                                }
+                                if (step.engineOff) {
+                                    SpidyEngineTaa(nullptr);
+                                    engine = SpidyEngineTaaNow();
+                                    previous = engine; // a style change, not a failure: no plan B press
+                                }
+                                if (step.tryOn) {
+                                    const bool on = SpidyEngineTaa(reinterpret_cast<void*>(uintptr_t{1})) == 0;
+                                    styleControl.tried(on);
+                                    if (on) {
+                                        OutputDebugStringA("IMAGE STYLE SPIDYVR: ENGINE TAA on (the game's TAA in each eye)\n");
+                                        engineTaaArm = true; // the FPS guard watches the next seconds
+                                        engine = SpidyEngineTaaNow();
+                                        previous = engine;
+                                    }
+                                }
+                                if ((step.eyeAaOff || (step.tryOn && styleControl.owned())) &&
+                                    (eyeAaNow() & 0xff) == eye_taa::on) {
+                                    native_gpu::setEyeTemporal(false);
+                                    eyeAaState = eye_taa::pack(eye_taa::off, 0);
+                                    OutputDebugStringA("EYE AA: off (IMAGE STYLE SPIDYVR: the game's TAA)\n");
+                                }
+                                if (step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
+                                    engine_taa::stateOf(engine) != engine_taa::on)
+                                    pressEyeAa();
+                            }
+                            native_gpu::setCleanImage(image_style::spidy(style) &&
+                                                      engine_taa::stateOf(engine) == engine_taa::on);
                         }
                         {   // Update 35: FAR SHADOWS' FPS guard: a mode the press chose that halves
                             // the frame rate goes back to OFF (the reason shown).
@@ -12791,6 +12841,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanPedals(void* v) { return s
 // 0.0.73 IMAGE: 0 SPIDYVR (default), 1 HERO VR CLASSIC; the history read follows live (the launcher sends
 // the look's aa and sharpen beside it, and its mip bias when the game starts).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHero007(v, combat38::image, 5449); }
+// 0.0.73 test 4 IMAGE STYLE: shown as GAME TAA: SPIDYVR (0, default) or OFF (1, IMAGE's look) (live.txt image_style; image_style.hpp).
+// The frame loop's controller does the rest (stereo_probe's SpidyImageStyle, ENGINE TAA, the clean picture).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyleOption(void* v) { return setHero007(v, combat38::imageStyle, 5460); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

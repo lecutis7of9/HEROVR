@@ -1,8 +1,9 @@
-# Third-party 3D models (HERO VR 0.0.7)
+# Third-party 3D models (HERO VR 0.0.72)
 
 HERO VR's on-screen credit is "Made by Agent Mulder". The models below belong to their authors:
 Digital Goblin, iqbalmulyawan, Yanez Designs (Anthony Yanez), TORI106, LiliumLetifer, Eira, Ludus101,
-baton268 and Falxx. They are credited here, in CREDITS.md, on the launcher's Credits page and in the release notes,
+baton268 and Falxx (0.0.7); Boooooop, TheDevilsEye, Jesus Osco, fccooper and snafuj (0.0.72); the 23 worn
+suits' artists and the ROSTER pictures' artists listed below. They are credited here, in CREDITS.md, on the launcher's Credits page and in the release notes,
 as their licences require. HERO VR is free: it is never sold, paywalled or ad-supported.
 
 The release zip's `Models/` folder carries them (and `CapSuit/` the prepared suit for the optional,
@@ -35,11 +36,11 @@ overlay cannot sample textures. No texture ships for the converted models.
 - This work is based on "Captain America Shield" (https://sketchfab.com/3d-models/captain-america-shield-cbcf4fa7d4464b65a5bf051340f626ab) by Digital Goblin (https://sketchfab.com/DigitalGoblin) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Disc remeshed, straps decimated and recoloured for VR.
 - This work is based on "Captain America" (https://sketchfab.com/3d-models/captain-america-d4898ea3aac3474fa0661de3ade9b7c6) by iqbalmulyawan (https://sketchfab.com/Iqbal.Mulyawan.Putera) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-oriented, rescaled and welded; rigged on the player's PC.
 
-## Version 0.0.72 (TEST): the shipped models are the real ones
+## Version 0.0.72: the shipped models are the real ones
 
 0.0.72 replaces the 0.0.7 conversions above (decimated to ~700 triangles, colours baked, textures dropped) with
 the artists' real geometry, UVs, normals and base-colour textures (`tools/models072/convert_models_072.py`).
-The side-by-side gate (`tools/models072/model_check.py`, pictures in the test build's `model-check/`) fails a
+The side-by-side gate (`tools/models072/model_check.py`) fails a
 model under 30 % of its source's triangles or with a texture or UV missing. Same authors and licences as above.
 
 | Slot | Triangles shipped / source | Textures | Changes in 0.0.72 |
@@ -60,7 +61,7 @@ model under 30 % of its source's triangles or with a texture or UV missing. Same
 | `Vehicle/PunisherVan` (PUNISHER VAN, EXPERIMENTAL) | 135000 / 431452 | 4 | Quality-decimated to 31 %, painted black (the body texture's paint recoloured; chrome, rubber, lights kept), the window glass (3200 triangles) left out, real size 1.97 × 1.94 × 4.83 m. |
 | `Vehicle/PunisherVan/Interior`, `/SteeringWheel` | 840, 1848 (BUILT) | 1 (generated) | Not from the source (its cab is an empty shell): built by Agent Mulder for HERO VR; the wheel is its own part so it turns. |
 
-## Version 0.0.72 (TEST): THOR HAMMER and the PUNISHER VAN
+## Version 0.0.72: THOR HAMMER and the PUNISHER VAN
 
 | Slot | Model | Author | Licence |
 |---|---|---|---|
@@ -75,30 +76,6 @@ model under 30 % of its source's triangles or with a texture or UV missing. Same
 - This work is based on "Mjolnir - Thor love and thunder" (https://sketchfab.com/3d-models/mjolnir-thor-love-and-thunder-9689a953a9724987bb962bc00104c5fd) by Jesus Osco (https://sketchfab.com/gsus.vfx) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Decimated for VR.
 - This work is based on "Thor's Hammer: Mjolnir" (https://sketchfab.com/3d-models/thors-hammer-mjolnir-1929e65c877a48bba3b16cfa51f7a33c) by fccooper (https://sketchfab.com/fccooper) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-centred and scaled.
 - This work is based on "GMC Vandura1976 Van" (https://sketchfab.com/3d-models/gmc-vandura1976-van-40cf97bc0f7d4bdb8135c4e9d2264923) by snafuj (https://sketchfab.com/snafuj) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Decimated for VR, painted black, glass left out; a cab and steering wheel added (built for HERO VR).
-
-## Version 0.0.72 (TEST): new models (none in git; prepared on the PC from the Sketchfab downloads)
-
-The 0.0.72 test build adds these artists: floh, spybg (Valentin Yovchev), Bugawuga, RITIKA_87, klava88
-and jeandiz (SpatialNeglect), with the kitbash part authors ErhanMatur, Bzovius, SrGeneroso, shedmon,
-Albin and Mayess. No Marvel or DC credit: only the artists. The model files are not in this test zip
-(the Sketchfab downloads need the user's login); the kits that prepare them are in `tools/`.
-
-| Use | Model | Author | Licence | Changes |
-|---|---|---|---|---|
-| PUNISHER suit VEST | [The Punisher (Vest-Version)](https://sketchfab.com/3d-models/the-punisher-vest-version-2d7deb3b811e42419f71263871dd7139) | floh | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (HERO VR is free, never monetized) | Re-oriented, rescaled, welded (`tools/punisher_suit/prep_punisher.py`); rigged on the PC. |
-| PUNISHER suit WARZONE | [Punisher Warzone](https://sketchfab.com/3d-models/punisher-warzone-20b5eba6b24c463cb3a2666cd1ab4ba6) | spybg (Valentin Yovchev) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | As above. |
-| THE HAND enemy 1 | [Ninja - Walking](https://sketchfab.com/3d-models/ninja-walking-0268036dde274e6ba9ded5bdf8a082c1) | Bugawuga | CC BY 4.0 | Outfit texture recoloured crimson (skin, eyes, metal kept). |
-| THE HAND enemy 2 | [Ninja - low poly - real life based](https://sketchfab.com/3d-models/ninja-low-poly-real-life-based-inspired-22ccb0bf2b6d4f8286e0dd4edb5bce63) | RITIKA_87 | CC BY 4.0 | Decimated ~100k to ~45k, rigged (weights from enemy 1's rig), outfit recoloured crimson. |
-| THE HAND enemy 3 | [Saboteur Ninja Animated](https://sketchfab.com/3d-models/saboteur-ninja-animated-3cbc15c178f943a1b4511b973f27a033) | klava88 | CC BY 4.0 | Outfit recoloured crimson. |
-| HYDRA enemy 1 | [S.W.A.T. Operator](https://sketchfab.com/3d-models/swat-operator-9e82fabf26194896b5ad4a364d864eab) | jeandiz (SpatialNeglect); kitbash parts by ErhanMatur, Bzovius, SrGeneroso, shedmon, Albin, Mayess | CC BY 4.0 | Decimated ~107k to ~45k, weapons removed, our own skull-and-tentacles emblem (drawn by `tools/factions/factions.py`) on chest and shoulder. |
-| HYDRA enemy 2 | [FSB Operator](https://sketchfab.com/3d-models/fsb-operator-43a561e941704eefb1ab0614be4f0049) | jeandiz (SpatialNeglect); same kitbash authors | CC BY 4.0 | Decimated ~114k to ~45k, weapons removed, our own emblem. |
-
-- This work is based on "The Punisher (Vest-Version)" by floh, licensed under CC-BY-NC-4.0. Re-oriented, rescaled and welded; rigged on the player's PC. Free, never monetized.
-- This work is based on "Punisher Warzone" by spybg (Valentin Yovchev), licensed under CC-BY-4.0. Re-oriented, rescaled and welded; rigged on the player's PC.
-- This work is based on "Ninja - Walking" by Bugawuga, licensed under CC-BY-4.0. Outfit recoloured.
-- This work is based on "Ninja - low poly - real life based" by RITIKA_87, licensed under CC-BY-4.0. Decimated, rigged and recoloured.
-- This work is based on "Saboteur Ninja Animated" by klava88, licensed under CC-BY-4.0. Outfit recoloured.
-- This work is based on "S.W.A.T. Operator" and "FSB Operator" by jeandiz (SpatialNeglect), kitbashed from parts by ErhanMatur, Bzovius, SrGeneroso, shedmon, Albin and Mayess, licensed under CC-BY-4.0. Decimated, weapons removed, our own emblem added.
 
 ## The JOKER batarang: CC BY-NC-ND and "NoAI"
 
@@ -121,9 +98,9 @@ The Sketchfab "Daredevil batons" page the player linked was a style reference on
 downloaded from it. Following it, the mod shows no permanent cord: a cable is drawn only while a
 baton is thrown or bouncing.
 
-## Test build 8: ROSTER page pictures (Models/Roster/scene.glb)
+## Version 0.0.72: ROSTER page pictures (Models/Roster/scene.glb)
 
-Each picture is a cropped, scaled Sketchfab thumbnail (a render of the artist's model). The suit models themselves are not shipped in build 8 (the page shows MODEL MISSING for them). Spider-Man's picture is drawn for HERO VR.
+Each picture is a cropped, scaled Sketchfab thumbnail (a render of the artist's model). The suits that ship are the 23 in `Models/Suits/` (below); a suit not shipped shows MODEL MISSING. Spider-Man's picture is drawn for HERO VR.
 
 Licences: CC BY 4.0, CC BY-NC 4.0, CC BY-NC-SA 4.0; "Free Standard" = the Sketchfab Standard licence.
 
@@ -178,7 +155,7 @@ Licences: CC BY 4.0, CC BY-NC 4.0, CC BY-NC-SA 4.0; "Free Standard" = the Sketch
 47 PunisherWarzone: "Punisher Warzone" by spybg (CC Attribution) https://sketchfab.com/3d-models/punisher-warzone-20b5eba6b24c463cb3a2666cd1ab4ba6
 ```
 
-## Build 9 (TEST): the worn SUITS (Models/Suits/<suit>/scene.glb)
+## Version 0.0.72: the worn SUITS (Models/Suits/<suit>/scene.glb)
 
 The 23 suits the user sent (no others), converted by `tools/suits/convert_suit.py`: re-oriented to Y-up, scaled
 to 1.80 m, feet at the origin, their textures packed into atlases, skinned to the game's 16-bone body (the

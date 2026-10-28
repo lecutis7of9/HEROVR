@@ -27645,7 +27645,7 @@ int main() {
         check(tn::text == "You are on the latest test version, please be aware that some features do not work or are unfinished, "
                           "revert to 0.0.63 if unplayable and report issues in my discord server linked on the launcher",
               "the user's text word for word");
-        check(tn::testBuild, "this branch builds a test build (HERO_TEST_BUILD ON)");
+        check(!tn::testBuild, "the public 0.0.72 release builds with HERO_TEST_BUILD OFF (no test notice)");
         for (char c : tn::text)
             check(c == ' ' || drawable(c), std::string("the font draws '") + c + "'");
         const auto ls = tn::lines(tn::text, tn::textHeight, tn::width - 2 * tn::margin);

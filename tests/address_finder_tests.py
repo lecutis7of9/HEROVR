@@ -276,7 +276,7 @@ class VersionShownAndFullWindow(unittest.TestCase):
 
     def test_port_version_file(self):
         self.assertEqual(af.port_version(), self.read('PORT-VERSION').splitlines()[0].strip())
-        self.assertEqual(af.port_version(), 'Update 39.4')
+        self.assertEqual(af.port_version(), 'Update 39.5')
 
     def test_launcher_prints_version_first_in_green(self):
         s = self.read('tools/launch-game-vr.ps1')

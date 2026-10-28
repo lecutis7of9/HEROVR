@@ -1135,6 +1135,16 @@ Layout build(int page, float k, int open) {
         c = f.v - .002f * k;
         l.items.push_back(std::move(f));
     }
+#else
+    // The public release: its version where the test builds said TEST <n> <commit>.
+    {
+        Item f = itemOf(Kind::footer);
+        f.text = "HERO VR " SPIDY_PUBLIC_VERSION " - MADE BY AGENT MULDER";
+        f.h = fittedHeight(f.text, footerHeight * k, .14f);
+        f.v = c - f.h;
+        c = f.v - .002f * k;
+        l.items.push_back(std::move(f));
+    }
 #endif
     auto sliderItem = [&](Control control) {
         Item s = itemOf(Kind::slider, control);

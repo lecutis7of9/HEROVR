@@ -1,16 +1,44 @@
-# HERO VR 0.0.71 - Made by Agent Mulder
+# HERO VR 0.0.72 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of HERO VR 0.0.71 (version number **Version 0.0.71**, build Update 39.4, launcher 0.0.71.1)
+This zip is the full source of HERO VR 0.0.72 (version number **Version 0.0.72**, build Update 39.5, launcher 0.0.72.1)
 plus the prebuilt HERO VR launcher.
 
-**0.0.71: fixes VR not starting after Stop VR ("handle is invalid" at finding the headset); includes everything in 0.0.7.**
+**EXPERIMENTAL BUILD: 0.0.72 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63
+goes back to it, settings kept). 0.0.72 includes everything in 0.0.71.
 
-Why 0.0.70 and 0.0.71: versions compare number by number, so "0.0.7" would look older than 0.0.63
-to the launcher; 0.0.70 is 0.0.7, and 0.0.71 is 0.0.7 with this fix, seen as newer by every launcher.
+## What's new in 0.0.72
+- **Two new heroes** on the wrist hologram's HERO PROFILES: **THOR** (Mjolnir sheathed on your back: reach back and
+  grip to draw it, throw, recall and catch, lightning) and **GREEN LANTERN** (ring flight and constructs). One hero at a
+  time, and every hero stays OFF until you pick it.
+- **THOR HAMMER** (COMBAT): four real Mjolnir models, #1 BOOOOP (the default), #5 DEVILSEYE, #6 LOVE THUNDER and #3 FCCOOPER.
+- **Real 3D models**: the batons, batarangs, guns, grapple gun and shield now use the artists' own geometry, UVs and
+  textures, no longer flattened or one colour per triangle. A missing model shows MODEL MISSING, never a stand-in.
+- **23 worn suits** (the ROSTER page on the wrist): pick a suit for each hero. A worn suit takes the game body's place
+  (SUIT BODY: ARMS, FULL BODY or OFF) and shows in MIRROR VIEW. The default is still THE GAME'S OWN suit.
+- **Reputation, skill trees and perks** for every hero.
+- **GRAPPLE** for BATMAN, DAREDEVIL and the PUNISHER: takeoff from the ground, a sustained pull and a line drawn.
+  BATMAN's trigger fires the grapple, a grip on a belt pouch draws a batarang, and his cape fans out while gliding.
+- **SUPERMAN**: two thin heat-vision beams from the eyes, with sparks, a scorch mark and a looping sound.
+  **PUNISHER**: drop-leg thigh holsters, the barrel along the aim, a muzzle flash and the player's own shotgun, pistol
+  and reload sounds. **CAPTAIN AMERICA**: the thrown shield always flies home onto the forearm.
+  **WOLVERINE**: grip-fist claws with SNIKT. **THOR**'s lightning uses the player's two lightning sounds.
+- **WINDOW LIGHTS**: LOD FADE is off by default, and the game view's lens is never narrower than both eyes.
+- The phone is Spider-Man only, and putting it back in the back pocket works (no stuck phone).
+- **PUNISHER VAN (EXPERIMENTAL, OFF by default)**: tap X as the Punisher to summon it. It is an engine preview only:
+  the van does not drive you through the city yet.
+- The launcher (0.0.72.1, build 13) credits every model and suit artist. Before it updates, it still asks you to
+  confirm that the new version is EXPERIMENTAL and that 0.0.63 is the most recent STABLE build. **Revert** offers
+  **USE 0.0.63**, 0.0.62, 0.0.6 and 0.0.5.
+
+## In 0.0.71
+- Fixed: VR not starting after Stop VR ("handle is invalid" at finding the headset).
+
+Why 0.0.70, 0.0.71 and 0.0.72: versions compare number by number, so "0.0.7" would look older than 0.0.63
+to the launcher; 0.0.70 is 0.0.7, and 0.0.71 and 0.0.72 come after it for every launcher.
 
 ## What's new in 0.0.7
 - **New heroes** on the wrist hologram's COMBAT page, under HERO PROFILES: **BATMAN** (batarangs that chain and come
@@ -25,7 +53,7 @@ to the launcher; 0.0.70 is 0.0.7, and 0.0.71 is 0.0.7 with this fix, seen as new
   start, then switches itself OFF (and saves that), so it never stays on by accident.
 - **Captain America suit:** `CapSuit` and docs/CAP-SUIT-PIPELINE.md are an optional guide for doing a suit swap by
   hand. Nothing installs it for you.
-- The launcher (0.0.71.1, build 12; build 11 in 0.0.70): the HERO VR design's orb is smoother and lags less (still optional; classic stays
+- The launcher (build 12 in 0.0.71, build 11 in 0.0.70): the HERO VR design's orb is smoother and lags less (still optional; classic stays
   the default). **Revert** offers **USE 0.0.63**, 0.0.62, 0.0.6 and 0.0.5.
 - The Valve Index 15-degree controller tilt is **unconfirmed**; tell us how it feels.
 
@@ -92,7 +120,7 @@ to the launcher; 0.0.70 is 0.0.7, and 0.0.71 is 0.0.7 with this fix, seen as new
   half rate when full rate is out of reach. The graphics defaults are unchanged.
 - VR never ends silently when the headset is lost: the mod waits for it and brings VR back by itself.
 - Opt-in reports (see Privacy below).
-- Don't like 0.0.71? **Revert > USE 0.0.63**, **USE 0.0.62**, **USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
+- Don't like 0.0.72? **Revert > USE 0.0.63**, **USE 0.0.62**, **USE 0.0.6** or **USE 0.0.5** downloads that version from GitHub, checks it and
   installs it. The launcher then stays on it until you press **Updates > Update now**.
 
 ## Requirements
@@ -105,10 +133,12 @@ to the launcher; 0.0.70 is 0.0.7, and 0.0.71 is 0.0.7 with this fix, seen as new
 ## Install
 1. Right-click the zip, choose **Extract All...**, and extract it to a short path you can write to, for example
    `C:\HERO-VR`. Don't use Program Files or a OneDrive folder.
-2. Double-click **HERO VR Launcher.cmd**. If SmartScreen warns you, click **More info** and then **Run anyway**.
+   Open the **HERO-VR-Launcher-0.0.72** folder it makes (if Windows puts it inside another folder of the same name,
+   open that one too).
+2. Double-click **HERO VR Launcher.cmd**: it is the only file to open. If SmartScreen warns you, click **More info** and then **Run anyway**.
    The launcher is unsigned.
-3. On the first run the launcher downloads the ready-made mod files for 0.0.71 from the GitHub release
-   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.71) and checks them. If that was interrupted,
+3. On the first run the launcher downloads the ready-made mod files for 0.0.72 from the GitHub release
+   (https://github.com/lecutis7of9/HEROVR/releases/tag/v0.0.72) and checks them. If that was interrupted,
    press **Repair** on **Status** (or just PLAY VR, which offers it).
 4. Start your VR app, put the headset on and press **PLAY VR**. The default launch options are:
    `-RenderScale 100 -OverlayWebs -EngineTaa -SmallerDesktopView`.

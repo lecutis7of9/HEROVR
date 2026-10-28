@@ -9,7 +9,9 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.71.1** (launcher build 12), shipped with HERO VR 0.0.71 (mod Version 0.0.71, build Update 39.4).
+Launcher version **0.0.72.1** (launcher build 13), shipped with HERO VR 0.0.72 (mod Version 0.0.72, build Update 39.5).
+
+Build 13 credits the 0.0.72 models, the 23 worn suits and the ROSTER pictures on the Credits page. It keeps build 12's EXPERIMENTAL update confirm (0.0.63 is the most recent STABLE build) and Revert to 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
 
 Build 12 fixes VR not starting after Stop VR ("handle is invalid" at finding the headset): PowerShell gets its own standard input and Stop VR keeps the launcher's own standard handles. Everything else is build 11 (0.0.70).
 

@@ -124,6 +124,13 @@ class PastIssues(unittest.TestCase):
                 for name in ('"Build & update log"', 'new LogBox(), 556, 48, 532, 488', '"Copy"', '"Logs"', 'Build from source (dev)'):
                     self.assertIn(name, nh)
                 new = re.sub(hdr, '', new, flags=re.S); old = re.sub(hdr, '', old, flags=re.S)
+            if f == 'MainForm.Updates.cs':   # 0.0.71 (build 12): the one call to the EXPERIMENTAL / STABLE confirmation (experimental_confirm_tests.py)
+                line = '\n            if (!ConfirmExperimental(m)) return;   // build 12: the EXPERIMENTAL / STABLE notice, confirmed before any download'
+                self.assertEqual(new.count(line), 1); new = new.replace(line, '')
+            if f == 'Manifest.cs':   # 0.0.71 (build 12): "experimental" and "stable_version" for that notice; nothing else
+                for line in [l for l in new.split('\n') if '// build 12' in l]:
+                    self.assertTrue('Experimental' in line or 'StableVersion' in line, line); new = new.replace(line + '\n', '')
+                self.assertNotIn('Experimental', new)
             if old != new: changed.append(f)
         self.assertEqual(changed, [])
         self.assertIn('releases/latest/download/version.json', ''.join(all_src().values()))

@@ -1,6 +1,16 @@
-> **This is SM2 VR (port of SpidyVR):** an early, unofficial port of Spidy by Ilya Mezerowsky to
-> Marvel's Spider-Man 2 (Spider-Man2.exe 2.810.0.0), GPL v3. Build and test steps, and what is not ported
-> yet: [BUILD-SM2.md](BUILD-SM2.md). The rest of this README describes the original Spidy for Spider-Man Remastered.
+# HERO VR - VR for Marvel's Spider-Man 2 (Made by Agent Mulder)
+
+**To play, you do not need anything on this page.** Get HERO VR from the
+[latest release](https://github.com/lecutis7of9/HEROVR/releases/latest):
+
+1. Download **`HERO-VR-Launcher-<version>.zip`** (under *Assets*; not "Source code").
+2. Right-click it, **Extract All...**, and open the **HERO-VR-Launcher-<version>** folder (if Windows puts it
+   inside another folder of the same name, open that one too).
+3. Double-click **HERO VR Launcher.cmd**, then press **PLAY VR**. That is the only file to open.
+
+The rest of this page is the source: HERO VR is a port of **Spidy (SpidyVR) by Ilya Mezerowsky** to Marvel's
+Spider-Man 2 (Spider-Man2.exe 2.810.0.0), GPL v3. Build and test steps: [BUILD-SM2.md](BUILD-SM2.md). Below is the
+original Spidy README (for Spider-Man Remastered); its "Launch Spidy" files are not how you start HERO VR.
 
 <p align="center">
   <a href="https://github.com/IlyaMez/SpidyVR/releases/latest"><img src="docs/images/readme/hero.jpg" alt="Spider-Man in full VR. Spidy is a free PC VR mod for Marvel's Spider-Man Remastered, recorded in the headset on Quest 3." width="100%"></a>

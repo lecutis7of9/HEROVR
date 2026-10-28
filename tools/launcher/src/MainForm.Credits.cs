@@ -72,12 +72,17 @@ namespace Sm2VrLauncher
                  "Batarang EIRA - \"Batarang\" by Eira, CC BY 4.0 (decimated, recoloured)\n" +
                  "Batarang CLOONEY - \"Batarang Clooney\" by Ludus101, CC BY 4.0 (decimated)\n" +
                  "Batarang JOKER - \"Batarang Joker\" by baton268, CC BY-NC-ND 4.0 (unmodified, non-commercial: HERO VR is free)\n" +
-                 // Version 0.0.72 (test): THOR HAMMER's four Mjolnirs and the PUNISHER VAN.
+                 // Version 0.0.72: THOR HAMMER's four Mjolnirs and the PUNISHER VAN.
                  "Thor's hammer #1 - \"Marvel Thor's Hammer (Mjolnir)\" by Boooooop, CC BY 4.0 (decimated)\n" +
                  "Thor's hammer #5 - \"Mjolnir (Thor's hammer)\" by TheDevilsEye, CC BY 4.0\n" +
                  "Thor's hammer #6 - \"Mjolnir - Thor love and thunder\" by Jesus Osco, CC BY 4.0 (decimated)\n" +
                  "Thor's hammer #3 - \"Thor's Hammer: Mjolnir\" by fccooper, CC BY 4.0\n" +
                  "Punisher van - \"GMC Vandura1976 Van\" by snafuj, CC BY 4.0 (decimated, painted black; cab and wheel built by Agent Mulder)\n" +
+                 // Version 0.0.72 (launcher build 13): the 23 worn suits and the ROSTER pictures.
+                 "Worn suits (Models\\Suits) - by Light.k, H.E.C.U Models, Tigerar1, mikomagallona, Marco.41, YE YE, officialsupremefilms, Neut2000, CAPTAAINR, " +
+                 "Shivam.Yadav, 9A Films / Nihar Arora, Nathang30, benjamin.borromeo, Mittergen, floh, Chechorams16, Stokissout and AssetGoat; CC BY 4.0, " +
+                 "CC BY-NC 4.0 (floh), CC BY-NC-SA 4.0 (Nathang30) and the Sketchfab Standard licence (Tigerar1, Marco.41); non-commercial: HERO VR is free\n" +
+                 "ROSTER pictures - thumbnails of the artists' models, each named in THIRD-PARTY-MODELS.md\n" +
                  "Links, licences and changes: THIRD-PARTY-MODELS.md in the mod folder.", f, Theme.Silver);
             line().Act("Open THIRD-PARTY-MODELS", fb, () => OpenNotice("THIRD-PARTY-MODELS.md"));
 

@@ -1,8 +1,10 @@
-# HERO VR 0.0.72 (PRIVATE TEST BUILD, branch hero-0.0.72)
+# HERO VR 0.0.72 (EXPERIMENTAL release, tag v0.0.72, launcher build 13)
 
-Not a release: no tag, no GitHub release, no Nexus upload. CI runs with `upload=false`. The launcher's
-VERSION stays 0.0.70. Install it over the player's 0.0.70 folder (tools/release072/READ-ME-FIRST.txt).
+Released as tag v0.0.72 (Version 0.0.72, build Update 39.5, launcher 0.0.72.1, build 13), from test build 12's code.
+EXPERIMENTAL: it may crash or have issues; 0.0.63 is the most recent STABLE build (Revert > USE 0.0.63).
+The release zip carries `Models/` (every model and suit of test build 12) and `Sounds/`.
 Made by Agent Mulder. Only the model artists are credited (THIRD-PARTY-MODELS.md).
+The notes below were written during the test builds (1-12).
 
 Game addresses and hooks are marked CONFIRMED (the 0.0.7 paths: sm2_damage, the bridge raycasts, the swing
 asks) or CANDIDATE (not yet confirmed in the game). A CANDIDATE feature sits behind a toggle that turns
@@ -51,7 +53,7 @@ itself off on failure. A missing model shows MODEL MISSING and is never replaced
     which needs CodeWalker on the PC;
   - XNALaraFanatic's Arkham City sets 1 and 2 need a DeviantArt login (not fetched);
   - Kabalstein's Harley thugs are a MediaFire `.rar` in XNALara format.
-  - All of them are ports of the game's own Arkham meshes: fine for a private test, not for a public build.
+  - All of them are ports of the game's own Arkham meshes, so none of them ships.
 - **SETTINGS SUBTEXT:** every COMBAT setting's note is at most 80 characters, has exactly one '.', and says
   whether a restart is needed (tests/update38_tests.py).
 - **MSVC fix:** `mesh_model.cpp` no longer names a variable `small`, which is a macro in `rpcndr.h`.

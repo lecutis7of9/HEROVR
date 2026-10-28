@@ -7003,7 +7003,11 @@ DWORD WINAPI run(void*) {
                                                     ws = mesh_model::suitSlot(x->folder);
                                             if (wornSuitSlot.exchange(ws) != ws && ws) {
                                                 char line[160];
+                                                #if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
                                                 sprintf_s(line, "TEST " SPIDY_TEST_NUMBER " SUIT: wearing %s", mesh_model::slotFolders[ws]);
+#else
+                                                sprintf_s(line, "SUIT: wearing %s", mesh_model::slotFolders[ws]);
+#endif
                                                 game_prompts::note(line);
                                             }
                                         }

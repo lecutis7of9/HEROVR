@@ -2,6 +2,39 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.72 - HERO VR 0.0.72 (October 28, 2026)
+
+**EXPERIMENTAL BUILD: 0.0.72 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63
+goes back to it, settings kept).
+
+Version 0.0.72 (build Update 39.5), launcher build 13 (0.0.72.1). From test build 12 (68b111d), with the test notice
+and the TEST tag removed (HERO_TEST_BUILD OFF; the wrist shows "HERO VR 0.0.72 - MADE BY AGENT MULDER"). The release
+zip carries `Models/` (every model and suit of test build 12) and `Sounds/`. Every hero stays OFF until picked; the
+default suit is THE GAME'S OWN.
+
+- **Two new heroes** on the wrist hologram's HERO PROFILES: **THOR** (Mjolnir sheathed on your back: reach back and
+  grip to draw it, throw, recall and catch, lightning) and **GREEN LANTERN** (ring flight and constructs). One hero at a
+  time, and every hero stays OFF until you pick it.
+- **THOR HAMMER** (COMBAT): four real Mjolnir models, #1 BOOOOP (the default), #5 DEVILSEYE, #6 LOVE THUNDER and #3 FCCOOPER.
+- **Real 3D models**: the batons, batarangs, guns, grapple gun and shield now use the artists' own geometry, UVs and
+  textures, no longer flattened or one colour per triangle. A missing model shows MODEL MISSING, never a stand-in.
+- **23 worn suits** (the ROSTER page on the wrist): pick a suit for each hero. A worn suit takes the game body's place
+  (SUIT BODY: ARMS, FULL BODY or OFF) and shows in MIRROR VIEW. The default is still THE GAME'S OWN suit.
+- **Reputation, skill trees and perks** for every hero.
+- **GRAPPLE** for BATMAN, DAREDEVIL and the PUNISHER: takeoff from the ground, a sustained pull and a line drawn.
+  BATMAN's trigger fires the grapple, a grip on a belt pouch draws a batarang, and his cape fans out while gliding.
+- **SUPERMAN**: two thin heat-vision beams from the eyes, with sparks, a scorch mark and a looping sound.
+  **PUNISHER**: drop-leg thigh holsters, the barrel along the aim, a muzzle flash and the player's own shotgun, pistol
+  and reload sounds. **CAPTAIN AMERICA**: the thrown shield always flies home onto the forearm.
+  **WOLVERINE**: grip-fist claws with SNIKT. **THOR**'s lightning uses the player's two lightning sounds.
+- **WINDOW LIGHTS**: LOD FADE is off by default, and the game view's lens is never narrower than both eyes.
+- The phone is Spider-Man only, and putting it back in the back pocket works (no stuck phone).
+- **PUNISHER VAN (EXPERIMENTAL, OFF by default)**: tap X as the Punisher to summon it. It is an engine preview only:
+  the van does not drive you through the city yet.
+- The launcher (0.0.72.1, build 13) credits every model and suit artist. Before it updates, it still asks you to
+  confirm that the new version is EXPERIMENTAL and that 0.0.63 is the most recent STABLE build. **Revert** offers
+  **USE 0.0.63**, 0.0.62, 0.0.6 and 0.0.5.
+
 ## v0.0.71 - HERO VR 0.0.71 (October 27, 2026)
 
 **EXPERIMENTAL BUILD: 0.0.71 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63

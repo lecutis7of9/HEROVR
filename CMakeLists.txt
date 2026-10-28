@@ -86,7 +86,7 @@ endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}")
 # Test build 11: the wrist's bottom line and the start line say "TEST <n> <commit>" (build 10's log
 # showed build 9 still running; the number makes that plain). Bump per test build.
-set(HERO_TEST_NUMBER "1" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+set(HERO_TEST_NUMBER "2" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()

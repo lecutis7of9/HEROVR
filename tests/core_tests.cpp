@@ -24073,6 +24073,136 @@ int main() {
         live.update(1 / 90.f, true, right, reach);
         check(live.heldIn(0) == 0, "a reach over the shoulder after a turn draws from the back");
     });
+    test("0.0.73 test 3 GRAPPLE CONTROLS: DAREDEVIL draws from the back, aims, holds the trigger and grapples; BATMAN and the PUNISHER too, WEBS ON TRIGGER either way", [] {
+        using namespace spidy;
+        namespace g73 = spidy::grapple073;
+        const float eye = holster::standingEye;
+        const Pose level{{0, eye, 0}, {}};
+        const float dt = 1 / 90.f;
+        // test 2's routing (game_xr: u37.ball / u37.other, the WEB buttons) and test 3's (the controller's own)
+        auto oldPress = [](bool triggerWebs, float trigger, float squeeze) {
+            return g73::HeroPress{triggerWebs ? squeeze : trigger, triggerWebs ? trigger : squeeze};
+        };
+        check(g73::heroPress(.8f, .2f, false, false).trigger == .8f && g73::heroPress(.8f, .2f, false, false).grip == .2f,
+              "the real trigger and grip");
+        check(g73::heroPress(1, 1, true, false).trigger == 0 && g73::heroPress(1, 1, true, false).grip == 0, "the holo zone: nothing");
+        check(g73::heroPress(1, 1, false, true).trigger == 0 && g73::heroPress(1, 1, false, true).grip == 1, "the van: the pedal's trigger");
+        check(g73::heroPress(NAN, 7, false, false).trigger == 0 && g73::heroPress(NAN, 7, false, false).grip == 1, "NaN, out of range");
+        // the session: grip from frame 10 (the draw), the hand swings out to aim at 30, trigger held from 50
+        auto session = [&](int f, float& trigger, float& squeeze) {
+            squeeze = f >= 10 ? 1.f : 0.f;
+            trigger = f >= 50 ? 1.f : 0.f;
+        };
+        for (const bool triggerWebs : {false, true})
+            for (const bool oldRoute : {false, true})
+                for (unsigned hand = 0; hand < 2; ++hand) {
+                    const std::string tag = std::string(oldRoute ? " (test 2 routing" : " (test 3 routing") +
+                                            (triggerWebs ? ", WEBS ON TRIGGER" : ", grip webs") + ", hand " + std::to_string(hand) + ")";
+                    const bool shouldWork = !oldRoute || !triggerWebs;
+                    const Vec3 back{hand ? .15f : -.15f, eye - .15f, .2f}, out{hand ? .25f : -.25f, eye - .25f, -.55f};
+                    // ---- DAREDEVIL (BATON HOLSTERS, DD GRAPPLE on): the baton over the shoulder ----
+                    {
+                        hero007::Play p7;
+                        hero007::PlayInput in7;
+                        in7.dt = dt;
+                        in7.play = true;
+                        in7.hero = hero_modes::daredevil;
+                        in7.head = level;
+                        in7.eyeHeight = eye;
+                        in7.batonHolsters = true;
+                        p7.setHero(in7.hero);
+                        g73::TapOrHold tap;
+                        bool drawn = false, thrown = false;
+                        int firstAsk = -1;
+                        for (int f = 0; f < 120; ++f) {
+                            float trigger, squeeze;
+                            session(f, trigger, squeeze);
+                            for (unsigned i = 0; i < 2; ++i) {
+                                in7.hands[i].tracked = true;
+                                in7.hands[i].position = i == hand ? (f < 30 ? back : out) : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                                in7.hands[i].aim = {0, 0, -1};
+                                in7.hands[i].squeeze = i == hand ? squeeze : 0.f; // the rack draws on the real grip
+                            }
+                            hero007::PlayOutput o7;
+                            p7.holsterStep(in7, o7);
+                            drawn |= p7.batonDrawn(hand, true);
+                            const auto press = oldRoute ? oldPress(triggerWebs, trigger, squeeze) : g73::heroPress(trigger, squeeze, false, false);
+                            const auto t = tap.step(hand, dt, p7.batonDrawn(hand, true), press.trigger, false);
+                            thrown |= t.tap;
+                            const uint32_t asks = grapple072::asks(hero_modes::daredevil, true, hand == 0 && t.hold, hand == 1 && t.hold);
+                            if (asks & cape_glide::askGrappleOnly && asks & cape_glide::askGrapple[hand] && firstAsk < 0)
+                                firstAsk = f;
+                        }
+                        check(drawn, "DAREDEVIL drew the baton from his back" + tag);
+                        // test 2 routing, WEBS ON TRIGGER: the grip that drew him was his "trigger" (a grapple at the back
+                        // on the draw, or none) and the real trigger nothing; the grapple must come from the trigger
+                        check((firstAsk >= 50) == shouldWork, "DAREDEVIL's held trigger asks the grapple" + tag);
+                        check(!thrown, "no throw on the hold" + tag);
+                        const Vec3 aim = g73::batonAim(true, out, out + Vec3{0, .1f, -.5f}, {0, 0, -1});
+                        check(aim.z < -.9f, "along the pointed baton");
+                    }
+                    // ---- BATMAN: the grip holds the gun, the trigger fires it ----
+                    {
+                        hero007::Play p7;
+                        hero007::PlayInput in7;
+                        in7.dt = dt;
+                        in7.play = true;
+                        in7.hero = hero_modes::batman;
+                        in7.head = level;
+                        in7.eyeHeight = eye;
+                        p7.setHero(in7.hero);
+                        int firstAsk = -1;
+                        for (int f = 0; f < 120; ++f) {
+                            float trigger, squeeze;
+                            session(f, trigger, squeeze);
+                            const auto press = oldRoute ? oldPress(triggerWebs, trigger, squeeze) : g73::heroPress(trigger, squeeze, false, false);
+                            for (unsigned i = 0; i < 2; ++i) {
+                                in7.hands[i].tracked = true;
+                                in7.hands[i].position = i == hand ? out : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                                in7.hands[i].aim = {0, 0, -1};
+                                in7.hands[i].squeeze = i == hand ? squeeze : 0.f; // game_xr: always the real grip
+                                in7.hands[i].trigger = i == hand ? press.trigger : 0.f;
+                            }
+                            hero007::PlayOutput hold, o7;
+                            p7.holsterStep(in7, hold);
+                            p7.step(in7, o7);
+                            const uint32_t asks = cape_glide::pack(true, o7.grapple[0], o7.grapple[1]);
+                            if ((asks & cape_glide::askGrapple[hand]) && firstAsk < 0)
+                                firstAsk = f;
+                        }
+                        check((firstAsk >= 50) == shouldWork, "BATMAN's trigger fires the drawn gun" + tag);
+                    }
+                    // ---- the PUNISHER: the hook from the chest rig ----
+                    {
+                        hero072::Play p72;
+                        hero072::PlayIn in;
+                        in.dt = dt;
+                        in.play = true;
+                        in.hero = hero_modes::punisher;
+                        in.head = level;
+                        in.eyeHeight = eye;
+                        const Vec3 sternum{hand ? .07f : -.07f, eye - .31f, -.05f};
+                        int firstAsk = -1;
+                        for (int f = 0; f < 120; ++f) {
+                            float trigger, squeeze;
+                            session(f, trigger, squeeze);
+                            const auto press = oldRoute ? oldPress(triggerWebs, trigger, squeeze) : g73::heroPress(trigger, squeeze, false, false);
+                            for (unsigned i = 0; i < 2; ++i) {
+                                in.hands[i].tracked = true;
+                                in.hands[i].position = i == hand ? (f < 30 ? sternum : out) : Vec3{i ? .3f : -.3f, eye - .5f, -.3f};
+                                in.hands[i].aim = {0, 0, -1};
+                                in.hands[i].grip = i == hand ? press.grip : 0.f;
+                                in.hands[i].trigger = i == hand ? press.trigger : 0.f;
+                            }
+                            hero072::PlayOut o;
+                            p72.step(in, o);
+                            if ((grapple072::asks(hero_modes::punisher, true, o.grapple[0], o.grapple[1]) & cape_glide::askGrapple[hand]) && firstAsk < 0)
+                                firstAsk = f;
+                        }
+                        check((firstAsk >= 50) == shouldWork, "the PUNISHER's trigger fires the hook" + tag);
+                    }
+                }
+    });
     test("Version 0.0.73 test 3: PUNISHER HOOK GRAB - the chest rig is found looking down, either hand, a high hip fit, and the hook wins over the pistols", [] {
         using namespace spidy::hero072;
         using spidy::holster::BodyYaw;

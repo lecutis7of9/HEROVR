@@ -61,6 +61,21 @@ class FireGate {
     uint64_t fires_{};
 };
 
+// Version 0.0.73 test 3 (DAREDEVIL / BATMAN / PUNISHER grapple): a hero's weapon controls are the controller's
+// own TRIGGER and GRIP. WEBS ON TRIGGER swaps only SPIDER-MAN's web and web-ball buttons; test 2 fed the heroes
+// the swapped pair, so with it on DAREDEVIL's "trigger" was the grip that drew the baton (a press begun before
+// the baton was out: never his) and the real trigger did nothing; the PUNISHER's hook drew on the trigger.
+// The holo zone's hand presses nothing; driving the van, the trigger is the pedal's (the grip stays).
+struct HeroPress {
+    float trigger{}, grip{};
+};
+inline float pressOf(float v) { return std::isfinite(v) ? std::clamp(v, 0.f, 1.f) : 0.f; }
+inline HeroPress heroPress(float trigger, float squeeze, bool holoZone, bool driving) {
+    if (holoZone)
+        return {};
+    return {driving ? 0.f : pressOf(trigger), pressOf(squeeze)};
+}
+
 // DAREDEVIL's trigger: a tap throws, a hold grapples.
 inline constexpr float holdSeconds = .3f;
 class TapOrHold {

@@ -6468,7 +6468,11 @@ DWORD WINAPI run(void*) {
                             // IRON MAN keeps his trigger (the repulsor fires in flight, as in 0.0.6).
                             cf.flightTriggers = flyModeNow.load() != 0 && flyNow.flying && heroNow() != hero_modes::ironMan;
                             cf.airborne = cf.airborne || (flyModeNow.load() != 0 && flyNow.flying);
+                            // 0.0.73 test 3: the heroes' own trigger and grip (never WEBS ON TRIGGER's swap).
+                            grapple073::HeroPress heroPress[2]{};
                             for (unsigned i = 0; i < 2; ++i) {
+                                heroPress[i] = grapple073::heroPress(frame.hands[i].trigger, frame.hands[i].squeeze,
+                                                                     (hudZone & (1u << i)) != 0, vanDriving);
                                 auto& h = cf.hands[i];
                                 const auto& grip = frame.hands[i].grip;
                                 h.tracked = gripsTracked[i];
@@ -6867,9 +6871,9 @@ DWORD WINAPI run(void*) {
                                             const bool ddHolo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
                                             const auto ddT = ddTrigger.step(i, static_cast<float>(frame.seconds),
                                                                             cf.hands[i].tracked && batonOut && b.inHandNow(),
-                                                                            cf.hands[i].button, ddHolo);
+                                                                            heroPress[i].trigger, ddHolo);
                                             const bool trig = ddGrappleOn ? ddT.tap
-                                                                          : cf.hands[i].tracked && cf.hands[i].button > .5f && batonOut;
+                                                                          : cf.hands[i].tracked && heroPress[i].trigger > .5f && batonOut;
                                             ddAimHeld[i] = ddGrappleOn && ddT.hold;
                                             if (ddAimHeld[i]) {
                                                 ddAimDir[i] = grapple073::batonAim(batonShaftOk[i], batonButt[i], batonTipHeld[i], cf.hands[i].aim);
@@ -7074,7 +7078,7 @@ DWORD WINAPI run(void*) {
                                             hin.hands[i].position = cf.hands[i].position;
                                             hin.hands[i].aim = cf.hands[i].aim;
                                             hin.hands[i].tracked = cf.hands[i].tracked;
-                                            hin.hands[i].trigger = cf.hands[i].button;
+                                            hin.hands[i].trigger = heroPress[i].trigger; // test 3: the real trigger
                                             // Version 0.0.72 WOLVERINE: the claws come out on the grip fist.
                                             hin.hands[i].squeeze = std::isfinite(frame.hands[i].squeeze) ? frame.hands[i].squeeze : 0.f;
                                             // Version 0.0.7 PUNISHER GUN GRIP: the held gun from the grip pose.
@@ -7324,8 +7328,8 @@ DWORD WINAPI run(void*) {
                                             hero072HandAt[i] = cf.hands[i].position; // 0.0.72 GRAPPLE's line
                                             hero072HandAim[i] = cf.hands[i].aim;
                                             hero072HandTracked[i] = cf.hands[i].tracked;
-                                            in72.hands[i].trigger = cf.hands[i].button;
-                                            in72.hands[i].grip = cf.hands[i].grip;
+                                            in72.hands[i].trigger = heroPress[i].trigger; // test 3: the real trigger
+                                            in72.hands[i].grip = heroPress[i].grip;       // and grip
                                             // Test build 10 THOR HAMMER GRIP: Mjolnir in the fist from the grip pose.
                                             in72.hands[i].hammer = thor_grip::held(frame.hands[i].grip, runtime.controllers()[i]);
                                             // Version 0.0.73 (fix 24, UNIVERSAL GRAPPLE): the PUNISHER's hook never fires on a

@@ -2522,10 +2522,11 @@ void placeEyes() {
     }
     latchedImmersive = render && enabled && controlled && desired.enabled == 1;
     // The game's view is on the head and both eyes render: it need not, unless
-    // RECORDING FOV wants it in the window.
+    // RECORDING FOV wants it in the window. 0.0.73 STREAMER MODE: the window shows the
+    // headset's image instead, so RECORDING FOV gives way to it (no third view to pay for).
     restGameView(primary, latchedImmersive && (config.createViews & 32) && live.load() == 2 &&
                               !native_gpu::screenRequested() &&
-                              !recordingFov.load(std::memory_order_relaxed));
+                              !(recordingFov.load(std::memory_order_relaxed) && !native_gpu::streamerOn()));
     // The eyes' jobs of this frame mark into the resting view's list (see rested).
     if (const auto resting = rested.load(); resting && clearDrawn(resting))
         InterlockedIncrement64(&SpidyDrawnFrames);

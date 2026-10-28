@@ -154,6 +154,9 @@ enum Option : uint32_t {
     repLog,
     // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (on: a trigger drives only while its hand grips the wheel) or CLASSIC (0.0.72)
     vanPedals,
+    // 0.0.73 STREAMER MODE (streamer_view.hpp): the monitor shows the headset's eye, every drawing on it (ON) or not (OFF);
+    // STREAMER SMOOTH: how the monitor's view steadies head shake (LOW, OFF, HIGH); STREAMER EYE: LEFT EYE or RIGHT EYE
+    streamerMode, streamerSmooth, streamerEye,
     options
 };
 struct OptionInfo {
@@ -481,6 +484,12 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"van_pedals", "VAN PEDALS", "VPEDL", "WHEEL HAND: the wheel hand's trigger drives, the free hand fires, no restart.",
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
+    {"streamer_mode", "STREAMER MODE", "STRMR", "ON shows the headset's view with all its drawings on the monitor, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"streamer_smooth", "STREAMER SMOOTH", "STRSM", "Steadies head shake in the monitor's view, HIGH the most, no restart.",
+     3, {"LOW", "OFF", "HIGH", nullptr}},
+    {"streamer_eye", "STREAMER EYE", "STREY", "Which headset eye the monitor shows in STREAMER MODE, no restart.",
+     2, {"LEFT EYE", "RIGHT EYE", nullptr, nullptr}},
 };
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }

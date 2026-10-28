@@ -148,6 +148,10 @@ enum Option : uint32_t {
     vanScreen,
     // 0.0.73 test 3 PALM BLAST: IRON MAN's blast straight out of the open palm (PALM, on) or along the hand (AIM, fix 15)
     palmBlast,
+    // 0.0.73 test 3 HOLO ROSTER (fix 28): the wrist ROSTER row opens the hero tiles on the hologram (HOLO TILES, on) or the big popup (CLASSIC)
+    heroMenu,
+    // 0.0.73 test 3 REP PAGE: each rep change logged for the hologram's REP tab (ON) or not (OFF)
+    repLog,
     options
 };
 struct OptionInfo {
@@ -469,6 +473,10 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"palm_blast", "PALM BLAST", "PALMB", "PALM fires straight out of your open palm, AIM along the hand, no restart.",
      2, {"PALM", "AIM", nullptr, nullptr}},
+    {"hero_menu", "HERO MENU", "HMENU", "HOLO TILES picks heroes on the hologram, CLASSIC the big popup, no restart.",
+     2, {"HOLO TILES", "CLASSIC", nullptr, nullptr}},
+    {"rep_log", "REP LOG", "REPLG", "ON logs each rep change on the hologram's REP tab, OFF stops it, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).
 inline bool shadowMatchOn(uint32_t value) { return value == 0; }

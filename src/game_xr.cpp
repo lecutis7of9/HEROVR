@@ -28,6 +28,8 @@
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
 #include "spidy/roster_page.hpp"
+#include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
+#include "spidy/rep_log.hpp"     // 0.0.73 test 3 REP PAGE
 #include "spidy/health_ring.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/hand_crawl.hpp"
@@ -131,6 +133,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <ctime>
 #include <memory>
 #include <mutex>
 #include <deque>
@@ -858,6 +861,7 @@ hero072::PlayOptions hero072Options() {
     o.takedownLight = O::onFirst(c38(combat38::takedownLight));
     o.punisherVan = O::onFirst(c38(combat38::punisherVan)); // 0.0.73 test 3: ON first (the default)
     o.thorHammer = std::min<uint32_t>(c38(combat38::thorHammer), mesh_model::hammers - 1);
+    o.repLog = O::onFirst(c38(combat38::repLog)); // 0.0.73 test 3 REP PAGE: ON first (the default)
     return o;
 }
 // Version 0.0.6: a hero toggle just turned on turns the other two off (every write path: the
@@ -1469,6 +1473,37 @@ std::string readHero072Progress() {
         return text;
     } catch (...) {
         return {}; // a bad file: a fresh start, never a crash
+    }
+}
+// 0.0.73 test 3 REP PAGE: the rep log (rep_log.hpp), the last 200 rep changes, beside the progress
+// (%APPDATA%\\Spidy\\hero_rep_log.txt). Written whole by writeWhole; a missing, short or corrupt file
+// reads as an empty log (rep_log::Log::load checks its own checksum and never throws).
+std::wstring repLogPath() {
+    const auto ini = tabOnlyPath();
+    return ini.empty() ? ini : ini.substr(0, ini.find_last_of(L'\\')) + L"\\" + std::wstring(rep_log::fileName, rep_log::fileName + std::strlen(rep_log::fileName));
+}
+std::string readRepLog() {
+    try {
+        const auto path = repLogPath();
+        if (path.empty())
+            return {};
+        const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                        OPEN_EXISTING, 0, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+            return {};
+        LARGE_INTEGER size{};
+        std::string text;
+        if (GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 20)) {
+            text.resize(static_cast<size_t>(size.QuadPart));
+            DWORD read{};
+            if (!ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &read, nullptr))
+                read = 0;
+            text.resize(read);
+        }
+        CloseHandle(file);
+        return text;
+    } catch (...) {
+        return {}; // a bad file: an empty log, never a crash
     }
 }
 // REALISTIC FLIPS and the rows under it, as the rig takes them.
@@ -3555,6 +3590,8 @@ DWORD WINAPI run(void*) {
                                         in.disabled |= 1u << static_cast<unsigned>(c);
                                 wristOff = in.disabled;
                                 in.shadowDistanceOff = !shadow_distance::sliderMoves(native_shadow_distance::now());
+                                // 0.0.73 test 3 HOLO ROSTER: HERO MENU 0 HOLO TILES (the default), 1 CLASSIC (the popup).
+                                in.heroMenuClassic = c38(combat38::heroMenu) == 1;
                                 const auto result = wristMenu.update(in, wristShown);
                                 // Update 33: SHADOW DISTANCE follows the pointer while held; the
                                 // search's thread is asked once it is let go (it tests, then keeps
@@ -3773,6 +3810,22 @@ DWORD WINAPI run(void*) {
                                 if (result.heroRoster && !rosterFault) { // Build 8: the roster page, in front of the head
                                     if (validTrackedPose(frame.head) && rosterPage.open(frame.head, rosterClock))
                                         consoleLine("ROSTER: opened");
+                                }
+                                // 0.0.73 test 3 HOLO ROSTER: the tiles' PLAY AS and OUTFITS, as the popup's.
+                                if (result.rosterPlayAs >= 0 && result.rosterPlayAs < static_cast<int>(hero_modes::heroes)) {
+                                    if (result.rosterPlayAs == 0)
+                                        for (const auto o : combat38::heroToggles)
+                                            combat38Values[o] = 0;
+                                    else {
+                                        const auto o = combat38::heroToggles[result.rosterPlayAs - 1];
+                                        combat38Values[o] = 1;
+                                        heroOnly(o);
+                                    }
+                                    consoleLine(std::string("HOLO ROSTER: PLAY AS ") + wrist_hud::activeHeroName(result.rosterPlayAs));
+                                }
+                                if (result.rosterSuitHero >= 0 && result.rosterSuitIndex >= 0 && result.rosterSuitIndex < 16) {
+                                    rosterSuitRequest = static_cast<uint32_t>(result.rosterSuitHero) * 16 + static_cast<uint32_t>(result.rosterSuitIndex) + 1;
+                                    consoleLine("HOLO ROSTER: suit " + std::to_string(result.rosterSuitIndex) + " of hero " + std::to_string(result.rosterSuitHero) + " picked");
                                 }
                                 if (result.heroSpider) // Update 39.0.1: PLAY AS SPIDER-MAN, every hero toggle off (live)
                                     for (const auto o : combat38::heroToggles)
@@ -7369,6 +7422,14 @@ DWORD WINAPI run(void*) {
                                             if (!kept.empty())
                                                 hero072Play.load(kept.c_str());
                                             hero072Play.seedLightning(static_cast<uint32_t>(GetTickCount64())); // THOR's sound pick
+                                            try { // 0.0.73 test 3 REP PAGE: the kept log (a bad file: empty, never a crash)
+                                                const std::string log = readRepLog();
+                                                if (!log.empty() && !hero072Play.repLog.load(log))
+                                                    game_prompts::note("0.0.73 REP LOG: hero_rep_log.txt did not read back (ignored, a new log)");
+                                            } catch (...) {
+                                                hero072Play.repLog = rep_log::Log{};
+                                            }
+                                            hero072Play.repLog.begin();
                                         }
                                         hero_modes::BatonEnemy list72[our_ball::maxEnemies];
                                         std::array<world_trace::Vital, world_trace::enemySlots> vit72{};
@@ -7433,6 +7494,7 @@ DWORD WINAPI run(void*) {
                                         in72.jumpBusy = jumpBusy72 || (frame.buttons & buttonA) != 0;
                                         in72.takedownPrompt = false;
                                         in72.o = hero072Options();
+                                        in72.unixTime = static_cast<int64_t>(std::time(nullptr)); // REP LOG's dates
                                         // Build 8 ROSTER page: the suits it shows (published only when they change), and
                                         // a suit picked on it (row 0: the player's own mod or the game's suit).
                                         {
@@ -7452,6 +7514,22 @@ DWORD WINAPI run(void*) {
                                                 game_prompts::note(line);
                                             }
                                             roster_page::publish(roster_page::snapshotOf(hero072Play.suits, all72, in72.o.ownSuit));
+                                            // 0.0.73 test 3 HOLO ROSTER / REP PAGE: what the hologram's tiles and REP tab
+                                            // show (the wrist reads it on its own thread), at most 4 times a second.
+                                            static double holoRosterAt = -1;
+                                            if (holoRosterAt < 0 || combatClock - holoRosterAt > .25 || combatClock < holoRosterAt) {
+                                                holoRosterAt = combatClock;
+                                                holo_roster::Data hd;
+                                                hd.suits = roster_page::snapshotOf(hero072Play.suits, all72, in72.o.ownSuit);
+                                                hd.suitsKnown = true;
+                                                for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+                                                    hd.heroPoints[h] = h == heroWas ? hero072Play.rep.points : hero072Play.rep.heroPoints[h];
+                                                hd.playing = heroWas < hero_modes::heroes ? heroWas : 0u;
+                                                hd.reputation = in72.o.reputation;
+                                                hd.repLog = in72.o.repLog;
+                                                hd.log = hero072Play.repLog;
+                                                holo_roster::publish(hd);
+                                            }
                                         }
                                         // HERO SUIT NEXT: one step to this hero's next unlocked suit, then back to DEFAULT.
                                         if (c38(combat38::heroSuit) == 1) {
@@ -7563,6 +7641,16 @@ DWORD WINAPI run(void*) {
                                             hero072Play.save(kept, sizeof kept);
                                             if (writeWhole(hero072ProgressPath(), kept))
                                                 hero072Play.progressDirty = false;
+                                        }
+                                        // 0.0.73 test 3 REP LOG: kept on the same 10 s cadence, written whole.
+                                        static double repLogSavedAt = -1;
+                                        if (hero072Play.repLog.dirty() && (repLogSavedAt < 0 || combatClock - repLogSavedAt > 10.0)) {
+                                            repLogSavedAt = combatClock;
+                                            try {
+                                                if (writeWhole(repLogPath(), hero072Play.repLog.save()))
+                                                    hero072Play.repLog.clean();
+                                            } catch (...) {
+                                            }
                                         }
                                     }
                                     for (unsigned i = 0; i < 2 && heroWas == hero_modes::spiderMan; ++i) {
@@ -11409,6 +11497,7 @@ DWORD WINAPI run(void*) {
                                     // Update 15: its page, and where the other hand points.
                                     hud.page = wristMenu.page();
                                     hud.scroll = wristMenu.scroll();
+                                    hud.roster = wristMenu.roster(); // 0.0.73 test 3 HOLO ROSTER (closed: the page)
                                     if (!wristMenuFault.load()) {
                                         hud.settings = wristShown;
                                         hud.fps = wristFps.fps();
@@ -12629,6 +12718,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeaponCollision(void* v) { re
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanScreen(void* v) { return setHero007(v, combat38::vanScreen, 5445); }
 // 0.0.73 test 3 PALM BLAST: IRON MAN fires out of the open palm (PALM, on) or along the hand (AIM, fix 15) (live.txt palm_blast).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPalmBlast(void* v) { return setHero007(v, combat38::palmBlast, 5444); }
+// 0.0.73 test 3 HOLO ROSTER (fix 28): the wrist ROSTER row opens the hero tiles on the hologram (HOLO TILES, on) or the big popup (CLASSIC) (live.txt hero_menu).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeroMenu(void* v) { return setHero007(v, combat38::heroMenu, 5446); }
+// 0.0.73 test 3 REP PAGE: each rep change logged for the hologram's REP tab (ON) or not (OFF) (live.txt rep_log).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyRepLog(void* v) { return setHero007(v, combat38::repLog, 5447); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

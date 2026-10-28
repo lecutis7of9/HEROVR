@@ -42,13 +42,20 @@
 //   v002     STATUS (VERSION 0.0.2 top right), COMBAT's BALL LOOK OURS with AIM STRENGTH STRONG pointed
 //            at (its subtext), and EXTRAS' TRAIN MOVE in TRAINING pointed at
 //
-//   spidy_hud_preview <path.bmp> [pages|scroll|themes|webstyle|music|raimi|subtext|remap|v002|heroes|holo]
+// Version 0.0.73 test 3:
+//   roster   the HOLO ROSTER on the wrist: MARVEL tiles (one pointed at), DC tiles, BATMAN's page on CONTROLS,
+//            OUTFITS and STATS, the REP page (meter and log) and the REP LOG filtered to BATMAN (STATS' button);
+//            a made-up log and rep (not a play session)
+//
+//   spidy_hud_preview <path.bmp> [pages|scroll|themes|webstyle|music|raimi|subtext|remap|v002|heroes|holo|roster]
 //   spidy_hud_preview <path.bmp> v0062 <page>   (Update 39.0.2: a page, each section opened, the end)
 #include "spidy/soft_shapes.hpp"
 #include "spidy/music_player.hpp"
 #include "spidy/wrist_hud.hpp"
 #include "spidy/combat38.hpp"
 #include "spidy/gesture_session.hpp"
+#include "spidy/hero072.hpp"
+#include "spidy/holo_roster.hpp"
 #include "preview_image.hpp"
 #include <cmath>
 #include <cstdlib>
@@ -144,7 +151,7 @@ int main(int argc, char** argv) {
     const std::string sheet = argc > 2 ? argv[2] : "";
     if (!sheet.empty() && sheet != "pages" && sheet != "scroll" && sheet != "themes" && sheet != "webstyle" &&
         sheet != "music" && sheet != "raimi" && sheet != "subtext" &&
-        sheet != "remap" && sheet != "v002" && sheet != "heroes" && sheet != "holo" && sheet != "v0062") {
+        sheet != "remap" && sheet != "v002" && sheet != "heroes" && sheet != "holo" && sheet != "v0062" && sheet != "roster") {
         std::fprintf(stderr, "unknown sheet %s (pages, scroll, themes, webstyle, music or raimi)\n", sheet.c_str());
         return 2;
     }
@@ -157,7 +164,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "v0062 needs a page 0..%d\n", wrist_hud::pages - 1);
         return 2;
     }
-    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
+    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "roster" ? 7 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
     Image image(size * cells, height); // Update 15: pages 2 and 3 in cells 2 and 3
     const Vec3 eye{0, 1.62f, 0};
     for (int cell = 0; cell < cells; ++cell) {
@@ -341,6 +348,48 @@ int main(int argc, char** argv) {
                 const auto spot = wrist_hud::controlSpot(view.page, view.hover, view.scroll);
                 pointAt(view, eye, spot.u, spot.v);
             }
+        } else if (sheet == "roster") {
+            namespace hr = holo_roster;
+            static hr::Data d = [] {
+                hr::Data x;
+                static const hero072::SuitCatalog catalog;
+                x.suits = roster_page::snapshotOf(catalog, false, false);
+                x.suitsKnown = true;
+                x.playing = hero_modes::batman;
+                for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+                    x.heroPoints[h] = 1000 + 450 * static_cast<int32_t>(h);
+                x.heroPoints[hero_modes::batman] = 2345;
+                x.log.begin();
+                int32_t pts[hero_modes::heroes]{};
+                for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+                    pts[h] = x.heroPoints[h] - 200;
+                for (uint32_t i = 0; i < 30; ++i) {
+                    rep_log::Entry e;
+                    e.kind = static_cast<uint8_t>(i % 5 == 4 ? rep_log::crimeFailed : i % 3 == 2 ? rep_log::crimeStopped : rep_log::downed);
+                    e.hero = static_cast<uint8_t>(i % 2 ? hero_modes::batman : i % 4 ? hero_modes::thor : hero_modes::spiderMan);
+                    e.count = static_cast<uint16_t>(1 + i % 3);
+                    e.delta = e.kind == rep_log::crimeFailed ? -40 : e.kind == rep_log::crimeStopped ? 60 : 10 * e.count;
+                    pts[e.hero] += e.delta;
+                    e.after = pts[e.hero];
+                    e.seconds = 40 + i * 47;
+                    e.unixTime = 1793200000 + e.seconds;
+                    x.log.add(e);
+                }
+                return x;
+            }();
+            hr::State st;
+            st.hero = hero_modes::batman;
+            st.screen = cell <= 1 ? hr::Screen::grid : cell <= 4 ? hr::Screen::hero : hr::Screen::rep;
+            st.group = cell == 1 ? 1u : 0u;
+            st.tab = cell == 3 ? hr::Tab::outfits : cell == 4 ? hr::Tab::stats : hr::Tab::controls;
+            if (cell == 0)
+                st.hover = hr::tile + static_cast<int>(hero_modes::thor);
+            if (cell == 6)
+                st.filter = hero_modes::batman;
+            view.page = wrist_hud::powersPage;
+            view.roster = st;
+            view.rosterData = &d;
+            madeUpRun(view);
         } else if (sheet == "heroes") {
             // Update 39.0.2 (5 cells): POWERS with FLYING, then each hero profile opened - IRON MAN is the
             // hero being played (its profile ACTIVE), the pointer on the profile's header.

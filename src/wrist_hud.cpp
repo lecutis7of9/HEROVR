@@ -950,7 +950,7 @@ constexpr SectionDef combatSections[] = {
       C::combatRopeStrength, C::combatWallStick}},
     {"BLOOD", C::blood, C::combatBloodLook, "", "", nullptr, -1, {C::blood, C::combatBloodLook, C::bloodVisor}},
     // Version 0.0.72 (TEST)
-    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroSuit, C::combatOwnSuit, C::combatSuitBody, C::combatPerkBranch,
+    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroMenu, C::combatRepLog, C::combatHeroSuit, C::combatOwnSuit, C::combatSuitBody, C::combatPerkBranch,
       C::combatUltimates}},
     {"FIRES, SHOVES AND FACTIONS", C::none, C::none, "", "", nullptr, -1, {C::combatFireDouse, C::combatNpcShove, C::combatFaction}},
 };
@@ -3901,6 +3901,47 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
     const bool relaid = layoutSeen_ && in.layout != layout_;
     layout_ = in.layout;
     layoutSeen_ = true;
+    // 0.0.73 test 3 HOLO ROSTER (fix 28): while the heroes are open on the hologram, the panel is theirs:
+    // the pointer and a fresh pull work their tiles and tabs, the stick scrolls the REP log.
+    if (roster_.isOpen()) {
+        if (in.heroMenuClassic) { // switched to CLASSIC while open: back to the page
+            roster_.close();
+            r.rosterClosed = true;
+        }
+        hover_ = held_ = Control::none;
+        helpFor_ = Control::none;
+        drag_ = Drag::none;
+        closeList();
+        if (!touched)
+            claim_ = false;
+        const bool onIt = in.active && in.pointer.hit && std::isfinite(in.pointer.u) && std::isfinite(in.pointer.v) &&
+                          std::abs(in.pointer.u) <= halfW && std::abs(in.pointer.v) <= halfH;
+        if (first && onIt)
+            claim_ = true;
+        if (!roster_.isOpen() || !in.active)
+            return r;
+        const holo_roster::Data* d = in.rosterData;
+        if (!d) {
+            if (holo_roster::version() != rosterVersion_)
+                rosterVersion_ = holo_roster::latest(rosterData_);
+            d = &rosterData_;
+        }
+        holo_roster::Data shown = *d;
+        if (in.hero >= 0 && in.hero < static_cast<int>(holo_roster::heroes))
+            shown.playing = static_cast<uint32_t>(in.hero);
+        const int hoverWas = roster_.state().hover;
+        const float stick = std::isfinite(in.stick) && std::abs(in.stick) > stickDead ? in.stick : 0.f;
+        const holo_roster::Actions a =
+            roster_.update(onIt && !relaid, in.pointer.u, in.pointer.v, claim_ && press && !relaid, stick, in.seconds, shown);
+        r.stick = onIt && stick != 0;
+        r.hovered = roster_.state().hover != holo_roster::none && roster_.state().hover != hoverWas;
+        r.pressed = claim_ && press && hoverWas != holo_roster::none;
+        r.rosterPlayAs = a.playAs;
+        r.rosterSuitHero = a.suitHero;
+        r.rosterSuitIndex = a.suitIndex;
+        r.rosterClosed = r.rosterClosed || a.closed;
+        return r;
+    }
     for (int i = 0; i < pages; ++i)
         scroll_[static_cast<size_t>(i)] = clampScroll(i, scroll_[static_cast<size_t>(i)], k);
     float& scroll = scroll_[static_cast<size_t>(page_)];
@@ -4138,7 +4179,15 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 r.heroSpider = true;
                 break;
             case Control::heroRoster:
-                r.heroRoster = true;
+                // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes open on the hologram; only HERO MENU
+                // CLASSIC asks for the old big popup.
+                if (in.heroMenuClassic) {
+                    r.heroRoster = true;
+                } else {
+                    roster_.open(in.hero >= 0 ? static_cast<uint32_t>(in.hero) : 0u);
+                    hover_ = held_ = Control::none;
+                    helpFor_ = Control::none;
+                }
                 break;
             case Control::gestureRemapMove:
                 r.remapMove = true;
@@ -4300,6 +4349,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatLightHold:
             case Control::combatVanScreen:
             case Control::combatPalmBlast:
+            case Control::combatHeroMenu:
+            case Control::combatRepLog:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:
@@ -4756,6 +4807,61 @@ Frame place(const View& view, Vec3 viewer) {
     return {centre, right, normalized(cross(right, look))};
 }
 
+// 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes on the hologram, holo_roster's pieces in the theme's colours.
+void holoRoster(const Painter& p, const View& view) {
+    namespace hr = holo_roster;
+    const hr::Data* d = view.rosterData;
+    thread_local hr::Data latest{};
+    thread_local uint32_t seen = ~0u;
+    if (!d) {
+        if (hr::version() != seen)
+            seen = hr::latest(latest);
+        d = &latest;
+    }
+    thread_local std::vector<hr::Piece> ps;
+    ps.clear();
+    hr::pieces(view.roster, *d, ps);
+    const auto colour = [&](const hr::Piece& x) {
+        switch (x.role) {
+        case hr::Role::text: return p.c.text;
+        case hr::Role::label: return p.c.label;
+        case hr::Role::value: return p.c.value;
+        case hr::Role::help: return p.c.help;
+        case hr::Role::accent: return p.c.accent;
+        case hr::Role::frame: return p.c.frame;
+        case hr::Role::line: return p.c.line;
+        case hr::Role::good: return p.c.good;
+        case hr::Role::warn: return p.c.warn;
+        case hr::Role::bad: return p.c.bad;
+        case hr::Role::backing: return p.c.backing;
+        case hr::Role::custom: break;
+        }
+        return finite(x.color) ? x.color : p.c.text;
+    };
+    for (const hr::Piece& x : ps) {
+        const Vec3 c = colour(x);
+        const float a = std::isfinite(x.alpha) ? std::clamp(x.alpha, 0.f, 1.f) : 1.f;
+        switch (x.kind) {
+        case hr::Piece::fill: p.rect(x.u0, x.v0, x.u1, x.v1, c, a * (x.role == hr::Role::backing ? p.c.backingAlpha : 1.f)); break;
+        case hr::Piece::outline: {
+            const float w = .0007f;
+            p.bar(x.u0, x.v0, x.u1, x.v0, w, c, a);
+            p.bar(x.u0, x.v1, x.u1, x.v1, w, c, a);
+            p.bar(x.u0, x.v0, x.u0, x.v1, w, c, a);
+            p.bar(x.u1, x.v0, x.u1, x.v1, w, c, a);
+            break;
+        }
+        case hr::Piece::disc: {
+            const float r = (x.u1 - x.u0) / 2;
+            p.ring((x.u0 + x.u1) / 2, (x.v0 + x.v1) / 2, r, r, 0, r, c, a * .9f);
+            p.ring((x.u0 + x.u1) / 2, (x.v0 + x.v1) / 2, r, r, r * .86f, r, p.c.frame, a);
+            break;
+        }
+        case hr::Piece::text: p.text(x.words, x.u0, x.v0, x.height, c); break;
+        }
+    }
+}
+
 void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, float pixelAngle) {
     const float opacity = std::isfinite(view.opacity) ? std::clamp(view.opacity, 0.f, 1.f) : 0.f;
     if (opacity < .002f || !finite(view.emitter) || !finite(viewer))
@@ -4778,7 +4884,12 @@ void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, flo
     backing(p, top);
     if (p.pixel)
         spiderMark(p, 0, (top - halfH) / 2 - .01f, .085f);
-    if (page == 0) {
+    if (view.roster.screen != holo_roster::Screen::closed) {
+        // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes in place of the page, clipped to its inner area.
+        const size_t clipFrom = out.size();
+        holoRoster(p, view);
+        clipBand(out, clipFrom, f, s, viewBottom, viewTop);
+    } else if (page == 0) {
         figure(p, -.051f, -.003f);
         readouts(p, view.data);
         minimap(p, .034f, -.076f, view.heading);

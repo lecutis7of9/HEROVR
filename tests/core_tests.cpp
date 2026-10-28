@@ -1639,7 +1639,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 232, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 234, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1979,7 +1979,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 232, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 234, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18833,7 +18833,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 124, "one hundred and twenty-four options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 126, "one hundred and twenty-six options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18867,7 +18867,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 124, "0.0.73 test 3 has 124 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 126, "0.0.73 test 3 has 126 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19189,7 +19189,7 @@ int main() {
                 }
             }
         }
-        check(placed == 200 /* 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 202 /* 0.0.73 test 3: + HERO MENU, REP LOG, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -28180,6 +28180,22 @@ int main() {
             one[0].down = true;
             play.step(in, out);
             check(play.rep.points == repDown, "a down: reputation up");
+            // 0.0.73 test 3 REP LOG: the down is logged with its real change, hero and the after value.
+            check(play.repLog.size() == 1 && play.repLog.newest(0).kind == rep_log::downed &&
+                      play.repLog.newest(0).delta == repDown && play.repLog.newest(0).after == repDown &&
+                      play.repLog.newest(0).hero == hero_modes::daredevil && play.repLog.counts(hero_modes::daredevil).downed == 1,
+                  "REP LOG: the down was not logged with its real change");
+            {
+                Play quiet;
+                PlayIn qi = in;
+                qi.o.repLog = false;
+                one[0].down = false;
+                PlayOut qo;
+                quiet.step(qi, qo);
+                one[0].down = true;
+                quiet.step(qi, qo);
+                check(quiet.rep.points == repDown && quiet.repLog.size() == 0, "REP LOG OFF: rep still counts, nothing logged");
+            }
             char text[2048];
             play.save(text, sizeof text);
             Play back;
@@ -30756,6 +30772,395 @@ int main() {
             v.screen = Screen::hero, rp::append(a, nullptr, v, ca, nullptr, &snap);
             v.screen = Screen::controls, rp::append(b, nullptr, v, cc, nullptr, &snap);
             check(!a.empty() && !b.empty() && a.size() != b.size(), "a hero's CONTROLS tab drew nothing new: " + std::to_string(h));
+        }
+    });
+    // 0.0.73 test 3 REP PAGE: the meter is hero072's rep tuning, never other numbers.
+    test("0.0.73 rep log: the meter's level, floor, next and progress are hero072's", [] {
+        using namespace hero072;
+        const rep_log::Meter zero = rep_log::meterOf(0);
+        check(zero.level == 0 && zero.floor == 0 && zero.next == repTuning.levelEvery && zero.progress == 0 && !zero.max,
+              "the meter at 0");
+        const rep_log::Meter mid = rep_log::meterOf(repTuning.levelEvery * 3 + repTuning.levelEvery / 4);
+        check(mid.level == repLevel(mid.points) && mid.level == 3 && mid.floor == 3 * repTuning.levelEvery &&
+                  mid.next == 4 * repTuning.levelEvery && std::abs(mid.progress - .25f) < 1e-4f,
+              "the meter a quarter into level 3");
+        const rep_log::Meter top = rep_log::meterOf(repMost + 500);
+        check(top.max && top.points == repMost && top.progress == 1 && top.level == repLevel(repMost), "the meter at max");
+        check(rep_log::meterOf(-40).points == 0, "the meter below 0");
+        check(rep_log::rankText(0) == std::string(repTitleNames[repTitleIndex(0)]), "the rank at 0 is the real title");
+        for (int32_t p = 0; p <= repMost; p += 250) {
+            const std::string r = rep_log::rankText(p);
+            check(r.rfind(repTitleNames[repTitleIndex(p)], 0) == 0, "the rank is not the real title: " + r);
+            const std::string n = rep_log::nextText(p);
+            check(n.rfind("LV " + std::to_string(repLevel(p)), 0) == 0, "the level text: " + n);
+        }
+        check(rep_log::nextText(repMost).find("MAX REP") != std::string::npos, "the top says MAX REP");
+        check(rep_log::nextText(0).find(std::to_string(repTuning.levelEvery) + " TO ") != std::string::npos, "points to the next level");
+    });
+    test("0.0.73 rep log: entries append, newest first, the last 200 kept, counts per hero", [] {
+        rep_log::Log log;
+        log.begin();
+        check(log.size() == 0 && log.dirty() && log.session() == 1, "an empty log");
+        for (uint32_t i = 0; i < 250; ++i) {
+            rep_log::Entry e;
+            e.kind = i % 3 == 0 ? rep_log::downed : i % 3 == 1 ? rep_log::crimeStopped : rep_log::crimeFailed;
+            e.hero = static_cast<uint8_t>(i % 2 ? hero_modes::batman : hero_modes::spiderMan);
+            e.delta = e.kind == rep_log::crimeFailed ? -40 : 12;
+            e.after = static_cast<int32_t>(i);
+            e.seconds = i;
+            log.add(e);
+        }
+        check(log.size() == rep_log::most && log.total() == 250, "the ring keeps 200 of 250");
+        check(log.newest(0).after == 249 && log.newest(rep_log::most - 1).after == 50, "newest first, the oldest 50 gone");
+        check(log.countFor(hero_modes::batman) == 100 && log.countFor(hero_modes::heroes) == 200, "the filter's count");
+        const rep_log::Entry* b0 = log.nthFor(hero_modes::batman, 0);
+        check(b0 && b0->hero == hero_modes::batman && b0->after == 249, "batman's newest");
+        check(!log.nthFor(hero_modes::batman, 100), "past the filter's end");
+        const rep_log::Counts& c = log.counts(hero_modes::spiderMan);
+        check(c.downed + c.stopped + c.failed == 125 && c.gained > 0 && c.lost > 0, "the counts cover every add, not only the kept");
+        rep_log::Entry bad;
+        bad.kind = rep_log::kinds;
+        log.add(bad);
+        bad.kind = 0, bad.hero = 200;
+        log.add(bad);
+        check(log.total() == 250, "a bad entry is never logged");
+        rep_log::Entry e;
+        e.count = 3;
+        check(rep_log::what(e) == "3 BAD GUYS DOWN" && rep_log::deltaText(24) == "+24" && rep_log::deltaText(-60) == "-60",
+              "the words");
+        e.unixTime = 0, e.session = 3, e.seconds = 724;
+        check(rep_log::when(e) == "S3 12:04", "the session clock: " + rep_log::when(e));
+        e.unixTime = 1793200000;
+        check(rep_log::when(e).size() >= 10 && rep_log::when(e)[0] != 'S', "the date: " + rep_log::when(e));
+        for (uint32_t k = 0; k < rep_log::kinds; ++k)
+            check(std::string(rep_log::kindStatus[k]) == "CONFIRMED", "every logged hook is a CONFIRMED rep change");
+    });
+    test("0.0.73 rep log: saved and read back whole; a corrupt file is ignored, never a crash", [] {
+        rep_log::Log log;
+        log.begin();
+        for (uint32_t i = 0; i < 230; ++i) {
+            rep_log::Entry e;
+            e.kind = static_cast<uint8_t>(i % 3), e.hero = static_cast<uint8_t>(i % hero_modes::heroes);
+            e.count = static_cast<uint16_t>(1 + i % 4), e.delta = i % 3 == 2 ? -60 : 2 * static_cast<int32_t>(i % 9);
+            e.after = static_cast<int32_t>(i * 7), e.seconds = i * 3, e.unixTime = i % 2 ? 1793200000 + i : 0;
+            log.add(e);
+        }
+        const std::string text = log.save();
+        rep_log::Log back;
+        check(back.load(text), "the log did not read back");
+        check(back.size() == log.size() && back.total() == log.total() && back.session() == log.session() && !back.dirty(),
+              "the size, total and session");
+        for (uint32_t i = 0; i < log.size(); ++i) {
+            const rep_log::Entry &a = log.newest(i), &b = back.newest(i);
+            check(a.kind == b.kind && a.hero == b.hero && a.count == b.count && a.delta == b.delta && a.after == b.after &&
+                      a.session == b.session && a.seconds == b.seconds && a.unixTime == b.unixTime,
+                  "an entry changed: " + std::to_string(i));
+        }
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h)
+            check(back.counts(h).downed == log.counts(h).downed && back.counts(h).lost == log.counts(h).lost, "a hero's counts");
+        check(back.save() == text, "saved again, the same file");
+        back.begin();
+        check(back.session() == log.session() + 1, "the next session after a load");
+        // Corrupt: one byte changed, cut short, garbage, empty, an old header, a huge file.
+        std::string flipped = text;
+        flipped[text.size() / 2] = flipped[text.size() / 2] == '1' ? '2' : '1';
+        const std::string bads[] = {flipped, text.substr(0, text.size() / 2), "garbage\n\x01\x02", "", "HERO VR REP LOG 0\n",
+                                    std::string(300 * 1024, 'e'), text.substr(0, text.rfind("end=")) + "end=999,00000000\n"};
+        for (const std::string& b : bads) {
+            rep_log::Log l;
+            l.begin();
+            rep_log::Entry e;
+            l.add(e);
+            check(!l.load(b) && l.size() == 0 && l.total() == 0, "a corrupt log was read");
+            l.begin();
+            l.add(e);
+            check(l.size() == 1, "after a corrupt file the log works");
+        }
+    });
+    // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes are tiles on the hologram, never the big popup by default.
+    test("0.0.73 holo roster: HERO MENU defaults to HOLO TILES, its subtext and the REP LOG's", [] {
+        using namespace combat38;
+        check(optionInfo[heroMenu].count == 2 && std::string(optionInfo[heroMenu].values[0]) == "HOLO TILES" &&
+                  std::string(optionInfo[heroMenu].values[1]) == "CLASSIC",
+              "HERO MENU's values (HOLO TILES first: the default)");
+        check(std::string(optionInfo[repLog].values[0]) == "ON", "REP LOG on by default");
+        for (Option o : {heroMenu, repLog}) {
+            const std::string h = optionInfo[o].help;
+            check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.back() == '.' &&
+                      h.find("restart") != std::string::npos,
+                  "a subtext: " + h);
+        }
+        check(wrist_hud::combatOption(wrist_hud::Control::combatHeroMenu) == static_cast<int>(heroMenu) &&
+                  wrist_hud::combatOption(wrist_hud::Control::combatRepLog) == static_cast<int>(repLog),
+              "the rows' options");
+    });
+    test("0.0.73 holo roster: every hero has a tile; a tile opens his page, PLAY AS and outfits ask", [] {
+        namespace hr = holo_roster;
+        using hr::Screen;
+        check(hr::marvelCount + hr::dcCount == hero_modes::heroes, "every hero is on a tab");
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            uint32_t seen = 0;
+            for (uint32_t m : hr::marvelHeroes)
+                seen += m == h;
+            for (uint32_t d : hr::dcHeroes)
+                seen += d == h;
+            check(seen == 1, "a hero is not on exactly one tab: " + std::to_string(h));
+            check(hr::groupOf(h) == (h == hero_modes::batman || h == hero_modes::superman || h == hero_modes::greenLantern ? 1u : 0u),
+                  "MARVEL or DC");
+        }
+        hr::Data d;
+        d.suitsKnown = true;
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            d.suits.count[h] = 3;
+            std::snprintf(d.suits.rows[h][0].name, sizeof d.suits.rows[h][0].name, "%s", "OWN");
+            d.suits.rows[h][0].status = roster_page::Status::inUse;
+            std::snprintf(d.suits.rows[h][1].name, sizeof d.suits.rows[h][1].name, "%s", "CLASSIC");
+            std::snprintf(d.suits.rows[h][1].artist, sizeof d.suits.rows[h][1].artist, "%s", "SOMEONE");
+            d.suits.rows[h][1].status = roster_page::Status::unlocked;
+            std::snprintf(d.suits.rows[h][2].name, sizeof d.suits.rows[h][2].name, "%s", "FINAL");
+            d.suits.rows[h][2].status = roster_page::Status::lockedFinal;
+            d.suits.rows[h][2].final = true;
+        }
+        hr::Holo holo;
+        check(!holo.isOpen() && holo.update(true, 0, 0, true, 0, .01f, d).playAs < 0, "closed: nothing");
+        const auto centre = [&](int id, float& u, float& v) {
+            hr::Button bs[hr::buttonsMost];
+            const uint32_t n = hr::buttons(holo.state(), d, bs);
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == id) {
+                    u = (bs[i].u0 + bs[i].u1) / 2, v = (bs[i].v0 + bs[i].v1) / 2;
+                    return bs[i].enabled;
+                }
+            u = v = 99;
+            return false;
+        };
+        const auto press = [&](int id) {
+            float u, v;
+            const bool on = centre(id, u, v);
+            check(u != 99, "no such button: " + std::to_string(id));
+            holo.update(true, u, v, false, 0, .01f, d);
+            const hr::Actions a = holo.update(true, u, v, true, 0, .01f, d);
+            return std::make_pair(on, a);
+        };
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            d.playing = hero_modes::spiderMan;
+            holo.open(d.playing);
+            check(holo.state().screen == Screen::grid && holo.state().group == 0, "opens on the played hero's tab");
+            press(hr::groupOf(h) ? hr::tabDc : hr::tabMarvel);
+            check(holo.state().group == hr::groupOf(h), "the tab");
+            float u, v;
+            check(centre(hr::tile + static_cast<int>(h), u, v) && hr::buttonAt(holo.state(), d, u, v) == hr::tile + static_cast<int>(h),
+                  "a hero has no tile: " + std::to_string(h));
+            press(hr::tile + static_cast<int>(h));
+            check(holo.state().screen == Screen::hero && holo.state().hero == h, "the tile did not open his page");
+            const auto play = press(hr::playButton);
+            if (h == hero_modes::spiderMan)
+                check(!play.first && play.second.playAs < 0, "PLAY AS the hero already played does nothing");
+            else
+                check(play.first && play.second.playAs == static_cast<int>(h), "PLAY AS did not switch hero: " + std::to_string(h));
+            press(hr::subOutfits);
+            check(holo.state().tab == hr::Tab::outfits, "OUTFITS");
+            const auto pick = press(hr::outfit + 1);
+            check(pick.second.suitHero == static_cast<int>(h) && pick.second.suitIndex == 1, "an unlocked outfit did not ask");
+            const auto locked = press(hr::outfit + 2);
+            check(locked.second.suitHero < 0, "a locked outfit asked");
+            press(hr::backButton);
+            check(holo.state().screen == Screen::grid && holo.state().group == hr::groupOf(h), "BACK to his tab");
+            const auto closed = press(hr::closeButton);
+            check(closed.second.closed && !holo.isOpen(), "CLOSE");
+        }
+    });
+    test("0.0.73 holo roster: the tabs, sub-tabs and REP page draw inside the panel", [] {
+        namespace hr = holo_roster;
+        using hr::Screen;
+        hr::Data d;
+        d.playing = hero_modes::batman;
+        d.heroPoints[hero_modes::batman] = 2345;
+        d.log.begin();
+        for (uint32_t i = 0; i < 40; ++i) {
+            rep_log::Entry e;
+            e.kind = static_cast<uint8_t>(i % 3), e.hero = static_cast<uint8_t>(i % 2 ? hero_modes::batman : hero_modes::thor);
+            e.delta = i % 3 == 2 ? -40 : 12, e.after = 2000 + static_cast<int32_t>(i), e.seconds = i * 30;
+            d.log.add(e);
+        }
+        const auto inside = [&](const hr::State& s, const char* what) {
+            std::vector<hr::Piece> ps;
+            hr::pieces(s, d, ps);
+            check(ps.size() > 10, std::string(what) + " drew next to nothing");
+            for (const hr::Piece& p : ps) {
+                check(std::isfinite(p.u0) && std::isfinite(p.u1) && std::isfinite(p.v0) && std::isfinite(p.v1), what);
+                check(p.u0 >= hr::left - 1e-4f && p.u1 <= hr::right + 1e-4f && p.v0 >= hr::bottom - 1e-4f && p.v1 <= hr::top + 1e-4f,
+                      std::string(what) + ": outside the panel: " + p.words);
+            }
+            wrist_hud::View v;
+            v.emitter = {0, 1, -.4f};
+            v.opacity = 1;
+            v.page = wrist_hud::powersPage;
+            v.roster = s;
+            v.rosterData = &d;
+            std::vector<Vertex> out;
+            wrist_hud::appendWristHud(out, v, {0, 1.6f, 0}, .001f);
+            wrist_hud::View closed = v;
+            closed.roster = hr::State{};
+            std::vector<Vertex> page;
+            wrist_hud::appendWristHud(page, closed, {0, 1.6f, 0}, .001f);
+            check(!out.empty() && wrist_hud::sane(out, 0, {0, 1, -.4f}, 1) && out.size() != page.size(),
+                  std::string(what) + ": the hologram did not draw it");
+            return ps;
+        };
+        hr::State s;
+        s.screen = Screen::grid;
+        for (uint32_t g = 0; g < 2; ++g) {
+            s.group = g;
+            const auto ps = inside(s, g ? "the DC tiles" : "the MARVEL tiles");
+            for (uint32_t k = 0; k < (g ? hr::dcCount : hr::marvelCount); ++k) {
+                const std::string name = hero072::bio(g ? hr::dcHeroes[k] : hr::marvelHeroes[k]).name;
+                bool found = false;
+                for (const hr::Piece& p : ps)
+                    found = found || p.words == name;
+                check(found, "a tile has no name: " + name);
+            }
+        }
+        s.screen = Screen::hero;
+        for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
+            s.hero = h;
+            for (hr::Tab t : {hr::Tab::controls, hr::Tab::outfits, hr::Tab::stats}) {
+                s.tab = t;
+                inside(s, t == hr::Tab::controls ? "CONTROLS" : t == hr::Tab::outfits ? "OUTFITS" : "STATS");
+            }
+        }
+        // CONTROLS shows hero_controls' guide.
+        s.hero = hero_modes::thor, s.tab = hr::Tab::controls;
+        {
+            std::vector<hr::Piece> ps;
+            hr::pieces(s, d, ps);
+            const hero_controls::Guide& g = hero_controls::guideOf(hero_modes::thor);
+            bool found = false;
+            for (const hr::Piece& p : ps)
+                found = found || p.words == g.lines[0].name;
+            check(g.count > 0 && found, "CONTROLS is not the hero's guide");
+        }
+        // STATS: his counts, and SEE HIS REP LOG opens the log filtered to him.
+        s.hero = hero_modes::batman, s.tab = hr::Tab::stats;
+        {
+            std::vector<hr::Piece> ps;
+            hr::pieces(s, d, ps);
+            bool downs = false;
+            for (const hr::Piece& p : ps)
+                downs = downs || p.words == std::to_string(d.log.counts(hero_modes::batman).downed);
+            check(downs, "STATS has not his real downs");
+            hr::Holo holo;
+            holo.open(hero_modes::batman);
+            hr::Button bs[hr::buttonsMost];
+            uint32_t n = hr::buttons(holo.state(), d, bs);
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == hr::tile + static_cast<int>(hero_modes::batman))
+                    holo.update(true, (bs[i].u0 + bs[i].u1) / 2, (bs[i].v0 + bs[i].v1) / 2, true, 0, .01f, d);
+            n = hr::buttons(holo.state(), d, bs);
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == hr::subStats)
+                    holo.update(true, (bs[i].u0 + bs[i].u1) / 2, (bs[i].v0 + bs[i].v1) / 2, true, 0, .01f, d);
+            n = hr::buttons(holo.state(), d, bs);
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == hr::seeLog)
+                    holo.update(true, (bs[i].u0 + bs[i].u1) / 2, (bs[i].v0 + bs[i].v1) / 2, true, 0, .01f, d);
+            check(holo.state().screen == Screen::rep && holo.state().filter == hero_modes::batman, "SEE HIS REP LOG");
+            // The stick scrolls the log, clamped to its end.
+            for (int f = 0; f < 400; ++f)
+                holo.update(true, 0, 0, false, -1, .011f, d);
+            check(holo.state().logFirst == static_cast<float>(d.log.countFor(hero_modes::batman) - hr::logRows), "scrolled to the end");
+        }
+        s.screen = Screen::rep;
+        s.filter = hero_modes::heroes;
+        inside(s, "REP");
+        s.filter = hero_modes::thor, s.logFirst = 5;
+        inside(s, "REP, THOR's");
+        hr::Data empty;
+        std::vector<hr::Piece> ps;
+        s.filter = hero_modes::heroes;
+        hr::pieces(s, empty, ps);
+        check(!ps.empty(), "an empty log still draws");
+        empty.repLog = false, empty.reputation = false;
+        ps.clear();
+        hr::pieces(s, empty, ps);
+        s.screen = Screen::hero, s.tab = hr::Tab::stats;
+        hr::pieces(s, empty, ps);
+        check(!ps.empty(), "REP LOG and REPUTATION off still draw");
+    });
+    test("0.0.73 holo roster: the wrist's ROSTER opens the tiles, never the popup (only CLASSIC asks for it)", [] {
+        using namespace wrist_hud;
+        namespace hr = holo_roster;
+        for (int classic = 0; classic < 2; ++classic) {
+            resetSections();
+            Menu m;
+            Settings s;
+            m.setPage(powersPage);
+            Spot at{false, 0, 0};
+            for (float scroll = 0; scroll < 3; scroll += .01f) {
+                m.setScroll(powersPage, scroll, 1);
+                at = controlSpot(powersPage, Control::heroRoster, m.scroll());
+                if (at.found && at.visible)
+                    break;
+            }
+            hr::Data d;
+            d.playing = hero_modes::hulk;
+            auto step = [&](float trigger, float u, float v) {
+                Menu::Input in;
+                in.active = true;
+                in.pointer.hit = true;
+                in.pointer.u = u;
+                in.pointer.v = v;
+                in.trigger = trigger;
+                in.hero = hero_modes::hulk;
+                in.heroMenuClassic = classic;
+                in.rosterData = &d;
+                return m.update(in, s);
+            };
+            step(0, at.u, at.v);
+            step(.3f, at.u, at.v);
+            const auto r = step(.9f, at.u, at.v);
+            check(at.visible && r.pressed, "ROSTER was not pressed");
+            if (classic) {
+                check(r.heroRoster && !m.rosterOpen(), "CLASSIC: the popup is asked for");
+                continue;
+            }
+            check(!r.heroRoster && m.rosterOpen() && m.roster().screen == hr::Screen::grid && m.roster().group == 0,
+                  "HOLO TILES: the popup was asked for, or the tiles did not open");
+            check(m.claims(), "the press is the panel's");
+            // Released, then a tile: THOR (MARVEL), then PLAY AS.
+            step(0, 0, 0);
+            hr::Button bs[hr::buttonsMost];
+            auto pressId = [&](int id) {
+                const uint32_t n = hr::buttons(m.roster(), d, bs);
+                for (uint32_t i = 0; i < n; ++i)
+                    if (bs[i].id == id) {
+                        const float u = (bs[i].u0 + bs[i].u1) / 2, v = (bs[i].v0 + bs[i].v1) / 2;
+                        step(0, u, v);
+                        step(.3f, u, v);
+                        const auto x = step(.9f, u, v);
+                        step(0, u, v);
+                        return x;
+                    }
+                check(false, "no button " + std::to_string(id));
+                return Menu::Result{};
+            };
+            pressId(hr::tile + static_cast<int>(hero_modes::thor));
+            check(m.roster().screen == hr::Screen::hero && m.roster().hero == hero_modes::thor, "THOR's tile");
+            const auto play = pressId(hr::playButton);
+            check(play.rosterPlayAs == static_cast<int>(hero_modes::thor) && !play.heroRoster, "PLAY AS THOR");
+            pressId(hr::tabRep);
+            check(m.roster().screen == hr::Screen::rep, "REP tab");
+            const auto closed = pressId(hr::closeButton);
+            check(closed.rosterClosed && !m.rosterOpen(), "CLOSE back to the page");
+            // The hologram draws the page again.
+            View v;
+            v.emitter = {0, 1, -.4f};
+            v.opacity = 1;
+            v.page = powersPage;
+            v.roster = m.roster();
+            std::vector<Vertex> out;
+            appendWristHud(out, v, {0, 1.6f, 0}, .001f);
+            check(!out.empty() && sane(out, 0, {0, 1, -.4f}, 1), "the page after CLOSE");
         }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";

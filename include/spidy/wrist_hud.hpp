@@ -42,6 +42,7 @@
 // (Menu::Result::music); the playing is music_audio.hpp's, on its own thread.
 #include "gadget_wheel.hpp"
 #include "music_player.hpp"
+#include "holo_roster.hpp"
 #include "math.hpp"
 #include "vertex.hpp"
 #include <array>
@@ -490,6 +491,8 @@ enum class Control : uint8_t {
     combatLightHold, // 0.0.73 test 3 LIGHT HOLD: steadier street lights (EYE AA step + bright history hold), ON, STRONG, OFF
     combatVanScreen, // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen ON or OFF
     combatPalmBlast, // 0.0.73 test 3 PALM BLAST: IRON MAN fires out of the open palm (PALM, on) or along the hand (AIM)
+    combatHeroMenu, // 0.0.73 test 3 HOLO ROSTER (fix 28): the wrist ROSTER row opens the hero tiles on the hologram (HOLO TILES, on) or the big popup (CLASSIC)
+    combatRepLog, // 0.0.73 test 3 REP PAGE: each rep change logged for the hologram's REP tab (ON) or not (OFF)
     // Update 38.5: page 7 COLOR, 90s ANIMATED's own (eye_color.hpp toon): CARTOON STRENGTH (a live
     // slider), OUTLINES (a press, ON/OFF) and BANDS (a press, 3 -> 4 -> 5). Greyed (N/A) unless
     // FILTER is 90s ANIMATED. Result::colorSlider / colorOutlines / colorBands.
@@ -556,9 +559,9 @@ enum class Control : uint8_t {
     section11, // Version 0.0.72: GREEN LANTERN
     heroRoster, // Build 8: ROSTER: HEROES AND SUITS (opens the roster page, roster_page.hpp)
 };
-constexpr int controls = 232; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
+constexpr int controls = 234; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // build 9: + SUIT BODY; build 8: + ROSTER
 // Version 0.0.72: + 40 combat rows, + 2 sections; build 6: + THOR HAMMER MODEL, THOR FLIGHT
-constexpr int combatControls = 124; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
+constexpr int combatControls = 126; // 0.0.73 test 3: + REP LOG; // 0.0.73 test 3: + HERO MENU; // 0.0.73 test 3: + PALM BLAST; // 0.0.73 test 3: + VAN SCREEN; // 0.0.73 test 3: + LIGHT HOLD; // 0.0.73 test 3: + WEAPON COLLISION; // 0.0.73 test 2: + FLIGHT POSE; // 0.0.73 test 2: + CALIBRATION LOOK; // 0.0.73 test 2: + SHADOW MATCH; // 0.0.73 test 2: + CULL MARGIN; // 0.0.73: + CAP SPRINT; // combat38::options (checked in wrist_hud.cpp); build 9: + SUIT BODY
 // Update 38: a COMBAT row's combat38::Option (-1: not one).
 inline int combatOption(Control c) {
     const int i = static_cast<int>(c) - static_cast<int>(Control::combatCrawlCap);
@@ -1007,6 +1010,10 @@ struct View {
     Control helpFor{};
     float helpScroll{};
     MusicView music; // Update 19
+    // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes on the hologram (Menu::roster; closed: the page as
+    // ever), drawn from rosterData (tests, previews) or else holo_roster::latest.
+    holo_roster::State roster{};
+    const holo_roster::Data* rosterData{};
     std::array<float, FpsMeter::history> fpsTrail = [] {
         std::array<float, FpsMeter::history> a{};
         a.fill(std::numeric_limits<float>::quiet_NaN());
@@ -1073,6 +1080,11 @@ class Menu {
         Control helpControl{};
         int helpOverflow = -1;
         int hero = -1; // Update 39.0.2: hero_modes::Hero being played (POWERS opens its profile); -1 unknown
+        // 0.0.73 test 3 HOLO ROSTER (fix 28): HERO MENU CLASSIC (combat38::heroMenu 1): the ROSTER row
+        // asks for the old big popup (Result::heroRoster) instead of opening the heroes on the hologram.
+        bool heroMenuClassic{};
+        // The roster's data (tests); null: holo_roster::latest, as the game thread published it.
+        const holo_roster::Data* rosterData{};
     };
     // Update 19: what the MUSIC page asks of the player this update.
     enum class Music : uint8_t { none, rescan, pick, previous, rewind, toggle, stop, forward, next, seek };
@@ -1102,7 +1114,11 @@ class Menu {
         bool padMode{}, promptHandling{}, playOnMonitor{};
         bool gestureMoves{};                                        // Update 38.5: GESTURE MOVES pressed
         bool trainMove{};                                           // Version 0.0.2: TRAIN MOVE pressed
-        bool heroRoster{};  // Build 8: ROSTER: HEROES AND SUITS pressed (open the roster page)
+        bool heroRoster{};  // Build 8: ROSTER: HEROES AND SUITS pressed (open the roster page) - HERO MENU CLASSIC only
+        // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes on the hologram asked for these (-1 none), the same
+        // as the popup's PLAY AS and suit picks; rosterClosed: its CLOSE pressed.
+        int rosterPlayAs = -1, rosterSuitHero = -1, rosterSuitIndex = -1;
+        bool rosterClosed{};
         bool heroSpider{};  // Update 39.0.1: PLAY AS SPIDER-MAN pressed (every hero toggle off)
         bool section{};     // Update 39.0.2: a section header pressed (opened or closed)
         bool remapMove{}, remapRecord{}, remapKeep{}, remapAgain{}, remapCancel{}; // Update 38.5 GESTURE REMAP
@@ -1139,6 +1155,16 @@ class Menu {
     static constexpr float helpStickLines = 3.5f, helpAutoLines = 2.f, helpAutoHold = 1.2f, helpBackLines = 4.f;
     bool claims() const {
         return claim_;
+    }
+    // 0.0.73 test 3 HOLO ROSTER (fix 28): the heroes on the hologram, open in place of the page.
+    bool rosterOpen() const {
+        return roster_.isOpen();
+    }
+    const holo_roster::State& roster() const {
+        return roster_.state();
+    }
+    void closeRoster() {
+        roster_.close();
     }
     // Update 17: the page's scroll (panel metres, 0 the top).
     float scroll() const {
@@ -1181,6 +1207,9 @@ class Menu {
     int listFirst_{}, listHover_ = -1;
     float listScroll_{}; // rows, fractional while the stick moves it
     float seekShown_ = -1;
+    holo_roster::Holo roster_{};
+    holo_roster::Data rosterData_{};
+    uint32_t rosterVersion_{};
 };
 
 // Appends the light, its rays and the panel to `out` (the overlay's

@@ -64,7 +64,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/suit_wear.cpp
             src/test_notice.cpp
             src/van_screen.cpp
-            src/roster_page.cpp)
+            src/roster_page.cpp src/holo_roster.cpp)
 target_include_directories(spidy_core PUBLIC include)
 if(HERO_TEST_BUILD)
     target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_BUILD=1)

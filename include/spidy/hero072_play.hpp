@@ -16,6 +16,7 @@
 #include "spidy/hero072_visual.hpp"
 #include "spidy/holster.hpp"
 #include "spidy/punisher_rig.hpp"
+#include "spidy/rep_log.hpp"
 #include "spidy/prop_bounce.hpp"
 
 #include <cstdio>
@@ -40,6 +41,7 @@ struct PlayOptions {
     bool punisherVan = true; // 10:41: the Punisher van (EXPERIMENTAL); 0.0.73 test 3: on by default
     uint32_t thorHammer{};    // Version 0.0.72 THOR HAMMER: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE THUNDER, 3 FCCOOPER (the look only)
     bool perchTakedown = true, takedownLight = true; // 9:31, 9:32: BATMAN's PERCH TAKEDOWN and its light
+    bool repLog = true; // 0.0.73 test 3 REP PAGE: REP LOG (rep_log.hpp), on by default
     // From the combat38 values (ON first: 0 is ON; SURVIVAL and OWN SUIT: OFF first).
     static bool onFirst(uint32_t v) { return v == 0; }
     static bool offFirst(uint32_t v) { return v == 1; }
@@ -59,6 +61,7 @@ struct PlayIn {
     // Version 0.0.73: the hand's trigger is the hologram's / phone's (no hook fire), the hand holds a gun (no
     // hook draw), and DAREDEVIL's 0.0.72 cast-up gesture (off: the held trigger grapples, game_xr).
     bool handBusy[2]{}, gunInHand[2]{};
+    int64_t unixTime{}; // 0.0.73 test 3 REP PAGE: now, seconds since 1970 UTC (0 unknown), the log's dates
     float eyeHeight{}; // 0.0.73 test 3: the calibrated eye height (m; 0: the standing average) - the rig's scale
     bool ddCastGesture{};
     const BatonEnemy* list{};
@@ -275,6 +278,7 @@ class Play {
     float clock{};
     uint64_t frames{}, blowsOut{}, doused{};
     bool progressDirty{};
+    rep_log::Log repLog; // 0.0.73 test 3 REP PAGE: what changed rep (kept in hero_rep_log.txt by game_xr)
 
     Play() { suits.builtIn(); }
 
@@ -317,7 +321,30 @@ class Play {
             e.cleared = fight.justCleared;
             e.abandoned = fight.justAbandoned;
             const int32_t was = rep.points;
-            rep.step(e);
+            // 0.0.73 test 3 REP PAGE: the same adds as Reputation::step (its order: downs, cleared, then
+            // abandoned - fires, saved, cars and defeated are not fed here), one at a time so each logged
+            // change is the rep it really moved (rep_log.hpp: which hooks are CONFIRMED).
+            const auto logged = [&](rep_log::Kind kind, uint32_t count, int32_t amount) {
+                const int32_t before = rep.points;
+                rep.add(amount);
+                if (o.repLog) {
+                    rep_log::Entry le;
+                    le.kind = kind;
+                    le.hero = static_cast<uint8_t>(h);
+                    le.count = static_cast<uint16_t>(std::min(count, 0xffffu));
+                    le.delta = rep.points - before;
+                    le.after = rep.points;
+                    le.seconds = static_cast<uint32_t>(std::max(0.f, clock));
+                    le.unixTime = in.unixTime;
+                    repLog.add(le);
+                }
+            };
+            if (e.downs)
+                logged(rep_log::downed, e.downs, static_cast<int32_t>(std::min(e.downs, 8u)) * repDown);
+            if (e.cleared)
+                logged(rep_log::crimeStopped, 1, repCleared);
+            if (e.abandoned)
+                logged(rep_log::crimeFailed, 1, repTuning.abandoned);
             if (rep.points != was)
                 progressDirty = true;
         }

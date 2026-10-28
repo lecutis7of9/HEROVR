@@ -229,7 +229,15 @@ inline bool grappleAim(Vec3 aim, bool enemyAimed) {
     const float n = length(aim);
     return !enemyAimed && n > 1e-4f && finite(aim) && aim.y / n >= grappleAimUp;
 }
-inline constexpr float reachMost = 45, reachLeast = 2.5f;
+// Version 0.0.73 test 3 GRAPPLE REACH (the user, test 2: "you cant reach a building like across a street"):
+// 45 m (0.0.7 to 0.0.73 test 2) to 80 m - a building across a wide avenue, aimed up at its roof line,
+// is 50-70 m from the hand. This was THE cap: the bridge's ray is cast this far and a hit past it is
+// refused (hookable). Still inside the ray bridge's own 150 m limit (native_rays::valid) and under
+// SPIDER-MAN's 100 m web reach (SwingConfig::maxRange). The pull's clock already grows with the trip
+// (GrappleTune: the trip at full speed plus timeoutSpare), so an 80 m pull completes. That the game
+// has collision for a building 80 m off is CANDIDATE (the webs' 100 m rays are the same bridge).
+inline constexpr float reachMost = 80, reachLeast = 2.5f;
+inline constexpr float reachMostWas = 45; // test 2's
 // A hit the bridge's ray found: a fixed surface within reach (never the air, never a moving body).
 inline bool hookable(Vec3 from, Vec3 point, bool airAnchor, bool fixedSurface) {
     if (airAnchor || !fixedSurface || !finite(from) || !finite(point))

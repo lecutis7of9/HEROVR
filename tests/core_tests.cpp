@@ -23936,10 +23936,10 @@ int main() {
         check(grappleAim({0, .5f, -1}, false) && !grappleAim({0, .5f, -1}, true) && !grappleAim({0, 0, -1}, false) &&
                   !grappleAim({NAN, 1, 0}, false),
               "aimed up with no enemy only");
-        check(hookable({0, 1, 0}, {0, 10, -20}, false, true) && !hookable({0, 1, 0}, {0, 10, -60}, false, true) &&
+        check(hookable({0, 1, 0}, {0, 10, -20}, false, true) && !hookable({0, 1, 0}, {0, 10, -90}, false, true) &&
                   !hookable({0, 1, 0}, {0, 1, -1}, false, true) && !hookable({0, 1, 0}, {0, 10, -20}, true, true) &&
                   !hookable({0, 1, 0}, {0, 10, -20}, false, false),
-              "a fixed surface within 2.5-45 m only");
+              "a fixed surface within 2.5-80 m only (0.0.73 test 3: 45 m before)");
         // A ledge (a wall face): pulled up to it, then over.
         Grapple gr;
         Vec3 body{0, 1, 0};
@@ -24163,6 +24163,27 @@ int main() {
         r.body = body;
         return r;
     };
+    test("Version 0.0.73 test 3: GRAPPLE REACH - a building across a wide street (60-80 m) hooks and the pull completes", [] {
+        using namespace spidy::cape_glide;
+        // the user (test 2): "you cant reach a building like across a street" - test 2's 45 m cap refused it
+        const spidy::Vec3 hand{0, 1.4f, 0};
+        const spidy::Vec3 across{0, 25, -55}; // a roof line across the avenue: 60 m from the hand
+        check(length(across - hand) > reachMostWas && !(length(across - hand) <= reachMostWas), "the old cap refused it");
+        check(hookable(hand, across, false, true), "now in reach: " + std::to_string(length(across - hand)));
+        check(hookable(hand, {0, 30, -74}, false, true) && !hookable(hand, {0, 30, -85}, false, true), "80 m is the edge");
+        check(reachMost >= 75 && reachMost <= 100 && reachMost < 150, "within the ray bridge (150 m) and Spider-Man's web (100 m)");
+        // every grappler (BATMAN, the PUNISHER, DAREDEVIL, CAPTAIN AMERICA): the same bridge pull - from the ground, roof and wall
+        const auto roof = pullTo({0, 0, 0}, {0, 25, -55}, {0, 1, 0}, 1, true);
+        check(roof.arrived && roof.body.y > 25.f, "a 60 m pull to the roof arrives: " + std::to_string(roof.closest));
+        const auto wall = pullTo({0, 0, 0}, {0, 30, -74}, {0, 0, 1}, 0, true);
+        check(wall.arrived && wall.body.y > 30.f, "a 80 m pull to a ledge arrives (no timeout mid-pull): " + std::to_string(wall.closest));
+        Grapple gr;
+        gr.start({0, 0, 0}, {0, 30, -74}, {0, 0, 1}, 0);
+        check(gr.allowed() > 80.f / gr.tune.speed, "the clock covers the trip at full speed: " + std::to_string(gr.allowed()));
+        // the enemy reel's aim assist stays short (30 m, 5 degrees): a far wall never reels a thug beside the line
+        const spidy::Vec3 feet[1]{{3, 0, -50}};
+        check(spidy::grapple073::enemyOnLine({0, 1.4f, 0}, {0, 0, -1}, feet, 1, 80.f) == -1, "no reel past 30 m");
+    });
     test("Version 0.0.72: GRAPPLE - BATMAN's gun: the trigger aimed up -> asks -> a pull from the ground to the ledge", [] {
         using namespace spidy::hero007;
         Play p;

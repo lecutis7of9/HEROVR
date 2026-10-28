@@ -21,6 +21,7 @@
 #include "spidy/grapple072.hpp"
 #include "spidy/grapple073.hpp"
 #include "spidy/holster.hpp"
+#include "spidy/punisher_rig.hpp"
 #include "spidy/sfx.hpp"
 
 #include <cstring>
@@ -528,6 +529,12 @@ class Play {
             hands[i] = {in.hands[i].position, in.hands[i].tracked, in.hands[i].squeeze, in.hands[i].busy,
                         (rack == &batons && in.hands[i].thrown) ||
                             (rack == &shieldRack && i == shieldHand && !shield.inHandNow())};
+        // Version 0.0.73 test 3 PUNISHER HOOK GRAB: an empty hand at the chest rig is the hook's (hero072),
+        // never a pistol's - where a calibrated hip zone reaches up to the rig, the rig wins (punisher_rig).
+        if (rack == &guns)
+            for (unsigned i = 0; i < 2; ++i)
+                if (guns.heldIn(i) < 0 && in.hands[i].tracked && punisher_rig::guarded(in.hands[i].position, in.head, guns.body))
+                    hands[i].busy = true;
         rack->crossDraw = in.crossDraw;
         rack->update(in.dt, in.play, in.head, hands);
         out.claimed = rack->claimed();

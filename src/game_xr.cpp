@@ -7275,6 +7275,7 @@ DWORD WINAPI run(void*) {
                                             in72.handBusy[i] = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
                                             in72.gunInHand[i] = hero007Play.guns.heldIn(i) >= 0;
                                         }
+                                        in72.eyeHeight = calibratedEye; // 0.0.73 test 3: the PUNISHER rig's scale
                                         in72.ddCastGesture = false; // Version 0.0.73 (fix 5): DAREDEVIL grapples on a held trigger
                                         in72.list = list72;
                                         in72.count = n72;

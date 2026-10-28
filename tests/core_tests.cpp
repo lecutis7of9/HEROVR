@@ -36,6 +36,7 @@
 #include "spidy/mirror_guard.hpp"
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
+#include "spidy/punisher_rig.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/suit_wear.hpp"
 #include "spidy/glove_overlay.hpp"
@@ -23885,6 +23886,124 @@ int main() {
         reach[0].squeeze = 1;
         live.update(1 / 90.f, true, right, reach);
         check(live.heldIn(0) == 0, "a reach over the shoulder after a turn draws from the back");
+    });
+    test("Version 0.0.73 test 3: PUNISHER HOOK GRAB - the chest rig is found looking down, either hand, a high hip fit, and the hook wins over the pistols", [] {
+        using namespace spidy::hero072;
+        using spidy::holster::BodyYaw;
+        namespace rig = spidy::punisher_rig;
+        const float eye = spidy::holster::standingEye;
+        BodyYaw body;
+        body.update(1 / 90.f, {0, 0, -1});
+        const Pose level{{0, eye, 0}, {}};
+        const Vec3 neck = rig::neck(level, 1);
+        // the player looks DOWN at the chest to grab (45 degrees): the eyes swing forward and down about the neck
+        const Quat down = Quat::around({1, 0, 0}, -.7854f);
+        check(down.rotate(Vec3{0, 0, -1}).y < -.6f, "the test's head looks down");
+        const Pose looking{neck + down.rotate(Vec3{0, rig::neckDown, -rig::neckBack}), down};
+        check(length(rig::neck(looking, 1) - neck) < 1e-4f, "the neck pivot holds still under the look down");
+        const Vec3 sternum{-.07f, eye - .31f, -.05f}; // the left hand flat on the chest plate
+        // test 2's rig, from the eyes: in it standing tall, OUT of it the moment the player looks at it (the bug)
+        check(atRig(spidy::holster::bodyPoint(sternum, level.position, body)), "test 2's rig: the hand, looking ahead");
+        check(!atRig(spidy::holster::bodyPoint(sternum, looking.position, body)), "test 2's rig lost the hand looking down (the root cause)");
+        check(rig::at(sternum, level, body) && rig::at(sternum, looking, body), "the new rig: the hand either way");
+        // generous: a hand's width around the plate, either side
+        for (const Vec3 off : {Vec3{.15f, 0, 0}, Vec3{-.15f, 0, 0}, Vec3{0, .1f, 0}, Vec3{0, -.1f, 0}, Vec3{0, 0, -.15f}, Vec3{0, 0, .1f}})
+            check(rig::at(rig::centre(level, body) + off, level, body), "the rig's generous reach");
+        // never a hip's pistol rest, the back's shotgun, or out at arm's length
+        check(!rig::at({.28f, eye - .65f, -.02f}, level, body) && !rig::at({-.28f, eye - .65f, -.02f}, level, body), "not the hips");
+        check(!rig::at({0, eye - .2f, .25f}, level, body) && !rig::at({0, eye - .3f, -.6f}, level, body), "not the back, not arm's length");
+        check(!rig::at({NAN, 1, 0}, level, body) && !rig::at(sternum, level, BodyYaw{}), "NaN / no body: nothing");
+        // follows the calibrated body: a 1.90 m eye's chest sits lower
+        BodyYaw tall = body;
+        tall.scale = spidy::holster::scaleFor(1.9f);
+        const Pose tallHead{{0, 1.9f, 0}, {}};
+        check(rig::at({-.05f, 1.9f - .29f * tall.scale, -.05f * tall.scale}, tallHead, tall), "a tall player's chest");
+        // turned 90 degrees: the rig turns with the body
+        BodyYaw turned;
+        turned.update(1 / 90.f, {1, 0, 0});
+        check(rig::at({.05f, eye - .29f, .05f}, Pose{{0, eye, 0}, spidy::arc({0, 0, -1}, {1, 0, 0})}, turned), "turned to face +x");
+
+        // The whole grab, with the hip pistols on (fix 8) and a HIGH calibrated hip (test 2: its zone reached the
+        // chest and test 2's rig excluded it, so the hand took a pistol or nothing).
+        struct FitBack {
+            ~FitBack() { spidy::holster::fitted() = {}; }
+        } fitBack; // every other test sees no fit, even if a check here throws
+        spidy::holster::fitted() = {-.15f, -.08f, 0, 0};
+        check(spidy::holster::inZone(spidy::holster::leftHip, spidy::holster::bodyPoint(sternum, level.position, body)),
+              "the high hip fit's zone reaches the chest (the case)");
+        check(!atRig(spidy::holster::bodyPoint(sternum, level.position, body)), "test 2's rig gave way to the hip there");
+        for (unsigned hand = 0; hand < 2; ++hand) {
+            spidy::hero007::Play p7;
+            spidy::hero007::PlayInput in7;
+            in7.dt = 1 / 90.f;
+            in7.play = true;
+            in7.hero = spidy::hero_modes::punisher;
+            in7.head = level;
+            in7.eyeHeight = eye;
+            p7.setHero(in7.hero);
+            const Vec3 at = hand == 0 ? sternum : Vec3{-sternum.x, sternum.y, sternum.z};
+            Play p72;
+            PlayIn in;
+            in.dt = 1 / 90.f;
+            in.play = true;
+            in.hero = spidy::hero_modes::punisher;
+            in.head = level;
+            in.eyeHeight = eye;
+            for (unsigned i = 0; i < 2; ++i) {
+                in7.hands[i].tracked = in.hands[i].tracked = true;
+                in7.hands[i].position = in.hands[i].position = i == hand ? at : Vec3{i ? .3f : -.3f, eye - .3f, -.5f};
+            }
+            bool grapple = false;
+            for (int f = 0; f < 120; ++f) {
+                const float grip = f >= 10 ? 1.f : 0.f, trig = f >= 40 && f < 50 ? 1.f : 0.f;
+                in7.hands[hand].squeeze = in.hands[hand].grip = grip;
+                in.hands[hand].trigger = trig;
+                spidy::hero007::PlayOutput o7;
+                p7.holsterStep(in7, o7);
+                in.gunInHand[0] = p7.guns.heldIn(0) >= 0;
+                in.gunInHand[1] = p7.guns.heldIn(1) >= 0;
+                PlayOut out;
+                p72.step(in, out);
+                grapple |= out.grapple[hand];
+                if (f == 20) {
+                    check(p7.guns.heldIn(hand) < 0, "a reach to the rig took a pistol, hand " + std::to_string(hand));
+                    check(out.hookOut[hand] && p72.hooks[hand].state == HookLauncher::held, "the hook in the hand, hand " + std::to_string(hand));
+                }
+            }
+            check(grapple && p72.hooks[hand].fires == 1, "the trigger fired the hook, hand " + std::to_string(hand));
+            // the pistol still draws at the hip
+            spidy::hero007::Play q7;
+            q7.setHero(in7.hero);
+            spidy::hero007::PlayInput hip = in7;
+            hip.hands[hand].position = {hand ? .28f : -.28f, eye - .65f, -.02f};
+            for (int f = 0; f < 20; ++f) {
+                hip.hands[hand].squeeze = f >= 5 ? 1.f : 0.f;
+                spidy::hero007::PlayOutput o;
+                q7.holsterStep(hip, o);
+            }
+            check(q7.guns.heldIn(hand) >= 0, "the hip still draws its pistol, hand " + std::to_string(hand));
+        }
+        spidy::holster::fitted() = {};
+        // one launcher: the second hand cannot take it while the first has it
+        {
+            Play p72;
+            PlayIn in;
+            in.dt = 1 / 90.f;
+            in.play = true;
+            in.hero = spidy::hero_modes::punisher;
+            in.head = level;
+            for (unsigned i = 0; i < 2; ++i) {
+                in.hands[i].tracked = true;
+                in.hands[i].position = sternum;
+            }
+            PlayOut out;
+            p72.step(in, out);
+            in.hands[0].grip = 1;
+            p72.step(in, out);
+            in.hands[1].grip = 1;
+            p72.step(in, out);
+            check(p72.hooks[0].state == HookLauncher::held && p72.hooks[1].state == HookLauncher::stowed, "one launcher on the rig");
+        }
     });
     test("Version 0.0.73: PUNISHER hook - its own chest zone (never a holster's), grip draws, trigger fires", [] {
         using namespace spidy::hero072;

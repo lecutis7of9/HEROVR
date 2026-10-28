@@ -15,6 +15,7 @@
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_visual.hpp"
 #include "spidy/holster.hpp"
+#include "spidy/punisher_rig.hpp"
 #include "spidy/prop_bounce.hpp"
 
 #include <cstdio>
@@ -58,6 +59,7 @@ struct PlayIn {
     // Version 0.0.73: the hand's trigger is the hologram's / phone's (no hook fire), the hand holds a gun (no
     // hook draw), and DAREDEVIL's 0.0.72 cast-up gesture (off: the held trigger grapples, game_xr).
     bool handBusy[2]{}, gunInHand[2]{};
+    float eyeHeight{}; // 0.0.73 test 3: the calibrated eye height (m; 0: the standing average) - the rig's scale
     bool ddCastGesture{};
     const BatonEnemy* list{};
     uint32_t count{};
@@ -251,7 +253,7 @@ class Play {
     ShoveGesture shove;
     PerchTakedown perchTd;
     ShieldSlam slam;
-    HookLauncher hook;
+    HookLauncher hooks[2]; // 0.0.73 test 3: either hand's (one launcher: a hand draws it while the other has not)
     Fires fires;
     SpinGesture spin;
     PalmSpray palm;
@@ -458,16 +460,21 @@ class Play {
         }
         // ---- THE PUNISHER: the grapple hook from the chest rig ----
         if (h == hero_modes::punisher && guard[gHook].live(o.punisherHook)) {
-            for (unsigned i = 0; i < 1; ++i) { // the left hand (the right holds the gun)
-                // Version 0.0.73 (fix 24 + UNIVERSAL GRAPPLE): the rig's own zone; grip draws, trigger fires.
-                const bool rig = tracked[i] && atRig(holster::bodyPoint(p[i], head, body));
-                if (hook.stepTrigger(dt, true, in.hands[i].grip, in.hands[i].trigger, rig, in.gunInHand[i], in.handBusy[i])) {
+            // Version 0.0.73 test 3 PUNISHER HOOK GRAB: either empty hand (test 2: the left only), at the rig's
+            // generous chest zone anchored at the neck and scaled to the calibrated body (punisher_rig); one
+            // launcher on the rig, so a hand draws it only while the other does not have it.
+            holster::BodyYaw rigBody = body; // the rig's copy (the other heroes' body points stay unscaled)
+            rigBody.scale = holster::scaleFor(in.eyeHeight);
+            for (unsigned i = 0; i < 2; ++i) {
+                const bool otherHas = hooks[1 - i].state != HookLauncher::stowed;
+                const bool rig = tracked[i] && !otherHas && punisher_rig::at(p[i], in.head, rigBody);
+                if (hooks[i].stepTrigger(dt, true, in.hands[i].grip, in.hands[i].trigger, rig, in.gunInHand[i], in.handBusy[i])) {
                     // Version 0.0.72: the line is the bridge's real one (game_xr, to the raycast's hit);
                     // 0.0.71's 12 m stand-in line to nowhere is gone.
                     out.grapple[i] = true;
                     out.buzz(i, .7f);
                 }
-                out.hookOut[i] = hook.state != HookLauncher::stowed;
+                out.hookOut[i] = hooks[i].state != HookLauncher::stowed;
             }
         }
         // ---- FIRE DOUSE (the mod's own FireSpots; the game's fire hook is CANDIDATE) ----

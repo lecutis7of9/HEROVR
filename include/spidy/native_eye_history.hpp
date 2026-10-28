@@ -11,6 +11,7 @@
 #include "hero072_visual.hpp"
 #include "web_visual.hpp"
 #include "test_notice.hpp"
+#include "van_screen.hpp"
 
 #include <limits>
 
@@ -38,6 +39,8 @@ struct NativeEyeFrame {
     test_notice::View notice{};
     // Build 8 ROSTER page (opacity 0: closed), this frame's world.
     roster_page::View roster{};
+    // Version 0.0.73 test 3 VAN SCREEN (on false: none), this frame's world.
+    van_screen::View vanScreen{};
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

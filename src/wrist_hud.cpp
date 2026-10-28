@@ -889,7 +889,7 @@ struct SectionDef {
     const char* post;
     const char* word;
     int hero; // hero_modes::Hero, -1: not a hero's profile
-    Control rows[10]; // Version 0.0.72: PUNISHER has ten (the van)
+    Control rows[12]; // Version 0.0.72: PUNISHER has ten (the van); 0.0.73 test 3: eleven (VAN SCREEN)
 };
 using C = Control;
 constexpr SectionDef powersSections[] = {
@@ -908,7 +908,8 @@ constexpr SectionDef powersSections[] = {
     {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb}},
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
     {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
-      C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan}},
+      C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan,
+      C::combatVanScreen}},
     {"CAPTAIN AMERICA", C::none, C::none, "", "", nullptr, 8,
      {C::combatCaptainAmerica, C::combatShieldArm, C::combatShieldDamage, C::combatShieldChain, C::combatShieldBlock,
       C::combatShieldLook, C::combatShieldSlam, C::combatCapSprint}},
@@ -4297,6 +4298,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatFlyPose:
             case Control::combatWeaponCollision:
             case Control::combatLightHold:
+            case Control::combatVanScreen:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

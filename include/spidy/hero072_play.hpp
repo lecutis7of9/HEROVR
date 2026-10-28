@@ -37,7 +37,7 @@ struct PlayOptions {
     bool ultimates = true;
     uint32_t perkBranch{};
     bool ownSuit{};
-    bool punisherVan = false; // 10:41: the Punisher van (EXPERIMENTAL, off by default)
+    bool punisherVan = true; // 10:41: the Punisher van (EXPERIMENTAL); 0.0.73 test 3: on by default
     uint32_t thorHammer{};    // Version 0.0.72 THOR HAMMER: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE THUNDER, 3 FCCOOPER (the look only)
     bool perchTakedown = true, takedownLight = true; // 9:31, 9:32: BATMAN's PERCH TAKEDOWN and its light
     // From the combat38 values (ON first: 0 is ON; SURVIVAL and OWN SUIT: OFF first).

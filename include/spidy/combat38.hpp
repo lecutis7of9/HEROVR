@@ -121,7 +121,7 @@ enum Option : uint32_t {
     ownSuit,
     // Version 0.0.72 (the user, 9:31, 9:32): BATMAN's PERCH TAKEDOWN and its GREEN / RED light.
     perchTakedown, takedownLight,
-    punisherVan, // Version 0.0.72 EXPERIMENTAL: the Punisher van (van072.hpp), off by default
+    punisherVan, // Version 0.0.72 EXPERIMENTAL: the Punisher van (van072.hpp); 0.0.73 test 3: ON first (the default)
     thorHammer,  // Version 0.0.72 THOR HAMMER: which Mjolnir (mesh_model::hammerSlot), BOOOOP by default
     gameBody,    // Version 0.0.72 GAME BODY (EXPERIMENTAL): strict checks (native_game_body.hpp), off by default
     // Version 0.0.72 build 6 (THOR crash bisect, the user 9:37): THOR HAMMER MODEL and THOR FLIGHT, ON by default.
@@ -144,6 +144,8 @@ enum Option : uint32_t {
     // 0.0.73 test 3 LIGHT HOLD (eye_history.hpp): steadier street lights - EYE AA's step no larger than the
     // history can average, and bright history held; ON by default, STRONG (no step, full hold), OFF = test 2
     lightHold,
+    // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen (van_screen.hpp) ON or OFF
+    vanScreen,
     options
 };
 struct OptionInfo {
@@ -435,8 +437,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"takedown_light", "TAKEDOWN LIGHT", "TLIGHT", "GREEN: no one sees the takedown; RED: others get alerted, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"punisher_van", "PUNISHER VAN (EXPERIMENTAL)", "VAN", "EXPERIMENTAL, OFF by default: Punisher taps X to drive the van, no restart.",
-     2, {"OFF", "ON", nullptr, nullptr}},
+    {"punisher_van", "PUNISHER VAN (EXPERIMENTAL)", "VAN", "ON by default: X calls Punisher's van, parked if it cannot drive, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
     {"thor_hammer", "THOR HAMMER", "HAMMER", "Picks which Mjolnir model Thor draws from his back, no restart.",
      4, {"BOOOOP", "DEVILSEYE", "LOVE THUNDER", "FCCOOPER"}},
     {"game_body", "GAME BODY (EXPERIMENTAL)", "GBODY", "EXPERIMENTAL: game's own body only after every safety check passes, no restart.",
@@ -461,6 +463,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"light_hold", "LIGHT HOLD", "LHOLD", "Steadies flickering street lights, STRONG steadies more, no restart.",
      3, {"ON", "STRONG", "OFF", nullptr}},
+    {"van_screen", "VAN SCREEN", "VSCRN", "Shows a Punisher dash screen in the van - X or a poke pages it, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).
 inline bool shadowMatchOn(uint32_t value) { return value == 0; }

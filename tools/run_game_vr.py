@@ -2788,7 +2788,7 @@ def session(a, startup, session_off=()):
         if migrated_386:
             print(migrated_386, flush=True)
         # Version 0.0.73 test 3: a setting an older build wrote at its old default moves to the new one
-        # once (SHADOW MATCH ON: fixes the player asked for ship on); old numbers keep their old meaning.
+        # once (SHADOW MATCH ON, PUNISHER VAN ON: fixes the player asked for ship on); old numbers keep their old meaning.
         migrated_073t3 = live_settings.migrate_073t3(ROOT/'live.txt')
         if migrated_073t3:
             print(migrated_073t3, flush=True)

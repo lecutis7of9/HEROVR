@@ -360,7 +360,7 @@ SETTINGS = {
     'own_suit': ((0, 1), 'SpidyOwnSuit', "USE MY OWN OR GAME SUIT {} (0 off: the picked HERO SUIT; 1 on: the fallback for a model glitch or crash, the game's or your own mod's suit; live)"),
     'perch_takedown': ((0, 1), 'SpidyPerchTakedown', "PERCH TAKEDOWN {} (0 on: BATMAN quick-presses the game's takedown prompt button from a perch or a glide to hang the enemy by a rope; 1 off; live)"),
     'takedown_light': ((0, 1), 'SpidyTakedownLight', "TAKEDOWN LIGHT {} (0 on: GREEN over the target when no one sees it, RED when others would be alerted; 1 off; live)"),
-    'punisher_van': ((0, 1), 'SpidyPunisherVan', "PUNISHER VAN (EXPERIMENTAL) {} (0 off; 1 on: the PUNISHER taps X to summon his van near him on the street, grips the driver door handle to get in or out, grips the steering wheel's rim to steer, RT drives, LT reverses, both brake; live)"),
+    'punisher_van': ((0, 1), 'SpidyPunisherVan', "PUNISHER VAN (EXPERIMENTAL) {} (0 on, the default; 1 off. On: the PUNISHER taps X to summon his van near him on the street, grips the driver door handle to get in or out, grips the steering wheel's rim to steer, RT drives, LT reverses, both brake; a van that cannot drive stays parked; live)"),
     'game_body': ((0, 1), 'SpidyGameBody', "GAME BODY (EXPERIMENTAL) {} (0 off: the body as before; 1 on: the game's own body only while every safety check passes, else hidden with gloves; live)"),
     'thor_hammer_model': ((0, 1), 'SpidyThorHammerModel', "THOR HAMMER MODEL {} (0 on: Thor draws the THOR HAMMER model; 1 off: no hammer model drawn (the hammer still works), a crash bisect key, live)"),
     'suit_body': ((0, 2), 'SpidySuitBody', "SUIT BODY {} (0 arms: your picked suit model's arms in first person; 1 full_body: everything below the neck; 2 off: none in first person - the mirror always shows the whole suit; live)"),
@@ -371,6 +371,7 @@ SETTINGS = {
     'fly_pose': ((0, 1), 'SpidyFlyPose', "flying body: lean with speed or stay upright"),  # Version 0.0.73 test 2
     'weapon_collision': ((0, 1), 'SpidyWeaponCollision', "WEAPON COLLISION {} (0 on: thrown shields, batons, batarangs and the hammer bounce or stop off walls, cars and the ground, held ones are drawn short of them; 1 off: 0.0.73 test 2's flight; live)"),  # Version 0.0.73 test 3
     'light_hold': ((0, 2), 'SpidyLightHold', "LIGHT HOLD {} (0 on: steadier street lights and small bright lights - EYE AA's sub-pixel step no larger than the history can average, bright history held a little; 1 strong: no step, full hold; 2 off: 0.0.73 test 2; live)"),  # Version 0.0.73 test 3
+    'van_screen': ((0, 1), 'SpidyVanScreen', "the Punisher van's dash screen: on or off"),  # Version 0.0.73 test 3
     'thor_flight': ((0, 1), 'SpidyThorFlight', "THOR FLIGHT {} (0 on: Thor takes off with both arms up and flies; 1 off: no flight for Thor, a crash bisect key, live)"),
     'thor_hammer': ((0, 3), 'SpidyThorHammer', "THOR HAMMER {} (0 boooop: Boooooop's Mjolnir; 1 devilseye: TheDevilsEye's; 2 love_thunder: Jesus Osco's Love and Thunder; 3 fccooper: fccooper's; live)"),
 }
@@ -434,7 +435,7 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'captain_america': 'off', 'shield_arm': 'right', 'shield_damage': '35hp', 'shield_chain': 'on',
                      'shield_block': 'off', 'shield_look': 'built-in',
                      # Version 0.0.72 (TEST)
-                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'off', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on', 'cull_margin': '10deg', 'shadow_match': 'on', 'calib_look': 'holo', 'fly_pose': 'lean', 'weapon_collision': 'on', 'light_hold': 'on'}
+                     'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'on', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on', 'cull_margin': '10deg', 'shadow_match': 'on', 'calib_look': 'holo', 'fly_pose': 'lean', 'weapon_collision': 'on', 'light_hold': 'on', 'van_screen': 'on'}
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
@@ -559,7 +560,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
-                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('off', 'on'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -701,7 +702,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'own_suit': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'perch_takedown': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'takedown_light': {'on': 0, 'off': 1, '0': 0, '1': 1},
-           'punisher_van': {'off': 0, 'on': 1, '0': 0, '1': 1},
+           'punisher_van': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.73 test 3: ON first
            'game_body': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'thor_hammer_model': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'thor_flight': {'on': 0, 'off': 1, '0': 0, '1': 1},
@@ -713,6 +714,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'fly_pose': {'lean': 0, 'upright': 1, '0': 0, '1': 1},
            'weapon_collision': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'light_hold': {'on': 0, 'strong': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
+           'van_screen': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'thor_hammer': {'boooop': 0, 'devilseye': 1, 'love_thunder': 2, 'love+thunder': 2, 'fccooper': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
@@ -970,7 +972,7 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.7 CAPTAIN AMERICA
                  'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
                  # Version 0.0.72 (TEST)
-                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold')
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
 # Version 0.0.72: THOR and GREEN LANTERN ten.
@@ -1286,6 +1288,7 @@ RENUMBERED_382 = {'aim_assist': ('spidyvr', 'cone_20', 'cone_20', 'off'), 'punch
 MIGRATED_382 = '# Update 38.2: COMBAT numbers from 38.1 written as their words (migrated once)'
 
 
+
 def migrate_382(path):
     """Update 38.2, once: in an existing live.txt, a RENUMBERED_382 setting given as a number is set to the
     word that number meant in 38.1 (so "ring_layer = 1", IMAGE then, stays IMAGE, not NEWEST). The line to
@@ -1448,10 +1451,11 @@ def migrate_386(path):
 # A number is read with the OLD build's order (test 2's shadow_match 0 was OFF, 1 ON), so hand-typed numbers
 # keep their meaning; after the marker, numbers follow the new order. Every key a fix makes default is listed
 # here: {key: (old choice names in their old order, old default word, new default word)}.
-MIGRATE_073T3 = {'shadow_match': (('off', 'on'), 'off', 'on')}
+MIGRATE_073T3 = {'shadow_match': (('off', 'on'), 'off', 'on'),
+                 'punisher_van': (('off', 'on'), 'off', 'on')}  # 0.0.73 test 3: PUNISHER VAN ON first now
 MIGRATE_073T3_ALIASES = {'shadow_match': {'experimental': 'on'}}
 MIGRATED_073T3 = ('# Version 0.0.73 test 3: settings at an older build\'s default moved to the new default once '
-                  '(SHADOW MATCH ON; migrated; a value chosen after this line stays, numbers follow the new order)')
+                  '(SHADOW MATCH ON, PUNISHER VAN ON; migrated; a value chosen after this line stays, numbers follow the new order)')
 
 
 def migrate_old_defaults(text, moves, aliases=None):

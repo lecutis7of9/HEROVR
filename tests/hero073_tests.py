@@ -125,6 +125,36 @@ class Hero073(unittest.TestCase):
         twice = {n: fs for n, fs in names.items() if len(fs) > 1}
         self.assertEqual(twice, {})
 
+    def test_test3_van_screen_and_van_on_by_default(self):
+        import sys, tempfile, pathlib
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings as ls
+        # VAN SCREEN and PUNISHER VAN: ON by default (value 0), switchable off.
+        t = src('tools/live_settings.py')
+        self.assertIn("'punisher_van': 'on'", t)
+        self.assertIn("'van_screen': 'on'", t)
+        self.assertIn("'punisher_van': ('on', 'off')", t)
+        c = src('include/spidy/combat38.hpp')
+        self.assertIn('{"van_screen", "VAN SCREEN"', c.replace('{"van_screen","VAN SCREEN"', '{"van_screen", "VAN SCREEN"'))
+        self.assertIn('bool punisherVan = true;', src('include/spidy/hero072_play.hpp'))
+        # The once-only migration (MIGRATE_073T3): an old OFF default goes ON, an old 1 (was ON) stays ON,
+        # an OFF picked after the marker stays OFF.
+        self.assertEqual(ls.MIGRATE_073T3['punisher_van'], (('off', 'on'), 'off', 'on'))
+        with tempfile.TemporaryDirectory() as d:
+            live = pathlib.Path(d) / 'live.txt'
+            for line in ('punisher_van = off', 'punisher_van = 0', 'punisher_van = 1', 'punisher_van = on'):
+                live.write_text('fov = 90\n' + line + '\n', encoding='utf-8')
+                ls.migrate_073t3(live)
+                kept, _ = ls.persisted(live)
+                self.assertEqual(ls.export_value('punisher_van', kept['punisher_van']), 0, line)
+                self.assertIn('fov = 90', live.read_text(encoding='utf-8'))
+            live.write_text(ls.HEADER + 'punisher_van = off\n', encoding='utf-8')
+            self.assertIsNone(ls.migrate_073t3(live))
+            self.assertEqual(ls.export_value('punisher_van', ls.persisted(live)[0]['punisher_van']), 1)
+        # The game-side screen never draws behind or without an eye.
+        v = src('src/van_screen.cpp')
+        self.assertIn('if (!van072::fine(viewer) || dot(viewer - v.centre, n) <= 0)', v)
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -26,6 +26,7 @@
 #include "spidy/holo_calibration.hpp"
 #include "spidy/fly_lean.hpp"
 #include "spidy/test_notice.hpp"
+#include "spidy/van_screen.hpp"
 #include "spidy/roster_page.hpp"
 #include "spidy/health_ring.hpp"
 #include "spidy/combat_input.hpp"
@@ -853,7 +854,7 @@ hero072::PlayOptions hero072Options() {
     o.ownSuit = O::offFirst(c38(combat38::ownSuit));
     o.perchTakedown = O::onFirst(c38(combat38::perchTakedown));
     o.takedownLight = O::onFirst(c38(combat38::takedownLight));
-    o.punisherVan = O::offFirst(c38(combat38::punisherVan));
+    o.punisherVan = O::onFirst(c38(combat38::punisherVan)); // 0.0.73 test 3: ON first (the default)
     o.thorHammer = std::min<uint32_t>(c38(combat38::thorHammer), mesh_model::hammers - 1);
     return o;
 }
@@ -2118,6 +2119,10 @@ DWORD WINAPI run(void*) {
         static constexpr uint32_t vanBumperTag = vanTag0 + vanTags; // 1364 (answered before the balls' tags)
         uint64_t vanBumperHits{};
         double vanSlamAt = -1;
+        // Version 0.0.73 test 3 VAN SCREEN (van_screen.hpp): the dash screen's page; X while he drives (vanDashX,
+        // free then - the summon wants him out) or an open hand's poke pages it. Never the wheel's or the triggers'.
+        van_screen::Screen vanDash;
+        bool vanDashX{};
         van072::Probe vanProbe;
         bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
         van072::Spot vanSpot{};
@@ -6345,11 +6350,14 @@ DWORD WINAPI run(void*) {
                         // needs Models\Vehicle\PunisherVan (the Vandura, owner pt850u): missing, it self-disables
                         // with MODEL MISSING on the wrist (no stand-in, nothing spawned, X still taken off the game).
                         // Loaded, the tap asks the ray batch for a spot (vanWanted; the probe, above).
-                        if (c38(combat38::punisherVan) == 1 && heroNow() == hero_modes::punisher &&
+                        // Version 0.0.73 test 3: PUNISHER VAN is ON by default (ON is value 0).
+                        if (c38(combat38::punisherVan) == 0 && heroNow() == hero_modes::punisher &&
                             mapping == game_pad::Mapping::gameplay) {
                             const bool vanX = (buttons.buttons & buttonX) != 0;
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
                             if (vanX && !vanXWas) {
+                                if (van.state == van072::driving && c38(combat38::vanScreen) == 0)
+                                    vanDashX = true; // Version 0.0.73 test 3 VAN SCREEN: the next page
                                 if (mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded) {
                                     if (van.state != van072::driving && !vanProbe.active) {
                                         vanWanted = true;
@@ -6967,7 +6975,7 @@ DWORD WINAPI run(void*) {
                                         van072::In vin;
                                         vin.dt = vanAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - vanAt, 0.0, .1));
                                         vanAt = combatClock;
-                                        vin.enabled = c38(combat38::punisherVan) == 1 &&
+                                        vin.enabled = c38(combat38::punisherVan) == 0 &&
                                                       mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded;
                                         vin.punisher = heroWas == hero_modes::punisher;
                                         vin.play = cf.play;
@@ -7009,6 +7017,31 @@ DWORD WINAPI run(void*) {
                                             vanDriver.carried = false;
                                             vanCarry = {};
                                         }
+                                        // Version 0.0.73 test 3 VAN SCREEN: X or a poke (an open hand off the wheel)
+                                        // pages it while he drives; it takes nothing from the wheel or the pedals.
+                                        if (c38(combat38::vanScreen) == 0) {
+                                            try {
+                                                van_screen::In si;
+                                                si.dt = vin.dt;
+                                                si.driving = van.state == van072::driving;
+                                                si.x = vanDashX;
+                                                for (unsigned i = 0; i < 2; ++i) {
+                                                    si.tracked[i] = vin.tracked[i];
+                                                    si.hand[i] = vin.tracked[i] ? van.frame.local(vin.hands[i]) : Vec3{};
+                                                    si.grip[i] = vin.grip[i];
+                                                    si.onWheel[i] = van.wheel.latched[i];
+                                                }
+                                                if (vanDash.step(si)) { // a tick: X's hand, or both for a poke
+                                                    runtime.haptic(0, .05f);
+                                                    if (!si.x)
+                                                        runtime.haptic(1, .05f);
+                                                }
+                                            } catch (...) {
+                                                vanDash.reset();
+                                            }
+                                        } else
+                                            vanDash.reset();
+                                        vanDashX = false;
                                         if (vout.summoned) {
                                             message(1, 0, "PUNISHER VAN (EXPERIMENTAL): here - grip the driver door handle to get in");
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
@@ -9511,7 +9544,7 @@ DWORD WINAPI run(void*) {
                             }
                             // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the Vandura, its built cab and its wheel - each the
                             // model or nothing (MODEL MISSING on the wrist); drawn where the van is (world space).
-                            if (c38(combat38::punisherVan) == 1 && hero007In.hero == hero_modes::punisher) {
+                            if (c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) {
                                 const mesh_model::Mesh* body = slotModel(mesh_model::slotVan, "PUNISHER VAN");
                                 const mesh_model::Mesh* cab = slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
                                 const mesh_model::Mesh* wheel = slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
@@ -9528,6 +9561,10 @@ DWORD WINAPI run(void*) {
                                     L.wheelAt = van.frame.world(van072::wheelHub);
                                     L.wheelForward = -van072::worldDir(van.frame, toward);
                                     L.wheelUp = van072::worldDir(van.frame, up);
+                                    // Version 0.0.73 test 3 VAN SCREEN: on the dash where the driver reads it
+                                    if (c38(combat38::vanScreen) == 0)
+                                        saved.vanScreen = van_screen::view(van.frame, vanDash, van.speed, van072::Tune{}.topSpeed,
+                                                                           vanCarry.rpm, van.state == van072::driving);
                                 }
                             }
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
@@ -11266,6 +11303,19 @@ DWORD WINAPI run(void*) {
                                 translucent.resize(from);
                             }
                         }
+                        // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen, blended over the cab (depth-
+                        // tested, so the cab and his hands hide it). Should it fail, only it goes off.
+                        if (!saved->flatScreen && saved->vanScreen.on) {
+                            const size_t from = translucent.size();
+                            try {
+                                auto dash = saved->vanScreen;
+                                dash.centre += travel;
+                                dash.foot += travel;
+                                van_screen::append(translucent, dash, viewer);
+                            } catch (...) {
+                                translucent.resize(from);
+                            }
+                        }
                         // Build 8 ROSTER page: its plate and text blended, its pictures in the textured models'
                         // pass (depth-tested, after). Nothing at all while it is closed.
                         if (!saved->flatScreen && saved->roster.opacity > 0) {
@@ -12535,6 +12585,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCalibLook(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyPose(void* v) { return setHero007(v, combat38::flyPose, 5441); }
 // 0.0.73 test 3 WEAPON COLLISION (prop_bounce.hpp): thrown and held weapons meet walls, cars and the ground, ON (live.txt weapon_collision).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWeaponCollision(void* v) { return setHero007(v, combat38::weaponCollision, 5442); }
+// Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen ON or OFF (live.txt van_screen).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanScreen(void* v) { return setHero007(v, combat38::vanScreen, 5442); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

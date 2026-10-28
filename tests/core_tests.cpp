@@ -41,6 +41,7 @@
 #include "spidy/suit_wear.hpp"
 #include "spidy/glove_overlay.hpp"
 #include "spidy/test_notice.hpp"
+#include "spidy/van_screen.hpp"
 #include "spidy/roster_page.hpp"
 #include "spidy/hero_controls.hpp"
 #include <filesystem>
@@ -1638,7 +1639,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 230, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 231, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1978,7 +1979,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 230, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 231, "controls count drifted"); // 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18832,7 +18833,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 122, "one hundred and twenty-two options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 123, "one hundred and twenty-three options (0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18866,7 +18867,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 122, "0.0.73 test 3 has 122 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 123, "0.0.73 test 3 has 123 COMBAT options (test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19188,7 +19189,7 @@ int main() {
                 }
             }
         }
-        check(placed == 198 /* 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 199 /* 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -30047,6 +30048,115 @@ int main() {
         Vec3 up4{0, 1, 0}, feet4{3, 100, -4};
         leanSuit(back.tilt(), eye, up4, feet4);
         check(up4.z > .3f && up4.y > .85f && feet4.z < eye.z, "flying back: the suit leans back, feet ahead");
+    });
+    test("0.0.73 test 3 VAN SCREEN: X and pokes page it, never a gripping or wheel hand; drawn safe or not at all", [] {
+        namespace vs = van_screen;
+        using vs::Screen;
+        const vs::Mount m = vs::mountLocal();
+        const auto at = [&](float x, float y, float z) { return m.centre + m.right * x + m.up * y + m.normal * z; };
+        const Vec3 away{-.45f, 1.0f, -.4f}; // a hand in his lap
+        const auto in = [&](bool driving, bool x, Vec3 hand, float grip = 0, bool onWheel = false) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = driving;
+            i.x = x;
+            i.hand[0] = away;
+            i.tracked[0] = true;
+            i.hand[1] = hand;
+            i.tracked[1] = true;
+            i.grip[1] = grip;
+            i.onWheel[1] = onWheel;
+            return i;
+        };
+        // X cycles MAP -> STATUS -> CASES 1..7 -> LOCKER -> MAP.
+        Screen s;
+        check(s.page() == vs::map && s.file() == 0, "it starts on MAP");
+        std::vector<std::pair<uint32_t, uint32_t>> seen;
+        for (int k = 0; k < 10; ++k) {
+            check(s.step(in(true, true, away)), "an X while driving pages it");
+            seen.emplace_back(s.page(), s.file());
+        }
+        check(seen[0] == std::make_pair(uint32_t{vs::status}, uint32_t{0}) && seen[1].first == vs::cases && seen[1].second == 0 &&
+                  seen[7].first == vs::cases && seen[7].second == 6 && seen[8].first == vs::locker && seen[9].first == vs::map,
+              "X goes map, status, the 7 case files, locker, map");
+        // Not driving: nothing pages it.
+        Screen parked;
+        check(!parked.step(in(false, true, at(0, 0, 0))) && parked.page() == vs::map, "parked, nothing pages it");
+        // A poke on the tab row picks that page; a hand already in must come out first.
+        Screen p;
+        const float tabY = vs::height / 2 - vs::tabHeight / 2;
+        check(p.step(in(true, false, at(vs::width * .125f, tabY, .01f))) && p.page() == vs::cases,
+              "a poke on the CASES tab picks it");
+        check(!p.step(in(true, false, at(0, 0, 0))) && p.page() == vs::cases, "a hand still in does not page again");
+        check(!p.step(in(true, false, away)), "out again");
+        check(p.step(in(true, false, at(.05f, -.02f, 0))) && p.page() == vs::cases && p.file() == 1, "a poke on a case: the next file");
+        p.step(in(true, false, away));
+        check(p.step(in(true, false, at(-vs::width * .4f, -.02f, 0))) && p.file() == 0, "a poke on its left third: back a file");
+        p.step(in(true, false, away));
+        check(p.step(in(true, false, at(-vs::width * .4f, -.02f, 0))) && p.file() == vs::files - 1, "back from the first: the last");
+        p.step(in(true, false, away));
+        // A gripping hand or one on the wheel never pages it.
+        const uint32_t pageWas = p.page(), fileWas = p.file();
+        check(!p.step(in(true, false, at(0, 0, 0), .9f)), "a gripping hand never pages it");
+        p.step(in(true, false, away));
+        check(!p.step(in(true, false, at(0, 0, 0), 0, true)), "a hand on the wheel never pages it");
+        p.step(in(true, false, away));
+        check(!p.step(in(true, false, at(0, 0, .2f))) && !p.step(in(true, false, at(vs::width, 0, 0))), "near, not on it: nothing");
+        check(p.page() == pageWas && p.file() == fileWas, "unchanged");
+        vs::In bad = in(true, false, Vec3{std::nanf(""), 1, 1});
+        bad.dt = std::nanf("");
+        check(!p.step(bad) && std::isfinite(p.flash()), "a bad hand or clock: nothing");
+        // Where it hangs: clear of the wheel's rim, in the driver's reach and sight.
+        const float rimRight = van072::wheelHub.x + van072::Tune{}.wheelRadius;
+        check((m.centre - m.right * (vs::width / 2)).x > rimRight + .05f &&
+                  (m.centre - m.right * (vs::width / 2) - m.up * (vs::height / 2)).x > rimRight + .05f, "its left edge clears the wheel's rim");
+        const float eye = length(van072::seatEye - m.centre);
+        check(eye > .5f && eye < .9f, "readable from the seat");
+        check(dot(m.normal, normalized(van072::seatEye - m.centre)) > .999f, "it faces his eye");
+        check(length(Vec3{-.25f, 1.45f, -.6f} - m.centre) < .7f, "a reach from his right shoulder");
+        // Drawn: finite and not empty, on every page; nothing for a NaN or a behind eye; a bad view leaves out alone.
+        van072::Frame f;
+        f.at = {120, 3, -40};
+        f.yaw = .7f;
+        Screen d;
+        for (uint32_t k = 0; k < vs::pages + vs::files; ++k) {
+            const vs::View v = vs::view(f, d, 9.f, 16.f, .4f, true);
+            check(v.on, "a view for a good frame");
+            std::vector<Vertex> out;
+            const Vec3 eye = f.world(van072::seatEye);
+            check(vs::append(out, v, eye) && out.size() > 300 && out.size() % 3 == 0, "drawn: page " + std::to_string(v.page));
+            bool fine = true;
+            for (const auto& vx : out)
+                fine &= std::isfinite(vx.position.x) && std::isfinite(vx.position.y) && std::isfinite(vx.position.z);
+            check(fine, "every vertex finite");
+            d.next();
+        }
+        const vs::View v = vs::view(f, d, 9.f, 16.f, .4f, true);
+        std::vector<Vertex> out(5);
+        check(!vs::append(out, v, Vec3{std::nanf(""), 0, 0}) && out.size() == 5, "a NaN eye: nothing");
+        check(!vs::append(out, v, v.centre - cross(v.right, v.up) * .5f) && out.size() == 5, "from behind: nothing");
+        vs::View broken = v;
+        broken.centre.x = std::numeric_limits<float>::infinity();
+        check(!vs::append(out, broken, f.world(van072::seatEye)) && out.size() == 5, "a bad centre: out unchanged");
+        van072::Frame nf;
+        nf.yaw = std::nanf("");
+        check(!vs::view(nf, d, 1, 16, 0, true).on, "a bad frame: no view");
+        check(std::abs(vs::headingOf(van072::Frame{{}, 0}) - 0) < 1e-4f &&
+                  std::abs(vs::headingOf(van072::Frame{{}, -1.5707964f}) - 1.5707964f) < 1e-3f,
+              "heading: -z is 0, +x is 90");
+        // The wrist option: ON by default, one sentence, no restart.
+        const auto& o = combat38::optionInfo[combat38::vanScreen];
+        const std::string h = o.help, key = o.key;
+        check(key == "van_screen" && std::string(o.values[0]) == "ON" && std::string(o.values[1]) == "OFF" && o.count == 2,
+              "VAN SCREEN is ON / OFF, ON first");
+        check(h == vs::help && h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
+              "its subtext");
+        // The user's rule: every fix ships ON, switchable off - PUNISHER VAN is ON first (value 0) now.
+        const auto& van = combat38::optionInfo[combat38::punisherVan];
+        check(std::string(van.values[0]) == "ON" && std::string(van.values[1]) == "OFF" &&
+                  std::string(van.help).find("no restart.") != std::string::npos && std::string(van.help).size() <= 80,
+              "PUNISHER VAN is ON by default, OFF in the settings");
+        check(hero072::PlayOptions{}.punisherVan, "the 0.0.72 options start with the van on");
     });
     test("0.0.73 test 2 BUTTON GUIDE (fix 23): every hero's controls on his page, the SUITS / CONTROLS tabs, B back", [] {
         namespace rp = roster_page;

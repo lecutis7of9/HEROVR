@@ -1,6 +1,6 @@
 """HERO VR 0.0.73 private test builds (source gates): TEST <n> on the wrist, the CI never uploads a hero-0.0.73
 build, the claws are the JACKET AND JEANS suit's own (extracted, credited), the mirror shows the props."""
-import os, re, unittest
+import os, pathlib, re, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def src(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
@@ -378,6 +378,58 @@ class Hero073Image(unittest.TestCase):
             p.write_bytes(b'\xff\xfe junk = = \n')
             self.assertEqual(L.image_in_file(p), 'spidyvr')
             L.migrate_073t4(p)
+
+
+class Hero073Test4ImageStyle(unittest.TestCase):
+    """0.0.73 test 4 IMAGE STYLE (shown as GAME TAA): SPIDYVR (default) runs the game's own TAA in each eye with
+    nothing over it, as SpidyVR; OFF leaves the picture to IMAGE. The owner: "whatever spidyVR does to handle it works"."""
+    def live(self):
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings as L
+        return L
+    def test_option_default_and_values(self):
+        L = self.live()
+        self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'spidyvr')
+        self.assertEqual(L.export_value('image_style', 'spidyvr'), 0)
+        self.assertEqual(L.export_value('image_style', 'off'), 1)
+        self.assertEqual(L.export_value('image_style', 'hero_0.0.73'), 1)
+        self.assertEqual(L.parse('image_style = OFF')[0], {'image_style': 'off'})
+        self.assertEqual(L.SETTINGS['image_style'][1], 'SpidyImageStyleOption')
+        self.assertIn('image_style', L.UPDATE38_KEYS)
+        h = src('include/spidy/combat38.hpp')
+        m = re.search(r'\{"image_style", "GAME TAA", "\w+", "([^"]+)",\s*2, \{"SPIDYVR", "OFF", nullptr, nullptr\}\}', h)
+        self.assertIsNotNone(m)
+        self.assertLessEqual(len(m.group(1)), 80)
+        self.assertIn('no restart', m.group(1))
+        self.assertEqual(m.group(1).count('.'), 1)
+        self.assertIn("('image_style', ('SPIDYVR', 'OFF'))", src('tools/update37_records.py'))
+        self.assertIn('{C::combatImage, C::combatImageStyle, C::aa,', src('src/wrist_hud.cpp'))  # under IMAGE
+        self.assertEqual(L.UPDATE38_DEFAULTS['image'], 'spidyvr')  # IMAGE's own default kept
+    def test_code_5460_is_its_own(self):
+        hits = []
+        for d in ('src', 'include'):
+            for p in sorted(pathlib.Path(ROOT, d).rglob('*.[ch]pp')):
+                hits += [p.name for _ in re.finditer(r'\b5460\b', p.read_text(encoding='utf-8', errors='replace'))]
+        self.assertEqual(hits, ['game_xr.cpp'])
+    def test_export_and_controller_wired(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('setHero007(v, combat38::imageStyle, 5460)', g)
+        self.assertIn('styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn)', g)
+        self.assertIn('native_gpu::setCleanImage(image_style::spidy(style) &&', g)
+        # The controller sits after the FPS guard's plan B, so a failure still falls back to EYE AA.
+        self.assertLess(g.index('engineTaaFallback(engine_taa::reasonOf(engine));\n                            previous = engine;'),
+                        g.index('static image_style::Controller styleControl;'))
+        s = src('src/stereo_probe.cpp')
+        self.assertIn('spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load())', s)
+        self.assertIn('extern "C" uint32_t SpidyEngineTaaBlocked()', s)
+        self.assertIn('DWORD WINAPI SpidyImageStyle(void* style)', s)
+    def test_clean_picture_skips_fxaa_history_and_cas(self):
+        n = src('src/native_eye_gpu.cpp')
+        self.assertIn("(down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa()", n)
+        self.assertIn('const uint32_t percent = cleanImage.load() ? 0u : sharpenPercent.load();', n)
+        i = n.index('uint32_t historyNow() {')
+        self.assertIn('if (cleanImage.load(std::memory_order_relaxed))', n[i:i + 200])
 
 
 # 0.0.73 IMAGE: at the end, so every class above runs (it stood after the first class).

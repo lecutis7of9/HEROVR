@@ -31596,6 +31596,46 @@ int main() {
         }
         check(std::string(vh::musicReadme).find("No music comes with the mod") != std::string::npos, "the readme says no songs come");
     });
+    test("0.0.74 test 1 SEATED DRIVING: the rig holds the seat's lift (clamped, safe), HIDEOUT slots", [] {
+        GameTrackingRig a, b;
+        auto f = trackedFrame();
+        a.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        b.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        b.seatLift(.3f);
+        check(b.seatLiftApplied() == 0, "the lift waits for the next placed frame");
+        f.predictedDisplayTime = 2;
+        const auto oa = a.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        const auto ob = b.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        near(b.seatLiftApplied(), .3f);
+        near(ob.head[13] - oa.head[13], .3f);
+        near(ob.hands[0].position.y - oa.hands[0].position.y, .3f);
+        b.seatLift(5.f);
+        f.predictedDisplayTime = 3;
+        b.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        near(b.seatLiftApplied(), .6f);
+        b.seatLift(std::numeric_limits<float>::quiet_NaN());
+        f.predictedDisplayTime = 4;
+        const auto oc = b.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        near(b.seatLiftApplied(), 0);
+        check(std::isfinite(oc.head[13]), "a NaN lift never reaches the view");
+        b.seatLift(-5.f);
+        f.predictedDisplayTime = 5;
+        b.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        near(b.seatLiftApplied(), -.9f);
+        b.reset();
+        check(b.seatLiftApplied() == 0, "reset stands him up");
+        namespace mm = mesh_model;
+        check(std::string(mm::slotFolders[mm::slotHideoutBatcave]) == "Hideout/Batcave" &&
+                  std::string(mm::slotFolders[mm::slotHideoutSafehouse]) == "Hideout/Safehouse",
+              "the hideout folders");
+        check(std::string(hideout074::folders[1]) == mm::slotFolders[mm::slotHideoutSafehouse] &&
+                  std::string(hideout074::folders[2]) == mm::slotFolders[mm::slotHideoutBatcave],
+              "the visit's folders match the library's");
+        check(mm::slotIsHideout(mm::slotHideoutBatcave) && mm::slotIsHideout(mm::slotHideoutSafehouse) && !mm::slotIsHideout(mm::slotVan) &&
+                  !mm::slotIsSuit(mm::slotHideoutBatcave),
+              "slotIsHideout");
+        check(hero007::modelSinkBudget >= 3 * size_t{mm::hideoutTriangles}, "the model sink holds a room");
+    });
     test("0.0.74 test 1 HIDEOUTS: room.txt read, walked (stick, walls, steps, turns), points, exits, safe on faults", [] {
         namespace ho = hideout074;
         // a 4 x 3 m room of .25 m cells: x -2..2, z -1.5..1.5; a wall column at x 0..0.25 for z < 0.5; a step up at x > 1

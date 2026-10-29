@@ -30,7 +30,12 @@ inline constexpr unsigned char gateBytes[] = {0x45, 0x84, 0xf6, 0x75, 0x0a, 0x33
 inline constexpr unsigned char gatePatch[] = {0xeb, 0x0d};
 
 enum Mode : uint32_t { off = 0, copy = 1, gate = 2, modes = 3 };
-inline constexpr uint32_t defaultMode = copy; // Update 37: COPY (with BLOOM FX LENS)
+// 0.0.73 lights (test 4's video: streetlight / traffic-light halos and flare streaks strobing, worse
+// panning; headlights ghosting): OFF again, as the game itself builds non-active views (0x2c29102,
+// exe-confirmed above) and as SpidyVR (no bloom code at all). COPY runs the game's bloom / lens pass
+// in both eyes as well as the game view each frame; its frame-to-frame state being one per pass (not
+// per view) is the CANDIDATE cause of the strobing. COPY stays one wrist press away.
+inline constexpr uint32_t defaultMode = off; // was COPY (Update 37)
 inline constexpr uint32_t nextMode = 3;
 inline uint32_t next(uint32_t mode) { return (mode + 1) % modes; }
 inline const char* modeName(uint32_t mode) {
@@ -53,7 +58,7 @@ inline constexpr uint32_t pack(uint32_t mode, uint32_t reason) { return mode | r
 inline uint32_t modeOf(uint32_t packed) { return packed & 0xff; }
 inline uint32_t reasonOf(uint32_t packed) { return packed >> 8 & 0xff; }
 // The subtexts: one sentence each, <= 80 characters, exactly one '.'.
-inline constexpr const char* help = "Gives both eyes the game view's bloom glow; GATE is the plan B.";
+inline constexpr const char* help = "OFF: no eye bloom, as SpidyVR; COPY adds the game's glow, no restart.";
 inline const char* helpText(uint32_t packed) {
     const uint32_t m = modeOf(packed), r = reasonOf(packed);
     if (m == gate && r == unseen)

@@ -29,7 +29,7 @@ class StartupOn(unittest.TestCase):
 
     def test_other_defaults(self):
         d = ls.UPDATE37_DEFAULTS
-        self.assertEqual((d['eye_bloom'], d['shared_lod'], d['bloom_fx']), (1, 2, 0))
+        self.assertEqual((d['eye_bloom'], d['shared_lod'], d['bloom_fx']), (0, 2, 0))  # 0.0.73 lights: EYE BLOOM OFF
         for k, v in dict(wall_crawl=0, aim_steer=0, ring_face=0, wall_body=0, zip_strike=1, web_yank=1,  # Update 38.3: yank ON
                                      
                          web_bend=100, color_fx=0, foveated='off', npc_fade='off').items():

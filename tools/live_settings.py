@@ -384,6 +384,9 @@ SETTINGS = {
     'iron_hands': ((0, 1), 'SpidyIronHands', "HERO HANDS {} (0 on: IRON MAN's own hands - each MARK's repulsor on the real palm, the raised hand palm out along the blast; 1 off: test 4's shared hands; live)"),  # Version 0.0.73 test 5
     'dd_grapple_aim': ((0, 1), 'SpidyDdGrappleAim', "GRAPPLE AIM {} (0 on: DAREDEVIL's baton turns its silver tip ahead along the aim while the grapple aims, flies and reels, then back to the fighting grip; 1 off; live)"),  # Version 0.0.73 test 5
     'wolverine_claws': ((0, 1), 'SpidyWolverineClaws', "CLAW LOOK {} (0 on: WOLVERINE's claws come out between the knuckles along the fist, fanned, bright steel; 1 off: test 4's; live)"),  # Version 0.0.73 test 5
+    'glow_check': ((0, 2), 'SpidyGlowCheck', "GLOW CHECK {} (debug, live: 0 game: the lights' halo and streak sprites keep the game's visibility test; 1 always: drawn untested, through walls too; 2 hidden: not drawn)"),  # 0.0.73 GLOW CHECK
+    'sl_watch': ((0, 1), 'SpidySlWatch', "SL WATCH {} (test: 0 on: the game's Streamline constants, frame token and viewport id logged every 60 frames for the export; 1 off; live)"),  # 0.0.73 SL WATCH
+    'light_checks': ((0, 1), 'SpidyLightChecks', "LIGHT CHECKS {} (0 on: each eye's street-light glow checks get the game view's query room, at least 1024; 1 off: the game's 256; next VR start)"),  # 0.0.73 LIGHT CHECKS
     'streamer_eye': ((0, 1), 'SpidyStreamerEye', "STREAMER EYE {} (0 left_eye, 1 right_eye: the headset eye the monitor shows in STREAMER MODE; live)"),  # Version 0.0.73 STREAMER MODE
     'thor_flight': ((0, 1), 'SpidyThorFlight', "THOR FLIGHT {} (0 on: Thor takes off with both arms up and flies; 1 off: no flight for Thor, a crash bisect key, live)"),
     'thor_hammer': ((0, 3), 'SpidyThorHammer', "THOR HAMMER {} (0 boooop: Boooooop's Mjolnir; 1 devilseye: TheDevilsEye's; 2 love_thunder: Jesus Osco's Love and Thunder; 3 fccooper: fccooper's; live)"),
@@ -395,7 +398,9 @@ WORLD_LOG_KINDS = {'npc_log': 0, 'spawn_log': 1, 'mission_log': 2}
 # Update 37: settings that cannot change while VR runs: kept for the next start, with this notice.
 RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next time VR starts.',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
-           'lens_flares': 'RESTART NOTICE: lens_flares takes effect the next time VR starts.'}
+           'lens_flares': 'RESTART NOTICE: lens_flares takes effect the next time VR starts.',
+           # 0.0.73 LIGHT CHECKS: the eyes' query pools are sized when the eyes are made
+           'light_checks': 'RESTART NOTICE: light_checks takes effect the next time VR starts.'}
 # Update 37: the run36 closing settings, the defaults now (reach and monitor are the launcher's own
 # -BuildingReach 150 and -MonitorRate 30 again in Update 37.2); applied at the start for any setting live.txt does not keep.
 UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 0,  # 0.0.73 IMAGE SPIDYVR (was 140; CLASSIC: image_defaults)
@@ -405,7 +410,8 @@ UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 0,  # 0.0.73 IMAGE SPIDYVR (was 1
                      # COPY and SHARED LOD HIGHER started on every start (run371 started them OFF or low); the
                      # Update 36 values back (bloom_fx off, aim_steer off, the ring facing the eyes, wall_crawl
                      # the swing's wall); the medium web bend; the new 37.2 settings' defaults.
-                     'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 1, 'shared_lod': 2, 'bloom_fx': 0,
+                     'eye_temporal': 1, 'far_shadows': 2, 'shared_lod': 2, 'bloom_fx': 0,
+                     'eye_bloom': 0,  # 0.0.73 lights: EYE BLOOM OFF (SpidyVR's; COPY strobed the light halos)
                      'aim_steer': 0, 'ring_face': 0, 'wall_crawl': 0, 'web_bend': 100, 'wall_body': 0,
                      'zip_strike': 1, 'web_yank': 1, 'npc_fade': 'off', 'color_fx': 0, 'foveated': 'off',
                      'lod_fade': 0}  # Build 12 WINDOW LIGHTS: LOD FADE OFF
@@ -434,9 +440,10 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'punch_sense': 'forgiving', 'sfx_volume': '100%', 'supersonic': 'on', 'supersonic_speed': '2x',
                      # Version 0.0.6 (the heroes experimental: off)
                      'daredevil': 'off', 'hulk': 'off', 'daredevil_punch': '3x',
-                     # Version 0.0.62 (HIT INDICATOR off: the user's call; HAND FLIPS on and LENS FLARES
-                     # game: 0.0.6's behaviour and the graphics defaults kept)
-                     'hit_indicator': 'off', 'hand_flips': 'on', 'lens_flares': 'game',
+                     # Version 0.0.62 (HIT INDICATOR off: the user's call; HAND FLIPS on: 0.0.6's behaviour).
+                     # 0.0.73 lights: LENS FLARES OFF IN VR (was game; test 4: flare streaks strobing, headlights
+                     # ghosting; SpidyVR's PC had them off). A RESTART setting: run_game_vr reads lens_flares_off().
+                     'hit_indicator': 'off', 'hand_flips': 'on', 'lens_flares': 'off_in_vr',
                      # Version 0.0.62 (the SpidyVR comparison; 0.0.6's: game_move, 0.0.6)
                      'punch_hits': 'game_instant', 'foe_track': 'live',
                      'beacons_vision': 'on',  # Version 0.0.62 (the user's call)
@@ -452,7 +459,8 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'on', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on', 'cull_margin': '10deg', 'shadow_match': 'on', 'calib_look': 'holo', 'fly_pose': 'lean', 'weapon_collision': 'on', 'light_hold': 'on', 'van_screen': 'on', 'palm_blast': 'palm', 'hero_menu': 'holo_tiles', 'rep_log': 'on', 'van_pedals': 'wheel_hand', 'streamer_mode': 'on', 'streamer_smooth': 'low', 'streamer_eye': 'left_eye', 'iron_hands': 'on', 'dd_grapple_aim': 'on', 'wolverine_claws': 'on',
                      'image': 'spidyvr',  # 0.0.73 IMAGE: SPIDYVR (the owner after test 3)
                      'image_style': 'spidyvr',  # 0.0.73 test 4 GAME TAA: SpidyVR's own TAA per eye by default
-                     'dd_baton_tip': 'on'}  # 0.0.73 DD BATON: ON (new features ship on, switchable off)
+                     'dd_baton_tip': 'on',  # 0.0.73 DD BATON: ON (new features ship on, switchable off)
+                     'light_checks': 'on', 'glow_check': 'game', 'sl_watch': 'on'}  # 0.0.73 LIGHT CHECKS: ON (the eyes' light-glow query room)
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
@@ -467,7 +475,9 @@ UPDATE38_DEFAULTS.update(MODEL_LOOKS_072)
 STARTUP_ON = {'eye_temporal': 1, 'far_shadows': 2}
 # Update 37.2: what migrate_372 sets once in an existing live.txt (the settings above whose old value
 # the player saw in run371, and the Update 36 values back).
-MIGRATE_372 = {'sharpen': 140, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 1, 'shared_lod': 2,
+# 0.0.73 lights: eye_bloom 0 (was 1): an old live.txt reaching this after migrate_073t5 (main() runs that
+# first) must not get EYE BLOOM COPY back.
+MIGRATE_372 = {'sharpen': 140, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 0, 'shared_lod': 2,
                'bloom_fx': 0, 'aim_steer': 0, 'ring_face': 0, 'wall_crawl': 0, 'web_bend': 100}
 def startup_line(current):
     """Update 37.2: one console line on STARTUP_ON as the session runs them (current: LiveFile.current)."""
@@ -578,7 +588,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
-                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'), 'image_style': ('spidyvr', 'off'), 'dd_baton_tip': ('on', 'off'), 'streamer_mode': ('on', 'off'), 'streamer_smooth': ('low', 'off', 'high'), 'streamer_eye': ('left_eye', 'right_eye'), 'iron_hands': ('on', 'off'), 'dd_grapple_aim': ('on', 'off'), 'wolverine_claws': ('on', 'off'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'), 'image_style': ('spidyvr', 'off'), 'dd_baton_tip': ('on', 'off'), 'streamer_mode': ('on', 'off'), 'streamer_smooth': ('low', 'off', 'high'), 'streamer_eye': ('left_eye', 'right_eye'), 'iron_hands': ('on', 'off'), 'dd_grapple_aim': ('on', 'off'), 'wolverine_claws': ('on', 'off'), 'light_checks': ('on', 'off'), 'glow_check': ('game', 'always', 'hidden'), 'sl_watch': ('on', 'off'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -747,6 +757,9 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'dd_grapple_aim': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'wolverine_claws': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'streamer_eye': {'left_eye': 0, 'left': 0, 'l': 0, 'right_eye': 1, 'right': 1, 'r': 1, '0': 0, '1': 1},
+           'light_checks': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'glow_check': {'game': 0, 'always': 1, 'hidden': 2, '0': 0, '1': 1, '2': 2},
+           'sl_watch': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'thor_hammer': {'boooop': 0, 'devilseye': 1, 'love_thunder': 2, 'love+thunder': 2, 'fccooper': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
@@ -1005,7 +1018,7 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.7 CAPTAIN AMERICA
                  'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
                  # Version 0.0.72 (TEST)
-                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image', 'image_style', 'dd_baton_tip', 'streamer_mode', 'streamer_smooth', 'streamer_eye', 'iron_hands', 'dd_grapple_aim', 'wolverine_claws')
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image', 'image_style', 'dd_baton_tip', 'streamer_mode', 'streamer_smooth', 'streamer_eye', 'iron_hands', 'dd_grapple_aim', 'wolverine_claws', 'light_checks', 'glow_check', 'sl_watch')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
 # Version 0.0.72: THOR and GREEN LANTERN ten.
@@ -1655,6 +1668,66 @@ def migrate_073t4(path):
 
 
 HEADER += MIGRATED_073T4 + '\n'
+
+
+# 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his
+# video: the bulbs and light pools are steady, the lens-flare streaks and bloom halos round street and
+# traffic lights strobe, worse panning; car lights leave ghost trails). Test 4 started EYE BLOOM COPY
+# (the game's bloom / lens pass forced into both eyes, which the game itself gives only the active view)
+# and the game's own Lens Flares On (game log). Both move to SpidyVR's (no eye bloom; flares off) once
+# over a live.txt that holds the old default; a value chosen after the marker stays.
+MIGRATE_073T5 = {'eye_bloom': (1, 0), 'lens_flares': ('game', 'off_in_vr')}
+MIGRATED_073T5 = ('# Version 0.0.73 lights: EYE BLOOM COPY -> OFF and LENS FLARES GAME -> OFF IN VR once '
+                  '(migrated; a value chosen after this line stays)')
+
+
+def migrate_073t5(path):
+    """0.0.73 lights, once: MIGRATE_073T5 over an existing live.txt (a value at the old default only),
+    then the MIGRATED_073T5 marker. No live.txt: nothing (HEADER carries the marker). The line to show,
+    or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_073T5 in text:
+        return None
+    try:
+        values, _ = parse(text)
+        changed = {}
+        for name, (old, new) in MIGRATE_073T5.items():
+            if name in values and str(values[name]).strip().lower() in (str(old), str(old) + '.0'):
+                changed[name] = new
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_073T5 + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to the 0.0.73 lights fix (steady light halos, no flare strobing): ' +
+            ', '.join(f'{k} = {v}' for k, v in changed.items()) + ' (change it again and it stays).')
+
+
+HEADER += MIGRATED_073T5 + '\n'
+
+
+def lens_flares_off(text):
+    """True when live.txt `text` (None: no live.txt) turns the game's lens flares off for this VR session:
+    lens_flares = off_in_vr, or no lens_flares line at all (0.0.73 lights: the default is OFF IN VR).
+    Never raises (an unreadable text gives the default)."""
+    default = UPDATE38_DEFAULTS['lens_flares'] == 'off_in_vr'
+    try:
+        values, _ = parse(text or '')
+    except Exception:
+        return default
+    if 'lens_flares' not in values:
+        return default
+    return values['lens_flares'] in ('off_in_vr', 1)
 
 
 def next_launch_supersample(path):

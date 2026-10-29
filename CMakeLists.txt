@@ -87,11 +87,18 @@ endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}")
 # Test build 11: the wrist's bottom line and the start line say "TEST <n> <commit>" (build 10's log
 # showed build 9 still running; the number makes that plain). Bump per test build.
-set(HERO_TEST_NUMBER "3" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+# 0.0.73 test 4's console still said "HERO VR 0.0.72 TEST 3 a20b9ee" (export-test4): the version was
+# a literal and the number was not bumped. Both are here now; bump them per test build.
+set(HERO_TEST_NUMBER "5" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_NUMBER="${HERO_TEST_NUMBER}")
+set(HERO_TEST_VERSION "0.0.73" CACHE STRING "Version the test build's start line, notice and wrist name")
+if(NOT HERO_TEST_VERSION MATCHES "^[0-9][0-9.]*$")
+    set(HERO_TEST_VERSION "0.0.73")
+endif()
+target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_VERSION="${HERO_TEST_VERSION}")
 # Update 36: the calibration panel's art atlas, compiled in as bytes
 # (tools/calibration_art/make_atlas.py makes the file).
 set(SPIDY_CALIBRATION_ART "${CMAKE_CURRENT_SOURCE_DIR}/assets/calibration_art.qoi")

@@ -7,7 +7,7 @@ def src(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 class Build11(unittest.TestCase):
     def test_wrist_and_start_line_name_the_build(self):
         self.assertIn('"TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT', src('src/wrist_hud.cpp'))
-        self.assertIn('"HERO VR 0.0.72 TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT', src('src/game_xr.cpp'))
+        self.assertIn('"HERO VR " SPIDY_TEST_VERSION " TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT', src('src/game_xr.cpp'))
         self.assertRegex(src('CMakeLists.txt'), r'set\(HERO_TEST_NUMBER "[0-9]+"')  # build 12 and on: their own number
     def test_far_windows_candidate_write_gated(self):
         s = src('src/stereo_probe.cpp')

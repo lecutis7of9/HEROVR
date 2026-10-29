@@ -78,13 +78,13 @@ class RealLaunchPath(unittest.TestCase):
     def test_reaches_prepare_launch_default(self):
         calls, _ = run_session()
         self.assertEqual(len(calls), 1, 'prepare_display never reached vr_display.prepare_launch')
-        self.assertEqual(tuple(calls[0]['off']), ())
+        self.assertEqual(tuple(calls[0]['off']), ('lens_flares',))  # 0.0.73 lights: OFF IN VR by default
 
     def test_lens_flares_off_in_vr_reaches_prepare_launch(self):
         calls, text = run_session('lens_flares = off_in_vr\n')
         self.assertEqual(len(calls), 1)
         self.assertEqual(tuple(calls[0]['off']), ('lens_flares',))
-        self.assertIn('lens flares are off while VR runs', text)
+        self.assertIn('LENS FLARES: OFF IN VR this session', text)
 
     def test_smaller_and_full_desktop_paths(self):
         for extra in (['--smaller-desktop-view'], ['--full-desktop-view'], []):

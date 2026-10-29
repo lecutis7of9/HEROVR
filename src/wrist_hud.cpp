@@ -6,6 +6,9 @@
 #ifndef SPIDY_TEST_NUMBER
 #define SPIDY_TEST_NUMBER "0"
 #endif
+#ifndef SPIDY_TEST_VERSION
+#define SPIDY_TEST_VERSION "0.0.73"
+#endif
 #include "spidy/wrist_hud.hpp"
 #include "spidy/version.hpp"
 #include "spidy/extras385.hpp"
@@ -961,7 +964,7 @@ constexpr SectionDef graphicsSections[] = {
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
      {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
     {"DISPLAY AND DETAIL", C::monitor, C::none, "WINDOW ", "", nullptr, -1,
-     {C::monitor, C::eyeBloom, C::combatLightHold, C::combatLensFlares, C::sharedLod, C::eyeLod}},
+     {C::monitor, C::eyeBloom, C::combatLightHold, C::combatLightChecks, C::combatGlowCheck, C::combatSlWatch, C::combatLensFlares, C::sharedLod, C::eyeLod}},
     {"ADVANCED - TESTS AND ENGINE", C::none, C::none, "", "", "SETTINGS", -1,
      {C::engineTaa, C::taaJitter, C::eyeTest, C::addressFinder, C::webBallTest, C::foveaDebug, C::foveaStats}},
 };
@@ -1097,7 +1100,8 @@ Place placeOf(Control c) {
     return {};
 }
 bool restartTag(Control c) {
-    return c == Control::supersample || c == Control::combatMirrorView || c == Control::combatLensFlares; // 0.0.62
+    return c == Control::supersample || c == Control::combatMirrorView || c == Control::combatLensFlares || // 0.0.62
+           c == Control::combatLightChecks; // 0.0.73 LIGHT CHECKS: the eyes' pools are sized when they are made
 }
 
 namespace {
@@ -1131,7 +1135,7 @@ Layout build(int page, float k, int open) {
     // Build 5: which build runs, on the wrist (the console's first line says it too).
     {
         Item f = itemOf(Kind::footer);
-        f.text = "TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - HERO VR 0.0.72 test"; // Test build 11
+        f.text = "TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - HERO VR " SPIDY_TEST_VERSION " test"; // Test build 11; 0.0.73: the version from CMake
         f.h = fittedHeight(f.text, footerHeight * k, .14f);
         f.v = c - f.h;
         c = f.v - .002f * k;
@@ -4597,6 +4601,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatIronHands:
             case Control::combatDdGrappleAim:
             case Control::combatWolverineClaws:
+            case Control::combatLightChecks:
+            case Control::combatGlowCheck:
+            case Control::combatSlWatch:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

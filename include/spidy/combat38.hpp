@@ -176,6 +176,15 @@ enum Option : uint32_t {
     // bright steel (ON) or test 4's (OFF). 0.0.73 test 5 CLAW BONE: ON with a Wolverine suit, out of the suit's own
     // drawn fist, rooted inside it and locked to its hand bone (hero007::appendClawBone, suit_wear::clawPlace)
     wolverineClaws,
+    // 0.0.73 LIGHT CHECKS (eye_queries.hpp): ON (each eye's light-glow visibility checks get the game view's
+    // room, at least 1024, not the 256 the game gives secondary views) or OFF (the game's 256); next VR start
+    lightChecks,
+    // 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): a live debug switch for the lights' halo / streak sprites:
+    // GAME (the game's visibility test), ALWAYS (drawn untested) or HIDDEN (not drawn)
+    glowCheck,
+    // 0.0.73 SL WATCH (sl_watch.hpp): ON (default for the test build) logs what the game hands Streamline
+    // (jitter, motion-vector scale and flags, near/far/FOV, frame token, viewport id) every 60 frames; OFF stops
+    slWatch,
     options
 };
 struct OptionInfo {
@@ -311,8 +320,10 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     // LENS FLARES: GAME (0) leaves the game's setting alone; OFF IN VR turns the game's lens flares
     // off while VR runs (they test the monitor's view, not each eye's, and shine through walls),
-    // RESTART REQUIRED, put back when VR closes.
-    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR: no headlight flares through walls, restart VR to apply.",
+    // RESTART REQUIRED, put back when VR closes. 0.0.73 lights: the launcher starts it OFF IN VR (test 4's
+    // video: flare streaks strobing, headlights ghosting); index 0 stays GAME so live.txt numbers and the
+    // wrist readback bit keep their meaning (the launcher's default, not index 0, is the default here).
+    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR turns the game's lens flares off in VR, restart VR to apply.",
      2, {"GAME", "OFF IN VR", nullptr, nullptr}},
     // Version 0.0.62 PUNCH HITS (SpidyVR's land(): the hit is sent the moment the fist touches):
     // GAME + INSTANT (0, the default) sends a small CONFIRMED DirectDamage blow with a knock on the
@@ -520,6 +531,12 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"dd_grapple_aim", "GRAPPLE AIM", "DDAIM", "ON: the baton's silver tip turns to the aim while grappling; no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"wolverine_claws", "CLAW LOOK", "WVCLW", "ON: claws out of the fist between the knuckles, on the hand; no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"light_checks", "LIGHT CHECKS", "LCHK", "ON lets each eye check every light's glow so halos hold, restart VR to apply.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"glow_check", "GLOW CHECK", "GLOW", "Debug: ALWAYS draws every light glow untested, HIDDEN draws none, no restart.",
+     3, {"GAME", "ALWAYS", "HIDDEN", nullptr}},
+    {"sl_watch", "SL WATCH", "SLW", "Test: logs the game's DLSS camera data for the export, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as

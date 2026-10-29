@@ -16,6 +16,8 @@ CMB8  SpidyCombat38Data    include/spidy/combat38.hpp      Update 38 COMBAT: pun
 MPRB  SpidyMirrorProbeData include/spidy/mirror_probe.hpp  Update 38.4 MIRROR PROBE (38.5: v2, preview/menu/first events)
 WMUZ  SpidyWristMuzzleData include/spidy/wrist_muzzle.hpp  Update 38.5 BALL LOOK WRIST: web-shooter muzzle moves (CANDIDATE)
 HSWP  SpidyHeroSwitchData  include/spidy/hero_switch.hpp   Update 38.5 HERO SWITCH PROBE: a real Peter / Miles switch, re-attached
+BLOM  SpidyEyeBloomData    include/spidy/eye_bloom.hpp     0.0.73 lights: EYE BLOOM in force (OFF/COPY/GATE), reverts, eye jobs
+SLWT  SpidySlWatchData     include/spidy/sl_watch.hpp      0.0.73 SL WATCH: what the game hands Streamline (frame token, viewports, flags)
 AIRW  SpidyAirWatchData    include/spidy/air_watch.hpp     Update 38.5 Y IN THE AIR: Y presses, the game's moves out of the swing's flight (a glide's sign), read-only
 
 Each is a seqlock record (an odd sequence: being written; read again).
@@ -63,6 +65,10 @@ RECORDS = {
     'v005': ('SpidyV005Data', 0x35303056, 2, 552),
     # Version 0.0.6
     'v006': ('SpidyV006Data', 0x36303056, 1, 128),
+    # 0.0.73 lights (test 4's export had no EYE BLOOM state: the mode the halos ran under was unknown)
+    'eye_bloom': ('SpidyEyeBloomData', 0x4d4f4c42, 1, 144),
+    # 0.0.73 SL WATCH (the per-eye DLAA plan's question: one viewport or two, and what the game tags)
+    'sl_watch': ('SpidySlWatchData', 0x54574c53, 1, 1232),
 }
 # Update 38: records of the swing (ray) module, not the VR module: never in RECORDS, whose exports the
 # launcher requires of the VR module. The COMBAT record already carries the lunge counts.
@@ -116,7 +122,7 @@ V007_OPTIONS = (('batman', ('OFF', 'ON')), ('wolverine', ('OFF', 'ON')), ('super
                 ('captain_america', ('OFF', 'ON')), ('shield_arm', ('RIGHT', 'LEFT')), ('shield_damage', ('35 HP', '20 HP', '50 HP', '70 HP')),
                 ('shield_chain', ('ON', 'OFF')), ('shield_block', ('OFF', 'EXPERIMENTAL')), ('shield_look', ('BUILT-IN', 'MODEL')))
 # Version 0.0.72 (TEST): THOR, GREEN LANTERN and the 0.0.72 list (not in the records either).
-V0072_OPTIONS = (('thor', ('OFF', 'ON')), ('thor_lightning', ('ON', 'OFF')), ('thor_storm', ('ON', 'OFF')), ('thor_chain', ('ON', 'OFF')), ('green_lantern', ('OFF', 'ON')), ('gl_flight', ('ON', 'OFF')), ('gl_fist', ('ON', 'OFF')), ('gl_beam', ('ON', 'OFF')), ('gl_bubble', ('ON', 'OFF')), ('gl_chain', ('ON', 'OFF')), ('gl_charge', ('ON', 'OFF')), ('spider_climb_only', ('ON', 'OFF')), ('uppercut', ('ON', 'OFF')), ('smoke_blind', ('ON', 'OFF')), ('dd_grapple', ('ON', 'OFF')), ('dd_parry', ('ON', 'OFF')), ('iron_hud', ('ON', 'OFF')), ('punisher_rage', ('ON', 'OFF')), ('reputation', ('ON', 'OFF')), ('survival', ('OFF', 'ON')), ('punisher_suit', ('VEST', 'WARZONE')), ('natural_invincible', ('ON', 'OFF')), ('hulk_rage', ('ON', 'OFF')), ('rage_blood', ('EXTREME', 'NORMAL', 'OFF')), ('rage_tint', ('NORMAL', 'STRONG', 'SUBTLE', 'OFF')), ('fire_douse', ('ON', 'OFF')), ('shield_slam', ('ON', 'OFF')), ('punisher_hook', ('ON', 'OFF')), ('claw_climb', ('OFF', 'ON')), ('npc_shove', ('ON', 'OFF')), ('faction', ('AUTO', 'VANILLA', 'THE HAND', 'HYDRA', 'JOKER GANG')), ('hero_suit', ('DEFAULT', 'NEXT')), ('test_unlocks', ('OFF', 'SUITS', 'ULTIMATES', 'ALL')), ('ultimates', ('ON', 'OFF')), ('perk_branch', ('AUTO', 'CHAIN FIRST', 'HOLD POINTS', 'PERKS OFF')), ('own_suit', ('OFF', 'ON')), ('perch_takedown', ('ON', 'OFF')), ('takedown_light', ('ON', 'OFF')), ('punisher_van', ('ON', 'OFF')), ('thor_hammer', ('BOOOOP', 'DEVILSEYE', 'LOVE THUNDER', 'FCCOOPER')), ('game_body', ('OFF', 'ON')), ('thor_hammer_model', ('ON', 'OFF')), ('thor_flight', ('ON', 'OFF')), ('suit_body', ('ARMS', 'FULL BODY', 'OFF')), ('cap_sprint', ('ON', 'OFF')), ('cull_margin', ('10 DEG', '6 DEG', '15 DEG', '20 DEG')), ('shadow_match', ('ON', 'OFF')), ('calib_look', ('HOLO', 'CLASSIC')), ('fly_pose', ('LEAN', 'UPRIGHT')), ('weapon_collision', ('ON', 'OFF')), ('light_hold', ('ON', 'STRONG', 'OFF')), ('van_screen', ('ON', 'OFF')), ('palm_blast', ('PALM', 'AIM')), ('hero_menu', ('HOLO TILES', 'CLASSIC')), ('rep_log', ('ON', 'OFF')), ('van_pedals', ('WHEEL HAND', 'CLASSIC')), ('image', ('SPIDYVR', 'HERO VR CLASSIC')), ('image_style', ('SPIDYVR', 'OFF')), ('dd_baton_tip', ('ON', 'OFF')), ('streamer_mode', ('ON', 'OFF')), ('streamer_smooth', ('LOW', 'OFF', 'HIGH')), ('streamer_eye', ('LEFT EYE', 'RIGHT EYE')), ('iron_hands', ('ON', 'OFF')), ('dd_grapple_aim', ('ON', 'OFF')), ('wolverine_claws', ('ON', 'OFF')))
+V0072_OPTIONS = (('thor', ('OFF', 'ON')), ('thor_lightning', ('ON', 'OFF')), ('thor_storm', ('ON', 'OFF')), ('thor_chain', ('ON', 'OFF')), ('green_lantern', ('OFF', 'ON')), ('gl_flight', ('ON', 'OFF')), ('gl_fist', ('ON', 'OFF')), ('gl_beam', ('ON', 'OFF')), ('gl_bubble', ('ON', 'OFF')), ('gl_chain', ('ON', 'OFF')), ('gl_charge', ('ON', 'OFF')), ('spider_climb_only', ('ON', 'OFF')), ('uppercut', ('ON', 'OFF')), ('smoke_blind', ('ON', 'OFF')), ('dd_grapple', ('ON', 'OFF')), ('dd_parry', ('ON', 'OFF')), ('iron_hud', ('ON', 'OFF')), ('punisher_rage', ('ON', 'OFF')), ('reputation', ('ON', 'OFF')), ('survival', ('OFF', 'ON')), ('punisher_suit', ('VEST', 'WARZONE')), ('natural_invincible', ('ON', 'OFF')), ('hulk_rage', ('ON', 'OFF')), ('rage_blood', ('EXTREME', 'NORMAL', 'OFF')), ('rage_tint', ('NORMAL', 'STRONG', 'SUBTLE', 'OFF')), ('fire_douse', ('ON', 'OFF')), ('shield_slam', ('ON', 'OFF')), ('punisher_hook', ('ON', 'OFF')), ('claw_climb', ('OFF', 'ON')), ('npc_shove', ('ON', 'OFF')), ('faction', ('AUTO', 'VANILLA', 'THE HAND', 'HYDRA', 'JOKER GANG')), ('hero_suit', ('DEFAULT', 'NEXT')), ('test_unlocks', ('OFF', 'SUITS', 'ULTIMATES', 'ALL')), ('ultimates', ('ON', 'OFF')), ('perk_branch', ('AUTO', 'CHAIN FIRST', 'HOLD POINTS', 'PERKS OFF')), ('own_suit', ('OFF', 'ON')), ('perch_takedown', ('ON', 'OFF')), ('takedown_light', ('ON', 'OFF')), ('punisher_van', ('ON', 'OFF')), ('thor_hammer', ('BOOOOP', 'DEVILSEYE', 'LOVE THUNDER', 'FCCOOPER')), ('game_body', ('OFF', 'ON')), ('thor_hammer_model', ('ON', 'OFF')), ('thor_flight', ('ON', 'OFF')), ('suit_body', ('ARMS', 'FULL BODY', 'OFF')), ('cap_sprint', ('ON', 'OFF')), ('cull_margin', ('10 DEG', '6 DEG', '15 DEG', '20 DEG')), ('shadow_match', ('ON', 'OFF')), ('calib_look', ('HOLO', 'CLASSIC')), ('fly_pose', ('LEAN', 'UPRIGHT')), ('weapon_collision', ('ON', 'OFF')), ('light_hold', ('ON', 'STRONG', 'OFF')), ('van_screen', ('ON', 'OFF')), ('palm_blast', ('PALM', 'AIM')), ('hero_menu', ('HOLO TILES', 'CLASSIC')), ('rep_log', ('ON', 'OFF')), ('van_pedals', ('WHEEL HAND', 'CLASSIC')), ('image', ('SPIDYVR', 'HERO VR CLASSIC')), ('image_style', ('SPIDYVR', 'OFF')), ('dd_baton_tip', ('ON', 'OFF')), ('streamer_mode', ('ON', 'OFF')), ('streamer_smooth', ('LOW', 'OFF', 'HIGH')), ('streamer_eye', ('LEFT EYE', 'RIGHT EYE')), ('iron_hands', ('ON', 'OFF')), ('dd_grapple_aim', ('ON', 'OFF')), ('wolverine_claws', ('ON', 'OFF')), ('light_checks', ('ON', 'OFF')), ('glow_check', ('GAME', 'ALWAYS', 'HIDDEN')), ('sl_watch', ('ON', 'OFF')))
 COMBAT38_ALL_OPTIONS = COMBAT38_OPTIONS + V003_OPTIONS + V004_OPTIONS + V005_OPTIONS + V006_OPTIONS + V0062_OPTIONS + V007_OPTIONS + V0072_OPTIONS
 COMBAT38_REJECTS = ('sent', 'hand untracked', 'hand holding or carrying', 'trigger held', 'hand busy', 'too slow',
                     'not forward', 'not extended', 'not re-armed', 'gated (not playing)')
@@ -143,6 +149,73 @@ def _header(raw, key):
     if struct.unpack_from('<3I', raw, 0) != (magic, version, size):
         raise RuntimeError(f'Native {key} record protocol mismatch')
     return not struct.unpack_from('<Q', raw, size - 8)[0] & 1
+
+BLOOM_MODES = ('OFF', 'COPY', 'GATE')
+BLOOM_WHY = ('none', 'N/A (gate bytes differ)', 'no eye settings seen', 'the game view has no bloom here',
+             'eye bloom stayed off with GATE', 'write failed')  # eye_bloom.hpp Reason, in order
+
+
+def parse_eye_bloom(raw):
+    """0.0.73 lights: SpidyEyeBloomData (eye_bloom.hpp Data, BLOM v1)."""
+    if not _header(raw, 'eye_bloom'):
+        return None
+    packed, gate_known, gate_patched, changes, reverts, last, _ = struct.unpack_from('<7I', raw, 12)
+    calls, eye_jobs, head_on, own_on, written = struct.unpack_from('<5Q', raw, 40)
+    head, own0, own1, now0, now1, _ = struct.unpack_from('<6I', raw, 80)
+    return dict(mode=_name(BLOOM_MODES, packed & 0xff), why=_name(BLOOM_WHY, packed >> 8 & 0xff),
+                gate_known=bool(gate_known), gate_patched=bool(gate_patched), mode_changes=changes,
+                reverts=reverts, last_revert=_name(BLOOM_WHY, last), copy_jobs=calls, eye_jobs=eye_jobs,
+                game_view_bloom_on=head_on, eye_own_bloom_on=own_on, written=written,
+                newest_raw=dict(game_view=head, eye_own=[own0, own1], eye_now=[now0, now1]))
+
+
+SL_FLAGS = ('depth_inverted', 'camera_motion_included', 'motion_vectors_3d', 'reset', 'orthographic',
+            'motion_vectors_dilated', 'motion_vectors_jittered')  # sl_consts.h order, +444..+450
+SL_BUFFERS = ('depth', 'motion_vectors', 'hudless_color', 'scaling_input_color', 'scaling_output_color')
+SL_NONE = 0xffffffff
+
+
+def _sl_bool(b):
+    return {0: False, 1: True}.get(b, 'invalid' if b == 2 else f'#{b}')
+
+
+def _sl_id(v):
+    return None if v == SL_NONE else v
+
+
+def parse_sl_watch(raw):
+    """0.0.73 SL WATCH: SpidySlWatchData (sl_watch.hpp Data, SLWT v1)."""
+    if not _header(raw, 'sl_watch'):
+        return None
+    on, hooked, every, samples, nxt = struct.unpack_from('<5I', raw, 12)
+    constants, evaluates, tags, foreign = struct.unpack_from('<4Q', raw, 32)
+    views = []
+    for i in range(4):
+        vid, n, tag_calls, mask, evals, last, resets, _ = struct.unpack_from('<8I', raw, 64 + 32 * i)
+        if vid == SL_NONE and not (n or tag_calls or evals):
+            continue
+        views.append(dict(viewport=_sl_id(vid), constants=n, tag_calls=tag_calls, evaluates=evals, resets=resets,
+                          last_frame=_sl_id(last),
+                          tagged=[SL_BUFFERS[b] if b < len(SL_BUFFERS) else f'#{b}' for b in range(32) if mask >> b & 1]))
+    overflow, distinct = struct.unpack_from('<2I', raw, 192)
+    ring = []
+    count = min(samples, 16)
+    for k in range(count):
+        i = (nxt - count + k) % 16
+        o = 200 + 64 * i
+        call, frame, frame_raw, vp = struct.unpack_from('<4I', raw, o)
+        f = struct.unpack_from('<9f', raw, o + 16)
+        flags = raw[o + 52:o + 59]
+        ring.append(dict(call=call, frame=_sl_id(frame), frame_raw=frame_raw, viewport=_sl_id(vp),
+                         jitter=[round(f[0], 4), round(f[1], 4)], mvec_scale=[round(f[2], 6), round(f[3], 6)],
+                         near=f[4], far=f[5], fov=round(f[6], 4), aspect=round(f[7], 4), mv_invalid=f[8],
+                         struct_version=raw[o + 59], caller=f"0x{struct.unpack_from('<I', raw, o + 60)[0]:x}",
+                         **{n: _sl_bool(b) for n, b in zip(SL_FLAGS, flags)}))
+    return dict(on=bool(on), hooked=dict(set_constants=bool(hooked & 1), evaluate=bool(hooked & 2),
+                                         set_tag=bool(hooked & 4), set_tag_for_frame=bool(hooked & 8)),
+                every_frames=every, constants_calls=constants, evaluate_calls=evaluates, tag_calls=tags,
+                not_constants=foreign, viewports=views, viewport_overflow=overflow, frames_seen=distinct,
+                samples=samples, newest=ring)
 
 
 def parse_view_gates(raw):
@@ -838,7 +911,7 @@ PARSERS = dict(air_watch=parse_air_watch, view_gates=parse_view_gates, combat=pa
                perf=parse_perf, color=parse_color, fovea=parse_fovea, npc_fade=parse_npc_fade,
                combat38=parse_combat38, mirror_probe=parse_mirror_probe, wrist_muzzle=parse_wrist_muzzle,
                hero_switch=parse_hero_switch, v003=parse_v003, v005=parse_v005,
-               v006=parse_v006)
+               v006=parse_v006, eye_bloom=parse_eye_bloom, sl_watch=parse_sl_watch)
 
 
 def snapshot(game, xr, key):
@@ -878,6 +951,26 @@ def console_lines(records):
     if c and 'fired' in c:
         lines.append('Update 37 gestures: ' + ', '.join(f'{k} {v}' for k, v in c['fired'].items()) +
                      f"; punches {sum(c['punches'])}.")
+    eb = (records or {}).get('eye_bloom')
+    if eb and 'mode' in eb:
+        lines.append(f"0.0.73 lights: EYE BLOOM {eb['mode']} at the end ({eb['mode_changes']} changes, {eb['reverts']} "
+                     f"reverts, last: {eb['last_revert']}); {eb['eye_jobs']} eye jobs, {eb['written']} given the game "
+                     f"view's bloom, game view bloom on in {eb['game_view_bloom_on']}.")
+    sw = (records or {}).get('sl_watch')
+    if sw and 'viewports' in sw:
+        if not sw['hooked']['set_constants']:
+            lines.append(f"0.0.73 SL WATCH: {'on' if sw['on'] else 'off'}, slSetConstants not hooked (no Streamline "
+                         "in this session, or the game's TAA/DLSS setting does not use it).")
+        else:
+            views = '; '.join(f"viewport {v['viewport']}: {v['constants']} constants, {v['evaluates']} evaluates, "
+                              f"tags {'+'.join(v['tagged']) or 'none'}, {v['resets']} resets" for v in sw['viewports'])
+            n = sw['newest'][-1] if sw['newest'] else None
+            last = (f"; newest frame {n['frame']} jitter {n['jitter']} mvec_scale {n['mvec_scale']} near {n['near']:.4g} "
+                    f"far {n['far']:.4g} fov {n['fov']} depth_inverted {n['depth_inverted']} camera_motion "
+                    f"{n['camera_motion_included']} mv_jittered {n['motion_vectors_jittered']} reset {n['reset']}"
+                    if n else '')
+            lines.append(f"0.0.73 SL WATCH: {sw['constants_calls']} slSetConstants, {sw['evaluate_calls']} "
+                         f"slEvaluateFeature, {len(sw['viewports'])} viewport(s) ({views}){last}.")
     v = (records or {}).get('view_gates')
     if v and 'bloom_fx' in v:
         lines.append(f"Update 37 view gates: BLOOM FX {v['bloom_fx']} ({v['fx_writes']} writes), LOD FADE "

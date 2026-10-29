@@ -5,6 +5,9 @@
 #ifndef SPIDY_TEST_NUMBER
 #define SPIDY_TEST_NUMBER "0"
 #endif
+#ifndef SPIDY_TEST_VERSION
+#define SPIDY_TEST_VERSION "0.0.73"
+#endif
 #include "spidy/streamer_view.hpp"
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
@@ -105,6 +108,8 @@
 #include "spidy/image_style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
+#include "spidy/eye_queries.hpp"
+#include "spidy/sl_watch.hpp"
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/shared_lod.hpp"
@@ -610,6 +615,10 @@ uint32_t SpidyImpostorReachNow();
 DWORD WINAPI SpidyFarWindows(void* percent);
 DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
 DWORD WINAPI SpidyShadowMatchOn(void* on);
+// 0.0.73 LIGHT CHECKS (stereo_probe.cpp, eye_queries.hpp): read when the eyes are made.
+DWORD WINAPI SpidyLightChecksOn(void* on);
+DWORD WINAPI SpidyGlowCheckMode(void* mode); // 0.0.73 GLOW CHECK, live
+DWORD WINAPI SpidySlWatchOn(void* on);       // 0.0.73 SL WATCH (native_address_finder.cpp), live; hooks once
 // 0.0.73 test 3 LIGHT HOLD (native_eye_gpu.cpp): the history shader's bright hold, and the history
 // share its last pass kept (JITTER CALM).
 DWORD WINAPI SpidyEyeLightHold(void* percent);
@@ -1105,6 +1114,7 @@ uint32_t eyeAaNow() {
 // Update 34: ENGINE TAA's FPS guard is armed by the frame loop (it has the time).
 std::atomic<bool> engineTaaArm{};
 std::atomic<bool> farShadowsArm{}; // Update 35: FAR SHADOWS' own FPS guard, the same way
+void consoleLine(const std::string& text) noexcept; // below
 void pressEyeAa() {
     const uint32_t s = eyeAaNow();
     if ((s & 0xff) == eye_taa::on) {
@@ -1113,8 +1123,11 @@ void pressEyeAa() {
         OutputDebugStringA("EYE AA: off\n");
     } else if ((s & 0xff) == eye_taa::off) {
         // Update 34: one anti-aliasing at a time: EYE AA on turns ENGINE TAA off.
-        if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on)
+        if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on) {
             SpidyEngineTaa(nullptr);
+            // 0.0.73 test 5: test 4's console showed only "ENGINE TAA: OFF"; say which press did it.
+            consoleLine("ENGINE TAA: off by the EYE AA press (one anti-aliasing at a time)");
+        }
         if (native_gpu::setEyeTemporal(true)) {
             eyeAaState = eye_taa::pack(eye_taa::on, 0);
             OutputDebugStringA("EYE AA: on\n");
@@ -1130,6 +1143,7 @@ void pressEyeAa() {
 void pressEngineTaa() {
     if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on) {
         SpidyEngineTaa(nullptr);
+        consoleLine("ENGINE TAA: off by the ENGINE TAA press");
         return;
     }
     if (SpidyEngineTaa(reinterpret_cast<void*>(uintptr_t{1})) != 0)
@@ -2300,7 +2314,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightHoldApplied{~0u}, imageApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -4680,7 +4694,7 @@ DWORD WINAPI run(void*) {
                             testNotice.update(in);
                             if (before != testNotice.state() && testNotice.state() == test_notice::State::shown) {
                                 runtime.haptic(0, .2f), runtime.haptic(1, .2f);
-                                consoleLine("TEST NOTICE: shown (HERO VR 0.0.72 test " SPIDY_TEST_COMMIT ")");
+                                consoleLine("TEST NOTICE: shown (HERO VR " SPIDY_TEST_VERSION " test " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT ")");
                             }
                             else if (before == test_notice::State::shown && testNotice.state() == test_notice::State::gone &&
                                      testNotice.ended() != test_notice::Ended::timedOut)
@@ -10245,12 +10259,11 @@ DWORD WINAPI run(void*) {
                                 styleTick = nowTick;
                                 const bool eyeAaOn = (eyeAaNow() & 0xff) == eye_taa::on;
                                 const auto step = styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn);
-                                if (step.note) {
-                                    OutputDebugStringA(step.note);
-                                    OutputDebugStringA("\n");
-                                }
+                                if (step.note) // 0.0.73 test 5: in the console and the export, not only the debugger
+                                    consoleLine(step.note);
                                 if (step.engineOff) {
                                     SpidyEngineTaa(nullptr);
+                                    consoleLine("ENGINE TAA: off by GAME TAA OFF");
                                     engine = SpidyEngineTaaNow();
                                     previous = engine; // a style change, not a failure: no plan B press
                                 }
@@ -11074,6 +11087,24 @@ DWORD WINAPI run(void*) {
                                 matchWant != shadowMatchApplied) {
                                 shadowMatchApplied = matchWant;
                                 SpidyShadowMatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
+                            }
+                            // 0.0.73 LIGHT CHECKS: on or off for the next eyes made (value 0 ON, 1 OFF).
+                            if (const uint32_t checksWant = eye_queries::on(c38(combat38::lightChecks)) ? 1u : 0u;
+                                checksWant != lightChecksApplied) {
+                                lightChecksApplied = checksWant;
+                                SpidyLightChecksOn(reinterpret_cast<void*>(static_cast<uintptr_t>(checksWant)));
+                            }
+                            // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
+                            if (const uint32_t glowWant = c38(combat38::glowCheck); glowWant != glowCheckApplied) {
+                                glowCheckApplied = glowWant;
+                                SpidyGlowCheckMode(reinterpret_cast<void*>(static_cast<uintptr_t>(glowWant)));
+                            }
+                            // 0.0.73 SL WATCH: on or off when it changes (value 0 ON); while on, a cheap retry of the
+                            // Streamline hooks every 512 frames (it returns at once once they are in).
+                            if (const uint32_t watchWant = sl_watch::on(c38(combat38::slWatch)) ? 1u : 0u;
+                                watchWant != slWatchApplied || (watchWant && (++slWatchTicks & 511u) == 0)) {
+                                slWatchApplied = watchWant;
+                                SpidySlWatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(watchWant)));
                             }
                             // 0.0.73 test 3 LIGHT HOLD: the history shader's hold when it changes.
                             if (const uint32_t holdWant = eye_history::lightHoldPercentOf(c38(combat38::lightHold));
@@ -12445,7 +12476,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     // Version 0.0.6: the start banner names the version and its maker.
 #if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
     // Build 5: the first line names the code that runs (build 4's console said only 0.0.70).
-    message(1, 0, "HERO VR 0.0.72 TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
+    message(1, 0, "HERO VR " SPIDY_TEST_VERSION " TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
 #else
     message(1, 0, "SM2 VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");
 #endif
@@ -13042,6 +13073,20 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHe
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyleOption(void* v) { return setHero007(v, combat38::imageStyle, 5460); }
 // 0.0.73 DD BATON: ON (0, the baton seated in the fist, its silver tip flown on a rope) or OFF (1, test 3's) (live.txt dd_baton_tip).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdBatonTip(void* v) { return setHero007(v, combat38::ddBatonTip, 5453); }
+// 0.0.73 LIGHT CHECKS (eye_queries.hpp): ON (0, the eyes' light-glow checks get the game view's room) or OFF (1, the
+// game's 256) (live.txt light_checks). Passed on at once too, so a launch's OFF reaches the first eyes made.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecks(void* v) {
+    const DWORD r = setHero007(v, combat38::lightChecks, 5470);
+    if (!r)
+        SpidyLightChecksOn(reinterpret_cast<void*>(
+            static_cast<uintptr_t>(eye_queries::on(combat38Values[combat38::lightChecks].load()) ? 1 : 0)));
+    return r;
+}
+// 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): GAME (0), ALWAYS (1) or HIDDEN (2), live (live.txt glow_check).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheck(void* v) { return setHero007(v, combat38::glowCheck, 5471); }
+// 0.0.73 SL WATCH (sl_watch.hpp): ON (0, the game's Streamline constants logged for the export) or OFF (1), live
+// (live.txt sl_watch). The frame loop passes it on.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySlWatch(void* v) { return setHero007(v, combat38::slWatch, 5472); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

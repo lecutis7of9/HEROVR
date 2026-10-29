@@ -294,6 +294,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5462'), ['SpidyIronHands'])  # 0.0.73 test 5 HERO HANDS (5461: MP SOLO TEST)
         self.assertEqual(uses.get('5463'), ['SpidyDdGrappleAim'])
         self.assertEqual(uses.get('5464'), ['SpidyWolverineClaws'])
+        self.assertEqual(uses.get('5470'), ['SpidyLightChecks'])  # 0.0.73 LIGHT CHECKS
+        self.assertEqual(uses.get('5471'), ['SpidyGlowCheck'])  # 0.0.73 GLOW CHECK
+        self.assertEqual(uses.get('5472'), ['SpidySlWatch'])  # 0.0.73 SL WATCH
 
 
 class Hero073Image(unittest.TestCase):

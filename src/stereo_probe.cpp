@@ -5,6 +5,7 @@
 #include "spidy/engine_taa.hpp"
 #include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
+#include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/mirror_probe.hpp"
 #include "spidy/mirror_view.hpp"
@@ -820,6 +821,11 @@ void farShadowsSet(uint32_t mode, uint32_t reason, bool automatic) {
 // makes its own maps: nothing is shared between the eyes (sharing crashed the render thread in SM2VR 0.0.4).
 // CONFIRMED: the fit 0x2a8dc80 (far_shadows, csmFit) and the head lens (built every frame for the game view).
 // CANDIDATE: that 0x2a8dc80 fits to the view descriptor's pose and lens, as SM1's fit did (SpidyVR's swap).
+// 0.0.73 LIGHT CHECKS (eye_queries.hpp): 1 on (the default, so eyes made before the wrist's first push
+// get it), 0 off. Read when an eye is made. State: 0 no eye yet, 1 widened, 2 off, 3 the clamp's bytes
+// differ (the game's 256 kept), 4 a page protection failed (the game's 256 kept).
+std::atomic<uint32_t> lightChecksOn{1}, lightChecksState{};
+std::atomic<int32_t> lightChecksRoom[2]{};
 std::atomic<uint32_t> shadowMatchOn{};
 std::atomic<uint64_t> shadowMatchFits{}, shadowMatchSkipped{};
 SRWLOCK matchLock = SRWLOCK_INIT;
@@ -1538,6 +1544,24 @@ bool bloomGateWrite(bool patched) { // one writer at a time (a press and an auto
     const bool done = bloomGateWriteLocked(patched);
     ReleaseSRWLockExclusive(&bloomGateLock);
     return done;
+}
+// LIGHT CHECKS: the kind-2 clamp's immediate in 0x2c98350 (0x100 -> room), only while maintain() makes an
+// eye under `creation`. One byte; the five bytes are checked first (else nothing is written).
+bool lightChecksByte(uint8_t from, uint8_t to) {
+    namespace eq = spidy::eye_queries;
+    uint8_t now[sizeof eq::clampBytes]{};
+    if (!read(base + eq::clampRva, now, sizeof now) || now[0] != eq::clampBytes[0] || now[2] != from ||
+        now[1] != eq::clampBytes[1] || now[3] != eq::clampBytes[3] || now[4] != eq::clampBytes[4])
+        return false;
+    const auto at = reinterpret_cast<uint8_t*>(base + eq::clampByteRva);
+    DWORD protection{};
+    if (!VirtualProtect(at, 1, PAGE_EXECUTE_READWRITE, &protection))
+        return false;
+    std::atomic_ref<uint8_t>(*at).store(to);
+    DWORD unused{};
+    VirtualProtect(at, 1, protection, &unused);
+    FlushInstructionCache(GetCurrentProcess(), at, 1);
+    return true;
 }
 bool bloomGateWriteLocked(bool patched) {
     namespace eb = spidy::eye_bloom;
@@ -3195,11 +3219,30 @@ void maintain(void* manager) {
         static const char* names[] = {"Spidy left eye test", "Spidy right eye test"};
         for (unsigned i = 0; i < 2; ++i) {
             if (!eyes[i]) {
+                // LIGHT CHECKS: the eye's query pool as big as the game view's (at least 1024), not 256.
+                namespace eq = spidy::eye_queries;
+                int32_t gamePool{};
+                read(primary + eq::capacityOffset, &gamePool, sizeof gamePool);
+                const uint32_t room = eq::room(gamePool);
+                const uint8_t stockByte = eq::clampBytes[2];
+                bool widened = false;
+                if (!lightChecksOn.load())
+                    lightChecksState = 2;
+                else if (!(widened = lightChecksByte(stockByte, eq::roomByte(room))))
+                    lightChecksState = 3;
                 creatingEye = true;
                 const CreateArgs args{names[i], main.nearZ(), main.farZ(), 90.f, config.width, config.height,
-                                      28, nullptr, 0x100, 2, 0xffffffffu, 0};
+                                      28, nullptr, 0x100, 2, widened ? room : 0xffffffffu, 0};
                 eyes[i] = reinterpret_cast<Create>(base + 0x2c9c590)(manager, &args);
                 creatingEye = false;
+                if (widened) {
+                    lightChecksState = lightChecksByte(eq::roomByte(room), stockByte) ? 1u : 4u;
+                    // 4: the byte stays widened for later kind 2/4/5 views (bigger pools only, never smaller).
+                }
+                int32_t eyePool{};
+                if (eyes[i])
+                    read(reinterpret_cast<uintptr_t>(eyes[i].load()) + eq::capacityOffset, &eyePool, sizeof eyePool);
+                lightChecksRoom[i] = eyePool;
                 // Render jobs copy views from the next frame on (1920240).
                 if (eyes[i] && (config.createViews & 16))
                     giveOcclusion(eyes[i].load());
@@ -3864,6 +3907,56 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarWindows(void* percent) {
         return 4402;
     farWindowsPercent = static_cast<uint32_t>(value);
     return 0;
+}
+// 0.0.73 LIGHT CHECKS (eye_queries.hpp): 0 off, 1 on (the default); 4470 otherwise. Read when the eyes are made.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecksOn(void* on) {
+    const auto value = reinterpret_cast<uintptr_t>(on);
+    if (value > 1)
+        return 4470;
+    lightChecksOn = static_cast<uint32_t>(value);
+    return 0;
+}
+// 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): 0 GAME, 1 ALWAYS, 2 HIDDEN; live, any thread. 4471 for a
+// bad value, 4472 when a site's bytes are neither the game's nor ours (nothing written, GAME kept there).
+SRWLOCK glowLock = SRWLOCK_INIT;
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheckMode(void* mode) {
+    namespace gc = spidy::glow_check;
+    const auto value = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mode));
+    if (reinterpret_cast<uintptr_t>(mode) >= gc::modes)
+        return 4471;
+    AcquireSRWLockExclusive(&glowLock);
+    DWORD result = 0;
+    // Put back first, then patch, so the two sites are never both jumps.
+    for (const uintptr_t rva : value == gc::hidden ? std::array{gc::alwaysRva, gc::hiddenRva}
+                                                   : std::array{gc::hiddenRva, gc::alwaysRva}) {
+        const auto at = reinterpret_cast<uint16_t*>(base + rva);
+        uint16_t now{};
+        const uint16_t want = gc::wantAt(rva, value);
+        const uint16_t stock = rva == gc::alwaysRva ? gc::alwaysStock : gc::hiddenStock;
+        if ((reinterpret_cast<uintptr_t>(at) & 1) || !read(base + rva, &now, 2) || (now != stock && now != gc::jump)) {
+            result = 4472;
+            continue;
+        }
+        if (now == want)
+            continue;
+        DWORD protection{};
+        if (!VirtualProtect(at, 2, PAGE_EXECUTE_READWRITE, &protection)) {
+            result = 4472;
+            continue;
+        }
+        std::atomic_ref<uint16_t>(*at).store(want);
+        DWORD unused{};
+        VirtualProtect(at, 2, protection, &unused);
+        FlushInstructionCache(GetCurrentProcess(), at, 2);
+    }
+    ReleaseSRWLockExclusive(&glowLock);
+    return result;
+}
+// LIGHT CHECKS readback: the state (low byte, see lightChecksState) and the left / right eyes' query pools
+// (bits 8-19 and 20-31, each capped at 4095) as the game sized them.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecksNow(void*) {
+    const auto pool = [](int i) { return static_cast<uint32_t>(std::clamp(lightChecksRoom[i].load(), 0, 4095)); };
+    return (lightChecksState.load() & 0xff) | pool(0) << 8 | pool(1) << 20;
 }
 // 0.0.73 test 2 SHADOW MATCH: 0 off, 1 on; 4404 otherwise. Live; *fits / *skipped for the COMBAT record.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowMatchOn(void* on) {

@@ -1739,7 +1739,7 @@ DWORD WINAPI run(void*) {
                 if (mesh_model::slotIsHideout(slot) && c38(combat38::hideouts) != 0) { // 0.0.74 test 1 HIDEOUTS OFF: not loaded
                     models.meshes[slot] = {};
                     models.status[slot] = mesh_model::notTried;
-                    game_prompts::note(std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded");
+                    game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
                     continue;
                 }
                 try {
@@ -7415,7 +7415,7 @@ DWORD WINAPI run(void*) {
                                                     message(1, 0, (std::string("HIDEOUT: the ") + hideout074::names[which] +
                                                                    " (TEST) - walk with the left stick, turn with the right; hold B to go back to the van")
                                                                       .c_str());
-                                                    game_prompts::note(std::string("0.0.74 test 1 HIDEOUTS: into the ") + hideout074::names[which] + " (CANDIDATE)");
+                                                    game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS: into the ") + hideout074::names[which] + " (CANDIDATE)").c_str());
                                                 }
                                                 break;
                                             }

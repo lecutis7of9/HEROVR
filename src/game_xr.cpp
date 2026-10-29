@@ -5,6 +5,9 @@
 #ifndef SPIDY_TEST_NUMBER
 #define SPIDY_TEST_NUMBER "0"
 #endif
+#ifndef SPIDY_TEST_VERSION
+#define SPIDY_TEST_VERSION "0.0.73"
+#endif
 #include "spidy/streamer_view.hpp"
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
@@ -4677,7 +4680,7 @@ DWORD WINAPI run(void*) {
                             testNotice.update(in);
                             if (before != testNotice.state() && testNotice.state() == test_notice::State::shown) {
                                 runtime.haptic(0, .2f), runtime.haptic(1, .2f);
-                                consoleLine("TEST NOTICE: shown (HERO VR 0.0.72 test " SPIDY_TEST_COMMIT ")");
+                                consoleLine("TEST NOTICE: shown (HERO VR " SPIDY_TEST_VERSION " test " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT ")");
                             }
                             else if (before == test_notice::State::shown && testNotice.state() == test_notice::State::gone &&
                                      testNotice.ended() != test_notice::Ended::timedOut)
@@ -12326,7 +12329,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     // Version 0.0.6: the start banner names the version and its maker.
 #if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
     // Build 5: the first line names the code that runs (build 4's console said only 0.0.70).
-    message(1, 0, "HERO VR 0.0.72 TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
+    message(1, 0, "HERO VR " SPIDY_TEST_VERSION " TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
 #else
     message(1, 0, "SM2 VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");
 #endif

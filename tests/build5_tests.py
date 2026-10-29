@@ -32,10 +32,10 @@ class Notice(unittest.TestCase):
         s = src('src/game_xr.cpp')
         self.assertIn('testNoticeClock', s)
         self.assertIn('testNoticeClock < 45', s)
-        self.assertIn('consoleLine("TEST NOTICE: shown (HERO VR 0.0.72 test " SPIDY_TEST_COMMIT ")")', s)
+        self.assertIn('consoleLine("TEST NOTICE: shown (HERO VR " SPIDY_TEST_VERSION " test " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT ")")', s)
 
     def test_the_commit_is_on_the_console_and_the_wrist(self):
-        self.assertIn('"HERO VR 0.0.72 TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder', src('src/game_xr.cpp'))
+        self.assertIn('"HERO VR " SPIDY_TEST_VERSION " TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder', src('src/game_xr.cpp'))
         self.assertIn('"TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT', src('src/wrist_hud.cpp'))
         self.assertIn('SPIDY_TEST_COMMIT=', src('CMakeLists.txt'))
 

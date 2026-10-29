@@ -132,8 +132,6 @@
 #include "spidy/rope_grab.hpp"
 #include "spidy/v003.hpp"
 #include "spidy/suit_wear.hpp"
-#include "spidy/mp_ghost.hpp"   // 0.0.73 MP SOLO TEST
-#include "spidy/mp_session.hpp" // 0.0.73 MP SOLO TEST
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
@@ -776,9 +774,6 @@ std::string modelMissingNote(uint32_t mask) {
 std::atomic<uint32_t> wornSuitSlot{0};
 suit_wear::Rig suitRigs[mesh_model::suitSlots];
 std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
-// 0.0.73 MP SOLO TEST: the player's action flags (mp::Action: flying, swinging, grapple, firing) for the packet,
-// set on the game thread, read on the render thread (mod-internal state - CONFIRMED, no game address).
-std::atomic<uint32_t> mpActionsNow{0};
 // Test build 10 ONE BODY: when the render thread last drew the worn suit's SUIT BODY part (GetTickCount64; 0 never):
 // the game's own body and the fallback gloves are off while it is fresh (suit_wear::shownNow).
 std::atomic<uint64_t> suitShownAtMs{0};
@@ -9717,18 +9712,6 @@ DWORD WINAPI run(void*) {
                         if (!oursFault)
                         {
                             const bool pulling = capeNow.grappling == cape_glide::pull && capeNow.hand < 2;
-                            { // 0.0.73 MP SOLO TEST: what the remote player shows (mp::Action bits)
-                                uint32_t act = 0;
-                                if (flyNow.flying)
-                                    act |= spidy::mp::flying;
-                                if (swingStarted && swingState.status)
-                                    act |= spidy::mp::swinging;
-                                if (pulling)
-                                    act |= spidy::mp::grapple;
-                                if (saved.palmGlow[0] > 0 || saved.palmGlow[1] > 0 || saved.beamFade > 0)
-                                    act |= spidy::mp::firing;
-                                mpActionsNow.store(act, std::memory_order_relaxed);
-                            }
                             for (unsigned h = 0; h < 2; ++h) // Version 0.0.72: the grapple gun out while it fires / pulls
                                 hero007In.grappleHeld[h] = grapple072::deviceOf(hero007In.hero) == grapple072::Device::gun &&
                                                            ((pulling && capeNow.hand == h) ||
@@ -11346,102 +11329,6 @@ DWORD WINAPI run(void*) {
                                 if (!drawn)
                                     hero007::appendClawSteel(vertices, it, claws, viewer);
                             } catch (...) { // out of memory: no claws this frame, never a crash
-                            }
-                        }
-                        // 0.0.73 MP SOLO TEST: the remote player. The pose goes out through the real UDP packets
-                        // (mp_session.hpp) - to the 127.0.0.1 echo, which sends it back about half a second late as
-                        // PLAYER 2 (YOU, LOOPBACK), or to the HERO VR MP Test Buddy while it is connected - and what
-                        // comes back is drawn ~3 m ahead, facing the player: the remote suit with the mod's own
-                        // suit model (suit_wear / mesh_model), else a soft figure in the hero's colour, and a
-                        // nameplate with the ping. Only mod-internal state (CONFIRMED); no game address is read.
-                        // Any failure: the remote player hidden and a console line - never a crash.
-                        {
-                            static spidy::mp::Session* mpSession = new spidy::mp::Session; // never destroyed (no join at unload)
-                            static spidy::mp::AnchorFollow mpFollow;
-                            static suit_wear::Skinned mpSkinned;
-                            static auto mpLast = std::chrono::steady_clock::now();
-                            static bool mpFailedOnce = false;
-                            try {
-                                const bool mpOn = c38(combat38::mpSoloTest) == 0; // ON (the default) is choice 0
-                                if (mpOn && !mpSession->started()) {
-                                    spidy::mp::SessionConfig cfg;
-                                    // LAN (a buddy on another PC) only when %APPDATA%\Spidy\MP-LAN-ON.txt exists.
-                                    const auto ini = tabOnlyPath();
-                                    if (!ini.empty()) {
-                                        const auto lanFile = ini.substr(0, ini.find_last_of(L'\\')) + L"\\MP-LAN-ON.txt";
-                                        cfg.lan = GetFileAttributesW(lanFile.c_str()) != INVALID_FILE_ATTRIBUTES;
-                                    }
-                                    mpSession->start(cfg);
-                                    consoleLine(std::string("MP SOLO TEST: on (") + (cfg.lan ? "LAN" : "localhost") + ")");
-                                } else if (!mpOn && mpSession->started()) {
-                                    mpSession->stop();
-                                    mpFollow = {};
-                                    consoleLine("MP SOLO TEST: off");
-                                }
-                                for (const auto& line : mpSession->takeLog())
-                                    consoleLine("MP SOLO TEST: " + line);
-                                const auto mpNow = std::chrono::steady_clock::now();
-                                const float mpDt = std::clamp(std::chrono::duration<float>(mpNow - mpLast).count(), 0.f, .25f);
-                                mpLast = mpNow;
-                                if (mpOn && !saved->flatScreen && validTrackedPose(rendered.headPose)) {
-                                    const Quat turn = trackingTurn(rendered.swing);
-                                    const Quat back = turn.conjugate();
-                                    const Vec3 feet = rendered.anchor + travel;
-                                    // Publish: the eyes and grips in the player's level frame from his feet.
-                                    spidy::mp::LocalPose lp;
-                                    lp.eye.position = back.rotate(rendered.headPose.position + travel - feet);
-                                    lp.eye.orientation = back * rendered.headPose.orientation;
-                                    for (unsigned i = 0; i < 2; ++i) {
-                                        lp.hand[i] = rendered.swing.hands[i].tracked && validTrackedPose(rendered.grips[i]);
-                                        lp.grip[i].position = back.rotate(rendered.grips[i].position + travel - feet);
-                                        lp.grip[i].orientation = back * rendered.grips[i].orientation;
-                                        const auto& sh = rendered.swing.hands[i];
-                                        const float c = std::max({sh.trigger, sh.grip, sh.wallGrip});
-                                        lp.curl[i] = std::isfinite(c) ? std::clamp(c, 0.f, 1.f) : 0.f;
-                                    }
-                                    lp.standingEye = suitStanding > .8f ? suitStanding : 1.65f;
-                                    lp.worldFeet = feet;
-                                    const uint8_t suitId = spidy::mp::suitIdOfSlot(wornSuitSlot.load());
-                                    const uint8_t hero = static_cast<uint8_t>(std::min<uint32_t>(heroNow(), 31));
-                                    mpSession->publish(spidy::mp::fromLocal(lp, hero, suitId, spidy::mp::suitHashOf(suitId),
-                                                                           static_cast<uint8_t>(mpActionsNow.load(std::memory_order_relaxed))));
-                                    // Draw what came back.
-                                    const spidy::mp::SessionView v = mpSession->view();
-                                    const Vec3 lookLocal = back.rotate(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
-                                    mpFollow.update(spidy::mp::yawOf(lookLocal), mpDt);
-                                    if (v.visible && v.alpha > .01f) {
-                                        // The loopback is the player mirrored like a partner; the buddy walks its own root.
-                                        const spidy::mp::Ghost g = spidy::mp::partner(v.state, mpFollow.spot(Vec3{}), mpFollow.ghostYaw(),
-                                                                                      !v.buddy, v.buddy);
-                                        suit_wear::Tracked gt = spidy::mp::toTracked(g, feet, turn);
-                                        bool drawnSuit = false;
-                                        const uint32_t gs = spidy::mp::slotOfState(v.state);
-                                        if (gs && suitsRigged.load() && overlay.modelReady()) {
-                                            const mesh_model::Mesh* gm = mesh_model::library().model(gs);
-                                            const suit_wear::Rig& gr = suitRigs[gs - mesh_model::slotSuitFirst];
-                                            suit_wear::Skeleton gl;
-                                            suit_wear::BoneMove gmv[suit_wear::bones];
-                                            if (gm && gr.ok && suit_wear::estimate(gr, gt, gl) && suit_wear::moves(gr, gl, gmv) &&
-                                                suit_wear::skin(gr, gmv, mpSkinned)) {
-                                                if (gr.hasCape)
-                                                    suit_wear::cape(gr, gmv, gl, (v.state.actions & spidy::mp::flying) ? 1.f : 0.f, mpSkinned);
-                                                drawnSuit = suit_wear::draw(modelVertices, hero007::modelSinkBudget, *gm, gr, mpSkinned,
-                                                                            suit_wear::allBones);
-                                            }
-                                        }
-                                        if (!drawnSuit) // no suit model for it (the hero's own look, or not installed)
-                                            spidy::mp::appendFigure(translucent, gt, viewer, spidy::mp::heroColor(v.state.hero), v.alpha);
-                                        const float tall = std::clamp(gt.standingEye > .8f ? gt.standingEye : 1.65f, 1.f, 2.4f);
-                                        spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs),
-                                                                   gt.feet + gt.up * (tall + .35f), gt.up, viewer, v.alpha);
-                                    }
-                                } else if (mpSession->started()) {
-                                    mpSession->clearLocal();
-                                }
-                            } catch (...) {
-                                if (!mpFailedOnce)
-                                    consoleLine("MP SOLO TEST: the remote player failed to draw - hidden");
-                                mpFailedOnce = true;
                             }
                         }
                         if (!saved->flatScreen && mirrorOn.load() && validTrackedPose(rendered.headPose)) {
@@ -13229,12 +13116,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { retur
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerSmooth(void* v) { return setHero007(v, combat38::streamerSmooth, 5451); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerEye(void* v) { return setHero007(v, combat38::streamerEye, 5452); }
 // 0.0.73 test 5: IRON MAN HERO HANDS, DAREDEVIL GRAPPLE AIM, WOLVERINE CLAW LOOK - ON (0) or OFF (1), live (live.txt
-// iron_hands, dd_grapple_aim, wolverine_claws). 5461: the MP solo test's.
+// iron_hands, dd_grapple_aim, wolverine_claws). 5461: unused (the test builds' MP solo test, not in the release).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyIronHands(void* v) { return setHero007(v, combat38::ironHands, 5462); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdGrappleAim(void* v) { return setHero007(v, combat38::ddGrappleAim, 5463); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWolverineClaws(void* v) { return setHero007(v, combat38::wolverineClaws, 5464); }
-// 0.0.73 MP SOLO TEST: ON (0, the default) or OFF (1) (live.txt mp_solo_test; mp_session.hpp). 0.0.73 test 6: 5461 (5449 is IMAGE's).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpSoloTest(void* v) { return setHero007(v, combat38::mpSoloTest, 5461); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

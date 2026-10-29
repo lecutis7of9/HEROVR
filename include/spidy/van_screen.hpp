@@ -31,7 +31,7 @@ namespace spidy::van_screen {
 inline constexpr const char* help = "Shows a Punisher dash screen in the van - X or a poke pages it, no restart.";
 
 // 0.0.74 test 1: + MUSIC (the vehicle music player: previous, play / pause, next, volume, the song) and HOME
-// (GO TO SAFEHOUSE, GO TO BATCAVE, SIT / STAND). Their buttons act on a poke or a ray + trigger (Screen::action);
+// (the van: GO TO SAFEHOUSE, SIT / STAND; the Batmobile: GO TO BATCAVE, SIT / STAND, BATMOBILE picker). Their buttons act on a poke or a ray + trigger (Screen::action);
 // a tap off a button does nothing there.
 enum Page : uint32_t { map, status, cases, locker, music, home };
 inline constexpr uint32_t pages = 6;
@@ -39,14 +39,27 @@ inline constexpr const char* pageNames[pages] = {"MAP", "STATUS", "CASES", "LOCK
 // The tab row's k-th tab's centre (x, design units; the skull's corner left of the first).
 inline constexpr float tabLeft = .034f;
 // 0.0.74 test 1: what a button asks for (the caller does it; the screen only says).
-enum class Action : uint8_t { none, musicPrevious, musicToggle, musicNext, volumeDown, volumeUp, goSafehouse, goBatcave, sit, stand };
+enum class Action : uint8_t { none, musicPrevious, musicToggle, musicNext, volumeDown, volumeUp, goSafehouse, goBatcave, sit, stand,
+                              nextBatmobile };
+// 0.0.74 test 1 BATMOBILE: the dash picker's label for each car (batmobile074's order).
+inline constexpr uint32_t batmobileCars = 4;
+inline constexpr const char* batmobileLabels[batmobileCars] = {"BATMOBILE: 1989", "BATMOBILE: ODAMI", "BATMOBILE: FOREVER",
+                                                               "BATMOBILE: FOREVER 2"};
 // Which of the 0.0.74 buttons are there (their wrist options): hidden ones neither draw nor act.
 struct Offer {
     bool music = true;     // MUSIC PLAYER not OFF
     bool hideouts = true;  // HIDEOUTS ON
     bool seat = true;      // SEATED DRIVING not OFF
     bool sat = false;      // seated now: the seat button reads STAND
+    // 0.0.74 test 1 BATMOBILE: the Batman holo screen (MAP, STATUS, MUSIC, HOME; no case files or locker).
+    // HOME: the van has GO TO SAFEHOUSE, the Batmobile GO TO BATCAVE and the BATMOBILE picker.
+    bool batman = false;
+    uint8_t car = 0;       // the picker's choice (batmobileLabels; applies on the next summon)
 };
+// Whether a page is shown for this offer (the Batmobile hides CASES and LOCKER), and the shown pages in
+// tab order into `out` (returns how many, at least 1).
+bool pageShown(uint32_t page, const Offer& offer);
+uint32_t shownPages(const Offer& offer, uint32_t out[pages]);
 struct Button {
     Action action{};
     float x0{}, y0{}, x1{}, y1{}; // design units on the face
@@ -93,8 +106,11 @@ struct Mount {
     Vec3 centre, right, up, normal;
 };
 Mount mountLocal();
+// 0.0.74 test 1 BATMOBILE: the same, mounted at `at` (vehicle-local; flush, square) at `scale` metres a unit.
+Mount mountLocal(Vec3 at);
 // Where a van-local point lies on the face, in design units (metres / faceScale): x right, y up, z out of it.
 Vec3 onFace(Vec3 local);
+Vec3 onFace(Vec3 local, Vec3 at, float scale);
 
 // One frame's input, van-local hands (van072::Frame::local).
 struct In {
@@ -110,10 +126,15 @@ struct In {
     float trigger[2]{};
     bool ray{true}; // false: touch pokes and X only (the 0.0.73 test 3 first cut)
     Offer offer{};  // 0.0.74: the MUSIC / HOME buttons there
+    // 0.0.74 test 1 BATMOBILE: where the face is (vehicle-local) and its metres a design unit (the van's
+    // by default).
+    Vec3 at{mountAt};
+    float scale{faceScale};
 };
 // Where hand `from`'s ray along `dir` (van-local) meets the face, in design units (x, y; z 0), when it does
 // within the face (+ raySlack) and rayReach, from in front, not grazing. False otherwise (or non-finite).
 bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit);
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale);
 
 class Screen {
 public:
@@ -141,6 +162,8 @@ private:
     uint32_t page_{}, file_{};
     Action action_{};
     Offer offer_{};
+    Vec3 at_{mountAt};
+    float scale_{faceScale};
     float flash_{};
     bool near_[2]{}, hover_{};
     bool aimed_[2]{}, trigWas_[2]{};
@@ -169,9 +192,12 @@ struct View {
     float musicElapsed{}, musicTotal{};
     std::string musicSong, musicNote;
     const char* homeNote{};   // a line under the HOME buttons (the last hideout's fault, say)
+    const char* carName{};    // 0.0.74 test 1 BATMOBILE: the car driven (the header), nullptr: none
 };
 // The view for a van at `frame` (world).
 View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving);
+// 0.0.74 test 1 BATMOBILE: mounted at `at` (vehicle-local) at `scale`.
+View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving, Vec3 at, float scale);
 // Compass heading of a frame (radians, 0..2pi, clockwise from -z).
 float headingOf(const van072::Frame& frame);
 

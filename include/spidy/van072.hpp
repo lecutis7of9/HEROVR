@@ -35,7 +35,21 @@ namespace spidy::van072 {
 
 inline constexpr const char* settingHelp = "EXPERIMENTAL, OFF by default: Punisher taps X to drive the van, no restart.";
 
+// The van's frame: x right, y up, -z forward, origin on the ground under the axles' middle.
+// The left-hand-drive cab (a US van): the driver sits left.
+// Version 0.0.72: MEASURED on the shipped model (the door's own handle; the built cab's door card, seat, wheel).
+inline constexpr Vec3 doorHandleOut{-.98f, 1.18f, -.66f}, doorHandleIn{-.855f, 1.08f, -.83f};
+inline constexpr Vec3 seatEye{-.45f, 1.60f, -.55f}, wheelHub{-.45f, 1.18f, -1.08f};
+// The wheel faces the driver tilted back 25 degrees: its axis (towards the driver).
+inline Vec3 wheelAxis() { return normalized(Vec3{0, .42f, .91f}); }
+inline constexpr Vec3 exitStep{-1.75f, 0.f, -.55f}; // on the street, 0.75 m out from the driver's side
+
 struct Tune {
+    // 0.0.74 test 1 BATMOBILE: the vehicle's own layout in its frame (the van's numbers by default; the
+    // Batmobiles' come from their converter, tools/batmobile074). The van's constants above stay its own.
+    Vec3 handleOut = doorHandleOut, handleIn = doorHandleIn, eye = seatEye, hub = wheelHub;
+    Vec3 axis{0, .42f, .91f}; // the wheel's axis toward the driver (normalized on use)
+    Vec3 exit = exitStep;
     // Version 0.0.72: MEASURED on the shipped Vandura (4.85 x 2.0 x 1.95 m, 2.96 m between the axles).
     float length = 4.85f, width = 2.0f, height = 1.95f; // the van's box (metres)
     float wheelBase = 2.96f;
@@ -56,16 +70,14 @@ struct Tune {
     float groundStep = .6f;        // the ground under the van within this of the player's feet
 };
 
-// The van's frame: x right, y up, -z forward, origin on the ground under the axles' middle.
-// The left-hand-drive cab (a US van): the driver sits left.
-// Version 0.0.72: MEASURED on the shipped model (the door's own handle; the built cab's door card, seat, wheel).
-inline constexpr Vec3 doorHandleOut{-.98f, 1.18f, -.66f}, doorHandleIn{-.855f, 1.08f, -.83f};
-inline constexpr Vec3 seatEye{-.45f, 1.60f, -.55f}, wheelHub{-.45f, 1.18f, -1.08f};
-// The wheel faces the driver tilted back 25 degrees: its axis (towards the driver).
-inline Vec3 wheelAxis() { return normalized(Vec3{0, .42f, .91f}); }
 
 inline bool fine(Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); }
 inline bool fine(float f) { return std::isfinite(f); }
+// 0.0.74 test 1: the tune's wheel axis, unit (the van's when it is not a usable direction).
+inline Vec3 axisOf(const Tune& t) {
+    const float n = length(t.axis);
+    return fine(t.axis) && std::isfinite(n) && n > .5f ? t.axis * (1 / n) : wheelAxis();
+}
 
 struct Frame { // the van in the world
     Vec3 at{};
@@ -254,8 +266,8 @@ struct Wheel {
     bool gripWas[2]{};
     // Angle of a point round the hub in the wheel's plane (as the driver sees it); false: off the rim.
     static bool onRim(Vec3 localHand, float& a, float& off, const Tune& t) {
-        const Vec3 axis = wheelAxis();
-        const Vec3 d = localHand - wheelHub;
+        const Vec3 axis = axisOf(t);
+        const Vec3 d = localHand - t.hub;
         const float out = dot(d, axis);
         const Vec3 inPlane = d - axis * out;
         const Vec3 up = normalized(Vec3{0, 1, 0} - axis * axis.y), rightV{1, 0, 0};
@@ -437,13 +449,13 @@ struct Van {
             gripWas[i] = g;
             if (!pressed || state == none || !fine(in.hands[i]))
                 continue;
-            if (state == parked && length(in.hands[i] - frame.world(doorHandleOut)) <= t.handleReach) {
+            if (state == parked && length(in.hands[i] - frame.world(t.handleOut)) <= t.handleReach) {
                 state = driving;
                 wheel = {};
                 ++entries;
                 o.entered = true;
                 o.haptic[i] = .5f;
-            } else if (state == driving && length(in.hands[i] - frame.world(doorHandleIn)) <= t.handleReach &&
+            } else if (state == driving && length(in.hands[i] - frame.world(t.handleIn)) <= t.handleReach &&
                        std::abs(speed) <= t.exitSpeed) {
                 park();
                 ++exits;
@@ -495,7 +507,7 @@ struct Van {
             frame.at.y = g; // follow the street (a drop or a wall's top: keep the height)
         o.velocity = frame.forward() * speed;
         o.seat = true;
-        o.seatAt = frame.world(seatEye);
+        o.seatAt = frame.world(t.eye);
         if (!fine(o.seatAt) || !fine(frame.yaw)) {
             state = none;
             o = {};
@@ -523,7 +535,7 @@ struct Van {
                 h = kept.forward();
             h = normalized(h);
             Frame k{{}, std::atan2(-h.x, -h.z)};
-            const Vec3 off = k.world(seatEye); // the seat from an origin at 0
+            const Vec3 off = k.world(t.eye); // the seat from an origin at 0
             k.at = in.head - off;
             if (fine(k.at) && fine(k.yaw))
                 frame = k;
@@ -551,7 +563,6 @@ struct Van {
 // walked out beside the driver door (exitStep) over at most alightSeconds. Fail-safe: a bridge that does
 // not carry (refusedFrames), a bad pose or a NaN parks the van where it is (the preview's parked van), the
 // player standing - never a crash, never the flatscreen.
-inline constexpr Vec3 exitStep{-1.75f, 0.f, -.55f}; // on the street, 0.75 m out from the driver's side
 struct CarryTune {
     float bodyMost = 18.f;        // m/s: a carry asked faster than this is a fault (topSpeed 16 + the swing)
     float stuckRatio = .35f;      // the body under this share of the van's speed ...
@@ -640,12 +651,12 @@ struct Driver {
             if (o.exited) {
                 van.frame = before; // parked where it is
                 carried = false;
-                alightTo = before.world(exitStep);
+                alightTo = before.world(t.exit);
                 alightLeft = ct.alightSeconds;
                 ++alights;
                 boarded = false;
             } else if (van.state == driving) {
-                Vec3 v = dt > 0 ? (van.frame.world(seatEye) - before.world(seatEye)) * (1 / dt) : Vec3{};
+                Vec3 v = dt > 0 ? (van.frame.world(t.eye) - before.world(t.eye)) * (1 / dt) : Vec3{};
                 v.y = 0;
                 float turn = van.frame.yaw - before.yaw;
                 if (fine(turn)) // the yaw's wrap at +-pi is no turn
@@ -710,7 +721,7 @@ struct Driver {
             if (van.state == driving && !carried)
                 co.lockStick = true; // the preview's wheel: no turning away from it
             if (o.exited && boarded) { // carried in, not driven (the carry gave up): walked out beside the door
-                alightTo = van.frame.world(exitStep);
+                alightTo = van.frame.world(t.exit);
                 alightLeft = ct.alightSeconds;
                 ++alights;
                 boarded = false;
@@ -719,7 +730,7 @@ struct Driver {
                 boarding = false;
             if (boarding) {
                 boardTime += dt;
-                Vec3 d = van.frame.world(seatEye) - in.head;
+                Vec3 d = van.frame.world(t.eye) - in.head;
                 d.y = 0;
                 const float n = fine(d) ? length(d) : 0.f;
                 const bool canCarry = ci.ready && poseOk && fine(in.head);
@@ -791,8 +802,8 @@ struct Driver {
 
 // Version 0.0.72: the steering wheel's model axes in the van's frame, turned `angle` (+ clockwise as the
 // driver sees it): `up` the model's +y (12 o'clock), `toward` its +z (to the driver).
-inline void wheelAxes(float angle, Vec3& up, Vec3& toward) {
-    const Vec3 a = wheelAxis();
+inline void wheelAxes(float angle, Vec3& up, Vec3& toward, const Tune& t = {}) {
+    const Vec3 a = axisOf(t);
     const Vec3 up0 = normalized(Vec3{0, 1, 0} - a * a.y), right{1, 0, 0};
     const float c = fine(angle) ? std::cos(angle) : 1.f, s = fine(angle) ? std::sin(angle) : 0.f;
     up = up0 * c + right * s;

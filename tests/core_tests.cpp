@@ -44,6 +44,7 @@
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
 #include "spidy/hideout074.hpp"
+#include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
 #include "spidy/roster_page.hpp"
 #include "spidy/hero_controls.hpp"
@@ -18888,7 +18889,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 148, "one hundred and forty-eight options (0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 150, "one hundred and fifty options (0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18922,7 +18923,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 148, "0.0.74 test 1 has 148 COMBAT options (+ HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 150, "0.0.74 test 1 has 150 COMBAT options (+ BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19425,7 +19426,9 @@ int main() {
     });
     test("Update 38: the COMBAT rows are on their pages, each answering, live, with its own subtext", [] {
         using namespace wrist_hud;
-        for (uint32_t o = 0; o < combat38::options; ++o) {
+        check(combatOption(Control::colorCartoon) == -1 && combatOption(Control::combatSeatedDriving) == combat38::seatedDriving,
+              "0.0.74 test 1: the rows end at SEATED DRIVING (BATMOBILE is off the wrist)");
+        for (uint32_t o = 0; o < static_cast<uint32_t>(combatRows); ++o) {
             const auto c = static_cast<Control>(static_cast<int>(Control::combatCrawlCap) + static_cast<int>(o));
             check(combatOption(c) == static_cast<int>(o), "a COMBAT row's option drifted");
             // Update 39.0.2: each on its one page (COMBAT, POWERS, VR SETTINGS or GRAPHICS), in its section.
@@ -25845,7 +25848,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 4 && mm::slotHideoutSafehouse == mm::slots - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -31457,11 +31460,12 @@ int main() {
         check(vs::buttons(vs::music, noMusic, b) == 0, "CAR MUSIC OFF: no music buttons");
         // HOME
         vs::Offer all;
-        check(vs::buttons(vs::home, all, b) == 3 && b[0].action == vs::Action::goSafehouse && b[1].action == vs::Action::goBatcave &&
-                  b[2].action == vs::Action::sit,
-              "HOME: safehouse, Batcave, SIT");
+        // 0.0.74 test 1 BATMOBILE: the van keeps the safehouse only; the Batcave moved to the Batmobile's dash
+        check(vs::buttons(vs::home, all, b) == 2 && b[0].action == vs::Action::goSafehouse && b[1].action == vs::Action::sit,
+              "HOME: safehouse, SIT");
         all.sat = true;
-        check(vs::buttons(vs::home, all, b) == 3 && b[2].action == vs::Action::stand && std::string(b[2].label) == "STAND", "sat: STAND");
+        check(vs::buttons(vs::home, all, b) == 2 && b[1].action == vs::Action::stand && std::string(b[1].label) == "STAND", "sat: STAND");
+        all.sat = false;
         vs::Offer none;
         none.hideouts = none.seat = false;
         check(vs::buttons(vs::home, none, b) == 0, "HIDEOUTS and SEATED DRIVING OFF: no buttons");
@@ -31474,7 +31478,7 @@ int main() {
         hideOff.hideouts = false;
         h.step(in(at(vs::tabCentre(vs::home), tabY, .01f), hideOff));
         h.step(in(away, hideOff));
-        vs::buttons(vs::home, {}, b); // where GO TO BATCAVE would be (SIT moves up to the first row)
+        vs::buttons(vs::home, {}, b); // where SIT would be (it moves up to the first row: the second row is empty)
         check(!h.step(in(at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0), hideOff)) && h.takeAction() == vs::Action::none,
               "a hidden button does not act");
         h.step(in(away, hideOff));
@@ -31486,12 +31490,12 @@ int main() {
         r.step(in(at(vs::tabCentre(vs::home), tabY, .01f)));
         r.step(in(away));
         vs::buttons(vs::home, {}, b);
-        const Vec3 target = at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0);
+        const Vec3 target = at((b[0].x0 + b[0].x1) / 2, (b[0].y0 + b[0].y1) / 2, 0);
         vs::In ray = in(from);
         ray.aim[1] = normalized(target - from);
         r.step(ray);
         ray.trigger[1] = 1;
-        check(r.step(ray) && r.takeAction() == vs::Action::goBatcave, "the ray + trigger on GO TO BATCAVE");
+        check(r.step(ray) && r.takeAction() == vs::Action::goSafehouse, "the ray + trigger on GO TO SAFEHOUSE");
         // drawn: finite on MUSIC and HOME with every offer, songs or none
         van072::Frame f;
         f.at = {120, 3, -40};
@@ -31522,6 +31526,155 @@ int main() {
                     fine &= std::isfinite(vx.position.x) && std::isfinite(vx.position.y) && std::isfinite(vx.position.z);
                 check(fine, "every vertex finite");
             }
+        }
+    });
+    test("0.0.74 test 1 BATMOBILE: four cars, their layouts and tunes, the slots, the options, the glass", [] {
+        namespace bm = batmobile074;
+        namespace mm = spidy::mesh_model;
+        check(bm::cars == 4 && std::string(bm::names[0]) == "1989" && std::string(bm::names[1]) == "ODAMI" &&
+                  std::string(bm::names[2]) == "FOREVER" && std::string(bm::names[3]) == "FOREVER 2",
+              "the owner's picks 01, 07, 09, 10");
+        check(bm::clampCar(9) == 0 && bm::nextCar(0) == 1 && bm::nextCar(3) == 0 && bm::nextCar(77) == 1, "the picker wraps; unknown is 1989");
+        for (uint32_t c = 0; c < bm::cars; ++c) {
+            const auto& L = bm::layout(c);
+            const std::string car = bm::names[c];
+            check(L.length > 5.2f && L.length < 6.6f && L.width > 1.7f && L.width < 2.8f && L.height > .9f && L.height < 3.1f,
+                  "about 6 m long, car-sized: " + car);
+            check(std::abs(L.eye.x) < L.width / 2 && L.eye.y > .5f && L.eye.y < L.height + .3f && std::abs(L.eye.z) < L.length / 2,
+                  "the eye inside the car: " + car);
+            check(L.hub.z < L.eye.z && L.screen.z < L.eye.z && std::abs(L.hub.x - L.eye.x) < .1f, "the wheel and the screen ahead of him: " + car);
+            check(L.exit.x < -L.width / 2 && std::abs(L.exit.y) < 1e-4f, "out on the driver's side, on the street: " + car);
+            check(L.handleOut.x < -.5f && L.handleIn.x < -.5f && L.handleOut.x > -L.width / 2 - .2f,
+                  "the handles on the driver's side: " + car);
+            check(L.glass == (c != 3), "glass on all but FOREVER 2 (its canopy is cut open): " + car);
+            const van072::Tune t = bm::tune(c);
+            check(t.length == L.length && t.width == L.width && length(t.eye - L.eye) < 1e-6f && length(t.hub - L.hub) < 1e-6f &&
+                      length(t.exit - L.exit) < 1e-6f && t.topSpeed == van072::Tune{}.topSpeed && t.wheelBase > 2.5f && t.wheelBase < 3.8f,
+                  "its tune: its geometry, the van's driving: " + car);
+            check(length(van072::axisOf(t)) > .99f, "a usable wheel axis: " + car);
+            check(std::string(mm::slotFolders[mm::slotBatmobileFirst + c]) == std::string("Vehicle/Batmobile/") + bm::folders[c] &&
+                      std::string(mm::slotFolders[mm::slotBatmobileGlassFirst + c]) == std::string("Vehicle/Batmobile/") + bm::folders[c] + "/Glass" &&
+                      mm::slotIsVehicle(mm::slotBatmobileFirst + c) && !mm::slotMayDecimate[mm::slotBatmobileFirst + c] &&
+                      mm::slotDrawCap[mm::slotBatmobileFirst + c] == mm::vanTriangles,
+                  "its slots: folders, never flattened, the van's cap: " + car);
+            check(std::string(bm::credits[c].licence) == "CC BY 4.0" && std::string(bm::credits[c].url).rfind("https://", 0) == 0,
+                  "credited: " + car);
+        }
+        check(std::string(mm::slotFolders[mm::slotBatmobileCockpit]) == "Vehicle/Batmobile/Cockpit" &&
+                  std::string(mm::slotFolders[mm::slotBatmobileWheel]) == "Vehicle/Batmobile/SteeringWheel" && mm::slotIsBatmobile(mm::slotBatmobileWheel) &&
+                  !mm::slotIsBatmobile(mm::slotHideoutSafehouse),
+              "the shared cockpit and wheel");
+        const auto& on = combat38::optionInfo[combat38::batmobile];
+        const auto& pick = combat38::optionInfo[combat38::batmobileChoice];
+        check(std::string(on.values[0]) == "ON" && on.count == 2 && std::string(on.help) == bm::help && std::strlen(bm::help) <= 80 &&
+                  std::string(bm::help).find("restart") != std::string::npos,
+              "BATMOBILE: ON by default, its help line says the restart");
+        check(pick.count == 4 && std::string(pick.values[0]) == "1989" && std::string(pick.help) == bm::choiceHelp &&
+                  std::strlen(bm::choiceHelp) <= 80 && std::string(bm::choiceHelp).find("no restart") != std::string::npos,
+              "BATMOBILE CHOICE: 1989 by default, its help line says no restart");
+        // the glass: blended, far to near, nothing on a fault
+        mm::Mesh g;
+        for (int k = 0; k < 3; ++k) {
+            const float z = -1.f - k;
+            g.corners.insert(g.corners.end(), {Vec3{-.5f, 1, z}, Vec3{.5f, 1, z}, Vec3{0, 1.5f, z}});
+            g.colors.push_back({.5f, .5f, .5f});
+        }
+        bm::Glass glass;
+        glass.on = true;
+        glass.mesh = &g;
+        glass.at = {10, 0, 5};
+        glass.forward = {0, 0, -1};
+        std::vector<Vertex> out;
+        const Vec3 eye{10, 1.2f, 5};
+        check(bm::appendGlass(out, glass, eye) && out.size() == 9, "every glass triangle drawn");
+        bool blended = true;
+        for (const auto& v : out)
+            blended &= std::abs(v.alpha - bm::glassAlpha) < 1e-6f && bm::glassAlpha < .5f;
+        check(blended, "see-through: blended, lightly tinted");
+        check(out[0].position.z < out[3].position.z && out[3].position.z < out[6].position.z, "far to near");
+        out.clear();
+        glass.forward = {0, 1, 0};
+        check(!bm::appendGlass(out, glass, eye) && out.empty(), "a bad forward: nothing");
+        glass.forward = {0, 0, -1};
+        glass.mesh = nullptr;
+        check(!bm::appendGlass(out, glass, eye) && out.empty(), "no glass model: nothing (never a crash)");
+    });
+    test("0.0.74 test 1 BATMOBILE DASH: the Batman screen - BATCAVE, SIT, the picker; no CASES or LOCKER", [] {
+        namespace vs = van_screen;
+        namespace bm = batmobile074;
+        vs::Offer bat;
+        bat.batman = true;
+        bat.car = 2;
+        vs::Button b[8];
+        check(vs::buttons(vs::home, bat, b) == 3 && b[0].action == vs::Action::goBatcave && b[1].action == vs::Action::sit &&
+                  b[2].action == vs::Action::nextBatmobile && std::string(b[2].label) == "BATMOBILE: FOREVER",
+              "HOME: GO TO BATCAVE, SIT, the picker naming the pick");
+        vs::Offer batNoHide = bat;
+        batNoHide.hideouts = false;
+        check(vs::buttons(vs::home, batNoHide, b) == 2 && b[0].action == vs::Action::sit && b[1].action == vs::Action::nextBatmobile,
+              "HIDEOUTS OFF: SIT and the picker (the picker always there)");
+        check(vs::buttons(vs::music, bat, b) == 5, "MUSIC as in the van");
+        uint32_t shown[vs::pages];
+        check(vs::shownPages(bat, shown) == 4 && !vs::pageShown(vs::cases, bat) && !vs::pageShown(vs::locker, bat) &&
+                  vs::pageShown(vs::home, bat) && vs::pageShown(vs::music, bat) && vs::shownPages({}, shown) == vs::pages,
+              "Batman's tabs: MAP, STATUS, MUSIC, HOME (the van keeps all six)");
+        // paging skips the hidden pages; the screen sits at the car's own place
+        const auto& L = bm::layout(0);
+        const vs::Mount m = vs::mountLocal(L.screen);
+        const auto at = [&](float x, float y, float z) { return m.centre + (m.right * x + m.up * y + m.normal * z) * bm::screenScale; };
+        const Vec3 away{-.45f, 1.0f, -.4f};
+        const auto in = [&](Vec3 hand) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = true;
+            i.hand[0] = away;
+            i.tracked[0] = true;
+            i.hand[1] = hand;
+            i.tracked[1] = true;
+            i.offer = bat;
+            i.at = L.screen;
+            i.scale = bm::screenScale;
+            return i;
+        };
+        vs::Screen s;
+        s.step(in(away));
+        bool neverHidden = true;
+        for (int k = 0; k < 12; ++k) {
+            vs::In x = in(away);
+            x.x = true;
+            s.step(x);
+            neverHidden &= vs::pageShown(s.page(), bat);
+        }
+        check(neverHidden, "X pages through the shown pages only");
+        check(!s.pick(vs::cases) && !s.pick(vs::locker) && s.pick(vs::home) && s.page() == vs::home, "CASES and LOCKER cannot be picked");
+        s.step(in(away));
+        vs::buttons(vs::home, bat, b);
+        check(s.step(in(at((b[2].x0 + b[2].x1) / 2, (b[2].y0 + b[2].y1) / 2, 0))) && s.takeAction() == vs::Action::nextBatmobile,
+              "a poke on the picker at the Batmobile's screen");
+        s.step(in(away));
+        check(s.step(in(at((b[0].x0 + b[0].x1) / 2, (b[0].y0 + b[0].y1) / 2, 0))) && s.takeAction() == vs::Action::goBatcave,
+              "a poke on GO TO BATCAVE");
+        Vec3 hit{};
+        const Vec3 from = L.eye;
+        check(vs::rayOnFace(from, normalized(L.screen - from), hit, L.screen, bm::screenScale) && length(hit) < 1e-3f,
+              "the ray finds the Batmobile's face");
+        // drawn: finite, the car's name in the header, on every shown page
+        van072::Frame f;
+        f.at = {-30, 2, 60};
+        f.yaw = -1.1f;
+        vs::Screen d;
+        for (uint32_t page : {uint32_t{vs::map}, uint32_t{vs::status}, uint32_t{vs::music}, uint32_t{vs::home}}) {
+            d.pick(page);
+            vs::View v = vs::view(f, d, 5.f, 16.f, .3f, true, L.screen, bm::screenScale);
+            v.offer = bat;
+            v.carName = bm::names[0];
+            std::vector<Vertex> out;
+            check(vs::append(out, v, f.world(L.eye)) && out.size() > 300 && out.size() % 3 == 0, std::string("drawn: ") + vs::pageNames[page]);
+            bool fine = true;
+            for (const auto& vx : out)
+                fine &= std::isfinite(vx.position.x) && std::isfinite(vx.position.y) && std::isfinite(vx.position.z);
+            check(fine, "every vertex finite");
+            check(length(v.centre - f.world(L.screen)) < 1e-3f, "at the car's screen");
         }
     });
     test("0.0.74 test 1 CAR MUSIC + SEATED DRIVING: the gate, the duck, the volume, the seat's lift, help lines", [] {

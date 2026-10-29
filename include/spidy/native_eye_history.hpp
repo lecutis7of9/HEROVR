@@ -12,6 +12,7 @@
 #include "web_visual.hpp"
 #include "test_notice.hpp"
 #include "van_screen.hpp"
+#include "batmobile074.hpp"
 #include "hideout074.hpp"
 
 #include <limits>

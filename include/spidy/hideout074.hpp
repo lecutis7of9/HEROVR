@@ -21,7 +21,7 @@
 namespace spidy::hideout074 {
 
 // The wrist option's one-sentence help (combat38 HIDEOUTS; ON is value 0, the default).
-inline constexpr const char* help = "Adds safehouse and Batcave trips to the van dash, turning on needs a restart.";
+inline constexpr const char* help = "Safehouse trips from the van dash, Batcave from the Batmobile, needs a restart.";
 
 enum class Which : uint8_t { none, safehouse, batcave };
 inline constexpr const char* names[3] = {"", "SAFEHOUSE", "BATCAVE"};

@@ -41,9 +41,29 @@ constexpr float tau = 6.28318530718f;
 bool ok(float f) { return std::isfinite(f); }
 
 // The palette (linear RGB): gunmetal, a black-green face, olive, khaki, bone, blood red, armor green.
-const Vec3 gunmetal{.030f, .031f, .027f}, faceDark{.010f, .014f, .009f}, olive{.060f, .075f, .028f},
-    khaki{.34f, .34f, .16f}, bone{.78f, .74f, .58f}, blood{.62f, .035f, .02f}, armor{.16f, .58f, .12f},
-    dim{.15f, .16f, .08f};
+// 0.0.74 test 1 BATMOBILE: the Batman holo theme swaps them (setTheme, per append; render thread's own copy):
+// black-blue trim, a deep blue face, blue fills, cyan text, ice-white, a bat-signal amber, cyan lights.
+struct Palette {
+    Vec3 gunmetal, faceDark, olive, khaki, bone, blood, armor, dim;
+};
+constexpr Palette punisherPalette{{.030f, .031f, .027f}, {.010f, .014f, .009f}, {.060f, .075f, .028f}, {.34f, .34f, .16f},
+                                  {.78f, .74f, .58f},    {.62f, .035f, .02f},   {.16f, .58f, .12f},    {.15f, .16f, .08f}};
+constexpr Palette batmanPalette{{.012f, .016f, .026f}, {.002f, .010f, .022f}, {.016f, .050f, .100f}, {.10f, .46f, .68f},
+                                {.72f, .90f, 1.00f},   {.85f, .58f, .04f},    {.06f, .72f, .95f},   {.04f, .14f, .24f}};
+thread_local Vec3 gunmetal = punisherPalette.gunmetal, faceDark = punisherPalette.faceDark, olive = punisherPalette.olive,
+                  khaki = punisherPalette.khaki, bone = punisherPalette.bone, blood = punisherPalette.blood,
+                  armor = punisherPalette.armor, dim = punisherPalette.dim;
+void setTheme(bool batman) {
+    const Palette& t = batman ? batmanPalette : punisherPalette;
+    gunmetal = t.gunmetal;
+    faceDark = t.faceDark;
+    olive = t.olive;
+    khaki = t.khaki;
+    bone = t.bone;
+    blood = t.blood;
+    armor = t.armor;
+    dim = t.dim;
+}
 
 struct Painter {
     std::vector<Vertex>& out;
@@ -155,6 +175,29 @@ void skull(Painter& p, float x, float y, float s, Vec3 col, float z) {
     for (int k = -1; k <= 1; ++k)
         p.quad(x + k * .12f * s - .012f * s, y - .38f * s, x + k * .12f * s + .012f * s, y - .25f * s, zz, faceDark);
     p.quad(x - .25f * s, y - .26f * s, x + .25f * s, y - .24f * s, zz, faceDark);
+}
+
+// 0.0.74 test 1 BATMOBILE: an original bat emblem (wings, scalloped hem, ears) in an oval, holo-lit.
+void batEmblem(Painter& p, float x, float y, float s, Vec3 col, float z) {
+    p.disc(x, y, .5f * s, z, col * .9f, .9f, 20, .58f);
+    p.disc(x, y, .44f * s, z + .0002f, faceDark, 1, 20, .56f);
+    const Vec3 c = col * 1.2f;
+    const float zz = z + .0004f;
+    // the body and head
+    p.quad(x - .05f * s, y - .13f * s, x + .05f * s, y + .10f * s, zz, c);
+    p.tri(p.P(x - .05f * s, y + .10f * s, zz), p.P(x - .035f * s, y + .17f * s, zz), p.P(x - .01f * s, y + .10f * s, zz), c, 1);
+    p.tri(p.P(x + .01f * s, y + .10f * s, zz), p.P(x + .035f * s, y + .17f * s, zz), p.P(x + .05f * s, y + .10f * s, zz), c, 1);
+    for (int sx = -1; sx <= 1; sx += 2) {
+        const float k = static_cast<float>(sx);
+        // the wing: a top edge out to the tip, the hem in three scallops back to the body
+        const Vec3 root = p.P(x + k * .05f * s, y + .06f * s, zz), tip = p.P(x + k * .40f * s, y + .02f * s, zz);
+        const Vec3 h1 = p.P(x + k * .30f * s, y - .07f * s, zz), h2 = p.P(x + k * .18f * s, y - .05f * s, zz),
+                   h3 = p.P(x + k * .10f * s, y - .12f * s, zz), low = p.P(x + k * .05f * s, y - .10f * s, zz);
+        p.tri(root, tip, h1, c, 1);
+        p.tri(root, h1, h2, c, 1);
+        p.tri(root, h2, h3, c, 1);
+        p.tri(root, h3, low, c, 1);
+    }
 }
 
 const char* compassName(float deg) {
@@ -365,7 +408,7 @@ void drawMusic(Painter& p, const View& v) {
     char line[64];
     if (!v.offer.music) {
         p.text("MUSIC PLAYER OFF", lx, top - .032f, .011f, bone);
-        p.text("TURN IT ON: WRIST MENU, PUNISHER", lx, top - .046f, .0058f, khaki);
+        p.text(v.offer.batman ? "TURN IT ON: WRIST MENU, BATMAN" : "TURN IT ON: WRIST MENU, PUNISHER", lx, top - .046f, .0058f, khaki);
         return;
     }
     const std::string song = !v.musicAvailable ? std::string("PLAYER UNAVAILABLE")
@@ -401,17 +444,18 @@ void drawMusic(Painter& p, const View& v) {
 
 void drawHome(Painter& p, const View& v) {
     const float lx = -W + .010f, top = bodyTop;
-    p.text("HOME", lx, top - .010f, .0062f, khaki);
+    p.text(v.offer.batman && v.carName ? std::string("HOME - BATMOBILE ") + v.carName : std::string("HOME"), lx, top - .010f, .0062f, khaki);
     Button b[8];
     const uint32_t n = buttons(home, v.offer, b);
     for (uint32_t k = 0; k < n; ++k)
-        drawButton(p, b[k], v.hover, b[k].action == Action::goBatcave ? Vec3{.025f, .03f, .05f} : olive);
+        drawButton(p, b[k], v.hover, b[k].action == Action::goBatcave && !v.offer.batman ? Vec3{.025f, .03f, .05f} : olive);
     if (!n)
         p.text("HIDEOUTS AND SEATED DRIVING ARE OFF", lx, top - .032f, .0060f, bone);
     if (v.homeNote)
         p.text(v.homeNote, lx, bodyBottom + .003f, .0050f, blood * 1.6f);
-    else if (v.offer.hideouts)
-        p.text("TEST: THE BATCAVE OPENS FROM THE VAN UNTIL THE BATMOBILE IS IN", lx, bodyBottom + .003f, .0042f, dim * 1.8f);
+    else if (v.offer.batman && v.carName && v.offer.car < batmobileCars &&
+             std::string_view(batmobileLabels[v.offer.car]).substr(11) != std::string_view(v.carName))
+        p.text("THE PICKED BATMOBILE COMES ON THE NEXT SUMMON (X)", lx, bodyBottom + .003f, .0046f, dim * 2.4f);
 }
 } // namespace
 
@@ -429,21 +473,37 @@ uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
     } else if (page == home) {
         const float x0 = -W + .010f, x1 = W - .010f, h = .026f, gap = .005f;
         float y = bodyTop - .016f;
+        // 0.0.74 test 1 BATMOBILE: the van goes to the safehouse, the Batmobile to the Batcave (moved from the van).
         if (offer.hideouts) {
-            out[n++] = Button{Action::goSafehouse, x0, y - h, x1, y, "GO TO SAFEHOUSE"};
-            y -= h + gap;
-            out[n++] = Button{Action::goBatcave, x0, y - h, x1, y, "GO TO BATCAVE (TEST)"};
+            out[n++] = offer.batman ? Button{Action::goBatcave, x0, y - h, x1, y, "GO TO BATCAVE"}
+                                    : Button{Action::goSafehouse, x0, y - h, x1, y, "GO TO SAFEHOUSE"};
             y -= h + gap;
         }
-        if (offer.seat)
+        if (offer.seat) {
             out[n++] = Button{offer.sat ? Action::stand : Action::sit, x0, y - h, x1, y, offer.sat ? "STAND" : "SIT (SEATED DRIVING)"};
+            y -= h + gap;
+        }
+        if (offer.batman)
+            out[n++] = Button{Action::nextBatmobile, x0, y - h, x1, y, batmobileLabels[offer.car < batmobileCars ? offer.car : 0]};
     }
     return n;
 }
 
-Mount mountLocal() {
+bool pageShown(uint32_t page, const Offer& offer) { return page < pages && (!offer.batman || (page != cases && page != locker)); }
+
+uint32_t shownPages(const Offer& offer, uint32_t out[pages]) {
+    uint32_t n = 0;
+    for (uint32_t k = 0; k < pages; ++k)
+        if (pageShown(k, offer))
+            out[n++] = k;
+    return n;
+}
+
+Mount mountLocal() { return mountLocal(mountAt); }
+
+Mount mountLocal(Vec3 at) {
     Mount m;
-    m.centre = mountAt;
+    m.centre = at;
     // Flush in the dash: square to the van, whatever the seat (no turn toward the eye).
     m.right = {1, 0, 0};
     m.up = {0, 1, 0};
@@ -451,10 +511,13 @@ Mount mountLocal() {
     return m;
 }
 
-Vec3 onFace(Vec3 local) {
-    const Mount m = mountLocal();
+Vec3 onFace(Vec3 local) { return onFace(local, mountAt, faceScale); }
+
+Vec3 onFace(Vec3 local, Vec3 at, float scale) {
+    const Mount m = mountLocal(at);
     const Vec3 d = local - m.centre;
-    return Vec3{dot(d, m.right), dot(d, m.up), dot(d, m.normal)} * (1 / faceScale);
+    const float k = ok(scale) && scale >= .5f && scale <= 2.f ? scale : faceScale;
+    return Vec3{dot(d, m.right), dot(d, m.up), dot(d, m.normal)} * (1 / k);
 }
 
 void Screen::reset() {
@@ -466,10 +529,12 @@ void Screen::reset() {
 }
 
 bool Screen::next() {
-    if (page_ == cases && file_ + 1 < files)
+    if (page_ == cases && file_ + 1 < files && pageShown(cases, offer_))
         ++file_;
     else {
-        page_ = (page_ + 1) % pages;
+        do
+            page_ = (page_ + 1) % pages;
+        while (!pageShown(page_, offer_));
         file_ = 0;
     }
     flash_ = 1;
@@ -485,7 +550,7 @@ bool Screen::previousFile() {
 }
 
 bool Screen::pick(uint32_t page) {
-    if (page >= pages || page == page_)
+    if (!pageShown(page, offer_) || page == page_)
         return false;
     page_ = page;
     file_ = 0;
@@ -497,7 +562,9 @@ bool Screen::pokeAt(Vec3 f) {
     if (f.y >= H - tabHeight) {
         const float tx0 = -W + tabLeft; // the skull's corner picks the first tab
         const float share = std::clamp((f.x - tx0) / (W - tx0), 0.f, .999f);
-        return pick(static_cast<uint32_t>(share * pages));
+        uint32_t shown[pages];
+        const uint32_t n = shownPages(offer_, shown);
+        return pick(shown[std::min(n - 1, static_cast<uint32_t>(share * static_cast<float>(n)))]);
     }
     if (page_ == music || page_ == home) { // 0.0.74: the buttons, nothing between them
         Button b[8];
@@ -515,21 +582,25 @@ bool Screen::pokeAt(Vec3 f) {
     return next();
 }
 
-bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit) {
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit) { return rayOnFace(from, dir, hit, mountAt, faceScale); }
+
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale) {
     hit = {};
+    if (!van072::fine(at) || !ok(scale) || scale < .5f || scale > 2.f)
+        return false;
     if (!van072::fine(from) || !van072::fine(dir))
         return false;
     const float n = length(dir);
     if (!ok(n) || n < .5f)
         return false;
-    const Mount m = mountLocal();
+    const Mount m = mountLocal(at);
     const Vec3 d = dir * (1 / n);
-    const Vec3 f0 = onFace(from);
+    const Vec3 f0 = onFace(from, at, scale);
     const Vec3 df{dot(d, m.right), dot(d, m.up), dot(d, m.normal)}; // unit, the face's axes
     if (!van072::fine(f0) || !van072::fine(df) || f0.z <= 0 || df.z > -rayFacing)
         return false; // behind the face, or pointing away / along it
     const float t = -f0.z / df.z; // design units along the ray
-    if (!ok(t) || t * faceScale > rayReach)
+    if (!ok(t) || t * scale > rayReach)
         return false;
     const Vec3 h = f0 + df * t;
     if (!van072::fine(h) || std::abs(h.x) > W + raySlack || std::abs(h.y) > H + raySlack)
@@ -543,6 +614,14 @@ bool Screen::step(const In& in) {
         flash_ = std::max(0.f, flash_ - in.dt * 4.f);
     hover_ = false;
     offer_ = in.offer;
+    if (van072::fine(in.at) && ok(in.scale) && in.scale >= .5f && in.scale <= 2.f) {
+        at_ = in.at;
+        scale_ = in.scale;
+    }
+    if (!pageShown(page_, offer_)) { // the Batmobile's screen has no CASES / LOCKER
+        page_ = map;
+        file_ = 0;
+    }
     bool changed = false;
     if (!in.driving) {
         near_[0] = near_[1] = false;
@@ -563,7 +642,7 @@ bool Screen::step(const In& in) {
             near_[i] = false;
             continue;
         }
-        const Vec3 f = onFace(in.hand[i]);
+        const Vec3 f = onFace(in.hand[i], at_, scale_);
         // In the face's box, from just in front to a little through it (a poke goes in).
         const bool near = van072::fine(f) && f.z <= pokeDepth && f.z >= -pokeThrough && std::abs(f.x) <= W + pokeSlack &&
                           std::abs(f.y) <= H + pokeSlack;
@@ -575,7 +654,7 @@ bool Screen::step(const In& in) {
         near_[i] = near; // a hand already in (or gripping in) must come out first
         // RAY POKE: the free hand pointed at the face (not already touching it); a fresh trigger pages it there.
         Vec3 hit{};
-        if (in.ray && !near && !in.onWheel[i] && rayOnFace(in.hand[i], in.aim[i], hit)) {
+        if (in.ray && !near && !in.onWheel[i] && rayOnFace(in.hand[i], in.aim[i], hit, at_, scale_)) {
             aimed_[i] = true;
             hover_ = true;
             if (fresh)
@@ -594,14 +673,18 @@ float headingOf(const van072::Frame& frame) {
 }
 
 View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving) {
+    return view(frame, s, speed, topSpeed, rpm, driving, mountAt, faceScale);
+}
+
+View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving, Vec3 at, float scale) {
     View v;
-    if (!van072::fine(frame.at) || !ok(frame.yaw))
+    if (!van072::fine(frame.at) || !ok(frame.yaw) || !van072::fine(at) || !ok(scale) || scale < .5f || scale > 2.f)
         return v;
-    const Mount m = mountLocal();
+    const Mount m = mountLocal(at);
     v.centre = frame.world(m.centre);
     v.right = van072::worldDir(frame, m.right);
     v.up = van072::worldDir(frame, m.up);
-    v.scale = faceScale;
+    v.scale = scale;
     v.page = s.page();
     v.file = s.file();
     v.speed = ok(speed) ? speed : 0.f;
@@ -630,6 +713,7 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
         return false;
     const size_t from = out.size();
     try {
+        setTheme(v.offer.batman);
         Painter p{out, v.centre, r * v.scale, u * v.scale, n * v.scale, v.driving ? 1.f : .7f};
         const float b = .010f; // the bezel
         // built into the dash: a flat trim plate flush on the fascia round the bezel (no bracket, no tilt)
@@ -646,12 +730,21 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
             p.quad(-W, y, W, y + .0008f, -.0035f, olive, .35f);
         // the tab row with the skull
         const float ty = H - tabHeight;
-        p.quad(-W, ty, W, H, .0005f, {.02f, .022f, .013f});
-        skull(p, -W + .016f, ty + tabHeight * .52f, .030f, bone, .001f);
-        const float tx0 = -W + .034f, tw = (2 * W - .034f) / pages;
-        for (uint32_t k = 0; k < pages; ++k) {
-            const float x0 = tx0 + k * tw, x1 = x0 + tw - .002f;
+        p.quad(-W, ty, W, H, .0005f, v.offer.batman ? Vec3{.004f, .014f, .03f} : Vec3{.02f, .022f, .013f});
+        if (v.offer.batman)
+            batEmblem(p, -W + .017f, ty + tabHeight * .5f, .030f, blood, .001f);
+        else
+            skull(p, -W + .016f, ty + tabHeight * .52f, .030f, bone, .001f);
+        uint32_t shown[pages];
+        const uint32_t tabs = shownPages(v.offer, shown);
+        uint32_t at = 0;
+        const float tx0 = -W + .034f, tw = (2 * W - .034f) / static_cast<float>(tabs);
+        for (uint32_t j = 0; j < tabs; ++j) {
+            const uint32_t k = shown[j];
+            const float x0 = tx0 + j * tw, x1 = x0 + tw - .002f;
             const bool on = k == v.page;
+            if (on)
+                at = j;
             p.quad(x0, ty + .003f, x1, H - .003f, .0008f, on ? blood : olive);
             if (on)
                 p.quad(x0, ty + .003f, x1, ty + .0045f, .0011f, bone);
@@ -675,11 +768,11 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
         default: drawLocker(p, v); break;
         }
         // the footer
-        p.quad(-W, -H, W, -H + .012f, .0005f, {.02f, .022f, .013f});
+        p.quad(-W, -H, W, -H + .012f, .0005f, v.offer.batman ? Vec3{.004f, .014f, .03f} : Vec3{.02f, .022f, .013f});
         p.text(v.page == cases ? "X: NEXT  TAP LEFT: BACK" : v.page == music || v.page == home ? "TAP A BUTTON  X: NEXT PAGE" : "X OR TAP: NEXT PAGE",
                -W + .006f, -H + .0035f, .0050f, khaki);
         char line[16];
-        std::snprintf(line, sizeof line, "%u/%u", v.page + 1, static_cast<uint32_t>(pages));
+        std::snprintf(line, sizeof line, "%u/%u", at + 1, tabs);
         p.textRight(line, W - .006f, -H + .0035f, .0050f, khaki);
         if (v.hover)
             p.frame(-W, -H, W, H, .0012f, .003f, bone, .6f);

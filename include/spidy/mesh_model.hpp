@@ -61,7 +61,8 @@ inline constexpr uint32_t liteTriangles = 2400;
 // 512 px layers - about 1.4 MB each with mips - so the roster adds about 8 MB).
 // Build 9 SUITS: 112 (the 23 suits take at most 3 layers each, 69 at most; the game's 512 px layers: about 160 MB).
 // 0.0.74 test 1 HIDEOUTS: 160 (the Batcave's 35 images and the safehouse's; loaded only when HIDEOUTS is ON).
-inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 160;
+// 0.0.74 test 1 BATMOBILE: 192 (the four cars, the cockpit and the wheel bring 17 images; ON only).
+inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 192;
 inline constexpr size_t mostImageBytes = 48u << 20;
 
 struct Mesh {
@@ -168,6 +169,13 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // Version 0.0.74 test 1 HIDEOUTS: Models\Hideout\Batcave|Safehouse (tools/hideout074/make_hideout.py: the
                        // room in glTF space, its room.txt beside it). Loaded only when HIDEOUTS is ON (game_xr).
                        slotHideoutBatcave, slotHideoutSafehouse,
+                       // 0.0.74 test 1 BATMOBILE (batmobile074.hpp; owner picks 01 / 07 / 09 / 10): Models\Vehicle\Batmobile:
+                       // <car> the body (the van's frame: metres, -z forward, x right, the ground at y 0), <car>\Glass its
+                       // windscreen and side glass (drawn see-through, tinted), Cockpit the shared cockpit (its own frame: the
+                       // floor's middle at the origin; placed per car), SteeringWheel (the van wheel's convention). Loaded
+                       // only when BATMOBILE is ON (game_xr). Missing: no Batmobile (the van's X stays the Punisher's).
+                       slotBatmobileFirst, slotBatmobileGlassFirst = slotBatmobileFirst + 4, slotBatmobileCockpit = slotBatmobileGlassFirst + 4,
+                       slotBatmobileWheel,
                        slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
@@ -180,21 +188,30 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Suits/Suit_daredevil_3", "Suits/Suit_hulk_2", "Suits/Suit_wolverine_1", "Suits/Suit_wolverine_3",
                                                    "Suits/Suit_wolverine_4", "Suits/Suit_punisher_1", "Suits/Suit_punisher_2", "Suits/Suit_thor_1",
                                                    "Suits/Suit_thor_2", "Suits/Suit_greenLantern_2", "Suits/Suit_greenLantern_3", "Suits/Suit_superman_4",
-                                                   "Claws/Left", "Claws/Right", "Hideout/Batcave", "Hideout/Safehouse"};
+                                                   "Claws/Left", "Claws/Right", "Hideout/Batcave", "Hideout/Safehouse",
+                                                   "Vehicle/Batmobile/1989", "Vehicle/Batmobile/ODAMI", "Vehicle/Batmobile/FOREVER",
+                                                   "Vehicle/Batmobile/FOREVER2", "Vehicle/Batmobile/1989/Glass", "Vehicle/Batmobile/ODAMI/Glass",
+                                                   "Vehicle/Batmobile/FOREVER/Glass", "Vehicle/Batmobile/FOREVER2/Glass", "Vehicle/Batmobile/Cockpit",
+                                                   "Vehicle/Batmobile/SteeringWheel"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles};
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
+                                                vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
     return choice == 1 ? slotHammerDevilsEye : choice == 2 ? slotHammerLoveThunder : choice == 3 ? slotHammerFccooper : slotHammer;
 }
 // The van's parts (drawn by hero007::appendPlacedModel: up to 8 m, seen to 80 m).
-inline constexpr bool slotIsVehicle(uint32_t slot) { return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel; }
+inline constexpr bool slotIsBatmobile(uint32_t slot) { return slot >= slotBatmobileFirst && slot <= slotBatmobileWheel; }
+inline constexpr bool slotIsVehicle(uint32_t slot) {
+    return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel || slotIsBatmobile(slot);
+}
 // JOKER (CC BY-NC-ND): drawn exactly as downloaded or not at all.
 // Build 9: the suits never (vertex clustering would lose their skin and flatten them).
 inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false};
@@ -213,7 +230,8 @@ inline uint32_t suitSlot(const char* folder) {
     return 0;
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
-static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slots == 46, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
+                  slotBatmobileWheel == 55 && slots == 56, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

@@ -214,6 +214,13 @@ enum Option : uint32_t {
     // 0.0.74 test 1 SEATED DRIVING (vehicle074.hpp): the dash's SIT button (SIT BUTTON, the default), AUTO SIT (sat a
     // second after getting in), OFF; getting out stands him back up; live
     seatedDriving,
+    // 0.0.74 test 1 BATMOBILE (batmobile074.hpp; owner pt1159u "add the Batmobile's to test 1"): ON (the default)
+    // Batman (every suit) summons a drivable Batmobile on X, the van's driving; its models load at start only when ON
+    // (turning it on needs a restart). Anything missing: no car, a note, never a crash
+    batmobile,
+    // 0.0.74 test 1 BATMOBILE CHOICE: 1989 (the default, Dreamloft3D), ODAMI, FOREVER (SorroW), FOREVER 2 (S.York);
+    // the dash HOME page's BATMOBILE button steps it too; live (the next summon)
+    batmobileChoice,
     options
 };
 struct OptionInfo {
@@ -579,9 +586,11 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"SUIT LOOK", "FIGURE", nullptr, nullptr}},
     {"coming_soon", "COMING SOON", "SOON", "ON shows the heroes coming next update on the roster's SOON tab, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"hideouts", "HIDEOUTS", "HIDE", "Adds safehouse and Batcave trips to the van dash, turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"hideouts", "HIDEOUTS", "HIDE", "Safehouse trips from the van dash, Batcave from the Batmobile, needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"car_music", "CAR MUSIC", "CMUS", "The van dash's MUSIC page plays your songs, no restart needed.", 3, {"IN VEHICLES", "ALWAYS", "OFF", nullptr}},
     {"seated_driving", "SEATED DRIVING", "SEAT", "SIT on the van dash puts your eye at the driver's seat, no restart needed.", 3, {"SIT BUTTON", "AUTO SIT", "OFF", nullptr}},
+    {"batmobile", "BATMOBILE", "BMOB", "Drives a Batmobile as Batman (X summons it), turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"batmobile_choice", "BATMOBILE CHOICE", "BCAR", "Which Batmobile Batman's X summons (also the dash's BATMOBILE), no restart.", 4, {"1989", "ODAMI", "FOREVER", "FOREVER 2"}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

@@ -45,7 +45,11 @@
 #include <string_view>
 
 static_assert(spidy::wrist_hud::combatControls == static_cast<int>(spidy::combat38::options),
-              "a COMBAT row per combat38 option");
+              "a COMBAT value per combat38 option");
+static_assert(spidy::wrist_hud::combatRows ==
+                  static_cast<int>(spidy::wrist_hud::Control::combatSeatedDriving) - static_cast<int>(spidy::wrist_hud::Control::combatCrawlCap) + 1,
+              "a COMBAT row per wrist combat38 option");
+static_assert(spidy::wrist_hud::combatRows == static_cast<int>(spidy::combat38::batmobile), "the Batmobile's options are off the wrist");
 
 namespace spidy::wrist_hud {
 namespace {

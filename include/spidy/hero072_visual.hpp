@@ -51,6 +51,10 @@ struct Look {
     const mesh_model::Mesh* vanModel{};
     const mesh_model::Mesh* vanInterior{};
     const mesh_model::Mesh* vanWheel{};
+    // 0.0.74 test 1 BATMOBILE: the shared cockpit sits at its own place inside each car (world; the van's
+    // interior is at vanAt when this is off).
+    bool vanInteriorOwn{};
+    Vec3 vanInteriorAt{};
     // Lightning: each bolt from -> to, jagged by its seed.
     uint32_t bolts{};
     Vec3 boltFrom[boltsMost]{}, boltTo[boltsMost]{};

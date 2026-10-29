@@ -432,7 +432,8 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
         if (l.vanModel)
             hero007::appendPlacedModel(out, *l.vanModel, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
         if (l.vanInterior)
-            hero007::appendPlacedModel(out, *l.vanInterior, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
+            hero007::appendPlacedModel(out, *l.vanInterior, T(l.vanInteriorOwn && okv(l.vanInteriorAt) ? l.vanInteriorAt : l.vanAt),
+                                       l.vanForward, {0, 1, 0}, viewer);
         if (l.vanWheel && okv(l.wheelAt) && okv(l.wheelForward) && okv(l.wheelUp))
             hero007::appendPlacedModel(out, *l.vanWheel, T(l.wheelAt), l.wheelForward, l.wheelUp, viewer);
     }

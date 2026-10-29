@@ -33,6 +33,7 @@
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
+#include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
@@ -1444,6 +1445,52 @@ std::wstring carMusicFolder() {
     }
     return path;
 }
+// 0.0.74 test 1 BATMOBILE: the picked car kept between sessions, Documents\HERO VR\batmobile.txt (one digit, 0-3:
+// batmobile074::names). Read once at the models' load (after the launcher's live.txt has sent its own
+// batmobile_choice as the session starts: the saved pick wins), written whenever the pick changes (the dash's
+// BATMOBILE button, the wrist's BATMOBILE CHOICE). CANDIDATE in game; no file (or no Documents): the default.
+std::wstring batmobilePickFile() {
+    PWSTR docs{};
+    std::wstring path;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs)
+        path = std::wstring(docs) + L"\\HERO VR";
+    CoTaskMemFree(docs);
+    if (path.empty())
+        return path;
+    const int made = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
+    if (made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS)
+        return {};
+    return path + L"\\batmobile.txt";
+}
+int readBatmobilePick() {
+    const std::wstring path = batmobilePickFile();
+    if (path.empty())
+        return -1;
+    const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+        return -1;
+    char text[8]{};
+    DWORD got = 0;
+    const BOOL read = ReadFile(file, text, sizeof text - 1, &got, nullptr);
+    CloseHandle(file);
+    if (!read || got == 0 || text[0] < '0' || text[0] >= static_cast<char>('0' + batmobile074::cars))
+        return -1;
+    return text[0] - '0';
+}
+bool writeBatmobilePick(uint32_t car) {
+    const std::wstring path = batmobilePickFile();
+    if (path.empty())
+        return false;
+    const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+        return false;
+    const char text[3] = {static_cast<char>('0' + batmobile074::clampCar(car)), '\r', '\n'};
+    DWORD wrote = 0;
+    const BOOL ok = WriteFile(file, text, sizeof text, &wrote, nullptr);
+    CloseHandle(file);
+    return ok && wrote == sizeof text;
+}
+std::atomic<bool> batmobilePickRead{false}; // the saved pick applied (the models' load): from then on, a change is saved
 // 0.0.74 test 1 HIDEOUTS: each room's walk data (Models\Hideout\<Room>\room.txt beside its scene.glb),
 // read once at the models' load; ok false: that trip is not offered (he stays in the van).
 hideout074::Room hideoutRooms[3];
@@ -1742,6 +1789,17 @@ DWORD WINAPI run(void*) {
                     game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
                     continue;
                 }
+                // 0.0.74 test 1 BATMOBILE OFF: none of its models loaded (turning it on needs a restart); FOREVER 2 has no glass.
+                if (mesh_model::slotIsBatmobile(slot) &&
+                    (c38(combat38::batmobile) != 0 ||
+                     (slot >= mesh_model::slotBatmobileGlassFirst && slot < mesh_model::slotBatmobileGlassFirst + batmobile074::cars &&
+                      !batmobile074::layout(slot - mesh_model::slotBatmobileGlassFirst).glass))) {
+                    models.meshes[slot] = {};
+                    models.status[slot] = mesh_model::notTried;
+                    if (c38(combat38::batmobile) != 0)
+                        game_prompts::note((std::string("0.0.74 test 1 BATMOBILE OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
+                    continue;
+                }
                 try {
                     status = models.load(slot, root);
                 } catch (...) { // out of memory or worse: this slot is MODEL MISSING, nothing else stops
@@ -1764,6 +1822,18 @@ DWORD WINAPI run(void*) {
                     consoleLine(line);
                 }
             }
+            // 0.0.74 test 1 BATMOBILE: the saved pick (Documents\HERO VR\batmobile.txt) over live.txt's start value.
+            try {
+                const int pick = readBatmobilePick();
+                if (pick >= 0) {
+                    combat38Values[combat38::batmobileChoice] = static_cast<uint32_t>(pick);
+                    game_prompts::note((std::string("0.0.74 test 1 BATMOBILE: the saved pick ") + batmobile074::names[batmobile074::clampCar(
+                                                                                                    static_cast<uint32_t>(pick))])
+                                           .c_str());
+                }
+            } catch (...) {
+            }
+            batmobilePickRead = true;
             // 0.0.74 test 1 HIDEOUTS: each loaded room's walk data (no room.txt: that trip is not offered).
             for (uint32_t which = 1; which < 3; ++which) {
                 const uint32_t slot = which == 1 ? mesh_model::slotHideoutSafehouse : mesh_model::slotHideoutBatcave;
@@ -2301,6 +2371,20 @@ DWORD WINAPI run(void*) {
         int hideoutPointShown = -1;
         const char* vanHomeNote{};
         van_screen::Offer vanOffer{};
+        // 0.0.74 test 1 BATMOBILE (batmobile074.hpp): the one Driver is the van (PUNISHER) or a Batmobile (BATMAN).
+        // vehicleKind: what it was last frame (a change and the old one goes first); batCar: the car summoned
+        // (latched at the X; the picker applies on the next summon); vehicleTune: the numbers in use.
+        enum : uint8_t { kindNone, kindVan, kindBatmobile };
+        uint8_t vehicleKind = kindNone;
+        uint32_t batCar = 0, batPickSaved = UINT32_MAX;
+        van072::Tune vehicleTune{};
+        const auto batReady = [](uint32_t car) {
+            const auto& lib = mesh_model::library();
+            car = batmobile074::clampCar(car);
+            return lib.status[mesh_model::slotBatmobileFirst + car] == mesh_model::loaded &&
+                   lib.status[mesh_model::slotBatmobileCockpit] == mesh_model::loaded &&
+                   lib.status[mesh_model::slotBatmobileWheel] == mesh_model::loaded;
+        };
         uint32_t carMusicAskedSerial{}; // the player's status serial when last told to toggle (no double toggle)
         van072::Probe vanProbe;
         bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
@@ -5033,7 +5117,7 @@ DWORD WINAPI run(void*) {
                             // Version 0.0.72 PUNISHER VAN SUMMON: the probe's one ray (the roof's slot, as the beam's),
                             // from his feet along his look; asked again after 12 frames with no answer.
                             if (vanWanted && !vanProbe.active && finite(feet)) {
-                                vanProbe.start(feet, ahead);
+                                vanProbe.start(feet, ahead, vehicleTune);
                                 vanWanted = vanAsking = false;
                             }
                             // Version 0.0.73 DRIVING: the bumper's ray each frame he drives (from the front bumper
@@ -5041,7 +5125,7 @@ DWORD WINAPI run(void*) {
                             vanBumperAsked = false;
                             if (vanDriver.carried && van.state == van072::driving && std::abs(van.speed) > .3f &&
                                 aim.count < native_rays::capacity) {
-                                const van072::Tune vt{};
+                                const van072::Tune& vt = vehicleTune; // 0.0.74 test 1: the van's or the Batmobile's
                                 const Vec3 way = van.speed > 0 ? van.frame.forward() : van.frame.forward() * -1.f;
                                 const Vec3 from = van.frame.at + way * (vt.length * .5f) + Vec3{0, .8f, 0};
                                 const float reach = std::clamp(std::abs(van.speed) * .4f + .5f, .5f, 8.f);
@@ -6593,6 +6677,38 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                             vanXWas = vanX;
+                        } else if (c38(combat38::batmobile) == 0 && heroNow() == hero_modes::batman &&
+                                   mapping == game_pad::Mapping::gameplay) {
+                            // 0.0.74 test 1 BATMOBILE: BATMAN's X tap summons the picked Batmobile (the van's system;
+                            // his X is free too: no gadget wheel). Driving, X pages the dash.
+                            const bool batX = (buttons.buttons & buttonX) != 0;
+                            buttons.buttons &= ~static_cast<uint32_t>(buttonX);
+                            if (batX && !vanXWas) {
+                                if (van.state == van072::driving)
+                                    vanDashX = true; // the dash's next page
+                                const uint32_t car = batmobile074::clampCar(c38(combat38::batmobileChoice));
+                                if (batReady(car)) {
+                                    if (van.state != van072::driving && !vanProbe.active) {
+                                        if (car != batCar) { // another car picked: the parked one goes, the new one comes
+                                            batCar = car;
+                                            van.state = van072::none;
+                                            van.speed = 0;
+                                            vehicleTune = batmobile074::tune(car);
+                                        }
+                                        vanWanted = true;
+                                        runtime.haptic(0, .1f);
+                                    }
+                                } else if (van.state != van072::driving) {
+                                    runtime.haptic(0, .15f);
+                                    message(3, 0, (std::string("BATMOBILE: MODEL MISSING: Vehicle/Batmobile/") + batmobile074::folders[car] +
+                                                   " (or its Cockpit / SteeringWheel), no car")
+                                                      .c_str());
+                                    game_prompts::note((std::string("0.0.74 test 1 BATMOBILE: X tap - MODEL MISSING (Models\\Vehicle\\Batmobile\\") +
+                                                        batmobile074::folders[car] + ", Cockpit, SteeringWheel), no car")
+                                                           .c_str());
+                                }
+                            }
+                            vanXWas = batX;
                         } else
                             vanXWas = false;
                         // The gadget wheel: X held opens it in front of the hand
@@ -7235,9 +7351,34 @@ DWORD WINAPI run(void*) {
                                         van072::In vin;
                                         vin.dt = vanAt < 0 ? 0.f : static_cast<float>(std::clamp(combatClock - vanAt, 0.0, .1));
                                         vanAt = combatClock;
-                                        vin.enabled = c38(combat38::punisherVan) == 0 &&
-                                                      mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded;
-                                        vin.punisher = heroWas == hero_modes::punisher;
+                                        // 0.0.74 test 1 BATMOBILE: the van for the PUNISHER, the Batmobile for BATMAN; a change of
+                                        // hero or kind and the old one goes this frame (vin.punisher false: the van's "other hero").
+                                        uint8_t kindNow = kindNone;
+                                        if (heroWas == hero_modes::punisher && c38(combat38::punisherVan) == 0 &&
+                                            mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded)
+                                            kindNow = kindVan;
+                                        else if (heroWas == hero_modes::batman && c38(combat38::batmobile) == 0 && batReady(batCar))
+                                            kindNow = kindBatmobile;
+                                        vin.enabled = kindNow != kindNone;
+                                        vin.punisher = kindNow != kindNone && kindNow == vehicleKind;
+                                        vehicleKind = kindNow;
+                                        vehicleTune = kindNow == kindBatmobile ? batmobile074::tune(batCar) : van072::Tune{};
+                                        const bool batNow = kindNow == kindBatmobile;
+                                        const std::string vehName = batNow ? std::string("BATMOBILE ") + batmobile074::names[batCar]
+                                                                           : std::string("PUNISHER VAN");
+                                        // 0.0.74 test 1 BATMOBILE: the pick saved between sessions (after the saved one is read)
+                                        if (batmobilePickRead) {
+                                            const uint32_t pickNow = batmobile074::clampCar(c38(combat38::batmobileChoice));
+                                            if (pickNow != batPickSaved) {
+                                                if (batPickSaved != UINT32_MAX) {
+                                                    try {
+                                                        writeBatmobilePick(pickNow);
+                                                    } catch (...) {
+                                                    }
+                                                }
+                                                batPickSaved = pickNow;
+                                            }
+                                        }
                                         vin.play = cf.play;
                                         const Pose vanW = compose(motion.headPose, inverse(frame.head));
                                         vin.head = motion.headPose.position;
@@ -7273,7 +7414,7 @@ DWORD WINAPI run(void*) {
                                         const auto clearAhead = [](Vec3, Vec3, float) { return true; }; // the bumper ray (ci)
                                         const bool wasDriving = van.state == van072::driving;
                                         // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (0, the default) or CLASSIC (0.0.72), live.
-                                        van072::Tune vanTune{};
+                                        van072::Tune vanTune = vehicleTune;
                                         vanTune.wheelHandPedals = combat38::vanWheelHandPedals(c38(combat38::vanPedals));
                                         van072::Out vout{};
                                         // 0.0.74 test 1 SEATED DRIVING: the rig's new lift moves his whole room up or down -
@@ -7291,7 +7432,7 @@ DWORD WINAPI run(void*) {
                                         if (hideoutVisit.active() && (!vin.enabled || !vin.punisher || van.state != van072::driving)) {
                                             hideoutVisit.end();
                                             hideoutExitHeld = 0;
-                                            message(1, 0, "HIDEOUT: back in the van");
+                                            message(1, 0, batNow ? "HIDEOUT: back in the Batmobile" : "HIDEOUT: back in the van");
                                         }
                                         const bool hideoutAway = hideoutVisit.active();
                                         if (hideoutAway) { // the van held where it stands, no carry, no stick turn
@@ -7308,9 +7449,14 @@ DWORD WINAPI run(void*) {
                                             }
                                         // Version 0.0.73 test 3 VAN SCREEN: X or a poke (an open hand off the wheel)
                                         // pages it while he drives; it takes nothing from the wheel or the pedals.
-                                        if (c38(combat38::vanScreen) == 0) {
+                                        // 0.0.74 test 1 BATMOBILE: its screen is always there (the picker and the Batcave are on it).
+                                        if (c38(combat38::vanScreen) == 0 || batNow) {
                                             try {
                                                 van_screen::In si;
+                                                if (batNow) {
+                                                    si.at = batmobile074::layout(batCar).screen;
+                                                    si.scale = batmobile074::screenScale;
+                                                }
                                                 si.dt = vin.dt;
                                                 si.driving = van.state == van072::driving;
                                                 si.x = vanDashX;
@@ -7327,7 +7473,10 @@ DWORD WINAPI run(void*) {
                                                 }
                                                 // 0.0.74 test 1: the MUSIC / HOME buttons his options leave on the dash
                                                 vanOffer.music = c38(combat38::carMusic) != vehicle074::musicOff;
-                                                vanOffer.hideouts = c38(combat38::hideouts) == 0 && (hideoutRoomOk[1] || hideoutRoomOk[2]);
+                                                // 0.0.74 test 1 BATMOBILE: the van goes to the safehouse, the Batmobile to the Batcave
+                                                vanOffer.hideouts = c38(combat38::hideouts) == 0 && hideoutRoomOk[batNow ? 2 : 1];
+                                                vanOffer.batman = batNow;
+                                                vanOffer.car = static_cast<uint8_t>(batmobile074::clampCar(c38(combat38::batmobileChoice)));
                                                 vanOffer.seat = c38(combat38::seatedDriving) != vehicle074::seatOff;
                                                 vanOffer.sat = vanSeat.sat();
                                                 si.offer = vanOffer;
@@ -7384,6 +7533,15 @@ DWORD WINAPI run(void*) {
                                                 vanSeat.stand();
                                                 message(1, 0, "SEATED DRIVING: standing");
                                                 break;
+                                            case van_screen::Action::nextBatmobile: {
+                                                // 0.0.74 test 1 BATMOBILE: the dash picker - the next car, on the next summon (saved)
+                                                const uint32_t next = batmobile074::nextCar(c38(combat38::batmobileChoice));
+                                                combat38Values[combat38::batmobileChoice] = next;
+                                                message(1, 0, (std::string("BATMOBILE: ") + batmobile074::names[next] +
+                                                               (next == batCar ? " (driving it now)" : " - comes on the next summon (get out, X)"))
+                                                                  .c_str());
+                                                break;
+                                            }
                                             case van_screen::Action::goSafehouse:
                                             case van_screen::Action::goBatcave: {
                                                 const uint32_t which = act == van_screen::Action::goSafehouse ? 1u : 2u;
@@ -7398,7 +7556,9 @@ DWORD WINAPI run(void*) {
                                                 else if (van.state != van072::driving || !vanDriver.carried || vanDriver.boarding)
                                                     why = "get in and settle in the seat first";
                                                 else if (std::abs(van.speed) > .5f)
-                                                    why = "stop the van first";
+                                                    why = batNow ? "stop the Batmobile first" : "stop the van first";
+                                                else if ((which == 2) != batNow)
+                                                    why = batNow ? "the safehouse is the van's trip" : "the Batcave is the Batmobile's trip";
                                                 else if (!hideoutVisit.begin(which == 1 ? hideout074::Which::safehouse : hideout074::Which::batcave,
                                                                              hideoutRooms[which], motion.headPose.position, vin.look, van.frame.at.y))
                                                     why = "the room could not be placed";
@@ -7413,7 +7573,8 @@ DWORD WINAPI run(void*) {
                                                     hideoutPressWas = true;
                                                     hideoutPointShown = -1;
                                                     message(1, 0, (std::string("HIDEOUT: the ") + hideout074::names[which] +
-                                                                   " (TEST) - walk with the left stick, turn with the right; hold B to go back to the van")
+                                                                   (batNow ? " (TEST) - walk with the left stick, turn with the right; hold B to go back to the Batmobile"
+                                                                          : " (TEST) - walk with the left stick, turn with the right; hold B to go back to the van"))
                                                                       .c_str());
                                                     game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS: into the ") + hideout074::names[which] + " (CANDIDATE)").c_str());
                                                 }
@@ -7471,13 +7632,13 @@ DWORD WINAPI run(void*) {
                                                 hideoutVisit.end();
                                                 hideoutExitDone = true;
                                                 hideoutExitHeld = 0;
-                                                message(1, 0, "HIDEOUT: back in the van");
-                                                game_prompts::note("0.0.74 test 1 HIDEOUTS: back in the van");
+                                                message(1, 0, batNow ? "HIDEOUT: back in the Batmobile" : "HIDEOUT: back in the van");
+                                                game_prompts::note(batNow ? "0.0.74 test 1 HIDEOUTS: back in the Batmobile" : "0.0.74 test 1 HIDEOUTS: back in the van");
                                             }
                                         }
                                         // 0.0.74 test 1 SEATED DRIVING: next frame's lift (0 out of the seat, OFF or in a hideout).
                                         try {
-                                            const float seatY = van.frame.world(vehicle074::seatEye).y;
+                                            const float seatY = van.frame.world(batNow ? vanTune.eye : vehicle074::seatEye).y;
                                             vanSeatLift = vanSeat.step(static_cast<uint8_t>(c38(combat38::seatedDriving)),
                                                                        van.state == van072::driving, hideoutVisit.active(), vin.dt,
                                                                        motion.headPose.position.y, seatY);
@@ -7485,23 +7646,23 @@ DWORD WINAPI run(void*) {
                                             vanSeatLift = 0;
                                         }
                                         if (vout.summoned) {
-                                            message(1, 0, "PUNISHER VAN (EXPERIMENTAL): here - grip the driver door handle to get in");
+                                            message(1, 0, (vehName + (batNow ? ": here - grip the driver door handle to get in" : " (EXPERIMENTAL): here - grip the driver door handle to get in")).c_str());
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
                                         } else if (vout.noSpot) {
-                                            message(2, 0, "PUNISHER VAN (EXPERIMENTAL): no safe spot here, no van");
+                                            message(2, 0, (vehName + (batNow ? ": no safe spot here, no car" : " (EXPERIMENTAL): no safe spot here, no van")).c_str());
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: no safe spot (the probe found none)");
                                         }
                                         vanBoardShade = std::isfinite(vanCarry.shade) ? std::clamp(vanCarry.shade, 0.f, 1.f) : 0.f;
                                         if (vout.entered)
-                                            message(1, 0, vanDriver.carried || (vanDriver.boarding && ci.ready)
-                                                              ? "PUNISHER VAN: in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out"
-                                                              : "PUNISHER VAN: in - parked (the drive is not ready here); the inside handle gets you out");
+                                            message(1, 0, (vanDriver.carried || (vanDriver.boarding && ci.ready)
+                                                              ? (vehName + ": in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out")
+                                                              : (vehName + ": in - parked (the drive is not ready here); the inside handle gets you out")).c_str());
                                         if (vout.exited) {
-                                            message(1, 0, "PUNISHER VAN: out");
+                                            message(1, 0, (vehName + ": out").c_str());
                                             vanSlamAt = combatClock + (sfx::engineFadeMs + 40) / 1000.0; // after the fade (loop off: it starts at once)
                                         }
                                         if (vanCarry.fellBack) {
-                                            message(2, 0, "PUNISHER VAN: the drive could not carry you here - parked (get out by the inside handle)");
+                                            message(2, 0, (vehName + ": the drive could not carry you here - parked (get out by the inside handle)").c_str());
                                             char line[160];
                                             sprintf_s(line, "Version 0.0.73 PUNISHER VAN: carry given up, parked (fallbacks %llu, bridge status %u)",
                                                       static_cast<unsigned long long>(vanDriver.fallbacks), swingState.status);
@@ -10095,10 +10256,19 @@ DWORD WINAPI run(void*) {
                             }
                             // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the Vandura, its built cab and its wheel - each the
                             // model or nothing (MODEL MISSING on the wrist); drawn where the van is (world space).
-                            if (c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) {
-                                const mesh_model::Mesh* body = slotModel(mesh_model::slotVan, "PUNISHER VAN");
-                                const mesh_model::Mesh* cab = slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
-                                const mesh_model::Mesh* wheel = slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
+                            // 0.0.74 test 1 BATMOBILE: BATMAN's picked car (latched at the summon), the shared cockpit at
+                            // its place inside it, the wheel at its hub and its glass (blended) - the model or no car.
+                            const bool batDraw = vehicleKind == kindBatmobile && c38(combat38::batmobile) == 0 &&
+                                                 hero007In.hero == hero_modes::batman;
+                            if ((c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) || batDraw) {
+                                const uint32_t carNow = batmobile074::clampCar(batCar);
+                                const mesh_model::Mesh* body = batDraw ? slotModel(mesh_model::slotBatmobileFirst + carNow, "BATMOBILE")
+                                                                       : slotModel(mesh_model::slotVan, "PUNISHER VAN");
+                                const mesh_model::Mesh* cab = batDraw ? slotModel(mesh_model::slotBatmobileCockpit, "BATMOBILE")
+                                                                      : slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
+                                const mesh_model::Mesh* wheel = batDraw ? slotModel(mesh_model::slotBatmobileWheel, "BATMOBILE")
+                                                                        : slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
+                                const van072::Tune drawTune = batDraw ? batmobile074::tune(carNow) : van072::Tune{};
                                 // 0.0.74 test 1 HIDEOUTS: in a room the van is not drawn (nor its dash); the room is.
                                 if (hideoutVisit.active()) {
                                     const auto w = hideoutVisit.which();
@@ -10116,15 +10286,29 @@ DWORD WINAPI run(void*) {
                                     L.vanAt = van.frame.at;
                                     L.vanForward = van.frame.forward();
                                     Vec3 up{}, toward{};
-                                    van072::wheelAxes(van.wheel.angle, up, toward);
-                                    L.wheelAt = van.frame.world(van072::wheelHub);
+                                    van072::wheelAxes(van.wheel.angle, up, toward, drawTune);
+                                    L.wheelAt = van.frame.world(drawTune.hub);
+                                    if (batDraw) {
+                                        const auto& lay = batmobile074::layout(carNow);
+                                        L.vanInteriorOwn = true;
+                                        L.vanInteriorAt = van.frame.world(lay.cockpit);
+                                        if (lay.glass) {
+                                            saved.batGlass.mesh = mesh_model::library().model(mesh_model::slotBatmobileGlassFirst + carNow);
+                                            saved.batGlass.at = van.frame.at;
+                                            saved.batGlass.forward = van.frame.forward();
+                                            saved.batGlass.on = saved.batGlass.mesh != nullptr;
+                                        }
+                                    }
                                     L.wheelForward = -van072::worldDir(van.frame, toward);
                                     L.wheelUp = van072::worldDir(van.frame, up);
                                     // Version 0.0.73 test 3 VAN SCREEN: on the dash where the driver reads it
-                                    if (c38(combat38::vanScreen) == 0)
+                                    if (c38(combat38::vanScreen) == 0 || batDraw)
                                     {
-                                        saved.vanScreen = van_screen::view(van.frame, vanDash, van.speed, van072::Tune{}.topSpeed,
-                                                                           vanCarry.rpm, van.state == van072::driving);
+                                        saved.vanScreen = batDraw ? van_screen::view(van.frame, vanDash, van.speed, drawTune.topSpeed, vanCarry.rpm,
+                                                                                     van.state == van072::driving, batmobile074::layout(carNow).screen,
+                                                                                     batmobile074::screenScale)
+                                                                  : van_screen::view(van.frame, vanDash, van.speed, van072::Tune{}.topSpeed,
+                                                                                     vanCarry.rpm, van.state == van072::driving);
                                         // 0.0.74 test 1: the MUSIC page's song and the HOME page's buttons
                                         auto& V = saved.vanScreen;
                                         V.offer = vanOffer;
@@ -10142,6 +10326,10 @@ DWORD WINAPI run(void*) {
                                         } catch (...) {
                                         }
                                         V.homeNote = vanHomeNote;
+                                        if (batDraw) {
+                                            V.offer.batman = true;
+                                            V.carName = batmobile074::names[carNow];
+                                        }
                                     }
                                 }
                             }
@@ -12223,6 +12411,19 @@ DWORD WINAPI run(void*) {
                                 translucent.resize(from);
                             }
                         }
+                        // 0.0.74 test 1 BATMOBILE GLASS: see-through, lightly tinted, sorted far to near (depth-tested,
+                        // so the body and cockpit stay in front). Should it fail, only the glass goes off.
+                        if (!saved->flatScreen && saved->batGlass.on) {
+                            const size_t from = translucent.size();
+                            try {
+                                auto glass = saved->batGlass;
+                                glass.at += travel;
+                                if (!batmobile074::appendGlass(translucent, glass, viewer))
+                                    translucent.resize(from);
+                            } catch (...) {
+                                translucent.resize(from);
+                            }
+                        }
                         // Build 8 ROSTER page: its plate and text blended, its pictures in the textured models'
                         // pass (depth-tested, after). Nothing at all while it is closed.
                         if (!saved->flatScreen && saved->roster.opacity > 0) {
@@ -13579,6 +13780,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyComingSoon(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideouts(void* v) { return setHero007(v, combat38::hideouts, 5491); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarMusic(void* v) { return setHero007(v, combat38::carMusic, 5492); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedDriving(void* v) { return setHero007(v, combat38::seatedDriving, 5493); }
+// 0.0.74 test 1 (live.txt batmobile, batmobile_choice): BATMOBILE ON (0, default) / OFF (1), its models loaded at start
+// only when ON; BATMOBILE CHOICE 1989 (0, default) / ODAMI (1) / FOREVER (2) / FOREVER 2 (3), live (the next summon).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatmobile(void* v) { return setHero007(v, combat38::batmobile, 5494); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatmobileChoice(void* v) { return setHero007(v, combat38::batmobileChoice, 5495); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

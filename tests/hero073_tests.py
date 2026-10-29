@@ -308,6 +308,8 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5491'), ['SpidyHideouts'])  # 0.0.74 test 1 HIDEOUTS
         self.assertEqual(uses.get('5492'), ['SpidyCarMusic'])  # 0.0.74 test 1 CAR MUSIC
         self.assertEqual(uses.get('5493'), ['SpidySeatedDriving'])  # 0.0.74 test 1 SEATED DRIVING
+        self.assertEqual(uses.get('5494'), ['SpidyBatmobile'])  # 0.0.74 test 1 BATMOBILE
+        self.assertEqual(uses.get('5495'), ['SpidyBatmobileChoice'])  # 0.0.74 test 1 BATMOBILE CHOICE
 
 
 class Hero073Image(unittest.TestCase):

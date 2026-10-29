@@ -20,7 +20,8 @@ on:
 permissions:
   contents: write
 
-# hero-0.0.73 (private TEST builds): its own group, no source check against a tag, never uploaded.
+# hero-0.0.73 (private TEST builds, and hero-0.0.73-release before its tag exists): its own group, no source check
+# against a tag, never uploaded (the 0.0.73 release zip is taken from the run's artifact and put on the draft by hand).
 concurrency:
   group: prebuilt-${{ startsWith(github.ref_name, 'hero-0.0.73') && github.ref_name || inputs.tag }}
 

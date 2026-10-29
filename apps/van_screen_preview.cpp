@@ -141,6 +141,35 @@ int main(int argc, char** argv) {
         h.offer.sat = true;
         good &= page(dir + "page_home_sat.bmp", h);
     }
+    // 0.0.74 test 1 BATMOBILE: Batman's dash (the bat palette; MAP, STATUS, MUSIC, HOME)
+    {
+        const auto bat = [&](uint32_t pg) {
+            vs::View v = pageView(pg, 0, 10.4f, yaw, .55f);
+            v.offer.batman = true;
+            v.offer.car = 0;
+            v.carName = "1989";
+            v.carCredit = "MODEL: BAT-MOBILE (1989) BY DREAMLOFT3D, CC BY 4.0";
+            return v;
+        };
+        good &= page(dir + "bat_map.bmp", bat(vs::map));
+        good &= page(dir + "bat_status.bmp", bat(vs::status));
+        vs::View m = bat(vs::music);
+        m.musicTracks = 14;
+        m.musicTrack = 4;
+        m.musicPlaying = true;
+        m.musicSong = "Example Artist - Example Song";
+        m.musicVolume = 70;
+        m.musicTotal = 214;
+        m.musicElapsed = 81;
+        good &= page(dir + "bat_music.bmp", m);
+        vs::View h = bat(vs::home);
+        good &= page(dir + "bat_home.bmp", h);
+        h.offer.car = 2;
+        good &= page(dir + "bat_home_picked_forever.bmp", h);
+        h.offer.car = 0;
+        h.offer.sat = true;
+        good &= page(dir + "bat_home_sat.bmp", h);
+    }
     // the driver's seat
     const std::string models = argc > 2 ? std::string(argv[2]) : std::string();
     // From the driver's eye (he sits left of it, so the flush face is seen a little from the side).

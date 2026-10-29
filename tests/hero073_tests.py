@@ -287,6 +287,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5445'), ['SpidyVanScreen'])
         self.assertEqual(uses.get('5448'), ['SpidyVanPedals'])  # 0.0.73 test 3 VAN PEDALS
         self.assertEqual(uses.get('5449'), ['SpidyImage'])  # 0.0.73 IMAGE
+        self.assertEqual(uses.get('5453'), ['SpidyDdBatonTip'])  # 0.0.73 DD BATON
 
 
 class Hero073Image(unittest.TestCase):

@@ -160,6 +160,9 @@ enum Option : uint32_t {
     // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): SPIDYVR (the game's own TAA in each
     // eye, as SpidyVR; the default) or OFF (IMAGE's look: EYE AA history, FXAA and sharpening as IMAGE sets)
     imageStyle,
+    // 0.0.73 DD BATON: ON (the held baton seated in the fist, the grapple fired from its silver tip, the tip flying
+    // to the anchor on a rope and reeled back) or OFF (test 3's held baton and grapple line)
+    ddBatonTip,
     options
 };
 struct OptionInfo {
@@ -491,6 +494,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr}},
     {"image_style", "GAME TAA", "GTAA", "SPIDYVR: the game's TAA in each eye as SpidyVR; OFF: IMAGE's look; no restart.",
      2, {"SPIDYVR", "OFF", nullptr, nullptr}},
+    {"dd_baton_tip", "BATON TIP", "DDTIP", "ON: the baton sits in the fist, its silver tip flies on a rope, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

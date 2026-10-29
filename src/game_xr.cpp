@@ -9,6 +9,7 @@
 #include "spidy/mirror_guard.hpp"
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
 #include "spidy/baton_grip.hpp"
+#include "spidy/dd_baton073.hpp"
 #include "spidy/gun_grip.hpp"
 #include "spidy/grapple072.hpp" // Version 0.0.72 GRAPPLE (every hero who has one)
 #include "spidy/shadow_camera.hpp"
@@ -2136,6 +2137,9 @@ DWORD WINAPI run(void*) {
         // Version 0.0.72 GRAPPLE LINE: each hand's line drawn last frame, and when its pull began (the fly-out).
         bool grappleLineWas[2]{};
         std::chrono::steady_clock::time_point grappleLineAt[2]{};
+        // 0.0.73 DD BATON: each held baton's silver tip in flight (dd_baton073::TipFlight) and its clock.
+        dd_baton073::TipFlight batonTipFlight[2]{};
+        std::chrono::steady_clock::time_point batonTipClock{};
         Vec3 hero072HandAt[2]{}, hero072HandAim[2]{};
         uint32_t hero072GrappleNotes{};
         bool vanXWas{}; // Version 0.0.72 PUNISHER VAN: the X tap's edge
@@ -7006,8 +7010,12 @@ DWORD WINAPI run(void*) {
                                             batonAimNow[i] = aimDir;
                                             batonTracked[i] = cf.hands[i].tracked;
                                             // Version 0.0.7 BATON GRIP: through the fist from the grip pose, per controller.
+                                            // 0.0.73 DD BATON (BATON TIP ON): down the fist's own tube through the grip,
+                                            // so the handle sits in the curled fingers and the tip (the grapple's start,
+                                            // ddAimFrom) is the silver end on its axis; OFF: test 3's shaft exactly.
                                             {
-                                                const auto held = baton_grip::shaft(frame.hands[i].grip, i, runtime.controllers()[i]);
+                                                const auto held = dd_baton073::held(c38(combat38::ddBatonTip) == 0, frame.hands[i].grip, i,
+                                                                                    runtime.controllers()[i]);
                                                 batonShaftOk[i] = held.ok;
                                                 batonButt[i] = held.butt;
                                                 batonTipHeld[i] = held.tip;
@@ -9572,10 +9580,18 @@ DWORD WINAPI run(void*) {
                     }
                     {   // Version 0.0.6 DAREDEVIL ABILITIES: the batons, in the hand (0.0.7: in the fist) or spinning in flight.
                         const bool dd = !oursFault && heroWas == hero_modes::daredevil;
+                        // 0.0.73 DD BATON: the tips' clock (one step a frame, both hands)
+                        const auto tipNow = std::chrono::steady_clock::now();
+                        const float tipDt = batonTipClock.time_since_epoch().count() == 0
+                                                ? 0.f
+                                                : std::chrono::duration<float>(tipNow - batonTipClock).count();
+                        batonTipClock = tipNow;
+                        const bool ddTipOn = c38(combat38::ddBatonTip) == 0;
                         for (unsigned i = 0; i < 2; ++i) {
                             const auto& b = batons[i];
                             saved.batonOn[i] = 0;
                             saved.batonHeld[i] = false;
+                            saved.batonFist[i] = saved.batonTipApart[i] = false;
                             if (!dd || (b.inHandNow() && (!batonTracked[i] || !(length(batonAimNow[i]) > .5f))))
                                 continue;
                             // Version 0.0.7 BATON HOLSTERS: a holstered baton is drawn on the back (hero007).
@@ -9611,6 +9627,27 @@ DWORD WINAPI run(void*) {
                                 saved.batonOn[i] = 1;
                                 saved.batonHeld[i] = b.inHandNow() && batonShaftOk[i]; // the hand at the shaft's third
                             }
+                            // 0.0.73 DD BATON (BATON TIP ON): the fist fitted round the held baton, and while this
+                            // hand's grapple pulls the silver tip flies to the anchor (capeNow.anchor, world) on a
+                            // rope, the baton staying in the hand; reeled back and snapped on when it ends. Anything
+                            // off (OFF, not held, no pose): the tip on the baton, test 3's grapple line.
+                            const bool tipCan = ddTipOn && saved.batonHeld[i];
+                            const bool tipPull = tipCan && capeNow.grappling == cape_glide::pull && capeNow.hand == i;
+                            if (tipCan)
+                                batonTipFlight[i].step(tipPull, capeNow.anchor, tipDt);
+                            else
+                                batonTipFlight[i].reset();
+                            saved.batonFist[i] = tipCan;
+                            if (tipCan && batonTipFlight[i].apart()) {
+                                const auto tp = dd_baton073::place(saved.batonGrip[i], saved.batonTip[i], batonTipFlight[i].anchor(),
+                                                                   batonTipFlight[i].fraction());
+                                if (tp.ok && tp.apart) {
+                                    saved.batonTipApart[i] = true;
+                                    saved.batonRopeFrom[i] = tp.rope;
+                                    saved.batonTipBack[i] = tp.back;
+                                    saved.batonTipFront[i] = tp.front;
+                                }
+                            }
                         }
                         // Version 0.0.7 BATON LOOK (MODEL: the converted batons, CLUB when they are missing).
                         const uint32_t batonLookNow = c38(combat38::batonLook);
@@ -9638,7 +9675,8 @@ DWORD WINAPI run(void*) {
                             // hero007_visual moves it there) or DAREDEVIL's baton tip.
                             const uint32_t gh = hero007In.hero;
                             const bool dd = gh == hero_modes::daredevil;
-                            if (grapple072::grappler(gh) && pulling &&
+                            // 0.0.73 DD BATON: none while that hand's baton tip flies on its own rope.
+                            if (grapple072::grappler(gh) && pulling && !(dd && saved.batonTipApart[capeNow.hand]) &&
                                 (dd ? hero072HandTracked[capeNow.hand] : hero007In.hands[capeNow.hand].tracked)) {
                                 const unsigned h = capeNow.hand;
                                 const Vec3 at = dd ? grapple072::cableFrom(hero072HandAt[h], hero072HandAim[h]) : hero007In.hands[h].position;
@@ -10543,7 +10581,16 @@ DWORD WINAPI run(void*) {
                                                       heroNow() == hero_modes::batman ? glove_overlay::batDark : glove_overlay::suitRed);
                             }
                         for (unsigned i = 0; i < 2; ++i) // Version 0.0.6 DAREDEVIL's batons
-                            if (saved->batonOn[i] > 0) {
+                            if (saved->batonOn[i] > 0 && saved->batonTipApart[i]) {
+                                // 0.0.73 DD BATON: the baton in the hand without its silver tip, the tip out on the rope
+                                const Vec3 g = saved->batonGrip[i] + travel, tp = saved->batonTip[i] + travel;
+                                const Vec3 back = saved->batonTipBack[i] + travel, front = saved->batonTipFront[i] + travel;
+                                if (!(saved->hero007.batonModel[i] &&
+                                      hero007::appendBatonModelSplit(vertices, g, tp, *saved->hero007.batonModel[i], viewer, back, front,
+                                                                     dd_baton073::tipShare)))
+                                    hero007::appendBatonClubSplit(vertices, g, dd_baton073::seam(g, tp), viewer, pixelAngle, back, front);
+                                hero007::appendBatonRope(vertices, saved->batonRopeFrom[i] + travel, back, viewer, pixelAngle);
+                            } else if (saved->batonOn[i] > 0) {
                                 if (saved->hero007.batonModel[i] && // Version 0.0.7 BATON LOOK MODEL
                                     hero007::appendBatonModel(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
                                                               *saved->hero007.batonModel[i], viewer, saved->batonHeld[i]))
@@ -11074,6 +11121,7 @@ DWORD WINAPI run(void*) {
                                         float want = std::max({sh.trigger, sh.grip, sh.wallGrip});
                                         if (saved->batonHeld[i] || (i == 1 && saved->hero072.hammerInHand))
                                             want = 1.f;
+                                        t.fistFit[i] = saved->batonFist[i]; // 0.0.73 DD BATON: the fist round the baton
                                         static float curlNow[2]{};
                                         want = std::isfinite(want) ? std::clamp(want, 0.f, 1.f) : 0.f;
                                         curlNow[i] += (want - curlNow[i]) * .35f;
@@ -11233,7 +11281,15 @@ DWORD WINAPI run(void*) {
                                         if (saved->hero007.any)
                                             hero007::appendHero007(mirrorProps, saved->hero007, travel, seenFrom, pixelAngle);
                                         for (unsigned i = 0; i < 2; ++i)
-                                            if (saved->batonOn[i] > 0) {
+                                            if (saved->batonOn[i] > 0 && saved->batonTipApart[i]) { // 0.0.73 DD BATON
+                                                const Vec3 g = saved->batonGrip[i] + travel, tp = saved->batonTip[i] + travel;
+                                                const Vec3 back = saved->batonTipBack[i] + travel, front = saved->batonTipFront[i] + travel;
+                                                if (!(saved->hero007.batonModel[i] &&
+                                                      hero007::appendBatonModelSplit(mirrorProps, g, tp, *saved->hero007.batonModel[i], seenFrom,
+                                                                                     back, front, dd_baton073::tipShare)))
+                                                    hero007::appendBatonClubSplit(mirrorProps, g, dd_baton073::seam(g, tp), seenFrom, pixelAngle, back, front);
+                                                hero007::appendBatonRope(mirrorProps, saved->batonRopeFrom[i] + travel, back, seenFrom, pixelAngle);
+                                            } else if (saved->batonOn[i] > 0) {
                                                 if (!(saved->hero007.batonModel[i] &&
                                                       hero007::appendBatonModel(mirrorProps, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
                                                                                 *saved->hero007.batonModel[i], seenFrom, saved->batonHeld[i])))
@@ -12847,6 +12903,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHe
 // 0.0.73 test 4 IMAGE STYLE: shown as GAME TAA: SPIDYVR (0, default) or OFF (1, IMAGE's look) (live.txt image_style; image_style.hpp).
 // The frame loop's controller does the rest (stereo_probe's SpidyImageStyle, ENGINE TAA, the clean picture).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyleOption(void* v) { return setHero007(v, combat38::imageStyle, 5460); }
+// 0.0.73 DD BATON: ON (0, the baton seated in the fist, its silver tip flown on a rope) or OFF (1, test 3's) (live.txt dd_baton_tip).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdBatonTip(void* v) { return setHero007(v, combat38::ddBatonTip, 5453); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

@@ -2,6 +2,7 @@
 // Build 9 SUITS: suit_wear.hpp.
 #include "spidy/suit_wear.hpp"
 
+#include <bitset>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -197,6 +198,100 @@ void restHands(Rig& rig, const char* name) {
 }
 } // namespace
 
+namespace {
+void handReach(const Rig& rig, int side, float& knuckle, float& fingers);
+void curlFinger(const BoneMove& b, Vec3& d, Vec3& n);
+// Version 0.0.73 test 3 FIST: the rest fingers' line (Rig::fingerDepth, fingerSlope): the median depth (the hand
+// bone's z) of the hand's own vertices in six steps past the knuckles, a straight line fitted through them.
+void fingerLine(Rig& rig, int side) {
+    rig.fingerDepth[side] = rig.fingerSlope[side] = 0;
+    const Skeleton& k = rig.skeleton;
+    const uint32_t b = side ? boneHandR : boneHandL;
+    Vec3 x0, y0, z0;
+    if (!frame(k, b, facing(k), x0, y0, z0))
+        return;
+    float kn = 0, fi = 0;
+    handReach(rig, side, kn, fi);
+    if (!(fi > 1e-3f))
+        return;
+    constexpr int steps = 6;
+    std::vector<float> depth[steps];
+    const Vec3 a0 = k.at[boneEnds[b][0]];
+    for (size_t v = 0; v < rig.rest.size(); ++v) {
+        uint32_t w = 0;
+        for (int c = 0; c < 4; ++c)
+            if ((rig.joint[v * 4 + c] & 15) == b)
+                w += rig.weight[v * 4 + c];
+        if (w < 200)
+            continue;
+        const Vec3 d = rig.rest[v] - a0;
+        const float s = dot(d, y0) - kn;
+        const int i = static_cast<int>(std::floor(s / fi * steps));
+        if (s > 0 && i >= 0 && i < steps && std::isfinite(dot(d, z0)))
+            depth[i].push_back(dot(d, z0));
+    }
+    float n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (int i = 0; i < steps; ++i) {
+        if (depth[i].size() < 5)
+            continue;
+        auto mid = depth[i].begin() + static_cast<std::ptrdiff_t>(depth[i].size() / 2);
+        std::nth_element(depth[i].begin(), mid, depth[i].end());
+        const float x = (static_cast<float>(i) + .5f) * fi / steps, y = *mid;
+        n += 1, sx += x, sy += y, sxx += x * x, sxy += x * y;
+    }
+    if (n < 2)
+        return;
+    const float den = n * sxx - sx * sx;
+    const float slope = std::abs(den) > 1e-12f ? (n * sxy - sx * sy) / den : 0.f;
+    const float h = rig.height / 1.8f;
+    rig.fingerSlope[side] = std::isfinite(slope) ? std::clamp(slope, -1.f, .3f) : 0.f;
+    const float depth0 = (sy - rig.fingerSlope[side] * sx) / n;
+    rig.fingerDepth[side] = std::isfinite(depth0) ? std::clamp(depth0, -.06f * h, .02f * h) : 0.f;
+
+    // the fist's hole: the hand's own vertices fully curled (as skin curls them), then the handle's axis (along x0)
+    // tried on a 2.5 mm grid 4 cm round the curl's centre: the fewest outward faces inside the handle (the handle
+    // showing through), never a side of it left bare (8 sectors with skin within 2 cm of its surface)
+    BoneMove m;
+    m.x0 = x0, m.y0 = y0, m.z0 = z0, m.knuckle = kn, m.fingers = fi, m.curl = fistRadians;
+    m.depth = rig.fingerDepth[side], m.slope = rig.fingerSlope[side];
+    std::vector<float> py, pz, ny, nz;
+    for (size_t v = 0; v < rig.rest.size() && v < rig.restNormal.size(); ++v) {
+        uint32_t w = 0;
+        for (int c = 0; c < 4; ++c)
+            if ((rig.joint[v * 4 + c] & 15) == b)
+                w += rig.weight[v * 4 + c];
+        if (w < 200)
+            continue;
+        Vec3 d = rig.rest[v] - a0, nn = rig.restNormal[v];
+        curlFinger(m, d, nn);
+        const float y = dot(d, y0), z = dot(d, z0);
+        if (std::isfinite(y) && std::isfinite(z))
+            py.push_back(y), pz.push_back(z), ny.push_back(dot(nn, y0)), nz.push_back(dot(nn, z0));
+    }
+    const float r = .018f * h, cy = kn, cz = m.depth - fi / fistRadians;
+    int best = 1 << 30;
+    for (int iy = -16; iy <= 16; ++iy)
+        for (int iz = -16; iz <= 16; ++iz) {
+            const float hy = cy + iy * .0025f * h, hz = cz + iz * .0025f * h;
+            int poke = 0;
+            unsigned sectors = 0;
+            for (size_t i = 0; i < py.size(); ++i) {
+                const float dy = py[i] - hy, dz = pz[i] - hz, dd = std::sqrt(dy * dy + dz * dz);
+                if (dd < r - .001f * h && dd > 1e-6f && (ny[i] * dy + nz[i] * dz) / dd > .3f)
+                    ++poke;
+                if (dd < r + .02f * h) {
+                    const float a = std::atan2(dz, dy) + 3.14159265f;
+                    sectors |= 1u << std::min(7, static_cast<int>(a / (6.2831853f / 8)));
+                }
+            }
+            // a step off the centre costs a face: the fit stays put unless the hole is clearly better elsewhere
+            const int cost = poke + 1000 * (8 - static_cast<int>(std::bitset<8>(sectors).count())) + std::abs(iy) + std::abs(iz);
+            if (cost < best)
+                best = cost, rig.fistHole[side][0] = hy - cy, rig.fistHole[side][1] = hz - cz;
+        }
+}
+} // namespace
+
 bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name) {
     out = {};
     if (!mesh.ok() || !mesh.hasSuit || !mesh.hasSkin() || !mesh.hasNormals())
@@ -248,6 +343,8 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name) {
         out.corner[c] = found;
     }
     restHands(out, name);
+    fingerLine(out, 0);
+    fingerLine(out, 1);
     findCape(mesh, out);
     out.triangleBone.resize(n);
     for (uint32_t t = 0; t < n; ++t) {
@@ -332,7 +429,13 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
             const Vec3 back = handBackOf(gx, side);
             float kn = 0, fi = 0;
             handReach(rig, side, kn, fi);
-            const Vec3 wrist = t.grip[side] - way * (kn * s) + back * (fi * s / fistRadians);
+            // Version 0.0.73 test 3 FIST: the curl's centre (the handle) under the fingers' own line (fingerDepth).
+            // With fistFit the hole the fist leaves (Rig::fistHole) round the grip point instead.
+            const bool fit = t.fistFit[side];
+            out.fistFit[side] = fit;
+            const float holeY = kn + (fit ? rig.fistHole[side][0] : 0.f),
+                        holeZ = (fit ? rig.fingerDepth[side] + rig.fistHole[side][1] : 0.f) - fi / fistRadians;
+            const Vec3 wrist = t.grip[side] - way * (holeY * s) - back * (holeZ * s);
             const Vec3 out_ = side ? fx * -1.f : fx;
             out.at[wr] = wrist;
             out.at[tip] = wrist + way * hand;
@@ -400,6 +503,8 @@ bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
             handReach(rig, side, out[b].knuckle, out[b].fingers);
             const float c = std::isfinite(live.curl[side]) ? std::clamp(live.curl[side], 0.f, 1.f) : 0.f;
             out[b].curl = c * fistRadians;
+            if (live.fistFit[side])
+                out[b].depth = rig.fingerDepth[side], out[b].slope = rig.fingerSlope[side];
         }
     }
     return true;
@@ -410,16 +515,23 @@ namespace {
 // (x0), evenly along the fingers (a curl of b.curl radians over b.fingers), so the fingers wrap a handle; past
 // the fingertips it carries on straight. Its normal turned the same.
 void curlFinger(const BoneMove& b, Vec3& d, Vec3& n) {
-    const float lx = dot(d, b.x0), ly = dot(d, b.y0), lz = dot(d, b.z0);
-    const float s = ly - b.knuckle;
-    if (!(s > 0))
+    const float lx = dot(d, b.x0), ly = dot(d, b.y0);
+    const float s0 = ly - b.knuckle;
+    if (!(s0 > 0))
         return;
+    // Version 0.0.73 test 3 FIST: straightened off the fingers' own line (depth + slope s0) first, the arc length
+    // along it; then curled round the centre under that line (with depth = slope = 0: Test build 12's curl).
+    const float lz = dot(d, b.z0) - b.slope * s0 - b.depth, s = s0 * std::sqrt(1.f + b.slope * b.slope);
     const float R = b.fingers / b.curl, phi = std::min(s, b.fingers) / R, extra = std::max(0.f, s - b.fingers);
     const float cs = std::cos(phi), sn = std::sin(phi);
-    // (y, z) about the curl's centre (knuckle, -R): (0, R + lz) turned by phi, then on along the tangent
-    const float y = b.knuckle + (R + lz) * sn + extra * cs, z = -R + (R + lz) * cs - extra * sn;
+    // (y, z) about the curl's centre (knuckle, depth - R): (0, R + lz) turned by phi, then on along the tangent
+    const float y = b.knuckle + (R + lz) * sn + extra * cs, z = b.depth - R + (R + lz) * cs - extra * sn;
     d = b.x0 * lx + b.y0 * y + b.z0 * z;
-    const float nx = dot(n, b.x0), ny = dot(n, b.y0), nz = dot(n, b.z0);
+    float nx = dot(n, b.x0), ny = dot(n, b.y0), nz = dot(n, b.z0);
+    if (b.slope != 0) { // straightened: turned off the slope first
+        const float k = 1.f / std::sqrt(1.f + b.slope * b.slope), ty = ny * k + nz * b.slope * k;
+        nz = -ny * b.slope * k + nz * k, ny = ty;
+    }
     n = b.x0 * nx + b.y0 * (ny * cs + nz * sn) + b.z0 * (-ny * sn + nz * cs);
 }
 } // namespace

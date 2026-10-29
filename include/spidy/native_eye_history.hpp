@@ -95,6 +95,11 @@ struct NativeEyeFrame {
     std::array<Vec3, 2> batonGrip{}, batonTip{};
     std::array<float, 2> batonOn{};
     std::array<bool, 2> batonHeld{}; // test build 10: in the fist (the model's grip on the hand)
+    // 0.0.73 DD BATON (dd_baton073.hpp, BATON TIP ON): the suit's fist fitted round the held baton, and the
+    // silver tip apart (flying to the grapple's anchor, on it, or reeled back): its seam end and point, and the
+    // rope from the baton's seam (this frame's world). Always false while BATON TIP is OFF.
+    std::array<bool, 2> batonFist{}, batonTipApart{};
+    std::array<Vec3, 2> batonRopeFrom{}, batonTipBack{}, batonTipFront{};
     // 0.0.73 test 3 WEAPON COLLISION (held): each hand's held prop drawn back off the surface ahead (world
     // offset; the hand, the aim and every hit stay where they are - only the drawing moves).
     std::array<Vec3, 2> heldPush{};

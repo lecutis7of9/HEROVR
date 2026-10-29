@@ -2533,3 +2533,17 @@ The streetlight flicker is CANDIDATE: the history was cut in 26% of pairs, and s
 Under both, EYE AA, history 80, LIGHT HOLD, SHADOW MATCH, CULL MARGIN, FAR SHADOWS and EYE BLOOM are unchanged. The
 history read, FXAA and sharpening change live; the textures change on restart. `migrate_073t4` (marker MIGRATED_073T4) moves a
 live.txt's test 2/3 values (aa 1, sharpen 140) to 0 once, unless it picks `image = classic`. STARTUP_ON no longer forces sharpen 140.
+
+**DD BATON TIP** (combat38 `ddBatonTip`, wrist DAREDEVIL, live.txt `dd_baton_tip`, export SpidyDdBatonTip 5453; ON by default, live):
+- **ON** (0): the held baton is seated down the fist's own tube through the grip (`dd_baton073::seated`; 9.5 cm of butt
+  under the fist, the rest past the thumb), and the suit's fist is fitted round it (`suit_wear` Tracked/Skeleton `fistFit`:
+  per suit, `makeRig` fits the rest fingers' droop line and searches the hole the curled fist leaves; only the held hand,
+  only while held). The grapple's start (ddAimFrom) is the silver tip on its axis. While that hand's grapple pulls, the
+  tip (the model cut at its seam, `batonPart`, nothing flattened; the club's steel tip as fallback) flies to
+  `capeNow.anchor` in 0.12 s on a grey rope from the seam (`dd_baton073::TipFlight`/`place`), stays there, and reels
+  back in 0.25 s and snaps on when the pull ends; the hook line is not drawn for that hand meanwhile.
+- **OFF** (1): test 3's shaft (`baton_grip::shaft`) and fist exactly. The trigger-grapples / grip-release-throws
+  behaviour (c40b091) is the same in both.
+- CONFIRMED: curl 1 while a baton is held (game_xr), Touch tilt 30 deg. CANDIDATE: Index 15 deg, the Steam Frame as
+  Touch, the fist-hole fit parameters (a 36 mm handle scaled by the rig's height), `capeNow.anchor` as where the tip
+  lands. No new game addresses.

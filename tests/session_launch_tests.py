@@ -48,6 +48,7 @@ def _load():
 
 run_game_vr, STUBBED = _load()
 import vr_display  # noqa: E402  (the instance run_game_vr uses)
+import live_settings  # noqa: E402  (0.0.73 lights: the migration marker)
 
 
 class Prepared(Exception):
@@ -102,7 +103,11 @@ class SessionLaunchTests(unittest.TestCase):
 
     def test_main_hands_live_txt_lens_flares_to_the_launch(self):
         # The path a player takes: main() reads live.txt, then session() starts the game.
-        for live, off in (('lens_flares = off_in_vr\n', ('lens_flares',)), ('lens_flares = game\n', ()), ('', ())):
+        # 0.0.73 lights: OFF IN VR is the default (no line, or test 4's 'game' at the old default before the
+        # migration's marker); GAME chosen after the marker stays.
+        for live, off in (('lens_flares = off_in_vr\n', ('lens_flares',)),
+                          ('lens_flares = game\n', ('lens_flares',)),
+                          (live_settings.MIGRATED_073T5 + '\nlens_flares = game\n', ()), ('', ('lens_flares',))):
             with self.subTest(live=live), tempfile.TemporaryDirectory() as folder:
                 root = pathlib.Path(folder)
                 (root/'live.txt').write_text(live, encoding='utf-8')

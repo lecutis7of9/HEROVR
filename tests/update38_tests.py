@@ -105,6 +105,10 @@ class Defaults(unittest.TestCase):
         Version 0.0.72: the four model looks default to their MODEL value instead (the
         user's 0.0.71 test: index 0 drew the built-in stand-ins, never the bundled models)."""
         for key, value in ls.UPDATE38_DEFAULTS.items():
+            if key == 'lens_flares':  # 0.0.73 lights: OFF IN VR (1) by default; index 0 stays GAME
+                self.assertEqual(value, 'off_in_vr')
+                self.assertEqual(ls.export_value(key, value), 1)
+                continue
             if key in ls.MODEL_LOOKS_072:
                 self.assertEqual(value, ls.MODEL_LOOKS_072[key], key)
                 self.assertNotEqual(ls.export_value(key, value), 0, key)

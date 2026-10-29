@@ -402,7 +402,8 @@ UPDATE37_DEFAULTS = {'history': 80, 'sharpen': 0,  # 0.0.73 IMAGE SPIDYVR (was 1
                      # COPY and SHARED LOD HIGHER started on every start (run371 started them OFF or low); the
                      # Update 36 values back (bloom_fx off, aim_steer off, the ring facing the eyes, wall_crawl
                      # the swing's wall); the medium web bend; the new 37.2 settings' defaults.
-                     'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 1, 'shared_lod': 2, 'bloom_fx': 0,
+                     'eye_temporal': 1, 'far_shadows': 2, 'shared_lod': 2, 'bloom_fx': 0,
+                     'eye_bloom': 0,  # 0.0.73 lights: EYE BLOOM OFF (SpidyVR's; COPY strobed the light halos)
                      'aim_steer': 0, 'ring_face': 0, 'wall_crawl': 0, 'web_bend': 100, 'wall_body': 0,
                      'zip_strike': 1, 'web_yank': 1, 'npc_fade': 'off', 'color_fx': 0, 'foveated': 'off',
                      'lod_fade': 0}  # Build 12 WINDOW LIGHTS: LOD FADE OFF
@@ -431,9 +432,10 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'punch_sense': 'forgiving', 'sfx_volume': '100%', 'supersonic': 'on', 'supersonic_speed': '2x',
                      # Version 0.0.6 (the heroes experimental: off)
                      'daredevil': 'off', 'hulk': 'off', 'daredevil_punch': '3x',
-                     # Version 0.0.62 (HIT INDICATOR off: the user's call; HAND FLIPS on and LENS FLARES
-                     # game: 0.0.6's behaviour and the graphics defaults kept)
-                     'hit_indicator': 'off', 'hand_flips': 'on', 'lens_flares': 'game',
+                     # Version 0.0.62 (HIT INDICATOR off: the user's call; HAND FLIPS on: 0.0.6's behaviour).
+                     # 0.0.73 lights: LENS FLARES OFF IN VR (was game; test 4: flare streaks strobing, headlights
+                     # ghosting; SpidyVR's PC had them off). A RESTART setting: run_game_vr reads lens_flares_off().
+                     'hit_indicator': 'off', 'hand_flips': 'on', 'lens_flares': 'off_in_vr',
                      # Version 0.0.62 (the SpidyVR comparison; 0.0.6's: game_move, 0.0.6)
                      'punch_hits': 'game_instant', 'foe_track': 'live',
                      'beacons_vision': 'on',  # Version 0.0.62 (the user's call)
@@ -464,7 +466,9 @@ UPDATE38_DEFAULTS.update(MODEL_LOOKS_072)
 STARTUP_ON = {'eye_temporal': 1, 'far_shadows': 2}
 # Update 37.2: what migrate_372 sets once in an existing live.txt (the settings above whose old value
 # the player saw in run371, and the Update 36 values back).
-MIGRATE_372 = {'sharpen': 140, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 1, 'shared_lod': 2,
+# 0.0.73 lights: eye_bloom 0 (was 1): an old live.txt reaching this after migrate_073t5 (main() runs that
+# first) must not get EYE BLOOM COPY back.
+MIGRATE_372 = {'sharpen': 140, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 0, 'shared_lod': 2,
                'bloom_fx': 0, 'aim_steer': 0, 'ring_face': 0, 'wall_crawl': 0, 'web_bend': 100}
 def startup_line(current):
     """Update 37.2: one console line on STARTUP_ON as the session runs them (current: LiveFile.current)."""
@@ -1649,6 +1653,66 @@ def migrate_073t4(path):
 
 
 HEADER += MIGRATED_073T4 + '\n'
+
+
+# 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his
+# video: the bulbs and light pools are steady, the lens-flare streaks and bloom halos round street and
+# traffic lights strobe, worse panning; car lights leave ghost trails). Test 4 started EYE BLOOM COPY
+# (the game's bloom / lens pass forced into both eyes, which the game itself gives only the active view)
+# and the game's own Lens Flares On (game log). Both move to SpidyVR's (no eye bloom; flares off) once
+# over a live.txt that holds the old default; a value chosen after the marker stays.
+MIGRATE_073T5 = {'eye_bloom': (1, 0), 'lens_flares': ('game', 'off_in_vr')}
+MIGRATED_073T5 = ('# Version 0.0.73 lights: EYE BLOOM COPY -> OFF and LENS FLARES GAME -> OFF IN VR once '
+                  '(migrated; a value chosen after this line stays)')
+
+
+def migrate_073t5(path):
+    """0.0.73 lights, once: MIGRATE_073T5 over an existing live.txt (a value at the old default only),
+    then the MIGRATED_073T5 marker. No live.txt: nothing (HEADER carries the marker). The line to show,
+    or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_073T5 in text:
+        return None
+    try:
+        values, _ = parse(text)
+        changed = {}
+        for name, (old, new) in MIGRATE_073T5.items():
+            if name in values and str(values[name]).strip().lower() in (str(old), str(old) + '.0'):
+                changed[name] = new
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_073T5 + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to the 0.0.73 lights fix (steady light halos, no flare strobing): ' +
+            ', '.join(f'{k} = {v}' for k, v in changed.items()) + ' (change it again and it stays).')
+
+
+HEADER += MIGRATED_073T5 + '\n'
+
+
+def lens_flares_off(text):
+    """True when live.txt `text` (None: no live.txt) turns the game's lens flares off for this VR session:
+    lens_flares = off_in_vr, or no lens_flares line at all (0.0.73 lights: the default is OFF IN VR).
+    Never raises (an unreadable text gives the default)."""
+    default = UPDATE38_DEFAULTS['lens_flares'] == 'off_in_vr'
+    try:
+        values, _ = parse(text or '')
+    except Exception:
+        return default
+    if 'lens_flares' not in values:
+        return default
+    return values['lens_flares'] in ('off_in_vr', 1)
 
 
 def next_launch_supersample(path):

@@ -22,7 +22,8 @@ MARKER = 1 << 30
 
 class FakeMod:
     """The parts of game_xr.cpp / stereo_probe.cpp on this path, for one game process."""
-    COMBAT = {'mirror_view': 'test', 'lens_flares': 'off_in_vr'}  # the wrist row's next value from 0
+    COMBAT = {'mirror_view': 'test', 'lens_flares': 'off_in_vr'}  # the wrist row's next value from 0 (lens_flares
+    # starts at 1, OFF IN VR, from the launcher's default since 0.0.73 lights: a press gives GAME)
 
     def __init__(self):
         self.values = {'mirror_view': 0, 'lens_flares': 0}
@@ -164,10 +165,10 @@ class MirrorPersist(unittest.TestCase):
     def test_other_restart_settings_survive_too(self):
         with tempfile.TemporaryDirectory() as d:
             folder = pathlib.Path(d)
-            session(folder, wrist=['lens_flares', ('supersample', 200)])
-            self.assertEqual(L.persisted(folder / 'live.txt')[0].get('lens_flares'), 'off_in_vr')
+            session(folder, wrist=['lens_flares', ('supersample', 200)])  # 0.0.73 lights: OFF IN VR -> GAME
+            self.assertEqual(L.persisted(folder / 'live.txt')[0].get('lens_flares'), 'game')
             self.assertEqual(L.next_launch_supersample(folder / 'next-launch.txt'), 200)
-            self.assertEqual(session(folder).values['lens_flares'], 1)
+            self.assertEqual(session(folder).values['lens_flares'], 0)
 
     def test_a_hero_toggle_does_not_clear_it(self):
         self.assertNotIn('mirror_view', L.HERO_KEYS)

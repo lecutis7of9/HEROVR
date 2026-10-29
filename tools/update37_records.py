@@ -16,6 +16,7 @@ CMB8  SpidyCombat38Data    include/spidy/combat38.hpp      Update 38 COMBAT: pun
 MPRB  SpidyMirrorProbeData include/spidy/mirror_probe.hpp  Update 38.4 MIRROR PROBE (38.5: v2, preview/menu/first events)
 WMUZ  SpidyWristMuzzleData include/spidy/wrist_muzzle.hpp  Update 38.5 BALL LOOK WRIST: web-shooter muzzle moves (CANDIDATE)
 HSWP  SpidyHeroSwitchData  include/spidy/hero_switch.hpp   Update 38.5 HERO SWITCH PROBE: a real Peter / Miles switch, re-attached
+BLOM  SpidyEyeBloomData    include/spidy/eye_bloom.hpp     0.0.73 lights: EYE BLOOM in force (OFF/COPY/GATE), reverts, eye jobs
 AIRW  SpidyAirWatchData    include/spidy/air_watch.hpp     Update 38.5 Y IN THE AIR: Y presses, the game's moves out of the swing's flight (a glide's sign), read-only
 
 Each is a seqlock record (an odd sequence: being written; read again).
@@ -63,6 +64,8 @@ RECORDS = {
     'v005': ('SpidyV005Data', 0x35303056, 2, 552),
     # Version 0.0.6
     'v006': ('SpidyV006Data', 0x36303056, 1, 128),
+    # 0.0.73 lights (test 4's export had no EYE BLOOM state: the mode the halos ran under was unknown)
+    'eye_bloom': ('SpidyEyeBloomData', 0x4d4f4c42, 1, 144),
 }
 # Update 38: records of the swing (ray) module, not the VR module: never in RECORDS, whose exports the
 # launcher requires of the VR module. The COMBAT record already carries the lunge counts.
@@ -143,6 +146,24 @@ def _header(raw, key):
     if struct.unpack_from('<3I', raw, 0) != (magic, version, size):
         raise RuntimeError(f'Native {key} record protocol mismatch')
     return not struct.unpack_from('<Q', raw, size - 8)[0] & 1
+
+BLOOM_MODES = ('OFF', 'COPY', 'GATE')
+BLOOM_WHY = ('none', 'N/A (gate bytes differ)', 'no eye settings seen', 'the game view has no bloom here',
+             'eye bloom stayed off with GATE', 'write failed')  # eye_bloom.hpp Reason, in order
+
+
+def parse_eye_bloom(raw):
+    """0.0.73 lights: SpidyEyeBloomData (eye_bloom.hpp Data, BLOM v1)."""
+    if not _header(raw, 'eye_bloom'):
+        return None
+    packed, gate_known, gate_patched, changes, reverts, last, _ = struct.unpack_from('<7I', raw, 12)
+    calls, eye_jobs, head_on, own_on, written = struct.unpack_from('<5Q', raw, 40)
+    head, own0, own1, now0, now1, _ = struct.unpack_from('<6I', raw, 80)
+    return dict(mode=_name(BLOOM_MODES, packed & 0xff), why=_name(BLOOM_WHY, packed >> 8 & 0xff),
+                gate_known=bool(gate_known), gate_patched=bool(gate_patched), mode_changes=changes,
+                reverts=reverts, last_revert=_name(BLOOM_WHY, last), copy_jobs=calls, eye_jobs=eye_jobs,
+                game_view_bloom_on=head_on, eye_own_bloom_on=own_on, written=written,
+                newest_raw=dict(game_view=head, eye_own=[own0, own1], eye_now=[now0, now1]))
 
 
 def parse_view_gates(raw):
@@ -838,7 +859,7 @@ PARSERS = dict(air_watch=parse_air_watch, view_gates=parse_view_gates, combat=pa
                perf=parse_perf, color=parse_color, fovea=parse_fovea, npc_fade=parse_npc_fade,
                combat38=parse_combat38, mirror_probe=parse_mirror_probe, wrist_muzzle=parse_wrist_muzzle,
                hero_switch=parse_hero_switch, v003=parse_v003, v005=parse_v005,
-               v006=parse_v006)
+               v006=parse_v006, eye_bloom=parse_eye_bloom)
 
 
 def snapshot(game, xr, key):
@@ -878,6 +899,11 @@ def console_lines(records):
     if c and 'fired' in c:
         lines.append('Update 37 gestures: ' + ', '.join(f'{k} {v}' for k, v in c['fired'].items()) +
                      f"; punches {sum(c['punches'])}.")
+    eb = (records or {}).get('eye_bloom')
+    if eb and 'mode' in eb:
+        lines.append(f"0.0.73 lights: EYE BLOOM {eb['mode']} at the end ({eb['mode_changes']} changes, {eb['reverts']} "
+                     f"reverts, last: {eb['last_revert']}); {eb['eye_jobs']} eye jobs, {eb['written']} given the game "
+                     f"view's bloom, game view bloom on in {eb['game_view_bloom_on']}.")
     v = (records or {}).get('view_gates')
     if v and 'bloom_fx' in v:
         lines.append(f"Update 37 view gates: BLOOM FX {v['bloom_fx']} ({v['fx_writes']} writes), LOD FADE "

@@ -1780,7 +1780,7 @@ int main() {
                   std::string(helpText(Control::sharedLod)) == sl::help,
               "help texts");
         // Default-safe: both start OFF; a press steps OFF -> A -> plan B -> OFF.
-        check(eb::defaultMode == eb::copy && eb::next(eb::off) == eb::copy && eb::next(eb::copy) == eb::gate &&
+        check(eb::defaultMode == eb::off && eb::next(eb::off) == eb::copy && eb::next(eb::copy) == eb::gate &&
                   eb::next(eb::gate) == eb::off,
               "EYE BLOOM cycle");
         check(sl::defaultMode == sl::higher && sl::next(sl::off) == sl::game && sl::next(sl::game) == sl::higher &&
@@ -18455,7 +18455,7 @@ int main() {
     });
     test("Update 37.2: the start-up defaults (FAR SHADOWS EYES+CACHE, EYE BLOOM COPY, SHARED LOD HIGHER, Update 36 values back)", [] {
         check(far_shadows::defaultMode == far_shadows::eyesCache && far_shadows::eyesCache == 2, "FAR SHADOWS does not start EYES+CACHE");
-        check(eye_bloom::defaultMode == eye_bloom::copy && eye_bloom::copy == 1, "EYE BLOOM does not start COPY");
+        check(eye_bloom::defaultMode == eye_bloom::off && eye_bloom::copy == 1, "EYE BLOOM does not start OFF (0.0.73 lights)");
         check(shared_lod::defaultMode == shared_lod::higher && shared_lod::higher == 2, "SHARED LOD does not start HIGHER");
         check(view_gates::defaultFx == view_gates::fxOff && view_gates::Data{}.bloomFx == 0, "BLOOM FX does not start OFF");
         check(!health_ring::Place{}.flat, "the ring does not face the eyes (Update 36) by default");
@@ -19492,7 +19492,7 @@ int main() {
         check(d.status == 3 && d.pad == 0, "the session's status fell back to N/A");
     });
     test("Update 38: the 37.2 graphics defaults are unchanged; the WEB ROPE look", [] {
-        check(far_shadows::defaultMode == far_shadows::eyesCache && eye_bloom::defaultMode == eye_bloom::copy &&
+        check(far_shadows::defaultMode == far_shadows::eyesCache && eye_bloom::defaultMode == eye_bloom::off &&
                   shared_lod::defaultMode == shared_lod::higher && view_gates::defaultFx == view_gates::fxOff,
               "a 37.2 graphics default changed");
         check(npc_fade::defaultMode == npc_fade::off && !wall_body::defaultOn && foveation::defaultLevel == foveation::off,

@@ -2344,16 +2344,25 @@ def main():
     except OSError:
         pass
     # Version 0.0.62: live.txt lens_flares = off_in_vr (the hologram's LENS FLARES, RESTART) turns the game's
-    # lens flares off for this session (vr_display.SESSION_OFF; put back when VR closes). Default: the game's.
+    # lens flares off for this session (vr_display.SESSION_OFF; put back when VR closes). 0.0.73 lights: OFF IN
+    # VR is the default (no lens_flares line too), and a live.txt at the old default moves once (migrate_073t5,
+    # run here: this is read before session()'s migrations).
     session_off = ()
+    migrated_073t5 = live_settings.migrate_073t5(ROOT/'live.txt')
+    if migrated_073t5:
+        print(migrated_073t5, flush=True)
     try:
-        if live_settings.parse((ROOT/'live.txt').read_text(encoding='utf-8-sig', errors='replace'))[0].get(
-                'lens_flares') in ('off_in_vr', 1):
-            session_off = ('lens_flares',)
-            print('live.txt: lens_flares = off_in_vr: the game\'s lens flares are off while VR runs '
-                  '(headlight flares through walls).', flush=True)
+        live_text = (ROOT/'live.txt').read_text(encoding='utf-8-sig', errors='replace')
     except OSError:
-        pass
+        live_text = None
+    if live_settings.lens_flares_off(live_text):
+        session_off = ('lens_flares',)
+        print('LENS FLARES: OFF IN VR this session (0.0.73 lights default: no flare strobing or headlight '
+              'ghosts; the game\'s own setting is put back when VR closes; LENS FLARES GAME + restart VR to '
+              'keep them).', flush=True)
+    else:
+        print('LENS FLARES: GAME this session (the game\'s own lens flares; LENS FLARES OFF IN VR + restart VR '
+              'if they strobe).', flush=True)
     a.session_off = session_off   # session() reads it: it is not a local there (0.0.62 NameError at 'starting the game')
     # SM2 VR (from SM2VR 0.0.27): a Spider-Man 2 that renders no view of its own writes a swapchain back
     # buffer that is not the current one, and the graphics device is lost (DXGI_ERROR_ACCESS_DENIED). The

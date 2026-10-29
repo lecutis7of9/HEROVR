@@ -548,7 +548,6 @@ inline constexpr OptionInfo optionInfo[options] = {
      3, {"GAME", "ALWAYS", "HIDDEN", nullptr}},
     {"sl_watch", "SL WATCH", "SLW", "Test: logs the game's DLSS camera data for the export, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-     2, {"ON", "OFF", nullptr, nullptr}},
     {"sharpen_match", "SHARPEN MATCH", "SHM", "ON sharpens only what the eye history smoothed, none while you move; no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"claw_level", "CLAW LEVEL", "CLVL", "ON points the claws level with the hand, OFF keeps the older tilt; no restart.",

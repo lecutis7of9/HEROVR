@@ -291,6 +291,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5450'), ['SpidyStreamerMode'])  # 0.0.73 STREAMER MODE (5449: mp-solo-test's MP SOLO TEST)
         self.assertEqual(uses.get('5451'), ['SpidyStreamerSmooth'])
         self.assertEqual(uses.get('5452'), ['SpidyStreamerEye'])
+        self.assertEqual(uses.get('5470'), ['SpidyLightChecks'])  # 0.0.73 LIGHT CHECKS
+        self.assertEqual(uses.get('5471'), ['SpidyGlowCheck'])  # 0.0.73 GLOW CHECK
+        self.assertEqual(uses.get('5472'), ['SpidySlWatch'])  # 0.0.73 SL WATCH
 
 
 class Hero073Image(unittest.TestCase):

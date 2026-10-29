@@ -166,6 +166,15 @@ enum Option : uint32_t {
     // 0.0.73 STREAMER MODE (streamer_view.hpp): the monitor shows the headset's eye, every drawing on it (ON) or not (OFF);
     // STREAMER SMOOTH: how the monitor's view steadies head shake (LOW, OFF, HIGH); STREAMER EYE: LEFT EYE or RIGHT EYE
     streamerMode, streamerSmooth, streamerEye,
+    // 0.0.73 LIGHT CHECKS (eye_queries.hpp): ON (each eye's light-glow visibility checks get the game view's
+    // room, at least 1024, not the 256 the game gives secondary views) or OFF (the game's 256); next VR start
+    lightChecks,
+    // 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): a live debug switch for the lights' halo / streak sprites:
+    // GAME (the game's visibility test), ALWAYS (drawn untested) or HIDDEN (not drawn)
+    glowCheck,
+    // 0.0.73 SL WATCH (sl_watch.hpp): ON (default for the test build) logs what the game hands Streamline
+    // (jitter, motion-vector scale and flags, near/far/FOV, frame token, viewport id) every 60 frames; OFF stops
+    slWatch,
     options
 };
 struct OptionInfo {
@@ -507,6 +516,12 @@ inline constexpr OptionInfo optionInfo[options] = {
      3, {"LOW", "OFF", "HIGH", nullptr}},
     {"streamer_eye", "STREAMER EYE", "STREY", "Which headset eye the monitor shows in STREAMER MODE, no restart.",
      2, {"LEFT EYE", "RIGHT EYE", nullptr, nullptr}},
+    {"light_checks", "LIGHT CHECKS", "LCHK", "ON lets each eye check every light's glow so halos hold, restart VR to apply.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"glow_check", "GLOW CHECK", "GLOW", "Debug: ALWAYS draws every light glow untested, HIDDEN draws none, no restart.",
+     3, {"GAME", "ALWAYS", "HIDDEN", nullptr}},
+    {"sl_watch", "SL WATCH", "SLW", "Test: logs the game's DLSS camera data for the export, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

@@ -108,6 +108,8 @@
 #include "spidy/image_style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
+#include "spidy/eye_queries.hpp"
+#include "spidy/sl_watch.hpp"
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/shared_lod.hpp"
@@ -613,6 +615,10 @@ uint32_t SpidyImpostorReachNow();
 DWORD WINAPI SpidyFarWindows(void* percent);
 DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
 DWORD WINAPI SpidyShadowMatchOn(void* on);
+// 0.0.73 LIGHT CHECKS (stereo_probe.cpp, eye_queries.hpp): read when the eyes are made.
+DWORD WINAPI SpidyLightChecksOn(void* on);
+DWORD WINAPI SpidyGlowCheckMode(void* mode); // 0.0.73 GLOW CHECK, live
+DWORD WINAPI SpidySlWatchOn(void* on);       // 0.0.73 SL WATCH (native_address_finder.cpp), live; hooks once
 // 0.0.73 test 3 LIGHT HOLD (native_eye_gpu.cpp): the history shader's bright hold, and the history
 // share its last pass kept (JITTER CALM).
 DWORD WINAPI SpidyEyeLightHold(void* percent);
@@ -2300,7 +2306,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightHoldApplied{~0u}, imageApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -11014,6 +11020,24 @@ DWORD WINAPI run(void*) {
                                 shadowMatchApplied = matchWant;
                                 SpidyShadowMatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
                             }
+                            // 0.0.73 LIGHT CHECKS: on or off for the next eyes made (value 0 ON, 1 OFF).
+                            if (const uint32_t checksWant = eye_queries::on(c38(combat38::lightChecks)) ? 1u : 0u;
+                                checksWant != lightChecksApplied) {
+                                lightChecksApplied = checksWant;
+                                SpidyLightChecksOn(reinterpret_cast<void*>(static_cast<uintptr_t>(checksWant)));
+                            }
+                            // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
+                            if (const uint32_t glowWant = c38(combat38::glowCheck); glowWant != glowCheckApplied) {
+                                glowCheckApplied = glowWant;
+                                SpidyGlowCheckMode(reinterpret_cast<void*>(static_cast<uintptr_t>(glowWant)));
+                            }
+                            // 0.0.73 SL WATCH: on or off when it changes (value 0 ON); while on, a cheap retry of the
+                            // Streamline hooks every 512 frames (it returns at once once they are in).
+                            if (const uint32_t watchWant = sl_watch::on(c38(combat38::slWatch)) ? 1u : 0u;
+                                watchWant != slWatchApplied || (watchWant && (++slWatchTicks & 511u) == 0)) {
+                                slWatchApplied = watchWant;
+                                SpidySlWatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(watchWant)));
+                            }
                             // 0.0.73 test 3 LIGHT HOLD: the history shader's hold when it changes.
                             if (const uint32_t holdWant = eye_history::lightHoldPercentOf(c38(combat38::lightHold));
                                 holdWant != lightHoldApplied) {
@@ -12926,6 +12950,20 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHe
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyleOption(void* v) { return setHero007(v, combat38::imageStyle, 5460); }
 // 0.0.73 DD BATON: ON (0, the baton seated in the fist, its silver tip flown on a rope) or OFF (1, test 3's) (live.txt dd_baton_tip).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdBatonTip(void* v) { return setHero007(v, combat38::ddBatonTip, 5453); }
+// 0.0.73 LIGHT CHECKS (eye_queries.hpp): ON (0, the eyes' light-glow checks get the game view's room) or OFF (1, the
+// game's 256) (live.txt light_checks). Passed on at once too, so a launch's OFF reaches the first eyes made.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecks(void* v) {
+    const DWORD r = setHero007(v, combat38::lightChecks, 5470);
+    if (!r)
+        SpidyLightChecksOn(reinterpret_cast<void*>(
+            static_cast<uintptr_t>(eye_queries::on(combat38Values[combat38::lightChecks].load()) ? 1 : 0)));
+    return r;
+}
+// 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): GAME (0), ALWAYS (1) or HIDDEN (2), live (live.txt glow_check).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheck(void* v) { return setHero007(v, combat38::glowCheck, 5471); }
+// 0.0.73 SL WATCH (sl_watch.hpp): ON (0, the game's Streamline constants logged for the export) or OFF (1), live
+// (live.txt sl_watch). The frame loop passes it on.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySlWatch(void* v) { return setHero007(v, combat38::slWatch, 5472); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

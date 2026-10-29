@@ -71,3 +71,61 @@ Each step: stand still 10 s, then pan slowly left/right 10 s. Note: halos flicke
 5. Game menu Bloom Off, restart VR.
 6. Volumetric Lighting / fog lower, restart VR.
 7. Headset at 80 Hz (stable 2 frames per picture).
+
+## Test 5: LIGHT CHECKS, GLOW CHECK and SL WATCH (October 28)
+
+Every version has the strobe (0.0.63 too) and no image setting changed it, so the cause must be something that every
+version has. Every version makes the eyes as kind-2 views (SpidyVR's design).
+
+- CONFIRMED (exe): the street and traffic light halo and streak sprites (VFX 0x2deecd0) ask
+  RequestRenderQuery 0x2c8be20 twice per light in the drawing view's query pool (view+0x1c78). The consumer at
+  0x2def7ac..0x2def92c hides a sprite whenever either answer is missing or zero. The pool answers 0 when it is full.
+  The view constructor 0x2c98350 clamps a kind-2 view's pool to 0x100 (`mov eax, 0x100` at 0x2c98a41). The game's
+  own kind-0 view is not clamped. Bulbs and ground pools are meshes and lit surfaces, not these sprites, so they
+  stay stable (as in the video).
+- CANDIDATE: 256 slots are too few for the eyes' model queries plus every light at night, so the halos fail and
+  restart. That strobes them, and the streak sprites give the headlight trails.
+- LIGHT CHECKS (export 5470, wrist "ON lets each eye check every light's glow so halos hold, restart VR to apply."):
+  ON is the default. While an eye is being created, the clamp's immediate becomes the game view's own room. That
+  is at least 1024 and at most 4096, in whole 256s. The game's bytes are put back straight after. Nothing is
+  written if the bytes differ from the expected ones. OFF keeps the game's 256.
+- GLOW CHECK (5471, debug, live): GAME (the default), ALWAYS (the sprites drawn untested), HIDDEN (none drawn).
+  If ALWAYS stops the strobe, the visibility queries are confirmed as the cause.
+- SL WATCH (5472, wrist "Test: logs the game's DLSS camera data for the export, no restart.", ON by default for the
+  test build, live): this hooks sl.interposer.dll's slSetConstants, slEvaluateFeature, slSetTag and
+  slSetTagForFrame in a normal session (not only when the address finder runs). The hook installs once when SL
+  WATCH is switched on and is retried cheaply while ON. It logs, every 60 frames, the frame token (a1: the
+  virtual index and the raw dword at +40), the viewport id (a2+32), jitter, mvecScale, near/far/FOV/aspect,
+  motionVectorsInvalidValue, the seven flags (depthInverted +444, cameraMotionIncluded +445, motionVectors3D +446,
+  reset +447, ortho +448, dilated +449, motionVectorsJittered +450, the last one) and structVersion. Per viewport it
+  also counts constants, tag calls, the tag-type mask and evaluates. The record is SLWT v1, 1232 bytes, and the
+  export console shows "0.0.73 SL WATCH: ...".
+
+## The deciding question for per-eye DLAA (answered from the exe)
+
+Do the eye renders produce a depth buffer and a motion-vector buffer, and does the game's MV pass run for them?
+
+- CONFIRMED: depth. In the target maker 0x2c6eec0, kind = rdx & 0x7ffff, and the eye mask check
+  (0x2c6eeff..0x2c6ef18) is skipped for kind 0 (`test r8,r8; je`). GBuffer/kGBufferDepth (id 0x14) is kind 0 and
+  is not special-cased by id, so every buffer set gets one, including the eyes'.
+- CONFIRMED: a motion-vector buffer. GBuffer/kGBufferVelocity (id 0x15) is also kind 0 and not special-cased, so
+  the eyes' sets have one.
+- CONFIRMED: TAA depth history (kTaaDepth0/1, ids 0xa5/0xa6, kind 4) exists only with the -EngineTaa widening
+  and game AA 1/5..7. Test 4 showed targets L1 R1.
+- CANDIDATE: the half-res velocity family (ids 0x2f, 0x37..0x41, kind 0x4000, inside the eye mask 0x3fcc8) is
+  id-gated by settings at 0x2c6f560..0x2c6f5dc.
+- CANDIDATE: the MV pass on the eye views. ModelVelocityDepth (render command 0x13, handler 0x2b11150) is queued
+  at 0x2b4c1d1 (call 0x2c77810 on [r15]+0x160) in the model submit block 0x2b49e71, only when the model count is
+  not 0. Whether it lands on the eye lists is not confirmed. CopyVelocityDepth 0xc1 / CacheVelocityDepth 0xc2 are
+  queued at 0xd39b80, 0xd39bb9, 0xd39f26, 0xd39f5f and 0x2b562a5, and TemporalAa 0xb1 at 0x2d017c6. The runtime
+  check already exists: SpidyCommandTrace / SpidyCommandData counts per owner [other, game view, left eye,
+  right eye] (tools/probe_render_commands.py). Row 0x13 with non-zero eye columns confirms it.
+- CANDIDATE: camera-motion MVs rely on each view's previous camera, which the frame function 0x175a060 shifts for
+  every view. The EYE CAMERA record measures this.
+
+## Next headset test (night downtown with traffic, pan the head)
+
+1. GLOW CHECK ALWAYS: the strobe should stop (the queries are the cause), or not.
+2. LIGHT CHECKS ON vs OFF, each after a VR restart.
+3. Export with SL WATCH ON: one viewport or two, the flags, and the frame token per eye.
+4. SpidyCommandTrace: cmd 0x13 per eye.

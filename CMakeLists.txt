@@ -64,8 +64,15 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/suit_wear.cpp
             src/test_notice.cpp
             src/van_screen.cpp
-            src/roster_page.cpp src/holo_roster.cpp)
+            src/roster_page.cpp src/holo_roster.cpp
+            src/mp_net.cpp src/mp_socket.cpp src/mp_session.cpp src/mp_ghost.cpp) # 0.0.73 MP SOLO TEST: the UDP pipe
 target_include_directories(spidy_core PUBLIC include)
+# 0.0.73 MP SOLO TEST: the network thread (std::thread) and Winsock.
+find_package(Threads REQUIRED)
+target_link_libraries(spidy_core PUBLIC Threads::Threads)
+if(WIN32)
+    target_link_libraries(spidy_core PUBLIC ws2_32)
+endif()
 if(HERO_TEST_BUILD)
     target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_BUILD=1)
 endif()
@@ -89,7 +96,7 @@ target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}"
 # showed build 9 still running; the number makes that plain). Bump per test build.
 # 0.0.73 test 4's console still said "HERO VR 0.0.72 TEST 3 a20b9ee" (export-test4): the version was
 # a literal and the number was not bumped. Both are here now; bump them per test build.
-set(HERO_TEST_NUMBER "5" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+set(HERO_TEST_NUMBER "6" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()
@@ -172,6 +179,15 @@ if(WIN32)
   target_sources(spidy_tests PRIVATE src/game_targets.cpp)
 endif()
 add_test(NAME core COMMAND spidy_tests)
+# 0.0.73 MP SOLO TEST: the packet, interpolation, echo delay and handshake (tests/mp_tests.cpp); the probe
+# runs the real session for tests/mp_buddy_tests.py (the Python Test Buddy against the C++ game side).
+add_executable(spidy_mp_tests tests/mp_tests.cpp)
+target_link_libraries(spidy_mp_tests PRIVATE spidy_core)
+add_test(NAME mp COMMAND spidy_mp_tests)
+add_executable(spidy_mp_probe apps/mp_probe.cpp)
+target_link_libraries(spidy_mp_probe PRIVATE spidy_core)
+add_executable(spidy_mp_preview apps/mp_preview.cpp src/sfx_quiet.cpp) # 0.0.73 MP SOLO TEST: desktop previews
+target_link_libraries(spidy_mp_preview PRIVATE spidy_core)
 # Version 0.0.72 GAME BODY (EXPERIMENTAL): the multiplayer team's spec offline, a synthetic 237-joint rig.
 add_executable(spidy_game_body_tests tests/game_body_tests.cpp src/sfx_quiet.cpp)
 target_link_libraries(spidy_game_body_tests PRIVATE spidy_core)

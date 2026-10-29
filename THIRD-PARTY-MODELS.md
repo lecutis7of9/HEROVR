@@ -92,6 +92,16 @@ model under 30 % of its source's triangles or with a texture or UV missing. Same
   a drop-in game asset. Nothing was trained on it or generated from it, and no other use should be
   made of it.
 
+## 0.0.74 test 1: HIDEOUTS (Models/Hideout/<Room>/scene.glb + room.txt)
+
+| File | Source | Author | Licence | Changes |
+|---|---|---|---|---|
+| `Models/Hideout/Batcave/` | Injustice: Gods Among Us (iOS) Batcave stage, game rip ([The Models Resource](https://models.spriters-resource.com/mobile/injusticegodsamongus/asset/302872/)) | NetherRealm Studios / Warner Bros. Games; ripped by Ecelon (2017) | **None.** A game rip, WB/NetherRealm copyright, tolerated in free fan mods but with no licence. Flagged: replace it with a CC-BY Batcave if it ever has to be cleared. | Scaled to metres (x 0.6536), floor at 0, re-exported from Blender (KHR_lights_punctual stripped, blended materials drawn as cut-out), walk grid and points generated (`tools/hideout074/make_hideout.py`). |
+| `Models/Hideout/Safehouse/` | Built for HERO VR (a Blender PLACEHOLDER: plain walls, floor, a table, a case board) | Agent Mulder | Made for HERO VR | `tools/hideout074/make_safehouse_blender.py`. To be replaced by a real room. |
+
+The van offers both rooms from its dash HOME page: there is no Batmobile yet, so the Batcave's
+"exit to Batmobile" point takes the player back to the van.
+
 ## Reference only (no files used)
 
 The Sketchfab "Daredevil batons" page the player linked was a style reference only. Nothing was

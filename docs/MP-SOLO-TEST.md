@@ -21,7 +21,11 @@ network, accounts or servers, and no game memory address is read or written by i
   replaces the loopback as `PLAYER 2 (TEST BUDDY)`. When it quits (BYE) or goes silent 3 s, the loopback
   comes back.
 * Drawn only with the mod's own models: the remote suit's `suit_wear` rig + `mesh_model` mesh from
-  `Models\Suits` when installed, else a soft stick figure in the hero's colour.
+  `Models\Suits` when installed, else (0.0.73 MPSUIT, PLAYER 2 BODY = SUIT LOOK, the default) a shaded hero
+  body (`mp_body`): Spider-Man in a game suit is drawn web-patterned in that suit's colours as VR MIRROR
+  learned them (sent in the pose's LOOK tail), the other heroes in their colour with a visor and badge.
+  PLAYER 2 BODY = FIGURE (`mp_player2_body = figure`, export `SpidyMpPlayer2Body`, 5477), or a body that
+  cannot be drawn, keeps test 6's soft stick figure.
 * Failure rule: a socket that cannot open, a malformed / short / wrong-version / bad-checksum packet, or a
   draw failure hides the remote player and logs one console line (`MP SOLO TEST: ...`). Never a crash,
   never a fall back to flatscreen.
@@ -34,6 +38,7 @@ network, accounts or servers, and no game memory address is read or written by i
 | `include/spidy/mp_socket.hpp`, `src/mp_socket.cpp` | non-blocking UDP (Winsock / BSD) |
 | `include/spidy/mp_session.hpp`, `src/mp_session.cpp` | the network thread: loopback echo, buddy link, ping |
 | `include/spidy/mp_ghost.hpp`, `src/mp_ghost.cpp` | placement, stick figure, nameplate (pure) |
+| `include/spidy/mp_body.hpp`, `src/mp_body.cpp` | 0.0.73 MPSUIT PLAYER 2 BODY: the shaded hero body for a suit with no mod model, and its LOOK (pure) |
 | `src/game_xr.cpp` | wiring: publish the pose, draw the remote player (after the suit, before the mirror) |
 | `tools/mp_test_buddy.py` | the Test Buddy (stdlib only), `--selftest` matches `spidy_mp_probe golden` byte for byte |
 | `tests/mp_tests.cpp`, `tests/mp_buddy_tests.py` | round trip, versioning, malformed packets, interpolation, loopback delay, buddy handshake, live buddy |

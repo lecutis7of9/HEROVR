@@ -17,6 +17,11 @@
 //   the root's yawed frame, from the feet) and orientation (x y z w) | curl L, R (0..255) | standing eye mm.
 //   0.0.74 FLIGHT POSE (fix 27): + the body's leaned up x y z (the root's yawed frame; 0 1 0 upright) = 124 bytes.
 //   A 112-byte pose (0.0.73 and the test buddy) is still read, upright.
+//   0.0.73 MPSUIT: then (after the lean) a 12-byte LOOK tail = 136 bytes (still version 1: an older build ignores it, a pose without it -
+//   the MP Test Buddy's 112, or a 124 lean-only pose - has no look): 'L', flags (1 has a look, 2 learned from the game's own render),
+//   primary, secondary, emblem (sRGB, 3 bytes each), 0. The look is the worn suit's colours as SuitColours
+//   (vr_mirror.hpp) learned them from the game's own rendered suit - so PLAYER 2 as SPIDER-MAN in a game suit
+//   (no mod model) is drawn in that suit's colours, not the stick figure.
 // A packet of another version, a wrong magic, length or checksum, or a value that is not finite or out of
 // range, is refused (decode says why) - the caller hides the remote player and logs it; nothing throws.
 // A newer packet of the SAME version may carry more payload bytes than this build knows: they are ignored.
@@ -36,7 +41,7 @@ namespace spidy::mp {
 inline constexpr uint32_t magic = 0x504d5648u; // bytes 'H' 'V' 'M' 'P'
 inline constexpr uint8_t version = 1;
 inline constexpr size_t headerBytes = 20, crcBytes = 4, overheadBytes = headerBytes + crcBytes;
-inline constexpr size_t poseBytes = 124, poseBytesV1 = 112, helloBytes = 20, pingBytes = 4, pongBytes = 8;
+inline constexpr size_t poseBytes = 124, poseBytesV1 = 112, lookBytes = 12, poseSentBytes = poseBytes + lookBytes, helloBytes = 20, pingBytes = 4, pongBytes = 8;
 inline constexpr size_t maxPacket = 512;
 inline constexpr uint16_t defaultPort = 39470; // the game's UDP port (the buddy connects to it)
 inline constexpr uint8_t noSuit = 255;
@@ -58,6 +63,10 @@ struct PoseState {
     float curl[2]{};         // 0 open .. 1 a fist
     float standingEye = 1.65f;
     Vec3 leanUp{0, 1, 0};    // 0.0.74 FLIGHT POSE: the body's up, leaned in flight (yawed root frame, unit)
+    // 0.0.73 MPSUIT: the LOOK tail - the worn suit's colours (packed sRGB 0xRRGGBB); none: hasLook false
+    bool hasLook{};
+    bool lookLearned{};      // learned from the game's own rendered suit (else the classic default)
+    uint32_t lookPrimary{}, lookSecondary{}, lookEmblem{};
 };
 struct Packet {
     uint8_t type = pose;

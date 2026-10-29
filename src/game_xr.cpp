@@ -132,6 +132,7 @@
 #include "spidy/rope_grab.hpp"
 #include "spidy/v003.hpp"
 #include "spidy/suit_wear.hpp"
+#include "spidy/mp_body.hpp"    // 0.0.73 MPSUIT PLAYER 2 BODY
 #include "spidy/mp_ghost.hpp"   // 0.0.73 MP SOLO TEST
 #include "spidy/mp_session.hpp" // 0.0.73 MP SOLO TEST
 #include "spidy/wall_stick.hpp"
@@ -11416,8 +11417,14 @@ DWORD WINAPI run(void*) {
                                     lp.leanUp = back.rotate(fly_lean::upOf(saved->flyLean));
                                     const uint8_t suitId = spidy::mp::suitIdOfSlot(wornSuitSlot.load());
                                     const uint8_t hero = static_cast<uint8_t>(std::min<uint32_t>(heroNow(), 31));
-                                    mpSession->publish(spidy::mp::fromLocal(lp, hero, suitId, spidy::mp::suitHashOf(suitId),
-                                                                           static_cast<uint8_t>(mpActionsNow.load(std::memory_order_relaxed))));
+                                    spidy::mp::PoseState mine = spidy::mp::fromLocal(lp, hero, suitId, spidy::mp::suitHashOf(suitId),
+                                                                                     static_cast<uint8_t>(mpActionsNow.load(std::memory_order_relaxed)));
+                                    // 0.0.73 MPSUIT: the suit's colours as VR MIRROR learned them from the game's own render
+                                    // (vr_mirror::SuitColours; the default red and black until learned) ride in the LOOK tail,
+                                    // so a game suit with no mod model is still drawn in its colours as PLAYER 2.
+                                    spidy::mp::setLook(mine, suitPalette.primary, suitPalette.secondary, suitPalette.emblem,
+                                                       suitPalette.learned);
+                                    mpSession->publish(mine);
                                     // Draw what came back.
                                     const spidy::mp::SessionView v = mpSession->view();
                                     const Vec3 lookLocal = back.rotate(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
@@ -11442,7 +11449,15 @@ DWORD WINAPI run(void*) {
                                                                             suit_wear::allBones);
                                             }
                                         }
-                                        if (!drawnSuit) // no suit model for it (the hero's own look, or not installed)
+                                        // 0.0.73 MPSUIT PLAYER 2 BODY (the owner: "when im spiderman with ingame suits the other
+                                        // player was that stick figure thing"): no mod suit model for it (a game suit, the hero's
+                                        // own look, or not installed) draws a shaded hero body in the LOOK's colours (SUIT LOOK,
+                                        // the default); FIGURE, or a body that cannot be drawn, keeps test 6's stick figure.
+                                        bool drawnBody = false;
+                                        if (!drawnSuit && spidy::mp::bodyOn(c38(combat38::mpPlayer2Body)))
+                                            drawnBody = spidy::mp::appendHeroBody(vertices, gt, spidy::mp::lookOf(v.state), viewer,
+                                                                                  v.alpha) > 0;
+                                        if (!drawnSuit && !drawnBody)
                                             spidy::mp::appendFigure(translucent, gt, viewer, spidy::mp::heroColor(v.state.hero), v.alpha);
                                         const float tall = std::clamp(gt.standingEye > .8f ? gt.standingEye : 1.65f, 1.f, 2.4f);
                                         spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs),
@@ -13236,6 +13251,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySharpenMatch(void* v) { retur
 // (live.txt claw_level, window_pop).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawLevel(void* v) { return setHero007(v, combat38::clawLevel, 5474); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPop(void* v) { return setHero007(v, combat38::windowPop, 5475); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlayer2Body(void* v) { return setHero007(v, combat38::mpPlayer2Body, 5477); } // 0.0.73 MPSUIT
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

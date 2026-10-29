@@ -32,6 +32,10 @@ HEADER = struct.Struct('<4sBBBBIIHH')  # 20 bytes
 POSE_FMT = struct.Struct('<BBBBI3ff3f4f3f4f3f4fBBH')  # 112 bytes (the 0.0.73 POSE; still read, upright)
 LEAN_FMT = struct.Struct('<3f')  # 0.0.74 FLIGHT POSE: + the body's leaned up, 124 bytes in all
 assert HEADER.size == 20 and POSE_FMT.size == 112 and LEAN_FMT.size == 12
+# 0.0.73 MPSUIT: the LOOK tail after the lean ('L', flags 1 a look / 2 learned, primary, secondary, emblem as
+# sRGB bytes, 0) = 136 bytes; test 6 builds read the first 112 bytes and ignore the rest, this build reads a pose without it.
+LOOK_BYTES = 12
+LOOK_AT = POSE_FMT.size + LEAN_FMT.size  # 124
 DEFAULT_PORT = 39470
 NO_SUIT = 255
 
@@ -82,10 +86,15 @@ def pose_payload(p):
     def clamp01(x):
         return max(0.0, min(1.0, x))
     (hp, hq), (lp, lq), (rp, rq) = p['head'], p['hands'][0], p['hands'][1]
+    look = p.get('look')  # None, or (learned, primary, secondary, emblem) with each colour 0xRRGGBB
+    flags, cols = 0, (0, 0, 0)
+    if look:
+        flags, cols = 1 | (2 if look[0] else 0), tuple(c & 0xffffff for c in look[1:4])
+    tail = b'L' + bytes([flags]) + b''.join(c.to_bytes(3, 'big') for c in cols) + b'\0'
     return POSE_FMT.pack(p['hero'], p['suit'], p['actions'] & 63, 0, p['suit_hash'], *p['root'], p['yaw'],
                          *hp, *hq, *lp, *lq, *rp, *rq, round(clamp01(p['curl'][0]) * 255),
                          round(clamp01(p['curl'][1]) * 255), round(max(0.0, min(3.0, p['eye'])) * 1000)) + \
-        LEAN_FMT.pack(*safe_lean_up(p.get('lean_up', (0.0, 1.0, 0.0))))
+        LEAN_FMT.pack(*safe_lean_up(p.get('lean_up', (0.0, 1.0, 0.0)))) + tail
 
 
 def safe_lean_up(up):
@@ -132,7 +141,11 @@ def decode(data):
         out.update(hero=v[0], suit=v[1], actions=v[2], suit_hash=v[4], root=v[5:8], yaw=v[8],
                    head=(v[9:12], v[12:16]), hands=((v[16:19], v[19:23]), (v[23:26], v[26:30])),
                    curl=(v[30] / 255, v[31] / 255), eye=v[32] / 1000,
-                   lean_up=safe_lean_up(LEAN_FMT.unpack_from(body, POSE_FMT.size)) if length >= 124 else (0.0, 1.0, 0.0))
+                   lean_up=safe_lean_up(LEAN_FMT.unpack_from(body, POSE_FMT.size)) if length >= 124 else (0.0, 1.0, 0.0),
+                   look=None)
+        if length >= LOOK_AT + LOOK_BYTES and body[LOOK_AT] == ord('L') and body[LOOK_AT + 1] & 1:
+            t = body[LOOK_AT:]
+            out['look'] = (bool(t[1] & 2),) + tuple(int.from_bytes(t[2 + 3 * i:5 + 3 * i], 'big') for i in range(3))
         nums = list(out['root']) + [out['yaw']] + list(v[9:30])
         if not all(math.isfinite(x) for x in nums) or out['hero'] >= 32:
             raise BadPacket('bad value')

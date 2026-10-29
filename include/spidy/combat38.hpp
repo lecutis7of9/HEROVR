@@ -197,6 +197,10 @@ enum Option : uint32_t {
     // 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): ON (the default) the game's widened view keeps flat play's
     // building detail distance (at most 2x); OFF test 5's
     windowPop,
+    // 0.0.73 MPSUIT PLAYER 2 BODY (mp_body.hpp; the owner: "when im spiderman with ingame suits the other player
+    // was that stick figure thing again"): SUIT LOOK (the default) draws PLAYER 2 without a mod suit model as a
+    // shaded hero body (Spider-Man in the suit's learned colours); FIGURE test 6's stick figure
+    mpPlayer2Body,
     options
 };
 struct OptionInfo {
@@ -558,6 +562,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"window_pop", "WINDOW POP FIX", "WPOP", "ON keeps flat play's building detail in VR, up to 2x (moderate GPU); no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"mp_player2_body", "PLAYER 2 BODY", "P2B", "SUIT LOOK draws PLAYER 2 in game suits as a hero body; no restart.",
+     2, {"SUIT LOOK", "FIGURE", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

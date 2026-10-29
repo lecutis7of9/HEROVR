@@ -20,10 +20,10 @@ import mp_test_buddy as mb  # noqa: E402
 
 # The C++ side's output of `spidy_mp_probe golden` (the same fixed packets; tests/mp_tests.cpp checks it).
 GOLDEN = {
-    # 0.0.74: the POSE is 124 bytes (+ the flight lean's up, upright here); a 0.0.73 112-byte one still reads.
+    # 0.0.74 test 1: 136 payload bytes (88) - the pose, the flight lean (upright) and the 0.0.73 MPSUIT LOOK tail (4c 'L', no look: zeros)
     'pose': '48564d50010102002a000000e803000000007c0000032200d43c404b0000003f00000000000080be0000003f00000000cdcccc3f'
             '000000000000000000000000000000000000803f000080be0000803f000080be0000000000000000000000000000803f0000803e'
-            '0000e03f000080be000000000000003f00000000d7b35d3fff007206000000000000803f00000000a8c6a618',
+            '0000e03f000080be000000000000003f00000000d7b35d3fff0072064c000000000000000000000056070e10',
     'hello': '48564d50010202000100000007000000000014005445535420425544445900000000000001000000aebad988',
     'bye': '48564d50010602000300000000000000000000002421337d',
 }
@@ -63,6 +63,18 @@ class Golden(unittest.TestCase):
         for k, v in GOLDEN.items():
             self.assertEqual(cpp[k], v, k)
 
+    def test_look_tail(self):
+        # 0.0.73 MPSUIT: a buddy pose with a look decodes it; test 6's 112-byte pose (no tail) still decodes.
+        p = mb.decode(bytes.fromhex(GOLDEN['pose']))
+        self.assertIsNone(p['look'])
+        pose = dict(hero=0, suit=255, actions=0, suit_hash=0, root=(0, 0, 0), yaw=0, head=((0, 1.6, 0), (0, 0, 0, 1)),
+                    hands=(((-.2, 1, 0), (0, 0, 0, 1)), ((.2, 1, 0), (0, 0, 0, 1))), curl=(0, 0), eye=1.65,
+                    look=(True, 0x101010, 0xc01010, 0xffffff))
+        q = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 2, mb.pose_payload(pose)))
+        self.assertEqual(q['look'], (True, 0x101010, 0xc01010, 0xffffff))
+        old = mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 2, mb.pose_payload(pose)[:112])
+        self.assertIsNone(mb.decode(old)['look'])
+
     def test_decode_round_trip(self):
         p = mb.decode(bytes.fromhex(GOLDEN['pose']))
         self.assertEqual((p['type'], p['role'], p['seq'], p['sent_ms'], p['hero'], p['suit']), (mb.POSE, mb.ROLE_BUDDY, 42, 1000, 0, 3))
@@ -80,7 +92,7 @@ class Golden(unittest.TestCase):
         pose = dict(hero=0, suit=3, actions=mb.FLYING, suit_hash=1, root=(0, 0, 0), yaw=0, head=((0, 1.6, 0), (0, 0, 0, 1)),
                     hands=(((0, 1, 0), (0, 0, 0, 1)), ((0, 1, 0), (0, 0, 0, 1))), curl=(0, 0), eye=1.65, lean_up=(0, 0, -2))
         body = mb.pose_payload(pose)
-        self.assertEqual(len(body), 124)
+        self.assertEqual(len(body), 136)  # 0.0.74 test 1: 112 + lean 12 + LOOK 12
         up = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 0, body))['lean_up']
         self.assertAlmostEqual(up[2], -1.0, places=6)
         old = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 0, body[:112]))

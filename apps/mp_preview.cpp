@@ -1,6 +1,7 @@
 // 0.0.73 MP SOLO TEST: desktop previews of the remote player, from the game's own code. The player's pose goes
 // through the real packet code (mp::fromLocal -> encode -> decode), then mp::partner / mp::toTracked and the
-// game's own suit path (suit_wear estimate / moves / skin / draw with mesh_model's mesh) or mp::appendFigure,
+// game's own suit path (suit_wear estimate / moves / skin / draw with mesh_model's mesh), else (0.0.73 MPSUIT)
+// mp::appendHeroBody - PLAYER 2 BODY SUIT LOOK, the default - or mp::appendFigure (FIGURE),
 // plus mp::appendNameplate - exactly what game_xr draws. Dumps spidy::Vertex arrays; tools/mp/mp_preview.py
 // rasterises them from the player's eye.
 //
@@ -9,9 +10,11 @@
 // nameplate, translucent) and out/scenes.json.
 #include "spidy/hero007_visual.hpp"
 #include "spidy/mesh_model.hpp"
+#include "spidy/mp_body.hpp"
 #include "spidy/mp_ghost.hpp"
 #include "spidy/mp_net.hpp"
 #include "spidy/suit_wear.hpp"
+#include "spidy/vr_mirror.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -91,11 +94,16 @@ int main(int argc, char** argv) {
         bool buddy;
         const char* name;
         int ping;
+        int look;    // 0.0.73 MPSUIT: 0 no LOOK tail (the classic colours), 1 the default palette sent, 2 a learned black and red one
+        bool figure; // PLAYER 2 BODY FIGURE (the switch reverted): the stick figure
     };
     const Scene scenes[] = {
-        {"LOOPBACK GHOST - you in THOR's suit, mirrored, your raised RIGHT hand is its LEFT", 9, "Suit_thor_1", false, "", 3},
-        {"LOOPBACK GHOST - no suit model (IRON MAN's own look): the soft figure in his colour", 1, nullptr, false, "", 4},
-        {"TEST BUDDY connected - its puppet (BATMAN suit) waving, walking its circle", 4, "Suit_batman_1", true, "TEST BUDDY", 6},
+        {"LOOPBACK GHOST - you in THOR's suit, mirrored, your raised RIGHT hand is its LEFT", 9, "Suit_thor_1", false, "", 3, 0, false},
+        {"LOOPBACK GHOST - IRON MAN's own look (no suit model): PLAYER 2 BODY in his colour", 1, nullptr, false, "", 4, 0, false},
+        {"TEST BUDDY connected - its puppet (BATMAN suit) waving, walking its circle", 4, "Suit_batman_1", true, "TEST BUDDY", 6, 0, false},
+        {"SPIDER-MAN in a GAME suit (no mod model): PLAYER 2 BODY, the suit's colours (red and black)", 0, nullptr, false, "", 3, 1, false},
+        {"SPIDER-MAN in a GAME suit, its colours learned from the game's render (a black and red suit)", 0, nullptr, false, "", 3, 2, false},
+        {"PLAYER 2 BODY = FIGURE (the switch reverted): test 6's stick figure", 0, nullptr, false, "", 3, 1, true},
     };
     std::string js = "{\n \"layers\": " + std::to_string(array.layers.size()) + ",\n \"misses\": " + std::to_string(misses.size()) + ",\n \"scenes\": [";
     std::vector<Vertex> model, soft;
@@ -118,6 +126,12 @@ int main(int argc, char** argv) {
         p.role = sc.buddy ? mp::roleBuddy : mp::roleEcho;
         p.seq = 100 + static_cast<uint32_t>(k);
         p.state = mp::fromLocal(l, sc.hero, suit, mp::suitHashOf(suit), mp::swinging);
+        if (sc.look == 1) { // game_xr: the player's own vr_mirror::SuitPalette (here its default)
+            const vr_mirror::SuitPalette d;
+            mp::setLook(p.state, d.primary, d.secondary, d.emblem, false);
+        } else if (sc.look == 2) {
+            mp::setLook(p.state, {.018f, .018f, .022f}, {.52f, .025f, .03f}, {.60f, .03f, .04f}, true);
+        }
         const std::vector<uint8_t> bytes = mp::encode(p);
         mp::Packet back;
         const mp::Error e = mp::decode(bytes.data(), bytes.size(), back);
@@ -147,7 +161,10 @@ int main(int argc, char** argv) {
                 drawnSuit = sw::draw(model, hero007::modelSinkBudget, *m, rig, sk, sw::allBones);
             }
         }
-        if (!drawnSuit)
+        bool drawnBody = false;
+        if (!drawnSuit && !sc.figure) // 0.0.73 MPSUIT PLAYER 2 BODY (SUIT LOOK): opaque, with the suit models
+            drawnBody = mp::appendHeroBody(model, t, mp::lookOf(back.state), viewer, 1.f) > 0;
+        if (!drawnSuit && !drawnBody)
             mp::appendFigure(soft, t, viewer, mp::heroColor(back.state.hero), 1.f);
         const std::string plate = mp::nameplate(sc.buddy, sc.name, sc.ping);
         mp::appendNameplate(soft, plate, t.feet + t.up * (1.65f + .35f), t.up, viewer, 1.f);
@@ -155,9 +172,9 @@ int main(int argc, char** argv) {
         save(out + "soft_" + std::to_string(k) + ".bin", soft);
         char line[768];
         std::snprintf(line, sizeof line,
-                      "%s\n  {\"title\": \"%s\", \"plate\": \"%s\", \"packetBytes\": %zu, \"suit\": \"%s\", \"suitDrawn\": %s, \"modelVertices\": %zu, "
+                      "%s\n  {\"title\": \"%s\", \"plate\": \"%s\", \"packetBytes\": %zu, \"suit\": \"%s\", \"suitDrawn\": %s, \"bodyDrawn\": %s, \"modelVertices\": %zu, "
                       "\"softVertices\": %zu, \"feet\": [%.3f, %.3f, %.3f]}",
-                      k ? "," : "", sc.title, plate.c_str(), bytes.size(), sc.suit ? sc.suit : "", drawnSuit ? "true" : "false", model.size(),
+                      k ? "," : "", sc.title, plate.c_str(), bytes.size(), sc.suit ? sc.suit : "", drawnSuit ? "true" : "false", drawnBody ? "true" : "false", model.size(),
                       soft.size(), t.feet.x, t.feet.y, t.feet.z);
         js += line;
     }

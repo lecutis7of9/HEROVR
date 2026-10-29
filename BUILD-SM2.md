@@ -2683,3 +2683,20 @@ The owner after test 6: with GAME TAA SPIDYVR on, medium and far buildings "shak
   - how many samples had weight 1 (history thrown away).
   - The report has it as `engine_taa_eyes` (final and per sample), and the console prints `TAA JITTER HALF: ...`.
 - **Tests:** core `0.0.73 TAA SHAKE`, `tests/taashake_tests.py`.
+
+## 61. Version 0.0.73 MPSUIT: PLAYER 2 BODY
+
+- **PLAYER 2 BODY** (SURVIVAL AND REPUTATION, beside MP SOLO TEST; `mp_player2_body`, export `SpidyMpPlayer2Body`, 5477; SUIT LOOK default, live). The owner: "when im spiderman with ingame suits the other player was that stick figure thing again it only shows the characters we made normally".
+- **Cause, CONFIRMED in this mod's code:** PLAYER 2 is drawn only with the mod's own models. `mp::suitIdOfSlot(wornSuitSlot)` is `noSuit` for any game suit, because a game suit has no mod suit slot. `slotOfState` then gives 0, so `game_xr` fell to `mp::appendFigure`, the stick figure.
+- **Why not the game's suit or a Spider-Man model:**
+  - The game's own suit mesh would need its skinned mesh and draw address. No such address is evidenced, and none is invented here.
+  - No licensed Spider-Man glb is in the mod or on the box. Marvel's Avengers rips and flattened models are excluded.
+- **Fix:** with no mod suit model, `mp::appendHeroBody` draws a shaded, opaque procedural hero body (`mp_body`). It is posed by `suit_wear::estimate` on a synthetic 1.8 m rig.
+  - Spider-Man: a web-patterned body with a lensed mask and a chest spider, in the suit's colours. Those are VR MIRROR's `SuitPalette`, learned from the game's render (red and black until learned), sent in a new 12-byte pose LOOK tail.
+  - Other heroes: their colour, with a visor and a badge.
+- **Fallback:** FIGURE, or a body that cannot be drawn (it returns 0), keeps the stick figure. Drawing stays inside MP SOLO TEST's try/catch, so it never crashes or goes flat.
+- **Wire (0.0.74 test 1, with FLIGHT POSE's 12-byte lean):** the pose payload is 136 bytes (112 + lean 12 + LOOK 12; packet 160). Test 6 builds read the first 112 bytes and ignore the rest. This build reads a 112-byte pose as upright with no look, and a 124-byte one as leaned with no look. The Test Buddy sends the tail without a look, and `spidy_mp_probe golden` matches.
+- **CANDIDATE:** the learned palette is how the suit looks on the owner's headset. Untested in game.
+- **Preview:** `tools/mp/mp_preview.py` scenes 3-5.
+- **Tests:** mp_tests (LOOK round trip, old pose, every hero's body, the option), mp_buddy_tests `test_look_tail`, hero073_tests `Hero073MpSuit`.
+

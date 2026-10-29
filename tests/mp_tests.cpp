@@ -4,6 +4,7 @@
 // 127.0.0.1 (a loopback round trip and a handshake from a raw socket).
 #include "spidy/combat38.hpp"
 #include "spidy/mesh_model.hpp"
+#include "spidy/mp_body.hpp"
 #include "spidy/mp_ghost.hpp"
 #include "spidy/mp_net.hpp"
 #include "spidy/mp_session.hpp"
@@ -74,7 +75,7 @@ void testRoundTrip() {
     p.sentMs = 123456789;
     p.state = sample();
     const auto b = encode(p);
-    check(b.size() == overheadBytes + poseBytes && b.size() == 148, "a pose packet is 148 bytes (0.0.74: + the flight lean)");
+    check(b.size() == overheadBytes + poseSentBytes && b.size() == 160, "a pose packet is 160 bytes (0.0.74: + the flight lean, + the 0.0.73 MPSUIT LOOK tail)");
     check(b[0] == 'H' && b[1] == 'V' && b[2] == 'M' && b[3] == 'P' && b[4] == 1, "magic and version on the wire");
     Packet q;
     check(decode(b.data(), b.size(), q) == Error::none, "a pose packet decodes");
@@ -129,10 +130,41 @@ void testVersioning() {
     for (int i = 0; i < 8; ++i)
         longer.push_back(0xab);
     longer.resize(longer.size() + 4);
-    longer[18] = static_cast<uint8_t>(poseBytes + 8);
+    longer[18] = static_cast<uint8_t>(poseSentBytes + 8);
     longer = resealed(longer);
     check(decode(longer.data(), longer.size(), q) == Error::none && near(q.state.yaw, p.state.yaw, 0),
           "a longer v1 payload is accepted, its tail ignored");
+    // 0.0.73 MPSUIT: the LOOK tail round trips; a 0.0.73 test 6 pose (112 bytes, no tail) still decodes, lookless.
+    {
+        Packet lp = p;
+        lp.state.hero = 0; // Spider-Man: the LOOK is his suit's colours
+        setLook(lp.state, {.5f, .02f, .03f}, {.01f, .01f, .01f}, {1, 1, 1}, true);
+        const auto lb = encode(lp);
+        Packet lq;
+        check(decode(lb.data(), lb.size(), lq) == Error::none && lq.state.hasLook && lq.state.lookLearned,
+              "the LOOK tail decodes");
+        const Look k = lookOf(lq.state);
+        check(k.spider && k.learned && near(k.primary.x, .5f, .02f) && near(k.secondary.y, .01f, .01f),
+              "the LOOK colours round trip (sRGB bytes)");
+        auto old = lb;
+        auto leanOnly = lb; // 0.0.74: a lean-only pose (124 bytes, no LOOK tail) decodes, without a look
+        leanOnly.erase(leanOnly.begin() + headerBytes + poseBytes, leanOnly.begin() + headerBytes + poseSentBytes);
+        leanOnly[18] = static_cast<uint8_t>(poseBytes);
+        leanOnly = resealed(leanOnly);
+        Packet loq;
+        check(decode(leanOnly.data(), leanOnly.size(), loq) == Error::none && !loq.state.hasLook && near(loq.state.yaw, p.state.yaw, 0),
+              "a lean-only pose (no LOOK tail) still decodes, without a look");
+        old.erase(old.begin() + headerBytes + poseBytesV1, old.begin() + headerBytes + poseSentBytes);
+        old[18] = static_cast<uint8_t>(poseBytesV1);
+        old = resealed(old);
+        Packet oq;
+        check(decode(old.data(), old.size(), oq) == Error::none && !oq.state.hasLook && near(oq.state.yaw, p.state.yaw, 0),
+              "a test 6 pose (no LOOK tail) still decodes, without a look");
+        auto noMark = lb;
+        noMark[headerBytes + poseBytes] = 'X';
+        noMark = resealed(noMark);
+        check(decode(noMark.data(), noMark.size(), oq) == Error::none && !oq.state.hasLook, "a tail without 'L' is ignored");
+    }
     auto t = resealed([&] { auto c = b; c[5] = 99; return c; }());
     check(decode(t.data(), t.size(), q) == Error::badType, "an unknown type is refused");
 }
@@ -664,6 +696,38 @@ void testGhostDrawing() {
     check(appendNameplate(out, nameplate(false, "", 3), t.feet + Vec3{0, 2, 0}, t.up, viewer, 1) > 50, "the nameplate drawn");
     check(appendNameplate(out, "X", viewer, t.up, viewer, 1) == 0, "at the eye itself: nothing");
     check(heroColor(200).x == heroColor(10).x, "a hero past the roster: the last colour");
+    // 0.0.73 MPSUIT PLAYER 2 BODY: every hero gets a shaded opaque body, never the stick figure.
+    bool allBodies = true, bodiesSane = true;
+    for (int h = 0; h <= 10; ++h) {
+        std::vector<Vertex> b;
+        PoseState hs = s;
+        hs.hero = static_cast<uint8_t>(h);
+        const size_t bn = appendHeroBody(b, t, lookOf(hs), viewer, 1.f);
+        allBodies = allBodies && bn > 3000 && bn % 3 == 0 && bn <= bodyMaxVertices && b.size() == bn;
+        for (const auto& v : b)
+            bodiesSane = bodiesSane && std::isfinite(v.position.x) && std::isfinite(v.position.y) &&
+                         std::isfinite(v.position.z) && length(v.position - t.feet) < 2.5f && v.alpha > .99f;
+    }
+    check(allBodies, "PLAYER 2 BODY: every hero 0-10 draws a body");
+    check(bodiesSane, "PLAYER 2 BODY: finite, opaque, around the ghost");
+    std::vector<Vertex> nb;
+    check(appendHeroBody(nb, bad, lookOf(s), viewer, 1) == 0 && nb.empty(), "a broken pose: no body (the figure path)");
+    PoseState sp = s;
+    sp.hero = 0;
+    const Look def = lookOf(sp);
+    check(def.spider && !def.learned && def.primary.x > .3f && def.secondary.x < .1f,
+          "Spider-Man without a LOOK: red and black");
+    PoseState im = s;
+    im.hero = 1;
+    check(!lookOf(im).spider, "Iron Man: not the web pattern");
+    check(bodyOn(bodySuitLook) && !bodyOn(bodyFigure) && bodyOn(7), "SUIT LOOK on, FIGURE off, junk the default (on)");
+    const auto& rig = bodyRig();
+    check(rig.skeleton.at[suit_wear::head].y > 1.5f && rig.skeleton.at[suit_wear::footL].y < .1f,
+          "the body's rig: 1.8 m, standing");
+    const auto& oi = combat38::optionInfo[combat38::mpPlayer2Body];
+    check(std::string(oi.key) == "mp_player2_body" && oi.count == 2 && std::string(oi.values[0]) == "SUIT LOOK" &&
+              std::string(oi.values[1]) == "FIGURE",
+          "PLAYER 2 BODY: an option, SUIT LOOK (value 0, the default) or FIGURE");
 }
 } // namespace
 

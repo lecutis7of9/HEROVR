@@ -138,7 +138,8 @@ def scene(d, k, layers, R, title, plate, info):
     dr = ImageDraw.Draw(canvas)
     dr.text((10, 8), title, fill=(255, 220, 120))
     dr.text((10, 24), 'nameplate: "%s"   packet %d bytes   %s' % (plate, info['packetBytes'],
-            ('suit model: ' + info['suit']) if info['suitDrawn'] else 'no suit model: soft figure'), fill=(200, 200, 200))
+            ('suit model: ' + info['suit']) if info['suitDrawn'] else
+            'no suit model: PLAYER 2 BODY' if info.get('bodyDrawn') else 'no suit model: soft figure'), fill=(200, 200, 200))
     dr.text((10, H + 46), 'HERO VR 0.0.73 MP SOLO TEST - view from your eyes, PLAYER 2 about 3 m ahead (desktop preview, game code)',
             fill=(150, 150, 160))
     return canvas

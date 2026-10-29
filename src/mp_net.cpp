@@ -153,7 +153,7 @@ std::string cleanName(const char* raw) {
 }
 
 size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
-    const size_t body = payloadFor(p.type);
+    const size_t body = p.type == pose ? poseSentBytes : payloadFor(p.type); // 0.0.73 MPSUIT: + the LOOK tail
     if (body == SIZE_MAX || p.role >= roleEnd || !out || capacity < overheadBytes + body)
         return 0;
     Writer w{out, 0, capacity};
@@ -180,6 +180,14 @@ size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
         const float eye = std::isfinite(s.standingEye) ? std::clamp(s.standingEye, 0.f, 3.f) : 0.f;
         w.u16(static_cast<uint16_t>(std::lround(eye * 1000.f)));
         w.vec(safeLeanUp(s.leanUp)); // 0.0.74 FLIGHT POSE
+        // 0.0.73 MPSUIT: the LOOK tail
+        w.u8('L');
+        w.u8(static_cast<uint8_t>((s.hasLook ? 1 : 0) | (s.hasLook && s.lookLearned ? 2 : 0)));
+        for (uint32_t c : {s.lookPrimary, s.lookSecondary, s.lookEmblem}) {
+            const uint32_t k = s.hasLook ? c : 0u;
+            w.u8(static_cast<uint8_t>(k >> 16)), w.u8(static_cast<uint8_t>(k >> 8)), w.u8(static_cast<uint8_t>(k));
+        }
+        w.u8(0);
         break;
     }
     case hello:
@@ -256,6 +264,19 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
             if (!within(h.position, 50.f) || !unitish(h.orientation))
                 return Error::badValue;
         s.yaw = wrapAngle(s.yaw);
+        // 0.0.73 MPSUIT: the LOOK tail, only when it is there and marked (any other tail: ignored, no look)
+        if (body >= poseSentBytes && r.u8() == 'L') {
+            const uint8_t flags = r.u8();
+            uint32_t c[3]{};
+            for (uint32_t& k : c) {
+                const uint32_t R = r.u8(), G = r.u8(), B = r.u8();
+                k = (R << 16) | (G << 8) | B;
+            }
+            s.hasLook = (flags & 1) != 0;
+            s.lookLearned = s.hasLook && (flags & 2) != 0;
+            if (s.hasLook)
+                s.lookPrimary = c[0], s.lookSecondary = c[1], s.lookEmblem = c[2];
+        }
         break;
     }
     case hello:

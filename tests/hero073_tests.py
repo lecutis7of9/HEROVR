@@ -301,6 +301,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5473'), ['SpidySharpenMatch'])  # 0.0.73 AA SHARPEN MATCH
         self.assertEqual(uses.get('5474'), ['SpidyClawLevel'])  # 0.0.73 test 6 CLAW LEVEL
         self.assertEqual(uses.get('5475'), ['SpidyWindowPop'])  # 0.0.73 test 6 WINDOW POP FIX
+        self.assertEqual(uses.get('5477'), ['SpidyMpPlayer2Body'])  # 0.0.73 MPSUIT PLAYER 2 BODY
 
 
 class Hero073Image(unittest.TestCase):
@@ -589,6 +590,34 @@ class Hero073Test6(unittest.TestCase):
         self.assertEqual(L.UPDATE38_DEFAULTS['window_pop'], 'on')
         self.assertEqual(L.export_value('claw_level', 'off'), 1)
         self.assertEqual(L.export_value('window_pop', 'on'), 0)
+
+
+class Hero073MpSuit(unittest.TestCase):
+    """0.0.73 MPSUIT: PLAYER 2 in a game suit (no mod model) is a hero body, not the stick figure (SUIT LOOK, ON)."""
+
+    def test_player2_body_wired(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('spidy::mp::bodyOn(c38(combat38::mpPlayer2Body))', g)
+        self.assertIn('spidy::mp::appendHeroBody(vertices, gt, spidy::mp::lookOf(v.state), viewer', g)
+        self.assertIn('if (!drawnSuit && !drawnBody)', g)  # the figure only as the last resort
+        self.assertIn('spidy::mp::setLook(mine, suitPalette.primary, suitPalette.secondary, suitPalette.emblem', g)
+        self.assertIn('setHero007(v, combat38::mpPlayer2Body, 5477)', g)
+        self.assertIn('src/mp_body.cpp', src('CMakeLists.txt'))
+        self.assertIn('{"SUIT LOOK", "FIGURE", nullptr, nullptr}', src('include/spidy/combat38.hpp'))
+        self.assertIn('combatMpPlayer2Body', src('src/wrist_hud.cpp'))
+
+    def test_live_settings_default_suit_look(self):
+        import live_settings as L
+        self.assertEqual(L.UPDATE38_DEFAULTS['mp_player2_body'], 'suit_look')
+        self.assertEqual(L.export_value('mp_player2_body', 'suit_look'), 0)
+        self.assertEqual(L.export_value('mp_player2_body', 'figure'), 1)
+        self.assertEqual(L.SETTINGS['mp_player2_body'][1], 'SpidyMpPlayer2Body')
+
+    def test_buddy_pose_still_decodes(self):
+        # tools/mp_test_buddy.py sends test 6's 112-byte pose; the game reads it without a LOOK tail.
+        n = src('src/mp_net.cpp')
+        self.assertIn('poseSentBytes', n)
+        self.assertIn("'L'", n)
 
 
 if __name__ == '__main__':

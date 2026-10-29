@@ -66,6 +66,48 @@ bool page(const std::string& path, const vs::View& v) {
     draw(image, toCamera(w, eye, r, u, n), cam, 0, 0, 0, 0, image.w, image.h);
     return save(image, path);
 }
+// 0.0.74 test 2 DASH POINTER: the screen after Screen::step with the pointer on (the game's own code): the
+// right hand at `from` (car local) aimed at tab `tab` (or, `touch`, its fingertip on it), the bat palette when
+// `batman`. The page stays as it was until the trigger clicks.
+vs::View pointerView(uint32_t page, uint32_t tab, bool batman, bool touch, float yaw) {
+    van072::Frame f;
+    f.at = {37.f, 0, -112.f};
+    f.yaw = yaw;
+    vs::Screen s;
+    while (s.page() != page)
+        s.next();
+    vs::Offer offer;
+    offer.batman = batman;
+    const vs::Mount m = vs::mountLocal();
+    const float tabY = vs::height / 2 - vs::tabHeight / 2;
+    const Vec3 target = m.centre + (m.right * vs::tabCentre(tab) + m.up * tabY) * vs::faceScale;
+    vs::In i;
+    i.dt = 1.f / 90;
+    i.driving = true;
+    i.pointer = true;
+    i.offer = offer;
+    i.tracked[1] = true;
+    i.grip[1] = .9f;
+    i.trigger[1] = 0;
+    if (touch) {
+        i.aim[1] = m.normal * -1.f;
+        i.hand[1] = target + m.normal * (vs::fingerReach + .02f); // 2 cm short: hovering, not yet pressed
+    } else {
+        const Vec3 from{-.12f, 1.0f, -.75f};
+        i.hand[1] = from;
+        i.aim[1] = normalized(target - from);
+    }
+    s.step(i);
+    vs::View v = vs::view(f, s, 10.4f, 16.f, .55f, true);
+    v.flash = 0;
+    if (batman) {
+        v.offer.batman = true;
+        v.carName = "1989";
+        v.carCredit = "MODEL: BAT-MOBILE (1989) BY DREAMLOFT3D, CC BY 4.0";
+    }
+    std::printf("pointer: page %u hotTab %d cursor %d beam %d\n", page, v.hotTab, v.cursorOn ? 1 : 0, v.beamOn ? 1 : 0);
+    return v;
+}
 } // namespace
 
 // The cab and the screen from `eye` toward `target` (the van at the origin: world = van local).
@@ -170,6 +212,11 @@ int main(int argc, char** argv) {
         h.offer.sat = true;
         good &= page(dir + "bat_home_sat.bmp", h);
     }
+    // 0.0.74 test 2 DASH POINTER: the ray on the MAP tab from the STATUS page (Batmobile and van), and a fingertip
+    // over the LOCKER tab (van)
+    good &= page(dir + "pointer_bat_ray_map.bmp", pointerView(vs::status, vs::map, true, false, yaw));
+    good &= page(dir + "pointer_van_ray_map.bmp", pointerView(vs::status, vs::map, false, false, yaw));
+    good &= page(dir + "pointer_van_finger_locker.bmp", pointerView(vs::map, vs::locker, false, true, yaw));
     // the driver's seat
     const std::string models = argc > 2 ? std::string(argv[2]) : std::string();
     // From the driver's eye (he sits left of it, so the flush face is seen a little from the side).

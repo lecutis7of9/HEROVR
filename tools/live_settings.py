@@ -395,6 +395,12 @@ SETTINGS = {
     'seated_driving': ((0, 2), 'SpidySeatedDriving', "SEATED DRIVING {} (0 sit_button: the van dash HOME page's SIT puts your eye at the driver's seat; 1 auto_sit: sat a second after getting in; 2 off; getting out stands you up; live)"),  # 0.0.74 test 1 SEATED DRIVING
     'batmobile': ((0, 1), 'SpidyBatmobile', "BATMOBILE {} (0 on: Batman, every suit, summons a drivable Batmobile on X - bulletproof, the van's driving, its dash with GO TO BATCAVE, music, SIT and the car picker; 1 off; turning on needs a restart)"),  # 0.0.74 test 1 BATMOBILE
     'batmobile_choice': ((0, 3), 'SpidyBatmobileChoice', "BATMOBILE CHOICE {} (0 1989: Dreamloft3D's; 1 odami: Odami_3D's; 2 forever: SorroW's; 3 forever2: S.York-Designs'; the next summon; live)"),  # 0.0.74 test 1 BATMOBILE CHOICE
+    'spidyvr_picture': ((0, 1), 'SpidySpidyvrPicture', "SPIDYVR PICTURE {} (0 on: SpidyVR's picture - the game's TAA in each eye with SpidyVR's full jitter, no EYE AA, FXAA, CAS or sharpening, mip bias 0, 100% eyes; 1 custom: your own picture settings; live)"),  # 0.0.74 test 2
+    'flare_block': ((0, 1), 'SpidyFlareBlock', "FLARE BLOCK {} (0 on: the game's lens flares off in VR and the lights' glow sprites hidden; 1 off: LENS FLARES and GLOW CHECK as set; the flares need a VR restart)"),  # 0.0.74 test 2
+    'cabin_clear': ((0, 1), 'SpidyCabinClear', "CABIN CLEAR {} (0 on: the Batmobile's roof and pillars are not drawn while you sit or get in, so you see out; 1 off: drawn always; live)"),  # 0.0.74 test 2
+    'car_paint': ((0, 1), 'SpidyCarPaint', "CAR PAINT {} (0 satin: the Batmobiles' paint catches the light, metallic and roughness from the model; 1 flat: test 1's diffuse look; live)"),  # 0.0.74 test 2
+    'seated_tools': ((0, 1), 'SpidySeatedTools', "SEATED TOOLS {} (0 blocked: no grapple, baton, webs or hero abilities while you sit in or get into the van or Batmobile, back on exit; 1 allowed; live)"),  # 0.0.74 test 2
+    'dash_pointer': ((0, 1), 'SpidyDashPointer', "DASH POINTER {} (0 on: a ray, cursor and highlight on the van and Batmobile dash screens, the trigger clicks, a fingertip presses tabs; 1 off: touch only; live)"),  # 0.0.74 test 2
     'coming_soon': ((0, 1), 'SpidyComingSoon', "COMING SOON {} (0 on: the hologram's hero tiles show a SOON tab with the heroes coming in 0.0.74, not playable; 1 off: no SOON tab; live)"),  # 0.0.73 COMING SOON
     'light_checks': ((0, 1), 'SpidyLightChecks', "LIGHT CHECKS {} (0 on: each eye's street-light glow checks get the game view's query room, at least 1024; 1 off: the game's 256; next VR start)"),  # 0.0.73 LIGHT CHECKS
     'streamer_eye': ((0, 1), 'SpidyStreamerEye', "STREAMER EYE {} (0 left_eye, 1 right_eye: the headset eye the monitor shows in STREAMER MODE; live)"),  # Version 0.0.73 STREAMER MODE
@@ -472,7 +478,7 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'image_style': 'off',  # 0.0.73 release: GAME TAA OFF by default (was SPIDYVR since test 4: the image shook in motion); SPIDYVR one wrist press away
                      'dd_baton_tip': 'on',  # 0.0.73 DD BATON: ON (new features ship on, switchable off)
                      'light_checks': 'on', 'glow_check': 'game', 'sl_watch': 'on', 'mp_solo_test': 'off',
-                     'sharpen_match': 'on', 'claw_level': 'on', 'window_pop': 'on', 'mp_player2_body': 'suit_look', 'coming_soon': 'on', 'hideouts': 'on', 'car_music': 'in_vehicles', 'seated_driving': 'sit_button', 'batmobile': 'on', 'batmobile_choice': '1989'}  # 0.0.73 AA SHARPEN MATCH: ON (new features ship on, switchable off)  # 0.0.73 LIGHT CHECKS: ON (the eyes' light-glow query room)
+                     'sharpen_match': 'on', 'claw_level': 'on', 'window_pop': 'on', 'mp_player2_body': 'suit_look', 'coming_soon': 'on', 'hideouts': 'on', 'car_music': 'in_vehicles', 'seated_driving': 'sit_button', 'batmobile': 'on', 'batmobile_choice': '1989', 'spidyvr_picture': 'on', 'flare_block': 'on', 'cabin_clear': 'on', 'car_paint': 'satin', 'seated_tools': 'blocked', 'dash_pointer': 'on'}  # 0.0.73 AA SHARPEN MATCH: ON (new features ship on, switchable off)  # 0.0.73 LIGHT CHECKS: ON (the eyes' light-glow query room)
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
@@ -600,7 +606,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
-                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'), 'image_style': ('spidyvr', 'off'), 'dd_baton_tip': ('on', 'off'), 'streamer_mode': ('on', 'off'), 'streamer_smooth': ('low', 'off', 'high'), 'streamer_eye': ('left_eye', 'right_eye'), 'iron_hands': ('on', 'off'), 'dd_grapple_aim': ('on', 'off'), 'wolverine_claws': ('on', 'off'), 'light_checks': ('on', 'off'), 'glow_check': ('game', 'always', 'hidden'), 'sl_watch': ('on', 'off'), 'mp_solo_test': ('off', 'on'), 'sharpen_match': ('on', 'off'), 'claw_level': ('on', 'off'), 'window_pop': ('on', 'off'), 'mp_player2_body': ('suit_look', 'figure'), 'coming_soon': ('on', 'off'), 'hideouts': ('on', 'off'), 'car_music': ('in_vehicles', 'always', 'off'), 'seated_driving': ('sit_button', 'auto_sit', 'off'), 'batmobile': ('on', 'off'), 'batmobile_choice': ('1989', 'odami', 'forever', 'forever2'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'), 'image_style': ('spidyvr', 'off'), 'dd_baton_tip': ('on', 'off'), 'streamer_mode': ('on', 'off'), 'streamer_smooth': ('low', 'off', 'high'), 'streamer_eye': ('left_eye', 'right_eye'), 'iron_hands': ('on', 'off'), 'dd_grapple_aim': ('on', 'off'), 'wolverine_claws': ('on', 'off'), 'light_checks': ('on', 'off'), 'glow_check': ('game', 'always', 'hidden'), 'sl_watch': ('on', 'off'), 'mp_solo_test': ('off', 'on'), 'sharpen_match': ('on', 'off'), 'claw_level': ('on', 'off'), 'window_pop': ('on', 'off'), 'mp_player2_body': ('suit_look', 'figure'), 'coming_soon': ('on', 'off'), 'hideouts': ('on', 'off'), 'car_music': ('in_vehicles', 'always', 'off'), 'seated_driving': ('sit_button', 'auto_sit', 'off'), 'batmobile': ('on', 'off'), 'batmobile_choice': ('1989', 'odami', 'forever', 'forever2'), 'spidyvr_picture': ('on', 'custom'), 'flare_block': ('on', 'off'), 'cabin_clear': ('on', 'off'), 'car_paint': ('satin', 'flat'), 'seated_tools': ('blocked', 'allowed'), 'dash_pointer': ('on', 'off'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -783,6 +789,12 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'seated_driving': {'sit_button': 0, 'button': 0, 'sit': 0, 'auto_sit': 1, 'auto': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
            'batmobile': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'batmobile_choice': {'1989': 0, 'odami': 1, 'forever': 2, 'forever2': 3, 'forever_2': 3, '0': 0, '1': 1, '2': 2, '3': 3},
+           'spidyvr_picture': {'on': 0, 'custom': 1, '0': 0, '1': 1},
+           'flare_block': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'cabin_clear': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'car_paint': {'satin': 0, 'flat': 1, '0': 0, '1': 1},
+           'seated_tools': {'blocked': 0, 'allowed': 1, '0': 0, '1': 1},
+           'dash_pointer': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'thor_hammer': {'boooop': 0, 'devilseye': 1, 'love_thunder': 2, 'love+thunder': 2, 'fccooper': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            # Update 38.1: 38's words kept (safe -> tap, long_press -> click, f8_only -> 3)
            # Update 38.2: FOREARM first (the tap on the forearm the player asked for; 38.1's 'tap' too)
@@ -1041,7 +1053,7 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.7 CAPTAIN AMERICA
                  'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
                  # Version 0.0.72 (TEST)
-                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image', 'image_style', 'dd_baton_tip', 'streamer_mode', 'streamer_smooth', 'streamer_eye', 'iron_hands', 'dd_grapple_aim', 'wolverine_claws', 'light_checks', 'glow_check', 'sl_watch', 'mp_solo_test', 'sharpen_match', 'claw_level', 'window_pop', 'mp_player2_body', 'coming_soon', 'hideouts', 'car_music', 'seated_driving', 'batmobile', 'batmobile_choice')
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image', 'image_style', 'dd_baton_tip', 'streamer_mode', 'streamer_smooth', 'streamer_eye', 'iron_hands', 'dd_grapple_aim', 'wolverine_claws', 'light_checks', 'glow_check', 'sl_watch', 'mp_solo_test', 'sharpen_match', 'claw_level', 'window_pop', 'mp_player2_body', 'coming_soon', 'hideouts', 'car_music', 'seated_driving', 'batmobile', 'batmobile_choice', 'spidyvr_picture', 'flare_block', 'cabin_clear', 'car_paint', 'seated_tools', 'dash_pointer')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
 # Version 0.0.72: THOR and GREEN LANTERN ten.
@@ -1632,6 +1644,8 @@ def image_style_of(values):
     """'spidyvr' or 'off' (GAME TAA) from parsed live.txt values; the default (UPDATE38_DEFAULTS: off since the
     0.0.73 release) when unset or unknown."""
     default = UPDATE38_DEFAULTS['image_style']
+    if picture_preset_of(values):  # 0.0.74 test 2 SPIDYVR PICTURE: the game's TAA per eye
+        return 'spidyvr'
     try:
         return CHOICE_NAMES['image_style'][CHOICES['image_style'][str(values.get('image_style', default)).strip().lower()]]
     except (KeyError, IndexError, AttributeError):
@@ -1654,7 +1668,7 @@ def image_style_in_file(path):
         text = pathlib.Path(path).read_text(encoding='utf-8-sig', errors='replace')
         values, _ = parse(text)
     except Exception:
-        return UPDATE38_DEFAULTS['image_style']
+        values = {}  # no live.txt: the defaults (0.0.74 test 2: SPIDYVR PICTURE on, so spidyvr)
     return image_style_of(values)
 
 
@@ -1823,6 +1837,95 @@ def migrate_0073(path):
 HEADER += MIGRATED_0073 + '\n'
 
 
+# 0.0.74 test 2 SPIDYVR PICTURE (the owner at 6:36 PM ET: "AA is awful"; his video: jaggies and shimmer when
+# still, ghost trails on head turns, far buildings judder). ON (the default) runs SpidyVR's picture whatever
+# live.txt kept: the game's TemporalAa in each eye with SpidyVR's Halton jitter at its full amplitude (HERO's
+# OURS at 100%: the same formula, CONFIRMED against SpidyVR 0.4.1), nothing of the mod's over it (no EYE AA, FXAA,
+# CAS, SHARPEN MATCH), mip bias 0, 100% eyes. The values below are what the session runs; live.txt keeps the
+# player's own for SPIDYVR PICTURE CUSTOM. The DLL holds the same (game_xr: the picture preset).
+PICTURE_PRESET = {'image': 'spidyvr', 'image_style': 'spidyvr', 'aa': 0, 'sharpen': 0, 'sharpen_match': 'off',
+                  'taa_jitter': 0, 'taa_jitter_scale': 100}
+PICTURE_SUPERSAMPLE = 100  # SpidyVR's renderScale default (CONFIRMED), HERO's OFF
+
+
+def picture_preset_of(values):
+    """True when parsed live.txt values run SPIDYVR PICTURE (spidyvr_picture on, or unset: the default)."""
+    try:
+        return CHOICES['spidyvr_picture'][str(values.get('spidyvr_picture', UPDATE38_DEFAULTS['spidyvr_picture'])).strip().lower()] == 0
+    except (KeyError, AttributeError):
+        return True
+
+
+def picture_preset_in_file(path):
+    """picture_preset_of the live.txt at `path` (on without one). Never raises."""
+    try:
+        values, _ = parse(pathlib.Path(path).read_text(encoding='utf-8-sig', errors='replace'))
+    except Exception:
+        return True
+    return picture_preset_of(values)
+
+
+def flare_block_of(values):
+    """True when parsed live.txt values run FLARE BLOCK (flare_block on, or unset: the default)."""
+    try:
+        return CHOICES['flare_block'][str(values.get('flare_block', UPDATE38_DEFAULTS['flare_block'])).strip().lower()] == 0
+    except (KeyError, AttributeError):
+        return True
+
+
+# Once, over a live.txt written before test 2 (the owner's test 1 export kept IMAGE classic, FXAA, sharpen 140,
+# GAME TAA off, TAA JITTER off, SHARPEN MATCH on): the picture settings start from SpidyVR's, SPIDYVR PICTURE and
+# FLARE BLOCK on, and next-launch.txt's eye supersample back to 100. A value chosen after the marker stays.
+MIGRATE_074T2 = dict(PICTURE_PRESET, spidyvr_picture='on', flare_block='on', lens_flares='off_in_vr')
+MIGRATED_074T2 = ('# Version 0.0.74 test 2: SPIDYVR PICTURE - the picture settings set once to SpidyVR\'s '
+                  '(migrated; a value chosen after this line stays: spidyvr_picture = custom uses yours)')
+
+
+def migrate_074t2(path, next_launch=None):
+    """0.0.74 test 2, once: MIGRATE_074T2 over an existing live.txt (every listed setting, whatever it held),
+    then the MIGRATED_074T2 marker; next_launch (a next-launch.txt path) gets supersample 100. No live.txt:
+    nothing (HEADER carries the marker). The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_074T2 in text:
+        return None
+    try:
+        values, _ = parse(text)
+        changed = {}
+        for name, new in MIGRATE_074T2.items():
+            if name in values and str(values[name]).strip().lower() in (str(new), str(new) + '.0'):
+                continue
+            if name in values or name in ('spidyvr_picture', 'flare_block'):
+                changed[name] = new
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_074T2 + '\n')
+    except (OSError, ValueError):
+        return None
+    scale = ''
+    if next_launch is not None:
+        try:
+            old = next_launch_supersample(next_launch)
+            if old and old != PICTURE_SUPERSAMPLE and write_next_launch(next_launch, PICTURE_SUPERSAMPLE):
+                scale = f'; eye supersample {old}% -> {PICTURE_SUPERSAMPLE}% (SpidyVR\'s)'
+        except Exception:
+            pass
+    shown = {k: v for k, v in changed.items() if k not in ('spidyvr_picture', 'flare_block')}
+    return ('live.txt: 0.0.74 test 2 SPIDYVR PICTURE on (set once): ' +
+            (', '.join(f'{k} = {v}' for k, v in shown.items()) or 'the picture settings were SpidyVR\'s already') +
+            scale + ' (spidyvr_picture = custom brings your own back; FLARE BLOCK on).')
+
+
+HEADER += MIGRATED_074T2 + '\n'
+
+
 def lens_flares_off(text):
     """True when live.txt `text` (None: no live.txt) turns the game's lens flares off for this VR session:
     lens_flares = off_in_vr, or no lens_flares line at all (0.0.73 lights: the default is OFF IN VR).
@@ -1832,6 +1935,8 @@ def lens_flares_off(text):
         values, _ = parse(text or '')
     except Exception:
         return default
+    if flare_block_of(values):  # 0.0.74 test 2 FLARE BLOCK (default on): off in VR whatever lens_flares says
+        return True
     if 'lens_flares' not in values:
         return default
     return values['lens_flares'] in ('off_in_vr', 1)

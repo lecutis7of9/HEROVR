@@ -166,6 +166,7 @@
 #include "spidy/grapple073.hpp"
 #include "spidy/van072.hpp"
 #include "spidy/van_fps.hpp"
+#include "spidy/car_paint.hpp"
 #include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
 #include "spidy/window_pop.hpp"
@@ -18889,7 +18890,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 150, "one hundred and fifty options (0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 156, "one hundred and fifty-six options (0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18923,7 +18924,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 150, "0.0.74 test 1 has 150 COMBAT options (+ BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 156, "0.0.74 test 2 has 156 COMBAT options (+ SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25848,7 +25849,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 10 && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -26879,6 +26880,19 @@ int main() {
         check(mm::parseGlb(file.data(), file.size(), m, err) && m.triangles() == 4 && m.ok(), "a good GLB reads: " + err);
         check(std::abs(m.high.x - .2f) < 1e-5f && std::abs(m.colors[0].y - .3f) < 1e-5f, "node scale and base colour applied");
         check(mm::parseGltf(good.json, good.bin, m, err) && m.triangles() == 4, "a good .gltf + .bin reads");
+        // 0.0.74 test 2 CAR PAINT: an explicit metallicFactor at least car_paint::paintFrom paints (2 bytes a triangle);
+        // none (the glTF default of 1 not taken) or under it: no paint.
+        check(m.paint.empty(), "no metallicFactor: not painted");
+        {
+            std::string satin = good.json, low = good.json;
+            const std::string bc = "\"baseColorFactor\":[0.2,0.3,0.4,1]";
+            satin.replace(satin.find(bc), bc.size(), bc + ",\"metallicFactor\":0.4,\"roughnessFactor\":0.42");
+            low.replace(low.find(bc), bc.size(), bc + ",\"metallicFactor\":0.1");
+            mm::Mesh p;
+            check(mm::parseGltf(satin, good.bin, p, err) && p.paint.size() == 8 && p.paint[0] == 102 && p.paint[1] == 107,
+                  "satin: metal .4 rough .42 a triangle");
+            check(mm::parseGltf(low, good.bin, p, err) && p.paint.empty(), "metal .1: not painted");
+        }
         // Broken files: each refused with a reason, nothing left in the mesh.
         const auto refused = [&](std::vector<uint8_t> bytes, const char* what) {
             mm::Mesh r;
@@ -31411,6 +31425,72 @@ int main() {
         // still flush and straight (unmoved): the VAN SCREEN test checks its place
         check(m.normal.z == 1 && m.right.x == 1 && m.up.y == 1, "square to the van");
     });
+    test("0.0.74 test 2 DASH POINTER: beam, cursor, lit tab, trigger click and a fingertip touch on the MAP tab", [] {
+        namespace vs = van_screen;
+        const vs::Mount m = vs::mountLocal();
+        const auto at = [&](float x, float y, float z = 0) { return m.centre + (m.right * x + m.up * y + m.normal * z) * vs::faceScale; };
+        const float tabY = vs::height / 2 - vs::tabHeight / 2;
+        const Vec3 from{-.2f, 1.35f, -.45f};
+        const auto ray = [&](Vec3 target, float trigger) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = true;
+            i.pointer = true;
+            i.hand[1] = from;
+            i.tracked[1] = true;
+            i.aim[1] = normalized(target - from);
+            i.trigger[1] = trigger;
+            i.grip[1] = .9f;
+            return i;
+        };
+        vs::Screen s;
+        check(!s.step(ray(at(vs::tabCentre(vs::cases), tabY), 0)) && s.cursorOn() && s.beamOn() && s.hotTab() == 2,
+              "aimed at CASES: the beam, the cursor, the CASES tab lit");
+        check(length(s.beamFrom() - from) < 1e-4f && std::abs(s.cursor().y - tabY) < 1e-3f, "the beam from the hand to the spot");
+        vs::View v = vs::view(van072::Frame{}, s, 0, 16, 0, true);
+        check(v.pointer && v.cursorOn && v.beamOn && v.hotTab == 2, "the view carries it");
+        std::vector<Vertex> out, plain;
+        check(vs::append(out, v, van072::Frame{}.world(at(0, 0, 1))), "drawn");
+        for (const auto& q : out)
+            check(van072::fine(q.position) && van072::fine(q.color) && std::isfinite(q.alpha), "finite");
+        vs::View nv = v;
+        nv.pointer = false;
+        vs::append(plain, nv, van072::Frame{}.world(at(0, 0, 1)));
+        check(out.size() > plain.size(), "the beam and cursor are more triangles");
+        check(s.step(ray(at(vs::tabCentre(vs::cases), tabY), 1)) && s.page() == vs::cases, "the trigger clicks it");
+        // the fingertip: the controller 8.5 cm back from the MAP tab, pointing (grip held, trigger out)
+        const auto touch = [&](float back) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = true;
+            i.pointer = true;
+            const Vec3 tab = at(vs::tabCentre(vs::map), tabY);
+            i.aim[1] = m.normal * -1.f;
+            i.hand[1] = tab + m.normal * back;
+            i.tracked[1] = true;
+            i.grip[1] = .9f;
+            i.trigger[1] = 0;
+            return i;
+        };
+        check(!s.step(touch(.30f)) && s.page() == vs::cases, "held back: nothing yet");
+        check(s.step(touch(vs::fingerReach + .005f)) && s.page() == vs::map, "the fingertip on MAP: MAP");
+        check(s.hotTab() == 0 && s.cursorOn() && !s.beamOn(), "the touch shows the cursor, no beam");
+        vs::Screen old;
+        old.step(ray(at(vs::tabCentre(vs::cases), tabY), 1));
+        vs::In o = touch(.30f);
+        o.pointer = false;
+        old.step(o);
+        o = touch(vs::fingerReach + .005f);
+        o.pointer = false;
+        check(!old.step(o) && old.page() == vs::cases && !old.cursorOn(), "DASH POINTER off: the 0.0.74 test 1 touch (the grip pose)");
+        vs::Screen wheel;
+        vs::In iw = touch(vs::fingerReach + .005f);
+        iw.onWheel[1] = true;
+        check(!wheel.step(iw) && !wheel.cursorOn(), "the wheel's hand: nothing");
+        int tab = 0, button = 0;
+        vs::Screen::targetAt({NAN, 0, 0}, vs::map, {}, tab, button);
+        check(tab == -1 && button == -1, "a NaN: no target");
+    });
     test("0.0.74 test 1 VAN DASH MUSIC + HOME: the buttons act on a poke or the ray, hidden ones do not, drawn finite", [] {
         namespace vs = van_screen;
         const vs::Mount m = vs::mountLocal();
@@ -31573,7 +31653,7 @@ int main() {
               "BATMOBILE CHOICE: 1989 by default, its help line says no restart");
         // owner t1164u: the glass as the model came - no Glass slots, the cockpit right after the four bodies
         check(mm::slotBatmobileCockpit == mm::slotBatmobileFirst + bm::cars && mm::slotBatmobileWheel == mm::slotBatmobileCockpit + 1 &&
-                  mm::slotBatmobileWheel + 1 == mm::slots,
+                  mm::slotBatmobileWheel + 1 == mm::slotBatmobileRoofFirst && mm::slotBatmobileRoofFirst + bm::cars == mm::slots,
               "no Glass slots: each car's glass is in its body");
         for (uint32_t s2 = 0; s2 < mm::slots; ++s2)
             check(std::string(mm::slotFolders[s2]).find("/Glass") == std::string::npos, "no Glass folder loaded");
@@ -32660,6 +32740,107 @@ int main() {
         check(vanfps::uniformPlace({1, 2, 3}, {0, 0, -2}, {0, 2, 0}, {2, 0, 0}, scale) && scale == 2, "a turn and a scale");
         check(!vanfps::uniformPlace({1, 2, 3}, {1, 0, 0}, {.5f, 1, 0}, {0, 0, 1}, scale), "sheared: no");
         hero007::setModelSink(nullptr);
+        vanfps::forget();
+    });
+    test("0.0.74 test 2 CAR PAINT: satin highlight and sky on the painted Batmobile, FLAT and unpainted unchanged", [] {
+        // shade: black satin has a highlight where the light mirrors to the eye, little elsewhere, and odd input
+        // gives the diffuse colour.
+        const Vec3 base{.03f, .03f, .03f}, up{0, 1, 0}, l = normalized(Vec3{.3f, 1.f, .25f});
+        const Vec3 n{0, 1, 0};
+        const Vec3 mirror = normalized(Vec3{-l.x, l.y, -l.z});
+        const Vec3 hi = car_paint::shade(base, n, l, mirror, up, .4f, .42f);
+        const Vec3 diffuse = base * (.32f + .68f * std::abs(dot(n, l)));
+        check(hi.x > diffuse.x + .05f && hi.x <= 1.5f, "a highlight at the mirror angle");
+        const Vec3 off = car_paint::shade(base, Vec3{1, 0, 0}, l, Vec3{1, 0, 0}, up, .4f, .42f);
+        check(off.x < .1f && off.x > 0, "face on, away from the light: still dark (satin black)");
+        const Vec3 graze = car_paint::shade(base, n, l, normalized(Vec3{0, .05f, 1}), up, .4f, .42f);
+        check(graze.y > diffuse.y, "a grazing view picks up the sky");
+        const Vec3 bad = car_paint::shade(base, n, l, Vec3{NAN, 0, 0}, up, .4f, .42f);
+        check(bad.x == diffuse.x && bad.y == diffuse.y, "NaN: the diffuse colour");
+        // A smooth untextured 5000-triangle car shell, every triangle painted satin.
+        mesh_model::Mesh m;
+        uint32_t seed = 7;
+        const auto rnd = [&] { seed = seed * 1664525u + 1013904223u; return static_cast<float>(seed >> 8) / 16777216.f; };
+        const uint32_t n0 = 5000;
+        for (uint32_t t = 0; t < n0; ++t) {
+            const Vec3 c{rnd() * 4 - 2, rnd() * 1.4f, rnd() * 5 - 2.5f};
+            m.corners.insert(m.corners.end(), {c, c + Vec3{.05f, 0, 0}, c + Vec3{0, .01f, .05f}});
+            m.colors.push_back(base);
+            m.tints.push_back(base);
+            m.image.push_back(-1);
+            for (int k = 0; k < 3; ++k) {
+                m.normals.push_back(normalized(Vec3{rnd() - .5f, rnd() + .2f, rnd() - .5f}));
+                m.uvs.push_back(0), m.uvs.push_back(0);
+            }
+            m.paint.push_back(102), m.paint.push_back(107);
+        }
+        m.low = {-2, 0, -2.5f};
+        m.high = {2.05f, 1.42f, 2.55f};
+        m.cap = mesh_model::vanTriangles;
+        check(m.ok() && m.hasNormals(), "the model");
+        mesh_model::Mesh plain = m;
+        plain.paint.clear();
+        vanfps::forget();
+        vanfps::setEnabled(true);
+        std::vector<Vertex> flat, satin, offPaint, old;
+        const Vec3 o{30, 1, -12}, ex{1, 0, 0}, ey{0, 1, 0}, ez{0, 0, 1}, viewer{30.4f, 2.2f, -15};
+        car_paint::setEnabled(true);
+        check(vanfps::drawPrepared(flat, plain, o, ex, ey, ez, &viewer), "unpainted drew");
+        check(vanfps::drawPrepared(satin, m, o, ex, ey, ez, &viewer), "painted drew");
+        {   // The next frame, the eye 1 cm on: a quarter relit, the rest kept; 2 m on: all relit.
+            std::vector<Vertex> next, jump, fresh;
+            const Vec3 near{viewer.x + .01f, viewer.y, viewer.z}, far{viewer.x + 2.f, viewer.y, viewer.z};
+            check(vanfps::drawPrepared(next, m, o, ex, ey, ez, &near), "next frame drew");
+            size_t kept = 0;
+            for (size_t i = 0; i < next.size(); ++i)
+                kept += next[i].color.x == satin[i].color.x && next[i].color.y == satin[i].color.y;
+            check(next.size() == satin.size() && kept >= next.size() * 7 / 10 && kept < next.size(), "a quarter relit a frame");
+            check(vanfps::drawPrepared(jump, m, o, ex, ey, ez, &far), "jump drew");
+            vanfps::forget();
+            check(vanfps::drawPrepared(fresh, m, o, ex, ey, ez, &far), "fresh drew");
+            bool all = jump.size() == fresh.size();
+            for (size_t i = 0; all && i < jump.size(); ++i)
+                all = jump[i].color.x == fresh[i].color.x && jump[i].color.y == fresh[i].color.y;
+            check(all, "a 2 m jump: every triangle relit");
+        }
+        std::vector<Vertex> noViewer;
+        check(vanfps::drawPrepared(noViewer, m, o, ex, ey, ez), "no viewer drew");
+        car_paint::setEnabled(false);
+        check(vanfps::drawPrepared(offPaint, m, o, ex, ey, ez, &viewer), "FLAT drew");
+        car_paint::setEnabled(true);
+        check(flat.size() == satin.size() && flat.size() == offPaint.size() && flat.size() == noViewer.size(), "the same vertices");
+        bool sameOff = true, sameNone = true, finite = true;
+        uint32_t brighter = 0;
+        for (size_t i = 0; i < flat.size(); ++i) {
+            sameOff = sameOff && flat[i].color.x == offPaint[i].color.x && flat[i].color.y == offPaint[i].color.y;
+            sameNone = sameNone && flat[i].color.x == noViewer[i].color.x;
+            finite = finite && std::isfinite(satin[i].color.x + satin[i].color.y + satin[i].color.z) && satin[i].color.x <= 1.5f &&
+                     satin[i].position.x == flat[i].position.x;
+            brighter += satin[i].color.y > flat[i].color.y + .02f;
+        }
+        check(sameOff && sameNone, "FLAT, or no viewer: exactly test 1's light");
+        check(finite && brighter > 50, "SATIN: finite, and highlights / sky on some corners");
+        mesh_model::Mesh wrong = m;
+        wrong.paint.resize(10);
+        std::vector<Vertex> w;
+        check(vanfps::drawPrepared(w, wrong, o, ex, ey, ez, &viewer) && w.size() == flat.size() && w[0].color.x == flat[0].color.x,
+              "paint of the wrong size: not painted");
+        // The old path (VAN FPS off) paints too, nearly the same (its eye a corner's, not a triangle's).
+        hero007::setModelSink(&old);
+        std::vector<Vertex> out;
+        vanfps::setEnabled(false);
+        check(hero007::appendPlacedModel(out, m, o, {0, 0, -1}, {0, 1, 0}, viewer, 1.f), "old path drew");
+        vanfps::setEnabled(true);
+        hero007::setModelSink(nullptr);
+        float most = 0;
+        std::vector<Vertex> prep;
+        hero007::setModelSink(&prep);
+        check(hero007::appendPlacedModel(out, m, o, {0, 0, -1}, {0, 1, 0}, viewer, 1.f), "prepared drew again");
+        hero007::setModelSink(nullptr);
+        check(prep.size() == old.size(), "both paths: the same vertices");
+        for (size_t i = 0; i < std::min(prep.size(), old.size()); ++i)
+            most = std::max(most, length(prep[i].color - old[i].color));
+        check(most < .08f, "the two paths' satin within .08");
         vanfps::forget();
     });
     test("0.0.73 test 4 hero tiles only: every old POWERS row is reachable from its hero's page, no dropdowns", [] {

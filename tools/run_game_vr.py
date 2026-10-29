@@ -2422,6 +2422,11 @@ def main():
     migrated_0073 = live_settings.migrate_0073(ROOT/'live.txt')
     if migrated_0073:
         print(migrated_0073, flush=True)
+    # 0.0.74 test 2 SPIDYVR PICTURE: the picture settings set once to SpidyVR's (after migrate_0073, which would
+    # move image_style spidyvr back to off in a live.txt older than 0.0.73), the eye supersample to 100.
+    migrated_074t2 = live_settings.migrate_074t2(ROOT/'live.txt', ROOT/'next-launch.txt')
+    if migrated_074t2:
+        print(migrated_074t2, flush=True)
     game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     if live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False)):
         session_off = tuple(session_off) + ('game_aa',)
@@ -2615,7 +2620,12 @@ def session(a, startup, session_off=()):
     image_look = live_settings.image_in_file(ROOT/'live.txt')
     game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))
-    if mip_bias_asked != a.mip_bias:
+    if live_settings.picture_preset_in_file(ROOT/'live.txt') and str(mip_bias_asked).strip() != '0':
+        # 0.0.74 test 2 SPIDYVR PICTURE: SpidyVR adds no mip bias (CONFIRMED); spidyvr_picture = custom keeps yours.
+        print(f'0.0.74 SPIDYVR PICTURE: texture mip bias 0 (the launcher passed {a.mip_bias}; '
+              'spidyvr_picture = custom keeps it; restart).', flush=True)
+        mip_bias_asked = '0'
+    elif mip_bias_asked != a.mip_bias:
         if game_taa_look == 'spidyvr' and getattr(a, 'engine_taa', False) and image_look != 'spidyvr':
             print(f'0.0.73 GAME TAA SPIDYVR: texture mip bias {mip_bias_asked} under the game\'s TAA (the '
                   f'launcher passed {a.mip_bias}; live.txt image_style = off gives IMAGE CLASSIC\'s back; restart).',
@@ -2909,6 +2919,22 @@ def session(a, startup, session_off=()):
             else:
                 live_file.applied(name, value)
                 print(f'live.txt (kept): {text.format(value)}', flush=True)
+        # 0.0.74 test 2 SPIDYVR PICTURE (default on): SpidyVR's picture over whatever live.txt kept (live.txt
+        # keeps the player's own for spidyvr_picture = custom); the DLL holds the same while it is on.
+        if live_settings.picture_preset_in_file(ROOT/'live.txt'):
+            sent = []
+            for name, value in live_settings.PICTURE_PRESET.items():
+                _, export, text = live_settings.SETTINGS[name]
+                if export not in xr or call_remote(process, xr[export], live_settings.export_value(name, value)):
+                    continue
+                live_file.applied(name, value)
+                kept[name] = value
+                sent.append(f'{name} = {value}')
+            print('0.0.74 SPIDYVR PICTURE: ON - the game\'s TAA in each eye with SpidyVR\'s full jitter, no EYE AA, '
+                  'FXAA, CAS or SHARPEN MATCH, mip bias 0 (' + ', '.join(sent) + '); spidyvr_picture = custom '
+                  'uses your own.', flush=True)
+        else:
+            print('0.0.74 SPIDYVR PICTURE: CUSTOM - your own picture settings (live.txt).', flush=True)
         # Update 37: the run36 closing settings are the new defaults, for whatever live.txt does not keep.
         # 0.0.73 IMAGE: aa and sharpen follow the look (SPIDYVR 0 and 0, CLASSIC 1 and 140).
         image_now = live_settings.image_of(kept)

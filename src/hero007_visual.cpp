@@ -8,6 +8,7 @@
 #include "spidy/soft_shapes.hpp"
 #include "spidy/web_visual.hpp"
 #include "spidy/van_fps.hpp"
+#include "spidy/car_paint.hpp"
 
 #include <algorithm>
 #include <array>
@@ -223,7 +224,7 @@ namespace {
 // texture-array pass: no sort), each corner lit by its own normal (smooth where the model is
 // smooth), shape = (u, v, layer, 1); a triangle without a texture layer has layer -1 (its colour).
 template <class Place>
-bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Place place) {
+bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Place place, Vec3 viewer) {
     const Vec3 o = place(Vec3{0, 0, 0});
     const Vec3 ex = place(Vec3{1, 0, 0}) - o, ey = place(Vec3{0, 1, 0}) - o, ez = place(Vec3{0, 0, 1}) - o;
     if (!ok(o) || !ok(ex) || !ok(ey) || !ok(ez))
@@ -233,11 +234,13 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         return false;
     // Version 0.0.73 VAN FPS: a big model placed by a turn and one scale (the van, the hammers) takes the
     // prepared path (its model-space normals kept once): the same vertices, about a fifth of the time.
-    if (vanfps::drawPrepared(sink, model, o, ex, ey, ez))
+    if (vanfps::drawPrepared(sink, model, o, ex, ey, ez, &viewer))
         return true;
     const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
     const bool smooth = model.hasNormals(), uvs = model.hasUvs();
     sink.reserve(from + size_t{model.triangles()} * 3); // build 7: one growth, not a dozen
+    // 0.0.74 test 2 CAR PAINT (car_paint.hpp): a painted model (the Batmobile bodies) here too when small or stretched.
+    const bool paint = ok(viewer) && car_paint::enabled() && model.paint.size() == size_t{model.triangles()} * 2;
     // Build 7: the place is affine (at + axes), so each corner is o + ex x + ey y + ez z: no call per corner.
     const auto P = [&](Vec3 c) { return o + ex * c.x + ey * c.y + ez * c.z; };
     for (uint32_t t = 0; t < model.triangles(); ++t) {
@@ -262,7 +265,14 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
             }
             const float lit = .32f + .68f * std::abs(dot(n, light)); // both sides (any winding)
             const float u = uvs ? model.uvs[t * 6 + k * 2] : 0.f, v = uvs ? model.uvs[t * 6 + k * 2 + 1] : 0.f;
-            sink.push_back(Vertex{p[k], tint * lit, 1.f, {u, v, layer, 1.f}});
+            Vec3 colour = tint * lit;
+            if (paint && at < 0 && model.paint[t * 2] != 0) {
+                const Vec3 to = viewer - p[k];
+                if (length(to) > 1e-6f)
+                    colour = car_paint::shade(tint, n, light, normalized(to), {0, 1, 0}, car_paint::unpack(model.paint[t * 2]),
+                                              car_paint::unpack(model.paint[t * 2 + 1]));
+            }
+            sink.push_back(Vertex{p[k], colour, 1.f, {u, v, layer, 1.f}});
         }
     }
     for (size_t i = from; i < sink.size(); ++i) {
@@ -283,7 +293,7 @@ bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place plac
     if (!full.ok() || full.triangles() > std::min(full.cap, mesh_model::vanTriangles))
         return false;
     if (gModelSink)
-        return drawTextured(*gModelSink, full, place);
+        return drawTextured(*gModelSink, full, place, viewer);
     const mesh_model::Mesh& model = full.lite && full.lite->ok() ? *full.lite : full;
     if (model.triangles() > mesh_model::liteTriangles)
         return false;

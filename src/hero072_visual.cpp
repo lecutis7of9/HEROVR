@@ -436,6 +436,8 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
                                        l.vanForward, {0, 1, 0}, viewer);
         if (l.vanWheel && okv(l.wheelAt) && okv(l.wheelForward) && okv(l.wheelUp))
             hero007::appendPlacedModel(out, *l.vanWheel, T(l.wheelAt), l.wheelForward, l.wheelUp, viewer);
+        if (l.vanRoof && roofSeen(l, viewer - T(l.vanAt)))
+            hero007::appendPlacedModel(out, *l.vanRoof, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
     }
     for (uint32_t i = 0; i < std::min(l.bolts, boltsMost); ++i)
         appendBolt(out, T(l.boltFrom[i]), T(l.boltTo[i]), l.boltSeed[i], viewer, pixelAngle);

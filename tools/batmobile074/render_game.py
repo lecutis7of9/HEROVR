@@ -21,6 +21,9 @@ def imp(path, M):
     e.matrix_world = M
     return new
 body = imp(os.path.join(root, folder, 'model.glb'), Matrix.Identity(4))
+roof = []
+rp = os.path.join(root, folder, 'Roof', 'model.glb')
+if os.path.exists(rp): roof = imp(rp, Matrix.Identity(4))   # test 2: exterior-only canopy/roof (hidden from the seat)
 glass = []
 gp = os.path.join(root, folder, 'Glass', 'model.glb')
 if os.path.exists(gp):
@@ -99,8 +102,42 @@ def shot(name, loc, look, fov):
     sc.render.filepath = os.path.join(outdir, name); bpy.ops.render.render(write_still=True); print('WROTE', sc.render.filepath)
 os.makedirs(outdir, exist_ok=True)
 tag = folder.lower()
+def show_roof(on):
+    for o in roof:
+        o.hide_render = not on
+# markers for the cutaways: the head sphere (r 0.15 at the eye), the cockpit volume edges
+def marker_mat(n, c):
+    m = bpy.data.materials.new(n); m.use_nodes = True; b = m.node_tree.nodes['Principled BSDF']
+    b.inputs['Base Color'].default_value = c + (1,); b.inputs['Emission Color'].default_value = c + (1,); b.inputs['Emission Strength'].default_value = 1.5
+    return m
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.15, location=conv(lay['eye']), segments=32, ring_count=16)
+head = bpy.context.object; head.data.materials.append(marker_mat('head', (1.0, 0.1, 0.1)))
+marks = [head]
+if 'cabinLow' in lay:
+    lo, hi = conv(lay['cabinLow']), conv(lay['cabinHigh'])
+    c = (lo + hi) / 2; sz = V((abs(hi.x - lo.x), abs(hi.y - lo.y), abs(hi.z - lo.z)))
+    bpy.ops.mesh.primitive_cube_add(size=1, location=c); bx = bpy.context.object; bx.scale = sz
+    wf = bx.modifiers.new('wf', 'WIREFRAME'); wf.thickness = 0.015; bx.data.materials.append(marker_mat('cab', (0.1, 1.0, 0.3)))
+    marks.append(bx)
+def show_marks(on):
+    for o in marks: o.hide_render = not on
+show_marks(False)
+show_roof(False)   # seated: the roof is not drawn (INSIDE VIEW CULL)
 shot('%s_driver_eye.png' % tag, eye, eye + V((0, 20, -1.6)), 95)
+shot('%s_driver_left.png' % tag, eye, eye + V((-20, 6, -1.0)), 95)
+shot('%s_driver_right.png' % tag, eye, eye + V((20, 6, -1.0)), 95)
 scr = conv(lay['screen'])
 shot('%s_dash_screen.png' % tag, eye, scr + V((0.10, 0, 0.02)), 70)
+# cutaways (orthographic): side, sliced at the driver's centre line; top, sliced 0.2 m over the eye. Roof hidden as seated.
+show_marks(True)
+cam.data.type = 'ORTHO'; cam.data.ortho_scale = 3.4
+cam.location = V((eye.x - 8, eye.y - 0.2, eye.z - 0.3)); cam.rotation_euler = V((1, 0, 0)).to_track_quat('-Z', 'Y').to_euler()
+cam.data.clip_start = 8 - 0.001; cam.data.clip_end = 30
+sc.render.filepath = os.path.join(outdir, '%s_cutaway_side.png' % tag); bpy.ops.render.render(write_still=True); print('WROTE', sc.render.filepath)
+cam.location = V((eye.x + 0.37, eye.y - 0.2, eye.z + 8)); cam.rotation_euler = (0, 0, 0)
+cam.data.clip_start = 8 - 0.2
+sc.render.filepath = os.path.join(outdir, '%s_cutaway_top.png' % tag); bpy.ops.render.render(write_still=True); print('WROTE', sc.render.filepath)
+show_marks(False); cam.data.type = 'PERSP'; cam.data.clip_start = 0.02; cam.data.clip_end = 600
+show_roof(True)    # outside: the whole car, roof drawn
 shot('%s_exterior_front.png' % tag, (4.6, 6.2, 2.2), (0, 0, 0.7), 45)
 shot('%s_exterior_rear.png' % tag, (-4.8, -6.0, 2.6), (0, 0, 0.7), 45)

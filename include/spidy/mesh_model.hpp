@@ -85,6 +85,10 @@ struct Mesh {
     std::vector<Vec3> normals;  // 3 a triangle (NORMAL, model space) when every primitive has them
     std::vector<Vec3> tints;    // 1 a triangle: the material's baseColorFactor (multiplies the texture)
     std::vector<int16_t> image; // 1 a triangle: its base-colour image (index into images), -1 none
+    // 0.0.74 test 2 CAR PAINT (car_paint.hpp): 2 a triangle (metallic, roughness, 0..255) for an untextured triangle
+    // whose material says metallicFactor >= car_paint::paintFrom (0 0 otherwise); kept only for the Batmobile
+    // bodies and roofs (slotIsPaintable), empty for every other model.
+    std::vector<uint8_t> paint;
     struct Image {
         std::string uri;            // a file beside the .gltf (read by loadFolder), or empty
         std::vector<uint8_t> bytes; // the encoded image (PNG / JPEG / QOI)
@@ -176,7 +180,10 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // only when BATMOBILE is ON (game_xr). Missing: no Batmobile (the van's X stays the Punisher's).
                        slotBatmobileFirst, slotBatmobileCockpit = slotBatmobileFirst + 4,
                        slotBatmobileWheel,
-                       slots };
+                       // 0.0.74 test 2 INSIDE VIEW CULL: <car>\Roof (the canopy / roof / cabin glass the converter cut out of
+                       // the body over the cockpit; drawn only from outside the car). Missing: the car without it.
+                       slotBatmobileRoofFirst,
+                       slots = slotBatmobileRoofFirst + 4 };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
                                                    "Baton/Right", "Shield",           "GrappleGun",       "Hammer/BOOOOP",
@@ -191,7 +198,9 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Claws/Left", "Claws/Right", "Hideout/Batcave", "Hideout/Safehouse",
                                                    "Vehicle/Batmobile/1989", "Vehicle/Batmobile/ODAMI", "Vehicle/Batmobile/FOREVER",
                                                    "Vehicle/Batmobile/FOREVER2", "Vehicle/Batmobile/Cockpit",
-                                                   "Vehicle/Batmobile/SteeringWheel"};
+                                                   "Vehicle/Batmobile/SteeringWheel", "Vehicle/Batmobile/1989/Roof",
+                                                   "Vehicle/Batmobile/ODAMI/Roof", "Vehicle/Batmobile/FOREVER/Roof",
+                                                   "Vehicle/Batmobile/FOREVER2/Roof"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
@@ -199,14 +208,19 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
-                                                vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles};
+                                                vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
     return choice == 1 ? slotHammerDevilsEye : choice == 2 ? slotHammerLoveThunder : choice == 3 ? slotHammerFccooper : slotHammer;
 }
 // The van's parts (drawn by hero007::appendPlacedModel: up to 8 m, seen to 80 m).
-inline constexpr bool slotIsBatmobile(uint32_t slot) { return slot >= slotBatmobileFirst && slot <= slotBatmobileWheel; }
+inline constexpr bool slotIsBatmobile(uint32_t slot) { return slot >= slotBatmobileFirst && slot < slotBatmobileRoofFirst + 4; }
+// 0.0.74 test 2 CAR PAINT: the four Batmobile bodies and their roofs (not the cockpit or the wheel).
+inline constexpr bool slotIsPaintable(uint32_t slot) {
+    return (slot >= slotBatmobileFirst && slot < slotBatmobileFirst + 4) || (slot >= slotBatmobileRoofFirst && slot < slotBatmobileRoofFirst + 4);
+}
 inline constexpr bool slotIsVehicle(uint32_t slot) {
     return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel || slotIsBatmobile(slot);
 }
@@ -229,7 +243,7 @@ inline uint32_t suitSlot(const char* folder) {
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
-                  slotBatmobileWheel == 51 && slots == 52, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+                  slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slots == 56, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

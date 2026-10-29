@@ -1,6 +1,7 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 // Version 0.0.7 BATARANG STYLE: the strict glTF 2.0 reader (mesh_model.hpp).
 #include "spidy/mesh_model.hpp"
+#include "spidy/car_paint.hpp"
 
 #include "spidy/calibration_art.hpp"
 
@@ -559,6 +560,20 @@ struct Doc {
             c = {std::clamp(f[0], 0.f, 1.f), std::clamp(f[1], 0.f, 1.f), std::clamp(f[2], 0.f, 1.f)};
         return c;
     }
+    // 0.0.74 test 2 CAR PAINT: the material's explicit metallicFactor / roughnessFactor (absent: 0 metal, a
+    // non-painted triangle; the glTF default of 1 is not taken, so no other model gets painted by omission).
+    std::pair<uint8_t, uint8_t> materialPaint(const Json* index) {
+        const Json* list = root.get("materials");
+        const Json* m = index && index->isInt() && list ? list->at(static_cast<size_t>(index->num)) : nullptr;
+        const Json* pbr = m ? m->get("pbrMetallicRoughness") : nullptr;
+        const Json* mf = pbr ? pbr->get("metallicFactor") : nullptr;
+        const Json* rf = pbr ? pbr->get("roughnessFactor") : nullptr;
+        const auto byte = [](const Json* j, float fallback) {
+            const float v = j && j->kind == Json::number && std::isfinite(j->num) ? static_cast<float>(j->num) : fallback;
+            return static_cast<uint8_t>(std::lround(std::clamp(v, 0.f, 1.f) * 255.f));
+        };
+        return {byte(mf, 0.f), byte(rf, 1.f)};
+    }
     bool mesh(uint32_t index, const Mat& world) {
         const Json* list = root.get("meshes");
         const Json* m = list ? list->at(index) : nullptr;
@@ -588,6 +603,7 @@ struct Doc {
             if (idx.size() % 3)
                 return refuse(error, "a triangle list not a multiple of 3");
             const Vec3 color = materialColor(prim.get("material"));
+            const std::pair<uint8_t, uint8_t> paintOf = materialPaint(prim.get("material"));
             std::vector<Vec3> painted; // COLOR_0: each triangle the mean of its corners (x the material's factor)
             if (const Json* col = attrs->get("COLOR_0")) {
                 if (!col->isInt() || !colorAccessor(static_cast<uint32_t>(col->num), points.size(), painted))
@@ -650,6 +666,9 @@ struct Doc {
                 }
                 out.image.push_back(image);
                 out.tints.push_back(painted.empty() ? tint : Vec3{1, 1, 1});
+                const bool paintable = image < 0 && painted.empty() && paintOf.first >= static_cast<uint8_t>(car_paint::paintFrom * 255.f);
+                out.paint.push_back(paintable ? paintOf.first : uint8_t{0});
+                out.paint.push_back(paintable ? paintOf.second : uint8_t{0});
                 if (painted.empty()) {
                     out.colors.push_back(image >= 0 ? tint : color);
                 } else {
@@ -774,6 +793,9 @@ bool finish(Mesh& out, std::string& error) {
         out.image.clear();
         out.tints.clear();
     }
+    if (out.paint.size() != size_t{out.triangles()} * 2 ||
+        std::none_of(out.paint.begin(), out.paint.end(), [](uint8_t b) { return b != 0; })) // 0.0.74 test 2: none painted
+        out.paint.clear();
     if (!out.hasSkin()) { // Build 9 SUITS: a primitive without its skin (or a bad one): none worn
         out.skinJoints.clear();
         out.skinWeights.clear();
@@ -899,6 +921,8 @@ bool decimate(Mesh& mesh, uint32_t most) {
                 next.corners.push_back(s.first * (1.f / static_cast<float>(s.second)));
             }
             next.colors.push_back(mesh.colors[t]);
+            if (mesh.paint.size() == size_t{mesh.triangles()} * 2) // 0.0.74 test 2 CAR PAINT: kept with its triangle
+                next.paint.insert(next.paint.end(), {mesh.paint[t * 2], mesh.paint[t * 2 + 1]});
             if (mesh.hasUvs()) { // Version 0.0.72: each kept triangle keeps its corners' UVs, normals, image
                 next.uvs.insert(next.uvs.end(), mesh.uvs.begin() + t * 6, mesh.uvs.begin() + t * 6 + 6);
                 next.image.push_back(mesh.image[t]);
@@ -997,6 +1021,8 @@ Status Library::load(uint32_t style, const std::string& modelsRoot) {
     if (status[style] != notTried)
         return status[style];
     status[style] = loadFolder(modelsRoot + slotFolders[style] + "/", slotMayDecimate[style], meshes[style], error[style], slotDrawCap[style]);
+    if (status[style] == loaded && !slotIsPaintable(style)) // 0.0.74 test 2 CAR PAINT: the Batmobile bodies only
+        meshes[style].paint.clear();
     if (status[style] == loaded)
         makeLite(meshes[style], slotMayDecimate[style]);
     return status[style];

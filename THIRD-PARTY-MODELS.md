@@ -124,6 +124,19 @@ Credit lines: "Bat-Mobile (1989)" by Dreamloft3D, "Batmobile" by Odami_3D, "Batm
 (http://creativecommons.org/licenses/by/4.0/), converted for VR. The Batmobile's dash shows the
 driven car's credit on its HOME page.
 
+### 0.0.74 test 2 changes (Models/Vehicle/Batmobile/<Car>/model.glb and <Car>/Roof/model.glb)
+
+- **CABIN CLEAR** (the owner's t1171u: no shell, glass or canopy face inside the cockpit): the converter
+  deletes every body face inside the cockpit's box (1989: 3890 faces, ODAMI: 243, FOREVER: 11225,
+  FOREVER 2: 11576) and moves the roof, canopy and cabin glass over the cockpit into a separate
+  `Roof/model.glb` (1989: 2563 triangles, ODAMI: 111, FOREVER: 1033, FOREVER 2: 4337). The roof is drawn
+  only while the eye is outside the car, so from outside each car looks as it came. Nothing is made
+  see-through.
+- **CAR PAINT**: the 1989's body is written as satin black (base colour 0.03, metallic 0.40, roughness
+  0.42; the trim 0.06 / 0.35 / 0.45, the tyres 0.012 / 0.20 / 0.55). The source has no textures. The
+  other three cars keep their own colours.
+- Body triangles after the cut: 1989 101353, ODAMI 3350, FOREVER 95664, FOREVER 2 91891.
+
 ## Reference only (no files used)
 
 The Sketchfab "Daredevil batons" page the player linked was a style reference only. Nothing was

@@ -24,6 +24,11 @@ namespace spidy::vanfps {
 inline constexpr uint32_t preparedFrom = 4000;
 // Kept models (the van's body, the hammers in hand ...): a few, reused round robin.
 inline constexpr uint32_t preparedKept = 6;
+// 0.0.74 test 2 CAR PAINT: a painted model relights a quarter of its triangles a frame (about 1.5 ms of
+// 6 on the 1989's 101,000 triangles on the build box); all of them when, since the last frame, the eye
+// jumped over .5 m or the light turned (the car turned) over .1 in model space (a teleport, a seat change).
+inline constexpr uint32_t satinSlices = 4;
+inline constexpr float satinRelightEye = .5f, satinRelightLight = .1f;
 
 // Whether o + ex x + ey y + ez z is a turn (or mirror) with one scale, in range: then normals turn
 // with it and the prepared path is exact.
@@ -32,7 +37,10 @@ bool uniformPlace(Vec3 o, Vec3 ex, Vec3 ey, Vec3 ez, float& scale);
 // Appends the model's vertices exactly as hero007's textured path would (position, colour lit by
 // the corner's normal, shape u v layer 1) and returns true; false (nothing appended) when the model
 // or the placement is not one for this path - the caller then draws it the old way.
-bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3 o, Vec3 ex, Vec3 ey, Vec3 ez);
+// 0.0.74 test 2 CAR PAINT: `viewer` (world, the head) lights a painted model's triangles (Mesh::paint) with
+// car_paint::shade when CAR PAINT is SATIN; null or none painted: exactly the test 1 vertices.
+bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3 o, Vec3 ex, Vec3 ey, Vec3 ez,
+                  const Vec3* viewer = nullptr);
 
 // On by default; off: every model the old way (the revert, and the tests' reference).
 void setEnabled(bool on);

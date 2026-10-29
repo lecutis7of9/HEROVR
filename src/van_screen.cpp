@@ -3,6 +3,7 @@
 // Version 0.0.73 test 3 VAN SCREEN (van_screen.hpp).
 #include "spidy/van_screen.hpp"
 #include "spidy/overlay_text.hpp"
+#include "spidy/soft_shapes.hpp"
 #include "spidy/test_notice.hpp"
 
 #include <algorithm>
@@ -438,7 +439,7 @@ void drawMusic(Painter& p, const View& v) {
     for (uint32_t k = 0; k < n; ++k) {
         if (b[k].action == Action::musicToggle)
             b[k].label = v.musicPlaying ? "PAUSE" : "PLAY";
-        drawButton(p, b[k], v.hover, b[k].action == Action::musicToggle && v.musicPlaying ? blood * .8f : olive);
+        drawButton(p, b[k], v.pointer ? v.hotButton == static_cast<int>(k) : v.hover, b[k].action == Action::musicToggle && v.musicPlaying ? blood * .8f : olive);
     }
 }
 
@@ -448,7 +449,7 @@ void drawHome(Painter& p, const View& v) {
     Button b[8];
     const uint32_t n = buttons(home, v.offer, b);
     for (uint32_t k = 0; k < n; ++k)
-        drawButton(p, b[k], v.hover, b[k].action == Action::goBatcave && !v.offer.batman ? Vec3{.025f, .03f, .05f} : olive);
+        drawButton(p, b[k], v.pointer ? v.hotButton == static_cast<int>(k) : v.hover, b[k].action == Action::goBatcave && !v.offer.batman ? Vec3{.025f, .03f, .05f} : olive);
     if (!n)
         p.text("HIDEOUTS AND SEATED DRIVING ARE OFF", lx, top - .032f, .0060f, bone);
     if (v.homeNote)
@@ -584,6 +585,30 @@ bool Screen::pokeAt(Vec3 f) {
     return next();
 }
 
+void Screen::targetAt(Vec3 f, uint32_t page, const Offer& offer, int& tab, int& button) {
+    tab = button = -1;
+    if (!van072::fine(f) || std::abs(f.x) > W + raySlack || std::abs(f.y) > H + raySlack)
+        return;
+    if (f.y >= H - tabHeight) {
+        const float tx0 = -W + tabLeft;
+        const float share = std::clamp((f.x - tx0) / (W - tx0), 0.f, .999f);
+        uint32_t shown[pages];
+        const uint32_t n = shownPages(offer, shown);
+        if (n)
+            tab = static_cast<int>(std::min(n - 1, static_cast<uint32_t>(share * static_cast<float>(n))));
+        return;
+    }
+    if (page == music || page == home) {
+        Button b[8];
+        const uint32_t n = buttons(page, offer, b);
+        for (uint32_t k = 0; k < n; ++k)
+            if (f.x >= b[k].x0 - .002f && f.x <= b[k].x1 + .002f && f.y >= b[k].y0 - .002f && f.y <= b[k].y1 + .002f) {
+                button = static_cast<int>(k);
+                return;
+            }
+    }
+}
+
 bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit) { return rayOnFace(from, dir, hit, mountAt, faceScale); }
 
 bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale) {
@@ -615,6 +640,9 @@ bool Screen::step(const In& in) {
     if (ok(in.dt) && in.dt > 0)
         flash_ = std::max(0.f, flash_ - in.dt * 4.f);
     hover_ = false;
+    pointer_ = in.pointer;
+    cursorOn_ = beamOn_ = false;
+    hotTab_ = hotButton_ = -1;
     offer_ = in.offer;
     if (van072::fine(in.at) && ok(in.scale) && in.scale >= .5f && in.scale <= 2.f) {
         at_ = in.at;
@@ -644,13 +672,27 @@ bool Screen::step(const In& in) {
             near_[i] = false;
             continue;
         }
-        const Vec3 f = onFace(in.hand[i], at_, scale_);
+        // 0.0.74 test 2 DASH POINTER: the fingertip, out along the aim from the grip pose.
+        Vec3 touchAt = in.hand[i];
+        if (in.pointer && van072::fine(in.aim[i])) {
+            const float an = length(in.aim[i]);
+            if (ok(an) && an > .5f)
+                touchAt = in.hand[i] + in.aim[i] * (fingerReach / an);
+        }
+        const Vec3 f = onFace(touchAt, at_, scale_);
         // In the face's box, from just in front to a little through it (a poke goes in).
         const bool near = van072::fine(f) && f.z <= pokeDepth && f.z >= -pokeThrough && std::abs(f.x) <= W + pokeSlack &&
                           std::abs(f.y) <= H + pokeSlack;
-        // An open hand, off the wheel: a hand that grips (the wheel, a door) never pages it.
-        const bool open = ok(in.grip[i]) && in.grip[i] < pokeGripMost && !in.onWheel[i];
+        // An open hand, off the wheel: a hand that grips (the wheel, a door) never pages it. With the pointer
+        // a pointing hand (the index out: trigger released) is open too.
+        const bool pointing = in.pointer && tr < rayRelease;
+        const bool open = ok(in.grip[i]) && (in.grip[i] < pokeGripMost || pointing) && !in.onWheel[i];
         hover_ |= near && open;
+        if (near && open && in.pointer) {
+            cursorOn_ = true;
+            cursor_ = {std::clamp(f.x, -W, W), std::clamp(f.y, -H, H), 0};
+            targetAt(cursor_, page_, offer_, hotTab_, hotButton_);
+        }
         if (near && !near_[i] && open)
             changed |= pokeAt(f);
         near_[i] = near; // a hand already in (or gripping in) must come out first
@@ -659,6 +701,12 @@ bool Screen::step(const In& in) {
         if (in.ray && !near && !in.onWheel[i] && rayOnFace(in.hand[i], in.aim[i], hit, at_, scale_)) {
             aimed_[i] = true;
             hover_ = true;
+            if (in.pointer && !cursorOn_) {
+                cursorOn_ = beamOn_ = true;
+                cursor_ = hit;
+                beamFrom_ = in.hand[i];
+                targetAt(hit, page_, offer_, hotTab_, hotButton_);
+            }
             if (fresh)
                 changed |= pokeAt(hit);
         }
@@ -698,6 +746,16 @@ View view(const van072::Frame& frame, const Screen& s, float speed, float topSpe
     v.driving = driving;
     v.flash = s.flash();
     v.hover = s.hover();
+    if (s.pointer()) { // 0.0.74 test 2 DASH POINTER
+        v.pointer = true;
+        v.cursorOn = s.cursorOn();
+        v.cursorX = s.cursor().x;
+        v.cursorY = s.cursor().y;
+        v.beamOn = s.beamOn() && van072::fine(s.beamFrom());
+        v.beamFrom = v.beamOn ? frame.world(s.beamFrom()) : Vec3{};
+        v.hotTab = s.hotTab();
+        v.hotButton = s.hotButton();
+    }
     v.on = true;
     return v;
 }
@@ -750,6 +808,8 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
             p.quad(x0, ty + .003f, x1, H - .003f, .0008f, on ? blood : olive);
             if (on)
                 p.quad(x0, ty + .003f, x1, ty + .0045f, .0011f, bone);
+            if (v.pointer && v.hotTab == static_cast<int>(j)) // 0.0.74 test 2 DASH POINTER: the tab under it
+                p.frame(x0, ty + .003f, x1, H - .003f, .0011f, .0019f, bone);
             const float th = std::min(.0090f, fittedHeight(pageNames[k], .0090f, x1 - x0 - .004f)); // 0.0.74: six tabs
             p.textCentre(pageNames[k], (x0 + x1) / 2, ty + tabHeight / 2 - th / 2, th, on ? bone : khaki, .0015f);
         }
@@ -780,6 +840,19 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
             p.frame(-W, -H, W, H, .0012f, .003f, bone, .6f);
         if (v.flash > 0)
             p.frame(-W, -H, W, H, .0025f, .0032f, blood * 2.f, std::min(1.f, v.flash));
+        // 0.0.74 test 2 DASH POINTER: the beam from the hand and the cursor (the holo roster's look)
+        if (v.pointer && v.cursorOn && ok(v.cursorX) && ok(v.cursorY)) {
+            const float cx = std::clamp(v.cursorX, -W, W), cy = std::clamp(v.cursorY, -H, H);
+            if (v.beamOn && van072::fine(v.beamFrom)) {
+                const Vec3 to = p.P(cx, cy, .004f);
+                const Vec3 mid = (v.beamFrom + to) * .5f;
+                const Vec3 look = viewer - mid;
+                if (length(to - v.beamFrom) > .02f && length(look) > 1e-3f)
+                    soft::softBar(out, v.beamFrom, to, normalized(look), .0012f, bone, .45f * p.a, .0015f);
+            }
+            p.disc(cx, cy, .0026f, .0045f, bone, .95f, 12);
+            p.ring(cx, cy, .0048f, .0012f, .0045f, v.offer.batman ? Vec3{.3f, .7f, 1.f} : khaki * 1.6f, .7f, 20);
+        }
         for (size_t i = from; i < out.size(); ++i)
             if (!van072::fine(out[i].position) || !van072::fine(out[i].color) || !ok(out[i].alpha)) {
                 out.resize(from);

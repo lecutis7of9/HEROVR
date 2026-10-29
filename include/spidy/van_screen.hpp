@@ -100,6 +100,11 @@ inline constexpr float pokeDepth = .035f, pokeThrough = .05f, pokeSlack = .012f,
 // grazing: the ray's cosine to the face's normal past rayFacing) plus a fresh trigger press (past rayPress,
 // re-armed under rayRelease) pages it as a touch would at that spot. Never a hand on the wheel.
 inline constexpr float rayReach = 2.f, raySlack = .03f, rayFacing = .2f, rayPress = .6f, rayRelease = .3f;
+// 0.0.74 test 2 DASH POINTER (In::pointer): the touch is the fingertip's, fingerReach metres out along the
+// hand's aim from the controller's grip pose (CANDIDATE: the index tip of a pointing hand), and a pointing
+// hand (trigger released, the other fingers may grip) counts as open. The ray shows (a beam, a cursor, the
+// tab or button under it lit) as the holo roster's does.
+inline constexpr float fingerReach = .085f;
 
 // The screen's frame in the van's: unit right (+x) / up (+y) across the face, normal +z (the cab's back).
 struct Mount {
@@ -125,6 +130,7 @@ struct In {
     Vec3 aim[2]{};
     float trigger[2]{};
     bool ray{true}; // false: touch pokes and X only (the 0.0.73 test 3 first cut)
+    bool pointer{}; // 0.0.74 test 2 DASH POINTER: the fingertip touch and the drawn ray / cursor / hover
     Offer offer{};  // 0.0.74: the MUSIC / HOME buttons there
     // 0.0.74 test 1 BATMOBILE: where the face is (vehicle-local) and its metres a design unit (the van's
     // by default).
@@ -151,6 +157,18 @@ public:
     bool hover() const { return hover_; }
     // 0.0.73 test 3 RAY POKE: hand i's ray was on the face last step (its trigger is the screen's then).
     bool aimed(unsigned i) const { return i < 2 && aimed_[i]; }
+    // 0.0.74 test 2 DASH POINTER: the drawn pointer (last step): on, where it meets the face (design units),
+    // where the beam leaves the hand (vehicle-local), and the tab (index among the shown) / button under it
+    // (-1: none).
+    bool pointer() const { return pointer_; }
+    bool cursorOn() const { return cursorOn_; }
+    Vec3 cursor() const { return cursor_; }
+    bool beamOn() const { return beamOn_; }
+    Vec3 beamFrom() const { return beamFrom_; }
+    int hotTab() const { return hotTab_; }
+    int hotButton() const { return hotButton_; }
+    // Which shown tab (index) / page button lies at face point f (design units); -1: none.
+    static void targetAt(Vec3 f, uint32_t page, const Offer& offer, int& tab, int& button);
     // 0.0.74: the button pressed by the last step (none: none), read once.
     Action takeAction() {
         const Action a = action_;
@@ -167,6 +185,9 @@ private:
     float flash_{};
     bool near_[2]{}, hover_{};
     bool aimed_[2]{}, trigWas_[2]{};
+    bool pointer_{}, cursorOn_{}, beamOn_{};
+    Vec3 cursor_{}, beamFrom_{};
+    int hotTab_{-1}, hotButton_{-1};
     bool pokeAt(Vec3 f); // a touch at face point f (design units): the tab row, CASES' back third, else next
 };
 
@@ -184,6 +205,11 @@ struct View {
     bool driving{};
     float flash{};
     bool hover{};
+    // 0.0.74 test 2 DASH POINTER: the beam (world, from), the cursor (design units), the lit tab / button.
+    bool pointer{}, cursorOn{}, beamOn{};
+    float cursorX{}, cursorY{};
+    Vec3 beamFrom{};
+    int hotTab{-1}, hotButton{-1};
     // 0.0.74 test 1: the MUSIC page and the HOME page's buttons.
     Offer offer{};
     bool musicAvailable{true}, musicPlaying{}, musicPaused{};

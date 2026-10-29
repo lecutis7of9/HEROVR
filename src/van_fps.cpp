@@ -1,5 +1,6 @@
 // Version 0.0.73 VAN FPS (van_fps.hpp).
 #include "spidy/van_fps.hpp"
+#include "spidy/car_paint.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -19,6 +20,12 @@ struct Kept {
     std::vector<float> area;   // 1 a triangle: |cross| in model space (0: a sliver)
     std::vector<Vec3> corner;  // 3 a triangle: the corner's unit normal (smooth models)
     std::vector<float> length; // 3 a triangle: the given normal's length
+    // 0.0.74 test 2 CAR PAINT: the satin colours (3 a triangle), a quarter of them relit each frame (every
+    // fourth triangle, so no band lags), all of them when the eye or the light moved far in model space.
+    std::vector<Vec3> satin;
+    Vec3 satinEye{}, satinLight{};
+    uint32_t satinPhase = 0;
+    bool satinValid = false;
 };
 thread_local Kept kept[preparedKept];
 thread_local uint32_t nextKept = 0;
@@ -30,7 +37,7 @@ bool same(const Kept& k, const mesh_model::Mesh& m) {
            k.smooth == m.hasNormals() && k.normals == (m.hasNormals() ? m.normals.data() : nullptr);
 }
 
-const Kept* prepare(const mesh_model::Mesh& m) {
+Kept* prepare(const mesh_model::Mesh& m) {
     for (auto& k : kept)
         if (same(k, m))
             return &k;
@@ -85,13 +92,13 @@ bool uniformPlace(Vec3 o, Vec3 ex, Vec3 ey, Vec3 ez, float& scale) {
     return true;
 }
 
-bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3 o, Vec3 ex, Vec3 ey, Vec3 ez) {
+bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3 o, Vec3 ex, Vec3 ey, Vec3 ez, const Vec3* viewer) {
     float s = 0;
     if (!on.load(std::memory_order_relaxed) || !model.ok() || model.triangles() < preparedFrom || !uniformPlace(o, ex, ey, ez, s)) {
         ++counts.declined;
         return false;
     }
-    const Kept* k = prepare(model);
+    Kept* k = prepare(model);
     if (!k) {
         ++counts.declined;
         return false;
@@ -105,6 +112,23 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
     const size_t from = sink.size();
     sink.reserve(from + size_t{n} * 3); // no zeroing: every vertex is written once
     const auto P = [&](Vec3 c) { return o + ex * c.x + ey * c.y + ez * c.z; };
+    // 0.0.74 test 2 CAR PAINT: the eye and world up in model space (a world vector w meets the model as R^T w / s).
+    const bool paint = viewer && fin(*viewer) && car_paint::enabled() && model.paint.size() == size_t{n} * 2;
+    const Vec3 rel = paint ? *viewer - o : Vec3{};
+    const Vec3 em = Vec3{dot(ex, rel), dot(ey, rel), dot(ez, rel)} * (1.f / (s * s));
+    const Vec3 um = Vec3{ex.y, ey.y, ez.y} * (1.f / s);
+    car_paint::Material mat;
+    if (paint) {
+        if (k->satin.size() != size_t{n} * 3)
+            k->satin.assign(size_t{n} * 3, Vec3{}), k->satinValid = false;
+        if (!k->satinValid || spidy::length(em - k->satinEye) > satinRelightEye || spidy::length(lm - k->satinLight) > satinRelightLight)
+            k->satinValid = false;
+        k->satinPhase = (k->satinPhase + 1) % satinSlices;
+        k->satinEye = em, k->satinLight = lm; // the next frame's jump is from here
+    } else {
+        k->satinValid = false; // FLAT or no eye: the kept colours are stale when SATIN comes back
+    }
+    const bool relightAll = paint && !k->satinValid;
     for (uint32_t t = 0; t < n; ++t) {
         if (!(k->area[t] > sliver))
             continue; // the old path's sliver (world |cross| <= 1e-14): nothing drawn
@@ -113,6 +137,17 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
         const float layer = at >= 0 ? static_cast<float>(at) : -1.f;
         const Vec3 tint = at >= 0 && t < model.tints.size() ? model.tints[t] : model.colors[t];
         const float faceLit = std::abs(dot(k->face[t], lm));
+        const bool painted = paint && at < 0 && model.paint[t * 2] != 0;
+        car_paint::Facing face;
+        const bool relight = painted && (relightAll || t % satinSlices == k->satinPhase);
+        if (relight) { // one toward-eye a triangle (its middle): the corners' normals carry the shape
+            car_paint::material(mat, tint, model.paint[t * 2], model.paint[t * 2 + 1]);
+            const Vec3 mid = (model.corners[t * 3] + model.corners[t * 3 + 1] + model.corners[t * 3 + 2]) * (1.f / 3);
+            const Vec3 to = em - mid;
+            const float tl = spidy::length(to);
+            if (tl > 1e-6f)
+                face = car_paint::facing(mat, lm, to * (1.f / tl), um);
+        }
         for (uint32_t i = 0; i < 3; ++i) {
             const size_t c = size_t{t} * 3 + i;
             float d = faceLit;
@@ -120,9 +155,18 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
                 d = std::abs(dot(k->corner[c], lm));
             const float lit = .32f + .68f * d;
             const float u = uvs ? model.uvs[t * 6 + i * 2] : 0.f, v = uvs ? model.uvs[t * 6 + i * 2 + 1] : 0.f;
-            sink.push_back(Vertex{P(model.corners[c]), tint * lit, 1.f, {u, v, layer, 1.f}});
+            Vec3 colour = tint * lit;
+            if (relight) {
+                colour = face.ok ? car_paint::corner(mat, face, smooth && k->length[c] > flat ? k->corner[c] : k->face[t], lm, um) : colour;
+                k->satin[c] = colour;
+            } else if (painted) {
+                colour = k->satin[c];
+            }
+            sink.push_back(Vertex{P(model.corners[c]), colour, 1.f, {u, v, layer, 1.f}});
         }
     }
+    if (relightAll)
+        k->satinValid = true;
     // Colours and uvs come from the model as they are now (they are not kept); one cheap look at them.
     for (size_t i = from; i < sink.size(); ++i) {
         const Vertex& v = sink[i];

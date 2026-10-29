@@ -24,8 +24,11 @@ class Defaults(unittest.TestCase):
         self.assertTrue(L.lens_flares_off(''))
         self.assertTrue(L.lens_flares_off('lens_flares = off_in_vr\n'))
         self.assertTrue(L.lens_flares_off('lens_flares = 1\n'))
-        self.assertFalse(L.lens_flares_off('lens_flares = game\n'))
-        self.assertFalse(L.lens_flares_off('lens_flares = 0\n'))
+        # 0.0.74 test 2 FLARE BLOCK (on by default) keeps them off in VR; flare_block = off gives lens_flares back
+        self.assertTrue(L.lens_flares_off('lens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off('flare_block = off\nlens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off('flare_block = off\nlens_flares = 0\n'))
+        self.assertTrue(L.lens_flares_off('flare_block = off\nlens_flares = off_in_vr\n'))
 
     def test_subtexts_one_sentence_with_restart(self):
         h = src('include/spidy/eye_bloom.hpp')

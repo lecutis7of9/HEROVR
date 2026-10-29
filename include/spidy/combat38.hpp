@@ -221,6 +221,18 @@ enum Option : uint32_t {
     // 0.0.74 test 1 BATMOBILE CHOICE: 1989 (the default, Dreamloft3D), ODAMI, FOREVER (SorroW), FOREVER 2 (S.York);
     // the dash HOME page's BATMOBILE button steps it too; live (the next summon)
     batmobileChoice,
+    // 0.0.74 test 2 SPIDYVR PICTURE: ON (the default) or CUSTOM
+    spidyvrPicture,
+    // 0.0.74 test 2 FLARE BLOCK: ON (the default) or OFF
+    flareBlock,
+    // 0.0.74 test 2 CABIN CLEAR: ON (the default) or OFF
+    cabinClear,
+    // 0.0.74 test 2 CAR PAINT: SATIN (the default) or FLAT
+    carPaint,
+    // 0.0.74 test 2 SEATED TOOLS: BLOCKED (the default) or ALLOWED
+    seatedTools,
+    // 0.0.74 test 2 DASH POINTER: ON (the default) or OFF
+    dashPointer,
     options
 };
 struct OptionInfo {
@@ -591,6 +603,12 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"seated_driving", "SEATED DRIVING", "SEAT", "SIT on the van dash puts your eye at the driver's seat, no restart needed.", 3, {"SIT BUTTON", "AUTO SIT", "OFF", nullptr}},
     {"batmobile", "BATMOBILE", "BMOB", "Drives a Batmobile as Batman (X summons it), turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"batmobile_choice", "BATMOBILE CHOICE", "BCAR", "Which Batmobile Batman's X summons (also the dash's BATMOBILE), no restart.", 4, {"1989", "ODAMI", "FOREVER", "FOREVER 2"}},
+    {"spidyvr_picture", "SPIDYVR PICTURE", "SPIC", "ON: the game's TAA per eye like SpidyVR, no mod AA or sharpening; no restart.", 2, {"ON", "CUSTOM", nullptr, nullptr}},
+    {"flare_block", "FLARE BLOCK", "FLRB", "ON hides lens flares and light glow sprites in VR, restart VR to apply.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"car_paint", "CAR PAINT", "PAINT", "SATIN gives the Batmobiles satin paint highlights; FLAT is test 1's; no restart.", 2, {"SATIN", "FLAT", nullptr, nullptr}},
+    {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no grapple, webs or hero tools while in a car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
+    {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -614,6 +632,15 @@ inline bool shadowMatchOn(uint32_t value) { return value == 0; }
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }
 inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }
+// 0.0.74 test 2: SPIDYVR PICTURE (0 ON, 1 CUSTOM), FLARE BLOCK, CABIN CLEAR, DASH POINTER (0 ON, 1 OFF),
+// CAR PAINT (0 SATIN, 1 FLAT), SEATED TOOLS (0 BLOCKED, 1 ALLOWED); anything unknown: the fix (value 0)'s.
+inline bool spidyvrPictureOn(uint32_t value) { return value != 1; }
+inline bool flareBlockOn(uint32_t value) { return value != 1; }
+inline bool cabinClearOn(uint32_t value) { return value != 1; }
+inline bool satinPaintOn(uint32_t value) { return value != 1; }
+inline bool seatedToolsBlocked(uint32_t value) { return value != 1; }
+inline bool dashPointerOn(uint32_t value) { return value != 1; }
+inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
 inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }

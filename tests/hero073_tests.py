@@ -310,6 +310,12 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5493'), ['SpidySeatedDriving'])  # 0.0.74 test 1 SEATED DRIVING
         self.assertEqual(uses.get('5494'), ['SpidyBatmobile'])  # 0.0.74 test 1 BATMOBILE
         self.assertEqual(uses.get('5495'), ['SpidyBatmobileChoice'])  # 0.0.74 test 1 BATMOBILE CHOICE
+        self.assertEqual(uses.get('5496'), ['SpidySpidyvrPicture'])  # 0.0.74 test 2 SPIDYVR PICTURE
+        self.assertEqual(uses.get('5497'), ['SpidyFlareBlock'])  # 0.0.74 test 2 FLARE BLOCK
+        self.assertEqual(uses.get('5498'), ['SpidyCabinClear'])  # 0.0.74 test 2 CABIN CLEAR
+        self.assertEqual(uses.get('5499'), ['SpidyCarPaint'])  # 0.0.74 test 2 CAR PAINT
+        self.assertEqual(uses.get('5500'), ['SpidySeatedTools'])  # 0.0.74 test 2 SEATED TOOLS
+        self.assertEqual(uses.get('5501'), ['SpidyDashPointer'])  # 0.0.74 test 2 DASH POINTER
 
 
 class Hero073Image(unittest.TestCase):
@@ -351,11 +357,14 @@ class Hero073Image(unittest.TestCase):
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'off', True), '0.5')  # image_style = off: revert
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', False), '0.5')  # no ENGINE TAA prepared
         self.assertEqual(L.image_mip_bias('0.25', 'classic', 'spidyvr', True), '0.25')  # an explicit -MipBias stays
-        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.73 release: GAME TAA OFF by default
-        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'spidyvr'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'image_style': 'bogus'}), 'off')
-        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')
+        # 0.0.74 test 2: SPIDYVR PICTURE (on by default) runs GAME TAA SPIDYVR; CUSTOM: the 0.0.73 release default
+        self.assertEqual(L.image_style_of({}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'off', 'spidyvr_picture': 'custom'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'spidyvr', 'spidyvr_picture': 'custom'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'bogus', 'spidyvr_picture': 'custom'}), 'off')
+        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'spidyvr')
         self.assertEqual(L.image_of({}), 'spidyvr')
         self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
         self.assertEqual(L.export_value('image', 'classic'), 1)
@@ -449,7 +458,7 @@ class Hero073Test4ImageStyle(unittest.TestCase):
         g = src('src/game_xr.cpp')
         self.assertIn('setHero007(v, combat38::imageStyle, 5460)', g)
         self.assertIn('styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn)', g)
-        self.assertIn('native_gpu::setCleanImage(image_style::spidy(style) &&', g)
+        self.assertIn('native_gpu::setCleanImage(picture || (image_style::spidy(style) &&', g)
         # The controller sits after the FPS guard's plan B, so a failure still falls back to EYE AA.
         self.assertLess(g.index('engineTaaFallback(engine_taa::reasonOf(engine));\n                            previous = engine;'),
                         g.index('static image_style::Controller styleControl;'))

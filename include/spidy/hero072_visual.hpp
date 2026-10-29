@@ -55,6 +55,11 @@ struct Look {
     // interior is at vanAt when this is off).
     bool vanInteriorOwn{};
     Vec3 vanInteriorAt{};
+    // 0.0.74 test 2 INSIDE VIEW CULL (owner t1171u): the car's roof / canopy / cabin glass (Models/Vehicle/Batmobile/
+    // <car>\Roof, cut out of the body by the converter), drawn only while the eye is outside the car's box
+    // (roofLow..roofHigh in the car's frame: x right, y up, -z forward, from vanAt). Null: none drawn.
+    const mesh_model::Mesh* vanRoof{};
+    Vec3 roofLow{}, roofHigh{};
     // Lightning: each bolt from -> to, jagged by its seed.
     uint32_t bolts{};
     Vec3 boltFrom[boltsMost]{}, boltTo[boltsMost]{};
@@ -140,6 +145,20 @@ inline float shockRing(float radius, float age, bool subtle) {
     return subtle ? std::min(radius, subtleRing) * (.5f + .5f * a) : std::min(radius, 12.f) * (.2f + .8f * a);
 }
 inline float shockAlpha(float age, bool subtle) { return (subtle ? .18f : .45f) * (1.f - std::clamp(age, 0.f, 1.f)); }
+// 0.0.74 test 2 INSIDE VIEW CULL: whether the eye (rel: eye - vanAt, world axes) is outside the car's box, so the
+// roof is drawn. The box is the car's frame (vanForward is its -z, y up) grown by 5 cm; odd numbers: drawn.
+inline bool roofSeen(const Look& l, Vec3 rel) {
+    const Vec3 f{l.vanForward.x, 0, l.vanForward.z};
+    const float fl = std::sqrt(f.x * f.x + f.z * f.z);
+    if (!(fl > 1e-4f) || !std::isfinite(rel.x + rel.y + rel.z))
+        return true;
+    const Vec3 fw{f.x / fl, 0, f.z / fl}, right{-fw.z, 0, fw.x};
+    const float x = rel.x * right.x + rel.z * right.z, y = rel.y, z = -(rel.x * fw.x + rel.z * fw.z);
+    const Vec3 lo = l.roofLow, hi = l.roofHigh;
+    constexpr float m = .05f;
+    return !(x > std::min(lo.x, hi.x) - m && x < std::max(lo.x, hi.x) + m && y > std::min(lo.y, hi.y) - m &&
+             y < std::max(lo.y, hi.y) + m && z > std::min(lo.z, hi.z) - m && z < std::max(lo.z, hi.z) + m);
+}
 namespace budget {
 inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1500, chain = 1700, fist = 5400,
                         charge = 2600, ring = 200, hud = 9000;

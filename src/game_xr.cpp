@@ -32,6 +32,7 @@
 #include "spidy/fly_lean.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
+#include "spidy/car_paint.hpp"
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
@@ -648,6 +649,7 @@ uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, re
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
+DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
@@ -3325,6 +3327,13 @@ DWORD WINAPI run(void*) {
                                                frame.hands[1].valid && validTrackedPose(frame.hands[1].grip)};
                     const bool gesturesPlay = viewing && gameplay && !flatScreen && !calibrationInput &&
                                               validTrackedPose(frame.head);
+                    // 0.0.74 test 2 SEATED TOOLS (owner: "the grapple spawned the moment a hand gripped the wheel"):
+                    // BLOCKED (the default) - getting in, seated or carried in the van or the Batmobile, no hero tool
+                    // or ability answers a hand (no grapple, baton, webs, claws, guns, holster draw); the hands are
+                    // the car's (wheel, handles, dash, pedals). All of it is back the frame he is out. ALLOWED: 0.0.74
+                    // test 1's (the free hand's trigger reached the hero's weapons from the seat).
+                    const bool seatedLock = combat38::seatedToolsBlocked(c38(combat38::seatedTools)) &&
+                                            (vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried);
                     {   // Update 38.5 SYMBIOTE LOOK: both hands grab the chest, then pull outward - on or
                         // off (extras385::symbiote::ChestPull; the ULTIMATE's crossed arms never arm it).
                         gestures385::Input gi;
@@ -4298,7 +4307,7 @@ DWORD WINAPI run(void*) {
                         for (unsigned i = 0; i < 2; ++i)
                             if (hudZone & (1u << i))
                                 squeezes[i] = 0; // Update 38.1: the holo zone's grip
-                        const bool drawPlay = gesturesPlay && !phone.open() && !padLayer.latched();
+                        const bool drawPlay = gesturesPlay && !phone.open() && !padLayer.latched() && !seatedLock;
                         // Test build 12: the phone is SPIDER-MAN's only (the others' belts are their gadgets').
                         const bool phoneDrawPlay = drawPlay && heroNow() == hero_modes::spiderMan;
                         // Version 0.0.7 HOLSTERS (holster.hpp): PUNISHER's hips and back, DAREDEVIL's
@@ -5565,13 +5574,18 @@ DWORD WINAPI run(void*) {
                                     h.trigger = h.grip = 0;
                             // Version 0.0.7 BATMAN (cape_glide.hpp): his glide is allowed, and the hands whose
                             // trigger the last hero step took as the grapple gun's (the bridge fires on the press).
-                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open();
+                            if (seatedLock) { // 0.0.74 test 2 SEATED TOOLS: no web, web ball or grapple from the car
+                                for (auto& h : input.hands)
+                                    h.trigger = h.grip = 0;
+                                batmanGrapple[0] = batmanGrapple[1] = hero072Grapple[0] = hero072Grapple[1] = false;
+                            }
+                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !seatedLock;
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
                             batmanGrapple[0] = batmanGrapple[1] = false;
                             // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
                             // (askGrappleOnly every live frame, so the pull carries on to the point).
                             if (const uint32_t gh = heroNow(); gh != hero_modes::batman && grapple072::grappler(gh)) {
-                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open();
+                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open() && !seatedLock;
                                 input.asks |= grapple072::asks(gh, grappleLive, hero072Grapple[0], hero072Grapple[1]);
                             }
                             hero072Grapple[0] = hero072Grapple[1] = false;
@@ -6760,7 +6774,7 @@ DWORD WINAPI run(void*) {
                         }
                         if (flyNow.flying && mapping == game_pad::Mapping::gameplay)
                             pad.buttons = static_cast<uint16_t>(pad.buttons & ~game_pad::y); // FLY replaces Web Wings
-                        if (vanDriving && mapping == game_pad::Mapping::gameplay) { // Version 0.0.72: the van's pedals
+                        if ((vanDriving || seatedLock) && mapping == game_pad::Mapping::gameplay) { // Version 0.0.72: the van's pedals
                             pad.leftTrigger = {};
                             pad.rightTrigger = {};
                             // Version 0.0.73 DRIVING: no walk, no jump, no attack from the seat (pause stays).
@@ -6827,7 +6841,7 @@ DWORD WINAPI run(void*) {
                                     vanDriving && !van072::freeTrigger(true, combat38::vanWheelHandPedals(c38(combat38::vanPedals)),
                                                                        van.wheel.latched[i], vanRimGrip[i], vanDash.aimed(i));
                                 heroPress[i] = grapple073::heroPress(frame.hands[i].trigger, frame.hands[i].squeeze,
-                                                                     (hudZone & (1u << i)) != 0, seatBlock);
+                                                                     (hudZone & (1u << i)) != 0 || seatedLock, seatBlock);
                                 auto& h = cf.hands[i];
                                 const auto& grip = frame.hands[i].grip;
                                 h.tracked = gripsTracked[i];
@@ -6842,6 +6856,10 @@ DWORD WINAPI run(void*) {
                                 vanTrigger[i] = h.button;
                                 if (vanDriving)
                                     h.button = 0;
+                                if (seatedLock) { // 0.0.74 test 2 SEATED TOOLS: no punch, web ball, gadget or zip
+                                    h.button = h.grip = 0;
+                                    h.busy = true;
+                                }
                                 h.position = grip.position;
                                 // Update 38.1 AIM AXIS: HAND (webShooter(grip) -Z, the swing webs'), AIM
                                 // POSE or 38's grip -Z (DIAGNOSIS §0); the glob, assist, contact fist,
@@ -7456,6 +7474,8 @@ DWORD WINAPI run(void*) {
                                                 si.dt = vin.dt;
                                                 si.driving = van.state == van072::driving;
                                                 si.x = vanDashX;
+                                                // 0.0.74 test 2 DASH POINTER: the beam, cursor, lit tab / button and the fingertip touch
+                                                si.pointer = combat38::dashPointerOn(c38(combat38::dashPointer));
                                                 for (unsigned i = 0; i < 2; ++i) {
                                                     si.tracked[i] = vin.tracked[i];
                                                     si.hand[i] = vin.tracked[i] ? van.frame.local(vin.hands[i]) : Vec3{};
@@ -7727,7 +7747,9 @@ DWORD WINAPI run(void*) {
                                             hin.hands[i].holdGun(gun_grip::held(frame.hands[i].grip, i, runtime.controllers()[i]));
                                             // Version 0.0.73 UNIVERSAL GRAPPLE: this trigger is the hologram's / a menu's /
                                             // the phone's / the pad layer's - never a grapple (fix 3).
-                                            hin.hands[i].holo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
+                                            hin.hands[i].holo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched() || seatedLock;
+                                            if (seatedLock) // 0.0.74 test 2 SEATED TOOLS: no claws or gun grip from the wheel
+                                                hin.hands[i].squeeze = 0;
                                         }
                                         // Version 0.0.73 PROP BOUNCE: the thrown shield's surface ahead (this frame's tracking space).
                                         const uint32_t shieldBouncesWas = hero007Play.shield.wallBounces;
@@ -7987,7 +8009,7 @@ DWORD WINAPI run(void*) {
                                             in72.hands[i].hammer = thor_grip::held(frame.hands[i].grip, runtime.controllers()[i]);
                                             // Version 0.0.73 (fix 24, UNIVERSAL GRAPPLE): the PUNISHER's hook never fires on a
                                             // hologram press and is never drawn into a hand holding a gun.
-                                            in72.handBusy[i] = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched();
+                                            in72.handBusy[i] = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched() || seatedLock;
                                             in72.gunInHand[i] = hero007Play.guns.heldIn(i) >= 0;
                                         }
                                         in72.eyeHeight = calibratedEye; // 0.0.73 test 3: the PUNISHER rig's scale
@@ -10279,6 +10301,22 @@ DWORD WINAPI run(void*) {
                                     L.vanModel = body;
                                     L.vanInterior = cab;
                                     L.vanWheel = wheel;
+                                    // 0.0.74 test 2 CABIN CLEAR (owner t1171u, ON by default): the car's roof, canopy
+                                    // and cabin glass (Batmobile/<car>/Roof, cut out by the converter) drawn only
+                                    // while the eye is outside the car's box; OFF: always (test 1's look).
+                                    // 0.0.74 test 2 CAR PAINT (car_paint.hpp; SATIN by default): the Batmobile bodies'
+                                    // satin highlight and sky reflection from the head; FLAT: test 1's diffuse light.
+                                    car_paint::setEnabled(combat38::satinPaintOn(c38(combat38::carPaint)));
+                                    L.vanRoof = batDraw ? slotModel(mesh_model::slotBatmobileRoofFirst + carNow, "BATMOBILE") : nullptr;
+                                    if (batDraw) {
+                                        const auto& box = batmobile074::layout(carNow);
+                                        if (combat38::cabinClearOn(c38(combat38::cabinClear))) {
+                                            L.roofLow = {-box.width / 2, 0, -box.length / 2};
+                                            L.roofHigh = {box.width / 2, box.height, box.length / 2};
+                                        } else {
+                                            L.roofLow = L.roofHigh = {0, -1000.f, 0}; // no eye is ever inside
+                                        }
+                                    }
                                     L.vanAt = van.frame.at;
                                     L.vanForward = van.frame.forward();
                                     Vec3 up{}, toward{};
@@ -10751,7 +10789,23 @@ DWORD WINAPI run(void*) {
                             static image_style::Controller styleControl;
                             static uint32_t styleSent = UINT32_MAX;
                             static ULONGLONG styleTick{};
-                            const uint32_t style = c38(combat38::imageStyle);
+                            // 0.0.74 test 2 SPIDYVR PICTURE (ON, the default): GAME TAA SPIDYVR whatever the
+                            // wrist or live.txt says, SpidyVR's jitter (OURS at 100%: its Halton (2, 3) amplitude),
+                            // and nothing of the mod's over the picture, even while ENGINE TAA is off (no EYE AA,
+                            // FXAA, history or CAS: the game's frame as it is). CUSTOM: the player's own.
+                            const bool picture = combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture));
+                            const uint32_t style = picture ? static_cast<uint32_t>(image_style::spidyvr) : c38(combat38::imageStyle);
+                            if (picture) {
+                                static ULONGLONG jitterTick{};
+                                namespace et = engine_taa;
+                                if (const ULONGLONG nowTick = GetTickCount64(); nowTick - jitterTick >= 1000) {
+                                    jitterTick = nowTick;
+                                    if (SpidyEngineTaaJitterNow() != et::packJitter(et::ours, et::fullJitterScale)) {
+                                        SpidyEngineTaaJitterScale(reinterpret_cast<void*>(uintptr_t{et::fullJitterScale}));
+                                        SpidyEngineTaaJitter(reinterpret_cast<void*>(uintptr_t{et::ours}));
+                                    }
+                                }
+                            }
                             if (style != styleSent && SpidyImageStyle(reinterpret_cast<void*>(uintptr_t{
                                                           image_style::spidy(style) ? image_style::spidyvr
                                                                                     : image_style::gameTaaOff})) == 0)
@@ -10784,12 +10838,17 @@ DWORD WINAPI run(void*) {
                                     eyeAaState = eye_taa::pack(eye_taa::off, 0);
                                     OutputDebugStringA("EYE AA: off (IMAGE STYLE SPIDYVR: the game's TAA)\n");
                                 }
-                                if (step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
+                                if (picture && (eyeAaNow() & 0xff) == eye_taa::on) { // SPIDYVR PICTURE: never EYE AA
+                                    native_gpu::setEyeTemporal(false);
+                                    eyeAaState = eye_taa::pack(eye_taa::off, 0);
+                                    OutputDebugStringA("EYE AA: off (SPIDYVR PICTURE)\n");
+                                }
+                                if (!picture && step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
                                     engine_taa::stateOf(engine) != engine_taa::on)
                                     pressEyeAa();
                             }
-                            native_gpu::setCleanImage(image_style::spidy(style) &&
-                                                      engine_taa::stateOf(engine) == engine_taa::on);
+                            native_gpu::setCleanImage(picture || (image_style::spidy(style) &&
+                                                                  engine_taa::stateOf(engine) == engine_taa::on));
                         }
                         {   // Update 35: FAR SHADOWS' FPS guard: a mode the press chose that halves
                             // the frame rate goes back to OFF (the reason shown).
@@ -11621,7 +11680,10 @@ DWORD WINAPI run(void*) {
                                 SpidyLightChecksOn(reinterpret_cast<void*>(static_cast<uintptr_t>(checksWant)));
                             }
                             // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
-                            if (const uint32_t glowWant = c38(combat38::glowCheck); glowWant != glowCheckApplied) {
+                            // 0.0.74 test 2 FLARE BLOCK (ON, the default): the glow sprites hidden (GLOW CHECK HIDDEN).
+                            if (const uint32_t glowWant = combat38::flareBlockOn(c38(combat38::flareBlock)) ? combat38::glowHidden
+                                                                                                            : c38(combat38::glowCheck);
+                                glowWant != glowCheckApplied) {
                                 glowCheckApplied = glowWant;
                                 SpidyGlowCheckMode(reinterpret_cast<void*>(static_cast<uintptr_t>(glowWant)));
                             }
@@ -11640,13 +11702,15 @@ DWORD WINAPI run(void*) {
                             }
                             // 0.0.73 IMAGE: the history read (SPIDYVR sharp, CLASSIC bilinear) when it changes;
                             // the eye AA and sharpening are the launcher's (live.txt) and the wrist press's.
-                            if (const uint32_t sharpWant = combat38::imageLook(c38(combat38::image)).sharpHistory ? 1u : 0u;
+                            if (const uint32_t sharpWant = combat38::imageLook(combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture))
+                                                                                   ? 0u : c38(combat38::image)).sharpHistory ? 1u : 0u;
                                 sharpWant != imageApplied) {
                                 imageApplied = sharpWant;
                                 SpidyEyeHistorySharp(reinterpret_cast<void*>(static_cast<uintptr_t>(sharpWant)));
                             }
                             // 0.0.73 AA SHARPEN MATCH: CAS by the eye history kept (ON, value 0) or as set, when it changes.
-                            if (const uint32_t matchWant = eye_sharpen::matchOn(c38(combat38::sharpenMatch)) ? 1u : 0u;
+                            if (const uint32_t matchWant = !combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture)) &&
+                                                           eye_sharpen::matchOn(c38(combat38::sharpenMatch)) ? 1u : 0u;
                                 matchWant != sharpenMatchApplied) {
                                 sharpenMatchApplied = matchWant;
                                 SpidyEyeSharpenMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
@@ -13762,6 +13826,13 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedDriving(void* v) { retu
 // only when ON; BATMOBILE CHOICE 1989 (0, default) / ODAMI (1) / FOREVER (2) / FOREVER 2 (3), live (the next summon).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatmobile(void* v) { return setHero007(v, combat38::batmobile, 5494); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatmobileChoice(void* v) { return setHero007(v, combat38::batmobileChoice, 5495); }
+// 0.0.74 test 2: SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER (value 0 the fix, 1 off)
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySpidyvrPicture(void* v) { return setHero007(v, combat38::spidyvrPicture, 5496); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlareBlock(void* v) { return setHero007(v, combat38::flareBlock, 5497); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCabinClear(void* v) { return setHero007(v, combat38::cabinClear, 5498); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarPaint(void* v) { return setHero007(v, combat38::carPaint, 5499); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedTools(void* v) { return setHero007(v, combat38::seatedTools, 5500); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashPointer(void* v) { return setHero007(v, combat38::dashPointer, 5501); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

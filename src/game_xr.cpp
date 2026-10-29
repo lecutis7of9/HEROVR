@@ -1789,15 +1789,11 @@ DWORD WINAPI run(void*) {
                     game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
                     continue;
                 }
-                // 0.0.74 test 1 BATMOBILE OFF: none of its models loaded (turning it on needs a restart); FOREVER 2 has no glass.
-                if (mesh_model::slotIsBatmobile(slot) &&
-                    (c38(combat38::batmobile) != 0 ||
-                     (slot >= mesh_model::slotBatmobileGlassFirst && slot < mesh_model::slotBatmobileGlassFirst + batmobile074::cars &&
-                      !batmobile074::layout(slot - mesh_model::slotBatmobileGlassFirst).glass))) {
+                // 0.0.74 test 1 BATMOBILE OFF: none of its models loaded (turning it on needs a restart).
+                if (mesh_model::slotIsBatmobile(slot) && c38(combat38::batmobile) != 0) {
                     models.meshes[slot] = {};
                     models.status[slot] = mesh_model::notTried;
-                    if (c38(combat38::batmobile) != 0)
-                        game_prompts::note((std::string("0.0.74 test 1 BATMOBILE OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
+                    game_prompts::note((std::string("0.0.74 test 1 BATMOBILE OFF: ") + mesh_model::slotFolders[slot] + " not loaded").c_str());
                     continue;
                 }
                 try {
@@ -10257,7 +10253,7 @@ DWORD WINAPI run(void*) {
                             // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL): the Vandura, its built cab and its wheel - each the
                             // model or nothing (MODEL MISSING on the wrist); drawn where the van is (world space).
                             // 0.0.74 test 1 BATMOBILE: BATMAN's picked car (latched at the summon), the shared cockpit at
-                            // its place inside it, the wheel at its hub and its glass (blended) - the model or no car.
+                            // its place inside it, the wheel at its hub (its glass as the model came) - the model or no car.
                             const bool batDraw = vehicleKind == kindBatmobile && c38(combat38::batmobile) == 0 &&
                                                  hero007In.hero == hero_modes::batman;
                             if ((c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) || batDraw) {
@@ -10292,12 +10288,6 @@ DWORD WINAPI run(void*) {
                                         const auto& lay = batmobile074::layout(carNow);
                                         L.vanInteriorOwn = true;
                                         L.vanInteriorAt = van.frame.world(lay.cockpit);
-                                        if (lay.glass) {
-                                            saved.batGlass.mesh = mesh_model::library().model(mesh_model::slotBatmobileGlassFirst + carNow);
-                                            saved.batGlass.at = van.frame.at;
-                                            saved.batGlass.forward = van.frame.forward();
-                                            saved.batGlass.on = saved.batGlass.mesh != nullptr;
-                                        }
                                     }
                                     L.wheelForward = -van072::worldDir(van.frame, toward);
                                     L.wheelUp = van072::worldDir(van.frame, up);
@@ -12408,19 +12398,6 @@ DWORD WINAPI run(void*) {
                                 auto dash = saved->vanScreen;
                                 dash.centre += travel;
                                 van_screen::append(translucent, dash, viewer);
-                            } catch (...) {
-                                translucent.resize(from);
-                            }
-                        }
-                        // 0.0.74 test 1 BATMOBILE GLASS: see-through, lightly tinted, sorted far to near (depth-tested,
-                        // so the body and cockpit stay in front). Should it fail, only the glass goes off.
-                        if (!saved->flatScreen && saved->batGlass.on) {
-                            const size_t from = translucent.size();
-                            try {
-                                auto glass = saved->batGlass;
-                                glass.at += travel;
-                                if (!batmobile074::appendGlass(translucent, glass, viewer))
-                                    translucent.resize(from);
                             } catch (...) {
                                 translucent.resize(from);
                             }

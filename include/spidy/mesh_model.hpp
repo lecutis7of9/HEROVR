@@ -170,11 +170,11 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // room in glTF space, its room.txt beside it). Loaded only when HIDEOUTS is ON (game_xr).
                        slotHideoutBatcave, slotHideoutSafehouse,
                        // 0.0.74 test 1 BATMOBILE (batmobile074.hpp; owner picks 01 / 07 / 09 / 10): Models\Vehicle\Batmobile:
-                       // <car> the body (the van's frame: metres, -z forward, x right, the ground at y 0), <car>\Glass its
-                       // windscreen and side glass (drawn see-through, tinted), Cockpit the shared cockpit (its own frame: the
+                       // <car> the body (the van's frame: metres, -z forward, x right, the ground at y 0; its glass as the model
+                       // came), Cockpit the shared cockpit (its own frame: the
                        // floor's middle at the origin; placed per car), SteeringWheel (the van wheel's convention). Loaded
                        // only when BATMOBILE is ON (game_xr). Missing: no Batmobile (the van's X stays the Punisher's).
-                       slotBatmobileFirst, slotBatmobileGlassFirst = slotBatmobileFirst + 4, slotBatmobileCockpit = slotBatmobileGlassFirst + 4,
+                       slotBatmobileFirst, slotBatmobileCockpit = slotBatmobileFirst + 4,
                        slotBatmobileWheel,
                        slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
@@ -190,8 +190,7 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Suits/Suit_thor_2", "Suits/Suit_greenLantern_2", "Suits/Suit_greenLantern_3", "Suits/Suit_superman_4",
                                                    "Claws/Left", "Claws/Right", "Hideout/Batcave", "Hideout/Safehouse",
                                                    "Vehicle/Batmobile/1989", "Vehicle/Batmobile/ODAMI", "Vehicle/Batmobile/FOREVER",
-                                                   "Vehicle/Batmobile/FOREVER2", "Vehicle/Batmobile/1989/Glass", "Vehicle/Batmobile/ODAMI/Glass",
-                                                   "Vehicle/Batmobile/FOREVER/Glass", "Vehicle/Batmobile/FOREVER2/Glass", "Vehicle/Batmobile/Cockpit",
+                                                   "Vehicle/Batmobile/FOREVER2", "Vehicle/Batmobile/Cockpit",
                                                    "Vehicle/Batmobile/SteeringWheel"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
@@ -200,8 +199,7 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
-                                                vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles};
+                                                vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -231,7 +229,7 @@ inline uint32_t suitSlot(const char* folder) {
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
-                  slotBatmobileWheel == 55 && slots == 56, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+                  slotBatmobileWheel == 51 && slots == 52, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

@@ -10,8 +10,8 @@
 //   ODAMI      "Batmobile" by Odami_3D (CC BY 4.0)
 //   FOREVER    "Batmobile" by SorroW (CC BY 4.0)
 //   FOREVER 2  "Batmobile - Batman Forever" by S.York-Designs (CC BY 4.0; AI-generated with Meshy)
-// Each is Models\Vehicle\Batmobile\<FOLDER>\model.glb, its windshield and side glass Glass\model.glb (drawn
-// blended, lightly tinted: the driver sees the road through it), and one shared cockpit (Cockpit\, original,
+// Each is Models\Vehicle\Batmobile\<FOLDER>\model.glb, its glass and canopy exactly as the model came (owner
+// t1164u: no see-through edits), and one shared cockpit (Cockpit\, original,
 // Made by Agent Mulder) and wheel (SteeringWheel\) sat inside each at the layout below. The numbers are
 // MEASURED by the converter (tools/batmobile074/convert.py; layout.json beside each model): CONFIRMED on
 // the models, CANDIDATE in game. Pure: no game reads, no addresses. Fail-safe: a model missing or a fault
@@ -32,7 +32,7 @@ inline constexpr const char* choiceHelp = "Which Batmobile Batman's X summons (a
 
 inline constexpr uint32_t cars = 4;
 inline constexpr const char* names[cars] = {"1989", "ODAMI", "FOREVER", "FOREVER 2"};
-// Under Models\Vehicle\Batmobile\ (mesh_model slotBatmobileFirst + car, slotBatmobileGlassFirst + car).
+// Under Models\Vehicle\Batmobile\ (mesh_model slotBatmobileFirst + car).
 inline constexpr const char* folders[cars] = {"1989", "ODAMI", "FOREVER", "FOREVER2"};
 
 struct Credit {
@@ -63,7 +63,6 @@ struct Layout {
     Vec3 handleIn, handleOut;
     Vec3 exit;      // on the street, .75 m out from the driver's side
     Vec3 screen;    // the dash screen's face centre (flush, square)
-    bool glass;     // a Glass model (FOREVER 2: its canopy is cut open, no glass)
 };
 const Layout& layout(uint32_t car);
 inline uint32_t clampCar(uint32_t car) { return car < cars ? car : 0; }
@@ -72,20 +71,6 @@ inline uint32_t clampCar(uint32_t car) { return car < cars ? car : 0; }
 van072::Tune tune(uint32_t car);
 // The dash screen's metres a design unit (the cockpit's bezel takes the .28 x .17 face at 1:1).
 inline constexpr float screenScale = 1.f;
-// The glass's tint and opacity (lightly tinted, blended: the road shows through).
-inline constexpr float glassAlpha = .22f;
-inline constexpr Vec3 glassTint{.10f, .13f, .17f};
-
-// What the translucent pass draws: the car's glass (world space; library-owned mesh).
-struct Glass {
-    bool on{};
-    const mesh_model::Mesh* mesh{};
-    Vec3 at{}, forward{0, 0, -1};
-};
-// Appends the glass for an eye at `viewer`: every triangle blended at glassAlpha, far to near. Nothing on a
-// fault (out put back); returns whether it drew.
-bool appendGlass(std::vector<Vertex>& out, const Glass& g, Vec3 viewer);
-
 // The dash picker: the next car after `car`.
 inline uint32_t nextCar(uint32_t car) { return (clampCar(car) + 1) % cars; }
 

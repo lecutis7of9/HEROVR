@@ -25848,7 +25848,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 10 && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -31528,7 +31528,7 @@ int main() {
             }
         }
     });
-    test("0.0.74 test 1 BATMOBILE: four cars, their layouts and tunes, the slots, the options, the glass", [] {
+    test("0.0.74 test 1 BATMOBILE: four cars, their layouts and tunes, the slots, the options, the glass as the model came", [] {
         namespace bm = batmobile074;
         namespace mm = spidy::mesh_model;
         check(bm::cars == 4 && std::string(bm::names[0]) == "1989" && std::string(bm::names[1]) == "ODAMI" &&
@@ -31546,14 +31546,12 @@ int main() {
             check(L.exit.x < -L.width / 2 && std::abs(L.exit.y) < 1e-4f, "out on the driver's side, on the street: " + car);
             check(L.handleOut.x < -.5f && L.handleIn.x < -.5f && L.handleOut.x > -L.width / 2 - .2f,
                   "the handles on the driver's side: " + car);
-            check(L.glass == (c != 3), "glass on all but FOREVER 2 (its canopy is cut open): " + car);
             const van072::Tune t = bm::tune(c);
             check(t.length == L.length && t.width == L.width && length(t.eye - L.eye) < 1e-6f && length(t.hub - L.hub) < 1e-6f &&
                       length(t.exit - L.exit) < 1e-6f && t.topSpeed == van072::Tune{}.topSpeed && t.wheelBase > 2.5f && t.wheelBase < 3.8f,
                   "its tune: its geometry, the van's driving: " + car);
             check(length(van072::axisOf(t)) > .99f, "a usable wheel axis: " + car);
             check(std::string(mm::slotFolders[mm::slotBatmobileFirst + c]) == std::string("Vehicle/Batmobile/") + bm::folders[c] &&
-                      std::string(mm::slotFolders[mm::slotBatmobileGlassFirst + c]) == std::string("Vehicle/Batmobile/") + bm::folders[c] + "/Glass" &&
                       mm::slotIsVehicle(mm::slotBatmobileFirst + c) && !mm::slotMayDecimate[mm::slotBatmobileFirst + c] &&
                       mm::slotDrawCap[mm::slotBatmobileFirst + c] == mm::vanTriangles,
                   "its slots: folders, never flattened, the van's cap: " + car);
@@ -31573,32 +31571,12 @@ int main() {
         check(pick.count == 4 && std::string(pick.values[0]) == "1989" && std::string(pick.help) == bm::choiceHelp &&
                   std::strlen(bm::choiceHelp) <= 80 && std::string(bm::choiceHelp).find("no restart") != std::string::npos,
               "BATMOBILE CHOICE: 1989 by default, its help line says no restart");
-        // the glass: blended, far to near, nothing on a fault
-        mm::Mesh g;
-        for (int k = 0; k < 3; ++k) {
-            const float z = -1.f - k;
-            g.corners.insert(g.corners.end(), {Vec3{-.5f, 1, z}, Vec3{.5f, 1, z}, Vec3{0, 1.5f, z}});
-            g.colors.push_back({.5f, .5f, .5f});
-        }
-        bm::Glass glass;
-        glass.on = true;
-        glass.mesh = &g;
-        glass.at = {10, 0, 5};
-        glass.forward = {0, 0, -1};
-        std::vector<Vertex> out;
-        const Vec3 eye{10, 1.2f, 5};
-        check(bm::appendGlass(out, glass, eye) && out.size() == 9, "every glass triangle drawn");
-        bool blended = true;
-        for (const auto& v : out)
-            blended &= std::abs(v.alpha - bm::glassAlpha) < 1e-6f && bm::glassAlpha < .5f;
-        check(blended, "see-through: blended, lightly tinted");
-        check(out[0].position.z < out[3].position.z && out[3].position.z < out[6].position.z, "far to near");
-        out.clear();
-        glass.forward = {0, 1, 0};
-        check(!bm::appendGlass(out, glass, eye) && out.empty(), "a bad forward: nothing");
-        glass.forward = {0, 0, -1};
-        glass.mesh = nullptr;
-        check(!bm::appendGlass(out, glass, eye) && out.empty(), "no glass model: nothing (never a crash)");
+        // owner t1164u: the glass as the model came - no Glass slots, the cockpit right after the four bodies
+        check(mm::slotBatmobileCockpit == mm::slotBatmobileFirst + bm::cars && mm::slotBatmobileWheel == mm::slotBatmobileCockpit + 1 &&
+                  mm::slotBatmobileWheel + 1 == mm::slots,
+              "no Glass slots: each car's glass is in its body");
+        for (uint32_t s2 = 0; s2 < mm::slots; ++s2)
+            check(std::string(mm::slotFolders[s2]).find("/Glass") == std::string::npos, "no Glass folder loaded");
     });
     test("0.0.74 test 1 BATMOBILE DASH: the Batman screen - BATCAVE, SIT, the picker; no CASES or LOCKER", [] {
         namespace vs = van_screen;

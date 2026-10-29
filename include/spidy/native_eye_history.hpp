@@ -12,7 +12,6 @@
 #include "web_visual.hpp"
 #include "test_notice.hpp"
 #include "van_screen.hpp"
-#include "batmobile074.hpp"
 #include "hideout074.hpp"
 
 #include <limits>
@@ -43,8 +42,6 @@ struct NativeEyeFrame {
     roster_page::View roster{};
     // Version 0.0.73 test 3 VAN SCREEN (on false: none), this frame's world.
     van_screen::View vanScreen{};
-    // 0.0.74 test 1 BATMOBILE: the driven car's see-through glass (on false: none), this frame's world.
-    batmobile074::Glass batGlass{};
     // 0.0.74 test 1 HIDEOUTS (away false: none): the room's model (null: the fallback box), where it stands
     // (this frame's world) and the real floor's world height.
     bool hideoutAway{};

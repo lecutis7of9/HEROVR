@@ -1,6 +1,7 @@
 # HERO VR 0.0.74 test 1 BATMOBILE converter (Made by Agent Mulder). Blender 4.2 headless.
 #   blender -b --python convert.py -- <id|cockpit> <outdir>
-# Writes the game GLBs: body (opaque, ~6 m, game frame), glass (separate, tinted later in game), and for
+# Writes the game GLBs: body (~6 m, game frame; its glass and canopy exactly as the model came - owner t1164u:
+# no glass split, no see-through, no faces cut), and for
 # "cockpit" the shared cockpit (no wheel) and the steering wheel (hub at origin, rim in xy, +z to the driver,
 # +y 12 o'clock). Prints LAYOUT json (game frame: x right, y up, -z forward, origin = ground under the middle).
 import bpy, bmesh, sys, os, math, json, glob
@@ -9,13 +10,13 @@ argv = sys.argv[sys.argv.index('--') + 1:]
 which, outdir = argv[0], argv[1]
 BM = '/workspace/hero-0.0.72/batmobile'
 SPECS = {
- '01': dict(src='dl/dreamloft/Bat-Mobile_(1989).obj', tex='', s=1, r=(0,0,0), hide=[], glass=['Windows'], glassify=[], cut=[],
+ '01': dict(src='dl/dreamloft/Bat-Mobile_(1989).obj', tex='', s=1, r=(0,0,0), hide=[], glass=[], glassify=[], cut=[],
             L=(0,0.07,0.1), k=0.92, tris=110000, folder='1989', colors=False),
  '07': dict(src='dl/07_odami/scene.gltf', tex='dl/07_odami', s=0.01, r=(0,0,0), hide=['Material__90','Material__53','Material__54'],
-            glass=['Material__27'], glassify=[[-0.62,0.62,-0.75,0.65,0.88,1.6]], cut=[], L=(0,0,0.03), k=1.0, tris=110000, folder='ODAMI', colors=False),
+            glass=[], glassify=[], cut=[], L=(0,0,0.03), k=1.0, tris=110000, folder='ODAMI', colors=False),
  '09': dict(src='dl/09_sorrow/scene.gltf', tex='', s=0.001, r=(0,0,0), hide=['Object_2','Object_3','Object_4','Object_5','Object_18','Object_68','Object_67','Object_65'],
-            glass=['material_64'], glassify=[], cut=[], L=(0,-0.55,0.6), k=0.74, tris=110000, folder='FOREVER', colors=True),
- '10': dict(src='dl/10_syork/scene.gltf', tex='dl/10_syork', s=4, r=(0,0,90), hide=[], glass=[], glassify=[], cut=[[-0.85,0.85,-1.0,0.9,1.0,2.6]],
+            glass=[], glassify=[], cut=[], L=(0,-0.55,0.6), k=0.74, tris=110000, folder='FOREVER', colors=True),
+ '10': dict(src='dl/10_syork/scene.gltf', tex='dl/10_syork', s=4, r=(0,0,90), hide=[], glass=[], glassify=[], cut=[],
             L=(0,0.1,0.16), k=0.84, tris=110000, folder='FOREVER2', colors=False),
 }
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -230,7 +231,7 @@ if ng > 8000:
         md = o.modifiers.new('dec', 'DECIMATE'); md.ratio = 8000 / ng * 0.98
         bpy.context.view_layer.objects.active = o; bpy.ops.object.modifier_apply(modifier='dec')
 print('GLASS TRIS', ng, '->', tris_of(glassobjs))
-# view check from the eye (pre-turn Blender frame): what blocks the windscreen view (glass is see-through)
+# view check from the eye (pre-turn Blender frame): what blocks the windscreen view (the model's own glass counts as blocking)
 for o in glassobjs: o.hide_set(True); o.hide_viewport = True
 bpy.context.view_layer.update(); dg = bpy.context.evaluated_depsgraph_get()
 blocked = total = 0
@@ -244,14 +245,14 @@ print('VIEW blocked %d/%d above the dash (body only; the cockpit adds the dash)'
 for o in glassobjs: o.hide_viewport = False
 mn2, mx2 = bbox(body)
 turn_game(meshes())
-os.makedirs(outdir + '/' + S['folder'] + '/Glass', exist_ok=True)
+os.makedirs(outdir + '/' + S['folder'], exist_ok=True)
+assert not glassobjs, 'the glass stays in the body as the model came'
 export(outdir + '/' + S['folder'] + '/model.glb', body, colors=S['colors'])
-if glassobjs: export(outdir + '/' + S['folder'] + '/Glass/model.glb', glassobjs)
 def g3(b): return [round(-b.x, 4), round(b.z, 4), round(b.y, 4)]   # pre-turn Blender -> game
 lay = dict(id=which, folder=S['folder'], length=round(mx2.y - mn2.y, 3), width=round(mx2.x - mn2.x, 3), height=round(mx2.z - mn2.z, 3),
            cockpit=g3(L), eye=g3(eye_b), hub=g3(L + V((0.36, -0.33, 0.74))), axis=[0, 0.342, 0.940],
            handleIn=g3(L + V((0.665, -0.22, 0.60))), handleOut=g3(handle_out_b),
            exit=[round(-(side + 0.80), 3), 0.0, round(eye_b.y, 3)], screen=g3(L + V((0, -0.5895 + 0.009, 0.69))),
-           glass=bool(glassobjs), blocked=[blocked, total])
+           blocked=[blocked, total])
 print('LAYOUT ' + json.dumps(lay))
 json.dump(lay, open(outdir + '/' + S['folder'] + '/layout.json', 'w'), indent=1)

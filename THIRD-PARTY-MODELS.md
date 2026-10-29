@@ -103,20 +103,20 @@ model under 30 % of its source's triangles or with a texture or UV missing. Same
 The van's dash HOME page offers GO TO SAFEHOUSE; the Batmobile's dash offers GO TO BATCAVE, and the
 Batcave's "exit to Batmobile" point takes the player back to the Batmobile.
 
-## 0.0.74 test 1: BATMOBILE (Models/Vehicle/Batmobile/<Car>/model.glb, Glass/model.glb)
+## 0.0.74 test 1: BATMOBILE (Models/Vehicle/Batmobile/<Car>/model.glb)
 
 BATMAN's four drivable Batmobiles (BATMOBILE CHOICE, or the picker on the Batmobile's dash). Each is
 converted by `tools/batmobile074/convert.py`: rescaled to about 6 m long, x right, y up, -z forward,
 the ground under its axles, its colours baked per triangle, decimated to the van's 150000-triangle cap
-or under, never flattened. Its windshield and side glass are split into `Glass/` and drawn
-alpha-blended (22%, lightly tinted); opaque faces that blocked the driver's view were removed.
+or under, never flattened. Its windshield, glass and canopy are kept exactly as the model came
+(no glass split out, nothing made see-through, no faces cut).
 
 | Folder | Model | Author | Licence | Changes |
 |---|---|---|---|---|
-| `Batmobile/1989` | [Bat-Mobile (1989)](https://dreamloft3d.itch.io/bat-mobile-1989) (itch.io) | Dreamloft3D | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated from 166302 to 107804 triangles; 656 glass triangles split out and made see-through; colours baked, textures dropped; rescaled to 6.40 m. |
-| `Batmobile/ODAMI` | [Batmobile](https://sketchfab.com/3d-models/batmobile-04f571c0fece4c37a01d37c70721d5a6) | Odami_3D | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | 3620 triangles kept; 84 glass triangles split out and made see-through; colours baked, textures dropped; rescaled to 6.08 m. |
-| `Batmobile/FOREVER` | [Batmobile](https://sketchfab.com/3d-models/batmobile-4a7dad5866564ab3b497cb1f427cd602) | SorroW | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated from 506976 to 107918 triangles; 5034 canopy triangles split out and made see-through; colours baked, textures dropped; rescaled to 6.51 m. |
-| `Batmobile/FOREVER2` | [Batmobile - Batman Forever](https://sketchfab.com/3d-models/batmobile-batman-forever-77795a4cef7f4ae29b649eb527c49b05) (the author notes it is AI-generated with Meshy) | S.York-Designs | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated from 406780 to 107804 triangles; it has no separate glass, so the opaque canopy faces over the driver were removed (open cockpit); colours baked, textures dropped; rescaled to 6.38 m. |
+| `Batmobile/1989` | [Bat-Mobile (1989)](https://dreamloft3d.itch.io/bat-mobile-1989) (itch.io) | Dreamloft3D | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated from 166302 to 107806 triangles; glass as the model came; colours baked, textures dropped; rescaled to 6.40 m. |
+| `Batmobile/ODAMI` | [Batmobile](https://sketchfab.com/3d-models/batmobile-04f571c0fece4c37a01d37c70721d5a6) | Odami_3D | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | 3704 triangles kept; glass as the model came; colours baked, textures dropped; rescaled to 6.08 m. |
+| `Batmobile/FOREVER` | [Batmobile](https://sketchfab.com/3d-models/batmobile-4a7dad5866564ab3b497cb1f427cd602) | SorroW | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated from 506976 to 107922 triangles; canopy as the model came; the model's own seats and steering wheel left out for the shared cockpit; colours baked, textures dropped; rescaled to 6.51 m. |
+| `Batmobile/FOREVER2` | [Batmobile - Batman Forever](https://sketchfab.com/3d-models/batmobile-batman-forever-77795a4cef7f4ae29b649eb527c49b05) (the author notes it is AI-generated with Meshy) | S.York-Designs | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated from 406780 to 107804 triangles; canopy as the model came; colours baked, textures dropped; rescaled to 6.38 m. |
 | `Batmobile/Cockpit`, `Batmobile/SteeringWheel` | The shared cockpit (seat, dash, the holo screen's bezel) and wheel, sat inside each car | Agent Mulder | Made for HERO VR | `tools/batmobile074/build_cockpit_game.py`. |
 
 Credit lines: "Bat-Mobile (1989)" by Dreamloft3D, "Batmobile" by Odami_3D, "Batmobile" by SorroW and

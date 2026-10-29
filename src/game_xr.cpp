@@ -6,7 +6,7 @@
 #define SPIDY_TEST_NUMBER "0"
 #endif
 #ifndef SPIDY_TEST_VERSION
-#define SPIDY_TEST_VERSION "0.0.73"
+#define SPIDY_TEST_VERSION "0.0.74"
 #endif
 #include "spidy/streamer_view.hpp"
 #include "spidy/thor_grip.hpp"
@@ -11375,7 +11375,7 @@ DWORD WINAPI run(void*) {
                             static auto mpLast = std::chrono::steady_clock::now();
                             static bool mpFailedOnce = false;
                             try {
-                                const bool mpOn = c38(combat38::mpSoloTest) == 0; // ON (the default) is choice 0
+                                const bool mpOn = c38(combat38::mpSoloTest) == 1; // 0.0.74 test 1: OFF (the default) is choice 0, ON choice 1
                                 if (mpOn && !mpSession->started()) {
                                     spidy::mp::SessionConfig cfg;
                                     // LAN (a buddy on another PC) only when %APPDATA%\Spidy\MP-LAN-ON.txt exists.
@@ -13265,7 +13265,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerEye(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyIronHands(void* v) { return setHero007(v, combat38::ironHands, 5462); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdGrappleAim(void* v) { return setHero007(v, combat38::ddGrappleAim, 5463); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWolverineClaws(void* v) { return setHero007(v, combat38::wolverineClaws, 5464); }
-// 0.0.73 MP SOLO TEST: ON (0, the default) or OFF (1) (live.txt mp_solo_test; mp_session.hpp). 0.0.73 test 6: 5461 (5449 is IMAGE's).
+// 0.0.73 MP SOLO TEST: 0.0.74 test 1: OFF (0, the default) or ON (1) (live.txt mp_solo_test; mp_session.hpp). 0.0.73 test 6: 5461 (5449 is IMAGE's).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpSoloTest(void* v) { return setHero007(v, combat38::mpSoloTest, 5461); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;

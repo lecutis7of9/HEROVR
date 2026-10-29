@@ -7,7 +7,7 @@
 #define SPIDY_TEST_NUMBER "0"
 #endif
 #ifndef SPIDY_TEST_VERSION
-#define SPIDY_TEST_VERSION "0.0.73"
+#define SPIDY_TEST_VERSION "0.0.74"
 #endif
 #include "spidy/wrist_hud.hpp"
 #include "spidy/version.hpp"
@@ -892,7 +892,7 @@ struct SectionDef {
     const char* post;
     const char* word;
     int hero; // hero_modes::Hero, -1: not a hero's profile
-    Control rows[12]; // Version 0.0.72: PUNISHER has ten (the van); 0.0.73 test 3: eleven (VAN SCREEN), twelve (VAN PEDALS)
+    Control rows[16]; // 0.0.74 test 1: sixteen (SURVIVAL AND REPUTATION + COMING SOON, the vehicle rows); Version 0.0.72: PUNISHER has ten (the van); 0.0.73 test 3: eleven (VAN SCREEN), twelve (VAN PEDALS)
 };
 using C = Control;
 constexpr SectionDef powersSections[] = {

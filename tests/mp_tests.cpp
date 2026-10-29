@@ -634,12 +634,12 @@ void testSocketFailure() {
     s.stop();
 }
 void testGhostDrawing() {
-    // The wrist setting: MP SOLO TEST, ON first (the default, value 0), one sentence saying no restart.
+    // The wrist setting: MP SOLO TEST, 0.0.74 test 1: OFF first (the default, value 0), one sentence saying no restart.
     const auto& o = combat38::optionInfo[combat38::mpSoloTest];
     const std::string h = o.help;
     check(std::string(o.key) == "mp_solo_test" && std::string(o.label) == "MP SOLO TEST" && o.count == 2 &&
-              std::string(o.values[0]) == "ON" && std::string(o.values[1]) == "OFF",
-          "MP SOLO TEST: ON first (the default), OFF");
+              std::string(o.values[0]) == "OFF" && std::string(o.values[1]) == "ON",
+          "MP SOLO TEST: OFF first (the default, 0.0.74 test 1), ON");
     check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos, "its subtext: one sentence, no restart");
     // Suit ids: the worn slot <-> the packet's id and hash <-> the slot drawn.
     check(suitIdOfSlot(0) == noSuit && suitIdOfSlot(mesh_model::slotSuitEnd) == noSuit, "not a suit slot: the hero's own look");

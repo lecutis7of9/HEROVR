@@ -11,6 +11,12 @@ def src(p):
     return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
 
+# 0.0.74 test 1 is a private test build on top of the 0.0.73 release: HERO_TEST_BUILD ON and MP SOLO TEST back
+# (OFF by default). The public-release-only gates below are skipped there; Hero074Test1 checks the test build.
+import re as _re  # noqa: E402
+TEST_BUILD = bool(_re.search(r'option\(HERO_TEST_BUILD "[^"]*" ON\)', src('CMakeLists.txt')))
+
+
 class GameTaaOff(unittest.TestCase):
     def test_defaults(self):
         self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'off')
@@ -70,6 +76,7 @@ class GameTaaOff(unittest.TestCase):
         self.assertIn(L.MIGRATED_0073, L.HEADER)  # a new live.txt starts migrated
 
 
+@unittest.skipIf(TEST_BUILD, "0.0.74 test 1: MP SOLO TEST is in the test build (OFF by default)")
 class NoMultiplayerTest(unittest.TestCase):
     def test_mp_solo_test_left_out(self):
         self.assertNotIn('mp_solo_test', L.SETTINGS)
@@ -85,6 +92,7 @@ class NoMultiplayerTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(ROOT, f)), f)
 
 
+@unittest.skipIf(TEST_BUILD, "0.0.74 test 1: a test build has its TEST labels")
 class ReleaseLabels(unittest.TestCase):
     """The public 0.0.73 release: no test labels, HERO VR 0.0.73 on the wrist and the console."""
     def test_version_and_labels(self):
@@ -101,6 +109,23 @@ class ReleaseLabels(unittest.TestCase):
                 self.assertIsNone(re.search(r'"[^"]*\b(?:TEST|test) [0-9][^"]*"', code), (fn, line))
                 self.assertNotIn('this test build', code, fn)
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.73.md')))
+
+
+
+@unittest.skipUnless(TEST_BUILD, "the public release has no MP SOLO TEST")
+class Hero074Test1(unittest.TestCase):
+    """0.0.74 test 1: MP SOLO TEST back for the test build, OFF by default; the wrist says 0.0.74 TEST 1."""
+    def test_mp_solo_test_off_by_default(self):
+        self.assertEqual(L.UPDATE38_DEFAULTS['mp_solo_test'], 'off')
+        self.assertEqual(L.export_value('mp_solo_test', 'off'), 0)
+        self.assertEqual(L.export_value('mp_solo_test', 'on'), 1)
+        self.assertIn('2, {"OFF", "ON", nullptr, nullptr}}', src('include/spidy/combat38.hpp'))
+        self.assertIn('c38(combat38::mpSoloTest) == 1', src('src/game_xr.cpp'))
+
+    def test_labels(self):
+        c = src('CMakeLists.txt')
+        self.assertIn('set(HERO_TEST_NUMBER "1" CACHE', c)
+        self.assertIn('set(HERO_TEST_VERSION "0.0.74" CACHE', c)
 
 
 if __name__ == '__main__':

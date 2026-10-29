@@ -24,7 +24,7 @@ add_compile_definitions(SM2_PORT=1)
 option(SPIDY_BUILD_XR "Build the Windows OpenXR / D3D12 swing lab" ${WIN32})
 # 0.0.72: a test / experimental build shows the TEST BUILD NOTICE after calibration (test_notice.hpp).
 # Turn it OFF for a public release.
-option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" OFF) # the public 0.0.73 release: OFF (test builds: ON)
+option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" ON) # 0.0.74 test 1 (private test build): ON; the public 0.0.73 release: OFF
 option(SPIDY_BUILD_OBSERVER "Build the opt-in camera diagnostic DLL" OFF)
 option(SPIDY_BUILD_LAUNCHER "Build the Spidy launcher window (Dear ImGui from tools/bootstrap.ps1)" ${SPIDY_BUILD_XR})
 
@@ -96,14 +96,14 @@ target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}"
 # showed build 9 still running; the number makes that plain). Bump per test build.
 # 0.0.73 test 4's console still said "HERO VR 0.0.72 TEST 3 a20b9ee" (export-test4): the version was
 # a literal and the number was not bumped. Both are here now; bump them per test build.
-set(HERO_TEST_NUMBER "6" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+set(HERO_TEST_NUMBER "1" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_NUMBER="${HERO_TEST_NUMBER}")
-set(HERO_TEST_VERSION "0.0.73" CACHE STRING "Version the test build's start line, notice and wrist name")
+set(HERO_TEST_VERSION "0.0.74" CACHE STRING "Version the test build's start line, notice and wrist name")
 if(NOT HERO_TEST_VERSION MATCHES "^[0-9][0-9.]*$")
-    set(HERO_TEST_VERSION "0.0.73")
+    set(HERO_TEST_VERSION "0.0.74")
 endif()
 target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_VERSION="${HERO_TEST_VERSION}")
 # Update 36: the calibration panel's art atlas, compiled in as bytes

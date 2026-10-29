@@ -299,6 +299,8 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5472'), ['SpidySlWatch'])  # 0.0.73 SL WATCH
         self.assertEqual(uses.get('5461'), ['SpidyMpSoloTest'])  # 0.0.73 test 6: MP SOLO TEST (mp-solo-test's 5449 is IMAGE's)
         self.assertEqual(uses.get('5473'), ['SpidySharpenMatch'])  # 0.0.73 AA SHARPEN MATCH
+        self.assertEqual(uses.get('5474'), ['SpidyClawLevel'])  # 0.0.73 test 6 CLAW LEVEL
+        self.assertEqual(uses.get('5475'), ['SpidyWindowPop'])  # 0.0.73 test 6 WINDOW POP FIX
 
 
 class Hero073Image(unittest.TestCase):
@@ -551,6 +553,41 @@ class Hero073AaGameAaTaa(unittest.TestCase):
         self.assertTrue(len(sub) <= 100 and sub.endswith('.') and 'restart' in sub, sub)
         m = re.search(r'Opt\.Sw\("PICTURE", "EngineTaa", "ENGINE TAA", "([^"]+)", true\)', cs)
         self.assertTrue(m and 'restart' in m.group(1), cs)
+
+
+
+
+class Hero073Test6(unittest.TestCase):
+    """0.0.73 test 6: CLAW LEVEL and WINDOW POP FIX (both ON by default, live, switchable off)."""
+
+    def test_claw_level_wired(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('c38(combat38::clawLevel) == 0); // 0.0.73 test 6 CLAW LEVEL', g)
+        self.assertIn('setHero007(v, combat38::clawLevel, 5474)', g)
+        s = src('src/suit_wear.cpp')
+        self.assertIn('rig.clawWayLevel[side] = lw', s)
+        self.assertIn('useLevel ? rig.clawWayLevel[side] : rig.clawWay[side]', s)
+        self.assertIn('inline constexpr float clawLevelDeg = 0.f;', src('include/spidy/suit_wear.hpp'))
+
+    def test_window_pop_wired(self):
+        p = src('src/stereo_probe.cpp')
+        self.assertIn('std::atomic<bool> windowPopOn{true};', p)  # ON by default
+        self.assertIn('spidy::window_pop::flatMatch(stockHalfWidth', p)
+        self.assertIn('writeBits(game + spidy::shared_lod::multiplierOffset, bits)', p)
+        self.assertIn('spidy::window_pop::ownMultiplier(gm, gameWritten(game))', p)  # the eyes as in test 5
+        self.assertIn('windowPopRestore(); // 0.0.73 test 6 WINDOW POP FIX', p)
+        self.assertIn('SpidyWindowPopOn(void* on)', p)
+        g = src('src/game_xr.cpp')
+        self.assertIn('window_pop::on(c38(combat38::windowPop))', g)
+        self.assertIn('setHero007(v, combat38::windowPop, 5475)', g)
+        self.assertIn('inline constexpr float maxBoost = 2.f;', src('include/spidy/window_pop.hpp'))
+
+    def test_live_settings_defaults_on(self):
+        import live_settings as L
+        self.assertEqual(L.UPDATE38_DEFAULTS['claw_level'], 'on')
+        self.assertEqual(L.UPDATE38_DEFAULTS['window_pop'], 'on')
+        self.assertEqual(L.export_value('claw_level', 'off'), 1)
+        self.assertEqual(L.export_value('window_pop', 'on'), 0)
 
 
 if __name__ == '__main__':

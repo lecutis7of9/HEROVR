@@ -648,7 +648,10 @@ void findClawRoots(Rig& rig) {
         // blocky glove), within clawTiltDeg..clawTiltMaxDeg
         {
             const float t = std::clamp(std::atan2(rise, clawBehind * h), clawTiltDeg * degToRad, clawTiltMaxDeg * degToRad);
-            way = normalized(y0 * std::cos(t) + z0 * std::sin(t)), back = normalized(square(z0, way));
+            way = clawTiltWay(y0, z0, t), back = normalized(square(z0, way));
+            // 0.0.73 test 6 CLAW LEVEL: the same roots, the way along the hand bone (level with the hand)
+            const Vec3 lw = clawTiltWay(y0, z0, clawLevelDeg * degToRad);
+            rig.clawWayLevel[side] = lw, rig.clawBackLevel[side] = normalized(square(z0, lw));
         }
         // ascending across the claws (across = way x back)
         const Vec3 across = cross(way, back);
@@ -657,7 +660,7 @@ void findClawRoots(Rig& rig) {
         rig.clawOk[side] = ok(way) && ok(back);
     }
 }
-bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], Vec3& way, Vec3& back) {
+bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], Vec3& way, Vec3& back, bool level) {
     if (side < 0 || side > 1 || !rig.clawOk[side])
         return false;
     const BoneMove& b = m[side ? boneHandR : boneHandL];
@@ -665,7 +668,11 @@ bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], 
         return Vec3{b.m[0] * d.x + b.m[1] * d.y + b.m[2] * d.z, b.m[3] * d.x + b.m[4] * d.y + b.m[5] * d.z,
                     b.m[6] * d.x + b.m[7] * d.y + b.m[8] * d.z};
     };
-    const Vec3 w = normalized(apply(rig.clawWay[side])), bk = normalized(square(apply(rig.clawBack[side]), w));
+    // 0.0.73 test 6 CLAW LEVEL: the level way when asked and found (else the tilted one, test 5's)
+    const bool useLevel = level && ok(rig.clawWayLevel[side]) && length(rig.clawWayLevel[side]) > .5f &&
+                          ok(rig.clawBackLevel[side]) && length(rig.clawBackLevel[side]) > .5f;
+    const Vec3 w = normalized(apply(useLevel ? rig.clawWayLevel[side] : rig.clawWay[side])),
+               bk = normalized(square(apply(useLevel ? rig.clawBackLevel[side] : rig.clawBack[side]), w));
     if (!ok(w) || !ok(bk) || !(length(w) > .5f) || !(length(bk) > .5f))
         return false;
     for (int g = 0; g < 3; ++g) {

@@ -245,7 +245,9 @@ int main(int argc, char** argv) {
             lib.load(slot, root);
             const mm::Mesh* cm = lib.model(slot);
             hero007::ClawBone cb;
-            cb.ok = cm && sw::clawPlace(rig, mv, h, cb.root, cb.way, cb.back);
+            // 0.0.73 test 6 CLAW LEVEL: HANDS_CLAW_LEVEL=on the level way (the game's default), else test 5's tilt
+            const bool level = std::getenv("HANDS_CLAW_LEVEL") && std::strcmp(std::getenv("HANDS_CLAW_LEVEL"), "on") == 0;
+            cb.ok = cm && sw::clawPlace(rig, mv, h, cb.root, cb.way, cb.back, level);
             hero007::ClawParts parts;
             if (!cb.ok || !hero007::clawParts(*cm, parts)) {
                 std::fprintf(stderr, "no bone claws %d\n", h);

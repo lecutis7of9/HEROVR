@@ -2641,3 +2641,23 @@ With -EngineTaa and live.txt `image_style = spidyvr`, the session sets the game'
 - **Registry:** vr_display `SESSION_OFF['game_aa']` = AA 2, UpscaleMethod 0. The encoding is CONFIRMED in 31 reports.
 - **Tests:** hero073_tests `Hero073AaGameAaTaa` and vr_display_tests `test_game_aa_taa_for_the_session_and_back_after`.
 - **Details:** docs/AA-0.0.73.md.
+
+## 59. Version 0.0.73 test 6: CLAW LEVEL, WINDOW POP FIX
+
+- **CLAW LEVEL** (WOLVERINE section, `claw_level`, export `SpidyClawLevel`, 5474; ON default, live). The owner after test 5: "the angle on the attack end was way too high, it should be more level with the hand".
+  - ON points the claws along the hand bone (`suit_wear::clawLevelDeg` 0), level with the back of the hand. This replaces test 5's 8-30 degree tilt toward the back of the hand.
+  - The roots don't move. They stay inside the fist, at the same knuckle gaps (`findClawRoots`).
+  - OFF gives test 5's tilt.
+  - Preview: `HANDS_CLAW_LEVEL=on|off` in `apps/hero_hands_preview`.
+  - CANDIDATE: the 0 degree angle was judged from the three suit models, not checked on a headset.
+- **WINDOW POP FIX** (DISPLAY AND DETAIL, `window_pop`, export `SpidyWindowPop`, 5475; ON default, live). The owner: night building windows and facades pop from sparse to lit one or two blocks ahead.
+  - CONFIRMED in this mod's code: while immersive, `activeView` gives the game's own view (the active view `[0xc2cae70]`) a lens wide enough for both eyes plus CULL MARGIN. That is about 128 degrees across on a Quest 3, versus about 80 degrees for flat play's camera.
+  - CONFIRMED by disassembly (§ SHARED LOD): `0x2c9a000` writes view `+0x1b24` = K / tangent. The LOD and screen-size tests multiply it by `+0x1b28`, which is 1.0 from init and written by nothing else in the render code.
+  - Result: the widened game view's detail distances are about 0.4-0.5x flat play's. That game view decides which far buildings get their lit full models for both eyes (WINDOW LIGHTS, `recording_fov.hpp`).
+  - ON: `viewScale` writes the game view's `+0x1b28` = `window_pop::flatMatch()`. That is our half tangent over the stock camera's, the smaller of width and height, clamped to 1..2.
+    - The eyes' SHARED LOD keeps reading the game view's own scale (`ownMultiplier`), so the eyes behave as in test 5.
+    - OFF, a lens that isn't placed, or the stereo stopping (`windowPopRestore`) puts 1.0 back.
+  - SpidyVR's equivalent is `matchDistances`, which matches the eyes' detail distances to the flat camera.
+  - Cost: up to 2x the game view's detail reach. That means more full-detail buildings get drawn, a moderate GPU cost.
+  - CANDIDATE: that this is the pop the owner sees, and that the lit full-model swap follows `+0x1b28`. The impostor query's `+0x88` (145 m) distance remains the other CANDIDATE. It is still gated off (`farWindowsCandidateWrite`) because it flickers.
+  - Still pop-in: raise the game's Level of Detail (Very High) and FAR WINDOWS 3X.

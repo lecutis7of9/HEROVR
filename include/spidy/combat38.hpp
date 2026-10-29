@@ -190,6 +190,12 @@ enum Option : uint32_t {
     // 0.0.73 AA SHARPEN MATCH (eye_sharpen.hpp matchedPercent): ON (the default) sharpens by the share of
     // the eye history kept, none while a swing cuts it; OFF sharpens as set (test 5).
     sharpenMatch,
+    // 0.0.73 test 6 CLAW LEVEL (suit_wear.hpp clawLevelDeg): ON (the default) the claws level with the hand (along
+    // the hand bone, the same roots); OFF test 5's 8-30 degree tilt toward the back of the hand
+    clawLevel,
+    // 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): ON (the default) the game's widened view keeps flat play's
+    // building detail distance (at most 2x); OFF test 5's
+    windowPop,
     options
 };
 struct OptionInfo {
@@ -546,6 +552,10 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"mp_solo_test", "MP SOLO TEST", "MPSOL", "ON shows you 3 m ahead as PLAYER 2 over the UDP loopback test, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"sharpen_match", "SHARPEN MATCH", "SHM", "ON sharpens only what the eye history smoothed, none while you move; no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"claw_level", "CLAW LEVEL", "CLVL", "ON points the claws level with the hand, OFF keeps test 5's tilt; no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"window_pop", "WINDOW POP FIX", "WPOP", "ON keeps flat play's building detail in VR, up to 2x (moderate GPU); no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as

@@ -111,6 +111,7 @@
 #include "spidy/eye_queries.hpp"
 #include "spidy/sl_watch.hpp"
 #include "spidy/eye_sharpen.hpp" // 0.0.73 AA SHARPEN MATCH (matchOn)
+#include "spidy/window_pop.hpp"  // 0.0.73 test 6 WINDOW POP FIX (on)
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/shared_lod.hpp"
@@ -628,6 +629,7 @@ DWORD WINAPI SpidyEyeLightHold(void* percent);
 // 0.0.73 IMAGE (native_eye_gpu.cpp): the history read sharp (1, SPIDYVR) or bilinear (0, CLASSIC).
 DWORD WINAPI SpidyEyeHistorySharp(void* sharp);
 DWORD WINAPI SpidyEyeSharpenMatch(void* on); // 0.0.73 AA SHARPEN MATCH
+DWORD WINAPI SpidyWindowPopOn(void* on);     // 0.0.73 test 6 WINDOW POP FIX (stereo_probe.cpp)
 float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
@@ -2321,7 +2323,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, windowPopApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -11144,6 +11146,12 @@ DWORD WINAPI run(void*) {
                                 sharpenMatchApplied = matchWant;
                                 SpidyEyeSharpenMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
                             }
+                            // 0.0.73 test 6 WINDOW POP FIX: the game view's flat-play detail distance (ON, value 0) or not.
+                            if (const uint32_t popWant = window_pop::on(c38(combat38::windowPop)) ? 1u : 0u;
+                                popWant != windowPopApplied) {
+                                windowPopApplied = popWant;
+                                SpidyWindowPopOn(reinterpret_cast<void*>(static_cast<uintptr_t>(popWant)));
+                            }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)
                                 auto_perf::status(perfStatusText, sizeof perfStatusText, autoPerf, target);
@@ -11331,7 +11339,8 @@ DWORD WINAPI run(void*) {
                                 bool drawn = false;
                                 if (clawMovesOk && suitRig && suitRig->ok) {
                                     hero007::ClawBone cb;
-                                    cb.ok = suit_wear::clawPlace(*suitRig, clawMoves, static_cast<int>(it.side), cb.root, cb.way, cb.back);
+                                    cb.ok = suit_wear::clawPlace(*suitRig, clawMoves, static_cast<int>(it.side), cb.root, cb.way, cb.back,
+                                                                  c38(combat38::clawLevel) == 0); // 0.0.73 test 6 CLAW LEVEL
                                     drawn = cb.ok && hero007::appendClawBone(vertices, it.spin, cb, claws, viewer);
                                 }
                                 if (!drawn)
@@ -13210,6 +13219,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheck(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySlWatch(void* v) { return setHero007(v, combat38::slWatch, 5472); }
 // 0.0.73 AA SHARPEN MATCH: ON (CAS by the eye history kept) or OFF (as set), live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySharpenMatch(void* v) { return setHero007(v, combat38::sharpenMatch, 5473); }
+// 0.0.73 test 6: CLAW LEVEL (WOLVERINE's claws level with the hand) and WINDOW POP FIX - ON (0) or OFF (1), live
+// (live.txt claw_level, window_pop).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawLevel(void* v) { return setHero007(v, combat38::clawLevel, 5474); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPop(void* v) { return setHero007(v, combat38::windowPop, 5475); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

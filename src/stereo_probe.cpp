@@ -22,6 +22,7 @@
 #include "spidy/shadow_camera.hpp"
 #include "spidy/shared_lod.hpp"
 #include "spidy/view_gates.hpp"
+#include "spidy/window_pop.hpp"
 #include "spidy/recording_fov.hpp"
 #include <MinHook.h>
 #include <atomic>
@@ -476,6 +477,12 @@ bool farWindowsReady{};
 // switch between impostor and full model from one picture to the next. FAR WINDOWS keeps
 // write 1 (LOD REACH, CONFIRMED) only.
 constexpr bool farWindowsCandidateWrite = false;
+// 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): ON (the default) gives the game's widened view flat play's
+// detail distance (activeView sets gameLodFlat, viewScale writes it to the game view's +0x1b28).
+std::atomic<bool> windowPopOn{true};
+std::atomic<float> gameLodFlat{1.f}, gameLodApplied{1.f};
+std::atomic<uintptr_t> gameLodWritten{};
+std::atomic<uint64_t> windowPopWrites{};
 std::atomic<uint64_t> farWindowsCalls{}, farWindowsWrites{};
 std::atomic<float> farWindowsGame{}, farWindowsOurs{};
 // The HUD panel (native_hud.hpp): PlayerModelHudFollower's placement 73ab80,
@@ -1801,6 +1808,21 @@ void sharedLodRestore(unsigned eye) {
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidySharedLodData.restored));
     }
 }
+// 0.0.73 test 6 WINDOW POP FIX: what it wrote to `game`'s +0x1b28 (1 when nothing).
+float gameWritten(uintptr_t game) {
+    return gameLodWritten.load(std::memory_order_relaxed) == game ? gameLodApplied.load(std::memory_order_relaxed) : 1.f;
+}
+// Puts the game view's multiplier back to 1.0 (the stereo's stop), only on the view it wrote while still active.
+void windowPopRestore() {
+    const auto view = gameLodWritten.exchange(0);
+    if (view && view == pointer(base + spidy::shared_lod::activeViewRva)) {
+        const float one = 1.f;
+        uint32_t bits{};
+        std::memcpy(&bits, &one, 4);
+        writeBits(view + spidy::shared_lod::multiplierOffset, bits);
+    }
+    gameLodApplied.store(1.f);
+}
 uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     namespace sl = spidy::shared_lod;
     const auto result = originalViewScale(view, a, b, c);
@@ -1809,6 +1831,23 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     void* l = eyes[0].load(std::memory_order_relaxed);
     void* r = eyes[1].load(std::memory_order_relaxed);
     const int eye = view == l ? 0 : view == r ? 1 : -1;
+    // 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): the game's own view (the active view) gets back the stock
+    // camera's detail distance its widened lens took (+0x1b28, CONFIRMED field); 1.0 when OFF or not immersive.
+    if (eye < 0) {
+        const auto game = pointer(base + spidy::shared_lod::activeViewRva);
+        if (game && game == reinterpret_cast<uintptr_t>(view)) {
+            const float want = windowPopOn.load(std::memory_order_relaxed) ? gameLodFlat.load(std::memory_order_relaxed) : 1.f;
+            if (want != 1.f || gameLodWritten.load(std::memory_order_relaxed) == game) {
+                uint32_t bits{};
+                std::memcpy(&bits, &want, 4);
+                if (writeBits(game + spidy::shared_lod::multiplierOffset, bits)) {
+                    gameLodApplied.store(want, std::memory_order_relaxed);
+                    gameLodWritten.store(want != 1.f ? game : 0, std::memory_order_relaxed);
+                    windowPopWrites.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        }
+    }
     const uint32_t mode = sharedLodMode.load(std::memory_order_relaxed);
     if (!mode) {
         if (eye >= 0)
@@ -1825,7 +1864,7 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
         float gs = NAN, gm = NAN;
         if (game && game != reinterpret_cast<uintptr_t>(l) && game != reinterpret_cast<uintptr_t>(r) &&
             read(game + sl::scaleOffset, &gs, 4) && read(game + sl::multiplierOffset, &gm, 4))
-            gameScale = gs * gm;
+            gameScale = gs * spidy::window_pop::ownMultiplier(gm, gameWritten(game)); // without WINDOW POP FIX's boost
         bad = !sl::sane(gameScale) || !sl::sane(eyeScale);
         halved = !bad && gameScale < .5f * eyeScale;
         multiplier = bad ? 1.f : sl::multiplier(mode, eyeScale, gameScale);
@@ -2132,6 +2171,7 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
                  (stock.values[0x40c / 4] - stock.values[0x408 / 4]);
     // What that camera shows of the HUD panel sizes the panel in VR.
     stockHalfWidth = (stock.values[0x404 / 4] - stock.values[0x400 / 4]) / 2;
+    gameLodFlat.store(1.f, std::memory_order_relaxed); // WINDOW POP FIX: none unless the head view is placed below
     if (!(config.createViews & 8) || stopRequested || GetTickCount64() >= deadline || live.load() != 2)
         return false;
     if (!head.controlled || head.command.enabled != 1)
@@ -2153,6 +2193,7 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     const auto& pose = head.pose;
     const auto lens = viewLens(head.lens);
     bool placed = head.viewed;
+    gameLodFlat.store(1.f, std::memory_order_relaxed);
     if (placed) {
         out = stock;
         // Keep the stock camera's far plane and temporal jitter. Its near
@@ -2181,6 +2222,11 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     auto& data = SpidyAppearanceData;
     InterlockedIncrement64(&data.sequence);
     if (placed) {
+        // 0.0.73 test 6 WINDOW POP FIX: the stock camera's detail distance for this widened lens.
+        gameLodFlat.store(spidy::window_pop::flatMatch(stockHalfWidth,
+                                                       std::abs(stock.values[0x40c / 4] - stock.values[0x408 / 4]) / 2,
+                                                       (lens.right - lens.left) / 2, std::abs(lens.bottom - lens.top) / 2),
+                          std::memory_order_relaxed);
         ++data.activeAligned;
         data.activeBounds[0] = lens.left;
         data.activeBounds[1] = lens.right;
@@ -3794,6 +3840,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
     bloomGateWrite(false);
     sharedLodRestore(0);
     sharedLodRestore(1);
+    windowPopRestore(); // 0.0.73 test 6 WINDOW POP FIX
     if (live)
         result = 1401;
     else if (hooked) {
@@ -3910,6 +3957,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarWindows(void* percent) {
     farWindowsPercent = static_cast<uint32_t>(value);
     return 0;
 }
+// 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): 0 off, 1 on (the default); 4475 otherwise. Live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPopOn(void* on) {
+    const auto value = reinterpret_cast<uintptr_t>(on);
+    if (value > 1)
+        return 4475;
+    windowPopOn = value != 0;
+    return 0;
+}
+// Its writes and the boost in force (the console's line).
+extern "C" uint64_t SpidyWindowPopWrites() { return windowPopWrites.load(); }
+extern "C" float SpidyWindowPopBoost() { return gameLodApplied.load(); }
 // 0.0.73 LIGHT CHECKS (eye_queries.hpp): 0 off, 1 on (the default); 4470 otherwise. Read when the eyes are made.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecksOn(void* on) {
     const auto value = reinterpret_cast<uintptr_t>(on);

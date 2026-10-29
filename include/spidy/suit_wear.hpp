@@ -17,6 +17,7 @@
 #include "mesh_model.hpp"
 #include "vertex.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -158,6 +159,8 @@ struct Rig {
     bool clawOk[2]{};
     Vec3 clawRoot[2][3]{};
     Vec3 clawWay[2]{}, clawBack[2]{};
+    // 0.0.73 test 6 CLAW LEVEL: the claws' way level with the hand (along the hand bone), same roots
+    Vec3 clawWayLevel[2]{}, clawBackLevel[2]{};
     float clawKnuckle[2]{}; // the knuckle line (rest metres from the wrist along the hand bone)
 };
 // Test build 12 CAPE: the cape's thresholds (metres at a 1.8 m suit).
@@ -254,9 +257,19 @@ bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]);
 inline constexpr float clawBehind = .02f, clawSink = .02f, clawTiltDeg = 8.f, clawTiltMaxDeg = 30.f, clawExitDrop = .005f,
                        clawDepthMin = .006f;
 void findClawRoots(Rig& rig);
+// 0.0.73 test 6 CLAW LEVEL (the owner after test 5: "the angle on the attack end was way too high, it should be
+// more level with the hand"): the claws' way tilted clawLevelDeg from the hand bone (0: along it, level with the
+// back of the hand) instead of clawTiltDeg..clawTiltMaxDeg; the roots stay where findClawRoots put them.
+inline constexpr float clawLevelDeg = 0.f;
+// The claws' way tilted `tiltRad` from the hand bone `y0` toward the back of the hand `z0` (both unit, square).
+inline Vec3 clawTiltWay(Vec3 y0, Vec3 z0, float tiltRad) {
+    return normalized(y0 * std::cos(tiltRad) + z0 * std::sin(tiltRad));
+}
 // The claw roots (world, ascending across the hand), the claws' way and the back of the hand this frame; false
 // (nothing) without them or on insane moves.
-bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], Vec3& way, Vec3& back);
+// level (CLAW LEVEL ON): the level way (Rig::clawWayLevel) instead of the tilted one.
+bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], Vec3& way, Vec3& back,
+               bool level = false);
 // Skins every vertex (positions and normals, world) once a frame; then draw() places triangles from it.
 struct Skinned {
     std::vector<Vec3> p, n;

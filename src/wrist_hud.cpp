@@ -908,7 +908,7 @@ constexpr SectionDef powersSections[] = {
     // Version 0.0.7 HERO PROFILES
     {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle, C::combatSmokeBlind,
       C::combatPerchTakedown, C::combatTakedownLight}},
-    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb, C::combatWolverineClaws}},
+    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb, C::combatWolverineClaws, C::combatClawLevel}},
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
     {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
       C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan,
@@ -964,7 +964,7 @@ constexpr SectionDef graphicsSections[] = {
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
      {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
     {"DISPLAY AND DETAIL", C::monitor, C::none, "WINDOW ", "", nullptr, -1,
-     {C::monitor, C::eyeBloom, C::combatSharpenMatch, C::combatLightHold, C::combatLightChecks, C::combatGlowCheck, C::combatSlWatch, C::combatLensFlares, C::sharedLod, C::eyeLod}},
+     {C::monitor, C::eyeBloom, C::combatSharpenMatch, C::combatLightHold, C::combatLightChecks, C::combatGlowCheck, C::combatSlWatch, C::combatLensFlares, C::combatWindowPop, C::sharedLod, C::eyeLod}},
     {"ADVANCED - TESTS AND ENGINE", C::none, C::none, "", "", "SETTINGS", -1,
      {C::engineTaa, C::taaJitter, C::eyeTest, C::addressFinder, C::webBallTest, C::foveaDebug, C::foveaStats}},
 };
@@ -4606,6 +4606,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatSlWatch:
             case Control::combatMpSoloTest:
             case Control::combatSharpenMatch:
+            case Control::combatClawLevel:
+            case Control::combatWindowPop:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

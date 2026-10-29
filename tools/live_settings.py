@@ -128,7 +128,7 @@ SETTINGS = {
     'trail': ((0, 100), 'SpidyEyeTrail', 'EYE AA trail {}% at swing speed (0 none: sharpest motion, 100 full blend)'),
     # Update 34.2: ENGINE TAA's jitter (engine_taa::JitterMode) and its scale, live, never persisted
     'taa_jitter': ((0, 3), 'SpidyEngineTaaJitter', 'ENGINE TAA jitter {} (0 ours, 1 game camera, 2 pixels, 3 none)'),
-    'taa_jitter_scale': ((0, 200), 'SpidyEngineTaaJitterScale', 'ENGINE TAA jitter scale {}% (100 as made)'),
+    'taa_jitter_scale': ((0, 200), 'SpidyEngineTaaJitterScale', 'TAA JITTER scale {}% (100 FULL, 50 HALF: the default since 0.0.73 TAA SHAKE, 0 OFF)'),
     # Update 35: FAR SHADOWS (include/spidy/far_shadows.hpp), live, never persisted
     'far_shadows': ((0, 2), 'SpidyFarShadows',
                     'FAR SHADOWS {} (0 off, 1 eyes: far cascades for both eyes, 2 eyes+cache: plan B)'),

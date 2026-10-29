@@ -294,6 +294,7 @@ enum class Control : uint8_t {
     // Update 34.2: page 3 GRAPHICS, TAA JITTER: a press stepping ENGINE TAA's jitter
     // OURS -> GAME -> PIXELS -> NONE (engine_taa::JitterMode), live, never kept. Shown from
     // View::taaJitter. Result::taaJitter. Update 35: the press steps OURS <-> NONE.
+    // 0.0.73 TAA SHAKE: the press steps FULL -> HALF -> OFF (the jitter's scale, OURS; default HALF).
     taaJitter,
     // Update 35: page 3 GRAPHICS, FAR SHADOWS: a press stepping OFF -> EYES -> EYES+CACHE
     // (far_shadows.hpp), live, default EYES, never kept. Shown from View::farShadows
@@ -994,7 +995,7 @@ struct View {
     float eyeAaMs{};
     // Update 34: ENGINE TAA, engine_taa::pack(state, reason).
     uint32_t engineTaa{};
-    uint32_t taaJitter{}; // Update 34.2: engine_taa::JitterMode in force
+    uint32_t taaJitter{}; // Update 34.2: engine_taa::JitterMode in force; 0.0.73 TAA SHAKE: packJitter (the scale too)
     uint32_t farShadows{}; // Update 35: far_shadows::pack(mode, why it changed on its own)
     uint32_t eyeBloom{};   // Update 36: eye_bloom::pack(mode, why it changed on its own)
     uint32_t mirror{};     // Update 37: bit 0 on, bits 8-31 the drawing's cost in microseconds

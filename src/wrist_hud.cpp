@@ -2505,13 +2505,20 @@ void remapTrail(const Painter& p, const Item& it, const View& view, Vec3 grey) {
         p.text(third, tu, top - .007f - h2 - h3, h3, p.c.label);
 }
 
+// 0.0.73 TAA SHAKE: TAA JITTER's value, FULL / HALF / OFF (View::taaJitter is engine_taa::packJitter).
+std::string taaJitterValue(const View& view) {
+    char text[16];
+    engine_taa::levelText(engine_taa::jitterModeOf(view.taaJitter), engine_taa::jitterScaleOf(view.taaJitter), text,
+                          sizeof text);
+    return text;
+}
 // A toggle's or cycle's button value (Update 39.0.2: one place, also a section header's summary).
 std::string buttonValue(const View& view, Control c) {
     return c == Control::addressFinder ? addressFinderValue(view)
            : c == Control::eyeLod      ? eyeLodValue(view)
            : c == Control::eyeAa       ? eyeAaValue(view)
            : c == Control::engineTaa   ? engineTaaValue(view)
-           : c == Control::taaJitter   ? std::string(engine_taa::jitterName(view.taaJitter))
+           : c == Control::taaJitter   ? taaJitterValue(view)
            : c == Control::shadowCamera ? shadowCameraValue(view)
            : c == Control::farShadows   ? farShadowsValue(view)
            : c == Control::eyeBloom     ? eyeBloomValue(view)

@@ -2661,3 +2661,25 @@ With -EngineTaa and live.txt `image_style = spidyvr`, the session sets the game'
   - Cost: up to 2x the game view's detail reach. That means more full-detail buildings get drawn, a moderate GPU cost.
   - CANDIDATE: that this is the pop the owner sees, and that the lit full-model swap follows `+0x1b28`. The impostor query's `+0x88` (145 m) distance remains the other CANDIDATE. It is still gated off (`farWindowsCandidateWrite`) because it flickers.
   - Still pop-in: raise the game's Level of Detail (Very High) and FAR WINDOWS 3X.
+
+## 60. Version 0.0.73 TAA SHAKE: TAA JITTER FULL / HALF / OFF, the per-eye TAA record
+
+The owner after test 6: with GAME TAA SPIDYVR on, medium and far buildings "shake like crazy". GAME TAA OFF stops it (the owner CONFIRMED this).
+- **TAA JITTER** (GRAPHICS, wrist, live, no restart). A press steps FULL -> HALF -> OFF. The default is **HALF**, which is the fix and is ON.
+  - FULL is test 6's jitter (`taa_jitter_scale` 100). This is the revert.
+  - HALF is half of that (50): ±0.5 render pixel, the usual TAA size.
+  - OFF (0) keeps the game's TAA running with a still jitter (`engine_taa::stillJitter`, 1e-6 clip units, about 0.0035 pixel). TemporalAa returns when the jitter is 0, so a true 0 would turn TAA off.
+  - live.txt `taa_jitter_scale` (0-200) still sets any percent, and `taa_jitter` (0-3) still sets the mode.
+  - `SpidyEngineTaaJitterNow` now returns `engine_taa::packJitter`, which is the mode plus the scale in the next byte.
+- **Why** (docs/TAA-SHAKE-0.0.73.md):
+  - CONFIRMED by disassembly: the lens `0x2c75560` shifts the projection by the stored `+0x428`/`+0x42c` in clip units. TemporalAa `0x2c2dc60` takes it back as `0.5·x·W` and `-0.5·y·H` pixels (constants `0x5303de8` and `0x53119d4`). So units, sign and size agree, and they match the flat camera's (test 6: 0.874 vs 0.875 pixel at the largest).
+  - CONFIRMED: the eyes' previous camera is their own (12747/12747).
+  - CANDIDATE: the game's TAA history does not hold under constant head motion (the cut flag `+0x19ab`, ages `+0x19ac`/`+0x1de8`), so the ±1 pixel jitter itself is seen as shake.
+- **Per-eye record** (`SpidyEngineTaaEyes`, `engine_taa::Eyes`, 128 bytes, `ENTE` v1). This is read with read() only, every 250 ms while ENGINE TAA is on, at offsets the handler itself reads. That the handler's job is our eye view is a CANDIDATE. Fields:
+  - the stored jitter;
+  - the set's `+0x3800`/`+0x3804` size, from `[view+0x18e0]`;
+  - the pixels TAA takes back;
+  - the cut flag, the two ages against the frame `0xc2c6c30`, and the current frame's weight from them;
+  - how many samples had weight 1 (history thrown away).
+  - The report has it as `engine_taa_eyes` (final and per sample), and the console prints `TAA JITTER HALF: ...`.
+- **Tests:** core `0.0.73 TAA SHAKE`, `tests/taashake_tests.py`.

@@ -1632,6 +1632,51 @@ def engine_taa_line(t):
             f"{t['game_jitter_max'][0]:.6f}/{t['game_jitter_max'][1]:.6f}; targets L{t['targets'][0]} R{t['targets'][1]}.")
 
 
+# 0.0.73 TAA SHAKE: SpidyEngineTaaEyes (include/spidy/engine_taa.hpp Eyes): what each eye's view holds where
+# the game's TemporalAa reads it - the jitter stored, the size it is taken back with, the pixels that makes, the
+# history stamps and the current frame's weight from them (1 = the history thrown away), read every 250 ms.
+ENGINE_TAA_EYES_FORMAT = '<4I4f4I6I2f2I4f2I2IQ'
+ENGINE_TAA_EYES_BYTES = struct.calcsize(ENGINE_TAA_EYES_FORMAT)
+
+
+def jitter_level(mode, scale):
+    """TAA JITTER's wrist word (engine_taa::levelText): FULL / HALF / OFF, the mode by name, else the percent."""
+    if mode != 'OURS':
+        return str(mode)
+    return {100: 'FULL', 50: 'HALF', 0: 'OFF'}.get(scale, f'{scale}%')
+
+
+def engine_taa_eyes_snapshot(game, address):
+    """The per-eye TAA record (None until ENGINE TAA has been on, or from a probe without it)."""
+    if not address:
+        return None
+    raw = game.read(address, ENGINE_TAA_EYES_BYTES)
+    if len(raw) != ENGINE_TAA_EYES_BYTES:
+        return None
+    v = struct.unpack_from(ENGINE_TAA_EYES_FORMAT, raw)
+    if v[:3] != (0x45544e45, 1, ENGINE_TAA_EYES_BYTES) or not v[3]:
+        return None
+    mode = JITTER_MODES.get(v[26], v[26])
+    eyes = {}
+    for i, side in enumerate(('left', 'right')):
+        eyes[side] = dict(stored=[round(x, 8) for x in v[4 + 2 * i:6 + 2 * i]], taa_size=list(v[8 + 2 * i:10 + 2 * i]),
+                          pixels=[round(x, 4) for x in v[22 + 2 * i:24 + 2 * i]], cut=v[12 + i],
+                          cut_age=v[14 + i], stamp_age=v[16 + i], weight=round(v[18 + i], 4),
+                          history_reset_samples=v[28 + i])
+    return dict(samples=v[3], render=[v[20], v[21]], jitter_mode=mode, jitter_scale=v[27],
+                jitter=jitter_level(mode, v[27]), sequence=v[30], **eyes)
+
+
+def engine_taa_eyes_line(e):
+    """The console's word on the per-eye TAA record."""
+    def eye(name):
+        t = e[name]
+        return (f"{name} {t['pixels'][0]:+.3f}/{t['pixels'][1]:+.3f} px at {t['taa_size'][0]}x{t['taa_size'][1]}, "
+                f"weight {t['weight']}, {t['history_reset_samples']} resets")
+    return (f"TAA JITTER {e['jitter']}: eyes render {e['render'][0]}x{e['render'][1]}; newest {eye('left')}; "
+            f"{eye('right')} ({e['samples']} samples).")
+
+
 # Update 34.1: SpidyXrStart's options field: its offset in the config and the ENGINE TAA bit.
 OPTIONS_OFFSET = struct.calcsize('<4I7Q2If')
 ENGINE_TAA_OPTION = 0x800000
@@ -2679,7 +2724,7 @@ def session(a, startup, session_off=()):
                                            'SpidyEyeLodData', 'SpidyShadowCamera',
                                            'SpidyShadowCameraData', 'SpidyShadowDistanceData',
                                            'SpidyEyeTrail', 'SpidyEngineTaaJitter', 'SpidyEngineTaaJitterScale',
-                                           'SpidyEngineTaaData', 'SpidyFarShadowsData',
+                                           'SpidyEngineTaaData', 'SpidyEngineTaaEyes', 'SpidyFarShadowsData',
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -2771,6 +2816,7 @@ def session(a, startup, session_off=()):
         live_changes = []
         history_last = None  # Update 21: history_snapshot, kept from the samples
         engine_taa_last = engine_taa_said = None  # Update 34.2
+        taa_eyes_last = taa_eyes_said = None  # 0.0.73 TAA SHAKE
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
         finder_written_gen = None  # finished generation already written to reports/
@@ -3102,6 +3148,8 @@ def session(a, startup, session_off=()):
                         print(history_line(kept), flush=True)
                     if (taa := result.get('engine_taa')):
                         print(engine_taa_line(taa), flush=True)
+                    if (eyes := result.get('engine_taa_eyes')):
+                        print(engine_taa_eyes_line(eyes), flush=True)
                     if (shadows := eye_shadow_line(result.get('eye_shadows'))):
                         print(shadows, flush=True)
                 except Exception as error:  # noqa: BLE001 - the report matters more than the summary
@@ -3336,6 +3384,13 @@ def session(a, startup, session_off=()):
                         engine_taa_last = taa
                         sample['engine_taa'] = {k: taa[k] for k in ('state', 'reason', 'jitter_mode', 'jitter_scale',
                                                                     'eye_jitter', 'game_jitter', 'on_frames')}
+                    # 0.0.73 TAA SHAKE: the per-eye TAA record each sample, a console line when TAA JITTER changes.
+                    if (eyes := engine_taa_eyes_snapshot(game, xr.get('SpidyEngineTaaEyes'))):
+                        if eyes['jitter'] != taa_eyes_said:
+                            taa_eyes_said = eyes['jitter']
+                            print(engine_taa_eyes_line(eyes), flush=True)
+                        taa_eyes_last = eyes
+                        sample['engine_taa_eyes'] = {k: eyes[k] for k in ('jitter', 'render', 'left', 'right')}
                     if history_last:
                         sample['eye_history'] = {k: history_last[k] for k in ('percent', 'blended_pairs',
                                                                               'restarted_pairs', 'fault')}
@@ -3595,7 +3650,8 @@ def session(a, startup, session_off=()):
             eye_snapshots=list(eye_shots), eye_snapshot_folder=str(eye_folder) if eye_shots else None,
             bridge=bridge_snapshot(game, bridge['SpidyBridgeData']), xr_stop=xr_stop, bridge_stop=bridge_stop,
             eye_history=history_snapshot(game, xr['SpidyEyeHistoryData']) or history_last,
-            engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last)
+            engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last,
+            engine_taa_eyes=engine_taa_eyes_snapshot(game, xr.get('SpidyEngineTaaEyes')) or taa_eyes_last)
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

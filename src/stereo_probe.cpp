@@ -3025,6 +3025,55 @@ uint8_t renderOffscreen() {
 // OutputDebugString in Update 34/34.1: run341's report could not say if it was on).
 extern "C" {
 __declspec(dllexport) spidy::engine_taa::Data SpidyEngineTaaData;
+// 0.0.73 TAA SHAKE: what each eye's view holds where TemporalAa reads it (engine_taa::Eyes).
+__declspec(dllexport) spidy::engine_taa::Eyes SpidyEngineTaaEyes;
+}
+// 0.0.73 TAA SHAKE: read back (read() only) what TemporalAa 0x2c2dc60 takes from each eye: the stored
+// jitter, the size it takes it back with, the history stamps and the current frame's weight from them.
+void engineTaaEyesPublish(void* const views[2]) {
+    namespace et = spidy::engine_taa;
+    auto& e = SpidyEngineTaaEyes;
+    int32_t frame{};
+    const bool haveFrame = base && read(base + et::frameRva, &frame, 4);
+    for (unsigned i = 0; i < 2; ++i) {
+        const auto v = reinterpret_cast<uintptr_t>(views[i]);
+        if (!v)
+            continue;
+        float stored[2]{};
+        if (read(v + et::jobJitter, stored, sizeof stored)) {
+            e.stored[2 * i] = stored[0];
+            e.stored[2 * i + 1] = stored[1];
+        }
+        uintptr_t set{};
+        uint32_t size[2]{};
+        if (read(v + et::viewSet, &set, sizeof set) && set && read(set + et::setTaaWidth, size, sizeof size)) {
+            e.taaSize[2 * i] = size[0];
+            e.taaSize[2 * i + 1] = size[1];
+        }
+        const auto render = eyeRenderSize();
+        // The handler takes the set's size when its width is set, else its own target's (render size here).
+        const uint32_t w = size[0] ? size[0] : render[0], h = size[0] ? size[1] : render[1];
+        et::takenBack(e.stored[2 * i], e.stored[2 * i + 1], w, h, e.pixels[2 * i], e.pixels[2 * i + 1]);
+        uint8_t cut{};
+        int32_t cutFrame{}, stamp{};
+        if (haveFrame && read(v + et::viewCut, &cut, 1) && read(v + et::viewCutFrame, &cutFrame, 4) &&
+            read(v + et::viewStamp, &stamp, 4)) {
+            const int32_t cutAge = frame - cutFrame, stampAge = frame - stamp;
+            e.cut[i] = cut;
+            e.cutAge[i] = static_cast<uint32_t>(cutAge > 0 ? cutAge : 0);
+            e.stampAge[i] = static_cast<uint32_t>(stampAge > 0 ? stampAge : 0);
+            e.weight[i] = et::currentWeight(cut, cutAge, stampAge);
+            if (e.weight[i] >= 1)
+                ++e.resetSamples[i];
+        }
+    }
+    const auto render = eyeRenderSize();
+    e.render[0] = render[0];
+    e.render[1] = render[1];
+    e.mode = spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load());
+    e.scale = engineTaaJitterScale.load();
+    ++e.samples;
+    ++e.sequence;
 }
 void engineTaaPublish() {
     auto& d = SpidyEngineTaaData;
@@ -3066,6 +3115,10 @@ void engineTaaWatch() {
         SpidyEngineTaaData.targetsLeft = usable && l && engineTaaTargets(l) ? 1 : 0;
         SpidyEngineTaaData.targetsRight = usable && r && engineTaaTargets(r) ? 1 : 0;
         engineTaaPublish();
+        if (usable && engineTaaLive.load() && l && r) {
+            void* const views[2]{l, r};
+            engineTaaEyesPublish(views);
+        }
     }
     if (!engineTaaLive.load())
         return;
@@ -4253,17 +4306,29 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
     const auto value = reinterpret_cast<uintptr_t>(mode);
     if (value > et::jitterModes)
         return 4603;
-    const uint32_t next = value == et::jitterModes ? et::pressNext(engineTaaJitterMode.load()) // Update 35
-                                                    : static_cast<uint32_t>(value);
+    // 0.0.73 TAA SHAKE: the wrist's press (value 4) steps TAA JITTER FULL -> HALF -> OFF (the scale, OURS);
+    // live.txt taa_jitter 0..3 still sets the mode, taa_jitter_scale the scale.
+    const bool press = value == et::jitterModes;
+    const uint32_t next = press ? static_cast<uint32_t>(et::ours) : static_cast<uint32_t>(value);
     if (engineTaaJitterMode.exchange(next) != next)
         ++engineTaaModeChanges;
-    char line[96];
-    std::snprintf(line, sizeof line, "ENGINE TAA: jitter %s\n", et::jitterName(next));
+    if (press) {
+        const uint32_t scale = et::pressNextScale(engineTaaJitterScale.load());
+        engineTaaJitterScale = scale;
+        ++engineTaaModeChanges;
+    }
+    char level[16], line[96];
+    et::levelText(spidy::image_style::jitterMode(imageStyle.load(), next), engineTaaJitterScale.load(), level,
+                  sizeof level);
+    std::snprintf(line, sizeof line, "ENGINE TAA: jitter %s (%s, %u%%)\n", level, et::jitterName(next),
+                  engineTaaJitterScale.load());
     OutputDebugStringA(line);
     return 0;
 }
+// The mode in force (0.0.73 test 4) and, 0.0.73 TAA SHAKE, the scale (engine_taa::packJitter).
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
-    return spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()); // 0.0.73 test 4: in force
+    return spidy::engine_taa::packJitter(spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()),
+                                         engineTaaJitterScale.load());
 }
 // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): 0 SPIDYVR, 1 OFF; refused (4605) otherwise.
 // game_xr's controller sends it when the option changes; it does the rest (ENGINE TAA, the clean picture).

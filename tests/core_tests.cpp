@@ -1968,6 +1968,52 @@ int main() {
         check(far.size() <= 80 && far.back() == '.' && std::count(far.begin(), far.end(), '.') == 1, "help " + far);
         check(sd::maxCars == 200 && sd::metresFor(200, 195.7f) == 900, "the slider's top");
     });
+    test("0.0.73 TAA SHAKE: TAA JITTER FULL/HALF/OFF, default HALF, the per-eye record", [] {
+        namespace et = spidy::engine_taa;
+        check(et::defaultJitterScale == et::halfJitterScale && et::halfJitterScale == 50, "default not HALF");
+        check(et::pressNextScale(100) == 50 && et::pressNextScale(50) == 0 && et::pressNextScale(0) == 100 &&
+                  et::pressNextScale(70) == 100 && et::pressNextScale(200) == 100,
+              "press FULL -> HALF -> OFF");
+        char t[16];
+        const std::pair<uint32_t, const char*> levels[]{{100, "FULL"}, {50, "HALF"}, {0, "OFF"}, {70, "70%"}};
+        for (const auto& [scale, name] : levels) {
+            et::levelText(et::ours, scale, t, sizeof t);
+            check(std::string(t) == name, std::string("level ") + t);
+        }
+        et::levelText(et::noJitter, 50, t, sizeof t);
+        check(std::string(t) == "NONE", "NONE level");
+        et::levelText(et::pixels, 50, t, sizeof t);
+        check(std::string(t) == "PIXELS", "PIXELS level");
+        const uint32_t packed = et::packJitter(et::ours, 50);
+        check(et::jitterModeOf(packed) == et::ours && et::jitterScaleOf(packed) == 50, "packJitter");
+        check(et::jitterModeOf(et::packJitter(et::noJitter, 200)) == et::noJitter &&
+                  et::jitterScaleOf(et::packJitter(et::noJitter, 200)) == 200,
+              "packJitter 200");
+        // OFF keeps the game's TAA running (nonzero) with no visible jitter; NONE stays none.
+        float x = 9, y = 9;
+        et::jitterFor(et::ours, .25f, -.25f, 2000, 1000, .3f, .4f, 0, x, y);
+        check(x != 0 && y != 0 && std::abs(x) < 1e-5f && std::abs(y) < 1e-5f, "OFF must be still, not zero");
+        et::jitterFor(et::pixels, .25f, -.25f, 2000, 1000, .3f, .4f, 0, x, y);
+        check(x == et::stillJitter && y == et::stillJitter, "OFF pixels");
+        et::jitterFor(et::noJitter, .25f, -.25f, 2000, 1000, .3f, .4f, 0, x, y);
+        check(x == 0 && y == 0, "NONE jitters at 0");
+        // HALF is half of FULL: +-0.5 render pixel where FULL is +-1 (TAA takes back 0.5 x stored x W).
+        float fx, fy, hx, hy, px, py;
+        et::jitterFor(et::ours, .5f, -.5f, 3496, 3744, 0, 0, 100, fx, fy);
+        et::jitterFor(et::ours, .5f, -.5f, 3496, 3744, 0, 0, 50, hx, hy);
+        near(hx, fx / 2);
+        near(hy, fy / 2);
+        et::takenBack(fx, fy, 3496, 3744, px, py);
+        near(std::abs(px), .5f);
+        et::takenBack(hx, hy, 3496, 3744, px, py);
+        near(std::abs(px), .25f);
+        // The handler's current-frame weight: 1 on a cut, else the larger of the two ages' 1/(age+1).
+        check(et::currentWeight(1, 100, 100) == 1, "cut weight");
+        near(et::currentWeight(0, 3, 9), .25f);
+        near(et::currentWeight(0, -5, 1000), 1.f);
+        check(sizeof(et::Eyes) == 128 && et::Eyes{}.magic == 0x45544e45 && et::Eyes{}.bytes == 128, "Eyes");
+        check(sizeof(et::Data) == 144, "Data unchanged");
+    });
     test("Update 33: SHADOW DISTANCE and EYE AA on GRAPHICS, past the mask, help and texts", [] {
         using namespace wrist_hud;
         namespace sd = shadow_distance;

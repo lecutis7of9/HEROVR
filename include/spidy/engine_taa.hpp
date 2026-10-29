@@ -106,7 +106,7 @@ inline const char* jitterName(uint32_t m) {
     }
 }
 inline constexpr const char* jitterHelp =
-    "ENGINE TAA's jitter, only while it is on: try NONE if far buildings shake.";
+    "Game TAA jitter, only while it is on: HALF or OFF if far buildings shake; live.";
 // Update 35: the wrist's press steps OURS <-> NONE only. GAME and PIXELS showed no
 // difference in the Oct 23 runs (both still shook); live.txt taa_jitter still sets them.
 inline uint32_t pressNext(uint32_t mode) { return mode == ours ? noJitter : ours; }
@@ -115,7 +115,44 @@ inline constexpr const char* jitterInactiveHelp = "Only works while ENGINE TAA i
 // TAA JITTER acts only while ENGINE TAA is on and EYE AA is off (stereo_probe.cpp eyeJitter).
 inline bool jitterActive(uint32_t enginePacked, bool eyeAaOn) { return stateOf(enginePacked) == on && !eyeAaOn; }
 inline constexpr const char* jitterWidest = "PIXELS";
-inline constexpr uint32_t defaultJitterScale = 100, maximumJitterScale = 200;
+// 0.0.73 TAA SHAKE: the default scale is 50 (HALF). Test 6: with GAME TAA SPIDYVR far buildings
+// "shake like crazy", GAME TAA OFF stops it at once. Exe-confirmed (handler 0x2c2dc60 and lens 0x2c75560):
+// the lens shifts the projection by the stored +0x428/+0x42c in clip units (P x T(jx, jy)), and TemporalAa
+// takes the same values back as 0.5 x +0x428 x W and -0.5 x +0x42c x H pixels, W/H the eye set's
+// +0x3800/+0x3804 (its +0x3630 target's size) or its own target's - so units, sign and size agree, and
+// they agree with the game camera's own (test 6: both 0.875 pixel at the largest). The eyes' previous
+// camera is their own (test 6: 12747/12747). What is left is the jitter the game's TAA does not take
+// back: a full-pixel (+-1) Halton jitter stays in view wherever the history does not hold (a headset
+// never stands still; CANDIDATE), so HALF (+-0.5 pixel, the usual TAA size) is the default, FULL (100)
+// the old one, OFF (0) keeps the game's TAA running with no jitter (stillJitter).
+inline constexpr uint32_t defaultJitterScale = 50, maximumJitterScale = 200;
+inline constexpr uint32_t fullJitterScale = 100, halfJitterScale = 50, offJitterScale = 0;
+// TAA JITTER OFF: a constant jitter far under a pixel (2e-6 clip units: 0.0035 pixel at 3496) so the
+// handler, which returns when |+0x428| + |+0x42c| is 0, still runs - TAA without the shake.
+inline constexpr float stillJitter = 1e-6f;
+// The wrist's press (0.0.73 TAA SHAKE): FULL -> HALF -> OFF -> FULL; any other scale goes to FULL.
+inline uint32_t pressNextScale(uint32_t scale) {
+    return scale == fullJitterScale ? halfJitterScale : scale == halfJitterScale ? offJitterScale : fullJitterScale;
+}
+// The wrist's value: FULL / HALF / OFF for those scales (NONE, GAME and PIXELS by name), else the percent.
+inline void levelText(uint32_t mode, uint32_t scale, char* out, unsigned size) {
+    if (mode == noJitter)
+        std::snprintf(out, size, "NONE");
+    else if (mode != ours)
+        std::snprintf(out, size, "%s", jitterName(mode));
+    else if (scale == fullJitterScale)
+        std::snprintf(out, size, "FULL");
+    else if (scale == halfJitterScale)
+        std::snprintf(out, size, "HALF");
+    else if (scale == offJitterScale)
+        std::snprintf(out, size, "OFF");
+    else
+        std::snprintf(out, size, "%u%%", scale > maximumJitterScale ? maximumJitterScale : scale);
+}
+// SpidyEngineTaaJitterNow's value: the mode in force, the scale in the next byte.
+inline constexpr uint32_t packJitter(uint32_t mode, uint32_t scale) { return (mode & 0xff) | (scale & 0xff) << 8; }
+inline constexpr uint32_t jitterModeOf(uint32_t packed) { return packed & 0xff; }
+inline constexpr uint32_t jitterScaleOf(uint32_t packed) { return packed >> 8 & 0xff; }
 // The jitter for a mode: halton in -0.5..0.5 (this frame's step), render the eye render
 // size, gameJitter the game camera's own. Zero for a bad input.
 inline void jitterFor(uint32_t mode, float hx, float hy, uint32_t width, uint32_t height, float gx, float gy,
@@ -140,9 +177,52 @@ inline void jitterFor(uint32_t mode, float hx, float hy, uint32_t width, uint32_
     default:
         break;
     }
+    // 0.0.73 TAA SHAKE: OFF (scale 0) keeps the game's TAA running, with no visible jitter.
+    if (mode != noJitter && k == 0)
+        x = y = stillJitter;
     if (!std::isfinite(x) || !std::isfinite(y) || std::abs(x) > 4 || std::abs(y) > 4)
         x = y = 0;
 }
+// 0.0.73 TAA SHAKE: what each eye's view holds where TemporalAa 0x2c2dc60 reads it from its job
+// (exe-confirmed read sites; that its job is our eye view is a CANDIDATE), read back every 250 ms while
+// ENGINE TAA is on, for the report (SpidyEngineTaaEyes, tools/run_game_vr.py):
+// - stored: the eye's +0x428/+0x42c, the jitter the lens stored (clip units);
+// - taaSize: its buffer set (+0x18e0)'s +0x3800/+0x3804, the size the jitter is taken back with;
+// - pixels: 0.5 x stored x W, -0.5 x stored x H (0x5303de8 = 0.5, 0x53119d4 = -0.5), what TAA takes back;
+// - cut (+0x19ab), cutAge (frame 0xc2c6c30 - +0x19ac), stampAge (frame - +0x1de8) and weight, the
+//   current frame's share the handler makes of them: max(1 / (cutAge + 1), 1 / (stampAge + 1)), 1 on a
+//   cut. resetSamples counts weight 1: the history thrown away (that would be the shake).
+inline constexpr uint32_t eyesMagic = 0x45544e45; // ENTE
+inline constexpr uint32_t eyesVersion = 1;
+inline constexpr uint32_t viewSet = 0x18e0, setTaaWidth = 0x3800, viewCut = 0x19ab, viewCutFrame = 0x19ac,
+                          viewStamp = 0x1de8, frameRva = 0xc2c6c30;
+struct Eyes {
+    uint32_t magic = eyesMagic, version = eyesVersion, bytes = 128, samples{};
+    float stored[4]{};       // left x, y, right x, y
+    uint32_t taaSize[4]{};   // left W, H, right W, H
+    uint32_t cut[2]{}, cutAge[2]{}, stampAge[2]{};
+    float weight[2]{};
+    uint32_t render[2]{};    // eyeRenderSize
+    float pixels[4]{};       // left x, y, right x, y
+    uint32_t mode{}, scale{};
+    uint32_t resetSamples[2]{};
+    uint64_t sequence{};
+};
+static_assert(sizeof(Eyes) == 128);
+// The handler's current-frame weight for those (0x2c2e1b0..0x2c2e218), history present.
+inline float currentWeight(uint8_t cut, int32_t cutAge, int32_t stampAge) {
+    if (cut)
+        return 1;
+    const float a = 1.f / static_cast<float>((cutAge > 0 ? cutAge : 0) + 1);
+    const float b = 1.f / static_cast<float>((stampAge > 0 ? stampAge : 0) + 1);
+    return a > b ? a : b;
+}
+// TAA's own pixels for a stored jitter.
+inline void takenBack(float storedX, float storedY, uint32_t w, uint32_t h, float& px, float& py) {
+    px = .5f * storedX * static_cast<float>(w);
+    py = -.5f * storedY * static_cast<float>(h);
+}
+
 // Shared with tools/run_game_vr.py (SpidyEngineTaaData): what ENGINE TAA did, for the report.
 inline constexpr uint32_t dataMagic = 0x41544e45; // ENTA
 inline constexpr uint32_t dataVersion = 1;

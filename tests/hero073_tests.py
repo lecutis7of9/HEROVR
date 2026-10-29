@@ -298,6 +298,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5471'), ['SpidyGlowCheck'])  # 0.0.73 GLOW CHECK
         self.assertEqual(uses.get('5472'), ['SpidySlWatch'])  # 0.0.73 SL WATCH
         self.assertEqual(uses.get('5461'), ['SpidyMpSoloTest'])  # 0.0.73 test 6: MP SOLO TEST (mp-solo-test's 5449 is IMAGE's)
+        self.assertEqual(uses.get('5473'), ['SpidySharpenMatch'])  # 0.0.73 AA SHARPEN MATCH
 
 
 class Hero073Image(unittest.TestCase):
@@ -334,6 +335,15 @@ class Hero073Image(unittest.TestCase):
         self.assertEqual(L.image_mip_bias('0.5', 'spidyvr'), '0')
         self.assertEqual(L.image_mip_bias('0.5', 'classic'), '0.5')
         self.assertEqual(L.image_mip_bias('-0.25', 'spidyvr'), '-0.25')  # the player's own stays
+        # 0.0.73 AA: GAME TAA SPIDYVR with -EngineTaa leaves the game's own bias (0) even with CLASSIC
+        self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', True), '0')
+        self.assertEqual(L.image_mip_bias('0.5', 'classic', 'off', True), '0.5')  # image_style = off: revert
+        self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', False), '0.5')  # no ENGINE TAA prepared
+        self.assertEqual(L.image_mip_bias('0.25', 'classic', 'spidyvr', True), '0.25')  # an explicit -MipBias stays
+        self.assertEqual(L.image_style_of({}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'bogus'}), 'spidyvr')
+        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'spidyvr')
         self.assertEqual(L.image_of({}), 'spidyvr')
         self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
         self.assertEqual(L.export_value('image', 'classic'), 1)
@@ -344,7 +354,7 @@ class Hero073Image(unittest.TestCase):
         self.assertIn('SpidyEyeHistorySharp(', g)
         self.assertIn('row1.w > 0.5 ? sharpOld(old) : previous.SampleLevel(bilinear, old, 0).rgb', n)
         self.assertIn('std::atomic<bool> sharpHistory{true};', n)
-        self.assertIn("live_settings.image_mip_bias(a.mip_bias, image_look)", r)
+        self.assertIn("live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))", r)
         self.assertLess(r.index('migrate_073t3('), r.index('migrate_073t4('))
         self.assertLess(r.index('migrate_073t4('), r.index("kept, _ = live_settings.persisted(ROOT/'live.txt')"))
         self.assertIn('image_defaults(live_settings.UPDATE37_DEFAULTS, image_now)', r)
@@ -438,11 +448,37 @@ class Hero073Test4ImageStyle(unittest.TestCase):
     def test_clean_picture_skips_fxaa_history_and_cas(self):
         n = src('src/native_eye_gpu.cpp')
         self.assertIn("(down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa()", n)
-        self.assertIn('const uint32_t percent = cleanImage.load() ? 0u : sharpenPercent.load();', n)
+        # 0.0.73 AA: SHARPEN MATCH scales the slider; the clean picture still sends no CAS.
+        self.assertIn('cleanImage.load() ? 0u\n                          : eye_sharpen::matchedPercent(\n                                sharpenPercent.load()', n)
         i = n.index('uint32_t historyNow() {')
         self.assertIn('if (cleanImage.load(std::memory_order_relaxed))', n[i:i + 200])
 
 
 # 0.0.73 IMAGE: at the end, so every class above runs (it stood after the first class).
+
+class Hero073AaFix(unittest.TestCase):
+    """0.0.73 AA (the owner after test 5: "way too sharp and jagged when i move, too blurry when im still")."""
+
+    def test_sharpen_match_wired(self):
+        n = src('src/native_eye_gpu.cpp')
+        self.assertIn('eye_sharpen::matchedPercent(', n)
+        self.assertIn('std::atomic<bool> sharpenMatch{true}, historyRunning{false};', n)  # ON by default
+        self.assertIn('SpidyEyeSharpenMatch(void* on)', n)
+        g = src('src/game_xr.cpp')
+        self.assertIn('eye_sharpen::matchOn(c38(combat38::sharpenMatch))', g)
+        self.assertIn('SpidyEyeSharpenMatch(reinterpret_cast<void*>', g)
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings as L
+        self.assertEqual(L.UPDATE38_DEFAULTS['sharpen_match'], 'on')
+        self.assertIn('sharpen_match', L.UPDATE38_KEYS)
+        self.assertEqual(L.CHOICES['sharpen_match']['off'], 1)
+
+    def test_console_jitter_is_the_mode_in_force(self):
+        s = src('src/stereo_probe.cpp')
+        self.assertIn('d.mode = spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load());', s)
+        self.assertNotIn('d.mode = engineTaaJitterMode.load();', s)
+
+
 if __name__ == '__main__':
     unittest.main()

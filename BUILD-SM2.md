@@ -2618,3 +2618,18 @@ comes out of the hand looks like the all float around it"):
 
 Previews: `apps/hero_hands_preview` (`HANDS_CLAWS=steel|old|bone`, `HANDS_EXT`), `tools/hero_hands073/render_hands.py` (`--near=`),
 `tools/hero_hands073/render_claws.py`, `apps/dd_baton_preview` scene `aim` (`DD_AIM="x y z"`, `DD_AIM_PIVOT`, `DD_AIM_HOLD`).
+
+## 57. Version 0.0.73 AA: SHARPEN MATCH, GAME TAA texture detail, the console jitter label
+
+Owner after test 5: "way too sharp and jagged when i move, too blurry when im still". Full analysis: `docs/AA-0.0.73.md`.
+- CONFIRMED cause (test 5 logs): IMAGE stayed CLASSIC (FXAA + eye history 75 + CAS 100). GAME TAA ran ~35 s, then was pressed
+  OFF. While moving, the history was cut whole in 17090 of 35182 frame pairs, so those frames were raw render + FXAA + CAS 100
+  (jagged, over-sharp). When still, 75% of a rotation-only bilinear history was kept and mip +0.5 replaced the game's negative
+  biases on 266 samplers (blurry).
+- SHARPEN MATCH (DISPLAY AND DETAIL, `sharpen_match`, export `SpidySharpenMatch`, 5473; ON default, live): CAS is scaled by
+  the history weight actually kept this frame (`eye_sharpen::matchedPercent`), so no sharpening while you move. OFF = test 5.
+- GAME TAA SPIDYVR + engine TAA: mip bias `0.5` becomes `0` (`live_settings.image_mip_bias`), so textures keep their detail
+  under the game's TAA; restart. `-MipBias` still overrides it.
+- `engineTaaPublish` takes its jitter mode from `image_style::jitterMode`, so the console line names the jitter really used.
+- CONFIRMED: the jitter units equal the game's (Lens 0x2c75560 stores +0x428 = 2·argX, +0x42c = -2·argY). No new addresses.
+- CANDIDATE: the DLAA path (game AA 5-7) per eye, mip 0 versus `game` at 100% eyes; Windows build not compiled here.

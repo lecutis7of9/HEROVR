@@ -110,6 +110,7 @@
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
 #include "spidy/sl_watch.hpp"
+#include "spidy/eye_sharpen.hpp" // 0.0.73 AA SHARPEN MATCH (matchOn)
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/shared_lod.hpp"
@@ -626,6 +627,7 @@ DWORD WINAPI SpidySlWatchOn(void* on);       // 0.0.73 SL WATCH (native_address_
 DWORD WINAPI SpidyEyeLightHold(void* percent);
 // 0.0.73 IMAGE (native_eye_gpu.cpp): the history read sharp (1, SPIDYVR) or bilinear (0, CLASSIC).
 DWORD WINAPI SpidyEyeHistorySharp(void* sharp);
+DWORD WINAPI SpidyEyeSharpenMatch(void* on); // 0.0.73 AA SHARPEN MATCH
 float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
@@ -2319,7 +2321,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -11136,6 +11138,12 @@ DWORD WINAPI run(void*) {
                                 imageApplied = sharpWant;
                                 SpidyEyeHistorySharp(reinterpret_cast<void*>(static_cast<uintptr_t>(sharpWant)));
                             }
+                            // 0.0.73 AA SHARPEN MATCH: CAS by the eye history kept (ON, value 0) or as set, when it changes.
+                            if (const uint32_t matchWant = eye_sharpen::matchOn(c38(combat38::sharpenMatch)) ? 1u : 0u;
+                                matchWant != sharpenMatchApplied) {
+                                sharpenMatchApplied = matchWant;
+                                SpidyEyeSharpenMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
+                            }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)
                                 auto_perf::status(perfStatusText, sizeof perfStatusText, autoPerf, target);
@@ -13200,6 +13208,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheck(void* v) { return s
 // 0.0.73 SL WATCH (sl_watch.hpp): ON (0, the game's Streamline constants logged for the export) or OFF (1), live
 // (live.txt sl_watch). The frame loop passes it on.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySlWatch(void* v) { return setHero007(v, combat38::slWatch, 5472); }
+// 0.0.73 AA SHARPEN MATCH: ON (CAS by the eye history kept) or OFF (as set), live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySharpenMatch(void* v) { return setHero007(v, combat38::sharpenMatch, 5473); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

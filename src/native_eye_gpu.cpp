@@ -1671,6 +1671,9 @@ std::atomic<uint32_t> keptMilli{};
 // 0.0.73 IMAGE (combat38 image): the old picture read sharp (Catmull-Rom, SPIDYVR, the default) or
 // bilinear (CLASSIC, test 3). Live.
 std::atomic<bool> sharpHistory{true};
+// 0.0.73 AA SHARPEN MATCH (eye_sharpen.hpp matchedPercent): ON (the default) scales CAS by keptMilli;
+// historyRunning says whether the last pair ran the eye history at all (no history: CAS as set).
+std::atomic<bool> sharpenMatch{true}, historyRunning{false};
 uint32_t historyNow() {
     if (cleanImage.load(std::memory_order_relaxed)) // IMAGE STYLE SPIDYVR: the game's TAA keeps the history
         return 0;
@@ -2216,9 +2219,11 @@ void stagePair(EyePairState::Stamp stamp) {
             copyEyeTexture(slot->list.Get(), resources[i].Get(), states[i], stagedEyes[i].Get(), originalBarrier,
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
     // The history after AA: it blends what the headset is shown.
-    if (historyNow() && prepareHistory())
+    if (historyNow() && prepareHistory()) {
+        historyRunning.store(true, std::memory_order_relaxed); // SHARPEN MATCH: CAS follows keptMilli
         drawHistory(slot->list.Get(), index, stamp.serial);
-    else {
+    } else {
+        historyRunning.store(false, std::memory_order_relaxed); // SHARPEN MATCH: CAS as set
         history.valid = false;
         keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
     }
@@ -3219,6 +3224,10 @@ void setEyeHistorySharp(bool sharp) {
 bool eyeHistorySharp() {
     return sharpHistory.load();
 }
+// 0.0.73 AA SHARPEN MATCH: ON (the default) or OFF (CAS as set, test 5).
+void setSharpenMatch(bool on) {
+    sharpenMatch = on;
+}
 // 0.0.73 test 3 LIGHT HOLD: 0 off (test 2), 50 ON, 100 STRONG.
 bool setEyeLightHold(uint32_t percent) {
     if (percent > eye_history::lightHoldStrong)
@@ -3427,7 +3436,13 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     // Update 16: the headset's images sharpened (in place of the copy), or
     // copied as before when sharpening is off or cannot run.
     // 0.0.73 test 4 IMAGE STYLE SPIDYVR: no CAS over the game's TAA (SpidyVR sends it as resolved).
-    const uint32_t percent = cleanImage.load() ? 0u : sharpenPercent.load();
+    // 0.0.73 AA SHARPEN MATCH (the owner after test 5: "way too sharp and jagged when i move"): ON scales
+    // the percent by the share of the still-head history the last pass kept, none while a swing cuts it.
+    const uint32_t percent =
+        cleanImage.load() ? 0u
+                          : eye_sharpen::matchedPercent(
+                                sharpenPercent.load(), sharpenMatch.load(), historyRunning.load(),
+                                static_cast<float>(keptMilli.load(std::memory_order_relaxed)) / 1000.f);
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).
@@ -3756,6 +3771,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeHistorySharp(void* sharp) 
     if (value > 1)
         return 3995;
     native_gpu::setEyeHistorySharp(value == 1);
+    return 0;
+}
+// 0.0.73 AA SHARPEN MATCH (combat38 sharpen_match): 1 ON (CAS by the history kept), 0 OFF (as set);
+// refused (3994) above 1. Live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeSharpenMatch(void* on) {
+    const auto value = reinterpret_cast<uintptr_t>(on);
+    if (value > 1)
+        return 3994;
+    native_gpu::setSharpenMatch(value == 1);
     return 0;
 }
 // JITTER CALM: the share of its still-head history the last pass kept (0..1; 0 while none was kept or none ran).

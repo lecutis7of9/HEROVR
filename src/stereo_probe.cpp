@@ -2983,7 +2983,9 @@ __declspec(dllexport) spidy::engine_taa::Data SpidyEngineTaaData;
 void engineTaaPublish() {
     auto& d = SpidyEngineTaaData;
     d.packed = SpidyEngineTaaNow();
-    d.mode = engineTaaJitterMode.load();
+    // 0.0.73 AA: the jitter in force (GAME TAA SPIDYVR makes NONE OURS); test 5's console said "jitter NONE"
+    // while OURS ran (the asked mode).
+    d.mode = spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load());
     d.scalePercent = engineTaaJitterScale.load();
     d.gameAa = engineTaaGameAa.load();
     d.maskSeen = engineTaaMaskSeen.load();

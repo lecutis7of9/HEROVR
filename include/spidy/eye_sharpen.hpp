@@ -60,4 +60,20 @@ inline float sharpenChannel(const std::array<float, 9>& n, float sharpness, floa
     const float out = (b * w + d * w + f * w + h * w + e) / (1.f + 4.f * w);
     return std::isfinite(out) ? std::clamp(out, 0.f, 1.f) : std::clamp(e, 0.f, 1.f);
 }
+// 0.0.73 AA (the owner after test 5: "way too sharp and jagged when i move, too blurry when im still"):
+// SHARPEN MATCH. CAS is meant to give back what a soft pass took. With EYE AA's history the eye image is
+// soft only while the history is kept (still head); a swing cuts the history (test 5: 17090 of 35182
+// pairs cut whole) and the image is the raw render plus FXAA, which CAS made harsher. ON (the default)
+// scales the percent by the share of the still-head history the last pass kept (`kept`, 0..1, native_gpu
+// keptMilli): full while still, none while a swing cuts the history. Without a running history
+// (`historyRunning` false: history 0 or unavailable) the percent is as set, so a player who sharpens
+// FXAA alone keeps it. OFF: the percent as set (test 5). Never above `percent`.
+inline uint32_t matchedPercent(uint32_t percent, bool match, bool historyRunning, float kept) {
+    if (!match || !percent || !historyRunning)
+        return percent;
+    const float k = std::isfinite(kept) ? std::clamp(kept, 0.f, 1.f) : 0.f;
+    return static_cast<uint32_t>(static_cast<float>(percent) * k + .5f);
+}
+// combat38 sharpen_match: value 0 ON (the default), 1 OFF.
+inline bool matchOn(uint32_t value) { return value != 1; }
 } // namespace spidy::eye_sharpen

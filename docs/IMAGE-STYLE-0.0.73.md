@@ -40,6 +40,7 @@ the presses to the player (IMAGE HERO VR CLASSIC + GAME TAA OFF = test 3's pictu
 - Streetlights steadied by the game's TAA.
 - DLAA (game AA 5-7) path.
 - Mip bias 0 vs the game's own ('game').
+- 0.0.73 AA: the jitter units are CONFIRMED equal to the game's (Lens stores 2·arg; docs/AA-0.0.73.md).
 - Frame rate with the game's TAA per eye vs the removed FXAA/history/CAS passes.
 - The game's own sharpening setting (SpidyVR used lowest; untouched).
 

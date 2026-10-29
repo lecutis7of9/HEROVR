@@ -2540,11 +2540,19 @@ def session(a, startup, session_off=()):
     render_module = {}
     # 0.0.73 IMAGE: SPIDYVR (live.txt image, the default) starts the textures at mip bias 0 when the launcher
     # passes the old default 0.5; CLASSIC keeps 0.5; any other -MipBias is the player's and is kept.
+    # 0.0.73 AA: GAME TAA SPIDYVR (live.txt image_style, the default) with -EngineTaa starts at 0 for either
+    # look (no +0.5 blur under a TAA); image_style = off gives IMAGE's choice back.
     image_look = live_settings.image_in_file(ROOT/'live.txt')
-    mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look)
+    game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
+    mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))
     if mip_bias_asked != a.mip_bias:
-        print(f'0.0.73 IMAGE {image_look.upper()}: texture mip bias {mip_bias_asked} (the launcher passed '
-              f'{a.mip_bias}; image = classic keeps it).', flush=True)
+        if game_taa_look == 'spidyvr' and getattr(a, 'engine_taa', False) and image_look != 'spidyvr':
+            print(f'0.0.73 GAME TAA SPIDYVR: texture mip bias {mip_bias_asked} under the game\'s TAA (the '
+                  f'launcher passed {a.mip_bias}; live.txt image_style = off gives IMAGE CLASSIC\'s back; restart).',
+                  flush=True)
+        else:
+            print(f'0.0.73 IMAGE {image_look.upper()}: texture mip bias {mip_bias_asked} (the launcher passed '
+                  f'{a.mip_bias}; image = classic keeps it).', flush=True)
     try:
         mip_bias = encode_mip_bias(mip_bias_asked, a.anisotropy)
     except (ValueError, TypeError):

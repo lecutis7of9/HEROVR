@@ -201,6 +201,9 @@ enum Option : uint32_t {
     // was that stick figure thing again"): SUIT LOOK (the default) draws PLAYER 2 without a mod suit model as a
     // shaded hero body (Spider-Man in the suit's learned colours); FIGURE test 6's stick figure
     mpPlayer2Body,
+    // 0.0.73 COMING SOON (holo_roster.hpp soonHeroes): the hero tiles' SOON tab - the heroes coming in 0.0.74,
+    // their pictures, not playable - shown (ON, the default) or hidden (OFF); live
+    comingSoon,
     options
 };
 struct OptionInfo {
@@ -564,6 +567,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"mp_player2_body", "PLAYER 2 BODY", "P2B", "SUIT LOOK draws PLAYER 2 in game suits as a hero body; no restart.",
      2, {"SUIT LOOK", "FIGURE", nullptr, nullptr}},
+    {"coming_soon", "COMING SOON", "SOON", "ON shows the heroes coming next update on the roster's SOON tab, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

@@ -13,8 +13,11 @@ tests/roster_page_tests.py checks the two):
   0-10   the profile pictures, hero order (SPIDER-MAN .. GREEN LANTERN): a head-and-shoulders crop of one
          of THAT hero's picked suits' thumbnails (PORTRAITS says which), SPIDER-MAN a drawn web emblem
          (he has no picked suits: he wears the game's own);
-  11-47  each suit's preview (the whole figure), by the catalog's folder name.
-They are packed 3 x 3 into 1024 px JPEG atlases (6 images), each picture with an 8 px edge-repeated border
+  11-47  each suit's preview (the whole figure), by the catalog's folder name;
+  48-68  0.0.73 COMING SOON: the SOON tab's 21 portraits (the 0.0.74 heroes, holo_roster.hpp soonHeroes
+         order), tools/roster/soon/<key>.jpg made by soon_portraits.py (credits in soon/soon.json); one
+         missing is drawn as a silhouette here (and the page draws its own silhouette without the model).
+They are packed 3 x 3 into 1024 px JPEG atlases (8 images), each picture with an 8 px edge-repeated border
 so mips do not bleed. Picture k is triangles 2k and 2k+1 (a quad whose UVs are its cell); the page reads
 each picture's layer and UV box from them and draws its own flat quad - nothing is flattened, decimated or
 re-lit. Models/Roster/license.txt credits every artist."""
@@ -44,7 +47,11 @@ SUIT_FOLDERS = (['CapSuit'] + ['Suit_batman_%d' % n for n in (1, 2, 3, 5)] + ['S
                 ['Suit_punisher_%d' % n for n in (1, 2)] + ['Suit_thor_%d' % n for n in (1, 2, 3)] +
                 ['Suit_greenLantern_%d' % n for n in (1, 2, 3, 4)] + ['Suit_superman_%d' % n for n in (1, 2, 3, 4)] +
                 ['PunisherWarzone'])
-PICTURE_FOLDERS = ['portrait_' + k for k in HERO_KEYS] + SUIT_FOLDERS
+SOON_KEYS = ['deadpool', 'nightcrawler', 'moonknight', 'magneto', 'cyclops', 'jeangrey', 'vision', 'nickfury',
+             'wintersoldier', 'doctorstrange', 'mrfantastic', 'ghostrider', 'humantorch', 'silversurfer',
+             'thething', 'cyborg', 'flash', 'hawkman', 'robin', 'nightwing', 'raven']
+SOON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'soon')
+PICTURE_FOLDERS = ['portrait_' + k for k in HERO_KEYS] + SUIT_FOLDERS + ['soon_' + k for k in SOON_KEYS]
 ATLAS, CELLS, BORDER = 1024, 3, 8
 EXT_WOLVERINE = ('ext/ba_wolv.jpg', 'BlendAtlas Wolverine (D&W suit)', 'BlendAtlas', 'image from the artist\'s page',
                  'https://blendatlas.com (not on Sketchfab)')
@@ -87,6 +94,35 @@ def spider_tile(size):
     return im.resize((size, size), Image.LANCZOS)
 
 
+def silhouette(size):
+    """A COMING SOON picture with no portrait file: a plain head-and-shoulders silhouette."""
+    from PIL import Image, ImageDraw
+    im = Image.new('RGB', (size, size), (18, 22, 32))
+    d = ImageDraw.Draw(im)
+    s = size / 100.
+    d.ellipse([35 * s, 18 * s, 65 * s, 52 * s], fill=(70, 78, 96))
+    d.rounded_rectangle([18 * s, 56 * s, 82 * s, 112 * s], radius=int(22 * s), fill=(70, 78, 96))
+    return im
+
+
+def soon_pictures(soon_dir=SOON_DIR):
+    """The SOON tab's pictures and credits; a missing file is a silhouette (never an error)."""
+    from PIL import Image
+    path = os.path.join(soon_dir, 'soon.json')
+    meta = json.load(open(path)) if os.path.exists(path) else {}
+    out, credits = [], []
+    for key in SOON_KEYS:
+        f = os.path.join(soon_dir, key + '.jpg')
+        if os.path.exists(f):
+            out.append(Image.open(f).convert('RGB'))
+            m = meta.get(key, {})
+            credits.append(('soon_' + key, m.get('name', '?'), m.get('user', '?'), m.get('lic', '?'), m.get('url', '')))
+        else:
+            out.append(silhouette(400))
+            credits.append(('soon_' + key, 'silhouette placeholder (no portrait yet)', '', '', ''))
+    return out, credits
+
+
 def pictures(src):
     from PIL import Image
     meta = json.load(open(os.path.join(src, 'suit_meta.json')))
@@ -113,7 +149,8 @@ def pictures(src):
         s = min(w, h)
         out.append(im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s)))
         credits.append((folder, name, user, lic, url))
-    return out, credits
+    soon, soon_credits = soon_pictures()
+    return out + soon, credits + soon_credits
 
 
 def atlases(images):
@@ -205,7 +242,9 @@ def license_text(credits):
              'suit models themselves are NOT in this build (MODEL MISSING) until they are downloaded.',
              'Licences: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/ ; CC BY-NC 4.0',
              'https://creativecommons.org/licenses/by-nc/4.0/ ; CC BY-NC-SA 4.0',
-             'https://creativecommons.org/licenses/by-nc-sa/4.0/ ; "Free Standard" = the Sketchfab Standard licence.', '']
+             'https://creativecommons.org/licenses/by-nc-sa/4.0/ ; "Free Standard" = the Sketchfab Standard licence.',
+             'soon_*: COMING SOON portraits (0.0.74 heroes, not playable yet): cropped from the model\'s Sketchfab',
+             'thumbnail, or (FLASH, HAWKMAN) rendered from the model in Blender.', '']
     for k, (folder, name, user, lic, url) in enumerate(credits):
         if not user:
             lines.append('%2d %s: %s' % (k, folder, name))
@@ -216,7 +255,7 @@ def license_text(credits):
 
 def main(src, models):
     images, credits = pictures(src)
-    assert len(images) == len(PICTURE_FOLDERS) == 48, len(images)
+    assert len(images) == len(PICTURE_FOLDERS) == 69, len(images)
     sheets, boxes = atlases(images)
     out = os.path.join(models, 'Roster')
     os.makedirs(out, exist_ok=True)

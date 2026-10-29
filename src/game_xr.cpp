@@ -7625,6 +7625,7 @@ DWORD WINAPI run(void*) {
                                                 hd.playing = heroWas < hero_modes::heroes ? heroWas : 0u;
                                                 hd.reputation = in72.o.reputation;
                                                 hd.repLog = in72.o.repLog;
+                                                hd.comingSoon = c38(combat38::comingSoon) == 0; // 0.0.73 COMING SOON: ON (0) first
                                                 hd.log = hero072Play.repLog;
                                                 holo_roster::publish(hd);
                                             }
@@ -13252,6 +13253,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySharpenMatch(void* v) { retur
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawLevel(void* v) { return setHero007(v, combat38::clawLevel, 5474); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPop(void* v) { return setHero007(v, combat38::windowPop, 5475); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlayer2Body(void* v) { return setHero007(v, combat38::mpPlayer2Body, 5477); } // 0.0.73 MPSUIT
+// 0.0.73 COMING SOON: the hero tiles' SOON tab (the 0.0.74 heroes' pictures, not playable) ON (0, default) or OFF (1) (live.txt coming_soon).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyComingSoon(void* v) { return setHero007(v, combat38::comingSoon, 5490); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

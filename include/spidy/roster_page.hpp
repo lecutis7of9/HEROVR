@@ -23,7 +23,10 @@
 #include <vector>
 
 namespace spidy::roster_page {
-inline constexpr uint32_t heroes = hero_modes::heroes, suitsMost = 8, pictureCount = 48;
+// 0.0.73 COMING SOON: + 21 pictures after the 48 (the 0.0.74 heroes' portraits for the hero tiles' SOON tab,
+// holo_roster.hpp soonHeroes); a Roster model of 0.0.73 test 5 (48 only) still loads, the 21 then missing.
+inline constexpr uint32_t heroes = hero_modes::heroes, suitsMost = 8, basePictures = 48, soonPictures = 21,
+                          pictureCount = basePictures + soonPictures, soonFirst = basePictures;
 // The pictures in Models/Roster, in order (make_roster_glb.py PICTURE_FOLDERS; tests check the two):
 // 11 portraits (hero_modes order), then each suit's preview by its catalog folder.
 inline constexpr const char* pictureFolders[pictureCount] = {
@@ -35,7 +38,12 @@ inline constexpr const char* pictureFolders[pictureCount] = {
     "Suit_hulk_1", "Suit_hulk_2", "Suit_hulk_4", "Suit_wolverine_1", "Suit_wolverine_2", "Suit_wolverine_3",
     "Suit_wolverine_4", "Suit_wolverine_5", "Suit_punisher_1", "Suit_punisher_2", "Suit_thor_1", "Suit_thor_2",
     "Suit_thor_3", "Suit_greenLantern_1", "Suit_greenLantern_2", "Suit_greenLantern_3", "Suit_greenLantern_4",
-    "Suit_superman_1", "Suit_superman_2", "Suit_superman_3", "Suit_superman_4", "PunisherWarzone"};
+    "Suit_superman_1", "Suit_superman_2", "Suit_superman_3", "Suit_superman_4", "PunisherWarzone",
+    // 0.0.73 COMING SOON (tools/roster/soon, holo_roster.hpp soonHeroes order)
+    "soon_deadpool", "soon_nightcrawler", "soon_moonknight", "soon_magneto", "soon_cyclops", "soon_jeangrey",
+    "soon_vision", "soon_nickfury", "soon_wintersoldier", "soon_doctorstrange", "soon_mrfantastic",
+    "soon_ghostrider", "soon_humantorch", "soon_silversurfer", "soon_thething", "soon_cyborg", "soon_flash",
+    "soon_hawkman", "soon_robin", "soon_nightwing", "soon_raven"};
 int pictureOf(const char* folder); // -1: none
 
 // ---- the suits, as the game thread sees them ----
@@ -144,7 +152,8 @@ struct Picture {
     int32_t layer = -1;
     float u0{}, v0{}, u1{}, v1{};
 };
-// Picture k of the Roster model: its triangles 2k, 2k + 1 (false: not that model).
+// Picture k of the Roster model: its triangles 2k, 2k + 1 (false: not that model). 0.0.73 COMING SOON: a model
+// with only the first 48 (test 5's) is still one; the pictures it lacks stay layer -1 (their tiles' fallback).
 bool pictures(const mesh_model::Mesh* roster, Picture (&out)[pictureCount]);
 // The page's own vertices in panel space, rebuilt only when what it shows changes.
 struct Cache {

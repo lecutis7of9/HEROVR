@@ -20,6 +20,13 @@ using roster_page::Status;
 // The header: MARVEL, DC, REP, and CLOSE at the right.
 constexpr float marvelU0 = left, marvelU1 = -.041f, dcU0 = -.038f, dcU1 = -.011f, repU0 = -.008f, repU1 = .030f;
 constexpr float closeU0 = .046f, closeU1 = right;
+// 0.0.73 COMING SOON on: MARVEL, DC, SOON, REP, CLOSE (off: the four above, as test 5).
+constexpr float soonMarvelU1 = -.048f, soonDcU0 = -.045f, soonDcU1 = -.022f, soonTabU0 = -.019f, soonTabU1 = .015f;
+constexpr float soonRepU0 = .018f, soonRepU1 = .042f, soonCloseU0 = .050f;
+// The SOON screen: its title and MARVEL / DC in the row band, then five small tiles a row.
+constexpr float soonSubU0 = -.006f, soonSubMid0 = .037f, soonSubMid1 = .040f;
+constexpr float soonTop = .062f, soonTileH = .039f;
+constexpr uint32_t soonCols = 5;
 // A hero page: BACK, his name, PLAY AS; then CONTROLS, OUTFITS, STATS; then the tab's rows.
 constexpr float rowY0 = .065f, rowY1 = .076f, backU1 = -.061f, playU0 = .024f;
 constexpr float subY0 = .051f, subY1 = .062f;
@@ -40,6 +47,33 @@ void tileBox(uint32_t group, uint32_t k, float& u0, float& v0, float& u1, float&
     u1 = u0 + w;
     v1 = tileTop - static_cast<float>(k / cols) * (tileH + tileGap);
     v0 = v1 - tileH;
+}
+// The screen drawn: SOON with COMING SOON off is the grid.
+Screen shownOf(const State& s, const Data& d) { return s.screen == Screen::soon && !d.comingSoon ? Screen::grid : s.screen; }
+uint32_t soonIn(uint32_t group) {
+    uint32_t n = 0;
+    for (const SoonHero& x : soonHeroes)
+        n += x.group == group;
+    return n;
+}
+// The k-th tile of `group`'s page: its soonHeroes index.
+uint32_t soonAt(uint32_t group, uint32_t k) {
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < soonCount; ++i)
+        if (soonHeroes[i].group == group && n++ == k)
+            return i;
+    return 0;
+}
+void soonBox(uint32_t group, uint32_t k, float& u0, float& v0, float& u1, float& v1) {
+    // Five a row on MARVEL; DC's six three a row, centred, the same size.
+    const uint32_t cols = group == 0 ? soonCols : 3;
+    const float w = (right - left - tileGap * static_cast<float>(soonCols - 1)) / static_cast<float>(soonCols);
+    const float span = w * static_cast<float>(cols) + tileGap * static_cast<float>(cols - 1);
+    const float start = (left + right) / 2 - span / 2;
+    u0 = start + static_cast<float>(k % cols) * (w + tileGap);
+    u1 = u0 + w;
+    v1 = soonTop - static_cast<float>(k / cols) * (soonTileH + tileGap);
+    v0 = v1 - soonTileH;
 }
 uint32_t outfitRows(const Data& d, uint32_t hero) {
     return d.suitsKnown ? std::min(roster_page::suitsMost, d.suits.count[std::min(hero, heroes - 1)]) : 0u;
@@ -181,11 +215,33 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
     uint32_t n = 0;
     if (s.screen == Screen::closed)
         return 0;
-    out[n++] = Button{tabMarvel, marvelU0, tabY0, marvelU1, tabY1, true};
-    out[n++] = Button{tabDc, dcU0, tabY0, dcU1, tabY1, true};
-    out[n++] = Button{tabRep, repU0, tabY0, repU1, tabY1, true};
-    out[n++] = Button{closeButton, closeU0, tabY0, closeU1, tabY1, true};
-    if (s.screen == Screen::grid) {
+    const Screen shown = shownOf(s, d);
+    if (d.comingSoon) {
+        out[n++] = Button{tabMarvel, marvelU0, tabY0, soonMarvelU1, tabY1, true};
+        out[n++] = Button{tabDc, soonDcU0, tabY0, soonDcU1, tabY1, true};
+        out[n++] = Button{tabSoon, soonTabU0, tabY0, soonTabU1, tabY1, true};
+        out[n++] = Button{tabRep, soonRepU0, tabY0, soonRepU1, tabY1, true};
+        out[n++] = Button{closeButton, soonCloseU0, tabY0, closeU1, tabY1, true};
+    } else {
+        out[n++] = Button{tabMarvel, marvelU0, tabY0, marvelU1, tabY1, true};
+        out[n++] = Button{tabDc, dcU0, tabY0, dcU1, tabY1, true};
+        out[n++] = Button{tabRep, repU0, tabY0, repU1, tabY1, true};
+        out[n++] = Button{closeButton, closeU0, tabY0, closeU1, tabY1, true};
+    }
+    if (shown == Screen::soon) {
+        out[n++] = Button{soonMarvel, soonSubU0, rowY0, soonSubMid0, rowY1, true};
+        out[n++] = Button{soonDc, soonSubMid1, rowY0, right, rowY1, true};
+        const uint32_t g = std::min(s.soonGroup, 1u);
+        for (uint32_t k = 0; k < soonIn(g) && n < buttonsMost; ++k) {
+            Button b;
+            b.id = soonTile + static_cast<int>(soonAt(g, k));
+            soonBox(g, k, b.u0, b.v0, b.u1, b.v1);
+            b.enabled = false; // not playable yet: pointed at, it says so; pressed, nothing
+            out[n++] = b;
+        }
+        return n;
+    }
+    if (shown == Screen::grid) {
         const uint32_t g = std::min(s.group, 1u);
         for (uint32_t k = 0; k < count(g); ++k) {
             Button b;
@@ -195,7 +251,7 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
         }
         return n;
     }
-    if (s.screen == Screen::hero) {
+    if (shown == Screen::hero) {
         const uint32_t h = std::min(s.hero, heroes - 1);
         out[n++] = Button{backButton, left, rowY0, backU1, rowY1, true};
         out[n++] = Button{playButton, playU0, rowY0, right, rowY1, d.playing != h};
@@ -261,8 +317,13 @@ std::string helpFor(const State& s, const Data& d, int id) {
     case logFilter: return "Shows every hero's entries, or only one hero's. No restart needed.";
     case logNewer: return "Scrolls to newer entries (or push the stick up). No restart needed.";
     case logOlder: return "Scrolls to older entries (or pull the stick down). No restart needed.";
+    case tabSoon: return "Shows the heroes coming in 0.0.74; they are not playable yet.";
+    case soonMarvel: return "Shows the MARVEL heroes coming in 0.0.74. No restart needed.";
+    case soonDc: return "Shows the DC heroes and suits coming in 0.0.74. No restart needed.";
     default: break;
     }
+    if (id >= soonTile && id < soonTile + static_cast<int>(soonCount))
+        return std::string(soonHeroes[id - soonTile].name) + ": coming in 0.0.74, not playable yet.";
     if (id >= tile && id < tile + static_cast<int>(heroes))
         return std::string("Opens ") + nameOf(static_cast<uint32_t>(id - tile)) + "'s page: controls, outfits, stats, settings.";
     if (id >= outfit && d.suitsKnown && static_cast<uint32_t>(id - outfit) < outfitRows(d, h)) {
@@ -278,7 +339,9 @@ std::string helpFor(const State& s, const Data& d, int id) {
         case Status::unlocked: return "Makes this his outfit, kept with your progress. No restart needed.";
         }
     }
-    if (s.screen == Screen::grid)
+    if (shownOf(s, d) == Screen::soon)
+        return "Coming in 0.0.74: not playable yet.";
+    if (shownOf(s, d) == Screen::grid)
         return "Point at a hero and pull the trigger to open his page.";
     if (s.screen == Screen::rep)
         return "Push the stick to scroll the log. Kept across sessions.";
@@ -301,12 +364,53 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         if (const Button* b = byId(id))
             o.button(*b, label, s.hover == id, lit, .0046f);
     };
-    tabBtn(tabMarvel, "MARVEL", s.screen != Screen::rep && (s.screen == Screen::grid ? s.group == 0 : groupOf(s.hero) == 0));
-    tabBtn(tabDc, "DC", s.screen != Screen::rep && (s.screen == Screen::grid ? s.group == 1 : groupOf(s.hero) == 1));
-    tabBtn(tabRep, "REP", s.screen == Screen::rep);
+    const Screen shown = shownOf(s, d);
+    const bool heroes2 = shown == Screen::grid || shown == Screen::hero;
+    tabBtn(tabMarvel, "MARVEL", heroes2 && (shown == Screen::grid ? s.group == 0 : groupOf(s.hero) == 0));
+    tabBtn(tabDc, "DC", heroes2 && (shown == Screen::grid ? s.group == 1 : groupOf(s.hero) == 1));
+    tabBtn(tabSoon, "SOON", shown == Screen::soon);
+    tabBtn(tabRep, "REP", shown == Screen::rep);
     tabBtn(closeButton, "CLOSE", false);
     const uint32_t playing = std::min(d.playing, heroes - 1);
-    if (s.screen == Screen::grid) {
+    if (shown == Screen::soon) {
+        // 0.0.73 COMING SOON: the title, MARVEL / DC, and a small tile a hero: his picture (the Roster
+        // model's soon_* picture) or, without it, a plain head-and-shoulders, and his name. Dim: not playable.
+        const uint32_t g = std::min(s.soonGroup, 1u);
+        o.text("COMING SOON", left, rowY0 + .0028f, soonSubU0 - .003f, .0056f, Role::text);
+        tabBtn(soonMarvel, "MARVEL", g == 0);
+        tabBtn(soonDc, "DC", g == 1);
+        float lowest = soonTop;
+        for (uint32_t k = 0; k < soonIn(g); ++k) {
+            const uint32_t i = soonAt(g, k);
+            const Button* b = byId(soonTile + static_cast<int>(i));
+            if (!b)
+                continue;
+            lowest = std::min(lowest, b->v0);
+            const bool hov = s.hover == b->id;
+            const int pic = soonPicture(i);
+            o.fill(b->u0, b->v0, b->u1, b->v1, Role::backing, .6f);
+            o.outline(b->u0, b->v0, b->u1, b->v1, hov ? Role::line : Role::accent, hov ? 1.f : .6f);
+            const float cu = (b->u0 + b->u1) / 2, cv = b->v1 - .0145f, r = .0115f;
+            o.disc(cu, cv, r, Vec3{.10f, .13f, .19f}, pic);
+            // No picture: a silhouette in its place (drawn only then).
+            o.disc(cu, cv + r * .28f, r * .36f, Vec3{.42f, .47f, .56f}, pic);
+            o.p.back().fallback = true;
+            o.fill(cu - r * .62f, cv - r * .78f, cu + r * .62f, cv - r * .16f, Role::custom, 1.f, Vec3{.42f, .47f, .56f});
+            o.p.back().portrait = pic, o.p.back().fallback = true;
+            const float nameH = .0030f, roomW = b->u1 - b->u0 - .003f;
+            const auto lines = wrap(soonHeroes[i].name, nameH, roomW, 2);
+            const float first = lines.size() > 1 ? b->v1 - .0310f : b->v1 - .0335f;
+            for (size_t l = 0; l < lines.size(); ++l)
+                o.text(lines[l], b->u0 + .0015f, first - static_cast<float>(l) * .0042f, b->u1 - .0015f, nameH,
+                       hov ? Role::line : Role::text, true);
+        }
+        if (g == 1) {
+            const auto lines = wrap(soonSuits, .0032f, right - left, 2);
+            for (size_t l = 0; l < lines.size(); ++l)
+                o.text(lines[l], left, lowest - .012f - static_cast<float>(l) * .0058f, right, .0032f, Role::label);
+        }
+        o.text("NOT PLAYABLE YET - COMING IN 0.0.74", left, -.075f, right, .0032f, Role::value, true);
+    } else if (shown == Screen::grid) {
         const uint32_t g = std::min(s.group, 1u);
         for (uint32_t k = 0; k < count(g); ++k) {
             const uint32_t h = heroAt(g, k);
@@ -332,7 +436,7 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         if (d.reputation)
             o.text(rep_log::rankText(d.heroPoints[playing]) + "   " + rep_log::nextText(d.heroPoints[playing]), left, -.064f,
                    right, .0036f, Role::value);
-    } else if (s.screen == Screen::hero) {
+    } else if (shown == Screen::hero) {
         const uint32_t h = std::min(s.hero, heroes - 1);
         if (const Button* b = byId(backButton))
             o.button(*b, "BACK", s.hover == backButton, false);
@@ -499,6 +603,8 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     Actions a;
     if (s_.screen == Screen::closed)
         return a;
+    if (s_.screen == Screen::soon && !d.comingSoon)
+        s_.screen = Screen::grid; // COMING SOON turned off while it was shown
     const bool ok = hit && std::isfinite(u) && std::isfinite(v);
     s_.settingsPage = std::min(s_.settingsPage, std::max(1u, s_.settingsPages) - 1);
     s_.hover = ok ? buttonAt(s_, d, u, v) : none;
@@ -525,6 +631,12 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
         s_.screen = Screen::grid;
         s_.group = id == tabDc ? 1 : 0;
         break;
+    case tabSoon:
+        s_.screen = Screen::soon;
+        s_.soonGroup = std::min(s_.group, 1u);
+        break;
+    case soonMarvel:
+    case soonDc: s_.soonGroup = id == soonDc ? 1 : 0; break;
     case tabRep:
         s_.screen = Screen::rep;
         s_.filter = heroes;
@@ -566,7 +678,7 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
             s_.screen = Screen::hero;
             s_.hero = static_cast<uint32_t>(id - tile);
             s_.settingsPage = 0;
-        } else if (id >= outfit) {
+        } else if (id >= outfit && id < outfit + static_cast<int>(roster_page::suitsMost)) {
             a.suitHero = static_cast<int>(std::min(s_.hero, heroes - 1));
             a.suitIndex = id - outfit;
         }

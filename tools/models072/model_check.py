@@ -55,8 +55,8 @@ for _f in SUIT_FOLDERS:
 # so they are checked for real UVs, their texture and being drawn, and rendered beside their texture.
 BUILT = {'Vehicle/PunisherVan/Interior': 'the cab built for the source\'s empty shell (seats, dash, door card)',
          'Vehicle/PunisherVan/SteeringWheel': 'the steering wheel built as its own part (turned in game)',
-         # Build 8 ROSTER page: 48 picture quads (2 triangles each) over 6 atlases, no source model (make_roster_glb.py).
-         'Roster': 'the ROSTER page\'s 48 pictures (each artist\'s Sketchfab thumbnail), 6 atlases'}
+         # Build 8 ROSTER page: 48 picture quads (2 triangles each) over 6 atlases (0.0.73 COMING SOON: 69 over 8), no source model (make_roster_glb.py).
+         'Roster': 'the ROSTER page\'s 69 pictures (each artist\'s Sketchfab thumbnail; 21 COMING SOON), 8 atlases'}
 # The least a shipped model may have (it may keep fewer only when its source has fewer), by kind, and
 # never under MIN_SHARE of its source.
 FLOORS = {'pictures': 96, 'weapon': 3000, 'prop': 3000, 'shield': 5000, 'vehicle': 20000, 'vehicle_part': 1500, 'body': 10000}

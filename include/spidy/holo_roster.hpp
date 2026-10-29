@@ -16,6 +16,11 @@
 //                 works the rows (its own controls) and tells the roster how many pages there are.
 //   REP           (the user, 2:13 PM) the rep meter - the played hero's level, title and step, the way to the
 //                 next level - and the log (rep_log.hpp), scrolled with the stick
+//   SOON          (0.0.73 COMING SOON; the owner: "Let's add the profile pictures but put them in a 'coming soon'
+//                 section in the roster page") the heroes coming in 0.0.74, MARVEL or DC, a picture and a name
+//                 each (Models/Roster's soon_* pictures, tools/roster/soon), NOT playable: their tiles do
+//                 nothing when pressed. BATMAN and SUPERMAN are playable already, so their new suits are a
+//                 line under the DC tiles, not tiles. COMING SOON (combat38::comingSoon) OFF hides the tab.
 // HERO MENU (combat38::heroMenu) CLASSIC brings the old big ROSTER panel (roster_page.hpp) back instead.
 //
 // Pure: the state, its buttons and what it draws (pieces, in the wrist panel's own measures: metres at
@@ -39,8 +44,25 @@ inline constexpr uint32_t marvelHeroes[marvelCount] = {
 inline constexpr uint32_t dcHeroes[dcCount] = {hero_modes::batman, hero_modes::superman, hero_modes::greenLantern};
 // MARVEL (0) or DC (1).
 uint32_t groupOf(uint32_t hero);
+// 0.0.73 COMING SOON: the 0.0.74 heroes, in roster_page's soon_* picture order (picture soonFirst + k).
+// One tile a character (CYBORG is both the JUSTICE LEAGUE and the TEEN TITANS one).
+struct SoonHero {
+    const char* name;
+    uint32_t group; // 0 MARVEL, 1 DC
+};
+inline constexpr uint32_t soonCount = roster_page::soonPictures;
+inline constexpr SoonHero soonHeroes[soonCount] = {
+    {"DEADPOOL", 0},       {"NIGHTCRAWLER", 0},  {"MOON KNIGHT", 0},   {"MAGNETO", 0},     {"CYCLOPS", 0},
+    {"JEAN GREY", 0},      {"VISION", 0},        {"NICK FURY", 0},     {"WINTER SOLDIER", 0}, {"DOCTOR STRANGE", 0},
+    {"MR. FANTASTIC", 0},  {"GHOST RIDER", 0},   {"HUMAN TORCH", 0},   {"SILVER SURFER", 0}, {"THE THING", 0},
+    {"CYBORG", 1},         {"THE FLASH", 1},     {"HAWKMAN", 1},       {"ROBIN", 1},       {"NIGHTWING", 1},
+    {"RAVEN", 1}};
+// The new suits for heroes already playable (a line on the SOON tab's DC page).
+inline constexpr const char* soonSuits =
+    "NEW SUITS COMING: BATMAN (BATMAN V SUPERMAN, JUSTICE LEAGUE) AND SUPERMAN (BATMAN V SUPERMAN).";
+inline constexpr int soonPicture(uint32_t k) { return static_cast<int>(roster_page::soonFirst + k); }
 
-enum class Screen : uint8_t { closed, grid, hero, rep };
+enum class Screen : uint8_t { closed, grid, hero, rep, soon };
 enum class Tab : uint8_t { controls, outfits, stats, settings };
 enum Id : int {
     none = -1,
@@ -60,12 +82,17 @@ enum Id : int {
     subSettings,   // 0.0.73 test 4: the SETTINGS sub-tab
     settingsPrev,  // its pages
     settingsNext,
+    tabSoon,     // 0.0.73 COMING SOON: the header's SOON tab
     tile = 20,   // + hero
     outfit = 40, // + suit row
+    soonMarvel = 50, // the SOON tab's MARVEL / DC
+    soonDc = 51,
+    soonTile = 60, // + soonHeroes index (never pressable: not playable yet)
 };
 struct State {
     Screen screen = Screen::closed;
     uint32_t group{};                   // the grid's tab: 0 MARVEL, 1 DC
+    uint32_t soonGroup{};               // 0.0.73 COMING SOON: the SOON tab's 0 MARVEL, 1 DC
     uint32_t hero{};                    // the hero page's hero
     Tab tab = Tab::controls;
     uint32_t filter = heroes;           // the log: heroes = all, else that hero's entries
@@ -86,6 +113,7 @@ struct Data {
     uint32_t playing{};
     bool reputation = true; // REPUTATION on
     bool repLog = true;     // REP LOG on
+    bool comingSoon = true; // 0.0.73 COMING SOON on: the SOON tab shown
     rep_log::Log log{};
 };
 void publish(const Data&);

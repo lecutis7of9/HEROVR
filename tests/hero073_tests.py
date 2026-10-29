@@ -302,6 +302,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5474'), ['SpidyClawLevel'])  # 0.0.73 test 6 CLAW LEVEL
         self.assertEqual(uses.get('5475'), ['SpidyWindowPop'])  # 0.0.73 test 6 WINDOW POP FIX
         self.assertEqual(uses.get('5477'), ['SpidyMpPlayer2Body'])  # 0.0.73 MPSUIT PLAYER 2 BODY
+        self.assertEqual(uses.get('5490'), ['SpidyComingSoon'])  # 0.0.73 COMING SOON
 
 
 class Hero073Image(unittest.TestCase):

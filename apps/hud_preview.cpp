@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
     if (!sheet.empty() && sheet != "pages" && sheet != "scroll" && sheet != "themes" && sheet != "webstyle" &&
         sheet != "music" && sheet != "raimi" && sheet != "subtext" &&
         sheet != "remap" && sheet != "v002" && sheet != "heroes" && sheet != "holo" && sheet != "v0062" && sheet != "roster" &&
-        sheet != "rosterclean") {
+        sheet != "rosterclean" && sheet != "soon") {
         std::fprintf(stderr, "unknown sheet %s (pages, scroll, themes, webstyle, music or raimi)\n", sheet.c_str());
         return 2;
     }
@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "v0062 needs a page 0..%d\n", wrist_hud::pages - 1);
         return 2;
     }
-    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "roster" ? 7 : sheet == "rosterclean" ? 1 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
+    const int cells = sheet == "themes" ? wrist_hud::themes : sheet == "music" ? 6 : sheet == "raimi" ? 2 : sheet == "remap" ? 5 : sheet == "v002" ? 3 : sheet == "heroes" ? 5 : sheet == "roster" ? 7 : sheet == "rosterclean" ? 1 : sheet == "soon" ? 2 : sheet == "holo" ? wrist_hud::pages : sheet == "v0062" ? wrist_hud::sectionCount(sheetPage) + 2 : 4; // subtext: 4
     Image image(size * cells, height); // Update 15: pages 2 and 3 in cells 2 and 3
     const Vec3 eye{0, 1.62f, 0};
     for (int cell = 0; cell < cells; ++cell) {
@@ -403,7 +403,7 @@ int main(int argc, char** argv) {
                 const auto spot = wrist_hud::controlSpot(view.page, view.hover, view.scroll);
                 pointAt(view, eye, spot.u, spot.v);
             }
-        } else if (sheet == "roster" || sheet == "rosterclean") {
+        } else if (sheet == "roster" || sheet == "rosterclean" || sheet == "soon") {
             namespace hr = holo_roster;
             static hr::Data d = [] {
                 hr::Data x;
@@ -467,6 +467,15 @@ int main(int argc, char** argv) {
                         st.hover = hr::subSettings;
                     }
                 }
+            }
+            if (sheet == "soon") {
+                // 0.0.73 COMING SOON (2 cells): the SOON tab's MARVEL and DC pages, one tile pointed at.
+                wrist_hud::setActiveHero(static_cast<int>(hero_modes::batman));
+                view.heroTiles = true;
+                st = hr::State{};
+                st.screen = hr::Screen::soon;
+                st.soonGroup = static_cast<uint32_t>(cell);
+                st.hover = hr::soonTile + (cell ? 15 : 0);
             }
             view.page = wrist_hud::powersPage;
             view.roster = st;

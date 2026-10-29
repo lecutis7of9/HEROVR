@@ -954,7 +954,7 @@ constexpr SectionDef combatSections[] = {
       C::combatRopeStrength, C::combatWallStick}},
     {"BLOOD", C::blood, C::combatBloodLook, "", "", nullptr, -1, {C::blood, C::combatBloodLook, C::bloodVisor}},
     // Version 0.0.72 (TEST)
-    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroMenu, C::combatRepLog, C::combatMpSoloTest, C::combatMpPlayer2Body, C::combatHeroSuit, C::combatOwnSuit, C::combatSuitBody, C::combatPerkBranch,
+    {"SURVIVAL AND REPUTATION", C::none, C::none, "", "", "SETTINGS", -1, {C::combatTestUnlocks, C::combatSurvival, C::combatReputation, C::combatHeroMenu, C::combatRepLog, C::combatMpSoloTest, C::combatMpPlayer2Body, C::combatComingSoon, C::combatHeroSuit, C::combatOwnSuit, C::combatSuitBody, C::combatPerkBranch,
       C::combatUltimates}},
     {"FIRES, SHOVES AND FACTIONS", C::none, C::none, "", "", nullptr, -1, {C::combatFireDouse, C::combatNpcShove, C::combatFaction}},
 };
@@ -4616,6 +4616,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatClawLevel:
             case Control::combatWindowPop:
             case Control::combatMpPlayer2Body:
+            case Control::combatComingSoon:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:
@@ -5117,10 +5118,13 @@ void holoRoster(const Painter& p, const View& view) {
     };
     // 0.0.73 test 3 PORTRAITS: which heroes' portraits are drawn (their initials then are not).
     const float opacity = std::isfinite(view.opacity) ? std::clamp(view.opacity, 0.f, 1.f) : 0.f;
-    bool drawn[hero_modes::heroes]{};
+    // 0.0.73 COMING SOON: any Roster picture (the SOON tiles' are 48 on); one the model lacks is layer -1.
+    bool drawn[roster_page::pictureCount]{};
+    const auto picturePiece = [](const hr::Piece& x) {
+        return x.portrait >= 0 && x.portrait < static_cast<int>(roster_page::pictureCount);
+    };
     const auto portrait = [&](const hr::Piece& x) {
-        if (!view.rosterImages || !view.rosterPictures || opacity <= .55f || x.portrait < 0 ||
-            x.portrait >= static_cast<int>(hero_modes::heroes) || x.portrait >= static_cast<int>(roster_page::pictureCount))
+        if (!view.rosterImages || !view.rosterPictures || opacity <= .55f || !picturePiece(x))
             return false;
         const roster_page::Picture& q = view.rosterPictures[x.portrait];
         const bool box = std::isfinite(q.u0) && std::isfinite(q.v0) && std::isfinite(q.u1) && std::isfinite(q.v1) &&
@@ -5154,7 +5158,7 @@ void holoRoster(const Painter& p, const View& view) {
     for (const hr::Piece& x : ps) {
         const Vec3 c = colour(x);
         const float a = std::isfinite(x.alpha) ? std::clamp(x.alpha, 0.f, 1.f) : 1.f;
-        if (x.kind == hr::Piece::disc && x.portrait >= 0 && x.portrait < static_cast<int>(hero_modes::heroes)) {
+        if (x.kind == hr::Piece::disc && !x.fallback && picturePiece(x)) {
             bool ok = false;
             try {
                 ok = portrait(x);
@@ -5166,7 +5170,7 @@ void holoRoster(const Painter& p, const View& view) {
                 continue;
             }
         }
-        if (x.fallback && x.portrait >= 0 && x.portrait < static_cast<int>(hero_modes::heroes) && drawn[x.portrait])
+        if (x.fallback && picturePiece(x) && drawn[x.portrait])
             continue;
         switch (x.kind) {
         case hr::Piece::fill: p.rect(x.u0, x.v0, x.u1, x.v1, c, a * (x.role == hr::Role::backing ? p.c.backingAlpha : 1.f)); break;

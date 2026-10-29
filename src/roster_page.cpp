@@ -408,9 +408,12 @@ View view(const Page& p, uint32_t playing, Pose worldFromTracking) {
 bool pictures(const mesh_model::Mesh* m, Picture (&out)[pictureCount]) {
     for (auto& p : out)
         p = Picture{};
-    if (!m || m->triangles() != 2 * pictureCount || m->image.size() < 2 * pictureCount || m->uvs.size() < 12 * pictureCount)
+    if (!m || m->triangles() < 2 * basePictures || m->triangles() > 2 * pictureCount || m->triangles() % 2)
         return false;
-    for (uint32_t k = 0; k < pictureCount; ++k) {
+    const uint32_t have = m->triangles() / 2;
+    if (m->image.size() < 2 * have || m->uvs.size() < 12 * have)
+        return false;
+    for (uint32_t k = 0; k < have; ++k) {
         const int16_t im = m->image[2 * k];
         if (im < 0 || static_cast<size_t>(im) >= m->images.size() || m->images[static_cast<size_t>(im)].layer < 0)
             continue;

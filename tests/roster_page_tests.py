@@ -37,7 +37,33 @@ class RosterPage(unittest.TestCase):
     def test_picture_lists_agree(self):
         glb = load('make_roster_glb', 'tools', 'roster', 'make_roster_glb.py')
         self.assertEqual(cpp_folders(), glb.PICTURE_FOLDERS)
-        self.assertEqual(len(glb.PICTURE_FOLDERS), 48)
+        self.assertEqual(len(glb.PICTURE_FOLDERS), 69)
+
+    def test_coming_soon_portraits(self):
+        # 0.0.73 COMING SOON: the 21 SOON tiles' pictures are in the repo, in holo_roster's order, credited,
+        # none from Marvel's Avengers (2020); a missing one is a silhouette, never an error.
+        glb = load('make_roster_glb', 'tools', 'roster', 'make_roster_glb.py')
+        sp = load('soon_portraits', 'tools', 'roster', 'soon_portraits.py')
+        self.assertEqual(glb.SOON_KEYS, sp.KEYS)
+        self.assertEqual(glb.PICTURE_FOLDERS[48:], ['soon_' + k for k in glb.SOON_KEYS])
+        h = read('include', 'spidy', 'holo_roster.hpp')
+        body = h[h.index('soonHeroes[soonCount] = {'):]
+        names = re.findall(r'\{"([^"]+)", [01]\}', body[:body.index('};')])
+        self.assertEqual(len(names), 21)
+        key = {'THE FLASH': 'flash'}
+        self.assertEqual([key.get(n, re.sub(r'[^a-z]', '', n.lower())) for n in names], glb.SOON_KEYS)
+        meta = json.load(open(os.path.join(glb.SOON_DIR, 'soon.json')))
+        for k in glb.SOON_KEYS:
+            self.assertTrue(os.path.exists(os.path.join(glb.SOON_DIR, k + '.jpg')), k)
+            self.assertTrue(meta[k]['user'] and meta[k]['url'].startswith('https://sketchfab.com/'), k)
+            self.assertNotIn('avengers', (meta[k]['name'] + meta[k]['url']).lower(), k)
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            return
+        ims, credits = glb.soon_pictures(os.path.join(ROOT, 'no-such-folder'))
+        self.assertEqual(len(ims), 21)
+        self.assertTrue(all('silhouette' in c[1] for c in credits))
 
     def test_every_catalog_suit_has_a_picture(self):
         s = read('include', 'spidy', 'hero072.hpp')
@@ -81,11 +107,11 @@ class RosterPage(unittest.TestCase):
         self.assertEqual(b[:4], b'glTF')
         n = struct.unpack_from('<I', b, 12)[0]
         j = json.loads(b[20:20 + n])
-        self.assertEqual(len(j['images']), 6)
+        self.assertEqual(len(j['images']), 8)
         tris = sum(j['accessors'][pr['indices']]['count'] // 3 if 'indices' in pr else
                    j['accessors'][pr['attributes']['POSITION']]['count'] // 3
                    for m in j['meshes'] for pr in m['primitives'])
-        self.assertEqual(tris, 96)
+        self.assertEqual(tris, 138)
 
 
 if __name__ == '__main__':

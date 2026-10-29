@@ -35,6 +35,7 @@ overlay cannot sample textures. No texture ships for the converted models.
 - This work is based on "Daredevil's baton" (https://sketchfab.com/3d-models/daredevils-baton-e6addd57e2004ecaa44d3114fa90d78a) by Yanez Designs (Anthony Yanez) (https://sketchfab.com/paulyanez) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Rope removed, split into two batons, decimated and recoloured for VR.
 - This work is based on "Captain America Shield" (https://sketchfab.com/3d-models/captain-america-shield-cbcf4fa7d4464b65a5bf051340f626ab) by Digital Goblin (https://sketchfab.com/DigitalGoblin) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Disc remeshed, straps decimated and recoloured for VR.
 - This work is based on "Captain America" (https://sketchfab.com/3d-models/captain-america-d4898ea3aac3474fa0661de3ade9b7c6) by iqbalmulyawan (https://sketchfab.com/Iqbal.Mulyawan.Putera) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-oriented, rescaled and welded; rigged on the player's PC.
+- The Batcave hideout (Models/Hideout/Batcave) is the Batcave stage from Injustice: Gods Among Us (mobile) by NetherRealm Studios / Warner Bros. Games, ripped by Ecelon and shared on The Models Resource (https://models.spriters-resource.com/mobile/injusticegodsamongus/asset/302872/). Rescaled and re-exported for VR.
 
 ## Version 0.0.72: the shipped models are the real ones
 
@@ -96,7 +97,7 @@ model under 30 % of its source's triangles or with a texture or UV missing. Same
 
 | File | Source | Author | Licence | Changes |
 |---|---|---|---|---|
-| `Models/Hideout/Batcave/` | Injustice: Gods Among Us (iOS) Batcave stage, game rip ([The Models Resource](https://models.spriters-resource.com/mobile/injusticegodsamongus/asset/302872/)) | NetherRealm Studios / Warner Bros. Games; ripped by Ecelon (2017) | **None.** A game rip, WB/NetherRealm copyright, tolerated in free fan mods but with no licence. Flagged: replace it with a CC-BY Batcave if it ever has to be cleared. | Scaled to metres (x 0.6536), floor at 0, re-exported from Blender (KHR_lights_punctual stripped, blended materials drawn as cut-out), walk grid and points generated (`tools/hideout074/make_hideout.py`). |
+| `Models/Hideout/Batcave/` | Injustice: Gods Among Us (mobile) Batcave stage, from [The Models Resource](https://models.spriters-resource.com/mobile/injusticegodsamongus/asset/302872/) | Injustice: Gods Among Us by NetherRealm Studios / Warner Bros. Games; ripped by Ecelon (2017) | As credited by The Models Resource (credit the ripper) | Scaled to metres (x 0.6536), floor at 0, re-exported from Blender (KHR_lights_punctual stripped, blended materials drawn as cut-out), walk grid and points generated (`tools/hideout074/make_hideout.py`). |
 | `Models/Hideout/Safehouse/` | Built for HERO VR (a Blender PLACEHOLDER: plain walls, floor, a table, a case board) | Agent Mulder | Made for HERO VR | `tools/hideout074/make_safehouse_blender.py`. To be replaced by a real room. |
 
 The van offers both rooms from its dash HOME page: there is no Batmobile yet, so the Batcave's

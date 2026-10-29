@@ -480,5 +480,78 @@ class Hero073AaFix(unittest.TestCase):
         self.assertNotIn('d.mode = engineTaaJitterMode.load();', s)
 
 
+
+
+class Hero073AaGameAaTaa(unittest.TestCase):
+    """0.0.73 AA GAME AA TAA: with -EngineTaa and GAME TAA SPIDYVR the session sets the game's AA to TAA with no
+    upscaler (SpidyVR's path), put back after; --keep-game-aa / KEEP MY GAME AA keeps the player's."""
+
+    def tools(self):
+        import sys
+        import types
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        if 'winreg' not in sys.modules:  # vr_display needs winreg only to touch the real registry
+            sys.modules['winreg'] = types.ModuleType('winreg')
+        import live_settings as L
+        import vr_display as D
+        return L, D
+
+    def test_decision(self):
+        L, _ = self.tools()
+        self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))   # the default
+        self.assertFalse(L.game_aa_taa(True, 'spidyvr', True))   # KEEP MY GAME AA
+        self.assertFalse(L.game_aa_taa(True, 'off', False))      # GAME TAA OFF: IMAGE's look, the game's own AA
+        self.assertFalse(L.game_aa_taa(False, 'spidyvr', False)) # no ENGINE TAA prepared
+
+    def test_registry_values_confirmed_and_restorable(self):
+        _, D = self.tools()
+        self.assertEqual(D.SESSION_OFF['game_aa'], dict(AA=2, UpscaleMethod=0))
+        self.assertEqual(D.SESSION_OFF['lens_flares'], dict(LensFlares=0))
+        names = dict((k, w) for k, w, _ in D.session_list(('game_aa',)))[D.KEY]
+        self.assertEqual((names['AA'], names['UpscaleMethod'], names['Sharpness']), (2, 0, 1))
+        self.assertNotIn('AA', dict((k, w) for k, w, _ in D.session_list(()))[D.KEY])  # only when asked
+        import json
+        import pathlib
+        import tempfile
+
+        class Reg:
+            def __init__(self, g): self.g = dict(g)
+            def read(self, names=D.NAMES, key=D.KEY): return {n: v for n, v in self.g.items() if n in names} if key == D.KEY else {}
+            def write(self, values, key=D.KEY):
+                if key != D.KEY: return
+                for n, v in values.items():
+                    if v is None: self.g.pop(n, None)
+                    else: self.g[n] = v
+        user = dict(Fullscreen=1, ExclusiveFullscreen=0, WindowMaximized=0, WindowLeft=0, WindowTop=0,
+                    WindowWidth=2560, WindowHeight=1440, UserWindowWidth=2560, UserWindowHeight=1440,
+                    AA=2, UpscaleMethod=2, UpscaleQuality=3, Sharpness=1)
+        with tempfile.TemporaryDirectory() as folder:
+            backup = pathlib.Path(folder)/'backup.json'
+            r = Reg(user)
+            D.prepare_launch(registry=r, backup=backup, screen=(2560, 1440), off=('game_aa',))
+            self.assertEqual((r.g['AA'], r.g['UpscaleMethod'], r.g['UpscaleQuality']), (2, 0, 3))
+            self.assertEqual(json.loads(backup.read_text())['written'][D.KEY]['UpscaleMethod'], 0)
+            self.assertTrue(D.restore(r, backup))
+            self.assertEqual((r.g['AA'], r.g['UpscaleMethod']), (2, 2))  # the player's DLSS is back
+
+    def test_wired_launcher_script_and_session(self):
+        r = src('tools/run_game_vr.py')
+        self.assertIn("live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False))", r)
+        self.assertIn("session_off = tuple(session_off) + ('game_aa',)", r)
+        self.assertLess(r.index("session_off = tuple(session_off) + ('game_aa',)"), r.index('a.session_off = session_off'))
+        self.assertIn("p.add_argument('--keep-game-aa', action='store_true',", r)
+        ps = src('tools/launch-game-vr.ps1')
+        self.assertIn('[switch]$KeepGameAa,', ps)
+        self.assertIn("$captureArgs+=@('--keep-game-aa')", ps)
+        cs = src('tools/launcher/src/LaunchOptions.cs')
+        import re
+        m = re.search(r'Opt\.Sw\("PICTURE", "KeepGameAa", "KEEP MY GAME AA", "([^"]+)", false\)', cs)
+        self.assertTrue(m)
+        sub = m.group(1)
+        self.assertTrue(len(sub) <= 100 and sub.endswith('.') and 'restart' in sub, sub)
+        m = re.search(r'Opt\.Sw\("PICTURE", "EngineTaa", "ENGINE TAA", "([^"]+)", true\)', cs)
+        self.assertTrue(m and 'restart' in m.group(1), cs)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -2633,3 +2633,11 @@ Owner after test 5: "way too sharp and jagged when i move, too blurry when im st
 - `engineTaaPublish` takes its jitter mode from `image_style::jitterMode`, so the console line names the jitter really used.
 - CONFIRMED: the jitter units equal the game's (Lens 0x2c75560 stores +0x428 = 2·argX, +0x42c = -2·argY). No new addresses.
 - CANDIDATE: the DLAA path (game AA 5-7) per eye, mip 0 versus `game` at 100% eyes; Windows build not compiled here.
+
+## 58. Version 0.0.73 AA2: GAME AA TAA
+
+With -EngineTaa and live.txt `image_style = spidyvr`, the session sets the game's AA to TAA with Upscale Method None, the same as SpidyVR. The player's own setting is put back after the game closes.
+- **Switch:** the launcher's KEEP MY GAME AA, or `-KeepGameAa` / `--keep-game-aa`. Needs a restart.
+- **Registry:** vr_display `SESSION_OFF['game_aa']` = AA 2, UpscaleMethod 0. The encoding is CONFIRMED in 31 reports.
+- **Tests:** hero073_tests `Hero073AaGameAaTaa` and vr_display_tests `test_game_aa_taa_for_the_session_and_back_after`.
+- **Details:** docs/AA-0.0.73.md.

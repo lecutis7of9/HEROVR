@@ -50,6 +50,7 @@ param(
     [switch]$SmallerDesktopView,  # Update 33: a 1280 x 720 window (next launch), not 1920 x 1080
     [switch]$EngineTaa,  # Update 34: the eyes get the game's TAA targets, for the wrist's ENGINE TAA
     [switch]$KeepGameSettings,
+    [switch]$KeepGameAa,  # 0.0.73 AA: keep the game's own AA/upscaler (DLAA, DLSS) while VR runs
     [switch]$AttachOnly,
     [switch]$CloseGame,  # 0.0.5 hotfix 3: the launcher asked; a running Spider-Man 2 is closed first, then VR starts
     [string]$XrRuntime
@@ -376,7 +377,12 @@ elseif(-not $AttachOnly) {
 }
 if($EngineTaa) {
     $captureArgs+=@('--engine-taa')
-    Write-Host "ENGINE TAA: prepared (-EngineTaa); set the game's Anti-Aliasing to TAA, then turn ENGINE TAA on from the wrist's GRAPHICS page."
+    if($KeepGameAa) {
+        $captureArgs+=@('--keep-game-aa')
+        Write-Host "ENGINE TAA: prepared (-EngineTaa); your own game Anti-Aliasing is kept (-KeepGameAa): TAA with Upscale Method None suits GAME TAA best."
+    } else {
+        Write-Host "ENGINE TAA: prepared (-EngineTaa); the game's Anti-Aliasing is TAA with no upscaler while VR runs (as SpidyVR), yours is put back after (-KeepGameAa keeps it)."
+    }
 }
 if(-not $AttachOnly) { $captureArgs+=@('--auto-launch') }
 if($XrRuntime) { $captureArgs+=@('--xr-runtime',$XrRuntime) }

@@ -41,7 +41,8 @@ namespace Sm2VrLauncher
             Opt.Pick("PICTURE", "EyeAA", "EYE ANTI-ALIASING", "Smooths each eye image on its way to the headset.", new[] { "off", "fxaa" }, "fxaa"),
             Opt.Pick("PICTURE", "MipBias", "TEXTURE SHARPNESS (MIP BIAS)", "0.5 is calmer (less roof flicker), 0 is sharper, 'game' keeps the game's.", new[] { "game", "0", "0.25", "0.5", "1" }, "0.5"),
             Opt.Pick("PICTURE", "Anisotropy", "TEXTURE FILTERING", "Anisotropic filtering for textures at an angle. 0 keeps the game's.", new[] { "0", "2", "4", "8", "16" }, "16"),
-            Opt.Sw("PICTURE", "EngineTaa", "ENGINE TAA", "Prepares the game's TAA for the wrist's ENGINE TAA (set the game's AA to TAA).", true),
+            Opt.Sw("PICTURE", "EngineTaa", "ENGINE TAA", "Runs the game's own TAA in each eye, as SpidyVR does (restart to change).", true),
+            Opt.Sw("PICTURE", "KeepGameAa", "KEEP MY GAME AA", "Off: VR sets the game's AA to TAA with no DLSS, put back after; on keeps yours (restart).", false),
             Opt.Num("PICTURE", "BuildingReach", "BUILDING DETAIL DISTANCE", "How far buildings keep their full models, % of the game's distance.", 50, 400, 10, 150, "%"),
             Opt.Sw("PICTURE", "KeepGameSettings", "KEEP MY GAME PICTURE SETTINGS", "Keep your depth of field, motion blur, grain and vignette while VR runs.", false),
             // Desktop

@@ -2256,6 +2256,10 @@ def main():
                         'headset the blur is not where you look)')
     p.add_argument('--game-sharpening', action='store_true',
                    help="Keep the game's own Sharpness setting; without it a session sets it to its lowest")
+    p.add_argument('--keep-game-aa', action='store_true',
+                   help="0.0.73 AA: keep the game's own Anti-Aliasing and upscaler (DLAA, DLSS) in VR; without it "
+                        "a session with --engine-taa and GAME TAA SPIDYVR sets TAA with no upscaler, put back "
+                        'after. Read when the game starts')
     p.add_argument('--keep-game-settings', action='store_true',
                    help="Keep the game's own picture settings (depth of field, sharpness): the session then "
                         'changes only what VR needs (frame generation, vertical sync, ray tracing, Reflex, '
@@ -2364,6 +2368,18 @@ def main():
     else:
         print('LENS FLARES: GAME this session (the game\'s own lens flares; LENS FLARES OFF IN VR + restart VR '
               'if they strobe).', flush=True)
+    # 0.0.73 AA GAME AA TAA (vr_display.SESSION_OFF['game_aa']): with -EngineTaa and GAME TAA SPIDYVR (the
+    # defaults) the game's Anti-Aliasing is TAA with no upscaler while VR runs, as SpidyVR's per-eye TAA has it;
+    # the player's own (DLAA, DLSS) comes back when the game closes. --keep-game-aa keeps it during VR too.
+    game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
+    if live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False)):
+        session_off = tuple(session_off) + ('game_aa',)
+        print("GAME AA: TAA, no upscaler, this session (0.0.73 AA: the path SpidyVR's per-eye TAA uses; DLAA/DLSS "
+              "biased the textures the eyes share and ran for the monitor alone); your own is put back when the "
+              'game closes (-KeepGameAa keeps it; restart).', flush=True)
+    elif getattr(a, 'engine_taa', False) and game_taa_look == 'spidyvr':
+        print("GAME AA: your own this session (-KeepGameAa); GAME TAA works best with the game's Anti-Aliasing "
+              'at TAA and Upscale Method None.', flush=True)
     a.session_off = session_off   # session() reads it: it is not a local there (0.0.62 NameError at 'starting the game')
     # SM2 VR (from SM2VR 0.0.27): a Spider-Man 2 that renders no view of its own writes a swapchain back
     # buffer that is not the current one, and the graphics device is lost (DXGI_ERROR_ACCESS_DENIED). The

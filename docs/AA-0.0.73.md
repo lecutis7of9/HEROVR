@@ -83,3 +83,28 @@ The owner after test 5 said: "way too sharp and jagged when i move, too blurry w
 - **SHARPEN MATCH:** combat38 `sharpenMatch`, export 5473, live. CAS × the history share kept (eye_sharpen.hpp `matchedPercent`).
 - **Mip bias 0** under GAME TAA SPIDYVR with -EngineTaa (live_settings `image_mip_bias`). Revert with live.txt `image_style = off` or `-MipBias`. Needs a restart.
 - **SpidyEngineTaaData.mode** now records the jitter in force.
+
+## GAME AA TAA (hero-0.0.73-aa2)
+
+The game's own Anti-Aliasing is set to TAA with Upscale Method None while VR runs. This is SpidyVR's path. The player's own setting is put back when the game closes.
+- **When:** on by default with -EngineTaa and live.txt `image_style = spidyvr`.
+- **Switch off:** the launcher's KEEP MY GAME AA, `-KeepGameAa` or `--keep-game-aa` keeps the player's own. Needs a restart, because the game reads it at launch.
+- **Registry:** vr_display `SESSION_OFF['game_aa']` = AA 2, UpscaleMethod 0. It is backed up and restored like the other session values.
+  - The encoding is CONFIRMED against the game's log in 31 kept reports: 23 read "TAA / None", and 8 with UpscaleMethod 2 read "DLAA / DLSS".
+- **Why (CANDIDATE):** test 5 ran DLAA/DLSS Quality.
+  - DLSS biased 266 samplers negative for its 864 x 480 monitor render. The eyes share those samplers at 100%.
+  - DLSS was evaluated every frame for viewport 0 only. SL WATCH shows the eyes never pass through Streamline.
+- **Flatscreen:** nothing is written unless VR runs with -EngineTaa, so flatscreen play keeps the player's setting.
+
+## Differences from SpidyVR (after this branch)
+
+| | SpidyVR | HERO VR 0.0.73 aa2 default |
+|---|---|---|
+| Per-eye AA | the game's TemporalAa per eye | the same (ENGINE TAA + GAME TAA SPIDYVR) |
+| Game AA setting | TAA | TAA, no upscaler, for the session (GAME AA TAA) |
+| Render size | 67% of the eye, the game's TAA upsamples | 100% (2688 x 2880, the runtime's recommended size); no SM2 upscale address is known |
+| Extra history / FXAA / CAS | none | none while GAME TAA SPIDYVR is in force; EYE AA keeps them if chosen |
+| Mip bias | the game's own | 0 (CANDIDATE vs `game`) |
+| Game sharpness | lowest | lowest (Sharpness 1) |
+| Jitter | game formula | the same formula; units CONFIRMED |
+| Forced TAA flag | +0x40c = 1 | job +0x570 = 1 |

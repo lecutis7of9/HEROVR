@@ -90,6 +90,20 @@ class InGameChanges(unittest.TestCase):
         display.prepare_launch(registry=r2, backup=backup2, screen=(2560, 1440))
         self.assertNotIn('FilmGrainStrength', r2.keys[display.KEY])
 
+    def test_game_aa_taa_for_the_session_and_back_after(self):
+        # 0.0.73 AA GAME AA TAA: test 5's DLAA/DLSS Quality (AA 2, UpscaleMethod 2) is TAA with no upscaler
+        # while VR runs (AA 2, UpscaleMethod 0: "Anti aliasing: TAA / Upscale method: None" in 23 of the 31 kept reports),
+        # and the player's own after; without 'game_aa' (KEEP MY GAME AA) nothing is written.
+        r = Registry(dict(USER, AA=3, UpscaleMethod=2, UpscaleQuality=3))
+        display.prepare_launch(registry=r, backup=self.backup, screen=(2560, 1440), off=('game_aa',))
+        g = r.keys[display.KEY]
+        self.assertEqual((g['AA'], g['UpscaleMethod'], g['UpscaleQuality']), (2, 0, 3))
+        self.assertTrue(display.restore(r, self.backup))
+        self.assertEqual((g['AA'], g['UpscaleMethod']), (3, 2))
+        r2 = Registry(dict(USER, AA=2, UpscaleMethod=2))
+        display.prepare_launch(registry=r2, backup=self.backup.with_name('kept.json'), screen=(2560, 1440))
+        self.assertEqual(r2.keys[display.KEY]['UpscaleMethod'], 2)
+
     def test_hud_option_probe_only_reads(self):
         # 38.5: the game's own Hide HUD options are looked for, by the exe's names, and never written.
         r = Registry(USER)

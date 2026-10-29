@@ -1618,6 +1618,14 @@ def image_style_of(values):
         return 'spidyvr'
 
 
+def game_aa_taa(engine_taa, game_taa='spidyvr', keep=False):
+    """0.0.73 AA GAME AA TAA: True when this VR session sets the game's Anti-Aliasing to TAA with no upscaler
+    (vr_display.SESSION_OFF['game_aa']): ENGINE TAA prepared (-EngineTaa), GAME TAA SPIDYVR (live.txt
+    image_style, the default) and the player not keeping his own (--keep-game-aa). SpidyVR's path: the game's
+    TAA in each eye, no DLSS bias on the textures the eyes share. Takes effect at the game's start (restart)."""
+    return bool(engine_taa) and game_taa == 'spidyvr' and not keep
+
+
 def image_style_in_file(path):
     """image_style_of the live.txt at `path` (spidyvr without one). Never raises."""
     try:

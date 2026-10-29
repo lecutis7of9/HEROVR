@@ -73,6 +73,10 @@ bool setEyeHistory(uint32_t percent);
 // it on once the history pass has failed (eyeHistoryFault, 1-5). eyeHistoryMs: the
 // pass's newest GPU time for both eyes, NaN when not measured in the last second.
 bool setEyeTemporal(bool on);
+// 0.0.73 test 4 IMAGE STYLE SPIDYVR (image_style.hpp): true while the game's own TAA resolves each eye:
+// FXAA, the history blend and CAS stand aside (their settings kept). Live; game_xr sets it.
+void setCleanImage(bool clean);
+bool cleanImageNow();
 // Update 34.2: EYE AA TRAIL (eye_history::movedWeight): the percent of the history kept
 // at swing speed (0-100; default eye_history::defaultTrail). False above 100. Live.
 bool setEyeTrail(uint32_t percent);

@@ -695,6 +695,10 @@ eye_taa::MsMedian historyMedian;
 // Eye anti-aliasing (native_eye_gpu.hpp, setEyeAA). The pass is built on the
 // first pair that wants it, under the submission and recording locks.
 std::atomic<uint32_t> aaMode{}, aaFault{};
+// 0.0.73 test 4 IMAGE STYLE SPIDYVR (image_style.hpp): while the game's own TAA resolves each eye
+// (ENGINE TAA on), the picture goes to the headset as SpidyVR sends it: no FXAA, no history blend, no
+// CAS. The sliders keep their values (GAME TAA OFF and the fallback get them back). game_xr sets it.
+std::atomic<bool> cleanImage{};
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, down; // FXAA; the downsample filter
@@ -1651,6 +1655,8 @@ std::atomic<uint32_t> keptMilli{};
 // bilinear (CLASSIC, test 3). Live.
 std::atomic<bool> sharpHistory{true};
 uint32_t historyNow() {
+    if (cleanImage.load(std::memory_order_relaxed)) // IMAGE STYLE SPIDYVR: the game's TAA keeps the history
+        return 0;
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
 }
 std::mutex viewLock;
@@ -2180,7 +2186,8 @@ void stagePair(EyePairState::Stamp stamp) {
     // Supersampled eyes cannot be copied: they are always filtered down,
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
-    const bool smooth = (down || aaMode.load() == 1) && prepareAa();
+    // 0.0.73 test 4 IMAGE STYLE SPIDYVR: no FXAA over the game's TAA (the downsample filter stays).
+    const bool smooth = (down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa();
     if (down && !smooth) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
@@ -3073,7 +3080,7 @@ float eyePassesGpuMs() {
         else
             total += clock.ms.load();
     };
-    add(staged && !aaFault.load() && (downsampling() || aaMode.load() == 1), aaClock);
+    add(staged && !aaFault.load() && (downsampling() || (aaMode.load() == 1 && !cleanImage.load())), aaClock);
     add(staged && !historyFault.load() && historyNow(), historyClock);
     add(sharpening.load(), sharpenClock);
     return !any ? 0.f : allKnown ? total : std::numeric_limits<float>::quiet_NaN();
@@ -3119,6 +3126,13 @@ bool setEyeHistoryCut(uint32_t percent) {
 }
 uint32_t eyeTrail() {
     return trailPercent.load();
+}
+// 0.0.73 test 4 IMAGE STYLE: the clean picture (no FXAA, history or CAS) on or off.
+void setCleanImage(bool clean) {
+    cleanImage = clean;
+}
+bool cleanImageNow() {
+    return cleanImage.load();
 }
 bool setEyeTemporal(bool on) {
     if (on && historyFault.load())
@@ -3304,7 +3318,8 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     noteSharpenTime(slotIndex);
     // Update 16: the headset's images sharpened (in place of the copy), or
     // copied as before when sharpening is off or cannot run.
-    const uint32_t percent = sharpenPercent.load();
+    // 0.0.73 test 4 IMAGE STYLE SPIDYVR: no CAS over the game's TAA (SpidyVR sends it as resolved).
+    const uint32_t percent = cleanImage.load() ? 0u : sharpenPercent.load();
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).

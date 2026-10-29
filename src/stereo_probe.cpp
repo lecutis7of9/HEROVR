@@ -3,6 +3,7 @@
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_resolution.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/mirror_probe.hpp"
@@ -332,6 +333,9 @@ std::atomic<bool> engineTaaLive{};
 // Update 37: SpidyEngineTaa(3), on by itself the first time it can be (the eyes made with
 // the TAA targets, the game's AA on TAA); cleared by an off or the frame-rate guard.
 std::atomic<bool> engineTaaAuto{};
+// 0.0.73 test 4 IMAGE STYLE (image_style.hpp; SpidyImageStyle, game_xr sets it): SPIDYVR by default.
+// Under SPIDYVR the jitter is never NONE (NONE skips the game's TemporalAa: image_style::jitterMode).
+std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};
 // (SpidyEngineTaa is declared at file scope, in the extern "C" block above: Update 37.1, MSVC C2733.)
 std::atomic<uint32_t> engineTaaWhy{}, engineTaaGameAa{UINT32_MAX}, engineTaaWidened{}, engineTaaMaskSeen{};
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
@@ -2217,7 +2221,9 @@ std::array<float, 2> eyeJitter() {
     if (engine) {
         // Update 34.2: ENGINE TAA's jitter mode (engine_taa::jitterFor): ours, the game
         // camera's, in render pixels, or none.
-        spidy::engine_taa::jitterFor(engineTaaJitterMode.load(), halton(phase, 2) - .5f, halton(phase, 3) - .5f,
+        // 0.0.73 test 4 IMAGE STYLE SPIDYVR: NONE is OURS (as SpidyVR; NONE skips the game's TAA).
+        spidy::engine_taa::jitterFor(spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()),
+                                     halton(phase, 2) - .5f, halton(phase, 3) - .5f,
                                      render[0], render[1], gameJitter[0].load(std::memory_order_relaxed),
                                      gameJitter[1].load(std::memory_order_relaxed), engineTaaJitterScale.load(),
                                      j[0], j[1]);
@@ -4103,7 +4109,23 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
     return 0;
 }
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
-    return engineTaaJitterMode.load();
+    return spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()); // 0.0.73 test 4: in force
+}
+// 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): 0 SPIDYVR, 1 OFF; refused (4605) otherwise.
+// game_xr's controller sends it when the option changes; it does the rest (ENGINE TAA, the clean picture).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyle(void* style) {
+    const auto value = reinterpret_cast<uintptr_t>(style);
+    if (value >= spidy::image_style::styles)
+        return 4605;
+    if (imageStyle.exchange(static_cast<uint32_t>(value)) != value)
+        OutputDebugStringA(value == spidy::image_style::spidyvr ? "GAME TAA: SPIDYVR (jitter never NONE)\n"
+                                                                : "GAME TAA: OFF\n");
+    return 0;
+}
+// 0.0.73 test 4: why ENGINE TAA could not go on now (engine_taa::Reason; none: it could), without
+// trying (SpidyEngineTaa(1) counts and logs every refusal).
+extern "C" uint32_t SpidyEngineTaaBlocked() {
+    return engineTaaBlocked();
 }
 // Update 34.2: the jitter's scale, percent (0-200, 100 as made); refused (4604) above.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitterScale(void* percent) {

@@ -157,6 +157,9 @@ enum Option : uint32_t {
     // 0.0.73 IMAGE: SPIDYVR (sharp: no FXAA, no sharpen, the history read Catmull-Rom, mip bias 0 at the
     // next start) or HERO VR CLASSIC (test 3: FXAA, sharpen 140, bilinear history, mip bias 0.5)
     image,
+    // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): SPIDYVR (the game's own TAA in each
+    // eye, as SpidyVR; the default) or OFF (IMAGE's look: EYE AA history, FXAA and sharpening as IMAGE sets)
+    imageStyle,
     options
 };
 struct OptionInfo {
@@ -486,6 +489,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
     {"image", "IMAGE", "IMAGE", "SPIDYVR is sharp with no smear, CLASSIC is test 3's; textures change on restart.",
      2, {"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr}},
+    {"image_style", "GAME TAA", "GTAA", "SPIDYVR: the game's TAA in each eye as SpidyVR; OFF: IMAGE's look; no restart.",
+     2, {"SPIDYVR", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

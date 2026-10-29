@@ -165,6 +165,27 @@ inline constexpr float clawSteelAhead = .055f, clawSteelBack = .024f;
 // The claws' base and axes (world) for lookClaws' item: x the knuckle row, y the back of the hand, f along the claws.
 bool clawSteelFrame(const Item& it, Vec3& base, Vec3& x, Vec3& y, Vec3& f);
 bool appendClawSteel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
+// 0.0.73 test 5 CLAW BONE (the owner after the CLAW LOOK previews: "none of the wolverine claw things actually looks
+// like it comes out of the hand, looks like they all float around it"). The claws locked to the drawn hand's BONE:
+// each claw (the model's three parts, ascending in x) set rigidly with its root end on its root (suit_wear::clawPlace:
+// inside the fist, between index/middle, middle/ring, ring/pinky, under the back of the hand) - the model's x across
+// the knuckles (way x back), +y the back of the hand, -z the way - so the blade leaves the skin at the knuckles,
+// fanned as the artist made it. Retracting (spin, 0-1) slides each claw back along its own line into the hand,
+// what passes its root kept there (inside). False: not drawn (the caller then draws appendClawSteel by the grip).
+struct ClawBone {
+    bool ok{};
+    Vec3 root[3]{}; // ascending across (way x back)
+    Vec3 way{}, back{};
+};
+struct ClawParts {
+    bool ok{};
+    std::vector<uint8_t> part; // by triangle: its claw (0-2, ascending in x)
+    Vec3 base[3]{}, axis[3]{};
+    float reach[3]{};
+};
+bool clawParts(const mesh_model::Mesh& model, ClawParts& out);
+bool clawBonePoint(const ClawParts& parts, const ClawBone& at, int k, Vec3 modelPoint, float ext, Vec3& world);
+bool appendClawBone(std::vector<Vertex>& out, float spin, const ClawBone& at, const mesh_model::Mesh& model, Vec3 viewer);
 // Version 0.0.72 PUNISHER VAN: a model up to 8 m placed by its axes (world = at + right x + up y - forward z).
 // Test build 10: `scale` the model's size (1: as made).
 bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,

@@ -32239,8 +32239,13 @@ int main() {
         const auto t = db::aimTurn(s, grip.position, aim, 1);
         check(t.ok && dot(normalized(t.tip - t.butt), aim) > .999f, "weight 1: butt to tip along the aim");
         check(std::abs(length(t.tip - t.butt) - length(s.tip - s.butt)) < 1e-4f, "the same baton length");
-        check(std::abs(length(grip.position - t.butt) - db::buttBehind) < 1e-4f, "still held at the same place on the handle");
-        check(dot(normalized(t.tip - grip.position), aim) > .999f, "the tip (the ray's start) ahead of the fist along the aim");
+        const Vec3 pivot = grip.position + normalized(s.tip - s.butt) * db::aimPivot;
+        check(std::abs(length(pivot - t.butt) - db::aimHold) < 1e-4f && dot(normalized(pivot - t.butt), aim) > .999f,
+              "held at its end at the fist's top (AIM HANDLE: the handle out of the front of the fist, not across it)");
+        check(length(db::aimTurn(s, grip.position, aim, 1, 0, db::buttBehind).butt - (grip.position - aim * db::buttBehind)) < 1e-4f,
+              "no slide: test 5's turn about the grip point");
+        check(dot(normalized(t.tip - grip.position), aim) > .99f && dot(normalized(t.tip - pivot), aim) > .999f,
+              "the tip (the ray's start) ahead of the fist along the aim");
         const auto h = db::aimTurn(s, grip.position, aim, .5f);
         const float d0 = dot(normalized(s.tip - s.butt), aim), dh = dot(normalized(h.tip - h.butt), aim);
         check(h.ok && dh > d0 && dh < .999f, "half way: between");
@@ -32336,6 +32341,103 @@ int main() {
               "Wolverine's suits have their own hand profiles");
         check(!sw::handProfile("Suit_wolverine_1").palmRaise && !sw::handProfile("Suit_wolverine_1").triggerOpens,
               "no Iron Man palm-out or open hand on Wolverine");
+    });
+    test("0.0.73 test 5 CLAW BONE: the claws rooted inside the suit's fist, locked to its hand bone, retracting along their line", [] {
+        namespace mm = spidy::mesh_model;
+        namespace sw = spidy::suit_wear;
+        namespace h7 = spidy::hero007;
+        auto near = [](Vec3 a, Vec3 b, float e = 1e-4f) { return length(a - b) < e; };
+        // the claws model: three separate blades, roots on z 0, points at -z, ascending in x
+        mm::Mesh claw;
+        for (int k = 0; k < 3; ++k) {
+            const float x = (k - 1) * .02f;
+            claw.corners.push_back({x - .003f, 0, 0});
+            claw.corners.push_back({x + .003f, 0, 0});
+            claw.corners.push_back({x + .004f * (k - 1), .002f, -.3f}); // fanned
+            claw.colors.push_back({.45f, .2f, .1f});
+        }
+        claw.low = {-.027f, 0, -.3f};
+        claw.high = {.027f, .002f, 0};
+        h7::ClawParts parts;
+        check(h7::clawParts(claw, parts) && parts.part.size() == 3 && parts.part[0] == 0 && parts.part[1] == 1 && parts.part[2] == 2,
+              "three claws found, ascending across the knuckles");
+        check(near(parts.base[1], Vec3{0, 0, 0}) && parts.reach[1] > .29f && parts.reach[1] < .31f, "each claw's root end and reach");
+        // where the suit put the roots (inside the fist) and the way out
+        h7::ClawBone cb;
+        cb.ok = true;
+        cb.root[0] = {-.02f, 1.2f, -.4f}, cb.root[1] = {0, 1.21f, -.4f}, cb.root[2] = {.02f, 1.2f, -.4f};
+        cb.way = {0, 0, -1}, cb.back = {0, 1, 0};
+        Vec3 w{};
+        for (int k = 0; k < 3; ++k) {
+            check(h7::clawBonePoint(parts, cb, k, parts.base[k], 1, w) && near(w, cb.root[k]), "out: each root end on its root");
+        }
+        Vec3 tipOut{}, tipHalf{}, baseHalf{};
+        check(h7::clawBonePoint(parts, cb, 1, claw.corners[5], 1, tipOut) && near(tipOut, Vec3{0, 1.212f, -.7f}, 1e-3f),
+              "out: the point .3 m along the way, fanned as made");
+        check(h7::clawBonePoint(parts, cb, 1, claw.corners[5], .5f, tipHalf) && h7::clawBonePoint(parts, cb, 1, parts.base[1], .5f, baseHalf),
+              "half out");
+        const Vec3 line = normalized(tipOut - cb.root[1]);
+        check(length(tipOut - tipHalf) > .14f && length(tipOut - tipHalf) < .16f && length(cross(normalized(tipOut - tipHalf), line)) < 1e-3f,
+              "retracting slides the claw back along its own line");
+        check(near(baseHalf, cb.root[1]), "what passes the root is kept at the root (never out of the back of the hand)");
+        std::vector<Vertex> out;
+        const Vec3 viewer{0, 1.6f, 0};
+        check(h7::appendClawBone(out, 1, cb, claw, viewer) && out.size() == 9, "out: drawn");
+        out.clear();
+        check(h7::appendClawBone(out, .01f, cb, claw, viewer) && out.empty(), "in: nothing shows");
+        h7::ClawBone bad = cb;
+        bad.ok = false;
+        check(!h7::appendClawBone(out, 1, bad, claw, viewer), "no roots: false (the caller draws the grip's claws instead)");
+        // clawPlace: the rest roots carried by the hand bone (posed = a1 + M (p - a0))
+        sw::Rig rig;
+        rig.clawSuit = true;
+        rig.clawOk[1] = true;
+        rig.clawRoot[1][0] = {-.8f, 1.30f, .01f}, rig.clawRoot[1][1] = {-.8f, 1.31f, 0}, rig.clawRoot[1][2] = {-.8f, 1.30f, -.01f};
+        rig.clawWay[1] = {-1, 0, 0}, rig.clawBack[1] = {0, 1, 0};
+        sw::BoneMove mv[sw::bones];
+        for (auto& b : mv)
+            b.m[0] = b.m[4] = b.m[8] = 1;
+        // the right hand turned 90 degrees about y (x -> -z) and moved
+        sw::BoneMove& h = mv[sw::boneHandR];
+        h.m[0] = 0, h.m[2] = 1, h.m[6] = -1, h.m[8] = 0;
+        h.a0 = {-.7f, 1.35f, 0}, h.a1 = {.1f, 1.1f, -.3f};
+        Vec3 root[3], way{}, back{};
+        check(sw::clawPlace(rig, mv, 1, root, way, back), "placed on the right hand");
+        check(near(root[1], h.a1 + Vec3{0, -.04f, .1f}) && near(way, Vec3{0, 0, 1}) && near(back, Vec3{0, 1, 0}),
+              "the roots and the way move with the hand bone");
+        h.a1 = h.a1 + Vec3{0, .2f, 0};
+        Vec3 moved[3];
+        check(sw::clawPlace(rig, mv, 1, moved, way, back) && near(moved[0], root[0] + Vec3{0, .2f, 0}), "locked to the bone: it moves, they move");
+        check(!sw::clawPlace(rig, mv, 0, moved, way, back) && !sw::clawPlace(rig, mv, 2, moved, way, back),
+              "no roots on that hand / no such hand: not placed (the grip's claws)");
+        // only a Wolverine suit looks for claw roots (the load), and a suit with no fist found has none (never a crash)
+        mm::Mesh m;
+        const Vec3 J[sw::ends] = {{0, 1.6f, 0},      {0, 1.5f, 0},     {0, 1.3f, 0},      {0, 1.0f, 0},     {.18f, 1.45f, 0},
+                                  {.45f, 1.4f, 0},   {.7f, 1.35f, 0},  {-.18f, 1.45f, 0}, {-.45f, 1.4f, 0}, {-.7f, 1.35f, 0},
+                                  {.1f, .95f, 0},    {.1f, .5f, 0},    {.1f, .08f, 0},    {-.1f, .95f, 0},  {-.1f, .5f, 0},
+                                  {-.1f, .08f, 0},   {0, 1.8f, 0},     {.88f, 1.32f, 0},  {-.88f, 1.32f, 0}};
+        for (uint32_t e = 0; e < sw::ends; ++e)
+            m.suitEnds[e * 3] = J[e].x, m.suitEnds[e * 3 + 1] = J[e].y, m.suitEnds[e * 3 + 2] = J[e].z;
+        m.suitHandBack[1] = 1, m.suitHandBack[4] = 1;
+        m.hasSuit = true;
+        for (uint32_t b = 0; b < sw::bones; ++b) {
+            const Vec3 c = (J[sw::boneEnds[b][0]] + J[sw::boneEnds[b][1]]) * .5f;
+            const Vec3 p[3] = {c + Vec3{0, 0, .05f}, c + Vec3{.02f, 0, .05f}, c + Vec3{0, .02f, .05f}};
+            for (int k = 0; k < 3; ++k) {
+                m.corners.push_back(p[k]);
+                m.normals.push_back({0, 0, 1});
+                m.uvs.push_back(0), m.uvs.push_back(0);
+                for (int q = 0; q < 4; ++q)
+                    m.skinJoints.push_back(q ? 0 : static_cast<uint8_t>(b)), m.skinWeights.push_back(q ? 0 : 255);
+            }
+            m.colors.push_back({1, 1, 1});
+            m.tints.push_back({1, 1, 1});
+            m.image.push_back(-1);
+        }
+        sw::Rig plain, wolverine;
+        check(sw::makeRig(m, plain, "Suit_classic") && !plain.clawSuit && !plain.clawOk[0] && !plain.clawOk[1], "not Wolverine: no claw roots");
+        check(sw::makeRig(m, wolverine, "Suit_wolverine_1") && wolverine.clawSuit && !wolverine.clawOk[0] && !wolverine.clawOk[1],
+              "Wolverine with no fist to root in: none (the grip's claws), the suit still worn");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

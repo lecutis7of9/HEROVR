@@ -173,7 +173,8 @@ enum Option : uint32_t {
     // the grapple aims, flies and reels (ON) or kept in the fighting grip (OFF)
     ddGrappleAim,
     // 0.0.73 CLAW LOOK (hero007 appendClawSteel, suit_wear wolverine_* profiles): WOLVERINE's claws out between the knuckles along the fist, fanned,
-    // bright steel (ON) or test 4's (OFF)
+    // bright steel (ON) or test 4's (OFF). 0.0.73 test 5 CLAW BONE: ON with a Wolverine suit, out of the suit's own
+    // drawn fist, rooted inside it and locked to its hand bone (hero007::appendClawBone, suit_wear::clawPlace)
     wolverineClaws,
     options
 };
@@ -518,7 +519,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"dd_grapple_aim", "GRAPPLE AIM", "DDAIM", "ON: the baton's silver tip turns to the aim while grappling; no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"wolverine_claws", "CLAW LOOK", "WVCLW", "ON: steel claws out between the knuckles, fanned; no restart.",
+    {"wolverine_claws", "CLAW LOOK", "WVCLW", "ON: claws out of the fist between the knuckles, on the hand; no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as

@@ -87,9 +87,15 @@ inline float aimEase(float now, bool want, float dt) {
     const float n = std::isfinite(now) ? std::clamp(now, 0.f, 1.f) : 0.f;
     return want ? std::min(1.f, n + d / aimIn) : std::max(0.f, n - d / aimOut);
 }
-// The seated shaft turned toward the aim by w (0: unchanged; 1: butt -> tip along aim), about the grip point
-// (the fist stays round the handle: the butt buttBehind behind it). Smoothstepped; a nonsense input: s unchanged.
-inline baton_grip::Shaft aimTurn(const baton_grip::Shaft& s, Vec3 grip, Vec3 aim, float w) {
+// The seated shaft turned toward the aim by w (0: unchanged; 1: butt -> tip along aim). Smoothstepped; a nonsense
+// input: s unchanged. 0.0.73 test 5 AIM HANDLE (the handle clipped out of the fist turned about the grip point): the
+// turn's pivot slides up the seated handle to aimPivot above the grip (the fist's top, by the thumb and index) and the
+// baton slides through it until only aimHold of its butt is behind that pivot - held at its end like a pointer, the
+// handle out of the front of the fist rather than across it. CANDIDATE: aimPivot, aimHold (dd_baton_preview's poke,
+// DAREDEVIL 1 and 3, aims level, up and across: at most 22 fist points through the handle, was up to 269).
+inline constexpr float aimPivot = .05f, aimHold = .012f;
+inline baton_grip::Shaft aimTurn(const baton_grip::Shaft& s, Vec3 grip, Vec3 aim, float w, float pivot = aimPivot,
+                                 float hold = aimHold) {
     if (!s.ok || !fine(grip) || !fine(aim) || length(aim) < .5f || !std::isfinite(w) || !(w > 0.f))
         return s;
     const float k = std::clamp(w, 0.f, 1.f), e = k * k * (3.f - 2.f * k);
@@ -105,9 +111,13 @@ inline baton_grip::Shaft aimTurn(const baton_grip::Shaft& s, Vec3 grip, Vec3 aim
     if (!fine(way) || !(length(way) > .5f))
         return s;
     const float behind = std::clamp(length(grip - s.butt), 0.f, len);
+    const float up = std::isfinite(pivot) ? std::clamp(pivot, 0.f, len - behind) : 0.f;
+    const float keep = std::isfinite(hold) ? std::clamp(hold, 0.f, behind) : behind;
+    const Vec3 at = grip + h * (up * e);
+    const float back = behind * (1.f - e) + keep * e;
     baton_grip::Shaft t = s;
-    t.butt = grip - way * behind;
-    t.tip = grip + way * (len - behind);
+    t.butt = at - way * back;
+    t.tip = t.butt + way * len;
     t.ok = fine(t.butt) && fine(t.tip);
     return t.ok ? t : s;
 }

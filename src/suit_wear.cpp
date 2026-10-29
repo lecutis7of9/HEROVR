@@ -5,6 +5,8 @@
 #include <bitset>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 #include <vector>
@@ -357,6 +359,10 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name) {
                 sum[mesh.skinJoints[c * 4 + q] & 15] += mesh.skinWeights[c * 4 + q];
         out.triangleBone[t] = static_cast<uint8_t>(std::max_element(sum, sum + bones) - sum);
     }
+    // 0.0.73 test 5 CLAW BONE (needs triangleBone): only the Wolverine suits wear claws (~25-100 ms a suit at load)
+    out.clawSuit = name && std::strstr(name, "wolverine");
+    if (out.clawSuit)
+        findClawRoots(out);
     out.ok = true;
     return true;
 }
@@ -373,6 +379,34 @@ Vec3 handBackOf(Vec3 gripX, int side) {
     return side ? x : x * -1.f;
 }
 namespace {
+// The point of triangle abc nearest p (Ericson, Real-Time Collision Detection 5.1.5).
+Vec3 closestOnTriangle(Vec3 p, Vec3 a, Vec3 b, Vec3 c) {
+    const Vec3 ab = b - a, ac = c - a, ap = p - a;
+    const float d1 = dot(ab, ap), d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0)
+        return a;
+    const Vec3 bp = p - b;
+    const float d3 = dot(ab, bp), d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3)
+        return b;
+    const float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0)
+        return a + ab * (d1 / (d1 - d3));
+    const Vec3 cp = p - c;
+    const float d5 = dot(ab, cp), d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6)
+        return c;
+    const float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0)
+        return a + ac * (d2 / (d2 - d6));
+    const float va = d3 * d6 - d5 * d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0)
+        return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+    const float den = va + vb + vc;
+    if (!(std::abs(den) > 1e-20f))
+        return a;
+    return a + ab * (vb / den) + ac * (vc / den);
+}
 // The rest hand's knuckles (from the wrist) and its fingers' reach past them (rest metres).
 void handReach(const Rig& rig, int side, float& knuckle, float& fingers, const HandProfile& p) {
     const Skeleton& r = rig.skeleton;
@@ -454,6 +488,193 @@ void applyHandProfile(Rig& rig, const HandProfile& p) {
         if (ok(b) && length(b) > .5f)
             rig.profileBack[side] = b;
     }
+    if (rig.clawSuit && !rig.triangleBone.empty())
+        findClawRoots(rig);
+}
+// 0.0.73 test 5 CLAW BONE: the rest hand's claw roots (see suit_wear.hpp). In the profile's hand frame (x across,
+// y wrist -> knuckles, z the back): the hand bone's vertices (weight >= 200) in the slab 0.5 - 3 cm behind the
+// knuckle line; its width (5th - 95th percentile of x over the back half) split in four, the gaps between the
+// knuckles at 1/4, 1/2 and 3/4; each root clawBehind behind the knuckle line and clawSink under the back of the
+// hand there (the highest vertex within 8 mm across), kept 6 mm over the palm side (the lowest).
+void findClawRoots(Rig& rig) {
+    for (int side = 0; side < 2; ++side) {
+        rig.clawOk[side] = false;
+        Skeleton k = rig.skeleton;
+        k.handBack[side] = rig.profileBack[side];
+        const uint32_t b = side ? boneHandR : boneHandL;
+        Vec3 x0, y0, z0;
+        if (!frame(k, b, facing(k), x0, y0, z0))
+            continue;
+        float kn = 0, fi = 0;
+        handReach(rig, side, kn, fi, rig.hands);
+        const float h = std::max(.3f, rig.height) / 1.8f;
+        const Vec3 a0 = k.at[boneEnds[b][0]];
+        struct P {
+            float x, y, z;
+        };
+        std::vector<P> all, slab;
+        for (size_t v = 0; v < rig.rest.size(); ++v) {
+            uint32_t w = 0;
+            for (int c = 0; c < 4; ++c)
+                if ((rig.joint[v * 4 + c] & 15) == b)
+                    w += rig.weight[v * 4 + c];
+            if (w < 200)
+                continue;
+            const Vec3 d = rig.rest[v] - a0;
+            const P q{dot(d, x0), dot(d, y0), dot(d, z0)};
+            if (std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z))
+                all.push_back(q);
+        }
+        // the knuckle line where the hand's own back ends: the last step (5 mm, up to 1 cm past handReach's) still
+        // 3/4 the hand's widest (the 5th - 95th percentile across); some suits' rest hands are fingers past there
+        const auto widthAt = [&](float y, float half) {
+            std::vector<float> xs;
+            for (const P& q : all)
+                if (std::abs(q.y - y) <= half)
+                    xs.push_back(q.x);
+            if (xs.size() < 4)
+                return 0.f;
+            std::sort(xs.begin(), xs.end());
+            return xs[std::min(xs.size() - 1, xs.size() * 95 / 100)] - xs[xs.size() * 5 / 100];
+        };
+        float widest = 0;
+        for (float y = .01f * h; y <= kn + .01f * h; y += .005f * h)
+            widest = std::max(widest, widthAt(y, .01f * h));
+        float line = -1;
+        for (float y = .01f * h; y <= kn + .01f * h; y += .005f * h)
+            if (widthAt(y, .01f * h) >= .75f * widest)
+                line = y;
+        if (!(widest > .03f * h) || !(line > .03f * h))
+            continue;
+        kn = line;
+        for (const P& q : all)
+            if (q.y > kn - .03f * h && q.y < kn + .002f * h)
+                slab.push_back(q);
+        if (slab.size() < 8)
+            continue;
+        std::vector<float> zs;
+        for (const P& q : slab)
+            zs.push_back(q.z);
+        std::nth_element(zs.begin(), zs.begin() + zs.size() / 2, zs.end());
+        const float zMid = zs[zs.size() / 2];
+        std::vector<float> xs;
+        for (const P& q : slab)
+            if (q.z >= zMid)
+                xs.push_back(q.x);
+        if (xs.size() < 6)
+            continue;
+        std::sort(xs.begin(), xs.end());
+        const float lo = xs[xs.size() * 5 / 100], hi = xs[std::min(xs.size() - 1, xs.size() * 95 / 100)];
+        if (!(hi - lo > .02f * h))
+            continue;
+        const float tilt = clawTiltDeg * degToRad;
+        Vec3 way = normalized(y0 * std::cos(tilt) + z0 * std::sin(tilt)), back = normalized(square(z0, way));
+        // the rest hand's skin (its hand and forearm triangles): a root is inside where the winding number is over 1/2
+        std::vector<uint32_t> skinT;
+        for (uint32_t t = 0; t < rig.triangleBone.size(); ++t) {
+            const uint8_t tb = rig.triangleBone[t];
+            if (tb == b || tb == (side ? boneForeR : boneForeL))
+                skinT.push_back(t);
+        }
+        const auto inside = [&](Vec3 p) {
+            double w = 0;
+            for (uint32_t t : skinT) {
+                const Vec3 a = rig.rest[rig.corner[t * 3]] - p, bb = rig.rest[rig.corner[t * 3 + 1]] - p, c = rig.rest[rig.corner[t * 3 + 2]] - p;
+                const double la = length(a), lb = length(bb), lc = length(c);
+                w += 2.0 * std::atan2(static_cast<double>(dot(a, cross(bb, c))),
+                                      la * lb * lc + dot(a, bb) * lc + dot(bb, c) * la + dot(c, a) * lb);
+            }
+            return std::abs(w) > 3.14159265358979 * 2.0; // |w / 4 pi| > 1/2
+        };
+        // how far under the rest skin (to its nearest triangle): the skinned hand strays a few mm from its bone
+        const auto under = [&](Vec3 p) {
+            float best = 1e9f;
+            for (uint32_t t : skinT)
+                best = std::min(best, length(p - closestOnTriangle(p, rig.rest[rig.corner[t * 3]], rig.rest[rig.corner[t * 3 + 1]],
+                                                                    rig.rest[rig.corner[t * 3 + 2]])));
+            return best;
+        };
+        const Vec3 acrossR = cross(way, back);
+        bool good = !skinT.empty();
+        float rise = 0; // over the claws: how far (along the back) each line should climb to the knuckle row's top
+        for (int g = 0; g < 3 && good; ++g) {
+            const float gx = lo + (hi - lo) * (g + 1) * .25f;
+            // the back of the hand there: the highest inside point over the gap (some suits' rest hands are a
+            // few big triangles: no vertex need be near), stepped down from 8 cm over the bone
+            const float y = kn - clawBehind * h;
+            float top = -1e9f;
+            for (float z = .08f * h; z > -.12f * h; z -= .002f * h)
+                if (inside(a0 + x0 * gx + y0 * y + z0 * z)) {
+                    top = z;
+                    break;
+                }
+            if (!(top > -1e8f)) {
+                good = false;
+                break;
+            }
+            // the root clawSink under it if the claw's root end is inside; else the place nearest that with the
+            // most of it inside (the root first; 1.4 cm toward the back and the palm, 7 mm to each side)
+            const float want = top - clawSink * h;
+            int bestIn = -1;
+            float bestOff = 1e9f;
+            Vec3 best{};
+            for (float dx = -.004f * h; dx <= .0041f * h; dx += .004f * h)
+                for (float z = top; z > top - .06f * h; z -= .002f * h) {
+                    const Vec3 r = a0 + x0 * (gx + dx) + y0 * y + z0 * z;
+                    if (!inside(r))
+                        continue;
+                    int in = 4 + (under(r) >= clawDepthMin * h ? 8 : 0); // 6 mm under the skin first
+                    for (const Vec3 o : {back * (.014f * h), back * (-.014f * h), acrossR * (.007f * h), acrossR * (-.007f * h)})
+                        in += inside(r + o);
+                    const float off = std::abs(z - want) + std::abs(dx) * 2.f;
+                    if (in > bestIn || (in == bestIn && off < bestOff))
+                        bestIn = in, bestOff = off, best = r;
+                }
+            good = bestIn >= 4;
+            rig.clawRoot[side][g] = best;
+            // the knuckle row's top over this gap: the blade should leave the skin clawExitDrop under it
+            float topK = top;
+            for (float z = .08f * h; z > -.12f * h; z -= .002f * h)
+                if (inside(a0 + x0 * gx + y0 * kn + z0 * z)) {
+                    topK = z;
+                    break;
+                }
+            rise += (topK - clawExitDrop * h - dot(best - a0, z0)) / 3.f;
+        }
+        if (!good)
+            continue;
+        // the claws' way: tilted from the bone toward the back of the hand so the lines (from roots clawBehind behind the
+        // knuckle line) leave the skin at the top of the knuckle row, not through the curled fingers (a deep-rooted
+        // blocky glove), within clawTiltDeg..clawTiltMaxDeg
+        {
+            const float t = std::clamp(std::atan2(rise, clawBehind * h), clawTiltDeg * degToRad, clawTiltMaxDeg * degToRad);
+            way = normalized(y0 * std::cos(t) + z0 * std::sin(t)), back = normalized(square(z0, way));
+        }
+        // ascending across the claws (across = way x back)
+        const Vec3 across = cross(way, back);
+        std::sort(rig.clawRoot[side], rig.clawRoot[side] + 3, [&](Vec3 a, Vec3 c) { return dot(a, across) < dot(c, across); });
+        rig.clawWay[side] = way, rig.clawBack[side] = back, rig.clawKnuckle[side] = kn;
+        rig.clawOk[side] = ok(way) && ok(back);
+    }
+}
+bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], Vec3& way, Vec3& back) {
+    if (side < 0 || side > 1 || !rig.clawOk[side])
+        return false;
+    const BoneMove& b = m[side ? boneHandR : boneHandL];
+    const auto apply = [&](Vec3 d) {
+        return Vec3{b.m[0] * d.x + b.m[1] * d.y + b.m[2] * d.z, b.m[3] * d.x + b.m[4] * d.y + b.m[5] * d.z,
+                    b.m[6] * d.x + b.m[7] * d.y + b.m[8] * d.z};
+    };
+    const Vec3 w = normalized(apply(rig.clawWay[side])), bk = normalized(square(apply(rig.clawBack[side]), w));
+    if (!ok(w) || !ok(bk) || !(length(w) > .5f) || !(length(bk) > .5f))
+        return false;
+    for (int g = 0; g < 3; ++g) {
+        root[g] = b.a1 + apply(rig.clawRoot[side][g] - b.a0);
+        if (!ok(root[g]))
+            return false;
+    }
+    way = w, back = bk;
+    return true;
 }
 bool handOpen(const HandProfile& p, float grip, bool propHeld, bool repulsorPose) {
     return p.triggerOpens && repulsorPose && !propHeld && !(std::isfinite(grip) && grip > .5f);

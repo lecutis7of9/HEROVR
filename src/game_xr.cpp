@@ -10640,14 +10640,39 @@ DWORD WINAPI run(void*) {
                                 else
                                     appendBaton(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
                             }
-                        if (saved->hero007.any && saved->hero007.beamFade > 0 && validTrackedPose(rendered.headPose)) {
+                        // 0.0.73 test 5 CLAW BONE (CLAW LOOK ON): a Wolverine suit's claws come out of its own drawn
+                        // fist (the owner: "none of the wolverine claw things actually looks like it comes out of
+                        // the hand"), so they are left out here and drawn after the suit is skinned below
+                        // (hero007::appendClawBone at suit_wear::clawPlace: locked to the suit's hand bone); when that
+                        // cannot be done this frame, by the grip there instead (appendClawSteel) - never missing.
+                        bool clawLater[2]{};
+                        const hero007::Draw* heroDraw = &saved->hero007;
+                        hero007::Draw heroNoClaws;
+                        if (const uint32_t ws = wornSuitSlot.load();
+                            saved->hero007.any && saved->hero007.clawSteel && !saved->flatScreen && mesh_model::slotIsSuit(ws) &&
+                            suitsRigged.load() && overlay.modelReady() && validTrackedPose(rendered.headPose)) {
+                            const suit_wear::Rig& r = suitRigs[ws - mesh_model::slotSuitFirst];
+                            for (unsigned i = 0; i < 2; ++i) {
+                                const hero007::Item& h = saved->hero007.held[i];
+                                clawLater[i] = r.ok && h.look == hero007::lookClaws && h.side < 2 && r.clawOk[h.side] &&
+                                               saved->hero007.clawModel[h.side];
+                            }
+                            if (clawLater[0] || clawLater[1]) {
+                                heroNoClaws = saved->hero007;
+                                for (unsigned i = 0; i < 2; ++i)
+                                    if (clawLater[i])
+                                        heroNoClaws.held[i].look = hero007::lookNone;
+                                heroDraw = &heroNoClaws;
+                            }
+                        }
+                        if (heroDraw->any && heroDraw->beamFade > 0 && validTrackedPose(rendered.headPose)) {
                             // Version 0.0.72 HEAT VISION HEAD LOCK: the beams redrawn from this image's own head
                             // pose along where it looks (0.0.71: drawn to where the beam was aimed a frame ago).
-                            hero007::Draw locked = saved->hero007;
+                            hero007::Draw locked = *heroDraw;
                             hero007::headLockBeam(locked, rendered.headPose);
                             hero007::appendHero007(vertices, locked, travel, viewer, pixelAngle);
-                        } else if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
-                            hero007::appendHero007(vertices, saved->hero007, travel, viewer, pixelAngle);
+                        } else if (heroDraw->any) // Version 0.0.7 HERO PROFILES
+                            hero007::appendHero007(vertices, *heroDraw, travel, viewer, pixelAngle);
                         if (saved->hero072.any) { // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
                             // Build 5: THOR's look (the hammer, its chain, the storm) can never take the frame down:
                             // out of memory or a bad model drops this look for this frame only.
@@ -11121,6 +11146,8 @@ DWORD WINAPI run(void*) {
                         const mesh_model::Mesh* suitMesh = nullptr;
                         const suit_wear::Rig* suitRig = nullptr;
                         bool suitWorn = false;
+                        suit_wear::BoneMove clawMoves[suit_wear::bones]; // 0.0.73 test 5 CLAW BONE: the suit's bones now
+                        bool clawMovesOk = false;
                         if (const uint32_t ws = wornSuitSlot.load(); !saved->flatScreen && mesh_model::slotIsSuit(ws) &&
                                                                      overlay.modelReady() && validTrackedPose(rendered.headPose)) {
                             const auto suitStart = std::chrono::steady_clock::now();
@@ -11205,8 +11232,15 @@ DWORD WINAPI run(void*) {
                                     const uint32_t mask = suit_wear::partBones(suit_wear::firstPersonPart(
                                         suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow()), saved->bodyWanted));
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
-                                    suitWorn = (mask || (mirrorOn.load() && !mirrorReuse)) && suit_wear::estimate(*suitRig, t, live) &&
-                                               suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);
+                                    // (and posed for the CLAW BONE claws even with nothing of the suit shown: no skin then)
+                                    const bool skinWanted = mask || (mirrorOn.load() && !mirrorReuse);
+                                    const bool posed = (skinWanted || clawLater[0] || clawLater[1]) && suit_wear::estimate(*suitRig, t, live) &&
+                                                       suit_wear::moves(*suitRig, live, mv);
+                                    suitWorn = skinWanted && posed && suit_wear::skin(*suitRig, mv, suitSkinned);
+                                    if (posed && (clawLater[0] || clawLater[1])) {
+                                        std::copy(mv, mv + suit_wear::bones, clawMoves);
+                                        clawMovesOk = true;
+                                    }
                                     // Test build 12 CAPE: the cape hangs from the torso, and fans out while gliding (eased:
                                     // about a fifth of a second in, a third out)
                                     static float capeSpread = 0;
@@ -11229,6 +11263,25 @@ DWORD WINAPI run(void*) {
                             const float us = std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - suitStart).count();
                             suitMean = suitMean > 0 ? suitMean * .98f + us * .02f : us;
                             suitWearMicros = static_cast<uint32_t>(suitMean + .5f);
+                        }
+                        // 0.0.73 test 5 CLAW BONE: the claws left out above, out of the drawn fist (or by the grip).
+                        for (unsigned i = 0; i < 2; ++i) {
+                            if (!clawLater[i])
+                                continue;
+                            try {
+                                hero007::Item it = saved->hero007.held[i];
+                                it.at = it.at + travel;
+                                const mesh_model::Mesh& claws = *saved->hero007.clawModel[it.side];
+                                bool drawn = false;
+                                if (clawMovesOk && suitRig && suitRig->ok) {
+                                    hero007::ClawBone cb;
+                                    cb.ok = suit_wear::clawPlace(*suitRig, clawMoves, static_cast<int>(it.side), cb.root, cb.way, cb.back);
+                                    drawn = cb.ok && hero007::appendClawBone(vertices, it.spin, cb, claws, viewer);
+                                }
+                                if (!drawn)
+                                    hero007::appendClawSteel(vertices, it, claws, viewer);
+                            } catch (...) { // out of memory: no claws this frame, never a crash
+                            }
                         }
                         if (!saved->flatScreen && mirrorOn.load() && validTrackedPose(rendered.headPose)) {
                             static vr_mirror::Placement mirrorPlace;

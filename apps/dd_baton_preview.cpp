@@ -197,6 +197,9 @@ int main(int argc, char** argv) {
         if (std::sscanf(e, "%f %f %f", &x, &y, &z) == 3 && length(Vec3{x, y, z}) > .1f)
             aimWorld = normalized(Vec3{x, y, z});
     }
+    // DD_AIM_PIVOT / DD_AIM_HOLD (m): try the aim turn's pivot and hold (dd_baton073::aimPivot / aimHold)
+    const float aimPivot = std::getenv("DD_AIM_PIVOT") ? static_cast<float>(std::atof(std::getenv("DD_AIM_PIVOT"))) : db::aimPivot;
+    const float aimHold = std::getenv("DD_AIM_HOLD") ? static_cast<float>(std::atof(std::getenv("DD_AIM_HOLD"))) : db::aimHold;
     for (int scene = 0; scene < 4; ++scene) {
         const char* name = scene == 0 ? "old" : scene == 1 ? "new" : scene == 2 ? "grapple" : "aim";
         std::ofstream f(out + "dd_" + name + ".tri", std::ios::binary);
@@ -209,7 +212,8 @@ int main(int argc, char** argv) {
         std::printf("  \"%s\": {", name);
         for (unsigned h = 0; h < 2; ++h) {
             const baton_grip::Shaft sh = scene == 0   ? baton_grip::shaft(grip[h], h, ControllerKind::touch)
-                                         : scene == 3 ? db::aimTurn(db::seated(grip[h], h, ControllerKind::touch), grip[h].position, aimWorld, 1.f)
+                                         : scene == 3 ? db::aimTurn(db::seated(grip[h], h, ControllerKind::touch), grip[h].position, aimWorld, 1.f,
+                                                                  aimPivot, aimHold)
                                                       : db::seated(grip[h], h, ControllerKind::touch);
             std::vector<Vertex> v;
             if (scene == 2 && h == 1) {

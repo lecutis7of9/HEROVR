@@ -149,6 +149,16 @@ struct Rig {
     // rest hands' backs with the profile's restTurnDeg (skeleton.handBack when it has none).
     HandProfile hands;
     Vec3 profileBack[2]{{0, 1, 0}, {0, 1, 0}};
+    // 0.0.73 test 5 CLAW BONE (findClawRoots, at makeRig and applyHandProfile, for a Wolverine suit: clawSuit):
+    // each rest hand's three claw roots (rest model space, in the hand bone's rigid part behind the knuckles): between
+    // index/middle, middle/ring and ring/pinky (in the profile's hand frame: x across, y wrist -> knuckles, z the
+    // back), at least clawDepthMin under the skin with the claw's root end inside the fist; the claws' way (out over
+    // the knuckles, along the punch) and back.
+    bool clawSuit = false;
+    bool clawOk[2]{};
+    Vec3 clawRoot[2][3]{};
+    Vec3 clawWay[2]{}, clawBack[2]{};
+    float clawKnuckle[2]{}; // the knuckle line (rest metres from the wrist along the hand bone)
 };
 // Test build 12 CAPE: the cape's thresholds (metres at a 1.8 m suit).
 inline constexpr float capeSeedBehind = .18f;   // a triangle this far behind the suit's middle starts the cape
@@ -230,6 +240,23 @@ float easeToward(float now, float want, float dt, float seconds);
 // tilt 0): x and up blended and squared, forward from them. false (the frame unchanged) on insane input.
 bool blendGrip(Vec3& forward, Vec3& x, Vec3& up, float& tiltDeg, Vec3 tf, Vec3 tx, Vec3 tu, float w);
 bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]);
+// 0.0.73 test 5 CLAW BONE (the owner after the CLAW LOOK previews: "none of the wolverine claw things actually looks
+// like it comes out of the hand, looks like they all float around it"). The claws locked to the HAND BONE (not the
+// controller): Rig::clawRoot through this frame's hand move (BoneMove, the rigid part of the hand: never curled),
+// so they move with the drawn fist and stay in it as the wrist turns. CANDIDATE (at 1.8 m, scaled by the rig's
+// height; measured on CLASSIC, JACKET AND JEANS and WEAPON X in apps/hero_hands_preview HANDS_CLAWS=bone):
+//   clawBehind - the roots this far behind the knuckle line (the blade crosses the skin at the knuckles)
+//   clawSink   - the roots this far under the back of the hand (the claw's root end, 2.7 cm tall, inside)
+//   clawTiltDeg..clawTiltMaxDeg - the claws' way tilted from the hand bone toward its back so each blade leaves the
+//                  skin clawExitDrop under the top of the knuckle row (out over the knuckles, not through the fingers)
+//   clawDepthMin - each root at least this far under the rest skin where it can be (the skinned hand strays a few
+//                  mm from its bone near the wrist)
+inline constexpr float clawBehind = .02f, clawSink = .02f, clawTiltDeg = 8.f, clawTiltMaxDeg = 30.f, clawExitDrop = .005f,
+                       clawDepthMin = .006f;
+void findClawRoots(Rig& rig);
+// The claw roots (world, ascending across the hand), the claws' way and the back of the hand this frame; false
+// (nothing) without them or on insane moves.
+bool clawPlace(const Rig& rig, const BoneMove m[bones], int side, Vec3 root[3], Vec3& way, Vec3& back);
 // Skins every vertex (positions and normals, world) once a frame; then draw() places triangles from it.
 struct Skinned {
     std::vector<Vec3> p, n;

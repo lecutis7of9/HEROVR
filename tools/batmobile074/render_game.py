@@ -43,7 +43,7 @@ if screen_png and os.path.exists(screen_png):
     W, H = 0.28, 0.17
     bpy.ops.mesh.primitive_plane_add(size=1)
     p = bpy.context.object; p.scale = (W, H, 1)
-    p.rotation_euler = (math.radians(90), 0, math.radians(180))   # face toward the driver (Blender -y)
+    p.rotation_euler = (math.radians(90), 0, 0)   # face toward the driver (normal -y; +x to his right, not mirrored)
     p.location = conv(lay['screen'])
     m = bpy.data.materials.new('screen'); m.use_nodes = True; nt = m.node_tree; pb = nt.nodes['Principled BSDF']
     t = nt.nodes.new('ShaderNodeTexImage'); t.image = bpy.data.images.load(screen_png)

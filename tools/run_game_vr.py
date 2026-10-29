@@ -240,8 +240,9 @@ def test_build_lines(root=None):
                 hashes[key[7:].strip()] = value.lower()
             else:
                 fields[key] = value
-        lines.append(f"HERO VR {fields.get('version', '0.0.72')} test {fields.get('commit', 'unknown')}"
-                     f" (test build {fields.get('build', '?')}) - mod folder {root}")
+        # 0.0.73 test 5: the same words as the wrist and the mod's start line (HERO VR 0.0.73 TEST 5 <commit>)
+        lines.append(f"HERO VR {fields.get('version', '0.0.72')} TEST {fields.get('build', '?')} {fields.get('commit', 'unknown')}"
+                     f" - mod folder {root}")
         mixed = []
         for name, digest in sorted(hashes.items()):
             try:

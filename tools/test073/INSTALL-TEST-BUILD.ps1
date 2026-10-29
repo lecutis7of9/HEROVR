@@ -2,6 +2,9 @@
 #  1. Checks the files beside it (payload\, every one against SHA256SUMS.txt): a part zip not extracted is named.
 #  2. Finds every HERO VR mod folder (a folder with tools\launch-game-vr.ps1) in Downloads, Desktop, Documents
 #     and C:\sm2-port, and picks the one the game was played from last (its newest report).
+#     0.0.73 test 5: the folder an earlier test build was installed into (it has _before-0.0.72-test) comes
+#     first, so every test goes into ONE folder; backup copies and unpacked test downloads (a folder with
+#     INSTALL-TEST-BUILD.* in it or beside it) are not picked unless a test was already installed there.
 #  3. Copies the test build into it (the files it replaces are kept in _before-0.0.72-test first),
 #     checks every copied file's sha256, and writes HERO-VR-TEST-BUILD.txt (the console's test line).
 #  3b. 0.0.73 test 2 (fix 20): asks once, in a popup with HERO VR's own icon, to put a HERO VR shortcut on
@@ -40,6 +43,18 @@ if ($bad.Count) { Fail "$($bad.Count) files are damaged (download again): $($bad
 Say "Download OK: $($entries.Count) files, every sha256 matches." 'Green'
 
 # 2. The mod folder
+$keepName = '_before-0.0.72-test'
+function Installed($dir) { return [bool](Test-Path -LiteralPath (Join-Path $dir $keepName)) }
+function Skip($dir) {
+    # 0.0.73 test 5: test 4 went into an old unpacked test 12 folder; backups and downloads are never the main install.
+    if (Installed $dir) { return $false }
+    if ($dir -match 'backup' -or $dir -match '\\_before-') { return $true }
+    $up = Split-Path -Parent $dir
+    foreach ($n in 'INSTALL-TEST-BUILD.ps1', 'INSTALL-TEST-BUILD.bat') {
+        if ((Test-Path -LiteralPath (Join-Path $dir $n)) -or ($up -and (Test-Path -LiteralPath (Join-Path $up $n)))) { return $true }
+    }
+    return $false
+}
 function Played($dir) {
     $r = Join-Path $dir 'reports'
     $t = (Get-Item -LiteralPath $dir).LastWriteTime
@@ -59,13 +74,17 @@ if ($Target) {
             Where-Object { $_.Directory.Name -eq 'tools' -and $_.FullName -notlike "$here*" } |
             ForEach-Object { $found[$_.Directory.Parent.FullName] = 1 }
     }
+    $skipped = @($found.Keys | Where-Object { Skip $_ })
+    foreach ($s in $skipped) { $found.Remove($s) }
+    if ($skipped.Count) { Say ("Not offered ({0} backup copies or unpacked test downloads): {1}" -f $skipped.Count, ($skipped -join ', ')) 'DarkGray' }
 }
-$roots = @($found.Keys | Sort-Object { Played $_ } -Descending)
+$roots = @($found.Keys | Sort-Object @{ Expression = { Installed $_ }; Descending = $true }, @{ Expression = { Played $_ }; Descending = $true })
 if (-not $roots.Count) { Fail 'no HERO VR mod folder found. Run it as: INSTALL-TEST-BUILD.bat "C:\path\to\your\mod folder" (the folder with tools\launch-game-vr.ps1 in it).' }
 Say ''
 Say 'HERO VR mod folders found (newest play first):'
 for ($i = 0; $i -lt $roots.Count; $i++) {
     $note = ''
+    if (Installed $roots[$i]) { $note += '  [earlier test build installed here]' }
     if ($roots[$i] -match 'backup') { $note += '  [a BACKUP copy]' }
     if (Test-Path (Join-Path $roots[$i] 'HERO-VR-TEST-BUILD.txt')) { $note += '  [' + (Get-Content (Join-Path $roots[$i] 'HERO-VR-TEST-BUILD.txt') -TotalCount 1) + ']' }
     Say ("  [{0}] {1}   (last played {2:yyyy-MM-dd HH:mm}){3}" -f ($i + 1), $roots[$i], (Played $roots[$i]), $note)
@@ -73,7 +92,8 @@ for ($i = 0; $i -lt $roots.Count; $i++) {
 $root = $roots[0]
 if (-not $Yes) {
     Say ''
-    Say "The test build goes into [1] - the folder you played from last:" 'Yellow'
+    $why = if (Installed $root) { 'the folder the last test build was installed into' } else { 'the folder you played from last' }
+    Say "The test build goes into [1] - ${why}:" 'Yellow'
     Say "    $root" 'Yellow'
     $a = Read-Host 'Press Enter for [1], type another number, or N to cancel'
     if ($a -match '^[nN]') { Fail 'cancelled, nothing changed.' }
@@ -86,7 +106,7 @@ if (Get-Process -Name 'Spider-Man2', 'SM2VRLauncher' -ErrorAction SilentlyContin
 }
 
 # 3. Copy, keeping what is replaced
-$keep = Join-Path $root '_before-0.0.72-test'
+$keep = Join-Path $root $keepName
 $kept = 0
 foreach ($e in $entries) {
     $rel = $e[1] -replace '/', '\'
@@ -114,7 +134,10 @@ Say "  $($entries.Count) files copied and checked (sha256). $kept replaced files
 Say ('  In the console you will see: ' + ($title -replace ' - .*', '')) 'Cyan'
 # Test build 11: build 10's report came from a session that still ran build 9 (same DLL hashes), so the
 # wrist's number is named here, and every other mod folder is listed as NOT updated.
-if ($title -match 'test (\S+) - private test build (\d+)') {
+if ($title -match '^(HERO VR \S+) TEST (\d+) (\S+)') {
+    Say ("  On the wrist (bottom line) you must see: {0} TEST {1} {2}" -f $matches[1], $matches[2], $matches[3]) 'Cyan'
+    Say '  If the wrist shows anything else, the game started from another folder.' 'Yellow'
+} elseif ($title -match 'test (\S+) - private test build (\d+)') {
     Say ("  On the wrist (bottom line) you must see: TEST {0} {1}" -f $matches[2], $matches[1]) 'Cyan'
     Say '  If the wrist shows anything else, the game started from another folder.' 'Yellow'
 }

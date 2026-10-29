@@ -1135,7 +1135,7 @@ Layout build(int page, float k, int open) {
     // Build 5: which build runs, on the wrist (the console's first line says it too).
     {
         Item f = itemOf(Kind::footer);
-        f.text = "TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - HERO VR " SPIDY_TEST_VERSION " test"; // Test build 11; 0.0.73: the version from CMake
+        f.text = "HERO VR " SPIDY_TEST_VERSION " TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT; // Test build 11; 0.0.73: the version from CMake; test 5: reads like the start line
         f.h = fittedHeight(f.text, footerHeight * k, .14f);
         f.v = c - f.h;
         c = f.v - .002f * k;

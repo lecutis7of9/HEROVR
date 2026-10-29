@@ -2,6 +2,7 @@
 // Build 9 SUITS: suit_wear.hpp.
 #include "spidy/suit_wear.hpp"
 
+#include <bitset>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -284,7 +285,7 @@ void fingerLine(Rig& rig, int side) {
                 }
             }
             // a step off the centre costs a face: the fit stays put unless the hole is clearly better elsewhere
-            const int cost = poke + 1000 * (8 - __builtin_popcount(sectors)) + std::abs(iy) + std::abs(iz);
+            const int cost = poke + 1000 * (8 - static_cast<int>(std::bitset<8>(sectors).count())) + std::abs(iy) + std::abs(iz);
             if (cost < best)
                 best = cost, rig.fistHole[side][0] = hy - cy, rig.fistHole[side][1] = hz - cz;
         }

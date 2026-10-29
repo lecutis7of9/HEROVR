@@ -304,7 +304,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     // RESTART REQUIRED, put back when VR closes. 0.0.73 lights: the launcher starts it OFF IN VR (test 4's
     // video: flare streaks strobing, headlights ghosting); index 0 stays GAME so live.txt numbers and the
     // wrist readback bit keep their meaning (the launcher's default, not index 0, is the default here).
-    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR stops flare strobing and headlight ghosts, restart VR to apply.",
+    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR turns the game's lens flares off in VR, restart VR to apply.",
      2, {"GAME", "OFF IN VR", nullptr, nullptr}},
     // Version 0.0.62 PUNCH HITS (SpidyVR's land(): the hit is sent the moment the fist touches):
     // GAME + INSTANT (0, the default) sends a small CONFIRMED DirectDamage blow with a knock on the

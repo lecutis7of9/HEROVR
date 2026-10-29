@@ -58,7 +58,7 @@ inline constexpr uint32_t pack(uint32_t mode, uint32_t reason) { return mode | r
 inline uint32_t modeOf(uint32_t packed) { return packed & 0xff; }
 inline uint32_t reasonOf(uint32_t packed) { return packed >> 8 & 0xff; }
 // The subtexts: one sentence each, <= 80 characters, exactly one '.'.
-inline constexpr const char* help = "OFF stops flickering light halos; COPY adds the game's glow, no restart.";
+inline constexpr const char* help = "OFF: no eye bloom, as SpidyVR; COPY adds the game's glow, no restart.";
 inline const char* helpText(uint32_t packed) {
     const uint32_t m = modeOf(packed), r = reasonOf(packed);
     if (m == gate && r == unseen)

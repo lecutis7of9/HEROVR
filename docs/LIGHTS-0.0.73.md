@@ -39,3 +39,35 @@ each change reached the DLL ("kept in live.txt"), and none of those settings tou
 - The game log's "Lens Flares: Off" while VR runs.
 - The defaults line with eye_bloom = 0.
 - At the end, "0.0.73 lights: EYE BLOOM OFF at the end ..." (the report's update37.eye_bloom record).
+
+## After test 4 retest: "EYE BLOOM made no difference" (October 28)
+
+- CONFIRMED (our code): EYE BLOOM OFF returns before any write, so the eyes keep the
+  game's own zeroed +0xd8 (0x2c29102). OFF already meant "no eye bloom"; a halo that
+  stays with OFF comes from another pass, not +0xd8.
+- CONFIRMED (our code, eye_taa.hpp historyInForce/loosenInForce): while EYE AA is on
+  (test 4: on at start), history is at least 88% and the clamp gives at least 25%,
+  whatever the HISTORY BLEND slider says. The user's 70/40/75 changed nothing. The
+  pass reprojects for head rotation only and jitters the eye lens over 16 Halton steps.
+  SpidyVR runs none of this (eyeTemporal 0: no jitter, no history).
+- CANDIDATE: headlight ghosts are moving cars blended with 88% old frames; strobing
+  halos are jittered bright points through the game's bloom/flare threshold plus the
+  history pass cutting and restarting while panning (878 restarts in test 4).
+- CANDIDATE: judder, 40.5 fps on 90 Hz (each picture held about 2.2 frames, unevenly).
+- Exe flare systems (CONFIRMED strings, consumer of LensFlares +0x85 NOT traced):
+  bloom lens-flare ghosts/halo, anamorphic flare (CS_AnamorphicLensFlareDownsample),
+  material "Lens-Flare Occlusion"/"Disallow Anamorphic Flare", VFX "Lens Flare" sprite
+  node (string 0x8888108). No corona, glare or occlusion-query strings. Volumetric fog
+  has its own temporal pass (CS_VolumetricFogTemporalAA).
+
+## Headset A/B (one change at a time, same night street with traffic)
+
+Each step: stand still 10 s, then pan slowly left/right 10 s. Note: halos flicker
+(yes/no), headlight trails (yes/no), streaks. Keep a change only if it helped.
+1. Baseline as installed.
+2. Wrist EYE AA OFF (live, no restart).
+3. EYE AA back on, EYE AA TRAIL 0 (live).
+4. Game menu Lens Flares Off, then restart VR (the log must show "Lens Flares: Off").
+5. Game menu Bloom Off, restart VR.
+6. Volumetric Lighting / fog lower, restart VR.
+7. Headset at 80 Hz (stable 2 frames per picture).

@@ -1,6 +1,6 @@
 # Credits
 
-HERO VR 0.0.72 (version number 0.0.72; internal name: SM2 VR) is a port of **Spidy (SpidyVR) by Ilya Mezerowsky** to Marvel's Spider-Man 2.
+HERO VR 0.0.73 (version number 0.0.73; internal name: SM2 VR) is a port of **Spidy (SpidyVR) by Ilya Mezerowsky** to Marvel's Spider-Man 2.
 It is licensed under the GNU GPL version 3.
 
 - **Ilya Mezerowsky**: Spidy (SpidyVR), the VR mod this whole project is built on. Copyright (C) 2026 Ilya Mezerowsky, GPLv3.
@@ -59,6 +59,8 @@ It is licensed under the GNU GPL version 3.
   - **Stokissout**: "Wolverine Rigged" (CC BY 4.0), `Suit_wolverine_1`. https://sketchfab.com/Stokissout
   - **Light.k**: "Wolverine - Jacket - Jeans (Rigged and Textured)" (CC BY 4.0), `Suit_wolverine_3`. https://sketchfab.com/Light.k
   - **AssetGoat**: "Weapon X Wolverine" (CC BY 4.0), `Suit_wolverine_4`. https://sketchfab.com/assetgoat
+- **WOLVERINE's claws (0.0.73)**, `Models/Claws/Left` and `Models/Claws/Right`: cut from **Light.k**'s "Wolverine - Jacket -
+  Jeans (Rigged and Textured)" (CC BY 4.0; its `license.txt` ships beside them). https://sketchfab.com/Light.k
 - **ROSTER page pictures (0.0.72)**, `Models/Roster/scene.glb`: cropped Sketchfab thumbnails of the artists' models,
   each credited by name and licence in THIRD-PARTY-MODELS.md and `Models/Roster/license.txt`.
 - Third-party libraries, fonts and runtimes are listed with their licenses in THIRD_PARTY_NOTICES.md.

@@ -5,9 +5,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def src(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
 class Hero073(unittest.TestCase):
-    def test_test_build_on_with_its_number(self):
+    def test_release_build_off_test_number_kept(self):  # the public 0.0.73 release: HERO_TEST_BUILD OFF (test builds: ON)
         c = src('CMakeLists.txt')
-        self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" ON\)')
+        self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
         self.assertRegex(c, r'set\(HERO_TEST_NUMBER "[0-9]+"')
     def test_ci_never_uploads_a_hero_0073_build(self):
         w = src('.github/workflows/build-prebuilt.yml')

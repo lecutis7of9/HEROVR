@@ -12501,7 +12501,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     // Build 5: the first line names the code that runs (build 4's console said only 0.0.70).
     message(1, 0, "HERO VR " SPIDY_TEST_VERSION " TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR");
 #else
-    message(1, 0, "SM2 VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");
+    message(1, 0, "HERO VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR"); // 0.0.73: HERO VR, as the wrist
 #endif
     // Version 0.0.2 hotfix: the VR thread reserves its own 8 MB of stack (address space only;
     // pages are committed as used) instead of the game's default (1 MB), so its deep frame

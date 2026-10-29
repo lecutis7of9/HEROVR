@@ -215,7 +215,7 @@ std::string helpFor(Screen screen, uint32_t hero, int id, const Snapshot* s) {
     }
     if (s && s->ownSuit)
         return "OWN SUIT is on in the wrist's settings, so every hero keeps his own mod or game suit.";
-    return "Your pick is kept with your progress; alt suits are not drawn on your body in this test build yet.";
+    return "Your pick is kept with your progress.";
 }
 
 bool Page::open(Pose head, double seconds) {

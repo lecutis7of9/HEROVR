@@ -85,5 +85,23 @@ class NoMultiplayerTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(ROOT, f)), f)
 
 
+class ReleaseLabels(unittest.TestCase):
+    """The public 0.0.73 release: no test labels, HERO VR 0.0.73 on the wrist and the console."""
+    def test_version_and_labels(self):
+        import re
+        self.assertEqual(src('VERSION').strip(), '0.0.73')
+        self.assertRegex(src('CMakeLists.txt'), r'project\(Spidy VERSION 0\.0\.73 ')
+        self.assertRegex(src('CMakeLists.txt'), r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
+        self.assertIn('message(1, 0, "HERO VR " SPIDY_PUBLIC_VERSION " - Made by Agent Mulder: starting OpenXR");', src('src/game_xr.cpp'))
+        self.assertNotIn('"SM2 VR " SPIDY_PUBLIC_VERSION', src('src/game_xr.cpp'))
+        self.assertIn('f.text = "HERO VR " SPIDY_PUBLIC_VERSION " - MADE BY AGENT MULDER";', src('src/wrist_hud.cpp'))
+        for fn in ('include/spidy/combat38.hpp', 'src/holo_roster.cpp', 'src/roster_page.cpp'):
+            for line in src(fn).splitlines():
+                code = line.split('//')[0]
+                self.assertIsNone(re.search(r'"[^"]*\b(?:TEST|test) [0-9][^"]*"', code), (fn, line))
+                self.assertNotIn('this test build', code, fn)
+        self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.73.md')))
+
+
 if __name__ == '__main__':
     unittest.main()

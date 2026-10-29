@@ -82,6 +82,8 @@ namespace Sm2VrLauncher
                  "Worn suits (Models\\Suits) - by Light.k, H.E.C.U Models, Tigerar1, mikomagallona, Marco.41, YE YE, officialsupremefilms, Neut2000, CAPTAAINR, " +
                  "Shivam.Yadav, 9A Films / Nihar Arora, Nathang30, benjamin.borromeo, Mittergen, floh, Chechorams16, Stokissout and AssetGoat; CC BY 4.0, " +
                  "CC BY-NC 4.0 (floh), CC BY-NC-SA 4.0 (Nathang30) and the Sketchfab Standard licence (Tigerar1, Marco.41); non-commercial: HERO VR is free\n" +
+                 // Version 0.0.73 (launcher build 14): WOLVERINE's claws.
+                 "Wolverine's claws (Models\\Claws) - from \"Wolverine - Jacket - Jeans (Rigged and Textured)\" by Light.k, CC BY 4.0 (cut from the model)\n" +
                  "ROSTER pictures - thumbnails of the artists' models, each named in THIRD-PARTY-MODELS.md\n" +
                  "Links, licences and changes: THIRD-PARTY-MODELS.md in the mod folder.", f, Theme.Silver);
             line().Act("Open THIRD-PARTY-MODELS", fb, () => OpenNotice("THIRD-PARTY-MODELS.md"));

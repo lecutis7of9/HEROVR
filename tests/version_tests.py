@@ -28,8 +28,8 @@ class PublicVersion(unittest.TestCase):
         self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update ' + build)
 
     def test_first_public_release(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.72')  # 0.0.72 = build 39.5 (the 0.0.72 heroes, models and suits); 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.5')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.73')  # 0.0.73 = build 39.6 (the 0.0.73 fixes, GAME TAA off by default, no MP SOLO TEST); 0.0.72 = build 39.5 (the 0.0.72 heroes, models and suits); 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.6')
 
     def test_release_scripts_bump_version_too(self):
         ps = (ROOT / 'tools/release.ps1').read_text(encoding='utf-8')
@@ -45,8 +45,8 @@ class PublicVersion(unittest.TestCase):
         for name in ('public_version', 'version_line', 'port_version'):
             m = re.search(r'^def %s\(\):\n(?:    .*\n|\n)+' % name, src, re.M)
             exec(m.group(0), scope)
-        self.assertEqual(scope['public_version'](), '0.0.72')
-        self.assertEqual(scope['version_line'](), 'Version 0.0.72 (build Update 39.5)')
+        self.assertEqual(scope['public_version'](), '0.0.73')
+        self.assertEqual(scope['version_line'](), 'Version 0.0.73 (build Update 39.6)')
         self.assertIn("version=public_version(), port_version=port_version()", src)
         finder = (ROOT / 'tools/address_finder.py').read_text(encoding='utf-8')
         self.assertIn("'version': public_version()", finder)

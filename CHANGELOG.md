@@ -2,6 +2,54 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.73 - HERO VR 0.0.73 (October 29, 2026)
+
+**EXPERIMENTAL BUILD: 0.0.73 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63
+goes back to it, settings kept).
+
+Version 0.0.73 (build Update 39.6), launcher build 14 (0.0.73.1). From test build 6 (7af1589) with the multiplayer
+test (MP SOLO TEST) left out, GAME TAA OFF by default, and the test notice and TEST tag removed (HERO_TEST_BUILD OFF;
+the wrist shows "HERO VR 0.0.73 - MADE BY AGENT MULDER", the console "HERO VR 0.0.73 - Made by Agent Mulder").
+The release zip carries `Models/` (with WOLVERINE's claws) and `Sounds/`.
+
+- **GAME TAA starts OFF** (wrist GRAPHICS > QUALITY, under AA). The 0.0.73 test builds ran the game's own TAA in each
+  eye (SPIDYVR) by default, and for some players that made the picture shake in motion. 0.0.73 starts with it OFF and
+  leaves the game's own anti-aliasing setting alone. One press switches it back to SPIDYVR, with no restart. While
+  GAME TAA is SPIDYVR (and ENGINE TAA is on in the launcher), VR sets the game's AA to TAA with no upscaler and puts
+  yours back afterwards, unless the launcher's KEEP MY GAME AA is on. If you played a 0.0.73 test build, GAME TAA moves
+  to OFF once. Pick SPIDYVR again and it stays.
+- **The ROSTER is on the hologram**: the wrist's ROSTER opens hero tiles (MARVEL and DC tabs) with their portraits. Each
+  hero has a page with PLAY AS, CONTROLS (every button explained), OUTFITS (his suits), STATS (rep, rank, level and the
+  rep log) and SETTINGS (his old POWERS options). The tiles no longer flicker.
+- **The PUNISHER VAN drives** (ON by default, can be switched off). Getting in no longer swings the van round. Grip the
+  wheel and that hand's trigger drives (pull its stick back to reverse), while your free hand shoots. It has engine
+  and door sounds and a dash screen (MAP, VEHICLE STATUS, CASES, LOCKER) that X or a poke pages through. The van is
+  also much lighter on the CPU.
+- **WEAPON COLLISION** (ON): thrown and held weapons (batons, shield, hammer, batarangs) hit walls, cars and the
+  ground, bounce off and come home. Held weapons stop short of a surface. Weapons show in the mirror.
+- **Grapple for every grappler**: the grip draws it and the trigger fires it, and it now reaches 80 m (it was 45 m).
+  DAREDEVIL's grapple fires on a normal trigger press, and his silver baton tip flies on a rope to where you aim. His
+  batons sit properly in your fist and flip and throw freely. The PUNISHER can grab with his hook. CAPTAIN AMERICA's
+  shield stays on his arm, and he can sprint.
+- **WOLVERINE**: retractable claws for every Wolverine suit, rooted in the fist and level with the hand (CLAW LEVEL).
+- **IRON MAN**: the repulsor fires straight out of the open palm again (PALM BLAST), the repulsor beam is fixed, and
+  HERO HANDS gives him his own hands, palm out when raised.
+- Web lines and wall climbing are Spider-Man only.
+- **Body**: the hologram's body calibration uses a true T-pose and fits the holsters, the holsters turn with your body,
+  and flying leans with your speed (worn suits too).
+- **Picture**: fewer flickering street lights (LIGHT HOLD, SHADOW MATCH) and far windows (CULL MARGIN), buildings keep
+  flat play's detail in VR (WINDOW POP FIX, up to 2x), and EYE BLOOM is OFF and LENS FLARES are OFF IN VR by default
+  (no strobing halos or headlight ghosts). IMAGE SPIDYVR is sharp with no smear; CLASSIC is the older look.
+- **STREAMER MODE** (ON): the monitor shows the headset's view, with everything the mod draws, steadied (STREAMER
+  SMOOTH) and from the eye you pick (STREAMER EYE).
+- **SMOOTH TURN is on by default** (120°/s). Set it to 0 for snap turning. A 0 saved by an older launcher as its own
+  default moves to 120 once.
+- The launcher (0.0.73.1, build 14) opens the classic design by default again (the new design stays a switch in
+  Options > Launcher), adds KEEP MY GAME AA, and credits Wolverine's claws. Before it updates, it still asks you to
+  confirm that the new version is EXPERIMENTAL and that 0.0.63 is the most recent STABLE build. **Revert** offers
+  **USE 0.0.63**, 0.0.62, 0.0.6 and 0.0.5.
+- Not in this release: the multiplayer test (MP SOLO TEST) from the test builds.
+
 ## v0.0.72 - HERO VR 0.0.72 (October 28, 2026)
 
 **EXPERIMENTAL BUILD: 0.0.72 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63

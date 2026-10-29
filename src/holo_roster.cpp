@@ -426,7 +426,7 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
                 open += d.suits.rows[h][i].status == Status::inUse || d.suits.rows[h][i].status == Status::unlocked;
             if (d.suitsKnown)
                 row("OUTFITS OPEN", std::to_string(open) + " OF " + std::to_string(all));
-            o.text("COUNTED BY THE MOD SINCE 0.0.73 TEST 3, KEPT ACROSS SESSIONS", left, contentBottom - .006f, right, .0027f,
+            o.text("COUNTED BY THE MOD SINCE 0.0.73, KEPT ACROSS SESSIONS", left, contentBottom - .006f, right, .0027f,
                    Role::help);
             if (const Button* b = byId(seeLog))
                 o.button(*b, "SEE " + std::string(nameOf(h)) + "'S REP LOG", s.hover == seeLog, false);

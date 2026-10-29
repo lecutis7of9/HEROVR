@@ -20,9 +20,10 @@ import mp_test_buddy as mb  # noqa: E402
 
 # The C++ side's output of `spidy_mp_probe golden` (the same fixed packets; tests/mp_tests.cpp checks it).
 GOLDEN = {
-    'pose': '48564d50010102002a000000e80300000000700000032200d43c404b0000003f00000000000080be0000003f00000000cdcccc3f'
+    # 0.0.74: the POSE is 124 bytes (+ the flight lean's up, upright here); a 0.0.73 112-byte one still reads.
+    'pose': '48564d50010102002a000000e803000000007c0000032200d43c404b0000003f00000000000080be0000003f00000000cdcccc3f'
             '000000000000000000000000000000000000803f000080be0000803f000080be0000000000000000000000000000803f0000803e'
-            '0000e03f000080be000000000000003f00000000d7b35d3fff007206cbc79879',
+            '0000e03f000080be000000000000003f00000000d7b35d3fff007206000000000000803f00000000a8c6a618',
     'hello': '48564d50010202000100000007000000000014005445535420425544445900000000000001000000aebad988',
     'bye': '48564d50010602000300000000000000000000002421337d',
 }
@@ -71,6 +72,23 @@ class Golden(unittest.TestCase):
         h = mb.decode(bytes.fromhex(GOLDEN['hello']))
         self.assertEqual((h['name'], h['protocol']), ('TEST BUDDY', 1))
         self.assertEqual(mb.decode(bytes.fromhex(GOLDEN['bye']))['type'], mb.BYE)
+
+    def test_flight_lean_0074(self):
+        """0.0.74 FLIGHT POSE: the lean rides in the POSE; an old 112-byte POSE reads upright; a bad lean is upright."""
+        p = mb.decode(bytes.fromhex(GOLDEN['pose']))
+        self.assertEqual(p['lean_up'], (0.0, 1.0, 0.0))
+        pose = dict(hero=0, suit=3, actions=mb.FLYING, suit_hash=1, root=(0, 0, 0), yaw=0, head=((0, 1.6, 0), (0, 0, 0, 1)),
+                    hands=(((0, 1, 0), (0, 0, 0, 1)), ((0, 1, 0), (0, 0, 0, 1))), curl=(0, 0), eye=1.65, lean_up=(0, 0, -2))
+        body = mb.pose_payload(pose)
+        self.assertEqual(len(body), 124)
+        up = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 0, body))['lean_up']
+        self.assertAlmostEqual(up[2], -1.0, places=6)
+        old = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 0, body[:112]))
+        self.assertEqual(old['lean_up'], (0.0, 1.0, 0.0))
+        with self.assertRaises(mb.BadPacket):
+            mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 0, body[:100]))
+        for bad in ((float('nan'), 1, 0), (0, -1, 0), (0, 0, 0), (0, 3, 0)):
+            self.assertEqual(mb.safe_lean_up(bad), (0.0, 1.0, 0.0), bad)
 
     def test_puppet_states_encode_and_decode(self):
         pup = mb.Puppet()

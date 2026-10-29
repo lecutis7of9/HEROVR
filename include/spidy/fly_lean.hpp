@@ -9,6 +9,10 @@
 // The lean is a turn of the body about the eyes (native_body::Command::tilt, the turn the flips already
 // use: CONFIRMED path), about the body's level right axis, so the view never tilts. Up or down speed and
 // sideways speed never lean it. FLIGHT POSE UPRIGHT: none (the 0.0.72 body). Pure; no game memory.
+// Version 0.0.74 (fix 27's third try): every body the player can see leans - the worn suit hangs from the neck under
+// the upright head (suit_wear::Tracked::lean; test 3 swung it about the eyes, level with the camera, so looking down
+// found nothing) and Player 2 carries it (mp::PoseState::leanUp). Every input is the mod's own tracked pose and the
+// swing bridge's velocity (CONFIRMED: the mod's own data); no new game address.
 #include "spidy/math.hpp"
 
 #include <algorithm>
@@ -60,6 +64,29 @@ inline void leanSuit(Quat lean, Vec3 eye, Vec3& up, Vec3& feet) {
         return;
     up = lean.rotate(up);
     feet = eye + lean.rotate(feet - eye);
+}
+
+// Version 0.0.74 (fix 27, why test 3 still looked upright): the lean as the body's up (world; +y upright), and back
+// to the turn from upright (the shortest arc, which is the lean itself: it only ever turns about a level axis).
+// Player 2 carries it this way (mp::PoseState::leanUp). Not finite, or too small: upright.
+inline Vec3 upOf(Quat lean) {
+    const Vec3 u = lean.rotate(Vec3{0, 1, 0});
+    return finite(u) && length(u) > .5f ? normalized(u) : Vec3{0, 1, 0};
+}
+inline Quat fromUp(Vec3 upright, Vec3 leaned) {
+    if (!finite(upright) || !finite(leaned) || !(length(upright) > .5f) || !(length(leaned) > .5f))
+        return {};
+    const Vec3 a = normalized(upright), b = normalized(leaned);
+    if (dot(a, b) > .99999f || dot(a, b) < -.5f) // none, or more than 120 degrees: not a flight lean
+        return {};
+    return arc(a, b);
+}
+// A real lean: finite, unit, not the identity.
+inline bool leaning(Quat q) {
+    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    if (!std::isfinite(n) || std::abs(n - 1) > .01f)
+        return false;
+    return std::abs(q.x) >= 1e-6f || std::abs(q.y) >= 1e-6f || std::abs(q.z) >= 1e-6f;
 }
 
 class Lean {

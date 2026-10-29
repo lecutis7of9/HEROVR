@@ -179,6 +179,7 @@ size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
             w.u8(static_cast<uint8_t>(std::lround(std::clamp(std::isfinite(c) ? c : 0.f, 0.f, 1.f) * 255.f)));
         const float eye = std::isfinite(s.standingEye) ? std::clamp(s.standingEye, 0.f, 3.f) : 0.f;
         w.u16(static_cast<uint16_t>(std::lround(eye * 1000.f)));
+        w.vec(safeLeanUp(s.leanUp)); // 0.0.74 FLIGHT POSE
         break;
     }
     case hello:
@@ -221,7 +222,9 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
     out.sentMs = r.u32();
     out.echoHoldMs = r.u16();
     const size_t body = r.u16();
-    const size_t want = payloadFor(out.type);
+    const size_t full = payloadFor(out.type);
+    // 0.0.74: a 0.0.73 pose (112 bytes, no lean) is still a pose - read upright.
+    const size_t want = out.type == pose ? poseBytesV1 : full;
     if (want == SIZE_MAX)
         return Error::badType;
     // The same version may grow a payload (extra bytes ignored), never shrink it.
@@ -245,6 +248,7 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
         for (float& k : s.curl)
             k = static_cast<float>(r.u8()) / 255.f;
         s.standingEye = static_cast<float>(r.u16()) / 1000.f;
+        s.leanUp = body >= poseBytes ? safeLeanUp(r.vec()) : Vec3{0, 1, 0}; // 0.0.74 FLIGHT POSE
         if (s.hero >= 32 || !within(s.root, 1e5f) || !std::isfinite(s.yaw) || std::abs(s.yaw) > 100.f ||
             !within(s.head.position, 50.f) || !unitish(s.head.orientation) || s.standingEye > 3.f)
             return Error::badValue;
@@ -288,6 +292,18 @@ float yawOf(Vec3 f) {
     return std::atan2(-f.x, -f.z);
 }
 
+Vec3 safeLeanUp(Vec3 up) {
+    if (!finite(up))
+        return {0, 1, 0};
+    const float n = length(up);
+    if (!(n > .5f) || !(n < 2.5f))
+        return {0, 1, 0};
+    up = up * (1.f / n);
+    if (!(up.y > -.18f)) // more than ~100 degrees off upright: not a flight lean
+        return {0, 1, 0};
+    return up;
+}
+
 PoseState blend(const PoseState& a, const PoseState& b, float t) {
     t = std::isfinite(t) ? std::clamp(t, 0.f, 1.f) : 1.f;
     PoseState s = b;
@@ -301,6 +317,7 @@ PoseState blend(const PoseState& a, const PoseState& b, float t) {
         s.curl[i] = a.curl[i] + (b.curl[i] - a.curl[i]) * t;
     }
     s.standingEye = a.standingEye + (b.standingEye - a.standingEye) * t;
+    s.leanUp = safeLeanUp(lerp(safeLeanUp(a.leanUp), safeLeanUp(b.leanUp), t));
     return s;
 }
 
@@ -424,6 +441,7 @@ Ghost partner(const PoseState& s, Vec3 feet, float yaw, bool mirror, bool useRoo
         g.curl[i] = s.curl[from];
     }
     g.standingEye = s.standingEye > .8f && s.standingEye < 2.4f ? s.standingEye : 1.65f;
+    g.up = turn(safeLeanUp(s.leanUp)); // 0.0.74 FLIGHT POSE: the lean turns (and mirrors) with the body
     return g;
 }
 
@@ -465,6 +483,7 @@ PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t sui
     }
     s.actions = a;
     s.standingEye = l.standingEye;
+    s.leanUp = safeLeanUp(back.rotate(safeLeanUp(l.leanUp))); // 0.0.74 FLIGHT POSE
     return s;
 }
 

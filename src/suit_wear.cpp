@@ -2,6 +2,8 @@
 // Build 9 SUITS: suit_wear.hpp.
 #include "spidy/suit_wear.hpp"
 
+#include "spidy/fly_lean.hpp"
+
 #include <bitset>
 #include <algorithm>
 #include <cmath>
@@ -746,15 +748,30 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
         return false;
     // the head's axes (z its facing, y its up) and the body's (z the level facing, x its left)
     const Vec3 hz = normalized(t.eyeForward), hy = normalized(square(t.eyeUp, hz)), hx = cross(hy, hz);
-    Vec3 fz = square(hz, up);
+    // Version 0.0.74 FLIGHT POSE: leaning, the body's facing is the upright one turned by the lean.
+    const bool leaned = fly_lean::leaning(t.lean);
+    const Vec3 up0 = leaned ? normalized(t.lean.conjugate().rotate(up)) : up;
+    const auto levelOf = [&](Vec3 u) {
+        Vec3 f = square(hz, u);
+        if (!(length(f) > .2f))
+            f = square(hy * (dot(hz, u) > 0 ? -1.f : 1.f), u); // straight up or down: the top of the head says
+        return f;
+    };
+    Vec3 fz0 = leaned ? levelOf(up0) : Vec3{};
+    if (leaned && length(fz0) > 1e-3f)
+        fz0 = normalized(fz0);
+    Vec3 fz = leaned && length(fz0) > .5f ? square(t.lean.rotate(fz0), up) : levelOf(up);
     if (!(length(fz) > .2f))
-        fz = square(hy * (dot(hz, up) > 0 ? -1.f : 1.f), up); // straight up or down: the top of the head says
+        fz = levelOf(up);
     if (!(length(fz) > 1e-3f) || !(length(hy) > .5f))
         return false;
     fz = normalized(fz);
     const Vec3 fx = cross(up, fz);
     const auto H = [&](Vec3 v) { return hx * v.x + hy * v.y + hz * v.z; };
     const auto B = [&](Vec3 v) { return fx * v.x + up * v.y + fz * v.z; };
+    const bool neckPivot = leaned && length(fz0) > .5f && length(up0) > .5f;
+    const Vec3 fx0 = neckPivot ? cross(up0, fz0) : fx;
+    const auto B0 = [&](Vec3 v) { return neckPivot ? fx0 * v.x + up0 * v.y + fz0 * v.z : B(v); };
     // where the model's eyes are: half way up its head, 8 cm (at 1.8 m) in front of its axis
     const float restHeight = rig.height;
     const Vec3 restEye = r.at[head] + (r.at[headTop] - r.at[head]) * .5f + Vec3{0, 0, .08f * restHeight / 1.8f};
@@ -765,8 +782,10 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
     const Vec3 headAt = t.eye - H(restEye - r.at[head]) * s;
     out.at[head] = headAt;
     out.at[headTop] = headAt + H(r.at[headTop] - r.at[head]) * s;
+    // 0.0.74: the neck under the head as if upright, the body from the neck (upright: B0 is B, the same as before)
+    const Vec3 neckAt = headAt + B0(r.at[neck] - r.at[head]) * s;
     for (uint32_t e : {neck, chest, pelvis, shoulderL, shoulderR, hipL, hipR})
-        out.at[e] = headAt + B(r.at[e] - r.at[head]) * s;
+        out.at[e] = neckAt + B(r.at[e] - r.at[neck]) * s;
     out.face = hz;
     out.faceUp = hy;
     out.up = up;

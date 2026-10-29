@@ -25931,6 +25931,42 @@ int main() {
               "the shoulders turned to the facing, the feet on the floor, the wrists at the grips");
         check(sw::moves(rig, est, mv) && sw::skin(rig, mv, sk), "the estimate skins");
         check(sk.p[sw::boneChest * 3].z < est.at[sw::chest].z - .03f, "the chest's front turned toward -z");
+        {   // Version 0.0.74 FLIGHT POSE (fix 27): flying forward flat out, the body hangs from the neck under the
+            // upright head (test 3 swung it about the eyes, level with the camera: nothing to see), chest down.
+            fly_lean::Lean fl;
+            for (int i = 0; i < 900; ++i)
+                fl.update(1.f / 90, true, {0, 0, -30}, {0, 0, -1});
+            sw::Tracked f = t;
+            fly_lean::leanSuit(fl.tilt(), f.eye, f.up, f.feet);
+            f.lean = fl.tilt();
+            sw::Skeleton flat;
+            check(sw::estimate(rig, f, flat) && flat.ok, "the leaned estimate");
+            check(length(flat.at[sw::head] - est.at[sw::head]) < 1e-4f, "the head stays where the eyes are (the view never tilts)");
+            check(flat.at[sw::neck].y < f.eye.y - .05f && flat.at[sw::neck].y > f.eye.y - .4f, "the neck under the head");
+            check(flat.at[sw::pelvis].z > flat.at[sw::neck].z + .3f && std::abs(flat.at[sw::pelvis].y - flat.at[sw::neck].y) < .12f,
+                  "the body lies back, level with the neck");
+            check(flat.at[sw::footL].z > flat.at[sw::pelvis].z + .5f, "the legs trail behind");
+            check(flat.at[sw::neck].y < est.at[sw::neck].y + 1e-3f, "below the eyes, where looking down finds it");
+            // looking up while flying: the same body (test 3's flipped onto its back)
+            sw::Tracked u = f;
+            u.eyeForward = normalized(Vec3{0, .7f, -.7f});
+            sw::Skeleton up;
+            check(sw::estimate(rig, u, up) && length(up.at[sw::pelvis] - flat.at[sw::pelvis]) < .12f &&
+                      length(up.at[sw::footL] - flat.at[sw::footL]) < .2f,
+                  "looking up keeps the body as it was");
+            check(std::abs(up.at[sw::shoulderL].x - flat.at[sw::shoulderL].x) < .05f, "never flipped left for right");
+            // upright: exactly the old estimate
+            sw::Tracked same = t;
+            same.lean = {};
+            sw::Skeleton s2;
+            bool eq = sw::estimate(rig, same, s2);
+            for (uint32_t e = 0; e < sw::ends; ++e)
+                eq = eq && length(s2.at[e] - est.at[e]) < 1e-6f;
+            check(eq, "no lean: the 0.0.73 body exactly");
+            sw::Tracked bad2 = f;
+            bad2.lean = {std::nanf(""), 0, 0, 1};
+            check(sw::estimate(rig, bad2, s2), "a bad lean is ignored, never a failure");
+        }
         t.eye = {std::nanf(""), 0, 0};
         check(!sw::estimate(rig, t, est), "an insane head: no estimate");
         // a mesh without its skin is not worn

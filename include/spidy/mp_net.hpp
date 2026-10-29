@@ -15,6 +15,8 @@
 // POSE (112 bytes): hero, suit (255 none), action flags, 0 | suit folder hash (FNV-1a) | root (feet) x y z,
 //   yaw (radians about +y; forward is -z turned by it) | head, left grip, right grip: position (metres, in
 //   the root's yawed frame, from the feet) and orientation (x y z w) | curl L, R (0..255) | standing eye mm.
+//   0.0.74 FLIGHT POSE (fix 27): + the body's leaned up x y z (the root's yawed frame; 0 1 0 upright) = 124 bytes.
+//   A 112-byte pose (0.0.73 and the test buddy) is still read, upright.
 // A packet of another version, a wrong magic, length or checksum, or a value that is not finite or out of
 // range, is refused (decode says why) - the caller hides the remote player and logs it; nothing throws.
 // A newer packet of the SAME version may carry more payload bytes than this build knows: they are ignored.
@@ -34,7 +36,7 @@ namespace spidy::mp {
 inline constexpr uint32_t magic = 0x504d5648u; // bytes 'H' 'V' 'M' 'P'
 inline constexpr uint8_t version = 1;
 inline constexpr size_t headerBytes = 20, crcBytes = 4, overheadBytes = headerBytes + crcBytes;
-inline constexpr size_t poseBytes = 112, helloBytes = 20, pingBytes = 4, pongBytes = 8;
+inline constexpr size_t poseBytes = 124, poseBytesV1 = 112, helloBytes = 20, pingBytes = 4, pongBytes = 8;
 inline constexpr size_t maxPacket = 512;
 inline constexpr uint16_t defaultPort = 39470; // the game's UDP port (the buddy connects to it)
 inline constexpr uint8_t noSuit = 255;
@@ -55,6 +57,7 @@ struct PoseState {
     Pose hands[2]{};         // the grips, same frame
     float curl[2]{};         // 0 open .. 1 a fist
     float standingEye = 1.65f;
+    Vec3 leanUp{0, 1, 0};    // 0.0.74 FLIGHT POSE: the body's up, leaned in flight (yawed root frame, unit)
 };
 struct Packet {
     uint8_t type = pose;
@@ -78,6 +81,10 @@ size_t encode(const Packet& p, uint8_t* out, size_t capacity);
 std::vector<uint8_t> encode(const Packet& p);
 // Decodes `size` bytes into `out`; anything wrong: the reason (out is then unspecified).
 Error decode(const uint8_t* data, size_t size, Packet& out);
+
+// 0.0.74 FLIGHT POSE: a received lean up made safe - not finite, too short or tipped past horizontal-and-a-bit
+// (more than 100 degrees off +y): upright; else unit.
+Vec3 safeLeanUp(Vec3 up);
 
 // Sequence numbers wrap: a is newer than b when it is ahead by less than half the range.
 inline bool newer(uint32_t a, uint32_t b) { return static_cast<int32_t>(a - b) > 0; }
@@ -157,6 +164,7 @@ struct Ghost {
     float curl[2]{};
     float standingEye = 1.65f;
     float bodyYaw{};
+    Vec3 up{0, 1, 0}; // 0.0.74 FLIGHT POSE: the body's leaned up (world, placed like the eye; 0 1 0 upright)
 };
 Ghost partner(const PoseState& s, Vec3 feet, float yaw, bool mirror, bool useRoot);
 inline Vec3 forwardOf(float yaw) { return Quat::yaw(yaw).rotate(Vec3{0, 0, -1}); }
@@ -187,6 +195,7 @@ struct LocalPose {
     float curl[2]{};
     float standingEye = 1.65f;
     Vec3 worldFeet{};
+    Vec3 leanUp{0, 1, 0}; // 0.0.74 FLIGHT POSE: the body's up in flight, the tracking frame (0 1 0 upright)
 };
 PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t suitHash, uint8_t actions);
 

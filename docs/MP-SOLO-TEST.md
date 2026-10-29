@@ -13,6 +13,9 @@ network, accounts or servers, and no game memory address is read or written by i
   marked as another player; with the 0.1 s interpolation you see yourself about half a second late as
   `PLAYER 2 (YOU, LOOPBACK)  PING n MS`, ~3 m ahead, facing you, mirrored like a dance partner, in your
   current hero and suit.
+* **0.0.74 FLIGHT POSE:** the pose also carries the body's flight lean (its leaned up, 12 bytes more: a
+  124-byte POSE), so Player 2 leans forward / back in flight as you do. A 0.0.73 112-byte POSE (game or Test Buddy)
+  is still read (upright); an older build ignores the extra bytes. A broken lean draws upright, never hidden.
 * **HERO VR MP Test Buddy** (`tools/mp_test_buddy.py`, runs on the zip's bundled Python): connects with
   HELLO / WELCOME on UDP 39470; while connected its puppet (waves, walks a circle, switches suits on a key)
   replaces the loopback as `PLAYER 2 (TEST BUDDY)`. When it quits (BYE) or goes silent 3 s, the loopback

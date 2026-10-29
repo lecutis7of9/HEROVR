@@ -74,7 +74,7 @@ void testRoundTrip() {
     p.sentMs = 123456789;
     p.state = sample();
     const auto b = encode(p);
-    check(b.size() == overheadBytes + poseBytes && b.size() == 136, "a pose packet is 136 bytes");
+    check(b.size() == overheadBytes + poseBytes && b.size() == 148, "a pose packet is 148 bytes (0.0.74: + the flight lean)");
     check(b[0] == 'H' && b[1] == 'V' && b[2] == 'M' && b[3] == 'P' && b[4] == 1, "magic and version on the wire");
     Packet q;
     check(decode(b.data(), b.size(), q) == Error::none, "a pose packet decodes");
@@ -135,6 +135,55 @@ void testVersioning() {
           "a longer v1 payload is accepted, its tail ignored");
     auto t = resealed([&] { auto c = b; c[5] = 99; return c; }());
     check(decode(t.data(), t.size(), q) == Error::badType, "an unknown type is refused");
+}
+
+void testFlightLean() {
+    // 0.0.74 FLIGHT POSE (fix 27): the lean rides the pose; a 0.0.73 (112-byte) pose is still read, upright.
+    Packet p;
+    p.state = sample();
+    p.state.leanUp = normalized(Vec3{0, .2f, -1});
+    auto b = encode(p);
+    Packet q;
+    check(decode(b.data(), b.size(), q) == Error::none && near(q.state.leanUp, p.state.leanUp, 1e-5f), "the lean round trips");
+    std::vector<uint8_t> old(b.begin(), b.begin() + headerBytes + poseBytesV1);
+    old.resize(old.size() + crcBytes);
+    old[18] = static_cast<uint8_t>(poseBytesV1);
+    old = resealed(old);
+    check(decode(old.data(), old.size(), q) == Error::none && near(q.state.leanUp, {0, 1, 0}, 0) &&
+              near(q.state.yaw, p.state.yaw, 0),
+          "a 0.0.73 pose decodes, upright");
+    std::vector<uint8_t> shorter(b.begin(), b.begin() + headerBytes + poseBytesV1 - 2);
+    shorter.resize(shorter.size() + crcBytes);
+    shorter[18] = static_cast<uint8_t>(poseBytesV1 - 2);
+    shorter = resealed(shorter);
+    check(decode(shorter.data(), shorter.size(), q) == Error::badLength, "shorter than 0.0.73's: refused");
+    p.state.leanUp = {std::nanf(""), 1, 0};
+    b = encode(p);
+    check(decode(b.data(), b.size(), q) == Error::none && near(q.state.leanUp, {0, 1, 0}, 0), "a broken lean: upright, still drawn");
+    check(near(safeLeanUp({0, -1, 0}), {0, 1, 0}, 0) && near(safeLeanUp({0, 0, 0}), {0, 1, 0}, 0) &&
+              near(safeLeanUp({0, 0, -2}), {0, 0, -1}, 1e-6f),
+          "upside down or empty: upright; else unit");
+    // The local lean (tracking frame, flying -z flat out) -> the loopback partner leans toward the player.
+    LocalPose l;
+    l.eye = {{0, 1.6f, 0}, {}};
+    l.leanUp = {0, 0, -1};
+    const PoseState s = fromLocal(l, 1, noSuit, 0, flying);
+    check(near(s.leanUp, {0, 0, -1}, 1e-5f), "in the yawed frame");
+    AnchorFollow f;
+    f.update(0, .016f);
+    const Ghost g = partner(s, f.spot({}), f.ghostYaw(), true, false);
+    check(near(g.up, {0, 0, 1}, 1e-4f), "the partner faces the player: its lean comes toward him");
+    const suit_wear::Tracked t = toTracked(g, {}, {});
+    check(t.up.z > .99f && near(dot(t.eye - t.feet, t.eye - t.feet), 1.6f * 1.6f, 1e-3f) && t.feet.z < t.eye.z - 1.5f,
+          "Player 2 lies flat, head toward the player, feet trailing");
+    check(t.feet.z < t.eye.z && std::abs(t.feet.y - t.eye.y) < .05f, "feet level with the head");
+    LocalPose still = l;
+    still.leanUp = {0, 1, 0};
+    const suit_wear::Tracked u = toTracked(partner(fromLocal(still, 1, noSuit, 0, 0), f.spot({}), f.ghostYaw(), true, false), {}, {});
+    check(near(u.up, {0, 1, 0}, 1e-5f) && u.lean.w == 1 && u.lean.x == 0, "hovering: upright, unchanged");
+    PoseState a = s, c = s;
+    c.leanUp = {0, 1, 0};
+    check(std::abs(length(blend(a, c, .5f).leanUp) - 1) < 1e-4f, "blended leans stay unit");
 }
 
 void testMalformed() {
@@ -622,6 +671,7 @@ int main() {
     testCrcAndHash();
     testRoundTrip();
     testVersioning();
+    testFlightLean();
     testMalformed();
     testInterpolation();
     testDelayAndEcho();

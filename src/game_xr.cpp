@@ -11233,6 +11233,11 @@ DWORD WINAPI run(void*) {
                                     // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the suit leans with the flight about
                                     // the eyes, as the game's body does (fly_lean::leanSuit); upright: unchanged.
                                     fly_lean::leanSuit(saved->flyLean, t.eye, t.up, t.feet);
+                                    // 0.0.74 (fix 27): and the body hangs from the neck under the upright head, its
+                                    // front leaned (suit_wear::Tracked::lean) - test 3 swung it about the eyes, up
+                                    // level with the camera where the player could not see it.
+                                    if (fly_lean::leaning(saved->flyLean))
+                                        t.lean = saved->flyLean;
                                     t.eyeForward = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
                                     t.eyeUp = rendered.headPose.orientation.rotate(Vec3{0, 1, 0});
                                     // 0.0.73 test 5 HERO HANDS (iron_hands ON): the suit's own hand profile (IRON MAN's
@@ -11407,6 +11412,8 @@ DWORD WINAPI run(void*) {
                                     }
                                     lp.standingEye = suitStanding > .8f ? suitStanding : 1.65f;
                                     lp.worldFeet = feet;
+                                    // 0.0.74 FLIGHT POSE (fix 27): Player 2 leans too (the lean in the level frame)
+                                    lp.leanUp = back.rotate(fly_lean::upOf(saved->flyLean));
                                     const uint8_t suitId = spidy::mp::suitIdOfSlot(wornSuitSlot.load());
                                     const uint8_t hero = static_cast<uint8_t>(std::min<uint32_t>(heroNow(), 31));
                                     mpSession->publish(spidy::mp::fromLocal(lp, hero, suitId, spidy::mp::suitHashOf(suitId),

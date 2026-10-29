@@ -192,6 +192,10 @@ struct Tracked {
     bool open[2]{};
     Vec3 feet{}, up{0, 1, 0};
     float standingEye = 0; // the player's standing eye height above the feet (0: this frame's, crouching shrinks him)
+    // Version 0.0.74 FLIGHT POSE (fix 27): the flight's lean (world; identity: upright, exactly the old body) already
+    // in `up` and `feet` (fly_lean::leanSuit). With it the neck stays under the upright head and the body hangs
+    // from the neck, its front the lean's (so a flyer looking up never flips onto his back).
+    Quat lean{};
 };
 // The live skeleton for `rig` from the tracked poses: the head from the eyes, the torso the rest one turned to the
 // head's level facing and scaled to the player's eye height, the arms reaching the wrists (two-bone IK, the elbows

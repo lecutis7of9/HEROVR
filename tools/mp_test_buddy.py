@@ -9,7 +9,8 @@ the remote player you see (in place of your loopback ghost): it walks a circle, 
 
 Keys (in this window):  S next suit   H next hero (no suit)   W wave on/off   C circle on/off   Q quit
 Plain Python 3 (the HERO VR bundled one), no packages, nothing written anywhere; Ctrl+C quits too.
-The packet is the same as src/mp_net.cpp's (version 1; tests/mp_buddy_tests.py checks them byte for byte).
+The packet is the same as src/mp_net.cpp's (version 1; tests/mp_buddy_tests.py checks them byte for byte; 0.0.74: the
+POSE carries the flight lean, 124 bytes; 112-byte ones still read, upright).
 """
 import argparse
 import math
@@ -28,8 +29,9 @@ ROLE_GAME, ROLE_ECHO, ROLE_BUDDY = 0, 1, 2
 FLYING, SWINGING, GRAPPLE, FIRING, HAND_L, HAND_R = 1, 2, 4, 8, 16, 32
 PAYLOAD = {POSE: 112, HELLO: 20, WELCOME: 20, PING: 4, PONG: 8, BYE: 0}
 HEADER = struct.Struct('<4sBBBBIIHH')  # 20 bytes
-POSE_FMT = struct.Struct('<BBBBI3ff3f4f3f4f3f4fBBH')  # 112 bytes
-assert HEADER.size == 20 and POSE_FMT.size == 112
+POSE_FMT = struct.Struct('<BBBBI3ff3f4f3f4f3f4fBBH')  # 112 bytes (the 0.0.73 POSE; still read, upright)
+LEAN_FMT = struct.Struct('<3f')  # 0.0.74 FLIGHT POSE: + the body's leaned up, 124 bytes in all
+assert HEADER.size == 20 and POSE_FMT.size == 112 and LEAN_FMT.size == 12
 DEFAULT_PORT = 39470
 NO_SUIT = 255
 
@@ -75,13 +77,25 @@ def quat_ok(q):
 
 
 def pose_payload(p):
-    """p: dict(hero, suit, actions, suit_hash, root(3), yaw, head(pos3, quat4), hands[2](pos3, quat4), curl(2), eye)."""
+    """p: dict(hero, suit, actions, suit_hash, root(3), yaw, head(pos3, quat4), hands[2](pos3, quat4), curl(2), eye,
+    lean_up(3), optional: upright (0, 1, 0))."""
     def clamp01(x):
         return max(0.0, min(1.0, x))
     (hp, hq), (lp, lq), (rp, rq) = p['head'], p['hands'][0], p['hands'][1]
     return POSE_FMT.pack(p['hero'], p['suit'], p['actions'] & 63, 0, p['suit_hash'], *p['root'], p['yaw'],
                          *hp, *hq, *lp, *lq, *rp, *rq, round(clamp01(p['curl'][0]) * 255),
-                         round(clamp01(p['curl'][1]) * 255), round(max(0.0, min(3.0, p['eye'])) * 1000))
+                         round(clamp01(p['curl'][1]) * 255), round(max(0.0, min(3.0, p['eye'])) * 1000)) + \
+        LEAN_FMT.pack(*safe_lean_up(p.get('lean_up', (0.0, 1.0, 0.0))))
+
+
+def safe_lean_up(up):
+    """The same as mp_net's safeLeanUp: a broken or upside-down lean is upright, else unit."""
+    if len(up) != 3 or not all(math.isfinite(c) for c in up):
+        return (0.0, 1.0, 0.0)
+    n = math.sqrt(sum(c * c for c in up))
+    if not 0.5 < n < 2.5 or up[1] / n <= -0.18:
+        return (0.0, 1.0, 0.0)
+    return tuple(c / n for c in up)
 
 
 def name_payload(name):
@@ -117,7 +131,8 @@ def decode(data):
         v = POSE_FMT.unpack_from(body)
         out.update(hero=v[0], suit=v[1], actions=v[2], suit_hash=v[4], root=v[5:8], yaw=v[8],
                    head=(v[9:12], v[12:16]), hands=((v[16:19], v[19:23]), (v[23:26], v[26:30])),
-                   curl=(v[30] / 255, v[31] / 255), eye=v[32] / 1000)
+                   curl=(v[30] / 255, v[31] / 255), eye=v[32] / 1000,
+                   lean_up=safe_lean_up(LEAN_FMT.unpack_from(body, POSE_FMT.size)) if length >= 124 else (0.0, 1.0, 0.0))
         nums = list(out['root']) + [out['yaw']] + list(v[9:30])
         if not all(math.isfinite(x) for x in nums) or out['hero'] >= 32:
             raise BadPacket('bad value')

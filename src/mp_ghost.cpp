@@ -4,6 +4,7 @@
 // 0.0.73 MP SOLO TEST: the remote player's drawing (mp_ghost.hpp).
 #include "spidy/mp_ghost.hpp"
 
+#include "spidy/fly_lean.hpp"
 #include "spidy/hero072.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/overlay_text.hpp"
@@ -58,6 +59,12 @@ suit_wear::Tracked toTracked(const Ghost& g, Vec3 origin, Quat turn) {
         t.curl[i] = std::clamp(std::isfinite(g.curl[i]) ? g.curl[i] : 0.f, 0.f, 1.f);
     }
     t.standingEye = g.standingEye;
+    // 0.0.74 FLIGHT POSE (fix 27): Player 2 leans as the player does (0.0.73 never sent it: always upright).
+    const Quat lean = fly_lean::fromUp(t.up, dir(g.up));
+    if (fly_lean::leaning(lean)) {
+        fly_lean::leanSuit(lean, t.eye, t.up, t.feet);
+        t.lean = lean;
+    }
     return t;
 }
 

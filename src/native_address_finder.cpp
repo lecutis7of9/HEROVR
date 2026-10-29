@@ -2503,9 +2503,9 @@ __declspec(dllexport) DWORD WINAPI SpidySlWatchOn(void* on) {
     if (v > 1)
         return 4473;
     slWatchOn.store(static_cast<uint32_t>(v));
-    SpidySlWatchData.on = static_cast<uint32_t>(v);
+    ::SpidySlWatchData.on = static_cast<uint32_t>(v);
     if (v)
-        SpidySlWatchData.hooked = slWatchInstall();
+        ::SpidySlWatchData.hooked = slWatchInstall();
     return 0;
 }
 

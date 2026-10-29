@@ -5,6 +5,7 @@
 #ifndef SPIDY_TEST_NUMBER
 #define SPIDY_TEST_NUMBER "0"
 #endif
+#include "spidy/streamer_view.hpp"
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
@@ -11972,7 +11973,24 @@ DWORD WINAPI run(void*) {
                         }
                         // The game's window mirrors the left eye as it is now, the
                         // drawings above on it; copied only when the window took the last.
-                        native_gpu::keepShownEye(targets[0].texture);
+                        // 0.0.73 STREAMER MODE (streamer_view.hpp): in play, the chosen eye
+                        // with the view its image was made with (the projection layer's), so
+                        // the window's view can be steadied and cut to its shape.
+                        {
+                            const bool streaming = streamer_view::modeOn(c38(combat38::streamerMode)) &&
+                                                   drawn == Presentation::immersive;
+                            native_gpu::streamer(streaming, c38(combat38::streamerSmooth));
+                            if (streaming) {
+                                const auto& shown = targets[streamer_view::eyeIndex(c38(combat38::streamerEye))];
+                                const auto& o = shown.view.pose.orientation;
+                                const auto& f = shown.view.fov;
+                                const float orientation[4] = {o.x, o.y, o.z, o.w};
+                                const float fov[4] = {f.angleLeft, f.angleRight, f.angleDown, f.angleUp};
+                                native_gpu::keepShownEye(shown.texture, orientation, fov);
+                            } else {
+                                native_gpu::keepShownEye(targets[0].texture);
+                            }
+                        }
                         if (webGap >= 0 && imageGeneration != gapGeneration) {
                             native_eyes::reportWebGap(webGap);
                             gapGeneration = imageGeneration;
@@ -12905,6 +12923,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHe
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyleOption(void* v) { return setHero007(v, combat38::imageStyle, 5460); }
 // 0.0.73 DD BATON: ON (0, the baton seated in the fist, its silver tip flown on a rope) or OFF (1, test 3's) (live.txt dd_baton_tip).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdBatonTip(void* v) { return setHero007(v, combat38::ddBatonTip, 5453); }
+// 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
+// STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerSmooth(void* v) { return setHero007(v, combat38::streamerSmooth, 5451); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerEye(void* v) { return setHero007(v, combat38::streamerEye, 5452); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

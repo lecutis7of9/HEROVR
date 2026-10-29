@@ -163,6 +163,9 @@ enum Option : uint32_t {
     // 0.0.73 DD BATON: ON (the held baton seated in the fist, the grapple fired from its silver tip, the tip flying
     // to the anchor on a rope and reeled back) or OFF (test 3's held baton and grapple line)
     ddBatonTip,
+    // 0.0.73 STREAMER MODE (streamer_view.hpp): the monitor shows the headset's eye, every drawing on it (ON) or not (OFF);
+    // STREAMER SMOOTH: how the monitor's view steadies head shake (LOW, OFF, HIGH); STREAMER EYE: LEFT EYE or RIGHT EYE
+    streamerMode, streamerSmooth, streamerEye,
     options
 };
 struct OptionInfo {
@@ -496,6 +499,12 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"SPIDYVR", "OFF", nullptr, nullptr}},
     {"dd_baton_tip", "BATON TIP", "DDTIP", "ON: the baton sits in the fist, its silver tip flies on a rope, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"streamer_mode", "STREAMER MODE", "STRMR", "ON shows the headset's view with all its drawings on the monitor, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"streamer_smooth", "STREAMER SMOOTH", "STRSM", "Steadies head shake in the monitor's view, HIGH the most, no restart.",
+     3, {"LOW", "OFF", "HIGH", nullptr}},
+    {"streamer_eye", "STREAMER EYE", "STREY", "Which headset eye the monitor shows in STREAMER MODE, no restart.",
+     2, {"LEFT EYE", "RIGHT EYE", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

@@ -10,10 +10,12 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/monitor_rate.hpp"
 #include "spidy/presentation_gate.hpp"
+#include "spidy/streamer_view.hpp"
 #include <MinHook.h>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstring>
 #include <d3dcompiler.h>
@@ -218,6 +220,21 @@ struct MirrorPipeline {
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     bool failed{};
 } mirrorPipeline;
+// 0.0.73 STREAMER MODE (streamer_view.hpp): wanted (the game thread, each frame), the
+// smoothing, and the copy's own view (submission lock): which eye's orientation and lens
+// the copy in shownEye was made with, and whether it was taken in this mode (so the
+// sharpened headset image may be on the window). The window's smoothed view (present
+// thread, submission lock) and its own pipeline.
+std::atomic<bool> streamerWanted{};
+std::atomic<uint32_t> streamerSmoothing{}, streamerDraws{}, streamerWhy{};
+struct ShownView {
+    spidy::Quat orientation{};
+    spidy::streamer_view::Fov fov{};
+    bool valid{}, streamer{};
+} shownView;
+spidy::streamer_view::Smoother streamerSmoother;
+int64_t streamerQpc{};
+MirrorPipeline streamerPipeline;
 std::atomic<uint32_t> screenSkipped{}, backBufferFormat{};
 void publishScreen(uint32_t status, const void* rows, uint32_t rowBytes) {
     std::lock_guard lock(telemetry);
@@ -2490,8 +2507,10 @@ ScreenSkip copyScreen(IDXGISwapChain* swapchain) {
 }
 // The pipeline that draws a part of one texture over a whole target of
 // `format`: a screen-covering triangle and one linear sample (submission lock).
-bool prepareMirror(DXGI_FORMAT format) {
-    auto& m = mirrorPipeline;
+// 0.0.73 STREAMER MODE: the streamer's pipeline (streamer true) is the same but for its
+// shader: a rotation-only reprojection of the eye to the window's smoothed view, cut to the
+// window's shape about the eye's axis (streamer_view.hpp sample()), black off the image.
+bool preparePipeline(MirrorPipeline& m, DXGI_FORMAT format, bool streamer) {
     if (m.failed)
         return false;
     if (m.state && m.format == format)
@@ -2504,7 +2523,7 @@ bool prepareMirror(DXGI_FORMAT format) {
         parameters[0].DescriptorTable = {1, &range};
         parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[1].Constants.Num32BitValues = 8;
+        parameters[1].Constants.Num32BitValues = streamer ? 24 : 8;
         parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_STATIC_SAMPLER_DESC sampler{};
         sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -2543,6 +2562,31 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     return float4(source.SampleLevel(scaled, offset + position.xy * targetPixel * scale, 0).rgb, 1);
 }
 )";
+    // streamer_view.hpp constantsOf: the turn's rows, the crop's and the lens's tangents
+    // (left, right, down, up), the window's pixel size.
+    const char* streamerShader = R"(
+Texture2D source : register(t0);
+SamplerState scaled : register(s0);
+cbuffer Streamer : register(b0) { float4 row0; float4 row1; float4 row2; float4 crop; float4 lens; float4 pixel; };
+float4 vs(uint id : SV_VertexID) : SV_POSITION {
+    const float2 corner = float2((id << 1) & 2, id & 2);
+    return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
+}
+float4 ps(float4 position : SV_POSITION) : SV_TARGET {
+    const float2 uv = position.xy * pixel.xy;
+    const float3 d = float3(lerp(crop.x, crop.y, uv.x), lerp(crop.w, crop.z, uv.y), -1);
+    const float3 e = float3(dot(row0.xyz, d), dot(row1.xyz, d), dot(row2.xyz, d));
+    if (e.z > -0.0001)
+        return float4(0, 0, 0, 1);
+    const float2 t = e.xy / -e.z;
+    const float2 st = float2((t.x - lens.x) / (lens.y - lens.x), (lens.w - t.y) / (lens.w - lens.z));
+    if (any(st < 0) || any(st > 1))
+        return float4(0, 0, 0, 1);
+    return float4(source.SampleLevel(scaled, st, 0).rgb, 1);
+}
+)";
+    if (streamer)
+        shader = streamerShader;
     ComPtr<ID3DBlob> vs, ps, error;
     if (FAILED(D3DCompile(shader, std::strlen(shader), "spidy_mirror", nullptr, nullptr, "vs", "vs_5_0",
                           D3DCOMPILE_ENABLE_STRICTNESS, 0, &vs, &error)) ||
@@ -2573,6 +2617,9 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     m.failed = false;
     return true;
 }
+bool prepareMirror(DXGI_FORMAT format) {
+    return preparePipeline(mirrorPipeline, format, false);
+}
 // Present thread: the newest left eye over the back buffer about to be shown,
 // on the game's queue. While the game does not render its own view (the stereo
 // module's views option 32), nothing else draws there, and the window would
@@ -2602,25 +2649,66 @@ void mirrorEye(IDXGISwapChain* swapchain) {
     std::lock_guard recordLock(recording);
     const auto now = GetTickCount64();
     if (!enabled || fault || now >= deadline || !staged || !stagedEyes[0] || !capturedStamp.serial ||
-        now - capturedMs > imageHoldMs || !width || !height || !prepareMirror(view))
+        now - capturedMs > imageHoldMs || !width || !height)
         return;
+    // Update 16: while sharpening, the unsharpened stagedEyes[0] (the monitor
+    // gets no sharpening and no copy is added for it). 0.0.73 STREAMER MODE: a
+    // copy taken in that mode is the headset's own (sharpened) image and is shown.
+    const bool streaming = streamerWanted.load();
+    const bool shown = shownEye && shownEyeFresh(shownMs, now, mirrorRate.load()) &&
+                       (!sharpening || shownView.streamer);
+    // While the game renders its own view, only STREAMER MODE's fresh copy goes over it.
+    if (!mirrorWanted && !(streaming && shown && shownView.streamer))
+        return;
+    // 0.0.73 STREAMER MODE: the copy through the streamer shader, if it has a usable view
+    // and the shader builds; else the mirror as before (the copy or the game's eye).
+    namespace sv0 = spidy::streamer_view;
+    sv0::Constants streamerConstants{};
+    bool streamed = false;
+    if (streaming && shown && shownView.streamer) {
+        const auto smooth = streamerSmoothing.load();
+        const auto crop = sv0::fitCrop(shownView.fov, sv0::windowAspect(static_cast<uint32_t>(desc.Width), desc.Height),
+                                       sv0::marginOf(smooth));
+        if (!shownView.valid || !crop.valid) {
+            streamerWhy = 2;
+        } else if (!preparePipeline(streamerPipeline, view, true)) {
+            streamerWhy = 1;
+        } else {
+            const auto qpc = qpcNow();
+            LARGE_INTEGER frequency{};
+            QueryPerformanceFrequency(&frequency);
+            const float dt = streamerQpc && frequency.QuadPart
+                                 ? static_cast<float>(static_cast<double>(qpc - streamerQpc) /
+                                                      static_cast<double>(frequency.QuadPart))
+                                 : 1.f;
+            streamerQpc = qpc;
+            const auto smoothed = streamerSmoother.step(shownView.orientation, dt, sv0::smoothSeconds(smooth),
+                                                        sv0::slack(shownView.fov, crop));
+            streamerConstants = sv0::constantsOf(sv0::turnOf(shownView.orientation, smoothed), crop, shownView.fov,
+                                                 static_cast<uint32_t>(desc.Width), desc.Height);
+            streamed = true;
+        }
+    } else if (!streaming) {
+        streamerSmoother.reset();
+        streamerQpc = 0;
+    }
+    if (!streamed && !prepareMirror(view))
+        return;
+    auto& pipeline = streamed ? streamerPipeline : mirrorPipeline;
     auto* slot = readyCommands(mirrorCommands);
     if (!slot)
         return; // earlier draws still in flight: this present keeps what the buffer holds
-    // Update 16: while sharpening, the unsharpened stagedEyes[0] (the monitor
-    // gets no sharpening and no copy is added for it).
-    const bool shown = !sharpening && shownEye && shownEyeFresh(shownMs, now, mirrorRate.load());
     auto* eye = shown ? shownEye.Get() : stagedEyes[0].Get();
     D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
     sv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     sv.Texture2D.MipLevels = 1;
-    device->CreateShaderResourceView(eye, &sv, mirrorPipeline.source->GetCPUDescriptorHandleForHeapStart());
+    device->CreateShaderResourceView(eye, &sv, pipeline.source->GetCPUDescriptorHandleForHeapStart());
     D3D12_RENDER_TARGET_VIEW_DESC rv{};
     rv.Format = view;
     rv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    const auto rtv = mirrorPipeline.target->GetCPUDescriptorHandleForHeapStart();
+    const auto rtv = pipeline.target->GetCPUDescriptorHandleForHeapStart();
     device->CreateRenderTargetView(buffer.Get(), &rv, rtv);
     D3D12_RESOURCE_BARRIER b[2]{};
     b[0].Type = b[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -2636,12 +2724,15 @@ void mirrorEye(IDXGISwapChain* swapchain) {
     const float across = window < image ? window / image : 1, down = window < image ? 1 : image / window;
     const float part[8] = {1.f / static_cast<float>(desc.Width), 1.f / static_cast<float>(desc.Height),
                            (1 - across) / 2, (1 - down) / 2, across, down, 0, 0};
-    list->SetPipelineState(mirrorPipeline.state.Get());
-    list->SetGraphicsRootSignature(mirrorPipeline.root.Get());
-    ID3D12DescriptorHeap* heaps[] = {mirrorPipeline.source.Get()};
+    list->SetPipelineState(pipeline.state.Get());
+    list->SetGraphicsRootSignature(pipeline.root.Get());
+    ID3D12DescriptorHeap* heaps[] = {pipeline.source.Get()};
     list->SetDescriptorHeaps(1, heaps);
-    list->SetGraphicsRootDescriptorTable(0, mirrorPipeline.source->GetGPUDescriptorHandleForHeapStart());
-    list->SetGraphicsRoot32BitConstants(1, 8, part, 0);
+    list->SetGraphicsRootDescriptorTable(0, pipeline.source->GetGPUDescriptorHandleForHeapStart());
+    if (streamed)
+        list->SetGraphicsRoot32BitConstants(1, 24, streamerConstants.c, 0);
+    else
+        list->SetGraphicsRoot32BitConstants(1, 8, part, 0);
     list->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0, 0, static_cast<float>(desc.Width), static_cast<float>(desc.Height), 0, 1};
     const D3D12_RECT rect{0, 0, static_cast<LONG>(desc.Width), static_cast<LONG>(desc.Height)};
@@ -2655,6 +2746,10 @@ void mirrorEye(IDXGISwapChain* swapchain) {
     if (submitCommands(*slot)) {
         ++mirrorCalls;
         shownMirrors += shown;
+        if (streamed) {
+            ++streamerDraws;
+            streamerWhy = 0;
+        }
     }
     shownWanted = true;
 }
@@ -2670,7 +2765,7 @@ void presentFrame(IDXGISwapChain* swapchain, UINT flags) {
         return;
     if (screenWanted)
         captureScreen(swapchain);
-    else if (mirrorWanted)
+    else if (mirrorWanted || streamerWanted) // 0.0.73 STREAMER MODE: over the game's own view too
         mirrorEye(swapchain);
 }
 // The game presents once a frame whether or not it rendered a view of its
@@ -2805,6 +2900,19 @@ uint32_t mirrored() {
 }
 uint32_t mirroredShown() {
     return shownMirrors.load();
+}
+void streamer(bool on, uint32_t smooth) {
+    streamerSmoothing = smooth < spidy::streamer_view::smoothChoices ? smooth : 0u;
+    streamerWanted = on;
+}
+bool streamerOn() {
+    return streamerWanted.load();
+}
+uint32_t streamerPresents() {
+    return streamerDraws.load();
+}
+uint32_t streamerFault() {
+    return streamerWhy.load();
 }
 void wantScreen(bool wanted) {
     screenWanted = wanted;
@@ -3356,14 +3464,28 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     return true;
 }
 void keepShownEye(ID3D12Resource* left) {
+    keepShownEye(left, nullptr, nullptr);
+}
+void keepShownEye(ID3D12Resource* left, const float orientation[4], const float fov[4]) {
     // Update 16: while the headset's images are sharpened, the window shows
     // stagedEyes[0] (before sharpening, without Spidy's drawings): no copy.
-    if (!left || !mirrorWanted || screenWanted || !shownWanted || sharpening)
+    // 0.0.73 STREAMER MODE: the copy is made anyway (the headset's own image), and
+    // also while the game renders its own view (the copy goes over it).
+    const bool streaming = streamerWanted.load();
+    if (!left || !(mirrorWanted || streaming) || screenWanted || !shownWanted || (sharpening && !streaming))
         return;
     std::lock_guard submitLock(submission);
     std::lock_guard recordLock(recording);
-    if (!enabled || !staged || fault || shownFailed || !stagedEyes[0] || GetTickCount64() >= deadline)
+    const auto nowMs = GetTickCount64();
+    if (!enabled || !staged || fault || shownFailed || !stagedEyes[0] || nowMs >= deadline)
         return;
+    // Over the game's own view every present reaches the window: copies stay at the
+    // monitor's rate, not one each frame.
+    if (!mirrorWanted) {
+        const auto rate = mirrorRate.load();
+        if (rate && shownMs && nowMs >= shownMs && nowMs - shownMs < 1000 / rate)
+            return;
+    }
     const auto desc = left->GetDesc();
     if (!rgba8CopyTarget(desc) || desc.Width != outWidth || desc.Height != outHeight)
         return;
@@ -3388,6 +3510,14 @@ void keepShownEye(ID3D12Resource* left) {
         return;
     shownMs = GetTickCount64();
     shownWanted = false;
+    shownView = {};
+    shownView.streamer = streaming;
+    if (orientation && fov) {
+        shownView.orientation = {orientation[0], orientation[1], orientation[2], orientation[3]};
+        shownView.fov = {fov[0], fov[1], fov[2], fov[3]};
+        shownView.valid = spidy::streamer_view::usable(shownView.fov) &&
+                          std::isfinite(orientation[0] + orientation[1] + orientation[2] + orientation[3]);
+    }
 }
 bool waitCopy(uint64_t serial, uint32_t timeoutMs) {
     std::unique_lock lock(submission);

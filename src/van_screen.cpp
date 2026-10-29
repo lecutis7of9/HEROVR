@@ -456,6 +456,8 @@ void drawHome(Painter& p, const View& v) {
     else if (v.offer.batman && v.carName && v.offer.car < batmobileCars &&
              std::string_view(batmobileLabels[v.offer.car]).substr(11) != std::string_view(v.carName))
         p.text("THE PICKED BATMOBILE COMES ON THE NEXT SUMMON (X)", lx, bodyBottom + .003f, .0046f, dim * 2.4f);
+    else if (v.offer.batman && v.carCredit)
+        p.text(clipped(v.carCredit, .0042f, 2 * W - .020f), lx, bodyBottom + .003f, .0042f, dim * 2.0f);
 }
 } // namespace
 

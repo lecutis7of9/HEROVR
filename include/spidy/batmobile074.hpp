@@ -41,6 +41,10 @@ struct Credit {
     const char* licence;
     const char* url;
 };
+// The dash's credit line (the HOME page, upper case for its font).
+inline constexpr const char* creditLines[cars] = {
+    "MODEL: BAT-MOBILE (1989) BY DREAMLOFT3D, CC BY 4.0", "MODEL: BATMOBILE BY ODAMI 3D, CC BY 4.0",
+    "MODEL: BATMOBILE BY SORROW, CC BY 4.0", "MODEL: BATMOBILE - BATMAN FOREVER BY S.YORK-DESIGNS (AI, MESHY), CC BY 4.0"};
 inline constexpr Credit credits[cars] = {
     {"Bat-Mobile (1989)", "Dreamloft3D", "CC BY 4.0", "https://dreamloft3d.itch.io/bat-mobile-1989"},
     {"Batmobile", "Odami_3D", "CC BY 4.0", "https://sketchfab.com/3d-models/batmobile-04f571c0fece4c37a01d37c70721d5a6"},

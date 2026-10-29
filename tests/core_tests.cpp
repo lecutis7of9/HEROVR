@@ -31559,6 +31559,7 @@ int main() {
                   "its slots: folders, never flattened, the van's cap: " + car);
             check(std::string(bm::credits[c].licence) == "CC BY 4.0" && std::string(bm::credits[c].url).rfind("https://", 0) == 0,
                   "credited: " + car);
+            check(std::string(bm::creditLines[c]).find(bm::credits[c].licence) != std::string::npos, "credited on the dash: " + car);
         }
         check(std::string(mm::slotFolders[mm::slotBatmobileCockpit]) == "Vehicle/Batmobile/Cockpit" &&
                   std::string(mm::slotFolders[mm::slotBatmobileWheel]) == "Vehicle/Batmobile/SteeringWheel" && mm::slotIsBatmobile(mm::slotBatmobileWheel) &&
@@ -31668,6 +31669,7 @@ int main() {
             vs::View v = vs::view(f, d, 5.f, 16.f, .3f, true, L.screen, bm::screenScale);
             v.offer = bat;
             v.carName = bm::names[0];
+            v.carCredit = bm::creditLines[0];
             std::vector<Vertex> out;
             check(vs::append(out, v, f.world(L.eye)) && out.size() > 300 && out.size() % 3 == 0, std::string("drawn: ") + vs::pageNames[page]);
             bool fine = true;

@@ -193,6 +193,7 @@ struct View {
     std::string musicSong, musicNote;
     const char* homeNote{};   // a line under the HOME buttons (the last hideout's fault, say)
     const char* carName{};    // 0.0.74 test 1 BATMOBILE: the car driven (the header), nullptr: none
+    const char* carCredit{};  // 0.0.74 test 1 BATMOBILE: its model's credit (HOME's last line), nullptr: none
 };
 // The view for a van at `frame` (world).
 View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving);

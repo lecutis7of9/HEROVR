@@ -84,6 +84,9 @@ namespace Sm2VrLauncher
                  "CC BY-NC 4.0 (floh), CC BY-NC-SA 4.0 (Nathang30) and the Sketchfab Standard licence (Tigerar1, Marco.41); non-commercial: HERO VR is free\n" +
                  // Version 0.0.73 (launcher build 14): WOLVERINE's claws.
                  "Wolverine's claws (Models\\Claws) - from \"Wolverine - Jacket - Jeans (Rigged and Textured)\" by Light.k, CC BY 4.0 (cut from the model)\n" +
+                 // 0.0.74 test 1: BATMAN's Batmobiles.
+                 "Batmobiles (Models\\Vehicle\\Batmobile) - \"Bat-Mobile (1989)\" by Dreamloft3D, \"Batmobile\" by Odami_3D, \"Batmobile\" by SorroW, " +
+                 "\"Batmobile - Batman Forever\" by S.York-Designs (AI-generated with Meshy); CC BY 4.0 (converted; cockpit by Agent Mulder)\n" +
                  "ROSTER pictures - thumbnails of the artists' models, each named in THIRD-PARTY-MODELS.md\n" +
                  "Links, licences and changes: THIRD-PARTY-MODELS.md in the mod folder.", f, Theme.Silver);
             line().Act("Open THIRD-PARTY-MODELS", fb, () => OpenNotice("THIRD-PARTY-MODELS.md"));

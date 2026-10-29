@@ -10329,6 +10329,7 @@ DWORD WINAPI run(void*) {
                                         if (batDraw) {
                                             V.offer.batman = true;
                                             V.carName = batmobile074::names[carNow];
+                                            V.carCredit = batmobile074::creditLines[batmobile074::clampCar(carNow)];
                                         }
                                     }
                                 }

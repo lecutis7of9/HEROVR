@@ -288,15 +288,16 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5448'), ['SpidyVanPedals'])  # 0.0.73 test 3 VAN PEDALS
         self.assertEqual(uses.get('5449'), ['SpidyImage'])  # 0.0.73 IMAGE
         self.assertEqual(uses.get('5453'), ['SpidyDdBatonTip'])  # 0.0.73 DD BATON
-        self.assertEqual(uses.get('5450'), ['SpidyStreamerMode'])  # 0.0.73 STREAMER MODE
+        self.assertEqual(uses.get('5450'), ['SpidyStreamerMode'])  # 0.0.73 STREAMER MODE (MP SOLO TEST: 5461 since test 6, not 5449)
         self.assertEqual(uses.get('5451'), ['SpidyStreamerSmooth'])
         self.assertEqual(uses.get('5452'), ['SpidyStreamerEye'])
-        self.assertEqual(uses.get('5462'), ['SpidyIronHands'])  # 0.0.73 test 5 HERO HANDS (5461 unused: the test builds' MP SOLO TEST, not in the release)
+        self.assertEqual(uses.get('5462'), ['SpidyIronHands'])  # 0.0.73 test 5 HERO HANDS (5461: MP SOLO TEST, below)
         self.assertEqual(uses.get('5463'), ['SpidyDdGrappleAim'])
         self.assertEqual(uses.get('5464'), ['SpidyWolverineClaws'])
         self.assertEqual(uses.get('5470'), ['SpidyLightChecks'])  # 0.0.73 LIGHT CHECKS
         self.assertEqual(uses.get('5471'), ['SpidyGlowCheck'])  # 0.0.73 GLOW CHECK
         self.assertEqual(uses.get('5472'), ['SpidySlWatch'])  # 0.0.73 SL WATCH
+        self.assertEqual(uses.get('5461'), ['SpidyMpSoloTest'])  # 0.0.73 test 6: MP SOLO TEST (mp-solo-test's 5449 is IMAGE's)
         self.assertEqual(uses.get('5473'), ['SpidySharpenMatch'])  # 0.0.73 AA SHARPEN MATCH
         self.assertEqual(uses.get('5474'), ['SpidyClawLevel'])  # 0.0.73 test 6 CLAW LEVEL
         self.assertEqual(uses.get('5475'), ['SpidyWindowPop'])  # 0.0.73 test 6 WINDOW POP FIX

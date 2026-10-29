@@ -186,6 +186,8 @@ enum Option : uint32_t {
     // 0.0.73 SL WATCH (sl_watch.hpp): ON (default for the test build) logs what the game hands Streamline
     // (jitter, motion-vector scale and flags, near/far/FOV, frame token, viewport id) every 60 frames; OFF stops
     slWatch,
+    // 0.0.73 MP SOLO TEST: a loopback ghost of you (or the MP Test Buddy) as PLAYER 2 over the UDP net code (ON) or not (OFF)
+    mpSoloTest,
     // 0.0.73 AA SHARPEN MATCH (eye_sharpen.hpp matchedPercent): ON (the default) sharpens by the share of
     // the eye history kept, none while a swing cuts it; OFF sharpens as set (test 5).
     sharpenMatch,
@@ -547,6 +549,8 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"glow_check", "GLOW CHECK", "GLOW", "Debug: ALWAYS draws every light glow untested, HIDDEN draws none, no restart.",
      3, {"GAME", "ALWAYS", "HIDDEN", nullptr}},
     {"sl_watch", "SL WATCH", "SLW", "Test: logs the game's DLSS camera data for the export, no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"mp_solo_test", "MP SOLO TEST", "MPSOL", "ON shows you 3 m ahead as PLAYER 2 over the UDP loopback test, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"sharpen_match", "SHARPEN MATCH", "SHM", "ON sharpens only what the eye history smoothed, none while you move; no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},

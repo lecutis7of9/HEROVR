@@ -2547,3 +2547,47 @@ live.txt's test 2/3 values (aa 1, sharpen 140) to 0 once, unless it picks `image
 - CONFIRMED: curl 1 while a baton is held (game_xr), Touch tilt 30 deg. CANDIDATE: Index 15 deg, the Steam Frame as
   Touch, the fist-hole fit parameters (a 36 mm handle scaled by the rig's height), `capeNow.anchor` as where the tip
   lands. No new game addresses.
+
+## 56. Version 0.0.73 test 5: HERO HANDS (Iron Man), GRAPPLE AIM (Daredevil), CLAW LOOK (Wolverine)
+
+After test 4 the owner reported: "whatever you did to fix ironmans hands did not work. i feel like you are applying one fix to
+every heros hand but every hero works differently", that the raised Iron Man hand must be "palm faced forward and only on iron
+man", that Daredevil's silver tip stands straight up while grappling, and that Wolverine's claws' "fan out is fine but
+placement, color and rotation are totally screwed". Each fix is ON by default with a wrist switch to turn it off, all live
+(no restart). No new game addresses.
+
+**HERO HANDS** (combat38 `ironHands`, wrist `HERO HANDS`, live.txt `iron_hands`, export SpidyIronHands 5462):
+- Root cause: every suit went down one hand path (`restHands`' votes for the back of the rest hand). On the gauntlets that
+  vote is wrong: `tools/hero_hands073/palm_disc.py` measures MARK 85 33, MARK 7 49 and MARK 6 17 degrees off, so the
+  repulsor disc was never the real palm and test 4's shared fix moved every hero's hands alike.
+- ON (0): `suit_wear::HandProfile`, a per-suit profile (`handProfile(folder)`, applied at `makeRig`). IRON MAN's MARKs:
+  rest turned 35 / 0 / 50 / -18 deg (Suit_ironMan_1..4), forearm follows 0.75 of the roll, the trigger opens the hand,
+  and a hand raised palm-forward (`raisedPalm`: the palm within about 55 deg of the level look ahead, the grip no lower than
+  40 cm under the eyes) is drawn palm out along the blast, eased in and out. Only Iron Man has `palmRaise`/`triggerOpens`.
+- OFF (1): the shared profile for every suit (test 4's hands exactly).
+- CANDIDATE: every turn value (measured from the models, not on a headset), the 55 deg / 40 cm raise gate.
+
+**GRAPPLE AIM** (combat38 `ddGrappleAim`, wrist DAREDEVIL `GRAPPLE AIM`, live.txt `dd_grapple_aim`, export SpidyDdGrappleAim 5463):
+- ON (0): while that hand's grapple aims (trigger at least `aimTouch` 0.1), fires or reels, the seated baton turns about the
+  grip point (`dd_baton073::aimTurn`) until the silver tip points along the controller's aim (eased in 0.12 s, back to the
+  fighting grip in 0.25 s). The ray leaves the turned tip along the aim (`apps/dd_baton_preview` scene `aim`: 0.0 deg off).
+- OFF (1): the fighting grip (test 4's DD BATON TIP seat).
+- CANDIDATE: `aimTouch`, the timings; with the baton turned about 58 deg the handle leaves the fist's tube (the preview's
+  clipping count rises: suit 1 15-23 -> 62-70, suit 3 7 -> 144-169). GRAPPLE AIM OFF is the fallback.
+
+**CLAW LOOK** (combat38 `wolverineClaws`, wrist WOLVERINE `CLAW LOOK`, live.txt `wolverine_claws`, export SpidyWolverineClaws 5464):
+- Root cause: the claws model (Models/Claws, base at the origin, -z along the claws, x the knuckle row, +y the back of the
+  hand) was placed x -> the grip frame's right and y -> its up (toward the thumb), so the claws came out of the thumb side,
+  fanned across the wrong axis and floated ahead of the fist; its texture reads rusty in game.
+- ON (0): `hero007::clawSteelFrame` / `appendClawSteel`: y the back of the hand (right +X, left -X), x the knuckle row,
+  -z along the punch, the base `clawSteelAhead` 5.5 cm ahead of the grip and `clawSteelBack` 2.4 cm toward the back of
+  the hand; drawn untextured, shaded bright steel (diffuse, specular, rim). Retracting slides them into the knuckles as before.
+  WOLVERINE's own hand profiles (`wolverine_classic` +50, `wolverine_jacket` +20, `wolverine_weapon_x` 0) tighten the fist
+  round the claws; HERO HANDS on Wolverine follows CLAW LOOK.
+- OFF (1): test 4's claws and the shared hands.
+- Fix 10 is unchanged: every Wolverine suit uses the JACKET AND JEANS claws, retractable, never doubled.
+- CANDIDATE: both offsets, the three turns (the most compact fist in `apps/hero_hands_preview`). Limits: CLASSIC's rest hand is
+  truly low-poly (about 280 triangles a hand), which a profile cannot smooth; WEAPON X's own suit mesh has knuckle spikes.
+
+Previews: `apps/hero_hands_preview` (`HANDS_CLAWS=steel|old`), `tools/hero_hands073/render_hands.py` (`--near=`),
+`tools/hero_hands073/render_claws.py`, `apps/dd_baton_preview` scene `aim` (`DD_AIM="x y z"`).

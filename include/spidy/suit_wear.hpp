@@ -86,7 +86,35 @@ struct Skeleton {
     Vec3 up{0, 1, 0};
     float curl[2]{}; // Test build 12 FIST: each hand's fingers curled (0 open, 1 a fist round a handle)
     bool fistFit[2]{}; // Version 0.0.73 test 3 FIST: Tracked::fistFit (and the hand tracked)
+    bool heroHands{};  // 0.0.73 HERO HANDS: Tracked::heroHands (moves() takes the rig's own HandProfile)
+    bool open[2]{};    // 0.0.73 HERO HANDS: the profile's open hand (Tracked::open) held this frame
+    float foreFollow{}; // 0.0.73 HERO HANDS: the profile's forearmFollow (0: the shared forearm), frame() reads it
     bool ok{};
+};
+// 0.0.73 HERO HANDS (test 4: "i feel like you are applying one fix to every heros hand but every hero works
+// differently"). Until test 4 every suit's hands went down ONE path (restHands' votes, handWay / handBackOf,
+// handReach, fistRadians, the curl from the trigger / grip): Iron Man's gauntlet included. A hand profile is one
+// hero's (one suit's) own: its rest hand's back fixed (the votes' guess turned about the hand's own way), the worn
+// hand turned on the controller (roll about the hand's way, pitch at the wrist), its knuckles, fingers and curl,
+// and what the trigger does to it. The shared profile is the old path exactly (every field neutral), so every
+// suit with no profile of its own (Daredevil's baton fist among them) is unchanged; HERO HANDS OFF is the shared
+// profile for every suit.
+struct HandProfile {
+    const char* name = "shared";
+    float restTurnDeg = 0;   // the rest hand's back turned about its wrist -> fingertips way (the right hand's;
+                             // the left mirrored): the votes' back fixed where they read the gauntlet wrong
+    float rollDeg = 0;       // the worn hand rolled about its way (+: the right hand's back toward its thumb)
+    float pitchDeg = 0;      // the worn hand bent at the wrist (+: the back of the hand up toward the forearm)
+    float fistRadians = 3.3f;                                       // suit_wear::fistRadians
+    float knuckleShare = .5f, knuckleMax = .1f, fingersMax = .095f; // suit_wear::knuckleShare ...
+    float curlMax = 1.f;       // the most the fingers curl from the trigger / grip (a held prop still closes them)
+    bool triggerOpens = false; // the trigger held to fire (IRON MAN's repulsor charging) opens the hand flat
+    float openPitchDeg = 0;    // and while open so, the wrist bent back this much more (the palm out ahead)
+    float forearmFollow = 0;   // the forearm's share of the hand's roll past the shared half (0: the shared path,
+                               // the facing and the hand's back averaged; 1: the hand's back alone) - no pinch
+                               // at the wrist when the palm turns out ahead (the back toward the player)
+    bool palmRaise = false;    // IRON MAN: the raised hand (or the repulsor charging / just fired) drawn palm out
+                               // along the blast (raisedPalm, blendGrip; game_xr)
 };
 // A worn suit made ready (once, at load): its unique vertices, each corner's vertex, each triangle's bone.
 struct Rig {
@@ -117,6 +145,10 @@ struct Rig {
     std::vector<float> capeHang;
     std::vector<Vec3> capeAt; // x across, y down, z fold
     uint32_t capeTriangles{};
+    // 0.0.73 HERO HANDS: this suit's own hand profile (handProfile(name) at makeRig; applyHandProfile) and its
+    // rest hands' backs with the profile's restTurnDeg (skeleton.handBack when it has none).
+    HandProfile hands;
+    Vec3 profileBack[2]{{0, 1, 0}, {0, 1, 0}};
 };
 // Test build 12 CAPE: the cape's thresholds (metres at a 1.8 m suit).
 inline constexpr float capeSeedBehind = .18f;   // a triangle this far behind the suit's middle starts the cape
@@ -141,6 +173,10 @@ struct Tracked {
     // Version 0.0.73 test 3 FIST: the hand fits its fist round a held Daredevil baton (Rig::fingerDepth, fistHole);
     // false: Version 0.0.73 test 3's fist exactly (the dd_baton_tip switch OFF)
     bool fistFit[2]{};
+    // 0.0.73 HERO HANDS: the rig's own HandProfile (HERO HANDS ON, the game's default); false: the shared path.
+    // open: the profile's open hand (handOpen: IRON MAN's repulsor) this frame, per hand.
+    bool heroHands{};
+    bool open[2]{};
     Vec3 feet{}, up{0, 1, 0};
     float standingEye = 0; // the player's standing eye height above the feet (0: this frame's, crouching shrinks him)
 };
@@ -171,6 +207,28 @@ inline constexpr float knuckleMax = .1f;    // m at 1.8 m
 inline constexpr float fingersMax = .095f;  // m at 1.8 m
 Vec3 handWay(Vec3 gripForward, Vec3 gripUp, float tiltDeg);
 Vec3 handBackOf(Vec3 gripX, int side);
+// 0.0.73 HERO HANDS: the shared profile (every field the old path's) and a suit folder's own (the shared one for
+// a suit with none). applyHandProfile: the rig's profile and its turned rest backs (makeRig does it by name).
+const HandProfile& handProfileShared();
+const HandProfile& handProfile(const char* suitFolder);
+void applyHandProfile(Rig& rig, const HandProfile& p);
+// The profile in use: the rig's own with HERO HANDS on, else the shared one.
+inline const HandProfile& handsOf(const Rig& rig, bool heroHands) { return heroHands ? rig.hands : handProfileShared(); }
+// Whether the profile's open hand holds: triggerOpens, the repulsor charging or in a blast's pose, no prop held
+// and the grip not squeezed into a fist.
+bool handOpen(const HandProfile& p, float grip, bool propHeld, bool repulsorPose);
+// The fingers' curl wanted (0 open .. 1 a fist) from the trigger, the grip and the wall grip (0 .. 1): the shared
+// profile the most of them (test 4's exactly); a held prop (a baton, the hammer) always 1; the open hand 0;
+// curlMax caps the rest.
+float handCurl(const HandProfile& p, float trigger, float grip, float wallGrip, bool propHeld, bool repulsorPose);
+// 0.0.73 HERO HANDS (IRON MAN): the hand raised palm out - the real palm's normal within about 55 degrees of
+// the level look ahead and the grip no lower than 40 cm under the eyes (a hand held at the side or down: no).
+bool raisedPalm(Vec3 palmNormal, Vec3 eyeForward, Vec3 up, Vec3 grip, Vec3 eye);
+// A weight eased toward want (0 .. 1) over about `seconds` (dt the frame's; insane input: want).
+float easeToward(float now, float want, float dt, float seconds);
+// The grip's frame (forward, x, up, the handle tilt) turned share w (0 .. 1) toward a target frame (tf, tx, tu,
+// tilt 0): x and up blended and squared, forward from them. false (the frame unchanged) on insane input.
+bool blendGrip(Vec3& forward, Vec3& x, Vec3& up, float& tiltDeg, Vec3 tf, Vec3 tx, Vec3 tu, float w);
 bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]);
 // Skins every vertex (positions and normals, world) once a frame; then draw() places triangles from it.
 struct Skinned {

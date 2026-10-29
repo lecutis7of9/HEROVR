@@ -110,6 +110,9 @@ struct Draw {
     // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: Models\Claws\Left|Right (the JACKET AND JEANS suit's own claws) for
     // every Wolverine suit, by lookClaws' side (null: 0.0.72's built-in claws). Library-owned.
     const mesh_model::Mesh* clawModel[2]{};
+    // 0.0.73 test 5 CLAW LOOK (ON, the default): those claws out between the knuckles along the fist (appendClawSteel);
+    // false: test 4's (appendClawModel).
+    bool clawSteel{};
     // SHIELD LOOK MODEL: Models\Shield (null: the BUILT-IN look). Library-owned.
     const mesh_model::Mesh* shieldModel{};
     // Version 0.0.72 MODEL MISSING (the user, 27 Oct: "not a fake lookalike"): the looks whose MODEL
@@ -148,6 +151,20 @@ bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mes
 // back of the hand) at the knuckles of lookClaws' frame (clawKnuckle ahead, clawRise up, as the built-in claws),
 // sliding out with it.spin (the SNIKT extension 0-1.1; 0 reads as out). False: not drawn (the built-in claws then).
 bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
+// 0.0.73 test 5 CLAW LOOK (the owner after test 4: "the fan out is fine but placement, color and rotation are totally
+// screwed"). Test 4 laid the claw model's knuckle row (its x) across the fist's back-to-palm line and its back of
+// the hand (+y) toward the thumb (lookClaws' up), so the fan rose out of the thumb side of the fist and stood up off
+// the top of the hand; and it took the suit's rust-brown claw texture. Now, in lookClaws' frame (forward: along the
+// forearm out past the knuckles; up: toward the thumb, gun_grip::held), the model's +y is the back of the hand
+// (handBackOf: the grip's -X on the left, +X on the right), its x the knuckle row (index at the thumb side) and -z
+// along the forearm: the three claws come out of the back of the fist between the knuckles (clawSteelAhead along
+// the forearm, clawSteelBack toward the back of the hand), along the punch, fanned as the artist made them. Drawn
+// polished steel (never the texture): lit per face with a highlight from the viewer. CANDIDATE: the two offsets
+// (measured on the suits' drawn fists in apps/hero_hands_preview, not on a headset).
+inline constexpr float clawSteelAhead = .055f, clawSteelBack = .024f;
+// The claws' base and axes (world) for lookClaws' item: x the knuckle row, y the back of the hand, f along the claws.
+bool clawSteelFrame(const Item& it, Vec3& base, Vec3& x, Vec3& y, Vec3& f);
+bool appendClawSteel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
 // Version 0.0.72 PUNISHER VAN: a model up to 8 m placed by its axes (world = at + right x + up y - forward z).
 // Test build 10: `scale` the model's size (1: as made).
 bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,

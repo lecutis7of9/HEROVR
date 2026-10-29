@@ -217,6 +217,8 @@ add_executable(spidy_van_screen_preview apps/van_screen_preview.cpp) # Version 0
 target_link_libraries(spidy_van_screen_preview PRIVATE spidy_core)
 add_executable(spidy_dd_baton_preview apps/dd_baton_preview.cpp src/sfx_quiet.cpp) # Version 0.0.73 test 3 DD BATON
 target_link_libraries(spidy_dd_baton_preview PRIVATE spidy_core)
+add_executable(spidy_hero_hands_preview apps/hero_hands_preview.cpp src/sfx_quiet.cpp) # 0.0.73 HERO HANDS
+target_link_libraries(spidy_hero_hands_preview PRIVATE spidy_core)
 add_executable(spidy_phone_preview apps/phone_preview.cpp)
 target_link_libraries(spidy_phone_preview PRIVATE spidy_core)
 if(SPIDY_BUILD_OBSERVER)

@@ -366,6 +366,70 @@ bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model:
     return drawMesh(out, model, [&](Vec3 c) { return base + k.r * c.x + k.u * c.y - k.f * (c.z * ext); }, viewer);
 }
 
+bool clawSteelFrame(const Item& it, Vec3& base, Vec3& x, Vec3& y, Vec3& f) {
+    Frame k{};
+    if (!frameOf(it, k) || it.side > 1)
+        return false;
+    // the back of the hand: the grip's -X (left) / +X (right); lookClaws' right (forward x up) is the grip's +X
+    y = it.side ? k.r : k.r * -1.f;
+    f = k.f;
+    x = cross(f, y); // the model's own handedness (tools/claws073: x = forward x back of the hand)
+    base = k.o + f * clawSteelAhead + y * clawSteelBack;
+    return ok(base) && ok(x);
+}
+bool appendClawSteel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& full, Vec3 viewer) {
+    const Vec3 s = full.high - full.low;
+    Vec3 base{}, x{}, y{}, f{};
+    if (!full.ok() || !(std::max({s.x, s.y, s.z}) < .8f) || !(s.z > .05f) || !clawSteelFrame(it, base, x, y, f) || !ok(viewer) ||
+        !inRange(base, viewer, 40.f))
+        return false;
+    const float ext = it.spin > 0 && std::isfinite(it.spin) ? std::clamp(it.spin, 0.f, 1.1f) : 1.f;
+    if (ext < .02f)
+        return true; // still in the hand
+    const mesh_model::Mesh& model = full.lite && full.lite->ok() ? *full.lite : full;
+    const uint32_t n = model.triangles();
+    if (!n || n > mesh_model::liteTriangles)
+        return false;
+    thread_local std::vector<std::pair<float, uint32_t>> order;
+    thread_local std::vector<Vec3> placed;
+    order.clear();
+    placed.resize(size_t{n} * 3);
+    const float reach = std::max(.05f, -model.low.z);
+    for (uint32_t t = 0; t < n; ++t) {
+        Vec3 sum{};
+        for (uint32_t c = 0; c < 3; ++c) {
+            const Vec3 m = model.corners[t * 3 + c];
+            sum = sum + (placed[t * 3 + c] = base + x * m.x + y * m.y - f * (m.z * ext));
+        }
+        if (!ok(sum))
+            return false;
+        order.emplace_back(length(sum * (1.f / 3) - viewer), t);
+    }
+    std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    Guard g(out);
+    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f}), steel{.74f, .77f, .82f};
+    for (const auto& [far, t] : order) {
+        (void)far;
+        const Vec3 a = placed[t * 3], b = placed[t * 3 + 1], c = placed[t * 3 + 2];
+        const Vec3 n3 = cross(b - a, c - a);
+        const float len = length(n3);
+        if (!(len > 1e-12f))
+            continue;
+        const Vec3 nn = n3 * (1.f / len), mid = (a + b + c) * (1.f / 3), toEye = normalized(viewer - mid);
+        const Vec3 half = normalized(light + toEye);
+        const float diffuse = std::abs(dot(nn, light)), spec = std::pow(std::abs(dot(nn, half)), 28.f);
+        const float rim = std::pow(1.f - std::abs(dot(nn, toEye)), 3.f);
+        // brushed: a touch darker at the knuckles, brighter toward the point
+        const float along = std::clamp(dot(mid - base, f) / reach, 0.f, 1.f);
+        const float lit = .28f + .5f * diffuse + .12f * along;
+        Vec3 col = steel * lit + Vec3{1, 1, 1} * (.85f * spec + .25f * rim);
+        col = {std::min(col.x, 1.f), std::min(col.y, 1.f), std::min(col.z, 1.f)};
+        for (const Vec3& p : {a, b, c})
+            out.push_back(Vertex{p, col, 1.f, {}});
+    }
+    return true;
+}
+
 // Version 0.0.72 PUNISHER VAN: a model placed by its own axes (world = at + right x + up y - forward z), any
 // size to 8 m (the van and its parts), seen to 80 m. right / up / forward are made orthonormal here (forward kept).
 bool appendPlacedModel(std::vector<Vertex>& out, const mesh_model::Mesh& model, Vec3 at, Vec3 forward, Vec3 up, Vec3 viewer,
@@ -1104,7 +1168,8 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
         else if ((it.look == lookShield || it.look == lookShieldSpin) && d.shieldModel)
             drawn = appendShieldModel(out, it, *d.shieldModel, viewer);
         else if (it.look == lookClaws && it.side < 2 && d.clawModel[it.side]) // Version 0.0.73 (fix 10)
-            drawn = appendClawModel(out, it, *d.clawModel[it.side], viewer);
+            drawn = d.clawSteel ? appendClawSteel(out, it, *d.clawModel[it.side], viewer)
+                                : appendClawModel(out, it, *d.clawModel[it.side], viewer);
         if (!drawn && noStandIn(d.modelWanted, it.look)) {
             // Version 0.0.72 MODEL MISSING: no fake lookalike (the wrist names the missing model).
         } else if (!drawn) {

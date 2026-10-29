@@ -39,7 +39,9 @@ bool frame(const Skeleton& k, uint32_t b, Vec3 f, Vec3& x, Vec3& y, Vec3& z) {
         break;
     case boneForeL:
     case boneForeR:
-        ref = normalized(square(f, y)) + normalized(square(k.handBack[b == boneForeL ? 0 : 1], y));
+        // 0.0.73 HERO HANDS: a profile's forearmFollow leans it to the hand's back (no wrist pinch); 0: as before
+        ref = normalized(square(f, y)) * (1.f - .9f * std::clamp(k.foreFollow, 0.f, 1.f)) +
+              normalized(square(k.handBack[b == boneForeL ? 0 : 1], y)) * (1.f + std::clamp(k.foreFollow, 0.f, 1.f));
         break;
     case boneUpperL:
     case boneUpperR: { // the body's facing, its up taking over as the arm points ahead
@@ -199,7 +201,7 @@ void restHands(Rig& rig, const char* name) {
 } // namespace
 
 namespace {
-void handReach(const Rig& rig, int side, float& knuckle, float& fingers);
+void handReach(const Rig& rig, int side, float& knuckle, float& fingers, const HandProfile& p = HandProfile{});
 void curlFinger(const BoneMove& b, Vec3& d, Vec3& n);
 // Version 0.0.73 test 3 FIST: the rest fingers' line (Rig::fingerDepth, fingerSlope): the median depth (the hand
 // bone's z) of the hand's own vertices in six steps past the knuckles, a straight line fitted through them.
@@ -343,6 +345,7 @@ bool makeRig(const mesh_model::Mesh& mesh, Rig& out, const char* name) {
         out.corner[c] = found;
     }
     restHands(out, name);
+    applyHandProfile(out, handProfile(name)); // 0.0.73 HERO HANDS
     fingerLine(out, 0);
     fingerLine(out, 1);
     findCape(mesh, out);
@@ -371,13 +374,139 @@ Vec3 handBackOf(Vec3 gripX, int side) {
 }
 namespace {
 // The rest hand's knuckles (from the wrist) and its fingers' reach past them (rest metres).
-void handReach(const Rig& rig, int side, float& knuckle, float& fingers) {
+void handReach(const Rig& rig, int side, float& knuckle, float& fingers, const HandProfile& p) {
     const Skeleton& r = rig.skeleton;
     const float L = length(r.at[side ? tipR : tipL] - r.at[side ? wristR : wristL]), h = rig.height / 1.8f;
-    knuckle = std::min(L * knuckleShare, knuckleMax * h);
-    fingers = std::max(.02f * h, std::min(L - knuckle, fingersMax * h));
+    knuckle = std::min(L * p.knuckleShare, p.knuckleMax * h);
+    fingers = std::max(.02f * h, std::min(L - knuckle, p.fingersMax * h));
 }
+// v turned a radians about the unit axis k (Rodrigues).
+Vec3 turnAbout(Vec3 v, Vec3 k, float a) {
+    const float c = std::cos(a), sn = std::sin(a);
+    return v * c + cross(k, v) * sn + k * (dot(k, v) * (1.f - c));
+}
+constexpr float degToRad = 3.14159265f / 180.f;
 } // namespace
+
+// 0.0.73 HERO HANDS: the profiles. The shared one is HandProfile{} (test 4's path). IRON MAN's gauntlets
+// (tools/hero_hands073, apps/hero_hands_preview): see ironManHands in handProfile below.
+const HandProfile& handProfileShared() {
+    static const HandProfile shared{};
+    return shared;
+}
+const HandProfile& handProfile(const char* suitFolder) {
+    // IRON MAN: each MARK's gauntlet turned on its wrist so the repulsor disc is the real palm (CANDIDATE values,
+    // measured by tools/hero_hands073/palm_disc.py: the shared vote leaves MARK 85 33, MARK 7 49, MARK 6 17
+    // degrees off; MARK 1 has no disc), the forearm taking the roll, the trigger opening the hand, the raised hand
+    // palm out along the blast.
+    const auto ironMan = [](const char* name, float turn) {
+        HandProfile p;
+        p.name = name;
+        p.restTurnDeg = turn;
+        p.triggerOpens = true;
+        p.forearmFollow = .75f;
+        p.palmRaise = true;
+        return p;
+    };
+    static const HandProfile mark85 = ironMan("iron_man_mark85", 35.f), mark1 = ironMan("iron_man_mark1", 0.f),
+                             mark7 = ironMan("iron_man_mark7", 50.f), mark6 = ironMan("iron_man_mark6", -18.f);
+    static const struct {
+        const char* folder;
+        const HandProfile* profile;
+    } table[] = {{"Suit_ironMan_1", &mark85}, {"Suit_ironMan_2", &mark1}, {"Suit_ironMan_3", &mark7}, {"Suit_ironMan_4", &mark6}};
+    // WOLVERINE (0.0.73 test 5 CLAW LOOK: "every hero works differently"): each suit's fist made tight round the
+    // claws' knuckles. The shared vote reads CLASSIC's low-poly rest hand (Suit_wolverine_1, about 280 triangles a
+    // hand) about 50 degrees off its back, so the fist curled sideways - the thumb and fingertips standing up out of
+    // the top of a blocky fist (10 cm over the grip); turned +50 the fingers wrap over the palm (5.8 cm). JACKET AND
+    // JEANS (_3) +20 (its tightest fist), WEAPON X (_4) unturned. CANDIDATE: the most compact fist in
+    // apps/hero_hands_preview (the 95th-percentile reach of the hand round the grip), not seen on a headset.
+    const auto wolverine = [](const char* name, float turn) {
+        HandProfile p;
+        p.name = name;
+        p.restTurnDeg = turn;
+        return p;
+    };
+    static const HandProfile wvClassic = wolverine("wolverine_classic", 50.f), wvJacket = wolverine("wolverine_jacket", 20.f),
+                             wvWeaponX = wolverine("wolverine_weapon_x", 0.f);
+    static const struct {
+        const char* folder;
+        const HandProfile* profile;
+    } wolverines[] = {{"Suit_wolverine_1", &wvClassic}, {"Suit_wolverine_3", &wvJacket}, {"Suit_wolverine_4", &wvWeaponX}};
+    if (suitFolder)
+        for (const auto& e : wolverines)
+            if (std::strcmp(suitFolder, e.folder) == 0)
+                return *e.profile;
+    if (suitFolder)
+        for (const auto& e : table)
+            if (std::strcmp(suitFolder, e.folder) == 0)
+                return *e.profile;
+    return handProfileShared();
+}
+void applyHandProfile(Rig& rig, const HandProfile& p) {
+    rig.hands = p;
+    const Skeleton& k = rig.skeleton;
+    for (int side = 0; side < 2; ++side) {
+        rig.profileBack[side] = k.handBack[side];
+        const Vec3 ax = normalized(k.at[side ? tipR : tipL] - k.at[side ? wristR : wristL]);
+        if (p.restTurnDeg == 0.f || !(length(ax) > .5f))
+            continue;
+        const Vec3 b = normalized(turnAbout(k.handBack[side], ax, (side ? p.restTurnDeg : -p.restTurnDeg) * degToRad));
+        if (ok(b) && length(b) > .5f)
+            rig.profileBack[side] = b;
+    }
+}
+bool handOpen(const HandProfile& p, float grip, bool propHeld, bool repulsorPose) {
+    return p.triggerOpens && repulsorPose && !propHeld && !(std::isfinite(grip) && grip > .5f);
+}
+float handCurl(const HandProfile& p, float trigger, float grip, float wallGrip, bool propHeld, bool repulsorPose) {
+    if (propHeld)
+        return 1.f;
+    if (handOpen(p, grip, propHeld, repulsorPose))
+        return 0.f;
+    float want = std::max({trigger, grip, wallGrip});
+    want = std::isfinite(want) ? std::clamp(want, 0.f, 1.f) : 0.f;
+    return std::min(want, std::clamp(p.curlMax, 0.f, 1.f));
+}
+bool raisedPalm(Vec3 palmNormal, Vec3 eyeForward, Vec3 up, Vec3 grip, Vec3 eye) {
+    if (!ok(palmNormal) || !ok(eyeForward) || !ok(up) || !ok(grip) || !ok(eye) || !(length(up) > .5f))
+        return false;
+    const Vec3 u = normalized(up), ahead = square(eyeForward, u), pn = normalized(palmNormal);
+    if (!(length(ahead) > .2f) || !(length(pn) > .5f))
+        return false;
+    return dot(pn, normalized(ahead)) > .57f && dot(grip - eye, u) > -.4f;
+}
+float easeToward(float now, float want, float dt, float seconds) {
+    want = std::isfinite(want) ? std::clamp(want, 0.f, 1.f) : 0.f;
+    if (!std::isfinite(now) || !std::isfinite(dt) || !(seconds > 0))
+        return want;
+    const float step = std::clamp(dt, 0.f, .1f) / seconds;
+    return now < want ? std::min(want, now + step) : std::max(want, now - step);
+}
+bool blendGrip(Vec3& forward, Vec3& x, Vec3& up, float& tiltDeg, Vec3 tf, Vec3 tx, Vec3 tu, float w) {
+    if (!std::isfinite(w) || !ok(forward) || !ok(x) || !ok(up) || !ok(tx) || !ok(tu) || !ok(tf) || !std::isfinite(tiltDeg))
+        return false;
+    w = std::clamp(w, 0.f, 1.f);
+    if (w <= 0.f)
+        return true;
+    // smooth in and out (an S curve on the eased weight)
+    const float s = w * w * (3.f - 2.f * w);
+    Vec3 nu = normalized(up) * (1.f - s) + normalized(tu) * s;
+    if (!(length(nu) > 1e-3f))
+        nu = s < .5f ? up : tu;
+    nu = normalized(nu);
+    Vec3 nx = square(normalized(x) * (1.f - s) + normalized(tx) * s, nu);
+    if (!(length(nx) > 1e-3f))
+        nx = square(s < .5f ? x : tx, nu);
+    if (!(length(nx) > 1e-3f))
+        return false;
+    nx = normalized(nx);
+    const Vec3 nf = cross(nu, nx); // forward (-z) = -(x cross y), as repulsor::palmFrame
+    if (!ok(nf) || !ok(nx) || !ok(nu))
+        return false;
+    forward = nf, x = nx, up = nu;
+    tiltDeg = tiltDeg * (1.f - s);
+    return true;
+}
 
 bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
     out = {};
@@ -413,6 +542,9 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
     out.face = hz;
     out.faceUp = hy;
     out.up = up;
+    out.heroHands = t.heroHands;
+    out.foreFollow = t.heroHands ? std::clamp(rig.hands.forearmFollow, 0.f, 1.f) : 0.f;
+    const HandProfile& P = handsOf(rig, t.heroHands); // 0.0.73 HERO HANDS
     // the arms
     for (int side = 0; side < 2; ++side) {
         const uint32_t sh = side ? shoulderR : shoulderL, el = side ? elbowR : elbowL, wr = side ? wristR : wristL,
@@ -428,19 +560,34 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
             // hand's middle a curled finger's radius behind it, so the fist closes round the handle
             const Vec3 back = handBackOf(gx, side);
             float kn = 0, fi = 0;
-            handReach(rig, side, kn, fi);
+            handReach(rig, side, kn, fi, P);
             // Version 0.0.73 test 3 FIST: the curl's centre (the handle) under the fingers' own line (fingerDepth).
             // With fistFit the hole the fist leaves (Rig::fistHole) round the grip point instead.
             const bool fit = t.fistFit[side];
             out.fistFit[side] = fit;
             const float holeY = kn + (fit ? rig.fistHole[side][0] : 0.f),
-                        holeZ = (fit ? rig.fingerDepth[side] + rig.fistHole[side][1] : 0.f) - fi / fistRadians;
+                        holeZ = (fit ? rig.fingerDepth[side] + rig.fistHole[side][1] : 0.f) - fi / P.fistRadians;
             const Vec3 wrist = t.grip[side] - way * (holeY * s) - back * (holeZ * s);
             const Vec3 out_ = side ? fx * -1.f : fx;
+            // 0.0.73 HERO HANDS: the profile's hand turned on the wrist (the shared profile: none) - rolled about
+            // its way, then bent back (pitch: the fingers toward the back), more with its open hand.
+            Vec3 w2 = way, b2 = normalized(square(back, way));
+            out.open[side] = t.heroHands && t.open[side];
+            const float roll = (side ? P.rollDeg : -P.rollDeg) * degToRad,
+                        pitch = (P.pitchDeg + (out.open[side] ? P.openPitchDeg : 0.f)) * degToRad;
+            if (roll != 0.f)
+                b2 = turnAbout(b2, w2, roll);
+            if (pitch != 0.f) {
+                const Vec3 wp = w2 * std::cos(pitch) + b2 * std::sin(pitch);
+                b2 = b2 * std::cos(pitch) - w2 * std::sin(pitch);
+                w2 = wp;
+            }
+            if (!ok(w2) || !ok(b2) || !(length(w2) > .5f) || !(length(b2) > .5f))
+                w2 = way, b2 = normalized(square(back, way));
             out.at[wr] = wrist;
-            out.at[tip] = wrist + way * hand;
+            out.at[tip] = wrist + w2 * hand;
             out.at[el] = bend(out.at[sh], wrist, l1, l2, up * -.8f + out_ * .45f - fz * .3f);
-            out.handBack[side] = normalized(square(back, way));
+            out.handBack[side] = normalized(square(b2, w2));
         } else { // untracked: the rest arm, turned with the body
             out.at[el] = out.at[sh] + B(r.at[el] - r.at[sh]) * s;
             out.at[wr] = out.at[sh] + B(r.at[wr] - r.at[sh]) * s;
@@ -469,7 +616,18 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
 bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
     if (!rig.ok || !live.ok)
         return false;
-    const Skeleton& r = rig.skeleton;
+    // 0.0.73 HERO HANDS: the rest hands' backs the profile's (Rig::profileBack) with HERO HANDS on
+    Skeleton rp;
+    const auto moved = [](Vec3 a, Vec3 b) { return length(a - b) > 1e-6f; };
+    const bool turned = live.heroHands && (moved(rig.profileBack[0], rig.skeleton.handBack[0]) || moved(rig.profileBack[1], rig.skeleton.handBack[1]) ||
+                                           live.foreFollow != 0.f);
+    if (turned) {
+        rp = rig.skeleton;
+        rp.handBack[0] = rig.profileBack[0], rp.handBack[1] = rig.profileBack[1];
+        rp.foreFollow = live.foreFollow; // the rest forearm framed as the live one
+    }
+    const Skeleton& r = turned ? rp : rig.skeleton;
+    const HandProfile& P = handsOf(rig, live.heroHands);
     const Vec3 f0 = facing(r), f1 = facing(live);
     if (!(length(f0) > .5f) || !(length(f1) > .5f))
         return false;
@@ -500,9 +658,9 @@ bool moves(const Rig& rig, const Skeleton& live, BoneMove out[bones]) {
         if (b == boneHandL || b == boneHandR) { // Test build 12 FIST
             const int side = b == boneHandR;
             out[b].x0 = x0, out[b].y0 = y0, out[b].z0 = z0;
-            handReach(rig, side, out[b].knuckle, out[b].fingers);
+            handReach(rig, side, out[b].knuckle, out[b].fingers, P);
             const float c = std::isfinite(live.curl[side]) ? std::clamp(live.curl[side], 0.f, 1.f) : 0.f;
-            out[b].curl = c * fistRadians;
+            out[b].curl = c * P.fistRadians;
             if (live.fistFit[side])
                 out[b].depth = rig.fingerDepth[side], out[b].slope = rig.fingerSlope[side];
         }

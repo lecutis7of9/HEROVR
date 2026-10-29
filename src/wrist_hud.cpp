@@ -912,7 +912,7 @@ constexpr SectionDef powersSections[] = {
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
     {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
       C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan,
-      C::combatVanScreen, C::combatVanPedals}},
+      C::combatVanScreen, C::combatVanPedals, C::combatHideouts, C::combatCarMusic, C::combatSeatedDriving}},
     {"CAPTAIN AMERICA", C::none, C::none, "", "", nullptr, 8,
      {C::combatCaptainAmerica, C::combatShieldArm, C::combatShieldDamage, C::combatShieldChain, C::combatShieldBlock,
       C::combatShieldLook, C::combatShieldSlam, C::combatCapSprint}},
@@ -4617,6 +4617,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatWindowPop:
             case Control::combatMpPlayer2Body:
             case Control::combatComingSoon:
+            case Control::combatHideouts:
+            case Control::combatCarMusic:
+            case Control::combatSeatedDriving:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

@@ -43,6 +43,8 @@
 #include "spidy/glove_overlay.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
+#include "spidy/hideout074.hpp"
+#include "spidy/vehicle074.hpp"
 #include "spidy/roster_page.hpp"
 #include "spidy/hero_controls.hpp"
 #include <filesystem>
@@ -1646,7 +1648,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 253, "controls count drifted"); // 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 256, "controls count drifted"); // 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -2032,7 +2034,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 253, "controls count drifted"); // 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 256, "controls count drifted"); // 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18886,7 +18888,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 145, "one hundred and forty-five options (0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 148, "one hundred and forty-eight options (0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18920,7 +18922,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 145, "0.0.73 has 145 COMBAT options (+ COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 148, "0.0.74 test 1 has 148 COMBAT options (+ HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19242,7 +19244,7 @@ int main() {
                 }
             }
         }
-        check(placed == 221 /* 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 224 /* 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -25843,7 +25845,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 2 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 4 && mm::slotHideoutSafehouse == mm::slots - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -31052,20 +31054,21 @@ int main() {
         Screen s;
         check(s.page() == vs::map && s.file() == 0, "it starts on MAP");
         std::vector<std::pair<uint32_t, uint32_t>> seen;
-        for (int k = 0; k < 10; ++k) {
+        for (int k = 0; k < 12; ++k) {
             check(s.step(in(true, true, away)), "an X while driving pages it");
             seen.emplace_back(s.page(), s.file());
         }
         check(seen[0] == std::make_pair(uint32_t{vs::status}, uint32_t{0}) && seen[1].first == vs::cases && seen[1].second == 0 &&
-                  seen[7].first == vs::cases && seen[7].second == 6 && seen[8].first == vs::locker && seen[9].first == vs::map,
-              "X goes map, status, the 7 case files, locker, map");
+                  seen[7].first == vs::cases && seen[7].second == 6 && seen[8].first == vs::locker && seen[9].first == vs::music &&
+                  seen[10].first == vs::home && seen[11].first == vs::map,
+              "X goes map, status, the 7 case files, locker, music, home, map (0.0.74)");
         // Not driving: nothing pages it.
         Screen parked;
         check(!parked.step(in(false, true, at(0, 0, 0))) && parked.page() == vs::map, "parked, nothing pages it");
         // A poke on the tab row picks that page; a hand already in must come out first.
         Screen p;
         const float tabY = vs::height / 2 - vs::tabHeight / 2;
-        check(p.step(in(true, false, at(vs::width * .125f, tabY, .01f))) && p.page() == vs::cases,
+        check(p.step(in(true, false, at(vs::tabCentre(vs::cases), tabY, .01f))) && p.page() == vs::cases,
               "a poke on the CASES tab picks it");
         check(!p.step(in(true, false, at(0, 0, 0))) && p.page() == vs::cases, "a hand still in does not page again");
         check(!p.step(in(true, false, away)), "out again");
@@ -31352,9 +31355,9 @@ int main() {
         };
         const float tabY = vs::height / 2 - vs::tabHeight / 2;
         vs::Screen s;
-        check(!s.step(in(at(vs::width * .125f, tabY), 0)) && s.aimed(1) && s.hover(), "aimed at the CASES tab: hover, no page yet");
-        check(s.step(in(at(vs::width * .125f, tabY), 1)) && s.page() == vs::cases, "the trigger picks CASES");
-        check(!s.step(in(at(vs::width * .125f, tabY), 1)), "held: once");
+        check(!s.step(in(at(vs::tabCentre(vs::cases), tabY), 0)) && s.aimed(1) && s.hover(), "aimed at the CASES tab: hover, no page yet");
+        check(s.step(in(at(vs::tabCentre(vs::cases), tabY), 1)) && s.page() == vs::cases, "the trigger picks CASES");
+        check(!s.step(in(at(vs::tabCentre(vs::cases), tabY), 1)), "held: once");
         check(!s.step(in(at(0, -.02f), .5f)), "not re-armed yet (under the release)");
         s.step(in(at(0, -.02f), 0));
         check(s.step(in(at(.05f, -.02f), 1)) && s.file() == 1, "on a case: the next file");
@@ -31404,6 +31407,341 @@ int main() {
         check(vs::rayOnFace(shoulder, normalized(at(0, 0) - shoulder), hit) && length(hit) < 1e-3f, "the ray's spot: the face's centre");
         // still flush and straight (unmoved): the VAN SCREEN test checks its place
         check(m.normal.z == 1 && m.right.x == 1 && m.up.y == 1, "square to the van");
+    });
+    test("0.0.74 test 1 VAN DASH MUSIC + HOME: the buttons act on a poke or the ray, hidden ones do not, drawn finite", [] {
+        namespace vs = van_screen;
+        const vs::Mount m = vs::mountLocal();
+        const auto at = [&](float x, float y, float z) { return m.centre + (m.right * x + m.up * y + m.normal * z) * vs::faceScale; };
+        const Vec3 away{-.45f, 1.0f, -.4f};
+        const auto in = [&](Vec3 hand, vs::Offer offer = {}) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = true;
+            i.hand[0] = away;
+            i.tracked[0] = true;
+            i.hand[1] = hand;
+            i.tracked[1] = true;
+            i.offer = offer;
+            return i;
+        };
+        const float tabY = vs::height / 2 - vs::tabHeight / 2;
+        for (uint32_t k = 0; k < vs::pages; ++k) {
+            vs::Screen t;
+            if (k != vs::map)
+                check(t.step(in(at(vs::tabCentre(k), tabY, .01f))), "a tab poke pages it");
+            check(t.page() == k, std::string("each tab's centre picks its page: ") + vs::pageNames[k]);
+        }
+        vs::Screen s;
+        s.step(in(at(vs::tabCentre(vs::music), tabY, .01f)));
+        s.step(in(away));
+        check(s.page() == vs::music, "on MUSIC");
+        vs::Button b[8];
+        const uint32_t n = vs::buttons(vs::music, {}, b);
+        check(n == 5 && b[0].action == vs::Action::musicPrevious && b[1].action == vs::Action::musicToggle &&
+                  b[2].action == vs::Action::musicNext && b[3].action == vs::Action::volumeDown && b[4].action == vs::Action::volumeUp,
+              "MUSIC: prev, play / pause, next, vol-, vol+");
+        for (uint32_t k = 0; k < n; ++k) {
+            check(b[k].x0 >= -vs::width / 2 && b[k].x1 <= vs::width / 2 && b[k].y0 > -vs::height / 2 && b[k].y1 < vs::height / 2 - vs::tabHeight &&
+                      b[k].x1 > b[k].x0 + .02f && b[k].y1 > b[k].y0 + .02f,
+                  "a music button is on the face, under the tabs, big enough");
+            check(s.step(in(at((b[k].x0 + b[k].x1) / 2, (b[k].y0 + b[k].y1) / 2, 0))) && s.takeAction() == b[k].action && s.page() == vs::music,
+                  "a poke on a music button: its action, the page kept");
+            check(s.takeAction() == vs::Action::none, "read once");
+            s.step(in(away));
+        }
+        check(!s.step(in(at(0, vs::height / 2 - vs::tabHeight - .012f, 0))) && s.takeAction() == vs::Action::none && s.page() == vs::music,
+              "a poke off the buttons does nothing there");
+        s.step(in(away));
+        vs::Offer noMusic;
+        noMusic.music = false;
+        check(vs::buttons(vs::music, noMusic, b) == 0, "CAR MUSIC OFF: no music buttons");
+        // HOME
+        vs::Offer all;
+        check(vs::buttons(vs::home, all, b) == 3 && b[0].action == vs::Action::goSafehouse && b[1].action == vs::Action::goBatcave &&
+                  b[2].action == vs::Action::sit,
+              "HOME: safehouse, Batcave, SIT");
+        all.sat = true;
+        check(vs::buttons(vs::home, all, b) == 3 && b[2].action == vs::Action::stand && std::string(b[2].label) == "STAND", "sat: STAND");
+        vs::Offer none;
+        none.hideouts = none.seat = false;
+        check(vs::buttons(vs::home, none, b) == 0, "HIDEOUTS and SEATED DRIVING OFF: no buttons");
+        vs::Offer seatOnly;
+        seatOnly.hideouts = false;
+        check(vs::buttons(vs::home, seatOnly, b) == 1 && b[0].action == vs::Action::sit, "HIDEOUTS OFF: SIT only");
+        check(vs::buttons(vs::map, all, b) == 0 && vs::buttons(vs::cases, all, b) == 0, "no buttons elsewhere");
+        vs::Screen h;
+        vs::Offer hideOff;
+        hideOff.hideouts = false;
+        h.step(in(at(vs::tabCentre(vs::home), tabY, .01f), hideOff));
+        h.step(in(away, hideOff));
+        vs::buttons(vs::home, {}, b); // where GO TO BATCAVE would be (SIT moves up to the first row)
+        check(!h.step(in(at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0), hideOff)) && h.takeAction() == vs::Action::none,
+              "a hidden button does not act");
+        h.step(in(away, hideOff));
+        vs::buttons(vs::home, hideOff, b);
+        check(h.step(in(at((b[0].x0 + b[0].x1) / 2, (b[0].y0 + b[0].y1) / 2, 0), hideOff)) && h.takeAction() == vs::Action::sit, "SIT acts");
+        // the ray and trigger too
+        const Vec3 from{-.2f, 1.35f, -.45f};
+        vs::Screen r;
+        r.step(in(at(vs::tabCentre(vs::home), tabY, .01f)));
+        r.step(in(away));
+        vs::buttons(vs::home, {}, b);
+        const Vec3 target = at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0);
+        vs::In ray = in(from);
+        ray.aim[1] = normalized(target - from);
+        r.step(ray);
+        ray.trigger[1] = 1;
+        check(r.step(ray) && r.takeAction() == vs::Action::goBatcave, "the ray + trigger on GO TO BATCAVE");
+        // drawn: finite on MUSIC and HOME with every offer, songs or none
+        van072::Frame f;
+        f.at = {120, 3, -40};
+        f.yaw = .7f;
+        vs::Screen d;
+        for (int k = 0; k < 11; ++k)
+            d.next();
+        for (int pass = 0; pass < 4; ++pass) {
+            for (const uint32_t page : {uint32_t{vs::music}, uint32_t{vs::home}}) {
+                while (d.page() != page)
+                    d.next();
+                vs::View v = vs::view(f, d, 9.f, 16.f, .4f, true);
+                v.offer.music = pass != 1;
+                v.offer.hideouts = pass != 2;
+                v.offer.seat = pass != 2;
+                v.offer.sat = pass == 3;
+                v.musicTracks = pass == 0 ? 0 : 12;
+                v.musicTrack = 3;
+                v.musicPlaying = pass == 3;
+                v.musicSong = pass == 3 ? std::string(200, 'A') : "Song";
+                v.musicTotal = 200;
+                v.musicElapsed = 50;
+                v.homeNote = pass == 2 ? "THE BATCAVE DID NOT LOAD" : nullptr;
+                std::vector<Vertex> out;
+                check(vs::append(out, v, f.world(van072::seatEye)) && out.size() > 300 && out.size() % 3 == 0, "drawn: music / home");
+                bool fine = true;
+                for (const auto& vx : out)
+                    fine &= std::isfinite(vx.position.x) && std::isfinite(vx.position.y) && std::isfinite(vx.position.z);
+                check(fine, "every vertex finite");
+            }
+        }
+    });
+    test("0.0.74 test 1 CAR MUSIC + SEATED DRIVING: the gate, the duck, the volume, the seat's lift, help lines", [] {
+        namespace vh = vehicle074;
+        check(vh::musicMaySound(vh::musicInVehicles, true, false) && !vh::musicMaySound(vh::musicInVehicles, false, false) &&
+                  !vh::musicMaySound(vh::musicInVehicles, true, true),
+              "IN VEHICLES: in the van only, not in a hideout");
+        check(vh::musicMaySound(vh::musicAlways, false, false) && vh::musicMaySound(vh::musicAlways, true, true), "ALWAYS: anywhere");
+        check(!vh::musicMaySound(vh::musicOff, true, false), "OFF: never");
+        check(vh::duck(0) == 1.f && std::abs(vh::duck(1) - .65f) < 1e-5f && vh::duck(5) == vh::duck(1) && vh::duck(NAN) == 1.f &&
+                  vh::duck(.5f) < 1.f && vh::duck(.5f) > vh::duck(1),
+              "ducks a third at most under the engine");
+        check(vh::stepVolume(70, 1) == 80 && vh::stepVolume(95, 1) == 100 && vh::stepVolume(5, -1) == 0 && vh::stepVolume(NAN, 0) == 70,
+              "volume steps of 10, 0-100");
+        // the seat
+        vh::Seat seat;
+        const float seatY = 1.2f;
+        float headY = 1.75f; // standing in the van
+        check(seat.step(vh::seatButton, true, false, .01f, headY, seatY) == 0 && !seat.sat(), "SIT BUTTON: standing until SIT");
+        seat.sit();
+        float lift = seat.step(vh::seatButton, true, false, .01f, headY, seatY);
+        check(seat.sat() && std::abs(lift - (seatY - headY)) < 1e-5f, "SIT: the eye down to the seat's eye");
+        headY += lift;
+        check(std::abs(seat.step(vh::seatButton, true, false, .01f, headY, seatY) - lift) < 1e-6f, "held");
+        seat.sit(); // again: re-levels from where he is
+        check(std::abs(seat.step(vh::seatButton, true, false, .01f, headY + .1f, seatY) - (lift - .1f)) < 1e-5f, "SIT again: re-levelled");
+        check(seat.step(vh::seatButton, true, true, .01f, headY, seatY) == 0 && !seat.sat(), "a hideout: standing");
+        check(seat.step(vh::seatButton, true, false, .01f, 1.75f, seatY) < -.5f && seat.sat(), "back from it: sat again");
+        check(seat.step(vh::seatButton, false, false, .01f, headY, seatY) == 0 && !seat.sat(), "out of the van: standing");
+        check(seat.step(vh::seatButton, true, false, .01f, 1.75f, seatY) == 0 && !seat.sat(), "in again: standing until SIT");
+        seat.sit();
+        seat.step(vh::seatButton, true, false, .01f, 1.75f, seatY);
+        seat.stand();
+        check(seat.step(vh::seatButton, true, false, .01f, 1.75f, seatY) == 0 && !seat.sat(), "STAND");
+        vh::Seat a;
+        float l = 0;
+        for (int i = 0; i < 80; ++i)
+            l = a.step(vh::seatAuto, true, false, .01f, 1.75f, seatY);
+        check(l == 0 && !a.sat(), "AUTO SIT waits a second");
+        for (int i = 0; i < 40; ++i)
+            l = a.step(vh::seatAuto, true, false, .01f, 1.75f + l, seatY);
+        check(a.sat() && l < -.5f, "then sits him once");
+        a.stand();
+        for (int i = 0; i < 300; ++i)
+            l = a.step(vh::seatAuto, true, false, .01f, 1.75f, seatY);
+        check(!a.sat() && l == 0, "STAND sticks (once a boarding)");
+        vh::Seat o;
+        o.sit();
+        check(o.step(vh::seatOff, true, false, .01f, 1.75f, seatY) == 0 && !o.sat(), "OFF: never");
+        check(vh::seatLift(0, 3.f, 0) == vh::liftLow && vh::seatLift(0, 0, 3.f) == vh::liftHigh && vh::seatLift(0, NAN, 1) == 0,
+              "the lift is clamped and never NaN");
+        for (const char* h : {vh::musicHelp, vh::seatHelp, hideout074::help}) {
+            const std::string t = h;
+            check(t.size() <= 80 && std::count(t.begin(), t.end(), '.') == 1 && t.back() == '.' && t.find("restart") != std::string::npos,
+                  "a help line: one sentence, 80 at most, says the restart: " + t);
+        }
+        {
+            using namespace combat38;
+            check(std::string(optionInfo[hideouts].key) == "hideouts" && std::string(optionInfo[hideouts].help) == hideout074::help &&
+                      optionInfo[hideouts].count == 2 && std::string(valueName(hideouts, 0)) == "ON",
+                  "HIDEOUTS: ON first, its help");
+            check(std::string(optionInfo[carMusic].key) == "car_music" && std::string(optionInfo[carMusic].help) == vh::musicHelp &&
+                      optionInfo[carMusic].count == 3 && std::string(valueName(carMusic, 0)) == "IN VEHICLES" &&
+                      std::string(valueName(carMusic, 1)) == "ALWAYS" && std::string(valueName(carMusic, 2)) == "OFF",
+                  "CAR MUSIC: IN VEHICLES first, ALWAYS, OFF");
+            check(std::string(optionInfo[seatedDriving].key) == "seated_driving" && std::string(optionInfo[seatedDriving].help) == vh::seatHelp &&
+                      optionInfo[seatedDriving].count == 3 && std::string(valueName(seatedDriving, 0)) == "SIT BUTTON" &&
+                      std::string(valueName(seatedDriving, 1)) == "AUTO SIT" && std::string(valueName(seatedDriving, 2)) == "OFF",
+                  "SEATED DRIVING: SIT BUTTON first (auto sit off), AUTO SIT, OFF");
+            check(vh::musicInVehicles == 0 && vh::musicAlways == 1 && vh::musicOff == 2 && vh::seatButton == 0 && vh::seatAuto == 1 && vh::seatOff == 2,
+                  "the values match the modes");
+        }
+        check(std::string(vh::musicReadme).find("No music comes with the mod") != std::string::npos, "the readme says no songs come");
+    });
+    test("0.0.74 test 1 HIDEOUTS: room.txt read, walked (stick, walls, steps, turns), points, exits, safe on faults", [] {
+        namespace ho = hideout074;
+        // a 4 x 3 m room of .25 m cells: x -2..2, z -1.5..1.5; a wall column at x 0..0.25 for z < 0.5; a step up at x > 1
+        std::string t = "HEROVR-HIDEOUT 1\nname TEST\nspawn -1.375 0 0.125 90\n";
+        t += "point exit return_to_city_in_vehicle -1.625 0 -1.125 0.6 Get in van\n";
+        t += "point board open_case_board 1.6 0.3 1.2 0.5 Case board (coming soon)\n";
+        t += "bounds -2 -1.5 2 1.5\nkilly -3.00\ngrid -2 -1.5 0.25 16 12\n";
+        for (int j = 0; j < 12; ++j) {
+            t += "row";
+            for (int i = 0; i < 16; ++i)
+                t += (i == 8 && j < 8) ? " ." : i >= 12 ? " 30" : " 0";
+            t += "\n";
+        }
+        ho::Room room;
+        std::string err;
+        check(ho::parseRoom(t, room, err) && room.ok() && room.cols == 16 && room.rows == 12 && room.points.size() == 2, "read: " + err);
+        check(room.points[0].action == ho::Action::toVehicle && room.points[1].action == ho::Action::comingSoon &&
+                  room.points[0].prompt == "Get in van",
+              "exits go back to the vehicle, the rest are coming soon");
+        float y = 0;
+        check(room.floorAt(-1.9f, -1.4f, y) && y == 0 && !room.floorAt(.1f, -1, y) && room.floorAt(1.6f, 0, y) && std::abs(y - .3f) < 1e-6f &&
+                  !room.floorAt(5, 0, y) && !room.floorAt(NAN, 0, y),
+              "the floor: open, the wall, the step, off the grid, NaN");
+        ho::Room bad;
+        check(!ho::parseRoom("nope", bad, err) && !ho::parseRoom("HEROVR-HIDEOUT 1\nspawn 0 0 0 0\n", bad, err) &&
+                  !ho::parseRoom("HEROVR-HIDEOUT 1\nspawn 9 0 9 0\ngrid 0 0 1 1 1\nrow 0\n", bad, err) &&
+                  !ho::parseRoom("HEROVR-HIDEOUT 1\nspawn 0.5 0 0.5 0\ngrid 0 0 1 2 1\nrow 0\n", bad, err),
+              "a bad room is refused (not a room, no grid, spawn off it, a short row)");
+        check(!bad.ok() && bad.floorCm.empty(), "a refused room is left empty");
+        check(ho::actionOf("return_to_city") == ho::Action::toVehicle && ho::actionOf("return_to_city_in_batmobile") == ho::Action::toVehicle &&
+                  ho::actionOf("weapons_reserved") == ho::Action::comingSoon,
+              "action words");
+        // entered: the spawn under the eye, the spawn's forward where he looks, the floor on the real floor
+        ho::Visit v;
+        Vec3 head{50, 11.7f, -20};
+        const Vec3 fwd{1, 0, 0};
+        check(v.begin(ho::Which::safehouse, room, head, fwd, 10.f) && v.active(), "entered");
+        const Vec3 sw = v.place().world(room.spawn);
+        check(std::abs(sw.x - head.x) < 1e-4f && std::abs(sw.z - head.z) < 1e-4f && std::abs(sw.y - 10.f) < 1e-4f, "spawn under the eye, on the floor");
+        const Vec3 spawnFwd = v.place().worldDir(Vec3{std::cos(90 * 3.14159265f / 180), 0, -std::sin(90 * 3.14159265f / 180)});
+        check(dot(spawnFwd, fwd) > .999f, "facing the spawn's way");
+        // the stick: forward walks him (the room moves under him) and a wall stops him
+        ho::In in;
+        in.dt = 1.f / 90;
+        in.head = head;
+        in.headForward = fwd;
+        in.moveY = 1;
+        ho::Out o;
+        for (int i = 0; i < 90; ++i)
+            o = v.step(in);
+        check(std::abs(v.roomFeet().z - 0.125f) > .5f || std::abs(v.roomFeet().x + 1.375f) > .5f, "walked about 2 m in a second");
+        // walk into the wall from the west: never past it
+        ho::Visit w;
+        w.begin(ho::Which::safehouse, room, head, Vec3{0, 0, -1}, 10.f); // spawn yaw 90: room forward (0,0,-1) = world (0,0,-1)
+        ho::In e = in;
+        e.headForward = Vec3{0, 0, -1};
+        e.moveY = 0;
+        e.moveX = 1; // right: room +x
+        for (int i = 0; i < 400; ++i)
+            w.step(e);
+        check(w.roomFeet().x < 0.f && w.roomFeet().x > -1.f, "stopped at the wall");
+        // real walking into the wall: pushed back
+        ho::In real = e;
+        real.moveX = 0;
+        const Vec3 feet = w.roomFeet();
+        real.head = w.place().world(Vec3{.12f, 0, feet.z}) + Vec3{0, 1.7f, 0};
+        w.step(real);
+        check(std::abs(w.roomFeet().x - feet.x) < 1e-4f, "a real step into the wall: kept out");
+        const Vec3 eyeRoom = w.place().room(real.head);
+        check(std::abs(eyeRoom.x - feet.x) < 1e-3f, "the room pushed back under him");
+        // a snap turn rotates about the eye
+        ho::In turn = in;
+        turn.moveY = 0;
+        turn.turnX = 1;
+        const Vec3 before = v.place().room(head);
+        const float yaw0 = v.place().yaw;
+        v.step(turn);
+        const Vec3 after = v.place().room(head);
+        check(std::abs(std::abs(v.place().yaw - yaw0) - 30 * 3.14159265f / 180) < 1e-3f && length(after - before) < 1e-3f,
+              "30 degrees about the eye");
+        v.step(turn);
+        check(std::abs(std::abs(v.place().yaw - yaw0) - 30 * 3.14159265f / 180) < 1e-3f, "held: once");
+        // the exit point and a press: leave
+        ho::Visit x;
+        x.begin(ho::Which::batcave, room, head, fwd, 10.f);
+        ho::In ex;
+        ex.dt = 1.f / 90;
+        ex.headForward = fwd;
+        ex.head = x.place().world(Vec3{-1.6f, 0, -1.0f}) + Vec3{0, 1.7f, 0};
+        o = x.step(ex);
+        check(o.point == 0 && !o.leave, "at the exit: its prompt");
+        ex.press = true;
+        o = x.step(ex);
+        check(o.leave && o.act == ho::Action::toVehicle, "a press there: back to the van");
+        // the coming soon point (up the step)
+        ex.head = x.place().world(Vec3{1.6f, .3f, 1.2f}) + Vec3{0, 1.7f, 0};
+        ho::Visit cs;
+        cs.begin(ho::Which::batcave, room, head, fwd, 10.f);
+        // walk there by real steps (each within a step up)
+        for (int i = 0; i <= 40; ++i) {
+            ho::In st;
+            st.dt = 1.f / 90;
+            st.headForward = fwd;
+            const float a = i / 40.f;
+            st.head = cs.place().world(Vec3{-1.375f + a * (1.6f + 1.375f), 0, .125f + a * (1.2f - .125f)}) + Vec3{0, 1.7f, 0};
+            if (i == 40)
+                st.press = true;
+            o = cs.step(st);
+        }
+        check(o.point == 1 && o.act == ho::Action::comingSoon && !o.leave, "the case board: coming soon, he stays");
+        // faults: a NaN eye respawns or does nothing, never NaN
+        ho::In nan = in;
+        nan.head = {NAN, 0, 0};
+        o = v.step(nan);
+        check(std::isfinite(v.place().at.x) && v.active(), "a NaN eye: nothing broken");
+        ho::Visit never;
+        check(!never.begin(ho::Which::batcave, bad, head, fwd, 10.f) && !never.active(), "a bad room: not entered");
+        check(!never.begin(ho::Which::batcave, room, Vec3{NAN, 0, 0}, fwd, 10.f), "a NaN eye: not entered");
+        // drawn: the room and the backdrop
+        mesh_model::Mesh mesh;
+        mesh.corners = {{-2, 0, -1.5f}, {2, 0, -1.5f}, {2, 0, 1.5f}, {-2, 3, -1.5f}, {2, 3, -1.5f}, {2, 3, 1.5f}};
+        mesh.colors = {{.5f, .5f, .5f}, {.4f, .4f, .4f}};
+        mesh.low = {-2, 0, -1.5f};
+        mesh.high = {2, 3, 1.5f};
+        std::vector<Vertex> sink;
+        check(ho::appendRoom(sink, mesh, x.place(), 1000) && sink.size() == 6, "the room drawn");
+        bool fine = true;
+        for (const auto& vx : sink)
+            fine &= std::isfinite(vx.position.x) && vx.shape.z == -1.f && vx.color.x > 0;
+        check(fine, "untextured: its shaded colour");
+        check(!ho::appendRoom(sink, mesh, x.place(), 8) && sink.size() == 6, "over the budget: nothing");
+        std::vector<Vertex> box;
+        check(ho::appendBackdrop(box, mesh, x.place(), head) && box.size() == 36, "the black box round it");
+        for (const auto& vx : box)
+            fine &= length(vx.position - head) <= 150.1f && vx.color.x == 0 && vx.alpha == 1;
+        check(fine, "black, opaque, inside the far plane");
+        ho::Place far;
+        far.at = {1000, 0, 0};
+        box.clear();
+        check(ho::appendBackdrop(box, mesh, far, head), "far: pulled in");
+        for (const auto& vx : box)
+            fine &= length(vx.position - head) <= 150.1f;
+        check(fine, "never past 150 m");
+        box.clear();
+        ho::appendFallbackBox(box, head, 10.f);
+        check(box.size() == 42, "the fallback box");
     });
     test("0.0.73 test 2 BUTTON GUIDE (fix 23): every hero's controls on his page, the SUITS / CONTROLS tabs, B back", [] {
         namespace rp = roster_page;

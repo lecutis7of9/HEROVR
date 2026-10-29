@@ -196,7 +196,7 @@ bool playable(std::string_view fileName, uint64_t bytes) {
     if (dot == std::string_view::npos || dot == 0 || dot + 1 >= name.size())
         return false;
     const std::string ext = lower(name.substr(dot + 1));
-    for (const char* e : {"mp3", "wav", "flac", "m4a", "aac", "wma"})
+    for (const char* e : {"mp3", "wav", "flac", "m4a", "aac", "wma", "ogg"}) // 0.0.74 MUSIC PLAYER: + ogg
         if (ext == e)
             return true;
     return false;

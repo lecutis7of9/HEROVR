@@ -305,6 +305,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5475'), ['SpidyWindowPop'])  # 0.0.73 test 6 WINDOW POP FIX
         self.assertEqual(uses.get('5477'), ['SpidyMpPlayer2Body'])  # 0.0.73 MPSUIT PLAYER 2 BODY
         self.assertEqual(uses.get('5490'), ['SpidyComingSoon'])  # 0.0.73 COMING SOON
+        self.assertEqual(uses.get('5491'), ['SpidyHideouts'])  # 0.0.74 test 1 HIDEOUTS
+        self.assertEqual(uses.get('5492'), ['SpidyCarMusic'])  # 0.0.74 test 1 CAR MUSIC
+        self.assertEqual(uses.get('5493'), ['SpidySeatedDriving'])  # 0.0.74 test 1 SEATED DRIVING
 
 
 class Hero073Image(unittest.TestCase):

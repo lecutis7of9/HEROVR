@@ -205,6 +205,15 @@ enum Option : uint32_t {
     // 0.0.73 COMING SOON (holo_roster.hpp soonHeroes): the hero tiles' SOON tab - the heroes coming in 0.0.74,
     // their pictures, not playable - shown (ON, the default) or hidden (OFF); live
     comingSoon,
+    // 0.0.74 test 1 HIDEOUTS (hideout074.hpp): the van dash HOME page's GO TO SAFEHOUSE / GO TO BATCAVE (ON, the
+    // default) or not; the rooms load at start only when ON (turning it on needs a restart)
+    hideouts,
+    // 0.0.74 test 1 CAR MUSIC (vehicle074.hpp): the van dash MUSIC page's player - IN VEHICLES (the default), ALWAYS
+    // (on outside the van too), OFF; live
+    carMusic,
+    // 0.0.74 test 1 SEATED DRIVING (vehicle074.hpp): the dash's SIT button (SIT BUTTON, the default), AUTO SIT (sat a
+    // second after getting in), OFF; getting out stands him back up; live
+    seatedDriving,
     options
 };
 struct OptionInfo {
@@ -570,6 +579,9 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"SUIT LOOK", "FIGURE", nullptr, nullptr}},
     {"coming_soon", "COMING SOON", "SOON", "ON shows the heroes coming next update on the roster's SOON tab, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    {"hideouts", "HIDEOUTS", "HIDE", "Adds safehouse and Batcave trips to the van dash, turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"car_music", "CAR MUSIC", "CMUS", "The van dash's MUSIC page plays your songs, no restart needed.", 3, {"IN VEHICLES", "ALWAYS", "OFF", nullptr}},
+    {"seated_driving", "SEATED DRIVING", "SEAT", "SIT on the van dash puts your eye at the driver's seat, no restart needed.", 3, {"SIT BUTTON", "AUTO SIT", "OFF", nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

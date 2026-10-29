@@ -4,6 +4,7 @@
 // Version 0.0.73 test 3 VAN SCREEN: the dash screen's pages, drawn without a headset by the overlay's own
 // vertices (van_screen::append, the code the game runs) - SIMULATED, NOT GAME CAPTURE. Into <folder>:
 //   page_map.bmp page_status.bmp page_cases_N.bmp (N 1..7) page_locker.bmp  each page face-on
+//   page_music.bmp page_music_empty.bmp page_home.bmp page_home_sat.bmp  (0.0.74 test 1)
 //   driver_seat.bmp  from the driver's eye (van072::seatEye) in the built cab (when <models> has the van's
 //                    Vehicle/PunisherVan/Interior and .../SteeringWheel; untextured, darkened), the screen right of the wheel
 //
@@ -121,6 +122,25 @@ int main(int argc, char** argv) {
     for (uint32_t k = 0; k < vs::files; ++k)
         good &= page(dir + "page_cases_" + std::to_string(k + 1) + ".bmp", pageView(vs::cases, k, 10.4f, yaw, .55f));
     good &= page(dir + "page_locker.bmp", pageView(vs::locker, 0, 10.4f, yaw, .55f));
+    // 0.0.74 test 1: MUSIC (a song playing; the folder empty) and HOME (standing; sat)
+    {
+        vs::View v = pageView(vs::music, 0, 10.4f, yaw, .55f);
+        v.musicTracks = 14;
+        v.musicTrack = 4;
+        v.musicPlaying = true;
+        v.musicSong = "Example Artist - Example Song";
+        v.musicVolume = 70;
+        v.musicTotal = 214;
+        v.musicElapsed = 81;
+        good &= page(dir + "page_music.bmp", v);
+        vs::View e = pageView(vs::music, 0, 10.4f, yaw, .55f);
+        e.musicTracks = 0;
+        good &= page(dir + "page_music_empty.bmp", e);
+        vs::View h = pageView(vs::home, 0, 10.4f, yaw, .55f);
+        good &= page(dir + "page_home.bmp", h);
+        h.offer.sat = true;
+        good &= page(dir + "page_home_sat.bmp", h);
+    }
     // the driver's seat
     const std::string models = argc > 2 ? std::string(argv[2]) : std::string();
     // From the driver's eye (he sits left of it, so the flush face is seen a little from the side).

@@ -279,6 +279,15 @@ class GameTrackingRig {
         vehicleTurn_ = std::isfinite(radians) ? std::clamp(radians, -1.f, 1.f) : 0.f;
         stickLocked_ = lockStick;
     }
+    // 0.0.74 test 1 SEATED DRIVING (vehicle074::Seat): the tracking space raised `metres` (world up; -.9 .. .6) so
+    // a seated player's eye is at the driver seat's; set every frame (0: standing); reset() clears it. The lift
+    // used by the last update is seatLiftApplied() (the van's room is moved back by it, game_xr).
+    void seatLift(float metres) {
+        seatLift_ = std::isfinite(metres) ? std::clamp(metres, -.9f, .6f) : 0.f;
+    }
+    float seatLiftApplied() const {
+        return seatLiftApplied_;
+    }
     // Update 38.5 FLY ROLL (extras385::fly::Roll): the view rolled `radians` about the head's level
     // look (+ the right side down), the tracking space tilted the way WALL ROLL tilts it; a mod-side
     // view transform, not the game's camera. `stickRolls`: the right stick rolls, so it turns nothing.
@@ -403,6 +412,7 @@ class GameTrackingRig {
     bool triggerWebs_{}, buttonsChanged_{};
     float snap_ = .5235988f, smooth_{};
     float vehicleTurn_{}; // Version 0.0.73 PUNISHER VAN
+    float seatLift_{}, seatLiftApplied_{}; // 0.0.74 test 1 SEATED DRIVING
     bool stickLocked_{};
     // The stand-off wanted along the surface's normal, and the time on it.
     float surfaceDepth_{}, surfaceSeconds_{};

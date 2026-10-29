@@ -47,6 +47,8 @@ inline constexpr uint32_t drawTriangles = 24000; // the VR cap per model (3 vert
 // at the eye: the user's "make sure the new models arent falttened"), the van 150,000 (a whole vehicle; the source
 // has 431,452, the shipped one 135,000 by collapse decimation). Every other slot keeps drawTriangles.
 inline constexpr uint32_t hammerTriangles = 50000, vanTriangles = 150000;
+// Version 0.0.74 test 1 HIDEOUTS: a whole room (the Batcave ships 40,533).
+inline constexpr uint32_t hideoutTriangles = 60000;
 // Untextured (the overlay could not make its texture array), each model is drawn sorted far to near
 // in the overlay's own vertices: then its light copy (Mesh::lite, vertex clustering to liteTriangles).
 inline constexpr uint32_t liteTriangles = 2400;
@@ -58,7 +60,8 @@ inline constexpr uint32_t liteTriangles = 2400;
 // Test build 8 ROSTER page: 40 (the roster's six picture atlases on top of the 28 images; the game uses
 // 512 px layers - about 1.4 MB each with mips - so the roster adds about 8 MB).
 // Build 9 SUITS: 112 (the 23 suits take at most 3 layers each, 69 at most; the game's 512 px layers: about 160 MB).
-inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 112;
+// 0.0.74 test 1 HIDEOUTS: 160 (the Batcave's 35 images and the safehouse's; loaded only when HIDEOUTS is ON).
+inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 160;
 inline constexpr size_t mostImageBytes = 48u << 20;
 
 struct Mesh {
@@ -162,6 +165,9 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // JACKET AND JEANS Wolverine's own claws, Light.k, CC BY 4.0), the claws' base at the origin, -z along
                        // them, +y the back of the hand. Missing: 0.0.72's built-in claws.
                        slotClawsLeft = slotSuitEnd, slotClawsRight,
+                       // Version 0.0.74 test 1 HIDEOUTS: Models\Hideout\Batcave|Safehouse (tools/hideout074/make_hideout.py: the
+                       // room in glTF space, its room.txt beside it). Loaded only when HIDEOUTS is ON (game_xr).
+                       slotHideoutBatcave, slotHideoutSafehouse,
                        slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
@@ -174,14 +180,14 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Suits/Suit_daredevil_3", "Suits/Suit_hulk_2", "Suits/Suit_wolverine_1", "Suits/Suit_wolverine_3",
                                                    "Suits/Suit_wolverine_4", "Suits/Suit_punisher_1", "Suits/Suit_punisher_2", "Suits/Suit_thor_1",
                                                    "Suits/Suit_thor_2", "Suits/Suit_greenLantern_2", "Suits/Suit_greenLantern_3", "Suits/Suit_superman_4",
-                                                   "Claws/Left", "Claws/Right"};
+                                                   "Claws/Left", "Claws/Right", "Hideout/Batcave", "Hideout/Safehouse"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles};
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -206,7 +212,8 @@ inline uint32_t suitSlot(const char* folder) {
     }
     return 0;
 }
-static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slots == 44, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
+static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slots == 46, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

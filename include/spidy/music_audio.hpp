@@ -31,6 +31,8 @@ class Player {
         uint32_t serial{};               // grows with every change
     };
     Player();
+    // 0.0.74 MUSIC PLAYER (the vehicle screens): the songs in `folder` (made if missing), not phoneMusicFolder.
+    explicit Player(std::wstring folder);
     ~Player(); // stops the music, joins its threads
     Player(const Player&) = delete;
     Player& operator=(const Player&) = delete;

@@ -126,9 +126,9 @@ struct Player::Impl {
     std::atomic<uint32_t> serial{};
     bool dirty = true;
 
-    Impl() {
+    explicit Impl(std::wstring own = {}) {
         try {
-            folder = phoneMusicFolder();
+            folder = own.empty() ? phoneMusicFolder() : std::move(own); // 0.0.74: the vehicle player's own folder
         } catch (...) {
         }
         shown.folder = utf8(folder);
@@ -665,6 +665,13 @@ struct Player::Impl {
 Player::Player() {
     try {
         impl_ = std::make_unique<Impl>();
+    } catch (...) {
+        impl_.reset();
+    }
+}
+Player::Player(std::wstring folder) {
+    try {
+        impl_ = std::make_unique<Impl>(std::move(folder));
     } catch (...) {
         impl_.reset();
     }

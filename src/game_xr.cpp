@@ -32,6 +32,8 @@
 #include "spidy/fly_lean.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
+#include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
+#include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
 #include "spidy/rep_log.hpp"     // 0.0.73 test 3 REP PAGE
@@ -1420,6 +1422,59 @@ std::wstring tabOnlyPath() {
     CoTaskMemFree(folder);
     return path;
 }
+// 0.0.74 test 1 CAR MUSIC: the van dash's songs, Documents\HERO VR\Music - made (every level) with its
+// README.txt when missing; empty when Windows names no Documents (the player then takes the phone's folder).
+std::wstring carMusicFolder() {
+    PWSTR docs{};
+    std::wstring path;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs)
+        path = std::wstring(docs) + L"\\" + vehicle074::musicFolderUnderDocuments;
+    CoTaskMemFree(docs);
+    if (path.empty())
+        return path;
+    const int made = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
+    if (made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS)
+        return path;
+    const std::wstring readme = path + L"\\README.txt";
+    const HANDLE file = CreateFileW(readme.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) { // CREATE_NEW: never over his own
+        DWORD wrote = 0;
+        WriteFile(file, vehicle074::musicReadme, static_cast<DWORD>(std::strlen(vehicle074::musicReadme)), &wrote, nullptr);
+        CloseHandle(file);
+    }
+    return path;
+}
+// 0.0.74 test 1 HIDEOUTS: each room's walk data (Models\Hideout\<Room>\room.txt beside its scene.glb),
+// read once at the models' load; ok false: that trip is not offered (he stays in the van).
+hideout074::Room hideoutRooms[3];
+bool hideoutRoomOk[3]{};
+std::string hideoutRoomError[3];
+void readHideoutRoom(uint32_t which) {
+    hideoutRoomOk[which] = false;
+    hideoutRooms[which] = {};
+    std::wstring path = spidyHome() + L"\\Models\\";
+    for (const char* c = hideout074::folders[which]; *c; ++c)
+        path += *c == '/' ? L'\\' : static_cast<wchar_t>(*c);
+    path += L"\\room.txt";
+    const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        hideoutRoomError[which] = "no room.txt";
+        return;
+    }
+    std::string text;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart < 8 * 1024 * 1024) {
+        text.resize(static_cast<size_t>(size.QuadPart));
+        DWORD got = 0;
+        if (!ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &got, nullptr))
+            got = 0;
+        text.resize(got);
+    }
+    CloseHandle(file);
+    std::string error;
+    hideoutRoomOk[which] = !text.empty() && hideout074::parseRoom(text, hideoutRooms[which], error) && hideoutRooms[which].ok();
+    hideoutRoomError[which] = hideoutRoomOk[which] ? "" : (text.empty() ? "room.txt empty or unreadable" : "room.txt: " + error);
+}
 std::string readTabOnly() {
     const auto path = tabOnlyPath();
     if (path.empty())
@@ -1681,6 +1736,12 @@ DWORD WINAPI run(void*) {
             std::string missingSlots;
             for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
                 mesh_model::Status status = mesh_model::invalid;
+                if (mesh_model::slotIsHideout(slot) && c38(combat38::hideouts) != 0) { // 0.0.74 test 1 HIDEOUTS OFF: not loaded
+                    models.meshes[slot] = {};
+                    models.status[slot] = mesh_model::notTried;
+                    game_prompts::note(std::string("0.0.74 test 1 HIDEOUTS OFF: ") + mesh_model::slotFolders[slot] + " not loaded");
+                    continue;
+                }
                 try {
                     status = models.load(slot, root);
                 } catch (...) { // out of memory or worse: this slot is MODEL MISSING, nothing else stops
@@ -1702,6 +1763,21 @@ DWORD WINAPI run(void*) {
                     missingSlots += mesh_model::slotFolders[slot];
                     consoleLine(line);
                 }
+            }
+            // 0.0.74 test 1 HIDEOUTS: each loaded room's walk data (no room.txt: that trip is not offered).
+            for (uint32_t which = 1; which < 3; ++which) {
+                const uint32_t slot = which == 1 ? mesh_model::slotHideoutSafehouse : mesh_model::slotHideoutBatcave;
+                hideoutRoomOk[which] = false;
+                if (!models.model(slot))
+                    continue;
+                try {
+                    readHideoutRoom(which);
+                } catch (...) {
+                    hideoutRoomOk[which] = false;
+                    hideoutRoomError[which] = "could not be read";
+                }
+                consoleLine(std::string("HIDEOUTS: ") + hideout074::names[which] +
+                            (hideoutRoomOk[which] ? " ready (CANDIDATE)" : " not offered - " + hideoutRoomError[which]));
             }
             consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slots - 1) + " loaded" +
                         (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
@@ -1984,6 +2060,11 @@ DWORD WINAPI run(void*) {
         // when not being written: try_lock) and what the page shows.
         music::Player musicPlayer;
         music::Player::Status musicStatus;
+        // 0.0.74 test 1 CAR MUSIC (vehicle074.hpp): the van dash's own player (Documents\HERO VR\Music), its
+        // status, the volume he set (0-100; under the engine: duck) and the last volume given the player.
+        music::Player carMusic{carMusicFolder()};
+        music::Player::Status carMusicStatus;
+        float carMusicVolume = 70.f, carMusicGiven = -1.f;
         wrist_hud::MusicView wristMusic;
         int musicTrackKept = -1;
         PhoneView phoneShown;
@@ -2209,6 +2290,18 @@ DWORD WINAPI run(void*) {
         // free then - the summon wants him out) or an open hand's poke pages it. Never the wheel's or the triggers'.
         van_screen::Screen vanDash;
         bool vanDashX{};
+        // 0.0.74 test 1 SEATED DRIVING (vehicle074::Seat): the lift the rig holds (next frame's) and how much of
+        // it the van's tracking-space place already took back (so the van stays on the street as he rises).
+        vehicle074::Seat vanSeat;
+        float vanSeatLift{}, vanSeatTaken{};
+        // 0.0.74 test 1 HIDEOUTS (hideout074::Visit): the trip from the dash, the van held where it stands.
+        hideout074::Visit hideoutVisit;
+        float hideoutExitHeld{};
+        bool hideoutPressWas{}, hideoutExitDone{};
+        int hideoutPointShown = -1;
+        const char* vanHomeNote{};
+        van_screen::Offer vanOffer{};
+        uint32_t carMusicAskedSerial{}; // the player's status serial when last told to toggle (no double toggle)
         van072::Probe vanProbe;
         bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
         van072::Spot vanSpot{};
@@ -4437,6 +4530,8 @@ DWORD WINAPI run(void*) {
                     }
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
                     rig.vehicleTurn(vanCarry.turn, van072::seatStickLock(van.state, vanCarry.lockStick)); // 0.0.73 test 3: no stick turn seated
+                    // 0.0.74 test 1 SEATED DRIVING: the seat's lift while he drives; out of the van, standing again.
+                    rig.seatLift(van.state == van072::driving && !hideoutVisit.active() ? vanSeatLift : 0.f);
                     vanCarry.turn = 0;
                     motion = rig.update(controller, feet, {camera[8], camera[9], camera[10]}, gameplay,
                                         swingState.owned ? Vec3{0, 1, 0} : heroUp,
@@ -7181,13 +7276,36 @@ DWORD WINAPI run(void*) {
                                         van072::Tune vanTune{};
                                         vanTune.wheelHandPedals = combat38::vanWheelHandPedals(c38(combat38::vanPedals));
                                         van072::Out vout{};
-                                        try {
-                                            vout = vanDriver.step(vin, ci, vanCarry, flat, open, clearAhead, vanTune);
-                                        } catch (...) { // never: it allocates nothing; parked, the carry off
-                                            van.park();
-                                            vanDriver.carried = vanDriver.boarding = false;
-                                            vanCarry = {};
+                                        // 0.0.74 test 1 SEATED DRIVING: the rig's new lift moves his whole room up or down -
+                                        // the van rides in that room while carried, so its place there takes the lift back
+                                        // and it stays on the street (CANDIDATE: Windows-only, untested in the headset).
+                                        if (vanDriver.carried) {
+                                            const float d = rig.seatLiftApplied() - vanSeatTaken;
+                                            if (std::isfinite(d) && d != 0 && van072::fine(vanW.orientation)) {
+                                                vanDriver.room.at -= vanW.orientation.conjugate().rotate(Vec3{0, d, 0});
+                                                vanSeatTaken += d;
+                                            }
+                                        } else
+                                            vanSeatTaken = rig.seatLiftApplied();
+                                        // 0.0.74 test 1 HIDEOUTS: a trip ends with the van gone, OFF or another hero.
+                                        if (hideoutVisit.active() && (!vin.enabled || !vin.punisher || van.state != van072::driving)) {
+                                            hideoutVisit.end();
+                                            hideoutExitHeld = 0;
+                                            message(1, 0, "HIDEOUT: back in the van");
                                         }
+                                        const bool hideoutAway = hideoutVisit.active();
+                                        if (hideoutAway) { // the van held where it stands, no carry, no stick turn
+                                            van.speed = 0;
+                                            vanCarry = {};
+                                            vanCarry.lockStick = true;
+                                        } else
+                                            try {
+                                                vout = vanDriver.step(vin, ci, vanCarry, flat, open, clearAhead, vanTune);
+                                            } catch (...) { // never: it allocates nothing; parked, the carry off
+                                                van.park();
+                                                vanDriver.carried = vanDriver.boarding = false;
+                                                vanCarry = {};
+                                            }
                                         // Version 0.0.73 test 3 VAN SCREEN: X or a poke (an open hand off the wheel)
                                         // pages it while he drives; it takes nothing from the wheel or the pedals.
                                         if (c38(combat38::vanScreen) == 0) {
@@ -7207,6 +7325,15 @@ DWORD WINAPI run(void*) {
                                                     si.aim[i] = vin.tracked[i] && finite(aimL) ? aimL : Vec3{};
                                                     si.trigger[i] = std::isfinite(frame.hands[i].trigger) ? frame.hands[i].trigger : 0.f;
                                                 }
+                                                // 0.0.74 test 1: the MUSIC / HOME buttons his options leave on the dash
+                                                vanOffer.music = c38(combat38::carMusic) != vehicle074::musicOff;
+                                                vanOffer.hideouts = c38(combat38::hideouts) == 0 && (hideoutRoomOk[1] || hideoutRoomOk[2]);
+                                                vanOffer.seat = c38(combat38::seatedDriving) != vehicle074::seatOff;
+                                                vanOffer.sat = vanSeat.sat();
+                                                si.offer = vanOffer;
+                                                if (hideoutAway) // nothing pokes the dash from the hideout
+                                                    for (unsigned i = 0; i < 2; ++i)
+                                                        si.tracked[i] = false, si.trigger[i] = 0;
                                                 if (vanDash.step(si)) { // a tick: X's hand, or both for a poke
                                                     runtime.haptic(0, .05f);
                                                     if (!si.x)
@@ -7218,6 +7345,145 @@ DWORD WINAPI run(void*) {
                                         } else
                                             vanDash.reset();
                                         vanDashX = false;
+                                        // 0.0.74 test 1: what the dash's buttons asked for (each returns at once).
+                                        {
+                                            if (!carMusic.status(carMusicStatus)) {
+                                            } // busy: last frame's status
+                                            const bool carSounding = carMusicStatus.playing && !carMusicStatus.paused;
+                                            const uint8_t carMode = static_cast<uint8_t>(c38(combat38::carMusic));
+                                            const auto toggleCar = [&] {
+                                                carMusic.toggle();
+                                                carMusicAskedSerial = carMusicStatus.serial;
+                                            };
+                                            const van_screen::Action act = vanDash.takeAction();
+                                            switch (act) {
+                                            case van_screen::Action::musicPrevious:
+                                                carMusic.previous();
+                                                break;
+                                            case van_screen::Action::musicToggle:
+                                                if (!carSounding) { // one music at a time: the van's pauses the hologram's and the phone's
+                                                    if (musicStatus.playing && !musicStatus.paused)
+                                                        musicPlayer.toggle();
+                                                    if (phoneMusic.status().playing)
+                                                        phoneMusic.toggle();
+                                                }
+                                                toggleCar();
+                                                break;
+                                            case van_screen::Action::musicNext:
+                                                carMusic.next();
+                                                break;
+                                            case van_screen::Action::volumeDown:
+                                            case van_screen::Action::volumeUp:
+                                                carMusicVolume = vehicle074::stepVolume(carMusicVolume, act == van_screen::Action::volumeUp ? 1 : -1);
+                                                break;
+                                            case van_screen::Action::sit:
+                                                vanSeat.sit();
+                                                message(1, 0, "SEATED DRIVING: sat - your eye is at the driver's seat (STAND or getting out stands you up)");
+                                                break;
+                                            case van_screen::Action::stand:
+                                                vanSeat.stand();
+                                                message(1, 0, "SEATED DRIVING: standing");
+                                                break;
+                                            case van_screen::Action::goSafehouse:
+                                            case van_screen::Action::goBatcave: {
+                                                const uint32_t which = act == van_screen::Action::goSafehouse ? 1u : 2u;
+                                                const uint32_t slot = which == 1 ? mesh_model::slotHideoutSafehouse : mesh_model::slotHideoutBatcave;
+                                                const char* why = nullptr;
+                                                if (c38(combat38::hideouts) != 0)
+                                                    why = "HIDEOUTS is OFF";
+                                                else if (!hideoutRoomOk[which] || !mesh_model::library().model(slot))
+                                                    why = "that room's model or room.txt is missing";
+                                                else if (!overlay.modelReady())
+                                                    why = "the models' textures are not ready";
+                                                else if (van.state != van072::driving || !vanDriver.carried || vanDriver.boarding)
+                                                    why = "get in and settle in the seat first";
+                                                else if (std::abs(van.speed) > .5f)
+                                                    why = "stop the van first";
+                                                else if (!hideoutVisit.begin(which == 1 ? hideout074::Which::safehouse : hideout074::Which::batcave,
+                                                                             hideoutRooms[which], motion.headPose.position, vin.look, van.frame.at.y))
+                                                    why = "the room could not be placed";
+                                                if (why) { // any fault: he stays in the van
+                                                    vanHomeNote = why;
+                                                    message(2, 0, (std::string("HIDEOUT: not now - ") + why).c_str());
+                                                } else {
+                                                    vanHomeNote = nullptr;
+                                                    van.speed = 0;
+                                                    hideoutExitHeld = 0;
+                                                    hideoutExitDone = true; // B must be let go first
+                                                    hideoutPressWas = true;
+                                                    hideoutPointShown = -1;
+                                                    message(1, 0, (std::string("HIDEOUT: the ") + hideout074::names[which] +
+                                                                   " (TEST) - walk with the left stick, turn with the right; hold B to go back to the van")
+                                                                      .c_str());
+                                                    game_prompts::note(std::string("0.0.74 test 1 HIDEOUTS: into the ") + hideout074::names[which] + " (CANDIDATE)");
+                                                }
+                                                break;
+                                            }
+                                            default:
+                                                break;
+                                            }
+                                            // CAR MUSIC IN VEHICLES: quiet out of the van (and in a hideout); ALWAYS keeps on; OFF stops it.
+                                            const bool may = vehicle074::musicMaySound(carMode, vanDriving, hideoutVisit.active());
+                                            const bool hologramPlays = musicStatus.playing && !musicStatus.paused;
+                                            if (carSounding && (!may || hologramPlays) && carMusicStatus.serial != carMusicAskedSerial)
+                                                toggleCar();
+                                            const float target = carMusicVolume * vehicle074::duck(vanDriving ? vanCarry.rpm : 0.f);
+                                            if (std::isfinite(target) && std::abs(target - carMusicGiven) > .5f) {
+                                                carMusic.setVolume(target);
+                                                carMusicGiven = target;
+                                            }
+                                        }
+                                        // 0.0.74 test 1 HIDEOUTS: a frame in the room - the sticks walk and turn, A or a trigger
+                                        // uses the point in reach, B held .8 s goes back to the van.
+                                        if (hideoutVisit.active()) {
+                                            hideout074::In hi;
+                                            hi.dt = vin.dt;
+                                            hi.head = motion.headPose.position;
+                                            hi.headForward = vin.look;
+                                            hi.moveX = std::isfinite(frame.hands[0].stickX) ? frame.hands[0].stickX : 0.f;
+                                            hi.moveY = std::isfinite(frame.hands[0].stickY) ? frame.hands[0].stickY : 0.f;
+                                            hi.turnX = std::isfinite(frame.hands[1].stickX) ? frame.hands[1].stickX : 0.f;
+                                            const bool pressNow = (frame.buttons & buttonA) != 0 || frame.hands[0].trigger > .7f || frame.hands[1].trigger > .7f;
+                                            hi.press = pressNow && !hideoutPressWas;
+                                            hideoutPressWas = pressNow;
+                                            const bool bHeld = (frame.buttons & buttonB) != 0;
+                                            if (!bHeld)
+                                                hideoutExitDone = false, hideoutExitHeld = 0;
+                                            else if (!hideoutExitDone)
+                                                hideoutExitHeld += vin.dt;
+                                            hi.exit = !hideoutExitDone && hideoutExitHeld >= .8f;
+                                            hideout074::Out ho{};
+                                            try {
+                                                ho = hideoutVisit.step(hi);
+                                            } catch (...) {
+                                                ho.leave = true;
+                                            }
+                                            const hideout074::Room* room = hideoutVisit.room();
+                                            if (ho.point != hideoutPointShown) {
+                                                hideoutPointShown = ho.point;
+                                                if (room && ho.point >= 0 && static_cast<size_t>(ho.point) < room->points.size() &&
+                                                    !room->points[static_cast<size_t>(ho.point)].prompt.empty())
+                                                    message(1, 0, room->points[static_cast<size_t>(ho.point)].prompt.c_str());
+                                            }
+                                            if (ho.act == hideout074::Action::comingSoon)
+                                                message(1, 0, "COMING SOON");
+                                            if (ho.leave) {
+                                                hideoutVisit.end();
+                                                hideoutExitDone = true;
+                                                hideoutExitHeld = 0;
+                                                message(1, 0, "HIDEOUT: back in the van");
+                                                game_prompts::note("0.0.74 test 1 HIDEOUTS: back in the van");
+                                            }
+                                        }
+                                        // 0.0.74 test 1 SEATED DRIVING: next frame's lift (0 out of the seat, OFF or in a hideout).
+                                        try {
+                                            const float seatY = van.frame.world(vehicle074::seatEye).y;
+                                            vanSeatLift = vanSeat.step(static_cast<uint8_t>(c38(combat38::seatedDriving)),
+                                                                       van.state == van072::driving, hideoutVisit.active(), vin.dt,
+                                                                       motion.headPose.position.y, seatY);
+                                        } catch (...) {
+                                            vanSeatLift = 0;
+                                        }
                                         if (vout.summoned) {
                                             message(1, 0, "PUNISHER VAN (EXPERIMENTAL): here - grip the driver door handle to get in");
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
@@ -9833,7 +10099,15 @@ DWORD WINAPI run(void*) {
                                 const mesh_model::Mesh* body = slotModel(mesh_model::slotVan, "PUNISHER VAN");
                                 const mesh_model::Mesh* cab = slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
                                 const mesh_model::Mesh* wheel = slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
-                                if (body && van.state != van072::none && finite(van.frame.at) && std::isfinite(van.frame.yaw)) {
+                                // 0.0.74 test 1 HIDEOUTS: in a room the van is not drawn (nor its dash); the room is.
+                                if (hideoutVisit.active()) {
+                                    const auto w = hideoutVisit.which();
+                                    saved.hideoutAway = true;
+                                    saved.hideoutModel = mesh_model::library().model(w == hideout074::Which::batcave ? mesh_model::slotHideoutBatcave
+                                                                                                                     : mesh_model::slotHideoutSafehouse);
+                                    saved.hideoutPlace = hideoutVisit.place();
+                                    saved.hideoutFloor = van.frame.at.y;
+                                } else if (body && van.state != van072::none && finite(van.frame.at) && std::isfinite(van.frame.yaw)) {
                                     auto& L = saved.hero072;
                                     L.van = L.any = true;
                                     L.vanModel = body;
@@ -9848,8 +10122,27 @@ DWORD WINAPI run(void*) {
                                     L.wheelUp = van072::worldDir(van.frame, up);
                                     // Version 0.0.73 test 3 VAN SCREEN: on the dash where the driver reads it
                                     if (c38(combat38::vanScreen) == 0)
+                                    {
                                         saved.vanScreen = van_screen::view(van.frame, vanDash, van.speed, van072::Tune{}.topSpeed,
                                                                            vanCarry.rpm, van.state == van072::driving);
+                                        // 0.0.74 test 1: the MUSIC page's song and the HOME page's buttons
+                                        auto& V = saved.vanScreen;
+                                        V.offer = vanOffer;
+                                        V.musicAvailable = carMusicStatus.available;
+                                        V.musicPlaying = carMusicStatus.playing;
+                                        V.musicPaused = carMusicStatus.paused;
+                                        V.musicTracks = carMusicStatus.tracks;
+                                        V.musicTrack = carMusicStatus.track;
+                                        V.musicVolume = carMusicVolume;
+                                        V.musicElapsed = carMusicStatus.elapsed;
+                                        V.musicTotal = carMusicStatus.total;
+                                        try {
+                                            V.musicSong = carMusicStatus.song;
+                                            V.musicNote = carMusicStatus.note;
+                                        } catch (...) {
+                                        }
+                                        V.homeNote = vanHomeNote;
+                                    }
                                 }
                             }
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
@@ -10417,6 +10710,31 @@ DWORD WINAPI run(void*) {
                                 hero007::setModelSink(nullptr);
                             }
                         } endModelSink;
+                        // 0.0.74 test 1 HIDEOUTS: the room (the model sink, textured) inside its black box (opaque, depth-
+                        // writing: the game's picture hidden). No sink, a fault or over the budget: the plain box and floor
+                        // (the trip itself is refused without the models' textures). CANDIDATE: Windows only.
+                        if (saved->hideoutAway && !saved->flatScreen) {
+                            const size_t vFrom = vertices.size(), mFrom = modelVertices.size();
+                            hideout074::Place place = saved->hideoutPlace;
+                            place.at += travel;
+                            bool drew = false;
+                            try {
+                                if (saved->hideoutModel && overlay.modelReady())
+                                    drew = hideout074::appendRoom(modelVertices, *saved->hideoutModel, place, hero007::modelSinkBudget) &&
+                                           hideout074::appendBackdrop(vertices, *saved->hideoutModel, place, viewer);
+                            } catch (...) {
+                                drew = false;
+                            }
+                            if (!drew) {
+                                vertices.resize(vFrom);
+                                modelVertices.resize(mFrom);
+                                try {
+                                    hideout074::appendFallbackBox(vertices, viewer, saved->hideoutFloor + travel.y);
+                                } catch (...) {
+                                    vertices.resize(vFrom);
+                                }
+                            }
+                        }
                         // Where the overlay puts each tracked web shooter, and
                         // where the game's rope for this image's frame starts.
                         Vec3 shooters[2]{}, ropeStarts[2]{};
@@ -13255,6 +13573,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPop(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlayer2Body(void* v) { return setHero007(v, combat38::mpPlayer2Body, 5477); } // 0.0.73 MPSUIT
 // 0.0.73 COMING SOON: the hero tiles' SOON tab (the 0.0.74 heroes' pictures, not playable) ON (0, default) or OFF (1) (live.txt coming_soon).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyComingSoon(void* v) { return setHero007(v, combat38::comingSoon, 5490); }
+// 0.0.74 test 1 (live.txt hideouts, car_music, seated_driving): HIDEOUTS ON (0, default) / OFF (1), its rooms loaded at
+// start only when ON; CAR MUSIC IN VEHICLES (0, default) / ALWAYS (1) / OFF (2); SEATED DRIVING SIT BUTTON (0, default) /
+// AUTO SIT (1) / OFF (2).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideouts(void* v) { return setHero007(v, combat38::hideouts, 5491); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarMusic(void* v) { return setHero007(v, combat38::carMusic, 5492); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedDriving(void* v) { return setHero007(v, combat38::seatedDriving, 5493); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

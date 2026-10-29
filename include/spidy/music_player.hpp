@@ -97,7 +97,7 @@ template <class T> class TripleBuffer {
 // The song list. A file is a song when its extension is one of
 // playableExtensions (any case) and it is not hidden (a name starting with
 // "." - macOS's "._" copies included) or empty.
-constexpr const char* playableExtensions = "mp3 wav flac m4a aac wma";
+constexpr const char* playableExtensions = "mp3 wav flac m4a aac wma ogg"; // 0.0.74: + ogg (Media Foundation with Web Media Extensions)
 bool playable(std::string_view fileName, uint64_t bytes = 1);
 struct Track {
     std::string file; // as given (UTF-8)

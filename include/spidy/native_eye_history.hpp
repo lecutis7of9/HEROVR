@@ -12,6 +12,7 @@
 #include "web_visual.hpp"
 #include "test_notice.hpp"
 #include "van_screen.hpp"
+#include "hideout074.hpp"
 
 #include <limits>
 
@@ -41,6 +42,12 @@ struct NativeEyeFrame {
     roster_page::View roster{};
     // Version 0.0.73 test 3 VAN SCREEN (on false: none), this frame's world.
     van_screen::View vanScreen{};
+    // 0.0.74 test 1 HIDEOUTS (away false: none): the room's model (null: the fallback box), where it stands
+    // (this frame's world) and the real floor's world height.
+    bool hideoutAway{};
+    const mesh_model::Mesh* hideoutModel{};
+    hideout074::Place hideoutPlace{};
+    float hideoutFloor{};
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

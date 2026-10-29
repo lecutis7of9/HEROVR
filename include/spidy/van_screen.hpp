@@ -22,6 +22,7 @@
 #include "spidy/vertex.hpp"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace spidy::van_screen {
@@ -29,9 +30,30 @@ namespace spidy::van_screen {
 // The wrist option's one-sentence help (combat38 VAN SCREEN; ON is value 0, the default).
 inline constexpr const char* help = "Shows a Punisher dash screen in the van - X or a poke pages it, no restart.";
 
-enum Page : uint32_t { map, status, cases, locker };
-inline constexpr uint32_t pages = 4;
-inline constexpr const char* pageNames[pages] = {"MAP", "STATUS", "CASES", "LOCKER"};
+// 0.0.74 test 1: + MUSIC (the vehicle music player: previous, play / pause, next, volume, the song) and HOME
+// (GO TO SAFEHOUSE, GO TO BATCAVE, SIT / STAND). Their buttons act on a poke or a ray + trigger (Screen::action);
+// a tap off a button does nothing there.
+enum Page : uint32_t { map, status, cases, locker, music, home };
+inline constexpr uint32_t pages = 6;
+inline constexpr const char* pageNames[pages] = {"MAP", "STATUS", "CASES", "LOCKER", "MUSIC", "HOME"};
+// The tab row's k-th tab's centre (x, design units; the skull's corner left of the first).
+inline constexpr float tabLeft = .034f;
+// 0.0.74 test 1: what a button asks for (the caller does it; the screen only says).
+enum class Action : uint8_t { none, musicPrevious, musicToggle, musicNext, volumeDown, volumeUp, goSafehouse, goBatcave, sit, stand };
+// Which of the 0.0.74 buttons are there (their wrist options): hidden ones neither draw nor act.
+struct Offer {
+    bool music = true;     // MUSIC PLAYER not OFF
+    bool hideouts = true;  // HIDEOUTS ON
+    bool seat = true;      // SEATED DRIVING not OFF
+    bool sat = false;      // seated now: the seat button reads STAND
+};
+struct Button {
+    Action action{};
+    float x0{}, y0{}, x1{}, y1{}; // design units on the face
+    const char* label{};
+};
+// The page's buttons (MUSIC, HOME; none elsewhere) into `out`; returns how many (at most 8).
+uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]);
 
 struct CaseFile {
     const char* name;
@@ -58,6 +80,7 @@ inline constexpr float dashFaceZ = -1.28f, dashFaceBottom = .98f, dashFaceTop = 
 inline constexpr float bezelDepth = .008f; // design units behind the face: the bezel's back sits on the dash
 inline constexpr Vec3 mountAt{.04f, 1.115f, dashFaceZ + bezelDepth * faceScale + .002f};
 inline constexpr float tabHeight = .028f;
+inline constexpr float tabCentre(uint32_t k) { return -width / 2 + tabLeft + (static_cast<float>(k) + .5f) * (width - tabLeft) / pages; }
 inline constexpr float pokeDepth = .035f, pokeThrough = .05f, pokeSlack = .012f, pokeGripMost = .3f;
 // 0.0.73 test 3 RAY POKE (the screen sits ~0.8-1.0 m from the seat, out of reach without leaning): the free
 // hand's aim ray on the face (raySlack design units of margin all round, up to rayReach metres out, not
@@ -86,6 +109,7 @@ struct In {
     Vec3 aim[2]{};
     float trigger[2]{};
     bool ray{true}; // false: touch pokes and X only (the 0.0.73 test 3 first cut)
+    Offer offer{};  // 0.0.74: the MUSIC / HOME buttons there
 };
 // Where hand `from`'s ray along `dir` (van-local) meets the face, in design units (x, y; z 0), when it does
 // within the face (+ raySlack) and rayReach, from in front, not grazing. False otherwise (or non-finite).
@@ -106,9 +130,17 @@ public:
     bool hover() const { return hover_; }
     // 0.0.73 test 3 RAY POKE: hand i's ray was on the face last step (its trigger is the screen's then).
     bool aimed(unsigned i) const { return i < 2 && aimed_[i]; }
+    // 0.0.74: the button pressed by the last step (none: none), read once.
+    Action takeAction() {
+        const Action a = action_;
+        action_ = Action::none;
+        return a;
+    }
 
 private:
     uint32_t page_{}, file_{};
+    Action action_{};
+    Offer offer_{};
     float flash_{};
     bool near_[2]{}, hover_{};
     bool aimed_[2]{}, trigWas_[2]{};
@@ -129,6 +161,14 @@ struct View {
     bool driving{};
     float flash{};
     bool hover{};
+    // 0.0.74 test 1: the MUSIC page and the HOME page's buttons.
+    Offer offer{};
+    bool musicAvailable{true}, musicPlaying{}, musicPaused{};
+    int musicTracks{}, musicTrack{-1};
+    float musicVolume{70.f};  // 0-100
+    float musicElapsed{}, musicTotal{};
+    std::string musicSong, musicNote;
+    const char* homeNote{};   // a line under the HOME buttons (the last hideout's fault, say)
 };
 // The view for a van at `frame` (world).
 View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving);

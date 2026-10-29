@@ -268,10 +268,11 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
 void setModelSink(std::vector<Vertex>* sink);
 std::vector<Vertex>* modelSink();
 // Version 0.0.72: ten ordinary models, plus the van (body, cab, wheel) and a hammer in hand and one on show;
-// build 9: + the worn suit twice (first person and the mirror).
+// build 9: + the worn suit twice (first person and the mirror); 0.0.74 test 1: + a hideout room.
 inline constexpr size_t modelSinkBudget = 3 * (10 * size_t{mesh_model::drawTriangles} + size_t{mesh_model::vanTriangles} +
                                                2 * size_t{mesh_model::drawTriangles} + 2 * size_t{mesh_model::hammerTriangles} +
-                                               2 * size_t{mesh_model::drawTriangles});
+                                               2 * size_t{mesh_model::drawTriangles} +
+                                               size_t{mesh_model::hideoutTriangles}); // 0.0.74 test 1: + the hideout room
 
 // The vertex budget (each softBar 54, softTriangle 21, a 10-sided glob 90): the most one call may add.
 namespace budget {

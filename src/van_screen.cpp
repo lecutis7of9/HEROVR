@@ -341,7 +341,105 @@ void drawLocker(Painter& p, const View&) {
     }
     p.text("LOCKER SEALED - REAR DOORS", -W + .010f, bodyBottom + .006f, .0052f, dim * 1.8f);
 }
+
+// 0.0.74 test 1: a button (its frame lit while the screen is hovered).
+void drawButton(Painter& p, const Button& b, bool lit, Vec3 face) {
+    p.quad(b.x0, b.y0, b.x1, b.y1, .0012f, face);
+    p.frame(b.x0, b.y0, b.x1, b.y1, .0010f, .0016f, lit ? bone : khaki);
+    const float h = std::min(.0085f, fittedHeight(b.label, .0085f, b.x1 - b.x0 - .006f));
+    p.textCentre(b.label, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2 - h / 2, h, bone, .0022f);
+}
+
+std::string clipped(const std::string& s, float h, float most) {
+    if (textWidth(s, h) <= most)
+        return s;
+    std::string t = s;
+    while (!t.empty() && textWidth(t + "...", h) > most)
+        t.pop_back();
+    return t + "...";
+}
+
+void drawMusic(Painter& p, const View& v) {
+    const float lx = -W + .010f, top = bodyTop;
+    p.text("MUSIC", lx, top - .010f, .0062f, khaki);
+    char line[64];
+    if (!v.offer.music) {
+        p.text("MUSIC PLAYER OFF", lx, top - .032f, .011f, bone);
+        p.text("TURN IT ON: WRIST MENU, PUNISHER", lx, top - .046f, .0058f, khaki);
+        return;
+    }
+    const std::string song = !v.musicAvailable ? std::string("PLAYER UNAVAILABLE")
+                             : v.musicTracks <= 0  ? std::string("NO SONGS")
+                             : v.musicSong.empty() ? std::string("READY")
+                                                   : v.musicSong;
+    p.text(clipped(song, .0105f, 2 * W - .020f), lx, top - .027f, .0105f, bone, .0025f, 1, .14f);
+    const char* state = !v.musicAvailable ? "OFF" : v.musicPlaying ? "PLAYING" : v.musicPaused ? "PAUSED" : "STOPPED";
+    if (v.musicTracks > 0 && v.musicTrack >= 0)
+        std::snprintf(line, sizeof line, "%s  %d/%d", state, v.musicTrack + 1, v.musicTracks);
+    else
+        std::snprintf(line, sizeof line, "%s", state);
+    p.text(line, lx, top - .039f, .0060f, v.musicPlaying ? armor * 1.3f : khaki);
+    if (v.musicTracks <= 0 || !v.musicAvailable) {
+        p.text(v.musicNote.empty() ? "ADD MP3 / OGG / WAV TO DOCUMENTS/HERO VR/MUSIC" : clipped(v.musicNote, .0050f, 2 * W - .020f), lx,
+               top - .049f, .0050f, dim * 1.8f);
+    } else if (v.musicTotal > 0) {
+        const float share = std::clamp(v.musicElapsed / v.musicTotal, 0.f, 1.f);
+        p.quad(lx, top - .048f, W - .010f, top - .046f, .0015f, olive);
+        p.quad(lx, top - .048f, lx + (W - .010f - lx) * (ok(share) ? share : 0.f), top - .046f, .0018f, khaki * 1.4f);
+    }
+    // the volume bar (right of VOL+)
+    p.text("VOL", W - .060f, top - .010f, .0055f, khaki);
+    meter(p, W - .046f, top - .0115f, W - .010f, .0065f, std::clamp(v.musicVolume, 0.f, 100.f) / 100.f, armor);
+    Button b[8];
+    const uint32_t n = buttons(music, v.offer, b);
+    for (uint32_t k = 0; k < n; ++k) {
+        if (b[k].action == Action::musicToggle)
+            b[k].label = v.musicPlaying ? "PAUSE" : "PLAY";
+        drawButton(p, b[k], v.hover, b[k].action == Action::musicToggle && v.musicPlaying ? blood * .8f : olive);
+    }
+}
+
+void drawHome(Painter& p, const View& v) {
+    const float lx = -W + .010f, top = bodyTop;
+    p.text("HOME", lx, top - .010f, .0062f, khaki);
+    Button b[8];
+    const uint32_t n = buttons(home, v.offer, b);
+    for (uint32_t k = 0; k < n; ++k)
+        drawButton(p, b[k], v.hover, b[k].action == Action::goBatcave ? Vec3{.025f, .03f, .05f} : olive);
+    if (!n)
+        p.text("HIDEOUTS AND SEATED DRIVING ARE OFF", lx, top - .032f, .0060f, bone);
+    if (v.homeNote)
+        p.text(v.homeNote, lx, bodyBottom + .003f, .0050f, blood * 1.6f);
+    else if (v.offer.hideouts)
+        p.text("TEST: THE BATCAVE OPENS FROM THE VAN UNTIL THE BATMOBILE IS IN", lx, bodyBottom + .003f, .0042f, dim * 1.8f);
+}
 } // namespace
+
+uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
+    uint32_t n = 0;
+    if (page == music && offer.music) {
+        static const struct {
+            Action a;
+            const char* label;
+        } row[5] = {{Action::musicPrevious, "<< PREV"}, {Action::musicToggle, "PLAY/PAUSE"}, {Action::musicNext, "NEXT >>"},
+                    {Action::volumeDown, "VOL-"},   {Action::volumeUp, "VOL+"}};
+        const float x0 = -W + .010f, gap = .004f, bw = (2 * W - .020f - 4 * gap) / 5, y1 = bodyTop - .057f, y0 = bodyBottom + .004f;
+        for (int k = 0; k < 5; ++k)
+            out[n++] = Button{row[k].a, x0 + k * (bw + gap), y0, x0 + k * (bw + gap) + bw, y1, row[k].label};
+    } else if (page == home) {
+        const float x0 = -W + .010f, x1 = W - .010f, h = .026f, gap = .005f;
+        float y = bodyTop - .016f;
+        if (offer.hideouts) {
+            out[n++] = Button{Action::goSafehouse, x0, y - h, x1, y, "GO TO SAFEHOUSE"};
+            y -= h + gap;
+            out[n++] = Button{Action::goBatcave, x0, y - h, x1, y, "GO TO BATCAVE (TEST)"};
+            y -= h + gap;
+        }
+        if (offer.seat)
+            out[n++] = Button{offer.sat ? Action::stand : Action::sit, x0, y - h, x1, y, offer.sat ? "STAND" : "SIT (SEATED DRIVING)"};
+    }
+    return n;
+}
 
 Mount mountLocal() {
     Mount m;
@@ -363,6 +461,7 @@ void Screen::reset() {
     page_ = file_ = 0;
     flash_ = 0;
     near_[0] = near_[1] = hover_ = false;
+    action_ = Action::none;
     aimed_[0] = aimed_[1] = trigWas_[0] = trigWas_[1] = false;
 }
 
@@ -396,8 +495,20 @@ bool Screen::pick(uint32_t page) {
 
 bool Screen::pokeAt(Vec3 f) {
     if (f.y >= H - tabHeight) {
-        const float share = std::clamp((f.x + W) / width, 0.f, .999f);
+        const float tx0 = -W + tabLeft; // the skull's corner picks the first tab
+        const float share = std::clamp((f.x - tx0) / (W - tx0), 0.f, .999f);
         return pick(static_cast<uint32_t>(share * pages));
+    }
+    if (page_ == music || page_ == home) { // 0.0.74: the buttons, nothing between them
+        Button b[8];
+        const uint32_t n = buttons(page_, offer_, b);
+        for (uint32_t k = 0; k < n; ++k)
+            if (f.x >= b[k].x0 - .002f && f.x <= b[k].x1 + .002f && f.y >= b[k].y0 - .002f && f.y <= b[k].y1 + .002f) {
+                action_ = b[k].action;
+                flash_ = .6f;
+                return true;
+            }
+        return false;
     }
     if (page_ == cases && f.x < -W / 3)
         return previousFile();
@@ -431,6 +542,7 @@ bool Screen::step(const In& in) {
     if (ok(in.dt) && in.dt > 0)
         flash_ = std::max(0.f, flash_ - in.dt * 4.f);
     hover_ = false;
+    offer_ = in.offer;
     bool changed = false;
     if (!in.driving) {
         near_[0] = near_[1] = false;
@@ -543,7 +655,8 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
             p.quad(x0, ty + .003f, x1, H - .003f, .0008f, on ? blood : olive);
             if (on)
                 p.quad(x0, ty + .003f, x1, ty + .0045f, .0011f, bone);
-            p.textCentre(pageNames[k], (x0 + x1) / 2, ty + tabHeight / 2 - .0045f, .0090f, on ? bone : khaki, .0015f);
+            const float th = std::min(.0090f, fittedHeight(pageNames[k], .0090f, x1 - x0 - .004f)); // 0.0.74: six tabs
+            p.textCentre(pageNames[k], (x0 + x1) / 2, ty + tabHeight / 2 - th / 2, th, on ? bone : khaki, .0015f);
         }
         p.quad(-W, ty - .0012f, W, ty, .0012f, khaki * .8f);
         // the corner ticks (a sight's frame)
@@ -557,11 +670,14 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
         case map: drawMap(p, v); break;
         case status: drawStatus(p, v); break;
         case cases: drawCase(p, v); break;
+        case music: drawMusic(p, v); break;
+        case home: drawHome(p, v); break;
         default: drawLocker(p, v); break;
         }
         // the footer
         p.quad(-W, -H, W, -H + .012f, .0005f, {.02f, .022f, .013f});
-        p.text(v.page == cases ? "X: NEXT  TAP LEFT: BACK" : "X OR TAP: NEXT PAGE", -W + .006f, -H + .0035f, .0050f, khaki);
+        p.text(v.page == cases ? "X: NEXT  TAP LEFT: BACK" : v.page == music || v.page == home ? "TAP A BUTTON  X: NEXT PAGE" : "X OR TAP: NEXT PAGE",
+               -W + .006f, -H + .0035f, .0050f, khaki);
         char line[16];
         std::snprintf(line, sizeof line, "%u/%u", v.page + 1, static_cast<uint32_t>(pages));
         p.textRight(line, W - .006f, -H + .0035f, .0050f, khaki);

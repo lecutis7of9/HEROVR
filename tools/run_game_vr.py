@@ -2371,6 +2371,12 @@ def main():
     # 0.0.73 AA GAME AA TAA (vr_display.SESSION_OFF['game_aa']): with -EngineTaa and GAME TAA SPIDYVR (the
     # defaults) the game's Anti-Aliasing is TAA with no upscaler while VR runs, as SpidyVR's per-eye TAA has it;
     # the player's own (DLAA, DLSS) comes back when the game closes. --keep-game-aa keeps it during VR too.
+    # 0.0.73 release: GAME TAA starts OFF; a live.txt at the test builds' SPIDYVR moves once (migrate_0073, run
+    # here before image_style is read for GAME AA TAA and the mip bias). GAME AA TAA follows GAME TAA: OFF leaves
+    # the game's own Anti-Aliasing alone.
+    migrated_0073 = live_settings.migrate_0073(ROOT/'live.txt')
+    if migrated_0073:
+        print(migrated_0073, flush=True)
     game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     if live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False)):
         session_off = tuple(session_off) + ('game_aa',)
@@ -2380,6 +2386,9 @@ def main():
     elif getattr(a, 'engine_taa', False) and game_taa_look == 'spidyvr':
         print("GAME AA: your own this session (-KeepGameAa); GAME TAA works best with the game's Anti-Aliasing "
               'at TAA and Upscale Method None.', flush=True)
+    elif getattr(a, 'engine_taa', False):
+        print("GAME AA: your own this session (GAME TAA OFF, the 0.0.73 default: GAME AA TAA only runs with GAME TAA "
+              'SPIDYVR; turn it on in GRAPHICS > QUALITY and restart VR to use it).', flush=True)
     a.session_off = session_off   # session() reads it: it is not a local there (0.0.62 NameError at 'starting the game')
     # SM2 VR (from SM2VR 0.0.27): a Spider-Man 2 that renders no view of its own writes a swapchain back
     # buffer that is not the current one, and the graphics device is lost (DXGI_ERROR_ACCESS_DENIED). The

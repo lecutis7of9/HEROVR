@@ -109,6 +109,10 @@ class Defaults(unittest.TestCase):
                 self.assertEqual(value, 'off_in_vr')
                 self.assertEqual(ls.export_value(key, value), 1)
                 continue
+            if key == 'image_style':  # 0.0.73 release: GAME TAA OFF (1) by default; index 0 stays SPIDYVR
+                self.assertEqual(value, 'off')
+                self.assertEqual(ls.export_value(key, value), 1)
+                continue
             if key in ls.MODEL_LOOKS_072:
                 self.assertEqual(value, ls.MODEL_LOOKS_072[key], key)
                 self.assertNotEqual(ls.export_value(key, value), 0, key)

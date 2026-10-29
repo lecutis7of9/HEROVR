@@ -14,12 +14,12 @@
 // (exe-confirmed, handler 0x2c2dc60: it returns when the job's jitter is zero), so the game's TAA
 // was never actually in the picture.
 //
-// - SPIDYVR (0, default): ENGINE TAA on by itself as soon as nothing blocks it (the game's AA TAA/DLAA
+// - SPIDYVR (0; the default in the 0.0.73 tests, OFF in the release): ENGINE TAA on by itself as soon as nothing blocks it (the game's AA TAA/DLAA
 //   and -EngineTaa, the launcher's default), the jitter OURS whenever live.txt says NONE, and the
 //   clean picture (native_gpu::setCleanImage: FXAA, history and CAS stand aside, sliders kept).
 //   Until it is on, and if it fails (targets gone, frame rate halved, needs a restart), the picture
 //   is IMAGE's (EYE AA: SPIDYVR's sharp history read, or HERO VR CLASSIC), so it is never raw or flat.
-// - OFF (1): ENGINE TAA off, EYE AA on: the picture is IMAGE's alone (0.0.73 IMAGE, combat38::image).
+// - OFF (1, the default since the 0.0.73 release): ENGINE TAA off, EYE AA on: the picture is IMAGE's alone (0.0.73 IMAGE, combat38::image).
 // The mip bias is IMAGE's (live_settings.image_mip_bias: 0 under its SPIDYVR, read at the game's start).
 #include <cstdint>
 
@@ -27,8 +27,11 @@
 
 namespace spidy::image_style {
 enum Style : uint32_t { spidyvr = 0, gameTaaOff = 1, styles = 2 };
-inline constexpr uint32_t defaultStyle = spidyvr;
-inline bool spidy(uint32_t style) { return style != gameTaaOff; } // anything unknown: the default
+// 0.0.73 release (the owner on test 6: the picture shook under SPIDYVR, steady with GAME TAA OFF): OFF is the
+// default now. Index 0 stays SPIDYVR so live.txt numbers and the wrist keep their meaning; game_xr starts
+// combat38::imageStyle at defaultStyle and live.txt (live_settings.UPDATE38_DEFAULTS image_style = off) agrees.
+inline constexpr uint32_t defaultStyle = gameTaaOff;
+inline bool spidy(uint32_t style) { return style == spidyvr; } // anything unknown: the default (OFF)
 
 // The lens jitter mode used while ENGINE TAA is on: SPIDYVR never leaves the jitter at NONE, which
 // switches the game's TemporalAa off (it is OURS, SpidyVR's own); GAME and PIXELS stay as asked.

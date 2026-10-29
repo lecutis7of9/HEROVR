@@ -158,7 +158,8 @@ enum Option : uint32_t {
     // next start) or HERO VR CLASSIC (test 3: FXAA, sharpen 140, bilinear history, mip bias 0.5)
     image,
     // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): SPIDYVR (the game's own TAA in each
-    // eye, as SpidyVR; the default) or OFF (IMAGE's look: EYE AA history, FXAA and sharpening as IMAGE sets)
+    // eye, as SpidyVR) or OFF (IMAGE's look: EYE AA history, FXAA and sharpening as IMAGE sets; the default since
+    // the 0.0.73 release - index 0 stays SPIDYVR, the launcher's default and game_xr's start value are OFF)
     imageStyle,
     // 0.0.73 DD BATON: ON (the held baton seated in the fist, the grapple fired from its silver tip, the tip flying
     // to the anchor on a rope and reeled back) or OFF (test 3's held baton and grapple line)
@@ -525,7 +526,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
     {"image", "IMAGE", "IMAGE", "SPIDYVR is sharp with no smear, CLASSIC is test 3's; textures change on restart.",
      2, {"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr}},
-    {"image_style", "GAME TAA", "GTAA", "SPIDYVR: the game's TAA in each eye as SpidyVR; OFF: IMAGE's look; no restart.",
+    {"image_style", "GAME TAA", "GTAA", "OFF keeps the picture steady; SPIDYVR runs the game's TAA per eye, no restart.",
      2, {"SPIDYVR", "OFF", nullptr, nullptr}},
     {"dd_baton_tip", "BATON TIP", "DDTIP", "ON: the baton sits in the fist, its silver tip flies on a rope, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},

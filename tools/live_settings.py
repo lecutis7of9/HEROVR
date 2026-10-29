@@ -461,7 +461,7 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      # Version 0.0.72 (TEST)
                      'thor': 'off', 'thor_lightning': 'on', 'thor_storm': 'on', 'thor_chain': 'on', 'green_lantern': 'off', 'gl_flight': 'on', 'gl_fist': 'on', 'gl_beam': 'on', 'gl_bubble': 'on', 'gl_chain': 'on', 'gl_charge': 'on', 'spider_climb_only': 'on', 'uppercut': 'on', 'smoke_blind': 'on', 'dd_grapple': 'on', 'dd_parry': 'on', 'iron_hud': 'on', 'punisher_rage': 'on', 'reputation': 'on', 'survival': 'off', 'punisher_suit': 'vest', 'natural_invincible': 'on', 'hulk_rage': 'on', 'rage_blood': 'extreme', 'rage_tint': 'normal', 'fire_douse': 'on', 'shield_slam': 'on', 'punisher_hook': 'on', 'claw_climb': 'off', 'npc_shove': 'on', 'faction': 'auto', 'hero_suit': 'default', 'test_unlocks': 'off', 'ultimates': 'on', 'perk_branch': 'auto', 'own_suit': 'off', 'perch_takedown': 'on', 'takedown_light': 'on', 'punisher_van': 'on', 'thor_hammer': 'boooop', 'game_body': 'off', 'thor_hammer_model': 'on', 'thor_flight': 'on', 'suit_body': 'arms', 'cap_sprint': 'on', 'cull_margin': '10deg', 'shadow_match': 'on', 'calib_look': 'holo', 'fly_pose': 'lean', 'weapon_collision': 'on', 'light_hold': 'on', 'van_screen': 'on', 'palm_blast': 'palm', 'hero_menu': 'holo_tiles', 'rep_log': 'on', 'van_pedals': 'wheel_hand', 'streamer_mode': 'on', 'streamer_smooth': 'low', 'streamer_eye': 'left_eye', 'iron_hands': 'on', 'dd_grapple_aim': 'on', 'wolverine_claws': 'on',
                      'image': 'spidyvr',  # 0.0.73 IMAGE: SPIDYVR (the owner after test 3)
-                     'image_style': 'spidyvr',  # 0.0.73 test 4 GAME TAA: SpidyVR's own TAA per eye by default
+                     'image_style': 'off',  # 0.0.73 release: GAME TAA OFF by default (was SPIDYVR since test 4: the image shook in motion); SPIDYVR one wrist press away
                      'dd_baton_tip': 'on',  # 0.0.73 DD BATON: ON (new features ship on, switchable off)
                      'light_checks': 'on', 'glow_check': 'game', 'sl_watch': 'on',
                      'sharpen_match': 'on', 'claw_level': 'on', 'window_pop': 'on'}  # 0.0.73 AA SHARPEN MATCH: ON (new features ship on, switchable off)  # 0.0.73 LIGHT CHECKS: ON (the eyes' light-glow query room)
@@ -1613,28 +1613,32 @@ def image_defaults(defaults, image):
 
 
 def image_style_of(values):
-    """'spidyvr' or 'off' (GAME TAA) from parsed live.txt values; spidyvr (the default) when unset or unknown."""
+    """'spidyvr' or 'off' (GAME TAA) from parsed live.txt values; the default (UPDATE38_DEFAULTS: off since the
+    0.0.73 release) when unset or unknown."""
+    default = UPDATE38_DEFAULTS['image_style']
     try:
-        return CHOICE_NAMES['image_style'][CHOICES['image_style'][str(values.get('image_style', 'spidyvr')).strip().lower()]]
+        return CHOICE_NAMES['image_style'][CHOICES['image_style'][str(values.get('image_style', default)).strip().lower()]]
     except (KeyError, IndexError, AttributeError):
-        return 'spidyvr'
+        return default
 
 
 def game_aa_taa(engine_taa, game_taa='spidyvr', keep=False):
     """0.0.73 AA GAME AA TAA: True when this VR session sets the game's Anti-Aliasing to TAA with no upscaler
     (vr_display.SESSION_OFF['game_aa']): ENGINE TAA prepared (-EngineTaa), GAME TAA SPIDYVR (live.txt
-    image_style, the default) and the player not keeping his own (--keep-game-aa). SpidyVR's path: the game's
+    image_style; OFF is the default since the 0.0.73 release, so GAME AA TAA follows it: with GAME TAA OFF the
+    game's own Anti-Aliasing is left alone, as the eyes then run IMAGE's picture, not the game's TAA) and the
+    player not keeping his own (--keep-game-aa). SpidyVR's path: the game's
     TAA in each eye, no DLSS bias on the textures the eyes share. Takes effect at the game's start (restart)."""
     return bool(engine_taa) and game_taa == 'spidyvr' and not keep
 
 
 def image_style_in_file(path):
-    """image_style_of the live.txt at `path` (spidyvr without one). Never raises."""
+    """image_style_of the live.txt at `path` (the default, off, without one). Never raises."""
     try:
         text = pathlib.Path(path).read_text(encoding='utf-8-sig', errors='replace')
         values, _ = parse(text)
     except Exception:
-        return 'spidyvr'
+        return UPDATE38_DEFAULTS['image_style']
     return image_style_of(values)
 
 
@@ -1757,6 +1761,50 @@ def migrate_073t5(path):
 
 
 HEADER += MIGRATED_073T5 + '\n'
+
+
+# 0.0.73 release (the owner on test 6: the picture shook with GAME TAA SPIDYVR, steady with it OFF on the
+# wrist): GAME TAA (image_style) starts OFF. Index 0 stays SPIDYVR, so live.txt numbers and the wrist keep
+# their meaning; the launcher's default (UPDATE38_DEFAULTS), not index 0, is the default, as LENS FLARES.
+# Once, over a live.txt written before the marker: image_style at the test builds' default (spidyvr, or its
+# number 0 / aliases) becomes off. 0.0.72 never wrote image_style (it came in test 4), so a 0.0.72 install
+# just gets the new default. A value chosen after the marker (SPIDYVR on the wrist) stays.
+MIGRATE_0073 = {'image_style': (('spidyvr', 'off'), 'spidyvr', 'off')}
+MIGRATE_0073_ALIASES = {'image_style': {'spidy': 'spidyvr', 'spidy_vr': 'spidyvr', 'on': 'spidyvr',
+                                        'hero_0.0.73': 'off', 'hero': 'off'}}
+MIGRATED_0073 = ('# Version 0.0.73: GAME TAA (image_style) SPIDYVR -> OFF once, the new default '
+                 '(migrated; a value chosen after this line stays: image_style = spidyvr turns it back on)')
+
+
+def migrate_0073(path):
+    """Version 0.0.73 release, once: MIGRATE_0073 over an existing live.txt (migrate_old_defaults: a value at
+    the old default only), then the MIGRATED_0073 marker. No live.txt: nothing (HEADER carries the marker).
+    The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_0073 in text:
+        return None
+    try:
+        changed = migrate_old_defaults(text, MIGRATE_0073, MIGRATE_0073_ALIASES)
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_0073 + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to the 0.0.73 default: GAME TAA OFF (image_style = off; a steady picture in '
+            'motion). GAME TAA SPIDYVR on the wrist, or image_style = spidyvr, turns it back on and it stays.')
+
+
+HEADER += MIGRATED_0073 + '\n'
 
 
 def lens_flares_off(text):

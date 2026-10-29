@@ -758,6 +758,12 @@ std::atomic<uint32_t> combatTapMs{combat_input::Config{}.tapMs}, combatGestureMs
 // Update 38: the COMBAT page's live settings (combat38.hpp; live.txt and the hologram, each at
 // once, no restart), index 0 of each the default.
 std::atomic<uint32_t> combat38Values[combat38::options]{};
+// 0.0.73 release: the start values that are not index 0 (live.txt sends its own as the session starts; until
+// then, and with no live.txt line, these). GAME TAA starts OFF (image_style::defaultStyle).
+[[maybe_unused]] const bool combat38StartValues = [] {
+    combat38Values[combat38::imageStyle].store(image_style::defaultStyle);
+    return true;
+}();
 // Version 0.0.72 MODEL MISSING: one bit per mesh_model slot whose MODEL setting is on and whose model
 // could not be read (the render thread sets it; the wrist names them: "MODEL MISSING: <name>").
 std::atomic<uint32_t> modelMissingMask{0};

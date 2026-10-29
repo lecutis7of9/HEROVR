@@ -31118,11 +31118,12 @@ int main() {
         const std::string h = o.help;
         check(std::string(o.key) == "image_style" && std::string(o.label) == "GAME TAA" && o.count == 2 &&
                   std::string(o.values[0]) == "SPIDYVR" && std::string(o.values[1]) == "OFF",
-              "GAME TAA: SPIDYVR first (the default), OFF");
+              "GAME TAA: SPIDYVR first (index 0), OFF (the default)");
         check(combat38::imageStyle != combat38::image && combat38::imageLook(0).sharpHistory, "beside IMAGE, its look kept");
         check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
               "its subtext: one sentence, no restart");
-        check(is::defaultStyle == is::spidyvr && is::spidy(0) && !is::spidy(1), "value 0 SPIDYVR");
+        check(is::defaultStyle == is::gameTaaOff && is::spidy(0) && !is::spidy(1) && !is::spidy(7),
+              "value 0 SPIDYVR; the default (0.0.73 release) and anything unknown OFF");
         check((resetSections(), controlSpot(graphicsPage, Control::combatImageStyle)).found, "on the GRAPHICS page");
         // NONE skips the game's TemporalAa (exe-confirmed): SPIDYVR's jitter is OURS then; the rest as asked.
         check(is::jitterMode(is::spidyvr, et::noJitter) == et::ours && is::jitterMode(is::spidyvr, et::game) == et::game &&

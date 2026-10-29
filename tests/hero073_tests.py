@@ -341,10 +341,11 @@ class Hero073Image(unittest.TestCase):
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'off', True), '0.5')  # image_style = off: revert
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', False), '0.5')  # no ENGINE TAA prepared
         self.assertEqual(L.image_mip_bias('0.25', 'classic', 'spidyvr', True), '0.25')  # an explicit -MipBias stays
-        self.assertEqual(L.image_style_of({}), 'spidyvr')
+        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.73 release: GAME TAA OFF by default
         self.assertEqual(L.image_style_of({'image_style': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'bogus'}), 'spidyvr')
-        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'spidyvr'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'bogus'}), 'off')
+        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')
         self.assertEqual(L.image_of({}), 'spidyvr')
         self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
         self.assertEqual(L.export_value('image', 'classic'), 1)
@@ -412,7 +413,7 @@ class Hero073Test4ImageStyle(unittest.TestCase):
         return L
     def test_option_default_and_values(self):
         L = self.live()
-        self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'spidyvr')
+        self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'off')  # 0.0.73 release: OFF (SPIDYVR stays index 0)
         self.assertEqual(L.export_value('image_style', 'spidyvr'), 0)
         self.assertEqual(L.export_value('image_style', 'off'), 1)
         self.assertEqual(L.export_value('image_style', 'hero_0.0.73'), 1)
@@ -499,7 +500,7 @@ class Hero073AaGameAaTaa(unittest.TestCase):
 
     def test_decision(self):
         L, _ = self.tools()
-        self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))   # the default
+        self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))   # GAME TAA SPIDYVR on (OFF is the release default)
         self.assertFalse(L.game_aa_taa(True, 'spidyvr', True))   # KEEP MY GAME AA
         self.assertFalse(L.game_aa_taa(True, 'off', False))      # GAME TAA OFF: IMAGE's look, the game's own AA
         self.assertFalse(L.game_aa_taa(False, 'spidyvr', False)) # no ENGINE TAA prepared

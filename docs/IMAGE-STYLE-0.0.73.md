@@ -59,3 +59,10 @@ the presses to the player (IMAGE HERO VR CLASSIC + GAME TAA OFF = test 3's pictu
   turned it off ("ENGINE TAA: off by the EYE AA press" / "by the ENGINE TAA press" / "by GAME TAA OFF"). The
   Controller's notes go to the console and the export, not only to the debugger. Test: core_tests "0.0.73 test 5
   GAME TAA SPIDYVR".
+
+## 0.0.73 release: GAME TAA starts OFF
+
+- On test 6 the picture shook in motion with GAME TAA SPIDYVR and was steady with it OFF, so the public 0.0.73 starts with GAME TAA **OFF** (live.txt `image_style = off`, `image_style::defaultStyle`, game_xr's start value).
+- SPIDYVR keeps index 0, so live.txt numbers and the wrist mean the same as before. It is still one wrist press away (GRAPHICS > QUALITY > GAME TAA), or `image_style = spidyvr` in live.txt.
+- Migration (`live_settings.migrate_0073`, once, from `run_game_vr.py` before image_style is read): a live.txt written before the marker with `image_style` at the test builds' default (`spidyvr`, `0`, `spidy`, `on`) moves to `off`. A 0.0.72 live.txt has no image_style line and simply gets the new default. Anything chosen after the marker stays.
+- GAME AA TAA (AA 2: the game's Anti-Aliasing set to TAA with no upscaler while VR runs) only makes sense when the game's TAA renders each eye, so it stays tied to GAME TAA SPIDYVR (`live_settings.game_aa_taa`). With the OFF default the game's own Anti-Aliasing is left alone. Turning GAME TAA SPIDYVR on and restarting VR brings GAME AA TAA back (KEEP MY GAME AA still opts out).

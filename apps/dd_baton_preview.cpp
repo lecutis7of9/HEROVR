@@ -189,8 +189,19 @@ int main(int argc, char** argv) {
     for (int h = 0; h < 2; ++h)
         std::printf("hole %d: depth %.4f slope %.3f hole %+.4f %+.4f\n", h, rig.fingerDepth[h], rig.fingerSlope[h], rig.fistHole[h][0], rig.fistHole[h][1]);
     std::printf("{\n");
-    for (int scene = 0; scene < 3; ++scene) {
-        const char* name = scene == 0 ? "old" : scene == 1 ? "new" : "grapple";
+    // 0.0.73 test 5 GRAPPLE AIM: scene "aim" - both batons turned fully to a grapple aim ahead and up at a rooftop
+    // (DD_AIM="x y z" world to change it), the ray (yellow) from the silver tip; "new" is the same fists' fight grip.
+    Vec3 aimWorld = normalized(Vec3{.08f, .38f, -1.f});
+    if (const char* e = std::getenv("DD_AIM")) {
+        float x = 0, y = 0, z = -1;
+        if (std::sscanf(e, "%f %f %f", &x, &y, &z) == 3 && length(Vec3{x, y, z}) > .1f)
+            aimWorld = normalized(Vec3{x, y, z});
+    }
+    // DD_AIM_PIVOT / DD_AIM_HOLD (m): try the aim turn's pivot and hold (dd_baton073::aimPivot / aimHold)
+    const float aimPivot = std::getenv("DD_AIM_PIVOT") ? static_cast<float>(std::atof(std::getenv("DD_AIM_PIVOT"))) : db::aimPivot;
+    const float aimHold = std::getenv("DD_AIM_HOLD") ? static_cast<float>(std::atof(std::getenv("DD_AIM_HOLD"))) : db::aimHold;
+    for (int scene = 0; scene < 4; ++scene) {
+        const char* name = scene == 0 ? "old" : scene == 1 ? "new" : scene == 2 ? "grapple" : "aim";
         std::ofstream f(out + "dd_" + name + ".tri", std::ios::binary);
         const Worn& w = worn[scene == 0 ? 0 : 1];
         const std::vector<Vec3>* fist = w.fist;
@@ -200,8 +211,10 @@ int main(int argc, char** argv) {
                 put(f, p, tr.c);
         std::printf("  \"%s\": {", name);
         for (unsigned h = 0; h < 2; ++h) {
-            const baton_grip::Shaft sh = scene == 0 ? baton_grip::shaft(grip[h], h, ControllerKind::touch)
-                                                    : db::seated(grip[h], h, ControllerKind::touch);
+            const baton_grip::Shaft sh = scene == 0   ? baton_grip::shaft(grip[h], h, ControllerKind::touch)
+                                         : scene == 3 ? db::aimTurn(db::seated(grip[h], h, ControllerKind::touch), grip[h].position, aimWorld, 1.f,
+                                                                  aimPivot, aimHold)
+                                                      : db::seated(grip[h], h, ControllerKind::touch);
             std::vector<Vertex> v;
             if (scene == 2 && h == 1) {
                 // The right hand grapples to a point 6 m ahead and up, the tip all the way out (fraction .6 shown).
@@ -226,6 +239,18 @@ int main(int argc, char** argv) {
                 for (int j = 0; j < 3; ++j)
                     put(f, v[k + j].position, c);
             }
+            if (scene == 3) { // the grapple ray from the tip along the aim (yellow)
+                const Vec3 a = sh.tip, b = sh.tip + aimWorld * .7f, d = normalized(b - a);
+                const Vec3 u = normalized(cross(d, std::fabs(d.y) < .9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0})) * .003f, w = normalized(cross(d, u)) * .003f;
+                const Vec3 o[4]{u, w, u * -1.f, w * -1.f};
+                for (int k = 0; k < 4; ++k) {
+                    const Vec3 p0 = a + o[k], p1 = a + o[(k + 1) % 4], p2 = b + o[k], p3 = b + o[(k + 1) % 4];
+                    for (const Vec3& p : {p0, p1, p2, p1, p3, p2})
+                        put(f, p, {.95f, .85f, .1f});
+                }
+                const float along = std::acos(std::fmin(1.f, dot(normalized(sh.tip - sh.butt), aimWorld))) * 57.2958f;
+                std::fprintf(stderr, "aim %s: tip off the aim %.1f deg\n", h ? "right" : "left", along);
+            }
             // The clipping measure on the handle (butt to the seam).
             const Vec3 seam = db::seam(sh.butt, sh.tip);
             const int poked = poke(fist[h], fistN[h], sh.butt, seam);
@@ -243,7 +268,7 @@ int main(int argc, char** argv) {
             std::printf("%s\"%s\": {\"poke\": %d, \"inside\": %d, \"hug\": %d, \"fist\": %zu, \"offTubeDeg\": %.1f}", h ? ", " : "",
                         h ? "right" : "left", poked, inside, hug, fist[h].size(), off);
         }
-        std::printf("}%s\n", scene < 2 ? "," : "");
+        std::printf("}%s\n", scene < 3 ? "," : "");
     }
     std::printf("}\n");
     return 0;

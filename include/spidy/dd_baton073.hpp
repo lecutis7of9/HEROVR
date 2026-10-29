@@ -73,6 +73,55 @@ inline baton_grip::Shaft held(bool on, const Pose& grip, unsigned hand, Controll
     return on ? seated(grip, hand, kind) : baton_grip::shaft(grip, hand, kind);
 }
 
+// 0.0.73 test 5 GRAPPLE AIM (the owner after test 4: "when you try to grapple well the silver part is straight up so
+// you have to twist your arm weird to aim"): while this hand's grapple aims (a finger on the trigger), fires or
+// reels, the held baton turns about the grip point until its silver tip points along the controller's aim, eased
+// in over aimIn and back to the fighting grip (seated) over aimOut. The grapple's ray leaves the turned tip along
+// the aim. CANDIDATE: aimTouch (Touch's analog trigger reads 0 untouched; the trigger's first tenth = aiming).
+inline constexpr float aimIn = .12f, aimOut = .25f, aimTouch = .1f;
+inline bool aimWanted(bool on, bool held, float trigger, bool firing, bool tipApart) {
+    return on && held && (firing || tipApart || (std::isfinite(trigger) && trigger >= aimTouch));
+}
+inline float aimEase(float now, bool want, float dt) {
+    const float d = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+    const float n = std::isfinite(now) ? std::clamp(now, 0.f, 1.f) : 0.f;
+    return want ? std::min(1.f, n + d / aimIn) : std::max(0.f, n - d / aimOut);
+}
+// The seated shaft turned toward the aim by w (0: unchanged; 1: butt -> tip along aim). Smoothstepped; a nonsense
+// input: s unchanged. 0.0.73 test 5 AIM HANDLE (the handle clipped out of the fist turned about the grip point): the
+// turn's pivot slides up the seated handle to aimPivot above the grip (the fist's top, by the thumb and index) and the
+// baton slides through it until only aimHold of its butt is behind that pivot - held at its end like a pointer, the
+// handle out of the front of the fist rather than across it. CANDIDATE: aimPivot, aimHold (dd_baton_preview's poke,
+// DAREDEVIL 1 and 3, aims level, up and across: at most 22 fist points through the handle, was up to 269).
+inline constexpr float aimPivot = .05f, aimHold = .012f;
+inline baton_grip::Shaft aimTurn(const baton_grip::Shaft& s, Vec3 grip, Vec3 aim, float w, float pivot = aimPivot,
+                                 float hold = aimHold) {
+    if (!s.ok || !fine(grip) || !fine(aim) || length(aim) < .5f || !std::isfinite(w) || !(w > 0.f))
+        return s;
+    const float k = std::clamp(w, 0.f, 1.f), e = k * k * (3.f - 2.f * k);
+    const Vec3 was = s.tip - s.butt;
+    const float len = length(was);
+    if (!(len > .2f))
+        return s;
+    const Vec3 a = normalized(aim), h = was * (1.f / len);
+    Vec3 way = h * (1.f - e) + a * e;
+    if (!(length(way) > .1f)) // exactly opposed: through the grip's side rather than a flip through zero
+        way = normalized(cross(h, Vec3{0, 1, 0})) * (1.f - e) + a * e;
+    way = normalized(way);
+    if (!fine(way) || !(length(way) > .5f))
+        return s;
+    const float behind = std::clamp(length(grip - s.butt), 0.f, len);
+    const float up = std::isfinite(pivot) ? std::clamp(pivot, 0.f, len - behind) : 0.f;
+    const float keep = std::isfinite(hold) ? std::clamp(hold, 0.f, behind) : behind;
+    const Vec3 at = grip + h * (up * e);
+    const float back = behind * (1.f - e) + keep * e;
+    baton_grip::Shaft t = s;
+    t.butt = at - way * back;
+    t.tip = t.butt + way * len;
+    t.ok = fine(t.butt) && fine(t.tip);
+    return t.ok ? t : s;
+}
+
 // The seam between the body and the silver tip (on the shaft, tipShare from the tip end).
 inline Vec3 seam(Vec3 butt, Vec3 tip) { return tip + (butt - tip) * tipShare; }
 

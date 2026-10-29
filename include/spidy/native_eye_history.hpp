@@ -87,6 +87,12 @@ struct NativeEyeFrame {
     std::array<Vec3, 6> oursFrom{};
     std::array<Vec3, 2> palmPoseAim{};
     std::array<float, 2> palmPose{};
+    // 0.0.73 test 5 HERO HANDS (IRON MAN, iron_hands ON): the suit's own hand profiles (suit_wear::HandProfile), and
+    // each hand wanted palm out along palmRaiseAim (world) - raised palm out, or the repulsor charging / just fired
+    // (1; the render eases it in and out, suit_wear::easeToward). Never set with HERO HANDS OFF (test 4's hands).
+    bool heroHands{};
+    std::array<float, 2> palmRaise{};
+    std::array<Vec3, 2> palmRaiseAim{};
     float palmSpin{};
     // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the flight's lean of the body (world axes, about the eyes;
     // the identity upright), for the worn suit that stands in for the game's body.

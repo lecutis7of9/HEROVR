@@ -166,6 +166,16 @@ enum Option : uint32_t {
     // 0.0.73 STREAMER MODE (streamer_view.hpp): the monitor shows the headset's eye, every drawing on it (ON) or not (OFF);
     // STREAMER SMOOTH: how the monitor's view steadies head shake (LOW, OFF, HIGH); STREAMER EYE: LEFT EYE or RIGHT EYE
     streamerMode, streamerSmooth, streamerEye,
+    // 0.0.73 HERO HANDS (suit_wear::HandProfile): IRON MAN's own hands - each MARK's gauntlet turned so its
+    // repulsor is the real palm, the raised hand drawn palm out along the blast (ON) or test 4's shared hands (OFF)
+    ironHands,
+    // 0.0.73 GRAPPLE AIM (dd_baton073::aimTurn): DAREDEVIL's held baton turned silver tip ahead along the aim while
+    // the grapple aims, flies and reels (ON) or kept in the fighting grip (OFF)
+    ddGrappleAim,
+    // 0.0.73 CLAW LOOK (hero007 appendClawSteel, suit_wear wolverine_* profiles): WOLVERINE's claws out between the knuckles along the fist, fanned,
+    // bright steel (ON) or test 4's (OFF). 0.0.73 test 5 CLAW BONE: ON with a Wolverine suit, out of the suit's own
+    // drawn fist, rooted inside it and locked to its hand bone (hero007::appendClawBone, suit_wear::clawPlace)
+    wolverineClaws,
     options
 };
 struct OptionInfo {
@@ -505,6 +515,12 @@ inline constexpr OptionInfo optionInfo[options] = {
      3, {"LOW", "OFF", "HIGH", nullptr}},
     {"streamer_eye", "STREAMER EYE", "STREY", "Which headset eye the monitor shows in STREAMER MODE, no restart.",
      2, {"LEFT EYE", "RIGHT EYE", nullptr, nullptr}},
+    {"iron_hands", "HERO HANDS", "IMHND", "ON: Iron Man's own hands, palm out when raised to fire; no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"dd_grapple_aim", "GRAPPLE AIM", "DDAIM", "ON: the baton's silver tip turns to the aim while grappling; no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
+    {"wolverine_claws", "CLAW LOOK", "WVCLW", "ON: claws out of the fist between the knuckles, on the hand; no restart.",
+     2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

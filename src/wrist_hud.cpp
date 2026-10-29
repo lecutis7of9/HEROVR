@@ -897,15 +897,15 @@ constexpr SectionDef powersSections[] = {
      {C::flyMode, C::combatSupersonic, C::combatSupersonicSpeed, C::flyVignette, C::flyRoll, C::flyRollSpeed,
       C::flyAutoLevel, C::combatFlyPose}},
     {"SPIDER-MAN", C::none, C::none, "", "", nullptr, 0, {C::heroPlaySpider, C::combatHeroDamage, C::symbiote}},
-    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud, C::combatPalmBlast}},
+    {"IRON MAN", C::none, C::none, "", "", nullptr, 1, {C::combatShooterType, C::combatIronHud, C::combatPalmBlast, C::combatIronHands}},
     {"DAREDEVIL", C::none, C::none, "", "", nullptr, 2,
      {C::combatDaredevil, C::combatDaredevilPunch, C::combatBeaconsVision, C::combatBatonHolsters, C::combatBatonLook,
-      C::combatDdGrapple, C::combatDdParry, C::combatDdBatonTip}},
+      C::combatDdGrapple, C::combatDdParry, C::combatDdBatonTip, C::combatDdGrappleAim}},
     {"HULK", C::none, C::none, "", "", nullptr, 3, {C::combatHulk, C::combatHeroHeight, C::combatHulkRage}},
     // Version 0.0.7 HERO PROFILES
     {"BATMAN", C::none, C::none, "", "", nullptr, 4, {C::combatBatman, C::combatBatarangChain, C::combatBatarangStyle, C::combatSmokeBlind,
       C::combatPerchTakedown, C::combatTakedownLight}},
-    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb}},
+    {"WOLVERINE", C::none, C::none, "", "", nullptr, 5, {C::combatWolverine, C::combatClawClimb, C::combatWolverineClaws}},
     {"SUPERMAN", C::none, C::none, "", "", nullptr, 6, {C::combatSuperman}},
     {"PUNISHER", C::none, C::none, "", "", nullptr, 7, {C::combatPunisher, C::combatEasyReload, C::combatHolsterHands, C::combatGunModels, C::combatPunisherRage, C::combatPunisherSuit,
       C::combatRageBlood, C::combatRageTint, C::combatPunisherHook, C::combatPunisherVan,
@@ -4594,6 +4594,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatStreamerMode:
             case Control::combatStreamerSmooth:
             case Control::combatStreamerEye:
+            case Control::combatIronHands:
+            case Control::combatDdGrappleAim:
+            case Control::combatWolverineClaws:
                 r.combat38 = combatOption(hover_);
                 break;
             case Control::colorFx:

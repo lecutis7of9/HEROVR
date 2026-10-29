@@ -10,6 +10,7 @@
 #include "spidy/van_fps.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -364,6 +365,193 @@ bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model:
     const Vec3 base = k.o + k.f * hero007::clawKnuckle + k.u * hero007::clawRise;
     // Out of the knuckles: the length grows with the extension (only along the claws; the shape kept when out).
     return drawMesh(out, model, [&](Vec3 c) { return base + k.r * c.x + k.u * c.y - k.f * (c.z * ext); }, viewer);
+}
+
+bool clawSteelFrame(const Item& it, Vec3& base, Vec3& x, Vec3& y, Vec3& f) {
+    Frame k{};
+    if (!frameOf(it, k) || it.side > 1)
+        return false;
+    // the back of the hand: the grip's -X (left) / +X (right); lookClaws' right (forward x up) is the grip's +X
+    y = it.side ? k.r : k.r * -1.f;
+    f = k.f;
+    x = cross(f, y); // the model's own handedness (tools/claws073: x = forward x back of the hand)
+    base = k.o + f * clawSteelAhead + y * clawSteelBack;
+    return ok(base) && ok(x);
+}
+namespace {
+// The claws drawn polished steel (never the texture), far to near: lit per face with a highlight from the viewer,
+// a touch darker at the root, brighter toward the point (along f from base over reach).
+bool shadeSteel(std::vector<Vertex>& out, const std::vector<Vec3>& placed, uint32_t n, Vec3 base, Vec3 f, float reach, Vec3 viewer) {
+    thread_local std::vector<std::pair<float, uint32_t>> order;
+    order.clear();
+    for (uint32_t t = 0; t < n; ++t) {
+        const Vec3 sum = placed[t * 3] + placed[t * 3 + 1] + placed[t * 3 + 2];
+        if (!ok(sum))
+            return false;
+        order.emplace_back(length(sum * (1.f / 3) - viewer), t);
+    }
+    std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    Guard g(out);
+    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f}), steel{.74f, .77f, .82f};
+    for (const auto& [far, t] : order) {
+        (void)far;
+        const Vec3 a = placed[t * 3], b = placed[t * 3 + 1], c = placed[t * 3 + 2];
+        const Vec3 n3 = cross(b - a, c - a);
+        const float len = length(n3);
+        if (!(len > 1e-12f))
+            continue;
+        const Vec3 nn = n3 * (1.f / len), mid = (a + b + c) * (1.f / 3), toEye = normalized(viewer - mid);
+        const Vec3 half = normalized(light + toEye);
+        const float diffuse = std::abs(dot(nn, light)), spec = std::pow(std::abs(dot(nn, half)), 28.f);
+        const float rim = std::pow(1.f - std::abs(dot(nn, toEye)), 3.f);
+        const float along = std::clamp(dot(mid - base, f) / reach, 0.f, 1.f);
+        const float lit = .28f + .5f * diffuse + .12f * along;
+        Vec3 col = steel * lit + Vec3{1, 1, 1} * (.85f * spec + .25f * rim);
+        col = {std::min(col.x, 1.f), std::min(col.y, 1.f), std::min(col.z, 1.f)};
+        for (const Vec3& p : {a, b, c})
+            out.push_back(Vertex{p, col, 1.f, {}});
+    }
+    return true;
+}
+} // namespace
+bool appendClawSteel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& full, Vec3 viewer) {
+    const Vec3 s = full.high - full.low;
+    Vec3 base{}, x{}, y{}, f{};
+    if (!full.ok() || !(std::max({s.x, s.y, s.z}) < .8f) || !(s.z > .05f) || !clawSteelFrame(it, base, x, y, f) || !ok(viewer) ||
+        !inRange(base, viewer, 40.f))
+        return false;
+    const float ext = it.spin > 0 && std::isfinite(it.spin) ? std::clamp(it.spin, 0.f, 1.1f) : 1.f;
+    if (ext < .02f)
+        return true; // still in the hand
+    const mesh_model::Mesh& model = full.lite && full.lite->ok() ? *full.lite : full;
+    const uint32_t n = model.triangles();
+    if (!n || n > mesh_model::liteTriangles)
+        return false;
+    thread_local std::vector<Vec3> placed;
+    placed.resize(size_t{n} * 3);
+    const float reach = std::max(.05f, -model.low.z);
+    for (uint32_t c = 0; c < n * 3; ++c) {
+        const Vec3 m = model.corners[c];
+        placed[c] = base + x * m.x + y * m.y - f * (m.z * ext);
+    }
+    return shadeSteel(out, placed, n, base, f, reach, viewer);
+}
+
+bool clawParts(const mesh_model::Mesh& model, ClawParts& out) {
+    out = {};
+    const uint32_t n = model.triangles();
+    if (!model.ok() || !n || n > mesh_model::liteTriangles)
+        return false;
+    // the triangles joined by shared corners (the same place)
+    std::vector<uint32_t> up(n);
+    for (uint32_t t = 0; t < n; ++t)
+        up[t] = t;
+    const auto find = [&](uint32_t t) {
+        while (up[t] != t)
+            t = up[t] = up[up[t]];
+        return t;
+    };
+    std::vector<std::pair<std::array<float, 3>, uint32_t>> at;
+    at.reserve(size_t{n} * 3);
+    for (uint32_t c = 0; c < n * 3; ++c) {
+        const Vec3 p = model.corners[c];
+        at.push_back({{p.x, p.y, p.z}, c / 3});
+    }
+    std::sort(at.begin(), at.end());
+    for (size_t i = 1; i < at.size(); ++i)
+        if (at[i].first == at[i - 1].first)
+            up[find(at[i].second)] = find(at[i - 1].second);
+    std::vector<uint32_t> roots;
+    for (uint32_t t = 0; t < n; ++t)
+        if (find(t) == t)
+            roots.push_back(t);
+    if (roots.size() != 3)
+        return false;
+    out.part.assign(n, 0);
+    // each claw's root end (the centroid of its corners within 1 cm of the model's base, z > low... the base at z 0)
+    // and its axis (root end to point)
+    Vec3 sumB[3]{}, sumT[3]{};
+    float nb[3]{}, nt[3]{};
+    const float lowZ = model.low.z;
+    for (uint32_t t = 0; t < n; ++t) {
+        const uint8_t k = static_cast<uint8_t>(std::find(roots.begin(), roots.end(), find(t)) - roots.begin());
+        out.part[t] = k;
+        for (uint32_t c = 0; c < 3; ++c) {
+            const Vec3 p = model.corners[t * 3 + c];
+            if (p.z > -.01f)
+                sumB[k] = sumB[k] + p, nb[k] += 1;
+            if (p.z < lowZ * .5f)
+                sumT[k] = sumT[k] + p, nt[k] += 1;
+        }
+    }
+    for (int k = 0; k < 3; ++k) {
+        if (!(nb[k] > 0) || !(nt[k] > 0))
+            return false;
+        out.base[k] = sumB[k] * (1.f / nb[k]);
+        out.axis[k] = normalized(sumT[k] * (1.f / nt[k]) - out.base[k]);
+        out.reach[k] = 0;
+    }
+    for (uint32_t t = 0; t < n; ++t)
+        for (uint32_t c = 0; c < 3; ++c) {
+            const uint8_t k = out.part[t];
+            out.reach[k] = std::max(out.reach[k], dot(model.corners[t * 3 + c] - out.base[k], out.axis[k]));
+        }
+    // ascending across the knuckles (the model's x)
+    int order[3]{0, 1, 2};
+    std::sort(order, order + 3, [&](int a, int b) { return out.base[a].x < out.base[b].x; });
+    uint8_t rank[3];
+    for (int i = 0; i < 3; ++i)
+        rank[order[i]] = static_cast<uint8_t>(i);
+    ClawParts sorted = out;
+    for (int i = 0; i < 3; ++i)
+        sorted.base[i] = out.base[order[i]], sorted.axis[i] = out.axis[order[i]], sorted.reach[i] = out.reach[order[i]];
+    for (uint8_t& k : sorted.part)
+        k = rank[k];
+    out = std::move(sorted);
+    out.ok = true;
+    return true;
+}
+bool clawBonePoint(const ClawParts& parts, const ClawBone& at, int k, Vec3 m, float ext, Vec3& world) {
+    if (!parts.ok || !at.ok || k < 0 || k > 2)
+        return false;
+    // the model's x across the knuckles, +y the back of the hand, -z along the claws
+    const Vec3 across = normalized(cross(at.way, at.back));
+    Vec3 local = m - parts.base[k];
+    // retracting: slid back into the hand along the claw's own line, what passes its root kept at the root
+    local = local - parts.axis[k] * ((1.f - std::clamp(ext, 0.f, 1.f)) * parts.reach[k]);
+    const float behind = dot(local, parts.axis[k]);
+    if (behind < 0)
+        local = local - parts.axis[k] * behind;
+    world = at.root[k] + across * local.x + at.back * local.y - at.way * local.z;
+    return ok(world);
+}
+bool appendClawBone(std::vector<Vertex>& out, float spin, const ClawBone& at, const mesh_model::Mesh& model, Vec3 viewer) {
+    const Vec3 s = model.high - model.low;
+    if (!model.ok() || !(std::max({s.x, s.y, s.z}) < .8f) || !(s.z > .05f) || !at.ok || !ok(viewer) || !ok(at.way) || !ok(at.back) ||
+        !(length(at.way) > .5f) || !(length(at.back) > .5f) || !inRange(at.root[1], viewer, 40.f))
+        return false;
+    for (const Vec3& r : at.root)
+        if (!ok(r))
+            return false;
+    const float ext = spin > 0 && std::isfinite(spin) ? std::clamp(spin, 0.f, 1.f) : 1.f;
+    if (ext < .02f)
+        return true; // in the hand
+    // the parts cached by model (library-owned, never freed)
+    thread_local const mesh_model::Mesh* cachedFor{};
+    thread_local ClawParts parts;
+    if (cachedFor != &model) {
+        clawParts(model, parts);
+        cachedFor = &model;
+    }
+    if (!parts.ok)
+        return false;
+    const uint32_t n = model.triangles();
+    thread_local std::vector<Vec3> placed;
+    placed.resize(size_t{n} * 3);
+    for (uint32_t c = 0; c < n * 3; ++c)
+        if (!clawBonePoint(parts, at, parts.part[c / 3], model.corners[c], ext, placed[c]))
+            return false;
+    return shadeSteel(out, placed, n, at.root[1], at.way, std::max(.05f, -model.low.z), viewer);
 }
 
 // Version 0.0.72 PUNISHER VAN: a model placed by its own axes (world = at + right x + up y - forward z), any
@@ -1104,7 +1292,8 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
         else if ((it.look == lookShield || it.look == lookShieldSpin) && d.shieldModel)
             drawn = appendShieldModel(out, it, *d.shieldModel, viewer);
         else if (it.look == lookClaws && it.side < 2 && d.clawModel[it.side]) // Version 0.0.73 (fix 10)
-            drawn = appendClawModel(out, it, *d.clawModel[it.side], viewer);
+            drawn = d.clawSteel ? appendClawSteel(out, it, *d.clawModel[it.side], viewer)
+                                : appendClawModel(out, it, *d.clawModel[it.side], viewer);
         if (!drawn && noStandIn(d.modelWanted, it.look)) {
             // Version 0.0.72 MODEL MISSING: no fake lookalike (the wrist names the missing model).
         } else if (!drawn) {

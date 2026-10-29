@@ -1643,7 +1643,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 241, "controls count drifted"); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 244, "controls count drifted"); // 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1983,7 +1983,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 241, "controls count drifted"); // 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 244, "controls count drifted"); // 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18837,7 +18837,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 133, "one hundred and thirty-three options (0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 136, "one hundred and thirty-six options (0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18871,7 +18871,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 133, "0.0.73 has 133 COMBAT options (test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 136, "0.0.73 has 136 COMBAT options (test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19193,7 +19193,7 @@ int main() {
                 }
             }
         }
-        check(placed == 209 /* 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 212 /* 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -32158,6 +32158,286 @@ int main() {
         check(k.c[16] == l && k.c[17] == r && k.c[18] == d && k.c[19] == u, "then the lens");
         check(std::abs(k.c[20] * 1920 - 1) < 1e-6f && std::abs(k.c[21] * 1080 - 1) < 1e-6f, "then the pixel size");
         check(sv::constantsOf(turned, c, f, 0, 0).c[20] == 0, "no window, no division by zero");
+    });
+    test("0.0.73 test 5 HERO HANDS: IRON MAN's MARKs have their own profiles; every other suit keeps test 4's hands", [] {
+        namespace sw = spidy::suit_wear;
+        const sw::HandProfile& shared = sw::handProfileShared();
+        check(shared.restTurnDeg == 0 && !shared.triggerOpens && shared.forearmFollow == 0 && !shared.palmRaise,
+              "the shared profile is test 4's");
+        for (const char* other : {"Suit_daredevil_1", "Suit_daredevil_3", "Suit_thor_1", "Suit_batman_1", "", static_cast<const char*>(nullptr)})
+            check(&sw::handProfile(other) == &shared, "a non IRON MAN suit takes the shared profile");
+        check(&sw::handProfile("Suit_wolverine_1") != &shared, "Wolverine has his own (CLAW LOOK)");
+        const float turns[] = {35.f, 0.f, 50.f, -18.f};
+        const char* marks[] = {"Suit_ironMan_1", "Suit_ironMan_2", "Suit_ironMan_3", "Suit_ironMan_4"};
+        for (int m = 0; m < 4; ++m) {
+            const sw::HandProfile& p = sw::handProfile(marks[m]);
+            check(&p != &shared && p.palmRaise && p.triggerOpens && p.forearmFollow > .5f && p.restTurnDeg == turns[m],
+                  std::string("IRON MAN's own profile per MARK: ") + marks[m]);
+        }
+        check(&sw::handProfile("Suit_ironMan_1") != &sw::handProfile("Suit_ironMan_3"), "each MARK its own turn");
+        sw::Rig rig;
+        rig.hands = sw::handProfile("Suit_ironMan_1");
+        check(&sw::handsOf(rig, false) == &shared, "HERO HANDS OFF: the shared profile even on IRON MAN");
+        check(sw::handsOf(rig, true).palmRaise, "HERO HANDS ON: the MARK's");
+        // the fingers: DAREDEVIL's baton fist unchanged, IRON MAN's raised hand open
+        check(sw::handCurl(shared, 0, 0, 0, true, false) == 1.f && sw::handCurl(shared, .3f, .8f, 0, false, true) == .8f,
+              "shared: a prop is a fist, else the most of trigger and grip (test 4)");
+        const sw::HandProfile& im = sw::handProfile("Suit_ironMan_1");
+        check(sw::handCurl(im, 1.f, 0, 0, false, true) == 0.f && sw::handOpen(im, 0, false, true), "IRON MAN raised: open palm");
+        check(sw::handCurl(im, 1.f, 0, 0, false, false) == 1.f, "IRON MAN lowered: the trigger still curls");
+        check(sw::handCurl(im, 0, .9f, 0, false, true) == .9f && !sw::handOpen(im, .9f, false, true), "the grip held: a fist");
+    });
+    test("0.0.73 test 5 HERO HANDS: a raised palm out, eased in and out, blended palm out along the blast", [] {
+        namespace sw = spidy::suit_wear;
+        const Vec3 fwd{0, 0, -1}, up{0, 1, 0}, eye{0, 1.7f, 0};
+        check(sw::raisedPalm({0, 0, -1}, fwd, up, {.2f, 1.5f, -.4f}, eye), "palm ahead at chest height: raised");
+        check(sw::raisedPalm({.3f, .2f, -1}, fwd, up, {.2f, 1.7f, -.5f}, eye), "palm ahead a little off: raised");
+        check(!sw::raisedPalm({0, 0, 1}, fwd, up, {.2f, 1.5f, -.4f}, eye), "palm back at the face: not");
+        check(!sw::raisedPalm({1, 0, 0}, fwd, up, {.2f, 1.5f, -.4f}, eye), "palm sideways: not");
+        check(!sw::raisedPalm({0, 0, -1}, fwd, up, {.2f, .9f, -.2f}, eye), "the hand at the hip: not");
+        check(!sw::raisedPalm({NAN, 0, -1}, fwd, up, {.2f, 1.5f, -.4f}, eye), "nonsense: not");
+        float w = 0;
+        for (int k = 0; k < 4; ++k)
+            w = sw::easeToward(w, 1, .02f, .16f);
+        check(w > .45f && w < .55f, "half way in after .08 s");
+        for (int k = 0; k < 10; ++k)
+            w = sw::easeToward(w, 1, .02f, .16f);
+        check(w == 1.f, "all the way in");
+        check(sw::easeToward(1, 0, 5.f, .16f) < 1.f && sw::easeToward(1, 0, 5.f, .16f) >= 0.f, "a long frame moves one clamped step");
+        check(sw::easeToward(NAN, 1, .02f, .16f) == 1.f, "a nonsense weight snaps");
+        // blend: the hand's grip turned to the palm frame for the aim straight ahead
+        for (unsigned hand = 0; hand < 2; ++hand) {
+            repulsor::PalmFrame pf;
+            check(repulsor::palmFrame(fwd, up, hand, pf), "the palm frame for the aim");
+            Vec3 f{0, -1, 0}, x{1, 0, 0}, u{0, 0, 1};
+            float tilt = 30;
+            const Vec3 f0 = f;
+            check(sw::blendGrip(f, x, u, tilt, pf.forward, pf.x, pf.up, 0) && f.x == f0.x && f.y == f0.y && f.z == f0.z && tilt == 30,
+                  "weight 0: unchanged");
+            check(sw::blendGrip(f, x, u, tilt, pf.forward, pf.x, pf.up, 1), "weight 1");
+            const Vec3 palm = sw::handBackOf(x, static_cast<int>(hand)) * -1.f;
+            check(dot(palm, fwd) > .97f, "the palm faces the aim, hand " + std::to_string(hand));
+            check(tilt == 0 && dot(sw::handWay(f, u, tilt), up) > .97f, "fingers up, no handle tilt");
+            check(std::abs(dot(f, x)) < 1e-3f && std::abs(dot(u, x)) < 1e-3f, "an orthonormal grip");
+            Vec3 f2{0, -1, 0}, x2{1, 0, 0}, u2{0, 0, 1};
+            float t2 = 30;
+            check(sw::blendGrip(f2, x2, u2, t2, pf.forward, pf.x, pf.up, .5f) && t2 == 15 && std::abs(length(x2) - 1) < 1e-3f,
+                  "half: half the tilt, still unit");
+        }
+        Vec3 f{0, -1, 0}, x{1, 0, 0}, u{0, 0, 1};
+        float tilt = 30;
+        check(!sw::blendGrip(f, x, u, tilt, {NAN, 0, 0}, {1, 0, 0}, {0, 1, 0}, 1) && tilt == 30, "nonsense target: unchanged");
+    });
+    test("0.0.73 test 5 GRAPPLE AIM: the baton's silver tip turns to the aim about the grip, then back", [] {
+        namespace db = spidy::dd_baton073;
+        const Pose grip{{.2f, 1.2f, -.3f}, {0, 0, 0, 1}};
+        const auto s = db::seated(grip, 1, ControllerKind::touch);
+        check(s.ok && dot(normalized(s.tip - s.butt), Vec3{0, 1, 0}) > .45f, "the fighting grip: the tip up out of the fist");
+        const Vec3 aim{0, 0, -1};
+        const auto same = db::aimTurn(s, grip.position, aim, 0);
+        check(same.tip.x == s.tip.x && same.tip.y == s.tip.y && same.butt.z == s.butt.z, "weight 0: the fighting grip exactly");
+        const auto t = db::aimTurn(s, grip.position, aim, 1);
+        check(t.ok && dot(normalized(t.tip - t.butt), aim) > .999f, "weight 1: butt to tip along the aim");
+        check(std::abs(length(t.tip - t.butt) - length(s.tip - s.butt)) < 1e-4f, "the same baton length");
+        const Vec3 pivot = grip.position + normalized(s.tip - s.butt) * db::aimPivot;
+        check(std::abs(length(pivot - t.butt) - db::aimHold) < 1e-4f && dot(normalized(pivot - t.butt), aim) > .999f,
+              "held at its end at the fist's top (AIM HANDLE: the handle out of the front of the fist, not across it)");
+        check(length(db::aimTurn(s, grip.position, aim, 1, 0, db::buttBehind).butt - (grip.position - aim * db::buttBehind)) < 1e-4f,
+              "no slide: test 5's turn about the grip point");
+        check(dot(normalized(t.tip - grip.position), aim) > .99f && dot(normalized(t.tip - pivot), aim) > .999f,
+              "the tip (the ray's start) ahead of the fist along the aim");
+        const auto h = db::aimTurn(s, grip.position, aim, .5f);
+        const float d0 = dot(normalized(s.tip - s.butt), aim), dh = dot(normalized(h.tip - h.butt), aim);
+        check(h.ok && dh > d0 && dh < .999f, "half way: between");
+        const auto back = db::aimTurn(s, grip.position, normalized(s.butt - s.tip), 1);
+        check(back.ok && dot(normalized(back.tip - back.butt), normalized(s.butt - s.tip)) > .99f, "opposed aim: no flip through zero");
+        check(db::aimTurn(s, grip.position, {NAN, 0, 0}, 1).tip.x == s.tip.x, "nonsense aim: unchanged");
+        check(db::aimWanted(true, true, .5f, false, false) && db::aimWanted(true, true, 0, true, false) &&
+                  db::aimWanted(true, true, 0, false, true),
+              "aiming (finger on the trigger), firing or reeling");
+        check(!db::aimWanted(true, true, 0, false, false), "the fighting grip at rest");
+        check(!db::aimWanted(false, true, 1, true, true), "GRAPPLE AIM OFF: never");
+        check(!db::aimWanted(true, false, 1, true, true), "not in the hand: never");
+        float w = 0;
+        for (int k = 0; k < 3; ++k)
+            w = db::aimEase(w, true, .02f);
+        check(w > .45f && w < .55f, "eased in over .12 s");
+        for (int k = 0; k < 10; ++k)
+            w = db::aimEase(w, true, .02f);
+        check(w == 1.f, "in");
+        w = db::aimEase(w, false, .05f);
+        check(w > .75f && w < .85f, "out more slowly (.25 s)");
+        check(db::aimEase(NAN, true, NAN) == 0.f, "nonsense: rest");
+    });
+    test("0.0.73 test 5 CLAW LOOK: Wolverine's claws out of the back of the fist between the knuckles, along it, steel", [] {
+        namespace mm = spidy::mesh_model;
+        namespace h7 = spidy::hero007;
+        namespace sw = spidy::suit_wear;
+        auto near = [](Vec3 a, Vec3 b, float e = 1e-4f) { return length(a - b) < e; };
+        // A held right fist (gun_grip::held's frame): forward along the forearm, up toward the thumb; the grip's +X
+        // (the right hand's back) is forward x up.
+        h7::Item it{};
+        it.look = h7::lookClaws;
+        it.at = {.2f, 1.2f, -.4f};
+        it.forward = {0, 0, -1};
+        it.up = {0, 1, 0};
+        it.spin = 1.f;
+        const Vec3 gripX = cross(it.forward, it.up); // +x
+        Vec3 base{}, x{}, y{}, f{};
+        it.side = 1;
+        check(h7::clawSteelFrame(it, base, x, y, f), "right: a frame");
+        check(near(y, gripX) && near(f, it.forward) && near(x, Vec3{0, -1, 0}), "right: the model's +y the back of the hand (+X), -z along the fist, x the knuckle row (not the thumb)");
+        check(near(base, it.at + it.forward * h7::clawSteelAhead + gripX * h7::clawSteelBack), "right: the base at the knuckles, on the back of the hand");
+        check(std::abs(dot(base - it.at, it.up)) < 1e-5f, "right: not lifted toward the thumb (test 4's rise: out of the top of the hand)");
+        it.side = 0;
+        check(h7::clawSteelFrame(it, base, x, y, f), "left: a frame");
+        check(near(y, gripX * -1.f) && near(x, Vec3{0, 1, 0}) && near(f, it.forward), "left: mirrored (its back the grip's -X)");
+        it.side = 2;
+        check(!h7::clawSteelFrame(it, base, x, y, f), "no hand: no frame");
+        // the claws model: base at the origin, along -z, fanned along x
+        mm::Mesh claw;
+        claw.corners = {{-.02f, 0, 0}, {.02f, 0, 0}, {.0f, .01f, -.34f}};
+        claw.colors = {{.45f, .2f, .1f}}; // the texture's rust
+        claw.low = {-.02f, 0, -.34f};
+        claw.high = {.02f, .01f, 0};
+        const Vec3 viewer{0, 1.6f, 0};
+        std::vector<Vertex> out;
+        it.side = 1;
+        check(h7::clawSteelFrame(it, base, x, y, f), "right again");
+        check(h7::appendClawSteel(out, it, claw, viewer) && out.size() == 3, "out: drawn");
+        bool onRow = false;
+        for (const Vertex& v : out)
+            onRow = onRow || near(v.position, base + x * -.02f);
+        check(onRow, "the base corner on the knuckle row, from the base");
+        float reach = 0;
+        bool steel = true;
+        for (const Vertex& v : out) {
+            reach = std::max(reach, -(v.position.z - it.at.z));
+            steel = steel && v.color.z >= v.color.x - 1e-4f && v.color.x > .2f; // grey-blue steel, never the rust
+        }
+        check(reach > .34f && reach < .34f + h7::clawSteelAhead + .01f, "along the fist, past the knuckles");
+        check(steel, "steel, not the texture's rust");
+        out.clear();
+        it.spin = .01f;
+        check(h7::appendClawSteel(out, it, claw, viewer) && out.empty(), "in: nothing shows");
+        mm::Mesh huge = claw;
+        huge.high.z = 5;
+        it.spin = 1;
+        check(!h7::appendClawSteel(out, it, huge, viewer), "not a claws model: the built-in claws instead");
+        // The draw picks CLAW LOOK (clawSteel) or test 4's look
+        h7::Draw d{};
+        d.any = true;
+        d.held[1] = it;
+        d.clawModel[1] = &claw;
+        std::vector<Vertex> on, off;
+        d.clawSteel = true;
+        h7::appendHero007(on, d, {}, viewer, .002f);
+        d.clawSteel = false;
+        h7::appendHero007(off, d, {}, viewer, .002f);
+        check(!on.empty() && !off.empty() && (on.size() != off.size() || !near(on[0].position, off[0].position)), "ON and OFF differ");
+        // WOLVERINE's own hands (CLAW LOOK): each suit's fist turned (CANDIDATE), the shared path otherwise
+        check(sw::handProfile("Suit_wolverine_1").restTurnDeg == 50.f && sw::handProfile("Suit_wolverine_3").restTurnDeg == 20.f &&
+                  sw::handProfile("Suit_wolverine_4").restTurnDeg == 0.f && std::string(sw::handProfile("Suit_wolverine_4").name) == "wolverine_weapon_x",
+              "Wolverine's suits have their own hand profiles");
+        check(!sw::handProfile("Suit_wolverine_1").palmRaise && !sw::handProfile("Suit_wolverine_1").triggerOpens,
+              "no Iron Man palm-out or open hand on Wolverine");
+    });
+    test("0.0.73 test 5 CLAW BONE: the claws rooted inside the suit's fist, locked to its hand bone, retracting along their line", [] {
+        namespace mm = spidy::mesh_model;
+        namespace sw = spidy::suit_wear;
+        namespace h7 = spidy::hero007;
+        auto near = [](Vec3 a, Vec3 b, float e = 1e-4f) { return length(a - b) < e; };
+        // the claws model: three separate blades, roots on z 0, points at -z, ascending in x
+        mm::Mesh claw;
+        for (int k = 0; k < 3; ++k) {
+            const float x = (k - 1) * .02f;
+            claw.corners.push_back({x - .003f, 0, 0});
+            claw.corners.push_back({x + .003f, 0, 0});
+            claw.corners.push_back({x + .004f * (k - 1), .002f, -.3f}); // fanned
+            claw.colors.push_back({.45f, .2f, .1f});
+        }
+        claw.low = {-.027f, 0, -.3f};
+        claw.high = {.027f, .002f, 0};
+        h7::ClawParts parts;
+        check(h7::clawParts(claw, parts) && parts.part.size() == 3 && parts.part[0] == 0 && parts.part[1] == 1 && parts.part[2] == 2,
+              "three claws found, ascending across the knuckles");
+        check(near(parts.base[1], Vec3{0, 0, 0}) && parts.reach[1] > .29f && parts.reach[1] < .31f, "each claw's root end and reach");
+        // where the suit put the roots (inside the fist) and the way out
+        h7::ClawBone cb;
+        cb.ok = true;
+        cb.root[0] = {-.02f, 1.2f, -.4f}, cb.root[1] = {0, 1.21f, -.4f}, cb.root[2] = {.02f, 1.2f, -.4f};
+        cb.way = {0, 0, -1}, cb.back = {0, 1, 0};
+        Vec3 w{};
+        for (int k = 0; k < 3; ++k) {
+            check(h7::clawBonePoint(parts, cb, k, parts.base[k], 1, w) && near(w, cb.root[k]), "out: each root end on its root");
+        }
+        Vec3 tipOut{}, tipHalf{}, baseHalf{};
+        check(h7::clawBonePoint(parts, cb, 1, claw.corners[5], 1, tipOut) && near(tipOut, Vec3{0, 1.212f, -.7f}, 1e-3f),
+              "out: the point .3 m along the way, fanned as made");
+        check(h7::clawBonePoint(parts, cb, 1, claw.corners[5], .5f, tipHalf) && h7::clawBonePoint(parts, cb, 1, parts.base[1], .5f, baseHalf),
+              "half out");
+        const Vec3 line = normalized(tipOut - cb.root[1]);
+        check(length(tipOut - tipHalf) > .14f && length(tipOut - tipHalf) < .16f && length(cross(normalized(tipOut - tipHalf), line)) < 1e-3f,
+              "retracting slides the claw back along its own line");
+        check(near(baseHalf, cb.root[1]), "what passes the root is kept at the root (never out of the back of the hand)");
+        std::vector<Vertex> out;
+        const Vec3 viewer{0, 1.6f, 0};
+        check(h7::appendClawBone(out, 1, cb, claw, viewer) && out.size() == 9, "out: drawn");
+        out.clear();
+        check(h7::appendClawBone(out, .01f, cb, claw, viewer) && out.empty(), "in: nothing shows");
+        h7::ClawBone bad = cb;
+        bad.ok = false;
+        check(!h7::appendClawBone(out, 1, bad, claw, viewer), "no roots: false (the caller draws the grip's claws instead)");
+        // clawPlace: the rest roots carried by the hand bone (posed = a1 + M (p - a0))
+        sw::Rig rig;
+        rig.clawSuit = true;
+        rig.clawOk[1] = true;
+        rig.clawRoot[1][0] = {-.8f, 1.30f, .01f}, rig.clawRoot[1][1] = {-.8f, 1.31f, 0}, rig.clawRoot[1][2] = {-.8f, 1.30f, -.01f};
+        rig.clawWay[1] = {-1, 0, 0}, rig.clawBack[1] = {0, 1, 0};
+        sw::BoneMove mv[sw::bones];
+        for (auto& b : mv)
+            b.m[0] = b.m[4] = b.m[8] = 1;
+        // the right hand turned 90 degrees about y (x -> -z) and moved
+        sw::BoneMove& h = mv[sw::boneHandR];
+        h.m[0] = 0, h.m[2] = 1, h.m[6] = -1, h.m[8] = 0;
+        h.a0 = {-.7f, 1.35f, 0}, h.a1 = {.1f, 1.1f, -.3f};
+        Vec3 root[3], way{}, back{};
+        check(sw::clawPlace(rig, mv, 1, root, way, back), "placed on the right hand");
+        check(near(root[1], h.a1 + Vec3{0, -.04f, .1f}) && near(way, Vec3{0, 0, 1}) && near(back, Vec3{0, 1, 0}),
+              "the roots and the way move with the hand bone");
+        h.a1 = h.a1 + Vec3{0, .2f, 0};
+        Vec3 moved[3];
+        check(sw::clawPlace(rig, mv, 1, moved, way, back) && near(moved[0], root[0] + Vec3{0, .2f, 0}), "locked to the bone: it moves, they move");
+        check(!sw::clawPlace(rig, mv, 0, moved, way, back) && !sw::clawPlace(rig, mv, 2, moved, way, back),
+              "no roots on that hand / no such hand: not placed (the grip's claws)");
+        // only a Wolverine suit looks for claw roots (the load), and a suit with no fist found has none (never a crash)
+        mm::Mesh m;
+        const Vec3 J[sw::ends] = {{0, 1.6f, 0},      {0, 1.5f, 0},     {0, 1.3f, 0},      {0, 1.0f, 0},     {.18f, 1.45f, 0},
+                                  {.45f, 1.4f, 0},   {.7f, 1.35f, 0},  {-.18f, 1.45f, 0}, {-.45f, 1.4f, 0}, {-.7f, 1.35f, 0},
+                                  {.1f, .95f, 0},    {.1f, .5f, 0},    {.1f, .08f, 0},    {-.1f, .95f, 0},  {-.1f, .5f, 0},
+                                  {-.1f, .08f, 0},   {0, 1.8f, 0},     {.88f, 1.32f, 0},  {-.88f, 1.32f, 0}};
+        for (uint32_t e = 0; e < sw::ends; ++e)
+            m.suitEnds[e * 3] = J[e].x, m.suitEnds[e * 3 + 1] = J[e].y, m.suitEnds[e * 3 + 2] = J[e].z;
+        m.suitHandBack[1] = 1, m.suitHandBack[4] = 1;
+        m.hasSuit = true;
+        for (uint32_t b = 0; b < sw::bones; ++b) {
+            const Vec3 c = (J[sw::boneEnds[b][0]] + J[sw::boneEnds[b][1]]) * .5f;
+            const Vec3 p[3] = {c + Vec3{0, 0, .05f}, c + Vec3{.02f, 0, .05f}, c + Vec3{0, .02f, .05f}};
+            for (int k = 0; k < 3; ++k) {
+                m.corners.push_back(p[k]);
+                m.normals.push_back({0, 0, 1});
+                m.uvs.push_back(0), m.uvs.push_back(0);
+                for (int q = 0; q < 4; ++q)
+                    m.skinJoints.push_back(q ? 0 : static_cast<uint8_t>(b)), m.skinWeights.push_back(q ? 0 : 255);
+            }
+            m.colors.push_back({1, 1, 1});
+            m.tints.push_back({1, 1, 1});
+            m.image.push_back(-1);
+        }
+        sw::Rig plain, wolverine;
+        check(sw::makeRig(m, plain, "Suit_classic") && !plain.clawSuit && !plain.clawOk[0] && !plain.clawOk[1], "not Wolverine: no claw roots");
+        check(sw::makeRig(m, wolverine, "Suit_wolverine_1") && wolverine.clawSuit && !wolverine.clawOk[0] && !wolverine.clawOk[1],
+              "Wolverine with no fist to root in: none (the grip's claws), the suit still worn");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

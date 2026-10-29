@@ -2164,6 +2164,9 @@ DWORD WINAPI run(void*) {
         bool ddAimHeld[2]{};
         Vec3 cf73Aim[2]{}; // Version 0.0.73 (fix 15): each hand's combat aim (tracking)
         Vec3 ddAimFrom[2]{}, ddAimDir[2]{};
+        // 0.0.73 test 5 GRAPPLE AIM: each held baton's turn toward the aim (0 the fighting grip .. 1 tip along the aim)
+        float ddAimTurn[2]{};
+        bool ddAimAlong[2]{};
         // Version 0.0.73 (fix 17): CAPTAIN AMERICA's SPRINT - pumped arms with the left stick pushed.
         grapple073::ArmPump capPump;
         bool capSprinting{};
@@ -6995,9 +6998,35 @@ DWORD WINAPI run(void*) {
                                             ddThrowNow[i] = false;
                                             const bool trig = ddGrappleOn ? ddThrown && !ddFire
                                                                           : cf.hands[i].tracked && heroPress[i].trigger > .5f && batonOut;
+                                            // Version 0.0.7 BATON GRIP: through the fist from the grip pose, per controller.
+                                            // 0.0.73 DD BATON (BATON TIP ON): down the fist's own tube through the grip,
+                                            // so the handle sits in the curled fingers and the tip (the grapple's start,
+                                            // ddAimFrom) is the silver end on its axis; OFF: test 3's shaft exactly.
+                                            // 0.0.73 test 5 GRAPPLE AIM (ON, with BATON TIP and DD GRAPPLE): while this
+                                            // hand aims (finger on the trigger), fires or reels, the baton eased round the
+                                            // grip until the silver tip points along the aim, and the grapple leaves it
+                                            // along the aim; back to the fighting grip after (dd_baton073::aimTurn).
+                                            {
+                                                const bool tipOn = c38(combat38::ddBatonTip) == 0;
+                                                const auto held = dd_baton073::held(tipOn, frame.hands[i].grip, i,
+                                                                                    runtime.controllers()[i]);
+                                                const bool aimOn = tipOn && ddGrappleOn && c38(combat38::ddGrappleAim) == 0;
+                                                const bool aimWant = dd_baton073::aimWanted(
+                                                    aimOn, held.ok && batonOut && b.inHandNow() && cf.hands[i].tracked && !ddHolo,
+                                                    heroPress[i].trigger, ddFire, batonTipFlight[i].phase() != dd_baton073::TipFlight::seatedOn);
+                                                ddAimTurn[i] = aimOn ? dd_baton073::aimEase(ddAimTurn[i], aimWant, batonDt) : 0.f;
+                                                const auto shaft = dd_baton073::aimTurn(held, frame.hands[i].grip.position, cf.hands[i].aim, ddAimTurn[i]);
+                                                batonShaftOk[i] = shaft.ok;
+                                                batonButt[i] = shaft.butt;
+                                                batonTipHeld[i] = shaft.tip;
+                                                ddAimAlong[i] = aimOn && ddAimTurn[i] > 0;
+                                            }
                                             ddAimHeld[i] = ddGrappleOn && ddFire;
                                             if (ddAimHeld[i]) {
-                                                ddAimDir[i] = grapple073::batonAim(batonShaftOk[i], batonButt[i], batonTipHeld[i], cf.hands[i].aim);
+                                                // GRAPPLE AIM: along the aim the tip is turning to (no wait for the turn)
+                                                ddAimDir[i] = ddAimAlong[i] && finite(cf.hands[i].aim) && length(cf.hands[i].aim) > .5f
+                                                                  ? normalized(cf.hands[i].aim)
+                                                                  : grapple073::batonAim(batonShaftOk[i], batonButt[i], batonTipHeld[i], cf.hands[i].aim);
                                                 ddAimFrom[i] = batonShaftOk[i] && finite(batonTipHeld[i]) ? batonTipHeld[i] : cf.hands[i].position;
                                                 hero072Grapple[i] = true;
                                             }
@@ -7010,17 +7039,6 @@ DWORD WINAPI run(void*) {
                                             batonHand[i] = hand;
                                             batonAimNow[i] = aimDir;
                                             batonTracked[i] = cf.hands[i].tracked;
-                                            // Version 0.0.7 BATON GRIP: through the fist from the grip pose, per controller.
-                                            // 0.0.73 DD BATON (BATON TIP ON): down the fist's own tube through the grip,
-                                            // so the handle sits in the curled fingers and the tip (the grapple's start,
-                                            // ddAimFrom) is the silver end on its axis; OFF: test 3's shaft exactly.
-                                            {
-                                                const auto held = dd_baton073::held(c38(combat38::ddBatonTip) == 0, frame.hands[i].grip, i,
-                                                                                    runtime.controllers()[i]);
-                                                batonShaftOk[i] = held.ok;
-                                                batonButt[i] = held.butt;
-                                                batonTipHeld[i] = held.tip;
-                                            }
                                             const int batonAimed = b.inHandNow() ? hero_modes::batonAim(hand, aimDir, batonList, foes.count) : -1;
                                             // Version 0.0.73 PROP BOUNCE: this throw's surface ahead, in this frame's tracking space.
                                             const uint32_t bouncesWas = b.wallBounces;
@@ -9527,9 +9545,14 @@ DWORD WINAPI run(void*) {
                         }
                         // Version 0.0.6 (Update 39.0.2) REPULSOR LOOK: each palm's charge (the web shooter's
                         // place, facing along the hand's aim), this frame's world; glow 0: none.
+                        // 0.0.73 test 5 HERO HANDS: the suits' own hand profiles (IRON MAN's MARKs: IRON MAN > HERO HANDS;
+                        // WOLVERINE's suits: WOLVERINE > CLAW LOOK, the fist the claws come out of)
+                        saved.heroHands = !oursFault && (heroNow() == hero_modes::wolverine ? c38(combat38::wolverineClaws) == 0
+                                                                                            : c38(combat38::ironHands) == 0);
                         for (unsigned i = 0; i < 2; ++i) {
                             saved.palmGlow[i] = 0;
                             saved.palmPose[i] = 0;
+                            saved.palmRaise[i] = 0;
                             if (!rep || !validTrackedPose(motion.grips[i]) || !motion.swing.hands[i].tracked)
                                 continue;
                             const float glow = repulsor_mcu::palmGlow(repTrigger.chargingFor(static_cast<int>(i)),
@@ -9550,6 +9573,20 @@ DWORD WINAPI run(void*) {
                                                     (std::isfinite(since) && since >= 0 && since < repulsor::palmPoseSeconds);
                                 saved.palmPose[i] = !palmOn && posing && finite(way) && length(way) > .5f ? 1.f : 0.f;
                                 saved.palmPoseAim[i] = saved.palmPose[i] > 0 ? normalized(way) : Vec3{};
+                                // 0.0.73 test 5 HERO HANDS (the owner: "when i raise my hand as iron man it needs to be
+                                // palm faced forward"): the hand raised palm out (its real palm ahead, not low), or
+                                // firing, drawn palm out along the blast - the palm's own way (PALM BLAST PALM) or the
+                                // aim while firing (AIM), so the bolt leaves the drawn palm straight to the target.
+                                if (saved.heroHands) {
+                                    const Vec3 palmT = repulsor::palmNormal(motion.grips[i], i);
+                                    const bool raised = suit_wear::raisedPalm(palmT, frame.head.orientation.rotate(Vec3{0, 0, -1}),
+                                                                              Vec3{0, 1, 0}, motion.grips[i].position, frame.head.position);
+                                    const Vec3 aimRaise = palmOn || !posing ? saved.worldFromTracking.orientation.rotate(palmT) : way;
+                                    if ((posing || raised) && finite(aimRaise) && length(aimRaise) > .5f) {
+                                        saved.palmRaise[i] = 1.f;
+                                        saved.palmRaiseAim[i] = normalized(aimRaise);
+                                    }
+                                }
                             }
                             if (glow > 0 && finite(at) && finite(way) && length(way) > .5f) {
                                 saved.palmGlow[i] = glow;
@@ -9780,6 +9817,8 @@ DWORD WINAPI run(void*) {
                             }
                             // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: the JACKET AND JEANS claws for every Wolverine suit
                             // (Models\Claws; 0.0.72's built-in claws when missing). The worn suit carries none (no double claws).
+                            // 0.0.73 test 5 CLAW LOOK ON (the default): out between the knuckles, along the fist, steel.
+                            saved.hero007.clawSteel = c38(combat38::wolverineClaws) == 0;
                             if (hero007In.hero == hero_modes::wolverine)
                                 for (unsigned i = 0; i < 2; ++i)
                                     saved.hero007.clawModel[i] = slotModel(i ? mesh_model::slotClawsRight : mesh_model::slotClawsLeft, "CLAWS");
@@ -10601,14 +10640,39 @@ DWORD WINAPI run(void*) {
                                 else
                                     appendBaton(vertices, saved->batonGrip[i] + travel, saved->batonTip[i] + travel, viewer, pixelAngle);
                             }
-                        if (saved->hero007.any && saved->hero007.beamFade > 0 && validTrackedPose(rendered.headPose)) {
+                        // 0.0.73 test 5 CLAW BONE (CLAW LOOK ON): a Wolverine suit's claws come out of its own drawn
+                        // fist (the owner: "none of the wolverine claw things actually looks like it comes out of
+                        // the hand"), so they are left out here and drawn after the suit is skinned below
+                        // (hero007::appendClawBone at suit_wear::clawPlace: locked to the suit's hand bone); when that
+                        // cannot be done this frame, by the grip there instead (appendClawSteel) - never missing.
+                        bool clawLater[2]{};
+                        const hero007::Draw* heroDraw = &saved->hero007;
+                        hero007::Draw heroNoClaws;
+                        if (const uint32_t ws = wornSuitSlot.load();
+                            saved->hero007.any && saved->hero007.clawSteel && !saved->flatScreen && mesh_model::slotIsSuit(ws) &&
+                            suitsRigged.load() && overlay.modelReady() && validTrackedPose(rendered.headPose)) {
+                            const suit_wear::Rig& r = suitRigs[ws - mesh_model::slotSuitFirst];
+                            for (unsigned i = 0; i < 2; ++i) {
+                                const hero007::Item& h = saved->hero007.held[i];
+                                clawLater[i] = r.ok && h.look == hero007::lookClaws && h.side < 2 && r.clawOk[h.side] &&
+                                               saved->hero007.clawModel[h.side];
+                            }
+                            if (clawLater[0] || clawLater[1]) {
+                                heroNoClaws = saved->hero007;
+                                for (unsigned i = 0; i < 2; ++i)
+                                    if (clawLater[i])
+                                        heroNoClaws.held[i].look = hero007::lookNone;
+                                heroDraw = &heroNoClaws;
+                            }
+                        }
+                        if (heroDraw->any && heroDraw->beamFade > 0 && validTrackedPose(rendered.headPose)) {
                             // Version 0.0.72 HEAT VISION HEAD LOCK: the beams redrawn from this image's own head
                             // pose along where it looks (0.0.71: drawn to where the beam was aimed a frame ago).
-                            hero007::Draw locked = saved->hero007;
+                            hero007::Draw locked = *heroDraw;
                             hero007::headLockBeam(locked, rendered.headPose);
                             hero007::appendHero007(vertices, locked, travel, viewer, pixelAngle);
-                        } else if (saved->hero007.any) // Version 0.0.7 HERO PROFILES
-                            hero007::appendHero007(vertices, saved->hero007, travel, viewer, pixelAngle);
+                        } else if (heroDraw->any) // Version 0.0.7 HERO PROFILES
+                            hero007::appendHero007(vertices, *heroDraw, travel, viewer, pixelAngle);
                         if (saved->hero072.any) { // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
                             // Build 5: THOR's look (the hammer, its chain, the storm) can never take the frame down:
                             // out of memory or a bad model drops this look for this frame only.
@@ -11082,6 +11146,8 @@ DWORD WINAPI run(void*) {
                         const mesh_model::Mesh* suitMesh = nullptr;
                         const suit_wear::Rig* suitRig = nullptr;
                         bool suitWorn = false;
+                        suit_wear::BoneMove clawMoves[suit_wear::bones]; // 0.0.73 test 5 CLAW BONE: the suit's bones now
+                        bool clawMovesOk = false;
                         if (const uint32_t ws = wornSuitSlot.load(); !saved->flatScreen && mesh_model::slotIsSuit(ws) &&
                                                                      overlay.modelReady() && validTrackedPose(rendered.headPose)) {
                             const auto suitStart = std::chrono::steady_clock::now();
@@ -11099,6 +11165,15 @@ DWORD WINAPI run(void*) {
                                     fly_lean::leanSuit(saved->flyLean, t.eye, t.up, t.feet);
                                     t.eyeForward = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
                                     t.eyeUp = rendered.headPose.orientation.rotate(Vec3{0, 1, 0});
+                                    // 0.0.73 test 5 HERO HANDS (iron_hands ON): the suit's own hand profile (IRON MAN's
+                                    // MARKs; every other suit's is the shared one - test 4's hands exactly)
+                                    t.heroHands = saved->heroHands;
+                                    const suit_wear::HandProfile& handsNow = suit_wear::handsOf(*suitRig, t.heroHands);
+                                    static auto raiseClock = std::chrono::steady_clock::now();
+                                    static float raiseNow[2]{};
+                                    const auto raiseAt = std::chrono::steady_clock::now();
+                                    const float raiseDt = std::clamp(std::chrono::duration<float>(raiseAt - raiseClock).count(), 0.f, .1f);
+                                    raiseClock = raiseAt;
                                     for (unsigned i = 0; i < 2; ++i) {
                                         t.hand[i] = rendered.swing.hands[i].tracked && validTrackedPose(rendered.grips[i]);
                                         t.grip[i] = rendered.grips[i].position + travel;
@@ -11108,8 +11183,24 @@ DWORD WINAPI run(void*) {
                                         // tilt) and the FIST: the trigger or the grip held, or a prop in this hand
                                         t.gripUp[i] = rendered.grips[i].orientation.rotate(Vec3{0, 1, 0});
                                         t.handleTiltDeg[i] = baton_grip::handleTiltDeg(runtime.controllers()[i]);
+                                        // 0.0.73 test 5 HERO HANDS: IRON MAN's raised (or firing) hand eased palm out along
+                                        // the blast (about a sixth of a second in and out), fingers up; else fix 15's turn.
+                                        const bool raiseWanted = handsNow.palmRaise && saved->repulsorLook && saved->palmRaise[i] > 0;
+                                        raiseNow[i] = handsNow.palmRaise && saved->repulsorLook
+                                                          ? suit_wear::easeToward(raiseNow[i], raiseWanted ? 1.f : 0.f, raiseDt, .16f)
+                                                          : 0.f;
+                                        static Vec3 raiseAim[2]{};
+                                        if (raiseWanted)
+                                            raiseAim[i] = saved->palmRaiseAim[i];
+                                        bool raisedDrawn = false;
+                                        if (raiseNow[i] > 0 && finite(raiseAim[i]) && length(raiseAim[i]) > .5f) {
+                                            repulsor::PalmFrame pf;
+                                            if (repulsor::palmFrame(raiseAim[i], t.up, i, pf))
+                                                raisedDrawn = suit_wear::blendGrip(t.gripForward[i], t.gripX[i], t.gripUp[i], t.handleTiltDeg[i],
+                                                                                   pf.forward, pf.x, pf.up, raiseNow[i]);
+                                        }
                                         // Version 0.0.73 (fix 15): IRON MAN firing - the palm turned to the aim.
-                                        if (saved->palmPose[i] > 0 && saved->repulsorLook) {
+                                        if (!raisedDrawn && !handsNow.palmRaise && saved->palmPose[i] > 0 && saved->repulsorLook) {
                                             repulsor::PalmFrame pf;
                                             if (repulsor::palmFrame(saved->palmPoseAim[i], t.up, i, pf)) {
                                                 t.gripForward[i] = pf.forward;
@@ -11119,9 +11210,11 @@ DWORD WINAPI run(void*) {
                                             }
                                         }
                                         const auto& sh = rendered.swing.hands[i];
-                                        float want = std::max({sh.trigger, sh.grip, sh.wallGrip});
-                                        if (saved->batonHeld[i] || (i == 1 && saved->hero072.hammerInHand))
-                                            want = 1.f;
+                                        // the fingers: the profile's curl (the shared profile: the most of trigger, grip
+                                        // and wall grip, a held prop a fist - test 4's); IRON MAN's hand opens flat raised
+                                        const bool propHeld = saved->batonHeld[i] || (i == 1 && saved->hero072.hammerInHand);
+                                        float want = suit_wear::handCurl(handsNow, sh.trigger, sh.grip, sh.wallGrip, propHeld, raiseWanted);
+                                        t.open[i] = suit_wear::handOpen(handsNow, sh.grip, propHeld, raiseWanted);
                                         t.fistFit[i] = saved->batonFist[i]; // 0.0.73 DD BATON: the fist round the baton
                                         static float curlNow[2]{};
                                         want = std::isfinite(want) ? std::clamp(want, 0.f, 1.f) : 0.f;
@@ -11139,8 +11232,15 @@ DWORD WINAPI run(void*) {
                                     const uint32_t mask = suit_wear::partBones(suit_wear::firstPersonPart(
                                         suit_wear::partOf(c38(combat38::suitBody)), hero_modes::gameBodyShown(heroNow()), saved->bodyWanted));
                                     // skinned only when something shows it (SUIT BODY on, or the mirror up): else no cost
-                                    suitWorn = (mask || (mirrorOn.load() && !mirrorReuse)) && suit_wear::estimate(*suitRig, t, live) &&
-                                               suit_wear::moves(*suitRig, live, mv) && suit_wear::skin(*suitRig, mv, suitSkinned);
+                                    // (and posed for the CLAW BONE claws even with nothing of the suit shown: no skin then)
+                                    const bool skinWanted = mask || (mirrorOn.load() && !mirrorReuse);
+                                    const bool posed = (skinWanted || clawLater[0] || clawLater[1]) && suit_wear::estimate(*suitRig, t, live) &&
+                                                       suit_wear::moves(*suitRig, live, mv);
+                                    suitWorn = skinWanted && posed && suit_wear::skin(*suitRig, mv, suitSkinned);
+                                    if (posed && (clawLater[0] || clawLater[1])) {
+                                        std::copy(mv, mv + suit_wear::bones, clawMoves);
+                                        clawMovesOk = true;
+                                    }
                                     // Test build 12 CAPE: the cape hangs from the torso, and fans out while gliding (eased:
                                     // about a fifth of a second in, a third out)
                                     static float capeSpread = 0;
@@ -11163,6 +11263,25 @@ DWORD WINAPI run(void*) {
                             const float us = std::chrono::duration<float, std::micro>(std::chrono::steady_clock::now() - suitStart).count();
                             suitMean = suitMean > 0 ? suitMean * .98f + us * .02f : us;
                             suitWearMicros = static_cast<uint32_t>(suitMean + .5f);
+                        }
+                        // 0.0.73 test 5 CLAW BONE: the claws left out above, out of the drawn fist (or by the grip).
+                        for (unsigned i = 0; i < 2; ++i) {
+                            if (!clawLater[i])
+                                continue;
+                            try {
+                                hero007::Item it = saved->hero007.held[i];
+                                it.at = it.at + travel;
+                                const mesh_model::Mesh& claws = *saved->hero007.clawModel[it.side];
+                                bool drawn = false;
+                                if (clawMovesOk && suitRig && suitRig->ok) {
+                                    hero007::ClawBone cb;
+                                    cb.ok = suit_wear::clawPlace(*suitRig, clawMoves, static_cast<int>(it.side), cb.root, cb.way, cb.back);
+                                    drawn = cb.ok && hero007::appendClawBone(vertices, it.spin, cb, claws, viewer);
+                                }
+                                if (!drawn)
+                                    hero007::appendClawSteel(vertices, it, claws, viewer);
+                            } catch (...) { // out of memory: no claws this frame, never a crash
+                            }
                         }
                         if (!saved->flatScreen && mirrorOn.load() && validTrackedPose(rendered.headPose)) {
                             static vr_mirror::Placement mirrorPlace;
@@ -12928,6 +13047,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdBatonTip(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerSmooth(void* v) { return setHero007(v, combat38::streamerSmooth, 5451); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerEye(void* v) { return setHero007(v, combat38::streamerEye, 5452); }
+// 0.0.73 test 5: IRON MAN HERO HANDS, DAREDEVIL GRAPPLE AIM, WOLVERINE CLAW LOOK - ON (0) or OFF (1), live (live.txt
+// iron_hands, dd_grapple_aim, wolverine_claws). 5461: the MP solo test's.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyIronHands(void* v) { return setHero007(v, combat38::ironHands, 5462); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdGrappleAim(void* v) { return setHero007(v, combat38::ddGrappleAim, 5463); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWolverineClaws(void* v) { return setHero007(v, combat38::wolverineClaws, 5464); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMirrorRecentre(void*) {
     mirrorRecentreAsked = true;
     return 0;

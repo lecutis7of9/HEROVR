@@ -291,6 +291,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5450'), ['SpidyStreamerMode'])  # 0.0.73 STREAMER MODE (5449: mp-solo-test's MP SOLO TEST)
         self.assertEqual(uses.get('5451'), ['SpidyStreamerSmooth'])
         self.assertEqual(uses.get('5452'), ['SpidyStreamerEye'])
+        self.assertEqual(uses.get('5462'), ['SpidyIronHands'])  # 0.0.73 test 5 HERO HANDS (5461: MP SOLO TEST)
+        self.assertEqual(uses.get('5463'), ['SpidyDdGrappleAim'])
+        self.assertEqual(uses.get('5464'), ['SpidyWolverineClaws'])
 
 
 class Hero073Image(unittest.TestCase):

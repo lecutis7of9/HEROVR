@@ -57,7 +57,7 @@ public:
             const bool wasSpidy = known_ && spidy_;
             known_ = true;
             spidy_ = wantSpidy;
-            owned_ = gaveUp_ = false;
+            owned_ = gaveUp_ = unavailableGaveUp_ = retryNewEyes_ = sawNoEyes_ = false;
             if (!wantSpidy) {
                 s.note = "GAME TAA: OFF (EYE AA, IMAGE's look)";
                 if (wasSpidy) { // back to IMAGE's picture
@@ -82,19 +82,47 @@ public:
         }
         if (owned_) { // it was on and went off
             owned_ = false;
+            lastOff_ = reason;
             if (reason == et::vrEnded || reason == et::noEyes)
                 return s; // a new VR start tries again
             gaveUp_ = true;
+            // 0.0.73 test 5: test 4's two ENGINE TAA OFFs were "as asked" (reason none: a press) and
+            // it never came back. A press or lost targets now hold only while these eyes live: the
+            // next eyes (after a menu, cutscene or loading) try again. A halved frame rate holds for
+            // the session (it would stutter again); GAME TAA OFF is the switch-off.
+            retryNewEyes_ = reason != et::slow;
+            sawNoEyes_ = unavailableGaveUp_ = false;
             s.eyeAaOn = !eyeAaOn;
             s.note = reason == et::slow ? "GAME TAA SPIDYVR: ENGINE TAA off (frame rate halved), EYE AA instead"
                          : reason == et::targetsGone ? "GAME TAA SPIDYVR: ENGINE TAA lost its targets, EYE AA instead"
-                                                     : "GAME TAA SPIDYVR: ENGINE TAA turned off, EYE AA instead";
+                                                     : "GAME TAA SPIDYVR: ENGINE TAA turned off by a press (ENGINE TAA or EYE AA), EYE AA "
+                                                       "until the next menu or cutscene (GAME TAA OFF keeps it off)";
             return s;
         }
-        if (gaveUp_)
+        if (gaveUp_) {
+            if (blocked == et::noEyes) {
+                sawNoEyes_ = sawNoEyes_ || retryNewEyes_;
+                return s;
+            }
+            // 0.0.73 test 5: "unavailable" read once (at the eyes' making, before their targets show)
+            // is not forever: once nothing blocks it (both eyes have the TAA targets, so no restart
+            // is needed after all), it tries again. A real block never clears, so this never flaps.
+            if (blocked == et::none && unavailableGaveUp_) {
+                s.note = "GAME TAA SPIDYVR: the block cleared (both eyes have the TAA targets), ENGINE TAA again";
+            } else if (blocked == et::none && sawNoEyes_) {
+                s.note = "GAME TAA SPIDYVR: new eyes, ENGINE TAA again";
+            } else {
+                return s;
+            }
+            gaveUp_ = unavailableGaveUp_ = sawNoEyes_ = retryNewEyes_ = false;
+            s.tryOn = true;
             return s;
+        }
         if (state == et::unavailable && (et::needsRestart(reason) || reason == et::maskDiffers)) {
             gaveUp_ = true;
+            unavailableGaveUp_ = true;
+            retryNewEyes_ = sawNoEyes_ = false;
+            lastOff_ = reason;
             s.note = reason == et::gameAa
                              ? "GAME TAA SPIDYVR: set the game's Anti-Aliasing to TAA (or DLAA) and restart; EYE AA until then"
                          : reason == et::notPrepared
@@ -109,8 +137,12 @@ public:
     void tried(bool on) { owned_ = owned_ || on; }
     bool owned() const { return owned_; }
     bool gaveUp() const { return gaveUp_; }
+    // The engine_taa::Reason of the last off it saw or gave up on (none: a press), for the log.
+    uint32_t lastOff() const { return lastOff_; }
 
 private:
     bool known_{}, spidy_{}, owned_{}, gaveUp_{};
+    bool unavailableGaveUp_{}, retryNewEyes_{}, sawNoEyes_{};
+    uint32_t lastOff_{};
 };
 } // namespace spidy::image_style

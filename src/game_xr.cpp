@@ -1114,6 +1114,7 @@ uint32_t eyeAaNow() {
 // Update 34: ENGINE TAA's FPS guard is armed by the frame loop (it has the time).
 std::atomic<bool> engineTaaArm{};
 std::atomic<bool> farShadowsArm{}; // Update 35: FAR SHADOWS' own FPS guard, the same way
+void consoleLine(const std::string& text) noexcept; // below
 void pressEyeAa() {
     const uint32_t s = eyeAaNow();
     if ((s & 0xff) == eye_taa::on) {
@@ -1122,8 +1123,11 @@ void pressEyeAa() {
         OutputDebugStringA("EYE AA: off\n");
     } else if ((s & 0xff) == eye_taa::off) {
         // Update 34: one anti-aliasing at a time: EYE AA on turns ENGINE TAA off.
-        if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on)
+        if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on) {
             SpidyEngineTaa(nullptr);
+            // 0.0.73 test 5: test 4's console showed only "ENGINE TAA: OFF"; say which press did it.
+            consoleLine("ENGINE TAA: off by the EYE AA press (one anti-aliasing at a time)");
+        }
         if (native_gpu::setEyeTemporal(true)) {
             eyeAaState = eye_taa::pack(eye_taa::on, 0);
             OutputDebugStringA("EYE AA: on\n");
@@ -1139,6 +1143,7 @@ void pressEyeAa() {
 void pressEngineTaa() {
     if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on) {
         SpidyEngineTaa(nullptr);
+        consoleLine("ENGINE TAA: off by the ENGINE TAA press");
         return;
     }
     if (SpidyEngineTaa(reinterpret_cast<void*>(uintptr_t{1})) != 0)
@@ -10215,12 +10220,11 @@ DWORD WINAPI run(void*) {
                                 styleTick = nowTick;
                                 const bool eyeAaOn = (eyeAaNow() & 0xff) == eye_taa::on;
                                 const auto step = styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn);
-                                if (step.note) {
-                                    OutputDebugStringA(step.note);
-                                    OutputDebugStringA("\n");
-                                }
+                                if (step.note) // 0.0.73 test 5: in the console and the export, not only the debugger
+                                    consoleLine(step.note);
                                 if (step.engineOff) {
                                     SpidyEngineTaa(nullptr);
+                                    consoleLine("ENGINE TAA: off by GAME TAA OFF");
                                     engine = SpidyEngineTaaNow();
                                     previous = engine; // a style change, not a failure: no plan B press
                                 }

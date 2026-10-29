@@ -42,3 +42,19 @@ the presses to the player (IMAGE HERO VR CLASSIC + GAME TAA OFF = test 3's pictu
 - Mip bias 0 vs the game's own ('game').
 - Frame rate with the game's TAA per eye vs the removed FXAA/history/CAS passes.
 - The game's own sharpening setting (SpidyVR used lowest; untouched).
+
+## Test 4: "GAME TAA SPIDYVR engaged for about 100 frames, twice" (October 28)
+
+- CONFIRMED (test 4 console, lines 70-74): ENGINE TAA was ON for about 3 s at about 103 s and again at about
+  115 s. Each time the next line was "ENGINE TAA: OFF" with no reason. That is reason none: an explicit off
+  (an ENGINE TAA press, an EYE AA press while on, or GAME TAA -> OFF). It was not the frame-rate guard (slow), not
+  targetsGone and not vrEnded, and refused was 0. IMAGE preset presses were logged nearby.
+- CONFIRMED (code): after any off it did not cause itself, the Controller set gaveUp_ for the rest of the session.
+  It also never auto-engaged from the start of gameplay until about 103 s, although image_style was spidyvr.
+- CANDIDATE: a transient "unavailable" (gameAa / notPrepared) read once at eye creation was taken as permanent.
+- Fix (test 5): an off by a press holds while the same eyes live, and ENGINE TAA comes back with new eyes (after
+  a menu or a cutscene). targetsGone does the same. An "unavailable" give-up is retried when the block clears.
+  slow (frame rate halved) stays off for the session. GAME TAA OFF never tries. The console now says which press
+  turned it off ("ENGINE TAA: off by the EYE AA press" / "by the ENGINE TAA press" / "by GAME TAA OFF"). The
+  Controller's notes go to the console and the export, not only to the debugger. Test: core_tests "0.0.73 test 5
+  GAME TAA SPIDYVR".

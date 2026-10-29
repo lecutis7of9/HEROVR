@@ -29367,6 +29367,45 @@ int main() {
                   offsetof(sw::Data, sequence) == 1224,
               "the SLWT record's layout (tools/update37_records.py parse_sl_watch)");
     });
+    test("0.0.73 test 5 GAME TAA SPIDYVR: a press or an early block no longer turns it off for good", [] {
+        namespace et = spidy::engine_taa;
+        namespace is = spidy::image_style;
+        const uint32_t off = et::pack(et::off, et::none), on = et::pack(et::on, et::none);
+        // Test 4: on, then off by a press ("as asked"), and never again in that session.
+        is::Controller c;
+        auto s = c.update(is::spidyvr, off, et::none, true);
+        check(s.tryOn, "SPIDYVR did not try ENGINE TAA when nothing blocked it");
+        c.tried(true);
+        s = c.update(is::spidyvr, on, et::none, false);
+        check(s.clean && c.owned(), "on was not SpidyVR's clean picture");
+        s = c.update(is::spidyvr, off, et::none, false);
+        check(c.gaveUp() && s.eyeAaOn && !s.tryOn && c.lastOff() == et::none, "a press off did not hand over to EYE AA");
+        s = c.update(is::spidyvr, off, et::none, true);
+        check(!s.tryOn, "a press off was undone while the same eyes live");
+        s = c.update(is::spidyvr, off, et::noEyes, true); // a menu or cutscene: the eyes go
+        check(!s.tryOn, "tried with no eyes");
+        s = c.update(is::spidyvr, off, et::none, true); // new eyes with their targets
+        check(s.tryOn && !c.gaveUp() && s.note, "new eyes did not bring ENGINE TAA back");
+        // A halved frame rate holds for the session, new eyes or not.
+        c.tried(true);
+        c.update(is::spidyvr, on, et::none, false);
+        c.update(is::spidyvr, et::pack(et::off, et::slow), et::none, false);
+        c.update(is::spidyvr, off, et::noEyes, true);
+        s = c.update(is::spidyvr, et::pack(et::off, et::slow), et::none, true);
+        check(!s.tryOn && c.gaveUp() && c.lastOff() == et::slow, "a halved frame rate was retried");
+        // "unavailable" read once at the eyes' making (before their targets show) is not forever.
+        is::Controller early;
+        s = early.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
+        check(early.gaveUp() && !s.tryOn && s.note, "a restart block was not shown");
+        s = early.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
+        check(!s.tryOn, "a real block was tried");
+        s = early.update(is::spidyvr, off, et::none, true);
+        check(s.tryOn && !early.gaveUp(), "the cleared block was not retried");
+        // GAME TAA OFF is the switch-off: never tries.
+        is::Controller offStyle;
+        s = offStyle.update(is::gameTaaOff, off, et::none, true);
+        check(!s.tryOn && !offStyle.update(is::gameTaaOff, off, et::none, true).tryOn, "GAME TAA OFF tried");
+    });
     test("Version 0.0.73: DD BATON fist - fistFit off leaves test 3's hand exactly, on moves only the held hand", [] {
         namespace mm = spidy::mesh_model;
         namespace sw = spidy::suit_wear;

@@ -2,6 +2,7 @@
 // Version 0.0.7 BATARANG STYLE: the strict glTF 2.0 reader (mesh_model.hpp).
 #include "spidy/mesh_model.hpp"
 #include "spidy/car_paint.hpp"
+#include "spidy/cabin_look074.hpp"
 
 #include "spidy/calibration_art.hpp"
 
@@ -574,6 +575,26 @@ struct Doc {
         };
         return {byte(mf, 0.f), byte(rf, 1.f)};
     }
+    // 0.0.74 test 3 COCKPIT GLOW: the material's role (cabin_look::roleOf: its name, else its emissive strength).
+    uint8_t materialRole(const Json* index) {
+        const Json* list = root.get("materials");
+        const Json* m = index && index->isInt() && list ? list->at(static_cast<size_t>(index->num)) : nullptr;
+        if (!m)
+            return 0;
+        std::string name;
+        if (const Json* n = m->get("name"); n && n->kind == Json::string)
+            name = n->text;
+        float e = -1, f[3];
+        if (numbers(m->get("emissiveFactor"), f, 3) && std::isfinite(f[0] + f[1] + f[2])) {
+            e = std::max({f[0], f[1], f[2]});
+            const Json* ext = m->get("extensions");
+            const Json* es = ext ? ext->get("KHR_materials_emissive_strength") : nullptr;
+            const Json* k = es ? es->get("emissiveStrength") : nullptr;
+            if (k && k->kind == Json::number && std::isfinite(k->num))
+                e *= static_cast<float>(std::clamp(k->num, 0.0, 100.0));
+        }
+        return cabin_look::roleOf(name, e);
+    }
     bool mesh(uint32_t index, const Mat& world) {
         const Json* list = root.get("meshes");
         const Json* m = list ? list->at(index) : nullptr;
@@ -604,6 +625,7 @@ struct Doc {
                 return refuse(error, "a triangle list not a multiple of 3");
             const Vec3 color = materialColor(prim.get("material"));
             const std::pair<uint8_t, uint8_t> paintOf = materialPaint(prim.get("material"));
+            const uint8_t roleHere = materialRole(prim.get("material"));
             std::vector<Vec3> painted; // COLOR_0: each triangle the mean of its corners (x the material's factor)
             if (const Json* col = attrs->get("COLOR_0")) {
                 if (!col->isInt() || !colorAccessor(static_cast<uint32_t>(col->num), points.size(), painted))
@@ -669,6 +691,7 @@ struct Doc {
                 const bool paintable = image < 0 && painted.empty() && paintOf.first >= static_cast<uint8_t>(car_paint::paintFrom * 255.f);
                 out.paint.push_back(paintable ? paintOf.first : uint8_t{0});
                 out.paint.push_back(paintable ? paintOf.second : uint8_t{0});
+                out.role.push_back(roleHere);
                 if (painted.empty()) {
                     out.colors.push_back(image >= 0 ? tint : color);
                 } else {
@@ -796,6 +819,9 @@ bool finish(Mesh& out, std::string& error) {
     if (out.paint.size() != size_t{out.triangles()} * 2 ||
         std::none_of(out.paint.begin(), out.paint.end(), [](uint8_t b) { return b != 0; })) // 0.0.74 test 2: none painted
         out.paint.clear();
+    if (out.role.size() != size_t{out.triangles()} ||
+        std::none_of(out.role.begin(), out.role.end(), [](uint8_t b) { return b != 0; })) // 0.0.74 test 3: none has one
+        out.role.clear();
     if (!out.hasSkin()) { // Build 9 SUITS: a primitive without its skin (or a bad one): none worn
         out.skinJoints.clear();
         out.skinWeights.clear();
@@ -923,6 +949,8 @@ bool decimate(Mesh& mesh, uint32_t most) {
             next.colors.push_back(mesh.colors[t]);
             if (mesh.paint.size() == size_t{mesh.triangles()} * 2) // 0.0.74 test 2 CAR PAINT: kept with its triangle
                 next.paint.insert(next.paint.end(), {mesh.paint[t * 2], mesh.paint[t * 2 + 1]});
+            if (mesh.role.size() == size_t{mesh.triangles()}) // 0.0.74 test 3 COCKPIT GLOW: kept with its triangle
+                next.role.push_back(mesh.role[t]);
             if (mesh.hasUvs()) { // Version 0.0.72: each kept triangle keeps its corners' UVs, normals, image
                 next.uvs.insert(next.uvs.end(), mesh.uvs.begin() + t * 6, mesh.uvs.begin() + t * 6 + 6);
                 next.image.push_back(mesh.image[t]);
@@ -1023,6 +1051,10 @@ Status Library::load(uint32_t style, const std::string& modelsRoot) {
     status[style] = loadFolder(modelsRoot + slotFolders[style] + "/", slotMayDecimate[style], meshes[style], error[style], slotDrawCap[style]);
     if (status[style] == loaded && !slotIsPaintable(style)) // 0.0.74 test 2 CAR PAINT: the Batmobile bodies only
         meshes[style].paint.clear();
+    if (status[style] == loaded && !slotIsBatmobile(style)) // 0.0.74 test 3: roles for the Batmobile models only
+        meshes[style].role.clear();
+    if (status[style] == loaded)
+        meshes[style].cabin = slotIsCabin(style);
     if (status[style] == loaded)
         makeLite(meshes[style], slotMayDecimate[style]);
     return status[style];

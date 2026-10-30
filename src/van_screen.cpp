@@ -2,6 +2,7 @@
 // Made by Agent Mulder.
 // Version 0.0.73 test 3 VAN SCREEN (van_screen.hpp).
 #include "spidy/van_screen.hpp"
+#include "spidy/finger_ray074.hpp"
 #include "spidy/overlay_text.hpp"
 #include "spidy/soft_shapes.hpp"
 #include "spidy/test_notice.hpp"
@@ -664,7 +665,28 @@ void Screen::targetAt(Vec3 f, uint32_t page, const Offer& offer, int& tab, int& 
 
 bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit) { return rayOnFace(from, dir, hit, mountAt, faceScale); }
 
-bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale) {
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale) { return rayOnFace(from, dir, hit, at, scale, raySlack); }
+
+Vec3 snapToButton(Vec3 f, uint32_t page, const Offer& offer) {
+    if (!van072::fine(f))
+        return f;
+    f = {std::clamp(f.x, -W, W), std::clamp(f.y, -H, H), 0};
+    if (f.y >= H - tabHeight || !(page == music || page == home || (page == map && offer.crimePopup)))
+        return f;
+    Button b[8];
+    const uint32_t n = buttons(page, offer, b);
+    finger_ray::Box box[8];
+    for (uint32_t k = 0; k < n && k < 8; ++k)
+        box[k] = {b[k].x0, b[k].y0, b[k].x1, b[k].y1};
+    float cx = f.x, cy = f.y;
+    if (finger_ray::snap(f.x, f.y, box, std::min<uint32_t>(n, 8), finger_ray::dashSnap, cx, cy) >= 0)
+        f = {cx, cy, 0};
+    return f;
+}
+
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale, float slack) {
+    if (!ok(slack) || slack < 0 || slack > .2f)
+        slack = raySlack;
     hit = {};
     if (!van072::fine(at) || !ok(scale) || scale < .5f || scale > 2.f)
         return false;
@@ -683,7 +705,7 @@ bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale) {
     if (!ok(t) || t * scale > rayReach)
         return false;
     const Vec3 h = f0 + df * t;
-    if (!van072::fine(h) || std::abs(h.x) > W + raySlack || std::abs(h.y) > H + raySlack)
+    if (!van072::fine(h) || std::abs(h.x) > W + slack || std::abs(h.y) > H + slack)
         return false;
     hit = {std::clamp(h.x, -W, W), std::clamp(h.y, -H, H), 0};
     return true;
@@ -727,12 +749,12 @@ bool Screen::step(const In& in) {
         }
         // 0.0.74 test 2 DASH POINTER: the fingertip, out along the aim from the grip pose.
         Vec3 touchAt = in.hand[i];
-        if (in.pointer && van072::fine(in.aim[i])) {
+        if (in.pointer && !in.finger && van072::fine(in.aim[i])) { // FINGER RAY: the hand is the tip
             const float an = length(in.aim[i]);
             if (ok(an) && an > .5f)
                 touchAt = in.hand[i] + in.aim[i] * (fingerReach / an);
         }
-        const Vec3 f = onFace(touchAt, at_, scale_);
+        Vec3 f = onFace(touchAt, at_, scale_);
         // In the face's box, from just in front to a little through it (a poke goes in).
         const bool near = van072::fine(f) && f.z <= pokeDepth && f.z >= -pokeThrough && std::abs(f.x) <= W + pokeSlack &&
                           std::abs(f.y) <= H + pokeSlack;
@@ -741,6 +763,11 @@ bool Screen::step(const In& in) {
         const bool pointing = in.pointer && tr < rayRelease;
         const bool open = ok(in.grip[i]) && (in.grip[i] < pokeGripMost || pointing) && !in.onWheel[i];
         hover_ |= near && open;
+        if (near && in.finger) // FINGER RAY: the touch snaps to the nearest button
+        {
+            const Vec3 sn = snapToButton(f, page_, offer_);
+            f = Vec3{sn.x, sn.y, f.z};
+        }
         if (near && open && in.pointer) {
             cursorOn_ = true;
             cursor_ = {std::clamp(f.x, -W, W), std::clamp(f.y, -H, H), 0};
@@ -751,7 +778,10 @@ bool Screen::step(const In& in) {
         near_[i] = near; // a hand already in (or gripping in) must come out first
         // RAY POKE: the free hand pointed at the face (not already touching it); a fresh trigger pages it there.
         Vec3 hit{};
-        if (in.ray && !near && !in.onWheel[i] && rayOnFace(in.hand[i], in.aim[i], hit, at_, scale_)) {
+        if (in.ray && !near && !in.onWheel[i] &&
+            rayOnFace(in.hand[i], in.aim[i], hit, at_, scale_, in.finger ? finger_ray::dashSlack : raySlack)) {
+            if (in.finger) // FINGER RAY: the cursor (and the press) snap to the nearest button
+                hit = snapToButton(hit, page_, offer_);
             aimed_[i] = true;
             hover_ = true;
             if (in.pointer && !cursorOn_) {

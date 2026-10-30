@@ -60,6 +60,12 @@ struct Look {
     // (roofLow..roofHigh in the car's frame: x right, y up, -z forward, from vanAt). Null: none drawn.
     const mesh_model::Mesh* vanRoof{};
     Vec3 roofLow{}, roofHigh{};
+    // 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp): the cockpit and its wheel drawn only while the eye is in the
+    // car's box (insideLow..insideHigh, the roof box's frame) when insideOnly; the handle marker (world; alpha 0: none).
+    bool insideOnly{};
+    Vec3 insideLow{}, insideHigh{};
+    Vec3 handleMarkAt{}, handleMarkOut{1, 0, 0};
+    float handleMarkAlpha{};
     // Lightning: each bolt from -> to, jagged by its seed.
     uint32_t bolts{};
     Vec3 boltFrom[boltsMost]{}, boltTo[boltsMost]{};
@@ -164,7 +170,8 @@ inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1
                         charge = 2600, ring = 200, hud = 9000;
 // RAGE BLOOD: drops are one soft bar each (54), pools a soft disc (10 segments) - drawn until full.
 inline constexpr size_t blood = 16000, spray = 2600, shock = 1200, hook = 1200, perch = 900, rope = 400;
+inline constexpr size_t marker = 400; // 0.0.74 test 3 DASH INSIDE: the handle's ring
 inline constexpr size_t frame = hammer + boltsMost * bolt + beam + bubble + chain + fist + charge + 2 * ring + hud +
-                                blood + spray + shock + hook + perch + rope;
+                                blood + spray + shock + hook + perch + rope + marker;
 } // namespace budget
 } // namespace spidy::hero072

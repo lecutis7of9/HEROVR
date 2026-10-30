@@ -323,6 +323,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5506'), ['SpidyJitterGuard'])  # 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
         self.assertEqual(uses.get('5507'), ['SpidyWheelFirst'])  # 0.0.74 test 3 WHEEL FIRST (van072.hpp)
         self.assertEqual(uses.get('5508'), ['SpidyCaveQuiet'])  # 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp)
+        self.assertEqual(uses.get('5509'), ['SpidyFingerRay'])  # 0.0.74 test 3 FINGER RAY (finger_ray074.hpp)
+        self.assertEqual(uses.get('5510'), ['SpidyDashInside'])  # 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp)
+        self.assertEqual(uses.get('5511'), ['SpidyCockpitGlow'])  # 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
 
 
 class Hero073Image(unittest.TestCase):

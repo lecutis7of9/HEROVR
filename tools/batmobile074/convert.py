@@ -14,7 +14,8 @@ which, outdir = argv[0], argv[1]
 BM = '/workspace/hero-0.0.72/batmobile'
 SPECS = {
  '01': dict(src='dl/dreamloft/Bat-Mobile_(1989).obj', tex='', s=1, r=(0,0,0), hide=[], glass=[], glassify=[], cut=[],
-            L=(0,0.07,0.1), k=0.92, tris=110000, folder='1989', colors=False),
+            L=(0,0.07,0.1), k=0.92, tris=110000, folder='1989', colors=False,
+            restore=dict(glass=['Windows'], head=0.22, wheel=0.26)),
  '07': dict(src='dl/07_odami/scene.gltf', tex='dl/07_odami', s=0.01, r=(0,0,0), hide=['Material__90','Material__53','Material__54'],
             glass=[], glassify=[], cut=[], L=(0,0,0.03), k=1.0, tris=110000, folder='ODAMI', colors=False),
  '09': dict(src='dl/09_sorrow/scene.gltf', tex='', s=0.001, r=(0,0,0), hide=['Object_2','Object_3','Object_4','Object_5','Object_18','Object_68','Object_67','Object_65'],
@@ -30,6 +31,12 @@ PAINT = {'01': {'Base_Color': (0.03, 0.40, 0.42), 'Back_Things': (0.06, 0.35, 0.
 # z from 0.05 under the floor to the roof line (everything above, the car's full height).
 CAB = dict(x=0.76, y0=-1.12, y1=0.60, z0=-0.05)
 OUTSIDE_WHOLE = True   # test 2b: the cut cabin faces go to Roof (outside only), not the bin
+# test 3 (owner, item 4): the 1989's roof, canopy frame and pillars go BACK into the body (drawn seated too); only the
+# glass (material 'Windows', so the windshield stays see-through seated) and whatever comes within `head` m of the
+# eye or `wheel` m of the steering hub stays in the exterior-only Roof piece. RESTORE_ROOF=False = test 2b.
+RESTORE_ROOF = True
+COCKPIT_PAINT = {'BC_Carbon': (0.03, 0.45, 0.38)}   # base (linear), metallic, roughness: satin black metallic
+DASH_TRIM = 0.03   # the dash top 0.82 -> 0.79 (the passenger screen moves down with it)
 BELT = 0.80   # beltline (cockpit-local z): the dash top is 0.82, the door trim 0.80
 EYE = (0.37, 0.25, 1.14)   # test 2: 0.12 higher and 0.07 further back than test 1 (0.37, 0.18, 1.02)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -119,7 +126,17 @@ def pad(name, centre, size, colour):
 if which == 'cockpit':
     bpy.ops.wm.open_mainfile(filepath=os.path.join(outdir, '..', 'cockpit_game.blend') if os.path.exists(os.path.join(outdir, '..', 'cockpit_game.blend')) else '/workspace/hero-0.0.74/batconv/out/cockpit_game.blend')
     sc = bpy.context.scene
-    for m in bpy.data.materials: simplify(m, size=512)
+    # test 3 (owner, item 4): satin black metallic instead of the carbon zigzag texture; the dash top 0.03 lower
+    for m in bpy.data.materials: simplify(m, size=512, paint=COCKPIT_PAINT.get(m.name))
+    for m in bpy.data.materials:
+        if m.name in COCKPIT_PAINT:
+            for n in [n for n in m.node_tree.nodes if n.type == 'TEX_IMAGE']: m.node_tree.nodes.remove(n)
+    for o in meshes():
+        if o.name == 'Dash':   # squash the top of the dash body: z .66 .. .82 -> .66 .. .82-DASH_TRIM
+            for v in o.data.vertices:
+                if v.co.z > 0.66: v.co.z = 0.66 + (v.co.z - 0.66) * (0.16 - DASH_TRIM) / 0.16
+        elif o.name in ('DashTop', 'ScreenBezel_P', 'Screen_Passenger'):
+            for v in o.data.vertices: v.co.z -= DASH_TRIM
     flatten(None)
     wheelnames = ('SteeringRim', 'SteeringHub', 'SteeringHubCap', 'SteeringSpoke_')
     wheel = [o for o in meshes() if o.name.startswith(wheelnames)]
@@ -271,7 +288,9 @@ cab_lo = L + V((-CAB['x'], CAB['y0'], CAB['z0'])); cab_hi = L + V((CAB['x'], CAB
 belt = L.z + BELT
 # above the beltline over the cabin's length, the car's full width (side windows, canopy sides, pillars)
 roof_lo = V((-50, L.y + CAB['y0'], belt)); roof_hi = V((50, L.y + CAB['y1'], TOP))
-roofobjs = []; deleted = moved = 0
+roofobjs = []; deleted = moved = 0; restored = [0]
+from mathutils.geometry import closest_point_on_tri
+def closest(p, a, b, c): return (closest_point_on_tri(p, a, b, c) - p).length
 for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.triangulate(bm, faces=bm.faces[:])
     kill, roof = [], []
@@ -292,6 +311,19 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     # test 2b (owner pt1208u screenshot: a black hole and missing panels from outside): the cut faces are not deleted
     # any more - they go to the exterior-only Roof piece too, so from outside the car is whole (body + Roof = the
     # source car) and seated the cockpit volume is still clear (Roof is not drawn while inside).
+    back = []
+    R = S.get('restore') if RESTORE_ROOF else None
+    if R:
+        hub_b = L + V((0.36, -0.33, 0.74))
+        mats = o.data.materials
+        for f in keep_roof:
+            mn_ = mats[f.material_index].name if len(mats) and mats[f.material_index] else ''
+            if any(g.lower() in mn_.lower() for g in R['glass']): continue
+            pts = [l.vert.co.copy() for l in f.loops]
+            if closest(eye_b, *pts) < R['head'] or closest(hub_b, *pts) < R['wheel']: continue
+            back.append(f)
+        bk = set(f.index for f in back); keep_roof = [f for f in keep_roof if f.index not in bk]
+        restored[0] += len(back)
     if OUTSIDE_WHOLE: keep_roof += kill; kill = []
     deleted += len(kill); moved += len(keep_roof)
     if keep_roof:
@@ -304,7 +336,7 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     bm.faces.ensure_lookup_table()
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.index in gone], context='FACES'); bm.to_mesh(o.data); bm.free()
 body = [o for o in body if len(o.data.polygons)]
-print('CABIN CUT deleted %d faces, roof (exterior only) %d faces' % (deleted, moved))
+print('CABIN CUT deleted %d faces, roof (exterior only) %d faces, restored to the body %d' % (deleted, moved, restored[0]))
 # ---- verification on the body as it ships (the roof hidden, as the game draws it seated)
 def tris_world(objs):
     for o in objs:
@@ -351,7 +383,7 @@ lay = dict(id=which, folder=S['folder'], length=round(mx2.y - mn2.y, 3), width=r
            handleIn=g3(L + V((0.665, -0.22, 0.60))), handleOut=g3(handle_out_b),
            exit=[round(-(side + 0.80), 3), 0.0, round(eye_b.y, 3)], screen=g3(L + V((0, -0.5895 + 0.009, 0.69))),
            cabinLow=g3(V((cab_hi.x, cab_lo.y, cab_lo.z))), cabinHigh=g3(V((cab_lo.x, cab_hi.y, mx2.z))),
-           blocked=list(fwd), side=[left[0] + right[0], left[1] + right[1]], up=list(up), deleted=deleted, roof=moved,
+           blocked=list(fwd), side=[left[0] + right[0], left[1] + right[1]], up=list(up), deleted=deleted, roof=moved, restored=restored[0],
            inCab=in_cab, inHead=in_head, nearest=round(nearest, 3))
 print('LAYOUT ' + json.dumps(lay))
 json.dump(lay, open(outdir + '/' + S['folder'] + '/layout.json', 'w'), indent=1)

@@ -135,6 +135,9 @@ struct In {
     float trigger[2]{};
     bool ray{true}; // false: touch pokes and X only (the 0.0.73 test 3 first cut)
     bool pointer{}; // 0.0.74 test 2 DASH POINTER: the fingertip touch and the drawn ray / cursor / hover
+    // 0.0.74 test 3 FINGER RAY (finger_ray074.hpp): hand[] is the index fingertip and aim[] the finger (the touch
+    // is the tip itself), the face's hit area grows by finger_ray::dashSlack and the cursor snaps to a button.
+    bool finger{};
     Offer offer{};  // 0.0.74: the MUSIC / HOME buttons there
     // 0.0.74 test 1 BATMOBILE: where the face is (vehicle-local) and its metres a design unit (the van's
     // by default).
@@ -145,6 +148,11 @@ struct In {
 // within the face (+ raySlack) and rayReach, from in front, not grazing. False otherwise (or non-finite).
 bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit);
 bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale);
+// 0.0.74 test 3 FINGER RAY: with `slack` design units of margin (raySlack above).
+bool rayOnFace(Vec3 from, Vec3 dir, Vec3& hit, Vec3 at, float scale, float slack);
+// 0.0.74 test 3 FINGER RAY: a face point (design units) snapped to the nearest button of `page` within
+// finger_ray::dashSnap (the tab strip and pages without buttons: unchanged, clamped to the face).
+Vec3 snapToButton(Vec3 f, uint32_t page, const Offer& offer);
 
 class Screen {
 public:

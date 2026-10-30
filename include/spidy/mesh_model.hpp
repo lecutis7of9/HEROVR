@@ -89,6 +89,11 @@ struct Mesh {
     // whose material says metallicFactor >= car_paint::paintFrom (0 0 otherwise); kept only for the Batmobile
     // bodies and roofs (slotIsPaintable), empty for every other model.
     std::vector<uint8_t> paint;
+    // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (cabin_look074.hpp): 1 a triangle, its material's role (a lamp, a
+    // switch tip, the baked handle marker; 0 plain); kept only for the Batmobile slots, empty when none has one.
+    // cabin: the Batmobile cockpit or its steering wheel (darkened and lit by COCKPIT GLOW).
+    std::vector<uint8_t> role;
+    bool cabin{};
     struct Image {
         std::string uri;            // a file beside the .gltf (read by loadFolder), or empty
         std::vector<uint8_t> bytes; // the encoded image (PNG / JPEG / QOI)
@@ -217,10 +222,14 @@ inline constexpr uint32_t hammerSlot(uint32_t choice) {
 }
 // The van's parts (drawn by hero007::appendPlacedModel: up to 8 m, seen to 80 m).
 inline constexpr bool slotIsBatmobile(uint32_t slot) { return slot >= slotBatmobileFirst && slot < slotBatmobileRoofFirst + 4; }
-// 0.0.74 test 2 CAR PAINT: the four Batmobile bodies and their roofs (not the cockpit or the wheel).
+// 0.0.74 test 2 CAR PAINT: the four Batmobile bodies and their roofs. 0.0.74 test 3 (owner: "satin black metallic
+// instead of the stretched zigzag texture"): the cockpit too (its trim is now untextured satin black).
 inline constexpr bool slotIsPaintable(uint32_t slot) {
-    return (slot >= slotBatmobileFirst && slot < slotBatmobileFirst + 4) || (slot >= slotBatmobileRoofFirst && slot < slotBatmobileRoofFirst + 4);
+    return (slot >= slotBatmobileFirst && slot < slotBatmobileFirst + 4) || (slot >= slotBatmobileRoofFirst && slot < slotBatmobileRoofFirst + 4) ||
+           slot == slotBatmobileCockpit;
 }
+// 0.0.74 test 3 COCKPIT GLOW: the models COCKPIT GLOW darkens and lights (the cockpit and its wheel).
+inline constexpr bool slotIsCabin(uint32_t slot) { return slot == slotBatmobileCockpit || slot == slotBatmobileWheel; }
 inline constexpr bool slotIsVehicle(uint32_t slot) {
     return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel || slotIsBatmobile(slot);
 }

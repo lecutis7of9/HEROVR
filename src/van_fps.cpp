@@ -1,6 +1,7 @@
 // Version 0.0.73 VAN FPS (van_fps.hpp).
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
+#include "spidy/cabin_look074.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -129,6 +130,9 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
         k->satinValid = false; // FLAT or no eye: the kept colours are stale when SATIN comes back
     }
     const bool relightAll = paint && !k->satinValid;
+    // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (cabin_look074.hpp): the cabin's dark light and glow; the baked marker.
+    const bool roles = model.role.size() == size_t{n};
+    const bool glow = model.cabin && cabin_look::glowOn();
     for (uint32_t t = 0; t < n; ++t) {
         if (!(k->area[t] > sliver))
             continue; // the old path's sliver (world |cross| <= 1e-14): nothing drawn
@@ -136,6 +140,9 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
         const int32_t at = im >= 0 && static_cast<size_t>(im) < model.images.size() ? model.images[static_cast<size_t>(im)].layer : -1;
         const float layer = at >= 0 ? static_cast<float>(at) : -1.f;
         const Vec3 tint = at >= 0 && t < model.tints.size() ? model.tints[t] : model.colors[t];
+        const uint8_t role = roles ? model.role[t] : uint8_t{0};
+        if (cabin_look::skipped(role))
+            continue;
         const float faceLit = std::abs(dot(k->face[t], lm));
         const bool painted = paint && at < 0 && model.paint[t * 2] != 0;
         car_paint::Facing face;
@@ -162,6 +169,8 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
             } else if (painted) {
                 colour = k->satin[c];
             }
+            if (glow)
+                colour = cabin_look::relit(colour, tint, dot(smooth && k->length[c] > flat ? k->corner[c] : k->face[t], um), role);
             sink.push_back(Vertex{P(model.corners[c]), colour, 1.f, {u, v, layer, 1.f}});
         }
     }

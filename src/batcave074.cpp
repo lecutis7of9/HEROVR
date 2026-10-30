@@ -2,6 +2,7 @@
 // Made by Agent Mulder.
 // 0.0.74 test 2b BATCAVE (batcave074.hpp).
 #include "spidy/batcave074.hpp"
+#include "spidy/finger_ray074.hpp"
 #include "spidy/overlay_text.hpp"
 
 #include <algorithm>
@@ -221,6 +222,20 @@ int rowAt(float x, float y) {
     return -1;
 }
 
+Vec3 snapPoint(Vec3 f) {
+    if (!fine(f))
+        return f;
+    const float W = designWidth / 2, H = designHeight / 2;
+    f = {std::clamp(f.x, -W, W), std::clamp(f.y, -H, H), f.z};
+    finger_ray::Box box[2];
+    buttonBox(Button::back, box[0].x0, box[0].y0, box[0].x1, box[0].y1);
+    buttonBox(Button::stand, box[1].x0, box[1].y0, box[1].x1, box[1].y1);
+    float cx = f.x, cy = f.y;
+    if (finger_ray::snap(f.x, f.y, box, 2, finger_ray::panelSnap, cx, cy) >= 0)
+        f = {cx, cy, f.z};
+    return f;
+}
+
 Vec3 onPanel(Vec3 room) {
     const Vec3 d = room - screenCentre;
     return Vec3{d.x / screenScale, d.y / screenScale, d.z};
@@ -291,10 +306,13 @@ Ask Computer::step(const In& in) {
             const bool aimOk = std::isfinite(an) && an > .5f;
             if (aimOk)
                 aim = aim * (1.f / an);
-            const Vec3 tip = aimOk ? in.hand[i] + aim * fingerReach : in.hand[i];
-            const Vec3 f = onPanel(tip);
+            const Vec3 tip = aimOk && !in.finger ? in.hand[i] + aim * fingerReach : in.hand[i]; // FINGER RAY: the tip
+            Vec3 f = onPanel(tip);
             const float W = designWidth / 2, H = designHeight / 2;
-            const bool inside = fine(f) && std::abs(f.x) <= W + .02f && std::abs(f.y) <= H + .02f;
+            const float slack = in.finger ? finger_ray::panelSlack : .03f;
+            const bool inside = fine(f) && std::abs(f.x) <= W + std::min(slack, .02f) && std::abs(f.y) <= H + std::min(slack, .02f);
+            if (inside && in.finger)
+                f = snapPoint(f);
             const bool near = inside && f.z <= pokeDepth && f.z >= -pokeThrough;
             const bool open = !std::isfinite(in.grip[i]) || in.grip[i] < .3f || tr < rayRelease; // a pointing hand
             if (near && open) {
@@ -312,8 +330,10 @@ Ask Computer::step(const In& in) {
             if (!near && aimOk && fine(o) && o.z > 0 && aim.z < -rayFacing) {
                 const float t = o.z / -aim.z; // metres along the aim to the panel's plane
                 const Vec3 hitRoom = in.hand[i] + aim * t;
-                const Vec3 h = onPanel(hitRoom);
-                if (t > 0 && t <= rayReach && fine(h) && std::abs(h.x) <= W + .03f && std::abs(h.y) <= H + .03f) {
+                Vec3 h = onPanel(hitRoom);
+                if (t > 0 && t <= rayReach && fine(h) && std::abs(h.x) <= W + slack && std::abs(h.y) <= H + slack) {
+                    if (in.finger) // FINGER RAY: the cursor (and the tap) snap to BACK / STAND UP, inside the panel
+                        h = snapPoint(h);
                     aimedHere = true;
                     if (!cursorOn_) {
                         cursorOn_ = beamOn_ = true;

@@ -9,6 +9,7 @@
 #include "spidy/web_visual.hpp"
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
+#include "spidy/cabin_look074.hpp"
 
 #include <algorithm>
 #include <array>
@@ -241,6 +242,9 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
     sink.reserve(from + size_t{model.triangles()} * 3); // build 7: one growth, not a dozen
     // 0.0.74 test 2 CAR PAINT (car_paint.hpp): a painted model (the Batmobile bodies) here too when small or stretched.
     const bool paint = ok(viewer) && car_paint::enabled() && model.paint.size() == size_t{model.triangles()} * 2;
+    // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (cabin_look074.hpp): the cabin's dark light and glow; the baked marker.
+    const bool roles = model.role.size() == size_t{model.triangles()};
+    const bool glow = model.cabin && cabin_look::glowOn();
     // Build 7: the place is affine (at + axes), so each corner is o + ex x + ey y + ez z: no call per corner.
     const auto P = [&](Vec3 c) { return o + ex * c.x + ey * c.y + ez * c.z; };
     for (uint32_t t = 0; t < model.triangles(); ++t) {
@@ -249,6 +253,9 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         // An image without a layer (it did not decode): its mean colour (colors[]) untextured.
         const float layer = at >= 0 ? static_cast<float>(at) : -1.f;
         const Vec3 tint = at >= 0 && t < model.tints.size() ? model.tints[t] : model.colors[t];
+        const uint8_t role = roles ? model.role[t] : uint8_t{0};
+        if (cabin_look::skipped(role))
+            continue;
         const Vec3 a = P(model.corners[t * 3]), b = P(model.corners[t * 3 + 1]), c = P(model.corners[t * 3 + 2]);
         const Vec3 fn = cross(b - a, c - a);
         const float fl = length(fn);
@@ -272,6 +279,8 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
                     colour = car_paint::shade(tint, n, light, normalized(to), {0, 1, 0}, car_paint::unpack(model.paint[t * 2]),
                                               car_paint::unpack(model.paint[t * 2 + 1]));
             }
+            if (glow)
+                colour = cabin_look::relit(colour, tint, n.y, role);
             sink.push_back(Vertex{p[k], colour, 1.f, {u, v, layer, 1.f}});
         }
     }
@@ -320,8 +329,12 @@ bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place plac
         const float len = length(n3);
         if (!(len > 1e-12f))
             continue; // a sliver: nothing to see
+        if (model.role.size() == size_t{n} && cabin_look::skipped(model.role[t]))
+            continue; // 0.0.74 test 3 DASH INSIDE: the baked handle marker
         const float lit = .32f + .68f * std::abs(dot(n3 * (1.f / len), light)); // both sides (any winding)
-        const Vec3 colour = model.colors[t] * lit;
+        Vec3 colour = model.colors[t] * lit;
+        if (full.cabin && cabin_look::glowOn()) // 0.0.74 test 3 COCKPIT GLOW (the untextured fallback too)
+            colour = cabin_look::relit(colour, model.colors[t], n3.y / len, model.role.size() == size_t{n} ? model.role[t] : uint8_t{0});
         for (const Vec3& p : {a, b, c})
             out.push_back(Vertex{p, colour, 1.f, {}});
     }

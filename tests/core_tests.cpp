@@ -175,6 +175,8 @@
 #include "spidy/car_paint.hpp"
 #include "spidy/seated_lock074.hpp"
 #include "spidy/taa_diag074.hpp"
+#include "spidy/cabin_look074.hpp"
+#include "spidy/finger_ray074.hpp"
 #include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
 #include "spidy/window_pop.hpp"
@@ -18921,7 +18923,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 163, "one hundred and sixty options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 166, "one hundred and sixty options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18955,7 +18957,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 163, "0.0.74 test 3 has 160 COMBAT options (+ HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 166, "0.0.74 test 3 has 160 COMBAT options (+ HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25239,6 +25241,121 @@ int main() {
         check(std::fabs(d.step(false, down) - .8f) < 1e-6f && !d.ducked, "RETURN TO CITY: back to what it was");
         check(cq::stale(cq::level) && !cq::stale(1.f) && !cq::stale(.5f), "a duck left by a crash is recognised at the next start");
         check(cq::ducked(NAN) == 0 && cq::ducked(1.f) == cq::level, "never louder, never NaN");
+    });
+    test("0.0.74 test 3 COCKPIT GLOW: a darker cabin, cool from above, amber from below, dials backlit, tips soft", [] {
+        namespace cl = spidy::cabin_look;
+        check(combat38::optionInfo[combat38::cockpitGlow].key == std::string_view("cockpit_glow") && cl::optionOn(0) && !cl::optionOn(1),
+              "COCKPIT GLOW: an option row, ON (0) by default, switchable");
+        check(cl::roleOf("BC_Gauges", -1) == cl::lamp && cl::roleOf("BC_ScreenL", -1) == cl::lamp && cl::roleOf("BC_RedCap", -1) == cl::tip &&
+                  cl::roleOf("HERO_handle_pad_mat", -1) == cl::marker && cl::roleOf("BC_Leather", -1) == cl::plain &&
+                  cl::roleOf("X", 2.f) == cl::lamp && cl::roleOf("X", .1f) == cl::tip && cl::roleOf("X", NAN) == cl::plain,
+              "roles from the material's name, else its emissive strength");
+        const Vec3 tint{.5f, .5f, .5f};
+        const Vec3 plain = tint * .8f;
+        const Vec3 side = cl::relit(plain, tint, 0, cl::plain), up = cl::relit(plain, tint, 1, cl::plain), down = cl::relit(plain, tint, -1, cl::plain);
+        check(side.x < plain.x * .6f && side.z < plain.z * .6f, "the cabin darker");
+        check(up.z > up.x && up.z > side.z, "faces turned up: a cool blue");
+        check(down.x > down.z && down.x > side.x, "faces turned down: amber");
+        const Vec3 lampC = cl::relit(tint * .32f, tint, 0, cl::lamp);
+        check(std::fabs(lampC.x - tint.x * cl::lampLevel) < 1e-6f, "a dial / screen: its own colour, whatever the light");
+        const Vec3 tipC = cl::relit(plain, tint, 0, cl::tip);
+        check(tipC.x > side.x && tipC.x < 1.f, "a switch tip: a soft glow, not neon");
+        const Vec3 bad = cl::relit(plain, tint, NAN, cl::plain);
+        check(std::isfinite(bad.x + bad.y + bad.z), "NaN light: finite");
+        check(cl::corner(tint, .8f, 1, cl::lamp, true, false).x == plain.x && cl::corner(tint, .8f, 1, cl::lamp, false, true).x == plain.x,
+              "OFF (or a body): the plain light, test 2b");
+        check(cl::glowOn() && cl::insideOn(), "both switches on until the options say otherwise");
+        check(mesh_model::slotIsCabin(mesh_model::slotBatmobileCockpit) && mesh_model::slotIsCabin(mesh_model::slotBatmobileWheel) &&
+                  !mesh_model::slotIsCabin(mesh_model::slotBatmobileFirst) && !mesh_model::slotIsCabin(mesh_model::slotVan),
+              "the cabin: the Batmobile cockpit and its wheel (all 4 cars share them)");
+    });
+    test("0.0.74 test 3 DASH INSIDE: the cockpit from inside the car only, the handle marker near a hand only", [] {
+        namespace cl = spidy::cabin_look;
+        check(combat38::optionInfo[combat38::dashInside].key == std::string_view("dash_inside"), "DASH INSIDE: an option row");
+        const Vec3 at{10, 0, 5}, fwd{0, 0, -1}, lo{-1, 0, -2.5f}, hi{1, 1.4f, 2.5f};
+        check(!cl::outsideBox(at, fwd, lo, hi, at + Vec3{-.4f, 1.1f, -.3f}), "the driver's eye: inside");
+        check(cl::outsideBox(at, fwd, lo, hi, at + Vec3{-4.6f, 1.7f, -4.8f}), "the owner's screenshot spot (front-left, 5 m, low): outside");
+        check(cl::outsideBox(at, fwd, lo, hi, at + Vec3{0, 1.6f, 0}), "over the roof: outside");
+        check(cl::outsideBox(at, Vec3{1, 0, 0}, lo, hi, at + Vec3{0, .5f, 2.f}) && !cl::outsideBox(at, Vec3{1, 0, 0}, lo, hi, at + Vec3{2.f, .5f, 0}),
+              "the box turns with the car");
+        check(!cl::outsideBox(at, Vec3{0, 0, 0}, lo, hi, at + Vec3{9, 9, 9}) && !cl::outsideBox(at, fwd, lo, hi, Vec3{NAN, 0, 0}),
+              "a bad frame: drawn as before");
+        check(cl::handleNear(1.f, .2f) == 0 && cl::handleNear(cl::showFrom, .2f) == 0 && cl::handleNear(NAN, .2f) == 0, "no hand near: no marker");
+        check(cl::handleNear(.3f, .2f) > 0 && cl::handleNear(.3f, .2f) < .56f && cl::handleNear(.1f, .2f) == 1.f, "near: faint; in reach: lit");
+        check(cl::markerRadius <= .02f, "the marker is small (under 2 cm)");
+        cl::setInside(true);
+        check(cl::skipped(cl::marker) && !cl::skipped(cl::lamp), "ON: the baked handle pad not drawn");
+        cl::setInside(false);
+        check(!cl::skipped(cl::marker), "OFF: test 2b's pad");
+        cl::setInside(true);
+    });
+    test("0.0.74 test 3 FINGER RAY: the dash laser from the index tip along the finger, snapping to buttons", [] {
+        namespace fr = spidy::finger_ray;
+        namespace vs = spidy::van_screen;
+        namespace bc = spidy::batcave074;
+        namespace bm = spidy::batmobile074;
+        check(combat38::optionInfo[combat38::fingerRay].key == std::string_view("finger_ray"), "FINGER RAY: an option row");
+        check(std::fabs(length(fr::dirInGrip) - 1) < 1e-4f && fr::dirInGrip.y < -.9f && fr::dirInGrip.z < 0, "the finger points where the hand does, a little up");
+        check(fr::tipInGrip.y < -.1f && fr::tipInGrip.z < -.03f && std::fabs(fr::tipInGrip.x) < 1e-6f,
+              "the tip: 11 cm ahead of the grip, 4 cm up its thumb side (not under the pinky)");
+        // the right hand pointing forward (grip -y forward): the tip ahead of the hand and above it
+        const Pose g{{0, 1, 0}, Quat::around({1, 0, 0}, 1.5707963f)};
+        const Vec3 tip = compose(g, Pose{fr::tipInGrip, {}}).position;
+        check(g.orientation.rotate({0, -1, 0}).z < -.99f && tip.z < -.1f && tip.y > 1.f, "a level hand: the tip ahead and above the grip");
+        const fr::Box boxes[2]{{0, 0, .1f, .05f}, {.2f, 0, .3f, .05f}};
+        float cx = 0, cy = 0;
+        check(fr::snap(.05f, .02f, boxes, 2, .03f, cx, cy) == 0 && std::fabs(cx - .05f) < 1e-6f, "inside a button: that button");
+        check(fr::snap(.12f, .02f, boxes, 2, .03f, cx, cy) == 0 && std::fabs(cx - .05f) < 1e-6f, "just past it: snapped back to it");
+        check(fr::snap(.18f, .02f, boxes, 2, .03f, cx, cy) == 1 && std::fabs(cx - .25f) < 1e-6f, "the nearer button wins");
+        check(fr::snap(.15f, .2f, boxes, 2, .03f, cx, cy) == -1 && cx == .15f, "far from any: none, unchanged");
+        check(fr::snap(NAN, 0, boxes, 2, .03f, cx, cy) == -1, "NaN: none");
+        // the Batmobile's HOME page: a ray just off GO TO BATCAVE presses it with the finger, not without
+        vs::Offer bat;
+        bat.batman = true;
+        bat.hideouts = true;
+        vs::Button b[8];
+        const uint32_t nb = vs::buttons(vs::home, bat, b);
+        check(nb == 3, "HOME's three buttons");
+        const Vec3 off{b[0].x0 - .02f, (b[0].y0 + b[0].y1) / 2, 0};
+        const Vec3 sn = vs::snapToButton(off, vs::home, bat);
+        check(std::fabs(sn.x - (b[0].x0 + b[0].x1) / 2) < 1e-5f, "a point 2 units off GO TO BATCAVE snaps to it");
+        const auto& L = bm::layout(0);
+        const vs::Mount m = vs::mountLocal(L.screen);
+        const auto at = [&](Vec3 f) { return m.centre + (m.right * f.x + m.up * f.y + m.normal * f.z) * bm::screenScale; };
+        const Vec3 from = L.eye + Vec3{.1f, -.25f, -.15f};
+        for (const bool finger : {false, true}) {
+            vs::Screen s;
+            s.pick(vs::home);
+            vs::In in;
+            in.dt = 1.f / 90;
+            in.driving = true;
+            in.pointer = true;
+            in.finger = finger;
+            in.offer = bat;
+            in.at = L.screen;
+            in.scale = bm::screenScale;
+            in.tracked[1] = true;
+            in.hand[1] = from;
+            in.aim[1] = normalized(at(off) - from);
+            in.grip[1] = 1;
+            s.step(in);
+            in.trigger[1] = 1;
+            s.step(in);
+            const auto act = s.takeAction();
+            if (finger)
+                check(act == vs::Action::goBatcave && s.beamOn() && length(s.beamFrom() - from) < 1e-5f,
+                      "FINGER RAY: the beam from the tip, the near miss snapped onto GO TO BATCAVE");
+            else
+                check(act != vs::Action::goBatcave, "OFF: test 2b's tight button");
+        }
+        // the Batcomputer: a tap near STAND UP snaps to it
+        float x0, y0, x1, y1;
+        bc::buttonBox(bc::Button::stand, x0, y0, x1, y1);
+        const Vec3 near = bc::snapPoint({x1 + .03f, y0 - .02f, 0});
+        check(bc::buttonAt(near.x, near.y) == bc::Button::stand && bc::buttonAt(x1 + .03f, y0 - .02f) == bc::Button::none,
+              "Batcomputer: a ray 3 units past STAND UP snaps onto it");
+        const Vec3 row = bc::snapPoint({0, bc::rowTop - bc::rowStep * 2, 0});
+        check(std::fabs(row.x) < 1e-6f, "the rows (which tile the panel) are left alone");
     });
     test("0.0.74 test 3 TAA LINK / JITTER GUARD: an unmoved history slot is refused, a moving one is not", [] {
         namespace tl = spidy::taa_link;

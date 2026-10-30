@@ -2,6 +2,7 @@
 // Made by Agent Mulder.
 // Version 0.0.72 (TEST) looks (hero072_visual.hpp).
 #include "spidy/hero072_visual.hpp"
+#include "spidy/cabin_look074.hpp"
 #include "spidy/hero072.hpp"
 #include "spidy/construct_fist.hpp"
 #include "spidy/hero007_visual.hpp"
@@ -431,13 +432,26 @@ void appendLook(std::vector<Vertex>& out, const Look& l, Vec3 travel, Vec3 viewe
     if (l.van && okv(l.vanAt) && okv(l.vanForward) && length(l.vanForward) > 1e-3f) {
         if (l.vanModel)
             hero007::appendPlacedModel(out, *l.vanModel, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
-        if (l.vanInterior)
+        // 0.0.74 test 3 DASH INSIDE: from outside the car only its shell (and Roof) - no cockpit through it.
+        const bool cabinSeen = !l.insideOnly || !cabin_look::outsideBox(T(l.vanAt), l.vanForward, l.insideLow, l.insideHigh, viewer);
+        if (l.vanInterior && cabinSeen)
             hero007::appendPlacedModel(out, *l.vanInterior, T(l.vanInteriorOwn && okv(l.vanInteriorAt) ? l.vanInteriorAt : l.vanAt),
                                        l.vanForward, {0, 1, 0}, viewer);
-        if (l.vanWheel && okv(l.wheelAt) && okv(l.wheelForward) && okv(l.wheelUp))
+        if (l.vanWheel && cabinSeen && okv(l.wheelAt) && okv(l.wheelForward) && okv(l.wheelUp))
             hero007::appendPlacedModel(out, *l.vanWheel, T(l.wheelAt), l.wheelForward, l.wheelUp, viewer);
         if (l.vanRoof && roofSeen(l, viewer - T(l.vanAt)))
             hero007::appendPlacedModel(out, *l.vanRoof, T(l.vanAt), l.vanForward, {0, 1, 0}, viewer);
+    }
+    // 0.0.74 test 3 DASH INSIDE: the door handle's small soft ring, only while a hand is near it.
+    if (std::isfinite(l.handleMarkAlpha) && l.handleMarkAlpha > .01f && okv(l.handleMarkAt) && okv(l.handleMarkOut) &&
+        length(l.handleMarkOut) > .5f && inRange(T(l.handleMarkAt), viewer, 6.f)) {
+        VGuard g(out);
+        const Vec3 p = T(l.handleMarkAt), nrm = normalized(l.handleMarkOut);
+        const Vec3 a = perpendicular(nrm), b = normalized(cross(nrm, a));
+        const float r = cabin_look::markerRadius, al = std::min(l.handleMarkAlpha, 1.f);
+        const Vec3 ice{.55f, .8f, 1.f};
+        softArc(out, p, a, b, 0, r * .45f, 0, 2 * pi, ice, .35f * al, r * .25f, 16);
+        softArc(out, p, a, b, r * .8f, r, 0, 2 * pi, ice, .8f * al, r * .2f, 20);
     }
     for (uint32_t i = 0; i < std::min(l.bolts, boltsMost); ++i)
         appendBolt(out, T(l.boltFrom[i]), T(l.boltTo[i]), l.boltSeed[i], viewer, pixelAngle);

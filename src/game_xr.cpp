@@ -111,6 +111,8 @@
 #include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (on)
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
+#include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
+#include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
@@ -2357,6 +2359,9 @@ DWORD WINAPI run(void*) {
         Vec3 ddThrowVel[2]{};
         bool ddAimHeld[2]{};
         Vec3 cf73Aim[2]{}; // Version 0.0.73 (fix 15): each hand's combat aim (tracking)
+        // 0.0.74 test 3 FINGER RAY: each hand's index fingertip and finger direction (tracking; ok false: none)
+        Vec3 fingerTip74[2]{}, fingerDir74[2]{};
+        bool fingerOk74[2]{};
         Vec3 ddAimFrom[2]{}, ddAimDir[2]{};
         // 0.0.73 test 5 GRAPPLE AIM: each held baton's turn toward the aim (0 the fighting grip .. 1 tip along the aim)
         float ddAimTurn[2]{};
@@ -6905,6 +6910,10 @@ DWORD WINAPI run(void*) {
                                 // yank, low aim, flick and blood all take this ray.
                                 h.aim = combat38::aimOf(grip, frame.hands[i].aim, c38(combat38::aimAxis));
                                 cf73Aim[i] = h.aim; // Version 0.0.73 (fix 15): the palm turns to this aim
+                                // 0.0.74 test 3 FINGER RAY (finger_ray074.hpp, CANDIDATE offsets): the index tip and its line
+                                fingerTip74[i] = compose(grip, Pose{finger_ray::tipInGrip, {}}).position;
+                                fingerDir74[i] = grip.orientation.rotate(finger_ray::dirInGrip);
+                                fingerOk74[i] = finite(fingerTip74[i]) && finite(fingerDir74[i]) && length(fingerDir74[i]) > .5f;
                                 h.palm = grip.orientation.rotate({0, -1, 0});
                                 // Update 38 ZIP MODE AIMED: the wrist's web ray on a character.
                                 h.onCharacter = aimed.hands[i].kind == static_cast<uint32_t>(game_swing::AimKind::character);
@@ -7550,6 +7559,9 @@ DWORD WINAPI run(void*) {
                                                 si.x = vanDashX;
                                                 // 0.0.74 test 2 DASH POINTER: the beam, cursor, lit tab / button and the fingertip touch
                                                 si.pointer = combat38::dashPointerOn(c38(combat38::dashPointer));
+                                                // 0.0.74 test 3 FINGER RAY (ON by default, live): from the index tip, along it
+                                                const bool fingerRay = si.pointer && cabin_look::optionOn(c38(combat38::fingerRay));
+                                                si.finger = fingerRay;
                                                 for (unsigned i = 0; i < 2; ++i) {
                                                     si.tracked[i] = vin.tracked[i];
                                                     si.hand[i] = vin.tracked[i] ? van.frame.local(vin.hands[i]) : Vec3{};
@@ -7559,6 +7571,16 @@ DWORD WINAPI run(void*) {
                                                     const Vec3 aimW = vanW.orientation.rotate(cf.hands[i].aim);
                                                     const Vec3 aimL = van.frame.local(van.frame.at + aimW);
                                                     si.aim[i] = vin.tracked[i] && finite(aimL) ? aimL : Vec3{};
+                                                    if (fingerRay) {
+                                                        const Vec3 tipW = compose(vanW, Pose{fingerTip74[i], {}}).position;
+                                                        const Vec3 dirL = van.frame.local(van.frame.at + vanW.orientation.rotate(fingerDir74[i]));
+                                                        const Vec3 tipL = van.frame.local(tipW);
+                                                        if (vin.tracked[i] && fingerOk74[i] && finite(tipL) && finite(dirL)) {
+                                                            si.hand[i] = tipL;
+                                                            si.aim[i] = dirL;
+                                                        } else
+                                                            si.tracked[i] = false, si.hand[i] = si.aim[i] = Vec3{};
+                                                    }
                                                     si.trigger[i] = std::isfinite(frame.hands[i].trigger) ? frame.hands[i].trigger : 0.f;
                                                 }
                                                 // 0.0.74 test 1: the MUSIC / HOME buttons his options leave on the dash
@@ -7785,6 +7807,8 @@ DWORD WINAPI run(void*) {
                                                 // 0.0.74 test 2b BATCOMPUTER POINTER (owner: "make sure when using the batscreens you have
                                                 // the laser pointer"): the dash's - a fingertip tap, or the aim ray + trigger (room space).
                                                 ci2.pointer = combat38::dashPointerOn(c38(combat38::dashPointer));
+                                                // 0.0.74 test 3 FINGER RAY (ON by default, live): from the index tip, along it
+                                                ci2.finger = ci2.pointer && cabin_look::optionOn(c38(combat38::fingerRay));
                                                 try {
                                                     const auto& pl = hideoutVisit.place();
                                                     for (unsigned i = 0; i < 2; ++i) {
@@ -7793,6 +7817,15 @@ DWORD WINAPI run(void*) {
                                                         const Vec3 aimW = vanW.orientation.rotate(cf.hands[i].aim);
                                                         const Vec3 aimR = Quat::yaw(-pl.yaw).rotate(aimW);
                                                         ci2.aim[i] = vin.tracked[i] && finite(aimR) ? aimR : Vec3{};
+                                                        if (ci2.finger) {
+                                                            const Vec3 tipR = pl.room(compose(vanW, Pose{fingerTip74[i], {}}).position);
+                                                            const Vec3 dirR = Quat::yaw(-pl.yaw).rotate(vanW.orientation.rotate(fingerDir74[i]));
+                                                            if (vin.tracked[i] && fingerOk74[i] && finite(tipR) && finite(dirR)) {
+                                                                ci2.hand[i] = tipR;
+                                                                ci2.aim[i] = normalized(dirR);
+                                                            } else
+                                                                ci2.tracked[i] = false, ci2.hand[i] = ci2.aim[i] = Vec3{};
+                                                        }
                                                         ci2.trigger[i] = std::isfinite(frame.hands[i].trigger) ? frame.hands[i].trigger : 0.f;
                                                         ci2.grip[i] = std::isfinite(vin.grip[i]) ? vin.grip[i] : 0.f;
                                                     }
@@ -10696,6 +10729,38 @@ DWORD WINAPI run(void*) {
                                             V.carCredit = batmobile074::creditLines[batmobile074::clampCar(carNow)];
                                         }
                                     }
+                                    // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp; ON by default, live): the cockpit and
+                                    // its wheel darker, lit low blue / amber, their gauges, screens and switch tips glowing.
+                                    cabin_look::setGlow(cabin_look::optionOn(c38(combat38::cockpitGlow)));
+                                    // 0.0.74 test 3 DASH INSIDE (ON by default, live): the cockpit, wheel and dash screen only
+                                    // from inside the car's box; the baked handle pad hidden, a small ring near a hand instead.
+                                    const bool insideOnly = cabin_look::optionOn(c38(combat38::dashInside));
+                                    cabin_look::setInside(insideOnly);
+                                    L.insideOnly = insideOnly;
+                                    L.insideLow = {-drawTune.width / 2, 0, -drawTune.length / 2};
+                                    L.insideHigh = {drawTune.width / 2, drawTune.height, drawTune.length / 2};
+                                    saved.vanScreenInsideOnly = insideOnly;
+                                    saved.vanScreenAt = van.frame.at;
+                                    saved.vanScreenForward = van.frame.forward();
+                                    saved.vanScreenLow = L.insideLow;
+                                    saved.vanScreenHigh = L.insideHigh;
+                                    L.handleMarkAlpha = 0;
+                                    if (insideOnly && (van.state == van072::parked || van.state == van072::driving)) {
+                                        const bool out = van.state == van072::parked;
+                                        const Vec3 hl = out ? drawTune.handleOut : drawTune.handleIn;
+                                        const Vec3 hw = van.frame.world(hl);
+                                        float nearest = 1e9f;
+                                        for (unsigned i = 0; i < 2; ++i)
+                                            if (frame.hands[i].valid && validTrackedPose(frame.hands[i].grip) && finite(motion.grips[i].position))
+                                                nearest = std::min(nearest, length(motion.grips[i].position - hw));
+                                        const float a = cabin_look::handleNear(nearest, drawTune.handleReach);
+                                        if (a > 0 && finite(hw)) {
+                                            const float side = hl.x < 0 ? -1.f : 1.f; // the door's side; out of it (in: into the cab)
+                                            L.handleMarkAt = hw;
+                                            L.handleMarkOut = van072::worldDir(van.frame, {out ? side : -side, 0, 0});
+                                            L.handleMarkAlpha = a;
+                                        }
+                                    }
                                 }
                             }
                             if (combat38::gunModelsOn(c38(combat38::gunModels)) && hero007In.hero == hero_modes::punisher) {
@@ -12804,7 +12869,10 @@ DWORD WINAPI run(void*) {
                         }
                         // Version 0.0.73 test 3 VAN SCREEN: the Punisher van's dash screen, blended over the cab (depth-
                         // tested, so the cab and his hands hide it). Should it fail, only it goes off.
-                        if (!saved->flatScreen && saved->vanScreen.on) {
+                        // 0.0.74 test 3 DASH INSIDE: not from outside the car's box (it showed through the shell).
+                        if (!saved->flatScreen && saved->vanScreen.on &&
+                            !(saved->vanScreenInsideOnly && cabin_look::outsideBox(saved->vanScreenAt + travel, saved->vanScreenForward,
+                                                                                   saved->vanScreenLow, saved->vanScreenHigh, viewer))) {
                             const size_t from = translucent.size();
                             try {
                                 auto dash = saved->vanScreen;
@@ -14208,6 +14276,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterGuard(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWheelFirst(void* v) { return setHero007(v, combat38::wheelFirst, 5507); }
 // 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCaveQuiet(void* v) { return setHero007(v, combat38::caveQuiet, 5508); }
+// 0.0.74 test 3 FINGER RAY (finger_ray074.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFingerRay(void* v) { return setHero007(v, combat38::fingerRay, 5509); }
+// 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashInside(void* v) { return setHero007(v, combat38::dashInside, 5510); }
+// 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return setHero007(v, combat38::cockpitGlow, 5511); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

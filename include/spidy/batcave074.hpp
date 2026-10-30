@@ -86,7 +86,13 @@ struct In {
     bool tracked[2]{};
     Vec3 hand[2]{}, aim[2]{};
     float trigger[2]{}, grip[2]{};
+    // 0.0.74 test 3 FINGER RAY (finger_ray074.hpp): hand[] is the index fingertip and aim[] the finger (the touch
+    // is the tip itself); the panel's hit area grows by finger_ray::panelSlack and the cursor snaps to BACK /
+    // STAND UP within finger_ray::panelSnap (the rows already tile the panel).
+    bool finger{};
 };
+// 0.0.74 test 3 FINGER RAY: a panel point (design units) clamped to the panel and snapped to BACK / STAND UP.
+Vec3 snapPoint(Vec3 f);
 // Where a room point lies on the panel: design units x right, y up; z metres out of it (toward the chair).
 Vec3 onPanel(Vec3 room);
 

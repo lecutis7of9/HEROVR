@@ -9,9 +9,13 @@
 // (by default the web shooter's, pitched down from the handle), so the beam left the bottom of the fist.
 // The grip pose's axes (tracking.hpp, CONFIRMED in its comments): -y where the hand points (wrist to
 // knuckles), -z the thumb side (up), +x out of the left palm / into the right.
-// CANDIDATE (hand measurements, not the runtime's hand skeleton - the mod reads none): a pointing index's tip
-// sits ~4 cm ahead of and ~3 cm above the grip origin at its knuckle, the finger ~7.5 cm long, pointing along
-// the hand tilted 10 degrees up toward the thumb side: tip ~(0, -.114, -.043) in the grip pose.
+// CANDIDATE (hand measurements, not the runtime's hand skeleton - the mod reads none).
+// 0.0.74 test 4 (owner t1290u: "the laser pointer is even lower on the hand now"): the grip's -y is the
+// controller HANDLE's axis (tracking.hpp: held tilted ~30 degrees), not where a pointing index goes - the finger
+// points ~30 degrees above the handle, toward the thumb side (-z). Test 3 put the line only 10 degrees above
+// the handle and its start 4 cm ahead of the grip at mid-fist height, so it came out of the curled fingers and
+// ran ~20 degrees lower than test 2's aim-pose ray. Now: the finger 30 degrees up from the handle (-y toward -z),
+// the tip 10 cm out along it plus 3 cm up its thumb side (the index sits on top of the fist): ~(0, -.072, -.076).
 // ON: the beam starts at that tip and runs along that finger for every vehicle's dash and the Batcomputer;
 // the touch is the tip itself; the hit area grows (fingerSlack) and the cursor snaps to the nearest button
 // within snapReach. OFF: test 2b exactly.
@@ -22,12 +26,13 @@
 
 namespace spidy::finger_ray {
 
-inline constexpr Vec3 knuckleInGrip{0, -.04f, -.03f};
-inline constexpr float fingerLength = .075f;
-// The finger's direction in the grip pose (unit): along -y, 10 degrees toward -z.
-inline constexpr Vec3 dirInGrip{0, -.98481f, -.17365f};
-inline constexpr Vec3 tipInGrip{knuckleInGrip.x + dirInGrip.x * fingerLength, knuckleInGrip.y + dirInGrip.y * fingerLength,
-                                knuckleInGrip.z + dirInGrip.z * fingerLength};
+// The finger's direction in the grip pose (unit): along -y, 30 degrees toward -z (the thumb side, up).
+inline constexpr Vec3 dirInGrip{0, -.8660254f, -.5f};
+// The finger's "up" (the back of the index, toward the thumb side), perpendicular to dirInGrip.
+inline constexpr Vec3 upInGrip{0, .5f, -.8660254f};
+inline constexpr float tipAlong = .10f, tipUp = .03f;
+inline constexpr Vec3 tipInGrip{dirInGrip.x * tipAlong + upInGrip.x * tipUp, dirInGrip.y * tipAlong + upInGrip.y * tipUp,
+                                dirInGrip.z * tipAlong + upInGrip.z * tipUp};
 // The grown hit area (design units of margin round the dash face / Batcomputer panel) and the snap's reach.
 inline constexpr float dashSlack = .05f, dashSnap = .03f, panelSlack = .06f, panelSnap = .05f;
 

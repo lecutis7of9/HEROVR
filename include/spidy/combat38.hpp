@@ -257,6 +257,12 @@ enum Option : uint32_t {
     spidyvrStock,
     // 0.0.74 test 3 MILES TAA (miles_taa074.hpp)
     milesTaa,
+    // 0.0.74 test 4 AA fixes 1-3 (taa_gate074.hpp)
+    taaGateLog,
+    eyeTaaRequeue,
+    mainViewSmall,
+    // 0.0.74 test 4 AA MODE (cleanValue below)
+    aaMode,
     options
 };
 struct OptionInfo {
@@ -645,6 +651,10 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"cockpit_glow", "COCKPIT GLOW", "CGLO", "ON darkens the Batmobile cabin and softly backlights dials and switches; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"spidyvr_stock", "SPIDYVR STOCK", "STCK", "ON runs SpidyVR's render, no HERO AA/TAA/jitter; live, LOD/mip at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"miles_taa", "MILES TAA", "MTAA", "ON runs Miles Morales VR's TAA in each eye at 67%; live, eye size at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"taa_gate_log", "TAA GATE LOG", "TGLG", "ON logs each eye's TAA runs, misses and history inputs every 10 s; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"eye_taa_requeue", "EYE TAA REQUEUE", "ETRQ", "ON queues the game's TAA again for an eye that stopped getting it; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"main_view_small", "MAIN VIEW SMALL", "MVSM", "ON renders the flat-screen view at half size so eyes get more GPU; restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"aa_mode", "AA MODE", "AAMD", "CLEAN: full-size eyes, FXAA, per-eye history, light CAS; textures at restart.", 2, {"CLEAN", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -698,6 +708,32 @@ inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
 inline bool spidyvrStockOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 3 MILES TAA (miles_taa074.hpp): ON (0, the default) or OFF (1); SPIDYVR STOCK leaves it to the player.
 inline bool milesTaaOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL (taa_gate074.hpp): ON (0) or OFF (1). TAA GATE
+// LOG starts ON; EYE TAA REQUEUE and MAIN VIEW SMALL start OFF (game_xr's start values, live.txt 'off').
+inline bool taaGateOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 4 AA MODE (docs/AA-MODE-CLEAN-074.md). 0 CLEAN (the default), 1 OFF. CLEAN is the anti-aliasing
+// a clean private SM2VR build (0.0.190) runs, rebuilt from HERO VR's own parts: no game TAA in the eyes, the eyes at
+// 100%, FXAA on every eye frame, EYE AA's per-eye history (head-pose reprojection, 3 x 3 clamp, reset on a cut) at
+// 80, a light CAS, mip bias +0.5 with 16x AF on the samplers the game biases negatively, building reach 150% with
+// the left eye choosing the far buildings for both (IMPOSTORS), lens flares and screen shake off. While it is ON
+// the options below answer cleanValue (c38 in game_xr.cpp), ahead of SPIDYVR STOCK / SPIDYVR PICTURE, which it
+// turns off. OFF: the player's own options (SPIDYVR STOCK, PICTURE, MILES TAA as set).
+inline bool aaModeClean(uint32_t value) { return value != 1; }
+inline uint32_t cleanValue(uint32_t option, uint32_t value) {
+    switch (option) {
+    case spidyvrStock: return 1;   // OFF: HERO VR's own render path (the CLEAN layers below)
+    case spidyvrPicture: return 1; // CUSTOM: FXAA, history and CAS run
+    case imageStyle: return 1;     // GAME TAA OFF: no game TAA in the eyes
+    case milesTaa: return 1;       // OFF
+    case eyeTaaRequeue: return 1;  // OFF (no game TAA to requeue)
+    case mainViewSmall: return 1;  // OFF
+    case image: return 1;          // CLASSIC: the history read bilinear (FXAA and the sharpening are the launcher's)
+    case sharpenMatch: return 1;   // OFF: a fixed light CAS
+    case taaHold: return 0;        // OFF
+    case lensFlares: return 1;     // OFF IN VR (read when VR starts)
+    default: return value;
+    }
+}
 inline constexpr uint32_t stockCullMarginDegrees = 0; // SpidyVR: the head's lens x 1.05 only (headView)
 // The value option `option` runs with while SPIDYVR STOCK is ON (`value`, the player's, for anything else).
 inline uint32_t stockValue(uint32_t option, uint32_t value) {

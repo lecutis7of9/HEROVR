@@ -328,6 +328,10 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5511'), ['SpidyCockpitGlow'])  # 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
         self.assertEqual(uses.get('5512'), ['SpidySpidyvrStock'])  # 0.0.74 test 3 SPIDYVR STOCK (combat38.hpp)
         self.assertEqual(uses.get('5513'), ['SpidyMilesTaa'])  # 0.0.74 test 3 MILES TAA (miles_taa074.hpp)
+        self.assertEqual(uses.get('5514'), ['SpidyTaaGateLog'])  # 0.0.74 test 4 (taa_gate074.hpp)
+        self.assertEqual(uses.get('5515'), ['SpidyEyeTaaRequeue'])
+        self.assertEqual(uses.get('5516'), ['SpidyMainViewSmall'])
+        self.assertEqual(uses.get('5517'), ['SpidyAaMode'])
 
 
 class Hero073Image(unittest.TestCase):
@@ -370,13 +374,15 @@ class Hero073Image(unittest.TestCase):
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', False), '0.5')  # no ENGINE TAA prepared
         self.assertEqual(L.image_mip_bias('0.25', 'classic', 'spidyvr', True), '0.25')  # an explicit -MipBias stays
         # 0.0.74 test 2: SPIDYVR PICTURE (on by default) runs GAME TAA SPIDYVR; CUSTOM: the 0.0.73 release default
-        self.assertEqual(L.image_style_of({}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'off', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'spidyvr', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'image_style': 'bogus', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')
-        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'spidyvr')
+        self.assertEqual(L.image_style_of({'aa_mode': 'off'}), 'spidyvr')  # 0.0.74 test 4: under aa_mode = off
+        self.assertEqual(L.image_style_of({'aa_mode': 'off', 'image_style': 'off'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.74 test 4 AA MODE CLEAN (default): no game TAA
+        self.assertEqual(L.image_style_of({'image_style': 'spidyvr'}), 'off')
+        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'off', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'spidyvr', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'bogus', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'off')
+        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')  # 0.0.74 test 4 AA MODE CLEAN
         self.assertEqual(L.image_of({}), 'spidyvr')
         self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
         self.assertEqual(L.export_value('image', 'classic'), 1)

@@ -49,6 +49,7 @@
 #include "spidy/taa_hold074.hpp"
 #include "spidy/taa_link074.hpp"
 #include "spidy/miles_taa074.hpp"
+#include "spidy/taa_gate074.hpp"
 #include "spidy/cave_quiet074.hpp"
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
@@ -18965,7 +18966,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 168, "one hundred and sixty options (0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 172, "one hundred and sixty options (0.0.74 test 4: + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; 0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18999,7 +19000,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 168, "0.0.74 test 3 has 160 COMBAT options (+ MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 172, "0.0.74 test 4 has 160 COMBAT options (+ TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; + MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25360,6 +25361,89 @@ int main() {
                   mt::queueSiteRva == 0x2d017b3 && sizeof(mt::temporalAaBytes) == 32 && sizeof(mt::queueSiteBytes) == 24,
               "the CONFIRMED addresses and their byte checks (<= 32 bytes each)");
     });
+    test("0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL: options, ring, requeue guard, main size", [] {
+        namespace tg = spidy::taa_gate;
+        using namespace combat38;
+        for (uint32_t o : {taaGateLog, eyeTaaRequeue, mainViewSmall}) {
+            check(optionInfo[o].count == 2 && std::string_view(optionInfo[o].values[0]) == "ON", "each an ON / OFF row");
+            const std::string h = optionInfo[o].help;
+            check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.find("restart") != std::string::npos,
+                  "a one-sentence subtext that says what needs a restart");
+            check(stockValue(o, 0) == 0 && stockValue(o, 1) == 1, "SPIDYVR STOCK leaves it to the player");
+        }
+        check(optionInfo[taaGateLog].key == std::string_view("taa_gate_log") &&
+                  optionInfo[eyeTaaRequeue].key == std::string_view("eye_taa_requeue") &&
+                  optionInfo[mainViewSmall].key == std::string_view("main_view_small"),
+              "the live.txt keys");
+        check(tg::on(0) && !tg::on(1) && taaGateOn(0) && !taaGateOn(1), "ON (0) or OFF (1); requeue and main small start OFF");
+        tg::JobRing ring;
+        ring.push(0x10);
+        ring.push(0x20);
+        ring.push(0x20);
+        ring.push(0);
+        check(ring.find(0x20) == 0 && ring.find(0x10) == 1 && ring.find(0x30) == -1 && ring.find(0) == -1,
+              "the ring: newest first, no repeats or nulls");
+        for (uintptr_t j = 0x30; j <= 0x60; j += 0x10)
+            ring.push(j);
+        check(ring.find(0x60) == 0 && ring.find(0x30) == 3 && ring.find(0x20) == -1, "four jobs kept");
+        tg::Requeue q;
+        q.newJob(5);
+        check(!q.want(0x100, true), "not after a job that got a call");
+        q.newJob(5);
+        q.newJob(5);
+        check(q.want(0x100, true) && !q.want(0x100, false) && !q.want(0, true), "after 2 jobs with no call, only while active");
+        q.queued(0x100);
+        check(!q.want(0x100, true), "once per job");
+        q.newJob(6);
+        check(q.fails == 0 && q.missed == 0 && !q.pending, "a requeue that brought a run clears the count");
+        bool trips = false;
+        int tripCount = 0;
+        for (uintptr_t j = 0x200; j < 0x200 + 40; ++j) {
+            q.newJob(6);
+            if (q.want(j, true))
+                q.queued(j);
+            if (q.newJob(6)) {
+                trips = true;
+                ++tripCount;
+            }
+        }
+        check(trips && tripCount == 1 && q.tripped && !q.want(0x999, true), "8 requeues with no run: off for good, tripped once");
+        check(tg::mainSize(2000, 1000) == std::array<uint32_t, 2>{1000, 504} && tg::mainSize(1920, 1080)[0] == 960 &&
+                  tg::mainSize(1920, 1080)[1] == 544 && tg::mainSize(10, 4)[0] == 8 && tg::mainSize(10, 4)[1] == 4,
+              "main size: 50%, multiples of 8, never more than the output");
+        check(tg::shrinkMain(true, true, 1920, 1080) && !tg::shrinkMain(false, true, 1920, 1080) &&
+                  !tg::shrinkMain(true, false, 1920, 1080) && !tg::shrinkMain(true, true, 32, 1080) &&
+                  !tg::shrinkMain(true, true, 20000, 1080),
+              "made small only on at the start, with TAA, at a sane size");
+        check(tg::sizeFlags(0xf0, true) == 0xf2 && tg::sizeFlags(0xf3, false) == 0xf1, "only bit 2 of the size flags changes");
+        check(sizeof(tg::Data) == 256 && tg::Data{}.magic == tg::magic && tg::Data{}.bytes == 256, "SpidyTaaGateData: 256 bytes");
+        for (uint32_t r = tg::requeueFailed; r <= tg::mainGameAa; ++r)
+            check(*tg::reasonText(r) && std::string(tg::reasonText(r)).size() < tg::lineMax, "every reason has a line");
+        check(tg::mainStartOption == 0x2000000 && tg::mainEyeTemporalBit == 0x40 && tg::mainEyeTemporalBit != spidy::miles_taa::eyeTemporalBit,
+              "its own start bit and eye bit");
+        check(tg::enqueueRva == 0x2c77810 && tg::viewTaaList == 0x18d0 && tg::temporalAaCommand == 0xb1 &&
+                  tg::mainViewGlobal == 0xc2ca220 && tg::viewBuffers == 0x1e38 && tg::setSizes == 0x1b978,
+              "the CONFIRMED addresses");
+    });
+    test("0.0.74 test 4 AA MODE CLEAN: the option, ahead of SPIDYVR STOCK, the anti-aliasing it answers", [] {
+        using namespace combat38;
+        check(optionInfo[aaMode].key == std::string_view("aa_mode") && optionInfo[aaMode].count == 2 &&
+                  std::string_view(optionInfo[aaMode].values[0]) == "CLEAN" && std::string_view(optionInfo[aaMode].values[1]) == "OFF",
+              "CLEAN (0, the default) / OFF (1)");
+        const std::string h = optionInfo[aaMode].help;
+        check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.find("restart") != std::string::npos,
+              "a one-sentence subtext that says what needs a restart");
+        check(aaModeClean(0) && !aaModeClean(1), "ON by default, switchable off");
+        check(cleanValue(spidyvrStock, 0) == 1 && cleanValue(spidyvrPicture, 0) == 1 && cleanValue(imageStyle, 0) == 1 &&
+                  cleanValue(milesTaa, 0) == 1 && cleanValue(eyeTaaRequeue, 0) == 1 && cleanValue(mainViewSmall, 0) == 1,
+              "no SpidyVR stock / picture, no game TAA, no MILES TAA, no requeue, no small main view");
+        check(cleanValue(image, 0) == 1 && cleanValue(sharpenMatch, 0) == 1 && cleanValue(taaHold, 1) == 0 && cleanValue(lensFlares, 0) == 1,
+              "CLASSIC history read, fixed CAS, no TAA HOLD, lens flares off in VR");
+        check(cleanValue(taaGateLog, 0) == 0 && cleanValue(taaGateLog, 1) == 1 && cleanValue(weaponCollision, 1) == 1,
+              "the diagnostics and every other option stay the player's");
+        for (uint32_t o = 0; o < options; ++o)
+            check(cleanValue(o, 0) < optionInfo[o].count, "every answer is a value the option has");
+    });
     test("0.0.74 test 3 COCKPIT GLOW: a darker cabin, cool from above, amber from below, dials backlit, tips soft", [] {
         namespace cl = spidy::cabin_look;
         check(combat38::optionInfo[combat38::cockpitGlow].key == std::string_view("cockpit_glow") && cl::optionOn(0) && !cl::optionOn(1),
@@ -25418,13 +25502,16 @@ int main() {
         namespace bc = spidy::batcave074;
         namespace bm = spidy::batmobile074;
         check(combat38::optionInfo[combat38::fingerRay].key == std::string_view("finger_ray"), "FINGER RAY: an option row");
-        check(std::fabs(length(fr::dirInGrip) - 1) < 1e-4f && fr::dirInGrip.y < -.9f && fr::dirInGrip.z < 0, "the finger points where the hand does, a little up");
-        check(fr::tipInGrip.y < -.1f && fr::tipInGrip.z < -.03f && std::fabs(fr::tipInGrip.x) < 1e-6f,
-              "the tip: 11 cm ahead of the grip, 4 cm up its thumb side (not under the pinky)");
+        check(std::fabs(length(fr::dirInGrip) - 1) < 1e-4f && fr::dirInGrip.y < -.8f && fr::dirInGrip.z < -.45f,
+              "test 4: the finger 30 degrees above the handle's axis, toward the thumb (test 3's 10 ran low)");
+        check(std::fabs(dot(fr::dirInGrip, fr::upInGrip)) < 1e-5f && fr::upInGrip.z < -.8f, "the finger's up: the thumb side");
+        check(fr::tipInGrip.y < -.06f && fr::tipInGrip.z < -.07f && std::fabs(fr::tipInGrip.x) < 1e-6f,
+              "the tip: 7 cm ahead of the grip, 7.6 cm up its thumb side (above the fist, not in the fingers)");
+        check(fr::tipInGrip.z < -.043f - .03f, "test 4: the tip 3+ cm higher than test 3's (0, -.114, -.043)");
         // the right hand pointing forward (grip -y forward): the tip ahead of the hand and above it
         const Pose g{{0, 1, 0}, Quat::around({1, 0, 0}, 1.5707963f)};
         const Vec3 tip = compose(g, Pose{fr::tipInGrip, {}}).position;
-        check(g.orientation.rotate({0, -1, 0}).z < -.99f && tip.z < -.1f && tip.y > 1.f, "a level hand: the tip ahead and above the grip");
+        check(g.orientation.rotate({0, -1, 0}).z < -.99f && tip.z < -.06f && tip.y > 1.05f, "a level hand: the tip ahead and above the grip");
         const fr::Box boxes[2]{{0, 0, .1f, .05f}, {.2f, 0, .3f, .05f}};
         float cx = 0, cy = 0;
         check(fr::snap(.05f, .02f, boxes, 2, .03f, cx, cy) == 0 && std::fabs(cx - .05f) < 1e-6f, "inside a button: that button");

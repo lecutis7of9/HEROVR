@@ -111,6 +111,7 @@
 #include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (off by default since the test 3 fix)
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
 #include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA (on)
+#include "spidy/taa_gate074.hpp" // 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
 #include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
@@ -665,6 +666,8 @@ void SpidyStockSet(uint32_t on); // 0.0.74 test 3 SPIDYVR STOCK (stereo_probe.cp
 void SpidyMilesTaaSet(uint32_t on); // 0.0.74 test 3 MILES TAA (stereo_probe.cpp)
 const spidy::miles_taa::Data* SpidyMilesTaaNow();
 void SpidyMilesTaaStall();
+void SpidyTaaGateSet(uint32_t log, uint32_t requeue); // 0.0.74 test 4 (stereo_probe.cpp)
+const spidy::taa_gate::Data* SpidyTaaGateNow();
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
@@ -787,6 +790,10 @@ std::atomic<uint32_t> combat38Values[combat38::options]{};
 // then, and with no live.txt line, these). GAME TAA starts OFF (image_style::defaultStyle).
 [[maybe_unused]] const bool combat38StartValues = [] {
     combat38Values[combat38::imageStyle].store(image_style::defaultStyle);
+    // 0.0.74 test 4 AA MODE CLEAN: MILES TAA, EYE TAA REQUEUE and MAIN VIEW SMALL start OFF (options kept).
+    combat38Values[combat38::milesTaa].store(1u);
+    combat38Values[combat38::eyeTaaRequeue].store(1u);
+    combat38Values[combat38::mainViewSmall].store(1u);
     return true;
 }();
 // Version 0.0.72 MODEL MISSING: one bit per mesh_model slot whose MODEL setting is on and whose model
@@ -861,6 +868,11 @@ uint32_t c38(uint32_t option) {
     if (option >= combat38::options)
         return 0u;
     const uint32_t own = combat38::clampValue(option, combat38Values[option].load());
+    // 0.0.74 test 4 AA MODE CLEAN (ON by default): the anti-aliasing options answer combat38::cleanValue, ahead
+    // of SPIDYVR STOCK (which it turns off); read straight from the table so the switch itself never recurses.
+    if (option != combat38::aaMode &&
+        combat38::aaModeClean(combat38::clampValue(combat38::aaMode, combat38Values[combat38::aaMode].load())))
+        return combat38::cleanValue(option, own);
     // 0.0.74 test 3 SPIDYVR STOCK (ON by default): HERO VR's render options answer SpidyVR's own behaviour
     // (combat38::stockValue); read straight from the table so the switch itself never recurses.
     if (option != combat38::spidyvrStock &&
@@ -9951,7 +9963,10 @@ DWORD WINAPI run(void*) {
                                   // 0.0.74 test 3 MILES TAA on at the start (run_game_vr MILES_TAA_OPTION):
                                   // the eyes made with the TAA targets, their scene at its upscale percent.
                                   ((config.options & miles_taa::startOption) ? miles_taa::eyeTemporalBit << 8
-                                                                              : 0u)))),
+                                                                              : 0u) |
+                                  // 0.0.74 test 4 MAIN VIEW SMALL on at the start (run_game_vr MAIN_VIEW_SMALL_OPTION).
+                                  ((config.options & taa_gate::mainStartOption) ? taa_gate::mainEyeTemporalBit << 8
+                                                                                : 0u)))),
                               "Eye anti-aliasing");
                         check(SpidyEyeShadows(reinterpret_cast<void*>(
                                   static_cast<uintptr_t>((config.options & 0x20000) ? 0 : 1))),
@@ -11201,6 +11216,16 @@ DWORD WINAPI run(void*) {
                             static miles_taa::Data milesLast{};
                             const bool milesWant = miles_taa::on(c38(combat38::milesTaa)) && !milesStall.tripped;
                             SpidyMilesTaaSet(milesWant ? 1u : 0u);
+                            // 0.0.74 test 4 TAA GATE LOG and EYE TAA REQUEUE (taa_gate074.hpp, ON, live).
+                            const bool gateLog = taa_gate::on(c38(combat38::taaGateLog));
+                            SpidyTaaGateSet(gateLog ? 1u : 0u, taa_gate::on(c38(combat38::eyeTaaRequeue)) ? 1u : 0u);
+                            static bool gateNoted{};
+                            static taa_gate::Data gateLast{};
+                            const taa_gate::Data* gd = SpidyTaaGateNow();
+                            if (gd && gd->reason && !gateNoted) {
+                                gateNoted = true;
+                                consoleLine(taa_gate::reasonText(gd->reason));
+                            }
                             if (const miles_taa::Data* md = SpidyMilesTaaNow()) {
                                 milesActive = (md->flags & miles_taa::flagLive) != 0;
                                 if (milesStall.frame(md->leftJobs, newPair, milesActive)) {
@@ -11223,34 +11248,105 @@ DWORD WINAPI run(void*) {
                                     (md->flags & (miles_taa::flagLive | miles_taa::flagAtStart)) &&
                                     nowTick - milesTick >= 10000) {
                                     milesTick = nowTick;
-                                    char line[512];
-                                    const uint64_t jobs = md->leftJobs - milesLast.leftJobs;
-                                    std::snprintf(line, sizeof line,
-                                                  "MILES TAA %s (%u%%, %ux%u): %llu eye frames; L TemporalAa ran %llu "
-                                                  "(history %llu) R ran %llu (history %llu); AA set %llu/%llu, queued "
-                                                  "%llu/%llu; gate L F %d stamp %d prev-slot %d idx %u +18e8 %u cut %u, R F %d "
-                                                  "stamp %d prev-slot %d idx %u +18e8 %u cut %u; TAA in/out L %u/%u R %u/%u",
-                                                  (md->flags & miles_taa::flagLive) ? "ON" : "OFF", md->percent,
-                                                  md->renderWidth, md->renderHeight,
-                                                  static_cast<unsigned long long>(jobs),
-                                                  static_cast<unsigned long long>(md->ran[0] - milesLast.ran[0]),
-                                                  static_cast<unsigned long long>(md->history[0] - milesLast.history[0]),
-                                                  static_cast<unsigned long long>(md->ran[1] - milesLast.ran[1]),
-                                                  static_cast<unsigned long long>(md->history[1] - milesLast.history[1]),
-                                                  static_cast<unsigned long long>(md->aaWrites[0] - milesLast.aaWrites[0]),
-                                                  static_cast<unsigned long long>(md->aaWrites[1] - milesLast.aaWrites[1]),
-                                                  static_cast<unsigned long long>(md->queued[0] - milesLast.queued[0]),
-                                                  static_cast<unsigned long long>(md->queued[1] - milesLast.queued[1]),
-                                                  md->frame[0], md->stamp[0], md->otherStamp[0], md->slotIndex[0],
-                                                  md->previous[0], md->cut[0], md->frame[1], md->stamp[1],
-                                                  md->otherStamp[1], md->slotIndex[1], md->previous[1], md->cut[1],
-                                                  md->inputWidth[0], md->outputWidth[0], md->inputWidth[1],
-                                                  md->outputWidth[1]);
-                                    if (!(md->flags & miles_taa::flagHooked))
-                                        std::snprintf(line + std::strlen(line), sizeof line - std::strlen(line),
-                                                      " (no TemporalAa hook: ran counts unknown)");
-                                    consoleLine(line);
-                                    milesLast = *md;
+                                    if (gateLog && gd) {
+                                        // 0.0.74 test 4 TAA GATE LOG: the same record in lines under 256 characters,
+                                        // with the ring's matches, the unmatched runs and the history weight's inputs.
+                                        char g1[taa_gate::lineMax], g2[taa_gate::lineMax], g3[taa_gate::lineMax],
+                                            g4[taa_gate::lineMax];
+                                        const uint64_t jobs = md->leftJobs - milesLast.leftJobs;
+                                        auto dl = [](uint64_t now, uint64_t was) {
+                                            return static_cast<unsigned long long>(now - was);
+                                        };
+                                        std::snprintf(g1, sizeof g1,
+                                                      "MILES TAA %s (%u%%, %ux%u): %llu eye frames; L calls %llu ran %llu "
+                                                      "hist %llu; R calls %llu ran %llu hist %llu",
+                                                      (md->flags & miles_taa::flagLive) ? "ON" : "OFF", md->percent,
+                                                      md->renderWidth, md->renderHeight,
+                                                      static_cast<unsigned long long>(jobs),
+                                                      dl(md->calls[0], milesLast.calls[0]), dl(md->ran[0], milesLast.ran[0]),
+                                                      dl(md->history[0], milesLast.history[0]),
+                                                      dl(md->calls[1], milesLast.calls[1]), dl(md->ran[1], milesLast.ran[1]),
+                                                      dl(md->history[1], milesLast.history[1]));
+                                        std::snprintf(g2, sizeof g2,
+                                                      "TAA GATE: jobs L %llu R %llu, no call L %llu R %llu, older-job match "
+                                                      "L %llu R %llu, other views %llu; AA set %llu/%llu queued %llu/%llu "
+                                                      "requeued %llu/%llu (failed %llu/%llu)%s",
+                                                      dl(gd->eyeJobs[0], gateLast.eyeJobs[0]), dl(gd->eyeJobs[1], gateLast.eyeJobs[1]),
+                                                      dl(gd->missedJobs[0], gateLast.missedJobs[0]),
+                                                      dl(gd->missedJobs[1], gateLast.missedJobs[1]),
+                                                      dl(gd->matchedOld[0], gateLast.matchedOld[0]),
+                                                      dl(gd->matchedOld[1], gateLast.matchedOld[1]),
+                                                      dl(gd->unmatched, gateLast.unmatched),
+                                                      dl(md->aaWrites[0], milesLast.aaWrites[0]),
+                                                      dl(md->aaWrites[1], milesLast.aaWrites[1]),
+                                                      dl(md->queued[0], milesLast.queued[0]), dl(md->queued[1], milesLast.queued[1]),
+                                                      dl(gd->requeued[0], gateLast.requeued[0]),
+                                                      dl(gd->requeued[1], gateLast.requeued[1]),
+                                                      dl(gd->requeueFailed[0], gateLast.requeueFailed[0]),
+                                                      dl(gd->requeueFailed[1], gateLast.requeueFailed[1]),
+                                                      (gd->flags & taa_gate::flagRequeueOff) ? " REQUEUE OFF" : "");
+                                        std::snprintf(g3, sizeof g3,
+                                                      "TAA GATE weight: L F %d stamp %d prev %d idx %u +18e8 %u cut %u/%d "
+                                                      "+1de8 %d fr %d; R F %d stamp %d prev %d idx %u +18e8 %u cut %u/%d "
+                                                      "+1de8 %d fr %d",
+                                                      md->frame[0], md->stamp[0], md->otherStamp[0], md->slotIndex[0],
+                                                      md->previous[0], gd->cut[0], gd->cutFrame[0], gd->jobStamp[0],
+                                                      gd->frame2[0], md->frame[1], md->stamp[1], md->otherStamp[1],
+                                                      md->slotIndex[1], md->previous[1], gd->cut[1], gd->cutFrame[1],
+                                                      gd->jobStamp[1], gd->frame2[1]);
+                                        // MAIN VIEW SMALL is read at the VR start; say when the wrist's value differs.
+                                        const bool mainNext = taa_gate::on(c38(combat38::mainViewSmall));
+                                        const bool mainAtStart = (gd->flags & taa_gate::flagMainAtStart) != 0;
+                                        std::snprintf(g4, sizeof g4,
+                                                      "TAA GATE main: cut %d/%d +1de8 %d fr %d; TAA in/out L %u/%u R %u/%u; "
+                                                      "MAIN VIEW SMALL %s %ux%u (%llu sizings)%s%s",
+                                                      gd->mainCut, gd->mainCutFrame, gd->mainStamp, gd->mainFrame2,
+                                                      md->inputWidth[0], md->outputWidth[0], md->inputWidth[1],
+                                                      md->outputWidth[1],
+                                                      (gd->flags & taa_gate::flagMainSmall) ? "ON"
+                                                      : (gd->flags & taa_gate::flagMainAtStart) ? "WAITING" : "OFF",
+                                                      gd->mainWidth, gd->mainHeight,
+                                                      static_cast<unsigned long long>(gd->mainResized),
+                                                      (md->flags & miles_taa::flagHooked) ? "" : " (no TemporalAa hook)",
+                                                      mainNext == mainAtStart ? ""
+                                                      : mainNext              ? "; ON at the next VR start"
+                                                                              : "; OFF at the next VR start");
+                                        consoleLine(g1);
+                                        consoleLine(g2);
+                                        consoleLine(g3);
+                                        consoleLine(g4);
+                                        gateLast = *gd;
+                                        milesLast = *md;
+                                    } else {
+                                        char line[512];
+                                        const uint64_t jobs = md->leftJobs - milesLast.leftJobs;
+                                        std::snprintf(line, sizeof line,
+                                                      "MILES TAA %s (%u%%, %ux%u): %llu eye frames; L TemporalAa ran %llu "
+                                                      "(history %llu) R ran %llu (history %llu); AA set %llu/%llu, queued "
+                                                      "%llu/%llu; gate L F %d stamp %d prev-slot %d idx %u +18e8 %u cut %u, R F %d "
+                                                      "stamp %d prev-slot %d idx %u +18e8 %u cut %u; TAA in/out L %u/%u R %u/%u",
+                                                      (md->flags & miles_taa::flagLive) ? "ON" : "OFF", md->percent,
+                                                      md->renderWidth, md->renderHeight,
+                                                      static_cast<unsigned long long>(jobs),
+                                                      static_cast<unsigned long long>(md->ran[0] - milesLast.ran[0]),
+                                                      static_cast<unsigned long long>(md->history[0] - milesLast.history[0]),
+                                                      static_cast<unsigned long long>(md->ran[1] - milesLast.ran[1]),
+                                                      static_cast<unsigned long long>(md->history[1] - milesLast.history[1]),
+                                                      static_cast<unsigned long long>(md->aaWrites[0] - milesLast.aaWrites[0]),
+                                                      static_cast<unsigned long long>(md->aaWrites[1] - milesLast.aaWrites[1]),
+                                                      static_cast<unsigned long long>(md->queued[0] - milesLast.queued[0]),
+                                                      static_cast<unsigned long long>(md->queued[1] - milesLast.queued[1]),
+                                                      md->frame[0], md->stamp[0], md->otherStamp[0], md->slotIndex[0],
+                                                      md->previous[0], md->cut[0], md->frame[1], md->stamp[1],
+                                                      md->otherStamp[1], md->slotIndex[1], md->previous[1], md->cut[1],
+                                                      md->inputWidth[0], md->outputWidth[0], md->inputWidth[1],
+                                                      md->outputWidth[1]);
+                                        if (!(md->flags & miles_taa::flagHooked))
+                                            std::snprintf(line + std::strlen(line), sizeof line - std::strlen(line),
+                                                          " (no TemporalAa hook: ran counts unknown)");
+                                        consoleLine(line);
+                                        milesLast = *md;
+                                    }
                                 }
                             }
                         }
@@ -12190,6 +12286,16 @@ DWORD WINAPI run(void*) {
                             SpidyTaaGuardSet(spidy::taa_link::guardOn(c38(combat38::jitterGuard)) ? 1u : 0u);
                             // 0.0.74 test 3 SPIDYVR STOCK (ON, the default): no TAA HOLD / TAA LINK job writes,
                             // no COLOR grade or foveation over the eyes (the other options answer stockValue in c38).
+                            // 0.0.74 test 4 AA MODE: one console line when it changes (CLEAN answers in c38).
+                            {
+                                static uint32_t aaModeShown = UINT32_MAX;
+                                if (const uint32_t aaModeNow = c38(combat38::aaMode); aaModeNow != aaModeShown) {
+                                    aaModeShown = aaModeNow;
+                                    consoleLine(combat38::aaModeClean(aaModeNow)
+                                                    ? "AA MODE: CLEAN (no game TAA in the eyes; FXAA, per-eye history, light CAS)"
+                                                    : "AA MODE: OFF (the player's own AA options)");
+                                }
+                            }
                             {
                                 const bool stockWant = combat38::spidyvrStockOn(c38(combat38::spidyvrStock));
                                 SpidyStockSet(stockWant ? 1u : 0u);
@@ -13650,9 +13756,9 @@ DWORD WINAPI run(void*) {
     return error;
 }
 } // namespace
-// Update 34.1: every option bit this build knows (the highest: 0x1000000, 0.0.74 test 3 MILES TAA).
+// Update 34.1: every option bit this build knows (the highest: 0x2000000, 0.0.74 test 4 MAIN VIEW SMALL).
 // tests/launcher_options_tests.py checks run_game_vr.py sends none past it.
-constexpr uint32_t knownOptions = 0x1ffffff;
+constexpr uint32_t knownOptions = 0x3ffffff;
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     std::lock_guard life(lifecycle);
     if (worker)
@@ -14396,6 +14502,13 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySpidyvrStock(void* v) { return setHero007(v, combat38::spidyvrStock, 5512); }
 // 0.0.74 test 3 MILES TAA (miles_taa074.hpp): ON (0, the default) or OFF (1); live (the eye size at the next VR start).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMilesTaa(void* v) { return setHero007(v, combat38::milesTaa, 5513); }
+// 0.0.74 test 4 (taa_gate074.hpp): TAA GATE LOG ON (0, the default) or OFF (1), live; EYE TAA REQUEUE ON (0) or OFF
+// (1, the default), live; MAIN VIEW SMALL ON (0) or OFF (1, the default), read at the VR start.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaGateLog(void* v) { return setHero007(v, combat38::taaGateLog, 5514); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTaaRequeue(void* v) { return setHero007(v, combat38::eyeTaaRequeue, 5515); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyMainViewSmall(void* v) { return setHero007(v, combat38::mainViewSmall, 5516); }
+// 0.0.74 test 4 AA MODE: CLEAN (0, the default) or OFF (1); live, the eye size and texture filtering at the VR start.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyAaMode(void* v) { return setHero007(v, combat38::aaMode, 5517); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

@@ -17,14 +17,18 @@ def src(rel):
 
 
 class Option(unittest.TestCase):
-    def test_default_on_switchable_off(self):
-        self.assertEqual(L.UPDATE38_DEFAULTS['miles_taa'], 'on')
+    def test_default_off_kept_as_option(self):
+        """0.0.74 test 4: MILES TAA is OFF by default (AA MODE CLEAN is the default), kept as an option."""
+        self.assertEqual(L.UPDATE38_DEFAULTS['miles_taa'], 'off')
         self.assertEqual(L.CHOICES['miles_taa']['on'], 0)
         self.assertEqual(L.CHOICES['miles_taa']['off'], 1)
-        self.assertTrue(L.miles_taa_of({}))
-        self.assertTrue(L.miles_taa_of({'miles_taa': 'on'}))
-        self.assertFalse(L.miles_taa_of({'miles_taa': 'off'}))
-        self.assertTrue(L.miles_taa_in_file('/nonexistent/live.txt'))
+        self.assertFalse(L.miles_taa_of({}))
+        self.assertFalse(L.miles_taa_of({'miles_taa': 'on'}))  # AA MODE CLEAN wins
+        self.assertTrue(L.miles_taa_of({'aa_mode': 'off', 'miles_taa': 'on'}))
+        self.assertFalse(L.miles_taa_of({'aa_mode': 'off', 'miles_taa': 'off'}))
+        self.assertFalse(L.miles_taa_of({'aa_mode': 'off'}))
+        self.assertFalse(L.miles_taa_in_file('/nonexistent/live.txt'))
+        self.assertIn('combat38Values[combat38::milesTaa].store(1u);', src('src/game_xr.cpp'))
         self.assertEqual(L.SETTINGS['miles_taa'][1], 'SpidyMilesTaa')
 
     def test_subtext_one_sentence_with_restart(self):
@@ -47,7 +51,7 @@ class Wiring(unittest.TestCase):
         self.assertIn('MILES_TAA_OPTION = 0x1000000', r)
         self.assertIn("miles_taa = live_settings.miles_taa_in_file(ROOT/'live.txt')", r)
         g = src('src/game_xr.cpp')
-        self.assertIn('constexpr uint32_t knownOptions = 0x1ffffff;', g)
+        self.assertRegex(g, r'constexpr uint32_t knownOptions = 0x[13]ffffff;')  # 0x3ffffff since 0.0.74 test 4
         self.assertIn('(config.options & miles_taa::startOption) ? miles_taa::eyeTemporalBit << 8', g)
         h = src('include/spidy/miles_taa074.hpp')
         self.assertIn('startOption = 0x1000000', h)

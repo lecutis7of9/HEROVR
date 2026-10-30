@@ -7,6 +7,7 @@
 #include "spidy/taa_hold074.hpp"
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 TAA LINK + JITTER GUARD
 #include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA
+#include "spidy/taa_gate074.hpp" // 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL
 #include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -383,6 +384,28 @@ void milesFallBack(uint32_t why) {
     std::snprintf(line, sizeof line, "MILES TAA: %s\n", spidy::miles_taa::reasonText(why));
     OutputDebugStringA(line);
 }
+// 0.0.74 test 4 (taa_gate074.hpp): TAA GATE LOG and EYE TAA REQUEUE (game_xr's switches, live), MAIN VIEW SMALL
+// (eyeTemporal bit 0x40, read at the VR start). gateLock guards the rings and the requeue states (copyJob,
+// setupDisplay and TemporalAa may run on different threads).
+std::atomic<bool> gateLogOn{true}, requeueOn{false}, requeueOff{};
+std::atomic<uint32_t> gateReason{};
+SRWLOCK gateLock = SRWLOCK_INIT;
+spidy::taa_gate::JobRing gateRings[2];
+spidy::taa_gate::Requeue gateRequeue[2];
+} // namespace
+extern "C" {
+__declspec(dllexport) spidy::taa_gate::Data SpidyTaaGateData;
+}
+namespace {
+// The first reason only (game_xr prints it once).
+void gateFallBack(uint32_t why) {
+    uint32_t expected = spidy::taa_gate::none;
+    if (!gateReason.compare_exchange_strong(expected, why))
+        return;
+    SpidyTaaGateData.reason = why;
+    OutputDebugStringA(spidy::taa_gate::reasonText(why));
+    OutputDebugStringA("\n");
+}
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
@@ -633,6 +656,18 @@ uintptr_t pointer(uintptr_t p) {
     uintptr_t v{};
     read(p, &v, 8);
     return v;
+}
+// EYE TAA REQUEUE: the game's Enqueue (0x2c77810, CONFIRMED) for TemporalAa 0xb1 on `list` (a view's +0x18d0),
+// as 0x2d017b3 does; a fault is caught and turns the requeue off (never a crash). No C++ objects here (SEH).
+using GateEnqueue = void (*)(void*, uint32_t, uint64_t, void*);
+bool gateEnqueue(uintptr_t list) {
+    __try {
+        reinterpret_cast<GateEnqueue>(base + spidy::taa_gate::enqueueRva)(reinterpret_cast<void*>(list),
+                                                                         spidy::taa_gate::temporalAaCommand, 1, nullptr);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
 }
 bool owned(void* view) {
     if (!view)
@@ -1383,6 +1418,22 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
                                                             nullptr);
                 if (miles)
                     ++SpidyMilesTaaData.queued[eye];
+            } else if (miles && requeueOn.load(std::memory_order_relaxed) && !requeueOff.load()) {
+                // 0.0.74 test 4 EYE TAA REQUEUE: the eye's jobs stopped getting TemporalAa; once more, once per job.
+                const uintptr_t job = milesJobs[eye].load(std::memory_order_relaxed);
+                AcquireSRWLockExclusive(&gateLock);
+                const bool want = gateRequeue[eye].want(job, true);
+                if (want)
+                    gateRequeue[eye].queued(job);
+                ReleaseSRWLockExclusive(&gateLock);
+                if (want) {
+                    if (gateEnqueue(address + spidy::taa_gate::viewTaaList)) {
+                        ++SpidyTaaGateData.requeued[eye];
+                    } else {
+                        requeueOff = true;
+                        gateFallBack(spidy::taa_gate::requeueFault);
+                    }
+                }
             }
             break;
         }
@@ -1395,6 +1446,41 @@ std::array<uint32_t, 2> eyeRenderSize() {
     // 0.0.74 test 3 MILES TAA: the percent the eyes were made at (set once, when the first eye's buffers are made).
     const uint32_t made = milesPercent.load(std::memory_order_relaxed);
     return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
+}
+// 0.0.74 test 4 MAIN VIEW SMALL (taa_gate074.hpp, CANDIDATE): the game's own view's scene at mainPercent of its
+// output when it was on at the VR start and the game's AA makes TAA targets (its TemporalAa resolves it). The
+// output sizes (+0x1b980..) are the game's; only the render size and flag 2 are written. Never view flag 32.
+void mainViewSmall(void* buffers) {
+    namespace tg = spidy::taa_gate;
+    if (!enabled || !(eyeTemporal.load() & tg::mainEyeTemporalBit) || !buffers)
+        return;
+    const uintptr_t main = pointer(base + tg::mainViewGlobal);
+    if (!main || pointer(main + tg::viewBuffers) != reinterpret_cast<uintptr_t>(buffers))
+        return;
+    uint32_t aa = UINT32_MAX, out[2]{};
+    const bool aaOk = read(base + spidy::engine_taa::aaRva, &aa, 4) && spidy::engine_taa::aaMakesTargets(aa);
+    if (!read(reinterpret_cast<uintptr_t>(buffers) + tg::setSizes + 8, out, sizeof out))
+        return;
+    if (!aaOk) {
+        gateFallBack(tg::mainGameAa);
+        return;
+    }
+    if (!tg::shrinkMain(true, aaOk, out[0], out[1]))
+        return;
+    const auto sizes = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(buffers) + tg::setSizes);
+    const auto small = tg::mainSize(out[0], out[1]);
+    sizes[0] = small[0];
+    sizes[1] = small[1];
+    sizes[15] = tg::sizeFlags(sizes[15], small[0] == out[0] && small[1] == out[1]);
+    auto& d = SpidyTaaGateData;
+    ++d.mainResized;
+    d.mainPercent = tg::mainPercent;
+    d.mainWidth = small[0];
+    d.mainHeight = small[1];
+    char line[128];
+    std::snprintf(line, sizeof line, "MAIN VIEW SMALL: the game's view at %ux%u for %ux%u\n", small[0], small[1], out[0],
+                  out[1]);
+    OutputDebugStringA(line);
 }
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
@@ -1411,8 +1497,10 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
                 eyeWidth = config.width;
                 eyeHeight = config.height;
             }
-    if (!eyeWidth)
+    if (!eyeWidth) {
+        mainViewSmall(buffers); // 0.0.74 test 4 MAIN VIEW SMALL
         return;
+    }
     // SM2 +1b978: render width, height; the anti-aliased image's width,
     // height; those in multiples of 8; the output's width, height (multiples
     // of 8 when aligned, SM2VR +1b990/+1b994); ... flags at +1b9b4, 2 among
@@ -2101,14 +2189,48 @@ TemporalAa originalTemporalAa{};
 void* temporalAaHook{};
 void temporalAa(void* a, void* b, void* c, void* d) {
     namespace mt = spidy::miles_taa;
+    namespace tg = spidy::taa_gate;
     const uintptr_t job = enabled ? pointer(base + mt::jobGlobal) : 0;
-    int eye = -1;
+    int eye = -1, age = -1;
     for (int i = 0; job && i < 2; ++i)
         if (milesJobs[i].load(std::memory_order_relaxed) == job)
-            eye = i;
+            eye = i, age = 0;
+    // 0.0.74 test 4 TAA GATE LOG: each eye's last 4 jobs, not only the newest (test 3 counted a run for the eye's
+    // previous job as none).
+    const bool gateLog = gateLogOn.load(std::memory_order_relaxed);
+    if (eye < 0 && job && gateLog) {
+        AcquireSRWLockShared(&gateLock);
+        for (int i = 0; i < 2 && eye < 0; ++i)
+            if (const int at = gateRings[i].find(job); at >= 0)
+                eye = i, age = at;
+        ReleaseSRWLockShared(&gateLock);
+    }
     if (eye < 0) {
         originalTemporalAa(a, b, c, d);
+        if (job && gateLog) { // the main view's and other views' runs, with what their history weight reads
+            auto& g = SpidyTaaGateData;
+            uint8_t cut{};
+            read(job + tg::jobCut, &cut, 1);
+            g.mainCut = cut;
+            read(job + tg::jobCutFrame, &g.mainCutFrame, 4);
+            read(job + tg::jobStamp, &g.mainStamp, 4);
+            read(base + tg::frameGlobal2, &g.mainFrame2, 4);
+            ++g.unmatched;
+            ++g.sequence;
+        }
         return;
+    }
+    if (gateLog) {
+        auto& g = SpidyTaaGateData;
+        if (age > 0)
+            ++g.matchedOld[eye];
+        uint8_t cut{};
+        read(job + tg::jobCut, &cut, 1);
+        g.cut[eye] = cut;
+        read(job + tg::jobCutFrame, &g.cutFrame[eye], 4);
+        read(job + tg::jobStamp, &g.jobStamp[eye], 4);
+        read(base + tg::frameGlobal2, &g.frame2[eye], 4);
+        ++g.sequence;
     }
     uint32_t aa{}, index{}, input{}, output{};
     int32_t frame{}, other{}, stamp{};
@@ -2207,6 +2329,25 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             // 0.0.74 test 3 MILES TAA step 3: the same write for each eye job while it is live.
             const bool miles = milesSteps();
             milesJobs[i].store(reinterpret_cast<uintptr_t>(job), std::memory_order_relaxed);
+            {   // 0.0.74 test 4 TAA GATE LOG's ring and EYE TAA REQUEUE's count of jobs with no TemporalAa call.
+                auto& g = SpidyTaaGateData;
+                const uint64_t calls = SpidyMilesTaaData.calls[i];
+                AcquireSRWLockExclusive(&gateLock);
+                gateRings[i].push(reinterpret_cast<uintptr_t>(job));
+                const bool missed = calls == gateRequeue[i].callsAtJob;
+                const bool pending = gateRequeue[i].pending;
+                const bool tripped = gateRequeue[i].newJob(calls);
+                ReleaseSRWLockExclusive(&gateLock);
+                ++g.eyeJobs[i];
+                if (missed && g.eyeJobs[i] > 1)
+                    ++g.missedJobs[i];
+                if (pending && missed)
+                    ++g.requeueFailed[i];
+                if (tripped) {
+                    requeueOff = true;
+                    gateFallBack(spidy::taa_gate::requeueFailed);
+                }
+            }
             if (engineTaaLive.load() || miles) {
                 const uint32_t temporal = 1;
                 std::memcpy(static_cast<uint8_t*>(settings) + spidy::engine_taa::jobAa, &temporal, 4);
@@ -4603,7 +4744,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the
     // eyes' buffers get the TAA targets for ENGINE TAA (engineTaaBuffers).
     // 0.0.74 test 3: bit 0x20, MILES TAA on at the start (miles_taa074.hpp).
-    eyeTemporal = static_cast<uint32_t>(value >> 8) & (0x10 | spidy::miles_taa::eyeTemporalBit);
+    // 0.0.74 test 4: bit 0x40, MAIN VIEW SMALL on at the start (taa_gate074.hpp).
+    eyeTemporal = static_cast<uint32_t>(value >> 8) &
+                  (0x10 | spidy::miles_taa::eyeTemporalBit | spidy::taa_gate::mainEyeTemporalBit);
     return 0;
 }
 // 0.0.74 test 3 MILES TAA: the switch (game_xr, every frame) and its record (flags kept current here).
@@ -4620,6 +4763,21 @@ extern "C" const spidy::miles_taa::Data* SpidyMilesTaaNow() {
 }
 // The safety (game_xr): eye pairs stopped reaching the headset; off for the session.
 extern "C" void SpidyMilesTaaStall() { milesFallBack(spidy::miles_taa::stalled); }
+// 0.0.74 test 4 TAA GATE LOG / EYE TAA REQUEUE switches (game_xr, every frame) and their record.
+extern "C" void SpidyTaaGateSet(uint32_t log, uint32_t requeue) {
+    gateLogOn = log != 0;
+    requeueOn = requeue != 0;
+}
+extern "C" const spidy::taa_gate::Data* SpidyTaaGateNow() {
+    namespace tg = spidy::taa_gate;
+    auto& d = SpidyTaaGateData;
+    const bool atStart = (eyeTemporal.load() & tg::mainEyeTemporalBit) != 0;
+    d.flags = (gateLogOn.load() ? tg::flagLog : 0u) | (requeueOn.load() ? tg::flagRequeue : 0u) |
+              (requeueOff.load() ? tg::flagRequeueOff : 0u) | (atStart ? tg::flagMainAtStart : 0u) |
+              (d.mainResized ? tg::flagMainSmall : 0u);
+    d.reason = gateReason.load();
+    return &d;
+}
 // Update 34: ENGINE TAA. 1 on (refused, 4602, when engineTaaBlocked() says why), 0
 // off, 2 off because the frame rate halved (game_xr's guard). SpidyEngineTaaNow:
 // engine_taa::pack(state, reason).

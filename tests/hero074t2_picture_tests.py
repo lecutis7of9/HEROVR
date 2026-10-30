@@ -21,8 +21,9 @@ class Preset(unittest.TestCase):
     def test_defaults_on(self):
         self.assertEqual(L.UPDATE38_DEFAULTS['spidyvr_picture'], 'on')
         self.assertEqual(L.UPDATE38_DEFAULTS['flare_block'], 'on')
-        self.assertTrue(L.picture_preset_of({}))
-        self.assertTrue(L.picture_preset_in_file('/nonexistent/live.txt'))
+        self.assertTrue(L.picture_preset_of({'aa_mode': 'off'}))  # 0.0.74 test 4: under aa_mode = off
+        self.assertFalse(L.picture_preset_of({}))  # AA MODE CLEAN (the default) turns it off
+        self.assertFalse(L.picture_preset_in_file('/nonexistent/live.txt'))
         self.assertFalse(L.picture_preset_of({'spidyvr_picture': 'custom'}))
         self.assertTrue(L.flare_block_of({}))
         self.assertFalse(L.flare_block_of({'flare_block': 'off'}))
@@ -35,11 +36,12 @@ class Preset(unittest.TestCase):
         self.assertEqual(L.PICTURE_SUPERSAMPLE, 100)
         for name, value in p.items():
             L.export_value(name, value)  # every value sends
-        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'aa_mode': 'off', 'image_style': 'off'}), 'spidyvr')
         # 0.0.74 test 3 SPIDYVR STOCK (on by default) leaves the game's lens flares alone; off: FLARE BLOCK's.
-        self.assertFalse(L.lens_flares_off('lens_flares = game\n'))
-        self.assertTrue(L.lens_flares_off('spidyvr_stock = off\nlens_flares = game\n'))
-        self.assertFalse(L.lens_flares_off('spidyvr_stock = off\nflare_block = off\nlens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off('aa_mode = off\nlens_flares = game\n'))  # 0.0.74 test 4: under aa_mode = off
+        self.assertTrue(L.lens_flares_off('aa_mode = off\nspidyvr_stock = off\nlens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off('aa_mode = off\nspidyvr_stock = off\nflare_block = off\nlens_flares = game\n'))
+        self.assertTrue(L.lens_flares_off('lens_flares = game\n'))  # AA MODE CLEAN (the default): FLARE BLOCK's
 
     def test_stock_preset(self):
         """0.0.74 test 3 SPIDYVR STOCK: the picture preset plus every HERO render layer at SpidyVR's value."""
@@ -53,10 +55,11 @@ class Preset(unittest.TestCase):
         for name, value in s.items():
             L.export_value(name, value)
         self.assertEqual(L.STOCK_SUPERSAMPLE, 100)
-        self.assertTrue(L.stock_of({}) and L.stock_of({'spidyvr_stock': 'on'}) and not L.stock_of({'spidyvr_stock': 'off'}))
+        self.assertTrue(L.stock_of({'aa_mode': 'off'}) and L.stock_of({'aa_mode': 'off', 'spidyvr_stock': 'on'}) and not L.stock_of({'aa_mode': 'off', 'spidyvr_stock': 'off'}))
+        self.assertFalse(L.stock_of({}))  # 0.0.74 test 4 AA MODE CLEAN (the default) turns it off
         self.assertEqual(L.UPDATE38_DEFAULTS['spidyvr_stock'], 'on')
-        self.assertEqual(L.render_preset_in_file('/nonexistent/live.txt')[1], 'SPIDYVR STOCK')
-        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom'}), 'spidyvr')  # stock implies the game's TAA
+        self.assertEqual(L.render_preset_in_file('/nonexistent/live.txt')[1], 'AA MODE CLEAN')  # 0.0.74 test 4
+        self.assertEqual(L.image_style_of({'aa_mode': 'off', 'spidyvr_picture': 'custom'}), 'spidyvr')  # stock implies the game's TAA
         h = src('include/spidy/combat38.hpp')
         self.assertIn('"spidyvr_stock", "SPIDYVR STOCK"', h)
         self.assertIn('stockValue', src('src/game_xr.cpp'))

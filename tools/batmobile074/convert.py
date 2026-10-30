@@ -51,6 +51,28 @@ EYE = (0.37, 0.25, 1.14)   # test 2: 0.12 higher and 0.07 further back than test
 # or the side windows (48..125, pitch <= 16) stay exterior-only (see-through openings); the rest of the roof,
 # its frame and pillars are drawn seated too.
 WIN_FWD = (42, 20); WIN_SIDE = (48, 125, 16)
+# 0.0.74 test 4 (owner t1290u: "the hood isnt flush ... big gap", "part of the frame cuts into the passenger side",
+# "inside the dash is silver"). Made by Agent Mulder. Each is a switch here; all False = test 3 exactly.
+# HOOD_FIX: the cabin cut no longer reaches 6 cm AHEAD of the dash front (y0 -1.12) or into the solid dash itself
+# (faces hidden inside the dash stay in the body), and in the windscreen cone the faces the driver sees OVER the dash
+# (ahead of the dash front, every corner HOOD_BELOW or more under the eye) stay in the body: the hood, cowl and
+# engine cover meet the dash instead of the exterior-only Roof piece leaving a hole into the engine bay.
+# PILLAR_FIX: a roof/pillar face is not put back into the body (it stays exterior-only) when it reaches into the
+# seats' air (both seats: x +-SEAT_AIR_X, dash front to the headrest, beltline to the eye + .12) - FOREVER 2's
+# passenger A-pillar came down through the passenger dash corner (it sat in the 42..48 deg gap between the cones).
+# DASH_DARK_FIX: BC_Carbon (dash top, door trims, bezels, console, firewall) shipped base 0.8 light grey (simplify()
+# linked the carbon texture, the texture was then removed and the BSDF kept its 0.8 default - the paint colour was
+# never written): now the satin black base is written after the texture goes. The game's cabin_look074 ambient (cool
+# from above, amber from below) lights it.
+# COWL_FILL: FOREVER 2's cockpit sits .60 m behind its windscreen base, so past the dash front you looked down into
+# the car between the dash and the hood's back edge (owner p0: the dash, then a dark drop, then the hood). A satin
+# black panel (body; outside it is under the opaque canopy) now runs from the dash top's front edge to where the
+# hood skin comes out from under the canopy (rays straight down every 6 cm across the dash), at most COWL_MAX.
+HOOD_FIX = True; PILLAR_FIX = True; DASH_DARK_FIX = True; COWL_FILL = True
+DASH_FRONT = -1.06; DASH_BACK = -0.62; DASH_X = 0.66; DASH_UNDER = 0.50   # the Dash mesh (cockpit-local) less 2 cm
+HOOD_BELOW = 0.10   # metres under the eye: lower than that, ahead of the dash = hood
+COWL_MAX = 1.40   # metres forward of the dash front at most
+SEAT_AIR_X = 0.70
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 
@@ -143,6 +165,12 @@ if which == 'cockpit':
     for m in bpy.data.materials:
         if m.name in COCKPIT_PAINT:
             for n in [n for n in m.node_tree.nodes if n.type == 'TEX_IMAGE']: m.node_tree.nodes.remove(n)
+            if DASH_DARK_FIX:
+                c = COCKPIT_PAINT[m.name][0]
+                for b in [n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED']:
+                    for l in list(b.inputs['Base Color'].links): m.node_tree.links.remove(l)
+                    b.inputs['Base Color'].default_value = (c, c, c, 1)
+                print('DASH DARK', m.name, c)
     for o in meshes():
         if o.name == 'Dash':   # squash the top of the dash body: z .66 .. .82 -> .66 .. .82-DASH_TRIM
             for v in o.data.vertices:
@@ -297,10 +325,30 @@ def tri_box(a, b, c, lo, hi):
     return True
 TOP = 50.0
 cab_lo = L + V((-CAB['x'], CAB['y0'], CAB['z0'])); cab_hi = L + V((CAB['x'], CAB['y1'], TOP))
+dash_top = L.z + 0.82 - DASH_TRIM
+def cabin_boxes(ztop):
+    """The cockpit air (what you can see seated) up to ztop. test 3: the whole cab box. HOOD_FIX: from the dash
+    front back, less the solid dash (above it, behind it, under it, and the door bands beside it)."""
+    if not HOOD_FIX: return [(cab_lo, V((cab_hi.x, cab_hi.y, ztop)))]
+    y0 = L.y + DASH_FRONT; x = CAB['x']
+    return [(V((L.x - x, y0, dash_top)), V((L.x + x, cab_hi.y, ztop))),                         # over the dash
+            (V((L.x - x, L.y + DASH_BACK, cab_lo.z)), V((L.x + x, cab_hi.y, ztop))),             # behind it
+            (V((L.x - x, y0, cab_lo.z)), V((L.x + x, L.y + DASH_BACK, L.z + DASH_UNDER))),       # the footwell
+            (V((L.x - x, y0, cab_lo.z)), V((L.x - DASH_X, L.y + DASH_BACK, ztop))),              # beside it
+            (V((L.x + DASH_X, y0, cab_lo.z)), V((L.x + x, L.y + DASH_BACK, ztop)))]
+def in_cabin(a, b, c, ztop=TOP): return any(tri_box(a, b, c, lo, hi) for lo, hi in cabin_boxes(ztop))
+air_lo = L + V((-SEAT_AIR_X, DASH_FRONT, BELT)); air_hi = L + V((SEAT_AIR_X, CAB['y1'], S.get('eyez', EYE[2]) + 0.12))
+def pitch_of(p):
+    d = p - eye_b; return math.degrees(math.atan2(d.z, math.hypot(d.x, d.y)))
+def hood_face(pts):
+    """HOOD_FIX: ahead of the dash's front edge and wholly below the eye by HOOD_BELOW: the hood, cowl and engine
+    cover (they can only block the view down at the road, which the real hood does too) stay in the body. The
+    canopy and windscreen frame are above that height; the glass is never restored (R['glass'])."""
+    return HOOD_FIX and all(p.y < L.y + DASH_FRONT - 0.02 and p.z <= eye_b.z - HOOD_BELOW for p in pts)
 belt = L.z + BELT
 # above the beltline over the cabin's length, the car's full width (side windows, canopy sides, pillars)
 roof_lo = V((-50, L.y + CAB['y0'], belt)); roof_hi = V((50, L.y + CAB['y1'], TOP))
-roofobjs = []; deleted = moved = 0; restored = [0]
+roofobjs = []; deleted = moved = 0; restored = [0]; pillar = [0]
 def window_planes():
     """The window openings' edges as planes through the eye (normals): the yaw sides of the windscreen and the side
     windows (vertical) and their tops (the windscreen z = tan(20) x forward, a side window z = tan(16) x sideways)."""
@@ -337,7 +385,7 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     for f in bm.faces:
         a, b, c = (l.vert.co.copy() for l in f.loops)
         inroof = tri_box(a, b, c, roof_lo, roof_hi)
-        incab = tri_box(a, b, c, cab_lo, cab_hi)
+        incab = in_cabin(a, b, c)
         if incab and not inroof: kill.append(f)
         elif inroof: roof.append(f)
         elif incab: kill.append(f)
@@ -346,7 +394,7 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     keep_roof = []
     for f in roof:
         zs = [l.vert.co.z for l in f.loops]
-        if tri_box(*(l.vert.co.copy() for l in f.loops), cab_lo, V((cab_hi.x, cab_hi.y, belt))): kill.append(f)
+        if in_cabin(*(l.vert.co.copy() for l in f.loops), ztop=belt): kill.append(f)
         else: keep_roof.append(f)
     # test 2b (owner pt1208u screenshot: a black hole and missing panels from outside): the cut faces are not deleted
     # any more - they go to the exterior-only Roof piece too, so from outside the car is whole (body + Roof = the
@@ -360,7 +408,8 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
             mn_ = mats[f.material_index].name if len(mats) and mats[f.material_index] else ''
             if any(g.lower() in mn_.lower() for g in R['glass']): continue
             pts = [l.vert.co.copy() for l in f.loops]
-            if R.get('cones') and in_window((pts[0] + pts[1] + pts[2]) / 3 - eye_b): continue
+            if R.get('cones') and in_window((pts[0] + pts[1] + pts[2]) / 3 - eye_b) and not hood_face(pts): continue
+            if PILLAR_FIX and tri_box(*pts, air_lo, air_hi): pillar[0] += 1; continue
             if closest(eye_b, *pts) < R['head'] or closest(hub_b, *pts) < R['wheel']: continue
             back.append(f)
         bk = set(f.index for f in back); keep_roof = [f for f in keep_roof if f.index not in bk]
@@ -377,6 +426,45 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     bm.faces.ensure_lookup_table()
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.index in gone], context='FACES'); bm.to_mesh(o.data); bm.free()
 body = [o for o in body if len(o.data.polygons)]
+def cowl_fill():
+    """COWL_FILL (see the top): a satin black cowl panel from the dash top's front edge forward to where the car's
+    own hood skin comes out from under the (exterior-only) canopy: rays straight down every 6 cm across the dash,
+    every 2 cm forward; the first time the topmost hit is the body, not the Roof piece, is the hood's edge. Across
+    that the source car's own cabin floor (cut away, or under the canopy) showed through. Returns it or None."""
+    bpy.context.view_layer.update(); dg_ = bpy.context.evaluated_depsgraph_get()
+    roofset = set(o.name for o in roofobjs)
+    y0 = L.y + DASH_FRONT - 0.003; z0 = dash_top - 0.004
+    xs = [L.x - DASH_X + i * (2 * DASH_X) / 22 for i in range(23)]
+    ends = []; met = 0
+    for x in xs:
+        end = None; d = 0.0
+        while d <= COWL_MAX:
+            h, p_, _n, _i, ob_, _m = sc.ray_cast(dg_, V((x, y0 - d, L.z + 2.4)), V((0, 0, -1)), distance=4.0)
+            if h and ob_.name not in roofset and p_.z >= z0 - 0.45:
+                if d > 0.0: end = (d + 0.03, min(p_.z - 0.012, z0 + 0.25)); met += 1
+                break
+            d += 0.02
+        ends.append(end)
+    got = [e for e in ends if e]
+    if not got: print('COWL FILL none (the hood meets the dash)'); return None
+    far = max(got)
+    ends = [e if e else far for e in ends]
+    # a straight edge, not a sawtooth: each column's reach/height is the median of it and its neighbours
+    med = lambda v: sorted(v)[len(v) // 2]
+    ends = [(med([e[0] for e in ends[max(0, i - 2):i + 3]]), med([e[1] for e in ends[max(0, i - 2):i + 3]])) for i in range(len(ends))]
+    print('COWL FILL forward %.2f..%.2f m, hood edge %.2f..%.2f m over the dash top (%d/%d columns)' % (
+        min(e[0] for e in ends), max(e[0] for e in ends), min(e[1] for e in ends) - z0, max(e[1] for e in ends) - z0, met, len(xs)))
+    vv, faces = [], []
+    for x, e in zip(xs, ends): vv += [V((x, y0, z0)), V((x, y0 - e[0], e[1]))]
+    for i in range(len(xs) - 1): faces.append((2 * i, 2 * i + 2, 2 * i + 3, 2 * i + 1))
+    me = bpy.data.meshes.new('HERO_cowl'); me.from_pydata([tuple(v) for v in vv], [], faces); me.update()
+    m = bpy.data.materials.new('HERO_cowl_mat'); m.use_nodes = True
+    m.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = (0.03, 0.03, 0.03, 1)
+    me.materials.append(m)
+    ob = bpy.data.objects.new('HERO_cowl', me); sc.collection.objects.link(ob); return ob
+if COWL_FILL:
+    cw = cowl_fill()
+    if cw: body.append(cw)
 print('CABIN CUT deleted %d faces, roof (exterior only) %d faces, restored to the body %d' % (deleted, moved, restored[0]))
 # ---- verification on the body as it ships (the roof hidden, as the game draws it seated)
 def tris_world(objs):
@@ -386,13 +474,15 @@ def tris_world(objs):
 def closest(p, a, b, c):
     from mathutils.geometry import closest_point_on_tri
     return (closest_point_on_tri(p, a, b, c) - p).length
-in_cab = sum(1 for t in tris_world([o for o in body if not o.name.startswith('HERO_handle_pad')]) if tri_box(*t, cab_lo, V((cab_hi.x, cab_hi.y, belt))))
+in_cab = sum(1 for t in tris_world([o for o in body if not o.name.startswith('HERO_handle_pad')]) if in_cabin(*t, ztop=belt))
+in_air = sum(1 for t in tris_world([o for o in body if not o.name.startswith('HERO_handle_pad')]) if PILLAR_FIX and tri_box(*t, air_lo, air_hi))
+print('CHECK body triangles in the seats air (PILLAR_FIX): %d (pillar faces kept exterior-only %d)' % (in_air, pillar[0]))
 in_head = 0; nearest = 9.0
 for t in tris_world(body):
     d = closest(eye_b, *t); nearest = min(nearest, d)
     if d < 0.15: in_head += 1
 print('CHECK body triangles in the cockpit volume below the beltline: %d; within 0.15 m of the eye: %d; nearest %.3f m' % (in_cab, in_head, nearest))
-assert in_cab == 0 and in_head == 0
+assert in_cab == 0 and in_head == 0 and in_air == 0
 for o in roofobjs: o.hide_set(True); o.hide_viewport = True
 bpy.context.view_layer.update(); dg = bpy.context.evaluated_depsgraph_get()
 def rays(yaws, pitches, floor):
@@ -425,6 +515,6 @@ lay = dict(id=which, folder=S['folder'], length=round(mx2.y - mn2.y, 3), width=r
            exit=[round(-(side + 0.80), 3), 0.0, round(eye_b.y, 3)], screen=g3(L + V((0, -0.5895 + 0.009, 0.69))),
            cabinLow=g3(V((cab_hi.x, cab_lo.y, cab_lo.z))), cabinHigh=g3(V((cab_lo.x, cab_hi.y, mx2.z))),
            blocked=list(fwd), side=[left[0] + right[0], left[1] + right[1]], up=list(up), deleted=deleted, roof=moved, restored=restored[0],
-           inCab=in_cab, inHead=in_head, nearest=round(nearest, 3))
+           inCab=in_cab, inHead=in_head, inAir=in_air, pillar=pillar[0], fixes=[HOOD_FIX, PILLAR_FIX, DASH_DARK_FIX], nearest=round(nearest, 3))
 print('LAYOUT ' + json.dumps(lay))
 json.dump(lay, open(outdir + '/' + S['folder'] + '/layout.json', 'w'), indent=1)

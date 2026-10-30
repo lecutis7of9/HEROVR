@@ -27,6 +27,8 @@ class LauncherOptionsTests(unittest.TestCase):
         bits = [int(b, 16) for b in re.findall(r'\((0x[0-9a-fA-F]+) if ', self.launcher[start:end])]
         bits.append(0x800000)  # ENGINE_TAA_OPTION
         bits.append(0x1000000)  # MILES_TAA_OPTION (0.0.74 test 3)
+        bits.append(0x2000000)  # MAIN_VIEW_SMALL_OPTION (0.0.74 test 4)
+        self.assertIn('MAIN_VIEW_SMALL_OPTION if main_small', self.launcher[start:end])
         self.assertIn('MILES_TAA_OPTION if miles_taa', self.launcher[start:end])
         self.assertIn('ENGINE_TAA_OPTION if a.engine_taa', self.launcher[start:end])
         for bit in bits:

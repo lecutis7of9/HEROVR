@@ -21,9 +21,10 @@ class Defaults(unittest.TestCase):
     def test_lens_flares_off_in_vr(self):
         self.assertEqual(L.UPDATE38_DEFAULTS['lens_flares'], 'off_in_vr')
         # 0.0.74 test 3 SPIDYVR STOCK (on by default): SpidyVR's upstream - the game's lens flares left alone
-        self.assertFalse(L.lens_flares_off(None))
-        self.assertFalse(L.lens_flares_off(''))
-        self.assertFalse(L.lens_flares_off('lens_flares = off_in_vr\n'))
+        self.assertFalse(L.lens_flares_off('aa_mode = off\n'))  # 0.0.74 test 4: under aa_mode = off
+        self.assertFalse(L.lens_flares_off('aa_mode = off\nlens_flares = off_in_vr\n'))
+        self.assertTrue(L.lens_flares_off(None))  # AA MODE CLEAN (the default): off in VR
+        self.assertTrue(L.lens_flares_off(''))
         S = 'spidyvr_stock = off\n'  # STOCK off: the HERO lights as before
         self.assertTrue(L.lens_flares_off(S))
         self.assertTrue(L.lens_flares_off(S + 'lens_flares = off_in_vr\n'))

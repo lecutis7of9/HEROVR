@@ -1796,6 +1796,9 @@ ENGINE_TAA_OPTION = 0x800000
 # 0.0.74 test 3 MILES TAA (live.txt miles_taa, on by default): the eyes are made with the game's TAA targets and
 # their scene at 67%, which the game's TemporalAa resolves to the full eye (include/spidy/miles_taa074.hpp).
 MILES_TAA_OPTION = 0x1000000
+# 0.0.74 test 4 MAIN VIEW SMALL (live.txt main_view_small, on by default): the game's own view at 50% per side, its
+# TAA resolving it (include/spidy/taa_gate074.hpp); read when VR starts.
+MAIN_VIEW_SMALL_OPTION = 0x2000000
 
 
 def eye_aa_line(aa, asked):
@@ -2552,6 +2555,9 @@ def main():
         live_text = None
     if live_settings.lens_flares_off(live_text):
         session_off = ('lens_flares',)
+        if live_settings.screen_shake_off(live_text):
+            print('LENS FLARES: OFF IN VR this session (AA MODE CLEAN; aa_mode = off + restart VR for your own).',
+                  flush=True)
         print('LENS FLARES: OFF IN VR this session (0.0.73 lights default: no flare strobing or headlight '
               'ghosts; the game\'s own setting is put back when VR closes; LENS FLARES GAME + restart VR to '
               'keep them).', flush=True)
@@ -2572,7 +2578,14 @@ def main():
     migrated_074t2 = live_settings.migrate_074t2(ROOT/'live.txt', ROOT/'next-launch.txt')
     if migrated_074t2:
         print(migrated_074t2, flush=True)
-    game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
+    # 0.0.74 test 4 AA MODE CLEAN (default on): the game's ScreenShake 0 while VR runs (SESSION_OFF['screen_shake'],
+    # put back after), and no game TAA in the eyes, so GAME AA TAA does not apply.
+    clean = live_settings.aa_mode_in_file(ROOT/'live.txt')
+    if live_settings.screen_shake_off(live_text):
+        session_off = tuple(session_off) + ('screen_shake',)
+        print('SCREEN SHAKE: OFF this session (AA MODE CLEAN; the game\'s own is put back when VR closes; '
+              'aa_mode = off + restart VR keeps it).', flush=True)
+    game_taa_look = 'off' if clean else live_settings.image_style_in_file(ROOT/'live.txt')
     if live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False)):
         session_off = tuple(session_off) + ('game_aa',)
         print("GAME AA: TAA, no upscaler, this session (0.0.73 AA: the path SpidyVR's per-eye TAA uses; DLAA/DLSS "
@@ -2828,7 +2841,13 @@ def session(a, startup, session_off=()):
     game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))
     _, render_preset_name = live_settings.render_preset_in_file(ROOT/'live.txt')
-    if render_preset_name and str(mip_bias_asked).strip() != '0':
+    if render_preset_name == 'AA MODE CLEAN':
+        # 0.0.74 test 4 AA MODE CLEAN: +0.5 on the samplers the game biases negatively, with --anisotropy (16x by
+        # default); a -MipBias other than the default is the player's and is kept.
+        mip_bias_asked = a.mip_bias if str(a.mip_bias).strip() != '0.5' else live_settings.CLEAN_MIP_BIAS
+        print(f'0.0.74 AA MODE CLEAN: texture mip bias {mip_bias_asked} with {a.anisotropy}x anisotropic filtering '
+              'on the samplers the game biases for its upscaler (aa_mode = off uses your own; restart).', flush=True)
+    elif render_preset_name and str(mip_bias_asked).strip() != '0':
         # 0.0.74 test 2 SPIDYVR PICTURE / test 3 SPIDYVR STOCK: SpidyVR adds no mip bias (CONFIRMED);
         # spidyvr_stock = off with spidyvr_picture = custom keeps yours.
         print(f'0.0.74 {render_preset_name}: texture mip bias 0 (the launcher passed {a.mip_bias}; '
@@ -3007,6 +3026,10 @@ def session(a, startup, session_off=()):
         print('MILES TAA: ' + ('ON - the game\'s TAA in each eye (Miles Morales VR\'s path), the eyes\' scene at 67% '
                                'resolved by it; miles_taa = off in live.txt for the full eye size (restart).'
                                if miles_taa else 'OFF (live.txt miles_taa).'), flush=True)
+        main_small = live_settings.main_view_small_in_file(ROOT/'live.txt')
+        print('MAIN VIEW SMALL: ' + ('ON - the flat-screen view at 50% (its TAA resolves it), more GPU time for the eyes; '
+                                     'main_view_small = off in live.txt and restart for the full size.'
+                                     if main_small else 'OFF (live.txt main_view_small).'), flush=True)
         config = struct.pack('<4I7Q2IfI', 0x53585243, 24, 664, game.pid, game.base, queue,
                              bridge_module, ray_module, motion_module, 0, 0,
                              int(a.seconds*1000), a.size, a.swing_speed,
@@ -3023,7 +3046,8 @@ def session(a, startup, session_off=()):
                              (0x100000 if a.no_prompt_help else 0) | (0x80000 if a.eye_lens_distances else 0) |
                              (0x200000 if a.arcade_webs else 0) | (0x400000 if a.eye_aa == 'off' else 0) |
                              (ENGINE_TAA_OPTION if a.engine_taa else 0) |
-                             (MILES_TAA_OPTION if miles_taa else 0)) + \
+                             (MILES_TAA_OPTION if miles_taa else 0) |
+                             (MAIN_VIEW_SMALL_OPTION if main_small else 0)) + \
             runtime_path(manifest) + struct.pack('<14I', a.snap_turn, a.haptics, a.screen_size, a.smooth_turn,
                                                  a.render_scale, a.weight, a.eye_height, a.arm_length, a.hud,
                                                  a.flip_speed, a.upscale, a.monitor_rate, a.screen_depth,
@@ -3181,7 +3205,20 @@ def session(a, startup, session_off=()):
         # 0.0.74 test 2 SPIDYVR PICTURE (default on): SpidyVR's picture over whatever live.txt kept (live.txt
         # keeps the player's own for spidyvr_picture = custom); the DLL holds the same while it is on.
         render_preset, render_preset_name = live_settings.render_preset_in_file(ROOT/'live.txt')
-        if render_preset_name == 'SPIDYVR STOCK':
+        if render_preset_name == 'AA MODE CLEAN':
+            # 0.0.74 test 4 AA MODE CLEAN (default on): docs/AA-MODE-CLEAN-074.md; aa_mode = off uses your own.
+            sent = []
+            for name, value in render_preset.items():
+                _, export, text = live_settings.SETTINGS[name]
+                if export not in xr or call_remote(process, xr[export], live_settings.export_value(name, value)):
+                    continue
+                live_file.applied(name, value)
+                kept[name] = value
+                sent.append(f'{name} = {value}')
+            print('0.0.74 AA MODE CLEAN: ON - no game TAA in the eyes, FXAA every eye frame, the per-eye history '
+                  'at 80, a light CAS, building reach 150 (' + ', '.join(sent) + '); aa_mode = off uses your own.',
+                  flush=True)
+        elif render_preset_name == 'SPIDYVR STOCK':
             # 0.0.74 test 3 SPIDYVR STOCK (default on): SpidyVR's render path - every HERO VR render layer of
             # live.txt at SpidyVR's value (docs/TAA-074-test3.md); spidyvr_stock = off uses your own.
             sent = []

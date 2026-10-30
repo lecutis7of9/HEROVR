@@ -24,7 +24,7 @@ const File criminalFiles[files] = {
 };
 
 const char* const researchNotes[researchItems][2] = {
-    {"GAME WAYPOINT LINK", "NEEDS A CONFIRMED HOOK - NOT IN"},
+    {"GAME WAYPOINT LINK", "IN RESEARCH"},
     {"SUIT VAULT", "COMING SOON (THE VAULT POINT)"},
     {"EVIDENCE LAB", "COMING SOON (THE LAB BENCH)"},
     {"BATWING", "NOT STARTED"},
@@ -362,7 +362,7 @@ std::vector<std::string> pageLines(uint32_t page, uint32_t cursor, const Feed& f
     std::vector<std::string> L;
     if (page >= pages)
         page = menu;
-    L.emplace_back(page == menu ? "BATCOMPUTER" : std::string("BATCOMPUTER / ") + pageNames[page]);
+    L.emplace_back(page == menu ? std::string("BATCOMPUTER") : std::string(pageNames[page])); // test 2b polish: the page name only (no overlap with BACK)
     const auto* t = f.crimes;
     char b[160];
     const auto where = [&](Vec3 at, float& m, float& deg) { return f.cityOk && crime_gps074::bearingTo(f.city, at, deg, m); };
@@ -375,7 +375,7 @@ std::vector<std::string> pageLines(uint32_t page, uint32_t cursor, const Feed& f
         for (uint32_t i = 0; i < files; ++i)
             L.push_back(sel(cursor == i, criminalFiles[i].name));
         const File& c = criminalFiles[std::min(cursor, files - 1)];
-        L.push_back(std::string("THREAT: ") + c.threat + "   (FLAVOUR FILE)");
+        L.push_back(std::string("THREAT: ") + c.threat);
         for (const char* l : c.lines)
             L.emplace_back(l);
         break;
@@ -398,7 +398,6 @@ std::vector<std::string> pageLines(uint32_t page, uint32_t cursor, const Feed& f
             L.emplace_back("NO ONGOING CASES SEEN - DRIVE WITH CRIME GPS ON");
         L.emplace_back("");
         L.emplace_back("A / TRIGGER: TRACK IT (THE CAR'S MAP AND ARROW)");
-        L.emplace_back("CRIMES = GROUPS OF THE GAME'S ENEMIES (CANDIDATE)");
         break;
     }
     case pastCases: {
@@ -427,8 +426,7 @@ std::vector<std::string> pageLines(uint32_t page, uint32_t cursor, const Feed& f
         if (!n)
             L.emplace_back("NO TRAFFIC YET - DRIVE WITH CRIME GPS ON");
         L.emplace_back("");
-        L.emplace_back("(CANDIDATE) FROM GROUPS OF THE GAME'S ENEMIES - NO ADDRESSES");
-        L.emplace_back("(FLAVOUR) DISPATCH: ALL UNITS, GIVE THE BLACK CAR ROOM");
+        L.emplace_back("DISPATCH: ALL UNITS, GIVE THE BLACK CAR ROOM");
         break;
     }
     case research:
@@ -437,9 +435,10 @@ std::vector<std::string> pageLines(uint32_t page, uint32_t cursor, const Feed& f
             L.push_back(std::string(researchNotes[i][0]) + ": " + researchNotes[i][1]);
         break;
     case map:
-        L.emplace_back("RED: CRIMES   GOLD: TRACKED   CYAN: THE CAR");
-        L.emplace_back("RINGS: 200 M AND 400 M FROM THE CAR");
-        L.emplace_back("NORTH UP (WORLD -Z, CANDIDATE)");
+        L.emplace_back("RED: CRIME  GOLD: TRACKED");
+        L.emplace_back("CYAN: THE CAR");
+        L.emplace_back("RINGS: 200 M, 400 M");
+        L.emplace_back("NORTH UP");
         L.emplace_back("STYLIZED - NO GAME MAP");
         if (!f.cityOk)
             L.emplace_back("NO CAR POSITION");
@@ -576,8 +575,16 @@ bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v
                 s.quad(-W, -H, W, H, 0, face, .88f);
                 s.frame(-W, -H, W, H, .01f, .001f, trim, 1);
                 const size_t n = v.lines.size();
-                if (n)
-                    s.text(v.lines[0], -W + .05f, H - .09f, .052f, ice, .002f);
+                // test 2b polish: the title shrinks to end before BACK; the rows before the panel's edge (MAP: the map)
+                const auto fit = [](const std::string& t, float h, float room) {
+                    const float w = textWidth(t, h);
+                    return w > room && w > 1e-6f ? h * room / w : h;
+                };
+                if (n) {
+                    float bx0, by0, bx1, by1;
+                    buttonBox(Button::back, bx0, by0, bx1, by1);
+                    s.text(v.lines[0], -W + .05f, H - .09f, fit(v.lines[0], .052f, bx0 - .03f - (-W + .05f)), ice, .002f);
+                }
                 s.quad(-W + .04f, H - .115f, W - .04f, H - .11f, .001f, trim, .9f);
                 // BACK / STAND UP
                 for (const Button bt : {Button::back, Button::stand}) {
@@ -598,7 +605,7 @@ bool append(std::vector<Vertex>& solid, std::vector<Vertex>& glow, const View& v
                     if (picked || hot)
                         s.quad(-W + .04f, y - .012f, (isMap ? 0.f : W - .04f), y + rowText + .012f, .001f, hot ? ice : trim,
                                hot ? (v.touching ? .5f : .3f) : .55f);
-                    s.text(l, -W + .06f, y, rowText, picked || hot ? ice : cyan, .002f);
+                    s.text(l, -W + .06f, y, fit(l, rowText, (isMap ? .03f : W - .05f) - (-W + .06f)), picked || hot ? ice : cyan, .002f);
                 }
                 if (isMap) {
                     const float mx = .42f, my = -.04f, R = .36f;

@@ -47,6 +47,7 @@
 #include "spidy/batcave074.hpp"
 #include "spidy/crime_gps074.hpp"
 #include "spidy/taa_hold074.hpp"
+#include "spidy/taa_link074.hpp"
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
 #include "spidy/roster_page.hpp"
@@ -18919,7 +18920,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 160, "one hundred and sixty options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 162, "one hundred and sixty options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18953,7 +18954,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 160, "0.0.74 test 3 has 160 COMBAT options (+ HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 162, "0.0.74 test 3 has 160 COMBAT options (+ HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25196,9 +25197,60 @@ int main() {
         check(!combat38::taaDiagnosticsOn(0) && combat38::taaDiagnosticsOn(1) && combat38::crimeGpsOn(0) && !combat38::crimeGpsOn(1),
               "TAA DIAGNOSTICS off by default, CRIME GPS on by default");
     });
+    test("0.0.74 test 3 WHEEL FIRST: switchable; off, a grip on the rim within reach of the handle opens the door (test 2b)", [] {
+        namespace v = van072;
+        check(combat38::wheelFirstOn(0) && !combat38::wheelFirstOn(1), "WHEEL FIRST on by default");
+        v::Tune t{};
+        t.handleIn = t.hub + Vec3{-.2f, -.05f, 0}; // a cramped cabin: the handle by the rim
+        v::Van van;
+        van.frame = {};
+        van.state = v::driving;
+        v::In in{};
+        in.enabled = in.play = in.punisher = true;
+        in.dt = 1.f / 90;
+        in.tracked[0] = in.tracked[1] = true;
+        const auto flat = [](float, float, float y) { return y; };
+        const auto open = [](Vec3, Vec3, float) { return true; };
+        const Vec3 axis = v::axisOf(t), up = normalized(Vec3{0, 1, 0} - axis * axis.y), side = normalized(cross(up, axis));
+        in.hands[0] = van.frame.world(t.hub + (up * std::cos(-1.9f) + side * std::sin(-1.9f)) * t.wheelRadius);
+        check(length(in.hands[0] - van.frame.world(t.handleIn)) <= t.handleReach, "the rim hand is within the handle's reach");
+        check(v::Wheel::near(van.frame.local(in.hands[0]), t), "the rim hand is on the wheel");
+        in.grip[0] = 1;
+        auto o = van.step(in, flat, open, open, t);
+        check(!o.exited && van.state == v::driving, "on: the wheel wins");
+        in.grip[0] = 0;
+        van.step(in, flat, open, open, t);
+        t.wheelFirst = false;
+        in.grip[0] = 1;
+        o = van.step(in, flat, open, open, t);
+        check(o.exited, "off: test 2b, the door opened from the wheel");
+    });
+    test("0.0.74 test 3 TAA LINK / JITTER GUARD: an unmoved history slot is refused, a moving one is not", [] {
+        namespace tl = spidy::taa_link;
+        check(tl::guardOn(0) && !tl::guardOn(1), "JITTER GUARD on by default, switchable");
+        check(combat38::optionInfo[combat38::jitterGuard].key == std::string_view("jitter_guard"), "the option row");
+        check(tl::frameRva == 0xc2c9d40 && tl::jobSlotIndex == 0x1a38 && tl::jobSlots == 0x1a28 && tl::jobPreviousSet == 0x18e8,
+              "the exe's history gate fields (0x2c98290)");
+        tl::Eye e;
+        bool r = false;
+        for (int f = 100; f < 140; ++f)
+            r = tl::refused(e, true, f - 1) || r;
+        check(!r, "a slot stamped every frame (the linked history) is never refused");
+        tl::Eye s;
+        for (uint32_t k = 0; k < tl::staleJobs; ++k)
+            check(!tl::refused(s, true, 77), "a few unmoved jobs (a pause) are not yet refused");
+        check(tl::refused(s, true, 77), "a slot unmoved for staleJobs jobs is refused (the still-head shimmer)");
+        check(!tl::refused(s, true, 200), "the slot moving again ends it at once");
+        tl::Eye n;
+        check(tl::refused(n, false, 0), "no slot or no previous set: always refused");
+        check(tl::bucket(10, 9) == 1 && tl::bucket(10, 10) == 0 && tl::bucket(10, 8) == 2 && tl::bucket(10, 0) == 3 &&
+              tl::bucket(10, 12) == 0, "the age buckets");
+        check(tl::guardJitter > 0 && tl::guardJitter < 1e-4f, "the guard's jitter is not zero (TemporalAa keeps running) yet far below a pixel");
+        check(sizeof(tl::Data) == 160, "the record the report reads");
+    });
     test("0.0.74 test 2b TAA HOLD: stuck stamps held 16 frames back, real cuts and OFF left to the game", [] {
         namespace th = spidy::taa_hold;
-        check(combat38::taaHoldOn(0) && !combat38::taaHoldOn(1), "TAA HOLD on by default");
+        check(!combat38::taaHoldOn(0) && combat38::taaHoldOn(1), "TAA HOLD off by default (0.0.74 test 3: it never fired)");
         check(th::settingsFrame == 0xc2c6c30 - 0xc2c64a0 && th::settingsJob == 0xc2c6af0 - 0xc2c64a0,
               "the context offsets are the globals TemporalAa reads");
         check(th::share(0, 0, 0) == 1 && th::share(1, 40, 40) == 1, "ages 0 or a cut: no history (the test 2 readback)");
@@ -25299,6 +25351,24 @@ int main() {
             check(std::abs(van.speed) <= t.exitSpeed, (name + ": braked to a crawl").c_str());
             rawGrip[0] = rawGrip[1] = 0;
             tick();
+            // 0.0.74 test 3 WHEEL FIRST: the rim point nearest the inside handle - a grip there takes the wheel.
+            {
+                float best = 0, bestD = 1e9f;
+                for (int k = 0; k < 360; ++k) {
+                    const float a = k * 6.2831853f / 360;
+                    const float dd = length(rim(a) - van.frame.world(t.handleIn));
+                    if (dd < bestD)
+                        bestD = dd, best = a;
+                }
+                in.hands[0] = rim(best);
+                rawGrip[0] = 1;
+                const auto w = tick();
+                check(!w.exited && van.state == v::driving && van.wheel.latched[0],
+                      (name + ": WHEEL FIRST - a grip on the rim near the door handle steers, the door stays shut").c_str());
+                rawGrip[0] = 0;
+                tick();
+                check(!v::Wheel::near(t.handleIn, t), (name + ": the inside handle itself is off the wheel").c_str());
+            }
             in.hands[0] = van.frame.world(t.handleIn);
             rawGrip[0] = 1;
             const auto x = tick();

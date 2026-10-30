@@ -68,6 +68,10 @@ struct Tune {
     // On: getting in never moves the van; HE is turned to its forward and carried into the seat (Driver).
     bool boardPlayer = true;
     float groundStep = .6f;        // the ground under the van within this of the player's feet
+    // 0.0.74 test 3 WHEEL FIRST (on; false: test 2b - the inside handle answers any grip within reach, so a grip
+    // on the Batmobiles' wheel, which sits within .2 m of their door handle, could open the door).
+    bool wheelFirst = true;
+    float wheelGuard = .06f;       // beyond rimNear: a hand this near the rim (or anywhere over the wheel's disc)
 };
 
 
@@ -278,6 +282,18 @@ struct Wheel {
     void release() {
         latched[0] = latched[1] = false;
     }
+    // 0.0.74 test 3 WHEEL FIRST: a hand on, or near, the wheel (rim, spokes or hub, within wheelGuard of its plane).
+    static bool near(Vec3 localHand, const Tune& t) {
+        if (!fine(localHand))
+            return false;
+        float a = 0, off = 0;
+        if (onRim(localHand, a, off, t) || (fine(off) && off <= t.rimNear + t.wheelGuard))
+            return true;
+        const Vec3 axis = axisOf(t);
+        const Vec3 d = localHand - t.hub;
+        const float out = dot(d, axis);
+        return std::abs(out) <= t.rimNear + t.wheelGuard && length(d - axis * out) <= t.wheelRadius + t.rimNear;
+    }
     // hands in the van's frame; grip 0-1. Returns the wheel's angle.
     float step(const Vec3 localHand[2], const float grip[2], const bool tracked[2], const Tune& t = {}) {
         float turn = 0;
@@ -457,7 +473,9 @@ struct Van {
                 o.entered = true;
                 o.haptic[i] = .5f;
             } else if (state == driving && length(in.hands[i] - frame.world(t.handleIn)) <= t.handleReach &&
-                       std::abs(speed) <= t.exitSpeed) {
+                       std::abs(speed) <= t.exitSpeed &&
+                       !(t.wheelFirst && (wheel.latched[i] || Wheel::near(frame.local(in.hands[i]), t)))) {
+                // 0.0.74 test 3 WHEEL FIRST: the wheel's grip wins; the door only answers a hand off the wheel.
                 park();
                 ++exits;
                 o.exited = true;

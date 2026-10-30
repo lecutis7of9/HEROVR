@@ -5,6 +5,7 @@
 #include "spidy/engine_taa.hpp"
 #include "spidy/taa_diag074.hpp"
 #include "spidy/taa_hold074.hpp"
+#include "spidy/taa_link074.hpp" // 0.0.74 test 3 TAA LINK + JITTER GUARD
 #include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -1927,7 +1928,7 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
 extern "C" {
 __declspec(dllexport) spidy::taa_hold::Data SpidyTaaHoldData;
 }
-std::atomic<bool> taaHoldOn{true};
+std::atomic<bool> taaHoldOn{false}; // 0.0.74 test 3: OFF by default (it never fired in test 2b)
 extern "C" void SpidyTaaHoldSet(uint32_t on) { taaHoldOn = on != 0; }
 void taaHoldJob(unsigned i, void* view, uint8_t* settings, uintptr_t job) {
     namespace th = spidy::taa_hold;
@@ -1967,6 +1968,42 @@ void taaHoldJob(unsigned i, void* view, uint8_t* settings, uintptr_t job) {
         std::memcpy(reinterpret_cast<void*>(job + th::jobStamp), &p.stamp, 4);
         ++d.held[i];
     }
+    ++d.sequence;
+}
+// 0.0.74 test 3 TAA LINK + JITTER GUARD (taa_link074.hpp). extern "C" block: the report finds it by name.
+extern "C" {
+__declspec(dllexport) spidy::taa_link::Data SpidyTaaLinkData;
+}
+std::atomic<bool> taaGuardOn{true};
+std::atomic<uint32_t> taaRefusedEyes{}; // bit per eye: history refused (slot unmoved or missing)
+extern "C" void SpidyTaaGuardSet(uint32_t on) { taaGuardOn = on != 0; }
+// One eye job after the game's copy (read() only): is its history slot moving with the frame?
+void taaLinkJob(unsigned i, uintptr_t job) {
+    namespace tl = spidy::taa_link;
+    static tl::Eye eyeState[2];
+    auto& d = SpidyTaaLinkData;
+    d.guardOn = taaGuardOn.load(std::memory_order_relaxed) ? 1 : 0;
+    ++d.jobs[i];
+    int32_t index{}, stamp{}, frame{};
+    uintptr_t slot{}, previous{};
+    bool have = read(job + tl::jobSlotIndex, &index, 4) && (index == 0 || index == 1) &&
+                read(job + tl::jobSlots + 8 * (1 - index), &slot, 8) && slot && read(slot, &stamp, 4) &&
+                read(job + tl::jobPreviousSet, &previous, 8) && previous;
+    if (!have)
+        ++d.noSlot[i];
+    const bool refused = tl::refused(eyeState[i], have, stamp);
+    if (have && refused)
+        ++d.stale[i];
+    if (have && base && read(base + tl::frameRva, &frame, 4)) {
+        ++d.ages[i][tl::bucket(frame, stamp)];
+        d.lastAge[i] = frame - stamp;
+    }
+    d.lastIndex[i] = index;
+    const uint32_t bit = 1u << i;
+    if (refused)
+        taaRefusedEyes.fetch_or(bit, std::memory_order_relaxed);
+    else
+        taaRefusedEyes.fetch_and(~bit, std::memory_order_relaxed);
     ++d.sequence;
 }
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
@@ -2023,6 +2060,8 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             // follow the frame (share 1 = no history, the shake). Only this job's copy is written.
             if (engineTaaLive.load())
                 taaHoldJob(i, view, static_cast<uint8_t*>(settings), reinterpret_cast<uintptr_t>(job));
+            if (engineTaaLive.load())
+                taaLinkJob(i, reinterpret_cast<uintptr_t>(job)); // 0.0.74 test 3 TAA LINK
             if (shareExposure(reinterpret_cast<uintptr_t>(job), i)) {
                 AcquireSRWLockExclusive(&telemetry);
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
@@ -2351,6 +2390,12 @@ std::array<float, 2> eyeJitter() {
                                      render[0], render[1], gameJitter[0].load(std::memory_order_relaxed),
                                      gameJitter[1].load(std::memory_order_relaxed), engineTaaJitterScale.load(),
                                      j[0], j[1]);
+        // 0.0.74 test 3 JITTER GUARD: an eye whose TAA history the game refuses only shows the jitter (the
+        // still-head shimmer); a near-zero constant keeps TemporalAa running and its history check made.
+        if (taaGuardOn.load(std::memory_order_relaxed) && taaRefusedEyes.load(std::memory_order_relaxed)) {
+            j = {spidy::taa_link::guardJitter, spidy::taa_link::guardJitter};
+            ++SpidyTaaLinkData.guardedLenses;
+        }
         engineTaaLenses.fetch_add(1, std::memory_order_relaxed);
         for (unsigned i = 0; i < 2; ++i) {
             if (std::abs(j[i]) > engineTaaEyeMax[i].load(std::memory_order_relaxed))
@@ -4401,6 +4446,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaa(void* on) {
     }
     engineTaaWhy = 0;
     if (!engineTaaLive.exchange(true)) {
+        taaRefusedEyes = 0; // 0.0.74 test 3 JITTER GUARD: each start re-checks the history
         ++engineTaaOns;
         OutputDebugStringA("ENGINE TAA: on\n");
     }

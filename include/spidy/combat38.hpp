@@ -237,10 +237,14 @@ enum Option : uint32_t {
     taaDiagnostics,
     // 0.0.74 test 2b CRIME GPS: ON (the default) or OFF - crime popups, MAP and HUD arrow in the Batmobile and van
     crimeGps,
-    // 0.0.74 test 2b TAA HOLD: ON (the default) or OFF - each eye's TAA history kept instead of thrown away every frame
+    // 0.0.74 test 2b TAA HOLD: OFF (the default since 0.0.74 test 3; it never fired) or ON
     taaHold,
     // 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (heap_guard.hpp)
     heapGuard,
+    // 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
+    jitterGuard,
+    // 0.0.74 test 3 WHEEL FIRST (van072.hpp)
+    wheelFirst,
     options
 };
 struct OptionInfo {
@@ -619,8 +623,10 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"taa_diagnostics", "TAA DIAGNOSTICS", "TAAD", "ON logs every frame's per-eye TAA jitter and history; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
     {"crime_gps", "CRIME GPS", "CGPS", "ON shows crimes near your car: popup, MAP, HUD arrow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"taa_hold", "TAA HOLD", "TAAH", "ON keeps each eye's TAA history so the image settles, not shakes; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"taa_hold", "TAA HOLD", "TAAH", "ON sets back the TAA stamps; it never fired, so OFF by default; live.", 2, {"OFF", "ON", nullptr, nullptr}},
     {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"jitter_guard", "JITTER GUARD", "JITG", "ON stops the eye jitter while the game refuses that eye's TAA history; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"wheel_first", "WHEEL FIRST", "WHL1", "ON: a hand on or near the wheel steers and never opens the door; live.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -657,8 +663,11 @@ inline bool dashPointerOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 2b: TAA DIAGNOSTICS (0 OFF, the default: a diagnostic, not a fix), CRIME GPS (0 ON, 1 OFF).
 inline bool taaDiagnosticsOn(uint32_t value) { return value == 1; }
 inline bool crimeGpsOn(uint32_t value) { return value != 1; }
-// 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): 0 ON, the default; 1 OFF.
-inline bool taaHoldOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 2b TAA HOLD (taa_hold074.hpp). 0.0.74 test 3: 0 OFF, the default (held 0 of 4550 eye jobs in
+// test 2b: it never fired); 1 ON.
+inline bool taaHoldOn(uint32_t value) { return value == 1; }
+// 0.0.74 test 3 WHEEL FIRST (van072.hpp Tune::wheelFirst): 0 ON, the default; 1 OFF.
+inline bool wheelFirstOn(uint32_t value) { return value != 1; }
 inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;

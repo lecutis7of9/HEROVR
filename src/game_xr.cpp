@@ -109,6 +109,7 @@
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
 #include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (on)
+#include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
@@ -655,6 +656,7 @@ DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::Jitte
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
 void SpidyTaaDiagnosticsSet(uint32_t on); // 0.0.74 test 2b TAA DIAGNOSTICS (stereo_probe.cpp)
 void SpidyTaaHoldSet(uint32_t on); // 0.0.74 test 2b TAA HOLD (stereo_probe.cpp)
+void SpidyTaaGuardSet(uint32_t on); // 0.0.74 test 3 JITTER GUARD (stereo_probe.cpp)
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
@@ -7465,6 +7467,7 @@ DWORD WINAPI run(void*) {
                                         // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (0, the default) or CLASSIC (0.0.72), live.
                                         van072::Tune vanTune = vehicleTune;
                                         vanTune.wheelHandPedals = combat38::vanWheelHandPedals(c38(combat38::vanPedals));
+                                        vanTune.wheelFirst = combat38::wheelFirstOn(c38(combat38::wheelFirst)); // 0.0.74 test 3
                                         van072::Out vout{};
                                         // 0.0.74 test 1 SEATED DRIVING: the rig's new lift moves his whole room up or down -
                                         // the van rides in that room while carried, so its place there takes the lift back
@@ -11998,6 +12001,8 @@ DWORD WINAPI run(void*) {
                             // 0.0.74 test 2b TAA DIAGNOSTICS (OFF by default): the per-frame per-eye TAA record.
                             SpidyTaaDiagnosticsSet(combat38::taaDiagnosticsOn(c38(combat38::taaDiagnostics)) ? 1u : 0u);
                             SpidyTaaHoldSet(combat38::taaHoldOn(c38(combat38::taaHold)) ? 1u : 0u);
+                            // 0.0.74 test 3 JITTER GUARD (ON, the default): no eye jitter while the game refuses the TAA history.
+                            SpidyTaaGuardSet(spidy::taa_link::guardOn(c38(combat38::jitterGuard)) ? 1u : 0u);
                             // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
                             // 0.0.74 test 2 FLARE BLOCK (ON, the default): the glow sprites hidden (GLOW CHECK HIDDEN).
                             if (const uint32_t glowWant = combat38::flareBlockOn(c38(combat38::flareBlock)) ? combat38::glowHidden
@@ -14180,6 +14185,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCrimeGps(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaHold(void* v) { return setHero007(v, combat38::taaHold, 5504); }
 // 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return setHero007(v, combat38::heapGuard, 5505); }
+// 0.0.74 test 3 JITTER GUARD (taa_link074.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterGuard(void* v) { return setHero007(v, combat38::jitterGuard, 5506); }
+// 0.0.74 test 3 WHEEL FIRST (van072.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWheelFirst(void* v) { return setHero007(v, combat38::wheelFirst, 5507); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

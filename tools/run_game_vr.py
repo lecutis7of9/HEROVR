@@ -1756,6 +1756,40 @@ def taa_hold_line(h):
             f"game cuts L {h['cuts'][0]} R {h['cuts'][1]}.")
 
 
+# 0.0.74 test 3 TAA LINK / JITTER GUARD: SpidyTaaLinkData (include/spidy/taa_link074.hpp Data). Whether each eye's
+# TAA history slot moves with the frame, as the game's own history check (0x2c98290) needs it to.
+TAA_LINK_FORMAT = '<4I6Q8QQ4iQ'
+TAA_LINK_BYTES = struct.calcsize(TAA_LINK_FORMAT)
+
+
+def taa_link_snapshot(game, address):
+    """The TAA LINK record (None before the first eye job or when missing)."""
+    if not address:
+        return None
+    raw = game.read(address, TAA_LINK_BYTES)
+    if len(raw) != TAA_LINK_BYTES:
+        return None
+    v = struct.unpack_from(TAA_LINK_FORMAT, raw)
+    if v[:3] != (0x4b4e4c54, 1, TAA_LINK_BYTES) or not (v[4] or v[5]):
+        return None
+    return dict(guard=bool(v[3]), jobs=[v[4], v[5]], no_slot=[v[6], v[7]], refused=[v[8], v[9]],
+                ages=[list(v[10:14]), list(v[14:18])], guarded_lenses=v[18], last_index=[v[19], v[20]],
+                last_age=[v[21], v[22]], sequence=v[23])
+
+
+def taa_link_line(t):
+    """The console's word on the eyes' TAA history link."""
+    def pct(a, b):
+        return f"{100 * a / max(1, b):.0f}%"
+    eyes = []
+    for i, name in enumerate('LR'):
+        a = t['ages'][i]
+        refused = t['no_slot'][i] + t['refused'][i]
+        eyes.append(f"{name} refused {pct(refused, t['jobs'][i])} (age 0/1/2/3+: {a[0]}/{a[1]}/{a[2]}/{a[3]})")
+    return (f"TAA LINK: {'; '.join(eyes)}; JITTER GUARD {'ON' if t['guard'] else 'OFF'}, "
+            f"{t['guarded_lenses']} lenses held still.")
+
+
 # Update 34.1: SpidyXrStart's options field: its offset in the config and the ENGINE TAA bit.
 OPTIONS_OFFSET = struct.calcsize('<4I7Q2If')
 ENGINE_TAA_OPTION = 0x800000
@@ -2940,6 +2974,7 @@ def session(a, startup, session_off=()):
                                            'SpidyEngineTaaData', 'SpidyEngineTaaEyes', 'SpidyFarShadowsData',
                                            'SpidyTaaDiag',  # 0.0.74 test 2b TAA DIAGNOSTICS
                                            'SpidyTaaHoldData',  # 0.0.74 test 2b TAA HOLD
+                                           'SpidyTaaLinkData',  # 0.0.74 test 3 TAA LINK
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -3034,6 +3069,7 @@ def session(a, startup, session_off=()):
         taa_eyes_last = taa_eyes_said = None  # 0.0.73 TAA SHAKE
         taa_diag_said = -1e9  # 0.0.74 test 2b TAA DIAGNOSTICS
         taa_hold_said = -1e9  # 0.0.74 test 2b TAA HOLD
+        taa_link_said = -1e9  # 0.0.74 test 3 TAA LINK
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
         finder_written_gen = None  # finished generation already written to reports/
@@ -3636,6 +3672,11 @@ def session(a, startup, session_off=()):
                         if time.monotonic() - taa_hold_said >= 10:
                             taa_hold_said = time.monotonic()
                             print(taa_hold_line(hold), flush=True)
+                    if (link := taa_link_snapshot(game, xr.get('SpidyTaaLinkData'))):
+                        sample['taa_link'] = link
+                        if time.monotonic() - taa_link_said >= 10:
+                            taa_link_said = time.monotonic()
+                            print(taa_link_line(link), flush=True)
                     if history_last:
                         sample['eye_history'] = {k: history_last[k] for k in ('percent', 'blended_pairs',
                                                                               'restarted_pairs', 'fault')}

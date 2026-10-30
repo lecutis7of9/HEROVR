@@ -1,5 +1,5 @@
 # SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-"""0.0.74 test 2b TAA HOLD: each eye's TAA history kept (default ON, live), its record and report line."""
+"""0.0.74 test 2b TAA HOLD: each eye's TAA stamps set back (0.0.74 test 3: default OFF - it never fired), live."""
 import pathlib
 import struct
 import sys
@@ -21,18 +21,20 @@ class TaaHold(unittest.TestCase):
         self.combat = (ROOT / 'include/spidy/combat38.hpp').read_text(encoding='utf-8')
         self.xr = (ROOT / 'src/game_xr.cpp').read_text(encoding='utf-8')
 
-    def test_on_by_default_live_with_subtext(self):
-        self.assertEqual(live_settings.UPDATE38_DEFAULTS.get('taa_hold'), 'on')
+    def test_off_by_default_live_with_subtext(self):
+        self.assertEqual(live_settings.UPDATE38_DEFAULTS.get('taa_hold'), 'off')
+        self.assertEqual(live_settings.export_value('taa_hold', 'off'), 0)
+        self.assertEqual(live_settings.export_value('taa_hold', 'on'), 1)
         self.assertEqual(live_settings.SETTINGS['taa_hold'][1], 'SpidyTaaHold')
         self.assertIn('live)', live_settings.SETTINGS['taa_hold'][2])
-        self.assertIn(('taa_hold', ('ON', 'OFF')), update37_records.V0072_OPTIONS)
-        self.assertIn('"taa_hold", "TAA HOLD", "TAAH", "ON keeps each eye\'s TAA history so the image settles, not shakes; '
-                      'no restart."', self.combat)
+        self.assertIn(('taa_hold', ('OFF', 'ON')), update37_records.V0072_OPTIONS)
+        self.assertIn('"taa_hold", "TAA HOLD", "TAAH", "ON sets back the TAA stamps; it never fired, so OFF by '
+                      'default; live."', self.combat)
         self.assertIn('setHero007(v, combat38::taaHold, 5504)', self.xr)
         self.assertIn('SpidyTaaHoldSet(combat38::taaHoldOn(c38(combat38::taaHold))', self.xr)
 
     def test_only_the_job_is_written(self):
-        self.assertIn('std::atomic<bool> taaHoldOn{true}', self.probe)
+        self.assertIn('std::atomic<bool> taaHoldOn{false}', self.probe)
         self.assertIn('taaHoldJob(i, view, static_cast<uint8_t*>(settings), reinterpret_cast<uintptr_t>(job))', self.probe)
         body = self.probe.split('void taaHoldJob(')[1].split('\nvoid copyJob(')[0]
         self.assertNotIn('memcpy(reinterpret_cast<void*>(v', body)  # the view is never written

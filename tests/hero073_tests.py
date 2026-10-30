@@ -320,6 +320,8 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5503'), ['SpidyCrimeGps'])  # 0.0.74 test 2b CRIME GPS
         self.assertEqual(uses.get('5504'), ['SpidyTaaHold'])  # 0.0.74 test 2b TAA HOLD
         self.assertEqual(uses.get('5505'), ['SpidyHeapGuard'])  # 0.0.74 test 3 HEAP GUARD
+        self.assertEqual(uses.get('5506'), ['SpidyJitterGuard'])  # 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
+        self.assertEqual(uses.get('5507'), ['SpidyWheelFirst'])  # 0.0.74 test 3 WHEEL FIRST (van072.hpp)
 
 
 class Hero073Image(unittest.TestCase):

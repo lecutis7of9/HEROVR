@@ -4121,6 +4121,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
         // both ImpostorHQModelRegJob launchers 2a6c2e0 and 2a6c410). Update 36:
         // these and reachLast were SM1's addresses, so `impostors` was always
         // off here; see docs/main-view-gates-audit.md.
+        // 0.0.74 test 6 note: the five calls' returns 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c:
+        // CANDIDATE, refuted by test 5 histogram (asked, the left eye said yes, no visible change). Kept as is.
         const unsigned char isActiveViewBytes[] = {0x48, 0x3b, 0x0d, 0xc9, 0x1c, 0x63, 0x09, 0x0f, 0x94, 0xc0, 0xc3};
         const struct {
             uintptr_t rva;

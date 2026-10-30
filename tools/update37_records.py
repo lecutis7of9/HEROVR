@@ -31,6 +31,7 @@ FX = ('OFF', 'LENS', 'LENS+')
 FADE = ('OFF', 'LEFT', 'BOTH')
 FADE_WHY = ('fine', 'this game build differs (N/A)', 'no eye reached the fade call (back to OFF)')
 # 0.0.74 test 5: view_gates.hpp ImpostorWhy (why the IMPOSTORS stand-in is off) and the five calls' addresses.
+# Their returns 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c: CANDIDATE, refuted by test 5 histogram.
 IMPOSTOR_WHY = ('installed', 'createViews 128 (opted out)', 'call 0x2a6af90 differs', 'call 0x2a6c346 differs',
                 'call 0x2a6c356 differs', 'call 0x2a6c467 differs', 'call 0x2a6c477 differs',
                 '+0x88 store 0x2a6bcad differs', '+0x88 store 0x2a6bded differs', 'not hooked')

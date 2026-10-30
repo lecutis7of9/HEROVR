@@ -1922,6 +1922,8 @@ def aa_mode_in_file(path):
 # the 0.0.74 test 5 per-call histogram shows the eyes reaching the five calls; before test 5 it never ran). The eye
 # size stays the player's (100 by default), the mip bias +0.5 with 16x anisotropy (the launcher), lens flares and
 # screen shake off for the session (vr_display.SESSION_OFF). The DLL holds the same (combat38::cleanValue).
+# 0.0.74 test 6 note: the five impostor calls' returns 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c are
+# CANDIDATE, refuted by test 5 histogram (asked, left eye yes, no visible change); the switch is unchanged.
 CLEAN_PRESET = {'image': 'classic', 'image_style': 'off', 'aa': 1, 'history': 80, 'trail': 0, 'sharpen': 40,
                  'sharpen_match': 'off', 'eye_temporal': 1, 'taa_jitter': 3, 'reach': 150, 'impostors': 1}
 CLEAN_MIP_BIAS = '0.5'

@@ -27,6 +27,10 @@
 //   (impostorCalls): the left eye answers yes there for both eyes, the right eye and the game view
 //   no, so one view picks the far buildings' full models. 0.0.74 test 5: installed without
 //   createViews 32 (SM2 never sets it), not with 128, only where every call's bytes match.
+//   0.0.74 test 6 note: the five calls (returns 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c) are
+//   CANDIDATE, refuted by test 5 histogram (asked 4k-8k times per 10 s, left eye yes ~1.5-1.8k,
+//   no visible change; c467/c477 never asked).
+//   The install machinery is kept; nothing here changes behaviour.
 // - EYE OCCLUSION. giveOcclusion (0x2c9b8e0) runs only when an eye view is created, so it
 //   cannot change in a session: live.txt eye_occlusion applies at the next VR start
 //   (a restart notice says so).
@@ -120,6 +124,7 @@ inline const char* impostorHelp(bool installed, bool on) {
     return on ? "Far buildings drawn as full models for the eyes." : "Far buildings left to the game's impostors.";
 }
 // 0.0.74 test 5: the five impostor calls (CANDIDATE) and the return address each leaves.
+// Return addresses 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c: CANDIDATE, refuted by test 5 histogram.
 inline constexpr uint32_t impostorCallRvas[5] = {0x2a6af90, 0x2a6c346, 0x2a6c356, 0x2a6c467, 0x2a6c477};
 inline constexpr unsigned impostorSites = 5;
 inline int impostorSite(uintptr_t returnRva) {

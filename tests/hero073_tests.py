@@ -322,6 +322,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5505'), ['SpidyHeapGuard'])  # 0.0.74 test 3 HEAP GUARD
         self.assertEqual(uses.get('5506'), ['SpidyJitterGuard'])  # 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
         self.assertEqual(uses.get('5507'), ['SpidyWheelFirst'])  # 0.0.74 test 3 WHEEL FIRST (van072.hpp)
+        self.assertEqual(uses.get('5508'), ['SpidyCaveQuiet'])  # 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp)
 
 
 class Hero073Image(unittest.TestCase):

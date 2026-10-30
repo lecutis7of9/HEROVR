@@ -245,6 +245,8 @@ enum Option : uint32_t {
     jitterGuard,
     // 0.0.74 test 3 WHEEL FIRST (van072.hpp)
     wheelFirst,
+    // 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp)
+    caveQuiet,
     options
 };
 struct OptionInfo {
@@ -627,6 +629,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"jitter_guard", "JITTER GUARD", "JITG", "ON stops the eye jitter while the game refuses that eye's TAA history; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"wheel_first", "WHEEL FIRST", "WHL1", "ON: a hand on or near the wheel steers and never opens the door; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"cave_quiet", "CAVE QUIET", "CAVQ", "ON quiets the city and the car engine in the Batcave and safehouse; live.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

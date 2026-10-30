@@ -110,6 +110,7 @@
 #include "spidy/eye_swap.hpp"
 #include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (on)
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
+#include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
@@ -1666,6 +1667,11 @@ RealisticFlipSettings realisticFlips(const vr_settings::Values& v) {
 // Version 0.0.2 hotfix: the VR thread's stack reserve (see SpidyXrStart).
 constexpr SIZE_T xrThreadStackReserve = 8u << 20;
 DWORD WINAPI run(void*) {
+    // 0.0.74 test 3 CAVE QUIET: a duck a crash left is put back now; whatever way run ends, the game's sound is back.
+    spidy::gameDuckRecover();
+    struct CaveQuietEnd {
+        ~CaveQuietEnd() { spidy::gameDuck(false); }
+    } caveQuietEnd;
     bool nativeStarted = false, gpuStarted = false, raysStarted = false, swingStarted = false,
          raysFailed = false, swingFailed = false, websStarted = false,
          bodyStarted = false;
@@ -2382,6 +2388,7 @@ DWORD WINAPI run(void*) {
         batcave074::Computer batComputer;
         batcave074::WristButton hideoutWrist;
         bool hideoutBWas{}, hideoutChairWant{}, hideoutMusic{};
+        bool caveQuietApplied{}; // 0.0.74 test 3 CAVE QUIET: the game's sound ducked
         float hideoutChairLift{}, hideoutSeconds{};
         Vec3 hideoutHintAt{}, hideoutHintFacing{0, 0, 1};
         // 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): groups of enemies near the car as crimes (CANDIDATE), its clock.
@@ -7936,8 +7943,18 @@ DWORD WINAPI run(void*) {
                                         // Version 0.0.73 VAN SOUND (owner t996u/t997u): the slam and the start-up once, the
                                         // engine on repeat while he sits in it (pitched with the throttle), faded as he gets
                                         // out - then the door slams again.
-                                        sfx::loop(sfx::vanEngine, vanDriving);
-                                        sfx::engineRpm(vanDriving ? vanCarry.rpm : 0.f);
+                                        // 0.0.74 test 3 CAVE QUIET (ON, the default): no engine and the city turned down
+                                        // in the Batcave and the safehouse; both back on RETURN TO CITY.
+                                        const bool caveQuietOption = spidy::cave_quiet::on(c38(combat38::caveQuiet));
+                                        const bool engineSounds = spidy::cave_quiet::engineSounds(vanDriving, caveQuietOption, hideoutVisit.active());
+                                        sfx::loop(sfx::vanEngine, engineSounds);
+                                        sfx::engineRpm(engineSounds ? vanCarry.rpm : 0.f);
+                                        if (const bool quietWant = spidy::cave_quiet::quiet(caveQuietOption, hideoutVisit.active());
+                                            quietWant != caveQuietApplied) {
+                                            caveQuietApplied = quietWant;
+                                            spidy::gameDuck(quietWant);
+                                            consoleLine(quietWant ? "CAVE QUIET: city sound down, engine off" : "CAVE QUIET: city sound back");
+                                        }
                                         if (vanDriving && !wasDriving)
                                             vanSlamAt = -1;
                                         if (vanSlamAt >= 0 && combatClock >= vanSlamAt) {
@@ -14189,6 +14206,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterGuard(void* v) { return setHero007(v, combat38::jitterGuard, 5506); }
 // 0.0.74 test 3 WHEEL FIRST (van072.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWheelFirst(void* v) { return setHero007(v, combat38::wheelFirst, 5507); }
+// 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCaveQuiet(void* v) { return setHero007(v, combat38::caveQuiet, 5508); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

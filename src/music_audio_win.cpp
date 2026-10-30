@@ -276,7 +276,10 @@ struct Player::Impl {
         // Windows resamples the song's rate to the device's.
         const DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
                             AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
-        if (FAILED(client->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, bufferHns, 0, &f.Format, nullptr)) ||
+        // 0.0.74 test 3 CAVE QUIET: the songs in their own session, so ducking the game's (game_duck_win.cpp) in a
+        // hideout leaves the car music and the Batcomputer's MUSIC as they are.
+        static const GUID musicSession = {0x6d1f0c1e, 0x74a3, 0x4c37, {0x9b, 0x2e, 0x41, 0x6d, 0x75, 0x6c, 0x64, 0x72}};
+        if (FAILED(client->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, bufferHns, 0, &f.Format, &musicSession)) ||
             FAILED(client->SetEventHandle(audioEvent)) || FAILED(client->GetBufferSize(&bufferFrames)) ||
             FAILED(client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(render.put())))) {
             closeClient();

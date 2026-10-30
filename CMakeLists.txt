@@ -410,7 +410,8 @@ if(SPIDY_BUILD_XR)
   if(SPIDY_BUILD_OBSERVER)
     target_sources(spidy_stereo_probe PRIVATE src/game_xr.cpp src/game_player.cpp src/native_game_body.cpp src/game_pad.cpp src/sm2_damage.cpp
                    src/game_menu.cpp src/game_time.cpp src/game_prompts.cpp src/game_steam.cpp
-                   src/phone_music.cpp src/music_audio_win.cpp src/sfx_win.cpp)
+                   src/phone_music.cpp src/music_audio_win.cpp src/sfx_win.cpp
+                   src/game_duck_win.cpp) # 0.0.74 test 3 CAVE QUIET
     # Update 19: the MUSIC page's player (Media Foundation decodes, WASAPI plays).
     target_link_libraries(spidy_stereo_probe PRIVATE spidy_openxr spidy_bhaptics shell32 ole32 uuid mfplat
                           mfreadwrite mfuuid windowscodecs)

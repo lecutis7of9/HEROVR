@@ -1922,7 +1922,11 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     return result;
 }
 // 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): ON by default, live (SpidyTaaHoldSet from game_xr).
+// extern "C" block (a definition, unlike a bare extern "C" declaration): the report finds it by this exact,
+// unmangled name. Test 2b ended VR with exit code 2 "Missing export: SpidyTaaHoldData" without it.
+extern "C" {
 __declspec(dllexport) spidy::taa_hold::Data SpidyTaaHoldData;
+}
 std::atomic<bool> taaHoldOn{true};
 extern "C" void SpidyTaaHoldSet(uint32_t on) { taaHoldOn = on != 0; }
 void taaHoldJob(unsigned i, void* view, uint8_t* settings, uintptr_t job) {

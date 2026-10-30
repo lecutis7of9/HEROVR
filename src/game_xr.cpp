@@ -108,7 +108,7 @@
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
-#include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (on)
+#include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (off by default since the test 3 fix)
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
@@ -14304,7 +14304,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashPointer(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaDiagnostics(void* v) { return setHero007(v, combat38::taaDiagnostics, 5502); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCrimeGps(void* v) { return setHero007(v, combat38::crimeGps, 5503); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaHold(void* v) { return setHero007(v, combat38::taaHold, 5504); }
-// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): ON (0, the default) or OFF (1); live.
+// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): OFF (0, the default since the test 3 fix) or ON (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return setHero007(v, combat38::heapGuard, 5505); }
 // 0.0.74 test 3 JITTER GUARD (taa_link074.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterGuard(void* v) { return setHero007(v, combat38::jitterGuard, 5506); }

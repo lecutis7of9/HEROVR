@@ -10,7 +10,7 @@ namespace spidy::heap_guard {
 // 3301 at the eye bridge). The game's render memory is a few D3D12 heaps whose textures
 // share (alias) the same bytes. When the game makes a new such heap, the eye images it
 // placed in the old one may be rebuilt or stop being the active alias. With HEAP GUARD on
-// (the default) the eye bridge then:
+// (OFF by default since the test 3 fix) the eye bridge then:
 //   1. lets go of both eye images (released only after its own GPU work that reads them
 //      has finished, like a swapped eye: eye_swap::releasable),
 //   2. forgets their states (learned again from the game's own next barriers),
@@ -19,8 +19,10 @@ namespace spidy::heap_guard {
 //   4. copies no pair that began before the new heap (the headset keeps the last one).
 // OFF: test 2's behaviour (the heap watch only counts).
 
-// live.txt / VR SETTINGS: HEAP GUARD, value 0 ON (the default), 1 OFF; anything else ON.
-inline bool on(uint32_t value) { return value != 1; }
+// live.txt / VR SETTINGS: HEAP GUARD, value 0 OFF (the default since the 0.0.74 test 3 fix: the player's test 3
+// sessions 014414 and 020500 stayed black with it on - eye pairs reached the bridge about every 0.6 s), 1 ON;
+// anything else OFF.
+inline bool on(uint32_t value) { return value == 1; }
 
 // d3d12.h values (plain numbers, so this is testable off Windows).
 inline constexpr uint32_t heapTypeDefault = 1;              // D3D12_HEAP_TYPE_DEFAULT

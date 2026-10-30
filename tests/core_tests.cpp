@@ -1317,7 +1317,7 @@ int main() {
     });
     test("0.0.74 test 3 HEAP GUARD: the eyes are let go of and taken again when the game rebuilds its render heaps", [] {
         namespace hg = heap_guard;
-        check(hg::on(0) && !hg::on(1) && hg::on(7), "HEAP GUARD: 0 ON (the default), 1 OFF, anything else ON");
+        check(!hg::on(0) && hg::on(1) && !hg::on(7), "HEAP GUARD: 0 OFF (the default since the test 3 fix), 1 ON, anything else OFF");
         check(hg::createHeapSlot == 28, "ID3D12Device::CreateHeap is vtable slot 28");
         // The player's rebuild: an 11272192-byte render-target heap; the eye images 1352x1472.
         const auto eye = hg::eyeBytes(1352, 1472);

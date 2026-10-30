@@ -239,7 +239,7 @@ enum Option : uint32_t {
     crimeGps,
     // 0.0.74 test 2b TAA HOLD: OFF (the default since 0.0.74 test 3; it never fired) or ON
     taaHold,
-    // 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (heap_guard.hpp)
+    // 0.0.74 test 3 HEAP GUARD: OFF (the default since the test 3 fix, the black headset) or ON (heap_guard.hpp)
     heapGuard,
     // 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
     jitterGuard,
@@ -634,7 +634,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"taa_diagnostics", "TAA DIAGNOSTICS", "TAAD", "ON logs every frame's per-eye TAA jitter and history; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
     {"crime_gps", "CRIME GPS", "CGPS", "ON shows crimes near your car: popup, MAP, HUD arrow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"taa_hold", "TAA HOLD", "TAAH", "ON sets back the TAA stamps; it never fired, so OFF by default; live.", 2, {"OFF", "ON", nullptr, nullptr}},
-    {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"OFF", "ON", nullptr, nullptr}},
     {"jitter_guard", "JITTER GUARD", "JITG", "ON stops the eye jitter while the game refuses that eye's TAA history; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"wheel_first", "WHEEL FIRST", "WHL1", "ON: a hand on or near the wheel steers and never opens the door; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cave_quiet", "CAVE QUIET", "CAVQ", "ON quiets the city and the car engine in the Batcave and safehouse; live.", 2, {"ON", "OFF", nullptr, nullptr}},

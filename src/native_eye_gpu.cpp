@@ -110,7 +110,7 @@ std::vector<RetiredEye> retiredEyes;
 using CreateHeap = HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_HEAP_DESC*, REFIID, void**);
 CreateHeap originalCreateHeap{};
 void* heapHook{};
-std::atomic<bool> heapGuardWanted{true};
+std::atomic<bool> heapGuardWanted{false}; // 0.0.74 test 3 fix: OFF until game_xr says ON (the black headset)
 std::atomic<uint64_t> heapEpoch{}, newestGeneration{}, heapSmallest{heap_guard::smallestRenderHeap};
 heap_guard::Guard heapGuard;
 std::atomic<bool> heapFellBack{}; // 0.0.74 test 3 fix: heapGuard.fellBack, read without the lock

@@ -1,7 +1,7 @@
 """HERO VR 0.0.74 test 3 HEAP GUARD: when the game rebuilds its render heaps and aliases (the public 0.0.73
 player's "[Mem12] Aliased resource does not fit in the original heap ... Recreating heap and aliases."), the eye
 bridge lets go of the eye images, forgets their states, takes them again from the next frame and copies no pair
-begun before. On by default, switchable (live.txt heap_guard, VR SETTINGS HEAP GUARD). Made by Agent Mulder."""
+begun before. OFF by default since the test 3 fix (the black headset), switchable (live.txt heap_guard, VR SETTINGS HEAP GUARD). Made by Agent Mulder."""
 import ast, os, struct, sys, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
@@ -19,10 +19,10 @@ def probe_snapshot():
 
 class Settings(unittest.TestCase):
     def test_default_on_and_switchable(self):
-        self.assertEqual(live_settings.UPDATE38_DEFAULTS['heap_guard'], 'on')
-        self.assertEqual(live_settings.export_value('heap_guard', 'on'), 0)
-        self.assertEqual(live_settings.export_value('heap_guard', 'off'), 1)
-        self.assertEqual(live_settings.CHOICE_NAMES['heap_guard'][0], 'on')
+        self.assertEqual(live_settings.UPDATE38_DEFAULTS['heap_guard'], 'off')  # the test 3 fix
+        self.assertEqual(live_settings.export_value('heap_guard', 'off'), 0)
+        self.assertEqual(live_settings.export_value('heap_guard', 'on'), 1)
+        self.assertEqual(live_settings.CHOICE_NAMES['heap_guard'][0], 'off')
         self.assertEqual(live_settings.SETTINGS['heap_guard'][1], 'SpidyHeapGuard')
 
     def test_option_row(self):
@@ -95,6 +95,15 @@ class BlackHeadsetFix(unittest.TestCase):
         self.assertIn('SpidyEyeHeapGuard(', head)
         self.assertIn('native_gpu::setStockImage(', head)
         self.assertIn('native_gpu::heapGuardFellBack()', head)
+
+    def test_off_by_default_everywhere(self):
+        # Sessions 014414 and 020500 (fa15f5f): the bridge started with the guard ON and live.txt's off only
+        # reached it after a pair reached the headset, which never happened. OFF from the bridge's first frame.
+        self.assertIn('std::atomic<bool> heapGuardWanted{false};', self.s)
+        self.assertIn('inline bool on(uint32_t value) { return value == 1; }', self.h)
+        self.assertIn('"HEAP", "ON lets the eyes go', src('include/spidy/combat38.hpp'))
+        self.assertIn('2, {"OFF", "ON", nullptr, nullptr}}', src('include/spidy/combat38.hpp').split('"heap_guard"', 1)[1].split('\n', 1)[0])
+        self.assertEqual(live_settings.CHOICE_NAMES['heap_guard'], ('off', 'on'))
 
     def test_notice_says_test_3(self):
         self.assertIn('set(HERO_TEST_NUMBER "3" CACHE', src('CMakeLists.txt'))

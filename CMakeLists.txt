@@ -65,6 +65,8 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/test_notice.cpp
             src/van_screen.cpp
             src/hideout074.cpp
+            src/batcave074.cpp
+            src/crime_gps074.cpp
             src/batmobile074.cpp
             src/roster_page.cpp src/holo_roster.cpp
             src/mp_net.cpp src/mp_socket.cpp src/mp_session.cpp src/mp_ghost.cpp src/mp_body.cpp) # 0.0.73 MP SOLO TEST (+ MPSUIT PLAYER 2 BODY): the UDP pipe
@@ -240,6 +242,8 @@ add_executable(spidy_hero072b_preview apps/hero072b_preview.cpp) # Version 0.0.7
 target_link_libraries(spidy_hero072b_preview PRIVATE spidy_core)
 add_executable(spidy_van_screen_preview apps/van_screen_preview.cpp) # Version 0.0.73 test 3 VAN SCREEN
 target_link_libraries(spidy_van_screen_preview PRIVATE spidy_core)
+add_executable(spidy_batcave_preview apps/batcave_preview.cpp) # 0.0.74 test 2b BATCAVE PREVIEW
+target_link_libraries(spidy_batcave_preview PRIVATE spidy_core)
 add_executable(spidy_dd_baton_preview apps/dd_baton_preview.cpp src/sfx_quiet.cpp) # Version 0.0.73 test 3 DD BATON
 target_link_libraries(spidy_dd_baton_preview PRIVATE spidy_core)
 add_executable(spidy_hero_hands_preview apps/hero_hands_preview.cpp src/sfx_quiet.cpp) # 0.0.73 HERO HANDS

@@ -1684,6 +1684,78 @@ def engine_taa_eyes_line(e):
             f"{eye('right')} ({e['samples']} samples).")
 
 
+# 0.0.74 test 2b TAA DIAGNOSTICS: SpidyTaaDiag (include/spidy/taa_diag074.hpp Diag), every frame while the
+# option is ON: per eye the jitter sent vs stored, the history ages and weight, shared or per-eye buffer sets.
+TAA_DIAG_FRAME = 'I2f4f2i2i2f'
+TAA_DIAG_RING = 16
+TAA_DIAG_FORMAT = '<4IQ2I2I4I2f2I' + TAA_DIAG_FRAME * TAA_DIAG_RING + 'Q'
+TAA_DIAG_BYTES = struct.calcsize(TAA_DIAG_FORMAT)
+
+
+def taa_diag_snapshot(game, address):
+    """The TAA DIAGNOSTICS record (None while it is off or missing)."""
+    if not address:
+        return None
+    raw = game.read(address, TAA_DIAG_BYTES)
+    if len(raw) != TAA_DIAG_BYTES:
+        return None
+    v = struct.unpack_from(TAA_DIAG_FORMAT, raw)
+    if v[:3] != (0x44415454, 1, TAA_DIAG_BYTES) or not v[3] or not v[4]:
+        return None
+    head = v[15]
+    frames = []
+    for k in range(TAA_DIAG_RING):
+        o = 17 + 13 * ((head + k) % TAA_DIAG_RING)
+        f = v[o:o + 13]
+        if not f[0] and not any(f[1:]):
+            continue
+        frames.append(dict(frame=f[0], sent=[round(x, 8) for x in f[1:3]],
+                           left=dict(stored=[round(x, 8) for x in f[3:5]], cut_age=f[7], stamp_age=f[9], weight=round(f[11], 4)),
+                           right=dict(stored=[round(x, 8) for x in f[5:7]], cut_age=f[8], stamp_age=f[10], weight=round(f[12], 4))))
+    return dict(frames_recorded=v[4], resets=[v[5], v[6]], stamp_changes=[v[7], v[8]], shared_jitter_frames=v[9],
+                shared_set_frames=v[10], per_eye_set_frames=v[11], sent_mismatch_frames=v[12],
+                stored_over_sent=[round(v[13], 3), round(v[14], 3)], last_frames=frames)
+
+
+def taa_diag_line(d):
+    """The console's word on TAA DIAGNOSTICS."""
+    n = max(1, d['frames_recorded'])
+    history = 'per-eye' if d['per_eye_set_frames'] >= d['shared_set_frames'] else 'SHARED'
+    return (f"TAA DIAGNOSTICS: {d['frames_recorded']} frames; history thrown away L {100 * d['resets'][0] / n:.0f}% "
+            f"R {100 * d['resets'][1] / n:.0f}%; stamp moved L {d['stamp_changes'][0]} R {d['stamp_changes'][1]}; "
+            f"stored/sent {d['stored_over_sent'][0]}x/{d['stored_over_sent'][1]}x; {history} history buffers; "
+            f"same jitter both eyes {100 * d['shared_jitter_frames'] / n:.0f}%; {d['sent_mismatch_frames']} unexplained.")
+
+
+# 0.0.74 test 2b TAA HOLD: SpidyTaaHoldData (include/spidy/taa_hold074.hpp Data), read from the eye JOBS
+# TemporalAa itself reads: zero_ages counts jobs whose history the game was about to throw away.
+TAA_HOLD_FORMAT = '<4I8Q6iI4xQ'
+TAA_HOLD_BYTES = struct.calcsize(TAA_HOLD_FORMAT)
+
+
+def taa_hold_snapshot(game, address):
+    """The TAA HOLD record (None before the first eye job or when missing)."""
+    if not address:
+        return None
+    raw = game.read(address, TAA_HOLD_BYTES)
+    if len(raw) != TAA_HOLD_BYTES:
+        return None
+    v = struct.unpack_from(TAA_HOLD_FORMAT, raw)
+    if v[:3] != (0x444c4854, 1, TAA_HOLD_BYTES) or not (v[4] or v[5]):
+        return None
+    return dict(on=bool(v[3]), jobs=[v[4], v[5]], held=[v[6], v[7]], zero_ages=[v[8], v[9]], cuts=[v[10], v[11]],
+                last_frame=[v[12], v[13]], last_cut_age=[v[14], v[15]], last_stamp_age=[v[16], v[17]])
+
+
+def taa_hold_line(h):
+    """The console's word on TAA HOLD."""
+    def pct(a, b):
+        return f"{100 * a / max(1, b):.0f}%"
+    return (f"TAA HOLD {'ON' if h['on'] else 'OFF'}: history about to be thrown away on L {pct(h['zero_ages'][0], h['jobs'][0])} "
+            f"R {pct(h['zero_ages'][1], h['jobs'][1])} of eye jobs; held L {h['held'][0]} R {h['held'][1]}; "
+            f"game cuts L {h['cuts'][0]} R {h['cuts'][1]}.")
+
+
 # Update 34.1: SpidyXrStart's options field: its offset in the config and the ENGINE TAA bit.
 OPTIONS_OFFSET = struct.calcsize('<4I7Q2If')
 ENGINE_TAA_OPTION = 0x800000
@@ -2866,6 +2938,8 @@ def session(a, startup, session_off=()):
                                            'SpidyShadowCameraData', 'SpidyShadowDistanceData',
                                            'SpidyEyeTrail', 'SpidyEngineTaaJitter', 'SpidyEngineTaaJitterScale',
                                            'SpidyEngineTaaData', 'SpidyEngineTaaEyes', 'SpidyFarShadowsData',
+                                           'SpidyTaaDiag',  # 0.0.74 test 2b TAA DIAGNOSTICS
+                                           'SpidyTaaHoldData',  # 0.0.74 test 2b TAA HOLD
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -2958,6 +3032,8 @@ def session(a, startup, session_off=()):
         history_last = None  # Update 21: history_snapshot, kept from the samples
         engine_taa_last = engine_taa_said = None  # Update 34.2
         taa_eyes_last = taa_eyes_said = None  # 0.0.73 TAA SHAKE
+        taa_diag_said = -1e9  # 0.0.74 test 2b TAA DIAGNOSTICS
+        taa_hold_said = -1e9  # 0.0.74 test 2b TAA HOLD
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
         finder_written_gen = None  # finished generation already written to reports/
@@ -3548,6 +3624,18 @@ def session(a, startup, session_off=()):
                             print(engine_taa_eyes_line(eyes), flush=True)
                         taa_eyes_last = eyes
                         sample['engine_taa_eyes'] = {k: eyes[k] for k in ('jitter', 'render', 'left', 'right')}
+                    # 0.0.74 test 2b TAA DIAGNOSTICS: the per-frame record each sample, a console line every 10 s.
+                    if (diag := taa_diag_snapshot(game, xr.get('SpidyTaaDiag'))):
+                        sample['taa_diag'] = diag
+                        if time.monotonic() - taa_diag_said >= 10:
+                            taa_diag_said = time.monotonic()
+                            print(taa_diag_line(diag), flush=True)
+                    # 0.0.74 test 2b TAA HOLD: always (a few counters), a console line every 10 s.
+                    if (hold := taa_hold_snapshot(game, xr.get('SpidyTaaHoldData'))):
+                        sample['taa_hold'] = hold
+                        if time.monotonic() - taa_hold_said >= 10:
+                            taa_hold_said = time.monotonic()
+                            print(taa_hold_line(hold), flush=True)
                     if history_last:
                         sample['eye_history'] = {k: history_last[k] for k in ('percent', 'blended_pairs',
                                                                               'restarted_pairs', 'fault')}

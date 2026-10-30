@@ -28,7 +28,7 @@ class Settings(unittest.TestCase):
     def test_option_row(self):
         self.assertIn('{"heap_guard", "HEAP GUARD", "HEAP",', src('include/spidy/combat38.hpp'))
         self.assertIn('{"ON", "OFF", nullptr, nullptr}}', src('include/spidy/combat38.hpp'))
-        self.assertIn('combat38::heapGuard, 5502', src('src/game_xr.cpp'))
+        self.assertIn('combat38::heapGuard, 5505', src('src/game_xr.cpp'))
 
 
 class Native(unittest.TestCase):

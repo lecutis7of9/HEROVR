@@ -44,6 +44,9 @@
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
 #include "spidy/hideout074.hpp"
+#include "spidy/batcave074.hpp"
+#include "spidy/crime_gps074.hpp"
+#include "spidy/taa_hold074.hpp"
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
 #include "spidy/roster_page.hpp"
@@ -168,6 +171,8 @@
 #include "spidy/van072.hpp"
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
+#include "spidy/seated_lock074.hpp"
+#include "spidy/taa_diag074.hpp"
 #include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
 #include "spidy/window_pop.hpp"
@@ -18914,7 +18919,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 157, "one hundred and fifty-seven options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 160, "one hundred and sixty options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18948,7 +18953,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 157, "0.0.74 test 3 has 157 COMBAT options (+ HEAP GUARD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 160, "0.0.74 test 3 has 160 COMBAT options (+ HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25160,6 +25165,171 @@ int main() {
                   std::string(v::settingHelp).find(" X ") != std::string::npos &&
                   std::string(v::settingHelp).find("EXPERIMENTAL") == 0,
               "the subtext: experimental, the button, restart, one sentence");
+    });
+    test("0.0.74 test 2b TAA DIAGNOSTICS: per-frame record counts resets, stamp moves, shared jitter/sets, x2 lens", [] {
+        namespace td = spidy::taa_diag;
+        td::Diag d{};
+        int32_t last[2]{};
+        bool have{};
+        for (uint32_t k = 0; k < 20; ++k) {
+            td::Frame f{};
+            f.frame = 1000 + k;
+            f.sent[0] = .000186f;
+            f.sent[1] = -.00027f;
+            f.stored[0] = f.stored[2] = 2 * f.sent[0];
+            f.stored[1] = f.stored[3] = 2 * f.sent[1];
+            f.weight[0] = f.weight[1] = 1;
+            td::add(d, f, 0x1000, 0x2000, int32_t(1000 + k), int32_t(1000 + k), last, have);
+        }
+        check(d.frames == 20 && d.resets[0] == 20 && d.resets[1] == 20, "every weight-1 frame counted, per eye");
+        check(d.stampChanges[0] == 19 && d.stampChanges[1] == 19, "a stamp moving every frame is seen");
+        check(d.sharedJitterFrames == 20 && d.perEyeSetFrames == 20 && d.sharedSetFrames == 0,
+              "same jitter both eyes, per-eye buffer sets");
+        check(d.sentMismatchFrames == 0 && std::abs(d.storedOverSent[0] - 2) < 1e-3f, "the lens doubling is explained (x2)");
+        check(d.head == 20 % td::ringSize && d.ring[(d.head + td::ringSize - 1) % td::ringSize].frame == 1019, "the ring keeps the newest");
+        td::Frame odd{};
+        odd.sent[0] = .0001f;
+        odd.stored[0] = .00035f;
+        td::add(d, odd, 0x1000, 0x1000, 0, 0, last, have);
+        check(d.sentMismatchFrames == 1 && d.sharedSetFrames == 1, "an unexplained jitter and a shared set are flagged");
+        check(td::ratio(1, 0) == 0 && td::ratio(NAN, 1) == 0, "no ratio from nothing");
+        check(!combat38::taaDiagnosticsOn(0) && combat38::taaDiagnosticsOn(1) && combat38::crimeGpsOn(0) && !combat38::crimeGpsOn(1),
+              "TAA DIAGNOSTICS off by default, CRIME GPS on by default");
+    });
+    test("0.0.74 test 2b TAA HOLD: stuck stamps held 16 frames back, real cuts and OFF left to the game", [] {
+        namespace th = spidy::taa_hold;
+        check(combat38::taaHoldOn(0) && !combat38::taaHoldOn(1), "TAA HOLD on by default");
+        check(th::settingsFrame == 0xc2c6c30 - 0xc2c64a0 && th::settingsJob == 0xc2c6af0 - 0xc2c64a0,
+              "the context offsets are the globals TemporalAa reads");
+        check(th::share(0, 0, 0) == 1 && th::share(1, 40, 40) == 1, "ages 0 or a cut: no history (the test 2 readback)");
+        th::Eye e;
+        auto p = th::plan(e, true, 0, 100, 100, 100, .01f);
+        check(!p.hold, "one stuck job is a real reset: the game ramps from it");
+        p = th::plan(e, true, 0, 101, 101, 101, .01f);
+        check(p.hold && p.cutFrame == 101 - th::holdAge && p.stamp == 101 - th::holdAge, "the second stuck job is held");
+        check(std::fabs(th::share(0, th::holdAge, th::holdAge) - 1.f / 17) < 1e-6f, "held: the frame's share is 1/17");
+        check(th::holdAge < 64, "the game's own 64-frame staleness cut is never reached");
+        check(!th::plan(e, true, 1, 102, 102, 102, .01f).hold, "the game's cut flag is always respected");
+        th::plan(e, true, 0, 103, 103, 103, .01f);
+        check(!th::plan(e, true, 0, 104, 104, 104, 2.f).hold, "an eye that jumped 2 m is a cut");
+        check(!th::plan(e, true, 0, 105, 105, 105, NAN).hold, "an unknown move is a cut");
+        th::Eye f;
+        th::plan(f, false, 0, 7, 7, 7, 0);
+        check(!th::plan(f, false, 0, 8, 8, 8, 0).hold, "OFF writes nothing");
+        th::Eye g;
+        th::plan(g, true, 0, 50, 45, 30, 0);
+        check(!th::plan(g, true, 0, 51, 45, 30, 0).hold, "a growing history is the game's: never touched");
+        check(!th::stuck(0, 0, 0) && !th::stuck(9, 9, 8), "a frame of 0 or one live stamp is not stuck");
+        check(sizeof(th::Data) == 120 && th::Data{}.bytes == 120, "the report record's size");
+    });
+    test("0.0.74 test 2b EXIT FIX: SEATED TOOLS on, every car (van + 4 Batmobiles) grips, steers, drives and gets out", [] {
+        namespace v = spidy::van072;
+        namespace sl = spidy::seated_lock074;
+        auto flat = [](float, float, float) { return 0.f; };
+        auto open = [](Vec3, Vec3, float) { return true; };
+        auto clearAhead = [](Vec3, Vec3, float) { return true; };
+        // the lock: Batman in a Batmobile everything, the Punisher in the van only the grapple
+        check(sl::lockFor(true, true, true).tools && sl::lockFor(true, true, true).grapple, "Batmobile: hero tools and grapple blocked");
+        check(!sl::lockFor(true, true, false).tools && sl::lockFor(true, true, false).grapple, "van: guns kept, grapple blocked");
+        check(!sl::lockFor(true, false, true).tools && !sl::lockFor(true, false, true).grapple, "out of the car: nothing blocked");
+        check(!sl::lockFor(false, true, true).tools && !sl::lockFor(false, true, true).grapple, "ALLOWED: test 1's");
+        const auto locked = sl::split({.9f, .95f}, true, true);
+        check(locked.car.trigger == .9f && locked.car.grip == .95f && locked.tools.trigger == 0 && locked.tools.grip == 0 && locked.busy,
+              "locked: the car keeps the raw grip and trigger, the tools get none");
+        const auto van0 = sl::split({.9f, .95f}, false, true);
+        check(van0.car.grip == .95f && van0.tools.grip == .95f && van0.tools.trigger == 0 && !van0.busy,
+              "van, guns kept: the grip reaches the gun, the trigger is still the pedal (0.0.72)");
+        for (uint32_t car = 0; car <= spidy::batmobile074::cars; ++car) {
+            const bool bat = car < spidy::batmobile074::cars;
+            const v::Tune t = bat ? spidy::batmobile074::tune(car) : v::Tune{};
+            v::Van van;
+            v::In in;
+            in.dt = 1.f / 90;
+            in.enabled = in.punisher = in.play = true;
+            in.tracked[0] = in.tracked[1] = true;
+            float rawGrip[2]{}, rawTrig[2]{};
+            auto tick = [&] {
+                const bool inCar = van.state == v::driving;
+                const sl::Lock l = sl::lockFor(true, inCar, bat);
+                for (int i = 0; i < 2; ++i) {
+                    const auto sp = sl::split({rawTrig[i], rawGrip[i]}, l.tools, inCar);
+                    in.grip[i] = sp.car.grip;      // what game_xr now gives the car
+                    in.trigger[i] = sp.car.trigger;
+                }
+                return van.step(in, flat, open, clearAhead, t);
+            };
+            const std::string name = bat ? std::string("Batmobile ") + std::to_string(car) : std::string("van");
+            in.summonPress = true;
+            check(tick().summoned, (name + ": summoned").c_str());
+            in.summonPress = false;
+            in.hands[0] = van.frame.world(t.handleOut);
+            rawGrip[0] = 1;
+            check(tick().entered && van.state == v::driving, (name + ": the outside handle, in").c_str());
+            rawGrip[0] = 0;
+            tick();
+            const Vec3 axis = v::axisOf(t), up = normalized(Vec3{0, 1, 0} - axis * axis.y), side = normalized(cross(up, axis));
+            auto rim = [&](float a) { return van.frame.world(t.hub + (up * std::cos(a) + side * std::sin(a)) * t.wheelRadius); };
+            in.hands[0] = rim(-1.5708f);
+            in.hands[1] = rim(1.5708f);
+            rawGrip[0] = rawGrip[1] = 1;
+            tick();
+            check(van.wheel.latched[0] && van.wheel.latched[1], (name + ": locked, the grip still latches the wheel").c_str());
+            for (int f = 1; f <= 45; ++f) {
+                const float d = .8f * f / 45;
+                in.hands[0] = rim(-1.5708f + d);
+                in.hands[1] = rim(1.5708f + d);
+                tick();
+            }
+            check(std::abs(van.wheel.angle) > .5f, (name + ": the wheel turns with the hands").c_str());
+            rawTrig[1] = 1;
+            for (int f = 0; f < 120; ++f) {
+                in.hands[0] = rim(-1.5708f + .8f);
+                in.hands[1] = rim(1.5708f + .8f);
+                tick();
+            }
+            check(van.speed > 3.f, (name + ": the wheel hand's trigger drives").c_str());
+            rawTrig[1] = 0;
+            rawTrig[0] = rawTrig[1] = 1; // both: brake
+            for (int f = 0; f < 400 && van.speed != 0.f; ++f) {
+                in.hands[0] = rim(-1.5708f + .8f);
+                in.hands[1] = rim(1.5708f + .8f);
+                tick();
+            }
+            rawTrig[0] = rawTrig[1] = 0;
+            check(std::abs(van.speed) <= t.exitSpeed, (name + ": braked to a crawl").c_str());
+            rawGrip[0] = rawGrip[1] = 0;
+            tick();
+            in.hands[0] = van.frame.world(t.handleIn);
+            rawGrip[0] = 1;
+            const auto x = tick();
+            check(x.exited && van.state == v::parked, (name + ": locked, the inside handle gets him out").c_str());
+            rawGrip[0] = 0;
+            tick();
+            // the dash's GET OUT button
+            in.hands[0] = van.frame.world(t.handleOut);
+            rawGrip[0] = 1;
+            check(tick().entered, (name + ": back in").c_str());
+            rawGrip[0] = 0;
+            in.exitAsk = true;
+            check(tick().exited && van.state == v::parked, (name + ": the dash GET OUT button gets him out").c_str());
+            in.exitAsk = false;
+        }
+        // the dash's GET OUT (HOME, only while driving): the van's own row, the Batmobile's beside the picker
+        namespace vs = spidy::van_screen;
+        vs::Button b[8];
+        vs::Offer vo;
+        vo.exit = true;
+        const uint32_t nv = vs::buttons(vs::home, vo, b);
+        check(nv == 3 && b[2].action == vs::Action::exitVehicle && std::string(b[2].label) == "GET OUT" && b[2].x1 > b[2].x0 &&
+                  b[2].y0 >= -vs::height / 2,
+              "van HOME: GET OUT, on the face");
+        vo.batman = true;
+        const uint32_t nb = vs::buttons(vs::home, vo, b);
+        check(nb == 4 && b[2].action == vs::Action::nextBatmobile && b[3].action == vs::Action::exitVehicle && b[2].x1 < b[3].x0 &&
+                  b[2].y0 == b[3].y0,
+              "Batmobile HOME: the picker and GET OUT share the last row");
+        vo.exit = false;
+        check(vs::buttons(vs::home, vo, b) == 3, "parked: no GET OUT");
     });
     test("Version 0.0.72 PUNISHER VAN: door handle in, wheel latched by grip, RT/LT/both, door handle out", [] {
         namespace v = spidy::van072;
@@ -32020,6 +32190,254 @@ int main() {
         ho::appendFallbackBox(box, head, 10.f);
         check(box.size() == 42, "the fallback box");
     });
+    test("0.0.74 test 2b CRIME GPS: thug groups become crimes, one popup, OK tracks, cleared / lost, bearings", [] {
+        namespace cg = spidy::crime_gps074;
+        float deg = 0, m = 0;
+        check(cg::bearingTo({0, 0, 0}, {0, 0, -100}, deg, m) && std::abs(deg) < 1e-3f && std::abs(m - 100) < 1e-3f, "north is -z");
+        check(cg::bearingTo({0, 0, 0}, {50, 0, 0}, deg, m) && std::abs(deg - 90) < 1e-3f && std::string(cg::compass(deg)) == "E", "east is +x");
+        check(cg::bearingTo({0, 0, 0}, {-50, 0, 0}, deg, m) && std::abs(deg - 270) < 1e-3f && std::string(cg::compass(deg)) == "W", "west");
+        check(!cg::bearingTo({0, 0, 0}, {NAN, 0, 0}, deg, m), "NaN: no bearing");
+        check(std::abs(cg::relative(90, 3.14159265f / 2)) < 1e-3f && std::abs(cg::relative(10, 0) - 10) < 1e-3f &&
+                  std::abs(cg::relative(350, 0) + 10) < 1e-3f,
+              "relative bearing, -180..180");
+        check(std::string(cg::help).size() <= 80, "CRIME GPS help fits 80");
+        cg::Tracker t;
+        const Vec3 car{0, 0, 0};
+        // one lone thug: no crime
+        Vec3 one[1]{{100, 0, 0}};
+        cg::Event e = t.step(0, one, 1, car, true);
+        check(!e.appeared && t.liveCount() == 0 && !t.popup(), "a lone enemy is no crime");
+        // three thugs together and two more far off: two crimes, one popup (the first)
+        Vec3 g[5]{{100, 0, 0}, {105, 0, 3}, {98, 0, -4}, {-300, 0, 200}, {-304, 0, 205}};
+        e = t.step(.1f, g, 5, car, true);
+        check(e.appeared != 0 && t.liveCount() == 2 && t.popup() == e.appeared, "two groups: two crimes, one popup");
+        const cg::Crime* c = t.find(t.popup());
+        check(c && c->thugs == 3 && std::abs(c->at.x - 101) < .01f, "the first crime: its three, its centre");
+        check(std::abs(t.popupLeft(.1f) - cg::popupSeconds) < 1e-3f, "the popup's countdown");
+        // moving a little: the same crimes (no new popup, no new ids)
+        Vec3 g2[5]{{110, 0, 0}, {115, 0, 3}, {108, 0, -4}, {-300, 0, 210}, {-304, 0, 215}};
+        e = t.step(.6f, g2, 5, car, true);
+        check(!e.appeared && t.liveCount() == 2, "matched from scan to scan");
+        const uint32_t first = t.popup();
+        check(t.accept(.7f) && t.tracked() == first && !t.popup(), "OK: tracked, the popup gone");
+        check(!t.accept(.7f), "OK twice: nothing");
+        // the tracked one: the car drives there, then it goes quiet -> CLEARED; the other: LOST
+        const Vec3 there{110, 0, 0};
+        e = t.step(1.f, g2, 5, there, true);
+        e = t.step(6.f, nullptr, 0, there, true);
+        check(e.ended != 0 && t.liveCount() == 0 && t.tracked() == 0 && t.pastCount() == 2, "unseen 4 s: over");
+        bool sawCleared = false, sawLost = false;
+        for (uint32_t k = 0; k < t.pastCount(); ++k) {
+            sawCleared |= t.past(k).id == first && t.past(k).outcome == cg::Outcome::cleared;
+            sawLost |= t.past(k).id != first && t.past(k).outcome == cg::Outcome::lost;
+        }
+        check(sawCleared && sawLost, "near at the end: CLEARED, far: LOST");
+        check(t.logCount() >= 5 && t.log(0).kind != cg::LogKind::none, "the scanner log, newest first");
+        // the popup times out; OFF clears the live list, keeps the past
+        Vec3 g3[2]{{0, 0, -50}, {2, 0, -52}};
+        t.step(10, g3, 2, car, true);
+        check(t.popup() != 0, "a new crime pops up");
+        t.step(10 + cg::popupSeconds + 1, g3, 2, car, true);
+        check(!t.popup() && t.liveCount() == 1, "the popup waits only so long");
+        t.step(30, g3, 2, car, false);
+        check(t.liveCount() == 0 && t.pastCount() == 2, "OFF: live cleared, past kept");
+        // garbage: NaN thugs and clock, too many thugs
+        Vec3 bad[40];
+        for (auto& b : bad)
+            b = {NAN, 0, 0};
+        t.step(NAN, bad, 40, car, true);
+        t.step(31, bad, 40, {NAN, 0, 0}, true);
+        check(t.liveCount() == 0, "NaN enemies: nothing");
+        cg::Tracker full;
+        Vec3 many[32];
+        for (int i = 0; i < 16; ++i)
+            many[2 * i] = {i * 100.f, 0, 0}, many[2 * i + 1] = {i * 100.f + 1, 0, 0};
+        full.step(0, many, 32, car, true);
+        check(full.liveCount() == cg::mostCrimes, "at most mostCrimes live");
+    });
+    test("0.0.74 test 2b BATCAVE: Batcomputer pages, sit / stand, tracking, wrist button, the draw stays finite", [] {
+        namespace bc = spidy::batcave074;
+        namespace cg = spidy::crime_gps074;
+        namespace ho = spidy::hideout074;
+        check(bc::pages == 10 && std::string(bc::pageNames[bc::menu]) == "BATCOMPUTER", "nine pages and the menu");
+        check(ho::actionOf("batcomputer") == ho::Action::batcomputer, "the batcomputer point");
+        bc::Computer pc;
+        bc::In in;
+        check(pc.step(in) == bc::Ask::none, "closed: nothing");
+        pc.open();
+        check(pc.isOpen() && pc.page() == bc::menu && pc.cursor() == 0, "opens on the menu");
+        in.stickY = -1;
+        pc.step(in);
+        check(pc.cursor() == 0, "a stick held when he sat does not move it");
+        in.stickY = 0;
+        pc.step(in);
+        in.stickY = -1;
+        pc.step(in);
+        pc.step(in); // held: once
+        check(pc.cursor() == 1, "stick down once: the next row");
+        in.stickY = 0;
+        pc.step(in);
+        in.stickY = 1;
+        pc.step(in);
+        in.stickY = 0;
+        pc.step(in);
+        in.stickY = 1;
+        pc.step(in); // up from the top wraps to the last
+        in.stickY = 0;
+        pc.step(in);
+        check(pc.cursor() == bc::pages - 2, "wraps");
+        in.press = true;
+        check(pc.step(in) == bc::Ask::none && pc.page() == bc::returnCity, "A opens the page");
+        check(pc.step(in) == bc::Ask::returnToCity, "RETURN TO CITY asks to go");
+        in.press = false;
+        in.back = true;
+        check(pc.step(in) == bc::Ask::none && pc.page() == bc::menu && pc.cursor() == bc::pages - 2, "B: the menu, on that row");
+        check(pc.step(in) == bc::Ask::stand && !pc.isOpen(), "B on the menu stands");
+        in.back = false;
+        // ongoing: track the second crime
+        cg::Tracker t;
+        Vec3 g[4]{{50, 0, 0}, {52, 0, 0}, {-200, 0, 0}, {-202, 0, 0}};
+        t.step(0, g, 4, {0, 0, 0}, true);
+        pc.open();
+        in.liveCrimes = t.liveCount();
+        in.stickY = 0;
+        pc.step(in);
+        for (uint32_t k = 0; k < bc::ongoing - 1; ++k) {
+            in.stickY = -1;
+            pc.step(in);
+            in.stickY = 0;
+            pc.step(in);
+        }
+        in.press = true;
+        pc.step(in);
+        check(pc.page() == bc::ongoing, "ONGOING CASES");
+        in.press = false;
+        in.stickY = -1;
+        pc.step(in);
+        in.stickY = 0;
+        pc.step(in);
+        in.press = true;
+        check(pc.step(in) == bc::Ask::track && pc.trackIndex() == 1, "A on a case: track it");
+        bc::Feed fd;
+        fd.crimes = &t;
+        fd.city = {0, 0, 0};
+        fd.cityOk = true;
+        fd.car = "1989";
+        for (uint32_t p = 0; p < bc::pages; ++p) {
+            const auto L = bc::pageLines(p, 0, fd);
+            check(L.size() >= 2 && L[0] == (p == bc::menu ? std::string("BATCOMPUTER") : std::string(bc::pageNames[p])), std::string("each page has lines, titled by its name: ") + bc::pageNames[p]);
+            bool tagged = false; // test 2b polish: dev tags stay in logs/docs, never on a page
+            for (const auto& l : L) tagged = tagged || l.find("CANDIDATE") != std::string::npos || l.find("CONFIRMED") != std::string::npos || l.find("FLAVOUR") != std::string::npos;
+            check(!tagged, std::string("no dev tags on the page: ") + bc::pageNames[p]);
+        }
+        const auto on = bc::pageLines(bc::ongoing, 1, fd);
+        check(on.size() >= 3 && on[2].rfind("> CRIME", 0) == 0 && on[1].rfind("  CRIME", 0) == 0, "ONGOING: the cursor's case marked");
+        const auto dots = bc::mapDots(fd);
+        check(dots.size() == 3 && dots[0].y == 2 && std::abs(dots[2].x + .5f) < .01f, "MAP: the car and the crimes");
+        // the wrist button: armed out of reach, a poke presses once
+        bc::WristButton w;
+        const Vec3 at{0, 1, 0};
+        check(!w.step(true, at, at, true), "starting in it: not armed");
+        check(!w.step(true, at, at + Vec3{.2f, 0, 0}, true), "out: armed");
+        check(w.step(true, at, at + Vec3{.03f, 0, 0}, true) && w.lit(), "in: pressed");
+        check(!w.step(true, at, at, true), "held in: once");
+        check(!w.step(false, at, at + Vec3{.2f, 0, 0}, true) && !w.step(true, at, at, true), "off disarms");
+        // the draw: finite, and a broken input draws nothing
+        bc::View v;
+        v.on = true;
+        v.place = {.3f, {10, 2, -5}};
+        v.batcave = true;
+        v.marks = 3;
+        v.markAt[0] = {-9.852f, .28f, -6.468f};
+        v.markAt[1] = {-15.7f, .32f, -1.4f};
+        v.markKind[1] = 1;
+        v.markAt[2] = {-22, 0, 7.1f};
+        v.markKind[2] = 2;
+        v.markLit = 1;
+        v.hintAt = {-9.8f, 1.6f, -2};
+        v.hintFacing = {0, 0, 1};
+        v.hintFade = 1;
+        v.wristOn = true;
+        v.wristAt = {10, 3, -5};
+        v.computer = true;
+        v.page = bc::map;
+        v.lines = bc::pageLines(bc::map, 0, fd);
+        v.mapDots = dots;
+        std::vector<spidy::Vertex> solid, glow;
+        check(bc::append(solid, glow, v, {10, 3.6f, -5}) && !glow.empty() && !solid.empty(), "drawn");
+        bool fin = true;
+        for (const auto& x : solid)
+            fin &= finite(x.position);
+        for (const auto& x : glow)
+            fin &= finite(x.position);
+        check(fin, "every vertex finite");
+        std::vector<spidy::Vertex> s2, g2;
+        v.place.at = {NAN, 0, 0};
+        check(!bc::append(s2, g2, v, {0, 0, 0}) && s2.empty() && g2.empty(), "a broken place: nothing");
+        v.on = false;
+        check(!bc::append(s2, g2, v, {0, 0, 0}), "off: nothing");
+    });
+    test("0.0.74 test 2b BATCOMPUTER CHAIR: seatAt puts the eye over the chair facing the screens; bad input keeps the place", [] {
+        namespace ho = spidy::hideout074;
+        std::string t = "HEROVR-HIDEOUT 1\nname TEST\nspawn -1.375 0 0.125 90\n";
+        t += "point pc batcomputer 1.0 0 1.0 0.8 BATCOMPUTER\n";
+        t += "bounds -2 -1.5 2 1.5\nkilly -3.00\ngrid -2 -1.5 0.25 16 12\n";
+        for (int j = 0; j < 12; ++j) {
+            t += "row";
+            for (int i = 0; i < 16; ++i)
+                t += i >= 12 ? " 30" : " 0";
+            t += "\n";
+        }
+        ho::Room room;
+        std::string err;
+        check(ho::parseRoom(t, room, err) && room.points.size() == 1 && room.points[0].action == ho::Action::batcomputer, "read: " + err);
+        ho::Visit v;
+        const Vec3 head{5, 11.7f, 3};
+        check(v.begin(ho::Which::batcave, room, head, {1, 0, 0}, 10.f), "entered");
+        const Vec3 chair{1.5f, 0, .5f};
+        check(v.seatAt(head, {0, 0, -1}, chair, 90.f), "seated");
+        const Vec3 feetW = v.place().world(chair);
+        check(std::abs(feetW.x - head.x) < 1e-3f && std::abs(feetW.z - head.z) < 1e-3f, "the chair under the eye");
+        const Vec3 ahead = v.place().worldDir(Vec3{0, 0, -1});
+        check(dot(ahead, Vec3{0, 0, -1}) > .999f, "facing the chair's way");
+        const auto keep = v.place();
+        check(!v.seatAt(head, {0, 0, -1}, {NAN, 0, 0}, 90) && !v.seatAt({NAN, 0, 0}, {0, 0, -1}, chair, 90) &&
+                  !v.seatAt(head, {0, 0, -1}, chair, NAN),
+              "NaN: refused");
+        check(std::abs(v.place().yaw - keep.yaw) < 1e-6f && length(v.place().at - keep.at) < 1e-6f, "refused: the place kept");
+    });
+    test("0.0.74 test 2b CRIME GPS dash: MAP's OK - TRACK button only with a popup, the arrow and popup draw finite", [] {
+        namespace vs = spidy::van_screen;
+        vs::Button b[8];
+        vs::Offer o;
+        check(vs::buttons(vs::map, o, b) == 0, "no popup: no MAP buttons");
+        o.crimePopup = true;
+        const uint32_t n = vs::buttons(vs::map, o, b);
+        check(n == 1 && b[0].action == vs::Action::crimeTrack && std::string(b[0].label) == "OK - TRACK" && b[0].x1 > b[0].x0 &&
+                  b[0].x0 >= -vs::width / 2 && b[0].x1 <= vs::width / 2 && b[0].y0 > -vs::height / 2,
+              "the popup: OK - TRACK on the face");
+        spidy::van072::Frame f{{0, 0, 0}, .4f};
+        vs::Screen s;
+        vs::View v = vs::view(f, s, 10, 30, .5f, true);
+        v.offer = o;
+        v.crimeOn = true;
+        v.crimes = 2;
+        v.crimeX[0] = 100;
+        v.crimeZ[0] = -40;
+        v.crimeX[1] = -900;
+        v.crimeZ[1] = 900;
+        v.crimeTracked = 0;
+        v.crimeMetres = 108;
+        v.crimeBearing = 68;
+        v.crimePopup = true;
+        v.crimePopupLeft = 9;
+        std::vector<spidy::Vertex> out;
+        vs::append(out, v, {0, 1.6f, .5f});
+        bool fin = !out.empty();
+        for (const auto& x : out)
+            fin &= finite(x.position);
+        check(fin, "the dash with crimes, the arrow and the popup: finite");
+    });
     test("0.0.73 test 2 BUTTON GUIDE (fix 23): every hero's controls on his page, the SUITS / CONTROLS tabs, B back", [] {
         namespace rp = roster_page;
         namespace hc = hero_controls;
@@ -32778,7 +33196,13 @@ int main() {
         const Vec3 off = car_paint::shade(base, Vec3{1, 0, 0}, l, Vec3{1, 0, 0}, up, .4f, .42f);
         check(off.x < .1f && off.x > 0, "face on, away from the light: still dark (satin black)");
         const Vec3 graze = car_paint::shade(base, n, l, normalized(Vec3{0, .05f, 1}), up, .4f, .42f);
-        check(graze.y > diffuse.y, "a grazing view picks up the sky");
+        check(graze.y > diffuse.y * (1 - .6f * .4f) + .002f, "a grazing view picks up the sky (over the satin diffuse)");
+        // 0.0.74 test 2b: satin BLACK - a door panel and the bonnet seen from a standing eye stay near black
+        const Vec3 door = car_paint::shade(base, Vec3{1, 0, 0}, l, normalized(Vec3{.35f, .25f, 1}), up, .4f, .42f);
+        const Vec3 bonnet = car_paint::shade(base, n, normalized(Vec3{-.3f, .6f, -1.f}), normalized(Vec3{0, .45f, 1}), up, .4f, .42f);
+        check(door.x < .06f && bonnet.x < .06f, "test 2b: no grey sheen over the panels (under .06 linear)");
+        check(combat38::carLookTest1(2) && !combat38::satinPaintOn(2) && combat38::satinPaintOn(0) && !combat38::carLookTest1(0),
+              "CAR PAINT TEST 1: the quick revert (flat, the whole car always drawn)");
         const Vec3 bad = car_paint::shade(base, n, l, Vec3{NAN, 0, 0}, up, .4f, .42f);
         check(bad.x == diffuse.x && bad.y == diffuse.y, "NaN: the diffuse colour");
         // A smooth untextured 5000-triangle car shell, every triangle painted satin.

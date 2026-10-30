@@ -272,6 +272,40 @@ void drawMap(Painter& p, const View& v) {
     p.text(line, x, hy - .068f, .014f, bone, .0025f, 1, .13f);
     p.text("GRID: STYLIZED", x, ly + .016f, .0052f, dim * 1.6f);
     p.text("NO GAME MAP", x, ly + .006f, .0052f, dim * 1.6f);
+    // 0.0.74 test 2b CRIME GPS: the crimes (red; the tracked gold), past the map's reach pinned to its rim
+    if (v.crimeOn) {
+        const uint32_t n = std::min(v.crimes, View::mostCrimes);
+        for (uint32_t k = 0; k < n; ++k) {
+            if (!ok(v.crimeX[k]) || !ok(v.crimeZ[k]))
+                continue;
+            float sx, sy;
+            toScreen(v.crimeX[k], v.crimeZ[k], sx, sy);
+            float dx = sx - cx, dy = sy - cy;
+            const float l = std::sqrt(dx * dx + dy * dy), rim = .056f;
+            if (l > rim && l > 1e-6f)
+                dx *= rim / l, dy *= rim / l;
+            const bool tracked = v.crimeTracked == static_cast<int>(k);
+            p.disc(cx + dx, cy + dy, tracked ? .0042f : .0032f, .0032f, tracked ? Vec3{1.f, .7f, .1f} : blood * 1.8f, 1, 10);
+            if (tracked)
+                p.ring(cx + dx, cy + dy, .0065f, .0009f, .0032f, Vec3{1.f, .7f, .1f}, .9f, 16);
+        }
+        if (v.crimeTracked >= 0 && ok(v.crimeMetres) && ok(v.crimeBearing)) {
+            p.text("TRACKED CRIME", x, hy - .082f, .0058f, blood * 1.6f);
+            std::snprintf(line, sizeof line, "%d M %s", static_cast<int>(v.crimeMetres + .5f), compassName(v.crimeBearing));
+            p.text(line, x, hy - .097f, .0095f, bone, .0025f, 1, .13f);
+        } else if (n && !(v.crimePopup && v.offer.crimePopup)) { // the popup covers this line
+            std::snprintf(line, sizeof line, "%u CRIME%s NEAR", n, n == 1 ? "" : "S");
+            p.text(line, x, hy - .090f, .0058f, blood * 1.6f);
+        }
+        if (v.crimePopup && v.offer.crimePopup) {
+            const float px1 = W - .006f, py0 = ly - .001f, py1 = hy - .072f;
+            p.quad(x - .004f, py0, px1, py1, .0034f, {.10f, .006f, .004f}, .96f);
+            p.frame(x - .004f, py0, px1, py1, .0012f, .0036f, blood * 2.f, 1);
+            p.text("CRIME IN PROGRESS", x, py1 - .010f, .0068f, bone, .0038f);
+            std::snprintf(line, sizeof line, "PRESS OK TO TRACK  %ds", static_cast<int>(v.crimePopupLeft + .5f));
+            p.text(line, x, py1 - .020f, .0050f, khaki, .0038f);
+        }
+    }
 }
 
 void meter(Painter& p, float x0, float y0, float x1, float h, float share, Vec3 col) {
@@ -473,6 +507,10 @@ uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
         const float x0 = -W + .010f, gap = .004f, bw = (2 * W - .020f - 4 * gap) / 5, y1 = bodyTop - .057f, y0 = bodyBottom + .004f;
         for (int k = 0; k < 5; ++k)
             out[n++] = Button{row[k].a, x0 + k * (bw + gap), y0, x0 + k * (bw + gap) + bw, y1, row[k].label};
+    } else if (page == map && offer.crimePopup) {
+        // 0.0.74 test 2b CRIME GPS: over the map page's readouts (drawMap's popup panel)
+        const float x0 = -W + .008f + .124f + .008f, x1 = W - .010f, y0 = bodyTop - .002f - .124f + .002f;
+        out[n++] = Button{Action::crimeTrack, x0, y0, x1, y0 + .020f, "OK - TRACK"};
     } else if (page == home) {
         const float x0 = -W + .010f, x1 = W - .010f, h = .026f, gap = .005f;
         float y = bodyTop - .016f;
@@ -486,8 +524,13 @@ uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
             out[n++] = Button{offer.sat ? Action::stand : Action::sit, x0, y - h, x1, y, offer.sat ? "STAND" : "SIT (SEATED DRIVING)"};
             y -= h + gap;
         }
+        // 0.0.74 test 2b: GET OUT shares the last row with the picker (the body holds 3 full rows + this).
+        const float xs = offer.exit ? (offer.batman ? x0 + (x1 - x0) * .62f : x0) : x1;
         if (offer.batman)
-            out[n++] = Button{Action::nextBatmobile, x0, y - h, x1, y, batmobileLabels[offer.car < batmobileCars ? offer.car : 0]};
+            out[n++] = Button{Action::nextBatmobile, x0, y - h, offer.exit ? xs - gap : x1, y,
+                              batmobileLabels[offer.car < batmobileCars ? offer.car : 0]};
+        if (offer.exit)
+            out[n++] = Button{Action::exitVehicle, xs, y - h, x1, y, "GET OUT"};
     }
     return n;
 }
@@ -569,6 +612,16 @@ bool Screen::pokeAt(Vec3 f) {
         const uint32_t n = shownPages(offer_, shown);
         return pick(shown[std::min(n - 1, static_cast<uint32_t>(share * static_cast<float>(n)))]);
     }
+    if (page_ == map && offer_.crimePopup) { // 0.0.74 test 2b CRIME GPS: OK - TRACK, else the next page
+        Button b[8];
+        const uint32_t n = buttons(page_, offer_, b);
+        for (uint32_t k = 0; k < n; ++k)
+            if (f.x >= b[k].x0 - .002f && f.x <= b[k].x1 + .002f && f.y >= b[k].y0 - .002f && f.y <= b[k].y1 + .002f) {
+                action_ = b[k].action;
+                flash_ = .6f;
+                return true;
+            }
+    }
     if (page_ == music || page_ == home) { // 0.0.74: the buttons, nothing between them
         Button b[8];
         const uint32_t n = buttons(page_, offer_, b);
@@ -598,7 +651,7 @@ void Screen::targetAt(Vec3 f, uint32_t page, const Offer& offer, int& tab, int& 
             tab = static_cast<int>(std::min(n - 1, static_cast<uint32_t>(share * static_cast<float>(n))));
         return;
     }
-    if (page == music || page == home) {
+    if (page == music || page == home || (page == map && offer.crimePopup)) {
         Button b[8];
         const uint32_t n = buttons(page, offer, b);
         for (uint32_t k = 0; k < n; ++k)
@@ -828,6 +881,34 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
         case music: drawMusic(p, v); break;
         case home: drawHome(p, v); break;
         default: drawLocker(p, v); break;
+        }
+        // 0.0.74 test 2b CRIME GPS: the popup's OK button, and the arrow over the dash to the tracked crime (lying
+        // flat over the screen's top edge, pointing its way from the car's nose; its distance and compass point)
+        if (v.crimeOn && v.page == map && v.crimePopup && v.offer.crimePopup) {
+            Button b[8];
+            const uint32_t n = buttons(map, v.offer, b);
+            for (uint32_t k = 0; k < n; ++k)
+                drawButton(p, b[k], v.pointer ? v.hotButton == static_cast<int>(k) : v.hover, blood * .9f);
+        }
+        if (v.crimeOn && v.crimeTracked >= 0 && ok(v.crimeMetres) && ok(v.crimeBearing)) {
+            float rel = v.crimeBearing - v.heading * 360.f / tau;
+            rel = std::fmod(rel, 360.f);
+            if (rel > 180.f)
+                rel -= 360.f;
+            if (rel < -180.f)
+                rel += 360.f;
+            const float a = rel * tau / 360.f, sx = std::sin(a), sz = -std::cos(a); // x right, -z ahead (the face's normal is toward him)
+            const float y = H + .034f, L = .028f, w = .010f;
+            const Vec3 gold{1.f, .70f, .12f};
+            const Vec3 tip = p.P(sx * L, y, .02f + sz * L), tail = p.P(-sx * L * .6f, y, .02f - sz * L * .6f);
+            const Vec3 side = p.P(-sz * w, y, .02f + sx * w) - p.P(0, y, .02f);
+            const Vec3 mid = p.P(sx * L * .1f, y, .02f + sz * L * .1f);
+            p.tri(tip, mid + side, mid - side, gold, .95f);
+            p.tri(mid + side * .45f, tail + side * .45f, tail - side * .45f, gold, .8f);
+            p.tri(mid + side * .45f, tail - side * .45f, mid - side * .45f, gold, .8f);
+            char cl[40];
+            std::snprintf(cl, sizeof cl, "CRIME %d M %s", static_cast<int>(v.crimeMetres + .5f), compassName(v.crimeBearing));
+            p.textCentre(cl, 0, H + .046f, .0075f, gold, .02f);
         }
         // the footer
         p.quad(-W, -H, W, -H + .012f, .0005f, v.offer.batman ? Vec3{.004f, .014f, .03f} : Vec3{.02f, .022f, .013f});

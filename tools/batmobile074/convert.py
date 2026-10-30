@@ -29,6 +29,7 @@ PAINT = {'01': {'Base_Color': (0.03, 0.40, 0.42), 'Back_Things': (0.06, 0.35, 0.
 # x +-0.76 (doors 0.70 + 0.06), y from the dash front edge (-1.06) less 0.06 to 0.06 behind the headrest (0.524+0.06),
 # z from 0.05 under the floor to the roof line (everything above, the car's full height).
 CAB = dict(x=0.76, y0=-1.12, y1=0.60, z0=-0.05)
+OUTSIDE_WHOLE = True   # test 2b: the cut cabin faces go to Roof (outside only), not the bin
 BELT = 0.80   # beltline (cockpit-local z): the dash top is 0.82, the door trim 0.80
 EYE = (0.37, 0.25, 1.14)   # test 2: 0.12 higher and 0.07 further back than test 1 (0.37, 0.18, 1.02)
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -288,6 +289,10 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
         zs = [l.vert.co.z for l in f.loops]
         if tri_box(*(l.vert.co.copy() for l in f.loops), cab_lo, V((cab_hi.x, cab_hi.y, belt))): kill.append(f)
         else: keep_roof.append(f)
+    # test 2b (owner pt1208u screenshot: a black hole and missing panels from outside): the cut faces are not deleted
+    # any more - they go to the exterior-only Roof piece too, so from outside the car is whole (body + Roof = the
+    # source car) and seated the cockpit volume is still clear (Roof is not drawn while inside).
+    if OUTSIDE_WHOLE: keep_roof += kill; kill = []
     deleted += len(kill); moved += len(keep_roof)
     if keep_roof:
         g = o.copy(); g.data = o.data.copy(); g.name = 'ROOF_' + o.name; sc.collection.objects.link(g)

@@ -32,8 +32,11 @@
 #include "spidy/fly_lean.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
+#include "spidy/seated_lock074.hpp"
 #include "spidy/car_paint.hpp"
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
+#include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
+#include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/roster_page.hpp"
@@ -650,6 +653,8 @@ uint32_t SpidyShadowCameraNow();        // Update 31: SHADOW CAMERA mode | rever
 uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, reason)
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
+void SpidyTaaDiagnosticsSet(uint32_t on); // 0.0.74 test 2b TAA DIAGNOSTICS (stereo_probe.cpp)
+void SpidyTaaHoldSet(uint32_t on); // 0.0.74 test 2b TAA HOLD (stereo_probe.cpp)
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
@@ -2368,9 +2373,22 @@ DWORD WINAPI run(void*) {
         hideout074::Visit hideoutVisit;
         float hideoutExitHeld{};
         bool hideoutPressWas{}, hideoutExitDone{};
+        bool hideoutAWas{}; // 0.0.74 test 2b: A's last frame at the Batcomputer (its triggers are the pointer's)
         int hideoutPointShown = -1;
+        // 0.0.74 test 2b BATCAVE (batcave074.hpp): the Batcomputer (sat in its chair), the wrist RETURN TO CITY
+        // button, the arrival hint (room space, faded after 10 s), the chair's lift and the visit's clock.
+        batcave074::Computer batComputer;
+        batcave074::WristButton hideoutWrist;
+        bool hideoutBWas{}, hideoutChairWant{}, hideoutMusic{};
+        float hideoutChairLift{}, hideoutSeconds{};
+        Vec3 hideoutHintAt{}, hideoutHintFacing{0, 0, 1};
+        // 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): groups of enemies near the car as crimes (CANDIDATE), its clock.
+        crime_gps074::Tracker crimeTracker;
+        float crimeGpsClock{};
+        uint32_t crimeGpsPopupShown{}, crimeGpsTrackedWas{};
         const char* vanHomeNote{};
         van_screen::Offer vanOffer{};
+        bool vanExitAsk = false; // 0.0.74 test 2b: the dash's GET OUT, for the next van step
         // 0.0.74 test 1 BATMOBILE (batmobile074.hpp): the one Driver is the van (PUNISHER) or a Batmobile (BATMAN).
         // vehicleKind: what it was last frame (a change and the old one goes first); batCar: the car summoned
         // (latched at the X; the picker applies on the next summon); vehicleTune: the numbers in use.
@@ -2392,6 +2410,8 @@ DWORD WINAPI run(void*) {
         uint32_t vanAskTag{}, vanAsks{}, vanAskFrames{};
         uint64_t vanAnswers{};
         float vanTrigger[2]{};
+        // 0.0.74 test 2b EXIT FIX: each hand's grip before SEATED TOOLS zeroes it (the wheel, the door handle, the dash).
+        float vanGrip[2]{};
         // 0.0.73 test 3 FREE-HAND GUNS: last frame's hand with its grip held on the wheel's rim (about to latch)
         bool vanRimGrip[2]{};
         double vanAt = -1;
@@ -3334,8 +3354,13 @@ DWORD WINAPI run(void*) {
                     // or ability answers a hand (no grapple, baton, webs, claws, guns, holster draw); the hands are
                     // the car's (wheel, handles, dash, pedals). All of it is back the frame he is out. ALLOWED: 0.0.74
                     // test 1's (the free hand's trigger reached the hero's weapons from the seat).
-                    const bool seatedLock = combat38::seatedToolsBlocked(c38(combat38::seatedTools)) &&
-                                            (vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried);
+                    // 0.0.74 test 2b (owner 8:38 PM ET): the full block is Batman's in the Batmobiles only; the Punisher keeps
+                    // his guns in the van (drive-bys: a free hand aims and fires); no grapple from any car.
+                    const seated_lock074::Lock carLock = seated_lock074::lockFor(
+                        combat38::seatedToolsBlocked(c38(combat38::seatedTools)),
+                        vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried,
+                        vehicleKind == kindBatmobile);
+                    const bool seatedLock = carLock.tools, grappleLock = carLock.grapple;
                     {   // Update 38.5 SYMBIOTE LOOK: both hands grab the chest, then pull outward - on or
                         // off (extras385::symbiote::ChestPull; the ULTIMATE's crossed arms never arm it).
                         gestures385::Input gi;
@@ -4622,7 +4647,7 @@ DWORD WINAPI run(void*) {
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
                     rig.vehicleTurn(vanCarry.turn, van072::seatStickLock(van.state, vanCarry.lockStick)); // 0.0.73 test 3: no stick turn seated
                     // 0.0.74 test 1 SEATED DRIVING: the seat's lift while he drives; out of the van, standing again.
-                    rig.seatLift(van.state == van072::driving && !hideoutVisit.active() ? vanSeatLift : 0.f);
+                    rig.seatLift(van.state != van072::driving ? 0.f : hideoutVisit.active() ? hideoutChairLift : vanSeatLift); // 0.0.74 test 2b: the chair's
                     vanCarry.turn = 0;
                     motion = rig.update(controller, feet, {camera[8], camera[9], camera[10]}, gameplay,
                                         swingState.owned ? Vec3{0, 1, 0} : heroUp,
@@ -5579,15 +5604,16 @@ DWORD WINAPI run(void*) {
                             if (seatedLock) { // 0.0.74 test 2 SEATED TOOLS: no web, web ball or grapple from the car
                                 for (auto& h : input.hands)
                                     h.trigger = h.grip = 0;
-                                batmanGrapple[0] = batmanGrapple[1] = hero072Grapple[0] = hero072Grapple[1] = false;
                             }
-                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !seatedLock;
+                            if (grappleLock) // 0.0.74 test 2b: no grapple from any car
+                                batmanGrapple[0] = batmanGrapple[1] = hero072Grapple[0] = hero072Grapple[1] = false;
+                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !grappleLock;
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
                             batmanGrapple[0] = batmanGrapple[1] = false;
                             // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
                             // (askGrappleOnly every live frame, so the pull carries on to the point).
                             if (const uint32_t gh = heroNow(); gh != hero_modes::batman && grapple072::grappler(gh)) {
-                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open() && !seatedLock;
+                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open() && !grappleLock;
                                 input.asks |= grapple072::asks(gh, grappleLive, hero072Grapple[0], hero072Grapple[1]);
                             }
                             hero072Grapple[0] = hero072Grapple[1] = false;
@@ -6852,15 +6878,17 @@ DWORD WINAPI run(void*) {
                                 // Update 38: SpidyVR's busy rule - a hand whose own web holds or
                                 // carries, a grab, a taken web or a climbing hand punches nothing.
                                 h.busy = !h.free;
-                                h.button = u37.ball[i];
-                                h.grip = u37.other[i];
                                 // Version 0.0.72 PUNISHER VAN: driving, the trigger is the van's pedal and nothing else.
-                                vanTrigger[i] = h.button;
-                                if (vanDriving)
-                                    h.button = 0;
-                                if (seatedLock) { // 0.0.74 test 2 SEATED TOOLS: no punch, web ball, gadget or zip
-                                    h.button = h.grip = 0;
-                                    h.busy = true;
+                                // 0.0.74 test 2 SEATED TOOLS: no punch, web ball, gadget or zip - 0.0.74 test 2b: the car's
+                                // own copy (vanTrigger, vanGrip: wheel, pedals, handles, dash) split off first, never zeroed.
+                                {
+                                    const auto sp = seated_lock074::split({u37.ball[i], u37.other[i]}, seatedLock, vanDriving);
+                                    vanTrigger[i] = sp.car.trigger;
+                                    vanGrip[i] = sp.car.grip;
+                                    h.button = sp.tools.trigger;
+                                    h.grip = sp.tools.grip;
+                                    if (sp.busy)
+                                        h.busy = true;
                                 }
                                 h.position = grip.position;
                                 // Update 38.1 AIM AXIS: HAND (webShooter(grip) -Z, the swing webs'), AIM
@@ -7403,12 +7431,17 @@ DWORD WINAPI run(void*) {
                                         for (unsigned i = 0; i < 2; ++i) {
                                             vin.hands[i] = compose(vanW, Pose{cf.hands[i].position, {}}).position;
                                             vin.tracked[i] = cf.hands[i].tracked && finite(vin.hands[i]);
-                                            vin.grip[i] = cf.hands[i].grip;
+                                            // 0.0.74 test 2b EXIT FIX (owner pt1208u "you cant exit any vehicle now"; CONFIRMED by
+                                            // reading: test 2's SEATED TOOLS zeroed cf.hands' grip, the van's wheel and door
+                                            // handle read it here): the car's grip is the hand's own, kept before the lock.
+                                            vin.grip[i] = seatedLock ? vanGrip[i] : cf.hands[i].grip;
                                             vin.trigger[i] = vanTrigger[i];
                                             // Version 0.0.73 test 3 WHEEL-HAND PEDALS: each controller's own stick (back + its
                                             // trigger: reverse, only while that hand grips the wheel - van072::wheelPedal)
                                             vin.stickY[i] = std::isfinite(frame.hands[i].stickY) ? frame.hands[i].stickY : 0.f;
                                         }
+                                        vin.exitAsk = vanExitAsk; // 0.0.74 test 2b: the dash's GET OUT, once
+                                        vanExitAsk = false;
                                         if (vanSpotReady) {
                                             vanSpotReady = false;
                                             vin.summonSpot = true;
@@ -7463,6 +7496,35 @@ DWORD WINAPI run(void*) {
                                                 vanDriver.carried = vanDriver.boarding = false;
                                                 vanCarry = {};
                                             }
+                                        // 0.0.74 test 2b CRIME GPS (ON by default): the enemies the last scan holds round the car,
+                                        // grouped into crimes (CANDIDATE: a group of thugs is a crime). A new one pops up on the
+                                        // dash's MAP ("OK - TRACK"); tracked, the arrow over the dash points the way. No game waypoint.
+                                        try {
+                                            const bool gpsOn = combat38::crimeGpsOn(c38(combat38::crimeGps)) && van.state == van072::driving &&
+                                                               finite(van.frame.at);
+                                            crimeGpsClock += std::isfinite(vin.dt) && vin.dt > 0 && vin.dt < 1 ? vin.dt : 0.f;
+                                            std::array<Vec3, world_trace::farSlots> crimeFar{};
+                                            float farAge = 0;
+                                            const uint32_t farN = gpsOn ? std::min<uint32_t>(world_trace::enemiesFar(crimeFar, farAge), world_trace::farSlots) : 0u;
+                                            const crime_gps074::Event ce = crimeTracker.step(crimeGpsClock, crimeFar.data(), farN, van.frame.at, gpsOn);
+                                            const uint32_t pop = crimeTracker.popup();
+                                            if (pop && pop != crimeGpsPopupShown && !hideoutVisit.active()) {
+                                                crimeGpsPopupShown = pop;
+                                                vanDash.pick(van_screen::map);
+                                                runtime.haptic(0, .12f);
+                                                runtime.haptic(1, .12f);
+                                                message(1, 0, "CRIME IN PROGRESS - press OK on the dash's MAP to track it");
+                                                game_prompts::note("0.0.74 test 2b CRIME GPS: a crime popped up (a group of enemies, CANDIDATE)");
+                                            }
+                                            if (ce.ended && ce.ended == crimeGpsTrackedWas && ce.outcome != crime_gps074::Outcome::none)
+                                                message(1, 0, ce.outcome == crime_gps074::Outcome::cleared ? "CRIME GPS: the tracked crime is over - CLEARED"
+                                                                                                           : "CRIME GPS: the tracked crime is over - LOST");
+                                            crimeGpsTrackedWas = crimeTracker.tracked();
+                                            vanOffer.crimePopup = gpsOn && pop != 0;
+                                        } catch (...) {
+                                            crimeTracker.reset();
+                                            vanOffer.crimePopup = false;
+                                        }
                                         // Version 0.0.73 test 3 VAN SCREEN: X or a poke (an open hand off the wheel)
                                         // pages it while he drives; it takes nothing from the wheel or the pedals.
                                         // 0.0.74 test 1 BATMOBILE: its screen is always there (the picker and the Batcave are on it).
@@ -7497,6 +7559,7 @@ DWORD WINAPI run(void*) {
                                                 vanOffer.car = static_cast<uint8_t>(batmobile074::clampCar(c38(combat38::batmobileChoice)));
                                                 vanOffer.seat = c38(combat38::seatedDriving) != vehicle074::seatOff;
                                                 vanOffer.sat = vanSeat.sat();
+                                                vanOffer.exit = van.state == van072::driving;
                                                 si.offer = vanOffer;
                                                 if (hideoutAway) // nothing pokes the dash from the hideout
                                                     for (unsigned i = 0; i < 2; ++i)
@@ -7551,6 +7614,21 @@ DWORD WINAPI run(void*) {
                                                 vanSeat.stand();
                                                 message(1, 0, "SEATED DRIVING: standing");
                                                 break;
+                                            case van_screen::Action::crimeTrack:
+                                                // 0.0.74 test 2b CRIME GPS: OK on the popup
+                                                if (crimeTracker.accept(crimeGpsClock)) {
+                                                    message(1, 0, "CRIME GPS: tracking - follow the gold arrow over the dash");
+                                                    game_prompts::note("0.0.74 test 2b CRIME GPS: a crime tracked");
+                                                } else
+                                                    message(2, 0, "CRIME GPS: that crime is gone");
+                                                break;
+                                            case van_screen::Action::exitVehicle:
+                                                // 0.0.74 test 2b: the fallback GET OUT (van072 parks him on the next step if stopped)
+                                                if (std::abs(van.speed) > vehicleTune.exitSpeed)
+                                                    message(2, 0, batNow ? "GET OUT: stop the Batmobile first" : "GET OUT: stop the van first");
+                                                else
+                                                    vanExitAsk = true;
+                                                break;
                                             case van_screen::Action::nextBatmobile: {
                                                 // 0.0.74 test 1 BATMOBILE: the dash picker - the next car, on the next summon (saved)
                                                 const uint32_t next = batmobile074::nextCar(c38(combat38::batmobileChoice));
@@ -7590,9 +7668,35 @@ DWORD WINAPI run(void*) {
                                                     hideoutExitDone = true; // B must be let go first
                                                     hideoutPressWas = true;
                                                     hideoutPointShown = -1;
+                                                    // 0.0.74 test 2b: the arrival hint 1.6 m ahead at eye height, facing him (room space)
+                                                    batComputer.close();
+                                                    hideoutWrist = {};
+                                                    hideoutChairWant = hideoutMusic = false;
+                                                    hideoutChairLift = hideoutSeconds = 0;
+                                                    {
+                                                        const auto& pl = hideoutVisit.place();
+                                                        Vec3 f{vin.look.x, 0, vin.look.z};
+                                                        const float fl = std::sqrt(f.x * f.x + f.z * f.z);
+                                                        f = fl > 1e-3f ? Vec3{f.x / fl, 0, f.z / fl} : Vec3{0, 0, -1};
+                                                        const Vec3 head = motion.headPose.position;
+                                                        const Vec3 hintW{head.x + f.x * 1.6f, head.y, head.z + f.z * 1.6f};
+                                                        const Vec3 a0 = hideout074::Place{pl.yaw, {}}.world(Vec3{1, 0, 0}); // room x in world
+                                                        // the room point of a world point: undo the yaw about the place's origin
+                                                        const auto toRoom = [&](Vec3 w) {
+                                                            const Vec3 d{w.x - pl.at.x, w.y - pl.at.y, w.z - pl.at.z};
+                                                            const Vec3 rz = hideout074::Place{pl.yaw, {}}.world(Vec3{0, 0, 1});
+                                                            return Vec3{d.x * a0.x + d.y * a0.y + d.z * a0.z, d.y, d.x * rz.x + d.y * rz.y + d.z * rz.z};
+                                                        };
+                                                        hideoutHintAt = toRoom(hintW);
+                                                        const Vec3 back = toRoom(head) - hideoutHintAt;
+                                                        const float bl = std::sqrt(back.x * back.x + back.z * back.z);
+                                                        hideoutHintFacing = bl > 1e-3f ? Vec3{back.x / bl, 0, back.z / bl} : Vec3{0, 0, 1};
+                                                        if (!finite(hideoutHintAt))
+                                                            hideoutHintAt = {}, hideoutHintFacing = {0, 0, 1};
+                                                    }
                                                     message(1, 0, (std::string("HIDEOUT: the ") + hideout074::names[which] +
-                                                                   (batNow ? " (TEST) - walk with the left stick, turn with the right; hold B to go back to the Batmobile"
-                                                                          : " (TEST) - walk with the left stick, turn with the right; hold B to go back to the van"))
+                                                                   (batNow ? " (TEST) - walk: left stick, turn: right. RETURN TO CITY: the glowing Batmobile, the button over your left wrist (poke it), or hold B"
+                                                                          : " (TEST) - walk: left stick, turn: right. RETURN TO CITY: the glowing van door, the button over your left wrist (poke it), or hold B"))
                                                                       .c_str());
                                                     game_prompts::note((std::string("0.0.74 test 1 HIDEOUTS: into the ") + hideout074::names[which] + " (CANDIDATE)").c_str());
                                                 }
@@ -7602,7 +7706,7 @@ DWORD WINAPI run(void*) {
                                                 break;
                                             }
                                             // CAR MUSIC IN VEHICLES: quiet out of the van (and in a hideout); ALWAYS keeps on; OFF stops it.
-                                            const bool may = vehicle074::musicMaySound(carMode, vanDriving, hideoutVisit.active());
+                                            const bool may = vehicle074::musicMaySound(carMode, vanDriving, hideoutVisit.active() && !hideoutMusic); // 0.0.74 test 2b: the Batcomputer's MUSIC plays
                                             const bool hologramPlays = musicStatus.playing && !musicStatus.paused;
                                             if (carSounding && (!may || hologramPlays) && carMusicStatus.serial != carMusicAskedSerial)
                                                 toggleCar();
@@ -7619,23 +7723,137 @@ DWORD WINAPI run(void*) {
                                             hi.dt = vin.dt;
                                             hi.head = motion.headPose.position;
                                             hi.headForward = vin.look;
-                                            hi.moveX = std::isfinite(frame.hands[0].stickX) ? frame.hands[0].stickX : 0.f;
-                                            hi.moveY = std::isfinite(frame.hands[0].stickY) ? frame.hands[0].stickY : 0.f;
-                                            hi.turnX = std::isfinite(frame.hands[1].stickX) ? frame.hands[1].stickX : 0.f;
+                                            // 0.0.74 test 2b BATCOMPUTER: sat at it, the sticks and buttons are its (no walking, B is BACK)
+                                            const bool atComputer = batComputer.isOpen();
+                                            hideoutSeconds += std::isfinite(vin.dt) && vin.dt > 0 && vin.dt < 1 ? vin.dt : 0.f;
+                                            hi.moveX = !atComputer && std::isfinite(frame.hands[0].stickX) ? frame.hands[0].stickX : 0.f;
+                                            hi.moveY = !atComputer && std::isfinite(frame.hands[0].stickY) ? frame.hands[0].stickY : 0.f;
+                                            hi.turnX = !atComputer && std::isfinite(frame.hands[1].stickX) ? frame.hands[1].stickX : 0.f;
                                             const bool pressNow = (frame.buttons & buttonA) != 0 || frame.hands[0].trigger > .7f || frame.hands[1].trigger > .7f;
-                                            hi.press = pressNow && !hideoutPressWas;
+                                            const bool pressFresh = pressNow && !hideoutPressWas;
+                                            hi.press = pressFresh && !atComputer;
                                             hideoutPressWas = pressNow;
+                                            const bool hideoutANow = (frame.buttons & buttonA) != 0;
                                             const bool bHeld = (frame.buttons & buttonB) != 0;
+                                            const bool bFresh = bHeld && !hideoutBWas;
+                                            hideoutBWas = bHeld;
+                                            if (atComputer)
+                                                hideoutExitDone = true, hideoutExitHeld = 0; // B is the computer's BACK, never the exit
                                             if (!bHeld)
                                                 hideoutExitDone = false, hideoutExitHeld = 0;
                                             else if (!hideoutExitDone)
                                                 hideoutExitHeld += vin.dt;
                                             hi.exit = !hideoutExitDone && hideoutExitHeld >= .8f;
+                                            // 0.0.74 test 2b RETURN TO CITY on the wrist: a poke of the right hand at the button over the left
+                                            bool wristPoke = false;
+                                            try {
+                                                const bool tracked = frame.hands[0].valid && validTrackedPose(frame.hands[0].grip) && frame.hands[1].valid &&
+                                                                     validTrackedPose(frame.hands[1].grip);
+                                                const Vec3 at = motion.grips[0].position + Vec3{0, .10f, 0};
+                                                wristPoke = hideoutWrist.step(!atComputer, at, motion.grips[1].position, tracked);
+                                            } catch (...) {
+                                                wristPoke = false;
+                                            }
+                                            hi.exit = hi.exit || wristPoke;
                                             hideout074::Out ho{};
                                             try {
                                                 ho = hideoutVisit.step(hi);
                                             } catch (...) {
                                                 ho.leave = true;
+                                            }
+                                            ho.leave = ho.leave || wristPoke;
+                                            if (atComputer) {
+                                                batcave074::In ci2;
+                                                const float y0 = std::isfinite(frame.hands[0].stickY) ? frame.hands[0].stickY : 0.f;
+                                                const float y1 = std::isfinite(frame.hands[1].stickY) ? frame.hands[1].stickY : 0.f;
+                                                ci2.stickY = std::abs(y0) > std::abs(y1) ? y0 : y1;
+                                                // A here: the triggers are the pointer's (a trigger aimed off the panel still presses)
+                                                const bool aNow = (frame.buttons & buttonA) != 0;
+                                                ci2.press = aNow && !hideoutAWas;
+                                                ci2.back = bFresh;
+                                                ci2.liveCrimes = crimeTracker.liveCount();
+                                                // 0.0.74 test 2b BATCOMPUTER POINTER (owner: "make sure when using the batscreens you have
+                                                // the laser pointer"): the dash's - a fingertip tap, or the aim ray + trigger (room space).
+                                                ci2.pointer = combat38::dashPointerOn(c38(combat38::dashPointer));
+                                                try {
+                                                    const auto& pl = hideoutVisit.place();
+                                                    for (unsigned i = 0; i < 2; ++i) {
+                                                        ci2.tracked[i] = vin.tracked[i];
+                                                        ci2.hand[i] = vin.tracked[i] ? pl.room(vin.hands[i]) : Vec3{};
+                                                        const Vec3 aimW = vanW.orientation.rotate(cf.hands[i].aim);
+                                                        const Vec3 aimR = Quat::yaw(-pl.yaw).rotate(aimW);
+                                                        ci2.aim[i] = vin.tracked[i] && finite(aimR) ? aimR : Vec3{};
+                                                        ci2.trigger[i] = std::isfinite(frame.hands[i].trigger) ? frame.hands[i].trigger : 0.f;
+                                                        ci2.grip[i] = std::isfinite(vin.grip[i]) ? vin.grip[i] : 0.f;
+                                                    }
+                                                } catch (...) {
+                                                    for (unsigned i = 0; i < 2; ++i)
+                                                        ci2.tracked[i] = false;
+                                                }
+                                                batcave074::Ask ask = batcave074::Ask::none;
+                                                try {
+                                                    ask = batComputer.step(ci2);
+                                                } catch (...) {
+                                                    ask = batcave074::Ask::stand;
+                                                }
+                                                if (ask != batcave074::Ask::none)
+                                                    runtime.haptic(1, .04f);
+                                                switch (ask) {
+                                                case batcave074::Ask::nextCar: {
+                                                    const uint32_t next = batmobile074::nextCar(c38(combat38::batmobileChoice));
+                                                    combat38Values[combat38::batmobileChoice] = next;
+                                                    message(1, 0, (std::string("BATMOBILE: ") + batmobile074::names[next] +
+                                                                   (next == batCar ? " (the one parked here)" : " - comes on the next summon"))
+                                                                      .c_str());
+                                                    break;
+                                                }
+                                                case batcave074::Ask::musicToggle:
+                                                    hideoutMusic = true;
+                                                    if (!(carMusicStatus.playing && !carMusicStatus.paused) && musicStatus.playing && !musicStatus.paused)
+                                                        musicPlayer.toggle();
+                                                    carMusic.toggle();
+                                                    carMusicAskedSerial = carMusicStatus.serial;
+                                                    break;
+                                                case batcave074::Ask::musicNext:
+                                                    hideoutMusic = true;
+                                                    carMusic.next();
+                                                    break;
+                                                case batcave074::Ask::returnToCity:
+                                                    ho.leave = true;
+                                                    break;
+                                                case batcave074::Ask::track: {
+                                                    uint32_t k = 0, id = 0;
+                                                    for (const auto& c : crimeTracker.live())
+                                                        if (c.id && k++ == batComputer.trackIndex()) {
+                                                            id = c.id;
+                                                            break;
+                                                        }
+                                                    if (id && crimeTracker.track(id, crimeGpsClock))
+                                                        message(1, 0, "BATCOMPUTER: case tracked - the arrow over the dash points the way");
+                                                    break;
+                                                }
+                                                case batcave074::Ask::stand:
+                                                    batComputer.close();
+                                                    hideoutChairWant = false;
+                                                    hideoutChairLift = 0;
+                                                    hideoutExitDone = true; // that B is not the exit's hold
+                                                    message(1, 0, "BATCOMPUTER: standing - walk with the left stick");
+                                                    break;
+                                                default:
+                                                    break;
+                                                }
+                                            }
+                                            hideoutAWas = hideoutANow;
+                                            if (ho.act == hideout074::Action::batcomputer && !atComputer &&
+                                                hideoutVisit.which() == hideout074::Which::batcave) {
+                                                const Vec3 look = vin.look;
+                                                if (hideoutVisit.seatAt(motion.headPose.position, look, batcave074::chairFeet, batcave074::chairFaceYaw)) {
+                                                    batComputer.open();
+                                                    hideoutChairWant = true;
+                                                    message(1, 0, "BATCOMPUTER: sat - stick up/down picks, A or trigger opens, B goes back (B on the menu stands)");
+                                                    game_prompts::note("0.0.74 test 2b BATCAVE: at the Batcomputer");
+                                                } else
+                                                    message(2, 0, "BATCOMPUTER: the chair could not be reached");
                                             }
                                             const hideout074::Room* room = hideoutVisit.room();
                                             if (ho.point != hideoutPointShown) {
@@ -7647,6 +7865,9 @@ DWORD WINAPI run(void*) {
                                             if (ho.act == hideout074::Action::comingSoon)
                                                 message(1, 0, "COMING SOON");
                                             if (ho.leave) {
+                                                batComputer.close();
+                                                hideoutChairWant = hideoutMusic = false;
+                                                hideoutChairLift = 0;
                                                 hideoutVisit.end();
                                                 hideoutExitDone = true;
                                                 hideoutExitHeld = 0;
@@ -7662,6 +7883,18 @@ DWORD WINAPI run(void*) {
                                                                        motion.headPose.position.y, seatY);
                                         } catch (...) {
                                             vanSeatLift = 0;
+                                        }
+                                        // 0.0.74 test 2b BATCOMPUTER CHAIR: sat, the eye goes to the chair's (the room's floor + seatedEye)
+                                        try {
+                                            if (!hideoutVisit.active() || !batComputer.isOpen() || van.state != van072::driving)
+                                                hideoutChairLift = 0, hideoutChairWant = false;
+                                            else if (hideoutChairWant) {
+                                                hideoutChairWant = false;
+                                                hideoutChairLift = vehicle074::seatLift(hideoutChairLift, motion.headPose.position.y,
+                                                                                        van.frame.at.y + batcave074::seatedEye);
+                                            }
+                                        } catch (...) {
+                                            hideoutChairLift = 0;
                                         }
                                         if (vout.summoned) {
                                             message(1, 0, (vehName + (batNow ? ": here - grip the driver door handle to get in" : " (EXPERIMENTAL): here - grip the driver door handle to get in")).c_str());
@@ -10297,6 +10530,63 @@ DWORD WINAPI run(void*) {
                                                                                                                      : mesh_model::slotHideoutSafehouse);
                                     saved.hideoutPlace = hideoutVisit.place();
                                     saved.hideoutFloor = van.frame.at.y;
+                                    // 0.0.74 test 2b BATCAVE: the glowing points, the arrival hint, the wrist button, the Batcomputer
+                                    try {
+                                        auto& HV = saved.hideoutView;
+                                        HV = {};
+                                        HV.on = true;
+                                        HV.place = hideoutVisit.place();
+                                        HV.batcave = w == hideout074::Which::batcave;
+                                        HV.seconds = hideoutSeconds;
+                                        if (const hideout074::Room* rm = hideoutVisit.room())
+                                            for (size_t k = 0; k < rm->points.size() && HV.marks < batcave074::View::mostMarks; ++k) {
+                                                const auto& pt = rm->points[k];
+                                                const int kind = pt.action == hideout074::Action::toVehicle     ? 0
+                                                                 : pt.action == hideout074::Action::batcomputer ? 1
+                                                                 : pt.action == hideout074::Action::comingSoon  ? 2
+                                                                                                                : -1;
+                                                if (kind < 0 || !finite(pt.at))
+                                                    continue;
+                                                if (static_cast<int>(k) == hideoutPointShown)
+                                                    HV.markLit = static_cast<int>(HV.marks);
+                                                HV.markAt[HV.marks] = pt.at;
+                                                HV.markKind[HV.marks++] = static_cast<uint8_t>(kind);
+                                            }
+                                        HV.hintAt = hideoutHintAt;
+                                        HV.hintFacing = hideoutHintFacing;
+                                        HV.hintFade = hideoutSeconds < 8.f ? 1.f : hideoutSeconds < 10.f ? (10.f - hideoutSeconds) * .5f : 0.f;
+                                        const bool leftOk = frame.hands[0].valid && validTrackedPose(frame.hands[0].grip) && finite(motion.grips[0].position);
+                                        HV.wristOn = leftOk && !batComputer.isOpen();
+                                        HV.wristLit = hideoutWrist.lit();
+                                        HV.wristAt = motion.grips[0].position + Vec3{0, .10f, 0};
+                                        HV.computer = batComputer.isOpen();
+                                        if (HV.computer) {
+                                            batcave074::Feed fd;
+                                            fd.crimes = &crimeTracker;
+                                            fd.city = van.frame.at;
+                                            fd.cityOk = finite(van.frame.at);
+                                            fd.now = crimeGpsClock;
+                                            fd.car = batmobile074::names[batmobile074::clampCar(c38(combat38::batmobileChoice))];
+                                            fd.song = carMusicStatus.song;
+                                            fd.musicOn = carMusicStatus.available;
+                                            fd.musicPlaying = carMusicStatus.playing && !carMusicStatus.paused;
+                                            fd.batman = batDraw;
+                                            HV.page = batComputer.page();
+                                            HV.cursor = batComputer.cursor();
+                                            HV.lines = batcave074::pageLines(HV.page, HV.cursor, fd);
+                                            HV.cursorOn = batComputer.cursorOn();
+                                            HV.cursorAt = batComputer.cursorAt();
+                                            HV.beamOn = batComputer.beamOn();
+                                            HV.beamFrom = batComputer.beamFrom();
+                                            HV.hotRow = batComputer.hotRow();
+                                            HV.hotButton = static_cast<int>(batComputer.hotButton());
+                                            HV.touching = batComputer.touching();
+                                            if (HV.page == batcave074::map)
+                                                HV.mapDots = batcave074::mapDots(fd);
+                                        }
+                                    } catch (...) {
+                                        saved.hideoutView = {};
+                                    }
                                 } else if (body && van.state != van072::none && finite(van.frame.at) && std::isfinite(van.frame.yaw)) {
                                     auto& L = saved.hero072;
                                     L.van = L.any = true;
@@ -10312,7 +10602,8 @@ DWORD WINAPI run(void*) {
                                     L.vanRoof = batDraw ? slotModel(mesh_model::slotBatmobileRoofFirst + carNow, "BATMOBILE") : nullptr;
                                     if (batDraw) {
                                         const auto& box = batmobile074::layout(carNow);
-                                        if (combat38::cabinClearOn(c38(combat38::cabinClear))) {
+                                        // 0.0.74 test 2b CAR PAINT TEST 1: the quick revert - the roof piece always drawn too
+                                        if (combat38::cabinClearOn(c38(combat38::cabinClear)) && !combat38::carLookTest1(c38(combat38::carPaint))) {
                                             L.roofLow = {-box.width / 2, 0, -box.length / 2};
                                             L.roofHigh = {box.width / 2, box.height, box.length / 2};
                                         } else {
@@ -10356,6 +10647,29 @@ DWORD WINAPI run(void*) {
                                         } catch (...) {
                                         }
                                         V.homeNote = vanHomeNote;
+                                        // 0.0.74 test 2b CRIME GPS: the live crimes, the tracked one's way, the popup
+                                        V.crimeOn = combat38::crimeGpsOn(c38(combat38::crimeGps));
+                                        if (V.crimeOn) {
+                                            uint32_t n = 0;
+                                            for (const auto& c : crimeTracker.live()) {
+                                                if (!c.id || n >= van_screen::View::mostCrimes || !finite(c.at))
+                                                    continue;
+                                                if (c.id == crimeTracker.tracked()) {
+                                                    V.crimeTracked = static_cast<int>(n);
+                                                    float deg = 0, m = 0;
+                                                    if (crime_gps074::bearingTo(van.frame.at, c.at, deg, m))
+                                                        V.crimeBearing = deg, V.crimeMetres = m;
+                                                    else
+                                                        V.crimeTracked = -1;
+                                                }
+                                                V.crimeX[n] = c.at.x;
+                                                V.crimeZ[n] = c.at.z;
+                                                ++n;
+                                            }
+                                            V.crimes = n;
+                                            V.crimePopup = crimeTracker.popup() != 0;
+                                            V.crimePopupLeft = crimeTracker.popupLeft(crimeGpsClock);
+                                        }
                                         if (batDraw) {
                                             V.offer.batman = true;
                                             V.carName = batmobile074::names[carNow];
@@ -11681,6 +11995,9 @@ DWORD WINAPI run(void*) {
                                 lightChecksApplied = checksWant;
                                 SpidyLightChecksOn(reinterpret_cast<void*>(static_cast<uintptr_t>(checksWant)));
                             }
+                            // 0.0.74 test 2b TAA DIAGNOSTICS (OFF by default): the per-frame per-eye TAA record.
+                            SpidyTaaDiagnosticsSet(combat38::taaDiagnosticsOn(c38(combat38::taaDiagnostics)) ? 1u : 0u);
+                            SpidyTaaHoldSet(combat38::taaHoldOn(c38(combat38::taaHold)) ? 1u : 0u);
                             // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
                             // 0.0.74 test 2 FLARE BLOCK (ON, the default): the glow sprites hidden (GLOW CHECK HIDDEN).
                             if (const uint32_t glowWant = combat38::flareBlockOn(c38(combat38::flareBlock)) ? combat38::glowHidden
@@ -12473,6 +12790,21 @@ DWORD WINAPI run(void*) {
                                 van_screen::append(translucent, dash, viewer);
                             } catch (...) {
                                 translucent.resize(from);
+                            }
+                        }
+                        // 0.0.74 test 2b BATCAVE: the glowing points and labels, the arrival hint, the wrist RETURN TO
+                        // CITY button (blended) and the Batcomputer's chair and screen. Should it fail, only it goes off.
+                        if (!saved->flatScreen && saved->hideoutAway && saved->hideoutView.on) {
+                            const size_t from = translucent.size(), vFrom = vertices.size();
+                            try {
+                                auto hv = saved->hideoutView;
+                                hv.place.at += travel;
+                                hv.wristAt += travel;
+                                if (!batcave074::append(vertices, translucent, hv, viewer))
+                                    translucent.resize(from), vertices.resize(vFrom);
+                            } catch (...) {
+                                translucent.resize(from);
+                                vertices.resize(vFrom);
                             }
                         }
                         // Build 8 ROSTER page: its plate and text blended, its pictures in the textured models'
@@ -13842,8 +14174,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCabinClear(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarPaint(void* v) { return setHero007(v, combat38::carPaint, 5499); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedTools(void* v) { return setHero007(v, combat38::seatedTools, 5500); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashPointer(void* v) { return setHero007(v, combat38::dashPointer, 5501); }
+// 0.0.74 test 2b: TAA DIAGNOSTICS OFF (0, default) / ON (1); CRIME GPS ON (0, default) / OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaDiagnostics(void* v) { return setHero007(v, combat38::taaDiagnostics, 5502); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCrimeGps(void* v) { return setHero007(v, combat38::crimeGps, 5503); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaHold(void* v) { return setHero007(v, combat38::taaHold, 5504); }
 // 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): ON (0, the default) or OFF (1); live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return setHero007(v, combat38::heapGuard, 5502); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return setHero007(v, combat38::heapGuard, 5505); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

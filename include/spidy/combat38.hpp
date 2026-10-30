@@ -233,6 +233,12 @@ enum Option : uint32_t {
     seatedTools,
     // 0.0.74 test 2 DASH POINTER: ON (the default) or OFF
     dashPointer,
+    // 0.0.74 test 2b TAA DIAGNOSTICS: OFF (the default) or ON - every frame's per-eye TAA record for the report
+    taaDiagnostics,
+    // 0.0.74 test 2b CRIME GPS: ON (the default) or OFF - crime popups, MAP and HUD arrow in the Batmobile and van
+    crimeGps,
+    // 0.0.74 test 2b TAA HOLD: ON (the default) or OFF - each eye's TAA history kept instead of thrown away every frame
+    taaHold,
     // 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (heap_guard.hpp)
     heapGuard,
     options
@@ -608,9 +614,12 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"spidyvr_picture", "SPIDYVR PICTURE", "SPIC", "ON: the game's TAA per eye like SpidyVR, no mod AA or sharpening; no restart.", 2, {"ON", "CUSTOM", nullptr, nullptr}},
     {"flare_block", "FLARE BLOCK", "FLRB", "ON hides lens flares and light glow sprites in VR, restart VR to apply.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"car_paint", "CAR PAINT", "PAINT", "SATIN gives the Batmobiles satin paint highlights; FLAT is test 1's; no restart.", 2, {"SATIN", "FLAT", nullptr, nullptr}},
-    {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no grapple, webs or hero tools while in a car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
+    {"car_paint", "CAR PAINT", "PAINT", "SATIN: satin black shine; FLAT: no shine; TEST 1: test 1 car look; no restart.", 3, {"SATIN", "FLAT", "TEST 1", nullptr}},
+    {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no hero tools in Batmobiles, no grapple in any car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"taa_diagnostics", "TAA DIAGNOSTICS", "TAAD", "ON logs every frame's per-eye TAA jitter and history; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
+    {"crime_gps", "CRIME GPS", "CGPS", "ON shows crimes near your car: popup, MAP, HUD arrow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"taa_hold", "TAA HOLD", "TAAH", "ON keeps each eye's TAA history so the image settles, not shakes; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
@@ -640,9 +649,16 @@ inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }
 inline bool spidyvrPictureOn(uint32_t value) { return value != 1; }
 inline bool flareBlockOn(uint32_t value) { return value != 1; }
 inline bool cabinClearOn(uint32_t value) { return value != 1; }
-inline bool satinPaintOn(uint32_t value) { return value != 1; }
+inline bool satinPaintOn(uint32_t value) { return value != 1 && value != 2; }
+// 0.0.74 test 2b CAR PAINT TEST 1 (the quick revert): flat paint and the roof piece always drawn (test 1's look).
+inline bool carLookTest1(uint32_t value) { return value == 2; }
 inline bool seatedToolsBlocked(uint32_t value) { return value != 1; }
 inline bool dashPointerOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 2b: TAA DIAGNOSTICS (0 OFF, the default: a diagnostic, not a fix), CRIME GPS (0 ON, 1 OFF).
+inline bool taaDiagnosticsOn(uint32_t value) { return value == 1; }
+inline bool crimeGpsOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): 0 ON, the default; 1 OFF.
+inline bool taaHoldOn(uint32_t value) { return value != 1; }
 inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;

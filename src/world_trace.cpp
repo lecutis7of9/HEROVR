@@ -47,6 +47,8 @@ Vec3 heroWorldAt{}; // under enemyLock
 std::atomic<bool> fastRefresh{true}; // Version 0.0.62 ENEMY TRACKING LIVE
 std::atomic<bool> enemyNear{};      // the last refresh found one (LIVE goes fast only then)
 std::array<Vec3, enemySlots> enemyWorld{}; // Version 0.0.3: the same enemies' world feet
+std::array<Vec3, farSlots> farWorld{}; // 0.0.74 test 2b CRIME GPS: the far ones
+uint32_t farCount{};
 // Version 0.0.5 DAMAGE PROBE: the same enemies' hit points (enemyLock), read-only.
 constexpr uintptr_t botHealthTable = 0x531b0a0, healthHp = 0xd0, healthMost = 0xa0;
 std::array<Vital, enemySlots> enemyVital{};
@@ -300,15 +302,30 @@ void run() {
         std::array<Found, 64> found{};
         uint32_t n{};
         Vec3 heroAt{}, at{};
+        // 0.0.74 test 2b CRIME GPS: the far ones too (the same records, farReach)
+        struct Far {
+            float metres{};
+            Vec3 world{};
+        };
+        std::array<Far, 96> farList{};
+        uint32_t farN{};
         if (heroRecord && position(heroRecord, heroAt))
-            for (const uintptr_t record : enemyRecords)
-                if (n < found.size() && position(record, at)) {
-                    const Vec3 rel = at - heroAt;
-                    const float metres = length(rel);
-                    if (finite(rel) && metres <= enemyReach)
-                        found[n++] = {metres, rel, record, at};
-                }
+            for (const uintptr_t record : enemyRecords) {
+                if (n >= found.size() && farN >= farList.size())
+                    break;
+                if (!position(record, at))
+                    continue;
+                const Vec3 rel = at - heroAt;
+                const float metres = length(rel);
+                if (!finite(rel))
+                    continue;
+                if (n < found.size() && metres <= enemyReach)
+                    found[n++] = {metres, rel, record, at};
+                if (farN < farList.size() && metres <= farReach)
+                    farList[farN++] = {metres, at};
+            }
         std::sort(found.begin(), found.begin() + n, [](const auto& a, const auto& b) { return a.first < b.first; });
+        std::sort(farList.begin(), farList.begin() + farN, [](const auto& a, const auto& b) { return a.metres < b.metres; });
         {
             std::lock_guard<std::mutex> lock(enemyLock);
             enemyCount = std::min<uint32_t>(n, enemySlots);
@@ -325,6 +342,9 @@ void run() {
             }
             enemyWhen = std::chrono::steady_clock::now();
             heroWorldAt = heroAt; // Version 0.0.62: where the hero was for this list
+            farCount = std::min<uint32_t>(farN, farSlots);
+            for (uint32_t i = 0; i < farCount; ++i)
+                farWorld[i] = farList[i].world;
         }
         enemyNear.store(n > 0, std::memory_order_relaxed);
         if (n)
@@ -672,6 +692,18 @@ uint32_t enemiesWorld(std::array<Vec3, enemySlots>& out, std::array<uint64_t, en
         ids[i] = enemyId[i];
     }
     return enemyCount;
+}
+uint32_t enemiesFar(std::array<Vec3, farSlots>& out, float& ageSeconds) {
+    ageSeconds = 1e9f;
+    if (!running.load())
+        return 0;
+    std::lock_guard<std::mutex> lock(enemyLock);
+    ageSeconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - enemyWhen).count();
+    if (ageSeconds > 1.f)
+        return 0;
+    for (uint32_t i = 0; i < farCount; ++i)
+        out[i] = farWorld[i];
+    return farCount;
 }
 uint32_t enemyVitals(std::array<Vital, enemySlots>& out) {
     if (!running.load())

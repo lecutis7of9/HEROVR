@@ -21,6 +21,8 @@ Action actionOf(const std::string& name) {
         return Action::toVehicle;
     if (name.empty() || name == "none")
         return Action::none;
+    if (name == "batcomputer")
+        return Action::batcomputer;
     return Action::comingSoon;
 }
 
@@ -139,17 +141,36 @@ Vec3 Place::world(Vec3 r) const { return Quat::yaw(yaw).rotate(r) + at; }
 Vec3 Place::room(Vec3 w) const { return Quat::yaw(-yaw).rotate(w - at); }
 Vec3 Place::worldDir(Vec3 d) const { return Quat::yaw(yaw).rotate(d); }
 
-void Visit::toSpawn(Vec3 head, Vec3 forward) {
+void Visit::toPoint(Vec3 head, Vec3 forward, Vec3 feet, float yawDeg) {
     Vec3 f{forward.x, 0, forward.z};
     if (!fine(f) || length(f) < 1e-4f)
         f = {0, 0, -1};
-    const float s = room_->spawnYaw * pi / 180.f;
+    const float s = yawDeg * pi / 180.f;
     place_.yaw = angleOf(f) - s;
-    // the spawn under the eye, its floor on the real floor
-    const Vec3 sp = Quat::yaw(place_.yaw).rotate(room_->spawn);
-    place_.at = Vec3{head.x - sp.x, floorY_ - room_->spawn.y, head.z - sp.z};
-    feet_ = room_->spawn;
-    floorShown_ = room_->spawn.y;
+    // the point under the eye, its floor on the real floor
+    const Vec3 sp = Quat::yaw(place_.yaw).rotate(feet);
+    place_.at = Vec3{head.x - sp.x, floorY_ - feet.y, head.z - sp.z};
+    feet_ = feet;
+    floorShown_ = feet.y;
+}
+
+void Visit::toSpawn(Vec3 head, Vec3 forward) { toPoint(head, forward, room_->spawn, room_->spawnYaw); }
+
+bool Visit::seatAt(Vec3 head, Vec3 forward, Vec3 feet, float yawDeg) {
+    if (!active() || !room_ || !fine(head) || !fine(feet) || !std::isfinite(yawDeg))
+        return false;
+    float y = 0;
+    if (room_->floorAt(feet.x, feet.z, y)) // else (a cell the grid calls blocked) the height given is kept
+        feet.y = y;
+    const Place was = place_;
+    const Vec3 wasFeet = feet_;
+    const float wasShown = floorShown_;
+    toPoint(head, forward, feet, yawDeg);
+    if (!fine(place_.at) || !std::isfinite(place_.yaw)) {
+        place_ = was, feet_ = wasFeet, floorShown_ = wasShown;
+        return false;
+    }
+    return true;
 }
 
 bool Visit::begin(Which which, const Room& room, Vec3 head, Vec3 forward, float floorY) {

@@ -13,6 +13,7 @@
 #include "test_notice.hpp"
 #include "van_screen.hpp"
 #include "hideout074.hpp"
+#include "batcave074.hpp"
 
 #include <limits>
 
@@ -48,6 +49,8 @@ struct NativeEyeFrame {
     const mesh_model::Mesh* hideoutModel{};
     hideout074::Place hideoutPlace{};
     float hideoutFloor{};
+    // 0.0.74 test 2b BATCAVE: the markers, the hint, the wrist button, the chair and the Batcomputer (on false: none).
+    batcave074::View hideoutView{};
     // Slow motion: the image's recolouring and the focus meter (none at rest).
     SlowMotionView slow{};
     // Update 36: the hero's share of his most hit points, for the wrist ring

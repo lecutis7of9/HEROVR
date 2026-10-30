@@ -40,7 +40,7 @@ inline constexpr const char* pageNames[pages] = {"MAP", "STATUS", "CASES", "LOCK
 inline constexpr float tabLeft = .034f;
 // 0.0.74 test 1: what a button asks for (the caller does it; the screen only says).
 enum class Action : uint8_t { none, musicPrevious, musicToggle, musicNext, volumeDown, volumeUp, goSafehouse, goBatcave, sit, stand,
-                              nextBatmobile };
+                              nextBatmobile, exitVehicle, crimeTrack };
 // 0.0.74 test 1 BATMOBILE: the dash picker's label for each car (batmobile074's order).
 inline constexpr uint32_t batmobileCars = 4;
 inline constexpr const char* batmobileLabels[batmobileCars] = {"BATMOBILE: 1989", "BATMOBILE: ODAMI", "BATMOBILE: FOREVER",
@@ -55,6 +55,10 @@ struct Offer {
     // HOME: the van has GO TO SAFEHOUSE, the Batmobile GO TO BATCAVE and the BATMOBILE picker.
     bool batman = false;
     uint8_t car = 0;       // the picker's choice (batmobileLabels; applies on the next summon)
+    // 0.0.74 test 2b: HOME's fallback GET OUT button (the door handle stays the main way; stopped only).
+    bool exit = false;
+    // 0.0.74 test 2b CRIME GPS: the MAP page's "OK - TRACK" button while a crime's popup is up.
+    bool crimePopup = false;
 };
 // Whether a page is shown for this offer (the Batmobile hides CASES and LOCKER), and the shown pages in
 // tab order into `out` (returns how many, at least 1).
@@ -220,6 +224,16 @@ struct View {
     const char* homeNote{};   // a line under the HOME buttons (the last hideout's fault, say)
     const char* carName{};    // 0.0.74 test 1 BATMOBILE: the car driven (the header), nullptr: none
     const char* carCredit{};  // 0.0.74 test 1 BATMOBILE: its model's credit (HOME's last line), nullptr: none
+    // 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): the live crimes (world x, z), the tracked one (-1 none) and
+    // its distance / bearing (degrees clockwise from world -z) for the MAP and the arrow over the dash; the popup.
+    static constexpr uint32_t mostCrimes = 8;
+    bool crimeOn{};
+    uint32_t crimes{};
+    float crimeX[mostCrimes]{}, crimeZ[mostCrimes]{};
+    int crimeTracked{-1};
+    float crimeMetres{}, crimeBearing{};
+    bool crimePopup{};
+    float crimePopupLeft{};
 };
 // The view for a van at `frame` (world).
 View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving);

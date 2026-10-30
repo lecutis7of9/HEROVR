@@ -201,6 +201,13 @@ bool heroAtRefresh(Vec3& out);
 // Version 0.0.3: the same list in world positions (feet, y up) with the list's age in seconds
 // (WALL STICK measures speeds with it; the hero-relative list carries the player's own motion).
 uint32_t enemiesWorld(std::array<Vec3, enemySlots>& out, std::array<uint64_t, enemySlots>& ids, float& ageSeconds);
+// 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): every enemy record the last scan holds within farReach of
+// the hero (nearest first, world feet), not only the near ones; its age in seconds. Which records the game
+// keeps (how far out) is the game's streaming - CANDIDATE. Read-only, the same scan (no new reads of the game
+// beyond each listed record's position).
+inline constexpr uint32_t farSlots = 32;
+inline constexpr float farReach = 600.f;
+uint32_t enemiesFar(std::array<Vec3, farSlots>& out, float& ageSeconds);
 // Version 0.0.5 DAMAGE PROBE (damage_probe.hpp), read-only: the same enemies' hit points, each one's
 // BotHealth component (vtable 0x531b0a0, owner record +0x10, as the CONFIRMED HeroHealth; hit
 // points +0xd0, most +0xa0) found in the full scan and re-read with the 10 Hz refresh.

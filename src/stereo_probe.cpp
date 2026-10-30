@@ -3,6 +3,8 @@
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_resolution.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/taa_diag074.hpp"
+#include "spidy/taa_hold074.hpp"
 #include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -1919,6 +1921,50 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     }
     return result;
 }
+// 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): ON by default, live (SpidyTaaHoldSet from game_xr).
+__declspec(dllexport) spidy::taa_hold::Data SpidyTaaHoldData;
+std::atomic<bool> taaHoldOn{true};
+extern "C" void SpidyTaaHoldSet(uint32_t on) { taaHoldOn = on != 0; }
+void taaHoldJob(unsigned i, void* view, uint8_t* settings, uintptr_t job) {
+    namespace th = spidy::taa_hold;
+    static th::Eye eyeState[2];
+    auto& d = SpidyTaaHoldData;
+    const bool on = taaHoldOn.load(std::memory_order_relaxed);
+    d.on = on ? 1 : 0;
+    int32_t frame{}, cutFrame{}, stamp{};
+    uint8_t cut{};
+    if (!read(job + th::jobCut, &cut, 1) || !read(job + th::jobCutFrame, &cutFrame, 4) ||
+        !read(job + th::jobStamp, &stamp, 4))
+        return;
+    // The frame TemporalAa compares with: the context's +0x790 (CANDIDATE), else the global it is copied to.
+    int32_t global{};
+    std::memcpy(&frame, settings + th::settingsFrame, 4);
+    if (base && read(base + spidy::engine_taa::frameRva, &global, 4) &&
+        (!frame || (!th::stuck(frame, cutFrame, stamp) && th::stuck(global, cutFrame, stamp))))
+        frame = global;
+    float rendered[3]{}, previous[3]{};
+    float moved = 1e9f;
+    const auto v = reinterpret_cast<uintptr_t>(view);
+    if (read(v + 0x30, rendered, sizeof rendered) && read(v + 0x560, previous, sizeof previous)) {
+        const float dx = rendered[0] - previous[0], dy = rendered[1] - previous[1], dz = rendered[2] - previous[2];
+        moved = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    ++d.jobs[i];
+    if (cut)
+        ++d.cuts[i];
+    if (th::stuck(frame, cutFrame, stamp))
+        ++d.zeroAges[i];
+    d.lastFrame[i] = frame;
+    d.lastCutAge[i] = frame - cutFrame;
+    d.lastStampAge[i] = frame - stamp;
+    const auto p = th::plan(eyeState[i], on, cut, frame, cutFrame, stamp, moved);
+    if (p.hold) {
+        std::memcpy(reinterpret_cast<void*>(job + th::jobCutFrame), &p.cutFrame, 4);
+        std::memcpy(reinterpret_cast<void*>(job + th::jobStamp), &p.stamp, 4);
+        ++d.held[i];
+    }
+    ++d.sequence;
+}
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
     // Update 36: EYE BLOOM, before the job copies the view settings (a, its r8).
     if (enabled) {
@@ -1969,6 +2015,10 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
                 const uint32_t temporal = 1;
                 std::memcpy(static_cast<uint8_t*>(settings) + spidy::engine_taa::jobAa, &temporal, 4);
             }
+            // 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): the eye's own TAA history kept when the game's stamps
+            // follow the frame (share 1 = no history, the shake). Only this job's copy is written.
+            if (engineTaaLive.load())
+                taaHoldJob(i, view, static_cast<uint8_t*>(settings), reinterpret_cast<uintptr_t>(job));
             if (shareExposure(reinterpret_cast<uintptr_t>(job), i)) {
                 AcquireSRWLockExclusive(&telemetry);
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
@@ -3027,6 +3077,50 @@ extern "C" {
 __declspec(dllexport) spidy::engine_taa::Data SpidyEngineTaaData;
 // 0.0.73 TAA SHAKE: what each eye's view holds where TemporalAa reads it (engine_taa::Eyes).
 __declspec(dllexport) spidy::engine_taa::Eyes SpidyEngineTaaEyes;
+// 0.0.74 test 2b TAA DIAGNOSTICS (taa_diag074.hpp): every frame's per-eye record while the option is ON.
+__declspec(dllexport) spidy::taa_diag::Diag SpidyTaaDiag;
+}
+std::atomic<bool> taaDiagOn{};
+// 0.0.74 test 2b TAA DIAGNOSTICS: game_xr sets it from the option (0 off, 1 on); read() only, never a write to the game.
+extern "C" void SpidyTaaDiagnosticsSet(uint32_t on) { taaDiagOn = on != 0; }
+// One frame of TAA DIAGNOSTICS: what each eye's view holds for TemporalAa this frame (read() only).
+void taaDiagFrame(void* const views[2]) {
+    namespace et = spidy::engine_taa;
+    namespace td = spidy::taa_diag;
+    static int32_t lastStamp[2]{};
+    static bool haveLast{};
+    auto& d = SpidyTaaDiag;
+    d.bytes = sizeof(td::Diag);
+    d.on = 1;
+    td::Frame f{};
+    int32_t frame{};
+    const bool haveFrame = base && read(base + et::frameRva, &frame, 4);
+    f.frame = static_cast<uint32_t>(frame);
+    f.sent[0] = eyeJitterSent[0].load(std::memory_order_relaxed);
+    f.sent[1] = eyeJitterSent[1].load(std::memory_order_relaxed);
+    uintptr_t sets[2]{};
+    int32_t stamps[2]{};
+    for (unsigned i = 0; i < 2; ++i) {
+        const auto v = reinterpret_cast<uintptr_t>(views[i]);
+        if (!v)
+            return;
+        float stored[2]{};
+        if (read(v + et::jobJitter, stored, sizeof stored)) {
+            f.stored[2 * i] = stored[0];
+            f.stored[2 * i + 1] = stored[1];
+        }
+        read(v + et::viewSet, &sets[i], sizeof sets[i]);
+        uint8_t cut{};
+        int32_t cutFrame{}, stamp{};
+        if (haveFrame && read(v + et::viewCut, &cut, 1) && read(v + et::viewCutFrame, &cutFrame, 4) &&
+            read(v + et::viewStamp, &stamp, 4)) {
+            f.cutAge[i] = frame - cutFrame;
+            f.stampAge[i] = frame - stamp;
+            f.weight[i] = et::currentWeight(cut, f.cutAge[i], f.stampAge[i]);
+            stamps[i] = stamp;
+        }
+    }
+    td::add(d, f, sets[0], sets[1], stamps[0], stamps[1], lastStamp, haveLast);
 }
 // 0.0.73 TAA SHAKE: read back (read() only) what TemporalAa 0x2c2dc60 takes from each eye: the stored
 // jitter, the size it takes it back with, the history stamps and the current frame's weight from them.
@@ -3119,6 +3213,17 @@ void engineTaaWatch() {
             void* const views[2]{l, r};
             engineTaaEyesPublish(views);
         }
+    }
+    // 0.0.74 test 2b TAA DIAGNOSTICS: every frame (not every 250 ms) while ON and ENGINE TAA is on.
+    if (taaDiagOn.load() && engineTaaLive.load()) {
+        void* l = eyes[0].load();
+        void* r = eyes[1].load();
+        if (l && r && !retired[0] && !retired[1] && !retiring() && !stopRequested) {
+            void* const views[2]{l, r};
+            taaDiagFrame(views);
+        }
+    } else {
+        SpidyTaaDiag.on = 0;
     }
     if (!engineTaaLive.load())
         return;

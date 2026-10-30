@@ -1,6 +1,7 @@
 """0.0.74 HIDEOUTS: builds a hideout's shipped folder (Models\\Hideout\\<NAME>\\) from its sources.
 
     python make_hideout.py batcave <batcave-room.glb> <batcave-room.json> <batcave-collision.glb> <out folder>
+    python make_hideout.py batcave <batcave-room.glb> <batcave-room.json> mesh <out folder>   (0.0.74 test 2b: walls from the room)
     python make_hideout.py safehouse <safehouse.glb> <safehouse.json> <safehouse-collision.glb> <out folder>
 
 Writes:
@@ -94,13 +95,42 @@ def floor_heights(floor, x0, z0, cols, rows):
     return h
 
 
+# 0.0.74 test 2b BATCAVE COLLISION: `mesh` in place of the collision model takes the walls, props and floor from
+# the room's own triangles (what the player sees), so the walk grid hugs the real geometry instead of the
+# hand-made boxes (prop_blockers). Up-facing faces are floor (a table or a car roof above the step height is
+# then a floor nobody can step onto: blocked); every other face is solid between knee and head height. Picture
+# cards (light rays, the waterfall sheet) and the far enclosure box are not solid.
+NOT_SOLID = ('card_light_rays', 'card_waterfall', 'cave_enclosure')
+
+
+def mesh_collision(tris):
+    floor, solid = [], []
+    for name, v in tris.items():
+        if any(n in name.lower() for n in NOT_SOLID) or not len(v):
+            continue
+        n = np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
+        ln = np.linalg.norm(n, axis=1)
+        ok = ln > 1e-12
+        up = np.zeros(len(v), bool)
+        up[ok] = np.abs(n[ok, 1] / ln[ok]) > .7  # either winding: a face lying flat
+        floor.append(v[up & (n[:, 1] != 0)])
+        solid.append(v[~up & ok])
+    floor = np.concatenate(floor) if floor else np.zeros((0, 3, 3))
+    solid = np.concatenate(solid) if solid else np.zeros((0, 3, 3))
+    return floor, solid
+
+
 def build(kind, room_glb, room_json, col_glb, out):
     os.makedirs(out, exist_ok=True)
     meta = json.load(open(room_json))
-    col = glb.triangles(col_glb)
-    floor = np.concatenate([v for k, v in col.items() if 'floor' in k.lower()])
-    solid = [v for k, v in col.items() if 'floor' not in k.lower()]
-    solid = np.concatenate(solid) if solid else np.zeros((0, 3, 3))
+    mesh = col_glb == 'mesh'
+    if mesh:
+        floor, solid = mesh_collision(glb.triangles(room_glb))
+    else:
+        col = glb.triangles(col_glb)
+        floor = np.concatenate([v for k, v in col.items() if 'floor' in k.lower()])
+        solid = [v for k, v in col.items() if 'floor' not in k.lower()]
+        solid = np.concatenate(solid) if solid else np.zeros((0, 3, 3))
     b = meta['bounds']
     lo = blender_to_gltf(b['playable_min'])
     hi = blender_to_gltf(b['playable_max'])
@@ -114,7 +144,7 @@ def build(kind, room_glb, room_json, col_glb, out):
         i, j = int((p[0] - x0) / CELL), int((p[2] - z0) / CELL)
         if 0 <= i < cols and 0 <= j < rows and not np.isnan(h[j, i]) and h[j, i] + KNEE < p[1] < h[j, i] + HEAD:
             blocked[j, i] = True
-    for box in meta.get('collision', {}).get('prop_blockers', []):
+    for box in ([] if mesh else meta.get('collision', {}).get('prop_blockers', [])):
         c = blender_to_gltf(box['center'])
         sx, sy, sz = box['size']  # blender x, y, z
         yaw = math.radians(box.get('yaw_deg', 0))  # about blender z (glTF y)

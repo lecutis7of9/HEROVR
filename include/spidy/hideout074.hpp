@@ -29,7 +29,8 @@ inline constexpr const char* names[3] = {"", "SAFEHOUSE", "BATCAVE"};
 inline constexpr const char* folders[3] = {"", "Hideout/Safehouse", "Hideout/Batcave"};
 
 // What a point does: back to the vehicle (the exits), or nothing yet (a "coming soon" point).
-enum class Action : uint8_t { none, toVehicle, comingSoon };
+// 0.0.74 test 2b: batcomputer (room.txt's "batcomputer"): sit in its chair and use it (batcave074.hpp).
+enum class Action : uint8_t { none, toVehicle, comingSoon, batcomputer };
 Action actionOf(const std::string& name); // room.txt's action word
 
 struct Point {
@@ -100,6 +101,9 @@ public:
     const Place& place() const { return place_; }
     const Room* room() const { return room_; }
     Vec3 roomFeet() const { return feet_; } // the player's feet in room space (the last good)
+    // 0.0.74 test 2b: put the eye over room point `feet` facing `yawDeg` (the spawn's yaw sense), as the spawn
+    // does (the Batcomputer's chair). False (nothing changed) on a non-finite input or a point off the floor.
+    bool seatAt(Vec3 head, Vec3 forward, Vec3 feet, float yawDeg);
 
 private:
     Which which_{};
@@ -109,6 +113,7 @@ private:
     float floorY_{}, floorShown_{};
     bool turnHeld_{}, pressWas_{};
     void toSpawn(Vec3 head, Vec3 forward);
+    void toPoint(Vec3 head, Vec3 forward, Vec3 feet, float yawDeg);
 };
 
 // The room's draw: the mesh (glTF space) placed by `place`, unlit (its baked colours; an untextured

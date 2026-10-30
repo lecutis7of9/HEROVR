@@ -11462,17 +11462,17 @@ DWORD WINAPI run(void*) {
                                 ++costFrames;
                                 if (newPair)
                                     ++costPairs;
-                                if (validTrackedPose(frame.head)) {
-                                    const Vec3 lookNow = frame.head.orientation.rotate(Vec3{0, 0, -1});
+                                if (validTrackedPose(motion.headPose)) {
+                                    const Vec3 lookNow = motion.headPose.orientation.rotate(Vec3{0, 0, -1});
                                     if (!stillKnown) {
-                                        stillAt = frame.head.position;
+                                        stillAt = motion.headPose.position;
                                         stillLook = lookNow;
                                         stillKnown = true;
                                     }
-                                    const Vec3 moved = frame.head.position - stillAt;
+                                    const Vec3 moved = motion.headPose.position - stillAt;
                                     const float turnDot = lookNow.x * stillLook.x + lookNow.y * stillLook.y + lookNow.z * stillLook.z;
                                     if (moved.x * moved.x + moved.y * moved.y + moved.z * moved.z > .03f * .03f || turnDot < .9986f)
-                                        stillHead = false; // over 3 cm or about 3 degrees from where the 10 s began
+                                        stillHead = false; // over 3 cm or about 3 degrees from where the 10 s began (the head in the game world: travel counts)
                                 }
                                 const ULONGLONG costNow = GetTickCount64();
                                 if (!costTick)

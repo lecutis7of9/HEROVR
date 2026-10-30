@@ -499,24 +499,30 @@ using SetupModels = uint64_t (*)(void*, void*, void*, uint64_t, uint64_t);
 SetupModels originalSetupModels{};
 void* setupModelsHook{};
 bool distances{};
-// The far buildings' full models (createViews bit 128 off). Far buildings are
-// impostors, and only the engine's active view (189daa0: the view at
-// ViewContextManager +f8) has the impostors it sees draw their full models,
-// with the lit windows and the rooms behind them: ImpostorHQModelRegJob
-// (16fb630, 16fb750) applies that view's wanted state per impostor, from its
-// visibility queries (16faf10), and the impostor submit job (16f8afa) marks
-// the view. A resting game view (restGameView) submits no scene, so in VR the
+// The far buildings' full models (createViews bit 128 off). CANDIDATE (0.0.74 test 5: until
+// SpidyViewGatesData's per-site histogram shows the eyes reaching these calls). Far buildings are
+// impostors, and only the engine's active view (IsActiveView 0x2c991a0 in 2.810, CONFIRMED by its
+// bytes and the five calls' targets; the view at [0xc2cae70], read from its cmp) has the impostors it sees draw their
+// full models, with the lit windows and the rooms behind them. The ImpostorHQModelRegJob launchers
+// (2a6c2e0, 2a6c410 here: CANDIDATE names) apply that view's wanted state per impostor, from its
+// visibility queries (2a6bc60), and the impostor submit job (2a6af10, CANDIDATE) marks the view.
+// The 189daa0 / 16fb630 / 16fb750 / 16faf10 / 16f8afa these comments used to give are SM1's
+// (189daa0 has no callers in 2.810): stale, CANDIDATE at best.
+// A resting game view (restGameView) submits no scene, so in VR the
 // buildings beyond the nearest stayed dark cards until a menu, which renders
 // that view again, lit them. While the game view rests the left eye stands in
-// for it at those five checks (isActiveView). One view only: the
+// for it at those five checks (isActiveView). 0.0.74 test 5: SM2 never rests the game view
+// (no flag 32), so the left eye stands in while immersive, the game view and the right eye
+// answer no there. One view only: the
 // registration applies a view's wanted states over everyone's, and two views
 // would undo each other's every frame.
 using IsView = bool (*)(void*);
 IsView originalIsActiveView{};
 void* isActiveViewHook{};
-bool impostors{};
+std::atomic<bool> impostors{};
+std::atomic<uint32_t> impostorsWhy{spidy::view_gates::impNotHooked}; // 0.0.74 test 5
 // How far away an impostor draws its full model then: the eyes' visibility
-// queries (16faf10) carry the game's distance in their result (+88: 145 m from
+// queries (2a6bc60 in 2.810, 16faf10 in SM1) carry the game's distance in their result (+88: 145 m from
 // 7a89170 or 7a89174, which region changes rewrite), and the impostor jobs
 // read it after the queries return. While an eye stands in, both eyes' results
 // get impostorReach percent of it (impostorQueries), so both draw alike;
@@ -1016,12 +1022,14 @@ uint64_t csmFit(void* csm, void* view, void* lights, void* settings) {
         farShadowsSet(fs::afterFailure(mode, failed), failed, true);
     return result;
 }
-// 189daa0, "is this the active view", where the impostor code asks it (the
-// return addresses after its five calls there; impostors above).
+// 2c991a0, "is this the active view" (189daa0 in SM1), where the impostor code asks it (the
+// return addresses after its five calls there, CANDIDATE; impostors above).
 std::atomic<uint32_t> lodFadeMode{spidy::view_gates::defaultFade}, lodFadeWhy{};
 bool lodFadeKnown{}; // 0x2b4f9b8's bytes as known (install)
 std::atomic<uint64_t> fadeCalls{}, fadeEyeAsks{};
 std::atomic<bool> impostorsOn{true};
+// 0.0.74 test 5: the five impostor calls' asks, yes answers (left, right, game view) and asks per call.
+std::atomic<uint64_t> impostorAsked{}, impostorYes[3]{}, impostorBySite[spidy::view_gates::impostorSites]{};
 std::atomic<uint32_t> lodReachPercent{spidy::view_gates::defaultReach};
 void viewGatesNote(uint64_t spidy::view_gates::Data::*field, unsigned add = 1);
 bool isActiveView(void* view) {
@@ -1063,19 +1071,33 @@ bool isActiveView(void* view) {
             }
         }
     }
-    if (view && view == eyes[0].load(std::memory_order_relaxed) && impostors && enabled &&
-        impostorsOn.load(std::memory_order_relaxed) && rested.load(std::memory_order_relaxed)) {
-        const auto caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - base;
-        if (caller == 0x2a6af95 || caller == 0x2a6c34b || caller == 0x2a6c35b || caller == 0x2a6c46c ||
-            caller == 0x2a6c47c) {
-            if (caller == 0x2a6c34b) {
+    // IMPOSTORS (0.0.74 test 5, CANDIDATE sites): at the five impostor calls only, while immersive and
+    // the switch is on, the left eye is the active view for both eyes; the right eye and the game view
+    // are not (one view picks, as the registration needs). No `rested` gate: that is flag 32's state,
+    // which SM2 never sets, so before test 5 this never answered. Every ask there is counted.
+    if (view && impostors.load(std::memory_order_relaxed) && enabled) {
+        namespace vg = spidy::view_gates;
+        const int site = vg::impostorSite(reinterpret_cast<uintptr_t>(_ReturnAddress()) - base);
+        if (site >= 0) {
+            void* const left = eyes[0].load(std::memory_order_relaxed);
+            const int who = left && view == left                               ? 0
+                            : left && view == eyes[1].load(std::memory_order_relaxed) ? 1
+                                                                                      : 2;
+            const bool standIn = left && impostorsOn.load(std::memory_order_relaxed) &&
+                                 latchedImmersive.load(std::memory_order_relaxed);
+            const bool answer = standIn ? vg::impostorAnswer(who) : originalIsActiveView(view);
+            impostorAsked.fetch_add(1, std::memory_order_relaxed);
+            impostorBySite[site].fetch_add(1, std::memory_order_relaxed);
+            if (answer)
+                impostorYes[who].fetch_add(1, std::memory_order_relaxed);
+            if (standIn && answer && site == 1) { // 0x2a6c34b: the first HQ launcher's first ask
                 AcquireSRWLockExclusive(&telemetry);
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
                 ++SpidyAppearanceData.impostorFrames;
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
                 ReleaseSRWLockExclusive(&telemetry);
             }
-            return true;
+            return answer;
         }
     }
     return originalIsActiveView(view);
@@ -1934,6 +1956,13 @@ void lodFadeCheck() {
     d.lodReach = lodReachPercent.load();
     d.impostorsOn = impostorsOn.load() ? 1 : 0;
     d.fadeGameCalls = fadeCalls.load();
+    d.impostorsInstalled = impostors.load() ? 1 : 0;
+    d.impostorsWhy = impostorsWhy.load();
+    d.impostorAsked = impostorAsked.load(std::memory_order_relaxed);
+    for (unsigned i = 0; i < 3; ++i)
+        d.impostorYes[i] = impostorYes[i].load(std::memory_order_relaxed);
+    for (unsigned i = 0; i < spidy::view_gates::impostorSites; ++i)
+        d.impostorBySite[i] = impostorBySite[i].load(std::memory_order_relaxed);
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
     ReleaseSRWLockExclusive(&gatesLock);
 }
@@ -2664,6 +2693,47 @@ bool retiring() {
 // view (descriptor +428, +42c): a Halton (2, 3) point within the pixel, twice
 // the offset over the render size. Temporal anti-aliasing gathers the samples;
 // a scene rendered smaller than the eye needs more of them per eye pixel.
+// 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN (game_xr's SpidyCleanSet) runs no TAA in the eyes, so their lenses
+// get no jitter: logged for the first 300 eye frames, and any left is zeroed while CLEAN is on (upscaled eyes keep
+// theirs: they need the game's TAA, milesUpscaled). +0x428 / +0x42c: the lens's stored jitter (CONFIRMED, et::jobJitter).
+std::atomic<bool> cleanOn{};
+SRWLOCK cleanJitterLock = SRWLOCK_INIT;
+spidy::view_gates::CleanJitter cleanJitter{};
+std::array<float, 2> cleanSent(std::array<float, 2> j) {
+    if (!cleanOn.load(std::memory_order_relaxed))
+        return j;
+    const bool nonzero = j[0] != 0 || j[1] != 0;
+    const bool keep = nonzero && milesUpscaled();
+    AcquireSRWLockExclusive(&cleanJitterLock);
+    auto& c = cleanJitter;
+    if (c.frames < c.logFrames) {
+        ++c.frames;
+        if (nonzero) {
+            ++c.sentNonzero;
+            c.maxSent = std::max(c.maxSent, std::max(std::abs(j[0]), std::abs(j[1])));
+        }
+    }
+    if (nonzero)
+        ++(keep ? c.kept : c.zeroed);
+    ReleaseSRWLockExclusive(&cleanJitterLock);
+    return keep ? j : std::array<float, 2>{0, 0};
+}
+// After the lens: what it stored (logged with the same 300 frames); zeroed while CLEAN is on.
+void cleanStored(Descriptor& lens) {
+    if (!cleanOn.load(std::memory_order_relaxed) || milesUpscaled())
+        return;
+    float& x = lens.values[0x428 / 4];
+    float& y = lens.values[0x42c / 4];
+    if (x == 0 && y == 0)
+        return;
+    AcquireSRWLockExclusive(&cleanJitterLock);
+    if (cleanJitter.frames <= cleanJitter.logFrames) {
+        ++cleanJitter.storedNonzero;
+        cleanJitter.maxStored = std::max(cleanJitter.maxStored, std::max(std::abs(x), std::abs(y)));
+    }
+    ReleaseSRWLockExclusive(&cleanJitterLock);
+    x = y = 0;
+}
 std::array<float, 2> eyeJitter() {
     // 0.0.74 test 3 MILES TAA step 1: MilesVR's lens jitter as it is (full Halton (2, 3), both eyes, no guard).
     if (milesSteps()) {
@@ -2909,6 +2979,8 @@ void eyeLod(void* eye, const Descriptor& lens, const Descriptor& game, unsigned 
 void* impostorQueries(void* view, void* cull) {
     const auto result = originalImpostorQueries(view, cull);
     float reach{};
+    // 0.0.74 test 5: still only with a resting game view (flag 32, never in SM2), so the IMPOSTORS stand-in
+    // writes no +0x88 (build 9's far models flipped with that write); farWindowsCandidateWrite stays false.
     if (result && impostors && enabled && impostorsOn.load(std::memory_order_relaxed) &&
         rested.load(std::memory_order_relaxed) &&
         eyeView(reinterpret_cast<uintptr_t>(view)) >= 0 &&
@@ -3169,12 +3241,13 @@ void placeEyes() {
             // derived matrices through the verified native lens constructor.
             const float aspect = static_cast<float>(config.width) / config.height;
             const auto& fov = desired.eyes[index].fov;
-            const auto jitter = eyeJitter();
+            const auto jitter = cleanSent(eyeJitter()); // 0.0.74 test 5: none while CLEAN is on
             const float nearZ = controlled && desired.enabled == 1 ? near_clip::metres() : main.nearZ();
             reinterpret_cast<Lens>(base + 0x2c75560)(
                 &descriptor, nearZ, main.farZ(), controlled ? std::tan(fov[0]) : -aspect,
                 controlled ? std::tan(fov[1]) : aspect, controlled ? -std::tan(fov[3]) : -1,
                 controlled ? -std::tan(fov[2]) : 1, 0, 0, jitter[0], jitter[1], false, false);
+            cleanStored(descriptor);
             if (controlled && desired.enabled == 1)
                 recordLens(index, descriptor,
                            {std::tan(fov[0]), std::tan(fov[1]), -std::tan(fov[3]), -std::tan(fov[2])});
@@ -4131,11 +4204,22 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                     entry(0x1da9ba8, lensScaleBytes, sizeof(lensScaleBytes)) &&
                     entry(0x4413c08, numeratorBytes, sizeof(numeratorBytes)) &&
                     entry(0x3dcf678, widescreenBytes, sizeof(widescreenBytes));
-        impostors = !(config.createViews & 128) && (config.createViews & 32);
-        for (const auto& call : impostorCalls)
-            impostors = impostors && entry(call.rva, call.bytes, sizeof(call.bytes));
-        impostors = impostors && entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
-                    entry(0x2a6bded, reachLastBytes, sizeof(reachLastBytes));
+        // 0.0.74 test 5: no createViews 32 needed (SM2 never sets it, so this was always off); 128 still opts
+        // out, and every byte check stays: the first that differs keeps it off and is the console's reason.
+        {
+            namespace vg = spidy::view_gates;
+            uint32_t why = (config.createViews & 128) ? vg::impOptedOut : vg::impFine;
+            for (unsigned i = 0; i < vg::impostorSites && why == vg::impFine; ++i)
+                if (impostorCalls[i].rva != vg::impostorCallRvas[i] ||
+                    !entry(impostorCalls[i].rva, impostorCalls[i].bytes, sizeof(impostorCalls[i].bytes)))
+                    why = vg::impCall0 + i;
+            if (why == vg::impFine && !entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)))
+                why = vg::impReachFirst;
+            if (why == vg::impFine && !entry(0x2a6bded, reachLastBytes, sizeof(reachLastBytes)))
+                why = vg::impReachLast;
+            impostorsWhy = why;
+            impostors = why == vg::impFine;
+        }
         // Update 38.3 FAR WINDOWS write 2: checked on its own (SM2 never sets flag 32).
         farWindowsReady = entry(0x2a6bc60, impostorQueriesBytes, sizeof(impostorQueriesBytes)) &&
                           entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
@@ -4328,6 +4412,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             auto& g = SpidyViewGatesData;
             g.fadeReady = lodFadeKnown ? 1 : 0;
             g.impostorsInstalled = impostors ? 1 : 0;
+            g.impostorsWhy = impostorsWhy.load();
             if (!lodFadeKnown && lodFadeMode.load()) {
                 lodFadeMode = spidy::view_gates::fadeOff;
                 lodFadeWhy = spidy::view_gates::fadeNoHook;
@@ -4719,6 +4804,30 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyViewGate(void* argument) {
 }
 // The four: fx | fade << 4 | fadeWhy << 8 | impostorsOn << 12 | impostors installed << 13 |
 // fade ready << 14 | reach << 16.
+// 0.0.74 test 5 IMPOSTORS: the stand-in's state and counts since the start (game_xr's console lines).
+extern "C" void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out) {
+    if (!out)
+        return;
+    out->hooked = hooked ? 1 : 0;
+    out->installed = impostors.load() ? 1 : 0;
+    out->on = impostorsOn.load() ? 1 : 0;
+    out->why = hooked ? impostorsWhy.load() : spidy::view_gates::impNotHooked;
+    out->asked = impostorAsked.load(std::memory_order_relaxed);
+    for (unsigned i = 0; i < 3; ++i)
+        out->yes[i] = impostorYes[i].load(std::memory_order_relaxed);
+    for (unsigned i = 0; i < spidy::view_gates::impostorSites; ++i)
+        out->bySite[i] = impostorBySite[i].load(std::memory_order_relaxed);
+}
+// 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN on or off (game_xr, each frame), and the 300-frame log.
+extern "C" void SpidyCleanSet(uint32_t on) { cleanOn.store(on != 0, std::memory_order_relaxed); }
+extern "C" void SpidyCleanJitter(spidy::view_gates::CleanJitter* out) {
+    if (!out)
+        return;
+    AcquireSRWLockShared(&cleanJitterLock);
+    *out = cleanJitter;
+    ReleaseSRWLockShared(&cleanJitterLock);
+    out->clean = cleanOn.load() ? 1 : 0;
+}
 extern "C" uint32_t SpidyViewGatesNow() {
     return bloomFxMode.load() | lodFadeMode.load() << 4 | (lodFadeWhy.load() & 0xf) << 8 |
            (impostorsOn.load() ? 1u : 0u) << 12 | (impostors ? 1u : 0u) << 13 | (lodFadeKnown ? 1u : 0u) << 14 |

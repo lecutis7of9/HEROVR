@@ -263,6 +263,8 @@ enum Option : uint32_t {
     mainViewSmall,
     // 0.0.74 test 4 AA MODE (cleanValue below)
     aaMode,
+    // 0.0.74 test 5 IMPOSTOR EYE (view_gates.hpp impostorAnswer, stereo_probe isActiveView)
+    impostorEye,
     options
 };
 struct OptionInfo {
@@ -655,6 +657,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"eye_taa_requeue", "EYE TAA REQUEUE", "ETRQ", "ON queues the game's TAA again for an eye that stopped getting it; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"main_view_small", "MAIN VIEW SMALL", "MVSM", "ON renders the flat-screen view at half size so eyes get more GPU; restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"aa_mode", "AA MODE", "AAMD", "CLEAN: full-size eyes, FXAA, per-eye history, light CAS; textures at restart.", 2, {"CLEAN", "OFF", nullptr, nullptr}},
+    {"impostor_eye", "IMPOSTOR EYE", "IMPE", "ON lets the left eye pick far buildings' full models for both eyes; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

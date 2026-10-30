@@ -30,6 +30,11 @@ SLOTS = ('off', 'RB+A', 'RB+B', 'RB+X', 'RB+Y', 'RB HOLD', 'Y', 'Y HOLD')
 FX = ('OFF', 'LENS', 'LENS+')
 FADE = ('OFF', 'LEFT', 'BOTH')
 FADE_WHY = ('fine', 'this game build differs (N/A)', 'no eye reached the fade call (back to OFF)')
+# 0.0.74 test 5: view_gates.hpp ImpostorWhy (why the IMPOSTORS stand-in is off) and the five calls' addresses.
+IMPOSTOR_WHY = ('installed', 'createViews 128 (opted out)', 'call 0x2a6af90 differs', 'call 0x2a6c346 differs',
+                'call 0x2a6c356 differs', 'call 0x2a6c467 differs', 'call 0x2a6c477 differs',
+                '+0x88 store 0x2a6bcad differs', '+0x88 store 0x2a6bded differs', 'not hooked')
+IMPOSTOR_SITES = ('0x2a6af90', '0x2a6c346', '0x2a6c356', '0x2a6c467', '0x2a6c477')
 HEALTH_STATUS = ('no health component found: the ring shows N/A',
                  'found, but not health values: the ring shows N/A',
                  'valid, not yet seen to change (take a hit or heal)',
@@ -39,7 +44,7 @@ GRIPS = ('grip', 'trigger', 'grip or trigger')
 SPOTS, ANCHORS, STYLES = ('LEFT', 'CENTRE', 'RIGHT'), ('PLAYSPACE', 'WORLD'), ('FIGURE', 'PANEL')
 
 RECORDS = {
-    'view_gates': ('SpidyViewGatesData', 0x54414756, 1, 352),
+    'view_gates': ('SpidyViewGatesData', 0x54414756, 2, 432),
     'combat': ('SpidyCombatData', 0x54424d43, 3, 208),
     'hand_crawl': ('SpidyHandCrawlData', 0x4c575243, 1, 96),
     'health': ('SpidyHealthData', 0x48544c48, 1, 616),
@@ -122,7 +127,7 @@ V007_OPTIONS = (('batman', ('OFF', 'ON')), ('wolverine', ('OFF', 'ON')), ('super
                 ('captain_america', ('OFF', 'ON')), ('shield_arm', ('RIGHT', 'LEFT')), ('shield_damage', ('35 HP', '20 HP', '50 HP', '70 HP')),
                 ('shield_chain', ('ON', 'OFF')), ('shield_block', ('OFF', 'EXPERIMENTAL')), ('shield_look', ('BUILT-IN', 'MODEL')))
 # Version 0.0.72 (TEST): THOR, GREEN LANTERN and the 0.0.72 list (not in the records either).
-V0072_OPTIONS = (('thor', ('OFF', 'ON')), ('thor_lightning', ('ON', 'OFF')), ('thor_storm', ('ON', 'OFF')), ('thor_chain', ('ON', 'OFF')), ('green_lantern', ('OFF', 'ON')), ('gl_flight', ('ON', 'OFF')), ('gl_fist', ('ON', 'OFF')), ('gl_beam', ('ON', 'OFF')), ('gl_bubble', ('ON', 'OFF')), ('gl_chain', ('ON', 'OFF')), ('gl_charge', ('ON', 'OFF')), ('spider_climb_only', ('ON', 'OFF')), ('uppercut', ('ON', 'OFF')), ('smoke_blind', ('ON', 'OFF')), ('dd_grapple', ('ON', 'OFF')), ('dd_parry', ('ON', 'OFF')), ('iron_hud', ('ON', 'OFF')), ('punisher_rage', ('ON', 'OFF')), ('reputation', ('ON', 'OFF')), ('survival', ('OFF', 'ON')), ('punisher_suit', ('VEST', 'WARZONE')), ('natural_invincible', ('ON', 'OFF')), ('hulk_rage', ('ON', 'OFF')), ('rage_blood', ('EXTREME', 'NORMAL', 'OFF')), ('rage_tint', ('NORMAL', 'STRONG', 'SUBTLE', 'OFF')), ('fire_douse', ('ON', 'OFF')), ('shield_slam', ('ON', 'OFF')), ('punisher_hook', ('ON', 'OFF')), ('claw_climb', ('OFF', 'ON')), ('npc_shove', ('ON', 'OFF')), ('faction', ('AUTO', 'VANILLA', 'THE HAND', 'HYDRA', 'JOKER GANG')), ('hero_suit', ('DEFAULT', 'NEXT')), ('test_unlocks', ('OFF', 'SUITS', 'ULTIMATES', 'ALL')), ('ultimates', ('ON', 'OFF')), ('perk_branch', ('AUTO', 'CHAIN FIRST', 'HOLD POINTS', 'PERKS OFF')), ('own_suit', ('OFF', 'ON')), ('perch_takedown', ('ON', 'OFF')), ('takedown_light', ('ON', 'OFF')), ('punisher_van', ('ON', 'OFF')), ('thor_hammer', ('BOOOOP', 'DEVILSEYE', 'LOVE THUNDER', 'FCCOOPER')), ('game_body', ('OFF', 'ON')), ('thor_hammer_model', ('ON', 'OFF')), ('thor_flight', ('ON', 'OFF')), ('suit_body', ('ARMS', 'FULL BODY', 'OFF')), ('cap_sprint', ('ON', 'OFF')), ('cull_margin', ('10 DEG', '6 DEG', '15 DEG', '20 DEG')), ('shadow_match', ('ON', 'OFF')), ('calib_look', ('HOLO', 'CLASSIC')), ('fly_pose', ('LEAN', 'UPRIGHT')), ('weapon_collision', ('ON', 'OFF')), ('light_hold', ('ON', 'STRONG', 'OFF')), ('van_screen', ('ON', 'OFF')), ('palm_blast', ('PALM', 'AIM')), ('hero_menu', ('HOLO TILES', 'CLASSIC')), ('rep_log', ('ON', 'OFF')), ('van_pedals', ('WHEEL HAND', 'CLASSIC')), ('image', ('SPIDYVR', 'HERO VR CLASSIC')), ('image_style', ('SPIDYVR', 'OFF')), ('dd_baton_tip', ('ON', 'OFF')), ('streamer_mode', ('ON', 'OFF')), ('streamer_smooth', ('LOW', 'OFF', 'HIGH')), ('streamer_eye', ('LEFT EYE', 'RIGHT EYE')), ('iron_hands', ('ON', 'OFF')), ('dd_grapple_aim', ('ON', 'OFF')), ('wolverine_claws', ('ON', 'OFF')), ('light_checks', ('ON', 'OFF')), ('glow_check', ('GAME', 'ALWAYS', 'HIDDEN')), ('sl_watch', ('ON', 'OFF')), ('mp_solo_test', ('OFF', 'ON')), ('sharpen_match', ('ON', 'OFF')), ('claw_level', ('ON', 'OFF')), ('window_pop', ('ON', 'OFF')), ('mp_player2_body', ('SUIT LOOK', 'FIGURE')), ('coming_soon', ('ON', 'OFF')), ('hideouts', ('ON', 'OFF')), ('car_music', ('IN VEHICLES', 'ALWAYS', 'OFF')), ('seated_driving', ('SIT BUTTON', 'AUTO SIT', 'OFF')), ('batmobile', ('ON', 'OFF')), ('batmobile_choice', ('1989', 'ODAMI', 'FOREVER', 'FOREVER 2')), ('spidyvr_picture', ('ON', 'CUSTOM')), ('flare_block', ('ON', 'OFF')), ('cabin_clear', ('ON', 'OFF')), ('car_paint', ('SATIN', 'FLAT', 'TEST 1')), ('seated_tools', ('BLOCKED', 'ALLOWED')), ('dash_pointer', ('ON', 'OFF')), ('taa_diagnostics', ('OFF', 'ON')), ('crime_gps', ('ON', 'OFF')), ('taa_hold', ('OFF', 'ON')), ('heap_guard', ('OFF', 'ON')), ('jitter_guard', ('ON', 'OFF')), ('wheel_first', ('ON', 'OFF')), ('cave_quiet', ('ON', 'OFF')), ('finger_ray', ('ON', 'OFF')), ('dash_inside', ('ON', 'OFF')), ('cockpit_glow', ('ON', 'OFF')), ('spidyvr_stock', ('ON', 'OFF')), ('miles_taa', ('ON', 'OFF')), ('taa_gate_log', ('ON', 'OFF')), ('eye_taa_requeue', ('ON', 'OFF')), ('main_view_small', ('ON', 'OFF')), ('aa_mode', ('CLEAN', 'OFF')))
+V0072_OPTIONS = (('thor', ('OFF', 'ON')), ('thor_lightning', ('ON', 'OFF')), ('thor_storm', ('ON', 'OFF')), ('thor_chain', ('ON', 'OFF')), ('green_lantern', ('OFF', 'ON')), ('gl_flight', ('ON', 'OFF')), ('gl_fist', ('ON', 'OFF')), ('gl_beam', ('ON', 'OFF')), ('gl_bubble', ('ON', 'OFF')), ('gl_chain', ('ON', 'OFF')), ('gl_charge', ('ON', 'OFF')), ('spider_climb_only', ('ON', 'OFF')), ('uppercut', ('ON', 'OFF')), ('smoke_blind', ('ON', 'OFF')), ('dd_grapple', ('ON', 'OFF')), ('dd_parry', ('ON', 'OFF')), ('iron_hud', ('ON', 'OFF')), ('punisher_rage', ('ON', 'OFF')), ('reputation', ('ON', 'OFF')), ('survival', ('OFF', 'ON')), ('punisher_suit', ('VEST', 'WARZONE')), ('natural_invincible', ('ON', 'OFF')), ('hulk_rage', ('ON', 'OFF')), ('rage_blood', ('EXTREME', 'NORMAL', 'OFF')), ('rage_tint', ('NORMAL', 'STRONG', 'SUBTLE', 'OFF')), ('fire_douse', ('ON', 'OFF')), ('shield_slam', ('ON', 'OFF')), ('punisher_hook', ('ON', 'OFF')), ('claw_climb', ('OFF', 'ON')), ('npc_shove', ('ON', 'OFF')), ('faction', ('AUTO', 'VANILLA', 'THE HAND', 'HYDRA', 'JOKER GANG')), ('hero_suit', ('DEFAULT', 'NEXT')), ('test_unlocks', ('OFF', 'SUITS', 'ULTIMATES', 'ALL')), ('ultimates', ('ON', 'OFF')), ('perk_branch', ('AUTO', 'CHAIN FIRST', 'HOLD POINTS', 'PERKS OFF')), ('own_suit', ('OFF', 'ON')), ('perch_takedown', ('ON', 'OFF')), ('takedown_light', ('ON', 'OFF')), ('punisher_van', ('ON', 'OFF')), ('thor_hammer', ('BOOOOP', 'DEVILSEYE', 'LOVE THUNDER', 'FCCOOPER')), ('game_body', ('OFF', 'ON')), ('thor_hammer_model', ('ON', 'OFF')), ('thor_flight', ('ON', 'OFF')), ('suit_body', ('ARMS', 'FULL BODY', 'OFF')), ('cap_sprint', ('ON', 'OFF')), ('cull_margin', ('10 DEG', '6 DEG', '15 DEG', '20 DEG')), ('shadow_match', ('ON', 'OFF')), ('calib_look', ('HOLO', 'CLASSIC')), ('fly_pose', ('LEAN', 'UPRIGHT')), ('weapon_collision', ('ON', 'OFF')), ('light_hold', ('ON', 'STRONG', 'OFF')), ('van_screen', ('ON', 'OFF')), ('palm_blast', ('PALM', 'AIM')), ('hero_menu', ('HOLO TILES', 'CLASSIC')), ('rep_log', ('ON', 'OFF')), ('van_pedals', ('WHEEL HAND', 'CLASSIC')), ('image', ('SPIDYVR', 'HERO VR CLASSIC')), ('image_style', ('SPIDYVR', 'OFF')), ('dd_baton_tip', ('ON', 'OFF')), ('streamer_mode', ('ON', 'OFF')), ('streamer_smooth', ('LOW', 'OFF', 'HIGH')), ('streamer_eye', ('LEFT EYE', 'RIGHT EYE')), ('iron_hands', ('ON', 'OFF')), ('dd_grapple_aim', ('ON', 'OFF')), ('wolverine_claws', ('ON', 'OFF')), ('light_checks', ('ON', 'OFF')), ('glow_check', ('GAME', 'ALWAYS', 'HIDDEN')), ('sl_watch', ('ON', 'OFF')), ('mp_solo_test', ('OFF', 'ON')), ('sharpen_match', ('ON', 'OFF')), ('claw_level', ('ON', 'OFF')), ('window_pop', ('ON', 'OFF')), ('mp_player2_body', ('SUIT LOOK', 'FIGURE')), ('coming_soon', ('ON', 'OFF')), ('hideouts', ('ON', 'OFF')), ('car_music', ('IN VEHICLES', 'ALWAYS', 'OFF')), ('seated_driving', ('SIT BUTTON', 'AUTO SIT', 'OFF')), ('batmobile', ('ON', 'OFF')), ('batmobile_choice', ('1989', 'ODAMI', 'FOREVER', 'FOREVER 2')), ('spidyvr_picture', ('ON', 'CUSTOM')), ('flare_block', ('ON', 'OFF')), ('cabin_clear', ('ON', 'OFF')), ('car_paint', ('SATIN', 'FLAT', 'TEST 1')), ('seated_tools', ('BLOCKED', 'ALLOWED')), ('dash_pointer', ('ON', 'OFF')), ('taa_diagnostics', ('OFF', 'ON')), ('crime_gps', ('ON', 'OFF')), ('taa_hold', ('OFF', 'ON')), ('heap_guard', ('OFF', 'ON')), ('jitter_guard', ('ON', 'OFF')), ('wheel_first', ('ON', 'OFF')), ('cave_quiet', ('ON', 'OFF')), ('finger_ray', ('ON', 'OFF')), ('dash_inside', ('ON', 'OFF')), ('cockpit_glow', ('ON', 'OFF')), ('spidyvr_stock', ('ON', 'OFF')), ('miles_taa', ('ON', 'OFF')), ('taa_gate_log', ('ON', 'OFF')), ('eye_taa_requeue', ('ON', 'OFF')), ('main_view_small', ('ON', 'OFF')), ('aa_mode', ('CLEAN', 'OFF')), ('impostor_eye', ('ON', 'OFF')))
 COMBAT38_ALL_OPTIONS = COMBAT38_OPTIONS + V003_OPTIONS + V004_OPTIONS + V005_OPTIONS + V006_OPTIONS + V0062_OPTIONS + V007_OPTIONS + V0072_OPTIONS
 COMBAT38_REJECTS = ('sent', 'hand untracked', 'hand holding or carrying', 'trigger held', 'hand busy', 'too slow',
                     'not forward', 'not extended', 'not re-armed', 'gated (not playing)')
@@ -221,13 +226,18 @@ def parse_sl_watch(raw):
 def parse_view_gates(raw):
     if not _header(raw, 'view_gates'):
         return None
-    fx, fade, why, ready, reach, installed, impostors, dumps, _ = struct.unpack_from('<9I', raw, 12)
+    fx, fade, why, ready, reach, installed, impostors, dumps, imp_why = struct.unpack_from('<9I', raw, 12)
     jobs, writes, failed, ask0, ask1, ans0, ans1, game_calls, reach_writes, withheld = struct.unpack_from('<10Q', raw, 48)
+    # Version 2 (0.0.74 test 5): the five impostor calls' asks, yes answers (left, right, game) and asks per call.
+    imp_asked, yes_l, yes_r, yes_g, s0, s1, s2, s3, s4, _ = struct.unpack_from('<10Q', raw, 128)
     return dict(bloom_fx=_name(FX, fx), lod_fade=_name(FADE, fade), fade_why=_name(FADE_WHY, why),
                 fade_hooked=bool(ready), lod_reach=reach, impostors_installed=bool(installed),
                 impostors=bool(impostors), dumps=dumps, fx_jobs=jobs, fx_writes=writes, fx_failed=failed,
                 fade_asked=[ask0, ask1], fade_answered=[ans0, ans1], fade_game_calls=game_calls,
                 reach_writes=reach_writes, impostor_withheld=withheld,
+                impostors_why=_name(IMPOSTOR_WHY, imp_why), impostor_asked=imp_asked,
+                impostor_yes=dict(left=yes_l, right=yes_r, game=yes_g),
+                impostor_by_site=dict(zip(IMPOSTOR_SITES, (s0, s1, s2, s3, s4))),
                 working=dict(bloom_fx=bool(writes) if fx else None, lod_fade=bool(ans0 or ans1) if fade else None))
 
 
@@ -975,7 +985,9 @@ def console_lines(records):
     if v and 'bloom_fx' in v:
         lines.append(f"Update 37 view gates: BLOOM FX {v['bloom_fx']} ({v['fx_writes']} writes), LOD FADE "
                      f"{v['lod_fade']} ({sum(v['fade_answered'])} answered; {v['fade_why']}), LOD REACH "
-                     f"{v['lod_reach']}%, IMPOSTORS {'on' if v['impostors'] else 'off'}.")
+                     f"{v['lod_reach']}%, IMPOSTORS {'on' if v['impostors'] else 'off'} (installed "
+                     f"{int(v['impostors_installed'])}, {v['impostors_why']}; {v['impostor_asked']} asks, yes L "
+                     f"{v['impostor_yes']['left']} R {v['impostor_yes']['right']} game {v['impostor_yes']['game']}).")
     m = (records or {}).get('mirror')
     if m and m.get('used'):
         lines.append(f"Update 37 mirror: {m['frames']} frames, mean {m['mean_ms']} ms, peak {m['peak_ms']} ms.")

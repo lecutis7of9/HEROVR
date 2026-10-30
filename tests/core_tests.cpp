@@ -18125,7 +18125,35 @@ int main() {
         near(reachMultiplier(std::nanf(""), 200), 2);
         check(callTarget(fadeCallRva, fadeCallBytes) == isActiveViewRva, "the fade call's bytes are not IsActiveView");
         check(std::string(occlusionNotice).rfind("RESTART NOTICE", 0) == 0, "eye_occlusion has no restart notice");
-        check(sizeof(Data) == 352 && Data{}.magic == dataMagic, "VGAT record changed");
+        check(sizeof(Data) == 432 && Data{}.magic == dataMagic && Data{}.version == 2 && Data{}.bytes == 432,
+              "VGAT record changed");
+    });
+    test("0.0.74 test 5 IMPOSTORS: the five calls, the left eye only, the reasons, IMPOSTOR EYE", [] {
+        using namespace view_gates;
+        const uintptr_t returns[] = {0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c};
+        for (int i = 0; i < 5; ++i)
+            check(impostorSite(returns[i]) == i, "a call's return address is not its site");
+        check(impostorSite(0x2b4f9bd) == -1 && impostorSite(0x2a6af90) == -1 && impostorSite(0) == -1,
+              "the LOD FADE return or a call's own address counted as an impostor site");
+        check(impostorAnswer(0) && !impostorAnswer(1) && !impostorAnswer(2), "not the left eye only");
+        char why[96];
+        impostorWhyText(impFine, why, sizeof why);
+        check(std::string(why).find("left eye") != std::string::npos, "the installed reason");
+        impostorWhyText(impCall0 + 1, why, sizeof why);
+        check(std::string(why).find("0x2a6c346") != std::string::npos, "a call's reason names it");
+        impostorWhyText(impOptedOut, why, sizeof why);
+        check(std::string(why).find("128") != std::string::npos, "opt-out reason");
+        check(offsetof(Data, impostorAsked) == 128 && offsetof(Data, impostorBySite) == 160 &&
+                  offsetof(Data, sequence) == sizeof(Data) - 8,
+              "VGAT v2 layout");
+        check(CleanJitter::logFrames == 300 && CleanJitter{}.frames == 0, "CLEAN JITTER logs 300 frames");
+        using namespace combat38;
+        const std::string h = optionInfo[impostorEye].help;
+        check(optionInfo[impostorEye].key == std::string_view("impostor_eye") && optionInfo[impostorEye].count == 2 &&
+                  std::string_view(optionInfo[impostorEye].values[0]) == "ON" && h.size() <= 80 &&
+                  std::count(h.begin(), h.end(), '.') == 1 && h.find("restart") != std::string::npos &&
+                  cleanValue(impostorEye, 0) == 0,
+              "IMPOSTOR EYE: an ON / OFF row, ON under CLEAN, one sentence with restart");
     });
     test("Update 37: combat - a tap is the web shooter, a hold does nothing, gestures fire their gadget", [] {
         using namespace combat_input;
@@ -18966,7 +18994,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 172, "one hundred and sixty options (0.0.74 test 4: + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; 0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 173, "one hundred and sixty options (0.0.74 test 5: + IMPOSTOR EYE; 0.0.74 test 4: + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; 0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -19000,7 +19028,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 172, "0.0.74 test 4 has 160 COMBAT options (+ TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; + MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 173, "0.0.74 test 5 has 160 COMBAT options (+ IMPOSTOR EYE; + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; + MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,

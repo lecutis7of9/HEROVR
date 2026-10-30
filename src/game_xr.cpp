@@ -111,6 +111,7 @@
 #include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (off by default since the test 3 fix)
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
 #include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA (on)
+#include "spidy/view_gates.hpp" // 0.0.74 test 5 IMPOSTORS, CLEAN JITTER
 #include "spidy/taa_gate074.hpp" // 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
@@ -668,6 +669,10 @@ const spidy::miles_taa::Data* SpidyMilesTaaNow();
 void SpidyMilesTaaStall();
 void SpidyTaaGateSet(uint32_t log, uint32_t requeue); // 0.0.74 test 4 (stereo_probe.cpp)
 const spidy::taa_gate::Data* SpidyTaaGateNow();
+void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out); // 0.0.74 test 5 IMPOSTORS (stereo_probe.cpp)
+void SpidyCleanSet(uint32_t on);                                // 0.0.74 test 5 CLEAN JITTER (stereo_probe.cpp)
+void SpidyCleanJitter(spidy::view_gates::CleanJitter* out);
+DWORD WINAPI SpidyViewGate(void* argument); // Update 37 (stereo_probe.cpp): selector 3 is IMPOSTORS
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
@@ -11224,6 +11229,63 @@ DWORD WINAPI run(void*) {
                                 });
                             }
                         }
+                        // 0.0.74 test 5 IMPOSTORS: IMPOSTOR EYE (ON by default, live) to stereo_probe on a change, the
+                        // "impostors installed = 0/1" line once the hooks are in, then every 10 s the five calls' asks,
+                        // the yes answers (left eye, right eye, game view) and the asks per call.
+                        {
+                            namespace vg = view_gates;
+                            static uint32_t impostorSent = UINT32_MAX;
+                            static bool impostorNoted{};
+                            static ULONGLONG impostorTick{};
+                            static vg::ImpostorStats impostorLast{};
+                            vg::ImpostorStats st{};
+                            SpidyImpostorStats(&st);
+                            if (const uint32_t want = c38(combat38::impostorEye) == 0 ? 1u : 0u;
+                                st.hooked && want != impostorSent) {
+                                impostorSent = want;
+                                if (st.installed)
+                                    SpidyViewGate(reinterpret_cast<void*>(static_cast<uintptr_t>(3u << 16 | want)));
+                            }
+                            if (st.hooked && !impostorNoted) {
+                                impostorNoted = true;
+                                char why[96];
+                                vg::impostorWhyText(st.why, why, sizeof why);
+                                consoleLine(std::string("IMPOSTORS: impostors installed = ") + (st.installed ? "1" : "0") +
+                                            " (" + why + ").");
+                            }
+                            if (const ULONGLONG nowTick = GetTickCount64();
+                                st.hooked && st.installed && nowTick - impostorTick >= 10000) {
+                                impostorTick = nowTick;
+                                auto dl = [](uint64_t now, uint64_t was) { return static_cast<unsigned long long>(now - was); };
+                                char line[256];
+                                std::snprintf(line, sizeof line,
+                                              "IMPOSTORS %s, 10 s: %llu asks, yes L %llu R %llu game %llu; per call "
+                                              "af90 %llu c346 %llu c356 %llu c467 %llu c477 %llu",
+                                              st.on ? "ON" : "OFF", dl(st.asked, impostorLast.asked),
+                                              dl(st.yes[0], impostorLast.yes[0]), dl(st.yes[1], impostorLast.yes[1]),
+                                              dl(st.yes[2], impostorLast.yes[2]), dl(st.bySite[0], impostorLast.bySite[0]),
+                                              dl(st.bySite[1], impostorLast.bySite[1]), dl(st.bySite[2], impostorLast.bySite[2]),
+                                              dl(st.bySite[3], impostorLast.bySite[3]), dl(st.bySite[4], impostorLast.bySite[4]));
+                                consoleLine(line);
+                                impostorLast = st;
+                            }
+                            // 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN to stereo_probe each frame; one line once 300
+                            // eye frames are logged (the eyes' lens jitter, which CLEAN zeroes).
+                            SpidyCleanSet(combat38::aaModeClean(c38(combat38::aaMode)) ? 1u : 0u);
+                            static bool jitterNoted{};
+                            vg::CleanJitter cj{};
+                            SpidyCleanJitter(&cj);
+                            if (!jitterNoted && cj.frames >= vg::CleanJitter::logFrames) {
+                                jitterNoted = true;
+                                char line[256];
+                                std::snprintf(line, sizeof line,
+                                              "CLEAN JITTER: %u eye frames, sent nonzero %u (max %.6f), stored nonzero %u "
+                                              "(max %.6f); zeroed %u, kept %u (upscaled eyes).",
+                                              cj.frames, cj.sentNonzero, cj.maxSent, cj.storedNonzero, cj.maxStored,
+                                              cj.zeroed, cj.kept);
+                                consoleLine(line);
+                            }
+                        }
                         // 0.0.74 test 3 MILES TAA (miles_taa074.hpp, ON by default, live): MilesVR's four steps in
                         // stereo_probe; here the switch, the safety (stallPairs eye jobs with no pair at the headset:
                         // off for the session, one console line), the fall-back line and the per-eye log every 10 s.
@@ -14528,6 +14590,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTaaRequeue(void* v) { retu
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMainViewSmall(void* v) { return setHero007(v, combat38::mainViewSmall, 5516); }
 // 0.0.74 test 4 AA MODE: CLEAN (0, the default) or OFF (1); live, the eye size and texture filtering at the VR start.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyAaMode(void* v) { return setHero007(v, combat38::aaMode, 5517); }
+// 0.0.74 test 5 IMPOSTOR EYE: ON (0, the default) or OFF (1), live (stereo_probe SpidyViewGate selector 3).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyImpostorEye(void* v) { return setHero007(v, combat38::impostorEye, 5518); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

@@ -1468,17 +1468,17 @@ void mainViewSmall(void* buffers) {
     if (!tg::shrinkMain(true, aaOk, out[0], out[1]))
         return;
     const auto sizes = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(buffers) + tg::setSizes);
-    const auto small = tg::mainSize(out[0], out[1]);
-    sizes[0] = small[0];
-    sizes[1] = small[1];
-    sizes[15] = tg::sizeFlags(sizes[15], small[0] == out[0] && small[1] == out[1]);
+    const auto shrunk = tg::mainSize(out[0], out[1]);
+    sizes[0] = shrunk[0];
+    sizes[1] = shrunk[1];
+    sizes[15] = tg::sizeFlags(sizes[15], shrunk[0] == out[0] && shrunk[1] == out[1]);
     auto& d = SpidyTaaGateData;
     ++d.mainResized;
     d.mainPercent = tg::mainPercent;
-    d.mainWidth = small[0];
-    d.mainHeight = small[1];
+    d.mainWidth = shrunk[0];
+    d.mainHeight = shrunk[1];
     char line[128];
-    std::snprintf(line, sizeof line, "MAIN VIEW SMALL: the game's view at %ux%u for %ux%u\n", small[0], small[1], out[0],
+    std::snprintf(line, sizeof line, "MAIN VIEW SMALL: the game's view at %ux%u for %ux%u\n", shrunk[0], shrunk[1], out[0],
                   out[1]);
     OutputDebugStringA(line);
 }

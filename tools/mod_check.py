@@ -226,8 +226,8 @@ def _running(image):
     """Whether a process of that image name runs (a new game started meanwhile keeps its files)."""
     import subprocess
     try:
-        out = subprocess.run(['tasklist', '/FI', f'IMAGENAME eq {image}', '/NH'], capture_output=True, text=True,
-                             timeout=20, creationflags=0x08000000).stdout
+        out = subprocess.run(['tasklist', '/FI', f'IMAGENAME eq {image}', '/NH'], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=20, creationflags=0x08000000).stdout
     except (OSError, subprocess.SubprocessError):
         return True  # unknown: leave them for the next START VR
     return image.lower() in out.lower()

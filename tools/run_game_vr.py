@@ -2532,7 +2532,7 @@ def main():
     # running) goes back first. TWO-GPU CHECK switched off: Windows' old preferences come back.
     try:
         mod_check.restore(ROOT/'reports', game_running())
-        if a.no_gpu_check:
+        if getattr(a, 'no_gpu_check', False):
             gpu_check.restore(ROOT/'reports')
     except Exception as error:  # noqa: BLE001 - never stops a session
         print(f'MOD CHECK / TWO-GPU CHECK: could not put files or settings back ({error}).', flush=True)
@@ -2610,7 +2610,7 @@ def session(a, startup, session_off=()):
     startup.fields['network'] = links
     if link_warning(links, runtime.get('name')):
         print(link_warning(links, runtime.get('name')), flush=True)
-    if not a.no_gpu_check:
+    if not getattr(a, 'no_gpu_check', False):
         # 0.0.74 test 3 TWO-GPU CHECK: before the game and SteamVR's compositor pick a graphics adapter.
         startup.stage = 'checking the graphics adapters'
         try:
@@ -2626,7 +2626,7 @@ def session(a, startup, session_off=()):
     def move_mod_loaders():
         # 0.0.74 test 3 MOD CHECK: the player said yes in the launcher (-MoveModLoaders). Only for a game this
         # session starts: a running game has them loaded already.
-        if a.no_mod_check or not a.move_mod_loaders:
+        if getattr(a, 'no_mod_check', False) or not getattr(a, 'move_mod_loaders', False):
             return
         try:
             exe = player_check.find_game()[0]
@@ -2785,7 +2785,7 @@ def session(a, startup, session_off=()):
         # 0.0.74 test 3: the game's module list every 3 seconds (CLEARER ERRORS maps a crash address with it).
         if moved_loaders:
             tell_came_back()
-        if not a.no_clear_errors and time.monotonic()-modules_read[0] >= 3:
+        if not getattr(a, 'no_clear_errors', False) and time.monotonic()-modules_read[0] >= 3:
             modules_read[0] = time.monotonic()
             listed = modules(game.pid)
             if listed:
@@ -2814,7 +2814,7 @@ def session(a, startup, session_off=()):
             queue = wait_for_renderer(game, process, render_data, problems=startup.fields.setdefault('queue_search', []),
                                       tick=watch_start)
         except RuntimeError as error:
-            if str(error) != 'The game closed while starting.' or a.no_clear_errors:
+            if str(error) != 'The game closed while starting.' or getattr(a, 'no_clear_errors', False):
                 raise
             clearer = crash_while_loading(game.path.parent, game_modules, startup)
             if not clearer:
@@ -3332,7 +3332,7 @@ def session(a, startup, session_off=()):
             # Once, after the report that found it.
             reason = lost_device.pop('reason', None)
             if reason:
-                print(device_lost_advice(reason, lost_device.get('frames'), clear=not a.no_clear_errors), flush=True)
+                print(device_lost_advice(reason, lost_device.get('frames'), clear=not getattr(a, 'no_clear_errors', False)), flush=True)
 
         def request_stop(_signal,_frame):
             nonlocal stop_requested

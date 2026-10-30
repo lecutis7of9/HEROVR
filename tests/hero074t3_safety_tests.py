@@ -128,7 +128,7 @@ class ClearerErrors(unittest.TestCase):
         self.assertIn('0x887A0005', text)
         run = src('tools/run_game_vr.py')
         self.assertIn('start_errors.device_lost_steps(', run)
-        self.assertIn('clear=not a.no_clear_errors', run)
+        self.assertIn("clear=not getattr(a, 'no_clear_errors', False)", run)
         self.assertIn('crash_while_loading(', run)
 
 

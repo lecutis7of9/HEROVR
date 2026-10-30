@@ -110,6 +110,7 @@
 #include "spidy/eye_bloom.hpp"
 #include "spidy/shared_lod.hpp"
 #include "spidy/eye_swap.hpp"
+#include "spidy/heap_guard.hpp"
 #include "spidy/web_pull.hpp"
 #include "spidy/web_grab.hpp"
 #include "spidy/lab_props.hpp"
@@ -1304,6 +1305,29 @@ int main() {
               "1% box must merge");
         check(noteOrtho(rows, rn, 0x10, 0x40, c) && rn == 2, "a second cascade must add");
         check(noteOrtho(rows, rn, 0x10, 0x80, a) && rn == 3, "another record offset must add");
+    });
+    test("0.0.74 test 3 HEAP GUARD: the eyes are let go of and taken again when the game rebuilds its render heaps", [] {
+        namespace hg = heap_guard;
+        check(hg::on(0) && !hg::on(1) && hg::on(7), "HEAP GUARD: 0 ON (the default), 1 OFF, anything else ON");
+        check(hg::createHeapSlot == 28, "ID3D12Device::CreateHeap is vtable slot 28");
+        // The player's rebuild: an 11272192-byte render-target heap; the eye images 1352x1472.
+        const auto eye = hg::eyeBytes(1352, 1472);
+        check(eye == 1352ull * 1472 * 4, "an eye image's bytes");
+        check(hg::eyeBytes(0, 0) == hg::smallestRenderHeap, "1 MB before an eye image is known");
+        check(hg::renderHeap(1, 0, 11272192, eye), "the game's rebuilt render heap counts");
+        check(!hg::renderHeap(2, 0, 11272192, eye), "an upload heap does not count");
+        check(!hg::renderHeap(3, 0, 11272192, eye), "a readback heap does not count");
+        check(!hg::renderHeap(1, 0x400, 11272192, eye), "a heap denying render targets does not count");
+        check(!hg::renderHeap(1, 0, 4u << 20, eye), "a heap smaller than an eye image does not count");
+        check(!hg::renderHeap(1, 0, 4096), "a tiny heap never counts");
+        hg::Guard g;
+        check(!g.check(3, true, true, 10), "the first look only sets the start (the game's own load)");
+        check(!g.check(3, true, true, 11) && g.mayCopy(11), "no new heap: nothing let go of, pairs copied");
+        check(g.check(4, true, true, 12) && g.rebuilds == 1, "a new render heap: the eyes are let go of");
+        check(!g.mayCopy(12) && !g.mayCopy(13) && g.mayCopy(14), "the pair in flight and the next are not copied");
+        check(!g.check(4, true, true, 14), "the same heap acts once");
+        check(!g.check(5, false, true, 15) && g.rebuilds == 1 && g.mayCopy(16), "OFF only counts");
+        check(!g.check(6, true, false, 16) && g.rebuilds == 1, "no eye image held: nothing to let go of");
     });
     test("Update 32.1: a graphics setting's new eye images are taken over or pause the eyes", [] {
         namespace es = eye_swap;
@@ -18890,7 +18914,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 156, "one hundred and fifty-six options (0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 157, "one hundred and fifty-seven options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18924,7 +18948,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 156, "0.0.74 test 2 has 156 COMBAT options (+ SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 157, "0.0.74 test 3 has 157 COMBAT options (+ HEAP GUARD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,

@@ -3853,6 +3853,11 @@ def session(a, startup, session_off=()):
             print(f"Render memory: two frames used at most {memory['worst_two_frames_mb']:.0f} of "
                   f"{memory['ring_mb']:.0f} MB; {memory['overflow_frames']} of {memory['frames']} frames "
                   'did not fit.', flush=True)
+        # 0.0.74 test 3 HEAP GUARD: the game rebuilt its render heaps and aliases (its log's "[Mem12] ...
+        # Recreating heap and aliases") while VR ran; the eye bridge let go of the eyes and took them again.
+        if (rebuilds := (result.get('gpu') or {}).get('heap_rebuilds')):
+            print(f"Heap guard: the game rebuilt its render memory {rebuilds} time(s) in VR; the eye bridge let go "
+                  'of the eye images and took them again from the next frame.', flush=True)
         if (seen := result.get('mip_bias')):
             if seen['status'] == 'late':
                 print('Texture mip bias: the game made its graphics device before Spidy started, so it was not '

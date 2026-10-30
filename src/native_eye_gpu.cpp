@@ -6,6 +6,7 @@
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/eye_swap.hpp"
+#include "spidy/heap_guard.hpp"
 #include "spidy/eye_debug.hpp"
 #include "spidy/eye_taa.hpp"
 #include "spidy/monitor_rate.hpp"
@@ -102,6 +103,26 @@ struct RetiredEye {
     uint64_t fence{};
 };
 std::vector<RetiredEye> retiredEyes;
+// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): the game's new render heaps (ID3D12Device::CreateHeap,
+// watched only: the game's call goes through untouched), the newest eye job begun, and the eyes
+// let go of when the game rebuilt its heaps and aliases (taken again from its next frame, the same
+// kind only). heapGuard and heapRetake are under `recording`.
+using CreateHeap = HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_HEAP_DESC*, REFIID, void**);
+CreateHeap originalCreateHeap{};
+void* heapHook{};
+std::atomic<bool> heapGuardWanted{true};
+std::atomic<uint64_t> heapEpoch{}, newestGeneration{}, heapSmallest{heap_guard::smallestRenderHeap};
+heap_guard::Guard heapGuard;
+std::array<bool, 2> heapRetake{};
+std::array<eye_swap::Desc, 2> heapRetakeDesc{};
+HRESULT STDMETHODCALLTYPE createHeap(ID3D12Device* d, const D3D12_HEAP_DESC* desc, REFIID riid, void** heap) {
+    const auto result = originalCreateHeap(d, desc, riid, heap);
+    // A failed one counts too: the game is tearing its aliases down either way.
+    if (desc && heap_guard::renderHeap(static_cast<uint32_t>(desc->Properties.Type),
+                                       static_cast<uint32_t>(desc->Flags), desc->SizeInBytes, heapSmallest.load()))
+        heapEpoch.fetch_add(1);
+    return result;
+}
 // 0.0.71 MIRROR VIEW (private test): the game's third view (stereo_probe.cpp's mirror) as a small
 // picture copied into both staged eyes. Its own state is learned from the game's barriers like
 // an eye's; anything unexpected sets mvFault and only the picture stops (never the eyes, never
@@ -270,6 +291,7 @@ void publish() { // submission and recording held by caller
     auto& d = SpidyGpuData;
     InterlockedIncrement64(&d.sequence);
     d.error = fault.load();
+    d.heapRebuilds = heapGuard.rebuilds; // 0.0.74 test 3 HEAP GUARD
     d.executes = executes;
     d.markers = markers;
     d.matchedMarkers = matchedMarkers;
@@ -505,6 +527,7 @@ bool makeReadbacks() {
         }
         width = static_cast<UINT>(desc.Width);
         height = desc.Height;
+        heapSmallest = heap_guard::eyeBytes(width, height); // 0.0.74 test 3 HEAP GUARD
         outWidth = wantedOutWidth.load() ? wantedOutWidth.load() : width;
         outHeight = wantedOutHeight.load() ? wantedOutHeight.load() : height;
         if (!captureImages)
@@ -2326,6 +2349,36 @@ void capturePair(EyePairState::Stamp stamp) {
         requestFence = fenceValue;
     copyReady.notify_all();
 }
+eye_swap::Desc swapDesc(const D3D12_RESOURCE_DESC& d) {
+    return {static_cast<uint32_t>(d.Dimension), d.Width, d.Height, d.DepthOrArraySize, d.MipLevels,
+            static_cast<uint32_t>(d.Format), d.SampleDesc.Count, static_cast<uint32_t>(d.Flags)};
+}
+// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): after the game made a new render heap, let go of the eye
+// images (and the mirror view's) once the bridge's own GPU work reading them is done, forget their
+// states and copy no pair begun before; registerEye/registerMirror take them again from the game's
+// next frame. Submission and recording held. Never submits anything.
+void guardHeaps() {
+    const bool holding = resources[0] || resources[1] || mvResource;
+    if (!heapGuard.check(heapEpoch.load(), heapGuardWanted.load(), holding, newestGeneration.load()))
+        return;
+    for (unsigned i = 0; i < 2; ++i) {
+        if (!resources[i])
+            continue;
+        heapRetakeDesc[i] = swapDesc(resources[i]->GetDesc());
+        heapRetake[i] = true;
+        retiredEyes.push_back({resources[i], fenceValue});
+        resources[i] = nullptr;
+        watched[i] = nullptr;
+        known[i] = false;
+        eyeViewStale[i] = true;
+    }
+    if (mvResource) {
+        retiredEyes.push_back({mvResource, fenceValue});
+        mvResource = nullptr;
+        mvWatched = nullptr;
+        mvKnown = false;
+    }
+}
 void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandList* const* commands) {
     if (!enabled) {
         originalExecute(q, count, commands);
@@ -2413,15 +2466,16 @@ void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandL
                     known[e.eye] = true;
                 }
             }
+    guardHeaps(); // 0.0.74 test 3 HEAP GUARD
     if (!relevant)
         return;
     const auto ready = pair.ready();
     if (staged) {
         if (enabled && !fault && GetTickCount64() < deadline && ready.serial &&
-            ready.generation > capturedStamp.generation)
+            ready.generation > capturedStamp.generation && heapGuard.mayCopy(ready.generation))
             stagePair(ready);
     } else if (enabled && !fault && GetTickCount64() < deadline && ready.serial &&
-               ready.generation > lastGeneration &&
+               ready.generation > lastGeneration && heapGuard.mayCopy(ready.generation) &&
                (!copyToXr || (requestedSerial == ready.serial && !requestFence)))
         capturePair(ready);
     publish();
@@ -2996,6 +3050,11 @@ DWORD readScreen() {
 }
 void enterMarker(unsigned eye, uint64_t serial, uint64_t generation, bool ended) {
     currentMarker = {eye, {serial, generation}, ended, eye < 2};
+    // 0.0.74 test 3 HEAP GUARD: the newest eye job recorded (any pair up to it may use the old heap).
+    if (eye < 2 && !ended)
+        for (auto seen = newestGeneration.load(std::memory_order_relaxed);
+             generation > seen && !newestGeneration.compare_exchange_weak(seen, generation);) {
+        }
 }
 void leaveMarker() {
     currentMarker = {};
@@ -3228,6 +3287,10 @@ bool eyeHistorySharp() {
 void setSharpenMatch(bool on) {
     sharpenMatch = on;
 }
+// 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (the heap watch only counts).
+void setHeapGuard(bool on) {
+    heapGuardWanted = on;
+}
 // 0.0.73 test 3 LIGHT HOLD: 0 off (test 2), 50 ON, 100 STRONG.
 bool setEyeLightHold(uint32_t percent) {
     if (percent > eye_history::lightHoldStrong)
@@ -3292,10 +3355,6 @@ void eyeAATiming(TimingMetric& gpu, uint32_t& mode, uint32_t& code, uint64_t& sm
     code = aaFault.load();
     smoothed = aaPairs.load();
 }
-eye_swap::Desc swapDesc(const D3D12_RESOURCE_DESC& d) {
-    return {static_cast<uint32_t>(d.Dimension), d.Width, d.Height, d.DepthOrArraySize, d.MipLevels,
-            static_cast<uint32_t>(d.Format), d.SampleDesc.Count, static_cast<uint32_t>(d.Flags)};
-}
 uint32_t eyeSwaps() {
     return eyeSwapCount.load();
 }
@@ -3334,6 +3393,16 @@ void registerEye(unsigned eye, ID3D12Resource* resource) {
     if (!sameDevice) {
         fault = 3502;
         return;
+    }
+    // 0.0.74 test 3 HEAP GUARD: an eye let go of after a heap rebuild is taken again only when it is
+    // the same kind of image as before, else the eyes pause (3503), never VR's end.
+    if (heapRetake[eye]) {
+        if (!eye_swap::compatible(heapRetakeDesc[eye], swapDesc(resource->GetDesc()))) {
+            eyesLostCode = eye_swap::lostCode;
+            copyReady.notify_all();
+            return;
+        }
+        heapRetake[eye] = false;
     }
     resources[eye] = resource;
     watched[eye] = resource;
@@ -3627,6 +3696,21 @@ DWORD start(void* input) {
                 hookedPresent = MH_EnableHook(h) == MH_OK && hookedPresent;
         publishScreen(hookedPresent ? 1 : 2, nullptr, 0);
     }
+    // 0.0.74 test 3 HEAP GUARD: watch the game's CreateHeap (optional: without it nothing changes).
+    // A second start (VR again) enables the hook made the first time.
+    heapRetake = {};
+    if (heapHook) {
+        MH_EnableHook(heapHook);
+    } else if (void** dvt = *reinterpret_cast<void***>(device.Get()); dvt && dvt[heap_guard::createHeapSlot]) {
+        void* target = dvt[heap_guard::createHeapSlot];
+        if (MH_CreateHook(target, reinterpret_cast<void*>(createHeap), reinterpret_cast<void**>(&originalCreateHeap)) ==
+            MH_OK) {
+            if (MH_EnableHook(target) == MH_OK)
+                heapHook = target;
+            else
+                MH_RemoveHook(target);
+        }
+    }
     std::lock_guard lock(telemetry);
     InterlockedIncrement64(&SpidyGpuData.sequence);
     SpidyGpuData.status = 1;
@@ -3684,6 +3768,8 @@ DWORD stop() {
         for (auto h : presentHooks)
             if (h)
                 MH_DisableHook(h);
+        if (heapHook)
+            MH_DisableHook(heapHook); // 0.0.74 test 3 HEAP GUARD
     }
     if (foveaHooked)
         for (auto h : foveaHooks)
@@ -3771,6 +3857,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeHistorySharp(void* sharp) 
     if (value > 1)
         return 3995;
     native_gpu::setEyeHistorySharp(value == 1);
+    return 0;
+}
+// 0.0.74 test 3 HEAP GUARD (combat38 heap_guard): 1 ON (let go of the eyes when the game rebuilds its
+// render heaps), 0 OFF; refused (3993) above 1. Live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeHeapGuard(void* on) {
+    const auto value = reinterpret_cast<uintptr_t>(on);
+    if (value > 1)
+        return 3993;
+    native_gpu::setHeapGuard(value == 1);
     return 0;
 }
 // 0.0.73 AA SHARPEN MATCH (combat38 sharpen_match): 1 ON (CAS by the history kept), 0 OFF (as set);

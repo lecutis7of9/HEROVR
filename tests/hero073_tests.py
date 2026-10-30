@@ -316,6 +316,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5499'), ['SpidyCarPaint'])  # 0.0.74 test 2 CAR PAINT
         self.assertEqual(uses.get('5500'), ['SpidySeatedTools'])  # 0.0.74 test 2 SEATED TOOLS
         self.assertEqual(uses.get('5501'), ['SpidyDashPointer'])  # 0.0.74 test 2 DASH POINTER
+        self.assertEqual(uses.get('5502'), ['SpidyHeapGuard'])  # 0.0.74 test 3 HEAP GUARD
 
 
 class Hero073Image(unittest.TestCase):

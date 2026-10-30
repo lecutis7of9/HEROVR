@@ -105,6 +105,7 @@
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
+#include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (on)
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
@@ -634,6 +635,7 @@ DWORD WINAPI SpidyEyeLightHold(void* percent);
 // 0.0.73 IMAGE (native_eye_gpu.cpp): the history read sharp (1, SPIDYVR) or bilinear (0, CLASSIC).
 DWORD WINAPI SpidyEyeHistorySharp(void* sharp);
 DWORD WINAPI SpidyEyeSharpenMatch(void* on); // 0.0.73 AA SHARPEN MATCH
+DWORD WINAPI SpidyEyeHeapGuard(void* on);    // 0.0.74 test 3 HEAP GUARD (native_eye_gpu.cpp)
 DWORD WINAPI SpidyWindowPopOn(void* on);     // 0.0.73 test 6 WINDOW POP FIX (stereo_probe.cpp)
 float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
@@ -2505,7 +2507,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, windowPopApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, heapGuardApplied{~0u}, windowPopApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -11715,6 +11717,13 @@ DWORD WINAPI run(void*) {
                                 sharpenMatchApplied = matchWant;
                                 SpidyEyeSharpenMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
                             }
+                            // 0.0.74 test 3 HEAP GUARD: the eye bridge lets go of the eyes when the game rebuilds
+                            // its render heaps (ON, value 0) or only counts them, when it changes.
+                            if (const uint32_t guardWant = heap_guard::on(c38(combat38::heapGuard)) ? 1u : 0u;
+                                guardWant != heapGuardApplied) {
+                                heapGuardApplied = guardWant;
+                                SpidyEyeHeapGuard(reinterpret_cast<void*>(static_cast<uintptr_t>(guardWant)));
+                            }
                             // 0.0.73 test 6 WINDOW POP FIX: the game view's flat-play detail distance (ON, value 0) or not.
                             if (const uint32_t popWant = window_pop::on(c38(combat38::windowPop)) ? 1u : 0u;
                                 popWant != windowPopApplied) {
@@ -13833,6 +13842,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCabinClear(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarPaint(void* v) { return setHero007(v, combat38::carPaint, 5499); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedTools(void* v) { return setHero007(v, combat38::seatedTools, 5500); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashPointer(void* v) { return setHero007(v, combat38::dashPointer, 5501); }
+// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return setHero007(v, combat38::heapGuard, 5502); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

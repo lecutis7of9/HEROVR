@@ -19,7 +19,7 @@ struct Config {
 struct Data {
     uint32_t magic = 0x53475044, version = 2, bytes = sizeof(Data), status{};
     int64_t sequence{};
-    uint32_t error{}, reserved{};
+    uint32_t error{}, heapRebuilds{}; // 0.0.74 test 3 HEAP GUARD: was reserved (0)
     uint64_t executes{}, markers{}, matchedMarkers{}, pairs{}, serial{}, generation{}, fence{}, completed{};
     uint64_t begins[2]{}, ends[2]{}, resources[2]{}, pixels[2]{};
     uint32_t states[2]{}, known[2]{}, width{}, height{};

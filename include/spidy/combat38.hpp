@@ -233,6 +233,8 @@ enum Option : uint32_t {
     seatedTools,
     // 0.0.74 test 2 DASH POINTER: ON (the default) or OFF
     dashPointer,
+    // 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (heap_guard.hpp)
+    heapGuard,
     options
 };
 struct OptionInfo {
@@ -609,6 +611,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"car_paint", "CAR PAINT", "PAINT", "SATIN gives the Batmobiles satin paint highlights; FLAT is test 1's; no restart.", 2, {"SATIN", "FLAT", nullptr, nullptr}},
     {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no grapple, webs or hero tools while in a car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

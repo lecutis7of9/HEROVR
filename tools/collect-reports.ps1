@@ -4,6 +4,9 @@
 # address-finder-latest-ortho.txt) if ADDRESS FINDER ran.
 # Run from anywhere: powershell -ExecutionPolicy Bypass -File C:\sm2-port\tools\collect-reports.ps1
 # It only reads the reports folder and writes send-me.zip there (the old send-me.zip is replaced).
+# 0.0.74 test 3: and the game's newest crash dump (.mdmp) from Documents\Marvel's Spider-Man 2 (-NoCrashDump:
+# without it; the launcher's Privacy > Crash dump in reports passes that when it is off).
+param([switch]$NoCrashDump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $reports = Join-Path $root 'reports'
@@ -29,6 +32,22 @@ $files += Get-ChildItem -LiteralPath $reports -Filter 'address-finder-latest*' -
 # Update 37: the newest WORLD LOG journal (NPC talk, spawns, missions; read-only notes).
 $files += Get-ChildItem -LiteralPath $reports -Filter 'world-trace-*.jsonl' -File |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { $_.FullName }
+# 0.0.74 test 3: the game's newest crash dump (the game writes one when it crashes; it says where in its log).
+if (-not $NoCrashDump) {
+    try {
+        $gameDocs = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "Marvel's Spider-Man 2"
+        if (Test-Path -LiteralPath $gameDocs) {
+            $dump = Get-ChildItem -LiteralPath $gameDocs -Filter '*.mdmp' -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($dump -and $dump.Length -le 256MB) {
+                $files += $dump.FullName
+                Write-Host ('Crash dump: ' + $dump.Name + ' (' + $dump.LastWriteTime.ToString('yyyy-MM-dd HH:mm') + ')')
+            } elseif ($dump) {
+                Write-Host ('Crash dump not added: ' + $dump.FullName + ' is over 256 MB; send it separately if asked.')
+            }
+        }
+    } catch { Write-Host ('Crash dump not added: ' + $_.Exception.Message) }
+}
 if (-not $files) { throw "Nothing to collect in $reports." }
 $zip = Join-Path $reports 'send-me.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }

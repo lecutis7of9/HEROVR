@@ -52,6 +52,10 @@ param(
     [switch]$KeepGameSettings,
     [switch]$KeepGameAa,  # 0.0.73 AA: keep the game's own AA/upscaler (DLAA, DLSS) while VR runs
     [switch]$AttachOnly,
+    [switch]$NoModCheck,  # 0.0.74 test 3: no look for other mods' loaders (winmm.dll...) in the game's folder
+    [switch]$MoveModLoaders,  # 0.0.74 test 3: the player said yes: move them aside for this session
+    [switch]$NoGpuCheck,  # 0.0.74 test 3: no high-performance GPU preference on a two-GPU PC (old values back)
+    [switch]$NoClearErrors,  # 0.0.74 test 3: no crash-line reading or device-lost fix steps
     [switch]$CloseGame,  # 0.0.5 hotfix 3: the launcher asked; a running Spider-Man 2 is closed first, then VR starts
     [string]$XrRuntime
 )
@@ -375,6 +379,11 @@ elseif(-not $AttachOnly) {
         Write-Host 'Desktop window: 1280 x 720 (-SmallerDesktopView), about 3-5% fewer pixels a frame; the HUD panel is softer. The game reads it at launch.'
     }
 }
+# 0.0.74 test 3: the start's safety checks (MOD CHECK, TWO-GPU CHECK, CLEARER ERRORS), each on by default.
+if($NoModCheck) { $captureArgs+=@('--no-mod-check') }
+elseif($MoveModLoaders) { $captureArgs+=@('--move-mod-loaders') }
+if($NoGpuCheck) { $captureArgs+=@('--no-gpu-check') }
+if($NoClearErrors) { $captureArgs+=@('--no-clear-errors') }
 if($EngineTaa) {
     $captureArgs+=@('--engine-taa')
     if($KeepGameAa) {

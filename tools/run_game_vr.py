@@ -5,6 +5,7 @@ from ctypes import wintypes
 import hashlib
 import json
 import math
+import os
 import pathlib
 import re
 import shutil
@@ -31,6 +32,9 @@ import shadow_distance
 import far_shadows
 import update37_records
 import player_check
+import mod_check  # 0.0.74 test 3
+import gpu_check
+import start_errors
 from session_comfort import comfort_advice, game_settings, play_rate
 from observe_game import call_remote, call_with_payload, modules
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
@@ -351,13 +355,16 @@ DEVICE_REASONS = {'0x887A0005': 'DXGI_ERROR_DEVICE_REMOVED', '0x887A0006': 'DXGI
                   '0x887A002B': 'DXGI_ERROR_ACCESS_DENIED', '0x8007000E': 'E_OUTOFMEMORY'}
 
 
-def device_lost_advice(reason, play_frames):
+def device_lost_advice(reason, play_frames, clear=True):
     """The console's lines after a session in which the game lost its graphics device (the game shows
     "A problem has occurred with your display driver"). `play_frames`: frames of VR play before it (the
     report's final `tracked`). Ray-Traced Reflections, a fixed Aspect Ratio, frame generation and NVIDIA
     Reflex are off for VR already (vr_display.SESSION); what is left to try is what the player can change."""
     name = DEVICE_REASONS.get(reason, 'unknown')
     when = 'as VR play began' if play_frames is not None and play_frames < 300 else 'in VR'
+    if clear and reason in start_errors.DEVICE_LOST:
+        # 0.0.74 test 3 CLEARER ERRORS (-NoClearErrors keeps the words below): the fix steps, in order.
+        return start_errors.device_lost_steps(reason, name, when)
     return (f'The game lost its graphics device {when} ({reason}, {name}): that is its "problem has occurred '
             'with your display driver" message. Try these one at a time, pressing START VR after each: '
             'OPTIONS > Normal camera on the monitor: On; in the game\'s Display settings, Monitor: your main '
@@ -2046,12 +2053,13 @@ def hud_snapshot(game, address):
     return None
 
 
-def wait_for_renderer(game, process, render_data, timeout=180, problems=None, tell_every=20):
+def wait_for_renderer(game, process, render_data, timeout=180, problems=None, tell_every=20, tick=None):
     """The game's graphics queue, as soon as the game draws frames (its intro, seconds after it starts).
 
     `render_data` is the render memory module's telemetry, when that module is loaded: its frame count
     shows the renderer running before the queue is looked for. `problems` collects why each look found
-    no queue (for the session's report); the console hears the latest every `tell_every` seconds.
+    no queue (for the session's report); the console hears the latest every `tell_every` seconds. `tick()`
+    runs each look (0.0.74 test 3: the game's module list for CLEARER ERRORS, MOD CHECK's watch); it never stops it.
     """
     deadline = time.monotonic()+timeout
     problem = 'the game drew no frames'
@@ -2060,6 +2068,11 @@ def wait_for_renderer(game, process, render_data, timeout=180, problems=None, te
     # hooks not reached in this build), look for the queue anyway after `frame_patience` seconds.
     frame_patience = time.monotonic()+30
     while alive(game) and time.monotonic() < deadline:
+        if tick:
+            try:
+                tick()
+            except Exception:  # noqa: BLE001 - a watch never ends the start
+                pass
         memory = render_memory_snapshot(game, render_data) if render_data else None
         if render_data and (not memory or memory['frames'] < 30) and time.monotonic() < frame_patience:
             time.sleep(.25)
@@ -2190,6 +2203,18 @@ def exit_code(error):
 UNCONFIRMED_COMFORT = ('Screen Shake Off', 'Lens Flares Off', 'Ambient Occlusion Off',
                        'Screen Space Reflections Low/Off', 'Shadow Quality High', 'Level of Detail High',
                        'Crowd Detail Medium/High', 'Hair Quality High')
+
+
+def settle_mods(running):
+    """0.0.74 test 3 MOD CHECK: the mod loaders a session moved aside go back when the game is closed; while it
+    runs, a small waiter puts them back as it closes (and the next START VR does, whatever happens)."""
+    try:
+        if not running:
+            mod_check.restore(ROOT/'reports')
+        elif mod_check.pending(ROOT/'reports'):
+            mod_check.restore_when_closed(find_game(), ROOT/'reports')
+    except Exception:  # noqa: BLE001 - the session's end never fails on it
+        pass
 
 
 def settle_display(running):
@@ -2369,6 +2394,17 @@ def main():
     p.add_argument('--hud', type=int, choices=(0, 1, 2, 3), default=2,
                    help="The game's HUD in the headset: 0 off, 1 small (50 degrees across), 2 medium (60, the "
                         'default), 3 large (70)')
+    # 0.0.74 test 3: the start's safety checks (each on unless switched off).
+    p.add_argument('--no-mod-check', action='store_true',
+                   help="Do not look for other mods' loaders (winmm.dll, dinput8.dll...) in the game's folder")
+    p.add_argument('--move-mod-loaders', action='store_true',
+                   help="Move those loaders into the game folder's _hero-vr-moved for this session (the launcher "
+                        'asks first); they go back when the game closes')
+    p.add_argument('--no-gpu-check', action='store_true',
+                   help='Do not set Windows\' high-performance graphics preference for the game and SteamVR on a PC '
+                        'with two graphics adapters (puts back the old values)')
+    p.add_argument('--no-clear-errors', action='store_true',
+                   help="Do not read the game's crash line or give the graphics-device fix steps")
     p.add_argument('--full-desktop-view', action='store_true',
                    help="Start the game with its own display settings instead of a small VR window")
     p.add_argument('--smaller-desktop-view', action='store_true',
@@ -2492,6 +2528,14 @@ def main():
     player_check.before_session(ROOT, launching=a.auto_launch and not game_running())
     keep_console(a.output)
     startup = Startup(a.output)
+    # 0.0.74 test 3 MOD CHECK: what an earlier session moved aside and could not put back (the game was still
+    # running) goes back first. TWO-GPU CHECK switched off: Windows' old preferences come back.
+    try:
+        mod_check.restore(ROOT/'reports', game_running())
+        if a.no_gpu_check:
+            gpu_check.restore(ROOT/'reports')
+    except Exception as error:  # noqa: BLE001 - never stops a session
+        print(f'MOD CHECK / TWO-GPU CHECK: could not put files or settings back ({error}).', flush=True)
     for line in test_build_lines():  # test build 5: which build, which folder, a mixed install
         print(line, flush=True)
     print(f'SM2 VR {version_line()} - {MADE_BY}', flush=True)  # Update 38.5: the public version first  # Update 30.1 (Update 31 from PORT-VERSION)
@@ -2501,6 +2545,27 @@ def main():
     except BaseException as error:
         startup.ended(error)
         raise
+
+
+def crash_while_loading(folder, game_modules, startup, attempts=6, log_path=None):
+    """0.0.74 test 3 CLEARER ERRORS: the plain words for a game that died while starting, from its log's crash
+    line (the game may still be writing it: a few tries), or None without one."""
+    found = None
+    for attempt in range(attempts):
+        try:
+            source = log_path or documents_folder()/GAME_NAME/(GAME_NAME+'.log')
+            found = start_errors.crash(pathlib.Path(source).read_text(encoding='utf-8', errors='replace'))
+        except (OSError, ValueError):
+            found = None
+        if found or attempt == attempts-1:
+            break
+        time.sleep(.5)
+    if not found:
+        return None
+    loaders = mod_check.found(folder)
+    startup.fields['game_crash'] = dict(found, address=hex(found['address']), loaders=loaders,
+                                        module=(start_errors.module_at(found['address'], game_modules) or [None])[0])
+    return start_errors.crash_message(found, game_modules, loaders, game_folder=folder)
 
 
 def session(a, startup, session_off=()):
@@ -2545,7 +2610,34 @@ def session(a, startup, session_off=()):
     startup.fields['network'] = links
     if link_warning(links, runtime.get('name')):
         print(link_warning(links, runtime.get('name')), flush=True)
+    if not a.no_gpu_check:
+        # 0.0.74 test 3 TWO-GPU CHECK: before the game and SteamVR's compositor pick a graphics adapter.
+        startup.stage = 'checking the graphics adapters'
+        try:
+            exe = player_check.find_game()[0]
+            startup.fields['two_gpu'] = gpu_check.check(exe, manifest, ROOT/'reports',
+                                                        local_appdata=os.environ.get('LOCALAPPDATA'),
+                                                        log=lambda line: print(line, flush=True))
+        except Exception as error:  # noqa: BLE001 - VR starts as before
+            startup.fields['two_gpu'] = f'{type(error).__name__}: {error}'
     startup.stage = 'starting the game'
+    moved_loaders = []
+
+    def move_mod_loaders():
+        # 0.0.74 test 3 MOD CHECK: the player said yes in the launcher (-MoveModLoaders). Only for a game this
+        # session starts: a running game has them loaded already.
+        if a.no_mod_check or not a.move_mod_loaders:
+            return
+        try:
+            exe = player_check.find_game()[0]
+            if exe:
+                moved_loaders.extend(mod_check.move_aside(pathlib.Path(exe).parent, ROOT/'reports',
+                                                          log=lambda line: print(line, flush=True)))
+                startup.fields['mod_loaders_moved'] = list(moved_loaders)
+            else:
+                print('MOD CHECK: the game\'s folder was not found, so nothing was moved.', flush=True)
+        except Exception as error:  # noqa: BLE001 - VR starts as before
+            print(f'MOD CHECK: could not move the mod loaders ({error}).', flush=True)
 
     def prepare_display():
         # Read only: every value the game saves, beside its log's [Settings] block in the report, so the
@@ -2654,7 +2746,10 @@ def session(a, startup, session_off=()):
     # switch); before October 5's seventh build the launcher found one, once, and VR stayed on the
     # screen after any reload.
     if a.auto_launch:
-        game = wait_for_game(prepare=prepare_display, early=render_memory_module, ready=lambda game: True)
+        def prepare_game():
+            move_mod_loaders()
+            prepare_display()
+        game = wait_for_game(prepare=prepare_game, early=render_memory_module, ready=lambda game: True)
     else:
         game = Game(find_game())
         render_memory_module(game.pid)
@@ -2670,8 +2765,35 @@ def session(a, startup, session_off=()):
     startup.fields['other_mods'] = real_vr+others
     if real_vr:
         raise RuntimeError(real_vr_refusal(game.path.parent, real_vr))
+    told_back = []
+
+    def tell_came_back():
+        # 0.0.74 test 3 MOD CHECK: a moved loader back as the game starts (a mod manager redeploying it).
+        back = [name for name in mod_check.came_back(game.path.parent, moved_loaders) if name not in told_back]
+        if back:
+            told_back.extend(back)
+            startup.fields['mod_loaders_came_back'] = list(told_back)
+            print(mod_check.came_back_text(back), flush=True)
+    if moved_loaders:
+        tell_came_back()
+    others = [name for name in others if name not in told_back]
     if others:
         print(other_mods_warning(game.path.parent, others), flush=True)
+    game_modules, modules_read = [], [0.0]
+
+    def watch_start():
+        # 0.0.74 test 3: the game's module list every 3 seconds (CLEARER ERRORS maps a crash address with it).
+        if moved_loaders:
+            tell_came_back()
+        if not a.no_clear_errors and time.monotonic()-modules_read[0] >= 3:
+            modules_read[0] = time.monotonic()
+            listed = modules(game.pid)
+            if listed:
+                game_modules[:] = listed
+    try:
+        watch_start()
+    except Exception:  # noqa: BLE001
+        pass
     startup.stage = "looking for the game's graphics queue"
     process = bridge = xr = rays = None
     bridge_active = xr_active = False
@@ -2688,7 +2810,16 @@ def session(a, startup, session_off=()):
         if not process:
             raise c.WinError(c.get_last_error())
         render_data = render_module.get('SpidyRenderMemoryData')
-        queue = wait_for_renderer(game, process, render_data, problems=startup.fields.setdefault('queue_search', []))
+        try:
+            queue = wait_for_renderer(game, process, render_data, problems=startup.fields.setdefault('queue_search', []),
+                                      tick=watch_start)
+        except RuntimeError as error:
+            if str(error) != 'The game closed while starting.' or a.no_clear_errors:
+                raise
+            clearer = crash_while_loading(game.path.parent, game_modules, startup)
+            if not clearer:
+                raise
+            raise RuntimeError(clearer) from error
         startup.fields['queue'] = hex(queue)
         startup.stage = "loading Spidy's modules into the game"
         if not bring_to_front(game.pid):
@@ -3201,7 +3332,7 @@ def session(a, startup, session_off=()):
             # Once, after the report that found it.
             reason = lost_device.pop('reason', None)
             if reason:
-                print(device_lost_advice(reason, lost_device.get('frames')), flush=True)
+                print(device_lost_advice(reason, lost_device.get('frames'), clear=not a.no_clear_errors), flush=True)
 
         def request_stop(_signal,_frame):
             nonlocal stop_requested
@@ -3766,6 +3897,7 @@ def session(a, startup, session_off=()):
         if process:
             close(process)
         settle_display(alive(game))
+        settle_mods(alive(game))
         game.close()
 
 
@@ -3794,11 +3926,13 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print('VR launch cancelled.',file=sys.stderr)
         settle_display(game_running())
+        settle_mods(game_running())
         sys.exit(130)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
         print(f'Spidy VR unavailable: {error}', file=sys.stderr)
         note_start_error(f'Spidy VR unavailable: {error}')
         settle_display(game_running())
+        settle_mods(game_running())
         sys.exit(exit_code(error))
     except Exception as error:  # 0.0.62: never a silent stop, whatever went wrong
         import traceback
@@ -3806,6 +3940,7 @@ if __name__ == '__main__':
         note_start_error(f'Spidy VR stopped on an internal error: {type(error).__name__}: {error}')
         try:
             settle_display(game_running())
+            settle_mods(game_running())
         except Exception:
             pass
         sys.exit(1)

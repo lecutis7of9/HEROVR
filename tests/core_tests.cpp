@@ -167,6 +167,7 @@
 #include "spidy/van072.hpp"
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
+#include "spidy/seated_lock074.hpp"
 #include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
 #include "spidy/window_pop.hpp"
@@ -25136,6 +25137,115 @@ int main() {
                   std::string(v::settingHelp).find(" X ") != std::string::npos &&
                   std::string(v::settingHelp).find("EXPERIMENTAL") == 0,
               "the subtext: experimental, the button, restart, one sentence");
+    });
+    test("0.0.74 test 2b EXIT FIX: SEATED TOOLS on, every car (van + 4 Batmobiles) grips, steers, drives and gets out", [] {
+        namespace v = spidy::van072;
+        namespace sl = spidy::seated_lock074;
+        auto flat = [](float, float, float) { return 0.f; };
+        auto open = [](Vec3, Vec3, float) { return true; };
+        auto clearAhead = [](Vec3, Vec3, float) { return true; };
+        // the lock: Batman in a Batmobile everything, the Punisher in the van only the grapple
+        check(sl::lockFor(true, true, true).tools && sl::lockFor(true, true, true).grapple, "Batmobile: hero tools and grapple blocked");
+        check(!sl::lockFor(true, true, false).tools && sl::lockFor(true, true, false).grapple, "van: guns kept, grapple blocked");
+        check(!sl::lockFor(true, false, true).tools && !sl::lockFor(true, false, true).grapple, "out of the car: nothing blocked");
+        check(!sl::lockFor(false, true, true).tools && !sl::lockFor(false, true, true).grapple, "ALLOWED: test 1's");
+        const auto locked = sl::split({.9f, .95f}, true, true);
+        check(locked.car.trigger == .9f && locked.car.grip == .95f && locked.tools.trigger == 0 && locked.tools.grip == 0 && locked.busy,
+              "locked: the car keeps the raw grip and trigger, the tools get none");
+        const auto van0 = sl::split({.9f, .95f}, false, true);
+        check(van0.car.grip == .95f && van0.tools.grip == .95f && van0.tools.trigger == 0 && !van0.busy,
+              "van, guns kept: the grip reaches the gun, the trigger is still the pedal (0.0.72)");
+        for (uint32_t car = 0; car <= spidy::batmobile074::cars; ++car) {
+            const bool bat = car < spidy::batmobile074::cars;
+            const v::Tune t = bat ? spidy::batmobile074::tune(car) : v::Tune{};
+            v::Van van;
+            v::In in;
+            in.dt = 1.f / 90;
+            in.enabled = in.punisher = in.play = true;
+            in.tracked[0] = in.tracked[1] = true;
+            float rawGrip[2]{}, rawTrig[2]{};
+            auto tick = [&] {
+                const bool inCar = van.state == v::driving;
+                const sl::Lock l = sl::lockFor(true, inCar, bat);
+                for (int i = 0; i < 2; ++i) {
+                    const auto sp = sl::split({rawTrig[i], rawGrip[i]}, l.tools, inCar);
+                    in.grip[i] = sp.car.grip;      // what game_xr now gives the car
+                    in.trigger[i] = sp.car.trigger;
+                }
+                return van.step(in, flat, open, clearAhead, t);
+            };
+            const std::string name = bat ? std::string("Batmobile ") + std::to_string(car) : std::string("van");
+            in.summonPress = true;
+            check(tick().summoned, (name + ": summoned").c_str());
+            in.summonPress = false;
+            in.hands[0] = van.frame.world(t.handleOut);
+            rawGrip[0] = 1;
+            check(tick().entered && van.state == v::driving, (name + ": the outside handle, in").c_str());
+            rawGrip[0] = 0;
+            tick();
+            const Vec3 axis = v::axisOf(t), up = normalized(Vec3{0, 1, 0} - axis * axis.y), side = normalized(cross(up, axis));
+            auto rim = [&](float a) { return van.frame.world(t.hub + (up * std::cos(a) + side * std::sin(a)) * t.wheelRadius); };
+            in.hands[0] = rim(-1.5708f);
+            in.hands[1] = rim(1.5708f);
+            rawGrip[0] = rawGrip[1] = 1;
+            tick();
+            check(van.wheel.latched[0] && van.wheel.latched[1], (name + ": locked, the grip still latches the wheel").c_str());
+            for (int f = 1; f <= 45; ++f) {
+                const float d = .8f * f / 45;
+                in.hands[0] = rim(-1.5708f + d);
+                in.hands[1] = rim(1.5708f + d);
+                tick();
+            }
+            check(std::abs(van.wheel.angle) > .5f, (name + ": the wheel turns with the hands").c_str());
+            rawTrig[1] = 1;
+            for (int f = 0; f < 120; ++f) {
+                in.hands[0] = rim(-1.5708f + .8f);
+                in.hands[1] = rim(1.5708f + .8f);
+                tick();
+            }
+            check(van.speed > 3.f, (name + ": the wheel hand's trigger drives").c_str());
+            rawTrig[1] = 0;
+            rawTrig[0] = rawTrig[1] = 1; // both: brake
+            for (int f = 0; f < 400 && van.speed != 0.f; ++f) {
+                in.hands[0] = rim(-1.5708f + .8f);
+                in.hands[1] = rim(1.5708f + .8f);
+                tick();
+            }
+            rawTrig[0] = rawTrig[1] = 0;
+            check(std::abs(van.speed) <= t.exitSpeed, (name + ": braked to a crawl").c_str());
+            rawGrip[0] = rawGrip[1] = 0;
+            tick();
+            in.hands[0] = van.frame.world(t.handleIn);
+            rawGrip[0] = 1;
+            const auto x = tick();
+            check(x.exited && van.state == v::parked, (name + ": locked, the inside handle gets him out").c_str());
+            rawGrip[0] = 0;
+            tick();
+            // the dash's GET OUT button
+            in.hands[0] = van.frame.world(t.handleOut);
+            rawGrip[0] = 1;
+            check(tick().entered, (name + ": back in").c_str());
+            rawGrip[0] = 0;
+            in.exitAsk = true;
+            check(tick().exited && van.state == v::parked, (name + ": the dash GET OUT button gets him out").c_str());
+            in.exitAsk = false;
+        }
+        // the dash's GET OUT (HOME, only while driving): the van's own row, the Batmobile's beside the picker
+        namespace vs = spidy::van_screen;
+        vs::Button b[8];
+        vs::Offer vo;
+        vo.exit = true;
+        const uint32_t nv = vs::buttons(vs::home, vo, b);
+        check(nv == 3 && b[2].action == vs::Action::exitVehicle && std::string(b[2].label) == "GET OUT" && b[2].x1 > b[2].x0 &&
+                  b[2].y0 >= -vs::height / 2,
+              "van HOME: GET OUT, on the face");
+        vo.batman = true;
+        const uint32_t nb = vs::buttons(vs::home, vo, b);
+        check(nb == 4 && b[2].action == vs::Action::nextBatmobile && b[3].action == vs::Action::exitVehicle && b[2].x1 < b[3].x0 &&
+                  b[2].y0 == b[3].y0,
+              "Batmobile HOME: the picker and GET OUT share the last row");
+        vo.exit = false;
+        check(vs::buttons(vs::home, vo, b) == 3, "parked: no GET OUT");
     });
     test("Version 0.0.72 PUNISHER VAN: door handle in, wheel latched by grip, RT/LT/both, door handle out", [] {
         namespace v = spidy::van072;

@@ -607,7 +607,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"flare_block", "FLARE BLOCK", "FLRB", "ON hides lens flares and light glow sprites in VR, restart VR to apply.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"car_paint", "CAR PAINT", "PAINT", "SATIN gives the Batmobiles satin paint highlights; FLAT is test 1's; no restart.", 2, {"SATIN", "FLAT", nullptr, nullptr}},
-    {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no grapple, webs or hero tools while in a car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
+    {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no hero tools in Batmobiles, no grapple in any car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as

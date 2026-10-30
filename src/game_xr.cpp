@@ -32,6 +32,7 @@
 #include "spidy/fly_lean.hpp"
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
+#include "spidy/seated_lock074.hpp"
 #include "spidy/car_paint.hpp"
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
@@ -2369,6 +2370,7 @@ DWORD WINAPI run(void*) {
         int hideoutPointShown = -1;
         const char* vanHomeNote{};
         van_screen::Offer vanOffer{};
+        bool vanExitAsk = false; // 0.0.74 test 2b: the dash's GET OUT, for the next van step
         // 0.0.74 test 1 BATMOBILE (batmobile074.hpp): the one Driver is the van (PUNISHER) or a Batmobile (BATMAN).
         // vehicleKind: what it was last frame (a change and the old one goes first); batCar: the car summoned
         // (latched at the X; the picker applies on the next summon); vehicleTune: the numbers in use.
@@ -2390,6 +2392,8 @@ DWORD WINAPI run(void*) {
         uint32_t vanAskTag{}, vanAsks{}, vanAskFrames{};
         uint64_t vanAnswers{};
         float vanTrigger[2]{};
+        // 0.0.74 test 2b EXIT FIX: each hand's grip before SEATED TOOLS zeroes it (the wheel, the door handle, the dash).
+        float vanGrip[2]{};
         // 0.0.73 test 3 FREE-HAND GUNS: last frame's hand with its grip held on the wheel's rim (about to latch)
         bool vanRimGrip[2]{};
         double vanAt = -1;
@@ -3332,8 +3336,13 @@ DWORD WINAPI run(void*) {
                     // or ability answers a hand (no grapple, baton, webs, claws, guns, holster draw); the hands are
                     // the car's (wheel, handles, dash, pedals). All of it is back the frame he is out. ALLOWED: 0.0.74
                     // test 1's (the free hand's trigger reached the hero's weapons from the seat).
-                    const bool seatedLock = combat38::seatedToolsBlocked(c38(combat38::seatedTools)) &&
-                                            (vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried);
+                    // 0.0.74 test 2b (owner 8:38 PM ET): the full block is Batman's in the Batmobiles only; the Punisher keeps
+                    // his guns in the van (drive-bys: a free hand aims and fires); no grapple from any car.
+                    const seated_lock074::Lock carLock = seated_lock074::lockFor(
+                        combat38::seatedToolsBlocked(c38(combat38::seatedTools)),
+                        vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried,
+                        vehicleKind == kindBatmobile);
+                    const bool seatedLock = carLock.tools, grappleLock = carLock.grapple;
                     {   // Update 38.5 SYMBIOTE LOOK: both hands grab the chest, then pull outward - on or
                         // off (extras385::symbiote::ChestPull; the ULTIMATE's crossed arms never arm it).
                         gestures385::Input gi;
@@ -5577,15 +5586,16 @@ DWORD WINAPI run(void*) {
                             if (seatedLock) { // 0.0.74 test 2 SEATED TOOLS: no web, web ball or grapple from the car
                                 for (auto& h : input.hands)
                                     h.trigger = h.grip = 0;
-                                batmanGrapple[0] = batmanGrapple[1] = hero072Grapple[0] = hero072Grapple[1] = false;
                             }
-                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !seatedLock;
+                            if (grappleLock) // 0.0.74 test 2b: no grapple from any car
+                                batmanGrapple[0] = batmanGrapple[1] = hero072Grapple[0] = hero072Grapple[1] = false;
+                            const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !grappleLock;
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
                             batmanGrapple[0] = batmanGrapple[1] = false;
                             // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
                             // (askGrappleOnly every live frame, so the pull carries on to the point).
                             if (const uint32_t gh = heroNow(); gh != hero_modes::batman && grapple072::grappler(gh)) {
-                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open() && !seatedLock;
+                                const bool grappleLive = !calibrationInput && !padLayer.latched() && !phone.open() && !grappleLock;
                                 input.asks |= grapple072::asks(gh, grappleLive, hero072Grapple[0], hero072Grapple[1]);
                             }
                             hero072Grapple[0] = hero072Grapple[1] = false;
@@ -6850,15 +6860,17 @@ DWORD WINAPI run(void*) {
                                 // Update 38: SpidyVR's busy rule - a hand whose own web holds or
                                 // carries, a grab, a taken web or a climbing hand punches nothing.
                                 h.busy = !h.free;
-                                h.button = u37.ball[i];
-                                h.grip = u37.other[i];
                                 // Version 0.0.72 PUNISHER VAN: driving, the trigger is the van's pedal and nothing else.
-                                vanTrigger[i] = h.button;
-                                if (vanDriving)
-                                    h.button = 0;
-                                if (seatedLock) { // 0.0.74 test 2 SEATED TOOLS: no punch, web ball, gadget or zip
-                                    h.button = h.grip = 0;
-                                    h.busy = true;
+                                // 0.0.74 test 2 SEATED TOOLS: no punch, web ball, gadget or zip - 0.0.74 test 2b: the car's
+                                // own copy (vanTrigger, vanGrip: wheel, pedals, handles, dash) split off first, never zeroed.
+                                {
+                                    const auto sp = seated_lock074::split({u37.ball[i], u37.other[i]}, seatedLock, vanDriving);
+                                    vanTrigger[i] = sp.car.trigger;
+                                    vanGrip[i] = sp.car.grip;
+                                    h.button = sp.tools.trigger;
+                                    h.grip = sp.tools.grip;
+                                    if (sp.busy)
+                                        h.busy = true;
                                 }
                                 h.position = grip.position;
                                 // Update 38.1 AIM AXIS: HAND (webShooter(grip) -Z, the swing webs'), AIM
@@ -7401,12 +7413,17 @@ DWORD WINAPI run(void*) {
                                         for (unsigned i = 0; i < 2; ++i) {
                                             vin.hands[i] = compose(vanW, Pose{cf.hands[i].position, {}}).position;
                                             vin.tracked[i] = cf.hands[i].tracked && finite(vin.hands[i]);
-                                            vin.grip[i] = cf.hands[i].grip;
+                                            // 0.0.74 test 2b EXIT FIX (owner pt1208u "you cant exit any vehicle now"; CONFIRMED by
+                                            // reading: test 2's SEATED TOOLS zeroed cf.hands' grip, the van's wheel and door
+                                            // handle read it here): the car's grip is the hand's own, kept before the lock.
+                                            vin.grip[i] = seatedLock ? vanGrip[i] : cf.hands[i].grip;
                                             vin.trigger[i] = vanTrigger[i];
                                             // Version 0.0.73 test 3 WHEEL-HAND PEDALS: each controller's own stick (back + its
                                             // trigger: reverse, only while that hand grips the wheel - van072::wheelPedal)
                                             vin.stickY[i] = std::isfinite(frame.hands[i].stickY) ? frame.hands[i].stickY : 0.f;
                                         }
+                                        vin.exitAsk = vanExitAsk; // 0.0.74 test 2b: the dash's GET OUT, once
+                                        vanExitAsk = false;
                                         if (vanSpotReady) {
                                             vanSpotReady = false;
                                             vin.summonSpot = true;
@@ -7495,6 +7512,7 @@ DWORD WINAPI run(void*) {
                                                 vanOffer.car = static_cast<uint8_t>(batmobile074::clampCar(c38(combat38::batmobileChoice)));
                                                 vanOffer.seat = c38(combat38::seatedDriving) != vehicle074::seatOff;
                                                 vanOffer.sat = vanSeat.sat();
+                                                vanOffer.exit = van.state == van072::driving;
                                                 si.offer = vanOffer;
                                                 if (hideoutAway) // nothing pokes the dash from the hideout
                                                     for (unsigned i = 0; i < 2; ++i)
@@ -7548,6 +7566,13 @@ DWORD WINAPI run(void*) {
                                             case van_screen::Action::stand:
                                                 vanSeat.stand();
                                                 message(1, 0, "SEATED DRIVING: standing");
+                                                break;
+                                            case van_screen::Action::exitVehicle:
+                                                // 0.0.74 test 2b: the fallback GET OUT (van072 parks him on the next step if stopped)
+                                                if (std::abs(van.speed) > vehicleTune.exitSpeed)
+                                                    message(2, 0, batNow ? "GET OUT: stop the Batmobile first" : "GET OUT: stop the van first");
+                                                else
+                                                    vanExitAsk = true;
                                                 break;
                                             case van_screen::Action::nextBatmobile: {
                                                 // 0.0.74 test 1 BATMOBILE: the dash picker - the next car, on the next summon (saved)

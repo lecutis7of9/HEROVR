@@ -40,7 +40,7 @@ inline constexpr const char* pageNames[pages] = {"MAP", "STATUS", "CASES", "LOCK
 inline constexpr float tabLeft = .034f;
 // 0.0.74 test 1: what a button asks for (the caller does it; the screen only says).
 enum class Action : uint8_t { none, musicPrevious, musicToggle, musicNext, volumeDown, volumeUp, goSafehouse, goBatcave, sit, stand,
-                              nextBatmobile };
+                              nextBatmobile, exitVehicle };
 // 0.0.74 test 1 BATMOBILE: the dash picker's label for each car (batmobile074's order).
 inline constexpr uint32_t batmobileCars = 4;
 inline constexpr const char* batmobileLabels[batmobileCars] = {"BATMOBILE: 1989", "BATMOBILE: ODAMI", "BATMOBILE: FOREVER",
@@ -55,6 +55,8 @@ struct Offer {
     // HOME: the van has GO TO SAFEHOUSE, the Batmobile GO TO BATCAVE and the BATMOBILE picker.
     bool batman = false;
     uint8_t car = 0;       // the picker's choice (batmobileLabels; applies on the next summon)
+    // 0.0.74 test 2b: HOME's fallback GET OUT button (the door handle stays the main way; stopped only).
+    bool exit = false;
 };
 // Whether a page is shown for this offer (the Batmobile hides CASES and LOCKER), and the shown pages in
 // tab order into `out` (returns how many, at least 1).

@@ -486,8 +486,13 @@ uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
             out[n++] = Button{offer.sat ? Action::stand : Action::sit, x0, y - h, x1, y, offer.sat ? "STAND" : "SIT (SEATED DRIVING)"};
             y -= h + gap;
         }
+        // 0.0.74 test 2b: GET OUT shares the last row with the picker (the body holds 3 full rows + this).
+        const float xs = offer.exit ? (offer.batman ? x0 + (x1 - x0) * .62f : x0) : x1;
         if (offer.batman)
-            out[n++] = Button{Action::nextBatmobile, x0, y - h, x1, y, batmobileLabels[offer.car < batmobileCars ? offer.car : 0]};
+            out[n++] = Button{Action::nextBatmobile, x0, y - h, offer.exit ? xs - gap : x1, y,
+                              batmobileLabels[offer.car < batmobileCars ? offer.car : 0]};
+        if (offer.exit)
+            out[n++] = Button{Action::exitVehicle, xs, y - h, x1, y, "GET OUT"};
     }
     return n;
 }

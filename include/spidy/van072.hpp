@@ -386,6 +386,7 @@ struct In {
     bool tracked[2]{};
     float grip[2]{}, trigger[2]{}; // trigger[0] LT, trigger[1] RT
     float stickY[2]{};    // Version 0.0.73 test 3: each controller's own thumbstick y (+ forward, - pulled back)
+    bool exitAsk{};       // 0.0.74 test 2b DASH EXIT: the dash's GET OUT button (out as the inside handle, at a crawl)
 };
 struct Out {
     bool summoned{}, noSpot{}, entered{}, exited{}, bumped{};
@@ -462,6 +463,12 @@ struct Van {
                 o.exited = true;
                 o.haptic[i] = .5f;
             }
+        }
+        if (in.exitAsk && state == driving && fine(speed) && std::abs(speed) <= t.exitSpeed) { // 0.0.74 test 2b DASH EXIT
+            park();
+            ++exits;
+            o.exited = true;
+            o.haptic[0] = o.haptic[1] = .4f;
         }
         if (state != driving)
             return o;

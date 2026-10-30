@@ -36,7 +36,7 @@ class Switch(unittest.TestCase):
         self.assertIn('restart', m.group(1))
 
     def test_notice_test_6(self):
-        self.assertIn('set(HERO_TEST_NUMBER "7" CACHE', src('CMakeLists.txt'))  # 0.0.74 test 7
+        self.assertIn('set(HERO_TEST_NUMBER "8" CACHE', src('CMakeLists.txt'))  # 0.0.74 test 8
 
 
 class Lens(unittest.TestCase):

@@ -177,7 +177,24 @@ struct Reading {
     float error[2]{};           // the mean squared difference left
     uint64_t skippedMoving{};   // tries given up so far: the head moved between the pairs
     uint64_t skippedFlat{};     // eyes not measured so far: a flat box
+    // 0.0.74 test 8 DISPLAY PROOF: the second pair's box again after the history (what the headset copy reads,
+    // before CAS), against its RAW box: the mean luma difference (0-1 levels; 0 when no history ran) and its move
+    // from the first pair's RAW box.
+    bool shownRead{};           // the after-history boxes were read
+    bool historyRan{};          // the eye history ran on that pair
+    bool shownOk[2]{};          // the move could be measured
+    float shownDiff[2]{};       // mean |displayed - raw| luma, -1 unread
+    float shownMeasured[2][2]{}; // displayed vs the first RAW pair, the head's share taken off
 };
+// Mean absolute difference of two boxes of luma; -1 when they differ in size or are empty.
+inline float meanAbsDiff(const std::vector<float>& a, const std::vector<float>& b) {
+    if (a.empty() || a.size() != b.size())
+        return -1.f;
+    double sum = 0;
+    for (size_t i = 0; i < a.size(); ++i)
+        sum += std::fabs(static_cast<double>(a[i]) - static_cast<double>(b[i]));
+    return static_cast<float>(sum / static_cast<double>(a.size()));
+}
 inline const char* faultText(uint32_t f) {
     switch (f) {
     case 0: return "none";

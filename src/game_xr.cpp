@@ -112,6 +112,7 @@
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
 #include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA (on)
 #include "spidy/view_gates.hpp" // 0.0.74 test 5 IMPOSTORS, CLEAN JITTER
+#include "spidy/view_jitter.hpp" // 0.0.74 test 8 VIEW JITTER
 #include "spidy/taa_gate074.hpp" // 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
@@ -673,6 +674,9 @@ void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out); // 0.0.74 test 5
 void SpidyCleanSet(uint32_t on);                                // 0.0.74 test 5 CLEAN JITTER (stereo_probe.cpp)
 void SpidyCleanJitter(spidy::view_gates::CleanJitter* out);
 uint64_t SpidyCleanTaaLenses(); // 0.0.74 test 6 CLEAN JITTER (stereo_probe.cpp)
+void SpidyViewJitterFixSet(uint32_t on); // 0.0.74 test 8 VIEW JITTER FIX (stereo_probe.cpp)
+uint32_t SpidyViewJitterFrames(spidy::view_jitter::Frame* out, uint32_t limit);
+void SpidyViewJitterStats(spidy::view_jitter::Stats* out);
 DWORD WINAPI SpidyViewGate(void* argument); // Update 37 (stereo_probe.cpp): selector 3 is IMPOSTORS
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
@@ -11295,6 +11299,75 @@ DWORD WINAPI run(void*) {
                             const bool standDown = cleanStandsDown();
                             const bool cleanAa = combat38::aaModeClean(c38(combat38::aaMode)) && !standDown;
                             SpidyCleanSet(cleanAa ? 1u : 0u);
+                            {   // 0.0.74 test 8 VIEW JITTER (view_jitter.hpp): VIEW JITTER FIX to stereo_probe each frame;
+                                // its detail frames (200 at the start, 200 after a switch flip, 100 after ENGINE TAA
+                                // flips) one line each, and every 10 s one line per view that ran. Pixels at each view's
+                                // own size (right, down); the shadow head has no picture: the eye size.
+                                namespace vjt = spidy::view_jitter;
+                                const bool vjFix = c38(combat38::viewJitterFix) == 0;
+                                SpidyViewJitterFixSet(vjFix ? 1u : 0u);
+                                static vjt::Frame vjFrames[32];
+                                const uint32_t vjGot = SpidyViewJitterFrames(vjFrames, 32);
+                                for (uint32_t vi = 0; vi < vjGot; ++vi) {
+                                    const vjt::Frame& vf = vjFrames[vi];
+                                    const vjt::Seen& gs = vf.seen[vjt::gameView].count ? vf.seen[vjt::gameView] : vf.seen[vjt::gameHead];
+                                    char vjLine[768];
+                                    int used = std::snprintf(
+                                        vjLine, sizeof vjLine,
+                                        "VIEW JITTER f%llu pass %llu [FIX %s, ENGINE TAA %s, game view %s]: game own (%+.3f, %+.3f) px",
+                                        static_cast<unsigned long long>(vf.frame), static_cast<unsigned long long>(vf.pass ? vf.pass - 1 : 0),
+                                        vf.fix ? "ON" : "OFF", vf.engine ? "ON" : "OFF", vf.rested ? "rested" : "renders",
+                                        vjt::pxRight(vf.ownX, gs.width), vjt::pxDown(vf.ownY, gs.height));
+                                    for (uint32_t v = 0; v < vjt::views && used > 0 && used < static_cast<int>(sizeof vjLine); ++v) {
+                                        const vjt::Seen& sn = vf.seen[v];
+                                        if (!sn.count)
+                                            continue;
+                                        used += std::snprintf(vjLine + used, sizeof vjLine - static_cast<size_t>(used),
+                                                              "; %s x%u (%+.3f, %+.3f) px at %ux%u", vjt::viewName(v), sn.count,
+                                                              vjt::pxRight(sn.x, sn.width), vjt::pxDown(sn.y, sn.height),
+                                                              sn.width, sn.height);
+                                    }
+                                    consoleLine(vjLine);
+                                }
+                                static ULONGLONG vjTick{};
+                                static vjt::Stats vjLast{};
+                                const ULONGLONG vjTickNow = GetTickCount64();
+                                if (!vjTick)
+                                    vjTick = vjTickNow;
+                                if (vjTickNow - vjTick >= 10000) {
+                                    const double vjSeconds = static_cast<double>(vjTickNow - vjTick) / 1000.0;
+                                    vjTick = vjTickNow;
+                                    vjt::Stats vs{};
+                                    SpidyViewJitterStats(&vs);
+                                    const uint64_t vjFramesNow = vs.frames - vjLast.frames;
+                                    const bool vjEngineOn = engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on;
+                                    for (uint32_t v = 0; v < vjt::views; ++v) {
+                                        const uint64_t runs = vs.runs[v] - vjLast.runs[v];
+                                        if (!runs)
+                                            continue;
+                                        auto vd = [&](const uint64_t* now, const uint64_t* was) {
+                                            return static_cast<unsigned long long>(now[v] - was[v]);
+                                        };
+                                        char vjLine[384];
+                                        std::snprintf(
+                                            vjLine, sizeof vjLine,
+                                            "VIEW JITTER 10 s %s [FIX %s, ENGINE TAA %s, game view rested %llu of %llu frames]: "
+                                            "%llu runs (%.1f/s, %.2f per frame) at %ux%u; last (%+.3f, %+.3f) px, max %.3f px; "
+                                            "nonzero %llu; Y vs game own: same %llu flipped %llu zero %llu",
+                                            vjt::viewName(v), vjFix ? "ON" : "OFF", vjEngineOn ? "ON" : "OFF",
+                                            static_cast<unsigned long long>(vs.restedFrames - vjLast.restedFrames),
+                                            static_cast<unsigned long long>(vjFramesNow), static_cast<unsigned long long>(runs),
+                                            static_cast<double>(runs) / vjSeconds,
+                                            vjFramesNow ? static_cast<double>(runs) / static_cast<double>(vjFramesNow) : 0.0,
+                                            vs.width[v], vs.height[v], vjt::pxRight(vs.lastX[v], vs.width[v]),
+                                            vjt::pxDown(vs.lastY[v], vs.height[v]), static_cast<double>(vs.maxPx[v]),
+                                            vd(vs.nonzero, vjLast.nonzero), vd(vs.ySame, vjLast.ySame),
+                                            vd(vs.yFlipped, vjLast.yFlipped), vd(vs.yZero, vjLast.yZero));
+                                        consoleLine(vjLine);
+                                    }
+                                    vjLast = vs;
+                                }
+                            }
                             {
                                 // 0 CLEAN (or no CLEAN), 1 stood down, 2 ENGINE TAA on under CLEAN with the switch off.
                                 static int standWas = -1;
@@ -11367,6 +11440,26 @@ DWORD WINAPI run(void*) {
                                                           static_cast<unsigned long long>(rd.skippedMoving),
                                                           static_cast<unsigned long long>(rd.skippedFlat));
                                         consoleLine(line);
+                                        // 0.0.74 test 8 DISPLAY PROOF: the same pair's box after the history (what the
+                                        // headset copy and CAS read) against its RAW box.
+                                        if (rd.shownRead) {
+                                            char shownLine[256];
+                                            const double diff = static_cast<double>(rd.shownDiff[e]);
+                                            if (rd.shownOk[e] && rd.ok[e])
+                                                std::snprintf(shownLine, sizeof shownLine,
+                                                              "CLEAN DISPLAY PROOF %s: history %s; displayed vs raw mean diff %.4f "
+                                                              "(%.2f of 255); displayed moved (%.2f, %.2f) px, raw (%.2f, %.2f) px",
+                                                              proofEye[e], rd.historyRan ? "RAN" : "NOT RUN", diff, diff * 255.0,
+                                                              static_cast<double>(rd.shownMeasured[e][0]),
+                                                              static_cast<double>(rd.shownMeasured[e][1]),
+                                                              static_cast<double>(rd.measured[e][0]), static_cast<double>(rd.measured[e][1]));
+                                            else
+                                                std::snprintf(shownLine, sizeof shownLine,
+                                                              "CLEAN DISPLAY PROOF %s: history %s; displayed vs raw mean diff %.4f "
+                                                              "(%.2f of 255); move not measured (a flat box)",
+                                                              proofEye[e], rd.historyRan ? "RAN" : "NOT RUN", diff, diff * 255.0);
+                                            consoleLine(shownLine);
+                                        }
                                     }
                                 }
                             }
@@ -11409,6 +11502,21 @@ DWORD WINAPI run(void*) {
                                             static_cast<double>(taaNow.px[0][0]), static_cast<double>(taaNow.px[0][1]),
                                             static_cast<double>(taaNow.px[1][0]), static_cast<double>(taaNow.px[1][1]));
                                         consoleLine(taaLine);
+                                        // 0.0.74 test 8 CLEAN BLEND: the effective weight (eye 0: the history's share
+                                        // kept, the new picture gets the rest) and where the headset's picture comes from.
+                                        const bool anyBlend = taaBlends != 0;
+                                        const double loosenAvg = anyBlend ? (taaNow.loosenSum - taaLast.loosenSum) / static_cast<double>(taaBlends) : 0.0;
+                                        char blendLine[384];
+                                        std::snprintf(
+                                            blendLine, sizeof blendLine,
+                                            "CLEAN BLEND 10 s: history kept avg %.0f%% (least %.0f%%, most %.0f%%), new picture avg "
+                                            "%.0f%%; loosen avg %.2f; history ran on %llu pairs, %llu sent; the headset copy reads "
+                                            "the history output (stagedEyes, copied from the history picture)",
+                                            taaKeep, anyBlend ? static_cast<double>(taaNow.keepLeast) * 100.0 : 0.0,
+                                            anyBlend ? static_cast<double>(taaNow.keepMost) * 100.0 : 0.0,
+                                            anyBlend ? 100.0 - taaKeep : 100.0, loosenAvg,
+                                            taaDl(taaNow.historyPairs, taaLast.historyPairs), taaDl(taaNow.presented, taaLast.presented));
+                                        consoleLine(blendLine);
                                     }
                                     taaLast = taaNow;
                                     lensesLast = taaLenses;
@@ -11457,23 +11565,21 @@ DWORD WINAPI run(void*) {
                                 static uint64_t costPairs{}, costFrames{};
                                 static TimingMetric costGpuLast{}, costPairLast{};
                                 static uint64_t covRan[2]{}, covJobs[2]{}, covMissed[2]{};
-                                static Vec3 stillAt{}, stillLook{};
-                                static bool stillKnown{}, stillHead{true};
+                                // 0.0.74 test 8 (view_jitter::HeadStill): STILL is under 10 cm and 8 degrees from where
+                                // the 10 s began (test 7's 3 cm / 3 degrees: a standing player's sway made nearly every
+                                // window MOVING), plus the seconds that stayed within 2 cm and 2 degrees. The head in the
+                                // game world: travel counts.
+                                static spidy::view_jitter::HeadStill still;
                                 ++costFrames;
                                 if (newPair)
                                     ++costPairs;
                                 if (validTrackedPose(motion.headPose)) {
                                     const Vec3 lookNow = motion.headPose.orientation.rotate(Vec3{0, 0, -1});
-                                    if (!stillKnown) {
-                                        stillAt = motion.headPose.position;
-                                        stillLook = lookNow;
-                                        stillKnown = true;
-                                    }
-                                    const Vec3 moved = motion.headPose.position - stillAt;
-                                    const float turnDot = lookNow.x * stillLook.x + lookNow.y * stillLook.y + lookNow.z * stillLook.z;
-                                    if (moved.x * moved.x + moved.y * moved.y + moved.z * moved.z > .03f * .03f || turnDot < .9986f)
-                                        stillHead = false; // over 3 cm or about 3 degrees from where the 10 s began (the head in the game world: travel counts)
+                                    const float at[3]{motion.headPose.position.x, motion.headPose.position.y, motion.headPose.position.z};
+                                    const float look[3]{lookNow.x, lookNow.y, lookNow.z};
+                                    still.add(at, look, GetTickCount64());
                                 }
+                                const bool stillHead = still.still();
                                 const ULONGLONG costNow = GetTickCount64();
                                 if (!costTick)
                                     costTick = costNow;
@@ -11488,21 +11594,22 @@ DWORD WINAPI run(void*) {
                                     const uint64_t copyCount = gpuNow.count - costGpuLast.count;
                                     const double copyMs = copyCount ? (gpuNow.totalMs - costGpuLast.totalMs) / static_cast<double>(copyCount) : 0.0;
                                     const float passes = native_gpu::eyePassesGpuMs();
-                                    char costLine[256];
+                                    char costLine[384];
                                     std::snprintf(costLine, sizeof costLine,
                                                   "ENGINE TAA COST 10 s [ENGINE TAA %s] head %s: game %.1f eye pairs/s, headset "
                                                   "%.1f frames/s; GPU eye pair to headset copy %.2f ms avg (last %.2f), copy "
-                                                  "%.2f ms, HERO passes %.2f ms",
+                                                  "%.2f ms, HERO passes %.2f ms; head moved %.1f cm %.1f deg, still %u of %u s",
                                                   engineOnNow ? "ON" : "OFF", stillHead ? "STILL" : "MOVING",
                                                   static_cast<double>(costPairs) / seconds, static_cast<double>(costFrames) / seconds,
                                                   pairMs, pairNow.lastMs, copyMs,
-                                                  std::isfinite(passes) ? static_cast<double>(passes) : -1.0);
+                                                  std::isfinite(passes) ? static_cast<double>(passes) : -1.0,
+                                                  static_cast<double>(still.maxTravel) * 100.0, static_cast<double>(still.maxTurnDeg),
+                                                  still.stillSeconds, still.seconds);
                                     consoleLine(costLine);
                                     costGpuLast = gpuNow;
                                     costPairLast = pairNow;
                                     costPairs = costFrames = 0;
-                                    stillKnown = false;
-                                    stillHead = true;
+                                    still.restart();
                                     const miles_taa::Data* cov = SpidyMilesTaaNow();
                                     if (cov && gd) {
                                         double ranPct[2]{}, callPct[2]{};
@@ -14821,6 +14928,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCleanJitterOn(void* v) { retu
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterProof(void* v) { return setHero007(v, combat38::jitterProof, 5520); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterProofBig(void* v) { return setHero007(v, combat38::jitterProofBig, 5521); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaStock(void* v) { return setHero007(v, combat38::engineTaaStock, 5522); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyViewJitterFix(void* v) { return setHero007(v, combat38::viewJitterFix, 5523); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

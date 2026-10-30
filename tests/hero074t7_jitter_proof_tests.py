@@ -41,10 +41,10 @@ class Switches(unittest.TestCase):
                 self.assertLessEqual(len(m.group(1)), 80)
                 self.assertEqual(m.group(1).count('.'), 1)
                 self.assertIn('restart', m.group(1))
-        self.assertIn('constexpr int combatControls = 177;', src('include/spidy/wrist_hud.hpp'))
+        self.assertIn('constexpr int combatControls = 178;', src('include/spidy/wrist_hud.hpp'))
 
     def test_notice_test_7(self):
-        self.assertIn('set(HERO_TEST_NUMBER "7" CACHE', src('CMakeLists.txt'))
+        self.assertIn('set(HERO_TEST_NUMBER "8" CACHE', src('CMakeLists.txt'))
 
     def test_no_name(self):
         for rel in ('include/spidy/jitter_proof.hpp', 'src/native_eye_gpu.cpp', 'src/game_xr.cpp',

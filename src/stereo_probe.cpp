@@ -29,6 +29,7 @@
 #include "spidy/view_gates.hpp"
 #include "spidy/window_pop.hpp"
 #include "spidy/recording_fov.hpp"
+#include "spidy/view_jitter.hpp" // 0.0.74 test 8 VIEW JITTER
 #include <MinHook.h>
 #include <atomic>
 #include <cmath>
@@ -2569,6 +2570,109 @@ native_eyes::Bounds viewLens(const native_eyes::Bounds& head) {
                ? recording_fov::covering(wide, degrees, flatAspect.load())
                : wide;
 }
+// 0.0.74 test 8 VIEW JITTER (view_jitter.hpp): every lens call's stored jitter (+0x428 / +0x42c after the call) per
+// view, at that view's own size; detail frames (200 at the start, 200 after a VIEW JITTER FIX flip, 100 after an ENGINE
+// TAA flip) and totals for game_xr's console lines. VIEW JITTER FIX: game_xr's SpidyViewJitterFixSet each frame (ON
+// unless the switch is OFF); ON, the game view, game head and shadow head lenses stop taking the game view's STORED
+// values back as arguments (the lens stores 2x / -2y, so test 7 doubled them and flipped Y on each call).
+namespace vj = spidy::view_jitter;
+std::atomic<uint32_t> viewJitterFix{1};
+SRWLOCK viewJitterLock = SRWLOCK_INIT;
+vj::Frame vjNow{};
+vj::Stats vjStats{};
+constexpr uint32_t vjRingSize = 512;
+vj::Frame vjRing[vjRingSize]{};
+uint32_t vjRingStart{}, vjRingCount{}, vjBudget{200};
+uint32_t vjFixSeen{UINT32_MAX}, vjEngineSeen{UINT32_MAX};
+// The game's own stored jitter this frame (the stock camera at activeView).
+float vjOwn[2]{};
+uint64_t vjOwnFrame{UINT64_MAX};
+bool vjFixOn() { return viewJitterFix.load(std::memory_order_relaxed) != 0; }
+// The game view draws this frame: not rested (restGameView clears its +0x13f8 and SubmitScene then leaves at once,
+// so the view gets no render job and its TAA does not run).
+bool vjGameRendered() {
+    const uintptr_t resting = rested.load(std::memory_order_relaxed);
+    return !resting || resting != pointer(base + spidy::taa_gate::mainViewGlobal);
+}
+// The game view's render size (its buffer set's sizes, taa_gate074.hpp, CONFIRMED).
+std::array<uint32_t, 2> vjGameSize() {
+    uint32_t size[2]{};
+    const uintptr_t mainView = pointer(base + spidy::taa_gate::mainViewGlobal);
+    const uintptr_t buffers = mainView ? pointer(mainView + spidy::taa_gate::viewBuffers) : 0;
+    if (!buffers || !read(buffers + spidy::taa_gate::setSizes, size, sizeof size))
+        return {0, 0};
+    return {size[0], size[1]};
+}
+// Caller holds viewJitterLock: closes the frame being gathered once frameIndex moved on.
+void vjRoll() {
+    if (vjNow.frame == frameIndex && vjNow.pass)
+        return;
+    bool any = false;
+    for (const auto& seen : vjNow.seen)
+        any = any || seen.count != 0;
+    if (any) {
+        ++vjStats.frames;
+        if (vjNow.rested)
+            ++vjStats.restedFrames;
+        if (vjBudget) {
+            --vjBudget;
+            if (vjRingCount == vjRingSize) {
+                vjRingStart = (vjRingStart + 1) % vjRingSize;
+                --vjRingCount;
+            }
+            vjRing[(vjRingStart + vjRingCount) % vjRingSize] = vjNow;
+            ++vjRingCount;
+        }
+    }
+    const uint32_t fix = vjFixOn() ? 1u : 0u;
+    const uint32_t engine = engineTaaLive.load(std::memory_order_relaxed) ? 1u : 0u;
+    if (fix != vjFixSeen) {
+        if (vjFixSeen != UINT32_MAX)
+            vjBudget = std::max(vjBudget, 200u);
+        vjFixSeen = fix;
+    }
+    if (engine != vjEngineSeen) {
+        if (vjEngineSeen != UINT32_MAX)
+            vjBudget = std::max(vjBudget, 100u);
+        vjEngineSeen = engine;
+    }
+    vjNow = vj::Frame{};
+    vjNow.frame = frameIndex;
+    vjNow.pass = offscreenPass + 1; // never 0 (0 marks the empty first frame)
+    vjNow.fix = fix;
+    vjNow.engine = engine;
+    vjNow.rested = vjGameRendered() ? 0u : 1u;
+    if (vjOwnFrame == frameIndex) {
+        vjNow.ownX = vjOwn[0];
+        vjNow.ownY = vjOwn[1];
+    }
+}
+void vjSetOwn(float x, float y) {
+    AcquireSRWLockExclusive(&viewJitterLock);
+    vjRoll();
+    vjOwn[0] = vjNow.ownX = x;
+    vjOwn[1] = vjNow.ownY = y;
+    vjOwnFrame = frameIndex;
+    ReleaseSRWLockExclusive(&viewJitterLock);
+}
+// The game's own stored jitter for this frame's game view and game head (main's when activeView did not see it).
+std::array<float, 2> vjOwnNow(float mainX, float mainY) {
+    AcquireSRWLockShared(&viewJitterLock);
+    const bool fresh = vjOwnFrame == frameIndex;
+    const std::array<float, 2> own{fresh ? vjOwn[0] : mainX, fresh ? vjOwn[1] : mainY};
+    ReleaseSRWLockShared(&viewJitterLock);
+    return own;
+}
+// After a lens call: what the view stored, at its own size (the shadow head and eyes at the eye size).
+void vjNote(uint32_t view, const Descriptor& lens) {
+    const auto size = view == vj::gameView || view == vj::gameHead ? vjGameSize() : eyeRenderSize();
+    const float x = lens.values[0x428 / 4], y = lens.values[0x42c / 4];
+    AcquireSRWLockExclusive(&viewJitterLock);
+    vjRoll();
+    vj::note(vjNow, view, x, y, size[0], size[1]);
+    vj::add(vjStats, view, x, y, size[0], size[1], vjNow.ownY);
+    ReleaseSRWLockExclusive(&viewJitterLock);
+}
 // The engine's active view (ViewContextManager +f8) is its first pool view: the
 // stock camera. Offscreen eyes are never active, and the "drawn in any view"
 // (18a1890) and "sphere in any view" (18a12a0) queries visit pool views only.
@@ -2586,6 +2690,7 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     if (!read(base + 0xc2ca228, &mask, 8) || !(mask & 1) ||
         !read(reinterpret_cast<uintptr_t>(incoming), &stock, sizeof(stock)) || !native_view::valid(stock))
         return false;
+    vjSetOwn(stock.values[0x428 / 4], stock.values[0x42c / 4]); // 0.0.74 test 8 VIEW JITTER: the game's own
     // The flat screen keeps the stock camera's shape whichever view is drawn.
     flatAspect = (stock.values[0x404 / 4] - stock.values[0x400 / 4]) /
                  (stock.values[0x40c / 4] - stock.values[0x408 / 4]);
@@ -2614,6 +2719,10 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     const auto lens = viewLens(head.lens);
     bool placed = head.viewed;
     gameLodFlat.store(1.f, std::memory_order_relaxed);
+    // 0.0.74 test 8 VIEW JITTER FIX: ON, the game's own jitter while the game view renders (it stores what the game
+    // asked for), 0 while it is rested; OFF, test 7's (the stored values as arguments: doubled, Y flipped).
+    const auto gameArgs = vj::fixedArgs(vj::gameView, vjFixOn(), vjGameRendered(), stock.values[0x428 / 4],
+                                        stock.values[0x42c / 4], vj::Args{stock.values[0x428 / 4], stock.values[0x42c / 4]});
     if (placed) {
         out = stock;
         // Keep the stock camera's far plane and temporal jitter. Its near
@@ -2621,8 +2730,7 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
         // off hands held up before the face (NEAR CLIP).
         reinterpret_cast<Lens>(base + 0x2c75560)(&out, nearZ, stock.farZ(), lens.left,
                                                  lens.right, lens.top, lens.bottom, 0, 0,
-                                                 stock.values[0x428 / 4], stock.values[0x42c / 4], false,
-                                                 false);
+                                                 gameArgs.x, gameArgs.y, false, false);
         reinterpret_cast<SetPose>(base + 0x2c76310)(&out, pose.data(), 0);
         placed = native_view::valid(out);
         if (!placed && nearZ != near_clip::metres()) {
@@ -2632,8 +2740,7 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
             out = stock;
             reinterpret_cast<Lens>(base + 0x2c75560)(&out, near_clip::metres(), stock.farZ(), lens.left,
                                                      lens.right, lens.top, lens.bottom, 0, 0,
-                                                     stock.values[0x428 / 4], stock.values[0x42c / 4], false,
-                                                     false);
+                                                     gameArgs.x, gameArgs.y, false, false);
             reinterpret_cast<SetPose>(base + 0x2c76310)(&out, pose.data(), 0);
             placed = native_view::valid(out);
         }
@@ -2673,8 +2780,10 @@ void submit(void* view, const Descriptor* incoming) {
         activeAligned = replaced;
         // Update 27: feed the ADDRESS FINDER the stock and aligned cameras (read-only).
         Descriptor stock{};
-        if (incoming && read(reinterpret_cast<uintptr_t>(incoming), &stock, sizeof stock))
+        if (incoming && read(reinterpret_cast<uintptr_t>(incoming), &stock, sizeof stock)) {
             native_address_finder::noteView(0, stock);
+            vjNote(vj::gameView, replaced ? aligned : stock); // 0.0.74 test 8 VIEW JITTER: what the game view gets
+        }
         if (replaced)
             native_address_finder::noteView(1, aligned);
         if (replaced) {
@@ -3093,9 +3202,12 @@ void placeEyes() {
     const bool activePlaced = activeHeroPlaced;
     activeHeroPlaced = false;
     // Update 34: the game camera's own jitter (a candidate for ENGINE TAA's units: logged).
+    // 0.0.74 test 8 VIEW JITTER FIX ON: the game's own (activeView's stock), not main's, which carries our lens.
+    const bool viewFix = vjFixOn();
+    const auto gameOwn = vjOwnNow(main.values[0x428 / 4], main.values[0x42c / 4]);
     if (render) {
-        gameJitter[0].store(main.values[0x428 / 4], std::memory_order_relaxed);
-        gameJitter[1].store(main.values[0x42c / 4], std::memory_order_relaxed);
+        gameJitter[0].store(viewFix ? gameOwn[0] : main.values[0x428 / 4], std::memory_order_relaxed);
+        gameJitter[1].store(viewFix ? gameOwn[1] : main.values[0x42c / 4], std::memory_order_relaxed);
     }
     native_eyes::Command desired{};
     bool controlled{};
@@ -3183,15 +3295,22 @@ void placeEyes() {
             pose[12] += placed.offset.x;
             pose[13] += placed.offset.y;
             pose[14] += placed.offset.z;
-            const auto onHead = [&](const native_eyes::Bounds& b, float nearZ) {
+            // 0.0.74 test 8 VIEW JITTER FIX (view_jitter.hpp): ON, the shadow head (aligned: cascades and the match
+            // lens; no picture) gets 0 and the game head (viewed) the game's own while the game view renders, 0
+            // while rested; OFF, test 7's main stored values as arguments.
+            const auto onHead = [&](const native_eyes::Bounds& b, float nearZ, uint32_t which) {
                 auto view = main;
+                const auto args = vj::fixedArgs(which, viewFix, vjGameRendered(), gameOwn[0], gameOwn[1],
+                                                vj::Args{main.values[0x428 / 4], main.values[0x42c / 4]});
                 reinterpret_cast<Lens>(base + 0x2c75560)(
                     &view, nearZ, main.farZ(), b.left, b.right, b.top, b.bottom, 0, 0,
-                    main.values[0x428 / 4], main.values[0x42c / 4], false, false);
+                    args.x, args.y, false, false);
                 reinterpret_cast<SetPose>(base + 0x2c76310)(&view, pose.data(), 0);
                 return view;
             };
-            const auto aligned = onHead(lens, near_clip::metres());
+            const auto aligned = onHead(lens, near_clip::metres(), vj::shadowHead);
+            if (native_view::valid(aligned))
+                vjNote(vj::shadowHead, aligned);
             if (native_view::valid(aligned)) {
                 // Covers both eyes: what the first eye fits its shadow cascades to.
                 shadowLens = aligned;
@@ -3209,10 +3328,10 @@ void placeEyes() {
                                            : near_clip::metres();
                 // Build 12 WINDOW LIGHTS: always viewLens (the cull margin), as at the
                 // first submit; the eyes' shadow lens stays `aligned`.
-                auto viewed = onHead(viewLens(lens), gameNear);
+                auto viewed = onHead(viewLens(lens), gameNear, vj::gameHead);
                 if (gameNear != near_clip::metres() && !native_view::valid(viewed)) {
                     shadowCameraFail(shadowCamera::lensRejected);
-                    viewed = onHead(viewLens(lens), near_clip::metres());
+                    viewed = onHead(viewLens(lens), near_clip::metres(), vj::gameHead);
                 }
                 if (!native_view::valid(viewed))
                     viewed = aligned;
@@ -3220,6 +3339,7 @@ void placeEyes() {
                     shadowCameraApplied(shadowMode);
                 } else if ((config.createViews & 8) && native_view::valid(viewed)) {
                     originalSubmit(reinterpret_cast<void*>(primary), &viewed);
+                    vjNote(vj::gameHead, viewed); // 0.0.74 test 8 VIEW JITTER
                     activeAligned = true;
                     shadowCameraApplied(shadowMode);
                 }
@@ -3257,6 +3377,7 @@ void placeEyes() {
                         main.values[0x404 / 4] + shift, main.values[0x408 / 4], main.values[0x40c / 4], 0, 0,
                         jitter[0], jitter[1], false, false);
                     reinterpret_cast<SetPose>(base + 0x2c76310)(&descriptor, pose.data(), 0);
+                    vjNote(vj::screenEye, descriptor); // 0.0.74 test 8 VIEW JITTER: logged, not changed (CANDIDATE)
                 }
                 reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
                 matchDistances(eye, descriptor, index);
@@ -3287,6 +3408,8 @@ void placeEyes() {
                 controlled ? -std::tan(fov[2]) : 1, 0, 0, jitter[0], jitter[1], false, false);
             if (!cleanTaaStep)
                 cleanStored(descriptor);
+            if (index < 2)
+                vjNote(index == 0 ? vj::eyeLeft : vj::eyeRight, descriptor); // 0.0.74 test 8 VIEW JITTER
             if (controlled && desired.enabled == 1)
                 recordLens(index, descriptor,
                            {std::tan(fov[0]), std::tan(fov[1]), -std::tan(fov[3]), -std::tan(fov[2])});
@@ -4858,6 +4981,30 @@ extern "C" void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out) {
         out->yes[i] = impostorYes[i].load(std::memory_order_relaxed);
     for (unsigned i = 0; i < spidy::view_gates::impostorSites; ++i)
         out->bySite[i] = impostorBySite[i].load(std::memory_order_relaxed);
+}
+// 0.0.74 test 8 VIEW JITTER FIX (game_xr, each frame): 1 on (the default), 0 off (test 7's lens calls).
+extern "C" void SpidyViewJitterFixSet(uint32_t on) { viewJitterFix.store(on ? 1u : 0u, std::memory_order_relaxed); }
+// 0.0.74 test 8 VIEW JITTER: takes up to max detail frames (oldest first), for game_xr's console lines.
+extern "C" uint32_t SpidyViewJitterFrames(spidy::view_jitter::Frame* out, uint32_t limit) {
+    if (!out)
+        return 0;
+    AcquireSRWLockExclusive(&viewJitterLock);
+    const uint32_t n = std::min(limit, vjRingCount);
+    for (uint32_t i = 0; i < n; ++i)
+        out[i] = vjRing[(vjRingStart + i) % vjRingSize];
+    vjRingStart = (vjRingStart + n) % vjRingSize;
+    vjRingCount -= n;
+    ReleaseSRWLockExclusive(&viewJitterLock);
+    return n;
+}
+extern "C" void SpidyViewJitterStats(spidy::view_jitter::Stats* out) {
+    if (!out)
+        return;
+    AcquireSRWLockExclusive(&viewJitterLock);
+    *out = vjStats;
+    for (auto& biggest : vjStats.maxPx)
+        biggest = 0; // each read gets the biggest shift since the last
+    ReleaseSRWLockExclusive(&viewJitterLock);
 }
 // 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN on or off (game_xr, each frame), and the 300-frame log.
 extern "C" void SpidyCleanSet(uint32_t on) { cleanOn.store(on != 0, std::memory_order_relaxed); }

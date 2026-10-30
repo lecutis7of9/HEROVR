@@ -100,7 +100,7 @@ target_compile_definitions(spidy_core PUBLIC SPIDY_TEST_COMMIT="${_hero_commit}"
 # showed build 9 still running; the number makes that plain). Bump per test build.
 # 0.0.73 test 4's console still said "HERO VR 0.0.72 TEST 3 a20b9ee" (export-test4): the version was
 # a literal and the number was not bumped. Both are here now; bump them per test build.
-set(HERO_TEST_NUMBER "7" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
+set(HERO_TEST_NUMBER "8" CACHE STRING "Test build number on the wrist (TEST <n> <commit>)")
 if(NOT HERO_TEST_NUMBER MATCHES "^[0-9]+$")
     set(HERO_TEST_NUMBER "0")
 endif()

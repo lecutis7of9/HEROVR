@@ -119,6 +119,10 @@ struct CleanTaaStats {
     uint64_t unmatched{};    // wanted, but no step noted for the pair
     uint64_t blended{}, restarted{}, cuts{};
     double keepSum{};        // eye 0's history share, summed over blended passes
+    // 0.0.74 test 8: the effective blend since the last cleanTaaStats() (which starts them again): the least and most
+    // history share of a blended pass (the new picture gets 1 - keep), and the loosen (the history clamp's slack) summed.
+    float keepLeast{1}, keepMost{};
+    double loosenSum{};
     uint64_t presented{};    // pairs sent to the headset
     uint64_t sharpened{};    // of those, CAS ran (percent above 0)
     uint64_t sharpenedAfterHistory{}; // and the eye history ran on that pair first

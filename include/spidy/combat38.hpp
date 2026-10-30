@@ -271,6 +271,8 @@ enum Option : uint32_t {
     jitterProof,
     jitterProofBig,
     engineTaaStock,
+    // 0.0.74 test 8 VIEW JITTER FIX (view_jitter.hpp, stereo_probe activeView / placeEyes): the head views' lens step
+    viewJitterFix,
     options
 };
 struct OptionInfo {
@@ -668,6 +670,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"jitter_proof", "JITTER PROOF", "JTPF", "ON logs if CLEAN's jitter moves the eye pixels, every 2 s; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"jitter_proof_big", "JITTER PROOF BIG", "JTPB", "ON steps 4 px and shows the eyes raw, to see it by eye; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
     {"engine_taa_stock", "ENGINE TAA STOCK", "ETST", "ON sets CLEAN aside while ENGINE TAA runs, as SpidyVR does; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"view_jitter_fix", "VIEW JITTER FIX", "VJFX", "ON stops the doubled jitter on the head and shadow views; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

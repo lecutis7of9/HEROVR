@@ -2014,6 +2014,9 @@ bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out) {
 // history) is copied to a readback buffer; once the GPU is past them (fence), the boxes are read and measured on a
 // thread-pool thread. Every step is checked: a failure is kept in proof::faultCode and the probe stays off.
 namespace proof {
+// 0.0.74 test 8 DISPLAY PROOF: regions 0-3 the two RAW pairs (pair * 2 + eye), 4-5 the second pair after the history.
+constexpr unsigned regions = 6;
+bool shownCopied{}, shownHistory{};
 std::atomic<bool> wanted{true}, big{false};
 std::atomic<uint32_t> faultCode{};
 std::atomic<bool> busy{false};
@@ -2033,7 +2036,7 @@ int recordedPair{-1}; // the pair this stagePair recorded (0, 1), -1 none
 std::mutex resultLock;
 jitter_proof::Reading result{}; // resultLock
 struct Job {
-    std::vector<float> luma[2][2]; // first or second pair, eye
+    std::vector<float> luma[3][2]; // first or second pair (RAW), the second after the history; eye
     jitter_proof::Reading reading{};
     float range{};
 };
@@ -2053,6 +2056,14 @@ void measureJob(Job& job) {
         r.measured[i][0] = s.x - r.head[i][0];
         r.measured[i][1] = s.y - r.head[i][1];
         flat += s.ok ? 0u : 1u;
+        // 0.0.74 test 8 DISPLAY PROOF
+        r.shownDiff[i] = r.shownRead ? jitter_proof::meanAbsDiff(job.luma[1][i], job.luma[2][i]) : -1.f;
+        if (r.shownRead) {
+            const auto shown = jitter_proof::measure(job.luma[0][i], job.luma[2][i], job.range);
+            r.shownOk[i] = shown.ok;
+            r.shownMeasured[i][0] = shown.x - r.head[i][0];
+            r.shownMeasured[i][1] = shown.y - r.head[i][1];
+        }
     }
     std::lock_guard lock(resultLock);
     r.number = result.number + 1;
@@ -2091,7 +2102,7 @@ bool prepare() {
     pitch = jitter_proof::rowPitch(kind);
     D3D12_RESOURCE_DESC b{};
     b.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    b.Width = static_cast<UINT64>(pitch) * jitter_proof::box * 4;
+    b.Width = static_cast<UINT64>(pitch) * jitter_proof::box * regions;
     b.Height = 1;
     b.DepthOrArraySize = 1;
     b.MipLevels = 1;
@@ -2136,7 +2147,7 @@ void collect() {
         return;
     stage = Stage::idle;
     lastMs = GetTickCount64();
-    const SIZE_T size = static_cast<SIZE_T>(pitch) * jitter_proof::box * 4;
+    const SIZE_T size = static_cast<SIZE_T>(pitch) * jitter_proof::box * regions;
     const D3D12_RANGE whole{0, size};
     void* data = nullptr;
     if (FAILED(buffer->Map(0, &whole, &data)) || !data) {
@@ -2146,7 +2157,7 @@ void collect() {
     auto* job = new (std::nothrow) Job{};
     bool read = job != nullptr;
     try {
-        for (unsigned one = 0; read && one < 2; ++one)
+        for (unsigned one = 0; read && one < (shownCopied ? 3u : 2u); ++one)
             for (unsigned i = 0; read && i < 2; ++i)
                 read = jitter_proof::toLuma(kind,
                                             static_cast<const uint8_t*>(data) +
@@ -2163,6 +2174,8 @@ void collect() {
         return;
     }
     auto& r = job->reading;
+    r.shownRead = shownCopied;
+    r.historyRan = shownHistory;
     r.big = big.load();
     r.stepped = stepped[0] && stepped[1];
     const float scale = eyeWidth ? static_cast<float>(boxWidth) / static_cast<float>(eyeWidth) : 1.f;
@@ -2208,6 +2221,7 @@ void step(ID3D12GraphicsCommandList* list, uint64_t serial) {
             return;
         }
         copyBoxes(list, 0);
+        shownCopied = shownHistory = false;
         boxWidth = outWidth;
         serials[0] = serial;
         stepped[0] = jittered;
@@ -2240,6 +2254,15 @@ void step(ID3D12GraphicsCommandList* list, uint64_t serial) {
     boxHeight = outHeight;
     eyeWidth = width;
     recordedPair = 1; // stagePair's submitted() sets the fence
+}
+// 0.0.74 test 8 DISPLAY PROOF: in stagePair after the history (ran) or none, on the pair whose RAW boxes were just
+// copied second: the same boxes of stagedEyes (COPY_SOURCE again; the headset copy and CAS read it) into regions 4-5.
+void afterHistory(ID3D12GraphicsCommandList* list, bool ran) {
+    if (recordedPair != 1 || stage != Stage::first || !buffer || !sameEyes() || outWidth != boxWidth)
+        return;
+    copyBoxes(list, 2);
+    shownCopied = true;
+    shownHistory = ran;
 }
 // After stagePair's list went to the queue (ok) or failed to.
 void submitted(bool ok, uint64_t fenceValueNow) {
@@ -2404,6 +2427,11 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         if (blended) {
             ++c.blended;
             c.keepSum += std::isfinite(leastKeep) ? static_cast<double>(leastKeep) : 0.0;
+            if (std::isfinite(leastKeep)) { // 0.0.74 test 8: the effective blend
+                c.keepLeast = std::min(c.keepLeast, leastKeep);
+                c.keepMost = std::max(c.keepMost, leastKeep);
+            }
+            c.loosenSum += std::isfinite(frame[0][15]) ? static_cast<double>(frame[0][15]) : 0.0;
         } else
             ++c.restarted;
         c.cuts += cut ? 1 : 0;
@@ -2575,10 +2603,12 @@ void stagePair(EyePairState::Stamp stamp) {
     if (historyNow() && prepareHistory()) {
         historyRunning.store(true, std::memory_order_relaxed); // SHARPEN MATCH: CAS follows keptMilli
         drawHistory(slot->list.Get(), index, stamp.serial);
+        proof::afterHistory(slot->list.Get(), true); // 0.0.74 test 8 DISPLAY PROOF
     } else {
         historyRunning.store(false, std::memory_order_relaxed); // SHARPEN MATCH: CAS as set
         history.valid = false;
         keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
+        proof::afterHistory(slot->list.Get(), false);
     }
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
     const bool sent = submitCommands(*slot);
@@ -3719,7 +3749,10 @@ void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float px
 }
 CleanTaaStats cleanTaaStats() {
     std::lock_guard lock(cleanTaaLock);
-    return cleanTaaCounts;
+    const CleanTaaStats now = cleanTaaCounts;
+    cleanTaaCounts.keepLeast = 1; // 0.0.74 test 8: least and most since the last read
+    cleanTaaCounts.keepMost = 0;
+    return now;
 }
 void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views) {
     std::lock_guard lock(viewLock);

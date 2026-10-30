@@ -95,6 +95,30 @@ uint32_t monitorRateNow();
 // The views the eyes of the pair with this serial were rendered from (the
 // eyes command's serial), for the history pass to turn the old pair to the new.
 void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views);
+// 0.0.74 test 6 CLEAN JITTER, CLEAN's own temporal AA (no part of the game's TemporalAa): game_xr says each frame
+// whether AA MODE CLEAN and CLEAN JITTER are both on (setCleanJitter); cleanTaa() is that while the eye history
+// can run. Then stereo_probe gives each eye's lens a Halton sub-pixel step and notes it here by the eyes command's
+// serial (noteEyeJitter: uv, the lens's own arguments, and render pixels); the history pass reads the new pair
+// that step back and blends it, FXAA stays off, CAS follows. cleanTaaStats(): running counts for the 10 s line.
+void setCleanJitter(bool on);
+bool cleanTaa();
+void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float pxX, float pxY);
+struct CleanTaaStats {
+    uint64_t pairs{};        // staged pairs while wanted
+    uint64_t fxaa{};         // of those, FXAA ran (not the downsample filter)
+    uint64_t historyPairs{}; // history passes (any mode)
+    uint64_t jittered{};     // history passes that found this pair's step
+    uint64_t unmatched{};    // wanted, but no step noted for the pair
+    uint64_t blended{}, restarted{}, cuts{};
+    double keepSum{};        // eye 0's history share, summed over blended passes
+    uint64_t presented{};    // pairs sent to the headset
+    uint64_t sharpened{};    // of those, CAS ran (percent above 0)
+    uint64_t sharpenedAfterHistory{}; // and the eye history ran on that pair first
+    uint32_t casPercent{};   // the last pair's CAS percent (0: none)
+    float px[2][2]{};        // the last step found, render pixels, per eye (x right, y down)
+    bool on{};               // cleanTaa() on the last staged pair
+};
+CleanTaaStats cleanTaaStats();
 // SpidyEyeHistoryData, for the launcher's report.
 struct HistoryData {
     uint32_t magic = 0x53454844; // SEHD

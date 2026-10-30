@@ -103,7 +103,7 @@ class Record(unittest.TestCase):
 class Jitter(unittest.TestCase):
     def test_clean_zeroes(self):
         s = src('src/stereo_probe.cpp')
-        self.assertIn('const auto jitter = cleanSent(eyeJitter());', s)
+        self.assertIn('const auto jitter = cleanTaaStep ? cleanTaaJitter(index) : cleanSent(eyeJitter());', s)  # 0.0.74 test 6: OFF as test 5
         self.assertIn('cleanStored(descriptor);', s)
         self.assertIn('float& x = lens.values[0x428 / 4];', s)
         self.assertIn('return keep ? j : std::array<float, 2>{0, 0};', s)

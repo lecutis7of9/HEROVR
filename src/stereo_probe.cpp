@@ -2785,6 +2785,39 @@ std::array<float, 2> eyeJitter() {
     eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
     return j;
 }
+// 0.0.74 test 6 CLEAN JITTER: CLEAN's own temporal AA. While AA MODE CLEAN and CLEAN JITTER are on and the eye history
+// can run (native_gpu::cleanTaa), each headset eye's lens gets a Halton (2, 3) step of +-0.5 render pixel (the same
+// phases as eyeJitter), noted for the history pass by the eyes command's serial (native_gpu::noteEyeJitter), which
+// reads the new pair back by it and blends; FXAA is off, CAS follows. Units (CONFIRMED, docs/AA-0.0.73.md and
+// engine_taa.hpp): the lens stores 2x / -2y (+0x428 / +0x42c) and builds its projection with them, which moves the
+// scene x * W pixels right and y * H pixels down; so a pixel step p is the argument p / W, and the uv step is the
+// argument itself. eyeJitter's own 2 (h - .5) / W is a whole pixel each way. The stored step is left as the lens
+// wrote it (cleanStored would zero it under a projection that has it). Off: test 5 (cleanSent, cleanStored).
+std::atomic<uint64_t> cleanTaaLenses{};
+bool cleanWantsJitter() {
+    return cleanOn.load(std::memory_order_relaxed) && latchedSerial.load(std::memory_order_relaxed) != 0 &&
+           !milesSteps() && native_gpu::cleanTaa();
+}
+std::array<float, 2> cleanTaaJitter(unsigned index) {
+    const auto render = eyeRenderSize();
+    const float ratio = static_cast<float>(config.width) / render[0];
+    const uint32_t phases = std::clamp<uint32_t>(static_cast<uint32_t>(std::ceil(8 * ratio * ratio)), 8, 32);
+    const auto halton = [](uint32_t step, uint32_t radix) {
+        float value = 0, fraction = 1.f / radix;
+        for (; step; step /= radix, fraction /= radix)
+            value += fraction * (step % radix);
+        return value;
+    };
+    const uint32_t phase = static_cast<uint32_t>(frameIndex % phases) + 1;
+    const float px = halton(phase, 2) - .5f, py = halton(phase, 3) - .5f;
+    const std::array<float, 2> j{px / render[0], py / render[1]};
+    eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
+    eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
+    cleanTaaLenses.fetch_add(1, std::memory_order_relaxed);
+    if (index < 2)
+        native_gpu::noteEyeJitter(latchedSerial.load(std::memory_order_relaxed), index, j[0], j[1], px, py);
+    return j;
+}
 // While immersive the game renders three scene views: the eyes and its own,
 // which Spidy moved to the head (activeView) for the work the game does for
 // its active view alone. That work needs the view's camera, not its image:
@@ -3241,13 +3274,16 @@ void placeEyes() {
             // derived matrices through the verified native lens constructor.
             const float aspect = static_cast<float>(config.width) / config.height;
             const auto& fov = desired.eyes[index].fov;
-            const auto jitter = cleanSent(eyeJitter()); // 0.0.74 test 5: none while CLEAN is on
+            // 0.0.74 test 5: none while CLEAN is on. 0.0.74 test 6 CLEAN JITTER: CLEAN's own step (cleanTaaJitter).
+            const bool cleanTaaStep = controlled && desired.enabled == 1 && index < 2 && cleanWantsJitter();
+            const auto jitter = cleanTaaStep ? cleanTaaJitter(index) : cleanSent(eyeJitter());
             const float nearZ = controlled && desired.enabled == 1 ? near_clip::metres() : main.nearZ();
             reinterpret_cast<Lens>(base + 0x2c75560)(
                 &descriptor, nearZ, main.farZ(), controlled ? std::tan(fov[0]) : -aspect,
                 controlled ? std::tan(fov[1]) : aspect, controlled ? -std::tan(fov[3]) : -1,
                 controlled ? -std::tan(fov[2]) : 1, 0, 0, jitter[0], jitter[1], false, false);
-            cleanStored(descriptor);
+            if (!cleanTaaStep)
+                cleanStored(descriptor);
             if (controlled && desired.enabled == 1)
                 recordLens(index, descriptor,
                            {std::tan(fov[0]), std::tan(fov[1]), -std::tan(fov[3]), -std::tan(fov[2])});
@@ -4822,6 +4858,8 @@ extern "C" void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out) {
 }
 // 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN on or off (game_xr, each frame), and the 300-frame log.
 extern "C" void SpidyCleanSet(uint32_t on) { cleanOn.store(on != 0, std::memory_order_relaxed); }
+// 0.0.74 test 6 CLEAN JITTER: eye lenses given CLEAN's own step so far (cleanTaaJitter), for game_xr's CLEAN TAA line.
+extern "C" uint64_t SpidyCleanTaaLenses() { return cleanTaaLenses.load(std::memory_order_relaxed); }
 extern "C" void SpidyCleanJitter(spidy::view_gates::CleanJitter* out) {
     if (!out)
         return;

@@ -265,6 +265,8 @@ enum Option : uint32_t {
     aaMode,
     // 0.0.74 test 5 IMPOSTOR EYE (view_gates.hpp impostorAnswer, stereo_probe isActiveView)
     impostorEye,
+    // 0.0.74 test 6 CLEAN JITTER (stereo_probe cleanTaaJitter, native_eye_gpu cleanTaa): CLEAN's own temporal AA
+    cleanJitter,
     options
 };
 struct OptionInfo {
@@ -658,6 +660,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"main_view_small", "MAIN VIEW SMALL", "MVSM", "ON renders the flat-screen view at half size so eyes get more GPU; restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"aa_mode", "AA MODE", "AAMD", "CLEAN: full-size eyes, FXAA, per-eye history, light CAS; textures at restart.", 2, {"CLEAN", "OFF", nullptr, nullptr}},
     {"impostor_eye", "IMPOSTOR EYE", "IMPE", "ON lets the left eye pick far buildings' full models for both eyes; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"clean_jitter", "CLEAN JITTER", "CLJT", "ON jitters CLEAN's eyes so the history smooths edges, FXAA off; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

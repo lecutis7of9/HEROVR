@@ -672,6 +672,7 @@ const spidy::taa_gate::Data* SpidyTaaGateNow();
 void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out); // 0.0.74 test 5 IMPOSTORS (stereo_probe.cpp)
 void SpidyCleanSet(uint32_t on);                                // 0.0.74 test 5 CLEAN JITTER (stereo_probe.cpp)
 void SpidyCleanJitter(spidy::view_gates::CleanJitter* out);
+uint64_t SpidyCleanTaaLenses(); // 0.0.74 test 6 CLEAN JITTER (stereo_probe.cpp)
 DWORD WINAPI SpidyViewGate(void* argument); // Update 37 (stereo_probe.cpp): selector 3 is IMPOSTORS
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
@@ -11272,6 +11273,51 @@ DWORD WINAPI run(void*) {
                             // 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN to stereo_probe each frame; one line once 300
                             // eye frames are logged (the eyes' lens jitter, which CLEAN zeroes).
                             SpidyCleanSet(combat38::aaModeClean(c38(combat38::aaMode)) ? 1u : 0u);
+                            const bool cleanAa = combat38::aaModeClean(c38(combat38::aaMode));
+                            // 0.0.74 test 6 CLEAN JITTER (ON by default, live): CLEAN's own temporal AA, and every 10 s
+                            // while CLEAN is on one CLEAN TAA line: the pairs, how many found their lens step, the
+                            // history's blends and restarts, FXAA, whether CAS ran after the history, the last steps.
+                            native_gpu::setCleanJitter(cleanAa && c38(combat38::cleanJitter) == 0);
+                            {
+                                static ULONGLONG taaTick{};
+                                static native_gpu::CleanTaaStats taaLast{};
+                                static uint64_t lensesLast{};
+                                if (const ULONGLONG taaTickNow = GetTickCount64(); taaTickNow - taaTick >= 10000) {
+                                    taaTick = taaTickNow;
+                                    const auto taaNow = native_gpu::cleanTaaStats();
+                                    const uint64_t taaLenses = SpidyCleanTaaLenses();
+                                    if (cleanAa) {
+                                        auto taaDl = [](uint64_t now, uint64_t was) {
+                                            return static_cast<unsigned long long>(now - was);
+                                        };
+                                        const uint64_t taaBlends = taaNow.blended - taaLast.blended;
+                                        const double taaKeep = taaBlends ? (taaNow.keepSum - taaLast.keepSum) * 100.0 / static_cast<double>(taaBlends) : 0.0;
+                                        const char* taaState = c38(combat38::cleanJitter) != 0   ? "OFF (switch)"
+                                                               : !native_gpu::eyeHistory()       ? "OFF (no eye history)"
+                                                               : native_gpu::eyeHistoryFault()   ? "OFF (history fault)"
+                                                               : taaNow.on                       ? "ON"
+                                                                                                 : "OFF (waiting)";
+                                        char taaLine[384];
+                                        std::snprintf(
+                                            taaLine, sizeof taaLine,
+                                            "CLEAN TAA %s, 10 s: %llu pairs, %llu lenses stepped, jitter found %llu "
+                                            "missing %llu; history blended %llu (avg keep %.0f%%) restarted %llu cuts %llu; "
+                                            "FXAA %llu; CAS %u%% on %llu of %llu sent, after history %llu; last px L (%.2f, "
+                                            "%.2f) R (%.2f, %.2f)",
+                                            taaState, taaDl(taaNow.pairs, taaLast.pairs), taaDl(taaLenses, lensesLast),
+                                            taaDl(taaNow.jittered, taaLast.jittered), taaDl(taaNow.unmatched, taaLast.unmatched), taaDl(taaNow.blended, taaLast.blended),
+                                            taaKeep, taaDl(taaNow.restarted, taaLast.restarted), taaDl(taaNow.cuts, taaLast.cuts),
+                                            taaDl(taaNow.fxaa, taaLast.fxaa), taaNow.casPercent, taaDl(taaNow.sharpened, taaLast.sharpened),
+                                            taaDl(taaNow.presented, taaLast.presented),
+                                            taaDl(taaNow.sharpenedAfterHistory, taaLast.sharpenedAfterHistory),
+                                            static_cast<double>(taaNow.px[0][0]), static_cast<double>(taaNow.px[0][1]),
+                                            static_cast<double>(taaNow.px[1][0]), static_cast<double>(taaNow.px[1][1]));
+                                        consoleLine(taaLine);
+                                    }
+                                    taaLast = taaNow;
+                                    lensesLast = taaLenses;
+                                }
+                            }
                             static bool jitterNoted{};
                             vg::CleanJitter cj{};
                             SpidyCleanJitter(&cj);
@@ -14592,6 +14638,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyMainViewSmall(void* v) { retu
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyAaMode(void* v) { return setHero007(v, combat38::aaMode, 5517); }
 // 0.0.74 test 5 IMPOSTOR EYE: ON (0, the default) or OFF (1), live (stereo_probe SpidyViewGate selector 3).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyImpostorEye(void* v) { return setHero007(v, combat38::impostorEye, 5518); }
+// 0.0.74 test 6 CLEAN JITTER: ON (0, the default) or OFF (1), live (native_gpu::setCleanJitter each frame).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCleanJitterOn(void* v) { return setHero007(v, combat38::cleanJitter, 5519); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

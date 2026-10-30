@@ -1699,10 +1699,39 @@ std::atomic<bool> sharpHistory{true};
 // 0.0.73 AA SHARPEN MATCH (eye_sharpen.hpp matchedPercent): ON (the default) scales CAS by keptMilli;
 // historyRunning says whether the last pair ran the eye history at all (no history: CAS as set).
 std::atomic<bool> sharpenMatch{true}, historyRunning{false};
+// 0.0.74 test 6 CLEAN JITTER (native_eye_gpu.hpp setCleanJitter): game_xr's switch (AA MODE CLEAN and CLEAN JITTER
+// both on), each pair's lens step by the eyes command's serial (stereo_probe noteEyeJitter: uv units, the lens's own
+// arguments, and render pixels), and the counts for the 10 s console line (cleanTaaLock).
+std::atomic<bool> cleanJitterWanted{false};
+struct NotedJitter {
+    uint64_t serial{};
+    float uv[2][2]{}, px[2][2]{};
+    unsigned eyes{}; // bit per eye noted
+};
+std::mutex cleanTaaLock;
+std::array<NotedJitter, 32> notedJitter{}; // cleanTaaLock
+unsigned nextJitter{};                     // cleanTaaLock
+CleanTaaStats cleanTaaCounts{};            // cleanTaaLock
+float shownJitter[2][2]{};                 // the step of the pair the history was last drawn from (uv)
+bool findJitter(uint64_t serial, float uv[2][2], float px[2][2]) {
+    std::lock_guard lock(cleanTaaLock);
+    for (const auto& n : notedJitter)
+        if (serial && n.serial == serial && n.eyes == 3) {
+            std::memcpy(uv, n.uv, sizeof n.uv);
+            std::memcpy(px, n.px, sizeof n.px);
+            return true;
+        }
+    return false;
+}
 uint32_t historyNow() {
     if (cleanImage.load(std::memory_order_relaxed)) // IMAGE STYLE SPIDYVR: the game's TAA keeps the history
         return 0;
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
+}
+// 0.0.74 test 6 CLEAN JITTER: on while game_xr wants it and the eye history can run (its percent above 0, the pass
+// not failed). Off, stereo_probe sends no step and FXAA runs as in test 5.
+bool cleanTaaReady() {
+    return cleanJitterWanted.load(std::memory_order_relaxed) && historyNow() > 0 && historyFault.load() == 0;
 }
 std::mutex viewLock;
 struct NotedViews {
@@ -1730,7 +1759,7 @@ const char* historyShader = R"(
 Texture2D current : register(t0);
 Texture2D previous : register(t1);
 SamplerState bilinear : register(s0);
-cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; };
+cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; float4 jitter; };
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
@@ -1766,7 +1795,15 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     current.GetDimensions(w, h);
     const int2 p = int2(position.xy);
     const int2 last = int2(w, h) - 1;
-    const float4 here = current.Load(int3(p, 0));
+    // 0.0.74 test 6 CLEAN JITTER: jitter.xy is this pair's lens step in uv. The lens moved the scene by +xy
+    // (stereo_probe cleanTaaJitter: its arguments x, y move it x * W pixels right and y * H pixels down), so the
+    // new pair is read at uv + xy, where this pixel's unjittered scene landed. jitter.zw, the step of the pair
+    // the history was drawn from, is not added back: the history holds the blend, which is already unjittered.
+    // Zero (CLEAN JITTER off or no step noted) reads the pixel as before (test 5).
+    const float4 loaded = current.Load(int3(p, 0));
+    const float4 here = any(jitter.xy != 0)
+        ? float4(current.SampleLevel(bilinear, position.xy * extra.yz + jitter.xy, 0).rgb, loaded.a)
+        : loaded;
     float3 lo = here.rgb, hi = here.rgb;
     [unroll] for (int y = -1; y <= 1; ++y)
         [unroll] for (int x = -1; x <= 1; ++x) {
@@ -1810,6 +1847,8 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     return float4(lerp(plain, karis, bright), here.a);
 }
 )";
+// The history pass's root constants: row0-row2, extra and (0.0.74 test 6) jitter, 4 floats each.
+constexpr UINT historyConstants = 20;
 bool failHistory(uint32_t code) {
     historyFault = code;
     history.ready = false;
@@ -1828,7 +1867,7 @@ bool prepareHistory() {
     parameters[0].DescriptorTable = {1, &range};
     parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    parameters[1].Constants.Num32BitValues = 16;
+    parameters[1].Constants.Num32BitValues = historyConstants; // 0.0.74 test 6: + the jitter float4
     parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1975,7 +2014,11 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     std::array<eye_history::EyeView, 2> now{};
     const bool viewed = findViews(serial, now);
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
-    float frame[2][16]{};
+    // 0.0.74 test 6 CLEAN JITTER: this pair's lens step (stereo_probe noteEyeJitter), none when it was not jittered.
+    float stepUv[2][2]{}, stepPx[2][2]{};
+    const bool wantStep = cleanJitterWanted.load(std::memory_order_relaxed);
+    const bool stepped = wantStep && findJitter(serial, stepUv, stepPx);
+    float frame[2][historyConstants]{};
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
     for (unsigned i = 0; i < 2; ++i) {
@@ -2006,6 +2049,11 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             eye_history::turnedLoosen(
                 eye_taa::loosenInForce(eye_history::historyLoosen(loosenPercent), temporalOn.load()), turn),
             travelCut, turnCut);
+        // 0.0.74 test 6 CLEAN JITTER (the shader's jitter float4): xy this pair's step, zw the last drawn pair's.
+        frame[i][16] = stepped ? stepUv[i][0] : 0.f;
+        frame[i][17] = stepped ? stepUv[i][1] : 0.f;
+        frame[i][18] = shownJitter[i][0];
+        frame[i][19] = shownJitter[i][1];
         blended = blended || keep > 0;
         if (i == 0 && both) {
             maxTravel = travel;
@@ -2048,7 +2096,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         auto target = history.targets->GetCPUDescriptorHandleForHeapStart();
         target.ptr += static_cast<SIZE_T>(targetStep) * (2 * i + write);
         list->SetGraphicsRootDescriptorTable(0, view);
-        list->SetGraphicsRoot32BitConstants(1, 16, frame[i], 0);
+        list->SetGraphicsRoot32BitConstants(1, historyConstants, frame[i], 0);
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
@@ -2084,6 +2132,25 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     // the next pair's: that one starts again.
     history.valid = viewed;
     history.shown = now;
+    for (unsigned i = 0; i < 2; ++i)
+        for (unsigned a = 0; a < 2; ++a)
+            shownJitter[i][a] = frame[i][16 + a];
+    {
+        std::lock_guard taa(cleanTaaLock);
+        auto& c = cleanTaaCounts;
+        ++c.historyPairs;
+        if (stepped) {
+            ++c.jittered;
+            std::memcpy(c.px, stepPx, sizeof stepPx);
+        } else if (wantStep)
+            ++c.unmatched;
+        if (blended) {
+            ++c.blended;
+            c.keepSum += std::isfinite(leastKeep) ? static_cast<double>(leastKeep) : 0.0;
+        } else
+            ++c.restarted;
+        c.cuts += cut ? 1 : 0;
+    }
     std::lock_guard lock(copyTimingLock);
     if (blended)
         ++SpidyEyeHistoryData.blended;
@@ -2232,7 +2299,9 @@ void stagePair(EyePairState::Stamp stamp) {
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
     // 0.0.73 test 4 IMAGE STYLE SPIDYVR: no FXAA over the game's TAA (the downsample filter stays).
-    const bool smooth = (down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa();
+    // 0.0.74 test 6 CLEAN JITTER: no FXAA either while CLEAN's own temporal AA runs (the history, then CAS).
+    const bool taa = cleanTaaReady();
+    const bool smooth = (down || (aaMode.load() == 1 && !cleanImage.load() && !taa)) && prepareAa();
     if (down && !smooth) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
@@ -2258,6 +2327,12 @@ void stagePair(EyePairState::Stamp stamp) {
         return;
     }
     aaPairs += smooth;
+    if (cleanJitterWanted.load(std::memory_order_relaxed)) {
+        std::lock_guard lock(cleanTaaLock);
+        ++cleanTaaCounts.pairs;
+        cleanTaaCounts.fxaa += smooth && !down ? 1 : 0;
+        cleanTaaCounts.on = taa;
+    }
     capturedStamp = stamp;
     capturedMs = GetTickCount64();
     capturedQpc = qpcNow();
@@ -3349,6 +3424,33 @@ float eyeHistoryMs() { // Update 35: the median of the last 31 passes (was the n
     std::lock_guard lock(historyMedianLock);
     return historyMedian.median();
 }
+// 0.0.74 test 6 CLEAN JITTER (native_eye_gpu.hpp).
+void setCleanJitter(bool on) { cleanJitterWanted.store(on, std::memory_order_relaxed); }
+bool cleanTaa() { return cleanTaaReady(); }
+void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float pxX, float pxY) {
+    if (!serial || eye > 1)
+        return;
+    std::lock_guard lock(cleanTaaLock);
+    NotedJitter* n = nullptr;
+    for (auto& e : notedJitter)
+        if (e.serial == serial)
+            n = &e;
+    if (!n) {
+        n = &notedJitter[nextJitter];
+        nextJitter = (nextJitter + 1) % static_cast<unsigned>(notedJitter.size());
+        *n = NotedJitter{};
+        n->serial = serial;
+    }
+    n->uv[eye][0] = uvX;
+    n->uv[eye][1] = uvY;
+    n->px[eye][0] = pxX;
+    n->px[eye][1] = pxY;
+    n->eyes |= 1u << eye;
+}
+CleanTaaStats cleanTaaStats() {
+    std::lock_guard lock(cleanTaaLock);
+    return cleanTaaCounts;
+}
 void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views) {
     std::lock_guard lock(viewLock);
     notedViews[nextNoted] = {serial, views};
@@ -3549,6 +3651,13 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     }
     sharpening = sharpened;
     sharpenPairs += sharpened;
+    { // 0.0.74 test 6: whether CAS ran on this pair, and after the eye history (the 10 s CLEAN TAA line)
+        std::lock_guard lock(cleanTaaLock);
+        ++cleanTaaCounts.presented;
+        cleanTaaCounts.sharpened += sharpened && percent ? 1 : 0;
+        cleanTaaCounts.sharpenedAfterHistory += sharpened && percent && historyRunning.load() ? 1 : 0;
+        cleanTaaCounts.casPercent = sharpened ? percent : 0;
+    }
     colorPairs += sharpened && graded;
     if (pendingCount == pendingCopies.size()) { // not seen finishing: drop the oldest
         std::move(pendingCopies.begin() + 1, pendingCopies.end(), pendingCopies.begin());

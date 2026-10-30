@@ -16,7 +16,7 @@ class Build12(unittest.TestCase):
         i = s.index('native_eyes::Bounds viewLens(')
         self.assertRegex(s[i:i + 600], r'recording_fov::widened\(head[,)]')  # 0.0.73 test 2: + the CULL MARGIN
         self.assertIn('const auto lens = viewLens(head.lens);', s)
-        self.assertIn('auto viewed = onHead(viewLens(lens), gameNear);', s)
+        self.assertIn('auto viewed = onHead(viewLens(lens), gameNear, vj::gameHead);', s)  # 0.0.74 test 8: + the view
         self.assertIn('shadowLens = aligned;', s)  # the eyes' shadows keep the eyes' own lens
     def test_cape_found_on_the_suit(self):
         self.assertIn('findCape', src('src/suit_wear.cpp'))

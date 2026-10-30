@@ -73,5 +73,33 @@ class Telemetry(unittest.TestCase):
         self.assertIn("get('heap_rebuilds')", src('tools/run_game_vr.py'))
 
 
+
+class BlackHeadsetFix(unittest.TestCase):
+    """0.0.74 test 3 fa15f5f: the player's headset black (797 eye pairs rendered, 30 copied). Made by Agent Mulder."""
+    s = src('src/native_eye_gpu.cpp')
+    g = src('src/game_xr.cpp')
+    h = src('include/spidy/heap_guard.hpp')
+
+    def test_guard_falls_back_and_rate_limits(self):
+        self.assertIn('inline constexpr uint64_t minGapMs = 1000;', self.h)
+        self.assertIn('bool fellBack{};', self.h)
+        self.assertIn('return fellBack || generation > holdGeneration;', self.h)
+        body = self.s[self.s.index('void guardHeaps()'):]
+        body = body[:body.index('\n}\n')]
+        self.assertIn('newestGeneration.load(), copied,', body)
+        self.assertIn('GetTickCount64()', body)
+
+    def test_switches_reach_the_bridge_without_a_picture(self):
+        lam = self.g[self.g.index('[&](std::array<XrRuntime::EyeTarget, 2>& targets) {'):]
+        head = lam[:lam.index('if (showScreen && stereoScene')]
+        self.assertIn('SpidyEyeHeapGuard(', head)
+        self.assertIn('native_gpu::setStockImage(', head)
+        self.assertIn('native_gpu::heapGuardFellBack()', head)
+
+    def test_notice_says_test_3(self):
+        self.assertIn('set(HERO_TEST_NUMBER "3" CACHE', src('CMakeLists.txt'))
+        self.assertIn('" TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR"', self.g)
+
+
 if __name__ == '__main__':
     unittest.main()

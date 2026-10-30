@@ -42,17 +42,34 @@ constexpr bool renderHeap(uint32_t type, uint32_t flags, uint64_t bytes, uint64_
            bytes >= smallestRenderHeap;
 }
 
+// 0.0.74 test 3 fix (the player's black headset, test 3 fa15f5f: 797 eye pairs rendered, 30 copied,
+// "eye images paused" at 29.5 s): the game makes large render heaps all through play (texture
+// streaming), so every one let go of the eyes and pushed the hold past the pair in flight again;
+// no pair ever reached the headset. Now the guard
+//   - acts at most once per `minGapMs` (the heaps in between are only counted), and
+//   - FALLS BACK to test 2's path for the rest of the session (`fellBack`: never acts, never
+//     holds a pair) as soon as the eyes go on rendering `starvePairs` pairs past its hold
+//     without one copied to the headset. The headset never stays black because of it.
+inline constexpr uint64_t minGapMs = 1000;
+inline constexpr uint64_t starvePairs = 45; // half a second at 90 Hz
+
 // The eye bridge's view of the heap watch, under its recording lock.
 // `epoch` counts the render heaps the game made (the CreateHeap watch, any thread).
 struct Guard {
     uint64_t seenEpoch{};        // the last epoch acted on
     uint64_t holdGeneration{};   // pairs up to this generation are not copied
+    uint64_t actedMs{};          // when the eyes were last let go of (0: never)
     uint32_t rebuilds{};         // how many times the eyes were let go of
+    uint32_t skipped{};          // new render heaps only counted (too soon after the last)
     bool armed{};                // the first epoch seen only sets the start (the game's own load)
+    bool fellBack{};             // the eyes starved: test 2's path (only counts) for the session
 
     // Whether the eye images must be let go of now: a new render heap since the last check,
-    // the guard on and the bridge holding an eye image. `generation`: the newest pair begun.
-    bool check(uint64_t epoch, bool guardOn, bool holdingEyes, uint64_t generation) {
+    // the guard on and the bridge holding an eye image. `generation`: the newest pair begun;
+    // `copiedGeneration`: the newest pair the bridge copied for the headset; `nowMs`: a clock.
+    bool check(uint64_t epoch, bool guardOn, bool holdingEyes, uint64_t generation,
+               uint64_t copiedGeneration = ~0ull, uint64_t nowMs = 0) {
+        starved(generation, copiedGeneration);
         if (!armed) {
             armed = true;
             seenEpoch = epoch;
@@ -61,15 +78,29 @@ struct Guard {
         if (epoch == seenEpoch)
             return false;
         seenEpoch = epoch;
-        if (!guardOn || !holdingEyes)
+        if (!guardOn || !holdingEyes || fellBack)
             return false;
+        if (actedMs && nowMs - actedMs < minGapMs) {
+            ++skipped;
+            return false;
+        }
         ++rebuilds;
+        actedMs = nowMs ? nowMs : 1;
         // The pair in flight may have begun in the old heap: skip it and the next one.
         holdGeneration = generation + 1;
         return true;
     }
+    // The last working path: the guard let go of the eyes, the game rendered `starvePairs` more
+    // pairs and none was copied since. Back to test 2's (no hold, no letting go) for good.
+    bool starved(uint64_t generation, uint64_t copiedGeneration) {
+        if (!fellBack && rebuilds && copiedGeneration <= holdGeneration && generation > holdGeneration + starvePairs) {
+            fellBack = true;
+            holdGeneration = 0;
+        }
+        return fellBack;
+    }
     // Whether a pair (by its generation) may be copied to the headset.
-    bool mayCopy(uint64_t generation) const { return generation > holdGeneration; }
+    bool mayCopy(uint64_t generation) const { return fellBack || generation > holdGeneration; }
 };
 
 } // namespace spidy::heap_guard

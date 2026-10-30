@@ -2554,7 +2554,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, heapGuardApplied{~0u}, windowPopApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, heapGuardApplied{~0u}, heapFallbackShown{}, windowPopApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -10956,6 +10956,19 @@ DWORD WINAPI run(void*) {
                 },
                 [&](std::array<XrRuntime::EyeTarget, 2>& targets) {
                     const auto copyStart = std::chrono::steady_clock::now();
+                    // 0.0.74 test 3 fix (the black headset): the eye bridge's own switches every frame, not only
+                    // after a pair reached the headset, so live.txt heap_guard / spidyvr_stock reach the bridge
+                    // even while no picture does; and the one line when HEAP GUARD fell back to test 2's path.
+                    if (const uint32_t guardWant = heap_guard::on(c38(combat38::heapGuard)) ? 1u : 0u;
+                        guardWant != heapGuardApplied) {
+                        heapGuardApplied = guardWant;
+                        SpidyEyeHeapGuard(reinterpret_cast<void*>(static_cast<uintptr_t>(guardWant)));
+                    }
+                    native_gpu::setStockImage(combat38::spidyvrStockOn(c38(combat38::spidyvrStock)));
+                    if (!heapFallbackShown && native_gpu::heapGuardFellBack()) {
+                        heapFallbackShown = 1;
+                        consoleLine("HEAP GUARD: the eye images starved, back to test 2's path for this session (heap_guard = off keeps it so)");
+                    }
                     if (showScreen && stereoScene && !native_gpu::eyesLost() && native_hud::onScreen(sceneHoldMs)) {
                         // The scene's newest pair, once the game has rendered
                         // one with the HUD's panel on its screen; until then

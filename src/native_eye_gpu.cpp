@@ -113,6 +113,7 @@ void* heapHook{};
 std::atomic<bool> heapGuardWanted{true};
 std::atomic<uint64_t> heapEpoch{}, newestGeneration{}, heapSmallest{heap_guard::smallestRenderHeap};
 heap_guard::Guard heapGuard;
+std::atomic<bool> heapFellBack{}; // 0.0.74 test 3 fix: heapGuard.fellBack, read without the lock
 std::array<bool, 2> heapRetake{};
 std::array<eye_swap::Desc, 2> heapRetakeDesc{};
 HRESULT STDMETHODCALLTYPE createHeap(ID3D12Device* d, const D3D12_HEAP_DESC* desc, REFIID riid, void** heap) {
@@ -2360,8 +2361,14 @@ eye_swap::Desc swapDesc(const D3D12_RESOURCE_DESC& d) {
 // next frame. Submission and recording held. Never submits anything.
 void guardHeaps() {
     const bool holding = resources[0] || resources[1] || mvResource;
-    if (!heapGuard.check(heapEpoch.load(), heapGuardWanted.load(), holding, newestGeneration.load()))
+    // 0.0.74 test 3 fix: the newest pair copied for the headset and a clock, so the guard acts at most
+    // once a second and falls back to test 2's path when the eyes starve (heap_guard.hpp).
+    const uint64_t copied = capturedStamp.generation > lastGeneration ? capturedStamp.generation : lastGeneration;
+    if (!heapGuard.check(heapEpoch.load(), heapGuardWanted.load(), holding, newestGeneration.load(), copied,
+                         GetTickCount64())) {
+        heapFellBack = heapGuard.fellBack;
         return;
+    }
     for (unsigned i = 0; i < 2; ++i) {
         if (!resources[i])
             continue;
@@ -3291,6 +3298,10 @@ void setSharpenMatch(bool on) {
 // 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (the heap watch only counts).
 void setHeapGuard(bool on) {
     heapGuardWanted = on;
+}
+// 0.0.74 test 3 fix: true once HEAP GUARD starved the eyes and fell back to test 2's path (session).
+bool heapGuardFellBack() {
+    return heapFellBack.load();
 }
 // 0.0.73 test 3 LIGHT HOLD: 0 off (test 2), 50 ON, 100 STRONG.
 bool setEyeLightHold(uint32_t percent) {

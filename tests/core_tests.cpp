@@ -1338,6 +1338,47 @@ int main() {
         check(!g.check(5, false, true, 15) && g.rebuilds == 1 && g.mayCopy(16), "OFF only counts");
         check(!g.check(6, true, false, 16) && g.rebuilds == 1, "no eye image held: nothing to let go of");
     });
+    test("0.0.74 test 3 fix: HEAP GUARD never keeps the headset black (rate limit, starve fallback)", [] {
+        namespace hg = heap_guard;
+        // The player's test 3 (fa15f5f): streaming heaps every few frames, 797 pairs rendered, 30 copied.
+        hg::Guard g;
+        check(!g.check(1, true, true, 100, 100, 10000), "the start");
+        check(g.check(2, true, true, 101, 100, 10010) && g.rebuilds == 1 && !g.mayCopy(102), "a new heap acts once");
+        check(!g.check(3, true, true, 102, 100, 10020) && g.skipped == 1 && g.rebuilds == 1,
+              "another heap within a second is only counted");
+        check(!g.check(4, true, true, 103, 100, 10500) && g.skipped == 2 && g.holdGeneration == 102,
+              "the hold is not pushed again within a second");
+        check(g.mayCopy(103), "the pair after the hold is copied");
+        // A pair reached the headset: a heap a second later acts again, normally.
+        check(g.check(5, true, true, 110, 103, 11100) && g.rebuilds == 2 && !g.fellBack, "a later rebuild acts");
+        // Now nothing reaches the headset while the game renders on: the last working path.
+        check(!g.check(5, true, true, 110 + hg::starvePairs, 103, 11200) && !g.fellBack, "not yet starved");
+        check(!g.check(5, true, true, 112 + hg::starvePairs, 103, 11300) && g.fellBack, "starved: falls back");
+        check(g.mayCopy(1) && g.mayCopy(112) && g.holdGeneration == 0, "fallen back: every pair may be copied");
+        check(!g.check(6, true, true, 200, 103, 20000) && !g.check(7, true, true, 201, 103, 40000) && g.rebuilds == 2,
+              "fallen back: never lets go of the eyes again (the session)");
+        // Loading (no eye pairs rendered): no fallback however long.
+        hg::Guard l;
+        check(!l.check(1, true, true, 5, 5, 1000) && l.check(2, true, true, 5, 5, 3000), "a load's rebuild acts");
+        check(!l.check(2, true, true, 5, 5, 60000) && !l.fellBack && !l.mayCopy(6) && l.mayCopy(7),
+              "no pairs rendered: holds, no fallback");
+        // OFF: never holds a pair whatever the heaps.
+        hg::Guard o;
+        for (uint64_t e = 1; e < 50; ++e)
+            check(!o.check(e, false, true, e * 2, e * 2, e * 100) && o.mayCopy(e * 2 + 1), "OFF never holds");
+        // The worst stream: a heap every frame with ON. Pairs reach the headset within starvePairs + 2.
+        hg::Guard w;
+        uint64_t copied = 0, firstCopyAfter = 0;
+        for (uint64_t gen = 1; gen < 400; ++gen) {
+            w.check(gen, true, true, gen, copied, 1000 + gen * 11);
+            if (w.mayCopy(gen) && gen > 3) {
+                copied = gen;
+                if (!firstCopyAfter)
+                    firstCopyAfter = gen;
+            }
+        }
+        check(copied == 399, "a heap every frame: pairs still reach the headset");
+    });
     test("Update 32.1: a graphics setting's new eye images are taken over or pause the eyes", [] {
         namespace es = eye_swap;
         const es::Desc eye{3, 1440, 1620, 1, 1, 28, 1, 0x1};

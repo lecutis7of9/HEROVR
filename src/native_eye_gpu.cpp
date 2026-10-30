@@ -342,6 +342,7 @@ OmSetTargets originalOmSetTargets{};
 SetViewports originalSetViewports{};
 std::array<void*, 2> foveaHooks{};
 std::atomic<bool> foveaHooked{}, foveaOn{}, foveaDebug{};
+std::atomic<bool> stockImage{}; // 0.0.74 test 3 SPIDYVR STOCK: no COLOR grade, no foveation
 std::atomic<uint32_t> foveaLevel{}, foveaInner{foveation::defaultInner}, foveaFault{};
 std::atomic<uint32_t> foveaTier{}, foveaTile{}, foveaHas4x4{};
 std::array<std::atomic<float>, 4> foveaCentres{}; // left u, v, right u, v (0: not known yet)
@@ -739,7 +740,6 @@ std::atomic<uint32_t> aaMode{}, aaFault{};
 // (ENGINE TAA on), the picture goes to the headset as SpidyVR sends it: no FXAA, no history blend, no
 // CAS. The sliders keep their values (GAME TAA OFF and the fallback get them back). game_xr sets it.
 std::atomic<bool> cleanImage{};
-std::atomic<bool> stockImage{}; // 0.0.74 test 3 SPIDYVR STOCK: no COLOR grade, no foveation
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, down; // FXAA; the downsample filter

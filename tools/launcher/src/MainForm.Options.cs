@@ -76,6 +76,12 @@ namespace Sm2VrLauncher
                     t.Changed += (a, e) =>
                     {
                         SetOpt(opt, t.Checked ? "1" : "0");
+                        // 0.0.74 test 3: TWO-GPU CHECK off puts Windows' old graphics preferences back at once.
+                        if (opt.Param == "NoGpuCheck" && !t.Checked && !loadingOptions)
+                        {
+                            int back = SafetyChecks.RestoreGpuPreferences(root);
+                            if (back > 0) sessionLog.Line("TWO-GPU CHECK off: Windows' graphics preference put back for " + back + " program(s).", Theme.Info);
+                        }
                         if (t.Checked && opt.Exclusive != null)
                         {
                             Control other;
@@ -106,6 +112,13 @@ namespace Sm2VrLauncher
             tip.SetToolTip(privacyStats, "Frame rate, stutters, heroes and features used, versions, GPU and headset. Never names, folders or IP. Takes effect at once.");
             tip.SetToolTip(privacyCrash, "Nothing is sent without your click: it opens a filled-in GitHub issue you submit. Takes effect at once.");
             y += 76; col = 0;
+            // 0.0.74 test 3: the game's newest crash dump in Reports' send-me.zip.
+            privacyDump = new ToggleRow("Crash dump in reports", "Reports adds the game's newest crash dump (.mdmp); takes effect at once.", settings.GetBool(KeyCrashDump, true));
+            privacyDump.Bounds = Theme.R(0, y, colW, 70);
+            privacyDump.Changed += (a, e) => { settings.SetBool(KeyCrashDump, privacyDump.Checked); settings.Save(); };
+            area.Controls.Add(privacyDump);
+            tip.SetToolTip(privacyDump, "From Documents\\Marvel's Spider-Man 2 (the game writes one when it crashes); only into send-me.zip, sent only by you. Takes effect at once.");
+            y += 76;
             // Build 10: LAUNCHER - the new design or the classic one (both designs), and the new design's sound.
             BuildLauncherSection(area, ref y, colW, gap);
             // Room at the end so the last row clears the edge.

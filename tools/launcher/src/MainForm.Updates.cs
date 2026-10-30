@@ -436,6 +436,9 @@ namespace Sm2VrLauncher
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
                 bool rs = d.RestoreSettings;
+                // 0.0.74 test 3 TWO-GPU CHECK: an older version knows nothing of it, so Windows' own graphics preferences go back first.
+                int gpuBack = SafetyChecks.RestoreGpuPreferences(root);
+                if (gpuBack > 0) sessionLog.Line("TWO-GPU CHECK: Windows' graphics preference put back for " + gpuBack + " program(s) before reverting.", Theme.Info);
                 if (d.UsePrevious) { UsePreviousVersion(rs, d.PreviousTag); return; }
                 if (d.Backup != null)
                 {

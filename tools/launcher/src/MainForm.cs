@@ -53,7 +53,9 @@ namespace Sm2VrLauncher
         StatusRow rowGame, rowGameVer, rowVr, rowBuild;
         LogBox sessionLog;
         AccentButton btnSendStats;
-        ToggleRow privacyStats, privacyCrash;
+        ToggleRow privacyStats, privacyCrash, privacyDump;
+        /// <summary>0.0.74 test 3: Reports adds the game's newest crash dump (.mdmp) unless this is off.</summary>
+        const string KeyCrashDump = "Reports.CrashDump";
 
         public MainForm() : this(Settings.Load(), Design.Classic) { }
 
@@ -652,6 +654,25 @@ namespace Sm2VrLauncher
                 if (gv != null && gv != SystemInfo.SupportedVersion &&
                     MessageBox.Show(this, "The game is v" + gv + "; the mod is made for v" + SystemInfo.SupportedVersion + " and will most likely refuse to start VR.\n\nTry anyway?", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
             }
+            // 0.0.74 test 3 MOD CHECK: another mod's loader beside the game (winmm.dll, dinput8.dll...) is offered to be
+            // moved aside for the session; the session puts it back when the game closes. Not for -AttachOnly: it is loaded.
+            if (gamePath != null && !extra.Contains("-AttachOnly") && OptValue(LaunchOptions.Find("NoModCheck")) == "1" &&
+                scriptParams.ContainsKey("MoveModLoaders"))
+            {
+                var loaders = SafetyChecks.ModLoaders(gamePath);
+                if (loaders.Count > 0)
+                {
+                    var answer = MessageBox.Show(this, "MOD CHECK: another mod's loader is in the game's folder:\n\n    " + string.Join(", ", loaders) +
+                        "\n\nLoaders like this can crash the game while it loads with VR. Move " + (loaders.Count == 1 ? "it" : "them") +
+                        " aside (into _hero-vr-moved in the game's folder) for this VR session? " + (loaders.Count == 1 ? "It goes" : "They go") +
+                        " back when the game closes.\n\nYes: move aside and start VR.   No: start VR with " + (loaders.Count == 1 ? "it" : "them") +
+                        ".   Cancel: do not start.\n\n(A mod manager such as Overstrike may put " + (loaders.Count == 1 ? "it" : "them") +
+                        " back at every launch; the log says so if it does. OPTIONS > SAFETY CHECKS > MOD CHECK turns this question off.)",
+                        LauncherInfo.Title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+                    if (answer == DialogResult.Cancel) return;
+                    if (answer == DialogResult.Yes) extra.Add("-MoveModLoaders");
+                }
+            }
             string vrText;
             if (SystemInfo.VrStatus(out vrText) != CheckState.Ok &&
                 MessageBox.Show(this, "Headset not connected: open Virtual Desktop in your headset first (or start SteamVR / Quest Link).\n\n" +
@@ -853,7 +874,10 @@ namespace Sm2VrLauncher
                 else sessionLog.Line("Collecting reports failed (exit code " + code + ").", Theme.Bad);
                 UpdatePlayState();
             });
-            r.Start(root, script, null);
+            // 0.0.74 test 3: OPTIONS > Privacy > Crash dump in reports (on by default) adds the game's newest .mdmp.
+            bool dumpParam = false;
+            try { dumpParam = File.ReadAllText(script).Contains("NoCrashDump"); } catch (Exception) { }
+            r.Start(root, script, settings.GetBool(KeyCrashDump, true) || !dumpParam ? null : new[] { "-NoCrashDump" });
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

@@ -89,6 +89,10 @@ namespace Sm2VrLauncher
             Opt.Sw("ADVANCED", "OwnShadows", "PER-EYE SHADOWS", "Each eye makes its own sun shadow maps (more processor work).", false),
             Opt.Sw("ADVANCED", "EyeLensDistances", "EYE LENS DISTANCES", "The eyes' own wide lenses for detail distances (detail loads nearer).", false),
             Opt.Sw("ADVANCED", "CaptureImages", "CAPTURE EYE IMAGES", "Save eye pictures into the report (for bug reports; slower).", false),
+            // 0.0.74 test 3: the start's safety checks, each on by default (tools\mod_check.py, gpu_check.py, start_errors.py).
+            Opt.Inv("SAFETY CHECKS", "NoModCheck", "MOD CHECK", "Offers to move other mods' loaders (winmm.dll...) aside for VR; no restart needed."),
+            Opt.Inv("SAFETY CHECKS", "NoGpuCheck", "TWO-GPU CHECK", "Runs the game and SteamVR on the graphics card; no restart, SteamVR at its next start."),
+            Opt.Inv("SAFETY CHECKS", "NoClearErrors", "CLEARER ERRORS", "Says why the game crashed or lost its graphics, with the fix; no restart needed."),
         };
 
         public static Opt Find(string p) { return All.FirstOrDefault(o => o.Param.Equals(p, StringComparison.OrdinalIgnoreCase)); }

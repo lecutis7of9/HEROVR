@@ -717,6 +717,9 @@ namespace Sm2VrLauncher
             vr.Output += (line, err) => sessionLog.Line(line, err && !line.StartsWith("WARNING") ? Theme.Bad : LogBox.ColorFor(line));
             var lines = new List<string>();
             vr.Output += (line, err) => { lock (lines) { lines.Add(line); if (lines.Count > 60) lines.RemoveAt(0); } };
+            // 0.0.74 test 3: the two-GPU device-lost signature (0x887A002B / bridge 3301) seen in this session.
+            bool twoGpuLost = false;
+            vr.Output += (line, err) => { if (LiveFile.TwoGpuLostLine(line)) twoGpuLost = true; };
             vr.Exited += code =>
             {
                 // Version 0.0.6: crash check and (opt-in) play stats, off the UI thread (it reads the session report).
@@ -729,6 +732,15 @@ namespace Sm2VrLauncher
                 job = Job.None;
                 bool userStopped = stopAsked != DateTime.MinValue;
                 stopAsked = DateTime.MinValue;
+                // 0.0.74 test 3: the two-GPU device loss gets its own window with a one-click fix (CLEARER ERRORS on).
+                if (twoGpuLost && !userStopped && OptValue(LaunchOptions.Find("NoClearErrors")) == "1")
+                {
+                    lastError = "The game lost its graphics device (0x887A002B). Collect reports to send it.";
+                    sessionLog.Line("VR stopped: the game lost its graphics device (0x887A002B, GPU eye bridge 3301).", Theme.Bad);
+                    RefreshLive();
+                    OfferTwoGpuFix();
+                    return;
+                }
                 if (code == 0) { sessionLog.Line("VR session ended.", Theme.Good); lastError = null; }
                 else
                 {
@@ -764,6 +776,39 @@ namespace Sm2VrLauncher
             Telemetry.SessionStarted();
             if (!vr.Start(root, Path.Combine(root, "tools", "launch-game-vr.ps1"), args)) { Telemetry.SessionAborted(); job = Job.None; UpdatePlayState(); }
         }
+
+        /// <summary>0.0.74 test 3: after the two-GPU device loss (0x887A002B, bridge 3301), one click turns STREAMER
+        /// MODE, SL WATCH and LIGHT CHECKS off in live.txt; then the player presses START VR (PLAY VR).</summary>
+        void OfferTwoGpuFix()
+        {
+            var answer = MessageBox.Show(this, TwoGpuFixQuestion, LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (answer != DialogResult.Yes) return;
+            var failed = new List<string>();
+            foreach (var key in LiveFile.TwoGpuKeys)
+                if (!LiveFile.Set(root, key, "off")) failed.Add(key);
+            if (failed.Count > 0)
+            {
+                MessageBox.Show(this, "Could not write " + string.Join(", ", failed.ToArray()) + " to " + LiveFile.PathIn(root) +
+                    ". Turn them off in OPTIONS > SAFETY CHECKS, then press START VR (PLAY VR).", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            sessionLog.Line("live.txt: streamer_mode = off, sl_watch = off, light_checks = off. Press START VR (PLAY VR).", Theme.Good);
+            foreach (var key in LiveFile.TwoGpuKeys)
+            {
+                Control row;
+                if (optRows.TryGetValue(key, out row) && row is ToggleRow) { loadingOptions = true; ((ToggleRow)row).Checked = false; loadingOptions = false; }
+            }
+            MessageBox.Show(this, TwoGpuFixDone, LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        internal const string TwoGpuFixQuestion =
+            "VR stopped: the game lost its graphics device (0x887A002B, the eye bridge's 3301). This has happened on PCs " +
+            "with two graphics chips (a graphics card beside the processor's or a laptop's own graphics).\n\n" +
+            "Turn STREAMER MODE, SL WATCH and LIGHT CHECKS off now (in live.txt)? They can be turned back on in " +
+            "OPTIONS > SAFETY CHECKS.\n\nYes: turn the three off.   No: leave them as they are.";
+        internal const string TwoGpuFixDone =
+            "Done: STREAMER MODE, SL WATCH and LIGHT CHECKS are off in live.txt.\n\nNow press START VR (PLAY VR). " +
+            "If the game is still open, the launcher offers to close it first.";
 
         // run_game_vr.py CLOSE_GAME_EXIT (tools/vr_launcher.py): the running game has to close before VR can start.
         const int CloseGameExit = 6;

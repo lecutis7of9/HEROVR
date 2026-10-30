@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Sm2VrLauncher
 {
-    enum OptKind { Switch, Invert, Int, Choice, Webs }
+    enum OptKind { Switch, Invert, Int, Choice, Webs, Live }  // Live: a live.txt on/off, never a launch argument
 
     class Opt
     {
@@ -26,6 +26,9 @@ namespace Sm2VrLauncher
         { return new Opt { Section = section, Param = p, Kind = OptKind.Invert, Title = title, Sub = sub, Default = "1" }; }
         public static Opt Num(string section, string p, string title, string sub, int min, int max, int step, int def, string suffix)
         { return new Opt { Section = section, Param = p, Kind = OptKind.Int, Title = title, Sub = sub, Min = min, Max = max, Step = step, Default = def.ToString(CultureInfo.InvariantCulture), Suffix = suffix }; }
+        // 0.0.74 test 3: a switch kept in the mod folder's live.txt (`p` is its name there), not passed to the script.
+        public static Opt Live(string section, string p, string title, string sub)
+        { return new Opt { Section = section, Param = p, Kind = OptKind.Live, Title = title, Sub = sub, Default = "1" }; }
         public static Opt Pick(string section, string p, string title, string sub, string[] choices, string def)
         { return new Opt { Section = section, Param = p, Kind = OptKind.Choice, Title = title, Sub = sub, Choices = choices, Default = def }; }
     }
@@ -93,6 +96,10 @@ namespace Sm2VrLauncher
             Opt.Inv("SAFETY CHECKS", "NoModCheck", "MOD CHECK", "Offers to move other mods' loaders (winmm.dll...) aside for VR; no restart needed."),
             Opt.Inv("SAFETY CHECKS", "NoGpuCheck", "TWO-GPU CHECK", "Runs the game and SteamVR on the graphics card; no restart, SteamVR at its next start."),
             Opt.Inv("SAFETY CHECKS", "NoClearErrors", "CLEARER ERRORS", "Says why the game crashed or lost its graphics, with the fix; no restart needed."),
+            // 0.0.74 test 3: the three live.txt settings the two-GPU device-lost pop-up turns off (LiveFile.TwoGpuKeys).
+            Opt.Live("SAFETY CHECKS", "streamer_mode", "STREAMER MODE", "The monitor shows the headset's eye with the mod's drawings; changes live, no restart."),
+            Opt.Live("SAFETY CHECKS", "sl_watch", "SL WATCH", "Logs the game's DLSS (Streamline) calls for bug reports; changes live, no restart."),
+            Opt.Live("SAFETY CHECKS", "light_checks", "LIGHT CHECKS", "Gives each eye the game view's street-light glow checks; needs a restart of VR (next START VR)."),
         };
 
         public static Opt Find(string p) { return All.FirstOrDefault(o => o.Param.Equals(p, StringComparison.OrdinalIgnoreCase)); }
@@ -100,6 +107,7 @@ namespace Sm2VrLauncher
         /// <summary>Which ps1 parameter(s) an option needs to work.</summary>
         public static bool Supported(Opt o, Dictionary<string, string> scriptParams)
         {
+            if (o.Kind == OptKind.Live) return true;                              // live.txt, not the script
             if (scriptParams == null || scriptParams.Count == 0) return true;   // unknown script: trust it
             if (o.Kind == OptKind.Webs) return scriptParams.ContainsKey("GameWebs") || scriptParams.ContainsKey("OverlayWebs");
             return scriptParams.ContainsKey(o.Param);
@@ -133,6 +141,8 @@ namespace Sm2VrLauncher
                     case OptKind.Invert:
                         if (v == "0") args.Add("-" + o.Param);
                         break;
+                    case OptKind.Live:
+                        break;  // live.txt (LiveFile), never an argument
                     case OptKind.Webs:
                         if (v == "1") { if (scriptParams == null || scriptParams.ContainsKey("OverlayWebs")) args.Add("-OverlayWebs"); }
                         else args.Add("-GameWebs");

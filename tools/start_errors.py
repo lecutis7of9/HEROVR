@@ -75,6 +75,12 @@ def crash_message(found, modules=None, loaders=(), game_name='Spider-Man2.exe', 
     return text
 
 
+# 0.0.74 test 3: the two-GPU sessions (RTX 5090 + AMD Radeon graphics, 204133 and 225454) lost the device with
+# DXGI_ERROR_ACCESS_DENIED; the launcher's pop-up turns these three live.txt settings off in one click.
+TWO_GPU_STEP = {'0x887A002B': ' 5) OPTIONS > SAFETY CHECKS: STREAMER MODE, SL WATCH and LIGHT CHECKS off (the launcher '
+                              'offers to do it).'}
+
+
 def device_lost_steps(reason, name, when):
     """The console's words for a lost graphics device (DXGI_ERROR_ACCESS_DENIED and the rest of its family)."""
     return (f'The game lost its graphics device {when} ({reason}, {name}): its "problem has occurred with your '
@@ -82,5 +88,5 @@ def device_lost_steps(reason, name, when):
             "the graphics card, not the motherboard (the processor's graphics); 2) Windows Settings > System > "
             'Display > Graphics: set Spider-Man2.exe, vrserver.exe and vrcompositor.exe to High performance (the '
             'TWO-GPU CHECK does this for you); 3) install the newest driver for your graphics card; 4) OPTIONS > '
-            'Normal camera on the monitor: On. If it happens '
+            'Normal camera on the monitor: On.' + TWO_GPU_STEP.get(reason, '') + ' If it happens '
             'again, press Reports and send the zip in #spidy-bugs on Discord.')

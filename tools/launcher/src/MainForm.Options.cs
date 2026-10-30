@@ -17,11 +17,19 @@ namespace Sm2VrLauncher
         string OptValue(Opt o)
         {
             if (o == null) return "0";
+            if (o.Kind == OptKind.Live) return LiveFile.On(root, o.Param, o.Default == "1") ? "1" : "0"; // 0.0.74 test 3
             return settings.Get("opt." + o.Param, o.Default);
         }
 
         void SetOpt(Opt o, string v)
         {
+            if (o.Kind == OptKind.Live)
+            {
+                // 0.0.74 test 3: live.txt itself (VR reads it while it runs); never the launcher's settings.
+                if (LiveFile.On(root, o.Param, o.Default == "1") != (v == "1") && !LiveFile.Set(root, o.Param, v == "1" ? "on" : "off"))
+                    sessionLog.Line("Could not write " + o.Param + " to " + LiveFile.PathIn(root) + ".", Theme.Bad);
+                return;
+            }
             settings.Set("opt." + o.Param, v);
             if (!loadingOptions)
             {

@@ -32864,7 +32864,13 @@ int main() {
         const Vec3 off = car_paint::shade(base, Vec3{1, 0, 0}, l, Vec3{1, 0, 0}, up, .4f, .42f);
         check(off.x < .1f && off.x > 0, "face on, away from the light: still dark (satin black)");
         const Vec3 graze = car_paint::shade(base, n, l, normalized(Vec3{0, .05f, 1}), up, .4f, .42f);
-        check(graze.y > diffuse.y, "a grazing view picks up the sky");
+        check(graze.y > diffuse.y * (1 - .6f * .4f) + .002f, "a grazing view picks up the sky (over the satin diffuse)");
+        // 0.0.74 test 2b: satin BLACK - a door panel and the bonnet seen from a standing eye stay near black
+        const Vec3 door = car_paint::shade(base, Vec3{1, 0, 0}, l, normalized(Vec3{.35f, .25f, 1}), up, .4f, .42f);
+        const Vec3 bonnet = car_paint::shade(base, n, normalized(Vec3{-.3f, .6f, -1.f}), normalized(Vec3{0, .45f, 1}), up, .4f, .42f);
+        check(door.x < .06f && bonnet.x < .06f, "test 2b: no grey sheen over the panels (under .06 linear)");
+        check(combat38::carLookTest1(2) && !combat38::satinPaintOn(2) && combat38::satinPaintOn(0) && !combat38::carLookTest1(0),
+              "CAR PAINT TEST 1: the quick revert (flat, the whole car always drawn)");
         const Vec3 bad = car_paint::shade(base, n, l, Vec3{NAN, 0, 0}, up, .4f, .42f);
         check(bad.x == diffuse.x && bad.y == diffuse.y, "NaN: the diffuse colour");
         // A smooth untextured 5000-triangle car shell, every triangle painted satin.

@@ -10335,7 +10335,8 @@ DWORD WINAPI run(void*) {
                                     L.vanRoof = batDraw ? slotModel(mesh_model::slotBatmobileRoofFirst + carNow, "BATMOBILE") : nullptr;
                                     if (batDraw) {
                                         const auto& box = batmobile074::layout(carNow);
-                                        if (combat38::cabinClearOn(c38(combat38::cabinClear))) {
+                                        // 0.0.74 test 2b CAR PAINT TEST 1: the quick revert - the roof piece always drawn too
+                                        if (combat38::cabinClearOn(c38(combat38::cabinClear)) && !combat38::carLookTest1(c38(combat38::carPaint))) {
                                             L.roofLow = {-box.width / 2, 0, -box.length / 2};
                                             L.roofHigh = {box.width / 2, box.height, box.length / 2};
                                         } else {

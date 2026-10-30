@@ -606,7 +606,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"spidyvr_picture", "SPIDYVR PICTURE", "SPIC", "ON: the game's TAA per eye like SpidyVR, no mod AA or sharpening; no restart.", 2, {"ON", "CUSTOM", nullptr, nullptr}},
     {"flare_block", "FLARE BLOCK", "FLRB", "ON hides lens flares and light glow sprites in VR, restart VR to apply.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"car_paint", "CAR PAINT", "PAINT", "SATIN gives the Batmobiles satin paint highlights; FLAT is test 1's; no restart.", 2, {"SATIN", "FLAT", nullptr, nullptr}},
+    {"car_paint", "CAR PAINT", "PAINT", "SATIN: satin black shine; FLAT: no shine; TEST 1: test 1 car look; no restart.", 3, {"SATIN", "FLAT", "TEST 1", nullptr}},
     {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no hero tools in Batmobiles, no grapple in any car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
@@ -637,7 +637,9 @@ inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }
 inline bool spidyvrPictureOn(uint32_t value) { return value != 1; }
 inline bool flareBlockOn(uint32_t value) { return value != 1; }
 inline bool cabinClearOn(uint32_t value) { return value != 1; }
-inline bool satinPaintOn(uint32_t value) { return value != 1; }
+inline bool satinPaintOn(uint32_t value) { return value != 1 && value != 2; }
+// 0.0.74 test 2b CAR PAINT TEST 1 (the quick revert): flat paint and the roof piece always drawn (test 1's look).
+inline bool carLookTest1(uint32_t value) { return value == 2; }
 inline bool seatedToolsBlocked(uint32_t value) { return value != 1; }
 inline bool dashPointerOn(uint32_t value) { return value != 1; }
 inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN

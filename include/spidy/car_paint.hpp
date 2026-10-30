@@ -23,6 +23,13 @@ namespace spidy::car_paint {
 // The least metallic a triangle's material must say to be painted (the converter's satin black is .4,
 // its trim .35, its tyres .2).
 inline constexpr float paintFrom = .15f;
+// 0.0.74 test 2b (owner pt1208u screenshot: "flat mid-grey"). CONFIRMED on the box (paintview): at a standing
+// eye most of the body is seen at 60-85 degrees, where the test 2 sky (.30-.38 linear) times the rough edge
+// Fresnel (1 - r = .58) gave ~.15 linear = sRGB ~.42 grey over every panel. Satin black now: a night-street sky
+// a third as bright and the grazing sheen halved, so the panels stay near black and only the highlight and the
+// horizon line read as paint. CANDIDATE: the game's exposure/TAA lifts the overlay a little more in the headset.
+inline constexpr Vec3 groundEnv{.012f, .012f, .014f}, skyEnv{.11f, .12f, .14f};
+inline float edgeOf(float rough) { return std::max(.5f * (1 - rough), .04f); }
 
 inline std::atomic<bool>& switchOn() {
     static std::atomic<bool> on{true};
@@ -65,9 +72,9 @@ inline Vec3 shade(Vec3 base, Vec3 n, Vec3 l, Vec3 v, Vec3 up, float metal, float
     }
     const Vec3 rv = n * (2 * dot(n, v)) - v; // reflect(-v, n)
     const float sky = std::clamp((dot(rv, up) + .1f) * 2.f, 0.f, 1.f), s = sky * sky * (3 - 2 * sky);
-    const Vec3 env = Vec3{.035f, .035f, .04f} * (1 - s) + Vec3{.30f, .33f, .38f} * s;
+    const Vec3 env = groundEnv * (1 - s) + skyEnv * s;
     const float g = 1 - nv, g2 = g * g, grazing = g2 * g2 * g;
-    const Vec3 Fe = f0 + (Vec3{1, 1, 1} * std::max(1 - rough, .04f) - f0) * grazing;
+    const Vec3 Fe = f0 + (Vec3{1, 1, 1} * edgeOf(rough) - f0) * grazing;
     c = c + Vec3{env.x * Fe.x, env.y * Fe.y, env.z * Fe.z} * (1 - .5f * rough);
     c = {std::min(c.x, 1.5f), std::min(c.y, 1.5f), std::min(c.z, 1.5f)};
     if (!std::isfinite(c.x + c.y + c.z))
@@ -96,7 +103,7 @@ inline void material(Material& m, Vec3 base, uint8_t metalByte, uint8_t roughByt
     m.e = std::min(2.f / (r2 * r2) - 2.f, 2000.f);
     m.norm = 1.6f * (m.e + 8.f) * (1.f / 25.1327f);
     m.roughKeep = 1 - .5f * rough;
-    m.edge = std::max(1 - rough, .04f);
+    m.edge = edgeOf(rough);
     m.key = key;
     m.ok = std::isfinite(m.f0.x + m.f0.y + m.f0.z + m.e + m.norm);
 }
@@ -139,7 +146,7 @@ inline Vec3 corner(const Material& m, const Facing& f, Vec3 n, Vec3 l, Vec3 up) 
     Vec3 c = m.diffuse * (.32f + .68f * d) + f.F * lobe;
     const float ry = 2 * nv * side * dot(n, up) - f.vUp; // reflect(-v, n) . up
     const float sky = std::clamp((ry + .1f) * 2.f, 0.f, 1.f), s = sky * sky * (3 - 2 * sky);
-    const Vec3 env = Vec3{.035f, .035f, .04f} * (1 - s) + Vec3{.30f, .33f, .38f} * s;
+    const Vec3 env = groundEnv * (1 - s) + skyEnv * s;
     const float g = 1 - nv, g2 = g * g, grazing = g2 * g2 * g;
     const Vec3 Fe = m.f0 + (Vec3{m.edge, m.edge, m.edge} - m.f0) * grazing;
     c = c + Vec3{env.x * Fe.x, env.y * Fe.y, env.z * Fe.z} * m.roughKeep;

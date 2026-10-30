@@ -20,15 +20,19 @@ class Defaults(unittest.TestCase):
 
     def test_lens_flares_off_in_vr(self):
         self.assertEqual(L.UPDATE38_DEFAULTS['lens_flares'], 'off_in_vr')
-        self.assertTrue(L.lens_flares_off(None))
-        self.assertTrue(L.lens_flares_off(''))
-        self.assertTrue(L.lens_flares_off('lens_flares = off_in_vr\n'))
-        self.assertTrue(L.lens_flares_off('lens_flares = 1\n'))
+        # 0.0.74 test 3 SPIDYVR STOCK (on by default): SpidyVR's upstream - the game's lens flares left alone
+        self.assertFalse(L.lens_flares_off(None))
+        self.assertFalse(L.lens_flares_off(''))
+        self.assertFalse(L.lens_flares_off('lens_flares = off_in_vr\n'))
+        S = 'spidyvr_stock = off\n'  # STOCK off: the HERO lights as before
+        self.assertTrue(L.lens_flares_off(S))
+        self.assertTrue(L.lens_flares_off(S + 'lens_flares = off_in_vr\n'))
+        self.assertTrue(L.lens_flares_off(S + 'lens_flares = 1\n'))
         # 0.0.74 test 2 FLARE BLOCK (on by default) keeps them off in VR; flare_block = off gives lens_flares back
-        self.assertTrue(L.lens_flares_off('lens_flares = game\n'))
-        self.assertFalse(L.lens_flares_off('flare_block = off\nlens_flares = game\n'))
-        self.assertFalse(L.lens_flares_off('flare_block = off\nlens_flares = 0\n'))
-        self.assertTrue(L.lens_flares_off('flare_block = off\nlens_flares = off_in_vr\n'))
+        self.assertTrue(L.lens_flares_off(S + 'lens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off(S + 'flare_block = off\nlens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off(S + 'flare_block = off\nlens_flares = 0\n'))
+        self.assertTrue(L.lens_flares_off(S + 'flare_block = off\nlens_flares = off_in_vr\n'))
 
     def test_subtexts_one_sentence_with_restart(self):
         h = src('include/spidy/eye_bloom.hpp')

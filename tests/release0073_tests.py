@@ -22,7 +22,8 @@ class GameTaaOff(unittest.TestCase):
         self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'off')
         self.assertEqual(L.export_value('image_style', 'spidyvr'), 0)  # index 0 keeps its meaning
         self.assertEqual(L.export_value('image_style', 'off'), 1)
-        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom'}), 'off')  # 0.0.74 test 2: under SPIDYVR PICTURE CUSTOM
+        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')  # 0.0.74 test 2: under SPIDYVR PICTURE CUSTOM (test 3: STOCK off)
+        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom'}), 'spidyvr')  # 0.0.74 test 3 SPIDYVR STOCK (default on)
         self.assertEqual(L.image_style_of({}), 'spidyvr')  # SPIDYVR PICTURE, the 0.0.74 test 2 default
         self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'spidyvr')
         h = src('include/spidy/image_style.hpp')
@@ -33,7 +34,8 @@ class GameTaaOff(unittest.TestCase):
         self.assertIn('std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};', src('src/stereo_probe.cpp'))
 
     def test_game_aa_taa_follows_game_taa(self):
-        self.assertFalse(L.game_aa_taa(True, L.image_style_of({'spidyvr_picture': 'custom'}), False))  # CUSTOM: the 0.0.73 release default
+        self.assertFalse(L.game_aa_taa(True, L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), False))  # CUSTOM, STOCK off: the 0.0.73 release default
+        self.assertTrue(L.game_aa_taa(True, L.image_style_of({'spidyvr_picture': 'custom'}), False))  # STOCK: the game's TAA, as upstream
         self.assertTrue(L.game_aa_taa(True, L.image_style_of({}), False))  # 0.0.74 test 2 SPIDYVR PICTURE
         self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))             # switched on: as before
         r = src('tools/run_game_vr.py')
@@ -73,7 +75,7 @@ class GameTaaOff(unittest.TestCase):
         self.assertIsNone(line)
         self.assertIsNone(value)
         self.assertIn(L.MIGRATED_0073, text)
-        self.assertEqual(L.image_style_of(dict(L.parse(text)[0], spidyvr_picture='custom')), 'off')
+        self.assertEqual(L.image_style_of(dict(L.parse(text)[0], spidyvr_picture='custom', spidyvr_stock='off')), 'off')  # test 3: STOCK off
         self.assertIsNone(L.migrate_0073('/nonexistent/dir/live.txt'))
         self.assertIn(L.MIGRATED_0073, L.HEADER)  # a new live.txt starts migrated
 

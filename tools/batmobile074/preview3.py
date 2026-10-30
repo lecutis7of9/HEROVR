@@ -24,7 +24,8 @@ ax = V(lay['axis']).normalized(); up0 = (V((0, 1, 0)) - ax * ax.y).normalized()
 cx, cy, cz = conv((1, 0, 0)), -conv(tuple(ax)), conv(tuple(up0))
 R = Matrix(((cx.x, cy.x, cz.x, 0), (cx.y, cy.y, cz.y, 0), (cx.z, cy.z, cz.z, 0), (0, 0, 0, 1)))
 wh = imp(os.path.join(root, 'SteeringWheel', 'model.glb'), Matrix.Translation(conv(lay['hub'])) @ R)
-# COCKPIT GLOW as the game's cabin_look074 (dark .52, lamps unlit x .92, tips + .42 glow, cool above / amber below)
+# COCKPIT GLOW as the game's cabin_look074 (test 3 review: dark .38, lamps unlit x 1.25, tips + .65 glow, stronger
+# cool above / amber below)
 cab_mats = [m for m in bpy.data.materials if m not in car_mats and m.use_nodes]
 glow_nodes = []
 for m in cab_mats:
@@ -36,7 +37,7 @@ for m in cab_mats:
     mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'; mix.blend_type = 'MULTIPLY'
     if src: nt.links.new(src, mix.inputs[6])
     else: mix.inputs[6].default_value = sock.default_value[:]
-    mix.inputs[7].default_value = (0.52, 0.52, 0.52, 1); nt.links.new(mix.outputs[2], sock)
+    mix.inputs[7].default_value = (0.38, 0.38, 0.38, 1); nt.links.new(mix.outputs[2], sock)
     if lamp or tip:
         nt.links.new(src if src else mix.outputs[2], b.inputs['Emission Color']) if src else None
         if not src: b.inputs['Emission Color'].default_value = sock.default_value[:]
@@ -44,15 +45,15 @@ for m in cab_mats:
 def set_glow(on):
     for m, mix, b, lamp, tip in glow_nodes:
         mix.inputs[0].default_value = 1.0 if (on and not lamp) else 0.0
-        b.inputs['Emission Strength'].default_value = (1.1 if lamp else 0.55 if tip else 0.0) if on else (0.35 if lamp else 0.0)
+        b.inputs['Emission Strength'].default_value = (2.4 if lamp else 1.3 if tip else 0.0) if on else (0.35 if lamp else 0.0)
     for l in accents: l.hide_render = not on
 eye = conv(lay['eye']); cpt = conv(lay['cockpit'])
 def light(n, kind, loc, rot, energy, col, size=0.5):
     L = bpy.data.objects.new(n, bpy.data.lights.new(n, kind)); L.data.energy = energy; L.data.color = col
     if kind == 'AREA': L.data.size = size
     L.location = loc; L.rotation_euler = rot; sc.collection.objects.link(L); return L
-accents = [light('cool', 'AREA', eye + V((0.37, 0.1, 0.25)), (0, 0, 0), 3.0, (0.35, 0.55, 1.0), 0.9),
-           light('amber', 'AREA', cpt + V((0, -0.5, 0.12)), (math.pi, 0, 0), 2.0, (1.0, 0.55, 0.15), 0.8)]
+accents = [light('cool', 'AREA', eye + V((0.37, 0.1, 0.25)), (0, 0, 0), 9.0, (0.30, 0.52, 1.0), 0.9),
+           light('amber', 'AREA', cpt + V((0, -0.5, 0.12)), (math.pi, 0, 0), 7.0, (1.0, 0.52, 0.12), 0.8)]
 cab = light('cab', 'POINT', eye + V((0.35, -0.3, 0.15)), (0, 0, 0), 6, (1, 1, 1))
 # street (as render_game.py)
 def mat(n, c, e=0):
@@ -133,9 +134,14 @@ for day in (False, True):
             shot('driver_%s_%s_glow%s' % (v, 'day' if day else 'night', 'ON' if on else 'OFF'), eye, look, 95)
     set_glow(True)
     show(ray_set, True); shot('finger_ray_%s' % ('day' if day else 'night'), eye, hit + V((0, 0, -0.05)), 70); show(ray_set, False)
-# outside: Roof drawn; no dash panel; the marker ring only with a hand near (item 8 shot)
-set_time(True); set_glow(True); show(roof, True); show(pads, False)
+# outside: Roof drawn; the cockpit and wheel NOT drawn (DASH INSIDE on, as hero072_visual: cabinSeen false from
+# outside the car's box); the marker ring only with a hand near (item 8 shot)
+set_time(True); set_glow(True); show(roof, True); show(pads, False); show(ck + wh, False)
 shot('exterior_frontleft34', (-3.3, 5.8, 1.5), (0, 0.3, 0.5), 50)   # owner screenshot: front-left 3/4, ~5 m, low
 shot('exterior_frontleft34_low', (-2.9, 4.6, 0.8), (0, 0.4, 0.55), 60)
+shot('exterior_rearright34', (3.4, -5.6, 1.7), (0, -0.2, 0.5), 50)
+shot('exterior_side', (-7.5, 0.0, 1.2), (0, 0, 0.6), 45)
+if os.environ.get('HERO_CKOUT'):   # diagnosis only: the cockpit drawn from outside (DASH INSIDE off)
+    show(ck + wh, True); shot('exterior_frontleft34_DASHINSIDEoff', (-3.3, 5.8, 1.5), (0, 0.3, 0.5), 50); show(ck + wh, False)
 show(mark_set, True); shot('handle_marker_hand_near', ho + V((side * 0.9, -0.6, 0.25)), ho, 35); show(mark_set, False)
 shot('handle_marker_no_hand', ho + V((side * 0.9, -0.6, 0.25)), ho, 35)

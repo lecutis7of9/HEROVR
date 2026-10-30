@@ -77,6 +77,8 @@ bool setEyeTemporal(bool on);
 // FXAA, the history blend and CAS stand aside (their settings kept). Live; game_xr sets it.
 void setCleanImage(bool clean);
 bool cleanImageNow();
+// 0.0.74 test 3 SPIDYVR STOCK: COLOR grade and foveation stand aside (their settings kept). Live; game_xr sets it.
+void setStockImage(bool stock);
 // Update 34.2: EYE AA TRAIL (eye_history::movedWeight): the percent of the history kept
 // at swing speed (0-100; default eye_history::defaultTrail). False above 100. Live.
 bool setEyeTrail(uint32_t percent);

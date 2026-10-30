@@ -36,8 +36,33 @@ class Preset(unittest.TestCase):
         for name, value in p.items():
             L.export_value(name, value)  # every value sends
         self.assertEqual(L.image_style_of({'image_style': 'off'}), 'spidyvr')
-        self.assertTrue(L.lens_flares_off('lens_flares = game\n'))
-        self.assertFalse(L.lens_flares_off('flare_block = off\nlens_flares = game\n'))
+        # 0.0.74 test 3 SPIDYVR STOCK (on by default) leaves the game's lens flares alone; off: FLARE BLOCK's.
+        self.assertFalse(L.lens_flares_off('lens_flares = game\n'))
+        self.assertTrue(L.lens_flares_off('spidyvr_stock = off\nlens_flares = game\n'))
+        self.assertFalse(L.lens_flares_off('spidyvr_stock = off\nflare_block = off\nlens_flares = game\n'))
+
+    def test_stock_preset(self):
+        """0.0.74 test 3 SPIDYVR STOCK: the picture preset plus every HERO render layer at SpidyVR's value."""
+        s = L.STOCK_PRESET
+        for name, value in L.PICTURE_PRESET.items():
+            self.assertEqual(s[name], value)
+        self.assertEqual((s['history'], s['trail'], s['eye_temporal'], s['eye_bloom'], s['bloom_fx'], s['shared_lod'],
+                          s['far_shadows'], s['lod_fade'], s['lod_reach'], s['impostors'], s['reach'], s['color_fx'],
+                          s['foveated'], s['vignette']),
+                         (0, 0, 0, 0, 0, 0, 0, 0, 100, 1, 150, 0, 'off', 0))
+        for name, value in s.items():
+            L.export_value(name, value)
+        self.assertEqual(L.STOCK_SUPERSAMPLE, 100)
+        self.assertTrue(L.stock_of({}) and L.stock_of({'spidyvr_stock': 'on'}) and not L.stock_of({'spidyvr_stock': 'off'}))
+        self.assertEqual(L.UPDATE38_DEFAULTS['spidyvr_stock'], 'on')
+        self.assertEqual(L.render_preset_in_file('/nonexistent/live.txt')[1], 'SPIDYVR STOCK')
+        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom'}), 'spidyvr')  # stock implies the game's TAA
+        h = src('include/spidy/combat38.hpp')
+        self.assertIn('"spidyvr_stock", "SPIDYVR STOCK"', h)
+        self.assertIn('stockValue', src('src/game_xr.cpp'))
+        probe = src('src/stereo_probe.cpp')
+        self.assertIn('engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed))\n                taaHoldJob', probe)
+        self.assertIn('!stockImage.load() && (colorOn.load()', src('src/native_eye_gpu.cpp'))
 
     def test_help_lines(self):
         h = src('include/spidy/combat38.hpp')

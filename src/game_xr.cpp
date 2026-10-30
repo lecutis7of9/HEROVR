@@ -660,6 +660,7 @@ uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
 void SpidyTaaDiagnosticsSet(uint32_t on); // 0.0.74 test 2b TAA DIAGNOSTICS (stereo_probe.cpp)
 void SpidyTaaHoldSet(uint32_t on); // 0.0.74 test 2b TAA HOLD (stereo_probe.cpp)
 void SpidyTaaGuardSet(uint32_t on); // 0.0.74 test 3 JITTER GUARD (stereo_probe.cpp)
+void SpidyStockSet(uint32_t on); // 0.0.74 test 3 SPIDYVR STOCK (stereo_probe.cpp)
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
@@ -853,6 +854,18 @@ uint32_t c38(uint32_t option) {
     const ReentryGuard guard{depth};
     if (guard.reentered())
         return 0u;
+    if (option >= combat38::options)
+        return 0u;
+    const uint32_t own = combat38::clampValue(option, combat38Values[option].load());
+    // 0.0.74 test 3 SPIDYVR STOCK (ON by default): HERO VR's render options answer SpidyVR's own behaviour
+    // (combat38::stockValue); read straight from the table so the switch itself never recurses.
+    if (option != combat38::spidyvrStock &&
+        combat38::spidyvrStockOn(combat38::clampValue(combat38::spidyvrStock, combat38Values[combat38::spidyvrStock].load())))
+        return combat38::stockValue(option, own);
+    return own;
+}
+// The player's own value of an option (SPIDYVR STOCK not applied): the wrist / dash cycles step from it.
+uint32_t c38Own(uint32_t option) {
     return option < combat38::options ? combat38::clampValue(option, combat38Values[option].load()) : 0u;
 }
 // 0.0.73 test 3 WEAPON COLLISION: ON (the default) - thrown props bounce / stop off walls, cars and the
@@ -4062,7 +4075,7 @@ DWORD WINAPI run(void*) {
                                 // live.txt keeps a value).
                                 if (result.combat38 >= 0 && result.combat38 < static_cast<int>(combat38::options)) {
                                     const auto o = static_cast<uint32_t>(result.combat38);
-                                    combat38Values[o] = (c38(o) + 1) % combat38::optionInfo[o].count;
+                                    combat38Values[o] = (c38Own(o) + 1) % combat38::optionInfo[o].count;
                                     heroOnly(o); // Version 0.0.6: one hero toggle at a time
                                     // Version 0.0.62: LENS FLARES is for the next start: the launcher
                                     // reads it back (SpidyHudSettings 3 bit 29, 10) into live.txt.
@@ -12062,7 +12075,10 @@ DWORD WINAPI run(void*) {
                                 SpidyFarWindows(reinterpret_cast<void*>(static_cast<uintptr_t>(farWant)));
                             }
                             // 0.0.73 test 2 CULL MARGIN: its degrees to the game's view lens when they change.
-                            if (const uint32_t cullWant = recording_fov::cullMarginOf(c38(combat38::cullMargin));
+                            // 0.0.74 test 3 SPIDYVR STOCK: no widening (SpidyVR's head lens x 1.05 only).
+                            if (const uint32_t cullWant = combat38::spidyvrStockOn(c38(combat38::spidyvrStock))
+                                                              ? combat38::stockCullMarginDegrees
+                                                              : recording_fov::cullMarginOf(c38(combat38::cullMargin));
                                 cullWant != cullAppliedDegrees) {
                                 cullAppliedDegrees = cullWant;
                                 SpidyCullMarginDegrees(reinterpret_cast<void*>(static_cast<uintptr_t>(cullWant)));
@@ -12085,6 +12101,13 @@ DWORD WINAPI run(void*) {
                             SpidyTaaHoldSet(combat38::taaHoldOn(c38(combat38::taaHold)) ? 1u : 0u);
                             // 0.0.74 test 3 JITTER GUARD (ON, the default): no eye jitter while the game refuses the TAA history.
                             SpidyTaaGuardSet(spidy::taa_link::guardOn(c38(combat38::jitterGuard)) ? 1u : 0u);
+                            // 0.0.74 test 3 SPIDYVR STOCK (ON, the default): no TAA HOLD / TAA LINK job writes,
+                            // no COLOR grade or foveation over the eyes (the other options answer stockValue in c38).
+                            {
+                                const bool stockWant = combat38::spidyvrStockOn(c38(combat38::spidyvrStock));
+                                SpidyStockSet(stockWant ? 1u : 0u);
+                                native_gpu::setStockImage(stockWant);
+                            }
                             // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
                             // 0.0.74 test 2 FLARE BLOCK (ON, the default): the glow sprites hidden (GLOW CHECK HIDDEN).
                             if (const uint32_t glowWant = combat38::flareBlockOn(c38(combat38::flareBlock)) ? combat38::glowHidden
@@ -14282,6 +14305,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFingerRay(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashInside(void* v) { return setHero007(v, combat38::dashInside, 5510); }
 // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return setHero007(v, combat38::cockpitGlow, 5511); }
+// 0.0.74 test 3 SPIDYVR STOCK (combat38::stockValue): ON (0, the default) or OFF (1); live (LOD / mip / eye size at the next VR start).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySpidyvrStock(void* v) { return setHero007(v, combat38::spidyvrStock, 5512); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

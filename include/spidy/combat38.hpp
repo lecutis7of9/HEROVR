@@ -253,6 +253,8 @@ enum Option : uint32_t {
     dashInside,
     // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
     cockpitGlow,
+    // 0.0.74 test 3 SPIDYVR STOCK (stockValue below)
+    spidyvrStock,
     options
 };
 struct OptionInfo {
@@ -639,6 +641,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"finger_ray", "FINGER RAY", "FRAY", "ON aims the dash laser from your index fingertip and snaps to buttons; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"dash_inside", "DASH INSIDE", "DSIN", "ON hides the cockpit from outside; the door handle glows only near a hand; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cockpit_glow", "COCKPIT GLOW", "CGLO", "ON darkens the Batmobile cabin and softly backlights dials and switches; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"spidyvr_stock", "SPIDYVR STOCK", "STCK", "ON runs SpidyVR's render, no HERO AA/TAA/jitter; live, LOD/mip at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -681,6 +684,39 @@ inline bool taaHoldOn(uint32_t value) { return value == 1; }
 // 0.0.74 test 3 WHEEL FIRST (van072.hpp Tune::wheelFirst): 0 ON, the default; 1 OFF.
 inline bool wheelFirstOn(uint32_t value) { return value != 1; }
 inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
+// 0.0.74 test 3 SPIDYVR STOCK (the owner: "our own AA/TAA/render changes may be compounding the building shimmer").
+// 0 ON (the default), 1 OFF. ON: every render option HERO VR added answers SpidyVR's own behaviour instead of
+// the player's choice (c38 in game_xr.cpp asks stockValue for every option), so the eyes run SpidyVR 0.4.1's
+// path: the game's TemporalAa per eye with its full Halton (2, 3) jitter, nothing over it (no EYE AA, FXAA,
+// history, CAS, SHARPEN MATCH, TAA HOLD, JITTER GUARD, LIGHT HOLD), the game's light checks, glow sprites and
+// lens flares, no CULL MARGIN widening, no WINDOW POP boost, FAR WINDOWS GAME (SpidyVR's 150% impostor reach stays),
+// SHADOW MATCH ON (SpidyVR's own fitCascades: both eyes' cascades on one lens), no AUTO PERFORMANCE.
+// docs/TAA-074-test3.md lists every difference and which ones this reverts. Gameplay options are untouched.
+inline bool spidyvrStockOn(uint32_t value) { return value != 1; }
+inline constexpr uint32_t stockCullMarginDegrees = 0; // SpidyVR: the head's lens x 1.05 only (headView)
+// The value option `option` runs with while SPIDYVR STOCK is ON (`value`, the player's, for anything else).
+inline uint32_t stockValue(uint32_t option, uint32_t value) {
+    switch (option) {
+    case spidyvrPicture: return 0; // ON: the game's TAA per eye, SpidyVR's jitter, the clean picture
+    case image: return 0;          // SPIDYVR (no FXAA / CAS look)
+    case imageStyle: return 0;     // GAME TAA SPIDYVR
+    case sharpenMatch: return 1;   // OFF
+    case lightHold: return 2;      // OFF (no history hold)
+    case taaHold: return 0;        // OFF
+    case jitterGuard: return 1;    // OFF: SpidyVR's jitter always
+    case taaDiagnostics: return 0; // OFF
+    case slWatch: return 1;        // OFF (no Streamline hooks)
+    case lightChecks: return 1;    // OFF: the game's 256 light-glow query room (next eyes made)
+    case glowCheck: return 0;      // GAME
+    case flareBlock: return 1;     // OFF: the game's glow sprites
+    case lensFlares: return 0;     // GAME (read when VR starts)
+    case windowPop: return 1;      // OFF
+    case shadowMatch: return 0;    // ON: SpidyVR's fitCascades
+    case farWindows: return 3;     // GAME: no extra write (SpidyVR's 150% impostor reach is `reach`, kept)
+    case autoPerf: return 0;       // OFF
+    default: return value;
+    }
+}
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
 inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }

@@ -1930,6 +1930,10 @@ __declspec(dllexport) spidy::taa_hold::Data SpidyTaaHoldData;
 }
 std::atomic<bool> taaHoldOn{false}; // 0.0.74 test 3: OFF by default (it never fired in test 2b)
 extern "C" void SpidyTaaHoldSet(uint32_t on) { taaHoldOn = on != 0; }
+// 0.0.74 test 3 SPIDYVR STOCK (ON by default, live from game_xr): the eye job gets SpidyVR's write only
+// (the context's TemporalAa on); TAA HOLD and TAA LINK leave it alone.
+std::atomic<bool> stockOn{true};
+extern "C" void SpidyStockSet(uint32_t on) { stockOn = on != 0; }
 void taaHoldJob(unsigned i, void* view, uint8_t* settings, uintptr_t job) {
     namespace th = spidy::taa_hold;
     static th::Eye eyeState[2];
@@ -2058,9 +2062,9 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             }
             // 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): the eye's own TAA history kept when the game's stamps
             // follow the frame (share 1 = no history, the shake). Only this job's copy is written.
-            if (engineTaaLive.load())
+            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed))
                 taaHoldJob(i, view, static_cast<uint8_t*>(settings), reinterpret_cast<uintptr_t>(job));
-            if (engineTaaLive.load())
+            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed))
                 taaLinkJob(i, reinterpret_cast<uintptr_t>(job)); // 0.0.74 test 3 TAA LINK
             if (shareExposure(reinterpret_cast<uintptr_t>(job), i)) {
                 AcquireSRWLockExclusive(&telemetry);

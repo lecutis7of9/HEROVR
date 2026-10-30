@@ -14,14 +14,17 @@ which, outdir = argv[0], argv[1]
 BM = '/workspace/hero-0.0.72/batmobile'
 SPECS = {
  '01': dict(src='dl/dreamloft/Bat-Mobile_(1989).obj', tex='', s=1, r=(0,0,0), hide=[], glass=[], glassify=[], cut=[],
-            L=(0,0.07,0.1), k=0.92, tris=110000, folder='1989', colors=False,
-            restore=dict(glass=['Windows'], head=0.22, wheel=0.26)),
+            L=(-0.076,0.396,0.1), k=0.92, tris=110000, folder='1989', colors=False, eyez=0.99,
+            restore=dict(glass=['Windows'], cones=False, head=0.155, wheel=0.26)),
  '07': dict(src='dl/07_odami/scene.gltf', tex='dl/07_odami', s=0.01, r=(0,0,0), hide=['Material__90','Material__53','Material__54'],
-            glass=[], glassify=[], cut=[], L=(0,0,0.03), k=1.0, tris=110000, folder='ODAMI', colors=False),
+            glass=[], glassify=[], cut=[], L=(0,0.30,0.03), k=1.0, tris=110000, folder='ODAMI', colors=False, eyez=1.09,
+            restore=dict(glass=[], cones=True, head=0.155, wheel=0.26)),
  '09': dict(src='dl/09_sorrow/scene.gltf', tex='', s=0.001, r=(0,0,0), hide=['Object_2','Object_3','Object_4','Object_5','Object_18','Object_68','Object_67','Object_65'],
-            glass=[], glassify=[], cut=[], L=(0,-0.55,0.6), k=0.74, tris=110000, folder='FOREVER', colors=True),
+            glass=[], glassify=[], cut=[], L=(-0.095,-0.55,0.27), k=0.74, tris=110000, folder='FOREVER', colors=True, eyez=0.97,
+            restore=dict(glass=[], cones=True, head=0.155, wheel=0.26)),
  '10': dict(src='dl/10_syork/scene.gltf', tex='dl/10_syork', s=4, r=(0,0,90), hide=[], glass=[], glassify=[], cut=[],
-            L=(0,0.1,0.16), k=0.84, tris=110000, folder='FOREVER2', colors=False),
+            L=(-0.131,0.814,0.16), k=0.84, tris=110000, folder='FOREVER2', colors=False, eyez=1.07,
+            restore=dict(glass=[], cones=True, head=0.155, wheel=0.26)),
 }
 # Test 2 paint (owner: satin black, subtle metallic): material -> (base colour linear, metallic, roughness).
 PAINT = {'01': {'Base_Color': (0.03, 0.40, 0.42), 'Back_Things': (0.06, 0.35, 0.45), 'Wheels': (0.012, 0.2, 0.55)},
@@ -39,6 +42,15 @@ COCKPIT_PAINT = {'BC_Carbon': (0.03, 0.45, 0.38)}   # base (linear), metallic, r
 DASH_TRIM = 0.03   # the dash top 0.82 -> 0.79 (the passenger screen moves down with it)
 BELT = 0.80   # beltline (cockpit-local z): the dash top is 0.82, the door trim 0.80
 EYE = (0.37, 0.25, 1.14)   # test 2: 0.12 higher and 0.07 further back than test 1 (0.37, 0.18, 1.02)
+# test 3 review (ROOF): at 1.14 the head was IN the canopy (1989 canopy underside 1.15 m at the eye, eye 1.232;
+# FOREVER 1.33 vs 1.584; FOREVER2 1.11 vs 1.274), so seated there was no roof over it. Each car now has its own
+# eye height over the cockpit floor (spec 'eyez') and the cockpit sits where the canopy leaves the head room
+# (measured: the highest eye with 0.16 m to every body/roof face): 1989 0.30 m back and 0.07 m inboard, ODAMI
+# 0.30 m back, FOREVER 0.24 m lower and 0.07 m inboard, FOREVER2 0.60 m back and 0.11 m inboard.
+# Window cones (spec restore 'cones'): roof faces the driver sees through the windscreen (|yaw| <= 42, pitch <= 20)
+# or the side windows (48..125, pitch <= 16) stay exterior-only (see-through openings); the rest of the roof,
+# its frame and pillars are drawn seated too.
+WIN_FWD = (42, 20); WIN_SIDE = (48, 125, 16)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 
@@ -235,7 +247,7 @@ else:
         for a in list(o.data.color_attributes): o.data.color_attributes.remove(a)
 # the driver-side outer handle: a ray from outside at the cockpit's sill height
 dg = bpy.context.evaluated_depsgraph_get()
-eye_b = L + V(EYE)
+eye_b = L + V((EYE[0], EYE[1], S.get('eyez', EYE[2])))
 hy, hz = L.y - 0.10, L.z + 0.80
 hit, loc, *_ = sc.ray_cast(dg, V((4.0, hy, hz)), V((-1, 0, 0)))
 side = loc.x if hit else (mx.x - mn.x) * k / 2
@@ -289,10 +301,38 @@ belt = L.z + BELT
 # above the beltline over the cabin's length, the car's full width (side windows, canopy sides, pillars)
 roof_lo = V((-50, L.y + CAB['y0'], belt)); roof_hi = V((50, L.y + CAB['y1'], TOP))
 roofobjs = []; deleted = moved = 0; restored = [0]
+def window_planes():
+    """The window openings' edges as planes through the eye (normals): the yaw sides of the windscreen and the side
+    windows (vertical) and their tops (the windscreen z = tan(20) x forward, a side window z = tan(16) x sideways)."""
+    out = []
+    for yaw in (WIN_FWD[0], -WIN_FWD[0], WIN_SIDE[0], -WIN_SIDE[0], WIN_SIDE[1], -WIN_SIDE[1]):
+        D = V((-math.sin(math.radians(yaw)), -math.cos(math.radians(yaw)), 0)); out.append(D.cross(V((0, 0, 1))).normalized())
+    out.append(V((0, math.tan(math.radians(WIN_FWD[1])), 1)).normalized())
+    t = math.tan(math.radians(WIN_SIDE[2])); out += [V((-t, 0, 1)).normalized(), V((t, 0, 1)).normalized()]
+    return out
+def in_window(d):
+    """d (eye -> a point): inside the windscreen or a side-window opening (the same bounds as window_planes)."""
+    if d.length < 1e-6: return False
+    yaw = abs(math.degrees(math.atan2(-d.x, -d.y)))
+    if yaw <= WIN_FWD[0]: return d.z <= math.tan(math.radians(WIN_FWD[1])) * -d.y
+    if WIN_SIDE[0] <= yaw <= WIN_SIDE[1]: return d.z <= math.tan(math.radians(WIN_SIDE[2])) * abs(d.x)
+    return False
 from mathutils.geometry import closest_point_on_tri
 def closest(p, a, b, c): return (closest_point_on_tri(p, a, b, c) - p).length
 for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
     bm = bmesh.new(); bm.from_mesh(o.data); bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    Rc = S.get('restore') if RESTORE_ROOF else None
+    if Rc and Rc.get('cones'):
+        # test 3 review (ROOF, FOREVER/FOREVER2 shards): the canopy faces over the cabin are first SPLIT along the
+        # window-opening edges (planes through the eye), so an opening ends on a straight frame line instead of the
+        # sawtooth of whole triangles; then triangulated again for the cuts below.
+        cand = [f for f in bm.faces if tri_box(*(l.vert.co.copy() for l in f.loops), roof_lo, roof_hi)]
+        for no in window_planes():
+            if not cand: break
+            geom = list({v for f in cand for v in f.verts}) + list({e for f in cand for e in f.edges}) + cand
+            bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-5, plane_co=eye_b, plane_no=no)
+            bmesh.ops.triangulate(bm, faces=bm.faces[:])
+            cand = [f for f in bm.faces if tri_box(*(l.vert.co.copy() for l in f.loops), roof_lo, roof_hi)]
     kill, roof = [], []
     for f in bm.faces:
         a, b, c = (l.vert.co.copy() for l in f.loops)
@@ -320,6 +360,7 @@ for o in [o for o in body if not o.name.startswith('HERO_handle_pad')]:
             mn_ = mats[f.material_index].name if len(mats) and mats[f.material_index] else ''
             if any(g.lower() in mn_.lower() for g in R['glass']): continue
             pts = [l.vert.co.copy() for l in f.loops]
+            if R.get('cones') and in_window((pts[0] + pts[1] + pts[2]) / 3 - eye_b): continue
             if closest(eye_b, *pts) < R['head'] or closest(hub_b, *pts) < R['wheel']: continue
             back.append(f)
         bk = set(f.index for f in back); keep_roof = [f for f in keep_roof if f.index not in bk]

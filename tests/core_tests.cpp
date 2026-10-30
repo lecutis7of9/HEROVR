@@ -18923,7 +18923,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 166, "one hundred and sixty options (0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 167, "one hundred and sixty options (0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18957,7 +18957,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 166, "0.0.74 test 3 has 160 COMBAT options (+ HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 167, "0.0.74 test 3 has 160 COMBAT options (+ SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25242,6 +25242,28 @@ int main() {
         check(cq::stale(cq::level) && !cq::stale(1.f) && !cq::stale(.5f), "a duck left by a crash is recognised at the next start");
         check(cq::ducked(NAN) == 0 && cq::ducked(1.f) == cq::level, "never louder, never NaN");
     });
+    test("0.0.74 test 3 SPIDYVR STOCK: every HERO render option answers SpidyVR's, gameplay untouched", [] {
+        using namespace combat38;
+        check(optionInfo[spidyvrStock].key == std::string_view("spidyvr_stock") && optionInfo[spidyvrStock].count == 2 &&
+                  spidyvrStockOn(0) && !spidyvrStockOn(1),
+              "SPIDYVR STOCK: an option, ON (0) by default, switchable off");
+        check(spidyvrPictureOn(stockValue(spidyvrPicture, 1)) && stockValue(image, 1) == 0 && stockValue(imageStyle, 1) == 0,
+              "the game's TAA per eye (SPIDYVR PICTURE ON, IMAGE SPIDYVR) whatever the player chose");
+        check(!taaHoldOn(stockValue(taaHold, 1)) && stockValue(jitterGuard, 0) == 1 && stockValue(sharpenMatch, 0) == 1 &&
+                  stockValue(lightHold, 0) == 2 && stockValue(taaDiagnostics, 1) == 0,
+              "no TAA HOLD, JITTER GUARD, SHARPEN MATCH or LIGHT HOLD");
+        check(stockValue(lightChecks, 0) == 1 && stockValue(flareBlock, 0) == 1 && stockValue(glowCheck, 2) == 0 &&
+                  stockValue(lensFlares, 1) == 0 && stockValue(windowPop, 0) == 1 && stockValue(slWatch, 0) == 1,
+              "the game's light checks, glow sprites and lens flares; no WINDOW POP or SL WATCH");
+        check(farWindowsPercentOf(stockValue(farWindows, 0)) == 100 && stockValue(autoPerf, 1) == 0 &&
+                  shadowMatchOn(stockValue(shadowMatch, 1)) && stockCullMarginDegrees == 0,
+              "FAR WINDOWS GAME, no AUTO PERFORMANCE, SHADOW MATCH ON (SpidyVR's fitCascades), no cull widening");
+        check(stockValue(heapGuard, 1) == 1 && stockValue(cockpitGlow, 1) == 1 && stockValue(dashInside, 1) == 1 &&
+                  stockValue(fingerRay, 1) == 1 && stockValue(batman, 1) == 1,
+              "gameplay and stability options keep the player's value");
+        for (uint32_t o = 0; o < options; ++o)
+            check(stockValue(o, 0) < optionInfo[o].count, "every stock value is one of the option's own");
+    });
     test("0.0.74 test 3 COCKPIT GLOW: a darker cabin, cool from above, amber from below, dials backlit, tips soft", [] {
         namespace cl = spidy::cabin_look;
         check(combat38::optionInfo[combat38::cockpitGlow].key == std::string_view("cockpit_glow") && cl::optionOn(0) && !cl::optionOn(1),
@@ -25260,6 +25282,11 @@ int main() {
         check(std::fabs(lampC.x - tint.x * cl::lampLevel) < 1e-6f, "a dial / screen: its own colour, whatever the light");
         const Vec3 tipC = cl::relit(plain, tint, 0, cl::tip);
         check(tipC.x > side.x && tipC.x < 1.f, "a switch tip: a soft glow, not neon");
+        // test 3 review (GLOW): visible but soft - the dials over their own colour, the tips well over the cabin,
+        // the accents a clear tint
+        check(cl::lampLevel > 1.f && cl::lampLevel <= 1.3f && cl::tipGlow >= .6f && cl::tipGlow < .7f && cl::dark < .4f,
+              "review: dials and tips glow visibly, softly");
+        check(up.z - side.z > .09f && down.x - side.x > .08f, "review: the blue / amber accents visible");
         const Vec3 bad = cl::relit(plain, tint, NAN, cl::plain);
         check(std::isfinite(bad.x + bad.y + bad.z), "NaN light: finite");
         check(cl::corner(tint, .8f, 1, cl::lamp, true, false).x == plain.x && cl::corner(tint, .8f, 1, cl::lamp, false, true).x == plain.x,

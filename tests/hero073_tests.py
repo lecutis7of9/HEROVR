@@ -326,6 +326,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5509'), ['SpidyFingerRay'])  # 0.0.74 test 3 FINGER RAY (finger_ray074.hpp)
         self.assertEqual(uses.get('5510'), ['SpidyDashInside'])  # 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp)
         self.assertEqual(uses.get('5511'), ['SpidyCockpitGlow'])  # 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
+        self.assertEqual(uses.get('5512'), ['SpidySpidyvrStock'])  # 0.0.74 test 3 SPIDYVR STOCK (combat38.hpp)
 
 
 class Hero073Image(unittest.TestCase):
@@ -370,10 +371,10 @@ class Hero073Image(unittest.TestCase):
         # 0.0.74 test 2: SPIDYVR PICTURE (on by default) runs GAME TAA SPIDYVR; CUSTOM: the 0.0.73 release default
         self.assertEqual(L.image_style_of({}), 'spidyvr')
         self.assertEqual(L.image_style_of({'image_style': 'off'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'off', 'spidyvr_picture': 'custom'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'spidyvr', 'spidyvr_picture': 'custom'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'image_style': 'bogus', 'spidyvr_picture': 'custom'}), 'off')
+        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'off', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'spidyvr', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'bogus', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')
         self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'spidyvr')
         self.assertEqual(L.image_of({}), 'spidyvr')
         self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')

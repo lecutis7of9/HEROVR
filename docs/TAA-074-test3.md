@@ -90,3 +90,71 @@ taken twice: once with JITTER GUARD ON and once OFF.
 * "refused" near 100% with ages at 3+ means cause 1 or 3.
 * Ages at 0 mean the slot is stamped in the same frame, which is cause 2.
 * "refused" near 0% with the shake still there means the history works and the shake is elsewhere.
+
+## SPIDYVR STOCK (test 3 extra): our render path against upstream SpidyVR
+
+The owner suspects that our own AA / TAA / render changes are adding to the building shimmer. **SPIDYVR STOCK** is
+one switch for that: VR menu row "SPIDYVR STOCK", live.txt `spidyvr_stock`, export `SpidySpidyvrStock`, code 5512.
+It is **ON by default** and can be switched OFF.
+
+When ON, every image, AA, TAA, jitter, history, sharpening, resolution and streetlight / aliasing layer that HERO VR
+added runs at SpidyVR 0.4.1's own value and code path:
+* The DLL applies it **live**. `c38()` answers `combat38::stockValue` for each render option, `SpidyStockSet` skips
+  the TAA HOLD and TAA LINK job writes, and `native_gpu::setStockImage` skips the colour grade and foveation.
+* The launch side follows at the **next VR start**: LOD, shadows, mip bias, eye size and lens flares (`STOCK_PRESET`
+  in tools/live_settings.py). The row's subtext says so: "live, LOD/mip at restart".
+
+Your own values stay in live.txt, so `spidyvr_stock = off` gives them all back. Gameplay features are not touched:
+the cars, the Batcave, the finger ray, COCKPIT GLOW, DASH INSIDE, the heroes and the HUD.
+
+The upstream reference is SpidyVR 0.4.1, compared at source level and against the Spider-Man2.exe reads listed above.
+CONFIRMED means read from the SpidyVR source or the exe. CANDIDATE means not proven.
+
+### Differences: reverted by STOCK
+
+| # | HERO VR layer (default when STOCK is OFF) | SpidyVR upstream | Under STOCK |
+|---|---|---|---|
+| 1 | TAA HOLD: writes the eye job's history weight (off since test 3, code 5504) | none (CONFIRMED) | **reverted**: no job write, live |
+| 2 | TAA LINK: reads per eye job, after the game's copy | none (CONFIRMED) | **reverted**: not run, live |
+| 3 | JITTER GUARD: near-zero jitter while the history is refused (on, code 5506) | full Halton (2, 3) jitter always (CONFIRMED) | **reverted**: OFF, live |
+| 4 | TAA DIAGNOSTICS | none | **reverted**: OFF, live |
+| 5 | ENGINE TAA jitter scale / `taa_jitter` / `taa_jitter_scale` | jitter x 1.0 (CONFIRMED) | **reverted**: 100%, jitter mode 0 |
+| 6 | IMAGE (EYE AA / FXAA / CAS look), `aa`, `aa_quality` | no FXAA, no CAS (CONFIRMED) | **reverted**: SPIDYVR, AA 0, live |
+| 7 | IMAGE STYLE (GAME TAA OFF since 0.0.73) | the game's TemporalAa per eye (CONFIRMED) | **reverted**: GAME TAA SPIDYVR, live |
+| 8 | EYE HISTORY blend / `history`, `trail`, `eye_temporal` | none (CONFIRMED) | **reverted**: 0 / off |
+| 9 | SHARPEN, SHARPEN MATCH | the game's sharpening at its lowest (CONFIRMED) | **reverted**: 0, OFF, live |
+| 10 | COLOR grade over the eyes (`color_fx`), EYE BLOOM, BLOOM FX, VIGNETTE | none (CONFIRMED) | **reverted**: off, grade skipped live |
+| 11 | FOVEATION (variable rate shading) | none (CONFIRMED) | **reverted**: off, skipped live |
+| 12 | LIGHT HOLD (streetlight glow history) | none | **reverted**: OFF, live |
+| 13 | LIGHT CHECKS (extra light-glow query room) | the game's 256 (CONFIRMED) | **reverted**: OFF (next eyes made) |
+| 14 | GLOW CHECK / FLARE BLOCK (glow sprites hidden) | the game's glow sprites (CONFIRMED) | **reverted**: GAME / OFF, live |
+| 15 | LENS FLARES OFF IN VR | the game's flares | **reverted**: GAME (next VR start) |
+| 16 | WINDOW POP (lit-window boost) | none | **reverted**: OFF, live |
+| 17 | FAR WINDOWS (extra impostor write) | none beyond impostorReach 150 (CONFIRMED) | **reverted**: GAME; `reach` 150, impostors 1 |
+| 18 | CULL MARGIN widening of the view lens | headView x 1.05 only, cull 0 (CONFIRMED) | **reverted**: 0 degrees, live |
+| 19 | SHARED LOD, FAR SHADOWS, LOD FADE, LOD REACH | matchDistances only (CONFIRMED) | **reverted**: 0 / 0 / 0 / 100 (next VR start) |
+| 20 | Texture mip bias from the launcher (+0.5) | 0 (CONFIRMED) | **reverted**: 0 (next VR start) |
+| 21 | Eye supersample from next-launch.txt | renderScale 100 by default (CONFIRMED) | **reverted**: 100% (next VR start) |
+| 22 | SL WATCH (Streamline hooks) | none | **reverted**: OFF |
+| 23 | AUTO PERFORMANCE (changes the render budget at run time) | none | **reverted**: OFF, live |
+
+### Differences: kept under STOCK, and why
+
+| # | HERO VR difference | SpidyVR upstream | Why it stays |
+|---|---|---|---|
+| K1 | Eyes at 100% | the game's upscale at 67% | There is no SM2 upscale address (never invented). SpidyVR's own renderScale default is 100. |
+| K2 | The eye job's TemporalAa flag written at +0x570 | the same write | It is SpidyVR's own path (CONFIRMED). |
+| K3 | createViews flag 32 never set (the game's own view still rendered) | the same: SM2VR always renders the game's view (src/game_xr.cpp) | Same as upstream. Without the game's view, SM2 loses the device (DXGI_ERROR_ACCESS_DENIED, SM2VR 0.0.5). |
+| K4 | Heap guard around the eye copies | none | Crash safety only. No image change. |
+| K5 | SHADOW MATCH ON | fitCascades | It is SpidyVR's fitCascades (CANDIDATE that the two are identical). |
+| K6 | shareExposure | shareExposure | Same as upstream (CONFIRMED). |
+| K7 | eye_lod / matchDistances | matchDistances | Same as upstream (CANDIDATE: the same distances). |
+| K8 | headView x 1.05 | headView x 1.05 | Same as upstream (CONFIRMED). |
+| K9 | Gameplay: cars and COCKPIT GLOW, Batcave, finger ray, heroes, HUD | n/a | Not render AA. The owner asked for these to stay. |
+
+### Testing it
+
+* Shimmer with STOCK ON looks like SpidyVR: our layers were not the cause. Send the TAA LINK numbers with STOCK OFF
+  and JITTER GUARD ON.
+* Shimmer is gone with STOCK ON and back with it OFF: one of rows 1-23 is the cause. Turn them on one at a time with
+  STOCK OFF.

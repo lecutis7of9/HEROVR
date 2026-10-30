@@ -389,7 +389,7 @@ void STDMETHODCALLTYPE omSetTargets(ID3D12GraphicsCommandList* list, UINT n, con
     if (!gbuffer)
         return;
     foveaTagged.fetch_add(1, std::memory_order_relaxed);
-    if (!foveaOn.load(std::memory_order_relaxed) || t.eye > 1)
+    if (!foveaOn.load(std::memory_order_relaxed) || stockImage.load(std::memory_order_relaxed) || t.eye > 1)
         return;
     auto* image = foveaImage[t.eye].load();
     if (!image || !fence || fence->GetCompletedValue() < foveaReady.load())
@@ -739,6 +739,7 @@ std::atomic<uint32_t> aaMode{}, aaFault{};
 // (ENGINE TAA on), the picture goes to the headset as SpidyVR sends it: no FXAA, no history blend, no
 // CAS. The sliders keep their values (GAME TAA OFF and the fallback get them back). game_xr sets it.
 std::atomic<bool> cleanImage{};
+std::atomic<bool> stockImage{}; // 0.0.74 test 3 SPIDYVR STOCK: no COLOR grade, no foveation
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, down; // FXAA; the downsample filter
@@ -3314,6 +3315,10 @@ void setCleanImage(bool clean) {
 bool cleanImageNow() {
     return cleanImage.load();
 }
+// 0.0.74 test 3 SPIDYVR STOCK: SpidyVR grades nothing and shades every pixel; the settings are kept.
+void setStockImage(bool stock) {
+    stockImage = stock;
+}
 bool setEyeTemporal(bool on) {
     if (on && historyFault.load())
         return false;
@@ -3515,7 +3520,7 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).
-    const bool graded = staged && (colorOn.load() || // not in the screen-copy mode (as sharpening)
+    const bool graded = staged && !stockImage.load() && (colorOn.load() || // not in the screen-copy mode (as sharpening)
                                    (foveaDebug.load() && foveaLevel.load() != foveation::off));
     const bool sharpened = (percent || graded) && prepareSharpen() &&
                            drawSharpen(slot->list.Get(), slotIndex, incoming, percent, debug);

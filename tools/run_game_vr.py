@@ -2605,7 +2605,13 @@ def main():
     # Update 23: once, an older next-launch.txt's supersample above 100 goes back to OFF (100).
     if (reset := live_settings.migrate_next_launch(ROOT/'next-launch.txt')):
         print(reset, flush=True)
-    if a.supersample == 100 and not a.size:
+    # 0.0.74 test 3 SPIDYVR STOCK (default on): SpidyVR's eye size (100%), whatever next-launch.txt chose.
+    stock_eyes = not a.size and live_settings.stock_in_file(ROOT/'live.txt')
+    if stock_eyes and a.supersample != live_settings.STOCK_SUPERSAMPLE:
+        print(f'0.0.74 SPIDYVR STOCK: eye supersample {live_settings.STOCK_SUPERSAMPLE}% (SpidyVR\'s; '
+              f'{a.supersample}% asked; spidyvr_stock = off keeps it).', flush=True)
+        a.supersample = live_settings.STOCK_SUPERSAMPLE
+    if a.supersample == 100 and not a.size and not stock_eyes:
         chosen = live_settings.next_launch_supersample(ROOT/'next-launch.txt')
         if chosen and chosen != 100:
             a.supersample = chosen
@@ -2818,10 +2824,12 @@ def session(a, startup, session_off=()):
     image_look = live_settings.image_in_file(ROOT/'live.txt')
     game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))
-    if live_settings.picture_preset_in_file(ROOT/'live.txt') and str(mip_bias_asked).strip() != '0':
-        # 0.0.74 test 2 SPIDYVR PICTURE: SpidyVR adds no mip bias (CONFIRMED); spidyvr_picture = custom keeps yours.
-        print(f'0.0.74 SPIDYVR PICTURE: texture mip bias 0 (the launcher passed {a.mip_bias}; '
-              'spidyvr_picture = custom keeps it; restart).', flush=True)
+    _, render_preset_name = live_settings.render_preset_in_file(ROOT/'live.txt')
+    if render_preset_name and str(mip_bias_asked).strip() != '0':
+        # 0.0.74 test 2 SPIDYVR PICTURE / test 3 SPIDYVR STOCK: SpidyVR adds no mip bias (CONFIRMED);
+        # spidyvr_stock = off with spidyvr_picture = custom keeps yours.
+        print(f'0.0.74 {render_preset_name}: texture mip bias 0 (the launcher passed {a.mip_bias}; '
+              'spidyvr_stock = off and spidyvr_picture = custom keep it; restart).', flush=True)
         mip_bias_asked = '0'
     elif mip_bias_asked != a.mip_bias:
         if game_taa_look == 'spidyvr' and getattr(a, 'engine_taa', False) and image_look != 'spidyvr':
@@ -3164,7 +3172,22 @@ def session(a, startup, session_off=()):
                 print(f'live.txt (kept): {text.format(value)}', flush=True)
         # 0.0.74 test 2 SPIDYVR PICTURE (default on): SpidyVR's picture over whatever live.txt kept (live.txt
         # keeps the player's own for spidyvr_picture = custom); the DLL holds the same while it is on.
-        if live_settings.picture_preset_in_file(ROOT/'live.txt'):
+        render_preset, render_preset_name = live_settings.render_preset_in_file(ROOT/'live.txt')
+        if render_preset_name == 'SPIDYVR STOCK':
+            # 0.0.74 test 3 SPIDYVR STOCK (default on): SpidyVR's render path - every HERO VR render layer of
+            # live.txt at SpidyVR's value (docs/TAA-074-test3.md); spidyvr_stock = off uses your own.
+            sent = []
+            for name, value in render_preset.items():
+                _, export, text = live_settings.SETTINGS[name]
+                if export not in xr or call_remote(process, xr[export], live_settings.export_value(name, value)):
+                    continue
+                live_file.applied(name, value)
+                kept[name] = value
+                sent.append(f'{name} = {value}')
+            print('0.0.74 SPIDYVR STOCK: ON - SpidyVR\'s own render path: the game\'s TAA in each eye with '
+                  'SpidyVR\'s jitter and nothing of HERO VR\'s AA, TAA, history, sharpening, colour, LOD or light '
+                  'tweaks (' + ', '.join(sent) + '); spidyvr_stock = off uses your own.', flush=True)
+        elif render_preset_name:
             sent = []
             for name, value in live_settings.PICTURE_PRESET.items():
                 _, export, text = live_settings.SETTINGS[name]

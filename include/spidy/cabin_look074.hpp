@@ -70,11 +70,14 @@ inline void setInside(bool on) { insideSwitch().store(on, std::memory_order_rela
 inline bool optionOn(uint32_t v) { return v == 0; }
 
 // ---- COCKPIT GLOW shading ------------------------------------------------------------------------------------
-inline constexpr float dark = .52f;                       // the cabin's own light, x the lit term
-inline constexpr Vec3 coolFromAbove{.035f, .060f, .120f}; // a roof strip's cool blue on faces turned up
-inline constexpr Vec3 amberFromBelow{.110f, .060f, .018f}; // the footwell's amber on faces turned down
-inline constexpr float lampLevel = .92f;                  // a backlit dial / screen: its own colour, unlit
-inline constexpr float tipGlow = .42f;                    // a switch tip's soft glow (over the dark light)
+// test 3 review (GLOW: "gauges, needles, numbers and switch tips should glow visibly but softly, not neon; the
+// blue / amber accents visible"): the cabin darker (.52 -> .38) so the lamps stand out, the accents ~1.6x, the
+// dials 1.25 (over their own colour: a soft bloom-free glow), the tips .65.
+inline constexpr float dark = .38f;                       // the cabin's own light, x the lit term
+inline constexpr Vec3 coolFromAbove{.060f, .100f, .200f}; // a roof strip's cool blue on faces turned up
+inline constexpr Vec3 amberFromBelow{.180f, .095f, .030f}; // the footwell's amber on faces turned down
+inline constexpr float lampLevel = 1.25f;                 // a backlit dial / screen: its own colour, unlit
+inline constexpr float tipGlow = .65f;                    // a switch tip's soft glow (over the dark light)
 
 // The lit term's multiplier for one corner: `lit` the plain pass's (.32 + .68 |n.l|), `up` the corner normal's
 // world-up component (either winding: |n| taken as is, the accent follows the face). Returns the colour

@@ -61,7 +61,7 @@ class Preset(unittest.TestCase):
         self.assertIn('"spidyvr_stock", "SPIDYVR STOCK"', h)
         self.assertIn('stockValue', src('src/game_xr.cpp'))
         probe = src('src/stereo_probe.cpp')
-        self.assertIn('engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed))\n                taaHoldJob', probe)
+        self.assertIn('engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed) && !miles)\n                taaHoldJob', probe)
         self.assertIn('!stockImage.load() && (colorOn.load()', src('src/native_eye_gpu.cpp'))
 
     def test_help_lines(self):
@@ -129,9 +129,9 @@ class Dll(unittest.TestCase):
     def test_game_xr_holds_the_preset(self):
         g = src('src/game_xr.cpp')
         self.assertIn('const bool picture = combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture));', g)
-        self.assertIn('native_gpu::setCleanImage(picture || (image_style::spidy(style) &&', g)
+        self.assertIn('native_gpu::setCleanImage(milesActive || picture || (image_style::spidy(style) &&', g)
         self.assertIn('SpidyEngineTaaJitterNow() != et::packJitter(et::ours, et::fullJitterScale)', g)
-        self.assertIn('if (!picture && step.eyeAaOn', g)
+        self.assertIn('if (!picture && !milesActive && step.eyeAaOn', g)
         self.assertIn('combat38::flareBlockOn(c38(combat38::flareBlock)) ? combat38::glowHidden', g)
         self.assertIn('setHero007(v, combat38::spidyvrPicture, 5496)', g)
         self.assertIn('setHero007(v, combat38::flareBlock, 5497)', g)

@@ -327,6 +327,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5510'), ['SpidyDashInside'])  # 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp)
         self.assertEqual(uses.get('5511'), ['SpidyCockpitGlow'])  # 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
         self.assertEqual(uses.get('5512'), ['SpidySpidyvrStock'])  # 0.0.74 test 3 SPIDYVR STOCK (combat38.hpp)
+        self.assertEqual(uses.get('5513'), ['SpidyMilesTaa'])  # 0.0.74 test 3 MILES TAA (miles_taa074.hpp)
 
 
 class Hero073Image(unittest.TestCase):
@@ -469,7 +470,7 @@ class Hero073Test4ImageStyle(unittest.TestCase):
         g = src('src/game_xr.cpp')
         self.assertIn('setHero007(v, combat38::imageStyle, 5460)', g)
         self.assertIn('styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn)', g)
-        self.assertIn('native_gpu::setCleanImage(picture || (image_style::spidy(style) &&', g)
+        self.assertIn('native_gpu::setCleanImage(milesActive || picture || (image_style::spidy(style) &&', g)
         # The controller sits after the FPS guard's plan B, so a failure still falls back to EYE AA.
         self.assertLess(g.index('engineTaaFallback(engine_taa::reasonOf(engine));\n                            previous = engine;'),
                         g.index('static image_style::Controller styleControl;'))

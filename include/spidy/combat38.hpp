@@ -255,6 +255,8 @@ enum Option : uint32_t {
     cockpitGlow,
     // 0.0.74 test 3 SPIDYVR STOCK (stockValue below)
     spidyvrStock,
+    // 0.0.74 test 3 MILES TAA (miles_taa074.hpp)
+    milesTaa,
     options
 };
 struct OptionInfo {
@@ -642,6 +644,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"dash_inside", "DASH INSIDE", "DSIN", "ON hides the cockpit from outside; the door handle glows only near a hand; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cockpit_glow", "COCKPIT GLOW", "CGLO", "ON darkens the Batmobile cabin and softly backlights dials and switches; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"spidyvr_stock", "SPIDYVR STOCK", "STCK", "ON runs SpidyVR's render, no HERO AA/TAA/jitter; live, LOD/mip at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"miles_taa", "MILES TAA", "MTAA", "ON runs Miles Morales VR's TAA in each eye at 67%; live, eye size at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -693,6 +696,8 @@ inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
 // SHADOW MATCH ON (SpidyVR's own fitCascades: both eyes' cascades on one lens), no AUTO PERFORMANCE.
 // docs/TAA-074-test3.md lists every difference and which ones this reverts. Gameplay options are untouched.
 inline bool spidyvrStockOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 3 MILES TAA (miles_taa074.hpp): ON (0, the default) or OFF (1); SPIDYVR STOCK leaves it to the player.
+inline bool milesTaaOn(uint32_t value) { return value != 1; }
 inline constexpr uint32_t stockCullMarginDegrees = 0; // SpidyVR: the head's lens x 1.05 only (headView)
 // The value option `option` runs with while SPIDYVR STOCK is ON (`value`, the player's, for anything else).
 inline uint32_t stockValue(uint32_t option, uint32_t value) {

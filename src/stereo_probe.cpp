@@ -6,6 +6,7 @@
 #include "spidy/taa_diag074.hpp"
 #include "spidy/taa_hold074.hpp"
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 TAA LINK + JITTER GUARD
+#include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA
 #include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -343,6 +344,45 @@ std::atomic<bool> engineTaaAuto{};
 std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};
 // (SpidyEngineTaa is declared at file scope, in the extern "C" block above: Update 37.1, MSVC C2733.)
 std::atomic<uint32_t> engineTaaWhy{}, engineTaaGameAa{UINT32_MAX}, engineTaaWidened{}, engineTaaMaskSeen{};
+// 0.0.74 test 3 MILES TAA (miles_taa074.hpp): MilesVR / SpidyVR 0.4.1's per-eye TAA. milesOn the switch (game_xr,
+// live), eyeTemporal 0x20 it was on when VR started (the eyes made with the TAA targets, at milesPercent), milesExeKnown
+// every byte check passed, milesReason why it fell back (SPIDYVR STOCK's path from there), milesJobs the eye jobs.
+std::atomic<bool> milesOn{true}, milesExeKnown{};
+// The eyes were made with the game's TAA targets while its mask and Anti-Aliasing make them (initBuffers): without
+// them TemporalAa has nowhere to write, so a switch turned on live after a start without them does nothing.
+std::atomic<bool> milesTargetsOk{}, milesTargets{};
+std::atomic<uint32_t> milesReason{}, milesPercent{}, milesUpscaleBad{};
+std::atomic<uintptr_t> milesJobs[2]{};
+} // namespace
+extern "C" {
+__declspec(dllexport) spidy::miles_taa::Data SpidyMilesTaaData;
+}
+namespace {
+// Whether the four steps run now: on, the exe as known, and nothing made it fall back for the session (a wrong
+// upscale or no hook only loses the proof, never the TAA the upscaled eyes need).
+bool milesLive() {
+    namespace mt = spidy::miles_taa;
+    const uint32_t why = milesReason.load(std::memory_order_relaxed);
+    return milesOn.load(std::memory_order_relaxed) && milesExeKnown.load(std::memory_order_relaxed) &&
+           milesTargets.load(std::memory_order_relaxed) && (why == mt::none || why == mt::upscaleWrong || why == mt::hookFailed);
+}
+// Eyes made smaller than their image need the game's TAA every frame (its jitter and the job's AA) whatever the switch
+// or the safety says: without it TemporalAa leaves (0x2c2dccb, 0x2c2dd09) and nothing resolves them to the eye's size.
+bool milesUpscaled() {
+    const uint32_t made = milesPercent.load(std::memory_order_relaxed);
+    return made && made < 100;
+}
+bool milesSteps() { return milesLive() || milesUpscaled(); }
+// The first reason only (one console line: game_xr reads it).
+void milesFallBack(uint32_t why) {
+    uint32_t expected = spidy::miles_taa::none;
+    if (!milesReason.compare_exchange_strong(expected, why))
+        return;
+    SpidyMilesTaaData.reason = why;
+    char line[160];
+    std::snprintf(line, sizeof line, "MILES TAA: %s\n", spidy::miles_taa::reasonText(why));
+    OutputDebugStringA(line);
+}
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
@@ -1334,10 +1374,16 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
             // 19203c2 queues TemporalAa (0x8a) unless the profile's +68c is set.
             uint8_t left{};
             // SM2: the profile flag is bit 0 of +cc8; TemporalAa is 0xb1 on +18d0 (SM2VR).
-            if ((eyeTemporal.load() & 4) && read(reinterpret_cast<uintptr_t>(profile) + 0xcc8, &left, 1) &&
-                (left & 1))
+            // 0.0.74 test 3 MILES TAA step 4: as MilesVR, TemporalAa where the profile leaves it out
+            // (0x2d017b3, CONFIRMED; its bytes checked at the start).
+            const bool miles = milesLive();
+            if (((eyeTemporal.load() & 4) || miles) && read(reinterpret_cast<uintptr_t>(profile) + 0xcc8, &left, 1) &&
+                (left & 1)) {
                 reinterpret_cast<Enqueue>(base + 0x2c77810)(reinterpret_cast<void*>(address + 0x18d0), 0xb1, 1,
                                                             nullptr);
+                if (miles)
+                    ++SpidyMilesTaaData.queued[eye];
+            }
             break;
         }
 }
@@ -1346,7 +1392,9 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
 std::array<uint32_t, 2> eyeRenderSize() {
     // Update 34: always the eye's own size; ENGINE TAA does not upsample (a size that
     // followed a live switch would change under buffers already made).
-    return spidy::eyeRenderSize(config.width, config.height, 100);
+    // 0.0.74 test 3 MILES TAA: the percent the eyes were made at (set once, when the first eye's buffers are made).
+    const uint32_t made = milesPercent.load(std::memory_order_relaxed);
+    return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
 }
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
@@ -1376,6 +1424,13 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
     sizes[5] = (eyeHeight + 7) & ~7u;
     sizes[6] = align ? sizes[4] : eyeWidth;
     sizes[7] = align ? sizes[5] : eyeHeight;
+    // 0.0.74 test 3 MILES TAA: eyes made smaller than their image keep the size they were made at (the game's TAA
+    // resolves it to sizes[2..3]); a later re-size must not ask for more than the buffers have.
+    if (const uint32_t made = milesPercent.load(std::memory_order_relaxed); made && made < 100) {
+        const auto render = eyeRenderSize();
+        sizes[0] = render[0];
+        sizes[1] = render[1];
+    }
     if (sizes[0] == eyeWidth && sizes[1] == eyeHeight)
         sizes[15] |= 2;
     else
@@ -1474,7 +1529,31 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
         // needs private scene buffers at its own resolution.
         alignas(16) uint8_t local[32]{};
         if (read(reinterpret_cast<uintptr_t>(description), local, sizeof(local))) {
+            // 0.0.74 test 3 MILES TAA: the eyes' size is chosen once, when the first eye's buffers are made.
+            namespace mt = spidy::miles_taa;
+            const bool miles = (eyeTemporal.load() & mt::eyeTemporalBit) != 0;
+            if (!milesPercent.load()) {
+                uint32_t stock[8]{}, aa = UINT32_MAX;
+                const bool maskStock = read(base + spidy::engine_taa::maskRva, stock, sizeof stock) &&
+                                       spidy::engine_taa::maskIsStock(stock);
+                const bool aaOk = read(base + spidy::engine_taa::aaRva, &aa, 4) &&
+                                  spidy::engine_taa::aaMakesTargets(aa);
+                if (miles && milesExeKnown.load() && !maskStock)
+                    milesFallBack(mt::maskDiffers);
+                else if (miles && milesExeKnown.load() && !aaOk)
+                    milesFallBack(mt::gameAa);
+                milesTargetsOk = maskStock && aaOk;
+                const uint32_t percent = mt::madePercent(miles, milesExeKnown.load(), maskStock, aaOk);
+                milesPercent = percent;
+                SpidyMilesTaaData.percent = percent;
+                char line[128];
+                std::snprintf(line, sizeof line, "MILES TAA: eyes made at %u%% (%s)\n", percent,
+                              miles ? "on at the start" : "off at the start");
+                OutputDebugStringA(line);
+            }
             const auto render = eyeRenderSize();
+            SpidyMilesTaaData.renderWidth = render[0];
+            SpidyMilesTaaData.renderHeight = render[1];
             std::memcpy(local, &render[0], 4);
             std::memcpy(local + 4, &render[1], 4);
             const uint64_t noParent{};
@@ -1483,9 +1562,14 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
             // the TAA target kind as well (engineTaaBuffers).
             sizingEye[0] = config.width;
             sizingEye[1] = config.height;
-            const bool sized = (eyeTemporal.load() & 0x10) ? engineTaaBuffers(buffers, local, name)
-                                                           : originalInitBuffers(buffers, local, name);
+            // 0.0.74 test 3 MILES TAA step 2: the TAA targets for the eyes, -EngineTaa or not.
+            const bool taaTargets = (eyeTemporal.load() & 0x10) ||
+                                    (miles && milesExeKnown.load() && milesReason.load() == mt::none);
+            const bool sized = taaTargets ? engineTaaBuffers(buffers, local, name)
+                                          : originalInitBuffers(buffers, local, name);
             sizingEye[0] = sizingEye[1] = 0;
+            if (taaTargets && sized && milesTargetsOk.load())
+                milesTargets = true;
             return sized;
         }
     }
@@ -2010,6 +2094,69 @@ void taaLinkJob(unsigned i, uintptr_t job) {
         taaRefusedEyes.fetch_and(~bit, std::memory_order_relaxed);
     ++d.sequence;
 }
+// 0.0.74 test 3 MILES TAA: the per-eye proof. TemporalAa 0x2c2dc60 reads no arguments (CONFIRMED); the four
+// registers are passed on as they came. read() only: nothing of the game's is written here.
+using TemporalAa = void (*)(void*, void*, void*, void*);
+TemporalAa originalTemporalAa{};
+void* temporalAaHook{};
+void temporalAa(void* a, void* b, void* c, void* d) {
+    namespace mt = spidy::miles_taa;
+    const uintptr_t job = enabled ? pointer(base + mt::jobGlobal) : 0;
+    int eye = -1;
+    for (int i = 0; job && i < 2; ++i)
+        if (milesJobs[i].load(std::memory_order_relaxed) == job)
+            eye = i;
+    if (eye < 0) {
+        originalTemporalAa(a, b, c, d);
+        return;
+    }
+    uint32_t aa{}, index{}, input{}, output{};
+    int32_t frame{}, other{}, stamp{};
+    uint8_t cut{}, pick{};
+    float jitter[2]{};
+    read(base + mt::jobAaGlobal, &aa, 4);
+    read(base + mt::frameGlobal, &frame, 4);
+    const bool haveIndex = read(job + mt::jobSlotIndex, &index, 4) && index <= 1;
+    const uintptr_t otherSlot = haveIndex ? pointer(job + mt::jobSlots + 8 * (1 - index)) : 0;
+    const bool haveOther = otherSlot && read(otherSlot, &other, 4);
+    const uintptr_t previous = pointer(job + mt::jobPrevious);
+    read(job + mt::jobCut, &cut, 1);
+    read(job + spidy::engine_taa::jobJitter, jitter, sizeof jitter);
+    if (const uintptr_t set = pointer(job + mt::jobSet)) {
+        read(set + mt::setInputSize, &input, 4);
+        read(base + mt::targetPickGlobal, &pick, 1);
+        read(set + (pick ? mt::setTargetWidthAlt : mt::setTargetWidth), &output, 4);
+    }
+    originalTemporalAa(a, b, c, d);
+    const uintptr_t slot = haveIndex ? pointer(job + mt::jobSlots + 8 * index) : 0;
+    const bool haveStamp = slot && read(slot, &stamp, 4);
+    const bool ran = aa == 1 && frame && (jitter[0] != 0 || jitter[1] != 0) && output && haveStamp && stamp == frame;
+    auto& dd = SpidyMilesTaaData;
+    ++dd.calls[eye];
+    if (ran)
+        ++dd.ran[eye];
+    if (ran && haveOther && other == frame - 1 && previous)
+        ++dd.history[eye];
+    dd.frame[eye] = frame;
+    dd.stamp[eye] = stamp;
+    dd.otherStamp[eye] = other;
+    dd.slotIndex[eye] = index;
+    dd.previous[eye] = previous ? 1 : 0;
+    dd.cut[eye] = cut;
+    dd.aa[eye] = aa;
+    dd.inputWidth[eye] = input;
+    dd.outputWidth[eye] = output;
+    // The upscale (CANDIDATE): TemporalAa must read the smaller scene and write the eye's size. 30 runs that do not
+    // and the console says so (the eyes stay as made: restart with MILES TAA OFF for the full size).
+    if (ran) {
+        const auto render = eyeRenderSize();
+        if (mt::upscaleOk(input, output, config.width, render[0]))
+            milesUpscaleBad = 0;
+        else if (milesUpscaleBad.fetch_add(1) + 1 == 30)
+            milesFallBack(mt::upscaleWrong);
+    }
+    ++dd.sequence;
+}
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
     // Update 36: EYE BLOOM, before the job copies the view settings (a, its r8).
     if (enabled) {
@@ -2019,6 +2166,7 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             bloomJob(eye, a);
         gatesJob(eye, a); // Update 37: BLOOM FX and the bloom block dumps
         if (eye == 0) {
+            ++SpidyMilesTaaData.leftJobs; // 0.0.74 test 3 MILES TAA's safety counts these
             lodFadeCheck();
             // Update 37: ENGINE TAA's auto, once nothing blocks it (checked every 64th left job).
             static uint32_t taaEvery{};
@@ -2056,15 +2204,20 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             // then had no anti-aliasing at all.
             // SM2 (Update 34): the settings' +0x570, which the frame's copy (0x2c81890 to
             // 0xc2c64a0) puts where TemporalAa 0x2c2dc60 reads it ([0xc2c6a10] == 1).
-            if (engineTaaLive.load()) {
+            // 0.0.74 test 3 MILES TAA step 3: the same write for each eye job while it is live.
+            const bool miles = milesSteps();
+            milesJobs[i].store(reinterpret_cast<uintptr_t>(job), std::memory_order_relaxed);
+            if (engineTaaLive.load() || miles) {
                 const uint32_t temporal = 1;
                 std::memcpy(static_cast<uint8_t*>(settings) + spidy::engine_taa::jobAa, &temporal, 4);
+                if (miles)
+                    ++SpidyMilesTaaData.aaWrites[i];
             }
             // 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): the eye's own TAA history kept when the game's stamps
             // follow the frame (share 1 = no history, the shake). Only this job's copy is written.
-            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed))
+            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed) && !miles)
                 taaHoldJob(i, view, static_cast<uint8_t*>(settings), reinterpret_cast<uintptr_t>(job));
-            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed))
+            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed) && !miles)
                 taaLinkJob(i, reinterpret_cast<uintptr_t>(job)); // 0.0.74 test 3 TAA LINK
             if (shareExposure(reinterpret_cast<uintptr_t>(job), i)) {
                 AcquireSRWLockExclusive(&telemetry);
@@ -2371,6 +2524,14 @@ bool retiring() {
 // the offset over the render size. Temporal anti-aliasing gathers the samples;
 // a scene rendered smaller than the eye needs more of them per eye pixel.
 std::array<float, 2> eyeJitter() {
+    // 0.0.74 test 3 MILES TAA step 1: MilesVR's lens jitter as it is (full Halton (2, 3), both eyes, no guard).
+    if (milesSteps()) {
+        const auto render = eyeRenderSize();
+        const auto j = spidy::miles_taa::jitter(frameIndex, config.width, render[0], render[1]);
+        eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
+        eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
+        return j;
+    }
     const bool engine = engineTaaLive.load() && !(eyeTemporal.load() & 1);
     if (!(eyeTemporal.load() & 1) && !engine)
         return {0, 0};
@@ -3886,6 +4047,16 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                                      sizeof(spidy::view_gates::fadeCallBytes)) &&
                                entry(0x2c991a0, isActiveViewBytes, sizeof(isActiveViewBytes));
             }
+            {   // 0.0.74 test 3 MILES TAA: every address it uses checked against 2.810's bytes.
+                namespace mt = spidy::miles_taa;
+                milesExeKnown = entry(mt::temporalAaRva, mt::temporalAaBytes, sizeof(mt::temporalAaBytes)) &&
+                                entry(mt::temporalAaCheckRva, mt::temporalAaCheckBytes, sizeof(mt::temporalAaCheckBytes)) &&
+                                entry(mt::currentTargetRva, mt::currentTargetBytes, sizeof(mt::currentTargetBytes)) &&
+                                entry(mt::historyTargetRva, mt::historyTargetBytes, sizeof(mt::historyTargetBytes)) &&
+                                entry(mt::queueSiteRva, mt::queueSiteBytes, sizeof(mt::queueSiteBytes));
+                if (!milesExeKnown)
+                    milesFallBack(mt::exeDiffers);
+            }
             s = MH_CreateHook(maintainHook, reinterpret_cast<void*>(maintain),
                               reinterpret_cast<void**>(&originalMaintain));
             if (s == MH_OK)
@@ -3958,6 +4129,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                 break;
             }
             hooked = true;
+            // 0.0.74 test 3 MILES TAA's per-eye log: its own hook, never a reason to start no VR.
+            if (milesExeKnown.load()) {
+                temporalAaHook = reinterpret_cast<void*>(base + spidy::miles_taa::temporalAaRva);
+                if (MH_CreateHook(temporalAaHook, reinterpret_cast<void*>(temporalAa),
+                                  reinterpret_cast<void**>(&originalTemporalAa)) != MH_OK) {
+                    temporalAaHook = nullptr;
+                    milesFallBack(spidy::miles_taa::hookFailed);
+                }
+            }
         }
         attempted = false;
         stopRequested = false;
@@ -3984,6 +4164,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             break;
         }
         enabled = true;
+        if (temporalAaHook && enableHook(temporalAaHook) != MH_OK) { // 0.0.74 test 3 MILES TAA (non-fatal)
+            removeHook(temporalAaHook);
+            temporalAaHook = nullptr;
+            milesFallBack(spidy::miles_taa::hookFailed);
+        }
         native_hud::panelHooked(hudPlaceHook != nullptr); // 0.0.70: never in SM2 (SM2_STEREO_HUD 0)
         SpidyShadowCameraData.fitHook = fitCascadesHook ? 1 : 0; // Update 31
         SpidyFarShadowsData.hooked = csmFitHook ? 1 : 0; // Update 35
@@ -4059,7 +4244,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
         for (auto hook : {maintainHook, updateHook, copyFinalHook, toneHook, copyJobHook, beginJobHook,
                           endJobHook, initBuffersHook, sizeBuffersHook, renderActorHook, setupModelsHook,
                           isActiveViewHook, impostorQueriesHook, setupDisplayHook, submitHook, renderOffscreenHook,
-                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook}) {
+                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook, temporalAaHook}) {
             auto s = disableHook(hook);
             if (s != MH_OK && s != MH_ERROR_DISABLED)
                 result = 1500 + s;
@@ -4417,9 +4602,24 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the
     // eyes' buffers get the TAA targets for ENGINE TAA (engineTaaBuffers).
-    eyeTemporal = static_cast<uint32_t>(value >> 8) & 0x10;
+    // 0.0.74 test 3: bit 0x20, MILES TAA on at the start (miles_taa074.hpp).
+    eyeTemporal = static_cast<uint32_t>(value >> 8) & (0x10 | spidy::miles_taa::eyeTemporalBit);
     return 0;
 }
+// 0.0.74 test 3 MILES TAA: the switch (game_xr, every frame) and its record (flags kept current here).
+extern "C" void SpidyMilesTaaSet(uint32_t on) { milesOn = on != 0; }
+extern "C" const spidy::miles_taa::Data* SpidyMilesTaaNow() {
+    namespace mt = spidy::miles_taa;
+    auto& d = SpidyMilesTaaData;
+    d.flags = (milesOn.load() ? mt::flagOn : 0u) | (milesLive() ? mt::flagLive : 0u) |
+              (temporalAaHook ? mt::flagHooked : 0u) | (milesExeKnown.load() ? mt::flagExeKnown : 0u) |
+              ((eyeTemporal.load() & mt::eyeTemporalBit) ? mt::flagAtStart : 0u) |
+              (milesReason.load() ? mt::flagFellBack : 0u);
+    d.reason = milesReason.load();
+    return &d;
+}
+// The safety (game_xr): eye pairs stopped reaching the headset; off for the session.
+extern "C" void SpidyMilesTaaStall() { milesFallBack(spidy::miles_taa::stalled); }
 // Update 34: ENGINE TAA. 1 on (refused, 4602, when engineTaaBlocked() says why), 0
 // off, 2 off because the frame rate halved (game_xr's guard). SpidyEngineTaaNow:
 // engine_taa::pack(state, reason).

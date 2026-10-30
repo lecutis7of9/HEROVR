@@ -110,6 +110,7 @@
 #include "spidy/eye_swap.hpp"
 #include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (off by default since the test 3 fix)
 #include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
+#include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
 #include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
@@ -661,6 +662,9 @@ void SpidyTaaDiagnosticsSet(uint32_t on); // 0.0.74 test 2b TAA DIAGNOSTICS (ste
 void SpidyTaaHoldSet(uint32_t on); // 0.0.74 test 2b TAA HOLD (stereo_probe.cpp)
 void SpidyTaaGuardSet(uint32_t on); // 0.0.74 test 3 JITTER GUARD (stereo_probe.cpp)
 void SpidyStockSet(uint32_t on); // 0.0.74 test 3 SPIDYVR STOCK (stereo_probe.cpp)
+void SpidyMilesTaaSet(uint32_t on); // 0.0.74 test 3 MILES TAA (stereo_probe.cpp)
+const spidy::miles_taa::Data* SpidyMilesTaaNow();
+void SpidyMilesTaaStall();
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
 DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
@@ -9943,7 +9947,11 @@ DWORD WINAPI run(void*) {
                                   (antialiased ? config.upscale | 7u << 8 : 100u) | reflections |
                                   // Update 34: -EngineTaa (options 0x800000): the eyes' buffers
                                   // get the TAA targets (0x10), for ENGINE TAA.
-                                  ((config.options & 0x800000) ? 0x10u << 8 : 0u)))),
+                                  ((config.options & 0x800000) ? 0x10u << 8 : 0u) |
+                                  // 0.0.74 test 3 MILES TAA on at the start (run_game_vr MILES_TAA_OPTION):
+                                  // the eyes made with the TAA targets, their scene at its upscale percent.
+                                  ((config.options & miles_taa::startOption) ? miles_taa::eyeTemporalBit << 8
+                                                                              : 0u)))),
                               "Eye anti-aliasing");
                         check(SpidyEyeShadows(reinterpret_cast<void*>(
                                   static_cast<uintptr_t>((config.options & 0x20000) ? 0 : 1))),
@@ -11182,6 +11190,70 @@ DWORD WINAPI run(void*) {
                                 });
                             }
                         }
+                        // 0.0.74 test 3 MILES TAA (miles_taa074.hpp, ON by default, live): MilesVR's four steps in
+                        // stereo_probe; here the switch, the safety (stallPairs eye jobs with no pair at the headset:
+                        // off for the session, one console line), the fall-back line and the per-eye log every 10 s.
+                        bool milesActive = false;
+                        {
+                            static miles_taa::StallGuard milesStall;
+                            static bool milesNoted{};
+                            static ULONGLONG milesTick{};
+                            static miles_taa::Data milesLast{};
+                            const bool milesWant = miles_taa::on(c38(combat38::milesTaa)) && !milesStall.tripped;
+                            SpidyMilesTaaSet(milesWant ? 1u : 0u);
+                            if (const miles_taa::Data* md = SpidyMilesTaaNow()) {
+                                milesActive = (md->flags & miles_taa::flagLive) != 0;
+                                if (milesStall.frame(md->leftJobs, newPair, milesActive)) {
+                                    SpidyMilesTaaStall();
+                                    milesActive = false;
+                                    consoleLine("MILES TAA: 45 eye frames in a row never reached the headset; off for "
+                                                "this session (SPIDYVR STOCK's path).");
+                                    milesNoted = true;
+                                }
+                                if (md->reason && !milesNoted) {
+                                    milesNoted = true;
+                                    consoleLine(std::string("MILES TAA: ") + miles_taa::reasonText(md->reason) +
+                                                (md->reason == miles_taa::upscaleWrong
+                                                     ? "; set miles_taa = off in live.txt and restart for the full eye size."
+                                                 : md->reason == miles_taa::hookFailed
+                                                     ? "; MILES TAA still runs."
+                                                     : "; SPIDYVR STOCK's path this session."));
+                                }
+                                if (const ULONGLONG nowTick = GetTickCount64();
+                                    (md->flags & (miles_taa::flagLive | miles_taa::flagAtStart)) &&
+                                    nowTick - milesTick >= 10000) {
+                                    milesTick = nowTick;
+                                    char line[512];
+                                    const uint64_t jobs = md->leftJobs - milesLast.leftJobs;
+                                    std::snprintf(line, sizeof line,
+                                                  "MILES TAA %s (%u%%, %ux%u): %llu eye frames; L TemporalAa ran %llu "
+                                                  "(history %llu) R ran %llu (history %llu); AA set %llu/%llu, queued "
+                                                  "%llu/%llu; gate L F %d stamp %d prev-slot %d idx %u +18e8 %u cut %u, R F %d "
+                                                  "stamp %d prev-slot %d idx %u +18e8 %u cut %u; TAA in/out L %u/%u R %u/%u",
+                                                  (md->flags & miles_taa::flagLive) ? "ON" : "OFF", md->percent,
+                                                  md->renderWidth, md->renderHeight,
+                                                  static_cast<unsigned long long>(jobs),
+                                                  static_cast<unsigned long long>(md->ran[0] - milesLast.ran[0]),
+                                                  static_cast<unsigned long long>(md->history[0] - milesLast.history[0]),
+                                                  static_cast<unsigned long long>(md->ran[1] - milesLast.ran[1]),
+                                                  static_cast<unsigned long long>(md->history[1] - milesLast.history[1]),
+                                                  static_cast<unsigned long long>(md->aaWrites[0] - milesLast.aaWrites[0]),
+                                                  static_cast<unsigned long long>(md->aaWrites[1] - milesLast.aaWrites[1]),
+                                                  static_cast<unsigned long long>(md->queued[0] - milesLast.queued[0]),
+                                                  static_cast<unsigned long long>(md->queued[1] - milesLast.queued[1]),
+                                                  md->frame[0], md->stamp[0], md->otherStamp[0], md->slotIndex[0],
+                                                  md->previous[0], md->cut[0], md->frame[1], md->stamp[1],
+                                                  md->otherStamp[1], md->slotIndex[1], md->previous[1], md->cut[1],
+                                                  md->inputWidth[0], md->outputWidth[0], md->inputWidth[1],
+                                                  md->outputWidth[1]);
+                                    if (!(md->flags & miles_taa::flagHooked))
+                                        std::snprintf(line + std::strlen(line), sizeof line - std::strlen(line),
+                                                      " (no TemporalAa hook: ran counts unknown)");
+                                    consoleLine(line);
+                                    milesLast = *md;
+                                }
+                            }
+                        }
                         {   // Update 34: ENGINE TAA's FPS guard and its plan B (EYE AA).
                             static engine_taa::FpsGuard guard;
                             static uint32_t previous{};
@@ -11265,16 +11337,18 @@ DWORD WINAPI run(void*) {
                                     eyeAaState = eye_taa::pack(eye_taa::off, 0);
                                     OutputDebugStringA("EYE AA: off (IMAGE STYLE SPIDYVR: the game's TAA)\n");
                                 }
-                                if (picture && (eyeAaNow() & 0xff) == eye_taa::on) { // SPIDYVR PICTURE: never EYE AA
+                                if ((picture || milesActive) && (eyeAaNow() & 0xff) == eye_taa::on) {
+                                    // SPIDYVR PICTURE and 0.0.74 test 3 MILES TAA: never EYE AA
                                     native_gpu::setEyeTemporal(false);
                                     eyeAaState = eye_taa::pack(eye_taa::off, 0);
-                                    OutputDebugStringA("EYE AA: off (SPIDYVR PICTURE)\n");
+                                    OutputDebugStringA(milesActive ? "EYE AA: off (MILES TAA)\n" : "EYE AA: off (SPIDYVR PICTURE)\n");
                                 }
-                                if (!picture && step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
+                                if (!picture && !milesActive && step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
                                     engine_taa::stateOf(engine) != engine_taa::on)
                                     pressEyeAa();
                             }
-                            native_gpu::setCleanImage(picture || (image_style::spidy(style) &&
+                            // 0.0.74 test 3 MILES TAA: the game's TAA alone (no FXAA, history or CAS sharpening).
+                            native_gpu::setCleanImage(milesActive || picture || (image_style::spidy(style) &&
                                                                   engine_taa::stateOf(engine) == engine_taa::on));
                         }
                         {   // Update 35: FAR SHADOWS' FPS guard: a mode the press chose that halves
@@ -13576,9 +13650,9 @@ DWORD WINAPI run(void*) {
     return error;
 }
 } // namespace
-// Update 34.1: every option bit this build knows (the highest: 0x800000, -EngineTaa).
+// Update 34.1: every option bit this build knows (the highest: 0x1000000, 0.0.74 test 3 MILES TAA).
 // tests/launcher_options_tests.py checks run_game_vr.py sends none past it.
-constexpr uint32_t knownOptions = 0xffffff;
+constexpr uint32_t knownOptions = 0x1ffffff;
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     std::lock_guard life(lifecycle);
     if (worker)
@@ -14320,6 +14394,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashInside(void* v) { return 
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return setHero007(v, combat38::cockpitGlow, 5511); }
 // 0.0.74 test 3 SPIDYVR STOCK (combat38::stockValue): ON (0, the default) or OFF (1); live (LOD / mip / eye size at the next VR start).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySpidyvrStock(void* v) { return setHero007(v, combat38::spidyvrStock, 5512); }
+// 0.0.74 test 3 MILES TAA (miles_taa074.hpp): ON (0, the default) or OFF (1); live (the eye size at the next VR start).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyMilesTaa(void* v) { return setHero007(v, combat38::milesTaa, 5513); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

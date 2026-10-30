@@ -48,6 +48,7 @@
 #include "spidy/crime_gps074.hpp"
 #include "spidy/taa_hold074.hpp"
 #include "spidy/taa_link074.hpp"
+#include "spidy/miles_taa074.hpp"
 #include "spidy/cave_quiet074.hpp"
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
@@ -18964,7 +18965,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 167, "one hundred and sixty options (0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 168, "one hundred and sixty options (0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18998,7 +18999,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 167, "0.0.74 test 3 has 160 COMBAT options (+ SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 168, "0.0.74 test 3 has 160 COMBAT options (+ MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25304,6 +25305,60 @@ int main() {
               "gameplay and stability options keep the player's value");
         for (uint32_t o = 0; o < options; ++o)
             check(stockValue(o, 0) < optionInfo[o].count, "every stock value is one of the option's own");
+    });
+    test("0.0.74 test 3 MILES TAA: MilesVR's jitter, phases, upscale check, safety and record", [] {
+        namespace mt = spidy::miles_taa;
+        using namespace combat38;
+        check(optionInfo[milesTaa].key == std::string_view("miles_taa") && optionInfo[milesTaa].count == 2 &&
+                  milesTaaOn(0) && !milesTaaOn(1) && mt::on(0) && !mt::on(1),
+              "MILES TAA: an option, ON (0) by default, switchable off");
+        check(stockValue(milesTaa, 0) == 0 && stockValue(milesTaa, 1) == 1, "SPIDYVR STOCK leaves MILES TAA to the player");
+        check(std::string(optionInfo[milesTaa].help).find("restart") != std::string::npos, "its subtext says what needs a restart");
+        // phases = clamp(ceil(8 ratio^2), 8, 32)
+        check(mt::phases(2000, 2000) == 8 && mt::phases(2000, 1340) == 18 && mt::phases(2000, 1000) == 32 &&
+                  mt::phases(2000, 500) == 32 && mt::phases(2000, 0) == 8,
+              "phases: 8 at full size, 18 at 67%, at most 32");
+        check(mt::halton(1, 2) == .5f && mt::halton(2, 2) == .25f && std::fabs(mt::halton(1, 3) - 1.f / 3) < 1e-6f,
+              "Halton (2, 3)");
+        const auto j0 = mt::jitter(0, 2000, 1340, 1400), j1 = mt::jitter(18, 2000, 1340, 1400);
+        check(j0 == j1 && j0[0] == 0.f && std::fabs(j0[1] - 2 * (1.f / 3 - .5f) / 1400) < 1e-9f,
+              "the jitter repeats every phases() frames, the first phase index 1");
+        float most = 0;
+        for (uint64_t f = 0; f < 64; ++f) {
+            const auto j = mt::jitter(f, 2000, 1340, 1400);
+            most = std::max({most, std::fabs(j[0]) * 1340, std::fabs(j[1]) * 1400});
+        }
+        check(most <= 1.f, "within one render pixel (NDC 2/width)");
+        check(mt::madePercent(true, true, true, true) == 67 && mt::madePercent(false, true, true, true) == 100 &&
+                  mt::madePercent(true, false, true, true) == 100 && mt::madePercent(true, true, false, true) == 100 &&
+                  mt::madePercent(true, true, true, false) == 100,
+              "67% only when on at the start and every check passed");
+        check(mt::upscaleOk(1340, 2000, 2000, 1340) &&
+                  mt::upscaleOk(0, 2000, 2000, 2000) && mt::upscaleOk(2000, 2000, 2000, 2000) &&
+                  !mt::upscaleOk(2000, 2000, 2000, 1340) && !mt::upscaleOk(1340, 0, 2000, 1340) &&
+                  !mt::upscaleOk(1340, 1340, 2000, 1340),
+              "upscale: the smaller scene in, the eye's size out");
+        mt::StallGuard g;
+        check(!g.frame(0, false, true) && !g.frame(10, true, true), "armed by a pair");
+        bool tripped = false;
+        for (uint64_t jobs = 11; jobs < 10 + mt::stallPairs; ++jobs)
+            tripped |= g.frame(jobs, false, true);
+        check(!tripped && g.frame(10 + mt::stallPairs, false, true) && g.tripped && !g.frame(500, false, true),
+              "45 eye frames without a pair: trips once");
+        mt::StallGuard idle;
+        check(!idle.frame(0, false, true) && !idle.frame(1000, false, true), "never before the first pair");
+        mt::StallGuard off;
+        off.frame(0, true, true);
+        check(!off.frame(100, false, false) && !off.frame(200, false, true), "off: re-armed only by a pair");
+        check(sizeof(mt::Data) == 256 && mt::Data{}.magic == mt::magic && mt::Data{}.version == 1 && mt::Data{}.bytes == 256,
+              "SpidyMilesTaaData: 256 bytes");
+        check(mt::startOption == 0x1000000 && mt::eyeTemporalBit == 0x20 && mt::upscalePercent == 67 && mt::stallPairs == 45,
+              "the start bit, the eye bit, 67%, 45 pairs");
+        for (uint32_t r = mt::exeDiffers; r <= mt::hookFailed; ++r)
+            check(mt::reasonText(r) && *mt::reasonText(r), "every reason has a line");
+        check(mt::temporalAaRva == 0x2c2dc60 && mt::currentTargetRva == 0x2c98240 && mt::historyTargetRva == 0x2c98290 &&
+                  mt::queueSiteRva == 0x2d017b3 && sizeof(mt::temporalAaBytes) == 32 && sizeof(mt::queueSiteBytes) == 24,
+              "the CONFIRMED addresses and their byte checks (<= 32 bytes each)");
     });
     test("0.0.74 test 3 COCKPIT GLOW: a darker cabin, cool from above, amber from below, dials backlit, tips soft", [] {
         namespace cl = spidy::cabin_look;

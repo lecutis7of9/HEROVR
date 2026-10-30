@@ -1793,6 +1793,9 @@ def taa_link_line(t):
 # Update 34.1: SpidyXrStart's options field: its offset in the config and the ENGINE TAA bit.
 OPTIONS_OFFSET = struct.calcsize('<4I7Q2If')
 ENGINE_TAA_OPTION = 0x800000
+# 0.0.74 test 3 MILES TAA (live.txt miles_taa, on by default): the eyes are made with the game's TAA targets and
+# their scene at 67%, which the game's TemporalAa resolves to the full eye (include/spidy/miles_taa074.hpp).
+MILES_TAA_OPTION = 0x1000000
 
 
 def eye_aa_line(aa, asked):
@@ -3000,6 +3003,10 @@ def session(a, startup, session_off=()):
         # each eye makes its own shadows. Say so, so the console and the report match what the eyes get.
         reflections_line = ("Reflections: the eyes' extra reflection targets are off "
                            "(not ported to Spider-Man 2; SM2VR has them off too).")
+        miles_taa = live_settings.miles_taa_in_file(ROOT/'live.txt')
+        print('MILES TAA: ' + ('ON - the game\'s TAA in each eye (Miles Morales VR\'s path), the eyes\' scene at 67% '
+                               'resolved by it; miles_taa = off in live.txt for the full eye size (restart).'
+                               if miles_taa else 'OFF (live.txt miles_taa).'), flush=True)
         config = struct.pack('<4I7Q2IfI', 0x53585243, 24, 664, game.pid, game.base, queue,
                              bridge_module, ray_module, motion_module, 0, 0,
                              int(a.seconds*1000), a.size, a.swing_speed,
@@ -3015,7 +3022,8 @@ def session(a, startup, session_off=()):
                              (0x20000 if a.own_shadows else 0) | (0 if reflections else 0x40000) |
                              (0x100000 if a.no_prompt_help else 0) | (0x80000 if a.eye_lens_distances else 0) |
                              (0x200000 if a.arcade_webs else 0) | (0x400000 if a.eye_aa == 'off' else 0) |
-                             (ENGINE_TAA_OPTION if a.engine_taa else 0)) + \
+                             (ENGINE_TAA_OPTION if a.engine_taa else 0) |
+                             (MILES_TAA_OPTION if miles_taa else 0)) + \
             runtime_path(manifest) + struct.pack('<14I', a.snap_turn, a.haptics, a.screen_size, a.smooth_turn,
                                                  a.render_scale, a.weight, a.eye_height, a.arm_length, a.hud,
                                                  a.flip_speed, a.upscale, a.monitor_rate, a.screen_depth,

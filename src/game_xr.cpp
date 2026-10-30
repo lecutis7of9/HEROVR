@@ -2434,7 +2434,7 @@ DWORD WINAPI run(void*) {
         bool vanExitAsk = false; // 0.0.74 test 2b: the dash's GET OUT, for the next van step
         // 0.0.74 test 1 BATMOBILE (batmobile074.hpp): the one Driver is the van (PUNISHER) or a Batmobile (BATMAN).
         // vehicleKind: what it was last frame (a change and the old one goes first); batCar: the car summoned
-        // (latched at the X; the picker applies on the next summon); vehicleTune: the numbers in use.
+        // (latched at the X; test 5: a parked car swaps to the pick); vehicleTune: the numbers in use.
         enum : uint8_t { kindNone, kindVan, kindBatmobile };
         uint8_t vehicleKind = kindNone;
         uint32_t batCar = 0, batPickSaved = UINT32_MAX;
@@ -7444,6 +7444,25 @@ DWORD WINAPI run(void*) {
                                         vanAt = combatClock;
                                         // 0.0.74 test 1 BATMOBILE: the van for the PUNISHER, the Batmobile for BATMAN; a change of
                                         // hero or kind and the old one goes this frame (vin.punisher false: the van's "other hero").
+                                        // 0.0.74 test 5 BATMOBILE SWAP (owner: "switching models doesn't change the car"): test 4
+                                        // latched the pick at the X summon only, so a car picked on the dash or the Batcomputer
+                                        // never came while he got out and back in by the door. A parked car now becomes the picked
+                                        // one where it stands (the layout and tune follow batCar every frame); a driven one on the
+                                        // step he gets out.
+                                        if (heroWas == hero_modes::batman && c38(combat38::batmobile) == 0 && van.state == van072::parked &&
+                                            !vanProbe.active) {
+                                            const uint32_t pickNow = batmobile074::clampCar(c38(combat38::batmobileChoice));
+                                            if (pickNow != batCar && batReady(pickNow)) {
+                                                batCar = pickNow;
+                                                van.speed = 0;
+                                                message(1, 0, (std::string("BATMOBILE ") + batmobile074::names[batCar] +
+                                                               ": here - grip the driver door handle to get in")
+                                                                  .c_str());
+                                                game_prompts::note((std::string("0.0.74 test 5 BATMOBILE SWAP: the parked car is now ") +
+                                                                    batmobile074::names[batCar])
+                                                                       .c_str());
+                                            }
+                                        }
                                         uint8_t kindNow = kindNone;
                                         if (heroWas == hero_modes::punisher && c38(combat38::punisherVan) == 0 &&
                                             mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded)
@@ -7695,7 +7714,7 @@ DWORD WINAPI run(void*) {
                                                 const uint32_t next = batmobile074::nextCar(c38(combat38::batmobileChoice));
                                                 combat38Values[combat38::batmobileChoice] = next;
                                                 message(1, 0, (std::string("BATMOBILE: ") + batmobile074::names[next] +
-                                                               (next == batCar ? " (driving it now)" : " - comes on the next summon (get out, X)"))
+                                                               (next == batCar ? " (driving it now)" : " - it swaps in when you get out"))
                                                                   .c_str());
                                                 break;
                                             }
@@ -7875,7 +7894,7 @@ DWORD WINAPI run(void*) {
                                                     const uint32_t next = batmobile074::nextCar(c38(combat38::batmobileChoice));
                                                     combat38Values[combat38::batmobileChoice] = next;
                                                     message(1, 0, (std::string("BATMOBILE: ") + batmobile074::names[next] +
-                                                                   (next == batCar ? " (the one parked here)" : " - comes on the next summon"))
+                                                                   (next == batCar ? " (the one parked here)" : " - swapped in where it is parked"))
                                                                       .c_str());
                                                     break;
                                                 }

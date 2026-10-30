@@ -32301,7 +32301,10 @@ int main() {
         fd.car = "1989";
         for (uint32_t p = 0; p < bc::pages; ++p) {
             const auto L = bc::pageLines(p, 0, fd);
-            check(L.size() >= 2 && L[0].rfind("BATCOMPUTER", 0) == 0, std::string("each page has lines: ") + bc::pageNames[p]);
+            check(L.size() >= 2 && L[0] == (p == bc::menu ? std::string("BATCOMPUTER") : std::string(bc::pageNames[p])), std::string("each page has lines, titled by its name: ") + bc::pageNames[p]);
+            bool tagged = false; // test 2b polish: dev tags stay in logs/docs, never on a page
+            for (const auto& l : L) tagged = tagged || l.find("CANDIDATE") != std::string::npos || l.find("CONFIRMED") != std::string::npos || l.find("FLAVOUR") != std::string::npos;
+            check(!tagged, std::string("no dev tags on the page: ") + bc::pageNames[p]);
         }
         const auto on = bc::pageLines(bc::ongoing, 1, fd);
         check(on.size() >= 3 && on[2].rfind("> CRIME", 0) == 0 && on[1].rfind("  CRIME", 0) == 0, "ONGOING: the cursor's case marked");

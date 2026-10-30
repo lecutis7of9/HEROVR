@@ -36,7 +36,7 @@ class Switch(unittest.TestCase):
         self.assertIn('restart', m.group(1))
 
     def test_notice_test_6(self):
-        self.assertIn('set(HERO_TEST_NUMBER "6" CACHE', src('CMakeLists.txt'))
+        self.assertIn('set(HERO_TEST_NUMBER "7" CACHE', src('CMakeLists.txt'))  # 0.0.74 test 7
 
 
 class Lens(unittest.TestCase):
@@ -44,7 +44,9 @@ class Lens(unittest.TestCase):
         s = src('src/stereo_probe.cpp')
         block = s[s.index('std::array<float, 2> cleanTaaJitter(unsigned index) {'):]
         block = block[:block.index('\n}\n')]
-        self.assertIn('const float px = halton(phase, 2) - .5f, py = halton(phase, 3) - .5f;', block)
+        # 0.0.74 test 7: scale is 1 unless JITTER PROOF BIG (OFF by default) is on
+        self.assertIn('const float px = (halton(phase, 2) - .5f) * scale, py = (halton(phase, 3) - .5f) * scale;', block)
+        self.assertIn('native_gpu::jitterProofBig() ? jitter_proof::bigScale : 1.f', block)
         self.assertIn('const std::array<float, 2> j{px / render[0], py / render[1]};', block)
         self.assertNotIn('2 * ', block)
         self.assertIn('native_gpu::noteEyeJitter(latchedSerial.load(std::memory_order_relaxed), index', block)

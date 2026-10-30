@@ -76,6 +76,7 @@
 #include "spidy/native_hud.hpp"
 #include "spidy/native_eye_history.hpp"
 #include "spidy/eye_history.hpp"
+#include "spidy/jitter_proof.hpp"
 #include "spidy/web_shading.hpp"
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_pair_state.hpp"
@@ -18161,6 +18162,74 @@ int main() {
                   std::count(jh.begin(), jh.end(), '.') == 1 && jh.find("restart") != std::string::npos &&
                   cleanValue(cleanJitter, 0) == 0 && cleanValue(cleanJitter, 1) == 1,
               "0.0.74 test 6 CLEAN JITTER: an ON / OFF row, kept under CLEAN, one sentence with restart");
+        // 0.0.74 test 7: JITTER PROOF (ON), JITTER PROOF BIG (OFF), ENGINE TAA STOCK (ON); CLEAN passes them through.
+        const struct { uint32_t o; const char* key; const char* first; const char* second; } rows[] = {
+            {jitterProof, "jitter_proof", "ON", "OFF"},
+            {jitterProofBig, "jitter_proof_big", "OFF", "ON"},
+            {engineTaaStock, "engine_taa_stock", "ON", "OFF"}};
+        for (const auto& r : rows) {
+            const std::string th = optionInfo[r.o].help;
+            check(optionInfo[r.o].key == std::string_view(r.key) && optionInfo[r.o].count == 2 &&
+                      std::string_view(optionInfo[r.o].values[0]) == r.first &&
+                      std::string_view(optionInfo[r.o].values[1]) == r.second && th.size() <= 80 &&
+                      std::count(th.begin(), th.end(), '.') == 1 && th.find("restart") != std::string::npos &&
+                      cleanValue(r.o, 0) == 0 && cleanValue(r.o, 1) == 1 && stockValue(r.o, 0) == 0,
+                  "0.0.74 test 7: a two-value row, the default first, kept under CLEAN, one sentence with restart");
+        }
+    });
+    test("0.0.74 test 7 CLEAN JITTER PROOF: the sub-pixel shift between two boxes, and the head's share", [] {
+        using namespace jitter_proof;
+        const auto scene = [](float x, float y) {
+            return std::sin(x * .37f) + std::cos(y * .29f) + .5f * std::sin((x + y) * .11f);
+        };
+        const auto pair = [&](float dx, float dy, std::vector<float>& a, std::vector<float>& b) {
+            a.assign(box * box, 0.f);
+            b.assign(box * box, 0.f);
+            for (uint32_t y = 0; y < box; ++y)
+                for (uint32_t x = 0; x < box; ++x) {
+                    a[y * box + x] = scene(static_cast<float>(x), static_cast<float>(y));
+                    b[y * box + x] = scene(static_cast<float>(x) - dx, static_cast<float>(y) - dy);
+                }
+        };
+        std::vector<float> a, b;
+        bool allFound = true;
+        for (const float d : {0.f, .3125f, -.5f, .0625f, 1.75f}) {
+            pair(d, -d, a, b);
+            const auto s = measure(a, b, range);
+            allFound = allFound && s.ok && std::abs(s.x - d) <= .07f && std::abs(s.y + d) <= .07f;
+        }
+        check(allFound, "the move is found to the nearest sixteenth of a pixel within +-2 pixels");
+        pair(4, -4, a, b);
+        const auto big = measure(a, b, bigRange);
+        check(big.ok && std::abs(big.x - 4) < .07f && std::abs(big.y + 4) < .07f, "JITTER PROOF BIG: a 4 pixel step");
+        std::vector<float> flat(box * box, .5f);
+        check(!measure(flat, flat, range).ok && !measure(a, std::vector<float>(3), range).ok,
+              "a flat box (sky) or a wrong size is not measured");
+        check(kindOf(28) == Kind::rgba8 && kindOf(87) == Kind::rgba8 && kindOf(24) == Kind::rgb10a2 &&
+                  kindOf(10) == Kind::rgba16f && kindOf(2) == Kind::unsupported && rowPitch(Kind::rgba8) == 512 &&
+                  rowPitch(Kind::rgba16f) == 1024 && bytesPer(Kind::unsupported) == 0,
+              "the eye formats read: 8-bit, 10-bit and half float, rows 256-byte aligned; others turn the probe off");
+        check(halfToFloat(0x3c00) == 1.f && halfToFloat(0x3800) == .5f && halfToFloat(0xbc00) == -1.f,
+              "half floats");
+        std::vector<uint8_t> raw(512 * box, 0);
+        raw[0] = 255; raw[1] = 255; raw[2] = 255;
+        std::vector<float> luma;
+        check(toLuma(Kind::rgba8, raw.data(), 512, luma) && luma.size() == box * box && luma[0] == 1.f && luma[1] == 0.f &&
+                  !toLuma(Kind::rgba8, raw.data(), 100, luma) && !toLuma(Kind::unsupported, raw.data(), 512, luma),
+              "a box to luma; a short pitch or unknown kind refused");
+        eye_history::EyeView v;
+        v.world = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        v.tangents = {-1, 1, -1, 1};
+        std::array<float, 9> h{};
+        float hx = 1, hy = 1;
+        check(eye_history::historyReprojection(v, v, h) && headShift(h, 2000, 2000, hx, hy) && std::abs(hx) < 1e-3f &&
+                  std::abs(hy) < 1e-3f,
+              "a still head adds no move");
+        std::array<float, 9> behind{};
+        behind[8] = -1;
+        check(!headShift(behind, 2000, 2000, hx, hy), "a centre behind the eye is refused");
+        check(std::string_view(faultText(1)) == "the eye format cannot be read" && std::string_view(faultText(99)) == "unknown",
+              "every fault has a reason");
     });
     test("Update 37: combat - a tap is the web shooter, a hold does nothing, gestures fire their gadget", [] {
         using namespace combat_input;
@@ -19001,7 +19070,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 174, "one hundred and sixty options (0.0.74 test 6: + CLEAN JITTER; 0.0.74 test 5: + IMPOSTOR EYE; 0.0.74 test 4: + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; 0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 177, "one hundred and sixty options (0.0.74 test 7: + JITTER PROOF, JITTER PROOF BIG, ENGINE TAA STOCK; 0.0.74 test 6: + CLEAN JITTER; 0.0.74 test 5: + IMPOSTOR EYE; 0.0.74 test 4: + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; 0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -19035,7 +19104,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 174, "0.0.74 test 6 has 160 COMBAT options (+ CLEAN JITTER; + IMPOSTOR EYE; + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; + MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 177, "0.0.74 test 7 has 177 COMBAT options (+ JITTER PROOF, JITTER PROOF BIG, ENGINE TAA STOCK; + CLEAN JITTER; + IMPOSTOR EYE; + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; + MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,

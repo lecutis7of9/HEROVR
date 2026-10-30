@@ -106,7 +106,7 @@ class BlackHeadsetFix(unittest.TestCase):
         self.assertEqual(live_settings.CHOICE_NAMES['heap_guard'], ('off', 'on'))
 
     def test_notice_says_test_3(self):
-        self.assertIn('set(HERO_TEST_NUMBER "6" CACHE', src('CMakeLists.txt'))
+        self.assertIn('set(HERO_TEST_NUMBER "7" CACHE', src('CMakeLists.txt'))  # 0.0.74 test 7
         self.assertIn('" TEST " SPIDY_TEST_NUMBER " " SPIDY_TEST_COMMIT " - Made by Agent Mulder: starting OpenXR"', self.g)
 
 

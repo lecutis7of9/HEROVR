@@ -3277,7 +3277,9 @@ def session(a, startup, session_off=()):
             f'{k} = {v}' for k, v in live_settings.UPDATE38_DEFAULTS.items()), flush=True)
         # Update 37.2: the settings that must start on, as the session now runs them.
         print(live_settings.startup_line(live_file.current), flush=True)
-        print(live_settings.image_line(image_now, live_file.current), flush=True)
+        # 0.0.74 test 7: under a preset (AA MODE CLEAN, SPIDYVR STOCK / PICTURE) the line names what it sends.
+        print(live_settings.image_line(image_now, live_file.current,
+                                       live_settings.render_preset_in_file(ROOT/'live.txt')[1]), flush=True)
         # Update 24: what makes far detail shimmer that the player set (strong sharpening), and a flicker
         # test (eye_debug) still in live.txt.
         for line in live_settings.start_notes(ROOT/'live.txt'):

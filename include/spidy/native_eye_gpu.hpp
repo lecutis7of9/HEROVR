@@ -1,4 +1,5 @@
 #pragma once
+#include "spidy/jitter_proof.hpp"
 #include "spidy/eye_color.hpp"
 #include <array>
 #include <cstdint>
@@ -101,6 +102,13 @@ void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& vi
 // serial (noteEyeJitter: uv, the lens's own arguments, and render pixels); the history pass reads the new pair
 // that step back and blends it, FXAA stays off, CAS follows. cleanTaaStats(): running counts for the 10 s line.
 void setCleanJitter(bool on);
+// 0.0.74 test 7 CLEAN JITTER PROOF (jitter_proof.hpp): game_xr's JITTER PROOF switch (on by default) and
+// JITTER PROOF BIG (off: on, stereo_probe sends a 4 pixel step and the stepped pairs are shown RAW, no history).
+// jitterProof(): the last reading (a new one when its number grows; fault nonzero: the probe is off).
+void setJitterProof(bool on);
+void setJitterProofBig(bool on);
+bool jitterProofBig();
+jitter_proof::Reading jitterProof();
 bool cleanTaa();
 void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float pxX, float pxY);
 struct CleanTaaStats {

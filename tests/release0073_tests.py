@@ -130,7 +130,7 @@ class Hero074Test1(unittest.TestCase):
 
     def test_labels(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_NUMBER "6" CACHE', c)  # 0.0.74 test 6: the notice says TEST 6
+        self.assertIn('set(HERO_TEST_NUMBER "7" CACHE', c)  # 0.0.74 test 7: the notice says TEST 7
         self.assertIn('set(HERO_TEST_VERSION "0.0.74" CACHE', c)
 
 

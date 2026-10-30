@@ -57,7 +57,7 @@ class Install(unittest.TestCase):
         self.assertIn('nowTick - impostorTick >= 10000', g)
         self.assertIn('af90 %llu c346 %llu c356 %llu c467 %llu c477 %llu', g)
         self.assertIn('"CLEAN JITTER: %u eye frames', g)
-        self.assertIn('SpidyCleanSet(combat38::aaModeClean(c38(combat38::aaMode)) ? 1u : 0u);', g)
+        self.assertIn('SpidyCleanSet(cleanAa ? 1u : 0u);', g)  # 0.0.74 test 7: cleanAa holds AA MODE CLEAN less ENGINE TAA STOCK's stand-down
 
     def test_now_bit_13_is_installed(self):
         self.assertIn('(impostors ? 1u : 0u) << 13', src('src/stereo_probe.cpp'))

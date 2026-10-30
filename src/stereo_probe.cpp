@@ -2796,7 +2796,8 @@ std::array<float, 2> eyeJitter() {
 std::atomic<uint64_t> cleanTaaLenses{};
 bool cleanWantsJitter() {
     return cleanOn.load(std::memory_order_relaxed) && latchedSerial.load(std::memory_order_relaxed) != 0 &&
-           !milesSteps() && native_gpu::cleanTaa();
+           !milesSteps() && native_gpu::cleanTaa() &&
+           !engineTaaLive.load(std::memory_order_relaxed); // 0.0.74 test 7: never over ENGINE TAA's own jitter
 }
 std::array<float, 2> cleanTaaJitter(unsigned index) {
     const auto render = eyeRenderSize();
@@ -2809,7 +2810,9 @@ std::array<float, 2> cleanTaaJitter(unsigned index) {
         return value;
     };
     const uint32_t phase = static_cast<uint32_t>(frameIndex % phases) + 1;
-    const float px = halton(phase, 2) - .5f, py = halton(phase, 3) - .5f;
+    // 0.0.74 test 7 JITTER PROOF BIG (a test, OFF by default): the step 8 times larger (+-4 pixels), shown raw.
+    const float scale = native_gpu::jitterProofBig() ? jitter_proof::bigScale : 1.f;
+    const float px = (halton(phase, 2) - .5f) * scale, py = (halton(phase, 3) - .5f) * scale;
     const std::array<float, 2> j{px / render[0], py / render[1]};
     eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
     eyeJitterSent[1].store(j[1], std::memory_order_relaxed);

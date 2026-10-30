@@ -267,6 +267,10 @@ enum Option : uint32_t {
     impostorEye,
     // 0.0.74 test 6 CLEAN JITTER (stereo_probe cleanTaaJitter, native_eye_gpu cleanTaa): CLEAN's own temporal AA
     cleanJitter,
+    // 0.0.74 test 7 JITTER PROOF, JITTER PROOF BIG (jitter_proof.hpp, native_eye_gpu proof), ENGINE TAA STOCK (c38)
+    jitterProof,
+    jitterProofBig,
+    engineTaaStock,
     options
 };
 struct OptionInfo {
@@ -661,6 +665,9 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"aa_mode", "AA MODE", "AAMD", "CLEAN: full-size eyes, FXAA, per-eye history, light CAS; textures at restart.", 2, {"CLEAN", "OFF", nullptr, nullptr}},
     {"impostor_eye", "IMPOSTOR EYE", "IMPE", "ON lets the left eye pick far buildings' full models for both eyes; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"clean_jitter", "CLEAN JITTER", "CLJT", "ON jitters CLEAN's eyes so the history smooths edges, FXAA off; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"jitter_proof", "JITTER PROOF", "JTPF", "ON logs if CLEAN's jitter moves the eye pixels, every 2 s; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"jitter_proof_big", "JITTER PROOF BIG", "JTPB", "ON steps 4 px and shows the eyes raw, to see it by eye; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
+    {"engine_taa_stock", "ENGINE TAA STOCK", "ETST", "ON sets CLEAN aside while ENGINE TAA runs, as SpidyVR does; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream

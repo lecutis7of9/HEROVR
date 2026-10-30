@@ -9,6 +9,7 @@
 #include "spidy/heap_guard.hpp"
 #include "spidy/eye_debug.hpp"
 #include "spidy/eye_taa.hpp"
+#include "spidy/jitter_proof.hpp"
 #include "spidy/monitor_rate.hpp"
 #include "spidy/presentation_gate.hpp"
 #include "spidy/streamer_view.hpp"
@@ -23,6 +24,7 @@
 #include <dxgi1_4.h>
 #include <limits>
 #include <mutex>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -2007,6 +2009,254 @@ bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out) {
         }
     return false;
 }
+// 0.0.74 test 7 CLEAN JITTER PROOF (jitter_proof.hpp, native_eye_gpu.hpp jitterProof): every ~2 s, two pairs in a
+// row with the head still, a 128 x 128 box from the middle of each staged RAW eye (after the copy or AA, before the
+// history) is copied to a readback buffer; once the GPU is past them (fence), the boxes are read and measured on a
+// thread-pool thread. Every step is checked: a failure is kept in proof::faultCode and the probe stays off.
+namespace proof {
+std::atomic<bool> wanted{true}, big{false};
+std::atomic<uint32_t> faultCode{};
+std::atomic<bool> busy{false};
+ComPtr<ID3D12Resource> buffer;
+jitter_proof::Kind kind{};
+DXGI_FORMAT format{};
+UINT pitch{};
+enum class Stage { idle, first, submitted } stage{Stage::idle};
+uint64_t serials[2]{};
+bool stepped[2]{};
+float sentPx[2][2][2]{}; // first or second pair, eye, axis (render pixels)
+std::array<eye_history::EyeView, 2> views[2]{};
+uint64_t fenceAt{}, lastMs{};
+UINT boxWidth{}, boxHeight{}, eyeWidth{};
+uint64_t skippedMoving{};
+int recordedPair{-1}; // the pair this stagePair recorded (0, 1), -1 none
+std::mutex resultLock;
+jitter_proof::Reading result{}; // resultLock
+struct Job {
+    std::vector<float> luma[2][2]; // first or second pair, eye
+    jitter_proof::Reading reading{};
+    float range{};
+};
+void fail(uint32_t code) {
+    uint32_t none = 0;
+    faultCode.compare_exchange_strong(none, code); // the first reason is kept; step() then stays idle
+    std::lock_guard lock(resultLock);
+    result.fault = faultCode.load();
+}
+void measureJob(Job& job) {
+    auto r = job.reading;
+    uint64_t flat = 0;
+    for (unsigned i = 0; i < 2; ++i) {
+        const auto s = jitter_proof::measure(job.luma[0][i], job.luma[1][i], job.range);
+        r.ok[i] = s.ok;
+        r.error[i] = s.error;
+        r.measured[i][0] = s.x - r.head[i][0];
+        r.measured[i][1] = s.y - r.head[i][1];
+        flat += s.ok ? 0u : 1u;
+    }
+    std::lock_guard lock(resultLock);
+    r.number = result.number + 1;
+    r.skippedFlat = result.skippedFlat + flat;
+    r.fault = faultCode.load();
+    result = r;
+}
+VOID CALLBACK measureLater(PTP_CALLBACK_INSTANCE, PVOID context) {
+    auto* job = static_cast<Job*>(context);
+    try {
+        measureJob(*job);
+    } catch (...) {
+        fail(5);
+    }
+    delete job;
+    busy.store(false);
+}
+bool prepare() {
+    if (buffer)
+        return true;
+    if (!stagedEyes[0] || !stagedEyes[1]) {
+        fail(1);
+        return false;
+    }
+    const auto desc = stagedEyes[0]->GetDesc();
+    kind = jitter_proof::kindOf(static_cast<uint32_t>(desc.Format));
+    if (kind == jitter_proof::Kind::unsupported) {
+        fail(1);
+        return false;
+    }
+    if (outWidth < jitter_proof::box + 32 || outHeight < jitter_proof::box + 32) {
+        fail(2);
+        return false;
+    }
+    format = desc.Format;
+    pitch = jitter_proof::rowPitch(kind);
+    D3D12_RESOURCE_DESC b{};
+    b.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    b.Width = static_cast<UINT64>(pitch) * jitter_proof::box * 4;
+    b.Height = 1;
+    b.DepthOrArraySize = 1;
+    b.MipLevels = 1;
+    b.SampleDesc.Count = 1;
+    b.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_READBACK;
+    if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &b, D3D12_RESOURCE_STATE_COPY_DEST,
+                                               nullptr, IID_PPV_ARGS(&buffer)))) {
+        buffer.Reset();
+        fail(3);
+        return false;
+    }
+    return true;
+}
+// The staged eyes still match the readback buffer (their format can change when the eyes are made again): a
+// mismatched copy is never recorded.
+bool sameEyes() {
+    for (unsigned i = 0; i < 2; ++i)
+        if (!stagedEyes[i] || stagedEyes[i]->GetDesc().Format != format)
+            return false;
+    return outWidth >= jitter_proof::box + 32 && outHeight >= jitter_proof::box + 32;
+}
+// The boxes of both staged eyes (COPY_SOURCE between uses) into regions pair * 2 + eye.
+void copyBoxes(ID3D12GraphicsCommandList* list, unsigned one) {
+    const UINT x = (outWidth - jitter_proof::box) / 2, y = (outHeight - jitter_proof::box) / 2;
+    const D3D12_BOX area{x, y, 0, x + jitter_proof::box, y + jitter_proof::box, 1};
+    for (unsigned i = 0; i < 2; ++i) {
+        D3D12_TEXTURE_COPY_LOCATION from{}, to{};
+        from.pResource = stagedEyes[i].Get();
+        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        to.pResource = buffer.Get();
+        to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        to.PlacedFootprint.Offset = static_cast<UINT64>(pitch) * jitter_proof::box * (one * 2 + i);
+        to.PlacedFootprint.Footprint = {format, jitter_proof::box, jitter_proof::box, 1, pitch};
+        list->CopyTextureRegion(&to, 0, 0, 0, &from, &area);
+    }
+}
+// Once the GPU is past both pairs: read them and queue the measurement.
+void collect() {
+    if (fence->GetCompletedValue() < fenceAt || busy.load())
+        return;
+    stage = Stage::idle;
+    lastMs = GetTickCount64();
+    const SIZE_T size = static_cast<SIZE_T>(pitch) * jitter_proof::box * 4;
+    const D3D12_RANGE whole{0, size};
+    void* data = nullptr;
+    if (FAILED(buffer->Map(0, &whole, &data)) || !data) {
+        fail(4);
+        return;
+    }
+    auto* job = new (std::nothrow) Job{};
+    bool read = job != nullptr;
+    try {
+        for (unsigned one = 0; read && one < 2; ++one)
+            for (unsigned i = 0; read && i < 2; ++i)
+                read = jitter_proof::toLuma(kind,
+                                            static_cast<const uint8_t*>(data) +
+                                                static_cast<size_t>(pitch) * jitter_proof::box * (one * 2 + i),
+                                            pitch, job->luma[one][i]);
+    } catch (...) {
+        read = false;
+    }
+    const D3D12_RANGE none{0, 0};
+    buffer->Unmap(0, &none);
+    if (!read) {
+        delete job;
+        fail(5);
+        return;
+    }
+    auto& r = job->reading;
+    r.big = big.load();
+    r.stepped = stepped[0] && stepped[1];
+    const float scale = eyeWidth ? static_cast<float>(boxWidth) / static_cast<float>(eyeWidth) : 1.f;
+    for (unsigned i = 0; i < 2; ++i) {
+        std::array<float, 9> h{};
+        if (!eye_history::historyReprojection(views[0][i], views[1][i], h) ||
+            !jitter_proof::headShift(h, boxWidth, boxHeight, r.head[i][0], r.head[i][1]))
+            r.head[i][0] = r.head[i][1] = 0;
+        for (unsigned a = 0; a < 2; ++a)
+            r.sent[i][a] = r.stepped ? (sentPx[1][i][a] - sentPx[0][i][a]) * scale : 0.f;
+    }
+    r.skippedMoving = skippedMoving;
+    job->range = r.big ? jitter_proof::bigRange : jitter_proof::range;
+    busy.store(true);
+    if (!TrySubmitThreadpoolCallback(measureLater, job, nullptr)) {
+        busy.store(false);
+        delete job;
+        fail(6);
+    }
+}
+// In stagePair, after the eyes are copied (or AA'd) into stagedEyes and before the history.
+void step(ID3D12GraphicsCommandList* list, uint64_t serial) {
+    if (!wanted.load(std::memory_order_relaxed) || faultCode.load()) {
+        stage = Stage::idle;
+        return;
+    }
+    if (stage == Stage::submitted) {
+        collect();
+        return;
+    }
+    std::array<eye_history::EyeView, 2> seen{};
+    if (!serial || !findViews(serial, seen)) {
+        stage = Stage::idle;
+        return;
+    }
+    float uv[2][2]{}, px[2][2]{};
+    const bool jittered = findJitter(serial, uv, px);
+    if (stage == Stage::idle) {
+        if (GetTickCount64() - lastMs < jitter_proof::everyMs || busy.load() || !prepare())
+            return;
+        if (!sameEyes()) {
+            fail(1); // the eyes changed format or size: the probe stops rather than copy a mismatched box
+            return;
+        }
+        copyBoxes(list, 0);
+        boxWidth = outWidth;
+        serials[0] = serial;
+        stepped[0] = jittered;
+        std::memcpy(sentPx[0], px, sizeof px);
+        views[0] = seen;
+        stage = Stage::first;
+        recordedPair = 0;
+        return;
+    }
+    // Stage::first: the next pair, if the head kept still.
+    if (serial == serials[0])
+        return;
+    const float turn = eye_history::historyTurn(views[0][0], seen[0]);
+    const float travel = eye_history::historyTravel(views[0][0], seen[0]);
+    if (!sameEyes() || outWidth != boxWidth) {
+        stage = Stage::idle; // the eyes were made again between the pairs
+        return;
+    }
+    if (!(turn < jitter_proof::stillTurn) || !(travel < jitter_proof::stillTravel)) {
+        ++skippedMoving;
+        stage = Stage::idle; // try again with the next pair
+        return;
+    }
+    copyBoxes(list, 1);
+    serials[1] = serial;
+    stepped[1] = jittered;
+    std::memcpy(sentPx[1], px, sizeof px);
+    views[1] = seen;
+    boxWidth = outWidth;
+    boxHeight = outHeight;
+    eyeWidth = width;
+    recordedPair = 1; // stagePair's submitted() sets the fence
+}
+// After stagePair's list went to the queue (ok) or failed to.
+void submitted(bool ok, uint64_t fenceValueNow) {
+    const int one = recordedPair;
+    recordedPair = -1;
+    if (stage != Stage::first || one < 0)
+        return;
+    if (!ok) {
+        stage = Stage::idle; // that box never reached the GPU
+        return;
+    }
+    if (one == 1) {
+        fenceAt = fenceValueNow;
+        stage = Stage::submitted;
+    }
+}
+} // namespace proof
 // The staged pair (in COPY_SOURCE) blended with the history, turned to its
 // view: drawn into the other picture, which is copied back into the staged
 // image and kept for the next pair.
@@ -2018,6 +2268,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     float stepUv[2][2]{}, stepPx[2][2]{};
     const bool wantStep = cleanJitterWanted.load(std::memory_order_relaxed);
     const bool stepped = wantStep && findJitter(serial, stepUv, stepPx);
+    const bool bigRaw = stepped && proof::big.load(std::memory_order_relaxed);
     float frame[2][historyConstants]{};
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
@@ -2054,7 +2305,13 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         frame[i][17] = stepped ? stepUv[i][1] : 0.f;
         frame[i][18] = shownJitter[i][0];
         frame[i][19] = shownJitter[i][1];
-        blended = blended || keep > 0;
+        // 0.0.74 test 7 JITTER PROOF BIG: the stepped pair shown RAW (no history, no step taken back), so a
+        // 4 pixel lens step can be seen by eye.
+        if (bigRaw) {
+            frame[i][12] = frame[i][3] = 0;
+            frame[i][16] = frame[i][17] = frame[i][18] = frame[i][19] = 0;
+        }
+        blended = blended || (keep > 0 && !bigRaw);
         if (i == 0 && both) {
             maxTravel = travel;
             cut = still > 0 && !(keep > 0);
@@ -2312,6 +2569,8 @@ void stagePair(EyePairState::Stamp stamp) {
         for (unsigned i = 0; i < 2; ++i)
             copyEyeTexture(slot->list.Get(), resources[i].Get(), states[i], stagedEyes[i].Get(), originalBarrier,
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
+    // 0.0.74 test 7 CLEAN JITTER PROOF: the RAW boxes, before the history.
+    proof::step(slot->list.Get(), stamp.serial);
     // The history after AA: it blends what the headset is shown.
     if (historyNow() && prepareHistory()) {
         historyRunning.store(true, std::memory_order_relaxed); // SHARPEN MATCH: CAS follows keptMilli
@@ -2322,7 +2581,9 @@ void stagePair(EyePairState::Stamp stamp) {
         keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
     }
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
-    if (!submitCommands(*slot)) {
+    const bool sent = submitCommands(*slot);
+    proof::submitted(sent, slot->fence);
+    if (!sent) {
         history.valid = false;
         return;
     }
@@ -3426,6 +3687,15 @@ float eyeHistoryMs() { // Update 35: the median of the last 31 passes (was the n
 }
 // 0.0.74 test 6 CLEAN JITTER (native_eye_gpu.hpp).
 void setCleanJitter(bool on) { cleanJitterWanted.store(on, std::memory_order_relaxed); }
+void setJitterProof(bool on) { proof::wanted.store(on, std::memory_order_relaxed); }
+void setJitterProofBig(bool on) { proof::big.store(on, std::memory_order_relaxed); }
+bool jitterProofBig() { return proof::big.load(std::memory_order_relaxed); }
+jitter_proof::Reading jitterProof() {
+    std::lock_guard lock(proof::resultLock);
+    auto r = proof::result;
+    r.fault = proof::faultCode.load();
+    return r;
+}
 bool cleanTaa() { return cleanTaaReady(); }
 void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float pxX, float pxY) {
     if (!serial || eye > 1)

@@ -8,7 +8,7 @@ class Hero073(unittest.TestCase):
     def test_release_build_off_test_number_kept(self):  # 0.0.74 test 1: a private test build, HERO_TEST_BUILD ON (the public 0.0.73 release: OFF)
         c = src('CMakeLists.txt')
         self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" ON\)')
-        self.assertIn('set(HERO_TEST_NUMBER "6" CACHE', c)  # 0.0.74 test 6: the notice says TEST 6
+        self.assertIn('set(HERO_TEST_NUMBER "7" CACHE', c)  # 0.0.74 test 7: the notice says TEST 7
         self.assertIn('set(HERO_TEST_VERSION "0.0.74" CACHE', c)
         self.assertRegex(c, r'set\(HERO_TEST_NUMBER "[0-9]+"')
     def test_ci_never_uploads_a_hero_0073_build(self):

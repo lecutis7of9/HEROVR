@@ -36161,6 +36161,17 @@ int main() {
         check(soleOpenEye(1) == 0 && soleOpenEye(2) == 1, "one open job names its eye");
         check(soleOpenEye(0) == 2 && soleOpenEye(3) == 2, "none or both open: no eye");
     });
+    test("0.0.75 EVERY ENEMY: the non-ThugBot fighting bots are enemies, allies and civilians are not", [] {
+        using namespace world_trace;
+        for (const char* foe : {".?AVDroneBot@@", ".?AVBeastBot@@", ".?AVMeleeHoverBot@@", ".?AVSlayerBot@@",
+                                ".?AVPrototypeMeleeBot@@", ".?AVTurretBot@@", ".?AVKravenBot@@", ".?AVGrenadierBot@@"})
+            check((bitsOf(foe) & enemyBit) != 0, foe);
+        check((bitsOf(".?AVThugBot@@") & enemyBit) != 0, "ThugBot stays an enemy");
+        for (const char* not_foe : {".?AVAllyBot@@", ".?AVSuperAllyBot@@", ".?AVCivilianBot@@", ".?AVBirdBot@@",
+                                    ".?AVSpiderBot@@", ".?AVSymbiotePeteBot@@", ".?AVMissionFollowBot@@", ".?AVBlackCatChaseBot@@", ".?AVBot@@",
+                                    ".?AVHumanBot@@", ".?AVDroneBotMoverManager@@"})
+            check(!(bitsOf(not_foe) & enemyBit), not_foe);
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

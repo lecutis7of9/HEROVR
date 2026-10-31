@@ -673,6 +673,26 @@ DWORD WINAPI SpidySetEyes(void*);
 float SpidyFlatAspect();
 }
 namespace {
+// 0.0.75 EVERY ENEMY: one console line the first time a hero blow goes to each kind of enemy (the
+// game class that made it an enemy, world_trace::enemyClass), so a test shows which kinds the weapons
+// reach and whether the game took the blow into its damage queue.
+void noteFoeClass(uint64_t who, bool sent) {
+    static std::array<std::array<char, world_trace::nameChars>, 24> seen{};
+    static uint32_t seenCount = 0;
+    char name[world_trace::nameChars]{};
+    if (!who || !world_trace::enemyClass(who, name) || !name[0])
+        return;
+    for (uint32_t i = 0; i < seenCount; ++i)
+        if (!std::strcmp(seen[i].data(), name))
+            return;
+    if (seenCount >= seen.size())
+        return;
+    std::memcpy(seen[seenCount++].data(), name, sizeof(name));
+    char line[200];
+    sprintf_s(line, "0.0.75 EVERY ENEMY: the first hero blow on a %s (0x%llx) %s", name, static_cast<unsigned long long>(who),
+              sent ? "went into the game's damage queue" : "was not sent (the damage path is off or full)");
+    game_prompts::note(line);
+}
 using BridgeCall = DWORD(WINAPI*)(void*);
 XrConfig config;
 BridgeCall submitInput{}, sampleBridge{}, stopBridge{}, retargetBridge{};
@@ -8476,6 +8496,7 @@ DWORD WINAPI run(void*) {
                                             const auto& hb = hout.blows[k];
                                             const bool sent = sm2_damage::queue(hb.id, hb.blow);
                                             (sent ? hero007Sent : hero007Unsent) += 1;
+                                            noteFoeClass(hb.id, sent);
                                             hitMarks.add(hb.at);
                                             if (hero007Sent + hero007Unsent <= 8 || !sent) {
                                                 char line[160];
@@ -8833,6 +8854,7 @@ DWORD WINAPI run(void*) {
                                             const auto& b72 = out72.blows[k];
                                             const bool sent = sm2_damage::queue(b72.id, b72.blow);
                                             (sent ? hero072Sent : hero072Unsent) += 1;
+                                            noteFoeClass(b72.id, sent);
                                             hitMarks.add(b72.at);
                                             if (hero072Sent + hero072Unsent <= 8 || !sent) {
                                                 char line[160];
@@ -9185,6 +9207,7 @@ DWORD WINAPI run(void*) {
                                             const uint64_t who = cf.enemyIds[static_cast<size_t>(victim)];
                                             const bool sent = who && sm2_damage::queue(who, hero007::superPunch());
                                             superPunchBlows += sent ? 1 : 0;
+                                            noteFoeClass(who, sent);
                                             if (superPunchBlows <= 5 || !sent) {
                                                 char line[160];
                                                 sprintf_s(line, "VERSION 0.0.7 SUPERMAN PUNCH 0x%llx: blow %s",
@@ -9220,6 +9243,7 @@ DWORD WINAPI run(void*) {
                                             }
                                             const bool sent = who && blow.amount > 0 && sm2_damage::queue(who, blow);
                                             (hero == hero_modes::daredevil ? ddPunchBlows : hulkPunchBlows) += sent ? 1 : 0;
+                                            noteFoeClass(who, sent);
                                             char line[200];
                                             sprintf_s(line, "VERSION 0.0.6 %s PUNCH 0x%llx: +%.0f HP blow %s",
                                                       hero == hero_modes::daredevil ? "DAREDEVIL" : "HULK",
@@ -9261,6 +9285,7 @@ DWORD WINAPI run(void*) {
                                             const sm2_damage::Blow blow{ib.amount, 5, ib.knockAmount};
                                             const bool sent = sm2_damage::queue(who, blow);
                                             instantBlows += sent ? 1 : 0;
+                                            noteFoeClass(who, sent);
                                             hitMarks.add(markAt);
                                             if (sent)
                                                 runtime.haptic(static_cast<int>(i), .7f); // the hit itself, on top

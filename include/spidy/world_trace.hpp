@@ -53,6 +53,24 @@ enum Bits : uint32_t {
 };
 inline bool has(const char* name, const char* part) { return name && std::strstr(name, part) != nullptr; }
 inline bool exact(const char* name, const char* full) { return name && !std::strcmp(name, full); }
+// 0.0.75 EVERY ENEMY: the game's fighting bots that do not derive from ThugBot (the Spider-Man2.exe
+// class hierarchies, read from its RTTI, CONFIRMED: SymbioteBot, BeetleDroneBot, Mysterio, Sandman,
+// Wraith, VenomBoss and the Tombstone thugs derive from ThugBot and were always enemies; these
+// derive from Bot or HumanBot only, so until 0.0.75 no hero weapon could pick them). A class named
+// here marks its actor an enemy, and the classes derived from it too (FalconBot and PigeonVenomBot
+// from MeleeHoverBot, SlayerKravenBot and SlayerRangedBot from SlayerBot, MultiTurretBot from
+// TurretBot; SymbiotePeteBot is left out, it is Peter). Which in-game enemy each one is (DroneBot the flying drones, BeastBot the robot dogs,
+// the Slayer / Kraven bots the hunters and their brutes) is CANDIDATE.
+inline constexpr const char* otherFoes[] = {
+    ".?AVDroneBot@@",          ".?AVBeastBot@@",          ".?AVMeleeHoverBot@@",   ".?AVGrenadierBot@@",
+    ".?AVKravenBot@@",         ".?AVSwordsmanBot@@",      ".?AVSlayerBot@@",       ".?AVCorruptedBot@@",
+    ".?AVPrototypeMeleeBot@@", ".?AVPrototypeRangedBot@@", ".?AVTurretBot@@"};
+inline bool isOtherFoe(const char* name) {
+    for (const char* foe : otherFoes)
+        if (exact(name, foe))
+            return true;
+    return false;
+}
 inline uint32_t bitsOf(const char* name) {
     if (!name || std::strncmp(name, ".?A", 3))
         return 0;
@@ -62,7 +80,7 @@ inline uint32_t bitsOf(const char* name) {
         b |= dialogueBit;
     if (exact(name, ".?AVCivilianBot@@"))
         b |= civilianBit;
-    if (exact(name, ".?AVThugBot@@"))
+    if (exact(name, ".?AVThugBot@@") || isOtherFoe(name))
         b |= enemyBit;
     if (exact(name, ".?AVAllyBot@@"))
         b |= allyBit;
@@ -217,6 +235,9 @@ struct Vital {
     uint32_t have{};
 };
 uint32_t enemyVitals(std::array<Vital, enemySlots>& out);
+// 0.0.75 EVERY ENEMY: the class an enemy in the last refresh was marked by (its decorated RTTI name,
+// e.g. ".?AVSymbioteBot@@"); false when that record is not in it.
+bool enemyClass(uint64_t id, char (&out)[nameChars]);
 uint64_t healthComponents(); // BotHealth components the last scan found
 uint64_t heroRecordNow();    // the hero's record the last scan found (0: none)
 // Version 0.0.3 BOT STATE PROBE (include/spidy/bot_probe.hpp): on or off, and the enemy to watch

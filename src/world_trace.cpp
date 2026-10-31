@@ -52,6 +52,7 @@ uint32_t farCount{};
 // Version 0.0.5 DAMAGE PROBE: the same enemies' hit points (enemyLock), read-only.
 constexpr uintptr_t botHealthTable = 0x531b0a0, healthHp = 0xd0, healthMost = 0xa0;
 std::array<Vital, enemySlots> enemyVital{};
+std::array<std::array<char, nameChars>, enemySlots> enemyClassName{}; // 0.0.75 EVERY ENEMY (enemyLock)
 std::atomic<uint64_t> healthFound{}, heroNowRecord{};
 // Version 0.0.3 BOT STATE PROBE (read-only; include/spidy/bot_probe.hpp).
 std::atomic<bool> botOn{};
@@ -170,6 +171,7 @@ void run() {
     std::vector<uintptr_t> enemyRecords;
     uintptr_t heroRecord{};
     std::unordered_map<uintptr_t, uintptr_t> healthOf, nowHealthOf; // Version 0.0.5: record -> BotHealth
+    std::unordered_map<uintptr_t, std::array<char, nameChars>> enemyNames; // 0.0.75: record -> its enemy class
     auto rateFrom = std::chrono::steady_clock::now();
     uint32_t refreshes{};
     // Version 0.0.3 BOT STATE PROBE: two pointers deep from one enemy's record, read-only.
@@ -339,6 +341,9 @@ void run() {
                     read(h->second + healthHp, &v.hp, 4) && read(h->second + healthMost, &v.most, 4))
                     v.have = std::isfinite(v.hp) && std::isfinite(v.most) && v.most > 0 && v.most < 1e6f;
                 enemyVital[i] = v;
+                enemyClassName[i] = {};
+                if (const auto c = enemyNames.find(found[i].record); c != enemyNames.end())
+                    enemyClassName[i] = c->second;
             }
             enemyWhen = std::chrono::steady_clock::now();
             heroWorldAt = heroAt; // Version 0.0.62: where the hero was for this list
@@ -498,9 +503,16 @@ void run() {
                 heroNowRecord.store(heroRecord, std::memory_order_relaxed);
                 healthOf.swap(nowHealthOf);
                 healthFound.store(healthOf.size(), std::memory_order_relaxed);
+                enemyNames.clear();
                 for (const auto& [record, bits] : nowActors)
-                    if (bits & enemyBit && record != hero && enemyRecords.size() < 64)
+                    if (bits & enemyBit && record != hero && enemyRecords.size() < 64) {
                         enemyRecords.push_back(record);
+                        std::array<char, nameChars> name{};
+                        if (const auto a = nowArchetype.find(record); a != nowArchetype.end() && a->second)
+                            for (unsigned k = 0; k + 1 < nameChars && a->second[k]; ++k)
+                                name[k] = a->second[k];
+                        enemyNames.emplace(record, name);
+                    }
             }
             refreshEnemies();
             if (!baseline) {
@@ -714,6 +726,19 @@ uint32_t enemyVitals(std::array<Vital, enemySlots>& out) {
     for (uint32_t i = 0; i < enemyCount; ++i)
         out[i] = enemyVital[i];
     return enemyCount;
+}
+bool enemyClass(uint64_t id, char (&out)[nameChars]) {
+    out[0] = 0;
+    if (!running.load() || !id)
+        return false;
+    std::lock_guard<std::mutex> lock(enemyLock);
+    for (uint32_t i = 0; i < enemyCount; ++i)
+        if (enemyId[i] == id) {
+            std::memcpy(out, enemyClassName[i].data(), nameChars);
+            out[nameChars - 1] = 0;
+            return true;
+        }
+    return false;
 }
 uint64_t healthComponents() { return healthFound.load(std::memory_order_relaxed); }
 uint64_t heroRecordNow() { return heroNowRecord.load(std::memory_order_relaxed); }

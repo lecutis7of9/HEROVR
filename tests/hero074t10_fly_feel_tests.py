@@ -2,7 +2,8 @@
 having a held button makes it so you maneuver kind of stiffly and if you hold your hand up when youre upside down or
 sideways you just go up"): FLY HOLD (a grip held to enter flight, then it stays), FLY STEER (the climb along the
 body's up, eased turning), FLY FLIPS (REALISTIC FLIPS readier while flying) and FLY LOOK UP (the toggled view: a tap of
-Y while flying smoothly pans the view up to look ahead when the body lies flat, off each session until tapped) - live.txt only (the wrist HUD is full), ids 5548-5551. No game address.
+Y while flying smoothly pans the view, and the arms with it, up toward the body's head about the body's own right
+axis - never world-up or the horizon - off each session until tapped) - live.txt only (the wrist HUD is full), ids 5548-5551. No game address.
 Made by Agent Mulder."""
 import os, re, sys, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -84,6 +85,14 @@ class FlyFeel(unittest.TestCase):
             self.assertIn('restart', text)
             self.assertEqual(text.count('. '), 0)  # one sentence
         self.assertNotIn('0x', re.sub(r'//.*', '', h))  # no game address
+    def test_look_up_is_body_relative(self):
+        h = src('include/spidy/fly_feel074.hpp')
+        self.assertIn('inline constexpr float bodyLiftRadians = 1.5707963f;', h)
+        m = h[h.index('inline Quat pitchUpTilt('):]
+        m = m[:m.index('\n}\n')]
+        self.assertIn('Quat::around(right / rl, bodyLiftRadians * weight)', m)
+        self.assertNotIn('horizon', m.lower())
+        self.assertIn('arms', h[h.index('lookUpHelp'):][:400])
     def test_no_forbidden_name(self):
         for p in ('include/spidy/fly_feel074.hpp', 'include/spidy/extras385.hpp', 'tests/hero074t10_fly_feel_tests.py',
                   'tools/live_settings.py', 'src/game_xr.cpp', 'src/game_swing.cpp', 'src/game_tracking.cpp',

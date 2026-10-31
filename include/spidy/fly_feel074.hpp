@@ -17,9 +17,10 @@
 //   override (vehicle_flips) still turns them off while driving. OFF: the player's own rows.
 // - FLY LOOK UP (fly_look_up, ON = the feature is there; the tester's final spec): a toggled view. A tap of Y while
 //   flying (FLY took Y from the game's Web Wings) turns it on or off, with a haptic tick and a line; it starts OFF
-//   every session. On, while flying, the view pitches up by as much as the flying body has pitched it down - full
-//   when the body is parallel to the ground (he looks ahead, not at the street), none when upright - about the
-//   view's level right axis (no roll, the heading kept), the head tracked on top. Each toggle is a smooth
+//   every session. On, while flying, the view pitches up a quarter turn about the BODY's own right axis toward the
+//   body's head direction (body-relative, never the world's up or the horizon: flat on the front, on the back,
+//   rolled or upside down alike he looks the way his head leads), the head tracked on top; the arms, hands, held
+//   props, aim and what the hands reach turn with it by the same offset (it turns the whole tracking space). Each toggle is a smooth
 //   cinematic pan (`panSeconds`, eased in and out), never a snap; landing pans back. live.txt OFF: no Y, no pan.
 // No game address is read or written: everything here is the mod's own state (CONFIRMED by construction; no
 // CANDIDATE). The flight word's extra bits ride in game_swing::Command::reserved7[1] (unused until now): an
@@ -45,9 +46,9 @@ inline constexpr const char* flipsHelp =
     "FLY FLIPS ON: your REALISTIC FLIPS react more readily while you fly (driving still turns them off); "
     "OFF keeps your own flip rows; live, no restart.";
 inline constexpr const char* lookUpHelp =
-    "FLY LOOK UP ON (the default) lets a tap of Y while flying smoothly pan your view up to look ahead instead of "
-    "down when your body lies flat (it starts off each session, another tap pans back), while OFF removes the Y "
-    "switch; live, no restart.";
+    "FLY LOOK UP ON (the default) lets a tap of Y while flying smoothly pan your view (and your arms with it) up "
+    "toward your body's head, so lying flat you look ahead instead of down (it starts off each session, another tap "
+    "pans back), while OFF removes the Y switch; live, no restart.";
 inline bool onByDefault(uint32_t value) { return value != 1; } // fly_hold, fly_steer, fly_flips
 inline bool levelOn(uint32_t value) { return value == 0; } // fly_look_up enabled: 0 ON; 1 or any other value OFF
 
@@ -192,13 +193,17 @@ class Pan {
   private:
     float progress_{};
 };
-// The tracking space's tilt (in the rig's yaw frame) with the view turned `weight` of the way from where the
-// tilt points `ahead` (the head's level ahead in the tracking space) to the horizon, worked out in the body's own
-// frame so any heading, roll, upside down or on the back works: the target is the level heading of the view's
-// ahead plus, as the view nears straight down or up, the level heading of the body's up (where the head's top
-// points, so flat on the front or the back it looks the way the head leads), which is smooth through vertical
-// with no gimbal flip. The angle is the view's lift to that level line - pi/2 lying flat, 0 upright (flatness),
-// the view's roll is left alone. NaN-safe: anything unreadable returns the tilt.
+// FLY LOOK UP's full lift: a quarter turn in the body's own frame, so lying flat (face down, on the back, any
+// heading, rolled or upside down) the view turns from along the body's front to along the body's head direction.
+inline constexpr float bodyLiftRadians = 1.5707963f;
+// The tracking space's tilt (in the rig's yaw frame) with the view pitched up `weight` (0..1) of bodyLiftRadians
+// about the BODY's own right axis, toward the body's head direction (the tester's spec:
+// body-relative, never the world's up or the horizon). `ahead` is the head's look in the tracking space; only its
+// heading there is used, so the axis is the body's right across where the player faces in his own frame. The lift
+// is applied in the body's frame (tilt * lift), so turning the whole body any way in the world turns the result
+// with it exactly. The head's own pitch and roll ride on top; the hands, the body and everything placed by the
+// tracking space turn with the view (GameTrackingRig applies it before the hands). NaN-safe: anything unreadable
+// returns the tilt unchanged.
 inline Quat pitchUpTilt(Quat tilt, Vec3 ahead, float weight) {
     if (!std::isfinite(weight) || weight <= 0)
         return tilt;
@@ -207,30 +212,16 @@ inline Quat pitchUpTilt(Quat tilt, Vec3 ahead, float weight) {
     if (!std::isfinite(n) || n < 1e-6f)
         return tilt;
     const Quat q{tilt.x / n, tilt.y / n, tilt.z / n, tilt.w / n};
-    ahead = {ahead.x, 0, ahead.z};
+    ahead = {ahead.x, 0, ahead.z}; // the facing in the body's frame (its up is the tracking space's +Y)
     const float al = length(ahead);
     if (!finite(ahead) || al < .1f)
         return tilt;
-    const Vec3 w = q.rotate(ahead / al);       // the view's ahead in the yaw frame
-    const Vec3 u = q.rotate(Vec3{0, 1, 0});    // the body's up (the head's top)
-    if (!finite(w) || !finite(u))
+    const Vec3 right = cross(ahead / al, Vec3{0, 1, 0}); // the body's right; a positive turn lifts ahead to up
+    const float rl = length(right);
+    if (!finite(right) || rl < .5f)
         return tilt;
-    // Level target: w's own heading, with the head's-top heading blended in by how far w points up or down (the
-    // sign takes the head-first side both face down and face up); |h| >= ~0.7 for unit orthogonal w, u.
-    Vec3 h{w.x - w.y * u.x, 0, w.z - w.y * u.z};
-    const float hl = length(h);
-    if (!finite(h) || hl < 1e-4f)
-        return tilt;
-    h = h / hl;
-    const Vec3 axis = cross(w, h);
-    const float s = length(axis), c = std::clamp(dot(w, h), -1.f, 1.f);
-    if (!finite(axis) || s < 1e-6f)
-        return tilt; // level already (h can't oppose w: a level w gives h = w)
-    const float angle = std::atan2(s, c);
-    if (!std::isfinite(angle) || angle <= 1e-5f)
-        return tilt;
-    const Quat lift = Quat::around(axis / s, angle * weight);
-    const Quat r = lift * q;
+    const Quat lift = Quat::around(right / rl, bodyLiftRadians * weight);
+    const Quat r = q * lift;
     const float m = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
     if (!std::isfinite(m) || m < 1e-6f)
         return tilt;

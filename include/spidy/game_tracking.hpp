@@ -315,9 +315,10 @@ class GameTrackingRig {
         flyRoll_ = std::isfinite(radians) ? std::clamp(radians, -3.1415927f, 3.1415927f) : 0.f;
         flyStick_ = stickRolls;
     }
-    // 0.0.74 test 10 FLY LOOK UP (fly_feel::Pan, pitchUpTilt): the view pitched up `weight` (0..1) of the way from
-    // the body's pitch down to the horizon, about the view's level right axis, the head kept in place, the yaw
-    // kept; a mod-side view transform like FLY ROLL (applied before it). Set every frame; reset() keeps it.
+    // 0.0.74 test 10 FLY LOOK UP (fly_feel::Pan, pitchUpTilt): the view pitched up `weight` (0..1) of a quarter turn
+    // about the body's own right axis toward the body's head direction, the head kept in place; the hands and all
+    // the tracking space places turn with it. A mod-side view transform like FLY ROLL (applied before it). Set
+    // every frame; reset() keeps it.
     void flyLookUp(float weight) {
         flyLookUp_ = std::isfinite(weight) ? std::clamp(weight, 0.f, 1.f) : 0.f;
     }

@@ -70,7 +70,7 @@ def staged(path, staging, digest):
 
 
 def prepare(pid, process, dll=DLL, staging=STAGING,
-            names=('SpidyStart','SpidyStop','SpidySubmit','SpidyBridgeData')):
+            names=('SpidyStart','SpidyStop','SpidySubmit','SpidyBridgeData'), optional=()):
     digest = hashlib.sha256(dll.read_bytes()).hexdigest()
     loaded = next((x for x in modules(pid) if x['name'].lower() == dll.name.lower()), None)
     if loaded:
@@ -97,6 +97,9 @@ def prepare(pid, process, dll=DLL, staging=STAGING,
             address = get_export(local,name.encode())
             if not address: raise RuntimeError(f'Missing export: {name}')
             result[name] = loaded['base'] + address - local
+        for name in optional:  # 0.0.74 test 10: telemetry that is skipped when absent
+            address = get_export(local,name.encode())
+            if address: result[name] = loaded['base'] + address - local
         return result, digest
     finally: free_library(local)
 

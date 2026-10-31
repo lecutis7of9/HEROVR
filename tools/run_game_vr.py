@@ -30,6 +30,7 @@ import eye_lod
 import shadow_camera
 import shadow_distance
 import far_shadows
+import window_probe
 import update37_records
 import player_check
 import mod_check  # 0.0.74 test 3
@@ -2787,7 +2788,9 @@ def session(a, startup, session_off=()):
                                            # Update 37.2: every record update37_records reads (the
                                            # WORLD LOG, BLOOD, PERF, COLOR, FOVEATED and NPC FADE ones
                                            # were missing, so their report sections stayed empty).
-                                           *sorted({export for export, *_ in update37_records.RECORDS.values()})))
+                                           *sorted({export for export, *_ in update37_records.RECORDS.values()})),
+            # 0.0.74 test 10: the WINDOW PROBE (read-only log); skipped when the module has no such export.
+            optional=(window_probe.EXPORT,))
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3052,6 +3055,7 @@ def session(a, startup, session_off=()):
         shadow_distance_last, shadow_distance_said = None, None  # Update 33: SHADOW DISTANCE, one line per change
         far_shadows_last, far_shadows_said = None, None  # Update 35: FAR SHADOWS, one line per change
         update37_last = {}  # Update 37: view gates, combat, hand climbing, health, mirror records
+        window_journal = None  # 0.0.74 test 10: the WINDOW PROBE, appended to reports/window-probe-*.jsonl
         trace_journal = None  # Update 37: the WORLD LOG's events, appended to reports/world-trace-*.jsonl
         # The player's body and fists: the latest of each, and a sample when punches land.
         body = punch = None
@@ -3330,6 +3334,10 @@ def session(a, startup, session_off=()):
                         trace_journal = update37_records.TraceJournal(
                             ROOT / 'reports' / f"world-trace-{time.strftime('%Y%m%d-%H%M%S')}.jsonl")
                     trace_journal.add(update37_now.get('world_trace'))
+                    if window_journal is None:
+                        window_journal = window_probe.Journal(
+                            ROOT / 'reports' / f"window-probe-{time.strftime('%Y%m%d-%H%M%S')}.jsonl")
+                    window_journal.add(window_probe.read(game, xr))
                     health_now = update37_last.get('health') or {}
                     sample['health_status'] = health_now.get('status')
                     sample['health_hp'] = health_now.get('hp')
@@ -3651,6 +3659,8 @@ def session(a, startup, session_off=()):
         if mip_bias_seen is not None:
             mip_bias_seen['start_code'] = render_module.get('mip_bias_start')
         render_stop = call_remote(process, render_module['SpidyRenderMemoryStop']) if render_module else 0
+        if window_journal is not None:  # 0.0.74 test 10: the WINDOW PROBE's last samples
+            window_journal.add(window_probe.read(game, xr))
         if trace_journal is not None:  # Update 37: the WORLD LOG's last events and census
             try:
                 trace_journal.finish(update37_records.snapshot(game, xr, 'world_trace'))

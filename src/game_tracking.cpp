@@ -657,9 +657,11 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         out.wallRoll = rollAngle;
         out.wallRotate = wallRoll_.engaged();
     }
-    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): toggled on while flying, the view pans up by as much as the
-    // body's pitch takes it down (full lying flat, none upright), about the level axis across the head's ahead;
-    // the head kept where it was and tracked on top, the yaw kept; FLY ROLL below still rolls.
+    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): toggled on while flying, the view pans up about the BODY's own
+    // right axis toward the body's head direction (body-relative, never the world's up), the head kept where it was
+    // and tracked on top; FLY ROLL below still rolls. It turns the whole tracking space, so the hands, grips, webs,
+    // aim, held props and the body placed below (out.hands, out.grips, out.swing, worldFromTracking) turn with the
+    // view by exactly the same offset and the same eased weight: the arms stay lined up with what he sees.
     if (flyLookUp_ > 0 && !holds && std::isfinite(flyLookUp_)) {
         const Pose before = placed.toWorld(f.head);
         const Vec3 ahead = f.head.orientation.rotate(Vec3{0, 0, -1});

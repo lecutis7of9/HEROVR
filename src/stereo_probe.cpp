@@ -21,6 +21,7 @@
 #include "spidy/shadow_camera.hpp"
 #include "spidy/shared_lod.hpp"
 #include "spidy/view_gates.hpp"
+#include "spidy/window_probe.hpp"
 #include "spidy/recording_fov.hpp"
 #include <MinHook.h>
 #include <atomic>
@@ -150,6 +151,8 @@ __declspec(dllexport) spidy::eye_bloom::Data SpidyEyeBloomData;
 __declspec(dllexport) spidy::shared_lod::Data SpidySharedLodData;
 // Update 37: BLOOM FX, LOD FADE, LOD REACH, IMPOSTORS and the bloom block dumps (view_gates.hpp).
 __declspec(dllexport) spidy::view_gates::Data SpidyViewGatesData;
+// 0.0.74 test 10: the WINDOW PROBE (window_probe.hpp; read-only, tools/window_probe.py).
+__declspec(dllexport) spidy::window_probe::Data SpidyWindowProbeData;
 // Frames in which the eyes marked what they drew for the game (rested, below).
 __declspec(dllexport) volatile LONG64 SpidyDrawnFrames;
 // Update 37.1: declared here, at file scope, not inside the anonymous namespace: MSVC
@@ -2448,9 +2451,89 @@ void eyeLod(void* eye, const Descriptor& lens, const Descriptor& game, unsigned 
     InterlockedIncrement64(&data.sequence);
     ReleaseSRWLockExclusive(&telemetry);
 }
+// 0.0.74 test 10 WINDOW PROBE (window_probe.hpp): read-only. Counts each view's impostor queries and, at most
+// every 100 ms per view, keeps what the view culled with. Only reads (read() catches a fault: the sample is
+// skipped) and the game's own isActiveView answer (2c991a0's original: a compare with the active view, no
+// write). Taken before the IMPOSTORS / FAR WINDOWS writes below, so +88 is the game's own distance.
+SRWLOCK windowProbeLock = SRWLOCK_INIT;
+std::atomic<double> windowProbeLast[spidy::window_probe::views]{}; // written under windowProbeLock
+double windowProbeSeconds() {
+    static const double frequency = [] {
+        LARGE_INTEGER f{};
+        QueryPerformanceFrequency(&f);
+        return f.QuadPart > 0 ? static_cast<double>(f.QuadPart) : 0.0;
+    }();
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    return frequency > 0 ? static_cast<double>(now.QuadPart) / frequency : 0.0;
+}
+void windowProbe(void* view, void* cull, void* result) {
+    namespace wp = spidy::window_probe;
+    auto& data = SpidyWindowProbeData;
+    const auto at = reinterpret_cast<uintptr_t>(view);
+    if (!at)
+        return;
+    int slot = -1;
+    if (const int eye = eyeView(at); eye >= 0)
+        slot = 1 + eye;
+    else if (const auto primary = pointer(base + 0xc2ca220); primary && (at == primary || pointer(at + 0x1dc8) == primary))
+        slot = 0;
+    if (slot < 0) {
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.other));
+        return;
+    }
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.calls[slot]));
+    if (result)
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.results[slot]));
+    const double now = windowProbeSeconds();
+    // Cheap check first; the lock is taken only when a sample may be due.
+    if (!wp::due(windowProbeLast[slot].load(std::memory_order_relaxed), now) || !TryAcquireSRWLockExclusive(&windowProbeLock))
+        return;
+    if (!wp::due(windowProbeLast[slot].load(std::memory_order_relaxed), now)) {
+        ReleaseSRWLockExclusive(&windowProbeLock);
+        return;
+    }
+    windowProbeLast[slot].store(now, std::memory_order_relaxed);
+    wp::Sample sample{};
+    sample.seconds = now;
+    sample.frame = frameIndex;
+    sample.view = static_cast<uint32_t>(slot);
+    float pose[16]{}, lens[4]{}, nearFar[2]{}, a[16]{}, b[16]{}, c[wp::cullFloats]{};
+    uint32_t viewFlags{};
+    const bool held = read(at, pose, sizeof(pose)) && read(at + 0x400, lens, sizeof(lens)) && read(at + 0x3f8, nearFar, sizeof(nearFar)) &&
+                      read(at + 0x438, &viewFlags, 4) && read(at + 0x2e0, a, sizeof(a)) &&
+                      read(at + 0x280, b, sizeof(b)) && read(reinterpret_cast<uintptr_t>(cull), c, sizeof(c));
+    float reach{};
+    if (result)
+        read(reinterpret_cast<uintptr_t>(result) + 0x88, &reach, 4);
+    bool active = false;
+    if (originalIsActiveView)
+        active = originalIsActiveView(view);
+    if (held) {
+        std::memcpy(sample.pose, pose, sizeof(pose));
+        std::memcpy(sample.lens, lens, sizeof(lens));
+        std::memcpy(sample.nearFar, nearFar, sizeof(nearFar));
+        std::memcpy(sample.matrixA, a, sizeof(a));
+        std::memcpy(sample.matrixB, b, sizeof(b));
+        std::memcpy(sample.cull, c, sizeof(c));
+        sample.viewFlags = viewFlags;
+    }
+    sample.reach = std::isfinite(reach) ? reach : 0.f;
+    sample.flags = (result ? 1u : 0u) | (active ? 2u : 0u) | (held && (viewFlags & 2) ? 4u : 0u) | (held ? 8u : 0u);
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.sequence));
+    if (data.started <= 0)
+        data.started = now;
+    if (!held)
+        ++data.faults;
+    data.ring[data.count % wp::ringSize] = sample;
+    ++data.count;
+    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&data.sequence));
+    ReleaseSRWLockExclusive(&windowProbeLock);
+}
 // A view's impostor visibility queries (impostorReach above).
 void* impostorQueries(void* view, void* cull) {
     const auto result = originalImpostorQueries(view, cull);
+    windowProbe(view, cull, result);
     float reach{};
     if (result && impostors && enabled && impostorsOn.load(std::memory_order_relaxed) &&
         rested.load(std::memory_order_relaxed) &&

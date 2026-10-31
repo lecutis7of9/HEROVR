@@ -18943,7 +18943,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 167, "0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 168, "0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18977,7 +18977,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 167, "0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 168, "0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -24261,6 +24261,174 @@ int main() {
         check(std::string(glideHelp).find('.') == std::string(glideHelp).size() - 1 &&
                   std::string(grappleHelp).find('.') == std::string(grappleHelp).size() - 1,
               "one sentence each");
+    });
+    test("0.0.74 test 10 GLIDE TILT: the controllers' tilt sets the glide's pitch directly (deadzone, clamp, blink, NaN, OFF)", [] {
+        using namespace spidy::cape_glide;
+        const float deg = 3.14159265f / 180.f;
+        const Tune tune{};
+        const Vec3 look{0, 0, -1};
+        // nose down by a degrees about the body's side-to-side axis (+X when looking down -Z)
+        const auto down = [&](float a) { return Quat::around({1, 0, 0}, -a * deg); };
+        float d = 0;
+        // The tilt: a controller held forward reads its nose pitch; held out along the arm, its roll - one number.
+        check(handTilt({}, look, d) && std::fabs(d) < .01f, "level: 0");
+        check(handTilt(down(20), look, d) && std::fabs(d - 20) < .05f, "forward, 20 down: 20 " + std::to_string(d));
+        check(handTilt(down(-30), look, d) && std::fabs(d + 30) < .05f, "forward, 30 up: -30");
+        check(handTilt(down(20) * Quat::yaw(-90 * deg), look, d) && std::fabs(d - 20) < .05f, "out along the arm, rolled 20: 20 " + std::to_string(d));
+        check(handTilt(down(20) * Quat::yaw(90 * deg), look, d) && std::fabs(d - 20) < .05f, "the left arm too");
+        check(handTilt(Quat::yaw(-90 * deg) * down(20), {1, 0, 0}, d) && std::fabs(d - 20) < .05f, "any facing (turned with the look)");
+        check(handTilt(down(20) * Quat::around({0, 0, 1}, 25 * deg), look, d) && std::fabs(d - 20) < .5f, "a sideways roll (the bank's) leaves it");
+        check(!handTilt({0, 0, 0, 0}, look, d) && !handTilt({NAN, 0, 0, 1}, look, d) && !handTilt({}, {0, 1, 0}, d) &&
+                  !handTilt({}, {NAN, 0, -1}, d),
+              "no orientation, NaN, a straight-down look: no tilt");
+        // The map: direct and proportional, a small deadzone, the glide's own limits.
+        check(tiltPitch(0, tune) == tune.pitchGlide && tiltPitch(4, tune) == tune.pitchGlide && tiltPitch(-4, tune) == tune.pitchGlide,
+              "inside the deadzone: the level glide");
+        check(std::fabs(tiltPitch(15, tune) - (tune.pitchGlide - 10)) < 1e-4f && std::fabs(tiltPitch(-15, tune) - (tune.pitchGlide + 10)) < 1e-4f,
+              "past it: angle in = pitch out");
+        check(std::fabs((tiltPitch(15, tune) - tiltPitch(25, tune)) - 10) < 1e-4f &&
+                  std::fabs((tiltPitch(25, tune) - tiltPitch(35, tune)) - 10) < 1e-4f,
+              "proportional: 10 more degrees, 10 more dive");
+        check(tiltPitch(90, tune) == tune.pitchDive && tiltPitch(-90, tune) == tune.pitchPull && tiltPitch(NAN, tune) == tune.pitchGlide,
+              "clamped to the dive and the pull up; NaN: level");
+        // In the glide.
+        struct Run {
+            Glide gl;
+            In in;
+            Run(bool tilt) {
+                in.seconds = 1 / 90.f;
+                in.allowed = in.airborne = true;
+                in.look = {0, 0, -1};
+                in.velocity = {0, -3, -2};
+                in.tilt = tilt;
+                in.hands[0] = {true, {-.7f, -.25f, 0}};
+                in.hands[1] = {true, {.7f, -.25f, 0}};
+            }
+            Out run(float seconds) {
+                Out o;
+                for (float t = 0; t < seconds; t += in.seconds) {
+                    o = gl.update(in);
+                    if (o.drive)
+                        in.velocity = o.velocity;
+                }
+                return o;
+            }
+            void aim(Quat l, Quat r) {
+                in.hands[0].aim = l;
+                in.hands[1].aim = r;
+            }
+        };
+        {
+            Run r(true);
+            r.run(.5f);
+            check(r.gl.on(), "arms out: the glide");
+            r.aim(down(25), down(25));
+            Out o = r.run(1.f);
+            check(o.tilting && std::fabs(o.pitch - (tune.pitchGlide - 20)) < .5f, "25 down: pitch -30 " + std::to_string(o.pitch));
+            r.aim(down(15), down(35));
+            o = r.run(1.f);
+            check(std::fabs(o.pitch - (tune.pitchGlide - 20)) < .5f, "the two hands averaged");
+            r.aim(down(40), down(40));
+            const float before = o.pitch;
+            o = r.run(.1f);
+            const float share = (before - o.pitch) / (before - (tune.pitchGlide - 35));
+            check(share > .45f && share < .8f, "about a tenth of a second's smoothing: " + std::to_string(share));
+            o = r.run(1.f);
+            check(std::fabs(o.pitch - (tune.pitchGlide - 35)) < .5f && o.pose == glide, "arms out, 40 down: a -45 dive, its own pose kept");
+            r.aim(down(90), down(90));
+            o = r.run(1.f);
+            check(std::fabs(o.pitch - tune.pitchDive) < .01f, "clamped at the dive");
+            const float fast = o.speed;
+            // the bank (hand heights) still steers while tilted
+            r.in.hands[0].offset = {-.65f, -.55f, 0};
+            r.in.hands[1].offset = {.65f, .05f, 0};
+            o = r.run(.5f);
+            check(o.bank > 10.f && o.velocity.x < -1.f && o.tilting, "steering as before: turns left " + std::to_string(o.bank));
+            r.in.hands[0].offset = {-.7f, -.25f, 0};
+            r.in.hands[1].offset = {.7f, -.25f, 0};
+            // nose up past level: a climb while the speed lasts
+            r.aim(down(-40), down(-40));
+            o = r.run(.4f);
+            check(o.pitch > 15 && o.velocity.y > 0 && o.speed < fast, "tilted back: climbs, trading speed: " + std::to_string(o.pitch));
+            o = r.run(6.f);
+            check(o.pitch <= tune.pitchStall + .01f && o.speed <= 12.f, "out of speed it stalls, never hangs");
+            // one hand without an orientation: the other's
+            r.aim(down(25), {0, 0, 0, 0});
+            o = r.run(1.5f);
+            check(o.tilting && std::fabs(o.pitch - (tune.pitchGlide - 20)) < .5f, "one hand: that hand's tilt");
+            // a blink (both): held .15 s, then the poses' pitch
+            const float held = o.pitch;
+            r.aim({0, 0, 0, 0}, {NAN, NAN, NAN, NAN});
+            o = r.run(.1f);
+            check(o.tilting && std::fabs(o.pitch - held) < .01f, "a blink: the last pitch held");
+            o = r.run(.1f);
+            check(!o.tilting, "past .15 s: the old pitch");
+            o = r.run(1.f);
+            check(std::fabs(o.pitch - tune.pitchGlide) < .5f && finite(o.velocity), "back to the arms-out glide pitch");
+            // back: afresh, no sweep from the stale value
+            r.aim(down(25), down(25));
+            o = r.run(.02f);
+            check(o.tilting, "the tilt back");
+            o = r.run(1.f);
+            check(std::fabs(o.pitch - (tune.pitchGlide - 20)) < .5f, "and its pitch");
+            // a tuck still dives
+            r.in.hands[0].offset = {-.2f, -.35f, -.15f};
+            r.in.hands[1].offset = {.2f, -.35f, -.15f};
+            r.aim(down(-40), down(-40));
+            o = r.run(1.f);
+            check(o.pose == dive && !o.tilting && o.pitch < -30.f, "tucked: DIVE regardless of the tilt");
+            // NaN never sticks
+            r.in.hands[0].offset = {-.7f, -.25f, 0};
+            r.in.hands[1].offset = {.7f, -.25f, 0};
+            r.aim({NAN, 0, 0, 1}, {0, INFINITY, 0, 1});
+            r.in.look = {NAN, 0, -1};
+            o = r.run(.3f);
+            check(std::isfinite(o.pitch) && (!o.drive || finite(o.velocity)), "NaN: no bad pitch or velocity");
+        }
+        {
+            // OFF: the old glide exactly, whatever the controllers do.
+            Run a(false), b(false);
+            bool same = true;
+            for (int i = 0; i < 400; ++i) {
+                b.aim(down(float(i % 120) - 60), down(float((i * 7) % 90)));
+                if (i == 150) {
+                    for (Run* r : {&a, &b}) {
+                        r->in.hands[0].offset = {-.2f, -.35f, -.15f};
+                        r->in.hands[1].offset = {.2f, -.35f, -.15f};
+                    }
+                }
+                if (i == 260) {
+                    for (Run* r : {&a, &b}) {
+                        r->in.hands[0].offset = {-.7f, .2f, 0};
+                        r->in.hands[1].offset = {.7f, .2f, 0};
+                    }
+                }
+                const Out oa = a.run(a.in.seconds * .5f), ob = b.run(b.in.seconds * .5f);
+                same = same && oa.pitch == ob.pitch && oa.bank == ob.bank && oa.speed == ob.speed && oa.pose == ob.pose &&
+                       oa.drive == ob.drive && !ob.tilting && oa.velocity.x == ob.velocity.x && oa.velocity.y == ob.velocity.y &&
+                       oa.velocity.z == ob.velocity.z;
+            }
+            check(same && a.gl.on(), "OFF: the controllers' tilt changes nothing");
+        }
+        // The word in the swing command; the option.
+        check(glideWord(true) == glideTiltBit && glideWord(false) == 0 && glideTilt(glideWord(true)) && !glideTilt(0) && !glideTilt(2),
+              "the glide word");
+        game_swing::Command c;
+        c.serial = c.focused = 1;
+        c.asks = pack(true, true, true);
+        const bool was = game_swing::valid(c);
+        c.reserved7[0] = glideWord(true);
+        check(was && game_swing::valid(c), "the glide word keeps the command valid");
+        namespace c38 = spidy::combat38;
+        using c38::optionInfo;
+        using c38::valueName;
+        check(std::string(optionInfo[c38::glideTilt].key) == "glide_tilt" && optionInfo[c38::glideTilt].count == 2 &&
+                  std::string(valueName(c38::glideTilt, 0)) == "ON" && std::string(valueName(c38::glideTilt, 1)) == "OFF" && c38::glideTiltOn(0) &&
+                  !c38::glideTiltOn(1),
+              "GLIDE TILT: ON first, OFF switches it off");
+        const std::string t = optionInfo[c38::glideTilt].help;
+        check(t.size() <= 80 && std::count(t.begin(), t.end(), '.') == 1 && t.back() == '.' && t.find("restart") != std::string::npos,
+              "a help line: one sentence, 80 at most, says the restart: " + t);
     });
     test("Version 0.0.73: UNIVERSAL GRAPPLE - FireGate, TapOrHold, baton aim, enemy reel, ARM PUMP sprint", [] {
         using namespace spidy::grapple073;

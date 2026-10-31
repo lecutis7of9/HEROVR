@@ -5676,6 +5676,8 @@ DWORD WINAPI run(void*) {
                             }
                             const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !grappleLock;
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
+                            // 0.0.74 test 10 GLIDE TILT: the glide's pitch from the controllers' tilt (the bridge reads it).
+                            input.reserved7[0] = cape_glide::glideWord(combat38::glideTiltOn(c38(combat38::glideTilt)));
                             batmanGrapple[0] = batmanGrapple[1] = false;
                             // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
                             // (askGrappleOnly every live frame, so the pull carries on to the point).
@@ -14591,6 +14593,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return
 // 0.0.74 test 10 ENTRY FACING (van072.hpp Tune::boardFaceRoom) and HIDEOUT HOLD (van_screen.hpp Offer::hideoutHold)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEntryFacing(void* v) { return setHero007(v, combat38::entryFacing, 5524); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideoutHold(void* v) { return setHero007(v, combat38::hideoutHold, 5525); }
+// 0.0.74 test 10 GLIDE TILT (cape_glide.hpp tiltPitch): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlideTilt(void* v) { return setHero007(v, combat38::glideTilt, 5535); }
 // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON (the default) / 1 OFF (the old aim)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowSwing(void* v) { return setHero007(v, combat38::throwSwing, 5534); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);

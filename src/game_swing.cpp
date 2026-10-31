@@ -906,7 +906,10 @@ void visit(const native_rays::QueryContext& world) {
         for (unsigned i = 0; i < 2; ++i) {
             gi.hands[i].tracked = live && in.hands[i].tracked;
             gi.hands[i].offset = toWorld.rotate(in.hands[i].gripRelativeToHead);
+            gi.hands[i].aim = in.hands[i].aim.orientation; // 0.0.74 test 10 GLIDE TILT (world)
         }
+        // 0.0.74 test 10 GLIDE TILT: the VR module's glide word (a Version 7 command only; else off).
+        gi.tilt = live && c.version >= 7 && c.bytes == sizeof(Command) && cape_glide::glideTilt(c.reserved7[0]);
         const auto glided = capeGlide.update(gi);
         capeData.glides += glided.started ? 1u : 0u;
         caped = pulled.drive || glided.drive;

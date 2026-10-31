@@ -170,6 +170,8 @@ struct Command {
     // cape, never while it yields the hero to the game. Version 6 (commandBytesV6) ends before it: no carry.
     uint32_t carry{};
     Vec3 carryVelocity{};
+    // 0.0.74 test 10: reserved7[0] is the glide word (cape_glide::glideWord, bit 0 GLIDE TILT); [1] unused.
+    // Same layout and size; an older bridge ignores it, an older VR module sends 0 (the poses' pitch).
     uint32_t reserved7[2]{};
 };
 constexpr uint32_t commandBytesV2 = 168, commandBytesV3 = 184, commandBytesV4 = 200, commandBytesV5 = 240,

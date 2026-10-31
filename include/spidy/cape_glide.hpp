@@ -33,6 +33,11 @@ inline constexpr uint32_t asksMost = (1u << 9) - 1u; // every bit in use (game_s
 inline uint32_t pack(bool batman, bool left, bool right) {
     return batman ? askBatman | (left ? askGrapple[0] : 0u) | (right ? askGrapple[1] : 0u) : 0u;
 }
+// 0.0.74 test 10 GLIDE TILT: the swing command's glide word (game_swing::Command::reserved7[0], Version 7;
+// an older VR module sends 0 and an older bridge never reads it - the poses' pitch either way).
+inline constexpr uint32_t glideTiltBit = 1u;
+inline uint32_t glideWord(bool tilt) { return tilt ? glideTiltBit : 0u; }
+inline bool glideTilt(uint32_t word) { return (word & glideTiltBit) != 0; }
 inline uint32_t packGrappleOnly(bool left, bool right) {
     return left || right ? askGrappleOnly | (left ? askGrapple[0] : 0u) | (right ? askGrapple[1] : 0u) : 0u;
 }
@@ -72,10 +77,17 @@ struct Tune {
     float turnMost = 85;                        // degrees a second at full bank
     float bankFull = 35, bankDead = 6;          // degrees of arm tilt for full turn / for none
     float stuckSpeed = 2.f, stuckHold = .45f;   // the body barely moving this long while gliding: blocked, end
+    // 0.0.74 test 10 GLIDE TILT (a tester: "dive pitch based on the roll of your controllers, like Shadow"):
+    // the controllers' tilt about the body's side-to-side axis (see handTilt) sets the pitch directly -
+    // pitchGlide less the tilt past tiltDead, times tiltGain, clamped to [pitchDive, pitchPull] - smoothed
+    // over tiltSmooth seconds; with no hand's tilt it is held tiltHold seconds, then the poses' pitch again.
+    float tiltDead = 5, tiltGain = 1, tiltSmooth = .10f, tiltHold = .15f;
+    float tiltRate = 360; // degrees a second at most (a reacquire or a mode switch is no snap)
 };
 struct HandIn {
     bool tracked{};
     Vec3 offset{}; // the grip against the head, world-oriented (metres)
+    Quat aim{};    // 0.0.74 test 10 GLIDE TILT: the controller's aim orientation (world, -Z forward, +Y up)
 };
 struct In {
     float seconds{};
@@ -84,6 +96,7 @@ struct In {
     Vec3 look{0, 0, -1};
     Vec3 velocity{};   // the body's velocity now (world)
     HandIn hands[2]{}; // 0 left, 1 right
+    bool tilt{};       // 0.0.74 test 10 GLIDE TILT on (the swing command's glide word); off: the poses' pitch
 };
 struct Out {
     bool drive{};        // the glide is on: velocity is the body's
@@ -91,6 +104,7 @@ struct Out {
     uint32_t pose{};     // Pose
     float speed{}, pitch{}, bank{}; // m/s, degrees, degrees (+: turning left)
     bool started{}, ended{};
+    bool tilting{}; // 0.0.74 test 10 GLIDE TILT: the pitch is the controllers' tilt's now
 };
 struct Reading {
     bool out{}, tucked{}, dropped{}, raised{};
@@ -117,6 +131,41 @@ inline Reading read(const HandIn hands[2], Vec3 look, const Tune& t, bool engage
     r.dropped = l[0].y < t.dropBelow && l[1].y < t.dropBelow;
     r.tucked = !r.out && !r.dropped && std::fabs(r.span) < t.tuckSpan && l[0].y > t.tuckLow && l[1].y > t.tuckLow;
     return r;
+}
+
+// 0.0.74 test 10 GLIDE TILT: one controller's tilt about the body's side-to-side axis, degrees, + the
+// controller's top tipped forward (nose down: dive), - back (pull up). The glide holds the arms out to
+// the sides, so the wing-like twist is a forearm roll about that axis: with the controller pointing forward
+// (the usual hold) it is the controller's own nose pitch, with it pointing out along the arm it is the
+// controller's own roll - the same number either way. Read from the controller's up axis in the plane of
+// the flat look and world up; the forward axis if the up axis lies along the arm. False: no reading.
+inline bool handTilt(Quat q, Vec3 look, float& degrees) {
+    const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    if (!std::isfinite(n) || n < .9f || n > 1.1f)
+        return false;
+    Vec3 f{look.x, 0, look.z};
+    if (!finite(f) || length(f) < .1f)
+        return false;
+    f = normalized(f);
+    const Vec3 up = q.rotate({0, 1, 0}), fwd = q.rotate({0, 0, -1});
+    if (!finite(up) || !finite(fwd))
+        return false;
+    float a{};
+    if (const float uf = dot(up, f), uu = up.y; uf * uf + uu * uu > .25f)
+        a = std::atan2(uf, uu);
+    else if (const float ff = dot(fwd, f), fu = fwd.y; ff * ff + fu * fu > .25f)
+        a = -std::atan2(fu, ff);
+    else
+        return false;
+    degrees = a * 180.f / pi;
+    return std::isfinite(degrees);
+}
+// The tilt (degrees, + nose down) to the glide's pitch (degrees, + up): direct, angle in = pitch out.
+inline float tiltPitch(float tilt, const Tune& t) {
+    if (!std::isfinite(tilt))
+        return t.pitchGlide;
+    const float a = std::fabs(tilt) <= t.tiltDead ? 0.f : tilt - std::copysign(t.tiltDead, tilt);
+    return std::clamp(t.pitchGlide - a * t.tiltGain, t.pitchDive, t.pitchPull);
 }
 
 class Glide {
@@ -167,8 +216,17 @@ class Glide {
             target = tune.pitchDive;
         else if (pose_ == pullUp)
             target = speed_ > tune.stallSpeed ? tune.pitchPull : tune.pitchStall;
-        const float step = tune.pitchRate * dt;
+        float rate = tune.pitchRate;
+        // 0.0.74 test 10 GLIDE TILT: the arms out (not tucked: a tuck still dives), the controllers' tilt is
+        // the pitch - the mean of both hands' (one hand's while the other blinks), smoothed; none read: the
+        // last held tiltHold seconds, then the poses' pitch above. A climb past the stall stalls as before.
+        o.tilting = in.tilt && tiltTarget(in, r.tucked, dt, target);
+        if (o.tilting)
+            rate = tune.tiltRate;
+        const float step = rate * dt;
         pitch_ += std::clamp(target - pitch_, -step, step);
+        if (!std::isfinite(pitch_))
+            pitch_ = tune.pitchGlide;
         // Energy: gravity along the path, less drag.
         const float th = radians(pitch_);
         speed_ += (-g * std::sin(th) - tune.drag * speed_ * speed_) * dt;
@@ -198,9 +256,42 @@ class Glide {
         outHeld_ = dropHeld_ = stuck_ = since_ = 0;
         pose_ = none;
         bank_ = 0;
+        tiltHas_ = false;
+        tiltLost_ = 0;
     }
 
   private:
+    // GLIDE TILT: true and target set while the tilt drives the pitch.
+    bool tiltTarget(const In& in, bool tucked, float dt, float& target) {
+        float sum = 0;
+        int count = 0;
+        for (const auto& h : in.hands) {
+            float d{};
+            if (h.tracked && handTilt(h.aim, in.look, d)) {
+                sum += d;
+                ++count;
+            }
+        }
+        if (count) {
+            const float raw = sum / float(count);
+            const float k = tune.tiltSmooth > 1e-4f ? 1.f - std::exp(-dt / tune.tiltSmooth) : 1.f;
+            tilt_ = tiltHas_ && std::isfinite(tilt_) ? tilt_ + (raw - tilt_) * k : raw;
+            tiltHas_ = true;
+            tiltLost_ = 0;
+        } else if (tiltHas_) {
+            tiltLost_ += dt;
+            if (tiltLost_ > tune.tiltHold)
+                tiltHas_ = false; // the poses' pitch again; the next reading starts afresh
+        }
+        if (!tiltHas_ || tucked)
+            return false;
+        target = tiltPitch(tilt_, tune);
+        if (target > tune.pitchStall && speed_ <= tune.stallSpeed)
+            target = tune.pitchStall; // no climb without the speed to trade (the PULL UP's stall)
+        return true;
+    }
+    bool tiltHas_{};
+    float tilt_{}, tiltLost_{};
     void start(const In& in) {
         on_ = true;
         since_ = 0;

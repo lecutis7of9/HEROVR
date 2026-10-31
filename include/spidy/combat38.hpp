@@ -262,6 +262,9 @@ enum Option : uint32_t {
     // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): ON (0, the default) every hand throw flies along the arm's
     // swing (the peak window's mean velocity); OFF (1) the old line (the hand's aim at the release)
     throwSwing,
+    // 0.0.74 test 10 GLIDE TILT (cape_glide.hpp handTilt / tiltPitch): ON (0, the default) BATMAN's glide pitch is
+    // the controllers' tilt, directly (Shadow's way); OFF (1) the arm poses' pitch (out glides, tuck dives, raise pulls up)
+    glideTilt,
     options
 };
 struct OptionInfo {
@@ -649,6 +652,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"entry_facing", "ENTRY FACING", "EFAC", "PLAY SPACE turns your play area to the car's front on entry; no restart needed.", 2, {"PLAY SPACE", "HEAD", nullptr, nullptr}},
     {"hideout_hold", "HIDEOUT HOLD", "HHLD", "HOLD: GO TO BATCAVE / SAFEHOUSE on the dash needs a 1 s hold; no restart needed.", 2, {"HOLD", "TAP", nullptr, nullptr}},
     {"throw_swing", "THROW BY SWING", "TSWG", "ON throws fly the way your arm swung, OFF is the old aim; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"glide_tilt", "GLIDE TILT", "GTLT", "ON: tilt your controllers to set the glide dive angle, like Shadow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -690,6 +694,8 @@ inline bool entryFacesRoom(uint32_t value) { return value != 1; }
 inline bool hideoutHoldOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON, the default; 1 OFF (the old aim).
 inline bool throwSwingOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 10 GLIDE TILT (cape_glide.hpp): 0 ON, the default; 1 OFF (the arm poses' pitch).
+inline bool glideTiltOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }

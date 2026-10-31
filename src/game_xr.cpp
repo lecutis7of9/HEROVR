@@ -2489,6 +2489,7 @@ DWORD WINAPI run(void*) {
         batcave074::Computer batComputer;
         batcave074::WristButton hideoutWrist;
         bool hideoutBWas{}, hideoutChairWant{}, hideoutMusic{};
+        bool seatRecenterWas{}; // 0.0.75 SEAT RECENTER: B's last state
         bool caveQuietApplied{}; // 0.0.74 test 3 CAVE QUIET: the game's sound ducked
         float hideoutChairLift{}, hideoutSeconds{};
         Vec3 hideoutHintAt{}, hideoutHintFacing{0, 0, 1};
@@ -8302,6 +8303,15 @@ DWORD WINAPI run(void*) {
                                             // AUTO SIT .3 s after the boarding; a sit waits while a hand holds the wheel.
                                             Vec3 seatAt = van.frame.world(vanTune.eye);
                                             seatAt.y = van.frame.world(batNow ? vanTune.eye : vehicle074::seatEye).y;
+                                            // 0.0.75 SEAT RECENTER: B while seated snaps the eye back to the driver's seat.
+                                            if (vehicle074::recenterPress((frame.buttons & vehicle074::recenterButton) != 0, seatRecenterWas,
+                                                                          static_cast<uint8_t>(c38(combat38::seatedDriving)),
+                                                                          van.state == van072::driving, hideoutVisit.active())) {
+                                                vanSeat.sit();
+                                                const bool held = van.wheel.latched[0] || van.wheel.latched[1];
+                                                message(1, 0, held ? "SEAT: recentring as you let go of the wheel" : "SEAT: recentred");
+                                                game_prompts::note("VERSION 0.0.75 SEAT RECENTER: B (the driver's seat)");
+                                            }
                                             vanSeatLift = vanSeat.step(static_cast<uint8_t>(c38(combat38::seatedDriving)),
                                                                        van.state == van072::driving, hideoutVisit.active(), vin.dt,
                                                                        motion.headPose.position, seatAt, vanDriver.boarding,
@@ -8331,7 +8341,7 @@ DWORD WINAPI run(void*) {
                                         vanBoardShade = std::isfinite(vanCarry.shade) ? std::clamp(vanCarry.shade, 0.f, 1.f) : 0.f;
                                         if (vout.entered)
                                             message(1, 0, (vanDriver.carried || (vanDriver.boarding && ci.ready)
-                                                              ? (vehName + ": in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out")
+                                                              ? (vehName + ": in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out; B recentres your seat")
                                                               : (vehName + ": in - parked (the drive is not ready here); the inside handle gets you out")).c_str());
                                         if (vout.exited) {
                                             message(1, 0, (vehName + ": out").c_str());

@@ -97,6 +97,20 @@ inline Vec3 seatOffset(Vec3 current, Vec3 head, Vec3 seat) {
     return o;
 }
 
+// 0.0.75 SEAT RECENTER: B (on Touch the right controller's upper face button; on the Steam Frame's right, too)
+// pressed while seated in the driver's seat re-centres the eye on the seat eye (Seat::sit: all three axes, HEIGHT
+// ONLY its height). Free there: the game gets no face button from the seat (DRIVING masks all but Start / Back),
+// B's other uses are the hideout's exit hold (not seated: the hideout clears the seat) and the calibration's skip
+// (not while driving). Not with SEATED DRIVING OFF. The cars have one seat, the driver's (seatEye; there is no
+// passenger seat), so that is where it snaps. A rising edge only; while a hand holds the wheel the sit waits for
+// it to let go (Seat: the eye jumping under a latched hand would steer).
+inline constexpr uint32_t recenterButton = 2; // spidy::buttonB (tracking.hpp)
+inline bool recenterPress(bool held, bool& was, uint8_t mode, bool driving, bool inHideout) {
+    const bool edge = held && !was;
+    was = held;
+    return edge && driving && !inHideout && mode != seatOff;
+}
+
 // The seat's state: sat (an offset held), cleared on getting out, OFF, or a hideout.
 class Seat {
 public:

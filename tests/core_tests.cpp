@@ -36075,6 +36075,38 @@ int main() {
         Coast c;
         check(c.start(launchFrom({})) && c.update(.05f, false, {0, jumpUp, 0}, true).velocity.y > 0, "the launch did not coast up");
     });
+    test("0.0.75 SEAT RECENTER: B while seated snaps the eye back to the driver's seat", [] {
+        namespace vh = spidy::vehicle074;
+        check(vh::recenterButton == static_cast<uint32_t>(spidy::buttonB), "the seat's button is B");
+        bool was = false;
+        check(vh::recenterPress(true, was, vh::seatAuto, true, false), "B pressed in the seat recentres");
+        check(!vh::recenterPress(true, was, vh::seatAuto, true, false), "held B does not repeat");
+        check(!vh::recenterPress(false, was, vh::seatAuto, true, false), "let go: nothing");
+        check(!vh::recenterPress(true, was, vh::seatAuto, false, false), "not driving: B is not the seat's");
+        was = false;
+        check(!vh::recenterPress(true, was, vh::seatAuto, true, true), "in a hideout B is its exit");
+        was = false;
+        check(!vh::recenterPress(true, was, vh::seatOff, true, false), "SEATED DRIVING OFF: no recenter");
+        was = false;
+        check(vh::recenterPress(true, was, vh::seatButton, true, false) &&
+                  (was = false, vh::recenterPress(true, was, vh::seatHeight, true, false)),
+              "SIT BUTTON and HEIGHT ONLY recentre too");
+        // The snap: sat, the eye (world, the offset in) drifts .3 m and down; B puts it back on the seat eye.
+        vh::Seat seat;
+        const spidy::Vec3 eye{0, 1.6f, 0};
+        seat.step(vh::seatButton, true, false, .016f, {0, 1.2f, 0}, eye);
+        seat.sit();
+        auto o = seat.step(vh::seatButton, true, false, .016f, {0, 1.2f, 0}, eye);
+        check(std::fabs(o.y - .4f) < 1e-4f, "the first sit lifts the eye to the seat");
+        seat.sit();
+        o = seat.step(vh::seatButton, true, false, .016f, {.3f, 1.5f, 0}, eye);
+        check(std::fabs(o.x + .3f) < 1e-4f && std::fabs(o.y - .5f) < 1e-4f, "the recenter takes the drift back out");
+        seat.sit();
+        const auto held = seat.step(vh::seatButton, true, false, .016f, {.2f, 1.6f, 0}, eye, false, true);
+        check(seat.waiting() && std::fabs(held.x - o.x) < 1e-6f, "a hand on the wheel: the recenter waits");
+        o = seat.step(vh::seatButton, true, false, .016f, {.2f, 1.6f, 0}, eye);
+        check(!seat.waiting() && std::fabs(o.x + .5f) < 1e-4f, "let go: it snaps");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

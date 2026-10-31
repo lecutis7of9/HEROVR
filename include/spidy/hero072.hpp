@@ -1365,7 +1365,12 @@ struct HookLauncher {
     }
     // Version 0.0.73: the grip at the rig draws, a trigger PRESS while drawn (never one begun on the hologram
     // or before the draw) fires; true the frame the line bites. gunInHand: the hand holds a pistol / shotgun.
+    // 0.0.74 test 10 QUICK HOOK (owner pt1362u/pt1363u: "takes so long to fire", "press it multiple times"):
+    // quick fires on the press itself (no windup, no rearm) and stays true while that trigger is held, as
+    // grapple073::FireGate (the bridge takes its rising edge, so a game tick that misses one frame still sees
+    // it). `fired` is true only the frame a fire begins (the buzz). OFF (quick false): test 9 exactly.
     bool trigDown{}, trigCounts{};
+    bool quick{}, firing{}, fired{};
     bool stepTrigger(float dt, bool play, float grip, float trigger, bool atRigNow, bool gunInHand, bool blocked) {
         dt = clampDt(dt);
         rearm = std::max(0.f, rearm - dt);
@@ -1376,8 +1381,12 @@ struct HookLauncher {
         const bool tWas = trigDown;
         trigDown = t >= .6f || (tWas && t > .35f);
         const bool press = trigDown && !tWas;
+        fired = false;
+        if (!trigDown)
+            firing = false;
         if (!play) {
             state = stowed;
+            firing = false;
             return false;
         }
         switch (state) {
@@ -1390,7 +1399,19 @@ struct HookLauncher {
         case held:
             if (!down) {
                 state = stowed;
+                firing = false;
                 return false;
+            }
+            if (quick) { // 0.0.74 test 10 QUICK HOOK: the press fires now; held, the ask stays
+                if (press && !blocked) {
+                    ++fires;
+                    fired = firing = true;
+                    rearm = 0;
+                    return true;
+                }
+                if (blocked)
+                    firing = false;
+                return firing;
             }
             if (press && !blocked && rearm <= 0) {
                 state = winding;
@@ -1404,6 +1425,7 @@ struct HookLauncher {
                 return false;
             state = down ? held : stowed;
             rearm = .4f;
+            fired = true;
             return true;
         }
     }

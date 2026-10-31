@@ -53,6 +53,9 @@ struct Blow {
     float knockAmount{};     // its strength (the melee site's 100)
     uint32_t damager{};      // the hero's handle (0: none)
     uint32_t type = meleeType;
+    // 0.0.74 test 10 GRAPPLE YANK (grapple074.hpp, CANDIDATE): the direction from the victim to the hero
+    // (a pull toward him), not the hero to the victim.
+    bool toward{};
 };
 // A handle from an actor slot's generation word and index (the melee site's own build).
 inline uint32_t handleOf(uint16_t generation, uint32_t index) {

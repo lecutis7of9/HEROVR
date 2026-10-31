@@ -413,6 +413,11 @@ struct Data {
     float speed{}, pitch{}, bank{};
     Vec3 anchor{};
     uint32_t glides{}, grapples{}, misses{}, arrivals{};
+    // 0.0.74 test 10 GRAPPLE YANK: each ENEMY REEL's start - the count, the enemy (world_trace id), his feet
+    // and the hero's body then (world).
+    uint32_t reels{}, reserved{};
+    uint64_t reelId{};
+    Vec3 reelFeet{}, reelFrom{};
 };
 
 } // namespace spidy::cape_glide

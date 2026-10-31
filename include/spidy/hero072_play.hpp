@@ -42,6 +42,7 @@ struct PlayOptions {
     uint32_t thorHammer{};    // Version 0.0.72 THOR HAMMER: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE THUNDER, 3 FCCOOPER (the look only)
     bool perchTakedown = true, takedownLight = true; // 9:31, 9:32: BATMAN's PERCH TAKEDOWN and its light
     bool repLog = true; // 0.0.73 test 3 REP PAGE: REP LOG (rep_log.hpp), on by default
+    bool punisherQuickHook = true; // 0.0.74 test 10 QUICK HOOK (HookLauncher::quick), on by default
     // From the combat38 values (ON first: 0 is ON; SURVIVAL and OWN SUIT: OFF first).
     static bool onFirst(uint32_t v) { return v == 0; }
     static bool offFirst(uint32_t v) { return v == 1; }
@@ -495,11 +496,14 @@ class Play {
             for (unsigned i = 0; i < 2; ++i) {
                 const bool otherHas = hooks[1 - i].state != HookLauncher::stowed;
                 const bool rig = tracked[i] && !otherHas && punisher_rig::at(p[i], in.head, rigBody);
+                hooks[i].quick = o.punisherQuickHook; // 0.0.74 test 10 QUICK HOOK
                 if (hooks[i].stepTrigger(dt, true, in.hands[i].grip, in.hands[i].trigger, rig, in.gunInHand[i], in.handBusy[i])) {
                     // Version 0.0.72: the line is the bridge's real one (game_xr, to the raycast's hit);
-                    // 0.0.71's 12 m stand-in line to nowhere is gone.
+                    // 0.0.71's 12 m stand-in line to nowhere is gone. 0.0.74 test 10: held while the trigger
+                    // is (QUICK HOOK), the buzz once, on the fire.
                     out.grapple[i] = true;
-                    out.buzz(i, .7f);
+                    if (hooks[i].fired)
+                        out.buzz(i, .7f);
                 }
                 out.hookOut[i] = hooks[i].state != HookLauncher::stowed;
             }

@@ -320,6 +320,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5509'), ['SpidyFingerRay'])  # 0.0.74 test 3 FINGER RAY (finger_ray074.hpp)
         self.assertEqual(uses.get('5510'), ['SpidyDashInside'])  # 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp)
         self.assertEqual(uses.get('5511'), ['SpidyCockpitGlow'])  # 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
+        self.assertEqual(uses.get('5530'), ['SpidyPunisherQuickHook'])  # 0.0.74 test 10 QUICK HOOK (hero072.hpp)
+        self.assertEqual(uses.get('5531'), ['SpidyGrappleYank'])  # 0.0.74 test 10 GRAPPLE YANK (grapple074.hpp)
+        self.assertEqual(uses.get('5532'), ['SpidySureGrapple'])  # 0.0.74 test 10 SURE GRAPPLE (grapple074.hpp)
         # 0.0.74 test 10: the tests' picture / AA codes are retired with their options (never reused)
         for code in ('5496', '5497', '5502', '5504', '5505', '5506') + tuple(str(c) for c in range(5512, 5524)):
             self.assertIsNone(uses.get(code), code)

@@ -110,6 +110,7 @@
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
+#include "spidy/grapple074.hpp"      // 0.0.74 test 10 SURE GRAPPLE / GRAPPLE YANK
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
 #include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
 #include "spidy/native_address_finder.hpp"
@@ -899,6 +900,7 @@ hero072::PlayOptions hero072Options() {
     o.fireDouse = O::onFirst(c38(combat38::fireDouse));
     o.shieldSlam = O::onFirst(c38(combat38::shieldSlam));
     o.punisherHook = O::onFirst(c38(combat38::punisherHook));
+    o.punisherQuickHook = combat38::quickHookOn(c38(combat38::punisherQuickHook)); // 0.0.74 test 10 QUICK HOOK
     o.clawClimb = c38(combat38::clawClimb) == 1; // Version 0.0.73: 0 OFF (the default), 1 ON
     o.shove = O::onFirst(c38(combat38::npcShove));
     o.faction = c38(combat38::faction);
@@ -2311,6 +2313,10 @@ DWORD WINAPI run(void*) {
         // Version 0.0.72 GRAPPLE (grapple072.hpp): DAREDEVIL's cast and the PUNISHER's hook (hero072's
         // presses, for the next swing command), the hook launcher drawn, and the hands for the line.
         bool hero072Grapple[2]{}, hero072HookOut[2]{}, hero072HandTracked[2]{};
+        grapple074::AskLatch grappleLatch;  // 0.0.74 test 10 SURE GRAPPLE
+        grapple074::YankWatch yankWatch;    // 0.0.74 test 10 GRAPPLE YANK (CANDIDATE): did he move?
+        uint32_t capeReelsSeen{}, grappleYanks{}, grappleYankNotes{};
+        bool capeReelsKnown{};
         // Version 0.0.72 GRAPPLE LINE: each hand's line drawn last frame, and when its pull began (the fly-out).
         bool grappleLineWas[2]{};
         std::chrono::steady_clock::time_point grappleLineAt[2]{};
@@ -5630,6 +5636,16 @@ DWORD WINAPI run(void*) {
                             }
                             if (grappleLock) // 0.0.74 test 2b: no grapple from any car
                                 batmanGrapple[0] = batmanGrapple[1] = hero072Grapple[0] = hero072Grapple[1] = false;
+                            { // 0.0.74 test 10 SURE GRAPPLE (grapple074::AskLatch): a press's ask held until the bridge
+                              // answers it (a grapple or a miss) or 150 ms pass - a one-frame ask is no longer lost
+                              // between two game ticks. BATMAN's channel or the other grapplers'.
+                                const uint32_t gh = heroNow();
+                                bool* const chan = gh != hero_modes::batman && grapple072::grappler(gh) ? hero072Grapple : batmanGrapple;
+                                const bool sure = combat38::sureGrappleOn(c38(combat38::sureGrapple)) && !grappleLock && !seatedLock;
+                                const double t = static_cast<double>(now.QuadPart) / static_cast<double>(frequency.QuadPart);
+                                for (unsigned i = 0; i < 2; ++i)
+                                    chan[i] = grappleLatch.ask(i, chan[i], t, sure);
+                            }
                             const bool capeLive = batmanNow && !calibrationInput && !padLayer.latched() && !phone.open() && !grappleLock;
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
                             batmanGrapple[0] = batmanGrapple[1] = false;
@@ -5772,6 +5788,53 @@ DWORD WINAPI run(void*) {
                                     }
                                 }
                                 capeCounted = true;
+                                // 0.0.74 test 10 SURE GRAPPLE: the bridge's answer frees the held asks.
+                                grappleLatch.answer(capeNow.grapples, capeNow.misses);
+                                // 0.0.74 test 10 GRAPPLE YANK (CANDIDATE, grapple074.hpp): each new ENEMY REEL asks
+                                // the game for a knockback from the enemy toward the hero (1 HP); the hero's reel
+                                // to him stays. Every yank's result is logged half a second later.
+                                {
+                                    const double t = static_cast<double>(now.QuadPart) / static_cast<double>(frequency.QuadPart);
+                                    if (capeReelsKnown && capeNow.reels > capeReelsSeen && capeNow.reelId &&
+                                        grapple072::grappler(heroNow()) && combat38::grappleYankOn(c38(combat38::grappleYank))) {
+                                        const bool sent = sm2_damage::queue(capeNow.reelId, grapple074::yankBlow());
+                                        ++grappleYanks;
+                                        yankWatch.start(capeNow.reelId, capeNow.reelFeet, capeNow.reelFrom, t);
+                                        yankWatch.live = yankWatch.live && sent;
+                                        if (++grappleYankNotes <= 40) {
+                                            char line[200];
+                                            sprintf_s(line, "VERSION 0.0.74 GRAPPLE YANK (CANDIDATE) %u: %s on enemy 0x%llx, %.1f m away - knockback "
+                                                            "toward you %s",
+                                                      grappleYanks, grapple072::heroName(heroNow()),
+                                                      static_cast<unsigned long long>(capeNow.reelId),
+                                                      static_cast<double>(length(capeNow.reelFeet - capeNow.reelFrom)),
+                                                      sent ? "sent (DirectDamage, CONFIRMED path)" : "NOT sent (damage path off or full)");
+                                            game_prompts::note(line);
+                                        }
+                                    }
+                                    capeReelsKnown = true;
+                                    capeReelsSeen = capeNow.reels;
+                                    if (yankWatch.due(t)) {
+                                        yankWatch.live = false;
+                                        Vec3 at{NAN, NAN, NAN};
+                                        for (uint32_t e = 0; e < enemiesHereCount; ++e)
+                                            if (enemiesHereIds[e] == yankWatch.id)
+                                                at = motion.anchor + enemiesHere[e];
+                                        const auto v = yankWatch.judge(at);
+                                        if (grappleYankNotes <= 40) {
+                                            char line[200];
+                                            if (!finite(at))
+                                                sprintf_s(line, "VERSION 0.0.74 GRAPPLE YANK (CANDIDATE) %u result: enemy 0x%llx not seen now - "
+                                                                "moved UNKNOWN", grappleYanks, static_cast<unsigned long long>(yankWatch.id));
+                                            else
+                                                sprintf_s(line, "VERSION 0.0.74 GRAPPLE YANK (CANDIDATE) %u result: enemy moved %s (%.2f m, %.2f m "
+                                                                "toward you; the hero's reel is the fallback)",
+                                                          grappleYanks, v.moved ? "YES" : "NO", static_cast<double>(v.distance),
+                                                          static_cast<double>(v.toward));
+                                            game_prompts::note(line);
+                                        }
+                                    }
+                                }
                                 capeGrapplesSeen = capeNow.grapples;
                                 capeMissesSeen = capeNow.misses;
                                 capeGlidesSeen = capeNow.glides;
@@ -14231,6 +14294,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyRageTint(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFireDouse(void* v) { return setHero007(v, combat38::fireDouse, 5418); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyShieldSlam(void* v) { return setHero007(v, combat38::shieldSlam, 5419); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherHook(void* v) { return setHero007(v, combat38::punisherHook, 5420); }
+// 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK (CANDIDATE), SURE GRAPPLE (grapple074.hpp): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherQuickHook(void* v) { return setHero007(v, combat38::punisherQuickHook, 5530); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGrappleYank(void* v) { return setHero007(v, combat38::grappleYank, 5531); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySureGrapple(void* v) { return setHero007(v, combat38::sureGrapple, 5532); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawClimb(void* v) { return setHero007(v, combat38::clawClimb, 5421); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyNpcShove(void* v) { return setHero007(v, combat38::npcShove, 5422); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFaction(void* v) { return setHero007(v, combat38::faction, 5423); }

@@ -241,6 +241,15 @@ enum Option : uint32_t {
     dashInside,
     // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
     cockpitGlow,
+    // 0.0.74 test 10 QUICK HOOK (hero072.hpp HookLauncher::quick): ON (0, the default) the PUNISHER's hook fires on
+    // the trigger press (no windup, no rearm) and its ask is held while the trigger is; OFF test 9's 0.25 s windup
+    punisherQuickHook,
+    // 0.0.74 test 10 GRAPPLE YANK (CANDIDATE, grapple074.hpp): ON (0, the default) a grapple that reels onto an enemy
+    // also sends the game a knockback from him toward the hero (DirectDamage, 1 HP); the hero's reel stays the fallback
+    grappleYank,
+    // 0.0.74 test 10 SURE GRAPPLE (grapple074::AskLatch): ON (0, the default) every hero's grapple press is held
+    // until the bridge answers it (a grapple or a miss) or 150 ms pass; OFF test 9's one-frame ask
+    sureGrapple,
     options
 };
 struct OptionInfo {
@@ -621,6 +630,9 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"finger_ray", "FINGER RAY", "FRAY", "ON aims the dash laser from your index fingertip and snaps to buttons; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"dash_inside", "DASH INSIDE", "DSIN", "ON hides the cockpit from outside; the door handle glows only near a hand; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cockpit_glow", "COCKPIT GLOW", "CGLO", "ON darkens the Batmobile cabin and softly backlights dials and switches; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"punisher_quick_hook", "QUICK HOOK", "QHOOK", "ON fires the Punisher hook as you pull the trigger, no lost press; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"grapple_yank", "GRAPPLE YANK", "GYNK", "ON tries to yank a hooked enemy to you (CANDIDATE); you still reel to him; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"sure_grapple", "SURE GRAPPLE", "SGRP", "ON holds each grapple press until the game takes it, every hero; live.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -656,6 +668,10 @@ inline bool dashPointerOn(uint32_t value) { return value != 1; }
 inline bool crimeGpsOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 3 WHEEL FIRST (van072.hpp Tune::wheelFirst): 0 ON, the default; 1 OFF.
 inline bool wheelFirstOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
+inline bool quickHookOn(uint32_t value) { return value != 1; }
+inline bool grappleYankOn(uint32_t value) { return value != 1; }
+inline bool sureGrappleOn(uint32_t value) { return value != 1; }
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
 inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }

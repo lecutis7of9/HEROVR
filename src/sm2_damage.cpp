@@ -154,7 +154,10 @@ void service() {
         if (!me || !readSafe(static_cast<uintptr_t>(me), &heroTransform, 8) || !readSafe(heroTransform + 0x30, heroAt, 12))
             std::memcpy(heroAt, victimAt, sizeof(heroAt));
         std::memcpy(now[i].point, victimAt, sizeof(victimAt));
-        directionOf(heroAt, victimAt, now[i].dir);
+        if (now[i].blow.toward) // 0.0.74 test 10 GRAPPLE YANK (CANDIDATE): from him toward the hero
+            directionOf(victimAt, heroAt, now[i].dir);
+        else
+            directionOf(heroAt, victimAt, now[i].dir);
         if (!now[i].blow.damager && me)
             now[i].blow.damager = slotHandle(me);
         const int r = sendOne(handle, now[i]);

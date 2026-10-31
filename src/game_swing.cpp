@@ -870,6 +870,10 @@ void visit(const native_rays::QueryContext& world) {
                     reelId = reelIds[reelOn];
                     capeGlide.reset();
                     ++capeData.grapples;
+                    ++capeData.reels; // 0.0.74 test 10 GRAPPLE YANK: the VR module's yank asks the game
+                    capeData.reelId = reelId;
+                    capeData.reelFeet = reelFeet[reelOn];
+                    capeData.reelFrom = body.position;
                 } else if (hit && cape_glide::hookable(from, hit->point, false, hit->fixed) &&
                     capeGrapple.start(body.position, hit->point, hit->normal, i)) {
                     reelId = 0;

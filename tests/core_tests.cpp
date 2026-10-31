@@ -167,6 +167,7 @@
 #include "spidy/bolt_walls.hpp"
 #include "spidy/cape_glide.hpp"
 #include "spidy/grapple073.hpp"
+#include "spidy/grapple074.hpp" // 0.0.74 test 10 SURE GRAPPLE / GRAPPLE YANK
 #include "spidy/van072.hpp"
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
@@ -18868,7 +18869,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 160, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 163, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18902,7 +18903,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 160, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 163, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -24823,6 +24824,108 @@ int main() {
         k.stepTrigger(dt, true, 0, 0, false, false, false);
         k.stepTrigger(dt, true, 1, 0, false, false, false);
         check(k.state == HookLauncher::stowed, "a grip away from the rig: nothing");
+    });
+    test("0.0.74 test 10 QUICK HOOK: the PUNISHER's hook fires on the press, held while the trigger is, no rearm", [] {
+        using namespace spidy::hero072;
+        const float dt = 1 / 90.f;
+        const auto drawn = [&](bool quick) {
+            HookLauncher h;
+            h.quick = quick;
+            h.stepTrigger(dt, true, 0, 0, true, false, false);
+            h.stepTrigger(dt, true, 1, 0, true, false, false);
+            return h;
+        };
+        HookLauncher q = drawn(true);
+        check(q.state == HookLauncher::held, "drawn at the rig");
+        check(q.stepTrigger(dt, true, 1, 1, false, false, false) && q.fired && q.fires == 1, "the press frame itself fires (no windup)");
+        bool all = true;
+        for (int f = 0; f < 30; ++f)
+            all = q.stepTrigger(dt, true, 1, 1, false, false, false) && !q.fired && all;
+        check(all && q.fires == 1, "held: the ask stays (as FireGate), one fire, one buzz");
+        check(!q.stepTrigger(dt, true, 1, 0, false, false, false) && !q.firing, "released: the ask ends");
+        check(q.stepTrigger(dt, true, 1, 1, false, false, false) && q.fired && q.fires == 2, "pressed again the next frame: fires (no rearm)");
+        q.stepTrigger(dt, true, 1, 0, false, false, false);
+        check(!q.stepTrigger(dt, true, 1, 1, false, false, true) && q.fires == 2, "a blocked (hologram) press: no fire");
+        q.stepTrigger(dt, true, 1, 0, false, false, false);
+        q.stepTrigger(dt, true, 1, 1, false, false, false);
+        check(!q.stepTrigger(dt, true, 0, 1, false, false, false) && q.state == HookLauncher::stowed, "grip let go: stowed, no ask");
+        // Every press of a burst fires (owner pt1363u: "half the time i press it multiple times").
+        HookLauncher b = drawn(true);
+        uint32_t edges = 0;
+        for (int press = 0; press < 5; ++press) {
+            edges += b.stepTrigger(dt, true, 1, 1, false, false, false) && b.fired ? 1u : 0u;
+            b.stepTrigger(dt, true, 1, 0, false, false, false);
+        }
+        check(edges == 5 && b.fires == 5, "five quick presses: five fires");
+        // OFF: test 9 exactly (the windup, the press not the bite frame).
+        HookLauncher o = drawn(false);
+        check(!o.stepTrigger(dt, true, 1, 1, false, false, false) && o.state == HookLauncher::winding, "OFF: the press winds up");
+        int frames = 1;
+        while (!o.stepTrigger(dt, true, 1, 1, false, false, false) && frames < 90)
+            ++frames;
+        check(frames >= 20 && frames <= 25 && o.fired, "OFF: bites after the 0.25 s windup");
+        check(spidy::combat38::quickHookOn(0) && !spidy::combat38::quickHookOn(1) && PlayOptions{}.punisherQuickHook,
+              "QUICK HOOK on by default");
+    });
+    test("0.0.74 test 10 SURE GRAPPLE: a press's ask held until the bridge answers or 150 ms", [] {
+        using spidy::grapple074::AskLatch;
+        AskLatch l;
+        l.answer(3, 1); // the first sample: the counts known, nothing answered
+        double t = 10;
+        check(l.ask(0, true, t, true), "the press frame asks");
+        bool held = true;
+        for (int f = 1; f < 13; ++f) // 90 Hz: up to ~133 ms
+            held = l.ask(0, false, t + f / 90.0, true) && held;
+        check(held, "the one-frame press stays asked for the next frames (a game tick cannot miss it)");
+        check(!l.ask(0, false, t + .16, true) && l.expired == 1, "150 ms with no answer: dropped");
+        t = 20;
+        l.ask(1, true, t, true);
+        l.ask(1, false, t + .01, true);
+        l.answer(4, 1); // the bridge grappled
+        check(!l.ask(1, false, t + .02, true) && l.answered == 1, "the grapple count rose: the ask ends");
+        l.ask(1, true, t + 1, true);
+        l.answer(4, 2);
+        check(!l.ask(1, false, t + 1.01, true), "a miss answers too");
+        check(l.ask(0, true, 30, false) && !l.ask(0, false, 30.01, false), "OFF: the raw ask only (test 9)");
+        AskLatch h;
+        h.answer(0, 0);
+        bool on = true;
+        for (int f = 0; f < 60; ++f)
+            on = h.ask(0, true, 40 + f / 90.0, true) && on;
+        check(on && h.armed == 1, "BATMAN's held trigger: one press, asked all the while");
+        check(spidy::combat38::sureGrappleOn(0) && !spidy::combat38::sureGrappleOn(1), "SURE GRAPPLE on by default");
+    });
+    test("0.0.74 test 10 GRAPPLE YANK (CANDIDATE): the knockback pulls toward the hero, the move judged", [] {
+        namespace g = spidy::grapple074;
+        namespace d = spidy::sm2_damage;
+        const d::Blow b = g::yankBlow();
+        check(b.toward && b.knockback == 5 && b.knockAmount > 0 && b.amount > 0 && b.amount <= 1, "a knockback, 1 HP, toward");
+        check(!d::Blow{}.toward && !d::batonHit().toward, "every other blow pushes away as before");
+        const float hero[3] = {0, 0, 0}, victim[3] = {0, 0, -10};
+        float dir[3]{};
+        d::directionOf(victim, hero, dir);
+        check(std::abs(dir[2] - 1) < 1e-5f, "toward: from the victim to the hero");
+        g::YankWatch w;
+        w.start(0x1234, {0, 0, -10}, {0, 0, 0}, 5);
+        check(w.live && !w.due(5.2) && w.due(5.5), "judged half a second later");
+        auto v = w.judge({0, 0, -6});
+        check(v.moved && std::abs(v.toward - 4) < 1e-4f, "four metres toward the hero: moved");
+        v = w.judge({.2f, 0, -10});
+        check(!v.moved && v.distance > .1f, "a stagger on the spot: not moved");
+        check(!w.judge({NAN, 0, 0}).moved, "not seen: not moved");
+        g::YankWatch z;
+        z.start(0, {0, 0, -10}, {0, 0, 0}, 5);
+        check(!z.live, "no enemy id: no watch");
+        spidy::cape_glide::Data c;
+        check(c.reels == 0 && c.reelId == 0 && c.bytes == sizeof(spidy::cape_glide::Data), "the cape sample carries the reels");
+        check(spidy::combat38::grappleYankOn(0) && !spidy::combat38::grappleYankOn(1), "GRAPPLE YANK on by default");
+        using namespace spidy::combat38;
+        check(std::string_view(optionInfo[punisherQuickHook].key) == "punisher_quick_hook" &&
+                  std::string_view(optionInfo[grappleYank].key) == "grapple_yank" &&
+                  std::string_view(optionInfo[sureGrapple].key) == "sure_grapple" &&
+                  std::string_view(valueName(punisherQuickHook, 0)) == "ON" && std::string_view(valueName(grappleYank, 0)) == "ON" &&
+                  std::string_view(valueName(sureGrapple, 0)) == "ON",
+              "three option rows, each ON first");
     });
     test("Version 0.0.73: CAPTAIN AMERICA grapple - the free hand's grip draws, the trigger fires, the shield arm stays the shield's", [] {
         using namespace spidy::hero007;

@@ -10,6 +10,8 @@ export. The flicker fixes stay: EYE BLOOM OFF, LENS FLARES OFF IN VR, LIGHT HOLD
 LIGHT CHECKS.
 """
 import pathlib
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -280,6 +282,69 @@ class Monitor(unittest.TestCase):
         self.assertNotIn('Streamer', src('tools/launch-game-vr.ps1'))
         self.assertNotIn('streamer', src('tools/run_game_vr.py').lower())
         self.assertIn("    'monitor': ((0, 240), 'SpidyMonitorRate',", live)
+
+class MonitorMemory(unittest.TestCase):
+    """0.0.74 test 10 MONITOR MEMORY: %APPDATA%\\Spidy\\monitor-copy.txt remembers the copy across sessions (no
+    setting). "copy" while it is on (removed on a clean exit), "lost" after a device-removed sign, "skip" for good:
+    written by the next session on "lost", by the launcher after the 0x887A002B / bridge 3301 signature with the copy
+    on, and by the device-lost pop-up's Yes. Killed or crashed for other reasons: left alone."""
+
+    def test_vr_side(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('const auto start = streamer_view::atStart(readMonitorMemory());', g)
+        self.assertIn('native_gpu::monitorSkip();', g)
+        self.assertIn('streamer_view::atEnd(now, monitorMemory.copied, native_gpu::deviceRemovedSeen())', g)
+        self.assertIn('writeMonitorMemory(streamer_view::memoryCopy);', g)
+        self.assertIn('writeMonitorMemory(streamer_view::memoryLost);', g)
+        self.assertIn('L"\\\\Spidy\\\\spidy_vr.ini"', g)  # beside it, in %APPDATA%\Spidy
+        n = src('src/native_eye_gpu.cpp')
+        self.assertIn('monitorFallBack(spidy::streamer_view::skippedAfterLoss);', n)
+        self.assertEqual(n.count('removedSeen = true;'), 3)  # GetDeviceRemovedReason, and the fence's 3301 twice
+        self.assertIn("return removedSeen.load() || fault.load() == 3301;", n)
+
+    def test_launcher_side(self):
+        mf = src('tools/launcher/src/MainForm.cs')
+        self.assertIn('if (LiveFile.MonitorSkipAfterSession(LiveFile.MonitorMemoryPath(), twoGpuLost))', mf)
+        fix = mf[mf.index('void OfferTwoGpuFix()'):mf.index('internal const string TwoGpuFixQuestion')]
+        self.assertIn('LiveFile.MonitorSkip(LiveFile.MonitorMemoryPath())', fix)
+        self.assertLess(fix.index('DialogResult.Yes) return;'), fix.index('LiveFile.MonitorSkip('))  # only on Yes
+        self.assertIn('"monitor-copy.txt"', src('tools/launcher/src/LiveFile.cs'))
+        self.assertIn('"Spidy"', src('tools/launcher/src/LiveFile.cs'))
+        self.assertNotIn('monitor_copy', L.SETTINGS)  # no setting
+
+    @unittest.skipUnless(shutil.which('mcs') and shutil.which('mono'), 'mono')
+    def test_launcher_behaviour(self):
+        harness = r'''
+using System; using System.IO;
+namespace Sm2VrLauncher { static class H { static int Main(string[] a) {
+  string f = Path.Combine(Path.Combine(a[0], "Spidy"), "monitor-copy.txt");
+  if (LiveFile.MonitorMemory(f) != "") return 1;                       // no file
+  if (LiveFile.MonitorSkipAfterSession(f, true)) return 2;             // the copy was not on: nothing
+  if (File.Exists(f)) return 3;
+  Directory.CreateDirectory(Path.GetDirectoryName(f));
+  File.WriteAllText(f, "copy - on\r\n");
+  if (LiveFile.MonitorSkipAfterSession(f, false)) return 4;            // killed / other crash: left alone
+  if (LiveFile.MonitorMemory(f) != "copy") return 5;
+  if (!LiveFile.MonitorSkipAfterSession(f, true)) return 6;            // device lost with the copy on
+  if (LiveFile.MonitorMemory(f) != "skip") return 7;
+  File.WriteAllText(f, "\uFEFFlost\r\n");
+  if (LiveFile.MonitorMemory(f) != "lost") return 8;
+  if (!LiveFile.MonitorSkipAfterSession(f, true)) return 9;
+  File.Delete(f); Directory.Delete(Path.GetDirectoryName(f));
+  if (!LiveFile.MonitorSkip(f) || LiveFile.MonitorMemory(f) != "skip") return 10;  // the pop-up's Yes
+  File.WriteAllText(f, "whatever");
+  if (LiveFile.MonitorMemory(f) != "") return 11;
+  if (!LiveFile.MonitorMemoryPath().EndsWith(Path.Combine("Spidy", "monitor-copy.txt"))) return 12;
+  return 0; } } }'''
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / 'h.cs').write_text(harness)
+            r = subprocess.run(['mcs', '-nologo', '-out:' + d + '/h.exe',
+                                str(ROOT / 'tools' / 'launcher' / 'src' / 'LiveFile.cs'), d + '/h.cs'],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            r = subprocess.run(['mono', d + '/h.exe', d], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

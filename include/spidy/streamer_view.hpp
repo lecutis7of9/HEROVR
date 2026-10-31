@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string_view>
 
 namespace spidy::streamer_view {
 
@@ -221,6 +222,7 @@ enum Path : uint32_t {
     deviceLost = 4,      // the device was removed or lost, or the GPU bridge faulted
     otherGpu = 5,        // the window's image or monitor is on another GPU than the game's
     noCopy = 6,          // the headset's image could not be copied (no texture, wrong format or size)
+    skippedAfterLoss = 7, // an earlier session lost the GPU device while the copy was on (Memory below)
 };
 inline bool gameView(uint32_t path) { return path > headsetEye; }
 // First word wins: a fallback is final for the session (a later success does not undo it),
@@ -258,9 +260,76 @@ inline const char* pathLine(uint32_t path) {
         return "MONITOR: the game's own view (0.0.72) - the window is on another GPU (two GPUs)";
     case noCopy:
         return "MONITOR: the game's own view (0.0.72) - the headset's image could not be copied";
+    case skippedAfterLoss:
+        return "MONITOR: the game's own view (0.0.72) - an earlier session lost the GPU device (0x887A002B) while "
+               "the copy was on, so the copy is skipped from now on (%APPDATA%\\Spidy\\monitor-copy.txt)";
     default:
         return "MONITOR: the game's own view (0.0.72)";
     }
+}
+
+// 0.0.74 test 10 MONITOR MEMORY: the copy is remembered across sessions in one small file,
+// %APPDATA%\\Spidy\\monitor-copy.txt (no setting). Its first word is the state:
+//   "copy"  - written when the copy first reaches the window; removed again on a clean exit.
+//   "lost"  - this session saw a device-removed sign while the copy was on (written at once and at the
+//             end, so a session the device loss kills still leaves it).
+//   "skip"  - the copy is skipped from now on (the monitor shows the game's own view, 0.0.72):
+//             written by the next session on "lost", by the launcher when a session's console showed
+//             0x887A002B / GPU eye bridge 3301 while the file said "copy" or "lost", and by the
+//             launcher's device-lost pop-up (its Yes). It stays.
+// A session merely killed or crashed for another reason leaves "copy": that changes nothing (the
+// next session copies again and writes "copy" itself). Any other text reads as no file.
+enum Memory : uint32_t { memoryNone = 0, memoryCopy = 1, memoryLost = 2, memorySkip = 3 };
+inline constexpr const char* memoryFile = "monitor-copy.txt";
+inline Memory memoryOf(std::string_view text) {
+    while (!text.empty() && (text.front() == ' ' || text.front() == '\t' || text.front() == '\r' || text.front() == '\n' ||
+                             static_cast<unsigned char>(text.front()) == 0xEF || static_cast<unsigned char>(text.front()) == 0xBB ||
+                             static_cast<unsigned char>(text.front()) == 0xBF))
+        text.remove_prefix(1); // blanks and a UTF-8 BOM
+    const auto word = text.substr(0, 4);
+    if (word == "skip")
+        return memorySkip;
+    if (word == "lost")
+        return memoryLost;
+    if (word == "copy")
+        return memoryCopy;
+    return memoryNone;
+}
+inline const char* memoryText(Memory m) {
+    switch (m) {
+    case memoryCopy:
+        return "copy - the monitor's copy of the headset eye is on (removed on a clean exit)\r\n";
+    case memoryLost:
+        return "lost - the GPU device was lost while the monitor's copy was on\r\n";
+    case memorySkip:
+        return "skip - the monitor's copy is skipped after a GPU device loss (0x887A002B); delete this file to try it again\r\n";
+    default:
+        return "";
+    }
+}
+// At a session's start: whether the copy is skipped, and whether "skip" is written now.
+struct StartMemory {
+    bool skip = false;
+    bool writeSkip = false;
+};
+inline StartMemory atStart(Memory m) {
+    return {m == memorySkip || m == memoryLost, m == memoryLost};
+}
+// The copy reached the window: "copy" is written unless the file already says more.
+inline bool writeCopy(Memory m) { return m == memoryNone || m == memoryCopy; }
+// At the session's end: what the file becomes (memoryNone = removed). A device-lost sign while the
+// copy was on (this session wrote "copy") leaves "lost"; a clean end removes "copy"; "skip" stays.
+inline Memory atEnd(Memory m, bool copiedThisSession, bool deviceLostSeen) {
+    if (m == memorySkip)
+        return memorySkip;
+    if (deviceLostSeen && (copiedThisSession || m == memoryLost))
+        return memoryLost;
+    return m == memoryLost ? memoryLost : memoryNone;
+}
+// The launcher after a session: its console showed the device-lost signature (0x887A002B / bridge
+// 3301) or not. Only "copy" or "lost" (the copy was on) turn to "skip".
+inline Memory afterSession(Memory m, bool deviceLostLine) {
+    return deviceLostLine && (m == memoryCopy || m == memoryLost) ? memorySkip : m;
 }
 
 } // namespace spidy::streamer_view

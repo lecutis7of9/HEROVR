@@ -34631,6 +34631,51 @@ int main() {
         sv::Latch n;
         check(!n.fallBack(sv::undecided) && !n.fallBack(sv::headsetEye) && n.streaming(), "not a reason");
     });
+    test("0.0.74 test 10 MONITOR MEMORY: only a device loss with the copy on skips the copy in later sessions", [] {
+        namespace sv = streamer_view;
+        check(std::string(sv::memoryFile) == "monitor-copy.txt", "the file's name");
+        for (auto m : {sv::memoryCopy, sv::memoryLost, sv::memorySkip})
+            check(sv::memoryOf(sv::memoryText(m)) == m, "each state reads back");
+        check(sv::memoryOf("") == sv::memoryNone && sv::memoryOf("hello") == sv::memoryNone &&
+                  sv::memoryOf("sk") == sv::memoryNone && !*sv::memoryText(sv::memoryNone),
+              "no file or other text: none");
+        check(sv::memoryOf("\xEF\xBB\xBF skip\r\n") == sv::memorySkip && sv::memoryOf("\r\nlost") == sv::memoryLost,
+              "a BOM and blanks are fine");
+        // The first session: no file, the copy reaches the window, a clean end removes "copy".
+        auto st = sv::atStart(sv::memoryNone);
+        check(!st.skip && !st.writeSkip, "no file: the copy is on");
+        check(sv::writeCopy(sv::memoryNone) && sv::writeCopy(sv::memoryCopy), "\"copy\" written");
+        check(!sv::writeCopy(sv::memoryLost) && !sv::writeCopy(sv::memorySkip), "never over more");
+        check(sv::atEnd(sv::memoryCopy, true, false) == sv::memoryNone, "a clean end removes it");
+        check(sv::atEnd(sv::memoryNone, false, false) == sv::memoryNone, "nothing written, nothing left");
+        // Killed or crashed for another reason: "copy" stays, and changes nothing.
+        st = sv::atStart(sv::memoryCopy);
+        check(!st.skip && !st.writeSkip, "a left \"copy\" alone: the copy is still on");
+        check(sv::afterSession(sv::memoryCopy, false) == sv::memoryCopy, "the launcher leaves it without the signature");
+        // A device loss with the copy on: "lost" at the end (or at once), then skip from the next session on.
+        check(sv::atEnd(sv::memoryCopy, true, true) == sv::memoryLost, "a device-removed sign leaves \"lost\"");
+        check(sv::atEnd(sv::memoryLost, true, true) == sv::memoryLost, "and keeps it");
+        check(sv::atEnd(sv::memoryNone, false, true) == sv::memoryNone, "no copy this session: not its loss");
+        st = sv::atStart(sv::memoryLost);
+        check(st.skip && st.writeSkip, "the next session skips and writes \"skip\"");
+        st = sv::atStart(sv::memorySkip);
+        check(st.skip && !st.writeSkip, "\"skip\" skips");
+        check(sv::atEnd(sv::memorySkip, false, false) == sv::memorySkip &&
+                  sv::atEnd(sv::memorySkip, false, true) == sv::memorySkip,
+              "\"skip\" stays, a clean end or not");
+        // The launcher's view: the 0x887A002B / bridge 3301 signature with the copy on.
+        check(sv::afterSession(sv::memoryCopy, true) == sv::memorySkip &&
+                  sv::afterSession(sv::memoryLost, true) == sv::memorySkip,
+              "the signature with the copy on: skip");
+        check(sv::afterSession(sv::memoryNone, true) == sv::memoryNone, "the copy was not on: nothing");
+        // A skipped session: the game's own view, named.
+        sv::Latch l;
+        check(l.fallBack(sv::skippedAfterLoss) && !l.streaming() && !l.shown(), "skipped: the game view all session");
+        const std::string line = sv::pathLine(sv::skippedAfterLoss);
+        check(line.find("game's own view (0.0.72)") != std::string::npos && line.find("0x887A002B") != std::string::npos &&
+                  line.find("monitor-copy.txt") != std::string::npos,
+              "its line says why");
+    });
     test("0.0.73 test 5 HERO HANDS: IRON MAN's MARKs have their own profiles; every other suit keeps test 4's hands", [] {
         namespace sw = spidy::suit_wear;
         const sw::HandProfile& shared = sw::handProfileShared();

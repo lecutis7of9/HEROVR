@@ -242,6 +242,10 @@ void keepShownEye(ID3D12Resource* eye, const float orientation[4], const float f
 // the console line) (diagnostic).
 uint32_t streamerPresents();
 uint32_t monitorPath();
+// 0.0.74 test 10 MONITOR MEMORY: skip the copy for this session (an earlier one lost the device with it
+// on), and whether a real device-removed sign was seen (for monitor-copy.txt).
+void monitorSkip();
+bool deviceRemovedSeen();
 // The newest copied frame, if one was copied within maxAgeMs.
 bool latestScreen(Screen& out, uint64_t maxAgeMs);
 // How the copy is read: the encoded format of the back buffer's family, or

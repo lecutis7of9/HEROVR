@@ -1572,6 +1572,51 @@ gesture_remap::Store loadGestures() {
         return {}; // a bad file: the built-in moves, never a crash
     }
 }
+// 0.0.74 test 10 MONITOR MEMORY (streamer_view::Memory): %APPDATA%\\Spidy\\monitor-copy.txt, beside
+// spidy_vr.ini. A missing, unreadable or odd file reads as none; a write that fails changes nothing else.
+std::wstring monitorMemoryPath() {
+    const auto ini = tabOnlyPath();
+    return ini.empty() ? ini
+                       : ini.substr(0, ini.find_last_of(L'\\')) + L"\\" +
+                             std::wstring(streamer_view::memoryFile,
+                                          streamer_view::memoryFile + std::strlen(streamer_view::memoryFile));
+}
+streamer_view::Memory readMonitorMemory() {
+    try {
+        const auto path = monitorMemoryPath();
+        if (path.empty())
+            return streamer_view::memoryNone;
+        const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr, OPEN_EXISTING, 0, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+            return streamer_view::memoryNone;
+        char text[64]{};
+        DWORD size{};
+        if (!ReadFile(file, text, sizeof text - 1, &size, nullptr))
+            size = 0;
+        CloseHandle(file);
+        return streamer_view::memoryOf(std::string_view(text, size));
+    } catch (...) {
+        return streamer_view::memoryNone;
+    }
+}
+void writeMonitorMemory(streamer_view::Memory m) {
+    try {
+        const auto path = monitorMemoryPath();
+        if (path.empty())
+            return;
+        if (m == streamer_view::memoryNone)
+            DeleteFileW(path.c_str());
+        else
+            writeWhole(path, streamer_view::memoryText(m));
+    } catch (...) {
+    }
+}
+// This VR session's part: the copy reached the window (so "copy" was written), "lost" was written.
+struct MonitorMemorySession {
+    bool copied = false;
+    bool lostWritten = false;
+} monitorMemory;
 // Version 0.0.72 (TEST) HERO PROGRESS: reputation, suits and perks kept beside spidy_vr.ini
 // (%APPDATA%\\Spidy\\hero072_progress.txt), outside the mod's folder, so an update keeps them.
 std::wstring hero072ProgressPath() {
@@ -1644,6 +1689,29 @@ DWORD WINAPI run(void*) {
     struct CaveQuietEnd {
         ~CaveQuietEnd() { spidy::gameDuck(false); }
     } caveQuietEnd;
+    // 0.0.74 test 10 MONITOR MEMORY: an earlier session that lost the GPU device with the monitor's copy
+    // on ("lost", or the launcher's "skip") skips the copy now (the monitor shows the game's own view,
+    // its MONITOR line says why). Whatever way run ends, a clean end removes "copy" and a device-removed
+    // sign leaves "lost" (streamer_view::atEnd).
+    monitorMemory = {};
+    {
+        const auto start = streamer_view::atStart(readMonitorMemory());
+        if (start.writeSkip)
+            writeMonitorMemory(streamer_view::memorySkip);
+        if (start.skip)
+            native_gpu::monitorSkip();
+    }
+    struct MonitorMemoryEnd {
+        ~MonitorMemoryEnd() {
+            try {
+                const auto now = readMonitorMemory();
+                const auto end = streamer_view::atEnd(now, monitorMemory.copied, native_gpu::deviceRemovedSeen());
+                if (end != now)
+                    writeMonitorMemory(end);
+            } catch (...) {
+            }
+        }
+    } monitorMemoryEnd;
     bool nativeStarted = false, gpuStarted = false, raysStarted = false, swingStarted = false,
          raysFailed = false, swingFailed = false, websStarted = false,
          bodyStarted = false;
@@ -13488,6 +13556,17 @@ DWORD WINAPI run(void*) {
                                 monitorPathLogged = path;
                                 if (*streamer_view::pathLine(path))
                                     consoleLine(streamer_view::pathLine(path));
+                                if (path == streamer_view::headsetEye && !monitorMemory.copied) {
+                                    monitorMemory.copied = true; // MONITOR MEMORY: "copy" until a clean end
+                                    if (streamer_view::writeCopy(readMonitorMemory()))
+                                        writeMonitorMemory(streamer_view::memoryCopy);
+                                }
+                            }
+                            if (monitorMemory.copied && !monitorMemory.lostWritten && native_gpu::deviceRemovedSeen()) {
+                                monitorMemory.lostWritten = true; // kept even if the loss ends the game
+                                writeMonitorMemory(streamer_view::memoryLost);
+                                consoleLine("MONITOR: the GPU device was lost with the copy on - the next sessions skip "
+                                            "the copy (monitor-copy.txt)");
                             }
                         }
                         if (webGap >= 0 && imageGeneration != gapGeneration) {

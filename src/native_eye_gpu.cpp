@@ -229,6 +229,9 @@ struct MirrorPipeline {
 // and its own pipeline.
 std::atomic<bool> streamerWanted{};
 std::atomic<uint32_t> streamerDraws{}, streamerPath{};
+// 0.0.74 test 10 MONITOR MEMORY: a real device-removed sign was seen (GetDeviceRemovedReason failing,
+// or the fence's UINT64_MAX, fault 3301) - what game_xr keeps in monitor-copy.txt.
+std::atomic<bool> removedSeen{};
 // streamer_view::Latch's rule on the atomic: the first fallback is final for the session.
 void monitorFallBack(uint32_t why) {
     uint32_t path = streamerPath.load();
@@ -789,6 +792,7 @@ bool makeReadbacks() {
 CopyCommands* readyCommands(std::array<CopyCommands, 3>& pool) {
     const auto completed = fence->GetCompletedValue();
     if (completed == UINT64_MAX) {
+        removedSeen = true; // the device was removed (0.0.74 test 10 MONITOR MEMORY)
         fault = 3301;
         return nullptr;
     }
@@ -2479,6 +2483,7 @@ void capturePair(EyePairState::Stamp stamp) {
         }
     const auto completed = fence->GetCompletedValue();
     if (completed == UINT64_MAX) {
+        removedSeen = true; // the device was removed (0.0.74 test 10 MONITOR MEMORY)
         fault = 3301;
         return;
     }
@@ -2895,6 +2900,7 @@ void mirrorEye(IDXGISwapChain* swapchain) {
         return;
     if (wanted) {
         if (FAILED(device->GetDeviceRemovedReason())) {
+            removedSeen = true;
             monitorFallBack(sv0::deviceLost);
             return;
         }
@@ -3176,6 +3182,12 @@ uint32_t streamerPresents() {
 }
 uint32_t monitorPath() {
     return streamerPath.load();
+}
+void monitorSkip() {
+    monitorFallBack(spidy::streamer_view::skippedAfterLoss);
+}
+bool deviceRemovedSeen() {
+    return removedSeen.load() || fault.load() == 3301;
 }
 void wantScreen(bool wanted) {
     screenWanted = wanted;

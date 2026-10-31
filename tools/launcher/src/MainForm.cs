@@ -732,6 +732,9 @@ namespace Sm2VrLauncher
                 job = Job.None;
                 bool userStopped = stopAsked != DateTime.MinValue;
                 stopAsked = DateTime.MinValue;
+                // 0.0.74 test 10 MONITOR MEMORY: a device loss while the monitor's copy was on skips the copy from now on.
+                if (LiveFile.MonitorSkipAfterSession(LiveFile.MonitorMemoryPath(), twoGpuLost))
+                    sessionLog.Line("MONITOR: the GPU device was lost with the monitor's copy on; from now on the monitor shows the game's own view (0.0.72).", Theme.Warn);
                 // 0.0.74 test 3: the two-GPU device loss gets its own window with a one-click fix (CLEARER ERRORS on).
                 if (twoGpuLost && !userStopped && OptValue(LaunchOptions.Find("NoClearErrors")) == "1")
                 {
@@ -778,7 +781,8 @@ namespace Sm2VrLauncher
         }
 
         /// <summary>0.0.74 test 3: after the two-GPU device loss (0x887A002B, bridge 3301), one click turns LIGHT
-        /// CHECKS off in live.txt (0.0.74 test 10: the only one left); then the player presses START VR (PLAY VR).</summary>
+        /// CHECKS off in live.txt (0.0.74 test 10: the only one left) and skips the monitor's copy from now on
+        /// (monitor-copy.txt "skip"); then the player presses START VR (PLAY VR).</summary>
         void OfferTwoGpuFix()
         {
             var answer = MessageBox.Show(this, TwoGpuFixQuestion, LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -793,6 +797,9 @@ namespace Sm2VrLauncher
                 return;
             }
             sessionLog.Line("live.txt: light_checks = off. Press START VR (PLAY VR).", Theme.Good);
+            // 0.0.74 test 10 MONITOR MEMORY: the known fix also skips the monitor's copy from now on.
+            if (LiveFile.MonitorSkip(LiveFile.MonitorMemoryPath()))
+                sessionLog.Line("MONITOR: the monitor's copy is skipped from now on (the game's own view, 0.0.72).", Theme.Good);
             foreach (var key in LiveFile.TwoGpuKeys)
             {
                 Control row;
@@ -805,9 +812,10 @@ namespace Sm2VrLauncher
             "VR stopped: the game lost its graphics device (0x887A002B, the eye bridge's 3301). This has happened on PCs " +
             "with two graphics chips (a graphics card beside the processor's or a laptop's own graphics).\n\n" +
             "Turn LIGHT CHECKS off now (in live.txt)? It can be turned back on in " +
-            "OPTIONS > SAFETY CHECKS.\n\nYes: turn it off.   No: leave it as it is.";
+            "OPTIONS > SAFETY CHECKS. The monitor then also shows the game's own view instead of the headset's copy.\n\n" +
+            "Yes: turn it off.   No: leave it as it is.";
         internal const string TwoGpuFixDone =
-            "Done: LIGHT CHECKS is off in live.txt.\n\nNow press START VR (PLAY VR). " +
+            "Done: LIGHT CHECKS is off in live.txt, and the monitor shows the game's own view.\n\nNow press START VR (PLAY VR). " +
             "If the game is still open, the launcher offers to close it first.";
 
         // run_game_vr.py CLOSE_GAME_EXIT (tools/vr_launcher.py): the running game has to close before VR can start.

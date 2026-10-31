@@ -90,5 +90,49 @@ namespace Sm2VrLauncher
         // The settings the pop-up turns off (and OPTIONS > SAFETY CHECKS shows). 0.0.74 test 10 PICTURE 72: LIGHT CHECKS
         // only (STREAMER MODE and SL WATCH are gone).
         public static readonly string[] TwoGpuKeys = { "light_checks" };
+
+        // 0.0.74 test 10 MONITOR MEMORY (streamer_view.hpp Memory): %APPDATA%\Spidy\monitor-copy.txt, which VR
+        // writes "copy" in while the monitor shows the headset's copy (removed on a clean exit) and "lost" in after a
+        // device-removed sign. "skip" makes every later session keep the monitor on the game's own view (0.0.72).
+        // No setting: only a device loss writes it.
+        public static string MonitorMemoryPath()
+        {
+            return Path.Combine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Spidy"), "monitor-copy.txt");
+        }
+
+        /// <summary>The file's state word ("copy", "lost", "skip"), or "" (no file, unreadable or other text).</summary>
+        public static string MonitorMemory(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return "";
+                string t = File.ReadAllText(path).TrimStart(new[] { ' ', '\t', '\r', '\n', '\uFEFF' });
+                string w = t.Length >= 4 ? t.Substring(0, 4) : "";
+                return w == "copy" || w == "lost" || w == "skip" ? w : "";
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>Writes "skip" (the pop-up's Yes, or after a device loss with the copy on).</summary>
+        public static bool MonitorSkip(string path)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, "skip - the monitor's copy is skipped after a GPU device loss (0x887A002B); delete this file to try it again\r\n", new UTF8Encoding(false));
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>After a VR session: if its console showed the device-lost signature (TwoGpuLostLine) while the
+        /// copy was on ("copy" or "lost"), "skip" is written; true then. A session killed or crashed for another
+        /// reason (no signature) changes nothing.</summary>
+        public static bool MonitorSkipAfterSession(string path, bool deviceLostLine)
+        {
+            if (!deviceLostLine) return false;
+            string m = MonitorMemory(path);
+            return (m == "copy" || m == "lost") && MonitorSkip(path);
+        }
     }
 }

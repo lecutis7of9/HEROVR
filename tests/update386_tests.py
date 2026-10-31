@@ -24,8 +24,8 @@ RUN = (ROOT / 'tools/run_game_vr.py').read_text(encoding='utf-8')
 
 class Version(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.73')  # 0.0.73 = build 39.6 (the 0.0.73 fixes, GAME TAA off by default, no MP SOLO TEST); 0.0.72 = build 39.5 (the 0.0.72 heroes, models and suits); 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
-        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.6')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8').strip(), '0.0.74')  # 0.0.74 = build 39.7 (the 0.0.74 test 1-10 work, SM1STYLE eye AA, the window-edge lights fix, the multiplayer server list); 0.0.73 = build 39.6 (the 0.0.73 fixes, GAME TAA off by default, no MP SOLO TEST); 0.0.72 = build 39.5 (the 0.0.72 heroes, models and suits); 0.0.71 = 0.0.70 ("0.0.7") + the Stop VR fix (build 39.4 unchanged; 0.0.70 was 39.4, 0.0.63 was 39.3, 0.0.62 was 39.2)
+        self.assertEqual((ROOT / 'PORT-VERSION').read_text(encoding='utf-8').strip(), 'Update 39.7')
 
 
 class Settings(unittest.TestCase):

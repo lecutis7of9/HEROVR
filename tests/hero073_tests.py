@@ -5,9 +5,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def src(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
 class Hero073(unittest.TestCase):
-    def test_release_build_off_test_number_kept(self):  # 0.0.74 test 1: a private test build, HERO_TEST_BUILD ON (the public 0.0.73 release: OFF)
+    def test_release_build_off_test_number_kept(self):  # the public 0.0.74 release: HERO_TEST_BUILD OFF (test builds: ON), the test number kept
         c = src('CMakeLists.txt')
-        self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" ON\)')
+        self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
         self.assertIn('set(HERO_TEST_NUMBER "10" CACHE', c)  # 0.0.74 test 10: the notice says TEST 10
         self.assertIn('set(HERO_TEST_VERSION "0.0.74" CACHE', c)
         self.assertRegex(c, r'set\(HERO_TEST_NUMBER "[0-9]+"')

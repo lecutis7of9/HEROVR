@@ -40,7 +40,7 @@ class GameTaaGone(unittest.TestCase):
         self.assertEqual(values['history'], 80)
 
 
-@unittest.skipIf(TEST_BUILD, "0.0.74 test 1: MP SOLO TEST is in the test build (OFF by default)")
+@unittest.skip("0.0.73 only: 0.0.74 ships multiplayer (the user's choice); Hero074Test1 checks it is there, OFF by default")
 class NoMultiplayerTest(unittest.TestCase):
     def test_mp_solo_test_left_out(self):
         self.assertNotIn('mp_solo_test', L.SETTINGS)
@@ -56,7 +56,7 @@ class NoMultiplayerTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(ROOT, f)), f)
 
 
-@unittest.skipIf(TEST_BUILD, "0.0.74 test 1: a test build has its TEST labels")
+@unittest.skip("0.0.73 only: release0074_tests.ReleaseLabels0074 checks the 0.0.74 release")
 class ReleaseLabels(unittest.TestCase):
     """The public 0.0.73 release: no test labels, HERO VR 0.0.73 on the wrist and the console."""
     def test_version_and_labels(self):
@@ -76,9 +76,8 @@ class ReleaseLabels(unittest.TestCase):
 
 
 
-@unittest.skipUnless(TEST_BUILD, "the public release has no MP SOLO TEST")
 class Hero074Test1(unittest.TestCase):
-    """0.0.74 test 1: MP SOLO TEST back for the test build, OFF by default; the wrist says 0.0.74 TEST <n>."""
+    """0.0.74 test 1: MP SOLO TEST back, OFF by default (the 0.0.74 release keeps it); the test number stays set."""
     def test_mp_solo_test_off_by_default(self):
         self.assertEqual(L.UPDATE38_DEFAULTS['mp_solo_test'], 'off')
         self.assertEqual(L.export_value('mp_solo_test', 'off'), 0)

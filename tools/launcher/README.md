@@ -9,7 +9,9 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.73.1** (launcher build 14), shipped with HERO VR 0.0.73 (mod Version 0.0.73, build Update 39.6).
+Launcher version **0.0.74.1** (launcher build 15), shipped with HERO VR 0.0.74 (mod Version 0.0.74, build Update 39.7).
+
+Build 15 ships with mod Version 0.0.74 (still EXPERIMENTAL, 0.0.63 the most recent STABLE build): Revert offers 0.0.73 first, then 0.0.63, 0.0.62, 0.0.6 and 0.0.5; the internet server list (the free Cloudflare lobby), safety checks and the newest crash dump in Reports come with it.
 
 Build 14 makes SMOOTH TURN (120 °/s) the default, makes the classic design the default again (anyone on the new design moves to classic once; the new design stays a switch in Options > Launcher), adds KEEP MY GAME AA, and credits WOLVERINE's claws on the Credits page. It keeps the EXPERIMENTAL update confirm (0.0.63 is the most recent STABLE build) and Revert to 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
 

@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
-project(Spidy VERSION 0.0.73 LANGUAGES C CXX)
+project(Spidy VERSION 0.0.74 LANGUAGES C CXX)
 # Every target on Windows: windows.h must never define min/max macros (they break std::min/std::max, MSVC C2589).
 if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 # The public version (semver, docs/VERSIONING.md): the launcher, the zip, the tag and VERSION all follow
-# this line; PORT-VERSION keeps the internal build ("Update 39.6"). Version 0.0.73 is build 39.6 (the 0.0.73 test 1-6 fixes: hero play, claws, THOR, IRON MAN, the van, the picture; GAME TAA off by default; no MP SOLO TEST; launcher build 14). Version 0.0.72 is build 39.5 (the heroes' new models and suits, THOR, IRON MAN, test builds 1-12; launcher build 13). Version 0.0.71 is 0.0.70's build 39.4 unchanged plus the launcher fix for VR not starting after Stop VR ("handle is invalid" at finding the headset; launcher build 12). Version 0.0.70 ("0.0.7"; the trailing 0 makes every launcher see it as newer than 0.0.63) is build 39.4 (the heroes: CAPTAIN AMERICA, BATMAN, WOLVERINE, SUPERMAN and PUNISHER with their weapon models, the MIRROR VIEW fix and launcher build 11). Version 0.0.63 was build 39.3 (0.0.62's mod unchanged; the new opt-in HERO VR launcher design, launcher build 10, and Revert to 0.0.62). Version 0.0.62 was build 39.2 (0.0.6 + ghost-hand fix, bolt walls, baton hits, instant punches, live enemy tracking, hit indicator, hand flips, lens flares). Version 0.0.6 was build 39.1.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work, then the 0.0.6 hotfix eye swapchain retry; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
+# this line; PORT-VERSION keeps the internal build ("Update 39.7"). Version 0.0.74 is build 39.7 (the 0.0.74 test 1-10 work: SM1STYLE eye AA, the window-edge lights fix, flight, the Daredevil quick grapple, the roster COLOR / MUSIC tabs, the multiplayer server list, the Batmobile and hideouts; launcher build 15). Version 0.0.73 is build 39.6 (the 0.0.73 test 1-6 fixes: hero play, claws, THOR, IRON MAN, the van, the picture; GAME TAA off by default; no MP SOLO TEST; launcher build 14). Version 0.0.72 is build 39.5 (the heroes' new models and suits, THOR, IRON MAN, test builds 1-12; launcher build 13). Version 0.0.71 is 0.0.70's build 39.4 unchanged plus the launcher fix for VR not starting after Stop VR ("handle is invalid" at finding the headset; launcher build 12). Version 0.0.70 ("0.0.7"; the trailing 0 makes every launcher see it as newer than 0.0.63) is build 39.4 (the heroes: CAPTAIN AMERICA, BATMAN, WOLVERINE, SUPERMAN and PUNISHER with their weapon models, the MIRROR VIEW fix and launcher build 11). Version 0.0.63 was build 39.3 (0.0.62's mod unchanged; the new opt-in HERO VR launcher design, launcher build 10, and Revert to 0.0.62). Version 0.0.62 was build 39.2 (0.0.6 + ghost-hand fix, bolt walls, baton hits, instant punches, live enemy tracking, hit indicator, hand flips, lens flares). Version 0.0.6 was build 39.1.1 (39.0 + the hero pages, then the holo sections and the new repulsor look, then the headset recovery, then the frame rate work, then the 0.0.6 hotfix eye swapchain retry; 0.0.5 was 38.9, 0.0.4 38.8, 0.0.3 38.7, 0.0.2 38.6, 0.0.1 38.5).
 add_compile_definitions(SPIDY_PUBLIC_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,7 +24,7 @@ add_compile_definitions(SM2_PORT=1)
 option(SPIDY_BUILD_XR "Build the Windows OpenXR / D3D12 swing lab" ${WIN32})
 # 0.0.72: a test / experimental build shows the TEST BUILD NOTICE after calibration (test_notice.hpp).
 # Turn it OFF for a public release.
-option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" ON) # 0.0.74 test 1 (private test build): ON; the public 0.0.73 release: OFF
+option(HERO_TEST_BUILD "Test build: show the test-version notice after calibration" OFF) # the public 0.0.74 release: OFF (test builds: ON)
 option(SPIDY_BUILD_OBSERVER "Build the opt-in camera diagnostic DLL" OFF)
 option(SPIDY_BUILD_LAUNCHER "Build the Spidy launcher window (Dear ImGui from tools/bootstrap.ps1)" ${SPIDY_BUILD_XR})
 

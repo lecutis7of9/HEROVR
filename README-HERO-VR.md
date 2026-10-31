@@ -1,16 +1,45 @@
-# HERO VR 0.0.73 - Made by Agent Mulder
+# HERO VR 0.0.74 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of HERO VR 0.0.73 (version number **Version 0.0.73**, build Update 39.6, launcher 0.0.73.1)
+This zip is the full source of HERO VR 0.0.74 (version number **Version 0.0.74**, build Update 39.7, launcher 0.0.74.1)
 plus the prebuilt HERO VR launcher.
 
-**EXPERIMENTAL BUILD: 0.0.73 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.63
-goes back to it, settings kept). 0.0.73 includes everything in 0.0.72.
+**EXPERIMENTAL BUILD: 0.0.74 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.73
+or USE 0.0.63 goes back, settings kept). 0.0.74 includes everything in 0.0.73 and 0.0.72.
 
-## What's new in 0.0.73
+## What's new in 0.0.74
+- **SM1STYLE eye anti-aliasing (on by default):** each eye uses the game's own TAA the way SpidyVR does, so edges
+  shimmer much less. To go back to the old look, put `sm1style = off` in live.txt (it applies the next time VR starts).
+- **Window-edge lights fixed:** lit windows no longer go dark at the outer edges of each eye.
+- **The picture is back to 0.0.72's baseline**, keeping 0.0.73's flicker fixes (no lens flares or eye bloom in VR,
+  steadier street lights and shadows, fewer popping far windows). 0.0.73's extra picture switches are gone.
+- **Flying:** hold a grip to start flying, steering follows your body and is smoother, flips are livelier, and a tap
+  on **Y** while flying looks up ahead when you lie flat. Flying no longer stalls or sinks when a hand blinks out of
+  tracking.
+- **Daredevil quick grapple:** a faster, smooth pull, and pressing grapple again with either baton mid-pull
+  re-aims it at once (Arkham style).
+- **Roster:** a **COLOR** tab in the header and a **MUSIC** tab on each hero with the music player.
+- **Music kept:** your songs live in Documents\HERO VR\Music, so updates and reverts never lose them.
+- **Multiplayer:** an internet **server list** (HERO VR's own free Cloudflare lobby), plus hosting and joining on
+  your own network. The list only shows game names, heroes and player counts.
+- **Batman:** four drivable **Batmobiles** (1989, ODAMI, FOREVER, FOREVER 2), the **Batcave** with the Batcomputer
+  and a **safehouse** for the van, crime alerts with a route on the dash, glide pitch from your controllers' tilt,
+  and separate belt spots for the grapple gun, batarangs and smoke pellets.
+- **Cars:** the van and Batmobiles are solid on foot, don't show through walls, keep your play area facing forward
+  as you get in, and turn flips off while you drive.
+- **Throws** fly along your arm's swing (batarangs, shield, hammer, batons). Punisher's hook fires instantly, and no
+  grapple press is lost.
+- **Launcher (0.0.74.1, build 15):** safety checks (mod check, two-GPU check, clearer errors), Reports include the
+  newest crash dump, and **Revert** offers **USE 0.0.73** first, then 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
+
+### Known issues (being worked on for 0.0.75)
+- Aliasing is better but still needs work.
+- Window edges are much better but not fully fixed yet.
+
+## In 0.0.73
 - **GAME TAA starts OFF** (wrist GRAPHICS > QUALITY, under AA). The 0.0.73 test builds ran the game's own TAA in each
   eye (SPIDYVR) by default, and for some players that made the picture shake in motion. 0.0.73 starts with it OFF and
   leaves the game's own anti-aliasing setting alone. One press switches it back to SPIDYVR, with no restart. While

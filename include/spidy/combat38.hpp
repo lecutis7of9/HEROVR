@@ -596,7 +596,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"batmobile", "BATMOBILE", "BMOB", "Drives a Batmobile as Batman (X summons it), turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"batmobile_choice", "BATMOBILE CHOICE", "BCAR", "Which Batmobile Batman's X summons (also the dash's BATMOBILE), no restart.", 4, {"1989", "ODAMI", "FOREVER", "FOREVER 2"}},
     {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"car_paint", "CAR PAINT", "PAINT", "SATIN: satin black shine; FLAT: no shine; TEST 1: test 1 car look; no restart.", 3, {"SATIN", "FLAT", "TEST 1", nullptr}},
+    {"car_paint", "CAR PAINT", "PAINT", "SATIN: satin black shine; FLAT: no shine; CLASSIC: the first look; no restart.", 3, {"SATIN", "FLAT", "CLASSIC", nullptr}},
     {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no hero tools in Batmobiles, no grapple in any car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"crime_gps", "CRIME GPS", "CGPS", "ON shows crimes near your car: popup, MAP, HUD arrow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},

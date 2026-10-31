@@ -13371,7 +13371,7 @@ DWORD WINAPI run(void*) {
                                         mirrorOn = false;
                                         mirrorAutoOffMicros = std::max<uint32_t>(1, static_cast<uint32_t>(mirrorGuard.meanMs * 1000.f + .5f));
                                         mirrorAutoOffAtMs = GetTickCount64();
-                                        game_prompts::note("Test build 10: the mirror was too slow and turned itself off");
+                                        game_prompts::note("The mirror was too slow and turned itself off");
                                     }
                                     mirrorHalfRate = mirrorGuard.half;
                                 }

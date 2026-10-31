@@ -688,7 +688,8 @@ struct Doc {
                 }
                 out.image.push_back(image);
                 out.tints.push_back(painted.empty() ? tint : Vec3{1, 1, 1});
-                const bool paintable = image < 0 && painted.empty() && paintOf.first >= static_cast<uint8_t>(car_paint::paintFrom * 255.f);
+                // 0.0.75 TEXTURED PAINT: a textured triangle too (Library::load keeps it only for slotPaintsTextures).
+                const bool paintable = painted.empty() && paintOf.first >= static_cast<uint8_t>(car_paint::paintFrom * 255.f);
                 out.paint.push_back(paintable ? paintOf.first : uint8_t{0});
                 out.paint.push_back(paintable ? paintOf.second : uint8_t{0});
                 out.role.push_back(roleHere);
@@ -1043,6 +1044,31 @@ void makeLite(Mesh& m, bool mayChange) {
 }
 } // namespace
 
+void keepTexturedPaint(Mesh& m, bool textured) {
+    const size_t n = m.triangles();
+    if (m.paint.size() != n * 2)
+        return;
+    if (!textured && m.image.size() == n)
+        for (size_t t = 0; t < n; ++t)
+            if (m.image[t] >= 0)
+                m.paint[t * 2] = m.paint[t * 2 + 1] = 0;
+    if (std::none_of(m.paint.begin(), m.paint.end(), [](uint8_t b) { return b != 0; }))
+        m.paint.clear(); // (before makeLite: the light copy takes the paint as left here)
+}
+
+PaintCount paintCount(const Mesh& m) {
+    PaintCount c;
+    c.triangles = m.triangles();
+    const bool images = m.image.size() == c.triangles, paint = m.paint.size() == size_t{c.triangles} * 2;
+    for (uint32_t t = 0; t < c.triangles; ++t) {
+        const bool tex = images && m.image[t] >= 0, p = paint && m.paint[size_t{t} * 2] != 0;
+        c.textured += tex;
+        c.painted += p;
+        c.texturedPainted += tex && p;
+    }
+    return c;
+}
+
 Status Library::load(uint32_t style, const std::string& modelsRoot) {
     if (style == 0 || style >= slots)
         return notTried;
@@ -1051,6 +1077,8 @@ Status Library::load(uint32_t style, const std::string& modelsRoot) {
     status[style] = loadFolder(modelsRoot + slotFolders[style] + "/", slotMayDecimate[style], meshes[style], error[style], slotDrawCap[style]);
     if (status[style] == loaded && !slotIsPaintable(style)) // 0.0.74 test 2 CAR PAINT: the Batmobile bodies only
         meshes[style].paint.clear();
+    if (status[style] == loaded) // 0.0.75 TEXTURED PAINT: textured triangles painted on the '89 and ODAMI only
+        keepTexturedPaint(meshes[style], slotPaintsTextures(style));
     if (status[style] == loaded && !slotIsBatmobile(style)) // 0.0.74 test 3: roles for the Batmobile models only
         meshes[style].role.clear();
     if (status[style] == loaded)

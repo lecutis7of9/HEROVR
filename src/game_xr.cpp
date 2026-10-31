@@ -10957,6 +10957,13 @@ DWORD WINAPI run(void*) {
                                               mesh_model::statusNames[status < 5 ? static_cast<int>(status) : 0],
                                               status == mesh_model::loaded ? "" : " - the built-in look drawn: ", models.error[slot].c_str());
                                     game_prompts::note(line);
+                                    if (status == mesh_model::loaded && mesh_model::slotIsPaintable(slot)) { // 0.0.75: once a car
+                                        const auto pc = mesh_model::paintCount(models.meshes[slot]);
+                                        sprintf_s(line, "CAR PAINT: %s - %u of %u triangles painted (%u of %u textured ones)",
+                                                  mesh_model::slotFolders[slot], pc.painted, pc.triangles, pc.texturedPainted, pc.textured);
+                                        consoleLine(line);
+                                        game_prompts::note(line);
+                                    }
                                     if (status != mesh_model::loaded && slot < 32)
                                         modelMissingMask.fetch_or(1u << slot);
                                 }

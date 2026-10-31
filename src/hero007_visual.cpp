@@ -282,7 +282,7 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
             const float lit = .32f + .68f * std::abs(dot(n, light)); // both sides (any winding)
             const float u = uvs ? model.uvs[t * 6 + k * 2] : 0.f, v = uvs ? model.uvs[t * 6 + k * 2 + 1] : 0.f;
             Vec3 colour = tint * lit;
-            if (paint && at < 0 && model.paint[t * 2] != 0) {
+            if (paint && model.paint[t * 2] != 0) { // 0.0.75: textured too (the colour multiplies the texture)
                 const Vec3 to = viewer - p[k];
                 if (length(to) > 1e-6f)
                     colour = car_paint::shade(tint, n, light, normalized(to), {0, 1, 0}, car_paint::unpack(model.paint[t * 2]),

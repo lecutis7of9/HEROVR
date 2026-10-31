@@ -144,7 +144,8 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
         if (cabin_look::skipped(role))
             continue;
         const float faceLit = std::abs(dot(k->face[t], lm));
-        const bool painted = paint && at < 0 && model.paint[t * 2] != 0;
+        // 0.0.75 TEXTURED PAINT: a textured triangle's satin colour (base: its tint) multiplies its texture.
+        const bool painted = paint && model.paint[t * 2] != 0;
         car_paint::Facing face;
         const bool relight = painted && (relightAll || t % satinSlices == k->satinPhase);
         if (relight) { // one toward-eye a triangle (its middle): the corners' normals carry the shape

@@ -85,10 +85,11 @@ struct Mesh {
     std::vector<Vec3> normals;  // 3 a triangle (NORMAL, model space) when every primitive has them
     std::vector<Vec3> tints;    // 1 a triangle: the material's baseColorFactor (multiplies the texture)
     std::vector<int16_t> image; // 1 a triangle: its base-colour image (index into images), -1 none
-    // 0.0.74 test 2 CAR PAINT (car_paint.hpp): 2 a triangle (metallic, roughness, 0..255) for an untextured triangle
+    // 0.0.74 test 2 CAR PAINT (car_paint.hpp): 2 a triangle (metallic, roughness, 0..255) for a triangle (0.0.75: textured too)
     // whose material says metallicFactor >= car_paint::paintFrom (0 0 otherwise); kept only for the Batmobile
     // bodies and roofs (slotIsPaintable), empty for every other model.
     std::vector<uint8_t> paint;
+    // 0.0.75 TEXTURED PAINT: a textured triangle (image >= 0) is painted only where the slot paints textures.
     // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (cabin_look074.hpp): 1 a triangle, its material's role (a lamp, a
     // switch tip, the baked handle marker; 0 plain); kept only for the Batmobile slots, empty when none has one.
     // cabin: the Batmobile cockpit or its steering wheel (darkened and lit by COCKPIT GLOW).
@@ -136,6 +137,13 @@ bool decimate(Mesh& mesh, uint32_t most);
 enum Status : uint32_t { notTried = 0, loaded, missing, invalid, overBudget };
 inline constexpr const char* statusNames[] = {"NOT TRIED", "LOADED", "MISSING", "INVALID", "OVER BUDGET (NO CHANGES ALLOWED)"};
 // Version 0.0.72: cap, the slot's draw cap (slotDrawCap; drawTriangles by default), is kept in Mesh::cap.
+// 0.0.75 TEXTURED PAINT: textured triangles keep their paint only when `textured` (slotPaintsTextures); a mesh
+// left with none painted keeps no paint. The count of a mesh's painted triangles (all, textured) for the log.
+void keepTexturedPaint(Mesh& m, bool textured);
+struct PaintCount {
+    uint32_t triangles = 0, painted = 0, textured = 0, texturedPainted = 0;
+};
+PaintCount paintCount(const Mesh& m);
 Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::string& error, uint32_t cap = drawTriangles);
 bool readFile(const std::string& path, std::vector<uint8_t>& out, size_t most = mostFileBytes);
 
@@ -227,6 +235,12 @@ inline constexpr bool slotIsBatmobile(uint32_t slot) { return slot >= slotBatmob
 inline constexpr bool slotIsPaintable(uint32_t slot) {
     return (slot >= slotBatmobileFirst && slot < slotBatmobileFirst + 4) || (slot >= slotBatmobileRoofFirst && slot < slotBatmobileRoofFirst + 4) ||
            slot == slotBatmobileCockpit;
+}
+// 0.0.75 TEXTURED PAINT (owner: the '89 and ODAMI flat grey): on these a textured triangle whose material says
+// metallic >= paintFrom is painted too, the satin colour multiplying its texture (the 1989 and ODAMI bodies and roofs).
+inline constexpr bool slotPaintsTextures(uint32_t slot) {
+    return slot == slotBatmobileFirst || slot == slotBatmobileFirst + 1 || slot == slotBatmobileRoofFirst ||
+           slot == slotBatmobileRoofFirst + 1;
 }
 // 0.0.74 test 3 COCKPIT GLOW: the models COCKPIT GLOW darkens and lights (the cockpit and its wheel).
 inline constexpr bool slotIsCabin(uint32_t slot) { return slot == slotBatmobileCockpit || slot == slotBatmobileWheel; }

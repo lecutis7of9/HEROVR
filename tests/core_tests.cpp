@@ -36107,6 +36107,34 @@ int main() {
         o = seat.step(vh::seatButton, true, false, .016f, {.2f, 1.6f, 0}, eye);
         check(!seat.waiting() && std::fabs(o.x + .5f) < 1e-4f, "let go: it snaps");
     });
+    test("0.0.75 TEXTURED PAINT: the '89 and ODAMI paint their textured metallic triangles, the rest as before", [] {
+        namespace mm = spidy::mesh_model;
+        check(mm::slotPaintsTextures(mm::slotBatmobileFirst) && mm::slotPaintsTextures(mm::slotBatmobileFirst + 1) &&
+                  mm::slotPaintsTextures(mm::slotBatmobileRoofFirst) && mm::slotPaintsTextures(mm::slotBatmobileRoofFirst + 1),
+              "the 1989 and ODAMI bodies and roofs paint textures");
+        check(!mm::slotPaintsTextures(mm::slotBatmobileFirst + 2) && !mm::slotPaintsTextures(mm::slotBatmobileFirst + 3) &&
+                  !mm::slotPaintsTextures(mm::slotBatmobileCockpit) && !mm::slotPaintsTextures(mm::slotVan),
+              "FOREVER, FOREVER 2, the cockpit and the van do not");
+        const auto make = [] {
+            mm::Mesh m;
+            m.colors.assign(3, spidy::Vec3{1, 1, 1});
+            m.image = {0, -1, 0};
+            m.paint = {102, 115, 89, 115, 0, 0}; // textured .4, untextured .35, textured metal 0
+            return m;
+        };
+        auto on = make();
+        mm::keepTexturedPaint(on, true);
+        auto c = mm::paintCount(on);
+        check(c.triangles == 3 && c.painted == 2 && c.textured == 2 && c.texturedPainted == 1, "the '89 / ODAMI: textured painted");
+        auto off = make();
+        mm::keepTexturedPaint(off, false);
+        c = mm::paintCount(off);
+        check(c.painted == 1 && c.texturedPainted == 0 && off.paint.size() == 6, "elsewhere only the untextured one");
+        auto none = make();
+        none.paint = {102, 115, 0, 0, 0, 0};
+        mm::keepTexturedPaint(none, false);
+        check(none.paint.empty() && mm::paintCount(none).painted == 0, "none left: no paint kept");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

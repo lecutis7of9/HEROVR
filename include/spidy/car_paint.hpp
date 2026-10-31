@@ -11,6 +11,8 @@
 //   specular Blinn, exponent 2 / r^4 - 2, normalised (e + 8) / 8pi, Schlick F0 = mix(.04, base, metal)
 //   sky      reflect(-v, n).y blends a street-dark ground into a night sky, Schlick at n.v, damped by r
 // Textured triangles (ODAMI, FOREVER 2, the cockpit) and vertex-coloured ones (FOREVER) are not painted.
+// 0.0.75 TEXTURED PAINT: on the 1989 and ODAMI (mesh_model::slotPaintsTextures) a textured metallic triangle is
+// painted too, the satin colour (its tint the base) multiplying its texture; still not FOREVER 2 or the cockpit.
 // CAR PAINT OFF: every triangle the 0.0.74 test 1 diffuse light.
 #include "spidy/math.hpp"
 

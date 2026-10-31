@@ -267,6 +267,13 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
 // drawn depth-tested and unsorted; null: they go untextured into `out` as before (their light copy).
 void setModelSink(std::vector<Vertex>* sink);
 std::vector<Vertex>* modelSink();
+// 0.0.74 test 10 MIRROR PROPS: every textured model draw that did not go into the sink, counted since the start
+// (`full`: the sink would pass modelSinkBudget; `badPlace`: a non-finite placement or vertex). game_xr logs a rise
+// (the mirror's props, the suits and the van share this one sink; a miss is a prop not drawn that frame).
+struct ModelMisses {
+    uint64_t full{}, badPlace{};
+};
+ModelMisses modelMisses();
 // Version 0.0.72: ten ordinary models, plus the van (body, cab, wheel) and a hammer in hand and one on show;
 // build 9: + the worn suit twice (first person and the mirror); 0.0.74 test 1: + a hideout room.
 inline constexpr size_t modelSinkBudget = 3 * (10 * size_t{mesh_model::drawTriangles} + size_t{mesh_model::vanTriangles} +

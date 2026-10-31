@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -212,6 +213,10 @@ void appendBatarang(std::vector<Vertex>& out, const Item& it, Vec3 viewer, float
 
 namespace {
 std::vector<Vertex>* gModelSink = nullptr;
+std::atomic<uint64_t> gMissFull{0}, gMissBadPlace{0}; // 0.0.74 test 10 MIRROR PROPS: drawTextured's misses
+}
+ModelMisses modelMisses() {
+    return {gMissFull.load(std::memory_order_relaxed), gMissBadPlace.load(std::memory_order_relaxed)};
 }
 void setModelSink(std::vector<Vertex>* sink) {
     gModelSink = sink;
@@ -228,11 +233,15 @@ template <class Place>
 bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Place place, Vec3 viewer) {
     const Vec3 o = place(Vec3{0, 0, 0});
     const Vec3 ex = place(Vec3{1, 0, 0}) - o, ey = place(Vec3{0, 1, 0}) - o, ez = place(Vec3{0, 0, 1}) - o;
-    if (!ok(o) || !ok(ex) || !ok(ey) || !ok(ez))
+    if (!ok(o) || !ok(ex) || !ok(ey) || !ok(ez)) {
+        gMissBadPlace.fetch_add(1, std::memory_order_relaxed);
         return false;
+    }
     const size_t from = sink.size();
-    if (from + size_t{model.triangles()} * 3 > modelSinkBudget)
+    if (from + size_t{model.triangles()} * 3 > modelSinkBudget) {
+        gMissFull.fetch_add(1, std::memory_order_relaxed);
         return false;
+    }
     // Version 0.0.73 VAN FPS: a big model placed by a turn and one scale (the van, the hammers) takes the
     // prepared path (its model-space normals kept once): the same vertices, about a fifth of the time.
     if (vanfps::drawPrepared(sink, model, o, ex, ey, ez, &viewer))
@@ -288,6 +297,7 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         const Vertex& v = sink[i];
         if (!ok(v.position) || !ok(v.color) || !std::isfinite(v.shape.x) || !std::isfinite(v.shape.y)) {
             sink.resize(from);
+            gMissBadPlace.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
     }

@@ -11,6 +11,7 @@
 #include "spidy/streamer_view.hpp"
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
+#include "spidy/mirror_props074.hpp" // 0.0.74 test 10 MIRROR PROPS
 #include "spidy/glove_overlay.hpp" // Version 0.0.72 GAME BODY fallback gloves
 #include "spidy/baton_grip.hpp"
 #include "spidy/dd_baton073.hpp"
@@ -12549,6 +12550,7 @@ DWORD WINAPI run(void*) {
                                 // reflected - for Spider-Man's figure and every suit alike. Any failure: no props there.
                                 if (!mirrorReused && plane.valid && mirrorInSight) {
                                     const size_t modelFrom = modelVertices.size();
+                                    const hero007::ModelMisses missFrom = hero007::modelMisses(); // 0.0.74 test 10
                                     try {
                                         const Vec3 seenFrom = vr_mirror::unreflect(plane, viewer);
                                         if (saved->hero007.any)
@@ -12569,12 +12571,79 @@ DWORD WINAPI run(void*) {
                                                     hero007::appendBatonClub(mirrorProps, saved->batonGrip[i] + travel, saved->batonTip[i] + travel,
                                                                              seenFrom, pixelAngle);
                                             }
+                                        // 0.0.74 test 10 MIRROR PROPS (owner pt1360u): the 0.0.72 look too - THOR's hammer (in
+                                        // the fist from this image's grip as in the world draw, flying, or on his back), his
+                                        // lightning and GREEN LANTERN's constructs (mirror_props074.hpp heroLook) - and IRON
+                                        // MAN's palms, bolts, beams, impacts and chest beam. Never the HUD or the van.
+                                        if (saved->hero072.any) {
+                                            hero072::Look m72 = mirror_props::heroLook(saved->hero072);
+                                            if (m72.hammer && m72.hammerInHand && validTrackedPose(rendered.grips[1])) {
+                                                const thor_grip::Held h = thor_grip::held(rendered.grips[1], runtime.controllers()[1]);
+                                                if (h.ok) {
+                                                    m72.hammerAt = h.at + (finite(saved->heldPush[1]) ? saved->heldPush[1] : Vec3{});
+                                                    m72.hammerForward = h.handle;
+                                                    m72.hammerUp = h.face;
+                                                }
+                                            }
+                                            if (m72.any) {
+                                                const double now72 =
+                                                    std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                                                const float ahead72 =
+                                                    m72.hammerStamp > 0 ? static_cast<float>(std::clamp(now72 - m72.hammerStamp, 0.0, .06)) : 0.f;
+                                                hero072::appendLook(mirrorProps, m72, travel, seenFrom, pixelAngle, ahead72);
+                                            }
+                                        }
+                                        if (saved->repulsorLook) {
+                                            const float mirrorPlasma = static_cast<float>(std::fmod(
+                                                std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(), 600.0));
+                                            if (saved->beamFade > 0)
+                                                appendChestBeam(mirrorProps, saved->beamFrom + travel, saved->beamTo + travel, seenFrom, pixelAngle,
+                                                                saved->beamFade * repulsor_mcu::plasmaFlicker(mirrorPlasma, 41u));
+                                            for (unsigned i = 0; i < 2; ++i)
+                                                if (saved->palmGlow[i] > 0)
+                                                    repulsor_mcu::appendCharge(mirrorProps, saved->palmAt[i] + travel, saved->palmWay[i], seenFrom,
+                                                                               pixelAngle, saved->palmGlow[i], saved->palmSpin);
+                                            for (size_t b = 0; b < saved->oursAt.size(); ++b) {
+                                                if (saved->oursFade[b] > 0) {
+                                                    const float flown = length(saved->oursAt[b] - saved->oursFrom[b]);
+                                                    const float fade = std::isfinite(flown) ? std::clamp(1.f - flown / 40.f, .2f, 1.f) : 0.f;
+                                                    appendRepulsorBeam(mirrorProps, saved->oursFrom[b] + travel, saved->oursTail[b] + travel, seenFrom,
+                                                                       pixelAngle, fade * saved->oursFade[b] *
+                                                                                       repulsor_mcu::plasmaFlicker(mirrorPlasma, static_cast<unsigned>(b) + 13u));
+                                                    repulsor_mcu::appendBolt(mirrorProps, saved->oursAt[b] + travel, saved->oursTail[b] + travel, seenFrom,
+                                                                             pixelAngle,
+                                                                             saved->oursFade[b] * repulsor_mcu::plasmaFlicker(mirrorPlasma, static_cast<unsigned>(b)));
+                                                }
+                                                if (saved->splashFade[b] > 0)
+                                                    repulsor_mcu::appendImpact(mirrorProps, saved->splashAt[b] + travel, seenFrom, seenFrom, pixelAngle,
+                                                                               saved->splashFade[b], .2f, static_cast<unsigned>(b) + 7u);
+                                            }
+                                        }
                                         if (!vr_mirror::reflectVertices(plane, modelVertices, modelFrom) ||
                                             !vr_mirror::reflectVertices(plane, mirrorProps, 0))
                                             modelVertices.resize(modelFrom), mirrorProps.clear();
                                     } catch (...) {
                                         modelVertices.resize(std::min(modelFrom, modelVertices.size()));
                                         mirrorProps.clear();
+                                    }
+                                    {
+                                        // 0.0.74 test 10 MIRROR PROPS: a prop model that did not fit the model sink (or was
+                                        // placed nowhere) is a prop missing from the mirror - counted and logged (at most
+                                        // every 10 s), with the sink's misses everywhere since the start.
+                                        static uint64_t mirrorMissFull{}, mirrorMissBad{};
+                                        static mirror_props::MissLog mirrorMissLog;
+                                        const hero007::ModelMisses missTo = hero007::modelMisses();
+                                        mirrorMissFull += missTo.full - missFrom.full;
+                                        mirrorMissBad += missTo.badPlace - missFrom.badPlace;
+                                        if (mirrorMissLog.due(mirrorMissFull + mirrorMissBad, GetTickCount64())) {
+                                            const uint64_t n = mirrorMissLog.take();
+                                            consoleLine("MIRROR PROPS: " + std::to_string(n) + " prop model draw(s) missed in the mirror (drawTextured " +
+                                                        "false; mirror so far: sink full " + std::to_string(mirrorMissFull) + ", bad place " +
+                                                        std::to_string(mirrorMissBad) + "; whole frame so far: sink full " +
+                                                        std::to_string(missTo.full) + ", bad place " + std::to_string(missTo.badPlace) +
+                                                        "; model sink " + std::to_string(modelVertices.size()) + "/" +
+                                                        std::to_string(hero007::modelSinkBudget) + " vertices)");
+                                        }
                                     }
                                     if (mirrorKeptNow) { // the half-rate frame shows them too (no flicker)
                                         mirrorKept.insert(mirrorKept.end(), modelVertices.begin() + static_cast<std::ptrdiff_t>(modelFrom),

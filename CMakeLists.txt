@@ -188,6 +188,10 @@ add_test(NAME core COMMAND spidy_tests)
 add_executable(spidy_mp_tests tests/mp_tests.cpp)
 target_link_libraries(spidy_mp_tests PRIVATE spidy_core)
 add_test(NAME mp COMMAND spidy_mp_tests)
+# 0.0.74 test 10 MIRROR PROPS: the 0.0.72 look in the mirror and the model sink's miss counter.
+add_executable(spidy_mirror_props_tests tests/mirror_props074_tests.cpp src/sfx_quiet.cpp)
+target_link_libraries(spidy_mirror_props_tests PRIVATE spidy_core)
+add_test(NAME mirror_props COMMAND spidy_mirror_props_tests)
 add_executable(spidy_mp_probe apps/mp_probe.cpp)
 target_link_libraries(spidy_mp_probe PRIVATE spidy_core)
 add_executable(spidy_mp_preview apps/mp_preview.cpp src/sfx_quiet.cpp) # 0.0.73 MP SOLO TEST: desktop previews

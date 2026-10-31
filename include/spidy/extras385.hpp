@@ -439,6 +439,7 @@ class Flight {
     // the old hard brake back to FLY's speed (80 -> 16 m/s in ~2 s read as a stall). STOP still brakes.
     static constexpr float coastDecel = 10.f;    // m/s^2
     static constexpr float levelBand = 15.f;     // degrees: the dash and the coast fly level inside this
+    static constexpr float settleSeconds = 1.5f; // 0.0.75: the band's hold after the coast
     static constexpr float dashGraceSeconds = .4f; // the dash's hold while the hands-out pose blinks (fly_boost)
     static float dropSpeed(float top) { return std::max(4.f, top * .4f); }
     Out update(const In& in) {
@@ -472,6 +473,12 @@ class Flight {
         Vec3 look = finite(in.look) && length(in.look) > .5f ? normalized(in.look) : Vec3{0, 0, -1};
         const float speedNow = length(v_);
         const bool coasting = flying_ && !sonic && pose != brake && !descending_ && speedNow > top + .01f;
+        // 0.0.75 SUPERSONIC SETTLE: the level band holds for settleSeconds after the dash's coast ends, so the end
+        // of a dash no longer drops straight into the hands' unlevelled way (FLY STEER turning you into the street).
+        if (sonic || coasting)
+            settle_ = settleSeconds;
+        else
+            settle_ = std::max(0.f, settle_ - dt);
         Vec3 target{};
         float accel = top * accelPerSpeed;
         // 1. A hand pointed with its trigger pulled: thrust along it, the trigger the speed.
@@ -509,7 +516,7 @@ class Flight {
             d = length(d) > .3f ? normalized(d) : look;
             if (in.bodySteer) // 0.0.74 test 10 FLY STEER: the hands' way eased (no jitter, no stiff snaps)
                 d = steer_ = fly_feel::eased(steer_, d, dt);
-            if (sonic || coasting)
+            if (sonic || coasting || settle_ > 0) // 0.0.75: and for settleSeconds after the coast (below)
                 d = levelled(d, levelBand); // 0.0.74 test 11: a hand a little low no longer sinks the dash
             if (held && length(dashWay_) > .5f)
                 d = dashWay_;
@@ -590,11 +597,13 @@ class Flight {
     void land() {
         flying_ = descending_ = dashing_ = false;
         v_ = dashWay_ = steer_ = {};
+        settle_ = 0;
     }
 
   private:
     bool flying_{}, descending_{}, dashing_{};
     Vec3 v_{}, dashWay_{}, steer_{};
+    float settle_{};
     uint32_t takeoffs_{}, landings_{};
 };
 // What the swing module's flight reports back (SpidyFlySample): the VR module draws the vignette,

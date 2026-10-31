@@ -809,7 +809,9 @@ void visit(const native_rays::QueryContext& world) {
         }
         for (unsigned i = 0; i < 2; ++i) {
             fi.hands[i].tracked = live && in.hands[i].tracked;
-            fi.hands[i].forward = in.hands[i].aim.orientation.rotate({0, 0, -1});
+            // 0.0.75 FLY WAY (analysis patch): `aim` is the web shooter's pose (tracking.hpp webShooter: the grip turned
+            // -90 deg about x, its -Z the grip's -Y, down the handle); the fist's own forward is that pose's +Y.
+            fi.hands[i].forward = in.hands[i].aim.orientation.rotate({0, 1, 0});
             fi.hands[i].offset = toWorld.rotate(in.hands[i].gripRelativeToHead);
         }
         flown = flight.update(fi);

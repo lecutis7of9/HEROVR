@@ -11193,10 +11193,14 @@ DWORD WINAPI run(void*) {
                         Vec3 way{};
                         for (unsigned i = 0; i < 2; ++i)
                             if (motion.swing.hands[i].tracked)
-                                way = way + motion.swing.hands[i].aim.orientation.rotate({0, 0, -1});
-                        if (!(finite(way) && length(way) > .3f))
+                                way = way + motion.swing.hands[i].aim.orientation.rotate({0, 1, 0}); // the fist's forward
+                        const bool handsKnown = finite(way) && length(way) > .3f;
+                        if (!handsKnown)
                             way = motion.headPose.orientation.rotate({0, 0, -1});
-                        saved.shockWay = saved.worldFromTracking.orientation.rotate(way);
+                        // 0.0.75 (analysis patch): motion.swing's aims are world already (trackedSwingInput: rig.toWorld);
+                        // turning them by worldFromTracking again put the boom off by the tracking yaw. The head's
+                        // fallback is tracking space, so only it is turned.
+                        saved.shockWay = handsKnown ? way : saved.worldFromTracking.orientation.rotate(way);
                         if (!finite(saved.shockWay) || length(saved.shockWay) < .3f)
                             saved.shockFade = 0;
                         else

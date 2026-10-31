@@ -23256,6 +23256,32 @@ int main() {
         for (int i = 0; i < 900; ++i)
             o = fl.update(in);
         check(!o.coasting && std::string(o.how) == "HOVER" && length(o.velocity) < .5f, "the coast never ended in a hover");
+        // 0.0.75 SUPERSONIC SETTLE: the hands still out 10 degrees low as the coast ends - level for settleSeconds,
+        // the hands' own way after it (no shove into the street at the dash's end).
+        {
+            Flight se;
+            In si = in;
+            si.move = {};
+            si.word = unpack(pack(normal, 0, 0, 0, true, extras385::fly::forward));
+            si.boost = fly_boost::multiplierOf(fly_boost::asksOf(true, 0));
+            Out so;
+            for (int i = 0; i < 270; ++i)
+                so = se.update(si);
+            si.boost = 0;
+            int guard = 0;
+            do
+                so = se.update(si);
+            while (so.coasting && ++guard < 20000);
+            float lowest = 0;
+            for (int i = 0; i < static_cast<int>(Flight::settleSeconds / dt) - 5; ++i) {
+                so = se.update(si);
+                lowest = std::min(lowest, so.velocity.y);
+            }
+            check(guard < 20000 && std::string(so.how) == "FORWARD" && lowest > -.3f, "0.0.75: the dash's end shoved you down");
+            for (int i = 0; i < 360; ++i)
+                so = se.update(si);
+            check(so.velocity.y < -1.f, "0.0.75: after the settle the hands' own way never came back");
+        }
         // STOP still brakes hard out of a dash.
         Flight st;
         In si = in;

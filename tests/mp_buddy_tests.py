@@ -4,6 +4,7 @@
 bad packets, and (when the probe is built) really connects: the game side switches from the loopback ghost
 to the buddy, sees its name and suit, and goes back to loopback after the buddy's BYE."""
 import json
+import math
 import os
 import pathlib
 import socket
@@ -162,6 +163,18 @@ class Malformed(unittest.TestCase):
             if got:
                 ids = [i['id'] for i in got['items']]
                 self.assertEqual(len(ids), len(set(ids)), show)
+        # 0.0.74 MP PROPS phase 2: 'throw' moves its thrown items packet to packet (by state)
+        pp = mb.Puppet()
+        pp.show = mb.PROP_SHOWS.index('throw')
+        pp.t = 0.3
+        first = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 1, mb.pose_payload(pp.state())))['props']['items']
+        pp.t += 1 / 30
+        second = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 2, 34, mb.pose_payload(pp.state())))['props']['items']
+        self.assertEqual([(i['id'], i['kind']) for i in first], [(9, mb.HAMMER), (4, mb.SHIELD_SPIN), (3, mb.BATARANG), (12, mb.PELLET)])
+        self.assertTrue(all(i['flags'] & mb.F_FLYING for i in first[:3]))
+        for a, b in zip(first, second):
+            self.assertNotEqual(a['at'], b['at'])
+            self.assertLess(math.dist(a['at'], b['at']), 1.0)
 
     def test_short_long_and_flips(self):
         good = bytes.fromhex(GOLDEN['pose'])

@@ -118,6 +118,12 @@ size_t propsBytes(const Props& p);
 size_t encodeProps(const Props& p, uint8_t* out, size_t capacity);
 // Reads a tail (`size` bytes from its 'P'); false (out emptied) when it is not one this build reads.
 bool decodeProps(const uint8_t* data, size_t size, Props& out);
+// 0.0.74 MP PROPS phase 2 (thrown items by state, 30 Hz): the props between two received poses. b's set, each
+// item that a has too (same id and kind, both in or both out of the hand, under propSnap apart) moved part way -
+// `at` lerped, its ways nlerped, an angle spin the short way round (a length spin - batons, claws, the bubble -
+// lerped); lines matched by kind likewise; effects are b's (each is a one-off with its own age).
+inline constexpr float propSnap = 4.f; // m: farther in one step is a new throw or a catch (no slide)
+Props blendProps(const Props& a, const Props& b, float t);
 // The props as the receiver gets them back (each value through its wire resolution) - for the tests.
 Props quantized(const Props& p);
 } // namespace spidy::mp

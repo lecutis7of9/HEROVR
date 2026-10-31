@@ -58,7 +58,8 @@ struct PropSource {
 enum PropId : uint8_t { idHeld = 1, idFlying = 3, idWorn = 5, idHammer = 9, idBaton = 10, idPellet = 12, idRing = 14,
                         idBubble = 16, idFist = 17, idCharge = 18, idPalm = 19 };
 
-// Everything the player shows, in priority order (held, the hammer, the batons, then what is thrown, then worn),
+// Everything the player shows, in priority order (held, the hammer, the batons, then what is thrown - batarangs, the
+// shield, smoke pellets - then worn),
 // cut at propItemsMost.
 Props captureProps(const PropSource& src, const SendFrame& f);
 

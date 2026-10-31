@@ -350,6 +350,7 @@ PoseState blend(const PoseState& a, const PoseState& b, float t) {
     }
     s.standingEye = a.standingEye + (b.standingEye - a.standingEye) * t;
     s.leanUp = safeLeanUp(lerp(safeLeanUp(a.leanUp), safeLeanUp(b.leanUp), t));
+    s.props = blendProps(a.props, b.props, t); // 0.0.74 MP PROPS phase 2: a thrown hammer flies, not hops
     return s;
 }
 

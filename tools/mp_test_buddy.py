@@ -326,7 +326,7 @@ class Puppet:
 
 
 # 0.0.74 MP PROPS: what the puppet shows (P cycles; --props picks the first).
-PROP_SHOWS = ['none', 'batarang', 'hammer', 'batons', 'shield', 'guns', 'claws', 'all']
+PROP_SHOWS = ['none', 'batarang', 'hammer', 'batons', 'shield', 'guns', 'claws', 'throw', 'all']
 
 
 def fake_props(show, t, left, right):
@@ -355,6 +355,17 @@ def fake_props(show, t, left, right):
         items.append(dict(id=2, kind=PISTOL, flags=held | F_SIDE, at=right, forward=ahead, up=up))
     if show in ('guns', 'all'):
         items.append(dict(id=6, kind=PISTOL, flags=2, at=(-0.2, 0.95, 0.0), forward=(0, -1, 0), up=(1, 0, 0)))
+    if show == 'throw':  # 0.0.74 MP PROPS phase 2: thrown items, sent by state every packet (30 Hz)
+        k = (t % 2.0) / 2.0  # a 2 s throw: out 8 m and back
+        out = 8.0 * math.sin(math.pi * k)
+        items.append(dict(id=9, kind=HAMMER, flags=F_FLYING, spin=(t * 12.0) % (2 * math.pi) - math.pi,
+                          at=(0.3, 1.4, -0.4 - out), forward=(0, math.cos(t * 12.0), math.sin(t * 12.0)), up=(1, 0, 0)))
+        items.append(dict(id=4, kind=SHIELD_SPIN, flags=F_FLYING | F_SIDE, spin=(t * 15.0) % (2 * math.pi) - math.pi,
+                          at=(-1.0 - 0.6 * out, 1.3, -0.5 - out), forward=(0, 1, 0), up=(0, 0, -1)))
+        items.append(dict(id=3, kind=BATARANG, flags=F_FLYING, spin=(t * 20.0) % (2 * math.pi) - math.pi,
+                          at=(0.8 + 0.4 * out, 1.6 + 0.2 * math.sin(t * 3.0), -1.0 - out), forward=ahead, up=up))
+        p = (t % 1.5) / 1.5  # a smoke pellet lobbed from the left hand, again and again
+        items.append(dict(id=12, kind=PELLET, flags=0, at=(left[0], left[1] + 3.0 * p - 4.9 * p * p, left[2] - 5.0 * p)))
     if show == 'claws':
         flags |= 1
         for i, h in enumerate((left, right)):

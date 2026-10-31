@@ -104,7 +104,27 @@ Props captureProps(const PropSource& src, const SendFrame& f) {
             it.forward = unitOr(f.way(span), {0, 0, -1});
             p.add(it);
         }
-    // 4. what he wears (holsters, the shield on his back)
+    // 4. 0.0.74 MP PROPS phase 2: what he has thrown (batarangs, the spinning shield) and his smoke pellets
+    if (d)
+        for (uint8_t i = 0; i < 2; ++i)
+            if (d->flying[i].look && d->flying[i].look <= propLookLast) {
+                PropItem it = fromItem(static_cast<uint8_t>(idFlying + i), d->flying[i], f);
+                if (it.kind == hero007::lookBatarang)
+                    it.variant = static_cast<uint8_t>(std::min<uint32_t>(src.batarangStyle, 255));
+                it.flags |= propFlagFlying;
+                p.add(it);
+            }
+    if (d)
+        for (uint8_t i = 0; i < 2; ++i)
+            if (d->pellet[i] && fin(d->pelletAt[i])) {
+                PropItem it;
+                it.id = static_cast<uint8_t>(idPellet + i);
+                it.kind = propPellet;
+                it.flags = i ? propFlagSide : 0;
+                it.at = f.at(d->pelletAt[i]);
+                p.add(it);
+            }
+    // 5. what he wears (holsters, the shield on his back)
     if (d)
         for (uint8_t i = 0; i < 4; ++i)
             if (d->worn[i].look && d->worn[i].look <= propLookLast) {
@@ -165,6 +185,11 @@ RemoteProps rebuildProps(const Props& p, const GhostFrame& f) {
             r.h072.hammerUp = f.way(it.up);
             r.h072.hammerSpin = f.mirror ? -it.spin : it.spin;
             r.h072.hammerChoice = it.variant;
+        } else if (it.kind == propPellet) {
+            const uint32_t s = side(it.flags);
+            r.h007.pellet[s] = true;
+            r.h007.pelletAt[s] = f.at(it.at);
+            r.h007.any = true;
         } else if (it.kind == propBaton) {
             const uint32_t s = side(it.flags);
             const float span = std::clamp(it.spin, .05f, 2.f);

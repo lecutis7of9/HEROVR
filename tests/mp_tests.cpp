@@ -1056,6 +1056,95 @@ void testPropsOnGhost() {
     check(rf.h072.any && rf.h072.hammer && !rf.h072.hammerInHand && !rf.hammerSheathed, "a flying hammer");
 }
 
+// 0.0.74 MP PROPS phase 2: thrown items by state (batarangs, the spinning shield, pellets, the hammer), blended.
+void testPropsThrown() {
+    const SendFrame sf = sendFrame({0, 0, 0}, Quat{}, 0.f);
+    hero007::Draw d;
+    d.any = true;
+    d.flying[0].look = hero007::lookBatarang;
+    d.flying[0].at = {1, 1.5f, -6};
+    d.flying[0].spin = 3.f;
+    d.flying[1].look = hero007::lookShieldSpin;
+    d.flying[1].at = {-2, 1.2f, -9};
+    d.flying[1].side = 1;
+    d.pellet[1] = true;
+    d.pelletAt[1] = {.5f, .4f, -3};
+    PropSource src;
+    src.h007 = &d;
+    src.batarangStyle = 1;
+    const Props p = captureProps(src, sf);
+    check(p.items == 3, "two thrown, one pellet");
+    check(p.item[0].id == idFlying && (p.item[0].flags & propFlagFlying) && p.item[0].variant == 1, "batarang in flight, styled");
+    check(p.item[1].id == idFlying + 1 && p.item[1].kind == hero007::lookShieldSpin, "the shield in flight");
+    check(p.item[2].id == idPellet + 1 && p.item[2].kind == propPellet && (p.item[2].flags & propFlagSide), "the pellet");
+    Ghost g;
+    g.feet = {0, 0, 0};
+    g.bodyYaw = 0;
+    const RemoteProps r = rebuildProps(quantized(p), ghostFrame(g, false, {10, 0, 0}, Quat{}));
+    check(r.h007.flying[0].look == hero007::lookBatarang && near(r.h007.flying[0].at, {11, 1.5f, -6}, .01f), "flying on the ghost");
+    check(r.h007.flying[1].look == hero007::lookShieldSpin && near(r.h007.flying[0].spin, 3.f, .001f), "shield, spin");
+    check(r.h007.pellet[1] && !r.h007.pellet[0] && near(r.h007.pelletAt[1], {10.5f, .4f, -3}, .01f), "pellet in its hand");
+    const RemoteProps m = rebuildProps(quantized(p), ghostFrame(g, true, {10, 0, 0}, Quat{}));
+    check(m.h007.pellet[0] && near(m.h007.pelletAt[0], {9.5f, .4f, -3}, .01f), "mirrored pellet: other hand, x flipped");
+
+    // blending: a hammer flying out, a batarang spinning across the +-pi seam
+    Props a, b;
+    PropItem h;
+    h.id = idHammer;
+    h.kind = propHammer;
+    h.flags = propFlagFlying;
+    h.at = {0, 1.5f, -2};
+    h.spin = 3.f;
+    a.add(h);
+    h.at = {0, 1.5f, -4};
+    h.spin = -3.f; // 3 -> -3 is .28 rad the short way, through pi
+    b.add(h);
+    PropItem bat;
+    bat.id = idBaton;
+    bat.kind = propBaton;
+    bat.spin = .2f;
+    a.add(bat);
+    bat.spin = .6f;
+    b.add(bat);
+    PropLine ln;
+    ln.kind = lineBolt;
+    ln.from = {0, 1, 0};
+    ln.to = {0, 1, -10};
+    a.add(ln);
+    ln.to = {0, 1, -12};
+    b.add(ln);
+    Props mid = blendProps(a, b, .5f);
+    check(mid.items == 2 && near(mid.item[0].at, {0, 1.5f, -3}), "hammer half way");
+    check(near(std::abs(mid.item[0].spin), 3.1415927f, .01f), "angle spin the short way (through pi)");
+    check(near(mid.item[1].spin, .4f), "baton length lerped");
+    check(mid.lines == 1 && near(mid.line[0].to, {0, 1, -11}), "line end blended");
+    check(near(blendProps(a, b, 0.f).item[0].at, a.item[0].at) && near(blendProps(a, b, 1.f).item[0].at, b.item[0].at), "ends");
+    Props caught = b;
+    caught.item[0].flags = propFlagInHand;
+    caught.item[0].at = {.3f, 1.2f, -.3f};
+    check(near(blendProps(a, caught, .5f).item[0].at, caught.item[0].at), "caught: snaps to the hand, no slide");
+    Props far = b;
+    far.item[0].at = {0, 1.5f, -30};
+    check(near(blendProps(a, far, .5f).item[0].at, far.item[0].at), "a new throw (far): snaps");
+    check(blendProps(a, Props{}, .5f).items == 0 && blendProps(Props{}, b, .5f).items == 2, "appear / vanish at once");
+
+    // through the Interpolator at 30 Hz: the hammer moves smoothly between packets
+    Interpolator in;
+    in.delay = .1f;
+    for (uint32_t k = 0; k < 12; ++k) {
+        PoseState s;
+        PropItem it = h;
+        it.at = {0, 1.5f, -static_cast<float>(k) * .5f};
+        it.spin = 0;
+        s.props.add(it);
+        in.push(k + 1, 1000 + k * 33, 1.0 + k * .033, s);
+    }
+    const Sampled smp = in.sample(1.0 + 11 * .033 - .0165);
+    check(smp.visible && smp.state.props.items == 1, "props through the Interpolator");
+    const float z = smp.state.props.item[0].at.z;
+    check(std::abs(z * 2.f - std::round(z * 2.f)) > .05f, "between two packets (not a hop)");
+}
+
 int main() {
     testCrcAndHash();
     testRoundTrip();
@@ -1074,6 +1163,7 @@ int main() {
     testGhostDrawing();
     testPropsWire();
     testPropsOnGhost();
+    testPropsThrown();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

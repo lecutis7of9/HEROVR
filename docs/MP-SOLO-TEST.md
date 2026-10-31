@@ -78,6 +78,11 @@ Solo test with the buddy: `python tools/mp_test_buddy.py --props all` (the defau
 the left hand, the hammer in the right, a batarang and a pistol worn. `--props batarang|hammer|batons|shield|guns|claws|none`
 picks one show, P in the buddy window cycles them, `--props-every 5` cycles by itself.
 
+Thrown things (0.0.74 MP PROPS phase 2) go by state in every packet (30 Hz): a thrown batarang, Cap's
+spinning shield, Thor's hammer in flight and Batman's smoke pellets are where your friend's game has them,
+moved smoothly between packets (spin the short way round); a catch or a new throw snaps instead of sliding.
+`--props throw` makes the buddy throw the hammer, the shield and a batarang out 8 m and back, and lob pellets.
+
 ## Files
 
 | File | Role |

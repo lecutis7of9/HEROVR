@@ -183,4 +183,50 @@ Props quantized(const Props& p) {
         decodeProps(buf, n, q);
     return q;
 }
+
+namespace {
+Vec3 mix(Vec3 a, Vec3 b, float t) { return a + (b - a) * t; }
+Vec3 mixWay(Vec3 a, Vec3 b, float t, Vec3 fallback) {
+    const Vec3 m = mix(safeDir(a, fallback), safeDir(b, fallback), t);
+    return length(m) > 1e-3f ? safeDir(m, fallback) : safeDir(b, fallback);
+}
+float wrapPi(float a) { return std::remainder(a, 6.2831853f); }
+bool lengthSpin(uint8_t kind) { return kind == propBaton || kind == propBubble || kind == 5 /* hero007::lookClaws */; }
+} // namespace
+
+Props blendProps(const Props& a, const Props& b, float t) {
+    t = std::isfinite(t) ? std::clamp(t, 0.f, 1.f) : 1.f;
+    Props s = b;
+    for (uint8_t k = 0; k < s.items && k < propItemsMost; ++k) {
+        PropItem& it = s.item[k];
+        for (uint8_t j = 0; j < a.items && j < propItemsMost; ++j) {
+            const PropItem& was = a.item[j];
+            if (was.id != it.id || was.kind != it.kind || ((was.flags ^ it.flags) & (propFlagInHand | propFlagSheathed)))
+                continue;
+            if (!finiteV(was.at) || !finiteV(it.at) || length(it.at - was.at) > propSnap)
+                break;
+            it.at = mix(was.at, b.item[k].at, t);
+            it.forward = mixWay(was.forward, b.item[k].forward, t, {0, 0, -1});
+            it.up = mixWay(was.up, b.item[k].up, t, {0, 1, 0});
+            if (std::isfinite(was.spin) && std::isfinite(it.spin))
+                it.spin = lengthSpin(it.kind) ? was.spin + (b.item[k].spin - was.spin) * t
+                                              : wrapPi(was.spin + wrapPi(b.item[k].spin - was.spin) * t);
+            break;
+        }
+    }
+    for (uint8_t k = 0; k < s.lines && k < propLinesMost; ++k) {
+        PropLine& l = s.line[k];
+        for (uint8_t j = 0; j < a.lines && j < propLinesMost; ++j) {
+            const PropLine& was = a.line[j];
+            if (was.kind != l.kind || !finiteV(was.from) || !finiteV(was.to) || length(l.to - was.to) > propSnap ||
+                length(l.from - was.from) > propSnap)
+                continue;
+            l.from = mix(was.from, b.line[k].from, t);
+            l.to = mix(was.to, b.line[k].to, t);
+            l.fade = was.fade + (b.line[k].fade - was.fade) * t;
+            break;
+        }
+    }
+    return s;
+}
 } // namespace spidy::mp

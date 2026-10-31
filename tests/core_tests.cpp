@@ -30848,8 +30848,8 @@ int main() {
     test("Version 0.0.72: TEST BUILD NOTICE - the exact text, after calibration, once a session, OK by poke or aimed trigger", [] {
         namespace tn = spidy::test_notice;
         check(tn::text == "You are on the latest test version, please be aware that some features do not work or are unfinished, "
-                          "revert to 0.0.63 if unplayable and report issues in my discord server linked on the launcher",
-              "the user's text word for word");
+                          "revert to 0.0.73 if unplayable and report issues in my discord server linked on the launcher",
+              "the user's text word for word (test 10: 0.0.73 to go back to, not 0.0.63)");
         check(tn::testBuild, "0.0.74 test 1 (a private test build) builds with HERO_TEST_BUILD ON (the test notice shows)");
         for (char c : tn::text)
             check(c == ' ' || drawable(c), std::string("the font draws '") + c + "'");

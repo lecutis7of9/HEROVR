@@ -55,7 +55,7 @@ class Notice(unittest.TestCase):
     def test_exact_text_kept(self):
         h = src('include/spidy/test_notice.hpp')
         self.assertIn('"You are on the latest test version, please be aware that some features do not work or are '
-                      'unfinished, revert to 0.0.63 if unplayable and report issues in my discord server linked on '
+                      'unfinished, revert to 0.0.73 if unplayable and report issues in my discord server linked on '
                       'the launcher"', h.replace('"\n    "', '').replace('" "', ''))
         self.assertIn('closeHint = "Press A to close"', h)
 

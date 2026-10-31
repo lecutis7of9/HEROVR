@@ -158,11 +158,11 @@ namespace Sm2VrLauncher
         public const int Build = 14;
         /// <summary>REVERT's one-click "Use previous version": the release this launcher's version replaces. Its version.json is read
         /// from github.com/&lt;repo&gt;/releases/download/&lt;tag&gt;/version.json (no API, no limit) and its zip is SHA-256 checked.</summary>
-        public const string PreviousTag = "v0.0.63";
+        public const string PreviousTag = "v0.0.73";
         /// <summary>Build 9 (Version 0.0.62): every release REVERT offers in one click, newest first. Each is installed the same way.
-        /// Build 10 (Version 0.0.63): 0.0.62 (launcher build 9) first. Build 11 (Version 0.0.70): 0.0.63 (launcher build 10) first. Build 12 (Version 0.0.71): the same list (0.0.70 is not offered: it is the version this fix replaces). Build 13 (Version 0.0.72): the same list (0.0.63 stays the STABLE build). Build 14 (Version 0.0.73): the same list (0.0.63 stays the STABLE build).
+        /// Build 10 (Version 0.0.63): 0.0.62 (launcher build 9) first. Build 11 (Version 0.0.70): 0.0.63 (launcher build 10) first. Build 12 (Version 0.0.71): the same list (0.0.70 is not offered: it is the version this fix replaces). Build 13 (Version 0.0.72): the same list (0.0.63 stays the STABLE build). Build 14 (Version 0.0.73): the same list (0.0.63 stays the STABLE build). 0.0.74 test 10 (still build 14): 0.0.73 first, the STABLE build to go back to.
         /// The oldest stays last (PreviousManifestUrl, as build 8).</summary>
-        public static readonly string[] PreviousTags = { "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };
+        public static readonly string[] PreviousTags = { "v0.0.73", "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };
         /// <summary>The name shown to players: window title, taskbar, dialogs, wordmark. Internal names (exe, settings folder,
         /// mutex, release manifest, update zips) stay "SM2 VR" so existing installs and settings keep working.</summary>
         public const string Title = "HERO VR";

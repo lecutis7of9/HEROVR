@@ -30,7 +30,7 @@ namespace Sm2VrLauncher
         public int LauncherBuild;   // "launcher_build": the launcher build inside the release zip (0 when not given)
         public string WhatsNew;     // "whats_new": one line shown in the update prompt
         public bool Experimental = true;   // build 12: "experimental" (default true): updating asks to confirm the EXPERIMENTAL notice
-        public string StableVersion;       // build 12: "stable_version": the most recent STABLE build named in that notice (default 0.0.63)
+        public string StableVersion;       // build 12: "stable_version": the most recent STABLE build named in that notice (default 0.0.73; 0.0.63 before 0.0.74 test 10)
         /// <summary>launcher.ini UpdateManifestUrl=...: read version.json from here instead of GitHub (testing).</summary>
         public static string OverrideUrl;
 

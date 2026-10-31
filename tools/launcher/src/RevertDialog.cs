@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
@@ -55,17 +56,18 @@ namespace Sm2VrLauncher
             };
             // One click back to an earlier release (build 9: 0.0.62 -> 0.0.6 or 0.0.5; build 10: 0.0.63 -> 0.0.62, 0.0.6 or 0.0.5; build 11: 0.0.70 -> 0.0.63; build 12: 0.0.71 -> 0.0.63,
             // 0.0.62, 0.0.6 or 0.0.5): works with no backup at all. Build 10: the buttons fill the row, so their note sits under them.
+            // 0.0.74 test 10: 0.0.73 first (five buttons), so each is as wide as the row allows (140 for four or fewer, as before).
             var previousButtons = new List<Control>();
-            int px = 24;
+            int px = 24, n = Math.Max(1, LauncherInfo.PreviousTags.Length), bw = Math.Min(140, (592 - (n - 1) * 8) / n);
             foreach (string tag in LauncherInfo.PreviousTags)
             {
                 string t = tag, number = PreviousNumber(t);
                 var b = new Button();
-                Style(b, "USE " + number, previousButtons.Count == 0); b.Bounds = Theme.R(px, 104, 140, 38);
+                Style(b, "USE " + number, previousButtons.Count == 0); b.Bounds = Theme.R(px, 104, bw, 38);
                 b.Enabled = (settings.RepoConfigured || preview) && OfferPrevious(root, t);
                 b.Click += (s, e) => { UsePrevious = true; PreviousTag = t; DialogResult = preview ? DialogResult.Cancel : DialogResult.OK; };
                 previousButtons.Add(b);
-                px += 148;
+                px += bw + 8;
             }
             var prevNote = new Label { Text = "From GitHub, SHA-256 checked. You stay on it until you press Update now.", ForeColor = Theme.Sub, AutoSize = false, Bounds = Theme.R(24, 146, 592, 24) };
             list.Bounds = Theme.R(24, 184, 592, 210);
@@ -107,8 +109,28 @@ namespace Sm2VrLauncher
         public static bool OfferPrevious(string root, string tag)
         {
             var have = ModVersion.Parse(SystemInfo.PortVersion(root));
+            var test = TestBuildVersion(root);   // 0.0.74 test 10: a test build keeps 0.0.73's VERSION file, so USE 0.0.73 is offered
+            if (test != null && (have == null || test > have)) have = test;
             var prev = ModVersion.Parse(tag);
             return prev != null && (have == null || have > prev);
+        }
+
+        /// <summary>0.0.74 test 10: a test build's own version ("version=0.0.74" in HERO-VR-TEST-BUILD.txt, written by
+        /// INSTALL-TEST-BUILD), else null. The test payload leaves VERSION at the release it was installed over.</summary>
+        static ModVersion TestBuildVersion(string root)
+        {
+            try
+            {
+                string f = Path.Combine(root ?? "", "HERO-VR-TEST-BUILD.txt");
+                if (!File.Exists(f)) return null;
+                foreach (string line in File.ReadAllLines(f))
+                {
+                    int i = line.IndexOf('=');
+                    if (i > 0 && line.Substring(0, i).Trim() == "version") return ModVersion.Parse(line.Substring(i + 1).Trim());
+                }
+            }
+            catch { }
+            return null;
         }
 
         static List<BackupInfo> FakeBackups()

@@ -26,7 +26,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT/'tools'/'launcher'/'src'
-STABLE = '0.0.63'
+STABLE = '0.0.73'   # 0.0.74 test 10: 0.0.73 (was 0.0.63)
 REL = (ROOT/'VERSION').read_text().strip()   # the release being checked (0.0.72)
 
 

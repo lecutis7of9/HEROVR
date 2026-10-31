@@ -377,8 +377,9 @@ class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
         self.assertGreaterEqual(cur, 9)
         self.compile_and_ask(s, cur)
         # build 9: 0.0.6 and 0.0.5; build 10 (Version 0.0.63): 0.0.62 first (launcher_build9_tests pins the order)
-        self.assertIn('public static readonly string[] PreviousTags = { %s%s"v0.0.6", "v0.0.5" };'
-                      % ('"v0.0.63", ' if cur >= 11 else '', '"v0.0.62", ' if cur >= 10 else ''), s)   # build 11 (0.0.70): 0.0.63 first
+        t73 = '"v0.0.73", ' if '"v0.0.73", "v0.0.63"' in s else ''   # 0.0.74 test 10: 0.0.73 first (launcher_build9_tests pins it)
+        self.assertIn('public static readonly string[] PreviousTags = { %s%s%s"v0.0.6", "v0.0.5" };'
+                      % (t73, '"v0.0.63", ' if cur >= 11 else '', '"v0.0.62", ' if cur >= 10 else ''), s)   # build 11 (0.0.70): 0.0.63 first
 
     def test_the_0_0_62_manifest_outranks_every_build(self):
         mj = src('ModVersion.cs')

@@ -15,10 +15,11 @@
 #include <vector>
 
 namespace spidy::test_notice {
-// The user's text, exactly (nothing in it corrected).
+// The user's text, exactly (nothing in it corrected). 0.0.74 test 10 (the user): "tells people to go to 73
+// in case its unplayable not 6whatever": 0.0.73, not 0.0.63, is the one to go back to.
 inline constexpr std::string_view text =
     "You are on the latest test version, please be aware that some features do not work or are unfinished, "
-    "revert to 0.0.63 if unplayable and report issues in my discord server linked on the launcher";
+    "revert to 0.0.73 if unplayable and report issues in my discord server linked on the launcher";
 inline constexpr std::string_view okLabel = "OK";
 // Build 6 (the user, 9:39: "OK is hard to select"): A on either controller closes it too (the left
 // controller's A is its X), and says so beside OK. That press never reaches play (holdsA).

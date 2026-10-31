@@ -29,12 +29,18 @@ class LauncherBuild9(unittest.TestCase):
         tags = re.search(r'public static readonly string\[\] PreviousTags = \{ ([^}]*) \};', mv).group(1)
         tags = [t.strip().strip('"') for t in tags.split(',')]
         self.assertEqual(tags[-2:], ['v0.0.6', 'v0.0.5'])
-        if int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 11:   # build 11 (0.0.70): 0.0.63 first
+        cmk = re.search(r'set\(HERO_TEST_VERSION "([0-9.]+)"', (ROOT/'CMakeLists.txt').read_text(encoding='utf-8'))
+        test_ver = tuple(int(x) for x in cmk.group(1).split('.')) if cmk else ()
+        if test_ver >= (0, 0, 74):   # 0.0.74 test 10 (the user: "go to 73 ... not 6whatever"): 0.0.73 first, the rest kept
+            self.assertEqual(tags, ['v0.0.73', 'v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
+            self.assertIn('public const string PreviousTag = "v0.0.73";', mv)
+        elif int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 11:   # build 11 (0.0.70): 0.0.63 first
             self.assertEqual(tags, ['v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
         elif int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 10:
             self.assertEqual(tags, ['v0.0.62', 'v0.0.6', 'v0.0.5'])
             self.assertIn('public const string PreviousTag = "v0.0.62";', mv)
         cur = tuple(int(x) for x in (ROOT/'VERSION').read_text(encoding='utf-8').strip().split('.'))
+        cur = max(cur, test_ver)   # a test build (0.0.74) still carries the release's VERSION (0.0.73)
         self.assertTrue(all(tuple(int(x) for x in t[1:].split('.')) < cur for t in tags), tags)
         rd = src('RevertDialog.cs')
         self.assertIn('foreach (string tag in LauncherInfo.PreviousTags)', rd)
@@ -42,6 +48,8 @@ class LauncherBuild9(unittest.TestCase):
         self.assertIn('OfferPrevious(root, t)', rd)
         # numbers compared as numbers: 0.0.62 is newer than both
         self.assertIn('return prev != null && (have == null || have > prev);', rd)
+        # 0.0.74 test 10: a test build (VERSION still 0.0.73) is compared by its marker's version, so USE 0.0.73 is offered
+        self.assertIn('"HERO-VR-TEST-BUILD.txt"', rd); self.assertIn('var test = TestBuildVersion(root);', rd)
         up = src('MainForm.Updates.cs')
         self.assertIn('UsePreviousVersion(rs, d.PreviousTag)', up)
         self.assertIn('"/releases/download/" + tag + "/version.json"', up)

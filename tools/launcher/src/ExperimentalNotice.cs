@@ -1,6 +1,6 @@
 // HERO VR launcher build 12 (0.0.71.1): every update to a newer version first asks the player to confirm that the
-// newest live build is EXPERIMENTAL (it may crash or have issues), that 0.0.63 is the most recent STABLE build and that
-// Revert > USE 0.0.63 goes back to it. version.json can name another stable build ("stable_version") or mark a
+// newest live build is EXPERIMENTAL (it may crash or have issues), that 0.0.73 (0.0.63 before 0.0.74 test 10) is the most recent
+// STABLE build and that Revert > USE 0.0.73 goes back to it. version.json can name another stable build ("stable_version") or mark a
 // release stable ("experimental": false, then no notice). The update itself (MainForm.Updates.cs) is build 9's; it
 // only calls ConfirmExperimental once, right before anything downloads (both the startup prompt and Update now).
 using System;
@@ -11,7 +11,7 @@ namespace Sm2VrLauncher
     static class ExperimentalNotice
     {
         /// <summary>The most recent STABLE build when version.json does not name one ("stable_version").</summary>
-        internal const string StableVersionDefault = "0.0.63";
+        internal const string StableVersionDefault = "0.0.73";   // 0.0.74 test 10: 0.0.73 (was 0.0.63)
 
         internal static string StableVersionOf(Manifest m)
         {

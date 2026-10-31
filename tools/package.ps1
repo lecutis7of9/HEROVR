@@ -97,8 +97,12 @@ foreach ($starter in $probeStarters) {
 Copy-Item -LiteralPath $versionFile -Destination $stage
 Copy-Item -LiteralPath (Join-Path $root 'SHARING.md') -Destination (Join-Path $stage 'README.txt')
 # Zip tools skip empty folders, and a note says what the folder is for (only songs are played from it).
+# 0.0.74 test 10 MUSIC KEPT: the songs' own folder is Documents\HERO VR\Music (kept through every update); this one
+# is still read, and its songs are copied there once at the next start.
 Set-Content -LiteralPath (Join-Path $stage 'Music\Put your songs here.txt') -Encoding ascii -Value @(
-    'Put your songs here (mp3, wav, flac, m4a, aac or wma), then pick them on the MUSIC page of the hologram.'
+    'Put your songs in Documents\HERO VR\Music (mp3, wav, flac, m4a, aac, wma or ogg; sub-folders too): that folder'
+    'is kept through every update. Songs here are copied there once at the next start and still play.'
+    'Pick them on the MUSIC page of the hologram, the phone or the van.'
     'Turn Music down to 0 in the game''s Audio settings so it does not play over your songs.')
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY_NOTICES.md') -Destination $stage

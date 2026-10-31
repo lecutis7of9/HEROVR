@@ -17523,6 +17523,24 @@ int main() {
                   list[2].file == "c.M4A",
               "the songs are not A-Z ignoring case");
         check(mu::indexOf(list, "c.M4A") == 2 && mu::indexOf(list, "x.mp3") == -1, "indexOf");
+        // 0.0.74 test 10 MUSIC KEPT: full paths from two folders and sub-folders; a song in both is listed once.
+        check(mu::songKey("C:\\Users\\a\\Documents\\HERO VR\\Music\\Rock\\Song.MP3", 7) == "song.mp3|7" &&
+                  mu::songKey("D:/x/song.mp3", 7) == mu::songKey("song.mp3", 7) && mu::songKey("song.mp3", 8) != mu::songKey("song.mp3", 7),
+              "songKey: the file name (any case) and the size");
+        const auto both = mu::songList({{"C:\\Docs\\HERO VR\\Music\\Rock\\b.mp3", 10},
+                                        {"C:\\Docs\\HERO VR\\Music\\a.wav", 4},
+                                        {"D:\\Games\\HERO-VR-0.0.73\\Music\\B.MP3", 10},
+                                        {"D:\\Games\\HERO-VR-0.0.73\\Music\\b.mp3", 11},
+                                        {"D:\\Games\\HERO-VR-0.0.73\\Music\\Sub\\._c.mp3", 3}});
+        check(both.size() == 3 && both[0].file == "C:\\Docs\\HERO VR\\Music\\a.wav" &&
+                  both[1].file == "C:\\Docs\\HERO VR\\Music\\Rock\\b.mp3" &&
+                  both[2].file == "D:\\Games\\HERO-VR-0.0.73\\Music\\b.mp3",
+              "the song list from two folders: A-Z by file name, one found twice kept as given first");
+        check(both.size() == 3 && both[0].name.find('\\') == std::string::npos && both[1].name.find("ROCK") == std::string::npos,
+              "a song's shown name has no folder in it");
+        check(std::string(spidy::vehicle074::musicReadme).find("Sub-folders are read too") != std::string::npos &&
+                  std::string(spidy::vehicle074::musicReadme).find("never loses") != std::string::npos,
+              "the songs folder's readme");
         check(mu::playable("x.Mp3") && !mu::playable(".x.mp3") && !mu::playable("x.mp3", 0) && !mu::playable("mp3"),
               "playable");
         check(mu::clockText(0) == "0:00" && mu::clockText(187) == "3:07" && mu::clockText(3723) == "1:02:03" &&

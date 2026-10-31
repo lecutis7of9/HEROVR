@@ -19,6 +19,9 @@ namespace Sm2VrLauncher
 
     static class Backups
     {
+        /// <summary>0.0.74 test 10 MUSIC KEPT: the install's own songs folder (the songs now live in Documents\HERO VR\Music;
+        /// this one is still read): never written by an install, copied into a backup or deleted by a restore.</summary>
+        public const string MusicFolder = "Music";
         /// <summary>Top folders that are never copied into a backup or deleted by a restore: the build (rebuilt
         /// every time), reports, the user's music, and development-only folders.</summary>
         public static readonly string[] SkipTop = { "build", "reports", "music", ".git", ".vs", "dist", "third_party", ".research", "test logs", "__pycache__", ".sm2vr.lock" };

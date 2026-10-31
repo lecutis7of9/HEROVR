@@ -2948,7 +2948,17 @@ def session(a, startup, session_off=()):
             finder_written_gen = finder.get('generation')
         body_said = ('off', None)
         # Update 19: the wrist hologram's MUSIC page plays the songs in this folder.
-        music_line = live_settings.ensure_music_folder(ROOT)
+        # 0.0.74 test 10 MUSIC KEPT: the songs' own folder is Documents/HERO VR/Music (phone_music.cpp
+        # phoneMusicFolder: outside the install, so an update or a new version unzipped elsewhere keeps them); the
+        # songs left in this install's Music folder, or in another HERO VR install beside it, are copied there once.
+        try:
+            songs_folder = documents_folder()/'HERO VR'/'Music'
+        except Exception:  # no Documents folder: the mod plays from the install's Music folder only
+            songs_folder = None
+        if songs_folder is not None:
+            for line in live_settings.keep_music(ROOT, songs_folder):
+                print(line, flush=True)
+        music_line = live_settings.ensure_music_folder(ROOT, songs_folder)
         if music_line:
             print(music_line, flush=True)
         # Update 37.2: an existing live.txt gets the 37.2 start values once (EYE AA, FAR SHADOWS

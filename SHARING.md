@@ -36,8 +36,11 @@ Launcher.exe` is an optional window with the same settings.
 
 ## Music
 
-Put your songs (mp3, wav, flac, m4a, aac or wma) in the **Music** folder. Pick them on the MUSIC page of the
-hologram. Turn Music down to 0 in the game's Audio settings so it doesn't play over your songs.
+Put your songs (mp3, wav, flac, m4a, aac, wma or ogg) in **Documents\HERO VR\Music** (made at the first start;
+sub-folders are read too). It is outside the mod's folder, so updating, unzipping a new version or reverting never
+loses your songs. Songs you left in the mod's own **Music** folder (or an older version's beside it) are copied there
+once at the next start, never moved or deleted, and that folder is still read. Pick them on the MUSIC page of the
+hologram, the phone or the van. Turn Music down to 0 in the game's Audio settings so it doesn't play over your songs.
 
 ## The hologram (settings menu)
 

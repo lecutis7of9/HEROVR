@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <unordered_set>
 
 namespace spidy::music {
 namespace {
@@ -201,10 +202,14 @@ bool playable(std::string_view fileName, uint64_t bytes) {
             return true;
     return false;
 }
+std::string songKey(std::string_view path, uint64_t bytes) {
+    return lower(baseName(path)) + '|' + std::to_string(bytes);
+}
 std::vector<Track> songList(const std::vector<std::pair<std::string, uint64_t>>& files) {
     std::vector<std::string> keep;
+    std::unordered_set<std::string> seen;
     for (const auto& [file, bytes] : files)
-        if (playable(file, bytes))
+        if (playable(file, bytes) && seen.insert(songKey(file, bytes)).second)
             keep.push_back(file);
     std::sort(keep.begin(), keep.end(), [](const std::string& a, const std::string& b) {
         const std::string x = lower(baseName(a)), y = lower(baseName(b));

@@ -46,7 +46,8 @@ if os.path.exists(ICON):
     shutil.copy(ICON, os.path.join(pay, 'HERO-VR.ico'))
 for f in ('THIRD-PARTY-MODELS.md', 'CREDITS.md'):
     shutil.copy(os.path.join(REPO, f), os.path.join(pay, f))
-os.makedirs(os.path.join(pay, 'Music'), exist_ok=True)
+# 0.0.74 test 10 MUSIC KEPT: no Music folder in the payload (the songs live in Documents\HERO VR\Music; the mod makes
+# the install's own one), and INSTALL-TEST-BUILD.ps1 never copies into it.
 # the marker the console reads (tools/run_game_vr.py test_build_lines)
 dlls = sorted(p for p in want if p.endswith('.dll') and p.startswith(('build/', 'python/')))
 marker = [f'HERO VR 0.0.73 test {COMMIT} - private test build {N} (not a release)', 'version=0.0.73',

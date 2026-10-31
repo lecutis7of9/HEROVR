@@ -1,7 +1,8 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR (Ilya Mezerowsky).
 #pragma once
-// Update 19: the MUSIC page's player (Windows): the songs in the Music folder
-// (phoneMusicFolder: <install folder>\Music), decoded by Media Foundation (MP3,
+// Update 19: the MUSIC page's player (Windows): the songs in the music folders
+// (musicFolders: Documents\HERO VR\Music, then <install folder>\Music, sub-folders
+// too; 0.0.74 test 10 MUSIC KEPT), decoded by Media Foundation (MP3,
 // WAV, FLAC, M4A/AAC, WMA: what Windows 10 and 11 decode out of the box) and
 // played through WASAPI (the default speakers or headset, shared, so the
 // game's own sound carries on beside it), on a thread of its own. The folder
@@ -30,8 +31,8 @@ class Player {
         std::vector<std::string> names; // every song's shown name, A-Z
         uint32_t serial{};               // grows with every change
     };
-    Player();
-    // 0.0.74 MUSIC PLAYER (the vehicle screens): the songs in `folder` (made if missing), not phoneMusicFolder.
+    Player(); // every one of musicFolders (the phone's, the wrist's and the van's songs)
+    // 0.0.74 MUSIC PLAYER: the songs in `folder` (made if missing) and its sub-folders only.
     explicit Player(std::wstring folder);
     ~Player(); // stops the music, joins its threads
     Player(const Player&) = delete;

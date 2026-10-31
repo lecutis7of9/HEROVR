@@ -130,6 +130,7 @@ namespace Sm2VrLauncher
                     string rel = e.FullName.Replace('\\', '/');
                     if (c.Prefix.Length > 0 && rel.StartsWith(c.Prefix)) rel = rel.Substring(c.Prefix.Length);
                     if (skipParts != null && skipParts.Any(pt => rel.StartsWith(pt, StringComparison.OrdinalIgnoreCase))) continue;   // installed by ModFiles.Install
+                    if (rel.StartsWith(Backups.MusicFolder + "/", StringComparison.OrdinalIgnoreCase)) continue;   // 0.0.74 test 10 MUSIC KEPT: his songs' folder is never written by an install
                     string to = Path.GetFullPath(Path.Combine(dest, rel.Replace('/', Path.DirectorySeparatorChar)));
                     if (!to.StartsWith(full, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Unsafe path in zip: " + e.FullName);
                     Directory.CreateDirectory(Path.GetDirectoryName(to));

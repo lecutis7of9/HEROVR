@@ -85,7 +85,10 @@ at the next start (when -Supersample is not given, i.e. is 100).
 The others need a new session: the render scale sizes the eye buffers when the session starts,
 and the eyes' reflections, shadows and temporal AA stay off in Spider-Man 2 either way.
 """
+import hashlib
+import os
 import pathlib
+import shutil
 
 # name: (range, the export that applies it, what the console says)
 SETTINGS = {
@@ -1984,24 +1987,201 @@ def write_next_launch(path, supersample):
 
 
 # Update 19: the folder the wrist hologram's MUSIC page plays from (the mod makes it too).
-MUSIC_README = """Spider-Man 2 VR: the wrist hologram's MUSIC page (page 5) plays the songs in this folder.
+# 0.0.74 test 10 MUSIC KEPT: the songs' own folder is Documents\HERO VR\Music (outside the install, so an
+# update, a new version unzipped beside the old one or a revert never leaves them behind); the install's own
+# Music folder is still read after it, and its songs are copied over once (keep_music).
+MUSIC_README = """Spider-Man 2 VR: the songs folder for the phone, the wrist hologram's MUSIC page and the van.
 
-Put MP3, WAV or FLAC files here (M4A/AAC and WMA work too, with Windows' own Media Foundation).
-New songs show up within a few seconds, even while the game runs; they play in A-Z order and the
-next one starts by itself. A file that will not play is skipped. Sub-folders are not read.
+Your songs now live in Documents\\HERO VR\\Music, outside the mod's folder, so updating HERO VR,
+unzipping a new version or reverting never loses them. Songs left here are copied there once at
+the next start (never moved or deleted) and this folder is still read too.
+
+Put MP3, WAV or FLAC files there (M4A/AAC, WMA and OGG work too, with Windows' own Media Foundation).
+Sub-folders are read too. New songs show up within a few seconds, even while the game runs; they play
+in A-Z order and the next one starts by itself. A file that will not play is skipped.
 The page's VOLUME is only the music's: the game's own sound is not changed. To keep the game's
 background music quiet meanwhile, set Music Volume to 0 in the game's Settings, Audio.
 """
+MUSIC_README_OURS = "Spider-Man 2 VR: "  # an older README of ours starts so: rewritten; anything else is his
+SONG_EXTENSIONS = ('.mp3', '.wav', '.flac', '.m4a', '.aac', '.wma', '.ogg')  # music_player.hpp playable
+MUSIC_COPIED = '.hero-vr-copied.txt'  # in the songs' folder: every song copied once (name|bytes)
+MUSIC_DEPTH = 8  # music_player.hpp folderDepth
 
 
-def ensure_music_folder(root):
-    """Makes the Music folder (and its README) under `root`; the line to show. Never raises."""
+def ensure_music_folder(root, songs_folder=None):
+    """Makes the Music folder (and its README) under `root`; the line to show (naming `songs_folder`, the songs' own
+    folder, when given). Never raises."""
     folder = pathlib.Path(root)/'Music'
     try:
         folder.mkdir(exist_ok=True)
         readme = folder/'README.txt'
         if not readme.exists():
             readme.write_text(MUSIC_README, encoding='utf-8')
+        else:
+            try:
+                old = readme.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                old = ''
+            if old.startswith(MUSIC_README_OURS) and old != MUSIC_README:
+                readme.write_text(MUSIC_README, encoding='utf-8')
     except OSError as error:
         return f'Music: could not make {folder} ({error}); the MUSIC page will list no songs.'
+    if songs_folder:
+        return (f'Music: put MP3, WAV or FLAC songs in {songs_folder} (kept through updates; the phone, the wrist '
+                f'hologram\'s MUSIC page and the van play them; {folder} is read too).')
     return f'Music: put MP3, WAV or FLAC songs in {folder} (wrist hologram, MUSIC page).'
+
+
+def is_song(path):
+    """music_player.hpp playable: a song's extension, not hidden (.name, macOS's ._ twins) and not empty."""
+    try:
+        return (path.suffix.lower() in SONG_EXTENSIONS and not path.name.startswith('.')
+                and path.is_file() and path.stat().st_size > 0)
+    except OSError:
+        return False
+
+
+def song_key(path):
+    """music_player.hpp songKey: the same song when the file name (any case) and the size are."""
+    return f'{path.name.lower()}|{path.stat().st_size}'
+
+
+def songs_in(folder, depth=MUSIC_DEPTH):
+    """Every song in `folder` and its sub-folders (`depth` down; no links followed), A-Z. Never raises."""
+    found, folder = [], pathlib.Path(folder)
+    try:
+        entries = sorted(folder.iterdir(), key=lambda p: p.name.lower())
+    except OSError:
+        return found
+    for entry in entries:
+        try:
+            if entry.is_symlink() or entry.name.startswith('.'):
+                continue
+            if entry.is_dir():
+                if depth > 0:
+                    found += songs_in(entry, depth - 1)
+            elif is_song(entry):
+                found.append(entry)
+        except OSError:
+            continue
+    return found
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for block in iter(lambda: f.read(1 << 20), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def old_music_folders(root):
+    """The Music folders songs may have been left in (oldest-first order does not matter): this install's own,
+    every other HERO VR install beside it (a folder with tools/launch-game-vr.ps1 or the launcher: the zips unpack
+    to HERO-VR-Launcher-<version>), the launcher's backups (<root>-backup/<version>) and the test installer's
+    _before-* copies. Only folders that exist."""
+    root = pathlib.Path(root)
+    folders = [root/'Music']
+    try:
+        siblings = sorted(root.parent.iterdir(), key=lambda p: p.name.lower()) if root.parent != root else []
+    except OSError:
+        siblings = []
+    for other in siblings:
+        try:
+            if other == root or not other.is_dir():
+                continue
+            if any((other/m).exists() for m in ('tools/launch-game-vr.ps1', 'Launch Spidy VR.cmd', 'Spidy Launcher.exe')):
+                folders.append(other/'Music')
+        except OSError:
+            continue
+    for pattern_root, pattern in ((root.parent/(root.name + '-backup'), '*/Music'), (root, '_before-*/Music')):
+        try:
+            folders += sorted(pattern_root.glob(pattern))
+        except OSError:
+            pass
+    out, seen = [], set()
+    for f in folders:
+        try:
+            key = str(f.resolve()).lower()
+            if key not in seen and f.is_dir():
+                seen.add(key)
+                out.append(f)
+        except OSError:
+            continue
+    return out
+
+
+def keep_music(root, songs_folder, sources=None):
+    """0.0.74 test 10 MUSIC KEPT: copies the songs left in an install's Music folder (old_music_folders) into the
+    songs' own folder (Documents/HERO VR/Music), each one once: a song already there (song_key) or copied before
+    (MUSIC_COPIED, so one he deleted there is not brought back) is skipped. Each copy is checked (size and SHA-256)
+    before it takes its name; nothing is ever moved or deleted from where it was. Keeps the sub-folders' names. The
+    lines to show (none when nothing was to do). Never raises."""
+    lines = []
+    try:
+        dest = pathlib.Path(songs_folder)
+        dest.mkdir(parents=True, exist_ok=True)
+        ledger = dest/MUSIC_COPIED
+        try:
+            copied = set(ledger.read_text(encoding='utf-8').splitlines())
+        except (OSError, UnicodeDecodeError):
+            copied = set()
+        have = set()
+        for song in songs_in(dest):
+            try:
+                have.add(song_key(song))
+            except OSError:
+                pass
+        try:
+            dest_key = str(dest.resolve()).lower()
+        except OSError:
+            dest_key = str(dest).lower()
+        new_keys, failed = [], []
+        for source in (old_music_folders(root) if sources is None else [pathlib.Path(s) for s in sources]):
+            try:
+                if str(source.resolve()).lower() == dest_key:
+                    continue
+            except OSError:
+                continue
+            count = 0
+            for song in songs_in(source):
+                part = None
+                try:
+                    key = song_key(song)
+                    if key in have or key in copied:
+                        continue
+                    target = dest/song.relative_to(source)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    n = 2
+                    while target.exists():  # another song by that name: beside it, never over it
+                        target = target.with_name(f'{song.stem} ({n}){song.suffix}')
+                        n += 1
+                    part = target.with_name('.' + target.name + '.part')
+                    shutil.copyfile(song, part)
+                    if part.stat().st_size != song.stat().st_size or _sha256(part) != _sha256(song):
+                        part.unlink()
+                        failed.append(str(song))
+                        continue
+                    os.replace(part, target)
+                    have.add(key)
+                    new_keys.append(key)
+                    count += 1
+                except OSError as error:
+                    failed.append(f'{song} ({error})')
+                    try:
+                        if part is not None and part.exists():
+                            part.unlink()
+                    except OSError:
+                        pass
+            if count:
+                lines.append(f'Music: {count} song{"s" if count != 1 else ""} copied from {source} to {dest} '
+                             f'(kept there through updates; the originals stay where they were).')
+        if new_keys:
+            with open(ledger, 'a', encoding='utf-8') as f:
+                f.write(''.join(k + '\n' for k in new_keys))
+        if failed:
+            lines.append(f'Music: {len(failed)} song(s) could not be copied to {dest} and stay where they were: '
+                         + ', '.join(failed[:5]) + (' ...' if len(failed) > 5 else ''))
+    except OSError as error:
+        lines.append(f'Music: could not copy songs to {songs_folder} ({error}); they stay where they were and still play.')
+    return lines

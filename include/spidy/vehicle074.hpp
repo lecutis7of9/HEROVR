@@ -15,14 +15,22 @@ namespace spidy::vehicle074 {
 enum MusicMode : uint8_t { musicInVehicles = 0, musicAlways = 1, musicOff = 2 };
 inline constexpr const char* musicHelp = "The van dash's MUSIC page plays your songs, no restart needed.";
 // Its own folder: Documents\HERO VR\Music (made on the first run, a readme in it; no songs come with the mod).
+// 0.0.74 test 10 MUSIC KEPT: the one music folder for every player (the phone, the wrist's MUSIC page and the van):
+// it is outside the install, so a new version, an update, a revert or a fresh unzip never leaves it behind.
+// The install's own Music folder (where songs went up to 0.0.73) is still read, after it.
 inline constexpr const wchar_t* musicFolderUnderDocuments = L"HERO VR\\Music";
 inline constexpr const char* musicReadmeName = "README.txt";
 inline constexpr const char* musicReadme =
-    "HERO VR 0.0.74 - car music\r\n"
+    "HERO VR - your music\r\n"
     "\r\n"
     "Put your own songs here (mp3, ogg, wav; flac / m4a / aac / wma also play where Windows can).\r\n"
-    "Sub-folders are read too. No music comes with the mod.\r\n"
+    "Sub-folders are read too (up to 8 deep). No music comes with the mod.\r\n"
     "\r\n"
+    "This folder is in your Documents, outside the mod's install folder, so updating HERO VR,\r\n"
+    "unzipping a new version or reverting never loses it. Songs from an older install's Music\r\n"
+    "folder are copied here once (never moved or deleted); that folder is still read too.\r\n"
+    "\r\n"
+    "The phone, the wrist's MUSIC page and the van's dash all play the songs here.\r\n"
     "In the van: the dash's MUSIC page (X: next page, or tap the tabs) has PREV, PLAY / PAUSE, NEXT,\r\n"
     "VOL- and VOL+. It plays only in the van unless the wrist menu's CAR MUSIC is set to ALWAYS;\r\n"
     "it ducks a little under the engine. CAR MUSIC OFF turns it off.\r\n"

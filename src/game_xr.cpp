@@ -1436,28 +1436,6 @@ std::wstring tabOnlyPath() {
     CoTaskMemFree(folder);
     return path;
 }
-// 0.0.74 test 1 CAR MUSIC: the van dash's songs, Documents\HERO VR\Music - made (every level) with its
-// README.txt when missing; empty when Windows names no Documents (the player then takes the phone's folder).
-std::wstring carMusicFolder() {
-    PWSTR docs{};
-    std::wstring path;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs)
-        path = std::wstring(docs) + L"\\" + vehicle074::musicFolderUnderDocuments;
-    CoTaskMemFree(docs);
-    if (path.empty())
-        return path;
-    const int made = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
-    if (made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS)
-        return path;
-    const std::wstring readme = path + L"\\README.txt";
-    const HANDLE file = CreateFileW(readme.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file != INVALID_HANDLE_VALUE) { // CREATE_NEW: never over his own
-        DWORD wrote = 0;
-        WriteFile(file, vehicle074::musicReadme, static_cast<DWORD>(std::strlen(vehicle074::musicReadme)), &wrote, nullptr);
-        CloseHandle(file);
-    }
-    return path;
-}
 // 0.0.74 test 1 BATMOBILE: the picked car kept between sessions, Documents\HERO VR\batmobile.txt (one digit, 0-3:
 // batmobile074::names). Read once at the models' load (after the launcher's live.txt has sent its own
 // batmobile_choice as the session starts: the saved pick wins), written whenever the pick changes (the dash's
@@ -2144,9 +2122,11 @@ DWORD WINAPI run(void*) {
         // when not being written: try_lock) and what the page shows.
         music::Player musicPlayer;
         music::Player::Status musicStatus;
-        // 0.0.74 test 1 CAR MUSIC (vehicle074.hpp): the van dash's own player (Documents\HERO VR\Music), its
-        // status, the volume he set (0-100; under the engine: duck) and the last volume given the player.
-        music::Player carMusic{carMusicFolder()};
+        // 0.0.74 test 1 CAR MUSIC (vehicle074.hpp): the van dash's own player, its status, the volume he set
+        // (0-100; under the engine: duck) and the last volume given the player. 0.0.74 test 10 MUSIC KEPT: the
+        // same songs as the phone and the wrist (musicFolders: Documents\HERO VR\Music, made with its README,
+        // then the install's Music folder; sub-folders too).
+        music::Player carMusic;
         music::Player::Status carMusicStatus;
         float carMusicVolume = 70.f, carMusicGiven = -1.f;
         wrist_hud::MusicView wristMusic;

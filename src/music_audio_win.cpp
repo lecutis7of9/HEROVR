@@ -1,7 +1,7 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR (Ilya Mezerowsky).
 // Update 19: the MUSIC page's player (music_audio.hpp): Media Foundation's
 // source reader decodes, WASAPI (shared, event driven) plays, on a thread
-// of its own; another looks through the Music folder.
+// of its own; another looks through the music folders (sub-folders too).
 #include "spidy/music_audio.hpp"
 #include "spidy/phone_music.hpp"
 #ifndef NOMINMAX
@@ -99,7 +99,8 @@ struct Player::Impl {
     std::mutex listLock;
     std::vector<Track> listed;
     bool listFresh{};
-    std::wstring folder;
+    std::wstring folder;               // shown: where to put songs (the first of folders)
+    std::vector<std::wstring> folders; // 0.0.74 test 10 MUSIC KEPT: every one read, sub-folders too
     std::thread player, scanner;
 
     // The player thread's own.
@@ -128,7 +129,11 @@ struct Player::Impl {
 
     explicit Impl(std::wstring own = {}) {
         try {
-            folder = own.empty() ? phoneMusicFolder() : std::move(own); // 0.0.74: the vehicle player's own folder
+            // 0.0.74 test 10 MUSIC KEPT: Documents\HERO VR\Music then the install's Music folder (musicFolders),
+            // or the one folder a player was given.
+            folders = own.empty() ? musicFolders() : std::vector<std::wstring>{std::move(own)};
+            if (!folders.empty())
+                folder = folders.front();
         } catch (...) {
         }
         shown.folder = utf8(folder);
@@ -201,21 +206,13 @@ struct Player::Impl {
         std::vector<std::pair<std::string, uint64_t>> last;
         bool first = true;
         while (!quit) {
+            // 0.0.74 test 10 MUSIC KEPT: every folder, sub-folders too (musicFiles), as full paths, a song
+            // found twice kept once.
             std::vector<std::pair<std::string, uint64_t>> files;
-            if (!folder.empty()) {
-                CreateDirectoryW(folder.c_str(), nullptr);
-                WIN32_FIND_DATAW found{};
-                const HANDLE find = FindFirstFileW((folder + L"\\*").c_str(), &found);
-                if (find != INVALID_HANDLE_VALUE) {
-                    do {
-                        if (found.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN))
-                            continue;
-                        const uint64_t bytes = (static_cast<uint64_t>(found.nFileSizeHigh) << 32) | found.nFileSizeLow;
-                        files.emplace_back(utf8(found.cFileName), bytes);
-                    } while (!quit && FindNextFileW(find, &found) && files.size() < 5000);
-                    FindClose(find);
-                }
-            }
+            for (const auto& f : folders)
+                CreateDirectoryW(f.c_str(), nullptr);
+            for (const auto& [path, bytes] : musicFiles(folders, &quit))
+                files.emplace_back(utf8(path), bytes);
             std::sort(files.begin(), files.end());
             if (first || files != last) {
                 auto songs = songList(files);
@@ -302,7 +299,7 @@ struct Player::Impl {
         closeSong();
         if (t < 0 || t >= static_cast<int>(list.size()))
             return false;
-        const std::wstring path = folder + L"\\" + wide(list[static_cast<size_t>(t)].file);
+        const std::wstring path = wide(list[static_cast<size_t>(t)].file); // 0.0.74 test 10: the full path
         if (FAILED(MFCreateSourceReaderFromURL(path.c_str(), nullptr, reader.put())))
             return false;
         reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);

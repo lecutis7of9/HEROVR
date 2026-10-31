@@ -106,6 +106,9 @@ if (Get-Process -Name 'Spider-Man2', 'SM2VRLauncher' -ErrorAction SilentlyContin
 }
 
 # 3. Copy, keeping what is replaced
+# 0.0.74 test 10 MUSIC KEPT: nothing is ever copied into the mod folder's Music folder (his songs; they now live in
+# Documents\HERO VR\Music, which this never touches).
+$entries = @($entries | Where-Object { $_[1] -notmatch '^(?i)Music[\\/]' })
 $keep = Join-Path $root $keepName
 $kept = 0
 foreach ($e in $entries) {

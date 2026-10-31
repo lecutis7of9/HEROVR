@@ -369,6 +369,111 @@ class Music(unittest.TestCase):
             self.assertEqual(readme.read_text(), 'mine')
             (pathlib.Path(d) / 'blocked').write_text('')
             self.assertIn('could not', live.ensure_music_folder(pathlib.Path(d) / 'blocked'))
+            # 0.0.74 test 10: an older README of ours is brought up to date (it said sub-folders are not read).
+            readme.write_text("Spider-Man 2 VR: the wrist hologram's MUSIC page (page 5) plays ... Sub-folders are not read.")
+            self.assertIn('kept through updates', live.ensure_music_folder(d, pathlib.Path(d) / 'Docs' / 'HERO VR' / 'Music'))
+            self.assertEqual(readme.read_text(encoding='utf-8'), live.MUSIC_README)
+            self.assertIn('Sub-folders are read too', live.MUSIC_README)
+            self.assertNotIn('Sub-folders are not read', live.MUSIC_README)
+
+
+class MusicKept(unittest.TestCase):
+    """0.0.74 test 10 MUSIC KEPT: an install's songs are copied once into Documents/HERO VR/Music, checked, never
+    moved or deleted, and a song already there (or copied before) is not copied again."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = pathlib.Path(self.tmp.name)
+        self.old = self.d / 'Downloads' / 'HERO-VR-Launcher-0.0.73'
+        self.new = self.d / 'Downloads' / 'HERO-VR-Launcher-0.0.74'
+        for r in (self.old, self.new):
+            (r / 'tools').mkdir(parents=True)
+            (r / 'tools' / 'launch-game-vr.ps1').write_text('x')
+        (self.old / 'Music' / 'Album').mkdir(parents=True)
+        (self.old / 'Music' / 'one.mp3').write_bytes(b'one' * 100)
+        (self.old / 'Music' / 'Album' / 'two.FLAC').write_bytes(b'two' * 100)
+        (self.old / 'Music' / 'README.txt').write_text('not a song')
+        (self.old / 'Music' / '._one.mp3').write_bytes(b'mac')
+        (self.old / 'Music' / 'empty.wav').write_bytes(b'')
+        self.songs = self.d / 'Documents' / 'HERO VR' / 'Music'
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_sources(self):
+        (self.new / 'Music').mkdir()
+        (self.d / 'Downloads' / 'not-hero' / 'Music').mkdir(parents=True)
+        (self.d / 'Downloads' / 'HERO-VR-Launcher-0.0.74-backup' / '0.0.73' / 'Music').mkdir(parents=True)
+        (self.new / '_before-0.0.72-test' / 'Music').mkdir(parents=True)
+        found = [str(f.relative_to(self.d)).replace('\\', '/') for f in live.old_music_folders(self.new)]
+        self.assertEqual(found[0], 'Downloads/HERO-VR-Launcher-0.0.74/Music')
+        self.assertIn('Downloads/HERO-VR-Launcher-0.0.73/Music', found)
+        self.assertIn('Downloads/HERO-VR-Launcher-0.0.74-backup/0.0.73/Music', found)
+        self.assertIn('Downloads/HERO-VR-Launcher-0.0.74/_before-0.0.72-test/Music', found)
+        self.assertNotIn('Downloads/not-hero/Music', found)
+
+    def test_copied_checked_and_never_deleted(self):
+        lines = live.keep_music(self.new, self.songs)
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn('2 songs copied from', lines[0])
+        self.assertEqual((self.songs / 'one.mp3').read_bytes(), b'one' * 100)
+        self.assertEqual((self.songs / 'Album' / 'two.FLAC').read_bytes(), b'two' * 100)  # sub-folders kept
+        self.assertFalse((self.songs / 'README.txt').exists())
+        self.assertFalse((self.songs / 'empty.wav').exists())
+        self.assertFalse(list(self.songs.rglob('*.part')))
+        # the originals are all still there
+        self.assertEqual((self.old / 'Music' / 'one.mp3').read_bytes(), b'one' * 100)
+        self.assertTrue((self.old / 'Music' / 'Album' / 'two.FLAC').exists())
+        self.assertTrue((self.old / 'Music' / 'README.txt').exists())
+        # once: nothing more the next time
+        self.assertEqual(live.keep_music(self.new, self.songs), [])
+
+    def test_existing_and_deleted_songs_not_copied_again(self):
+        self.songs.mkdir(parents=True)
+        (self.songs / 'Mine').mkdir()
+        (self.songs / 'Mine' / 'ONE.mp3').write_bytes(b'one' * 100)  # the same song (name and size), elsewhere
+        lines = live.keep_music(self.new, self.songs)
+        self.assertIn('1 song copied', lines[0])
+        self.assertFalse((self.songs / 'one.mp3').exists())
+        (self.songs / 'Album' / 'two.FLAC').unlink()  # he deleted it: it stays deleted
+        self.assertEqual(live.keep_music(self.new, self.songs), [])
+        self.assertFalse((self.songs / 'Album' / 'two.FLAC').exists())
+
+    def test_name_taken_by_another_song(self):
+        self.songs.mkdir(parents=True)
+        (self.songs / 'one.mp3').write_bytes(b'other song')
+        live.keep_music(self.new, self.songs)
+        self.assertEqual((self.songs / 'one.mp3').read_bytes(), b'other song')  # never over his
+        self.assertEqual((self.songs / 'one (2).mp3').read_bytes(), b'one' * 100)
+
+    def test_bad_copy_is_dropped(self):
+        real = live.shutil.copyfile
+
+        def broken(src, dst):
+            real(src, dst)
+            with open(dst, 'r+b') as f:
+                f.write(b'X')
+        live.shutil.copyfile = broken
+        try:
+            lines = live.keep_music(self.new, self.songs)
+        finally:
+            live.shutil.copyfile = real
+        self.assertTrue(any('could not be copied' in line for line in lines), lines)
+        self.assertEqual(live.songs_in(self.songs), [])
+        self.assertFalse(list(self.songs.rglob('*.part')))
+        self.assertTrue((self.old / 'Music' / 'one.mp3').exists())
+        # a later start tries again
+        self.assertIn('2 songs copied', live.keep_music(self.new, self.songs)[0])
+
+    def test_own_folder_and_blocked(self):
+        self.assertEqual(live.keep_music(self.new, self.old / 'Music', sources=[self.old / 'Music']), [])
+        (self.d / 'file').write_text('')
+        self.assertIn('could not copy', live.keep_music(self.new, self.d / 'file' / 'Music')[0])
+
+    def test_launcher_calls_it(self):
+        s = (pathlib.Path(__file__).resolve().parents[1] / 'tools' / 'run_game_vr.py').read_text(encoding='utf-8')
+        self.assertIn("documents_folder()/'HERO VR'/'Music'", s)
+        self.assertIn('live_settings.keep_music(ROOT, songs_folder)', s)
 
 
 class WebStyleMigration(unittest.TestCase):

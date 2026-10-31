@@ -1,4 +1,6 @@
 #include "spidy/phone_music.hpp"
+#include "spidy/music_player.hpp"
+#include "spidy/vehicle074.hpp"
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -8,10 +10,12 @@
 #include <shlobj.h>
 #include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <cwctype>
 #include <deque>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 namespace spidy {
@@ -162,33 +166,25 @@ struct PhoneMusic::Player {
     void load() {
         if (opened)
             return;
-        const std::wstring folder = phoneMusicFolder();
         files.clear();
         names.clear();
-        WIN32_FIND_DATAW found{};
-        const HANDLE find = FindFirstFileW((folder + L"\\*").c_str(), &found);
+        // 0.0.74 test 10 MUSIC KEPT: Documents\HERO VR\Music, then the install's Music folder, sub-folders
+        // too (musicFiles skips folders' links, hidden, system and empty files and macOS's ._ twins, and
+        // keeps a song found in both once). The phone's MCI player takes the formats isSong names.
         std::vector<std::wstring> songs;
-        if (find != INVALID_HANDLE_VALUE) {
-            do {
-                // Not a folder, a hidden or system file, an empty one, nor
-                // the twin macOS leaves beside each file it copies (._name),
-                // which no player opens.
-                constexpr DWORD unlisted =
-                    FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM;
-                const bool skipped = (found.dwFileAttributes & unlisted) ||
-                                     (!found.nFileSizeHigh && !found.nFileSizeLow) ||
-                                     std::wstring_view(found.cFileName).starts_with(L"._");
-                if (!skipped && isSong(found.cFileName))
-                    songs.push_back(found.cFileName);
-            } while (FindNextFileW(find, &found));
-            FindClose(find);
-        }
-        std::sort(songs.begin(), songs.end(), [](const std::wstring& a, const std::wstring& b) {
-            return _wcsicmp(a.c_str(), b.c_str()) < 0;
+        for (auto& song : musicFiles(musicFolders()))
+            if (isSong(song.first))
+                songs.push_back(std::move(song.first));
+        const auto base = [](const std::wstring& p) {
+            const auto slash = p.find_last_of(L"\\/");
+            return slash == std::wstring::npos ? p.c_str() : p.c_str() + slash + 1;
+        };
+        std::stable_sort(songs.begin(), songs.end(), [&](const std::wstring& a, const std::wstring& b) {
+            return _wcsicmp(base(a), base(b)) < 0;
         });
-        for (const auto& n : songs) {
-            names.push_back(phoneSongName(utf8(n), static_cast<int>(files.size())));
-            files.push_back(folder + L"\\" + n);
+        for (auto& path : songs) {
+            names.push_back(phoneSongName(utf8(base(path)), static_cast<int>(files.size())));
+            files.push_back(std::move(path));
         }
         track = std::clamp(track, 0, std::max(0, static_cast<int>(files.size()) - 1));
         failed = false;
@@ -353,10 +349,116 @@ void PhoneMusic::setAutoplay(bool on) {
     player_->send(Player::Command::settings);
 }
 
-std::wstring phoneMusicFolder() {
+namespace {
+std::wstring installMusicFolder() {
     const std::wstring folder = spidyHome() + L"\\Music";
     CreateDirectoryW(folder.c_str(), nullptr);
     return folder;
+}
+// The README in the songs' folder: written when missing, or rewritten when it is an older one of ours.
+void writeMusicReadme(const std::wstring& folder) {
+    const std::wstring path = folder + L"\\README.txt"; // vehicle074::musicReadmeName
+    const char* text = vehicle074::musicReadme;
+    const DWORD size = static_cast<DWORD>(std::strlen(text));
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        char old[4096]{};
+        DWORD got = 0;
+        const BOOL read = ReadFile(file, old, sizeof old - 1, &got, nullptr);
+        CloseHandle(file);
+        const std::string_view was(old, got);
+        if (!read || (was.size() == size && was == text) || !was.starts_with("HERO VR ") || !was.ends_with("Made by Agent Mulder.\r\n"))
+            return; // the same, or not ours: left alone
+    }
+    file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+        return;
+    DWORD wrote = 0;
+    WriteFile(file, text, size, &wrote, nullptr);
+    CloseHandle(file);
+}
+bool sameFolder(const std::wstring& a, const std::wstring& b) {
+    auto trim = [](std::wstring s) {
+        while (s.size() > 3 && (s.back() == L'\\' || s.back() == L'/'))
+            s.pop_back();
+        return s;
+    };
+    return _wcsicmp(trim(a).c_str(), trim(b).c_str()) == 0;
+}
+void findSongs(const std::wstring& folder, int depth, std::vector<std::pair<std::wstring, uint64_t>>& out,
+               std::unordered_set<std::string>& seen, size_t& visited, const std::atomic<bool>* stop) {
+    WIN32_FIND_DATAW found{};
+    const HANDLE find = FindFirstFileExW((folder + L"\\*").c_str(), FindExInfoBasic, &found, FindExSearchNameMatch,
+                                         nullptr, FIND_FIRST_EX_LARGE_FETCH);
+    if (find == INVALID_HANDLE_VALUE)
+        return;
+    std::vector<std::wstring> below;
+    do {
+        if (stop && stop->load(std::memory_order_relaxed))
+            break;
+        const std::wstring_view name(found.cFileName);
+        if (name == L"." || name == L"..")
+            continue;
+        // Hidden or system (desktop.ini, Thumbs.db, $RECYCLE.BIN), and macOS's ._ twins, which nothing opens.
+        if ((found.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) || name.starts_with(L"._"))
+            continue;
+        if (found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            // Sub-folders, but no junction or link (a loop, or a whole other drive).
+            if (depth < music::folderDepth && !(found.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                below.push_back(folder + L"\\" + found.cFileName);
+            continue;
+        }
+        const uint64_t bytes = (static_cast<uint64_t>(found.nFileSizeHigh) << 32) | found.nFileSizeLow;
+        const std::string name8 = utf8(found.cFileName);
+        if (music::playable(name8, bytes) && seen.insert(music::songKey(name8, bytes)).second)
+            out.emplace_back(folder + L"\\" + found.cFileName, bytes);
+    } while (out.size() < music::songCap && ++visited < 200000 && FindNextFileW(find, &found));
+    FindClose(find);
+    std::sort(below.begin(), below.end(), [](const std::wstring& a, const std::wstring& b) {
+        return _wcsicmp(a.c_str(), b.c_str()) < 0;
+    });
+    for (const auto& sub : below) {
+        if (out.size() >= music::songCap || visited >= 200000 || (stop && stop->load(std::memory_order_relaxed)))
+            break;
+        findSongs(sub, depth + 1, out, seen, visited, stop);
+    }
+}
+} // namespace
+
+std::wstring phoneMusicFolder() {
+    std::wstring folder;
+    PWSTR docs{};
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_CREATE, nullptr, &docs)) && docs && *docs)
+        folder = std::wstring(docs) + L"\\" + vehicle074::musicFolderUnderDocuments;
+    CoTaskMemFree(docs);
+    if (!folder.empty()) {
+        SHCreateDirectoryExW(nullptr, folder.c_str(), nullptr); // made with HERO VR, or already there
+        const DWORD is = GetFileAttributesW(folder.c_str());
+        if (is != INVALID_FILE_ATTRIBUTES && (is & FILE_ATTRIBUTE_DIRECTORY)) {
+            writeMusicReadme(folder);
+            return folder;
+        }
+    }
+    return installMusicFolder(); // no Documents folder (or it cannot be written): the install's own
+}
+
+std::vector<std::wstring> musicFolders() {
+    std::vector<std::wstring> folders{phoneMusicFolder()};
+    const std::wstring install = installMusicFolder();
+    if (!sameFolder(install, folders.front()))
+        folders.push_back(install);
+    return folders;
+}
+
+std::vector<std::pair<std::wstring, uint64_t>> musicFiles(const std::vector<std::wstring>& folders,
+                                                         const std::atomic<bool>* stop) {
+    std::vector<std::pair<std::wstring, uint64_t>> out;
+    std::unordered_set<std::string> seen;
+    size_t visited = 0;
+    for (const auto& folder : folders)
+        if (!folder.empty() && out.size() < music::songCap)
+            findSongs(folder, 0, out, seen, visited, stop);
+    return out;
 }
 
 std::wstring spidyHome() {

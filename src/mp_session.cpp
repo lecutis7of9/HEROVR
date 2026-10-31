@@ -2,6 +2,7 @@
 // Made by Agent Mulder. Version 0.0.73 MP SOLO TEST: the network thread (mp_session.hpp).
 #include "spidy/mp_session.hpp"
 
+#include "spidy/hero_modes.hpp"
 #include "spidy/mp_socket.hpp"
 
 #include <algorithm>
@@ -91,6 +92,9 @@ SessionView Session::view() const {
     v.sent = sent_, v.received = received_, v.rejected = rejected_;
     v.dropped = loop_.dropped() + buddy_.dropped();
     v.status = status_;
+    v.hosting = hosting_ && running_;
+    v.beacons = beacons_;
+    v.lanText = lanText_;
     if (!running_)
         return v;
     const Sampled s = buddyOn_ ? buddy_.sample(t) : (config_.echo ? loop_.sample(t) : Sampled{});
@@ -126,12 +130,30 @@ void Session::run() {
     Peer callPeer{};
     bool callOk = false;
     double nextResolve = 0, nextCall = 0, nextCallLog = 0;
-    const std::string idle = echoOk ? "loopback" : (wantCall ? "calling" : "waiting for a buddy");
+    const std::string idle = echoOk ? "loopback" : (wantCall ? "calling" : cfg.host ? "hosting" : "waiting for a buddy");
+    // 0.0.74 MP LOBBY: hosting - the beacon's targets (each LAN's broadcast) and a random id for this session.
+    std::vector<uint32_t> targets = cfg.announceTo;
+    std::string lan;
+    if (cfg.host) {
+        const auto mine = localAddresses();
+        for (uint32_t a : mine)
+            lan += (lan.empty() ? "" : ", ") + addrText({a, 0}).substr(0, addrText({a, 0}).rfind(':'));
+        if (targets.empty())
+            targets = broadcastTargets(mine);
+        if (!game.allowBroadcast())
+            log("MP LOBBY: broadcast refused (" + game.lastError() + ") - friends will not see you in their list");
+    }
+    const uint32_t hostId = static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count() * 2654435761u) ^
+                            (static_cast<uint32_t>(port) << 16) ^ 0x5eedu;
+    double nextAnnounce = 0;
     {
         std::lock_guard<std::mutex> g(lock_);
         running_ = true;
         port_ = port;
         link_.self(gamePeer);
+        link_.keepPeer = cfg.host;
+        hosting_ = cfg.host;
+        lanText_ = lan;
         status_ = idle;
         peerText_ = wantCall ? cfg.peerHost + ":" + std::to_string(cfg.peerPort) : std::string{};
     }
@@ -337,7 +359,28 @@ void Session::run() {
                 buddyPeer = link_.peer();
                 calling_ = callOk && !buddyOn_;
             }
-            // 0.0.74 MP JOIN: calling the friend - a HELLO a second until he answers (both calling at once
+            // 0.0.74 MP LOBBY: the host's beacon, once a second, to every LAN's broadcast (and announceTo).
+            if (cfg.host && t >= nextAnnounce) {
+                nextAnnounce = t + cfg.announceEvery;
+                Beacon b;
+                b.protocol = version;
+                b.gamePort = port;
+                b.hostId = hostId;
+                b.name = myName;
+                {
+                    std::lock_guard<std::mutex> g(lock_);
+                    b.players = static_cast<uint8_t>(1 + (buddyOn_ && link_.peerIsGame() ? 1 : 0));
+                    if (haveLocal_ && local_.hero < hero_modes::heroes)
+                        b.hero = local_.hero, b.heroName = hero_modes::heroNames[local_.hero];
+                }
+                const auto bytes = encodeBeacon(b);
+                uint32_t ok = 0;
+                for (uint32_t a : targets)
+                    ok += game.send(bytes.data(), bytes.size(), {a, cfg.lobbyPort}) ? 1u : 0u;
+                std::lock_guard<std::mutex> g(lock_);
+                beacons_ += ok ? 1 : 0;
+            }
+                        // 0.0.74 MP JOIN: calling the friend - a HELLO a second until he answers (both calling at once
             // also opens most home routers' UDP doors for each other).
             if (callOk && !buddyNow && t >= nextCall) {
                 nextCall = t + cfg.callEvery;

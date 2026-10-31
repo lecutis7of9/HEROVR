@@ -3,8 +3,10 @@
 // delay, the partner placement and the buddy handshake - pure parts first, then the real session on
 // 127.0.0.1 (a loopback round trip and a handshake from a raw socket).
 #include "spidy/combat38.hpp"
+#include "spidy/hero_modes.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/mp_body.hpp"
+#include "spidy/mp_lobby.hpp"
 #include "spidy/mp_ghost.hpp"
 #include "spidy/mp_net.hpp"
 #include "spidy/mp_prop_look.hpp"
@@ -1274,6 +1276,176 @@ void testPropsEffects() {
     check(encodeProps(full, buf, sizeof buf) <= propsMostBytes, "tail with fx fits");
 }
 
+// 0.0.74 MP LOBBY: the host's beacon, where it goes, the list the launcher shows, MP-LOBBY.txt, a host keeps his friend.
+void testLobby() {
+    Beacon b;
+    b.protocol = version;
+    b.gamePort = 39471;
+    b.players = 1;
+    b.hero = 3;
+    b.hostId = 0xdeadbeefu;
+    b.name = "mary jane";
+    b.heroName = "MILES MORALES";
+    const auto bytes = encodeBeacon(b);
+    check(bytes.size() == beaconBytes && bytes.size() == 52 && bytes[0] == 'H' && bytes[1] == 'V' && bytes[2] == 'L' &&
+              bytes[3] == 'B' && bytes[4] == 1,
+          "LOBBY: the beacon is 52 bytes, 'HVLB' version 1");
+    check(bytes[6] == (39471 & 255) && bytes[7] == (39471 >> 8) && bytes[12] == 0xef && bytes[15] == 0xde,
+          "LOBBY: little-endian port and host id (Lobby.cs reads the same bytes)");
+    Beacon d;
+    check(decodeBeacon(bytes.data(), bytes.size(), d) && d.name == "MARY JANE" && d.heroName == "MILES MORALES" &&
+              d.gamePort == 39471 && d.hero == 3 && d.players == 1 && d.maxPlayers == 2 && d.hostId == 0xdeadbeefu &&
+              d.protocol == version,
+          "LOBBY: the beacon round trips (name upper case)");
+    Beacon longName = b;
+    longName.name = "a name far longer than sixteen";
+    check(decodeBeacon(encodeBeacon(longName).data(), beaconBytes, d) && d.name.size() == 16, "LOBBY: a long name is cut to 16");
+    auto bad = bytes;
+    bad[20] ^= 1;
+    check(!decodeBeacon(bad.data(), bad.size(), d), "LOBBY: a damaged beacon (checksum) is dropped");
+    check(!decodeBeacon(bytes.data(), 51, d) && !decodeBeacon(nullptr, 52, d), "LOBBY: short / null dropped");
+    auto v2 = bytes;
+    v2[4] = 2;
+    check(!decodeBeacon(v2.data(), v2.size(), d), "LOBBY: another lobby version is not read");
+    Packet hp;
+    hp.type = hello;
+    hp.role = roleGame;
+    uint8_t game[128];
+    const size_t gn = encode(hp, game, sizeof game);
+    check(gn && !decodeBeacon(game, gn, d), "LOBBY: a game packet is not a beacon");
+    for (int i = 0; i < 300; ++i) {
+        std::vector<uint8_t> junk(52);
+        for (auto& c : junk)
+            c = static_cast<uint8_t>(std::rand());
+        decodeBeacon(junk.data(), junk.size(), d); // never crashes
+    }
+
+    // Targets: the all-ones broadcast plus each LAN's /24 broadcast; loopback, 0.0.0.0, link-local and repeats skipped.
+    const auto t = broadcastTargets({0xc0a80105u, 0x7f000001u, 0, 0xc0a801c8u, 0x0a000002u, 0xa9fe0101u});
+    check(t.size() == 3 && t[0] == 0xffffffffu && t[1] == 0xc0a801ffu && t[2] == 0x0a0000ffu,
+          "LOBBY: beacons go to 255.255.255.255 and each LAN's x.y.z.255 once");
+
+    // The list: heard hosts, the same host on two networks once, forgotten 4 s after the last beacon.
+    HostList list;
+    Beacon h1 = b, h2 = b;
+    h2.hostId = 7;
+    h2.name = "ALICE";
+    list.heard(0xc0a80114u, h1, 0);
+    list.heard(0x0a000014u, h1, .5); // the same host through the other network card
+    list.heard(0xc0a80120u, h2, 1);
+    auto l = list.list(1);
+    check(l.size() == 2 && l[0].beacon.name == "ALICE" && l[1].addr == 0xc0a80114u, "LOBBY: listed by name, a host once");
+    h1.players = 2;
+    list.heard(0xc0a80114u, h1, 3);
+    l = list.list(5.5);
+    check(l.size() == 1 && l[0].beacon.players == 2, "LOBBY: updated (FULL), the silent one forgotten after 4 s");
+    check(list.list(7.5).empty(), "LOBBY: all forgotten when the hosts stop");
+
+    // MP-LOBBY.txt (the launcher writes it; the game reads it).
+    auto s = parseLobbySetting("\xef\xbb\xbfmode=join\r\njoin = 192.168.1.20:39471\r\nname=peter # me\r\nhost=MARY\r\n");
+    check(s.mode == LobbySetting::join && s.joinHost == "192.168.1.20" && s.joinPort == 39471 && s.name == "PETER" &&
+              s.hostName == "MARY",
+          "LOBBY: MP-LOBBY.txt join (UTF-8 mark, CRLF, comments)");
+    check(parseLobbySetting("join=10.0.0.5").mode == LobbySetting::none, "LOBBY: no mode: nothing");
+    check(parseLobbySetting("mode=join\n").mode == LobbySetting::none, "LOBBY: join without an address: nothing");
+    s = parseLobbySetting("MODE=Host\nname=Peter");
+    check(s.mode == LobbySetting::host && s.name == "PETER", "LOBBY: host");
+    LobbySetting w;
+    w.mode = LobbySetting::join;
+    w.joinHost = "10.1.2.3";
+    w.joinPort = 39472;
+    w.name = "BOB";
+    w.hostName = "MARY";
+    const auto back = parseLobbySetting(lobbyText(w));
+    check(back.mode == w.mode && back.joinHost == w.joinHost && back.joinPort == w.joinPort && back.name == "BOB" &&
+              back.hostName == "MARY",
+          "LOBBY: lobbyText round trips");
+
+    // A host keeps his friend: a third game's HELLO is ignored while the friend is here, let in once he has gone.
+    BuddyLink link;
+    link.timeout = 3;
+    link.keepPeer = true;
+    const Peer pal{0x0a000002u, 39470}, third{0x0a000003u, 39470};
+    Packet h;
+    h.type = hello;
+    h.role = roleGame;
+    std::snprintf(h.name, sizeof h.name, "PAL");
+    check(link.onPacket(h, pal, 0) == BuddyLink::Step::welcome, "LOBBY: the friend joins the host");
+    check(link.onPacket(h, third, 1) == BuddyLink::Step::ignore && link.peer() == pal, "LOBBY: a third player is kept out (FULL)");
+    check(link.onPacket(h, pal, 1.5) == BuddyLink::Step::welcome && link.peer() == pal, "LOBBY: the friend's own HELLO still answered");
+    check(link.onPacket(h, third, 5) == BuddyLink::Step::welcome && link.peer() == third, "LOBBY: the place is free once he has gone");
+}
+
+void testSessionHost() {
+    // A listener where the launcher would be, a hosting game announcing to it, a friend joining from the list.
+    UdpSocket ear;
+    const uint16_t lp = 39649;
+    check(ear.openShared(0, lp), "HOST: the list listens (shared port)");
+    UdpSocket ear2;
+    check(ear2.openShared(0, lp), "HOST: a second listener on the same lobby port (launcher + game) is allowed");
+    ear2.close();
+    Session host, pal;
+    SessionConfig ch, cp;
+    ch.port = 39650;
+    ch.echo = cp.echo = false;
+    ch.host = true;
+    ch.lobbyPort = lp;
+    ch.announceTo = {loopbackAddr};
+    ch.announceEvery = .2;
+    ch.name = "mary";
+    ch.buddyTimeout = cp.buddyTimeout = 1.0;
+    check(host.start(ch), "HOST: the hosting game starts");
+    HostList list;
+    PoseState hp = sample();
+    hp.hero = 2;
+    double t0 = host.now();
+    std::vector<HostSeen> seen;
+    while (host.now() - t0 < 2.0 && seen.empty()) {
+        host.publish(hp);
+        uint8_t buf[256];
+        Peer from;
+        int n;
+        while ((n = ear.receive(buf, sizeof buf, from)) > 0) {
+            Beacon b;
+            if (decodeBeacon(buf, static_cast<size_t>(n), b))
+                list.heard(from.addr, b, host.now());
+        }
+        seen = list.list(host.now());
+        sleepMs(10);
+    }
+    check(seen.size() == 1 && seen[0].beacon.name == "MARY" && seen[0].beacon.players == 1 && seen[0].beacon.hero == 2 &&
+              seen[0].beacon.heroName == hero_modes::heroNames[2] && seen[0].beacon.gamePort == host.view().port,
+          "HOST: heard in the list: name, hero, 1 of 2, its game port");
+    check(host.view().hosting && host.view().status == "hosting", "HOST: the view says hosting");
+    // JOIN from the list = call the address it was heard from.
+    if (!seen.empty()) {
+        cp.port = 39660;
+        cp.peerHost = addrText({seen[0].addr, 0}).substr(0, addrText({seen[0].addr, 0}).rfind(':'));
+        cp.peerPort = seen[0].beacon.gamePort;
+        cp.name = "peter";
+        check(pal.start(cp), "HOST: the friend's game starts from the list");
+        bool full = false;
+        t0 = host.now();
+        while (host.now() - t0 < 3.0 && !full) {
+            host.publish(hp);
+            pal.publish(sample());
+            uint8_t buf[256];
+            Peer from;
+            int n;
+            while ((n = ear.receive(buf, sizeof buf, from)) > 0) {
+                Beacon b;
+                if (decodeBeacon(buf, static_cast<size_t>(n), b))
+                    full = full || (b.players == 2 && host.view().buddyName == "PETER" && pal.view().buddyName == "MARY");
+            }
+            sleepMs(10);
+        }
+        check(full, "HOST: joined from the list; the beacon now says 2 of 2 (FULL)");
+        pal.stop();
+    }
+    host.stop();
+    check(!host.view().hosting, "HOST: stopped: not hosting");
+}
+
 int main() {
     testCrcAndHash();
     testRoundTrip();
@@ -1294,6 +1466,8 @@ int main() {
     testPropsOnGhost();
     testPropsThrown();
     testPropsEffects();
+    testLobby();
+    testSessionHost();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

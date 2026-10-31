@@ -22,6 +22,7 @@
 
 #include "spidy/mp_socket.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace spidy::mp {
@@ -113,7 +114,56 @@ bool resolvePeer(const std::string& host, uint16_t port, Peer& out, std::string&
 UdpSocket::~UdpSocket() { close(); }
 bool UdpSocket::isOpen() const { return handle_ != none; }
 
-bool UdpSocket::open(uint32_t addr, uint16_t port) {
+std::vector<uint32_t> localAddresses() {
+    std::vector<uint32_t> out;
+#ifdef _WIN32
+    WSADATA data;
+    if (WSAStartup(MAKEWORD(2, 2), &data) != 0)
+        return out;
+#endif
+    char name[256]{};
+    if (::gethostname(name, sizeof name - 1) == 0) {
+        addrinfo hints{};
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        addrinfo* got = nullptr;
+        if (::getaddrinfo(name, nullptr, &hints, &got) == 0) {
+            for (addrinfo* i = got; i; i = i->ai_next)
+                if (i->ai_family == AF_INET && i->ai_addr) {
+                    const uint32_t a = ntohl(reinterpret_cast<const sockaddr_in*>(i->ai_addr)->sin_addr.s_addr);
+                    if (a && (a >> 24) != 127 && std::find(out.begin(), out.end(), a) == out.end())
+                        out.push_back(a);
+                }
+            ::freeaddrinfo(got);
+        }
+    }
+#ifdef _WIN32
+    WSACleanup();
+#endif
+    return out;
+}
+
+bool UdpSocket::open(uint32_t addr, uint16_t port) { return openImpl(addr, port, false); }
+bool UdpSocket::openShared(uint32_t addr, uint16_t port) { return openImpl(addr, port, true); }
+
+bool UdpSocket::allowBroadcast() {
+    if (handle_ == none)
+        return false;
+#ifdef _WIN32
+    BOOL on = TRUE;
+    const int r = ::setsockopt(native(handle_), SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
+#else
+    int on = 1;
+    const int r = ::setsockopt(native(handle_), SOL_SOCKET, SO_BROADCAST, &on, sizeof on);
+#endif
+    if (r != 0) {
+        error_ = describe("broadcast");
+        return false;
+    }
+    return true;
+}
+
+bool UdpSocket::openImpl(uint32_t addr, uint16_t port, bool shared) {
     close();
     error_.clear();
 #ifdef _WIN32
@@ -154,6 +204,20 @@ bool UdpSocket::open(uint32_t addr, uint16_t port) {
         return false;
     }
 #endif
+    if (shared) {
+#ifdef _WIN32
+        BOOL on = TRUE;
+        ::setsockopt(s, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&on), sizeof on);
+        ::setsockopt(s, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&on), sizeof on);
+#else
+        int on = 1;
+        ::setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+#ifdef SO_REUSEPORT
+        ::setsockopt(s, SOL_SOCKET, SO_REUSEPORT, &on, sizeof on);
+#endif
+        ::setsockopt(s, SOL_SOCKET, SO_BROADCAST, &on, sizeof on);
+#endif
+    }
     sockaddr_in a{};
     a.sin_family = AF_INET;
     a.sin_port = htons(port);

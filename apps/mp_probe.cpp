@@ -5,10 +5,12 @@
 //                                         (0.0.74 MP JOIN: with a peer it calls that game, like MP-PEER.txt)
 //                                         a second (tests/mp_buddy_tests.py drives the Test Buddy at it)
 //   spidy_mp_probe golden                 hex of fixed packets (the Python buddy must encode the same bytes)
+#include "spidy/mp_lobby.hpp"
 #include "spidy/mp_net.hpp"
 #include "spidy/mp_prop_look.hpp"
 #include "spidy/mp_props.hpp"
 #include "spidy/mp_session.hpp"
+#include "spidy/mp_socket.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -89,7 +91,13 @@ int main(int argc, char** argv) {
         const double seconds = std::atof(argv[3]);
         if (argc >= 5)
             cfg.echo = false; // a game in a join: PLAYER 2 is only the friend ("" = listen, the friend calls)
-        if (argc >= 5 && argv[4][0]) { // 0.0.74 MP JOIN: call another game (two probes = two players)
+        if (argc >= 5 && !std::strncmp(argv[4], "host", 4)) { // 0.0.74 MP LOBBY: host[:lobby port] (that port: to 127.0.0.1 only)
+            cfg.host = true;
+            if (argv[4][4] == ':') {
+                cfg.lobbyPort = static_cast<uint16_t>(std::atoi(argv[4] + 5));
+                cfg.announceTo = {0x7f000001u};
+            }
+        } else if (argc >= 5 && argv[4][0]) { // 0.0.74 MP JOIN: call another game (two probes = two players)
             const PeerSetting peer = parsePeerSetting(argv[4]);
             if (!peer.ok) {
                 std::fprintf(stderr, "bad peer '%s'\n", argv[4]);
@@ -139,12 +147,13 @@ int main(int argc, char** argv) {
                 std::printf("{\"t\": %.1f, \"running\": %d, \"port\": %u, \"visible\": %d, \"buddy\": %d, \"name\": \"%s\", "
                             "\"ping\": %d, \"hero\": %u, \"suit\": %u, \"root\": [%.3f, %.3f, %.3f], \"actions\": %u, "
                             "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d, "
-                            "\"props\": %u, \"propKinds\": [%u, %u, %u, %u], \"lines\": %u, \"fxTaken\": %u}\n",
+                            "\"props\": %u, \"propKinds\": [%u, %u, %u, %u], \"lines\": %u, \"fxTaken\": %u, "
+                            "\"hosting\": %d, \"beacons\": %u}\n",
                             t, v.running, v.port, v.visible, v.buddy, v.buddyName.c_str(), v.pingMs, v.state.hero,
                             v.state.suit, v.state.root.x, v.state.root.y, v.state.root.z, v.state.actions, v.sent,
                             v.received, v.rejected, v.peerGame, v.calling, static_cast<unsigned>(v.state.props.items),
                             v.state.props.item[0].kind, v.state.props.item[1].kind, v.state.props.item[2].kind,
-                            v.state.props.item[3].kind, static_cast<unsigned>(v.state.props.lines), inbox.taken());
+                            v.state.props.item[3].kind, static_cast<unsigned>(v.state.props.lines), inbox.taken(), v.hosting, v.beacons);
                 for (const auto& l : s.takeLog())
                     std::printf("# %s\n", l.c_str());
                 std::fflush(stdout);
@@ -156,6 +165,65 @@ int main(int argc, char** argv) {
             std::printf("# %s\n", l.c_str());
         return 0;
     }
-    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port]] [name] | golden\n");
+    if (argc >= 3 && !std::strcmp(argv[1], "lobbyfile")) { // 0.0.74 MP LOBBY: how the game reads an MP-LOBBY.txt
+        std::FILE* f = std::fopen(argv[2], "rb");
+        if (!f)
+            return 2;
+        std::string text;
+        char buf[4096];
+        size_t n;
+        while ((n = std::fread(buf, 1, sizeof buf, f)) > 0)
+            text.append(buf, n);
+        std::fclose(f);
+        const LobbySetting l = parseLobbySetting(text);
+        std::printf("{\"mode\": \"%s\", \"join\": \"%s\", \"port\": %u, \"name\": \"%s\", \"host\": \"%s\"}\n",
+                    l.mode == LobbySetting::host ? "host" : l.mode == LobbySetting::join ? "join" : "none", l.joinHost.c_str(),
+                    l.joinPort, l.name.c_str(), l.hostName.c_str());
+        return 0;
+    }
+    if (argc >= 3 && !std::strcmp(argv[1], "lobby")) { // 0.0.74 MP LOBBY: the launcher's list, as JSON once a second
+        const double seconds = std::atof(argv[2]);
+        const uint16_t port = argc >= 4 ? static_cast<uint16_t>(std::atoi(argv[3])) : lobbyPort;
+        UdpSocket sock;
+        if (!sock.openShared(0, port)) {
+            std::fprintf(stderr, "lobby: %s\n", sock.lastError().c_str());
+            return 2;
+        }
+        HostList hosts;
+        const auto clock = [] {
+            return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        };
+        const double t0 = clock();
+        double nextPrint = t0 + 1;
+        uint8_t buf[2048];
+        while (clock() - t0 < seconds) {
+            Peer from;
+            int n;
+            while ((n = sock.receive(buf, sizeof buf, from)) > 0) {
+                Beacon b;
+                if (decodeBeacon(buf, static_cast<size_t>(n), b))
+                    hosts.heard(from.addr, b, clock());
+            }
+            if (clock() >= nextPrint) {
+                nextPrint += 1;
+                std::printf("{\"t\": %.1f, \"hosts\": [", clock() - t0);
+                bool first = true;
+                for (const auto& h : hosts.list(clock())) {
+                    std::printf("%s{\"addr\": \"%s\", \"name\": \"%s\", \"hero\": %u, \"heroName\": \"%s\", "
+                                "\"players\": %u, \"max\": %u, \"protocol\": %u}",
+                                first ? "" : ", ", addrText({h.addr, h.beacon.gamePort}).c_str(), h.beacon.name.c_str(),
+                                h.beacon.hero, h.beacon.heroName.c_str(), h.beacon.players, h.beacon.maxPlayers,
+                                h.beacon.protocol);
+                    first = false;
+                }
+                std::printf("]}\n");
+                std::fflush(stdout);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return 0;
+    }
+    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port] | host[:lobby port]] [name] | "
+                         "lobby <seconds> [port] | lobbyfile <path> | golden\n");
     return 1;
 }

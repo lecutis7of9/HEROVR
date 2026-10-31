@@ -126,7 +126,7 @@ namespace Sm2VrLauncher
 
         void HeroLayoutSheets()
         {
-            var home = new[] { Theme.R(210, 286, 760, 346), Theme.R(36, 76, 1108, 556), Theme.R(36, 76, 1108, 556), Theme.R(36, 76, 1108, 556), Theme.R(230, 286, 720, 346) };
+            var home = new[] { Theme.R(210, 286, 760, 346), Theme.R(36, 76, 1108, 556), Theme.R(36, 76, 1108, 556), Theme.R(36, 76, 1108, 556), Theme.R(230, 286, 720, 346), MultiplayerBounds() };
             for (int i = 0; i < home.Length && i < sheetBounds.Length; i++)
             {
                 var r = home[i];
@@ -549,7 +549,7 @@ namespace Sm2VrLauncher
                 y += 56;
                 // The classic bar's other sections, which the new design's five tiles do not show.
                 int x = 0;
-                foreach (var link in new[] { new { T = "Status", G = "status", S = SheetStatus }, new { T = "Reports & log", G = "reports", S = SheetReports }, new { T = "Credits", G = "credits", S = SheetCredits } })
+                foreach (var link in new[] { new { T = "Status", G = "status", S = SheetStatus }, new { T = "Reports & log", G = "reports", S = SheetReports }, new { T = "Credits", G = "credits", S = SheetCredits }, new { T = "Multiplayer", G = "play", S = SheetMultiplayer } })
                 {
                     var b = new AccentButton(link.T, ButtonKind.Secondary) { Glyph = link.G };
                     int bw = link.T.Length > 8 ? 190 : 150;
@@ -559,7 +559,7 @@ namespace Sm2VrLauncher
                     area.Controls.Add(b);
                     x += bw + 12;
                 }
-                var moreSub = new TextLabel("The checks behind PLAY VR, bug and crash reports with the session log, and who made the mod.", Theme.Ui(11.5f), Theme.Sub) { Wrap = false };
+                var moreSub = new TextLabel("Checks, reports, credits, and playing with a friend.", Theme.Ui(11.5f), Theme.Sub) { Wrap = false };
                 moreSub.Bounds = Theme.R(x + 4, y + 14, 1040 - x - 4, 20);
                 area.Controls.Add(moreSub);
                 y += 56;

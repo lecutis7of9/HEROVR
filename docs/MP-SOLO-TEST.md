@@ -30,7 +30,36 @@ network, accounts or servers, and no game memory address is read or written by i
   draw failure hides the remote player and logs one console line (`MP SOLO TEST: ...`). Never a crash,
   never a fall back to flatscreen.
 
-## Playing with a friend (0.0.74 MP JOIN)
+## Host and join from the launcher (0.0.74 MP LOBBY, same network)
+
+No addresses to type. Both players need this build and the same home network (Wi-Fi or cable).
+
+1. Host: in the launcher, open **Multiplayer** (header button, or the "Multiplayer" link on the new design's home),
+   type a name, press **Host**, then PLAY VR. The game announces itself on the network once a second
+   (UDP broadcast on port 39469: name, hero, 1/2 or 2/2 players).
+2. Friend: open **Multiplayer** in his launcher. "Games on this network" lists the host within a second or two
+   (name, hero, address, players). Press **Join** next to it, then PLAY VR. FULL games and games from another
+   mod version cannot be joined.
+3. Firewall: one line in the sheet says it - *The first time, Windows asks to let Spider-Man 2 and the launcher
+   through the firewall: tick Private networks and press Allow (look at the desktop if you are in the headset).*
+   Or press **Allow through firewall**: it adds one inbound rule "HERO VR multiplayer" for UDP 39469-39474 on
+   Private networks (Windows asks for admin). If someone clicked "Block" before, that choice wins until the rule
+   is added or the block is removed in Windows Defender Firewall.
+4. **Leave** deletes the setting; a running game picks up Host / Join / Leave within 2 s (`MP LOBBY: changed in
+   the launcher - the network restarts`). The console shows `MP LOBBY: hosting as 'MARY' ...` or
+   `MP LOBBY: joining 'MARY' at 192.168.1.20:39470 ...`.
+
+The launcher writes `%APPDATA%\Spidy\MP-LOBBY.txt` (`mode=host` or `mode=join`, `join=IP:port`, `name=`,
+`host=`). While it exists it wins over MP-PEER.txt; MP-PEER.txt (below) stays the advanced fallback, for VPNs and
+the internet. A host keeps its first friend (a 2-player game): another caller is ignored until he leaves.
+The list is the launcher only for now (no in-headset list yet). Broadcast reaches the same subnet only
+(255.255.255.255 and each network card's /24); on networks that block broadcast (some guest Wi-Fi, office
+networks), use MP-PEER.txt.
+
+Check without a second PC: `spidy_mp_probe lobby 30` lists hosts on the network; `spidy_mp_probe run 39480 60
+host Mary` hosts.
+
+## Playing with a friend by address (0.0.74 MP JOIN, advanced)
 
 Two real games, one on each PC, see each other: the friend is PLAYER 2, standing in front of you
 (his moves, his hero and suit, his name and ping on the nameplate). Both players need this build.
@@ -99,12 +128,14 @@ the buddy (a shot every half second, a shock ring every 3 s); `--props all` adds
 |---|---|
 | `include/spidy/mp_net.hpp`, `src/mp_net.cpp` | packet encode/decode, validation, interpolation, echo delay, partner pose, buddy handshake (pure) |
 | `include/spidy/mp_socket.hpp`, `src/mp_socket.cpp` | non-blocking UDP (Winsock / BSD) |
+| `include/spidy/mp_lobby.hpp`, `src/mp_lobby.cpp` | 0.0.74 MP LOBBY: the 52-byte host beacon, the host list, MP-LOBBY.txt (pure) |
+| `tools/launcher/src/Lobby.cs`, `MainForm.Multiplayer.cs` | the launcher's Multiplayer sheet: Host, the list, Join, firewall rule |
 | `include/spidy/mp_session.hpp`, `src/mp_session.cpp` | the network thread: loopback echo, buddy link, ping |
 | `include/spidy/mp_ghost.hpp`, `src/mp_ghost.cpp` | placement, stick figure, nameplate (pure) |
 | `include/spidy/mp_body.hpp`, `src/mp_body.cpp` | 0.0.73 MPSUIT PLAYER 2 BODY: the shaded hero body for a suit with no mod model, and its LOOK (pure) |
 | `src/game_xr.cpp` | wiring: publish the pose, draw the remote player (after the suit, before the mirror) |
 | `tools/mp_test_buddy.py` | the Test Buddy (stdlib only), `--selftest` matches `spidy_mp_probe golden` byte for byte |
-| `tests/mp_tests.cpp`, `tests/mp_buddy_tests.py` | round trip, versioning, malformed packets, interpolation, loopback delay, buddy handshake, live buddy |
+| `tests/mp_tests.cpp`, `tests/mp_buddy_tests.py`, `tests/hero074_mp_lobby_tests.py` | round trip, versioning, malformed packets, interpolation, loopback delay, buddy handshake, live buddy |
 
 ## CONFIRMED / CANDIDATE
 
@@ -116,6 +147,7 @@ the buddy (a shot every half second, a shock ring every 3 s); `--props all` adds
 | Loopback + Test Buddy on localhost | CONFIRMED (Linux tests and CI; in-headset: to be confirmed by the tester) |
 | Buddy on another PC over LAN (opt-in: empty file `%APPDATA%\Spidy\MP-LAN-ON.txt`, UDP 39470 through Windows Firewall) | CANDIDATE |
 | Remote player's placement in the world (drawn relative to you, ~3 m ahead; not at its real world position) | CANDIDATE design for the solo test |
+| LAN lobby beacon / list / MP-LOBBY.txt (no game data, mod-internal) | CONFIRMED by construction (Linux tests); across two real Windows PCs and Windows Firewall: CANDIDATE, to be confirmed by the tester |
 | Game's own suit id at `+0x8c` | NOT USED |
 | Any game body / actor address for a remote player | NOT USED (none invented) |
 | Steam P2P / NAT traversal / more than 2 players | FUTURE |

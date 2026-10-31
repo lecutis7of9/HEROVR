@@ -533,6 +533,8 @@ BuddyLink::Step BuddyLink::onPacket(const Packet& p, Peer from, double now) {
     if (p.type == hello) {
         if ((p.role != roleBuddy && p.role != roleGame) || p.protocol != version)
             return Step::ignore;
+        if (keepPeer && connected(now) && !(from == peer_))
+            return Step::ignore; // 0.0.74 MP LOBBY: full - he keeps calling until the place is free
         take(from, p.role, p.name, now);
         ++hellos_;
         return Step::welcome;

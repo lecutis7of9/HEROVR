@@ -19,6 +19,14 @@ Build 12 fixes VR not starting after Stop VR ("handle is invalid" at finding the
 
 Build 11 makes the optional HERO VR design smoother (the orb and the lag fixes) and adds 0.0.63 to Revert (USE 0.0.63, 0.0.62, 0.0.6 or 0.0.5). The classic design stays the default: the launcher asks once whether to restart with the new design, Options > Launcher design switches between the two at any time, and the launcher opens the classic design by itself if the new one fails to start. Hold Shift while starting it, or start it with `--classic`, to open the classic design.
 
+## Multiplayer (same network)
+
+The **Multiplayer** sheet (header button; "Multiplayer" link on the new design's home) hosts or joins a friend's game on the same
+network with no IP typing: **Host** announces this PC, the list shows games heard on the network (name, hero, players), **Join**
+picks one, **Leave** stops. It writes `%APPDATA%\Spidy\MP-LOBBY.txt` for the game; the game's `MP-PEER.txt` stays the advanced
+fallback for VPNs. **Allow through firewall** adds one inbound rule for UDP 39469-39474 on Private networks. See
+[docs/MP-SOLO-TEST.md](../../docs/MP-SOLO-TEST.md).
+
 ## Privacy and reports
 
 The launcher never sends anything on its own. There is no tracking, no account and no server of ours: every report

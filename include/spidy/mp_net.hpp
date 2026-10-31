@@ -243,6 +243,9 @@ class BuddyLink {
     void dial(Peer friendAddr) { dial_ = friendAddr; }
     Peer dialing() const { return dial_; }
     void self(Peer own) { self_ = own; }
+    // 0.0.74 MP LOBBY: a host keeps the friend it has - another game's HELLO is ignored while he is still here
+    // (a 2-player game; the beacon says FULL). Off: a new HELLO takes over (the Test Buddy's old behaviour).
+    bool keepPeer = false;
 
   private:
     void take(Peer from, uint8_t role, const char* name, double now);

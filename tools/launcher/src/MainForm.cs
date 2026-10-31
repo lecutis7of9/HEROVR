@@ -96,11 +96,12 @@ namespace Sm2VrLauncher
             BuildUpdates();
             BuildCredits();
             BuildReports();
+            BuildMultiplayer();
             BuildFooter();
             BuildBar();
             foreach (var pg in pages)
                 foreach (Control c in pg.Controls) { var gp = c as GlassPanel; if (gp != null) gp.HandleClicked += (s, e) => tabs.Select(-1); }
-            tabs.SelectedChanged += (s, e) => { HeroSheetChanged(); ShowPage(tabs.Selected); };
+            tabs.SelectedChanged += (s, e) => { HeroSheetChanged(); ShowPage(tabs.Selected); MultiplayerShown(tabs.Selected == SheetMultiplayer); };
             slide.Tick += (s, e) => SlideStep();
             KeyPreview = true;
             if (hero)
@@ -235,6 +236,10 @@ namespace Sm2VrLauncher
             tip.SetToolTip(btnTikTok, "Agent Mulder on TikTok (@agentmulder)");
             tip.SetToolTip(btnDiscord, "The SM2 VR Discord server");
             tip.SetToolTip(updatePill, "Open Updates");
+            // 0.0.74 MP LOBBY: the bar is full (six sections round PLAY VR), so Multiplayer sits in the header.
+            btnMultiplayer = Add(this, new AccentButton("Multiplayer", ButtonKind.Ghost) { Glyph = "play", TextFont = Theme.UiBold(12) }, 262, 26, 140, 30);
+            btnMultiplayer.Click += (s, e) => tabs.Select(tabs.Selected == SheetMultiplayer ? -1 : SheetMultiplayer);
+            tip.SetToolTip(btnMultiplayer, "Play with a friend on the same network: HOST, or JOIN a game from the list - no addresses to type");
 
             wordmark = Add(this, new Wordmark(), 444, 80, 700, 190);
 
@@ -246,6 +251,7 @@ namespace Sm2VrLauncher
                 Theme.R(36, 76, 1108, 556),    // Updates (and Build, Revert)
                 Theme.R(36, 76, 1108, 556),    // Credits
                 Theme.R(230, 286, 720, 346),   // Reports and the session log
+                MultiplayerBounds(),           // 0.0.74 MP LOBBY: Multiplayer (HOST / the games on this network / JOIN)
             };
             pages = new Page[sheetBounds.Length];
             for (int i = 0; i < pages.Length; i++)
@@ -953,6 +959,7 @@ namespace Sm2VrLauncher
                 MessageBox.Show(this, "A build from source is running. Close anyway? (The build stops.)", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             { e.Cancel = true; return; }
             settings.Save();
+            if (!e.Cancel) DisposeMultiplayer();
             base.OnFormClosing(e);
             if (hero && !e.Cancel) HeroClosed();
         }

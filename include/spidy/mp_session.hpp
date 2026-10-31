@@ -9,6 +9,7 @@
 // player. view() is the remote player as the render thread should draw it (interpolated 0.1 s behind).
 // Any socket error or bad packet: the remote player is hidden and a line is logged - never a throw, never
 // a stall of the caller (publish / view only take a short lock).
+#include "spidy/mp_lobby.hpp"
 #include "spidy/mp_net.hpp"
 
 #include <atomic>
@@ -34,6 +35,12 @@ struct SessionConfig {
     uint16_t peerPort = defaultPort;
     std::string name;             // cleanName'd; empty: "HERO VR"
     double callEvery = 1.0;       // seconds between HELLOs while calling
+    // 0.0.74 MP LOBBY: HOST - announce this game on the LAN (mp_lobby.hpp beacon to the lobby port, every
+    // announceEvery s) and keep the first friend who joins. announceTo empty: broadcastTargets(localAddresses()).
+    bool host = false;
+    uint16_t lobbyPort = spidy::mp::lobbyPort;
+    std::vector<uint32_t> announceTo;
+    double announceEvery = 1.0;
 };
 struct SessionView {
     bool running{};               // the socket is up
@@ -49,6 +56,9 @@ struct SessionView {
     uint16_t port{};
     uint32_t sent{}, received{}, rejected{}, dropped{};
     std::string status;           // one short line for the console / wrist
+    bool hosting{};               // 0.0.74 MP LOBBY: announcing on the LAN
+    uint32_t beacons{};           // beacons sent
+    std::string lanText;          // this PC's LAN addresses ("192.168.1.5"), for the log and the friend
 };
 class Session {
   public:
@@ -79,7 +89,9 @@ class Session {
     PoseState local_{};
     Interpolator loop_, buddy_;
     BuddyLink link_;
-    bool running_{}, buddyOn_{}, calling_{};
+    bool running_{}, buddyOn_{}, calling_{}, hosting_{};
+    uint32_t beacons_{};
+    std::string lanText_;
     std::string peerText_;
     float loopPing_ = -1, buddyPing_ = -1;
     uint16_t port_{};

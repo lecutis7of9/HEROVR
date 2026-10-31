@@ -12559,6 +12559,11 @@ DWORD WINAPI run(void*) {
                             static std::string mpPeerText, mpRunText;
                             static spidy::mp::PeerSetting mpPeer;
                             static bool mpPeerFile = false, mpRunPeer = false;
+                            // 0.0.74 MP LOBBY: %APPDATA%\Spidy\MP-LOBBY.txt (the launcher's HOST / JOIN) wins over
+                            // MP-PEER.txt (the advanced fallback): mode=host announces this game on the LAN, mode=join
+                            // calls the host picked in the launcher's list. mpLobbyText: the file as last read.
+                            static std::string mpLobbyText;
+                            static spidy::mp::LobbySetting mpLobby;
                             static ULONGLONG mpPeerCheck = 0;
                             try {
                                 const auto mpDir = [] {
@@ -12568,20 +12573,32 @@ DWORD WINAPI run(void*) {
                                 if (GetTickCount64() >= mpPeerCheck) {
                                     mpPeerCheck = GetTickCount64() + 2000;
                                     const std::wstring dir = mpDir();
-                                    mpPeerFile = false;
-                                    std::string text;
-                                    if (!dir.empty()) {
-                                        const std::wstring peerFile = dir + L"\\MP-PEER.txt";
-                                        HANDLE f = CreateFileW(peerFile.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                                                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-                                        if (f != INVALID_HANDLE_VALUE) {
-                                            char buf[4096];
-                                            DWORD got = 0;
-                                            if (ReadFile(f, buf, sizeof buf, &got, nullptr))
-                                                text.assign(buf, buf + got), mpPeerFile = true;
-                                            CloseHandle(f);
-                                        }
+                                    const auto readSmall = [&dir](const wchar_t* name, std::string& out) {
+                                        out.clear();
+                                        if (dir.empty())
+                                            return false;
+                                        HANDLE f = CreateFileW((dir + L"\\" + name).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE |
+                                                               FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+                                        if (f == INVALID_HANDLE_VALUE)
+                                            return false;
+                                        char buf[4096];
+                                        DWORD got = 0;
+                                        const bool ok = ReadFile(f, buf, sizeof buf, &got, nullptr) != 0;
+                                        if (ok)
+                                            out.assign(buf, buf + got);
+                                        CloseHandle(f);
+                                        return ok;
+                                    };
+                                    std::string lobbyText;
+                                    readSmall(L"MP-LOBBY.txt", lobbyText);
+                                    if (lobbyText != mpLobbyText) {
+                                        mpLobbyText = lobbyText;
+                                        mpLobby = spidy::mp::parseLobbySetting(lobbyText);
+                                        if (!lobbyText.empty() && mpLobby.mode == spidy::mp::LobbySetting::none)
+                                            consoleLine("MP LOBBY: MP-LOBBY.txt says neither host nor join - ignored");
                                     }
+                                    std::string text;
+                                    mpPeerFile = readSmall(L"MP-PEER.txt", text);
                                     if (text != mpPeerText || !mpPeerFile) {
                                         mpPeerText = mpPeerFile ? text : std::string{};
                                         mpPeer = spidy::mp::parsePeerSetting(mpPeerText);
@@ -12590,14 +12607,18 @@ DWORD WINAPI run(void*) {
                                                         "203.0.113.7 or 203.0.113.7:39470) - not calling");
                                     }
                                 }
-                                const bool mpJoin = mpPeerFile && mpPeer.ok;
+                                const bool mpLobbyOn = mpLobby.mode != spidy::mp::LobbySetting::none;
+                                const bool mpJoin = mpLobbyOn || (mpPeerFile && mpPeer.ok);
+                                // what the network runs from: a change restarts it (MP-LOBBY.txt first)
+                                const std::string& mpWantText = mpLobbyOn ? mpLobbyText : mpPeerText;
                                 // 0.0.74 test 1: MP SOLO TEST OFF (the default) is choice 0, ON choice 1
                                 const bool mpOn = c38(combat38::mpSoloTest) == 1 || mpJoin;
-                                if (mpSession->started() && (mpJoin != mpRunPeer || (mpJoin && mpRunText != mpPeerText))) {
+                                if (mpSession->started() && (mpJoin != mpRunPeer || (mpJoin && mpRunText != mpWantText))) {
                                     mpSession->stop();
                                     mpFollow = {};
                                     mpFacing.reset();
-                                    consoleLine("MP JOIN: MP-PEER.txt changed - the network restarts");
+                                    consoleLine(mpLobbyOn || !mpLobbyText.empty() ? "MP LOBBY: changed in the launcher - the network restarts"
+                                                                                  : "MP JOIN: MP-PEER.txt changed - the network restarts");
                                 }
                                 if (mpOn && !mpSession->started()) {
                                     spidy::mp::SessionConfig cfg;
@@ -12605,7 +12626,14 @@ DWORD WINAPI run(void*) {
                                     const std::wstring dir = mpDir();
                                     if (!dir.empty())
                                         cfg.lan = GetFileAttributesW((dir + L"\\MP-LAN-ON.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
-                                    if (mpJoin) { // a friend on another PC: every interface, PLAYER 2 is him (no echo)
+                                    if (mpLobbyOn) { // 0.0.74 MP LOBBY: HOST (announce, wait) or JOIN (call the host picked)
+                                        cfg.lan = true;
+                                        cfg.echo = false;
+                                        cfg.name = mpLobby.name;
+                                        cfg.host = mpLobby.mode == spidy::mp::LobbySetting::host;
+                                        if (!cfg.host)
+                                            cfg.peerHost = mpLobby.joinHost, cfg.peerPort = mpLobby.joinPort;
+                                    } else if (mpJoin) { // a friend on another PC: every interface, PLAYER 2 is him (no echo)
                                         cfg.lan = true;
                                         cfg.echo = false;
                                         cfg.peerHost = mpPeer.host;
@@ -12614,9 +12642,16 @@ DWORD WINAPI run(void*) {
                                     }
                                     mpSession->start(cfg);
                                     mpRunPeer = mpJoin;
-                                    mpRunText = mpPeerText;
+                                    mpRunText = mpWantText;
                                     mpFacing.reset();
-                                    if (mpJoin)
+                                    const std::string myName = cfg.name.empty() ? std::string("HERO VR") : cfg.name;
+                                    if (mpLobbyOn && cfg.host)
+                                        consoleLine("MP LOBBY: hosting as '" + myName + "' - friends on this network see you in the launcher's "
+                                                    "Multiplayer list (UDP " + std::to_string(cfg.port) + "; allow the firewall prompt on Private networks)");
+                                    else if (mpLobbyOn)
+                                        consoleLine("MP LOBBY: joining " + (mpLobby.hostName.empty() ? std::string("the host") : "'" + mpLobby.hostName + "'") +
+                                                    " at " + mpLobby.joinHost + ":" + std::to_string(mpLobby.joinPort) + " as '" + myName + "'");
+                                    else if (mpJoin)
                                         consoleLine("MP JOIN: on - calling " + mpPeer.host + ":" + std::to_string(mpPeer.port) + " as '" +
                                                     (mpPeer.name.empty() ? std::string("HERO VR") : mpPeer.name) +
                                                     "', listening on UDP " + std::to_string(cfg.port) + " (every interface)");

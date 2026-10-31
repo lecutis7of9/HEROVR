@@ -70,7 +70,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/batmobile074.cpp
             src/roster_page.cpp src/holo_roster.cpp
             src/mp_net.cpp src/mp_socket.cpp src/mp_session.cpp src/mp_ghost.cpp src/mp_body.cpp
-            src/mp_props.cpp src/mp_prop_look.cpp) # 0.0.73 MP SOLO TEST (+ MPSUIT PLAYER 2 BODY): the UDP pipe
+            src/mp_props.cpp src/mp_prop_look.cpp src/mp_lobby.cpp) # 0.0.73 MP SOLO TEST (+ MPSUIT PLAYER 2 BODY): the UDP pipe
 target_include_directories(spidy_core PUBLIC include)
 # 0.0.73 MP SOLO TEST: the network thread (std::thread) and Winsock.
 find_package(Threads REQUIRED)

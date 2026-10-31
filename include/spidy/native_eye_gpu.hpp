@@ -83,6 +83,10 @@ uint32_t eyeHistoryFault();
 float eyeHistoryMs();
 // Update 15: the eye AA mode, history percent and monitor rate in force.
 uint32_t eyeAA();
+// 0.0.74 test 10 SM1STYLE (sm1style.hpp): while locked no FXAA, EYE AA history or CAS sharpen run on the eyes; the
+// settings asked for (eyeAA, eyeHistory, eyeSharpen) are kept and apply again once it is released.
+void setSm1StyleLock(bool on);
+bool sm1StyleLock();
 uint32_t eyeHistory();
 uint32_t monitorRateNow();
 // The views the eyes of the pair with this serial were rendered from (the

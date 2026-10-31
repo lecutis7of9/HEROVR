@@ -1643,6 +1643,35 @@ def engine_taa_line(t):
 # Update 34.1: SpidyXrStart's options field: its offset in the config and the ENGINE TAA bit.
 OPTIONS_OFFSET = struct.calcsize('<4I7Q2If')
 ENGINE_TAA_OPTION = 0x800000
+# 0.0.74 test 10 SM1STYLE (include/spidy/sm1style.hpp startOption): SpidyVR's eye anti-aliasing at this start.
+SM1STYLE_OPTION = 0x1000000
+SM1STYLE_UPSCALE = 67   # SpidyVR's DEFAULT_UPSCALE (its tools/run_game_vr.py:52, eye_resolution.hpp:25)
+
+
+def apply_sm1style(a, live_text):
+    """0.0.74 test 10 SM1STYLE, the default (live.txt `sm1style = off` turns it off for the next start): SpidyVR's
+    eye settings for this start, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale
+    and supersample 100, eyes at 67%, the game's own mip bias and filtering (SpidyVR changes neither), the game's
+    sharpening at its lowest, no ENGINE TAA. Sets a.sm1style; returns the console line."""
+    a.sm1style = live_settings.sm1style_on(live_text)
+    if not a.sm1style:
+        return ('SM1STYLE: OFF (live.txt sm1style = off): the 0.0.72 eye picture, our FXAA / EYE AA history / '
+                'sharpen as set. sm1style = on (or no line) + restart VR for SpidyVR\'s per-eye TAA.')
+    forced = [f'{name} {old} -> {new}' for name, old, new in (
+        ('render scale', a.render_scale, 100), ('supersample', a.supersample, 100),
+        ('upscale', a.upscale, SM1STYLE_UPSCALE), ('mip bias', a.mip_bias, 'game'),
+        ('anisotropy', a.anisotropy, 0)) if old != new]
+    if a.game_sharpening:
+        forced.append('game sharpening -> lowest')
+    if a.engine_taa:
+        forced.append('ENGINE TAA -> off')
+    a.render_scale = 100 if not a.size else a.render_scale
+    a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, SM1STYLE_UPSCALE, 'game', 0
+    a.game_sharpening = a.engine_taa = False
+    return ("SM1STYLE ON (default): SpidyVR's eye anti-aliasing - the game's TAA in each eye, eyes at 67%, "
+            'Halton(2,3) jitter, render scale 100%, supersample 100%, the game\'s mip bias; our FXAA, EYE AA history '
+            'and CAS sharpen locked off' + (' (kept over: ' + ', '.join(forced) + ')' if forced else '') +
+            '. live.txt sm1style = off + restart VR for the 0.0.72 picture.')
 
 
 def eye_aa_line(aa, asked):
@@ -2198,7 +2227,8 @@ def settle_display(running):
 def picture_kept(a):
     """The game's picture settings a session leaves as the player has them (vr_display.PICTURE names)."""
     return tuple(name for name, kept in (('depth_of_field', a.game_depth_of_field or a.keep_game_settings),
-                                         ('sharpening', a.game_sharpening or a.keep_game_settings),
+                                         ('sharpening', (a.game_sharpening or a.keep_game_settings) and
+                                          not getattr(a, 'sm1style', False)),  # 0.0.74 test 10 SM1STYLE
                                          ('comfort', a.keep_game_settings)) if kept)
 
 
@@ -2444,6 +2474,8 @@ def main():
             a.supersample = chosen
             print(f'Eye supersample {chosen}% from next-launch.txt (chosen on the wrist hologram; delete the file '
                   'or set it back to 100 there to return to the default).', flush=True)
+    # 0.0.74 test 10 SM1STYLE: last, so no argument, next-launch.txt or keep-settings changes what it sets.
+    print(apply_sm1style(a, live_text), flush=True)
     if not 50 <= a.building_reach <= 400:
         p.error('Use a building reach of 50..400% of the game\'s distance')
     if not MONITOR_RATES[0] <= a.monitor_rate <= MONITOR_RATES[1]:
@@ -2816,7 +2848,8 @@ def session(a, startup, session_off=()):
                              (0x20000 if a.own_shadows else 0) | (0 if reflections else 0x40000) |
                              (0x100000 if a.no_prompt_help else 0) | (0x80000 if a.eye_lens_distances else 0) |
                              (0x200000 if a.arcade_webs else 0) | (0x400000 if a.eye_aa == 'off' else 0) |
-                             (ENGINE_TAA_OPTION if a.engine_taa else 0)) + \
+                             (ENGINE_TAA_OPTION if a.engine_taa else 0) |
+                             (SM1STYLE_OPTION if getattr(a, 'sm1style', False) else 0)) + \
             runtime_path(manifest) + struct.pack('<14I', a.snap_turn, a.haptics, a.screen_size, a.smooth_turn,
                                                  a.render_scale, a.weight, a.eye_height, a.arm_length, a.hud,
                                                  a.flip_speed, a.upscale, a.monitor_rate, a.screen_depth,

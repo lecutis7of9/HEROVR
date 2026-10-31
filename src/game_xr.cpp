@@ -122,6 +122,7 @@
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -620,6 +621,9 @@ __declspec(dllexport) EyeSnapshot SpidyXrSnapshot;
 DWORD WINAPI SpidyStart(void*);
 DWORD WINAPI SpidyEyeTemporal(void*);
 DWORD WINAPI SpidyEngineTaa(void*); // Update 34: ENGINE TAA, 0 off, 1 on, 2 off (slow)
+// 0.0.74 test 10 SM1STYLE (stereo_probe.cpp): its record, and the safety's off.
+const spidy::sm1style::Data* SpidySm1StyleNow();
+void SpidySm1StyleStall();
 DWORD WINAPI SpidyEyeShadows(void*);
 DWORD WINAPI SpidyMonitorRate(void*);
 // Update 15: the wrist hologram's GRAPHICS page (native_eye_gpu.cpp,
@@ -1151,7 +1155,27 @@ uint32_t eyeAaNow() {
 std::atomic<bool> engineTaaArm{};
 std::atomic<bool> farShadowsArm{}; // Update 35: FAR SHADOWS' own FPS guard, the same way
 void consoleLine(const std::string& text) noexcept; // below
+// 0.0.74 test 10 SM1STYLE: running (the frame loop sets it), and the wrist rows it locks (shown UNAVAILABLE).
+std::atomic<bool> sm1StyleActive{false};
+constexpr uint32_t sm1LockedRows = 1u << static_cast<unsigned>(wrist_hud::Control::aa) |
+                                   1u << static_cast<unsigned>(wrist_hud::Control::history) |
+                                   1u << static_cast<unsigned>(wrist_hud::Control::sharpen) |
+                                   1u << static_cast<unsigned>(wrist_hud::Control::supersample);
+// 0.0.74 test 10 SM1STYLE: asked for at this start (live.txt sm1style, the launcher's option) and not fallen back,
+// or running. While it holds, nothing of ours turns EYE AA (its lens jitter and history) or ENGINE TAA on.
+bool sm1Holds() {
+    namespace s1 = spidy::sm1style;
+    const auto* d = SpidySm1StyleNow();
+    if (d && (d->flags & s1::flagLive))
+        return true;
+    return (config.options & s1::startOption) && !(d && (d->flags & s1::flagFellBack));
+}
 void pressEyeAa() {
+    if (sm1Holds() && (eyeAaNow() & 0xff) != eye_taa::on) {
+        consoleLine("EYE AA: locked off by SM1STYLE (SpidyVR's own eye anti-aliasing; live.txt sm1style = off and "
+                    "restart for the 0.0.72 picture)");
+        return;
+    }
     const uint32_t s = eyeAaNow();
     if ((s & 0xff) == eye_taa::on) {
         native_gpu::setEyeTemporal(false);
@@ -1177,6 +1201,10 @@ void pressEyeAa() {
 // Update 34: ENGINE TAA on/off. On is refused (the reason shown) unless both eyes have
 // the TAA targets; on turns EYE AA off; the FPS guard watches the next 3 s.
 void pressEngineTaa() {
+    if (sm1Holds() && engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on) {
+        consoleLine("ENGINE TAA: locked off by SM1STYLE (it already runs the game's TAA in each eye)");
+        return;
+    }
     if (engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on) {
         SpidyEngineTaa(nullptr);
         consoleLine("ENGINE TAA: off by the ENGINE TAA press");
@@ -3873,7 +3901,9 @@ DWORD WINAPI run(void*) {
                                 wristOff = wristApply.disabled() |
                                            (native_gpu::eyeSharpenFault()
                                                 ? 1u << static_cast<unsigned>(wrist_hud::Control::sharpen)
-                                                : 0u);
+                                                : 0u) |
+                                           // 0.0.74 test 10 SM1STYLE: its locked rows (UNAVAILABLE, presses do nothing).
+                                           (sm1Holds() ? sm1LockedRows : 0u);
                                 in.disabled = wristOff;
                                 // Update 17: the stick scrolls a page while the pointer
                                 // is on it; the applied text size and anything that
@@ -10259,7 +10289,12 @@ DWORD WINAPI run(void*) {
                                   (antialiased ? config.upscale | 7u << 8 : 100u) | reflections |
                                   // Update 34: -EngineTaa (options 0x800000): the eyes' buffers
                                   // get the TAA targets (0x10), for ENGINE TAA.
-                                  ((config.options & 0x800000) ? 0x10u << 8 : 0u)))),
+                                  ((config.options & 0x800000) ? 0x10u << 8 : 0u) |
+                                  // 0.0.74 test 10 SM1STYLE (options 0x1000000): SpidyVR's per-eye TAA,
+                                  // eyes at sm1style::upscalePercent (stereo_probe decides when the eyes
+                                  // are made, after its own checks).
+                                  ((config.options & spidy::sm1style::startOption)
+                                       ? spidy::sm1style::eyeTemporalBit << 8 : 0u)))),
                               "Eye anti-aliasing");
                         check(SpidyEyeShadows(reinterpret_cast<void*>(
                                   static_cast<uintptr_t>((config.options & 0x20000) ? 0 : 1))),
@@ -10509,7 +10544,8 @@ DWORD WINAPI run(void*) {
                     // (headset pixels); the history and the headset layer get the same lens.
                     std::array<std::array<float, 2>, 2> aaShift{}; // tangents, per eye
                     bool aaShifted = false;
-                    if (!flatScreen && (eyeAaNow() & 0xff) == eye_taa::on &&
+                    // 0.0.74 test 10 SM1STYLE: never while it runs (SpidyVR's jitter only; no JITTER CALM shrink).
+                    if (!flatScreen && (eyeAaNow() & 0xff) == eye_taa::on && !sm1StyleActive.load() &&
                         engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on) {
                         float jx{}, jy{};
                         eye_taa::step(eyes.serial, jx, jy);
@@ -11539,6 +11575,72 @@ DWORD WINAPI run(void*) {
                                 engine_taa::stateOf(engine) != engine_taa::on)
                                 engineTaaFallback(engine_taa::reasonOf(engine));
                             previous = engine;
+                        }
+                        {   // 0.0.74 test 10 SM1STYLE: the lock on our eye passes, its start line, the safety.
+                            namespace s1 = spidy::sm1style;
+                            static s1::StallGuard sm1Guard;
+                            static bool sm1Started{}, sm1Told{};
+                            static ULONGLONG sm1LogAt{};
+                            const auto* sd = SpidySm1StyleNow();
+                            const bool live = sd && (sd->flags & s1::flagLive);
+                            sm1StyleActive.store(live);
+                            native_gpu::setSm1StyleLock(live);
+                            if (live && (eyeAaNow() & 0xff) == eye_taa::on) {
+                                native_gpu::setEyeTemporal(false);
+                                eyeAaState = eye_taa::pack(eye_taa::off, 0);
+                                OutputDebugStringA("EYE AA: off (SM1STYLE runs)\n");
+                            }
+                            if (live && engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on)
+                                SpidyEngineTaa(nullptr);
+                            if (live && !sm1Started) {
+                                sm1Started = true;
+                                char line[400];
+                                std::snprintf(line, sizeof line,
+                                              "SM1STYLE ON: SpidyVR's eye anti-aliasing - the game's TAA in each eye, "
+                                              "eyes rendered at %u%% (%ux%u, shown %ux%u), Halton(2,3) jitter both "
+                                              "eyes, %u phases, render scale %u%%, supersample %u%%; our FXAA, EYE AA "
+                                              "history, CAS sharpen and ENGINE TAA locked off",
+                                              sd->percent, sd->renderWidth, sd->renderHeight,
+                                              SpidyXrData.eyeWidth, SpidyXrData.eyeHeight,
+                                              s1::phases(SpidyXrData.eyeWidth, sd->renderWidth),
+                                              config.renderScale, native_gpu::supersample());
+                                consoleLine(line);
+                            }
+                            if (sd && sm1Guard.frame(sd->leftJobs, newPair, live)) {
+                                SpidySm1StyleStall();
+                                consoleLine("SM1STYLE: off for this session, eye pairs stopped reaching the headset "
+                                            "(our eye passes are back)");
+                            }
+                            if (sd && sd->reason && sd->reason != s1::stalled && !sm1Told &&
+                                (config.options & s1::startOption)) {
+                                sm1Told = true;
+                                const bool runs = sd->reason == s1::upscaleWrong || sd->reason == s1::hookFailed;
+                                consoleLine(std::string(runs ? "SM1STYLE warning: " : "SM1STYLE: not used, ") +
+                                            s1::reasonText(sd->reason) +
+                                            (runs ? (sd->reason == s1::upscaleWrong
+                                                         ? " (live.txt sm1style = off + restart VR if the eyes look wrong)"
+                                                         : "")
+                                                  : " - the 0.0.72 eye picture this session"));
+                            }
+                            const ULONGLONG now = GetTickCount64();
+                            if (sd && (sd->flags & s1::flagSteps) && now - sm1LogAt >= 10000) {
+                                sm1LogAt = now;
+                                char line[256];
+                                std::snprintf(line, sizeof line,
+                                              "SM1STYLE: TemporalAa ran L %llu/%llu R %llu/%llu, history L %llu R "
+                                              "%llu, AA writes L %llu R %llu, queued L %llu R %llu\n",
+                                              static_cast<unsigned long long>(sd->ran[0]),
+                                              static_cast<unsigned long long>(sd->calls[0]),
+                                              static_cast<unsigned long long>(sd->ran[1]),
+                                              static_cast<unsigned long long>(sd->calls[1]),
+                                              static_cast<unsigned long long>(sd->history[0]),
+                                              static_cast<unsigned long long>(sd->history[1]),
+                                              static_cast<unsigned long long>(sd->aaWrites[0]),
+                                              static_cast<unsigned long long>(sd->aaWrites[1]),
+                                              static_cast<unsigned long long>(sd->queued[0]),
+                                              static_cast<unsigned long long>(sd->queued[1]));
+                                OutputDebugStringA(line);
+                            }
                         }
                         {   // Update 35: FAR SHADOWS' FPS guard: a mode the press chose that halves
                             // the frame rate goes back to OFF (the reason shown).
@@ -14263,7 +14365,8 @@ DWORD WINAPI run(void*) {
 } // namespace
 // Update 34.1: every option bit this build knows (the highest: 0x800000, -EngineTaa).
 // tests/launcher_options_tests.py checks run_game_vr.py sends none past it.
-constexpr uint32_t knownOptions = 0xffffff;
+// 0.0.74 test 10: 0x1000000, SM1STYLE (sm1style.hpp startOption).
+constexpr uint32_t knownOptions = 0x1ffffff;
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     std::lock_guard life(lifecycle);
     if (worker)
@@ -14288,6 +14391,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
         std::snprintf(line, sizeof line, "VR start: options 0x%x not known to this build, skipped\n", unknown);
         OutputDebugStringA(line);
         config.options &= knownOptions;
+    }
+    // 0.0.74 test 10 SM1STYLE: SpidyVR's render scale and no supersample, whatever was asked (the launcher sends
+    // these already; an older or hand-made start still gets them).
+    if (config.options & spidy::sm1style::startOption) {
+        if (!config.eyeSize && config.renderScale != spidy::sm1style::renderScale) {
+            config.renderScale = spidy::sm1style::renderScale;
+            OutputDebugStringA("SM1STYLE: render scale 100%\n");
+        }
+        if (native_gpu::supersample() != spidy::sm1style::supersample &&
+            native_gpu::setSupersample(spidy::sm1style::supersample))
+            OutputDebugStringA("SM1STYLE: supersample 100%\n");
     }
     // A calibration is both measurements or neither.
     if ((config.eyeHeightMm == 0) != (config.armLengthMm == 0) ||
@@ -14458,6 +14572,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeAaStart(void* on) {
     const auto v = reinterpret_cast<uintptr_t>(on);
     if (v > 1)
         return 5209;
+    if (sm1Holds()) { // 0.0.74 test 10: SM1STYLE keeps EYE AA off (the value stays in live.txt for sm1style = off)
+        OutputDebugStringA("EYE AA AT START: kept off, SM1STYLE\n");
+        return 0;
+    }
     const uint32_t state = eyeAaNow() & 0xff;
     if ((v == 1 && state == eye_taa::off) || (v == 0 && state == eye_taa::on))
         pressEyeAa();

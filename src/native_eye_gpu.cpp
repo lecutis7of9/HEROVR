@@ -967,6 +967,10 @@ eye_taa::MsMedian historyMedian;
 // Eye anti-aliasing (native_eye_gpu.hpp, setEyeAA). The pass is built on the
 // first pair that wants it, under the submission and recording locks.
 std::atomic<uint32_t> aaMode{}, aaFault{};
+// 0.0.74 test 10 SM1STYLE (sm1style.hpp; game_xr sets it every frame while SpidyVR's per-eye TAA runs): no FXAA, no
+// EYE AA history and no CAS sharpen on the eyes, whatever the hologram, live.txt or the launcher asked for. The
+// asked values are kept (eyeAA / eyeHistory / eyeSharpen, live.txt) and come back when it is released.
+std::atomic<bool> sm1Lock{};
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, down; // FXAA; the downsample filter
@@ -1920,6 +1924,8 @@ std::atomic<uint32_t> cutPercent{spidy::eye_history::defaultCut};     // Update 
 std::atomic<uint32_t> lightHoldPercent{spidy::eye_history::lightHoldOn};
 std::atomic<uint32_t> keptMilli{};
 uint32_t historyNow() {
+    if (sm1Lock.load(std::memory_order_relaxed))
+        return 0; // 0.0.74 test 10 SM1STYLE
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
 }
 std::mutex viewLock;
@@ -2421,7 +2427,7 @@ void stagePair(EyePairState::Stamp stamp) {
     // Supersampled eyes cannot be copied: they are always filtered down,
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
-    const bool smooth = (down || aaMode.load() == 1) && prepareAa();
+    const bool smooth = (down || (aaMode.load() == 1 && !sm1Lock.load())) && prepareAa(); // SM1STYLE: no FXAA
     if (down && !smooth) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
@@ -3299,6 +3305,14 @@ bool setEyeAA(uint32_t mode) {
     return true;
 }
 // Update 15: the wrist hologram's GRAPHICS page reads what is in force.
+void setSm1StyleLock(bool on) {
+    if (sm1Lock.exchange(on) != on)
+        OutputDebugStringA(on ? "SM1STYLE: our FXAA, EYE AA history and CAS sharpen locked off\n"
+                              : "SM1STYLE: released; our eye passes follow their settings again\n");
+}
+bool sm1StyleLock() {
+    return sm1Lock.load();
+}
 uint32_t eyeAA() {
     return aaMode.load();
 }
@@ -3509,7 +3523,7 @@ void eyeSharpenTiming(TimingMetric& gpu, uint32_t& percent, uint32_t& code, uint
         std::lock_guard lock(copyTimingLock);
         gpu = sharpenGpu;
     }
-    percent = sharpenPercent.load();
+    percent = sm1Lock.load() ? 0u : sharpenPercent.load();
     code = sharpenFault.load();
     sharpened = sharpenPairs.load();
 }
@@ -3527,7 +3541,7 @@ float eyePassesGpuMs() {
         else
             total += clock.ms.load();
     };
-    add(staged && !aaFault.load() && (downsampling() || aaMode.load() == 1), aaClock);
+    add(staged && !aaFault.load() && (downsampling() || (aaMode.load() == 1 && !sm1Lock.load())), aaClock);
     add(staged && !historyFault.load() && historyNow(), historyClock);
     add(sharpening.load(), sharpenClock);
     return !any ? 0.f : allKnown ? total : std::numeric_limits<float>::quiet_NaN();
@@ -3604,7 +3618,7 @@ void eyeAATiming(TimingMetric& gpu, uint32_t& mode, uint32_t& code, uint64_t& sm
         gpu = aaGpu;
     }
     // 2: the supersampled eyes' downsample filter, whatever FXAA is set to.
-    mode = width && downsampling() ? 2 : aaMode.load();
+    mode = width && downsampling() ? 2 : sm1Lock.load() ? 0u : aaMode.load();
     code = aaFault.load();
     smoothed = aaPairs.load();
 }
@@ -3751,7 +3765,8 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     noteSharpenTime(slotIndex);
     // Update 16: the headset's images sharpened (in place of the copy), or
     // copied as before when sharpening is off or cannot run.
-    const uint32_t percent = sharpenPercent.load();
+    // 0.0.74 test 10 SM1STYLE: no CAS while it runs (the pass still grades COLOR / the fovea test, strength 0).
+    const uint32_t percent = sm1Lock.load() ? 0u : sharpenPercent.load();
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).

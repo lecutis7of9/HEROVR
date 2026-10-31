@@ -27,6 +27,8 @@ class LauncherOptionsTests(unittest.TestCase):
         bits = [int(b, 16) for b in re.findall(r'\((0x[0-9a-fA-F]+) if ', self.launcher[start:end])]
         bits.append(0x800000)  # ENGINE_TAA_OPTION
         self.assertIn('ENGINE_TAA_OPTION if a.engine_taa', self.launcher[start:end])
+        bits.append(0x1000000)  # SM1STYLE_OPTION (0.0.74 test 10)
+        self.assertIn("SM1STYLE_OPTION if getattr(a, 'sm1style', False)", self.launcher[start:end])
         for bit in bits:
             self.assertEqual(bit & ~self.known(), 0, hex(bit))
 

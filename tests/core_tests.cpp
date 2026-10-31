@@ -112,6 +112,7 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/sm1style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/shared_lod.hpp"
@@ -35923,6 +35924,36 @@ int main() {
             check(std::abs(looked.flipTilt.x - tilted.flipTilt.x) < 1e-4f, "LOOK UP took the body's pose");
             check(length(matrixRow(looked.head, 3) - matrixRow(tilted.head, 3)) < .001f, "LOOK UP moved the eyes");
         }
+    });
+    test("0.0.74 test 10 SM1STYLE: SpidyVR's jitter, phases, the 67% eyes, the fallbacks, the safety", [] {
+        namespace s1 = spidy::sm1style;
+        check(s1::on(0) && !s1::on(1), "sm1style 0 is ON, 1 OFF");
+        check(s1::upscalePercent == 67 && s1::renderScale == 100 && s1::supersample == 100, "SpidyVR's values");
+        check(s1::startOption == 0x1000000 && s1::eyeTemporalBit == 0x20, "option bits");
+        check(sizeof(s1::Data) == 256, "sm1style::Data 256 bytes");
+        // SpidyVR's eyeJitter: clamp(ceil(8 r^2), 8, 32) phases, 2 (h - .5) / render, the same both eyes.
+        check(s1::phases(2000, 2000) == 8 && s1::phases(2000, 1340) == 18 && s1::phases(2000, 500) == 32, "phases");
+        check(std::abs(s1::halton(1, 2) - .5f) < 1e-6f && std::abs(s1::halton(2, 3) - 2.f / 3) < 1e-6f, "halton");
+        const auto j = s1::jitter(0, 2000, 1340, 1000);
+        check(std::abs(j[0]) < 1e-7f && std::abs(j[1] - 2 * (1.f / 3 - .5f) / 1000) < 1e-7f, "jitter phase 1");
+        // The eyes upscaled only when every check passed.
+        check(s1::madePercent(true, true, true, true) == 67, "67% when all checks pass");
+        check(s1::madePercent(false, true, true, true) == 100 && s1::madePercent(true, false, true, true) == 100 &&
+                  s1::madePercent(true, true, false, true) == 100 && s1::madePercent(true, true, true, false) == 100,
+              "a failed check keeps the eyes at 100%");
+        check(s1::upscaleOk(1340, 2000, 2000, 1340) && !s1::upscaleOk(2000, 2000, 2000, 1340), "upscaleOk");
+        // The safety trips once, after stallPairs left jobs with no pair, never while inactive.
+        s1::StallGuard g;
+        check(!g.frame(0, true, true), "armed");
+        bool tripped = false;
+        for (uint64_t k = 1; k <= s1::stallPairs + 1; ++k)
+            tripped = g.frame(k, false, true) || tripped;
+        check(tripped && !g.frame(500, false, true), "the safety trips once");
+        s1::StallGuard idle;
+        for (uint64_t k = 0; k < 200; ++k)
+            check(!idle.frame(k, false, false), "tripped while off");
+        for (uint32_t r = s1::exeDiffers; r <= s1::hookFailed; ++r)
+            check(*s1::reasonText(r) != 0, "a reason without text");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

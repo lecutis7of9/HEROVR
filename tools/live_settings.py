@@ -150,6 +150,11 @@ SETTINGS = {
     # RESTART: the eyes' occlusion is made when VR starts (no export: kept for the next start).
     'eye_occlusion': ((0, 1), None, 'EYE OCCLUSION {} (1 the eyes cull hidden objects, 0 off) - RESTART NOTICE: '
                       'takes effect the next time VR starts'),
+    # 0.0.74 test 10 SM1STYLE: SpidyVR's eye anti-aliasing (the game's TAA in each eye, eyes at 67%), the
+    # default. live.txt only (no hologram row); RESTART: decided when VR starts (run_game_vr reads sm1style_on()).
+    'sm1style': ((0, 1), None, 'SM1STYLE {} (0 on: SpidyVR\'s eye anti-aliasing, the game\'s TAA in each eye at '
+                 '67%, our FXAA, history and sharpen locked off; 1 off: the 0.0.72 eye picture) - RESTART NOTICE: '
+                 'takes effect the next time VR starts'),
     'history_cut': ((25, 400), 'SpidyEyeHistoryCut', 'HISTORY CUT {}% (lower drops old history sooner when you move: fewer trails; higher keeps it longer: smoother, more trail)'),
     'aa_quality': ((0, 1), 'SpidyEyeAAQuality', 'AA QUALITY {} (0 FXAA, 1 strong FXAA: smoother edges, a little softer)'),
     # The ring on the wrist (health_ring::Place).
@@ -428,6 +433,9 @@ VIEW_GATES = {'bloom_fx': 0, 'lod_fade': 1, 'lod_reach': 2, 'impostors': 3}
 WORLD_LOG_KINDS = {'npc_log': 0, 'spawn_log': 1, 'mission_log': 2}
 # Update 37: settings that cannot change while VR runs: kept for the next start, with this notice.
 RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next time VR starts.',
+           # 0.0.74 test 10 SM1STYLE: the eyes' targets are made when VR starts
+           'sm1style': 'RESTART NOTICE: sm1style takes effect the next time VR starts (off: the 0.0.72 eye '
+                       'picture, our FXAA, history and sharpen; on: SpidyVR\'s per-eye TAA at 67%).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
            'lens_flares': 'RESTART NOTICE: lens_flares takes effect the next time VR starts.',
            # 0.0.73 LIGHT CHECKS: the eyes' query pools are sized when the eyes are made
@@ -614,6 +622,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'supersonic_speed': ('2x', '1.5x', '2.5x', '3x'),
                 'daredevil': ('off', 'on'), 'hulk': ('off', 'on'), 'daredevil_punch': ('3x', '1x', '2x', '4x', '5x'),
                 'hit_indicator': ('off', 'on'), 'hand_flips': ('on', 'off'), 'lens_flares': ('game', 'off_in_vr'),
+                'sm1style': ('on', 'off'),  # 0.0.74 test 10 SM1STYLE
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
                 'batman': ('off', 'on'), 'wolverine': ('off', 'on'), 'superman': ('off', 'on'), 'punisher': ('off', 'on'),
@@ -702,6 +711,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'hit_indicator': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'hand_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'lens_flares': {'game': 0, 'off_in_vr': 1, 'off': 1, '0': 0, '1': 1},
+           'sm1style': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 SM1STYLE
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},
@@ -1100,6 +1110,7 @@ HERO_KEYS = ('iron_man', 'daredevil', 'hulk', 'batman', 'wolverine', 'superman',
 START_ONLY = START_ONLY + UPDATE38_KEYS
 # 0.0.74 test 10 VAN NO FLIPS: an OFF in live.txt is kept from session to session (ON is the DLL's own default).
 START_ONLY = START_ONLY + ('van_no_flips',)
+START_ONLY = START_ONLY + ('sm1style',)  # 0.0.74 test 10 SM1STYLE: an OFF kept between sessions (RESTART)
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
@@ -1873,6 +1884,17 @@ def lens_flares_off(text):
     if 'lens_flares' not in values:
         return default
     return values['lens_flares'] in ('off_in_vr', 1)
+
+
+def sm1style_on(text):
+    """0.0.74 test 10: True when live.txt `text` (None: no live.txt) leaves SM1STYLE on for this VR start (SpidyVR's
+    eye anti-aliasing, the default: no sm1style line, or one that is not off). Only `sm1style = off` (or 1) turns it
+    off. Never raises (an unreadable text gives the default, on)."""
+    try:
+        values, _ = parse(text or '')
+    except Exception:
+        return True
+    return values.get('sm1style') not in ('off', 1)
 
 
 def next_launch_supersample(path):

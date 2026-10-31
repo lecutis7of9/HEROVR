@@ -4,6 +4,7 @@
 #include "spidy/eye_resolution.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/eye_bloom.hpp"
+#include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/mirror_probe.hpp"
@@ -338,6 +339,47 @@ std::atomic<bool> engineTaaLive{};
 std::atomic<bool> engineTaaAuto{};
 // (SpidyEngineTaa is declared at file scope, in the extern "C" block above: Update 37.1, MSVC C2733.)
 std::atomic<uint32_t> engineTaaWhy{}, engineTaaGameAa{UINT32_MAX}, engineTaaWidened{}, engineTaaMaskSeen{};
+// 0.0.74 test 10 SM1STYLE (sm1style.hpp): SpidyVR's own per-eye TAA. eyeTemporal 0x20: on when VR started (live.txt
+// sm1style, the launcher's option; never switched live), sm1ExeKnown every byte check passed, sm1Reason why it fell
+// back (the 0.0.72 path from there), sm1Jobs the eye jobs.
+std::atomic<bool> sm1ExeKnown{};
+// The eyes were made with the game's TAA targets while its mask and Anti-Aliasing make them (initBuffers): without
+// them TemporalAa has nowhere to write.
+std::atomic<bool> sm1TargetsOk{}, sm1Targets{};
+std::atomic<uint32_t> sm1Reason{}, sm1Percent{}, sm1UpscaleBad{};
+std::atomic<uintptr_t> sm1Jobs[2]{};
+} // namespace
+extern "C" {
+__declspec(dllexport) spidy::sm1style::Data SpidySm1StyleData;
+}
+namespace {
+bool sm1AtStart() { return (eyeTemporal.load(std::memory_order_relaxed) & spidy::sm1style::eyeTemporalBit) != 0; }
+// Whether the four steps run now: on at the start, the exe as known, the eyes made with the TAA targets and nothing
+// made it fall back for the session (a wrong upscale or no hook only loses the proof, never the TAA the upscaled
+// eyes need).
+bool sm1Live() {
+    namespace mt = spidy::sm1style;
+    const uint32_t why = sm1Reason.load(std::memory_order_relaxed);
+    return sm1AtStart() && sm1ExeKnown.load(std::memory_order_relaxed) && sm1Targets.load(std::memory_order_relaxed) &&
+           (why == mt::none || why == mt::upscaleWrong || why == mt::hookFailed);
+}
+// Eyes made smaller than their image need the game's TAA every frame (its jitter and the job's AA) whatever the
+// safety says: without it TemporalAa leaves (0x2c2dccb, 0x2c2dd09) and nothing resolves them to the eye's size.
+bool sm1Upscaled() {
+    const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
+    return made && made < 100;
+}
+bool sm1Steps() { return sm1Live() || sm1Upscaled(); }
+// The first reason only (one console line: game_xr reads it).
+void sm1FallBack(uint32_t why) {
+    uint32_t expected = spidy::sm1style::none;
+    if (!sm1Reason.compare_exchange_strong(expected, why))
+        return;
+    SpidySm1StyleData.reason = why;
+    char line[160];
+    std::snprintf(line, sizeof line, "SM1STYLE: %s\n", spidy::sm1style::reasonText(why));
+    OutputDebugStringA(line);
+}
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
@@ -1323,10 +1365,16 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
             // 19203c2 queues TemporalAa (0x8a) unless the profile's +68c is set.
             uint8_t left{};
             // SM2: the profile flag is bit 0 of +cc8; TemporalAa is 0xb1 on +18d0 (SM2VR).
-            if ((eyeTemporal.load() & 4) && read(reinterpret_cast<uintptr_t>(profile) + 0xcc8, &left, 1) &&
-                (left & 1))
+            // 0.0.74 test 10 SM1STYLE step 4: as SpidyVR (src/stereo_probe.cpp:906), TemporalAa where the profile
+            // leaves it out (0x2d017b3, CONFIRMED; its bytes checked at the start).
+            const bool sm1 = sm1Live();
+            if (((eyeTemporal.load() & 4) || sm1) && read(reinterpret_cast<uintptr_t>(profile) + 0xcc8, &left, 1) &&
+                (left & 1)) {
                 reinterpret_cast<Enqueue>(base + 0x2c77810)(reinterpret_cast<void*>(address + 0x18d0), 0xb1, 1,
                                                             nullptr);
+                if (sm1)
+                    ++SpidySm1StyleData.queued[eye];
+            }
             break;
         }
 }
@@ -1335,7 +1383,9 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
 std::array<uint32_t, 2> eyeRenderSize() {
     // Update 34: always the eye's own size; ENGINE TAA does not upsample (a size that
     // followed a live switch would change under buffers already made).
-    return spidy::eyeRenderSize(config.width, config.height, 100);
+    // 0.0.74 test 10 SM1STYLE: the percent the eyes were made at (set once, when the first eye's buffers are made).
+    const uint32_t made = sm1Percent.load(std::memory_order_relaxed);
+    return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
 }
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
@@ -1365,6 +1415,14 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
     sizes[5] = (eyeHeight + 7) & ~7u;
     sizes[6] = align ? sizes[4] : eyeWidth;
     sizes[7] = align ? sizes[5] : eyeHeight;
+    // 0.0.74 test 10 SM1STYLE (SpidyVR src/stereo_probe.cpp:917-932): eyes made smaller than their image keep the
+    // size they were made at (the game's TAA resolves it to sizes[2..3]); a later re-size must not ask for more than
+    // the buffers have.
+    if (const uint32_t made = sm1Percent.load(std::memory_order_relaxed); made && made < 100) {
+        const auto render = eyeRenderSize();
+        sizes[0] = render[0];
+        sizes[1] = render[1];
+    }
     if (sizes[0] == eyeWidth && sizes[1] == eyeHeight)
         sizes[15] |= 2;
     else
@@ -1463,7 +1521,31 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
         // needs private scene buffers at its own resolution.
         alignas(16) uint8_t local[32]{};
         if (read(reinterpret_cast<uintptr_t>(description), local, sizeof(local))) {
+            // 0.0.74 test 10 SM1STYLE: the eyes' size is chosen once, when the first eye's buffers are made.
+            namespace mt = spidy::sm1style;
+            const bool sm1 = sm1AtStart();
+            if (!sm1Percent.load()) {
+                uint32_t stock[8]{}, aa = UINT32_MAX;
+                const bool maskStock = read(base + spidy::engine_taa::maskRva, stock, sizeof stock) &&
+                                       spidy::engine_taa::maskIsStock(stock);
+                const bool aaOk = read(base + spidy::engine_taa::aaRva, &aa, 4) &&
+                                  spidy::engine_taa::aaMakesTargets(aa);
+                if (sm1 && sm1ExeKnown.load() && !maskStock)
+                    sm1FallBack(mt::maskDiffers);
+                else if (sm1 && sm1ExeKnown.load() && !aaOk)
+                    sm1FallBack(mt::gameAa);
+                sm1TargetsOk = maskStock && aaOk;
+                const uint32_t percent = mt::madePercent(sm1, sm1ExeKnown.load(), maskStock, aaOk);
+                sm1Percent = percent;
+                SpidySm1StyleData.percent = percent;
+                char line[128];
+                std::snprintf(line, sizeof line, "SM1STYLE: eyes made at %u%% (%s)\n", percent,
+                              sm1 ? "on at the start" : "off at the start");
+                OutputDebugStringA(line);
+            }
             const auto render = eyeRenderSize();
+            SpidySm1StyleData.renderWidth = render[0];
+            SpidySm1StyleData.renderHeight = render[1];
             std::memcpy(local, &render[0], 4);
             std::memcpy(local + 4, &render[1], 4);
             const uint64_t noParent{};
@@ -1472,9 +1554,14 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
             // the TAA target kind as well (engineTaaBuffers).
             sizingEye[0] = config.width;
             sizingEye[1] = config.height;
-            const bool sized = (eyeTemporal.load() & 0x10) ? engineTaaBuffers(buffers, local, name)
-                                                           : originalInitBuffers(buffers, local, name);
+            // 0.0.74 test 10 SM1STYLE step 2 (SpidyVR src/stereo_probe.cpp:961-990): the TAA targets for the eyes.
+            const bool taaTargets = (eyeTemporal.load() & 0x10) ||
+                                    (sm1 && sm1ExeKnown.load() && sm1Reason.load() == mt::none);
+            const bool sized = taaTargets ? engineTaaBuffers(buffers, local, name)
+                                          : originalInitBuffers(buffers, local, name);
             sizingEye[0] = sizingEye[1] = 0;
+            if (taaTargets && sized && sm1TargetsOk.load())
+                sm1Targets = true;
             return sized;
         }
     }
@@ -1879,19 +1966,85 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     }
     return result;
 }
+// 0.0.74 test 10 SM1STYLE: the per-eye proof. TemporalAa 0x2c2dc60 reads no arguments (CONFIRMED); the four
+// registers are passed on as they came. read() only: nothing of the game's is written here.
+using TemporalAa = void (*)(void*, void*, void*, void*);
+TemporalAa originalTemporalAa{};
+void* temporalAaHook{};
+void temporalAa(void* a, void* b, void* c, void* d) {
+    namespace mt = spidy::sm1style;
+    const uintptr_t job = enabled ? pointer(base + mt::jobGlobal) : 0;
+    int eye = -1;
+    for (int i = 0; job && i < 2; ++i)
+        if (sm1Jobs[i].load(std::memory_order_relaxed) == job)
+            eye = i;
+    if (eye < 0) {
+        originalTemporalAa(a, b, c, d);
+        return;
+    }
+    uint32_t aa{}, index{}, input{}, output{};
+    int32_t frame{}, other{}, stamp{};
+    uint8_t cut{}, pick{};
+    float jitter[2]{};
+    read(base + mt::jobAaGlobal, &aa, 4);
+    read(base + mt::frameGlobal, &frame, 4);
+    const bool haveIndex = read(job + mt::jobSlotIndex, &index, 4) && index <= 1;
+    const uintptr_t otherSlot = haveIndex ? pointer(job + mt::jobSlots + 8 * (1 - index)) : 0;
+    const bool haveOther = otherSlot && read(otherSlot, &other, 4);
+    const uintptr_t previous = pointer(job + mt::jobPrevious);
+    read(job + mt::jobCut, &cut, 1);
+    read(job + spidy::engine_taa::jobJitter, jitter, sizeof jitter);
+    if (const uintptr_t set = pointer(job + mt::jobSet)) {
+        read(set + mt::setInputSize, &input, 4);
+        read(base + mt::targetPickGlobal, &pick, 1);
+        read(set + (pick ? mt::setTargetWidthAlt : mt::setTargetWidth), &output, 4);
+    }
+    originalTemporalAa(a, b, c, d);
+    const uintptr_t slot = haveIndex ? pointer(job + mt::jobSlots + 8 * index) : 0;
+    const bool haveStamp = slot && read(slot, &stamp, 4);
+    const bool ran = aa == 1 && frame && (jitter[0] != 0 || jitter[1] != 0) && output && haveStamp && stamp == frame;
+    auto& dd = SpidySm1StyleData;
+    ++dd.calls[eye];
+    if (ran)
+        ++dd.ran[eye];
+    if (ran && haveOther && other == frame - 1 && previous)
+        ++dd.history[eye];
+    dd.frame[eye] = frame;
+    dd.stamp[eye] = stamp;
+    dd.otherStamp[eye] = other;
+    dd.slotIndex[eye] = index;
+    dd.previous[eye] = previous ? 1 : 0;
+    dd.cut[eye] = cut;
+    dd.aa[eye] = aa;
+    dd.inputWidth[eye] = input;
+    dd.outputWidth[eye] = output;
+    // The upscale (CANDIDATE): TemporalAa must read the smaller scene and write the eye's size. 30 runs that do not
+    // and the console says so (the eyes stay as made: restart with SM1STYLE OFF for the full size).
+    if (ran) {
+        const auto render = eyeRenderSize();
+        if (mt::upscaleOk(input, output, config.width, render[0]))
+            sm1UpscaleBad = 0;
+        else if (sm1UpscaleBad.fetch_add(1) + 1 == 30)
+            sm1FallBack(mt::upscaleWrong);
+    }
+    ++dd.sequence;
+}
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
     // Update 36: EYE BLOOM, before the job copies the view settings (a, its r8).
     if (enabled) {
         spidy::mirror_probe::job(reinterpret_cast<uint64_t>(view)); // Update 38.4: counts only
         const int eye = view == eyes[0].load() ? 0 : view == eyes[1].load() ? 1 : -1;
-        if (bloomMode.load(std::memory_order_relaxed))
+        // 0.0.74 test 10 SM1STYLE: EYE BLOOM stays off while it runs (SpidyVR has none).
+        if (bloomMode.load(std::memory_order_relaxed) && !sm1Steps())
             bloomJob(eye, a);
         gatesJob(eye, a); // Update 37: BLOOM FX and the bloom block dumps
         if (eye == 0) {
+            ++SpidySm1StyleData.leftJobs; // 0.0.74 test 10 SM1STYLE's safety counts these
             lodFadeCheck();
             // Update 37: ENGINE TAA's auto, once nothing blocks it (checked every 64th left job).
             static uint32_t taaEvery{};
             if (engineTaaAuto.load(std::memory_order_relaxed) && !engineTaaLive.load(std::memory_order_relaxed) &&
+                !sm1Steps() && // 0.0.74 test 10: never under SM1STYLE
                 ++taaEvery % 64 == 0 && engineTaaBlocked() == spidy::engine_taa::none &&
                 SpidyEngineTaa(reinterpret_cast<void*>(uintptr_t{1})) == 0)
                 engineTaaAuto = false; // on: from here it is the player's and the guard's
@@ -1925,9 +2078,14 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             // then had no anti-aliasing at all.
             // SM2 (Update 34): the settings' +0x570, which the frame's copy (0x2c81890 to
             // 0xc2c64a0) puts where TemporalAa 0x2c2dc60 reads it ([0xc2c6a10] == 1).
-            if (engineTaaLive.load()) {
+            // 0.0.74 test 10 SM1STYLE step 3 (SpidyVR src/stereo_probe.cpp:1045): the same write for each eye job.
+            const bool sm1 = sm1Steps();
+            sm1Jobs[i].store(reinterpret_cast<uintptr_t>(job), std::memory_order_relaxed);
+            if (engineTaaLive.load() || sm1) {
                 const uint32_t temporal = 1;
                 std::memcpy(static_cast<uint8_t*>(settings) + spidy::engine_taa::jobAa, &temporal, 4);
+                if (sm1)
+                    ++SpidySm1StyleData.aaWrites[i];
             }
             if (shareExposure(reinterpret_cast<uintptr_t>(job), i)) {
                 AcquireSRWLockExclusive(&telemetry);
@@ -2227,6 +2385,15 @@ bool retiring() {
 // the offset over the render size. Temporal anti-aliasing gathers the samples;
 // a scene rendered smaller than the eye needs more of them per eye pixel.
 std::array<float, 2> eyeJitter() {
+    // 0.0.74 test 10 SM1STYLE step 1: SpidyVR's lens jitter as it is (src/stereo_probe.cpp:1294-1306: full Halton
+    // (2, 3), both eyes, no scale, no mode, no guard), before anything of ours.
+    if (sm1Steps()) {
+        const auto render = eyeRenderSize();
+        const auto j = spidy::sm1style::jitter(frameIndex, config.width, render[0], render[1]);
+        eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
+        eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
+        return j;
+    }
     const bool engine = engineTaaLive.load() && !(eyeTemporal.load() & 1);
     if (!(eyeTemporal.load() & 1) && !engine)
         return {0, 0};
@@ -3703,6 +3870,16 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                                      sizeof(spidy::view_gates::fadeCallBytes)) &&
                                entry(0x2c991a0, isActiveViewBytes, sizeof(isActiveViewBytes));
             }
+            {   // 0.0.74 test 10 SM1STYLE: every address it uses checked against 2.810's bytes.
+                namespace mt = spidy::sm1style;
+                sm1ExeKnown = entry(mt::temporalAaRva, mt::temporalAaBytes, sizeof(mt::temporalAaBytes)) &&
+                              entry(mt::temporalAaCheckRva, mt::temporalAaCheckBytes, sizeof(mt::temporalAaCheckBytes)) &&
+                              entry(mt::currentTargetRva, mt::currentTargetBytes, sizeof(mt::currentTargetBytes)) &&
+                              entry(mt::historyTargetRva, mt::historyTargetBytes, sizeof(mt::historyTargetBytes)) &&
+                              entry(mt::queueSiteRva, mt::queueSiteBytes, sizeof(mt::queueSiteBytes));
+                if (!sm1ExeKnown)
+                    sm1FallBack(mt::exeDiffers);
+            }
             s = MH_CreateHook(maintainHook, reinterpret_cast<void*>(maintain),
                               reinterpret_cast<void**>(&originalMaintain));
             if (s == MH_OK)
@@ -3775,6 +3952,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                 break;
             }
             hooked = true;
+            // 0.0.74 test 10 SM1STYLE's per-eye log: its own hook, never a reason to start no VR.
+            if (sm1ExeKnown.load()) {
+                temporalAaHook = reinterpret_cast<void*>(base + spidy::sm1style::temporalAaRva);
+                if (MH_CreateHook(temporalAaHook, reinterpret_cast<void*>(temporalAa),
+                                  reinterpret_cast<void**>(&originalTemporalAa)) != MH_OK) {
+                    temporalAaHook = nullptr;
+                    sm1FallBack(spidy::sm1style::hookFailed);
+                }
+            }
         }
         attempted = false;
         stopRequested = false;
@@ -3801,6 +3987,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             break;
         }
         enabled = true;
+        if (temporalAaHook && enableHook(temporalAaHook) != MH_OK) { // 0.0.74 test 10 SM1STYLE (non-fatal)
+            removeHook(temporalAaHook);
+            temporalAaHook = nullptr;
+            sm1FallBack(spidy::sm1style::hookFailed);
+        }
         native_hud::panelHooked(hudPlaceHook != nullptr); // 0.0.70: never in SM2 (SM2_STEREO_HUD 0)
         SpidyShadowCameraData.fitHook = fitCascadesHook ? 1 : 0; // Update 31
         SpidyFarShadowsData.hooked = csmFitHook ? 1 : 0; // Update 35
@@ -3875,7 +4066,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
         for (auto hook : {maintainHook, updateHook, copyFinalHook, toneHook, copyJobHook, beginJobHook,
                           endJobHook, initBuffersHook, sizeBuffersHook, renderActorHook, setupModelsHook,
                           isActiveViewHook, impostorQueriesHook, setupDisplayHook, submitHook, renderOffscreenHook,
-                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook}) {
+                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook, temporalAaHook}) {
             auto s = disableHook(hook);
             if (s != MH_OK && s != MH_ERROR_DISABLED)
                 result = 1500 + s;
@@ -4186,9 +4377,22 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the
     // eyes' buffers get the TAA targets for ENGINE TAA (engineTaaBuffers).
-    eyeTemporal = static_cast<uint32_t>(value >> 8) & 0x10;
+    // 0.0.74 test 10: bit 0x20, SM1STYLE on at the start (sm1style.hpp).
+    eyeTemporal = static_cast<uint32_t>(value >> 8) & (0x10 | spidy::sm1style::eyeTemporalBit);
     return 0;
 }
+// 0.0.74 test 10 SM1STYLE: its record (flags kept current here; game_xr reads it every frame).
+extern "C" const spidy::sm1style::Data* SpidySm1StyleNow() {
+    namespace mt = spidy::sm1style;
+    auto& d = SpidySm1StyleData;
+    d.flags = (sm1AtStart() ? mt::flagOn | mt::flagAtStart : 0u) | (sm1Live() ? mt::flagLive : 0u) |
+              (sm1Steps() ? mt::flagSteps : 0u) | (temporalAaHook ? mt::flagHooked : 0u) |
+              (sm1ExeKnown.load() ? mt::flagExeKnown : 0u) | (sm1Reason.load() ? mt::flagFellBack : 0u);
+    d.reason = sm1Reason.load();
+    return &d;
+}
+// The safety (game_xr): eye pairs stopped reaching the headset; off for the session.
+extern "C" void SpidySm1StyleStall() { sm1FallBack(spidy::sm1style::stalled); }
 // Update 34: ENGINE TAA. 1 on (refused, 4602, when engineTaaBlocked() says why), 0
 // off, 2 off because the frame rate halved (game_xr's guard). SpidyEngineTaaNow:
 // engine_taa::pack(state, reason).
@@ -4207,6 +4411,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaa(void* on) {
         if (value == 0)
             engineTaaWhy = 0;
         return 0;
+    }
+    if (sm1Steps()) { // 0.0.74 test 10: SM1STYLE runs the game's TAA in each eye; nothing of ours over it
+        ++engineTaaRefusals;
+        OutputDebugStringA("ENGINE TAA: refused, SM1STYLE runs the game's TAA in each eye (live.txt sm1style)\n");
+        return 4602;
     }
     if (const uint32_t why = engineTaaBlocked()) {
         engineTaaWhy = why;

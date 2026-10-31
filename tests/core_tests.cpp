@@ -49,6 +49,7 @@
 #include "spidy/crime_gps074.hpp"
 #include "spidy/cave_quiet074.hpp"
 #include "spidy/batmobile074.hpp"
+#include "spidy/bike075.hpp"
 #include "spidy/vehicle074.hpp"
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
@@ -27173,7 +27174,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 /* 0.0.75 MOTORCYCLE body + bars */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -32876,7 +32877,7 @@ int main() {
               "BATMOBILE CHOICE: 1989 by default, its help line says no restart");
         // owner t1164u: the glass as the model came - no Glass slots, the cockpit right after the four bodies
         check(mm::slotBatmobileCockpit == mm::slotBatmobileFirst + bm::cars && mm::slotBatmobileWheel == mm::slotBatmobileCockpit + 1 &&
-                  mm::slotBatmobileWheel + 1 == mm::slotBatmobileRoofFirst && mm::slotBatmobileRoofFirst + bm::cars == mm::slots,
+                  mm::slotBatmobileWheel + 1 == mm::slotBatmobileRoofFirst && mm::slotBatmobileRoofFirst + bm::cars == mm::slotBikeBody /* 0.0.75 the bike after */,
               "no Glass slots: each car's glass is in its body");
         for (uint32_t s2 = 0; s2 < mm::slots; ++s2)
             check(std::string(mm::slotFolders[s2]).find("/Glass") == std::string::npos, "no Glass folder loaded");
@@ -36202,6 +36203,76 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
             if (!c.comingSoon(h, i))
                 check(c.isUnlocked(h, i, suitsOpen(0)), "every suit with a model is unlocked at REP 0");
 });
+    test("0.0.75 MOTORCYCLE: its layout and tune, HANDLEBAR steering round +y, the rear arc only, NaN-safe", [] {
+        namespace bk = spidy::bike075;
+        namespace vk = spidy::van072;
+        const vk::Tune t = bk::tune();
+        const bk::Layout& l = bk::layout();
+        check(t.handlebar && !vk::Tune{}.handlebar, "only the bike's tune steers by handlebar");
+        check(std::abs(l.length - 2.8531f) < 1e-4f && std::abs(l.wheelBase - 2.23f) < 1e-4f && l.height > 1 && l.width < .8f,
+              "the measured size");
+        check(t.wheelLock > 0 && t.wheelLock < 1 && t.steerMost > 0 && t.steerMost < .6f && t.topSpeed > 10 && t.accel > 0,
+              "its riding numbers");
+        check(t.eye.y > l.height && t.exit.x < -l.width / 2 && t.exit.y == 0 && t.handleIn.x < 0 && t.handleOut.x < 0,
+              "the eye over the seat, on and off on the left, the step-off beside it");
+        float a = 0, off = 0;
+        check(vk::Wheel::onRim(l.gripLeft, a, off, t) && vk::Wheel::onRim(l.gripRight, a, off, t), "both grips are on the bars");
+        float a0 = 0, a1 = 0;
+        vk::Wheel::onRim(l.gripRight, a0, off, t);
+        vk::Wheel::onRim(l.gripRight + spidy::Vec3{-.02f, 0, .04f}, a1, off, t);
+        check(a1 > a0, "the right grip pulled back is + (a right turn)");
+        check(!vk::Wheel::onRim(t.hub + spidy::Vec3{0, 0, -t.wheelRadius}, a, off, t), "nothing round the cowl's front");
+        check(!vk::Wheel::onRim(l.gripLeft + spidy::Vec3{0, .3f, 0}, a, off, t), "a hand well over a grip is off it");
+        check(!vk::Wheel::onRim(spidy::Vec3{NAN, 0, 0}, a, off, t) && !vk::Wheel::near(spidy::Vec3{NAN, 0, 0}, t), "NaN: off");
+        check(vk::Wheel::near(t.hub + spidy::Vec3{0, 0, .1f}, t) && !vk::Wheel::near(t.hub + spidy::Vec3{0, 0, -.9f}, t),
+              "near: over the yoke, not ahead of the bike");
+        // two hands turn the bars, clamped at the lock
+        vk::Wheel w{};
+        const float g[2] = {1, 1};
+        const bool tr[2] = {true, true};
+        spidy::Vec3 h[2] = {l.gripLeft, l.gripRight};
+        w.step(h, g, tr, t);
+        check(w.latched[0] && w.latched[1], "both grips latch");
+        for (int k = 1; k <= 20; ++k) {
+            const float r = .05f * k, c = std::cos(r), s = std::sin(r);
+            for (int i = 0; i < 2; ++i) {
+                const spidy::Vec3 d = (i ? l.gripRight : l.gripLeft) - t.hub;
+                h[i] = t.hub + spidy::Vec3{d.x * c - d.z * s, d.y, d.x * s + d.z * c};
+            }
+            w.step(h, g, tr, t);
+        }
+        check(w.angle > 0 && std::abs(w.angle - t.wheelLock) < 1e-4f, "turned right to the lock");
+        spidy::Vec3 up{}, toward{};
+        vk::wheelAxes(0, up, toward, t);
+        check(std::abs(toward.z - 1) < 1e-5f && std::abs(up.y - 1) < 1e-5f, "straight: the bars as modelled");
+        vk::wheelAxes(.3f, up, toward, t);
+        check(toward.x < 0 && std::abs(up.y - 1) < 1e-5f, "a right turn swings the bars' back to the left");
+        vk::wheelAxes(NAN, up, toward, t);
+        check(std::isfinite(toward.x) && std::abs(toward.z - 1) < 1e-5f, "NaN angle: straight");
+    });
+    test("0.0.75 MOTORCYCLE: the X tap (a hold is the abilities' modifier), the slots, the credit", [] {
+        namespace bk = spidy::bike075;
+        namespace mm = spidy::mesh_model;
+        bk::Tap tp{};
+        check(!tp.step(true, .016f) && !tp.step(true, .1f) && tp.step(false, .016f), "a short press is a tap, on release");
+        check(!tp.step(false, .016f), "once");
+        tp = {};
+        tp.step(true, .016f);
+        for (int k = 0; k < 30; ++k)
+            tp.step(true, .02f);
+        check(!tp.step(false, .016f), "a hold over .4 s is not a tap");
+        tp = {};
+        check(!tp.step(true, NAN) && tp.step(false, NAN), "NaN dt: still a tap, no NaN");
+        check(std::string(mm::slotFolders[mm::slotBikeBody]) == "Vehicle/Motorcycle" &&
+                  std::string(mm::slotFolders[mm::slotBikeBars]) == "Vehicle/Motorcycle/Handlebars",
+              "the bike's two folders");
+        check(mm::slotIsBike(mm::slotBikeBody) && mm::slotIsBike(mm::slotBikeBars) && mm::slotIsVehicle(mm::slotBikeBody) &&
+                  !mm::slotIsBike(mm::slotVan) && !mm::slotIsSuit(mm::slotBikeBody),
+              "bike slots are vehicles, not suits");
+        check(std::string(bk::creditLine).find("MERT TETIK") != std::string::npos &&
+                  std::string(bk::creditLine).find("CC BY 4.0") != std::string::npos && std::string(bk::creditArtist) == "Mert Tetik",
+              "the CC BY credit");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

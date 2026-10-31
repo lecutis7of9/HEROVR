@@ -77,6 +77,10 @@ struct Tune {
     // on the Batmobiles' wheel, which sits within .2 m of their door handle, could open the door).
     bool wheelFirst = true;
     float wheelGuard = .06f;       // beyond rimNear: a hand this near the rim (or anywhere over the wheel's disc)
+    // 0.0.75 MOTORCYCLE HANDLEBARS (bike075; false for the van and the Batmobiles, unchanged): the "wheel" is a
+    // handlebar turning round +y through hub; the grips on the circle of wheelRadius round it, at the hub's height,
+    // on its rear half (toward the rider). The angle is the bars' turn (+ a right turn: the right grip comes back).
+    bool handlebar = false;
 };
 
 
@@ -275,6 +279,14 @@ struct Wheel {
     bool gripWas[2]{};
     // Angle of a point round the hub in the wheel's plane (as the driver sees it); false: off the rim.
     static bool onRim(Vec3 localHand, float& a, float& off, const Tune& t) {
+        if (t.handlebar) {
+            const Vec3 d = localHand - t.hub;
+            const float flat = std::hypot(d.x, d.z);
+            a = std::atan2(d.z, d.x); // round +y as seen from above: + a right turn (the right grip comes back)
+            off = std::max(std::abs(flat - t.wheelRadius), std::abs(d.y));
+            // only the grips' rear arc (toward the rider): nothing reaches round the front of the cowl
+            return fine(a) && fine(off) && off <= t.rimNear && d.z >= .2f * flat;
+        }
         const Vec3 axis = axisOf(t);
         const Vec3 d = localHand - t.hub;
         const float out = dot(d, axis);
@@ -292,8 +304,11 @@ struct Wheel {
         if (!fine(localHand))
             return false;
         float a = 0, off = 0;
-        if (onRim(localHand, a, off, t) || (fine(off) && off <= t.rimNear + t.wheelGuard))
+        if (onRim(localHand, a, off, t) || (fine(off) && off <= t.rimNear + t.wheelGuard && (!t.handlebar || localHand.z >= t.hub.z)))
             return true;
+        if (t.handlebar) // over the bars' middle (the yoke between the grips)
+            return std::abs(localHand.y - t.hub.y) <= t.rimNear + t.wheelGuard &&
+                   std::hypot(localHand.x - t.hub.x, localHand.z - t.hub.z) <= t.wheelRadius + t.rimNear;
         const Vec3 axis = axisOf(t);
         const Vec3 d = localHand - t.hub;
         const float out = dot(d, axis);
@@ -872,6 +887,12 @@ struct Driver {
 // Version 0.0.72: the steering wheel's model axes in the van's frame, turned `angle` (+ clockwise as the
 // driver sees it): `up` the model's +y (12 o'clock), `toward` its +z (to the driver).
 inline void wheelAxes(float angle, Vec3& up, Vec3& toward, const Tune& t = {}) {
+    if (t.handlebar) { // 0.0.75 MOTORCYCLE: the bars turn round +y; their model's -z (forward) is -toward
+        const float c = fine(angle) ? std::cos(angle) : 1.f, s = fine(angle) ? std::sin(angle) : 0.f;
+        up = {0, 1, 0};
+        toward = {-s, 0, c};
+        return;
+    }
     const Vec3 a = axisOf(t);
     const Vec3 up0 = normalized(Vec3{0, 1, 0} - a * a.y), right{1, 0, 0};
     const float c = fine(angle) ? std::cos(angle) : 1.f, s = fine(angle) ? std::sin(angle) : 0.f;

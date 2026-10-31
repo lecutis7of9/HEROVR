@@ -657,18 +657,20 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         out.wallRoll = rollAngle;
         out.wallRotate = wallRoll_.engaged();
     }
-    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): while flying, the view's pitch and roll eased off the body's
-    // tilt to level (the real head only), the head kept where it was; the yaw stays; FLY ROLL below still rolls.
-    if (flyLevel_ > 0 && !holds && std::isfinite(flyLevel_)) {
+    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): toggled on while flying, the view pans up by as much as the
+    // body's pitch takes it down (full lying flat, none upright), about the level axis across the head's ahead;
+    // the head kept where it was and tracked on top, the yaw kept; FLY ROLL below still rolls.
+    if (flyLookUp_ > 0 && !holds && std::isfinite(flyLookUp_)) {
         const Pose before = placed.toWorld(f.head);
-        const Quat tilt = fly_feel::levelTilt(placed.tilt, flyLevel_);
+        const Vec3 ahead = f.head.orientation.rotate(Vec3{0, 0, -1});
+        const Quat tilt = fly_feel::pitchUpTilt(placed.tilt, ahead, flyLookUp_);
         if (finite(tilt.rotate(Vec3{0, 1, 0}))) {
             const Quat kept = placed.tilt;
             placed.tilt = tilt;
             const Vec3 shift = before.position - placed.toWorld(f.head).position;
             if (finite(shift)) {
                 placed.origin += shift;
-                out.flyLevel = flyLevel_;
+                out.flyLookUp = flyLookUp_;
             } else {
                 placed.tilt = kept;
             }

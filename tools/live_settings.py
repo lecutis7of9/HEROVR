@@ -214,7 +214,7 @@ SETTINGS = {
     'fly_hold': ((0, 1), 'SpidyFlyHold', "FLY HOLD {} (0 on: hold a grip for half a second in the air, or with a hand up on the ground, to start flying and you keep flying when you let go; 1 off: flight starts by itself as before; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
     'fly_steer': ((0, 1), 'SpidyFlySteer', "FLY STEER {} (0 on: a raised hand and the right stick climb toward your body's up even upside down or sideways, with smoother turns; 1 off: always the world's up as before; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
     'fly_flips': ((0, 1), 'SpidyFlyFlips', "FLY FLIPS {} (0 on: your REALISTIC FLIPS react more readily while you fly, driving still turns them off; 1 off: keeps your own flip rows; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
-    'fly_look_up': ((0, 1), 'SpidyFlyLookUp', "FLY LOOK UP {} (0 on, the default: while you fly your view follows only your real head and stays level with the world, so a dive never drags it down, and a tap of Y while flying turns it off or on; 1 off: your view tilts with the flying body as before, and a value it can't read is off too; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
+    'fly_look_up': ((0, 1), 'SpidyFlyLookUp', "FLY LOOK UP {} (0 on, the default: a tap of Y while flying smoothly pans your view up so you look ahead instead of down when your body lies flat, off each session until you tap it, another tap pans back; 1 off: no Y switch, and a value it can't read is off too; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
     'symbiote_look': ((0, 1), 'SpidySymbioteLook', 'SYMBIOTE LOOK {} (1 black goo hands, symbiote webs and a black mirror; not the game suit)'),
     'prompt_handling': ((0, 1), 'SpidyPromptHandling', 'PROMPT HANDLING {} (0 manual PAD MODE; 1 auto, which needs the prompts hooked: not yet in SM2)'),
     'gesture_moves': ((0, 2), 'SpidyGestureMoves', 'GESTURE MOVES {} (0 off; 1 TRAINING draws the picked move path in the air (TRAIN MOVE) and names each move, sends nothing; 2 ON sends abilities, parry and wings)'),
@@ -553,7 +553,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'fly_hold': ('on', 'off'),  # 0.0.74 test 10 FLY HOLD
                 'fly_steer': ('on', 'off'),  # 0.0.74 test 10 FLY STEER
                 'fly_flips': ('on', 'off'),  # 0.0.74 test 10 FLY FLIPS
-                'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the level view)
+                'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
                 'hud_text_color': ('theme', 'white', 'yellow', 'cyan'),
                 'web_style': WEB_STYLES,
@@ -776,7 +776,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'fly_hold': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY HOLD
            'fly_steer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY STEER
            'fly_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY FLIPS
-           'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the level view)
+           'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            'shadow_match': {'on': 0, 'off': 1, 'experimental': 0, '0': 0, '1': 1},
            'calib_look': {'holo': 0, 'classic': 1, '0': 0, '1': 1},

@@ -35560,32 +35560,118 @@ int main() {
             check(!ff::flying(offRows, true, true).enabled, "FLY FLIPS turned REALISTIC FLIPS on");
             check(!vehicle_flips::realistic(f, true, true).enabled, "FLY FLIPS beat the van's override");
         }
-        // LOOK UP (the level view): the weight eases to exactly 1 and back to exactly 0 (NaN-safe); levelTilt takes a
-        // pitched and rolled tilt to level at 1, leaves it at 0, part way between, and a bad tilt or weight is safe.
+        // LOOK UP (the toggled view): the pan is smooth both ways (eased start, no frame jumps), ends exactly at 0 and
+        // 1, turns round from where it is, NaN-safe.
         {
-            ff::LevelView l;
-            float w = 0;
-            for (int i = 0; i < 270; ++i)
-                w = l.update(1 / 90.f, true);
-            check(w == 1, "LOOK UP did not reach level");
-            for (int i = 0; i < 900; ++i)
-                w = l.update(1 / 90.f, false);
-            check(w == 0, "LOOK UP did not ease back to the body's tilt");
-            check(l.update(nan, true) == 0 && l.update(1 / 90.f, true) > 0, "LOOK UP NaN seconds");
-            const Quat dive = Quat::around({1, 0, 0}, -1.2f) * Quat::around({0, 0, 1}, .7f);
-            const Quat level = ff::levelTilt(dive, 1);
-            check(level.w == 1 && level.x == 0 && level.y == 0 && level.z == 0, "levelTilt 1 is not level");
-            const Quat same = ff::levelTilt(dive, 0);
-            check(same.x == dive.x && same.w == dive.w, "levelTilt 0 changed the tilt");
-            const Quat half = ff::levelTilt(dive, .5f);
-            const float upHalf = half.rotate({0, 1, 0}).y, upDive = dive.rotate({0, 1, 0}).y;
-            check(upHalf > upDive + .05f && upHalf < 1, "levelTilt .5 is not part way");
-            const Quat flipped = ff::levelTilt({-dive.x, -dive.y, -dive.z, -dive.w}, .5f);
-            check(std::abs(flipped.x - half.x) < 1e-5f && std::abs(flipped.w - half.w) < 1e-5f, "levelTilt went the long way");
-            const Quat bad = ff::levelTilt({nan, 0, 0, 1}, .5f);
-            check(bad.w == 1 && bad.x == 0, "levelTilt: a bad tilt is not level");
-            const Quat badW = ff::levelTilt(dive, nan);
-            check(badW.x == dive.x, "levelTilt: a bad weight changed the tilt");
+            ff::Pan p;
+            float w = 0, most = 0;
+            const float first = p.update(1 / 90.f, true);
+            check(first > 0 && first < .002f, "LOOK UP's pan did not start gently");
+            w = first;
+            for (int i = 0; i < 27; ++i) {
+                const float n = p.update(1 / 90.f, true);
+                most = std::max(most, n - w);
+                w = n;
+            }
+            check(w > .2f && w < .8f, "LOOK UP's pan is not part way after .3 s");
+            for (int i = 0; i < 60; ++i) {
+                const float n = p.update(1 / 90.f, true);
+                most = std::max(most, n - w);
+                w = n;
+            }
+            check(w == 1, "LOOK UP's pan did not finish");
+            check(most < .05f, "LOOK UP's pan snapped");
+            for (int i = 0; i < 20; ++i)
+                w = p.update(1 / 90.f, false);
+            check(w < 1 && w > .5f, "LOOK UP's pan back is not smooth");
+            const float before = w;
+            w = p.update(1 / 90.f, true);
+            check(std::abs(w - before) < .05f, "LOOK UP's pan turned round with a jump");
+            for (int i = 0; i < 200; ++i)
+                w = p.update(1 / 90.f, false);
+            check(w == 0, "LOOK UP's pan did not come back to exactly 0");
+            check(p.update(nan, true) == 0, "LOOK UP NaN seconds");
+            // pitchUpTilt: the body flat (the view looking straight down) pans to the horizon at 1, half way at .5;
+            // half flat pans its 45 degrees; upright, or a look already up, stays; the heading is kept; NaN-safe.
+            const Vec3 ahead{0, 0, -1};
+            const Quat flat = Quat::around({1, 0, 0}, -1.5707963f);
+            check(flat.rotate(ahead).y < -.999f, "the test's flat body does not look down");
+            const Vec3 full = ff::pitchUpTilt(flat, ahead, 1).rotate(ahead);
+            check(std::abs(full.y) < 1e-3f && full.z < -.999f, "LOOK UP did not look ahead lying flat");
+            const Vec3 halfWay = ff::pitchUpTilt(flat, ahead, .5f).rotate(ahead);
+            check(std::abs(halfWay.y + .7071f) < 2e-3f && halfWay.z < 0, "LOOK UP half way is not 45 degrees");
+            const Quat halfFlat = Quat::around({1, 0, 0}, -.785398f);
+            const Vec3 hf = ff::pitchUpTilt(halfFlat, ahead, 1).rotate(ahead);
+            check(std::abs(hf.y) < 1e-3f && hf.z < -.999f, "LOOK UP half flat did not reach ahead");
+            const Quat upright{};
+            const Quat same = ff::pitchUpTilt(upright, ahead, 1);
+            check(same.w == 1 && same.x == 0 && same.y == 0 && same.z == 0, "LOOK UP pitched an upright body");
+            // Any orientation, in the body's own frame: every heading, on the back, rolled, upside down, near vertical.
+            auto level = [&](Quat t, float wgt = 1) {
+                const Quat r = ff::pitchUpTilt(t, ahead, wgt);
+                const float m = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
+                const Vec3 v = r.rotate(ahead);
+                return std::isfinite(m) && std::abs(m - 1) < 1e-4f && finite(v) && std::abs(v.y) < 2e-3f;
+            };
+            const float halfPi = 1.5707963f;
+            for (int k = 0; k < 4; ++k) { // yaw 0/90/180/270, lying flat: ahead along that heading
+                const Quat yaw = Quat::around({0, 1, 0}, k * halfPi);
+                const Quat t = yaw * flat;
+                const Vec3 want = yaw.rotate(ahead), got = ff::pitchUpTilt(t, ahead, 1).rotate(ahead);
+                check(level(t) && dot(want, got) > .999f, "LOOK UP lying flat at a yaw of 0/90/180/270");
+                check(dot(yaw.rotate(ahead), ff::pitchUpTilt(yaw, ahead, 1).rotate(ahead)) > .9999f,
+                      "LOOK UP moved an upright body at a yaw");
+            }
+            const Quat onBack = Quat::around({1, 0, 0}, halfPi);
+            const Vec3 ob = ff::pitchUpTilt(onBack, ahead, 1).rotate(ahead);
+            check(level(onBack) && ob.z < -.999f, "LOOK UP on the back did not look ahead");
+            const Quat rolledFlat = flat * Quat::around({0, 0, 1}, halfPi);
+            const Quat rolledSide = Quat::around({0, 0, 1}, halfPi), inverted = Quat::around({0, 0, 1}, 3.14159265f);
+            check(level(rolledFlat), "LOOK UP flat and rolled 90");
+            check(dot(rolledSide.rotate(ahead), ff::pitchUpTilt(rolledSide, ahead, 1).rotate(ahead)) > .9999f,
+                  "LOOK UP moved a level look rolled 90");
+            const Quat rs = ff::pitchUpTilt(rolledSide, ahead, 1);
+            check(rs.rotate({0, 1, 0}).y < 1e-3f && std::abs(rs.rotate({0, 1, 0}).x) > .999f, "LOOK UP took the roll");
+            const Quat inv = ff::pitchUpTilt(inverted, ahead, 1);
+            check(level(inverted) && inv.rotate({0, 1, 0}).y < -.999f, "LOOK UP upside down");
+            check(level(flat * inverted) && level(onBack * inverted), "LOOK UP upside down and flat");
+            Vec3 prev{};
+            bool smooth = true;
+            for (float e : {-.2f, -1e-3f, -1e-5f, -1e-7f, 0.f, 1e-7f, 1e-5f, 1e-3f, .2f}) { // through straight down
+                const Quat t = Quat::around({1, 0, 0}, -halfPi + e);
+                const Vec3 v = ff::pitchUpTilt(t, ahead, 1).rotate(ahead);
+                smooth = smooth && level(t) && v.z < -.98f && (e == -.2f || dot(prev, v) > .98f);
+                prev = v;
+            }
+            check(smooth, "LOOK UP flipped or failed near vertical");
+            for (float e : {-1e-5f, 0.f, 1e-5f}) // straight up, yawed and rolled a hair
+                check(level(Quat::around({0, 1, 0}, .3f) * Quat::around({1, 0, 0}, halfPi + e) *
+                            Quat::around({0, 0, 1}, e)),
+                      "LOOK UP near straight up");
+            uint32_t seed = 12345;
+            auto rnd = [&] { seed = seed * 1664525u + 1013904223u; return (seed >> 8) / 8388608.f - 1; };
+            bool all = true;
+            for (int i = 0; i < 2000; ++i) {
+                const Quat t{rnd(), rnd(), rnd(), rnd()};
+                if (std::sqrt(t.x * t.x + t.y * t.y + t.z * t.z + t.w * t.w) < .05f)
+                    continue;
+                all = all && level(t);
+                const Vec3 h = ff::pitchUpTilt(t, ahead, .5f).rotate(ahead);
+                all = all && finite(h);
+            }
+            check(all, "LOOK UP failed at some orientation");
+            const Quat turned = Quat::around({0, 1, 0}, .8f) * Quat::around({1, 0, 0}, -1.f);
+            const Vec3 t0 = turned.rotate(ahead), t1 = ff::pitchUpTilt(turned, ahead, 1).rotate(ahead);
+            check(std::abs(t1.y) < 1e-3f && t0.x * t1.x + t0.z * t1.z > 0 &&
+                      std::abs(t0.x * t1.z - t0.z * t1.x) < 1e-3f,
+                  "LOOK UP turned the heading");
+            const Quat badT = ff::pitchUpTilt({nan, 0, 0, 1}, ahead, 1);
+            check(std::isnan(badT.x), "LOOK UP: a bad tilt was changed");
+            const Quat badW = ff::pitchUpTilt(flat, ahead, nan);
+            const Quat badA = ff::pitchUpTilt(flat, {nan, 0, 0}, 1);
+            const Quat zeroA = ff::pitchUpTilt(flat, {0, 1, 0}, 1);
+            check(badW.x == flat.x && badA.x == flat.x && zeroA.x == flat.x, "LOOK UP: bad input changed the tilt");
+            check(ff::pitchUpTilt(flat, ahead, 0).x == flat.x, "LOOK UP at 0 changed the tilt");
             // The in-game switch: a tap of Y while flying; a hold, or a press begun on the ground, never counts.
             ff::YTap y;
             check(!y.update(1 / 90.f, true, true) && y.update(1 / 90.f, true, false), "a Y tap did not switch");
@@ -35597,9 +35683,10 @@ int main() {
             check(!g.update(1 / 90.f, true, true) && !g.update(1 / 90.f, true, false), "a Y from the ground switched");
             check(!g.update(nan, true, true) && g.update(nan, true, false), "a Y tap with NaN seconds");
         }
-        // The rig: flying with a flip's tilt, LOOK UP keeps the eyes level and where they were, the body keeps its pose.
+        // The rig: flying with a flip that pitches the view down, LOOK UP brings the eyes' ahead to the horizon and
+        // keeps them where they were and the heading; the body keeps its pose.
         {
-            auto run = [](float weight) {
+            auto run = [](float weight, float stick) {
                 GameTrackingRig rig;
                 RealisticFlipSettings settings;
                 settings.enabled = true;
@@ -35607,24 +35694,29 @@ int main() {
                 rig.flips(true);
                 rig.flipSpeed(3.14159265f);
                 rig.flight({{}, {}, true, false});
-                rig.flyLevel(weight);
+                rig.flyLookUp(weight);
                 auto f = trackedFrame();
                 flipFrame(rig, f, false, false);
                 flipFrame(rig, f, false, true);
-                f.hands[0].stickY = 1;
+                f.hands[0].stickY = stick;
                 GameMotionFrame m;
-                for (int i = 0; i < 45; ++i)
+                for (int i = 0; i < 30; ++i)
                     m = flipFrame(rig, f, false, true);
                 return m;
             };
-            const GameMotionFrame tilted = run(0), levelled = run(1);
-            check(std::abs(tilted.flipTilt.x) > .1f && tilted.flyLevel == 0, "the test's flip did not tilt");
-            check(matrixRow(tilted.head, 1).y > -.99f, "the flip did not tilt the view");
-            check(matrixRow(levelled.head, 1).y < -.999f && levelled.flyLevel == 1, "LOOK UP did not level the view");
-            check(std::abs(levelled.flipTilt.x - tilted.flipTilt.x) < 1e-4f, "LOOK UP took the body's pose");
-            check(length(matrixRow(levelled.head, 3) - matrixRow(tilted.head, 3)) < .001f, "LOOK UP moved the eyes");
-            const Vec3 aheadT = matrixRow(tilted.head, 2), aheadL = matrixRow(levelled.head, 2);
-            check(aheadT.x * aheadL.x + aheadT.z * aheadL.z > -1e-3f, "LOOK UP turned the heading");
+            float stick = 1;
+            GameMotionFrame tilted = run(0, stick);
+            if (matrixRow(tilted.head, 2).y > -.1f) {
+                stick = -1;
+                tilted = run(0, stick);
+            }
+            const GameMotionFrame looked = run(1, stick);
+            const Vec3 aheadT = matrixRow(tilted.head, 2), aheadL = matrixRow(looked.head, 2);
+            check(aheadT.y < -.1f && tilted.flyLookUp == 0, "the test's flip did not pitch the view down");
+            check(std::abs(aheadL.y) < .01f && looked.flyLookUp == 1, "LOOK UP did not bring the look to the horizon");
+            check(std::abs(looked.flipTilt.x - tilted.flipTilt.x) < 1e-4f, "LOOK UP took the body's pose");
+            check(length(matrixRow(looked.head, 3) - matrixRow(tilted.head, 3)) < .001f, "LOOK UP moved the eyes");
+            check(aheadT.x * aheadL.x + aheadT.z * aheadL.z > 0, "LOOK UP turned the heading round");
         }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";

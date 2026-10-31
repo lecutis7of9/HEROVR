@@ -9,18 +9,18 @@
 //   `holdSeconds` in the air (on the ground: with a hand up, the RISE pose) to enter flight; once flying you
 //   stay flying after letting go, and R3 / landing end it as before. OFF: the old auto start.
 // - FLY STEER (fly_steer, ON): RISE and the right stick's climb go along the body's up (the tracking space's
-//   up: FLY ROLL and the flips' tilt included, the view's own up with LOOK UP), not the world's, so a hand up while upside down or
+//   up: FLY ROLL, the flips' tilt and LOOK UP included), not the world's, so a hand up while upside down or
 //   sideways goes the way it looks; the hands' way is smoothed and the flight turns its velocity round
 //   (keeping speed) instead of braking into each new way. OFF: world up, as before.
 // - FLY FLIPS (fly_flips, ON): while FLY flies, REALISTIC FLIPS (only if the player has it on) respond more
 //   readily: more strength and spin, a quicker response, lower speed and arm thresholds. The van / Batmobile
 //   override (vehicle_flips) still turns them off while driving. OFF: the player's own rows.
-// - FLY LOOK UP (fly_look_up, ON; owner: "not a fixed tilt"): while flying, the view follows the player's real
-//   head only, level with the world: the flying body's pitch and roll (REALISTIC FLIPS' tilt, the dive /
-//   Superman pose) no longer drag the view toward the ground; the yaw (heading) and position still follow, and
-//   the stick's FLY ROLL still rolls it. On his back he looks up and sees the sky. The body keeps its pose. Eased
-//   in and out over `levelEaseSeconds`. A tap of Y while flying (FLY took Y from the game's Web Wings) turns it
-//   off / on for the session, with a buzz and a line; live.txt is the master: OFF there, Y does nothing.
+// - FLY LOOK UP (fly_look_up, ON = the feature is there; the tester's final spec): a toggled view. A tap of Y while
+//   flying (FLY took Y from the game's Web Wings) turns it on or off, with a haptic tick and a line; it starts OFF
+//   every session. On, while flying, the view pitches up by as much as the flying body has pitched it down - full
+//   when the body is parallel to the ground (he looks ahead, not at the street), none when upright - about the
+//   view's level right axis (no roll, the heading kept), the head tracked on top. Each toggle is a smooth
+//   cinematic pan (`panSeconds`, eased in and out), never a snap; landing pans back. live.txt OFF: no Y, no pan.
 // No game address is read or written: everything here is the mod's own state (CONFIRMED by construction; no
 // CANDIDATE). The flight word's extra bits ride in game_swing::Command::reserved7[1] (unused until now): an
 // older bridge ignores them, an older VR module sends 0 (the old flight exactly).
@@ -45,11 +45,11 @@ inline constexpr const char* flipsHelp =
     "FLY FLIPS ON: your REALISTIC FLIPS react more readily while you fly (driving still turns them off); "
     "OFF keeps your own flip rows; live, no restart.";
 inline constexpr const char* lookUpHelp =
-    "FLY LOOK UP ON (the default): while you fly your view follows only your real head and stays level with the "
-    "world, so a dive pose never drags it to the ground, and a tap of Y turns it off or on while flying; OFF tilts "
-    "your view with the flying body as before; live, no restart.";
+    "FLY LOOK UP ON (the default) lets a tap of Y while flying smoothly pan your view up to look ahead instead of "
+    "down when your body lies flat (it starts off each session, another tap pans back), while OFF removes the Y "
+    "switch; live, no restart.";
 inline bool onByDefault(uint32_t value) { return value != 1; } // fly_hold, fly_steer, fly_flips
-inline bool levelOn(uint32_t value) { return value == 0; } // fly_look_up: 0 ON; 1 or any other value OFF
+inline bool levelOn(uint32_t value) { return value == 0; } // fly_look_up enabled: 0 ON; 1 or any other value OFF
 
 // ---- The flight's second word (game_swing::Command::reserved7[1]) ----
 enum : uint32_t { bitHold = 1u, bitEnter = 2u, bitSteer = 4u };
@@ -172,47 +172,68 @@ inline RealisticFlipSettings flying(RealisticFlipSettings s, bool flyingNow, boo
     return s;
 }
 
-// ---- FLY LOOK UP (the level view) ----
-inline constexpr float levelEaseSeconds = .35f, tapSeconds = .5f;
-class LevelView {
+// ---- FLY LOOK UP (the toggled view) ----
+inline constexpr float panSeconds = .6f, tapSeconds = .5f;
+class Pan {
   public:
-    // How level the view is this frame, 0 (the body's tilt, as before) .. 1 (level): eased toward 1 while
-    // `want`, back to exactly 0 otherwise.
+    // How far the view is panned up this frame, 0 .. 1: the progress runs toward `want` at 1 / panSeconds a
+    // second and is eased (smoothstep), so it starts and ends gently; turned round half way, it goes back from
+    // where it is. Exactly 0 and 1 at the ends; NaN-safe.
     float update(float seconds, bool want) {
         const float dt = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
-        const float goal = want ? 1.f : 0.f;
-        weight_ += (goal - weight_) * (1 - std::exp(-dt / levelEaseSeconds));
-        if (want && weight_ > .998f)
-            weight_ = 1;
-        if (!want && weight_ < .002f)
-            weight_ = 0;
-        if (!std::isfinite(weight_))
-            weight_ = 0;
-        weight_ = std::clamp(weight_, 0.f, 1.f);
-        return weight_;
+        progress_ += (want ? dt : -dt) / panSeconds;
+        progress_ = std::isfinite(progress_) ? std::clamp(progress_, 0.f, 1.f) : 0.f;
+        return weight();
     }
-    float weight() const { return weight_; }
-    void reset() { weight_ = 0; }
+    float weight() const { return progress_ * progress_ * (3 - 2 * progress_); }
+    float progress() const { return progress_; }
+    void reset() { progress_ = 0; }
 
   private:
-    float weight_{};
+    float progress_{};
 };
-// The tracking space's tilt (pitch and roll about the yaw's frame; the heading is the rig's yaw) taken
-// `weight` of the way to level (none): 0 the tilt, 1 level, the short way; NaN-safe (a bad tilt: level).
-inline Quat levelTilt(Quat tilt, float weight) {
+// The tracking space's tilt (in the rig's yaw frame) with the view turned `weight` of the way from where the
+// tilt points `ahead` (the head's level ahead in the tracking space) to the horizon, worked out in the body's own
+// frame so any heading, roll, upside down or on the back works: the target is the level heading of the view's
+// ahead plus, as the view nears straight down or up, the level heading of the body's up (where the head's top
+// points, so flat on the front or the back it looks the way the head leads), which is smooth through vertical
+// with no gimbal flip. The angle is the view's lift to that level line - pi/2 lying flat, 0 upright (flatness),
+// the view's roll is left alone. NaN-safe: anything unreadable returns the tilt.
+inline Quat pitchUpTilt(Quat tilt, Vec3 ahead, float weight) {
     if (!std::isfinite(weight) || weight <= 0)
         return tilt;
+    weight = std::min(weight, 1.f);
     const float n = std::sqrt(tilt.x * tilt.x + tilt.y * tilt.y + tilt.z * tilt.z + tilt.w * tilt.w);
-    if (!std::isfinite(n) || n < 1e-6f || weight >= 1)
-        return {};
-    Quat q{tilt.x / n, tilt.y / n, tilt.z / n, tilt.w / n};
-    if (q.w < 0)
-        q = {-q.x, -q.y, -q.z, -q.w};
-    const float k = 1 - weight;
-    Quat r{q.x * k, q.y * k, q.z * k, q.w * k + weight};
+    if (!std::isfinite(n) || n < 1e-6f)
+        return tilt;
+    const Quat q{tilt.x / n, tilt.y / n, tilt.z / n, tilt.w / n};
+    ahead = {ahead.x, 0, ahead.z};
+    const float al = length(ahead);
+    if (!finite(ahead) || al < .1f)
+        return tilt;
+    const Vec3 w = q.rotate(ahead / al);       // the view's ahead in the yaw frame
+    const Vec3 u = q.rotate(Vec3{0, 1, 0});    // the body's up (the head's top)
+    if (!finite(w) || !finite(u))
+        return tilt;
+    // Level target: w's own heading, with the head's-top heading blended in by how far w points up or down (the
+    // sign takes the head-first side both face down and face up); |h| >= ~0.7 for unit orthogonal w, u.
+    Vec3 h{w.x - w.y * u.x, 0, w.z - w.y * u.z};
+    const float hl = length(h);
+    if (!finite(h) || hl < 1e-4f)
+        return tilt;
+    h = h / hl;
+    const Vec3 axis = cross(w, h);
+    const float s = length(axis), c = std::clamp(dot(w, h), -1.f, 1.f);
+    if (!finite(axis) || s < 1e-6f)
+        return tilt; // level already (h can't oppose w: a level w gives h = w)
+    const float angle = std::atan2(s, c);
+    if (!std::isfinite(angle) || angle <= 1e-5f)
+        return tilt;
+    const Quat lift = Quat::around(axis / s, angle * weight);
+    const Quat r = lift * q;
     const float m = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
     if (!std::isfinite(m) || m < 1e-6f)
-        return {};
+        return tilt;
     return {r.x / m, r.y / m, r.z / m, r.w / m};
 }
 // The in-game switch: a tap of Y (pressed and let go within `tapSeconds`) while `active` (FLY flying, the

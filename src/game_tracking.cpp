@@ -657,6 +657,23 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         out.wallRoll = rollAngle;
         out.wallRotate = wallRoll_.engaged();
     }
+    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): while flying, the view's pitch and roll eased off the body's
+    // tilt to level (the real head only), the head kept where it was; the yaw stays; FLY ROLL below still rolls.
+    if (flyLevel_ > 0 && !holds && std::isfinite(flyLevel_)) {
+        const Pose before = placed.toWorld(f.head);
+        const Quat tilt = fly_feel::levelTilt(placed.tilt, flyLevel_);
+        if (finite(tilt.rotate(Vec3{0, 1, 0}))) {
+            const Quat kept = placed.tilt;
+            placed.tilt = tilt;
+            const Vec3 shift = before.position - placed.toWorld(f.head).position;
+            if (finite(shift)) {
+                placed.origin += shift;
+                out.flyLevel = flyLevel_;
+            } else {
+                placed.tilt = kept;
+            }
+        }
+    }
     // Update 38.5 FLY ROLL: about the head's level look, the head kept where it was (as above).
     if (flyRoll_ != 0 && !holds && std::isfinite(flyRoll_)) {
         const Pose before = placed.toWorld(f.head);
@@ -668,20 +685,6 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             placed.tilt = unit(yaw.conjugate() * roll * yaw * placed.tilt);
             placed.origin += before.position - placed.toWorld(f.head).position;
             out.flyRoll = flyRoll_;
-        }
-    }
-    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): the view pitched up about its (rolled) right, the head kept
-    // where it was, as FLY ROLL above.
-    if (flyPitch_ != 0 && !holds && std::isfinite(flyPitch_)) {
-        const Pose before = placed.toWorld(f.head);
-        const Vec3 ahead = before.orientation.rotate(Vec3{0, 0, -1});
-        const Quat pitch = fly_feel::pitchUp(ahead, flyPitch_, out.flyRoll);
-        const Quat yaw = Quat::yaw(placed.yaw);
-        const Quat tilt = unit(yaw.conjugate() * pitch * yaw * placed.tilt);
-        if (finite(tilt.rotate(Vec3{0, 1, 0}))) {
-            placed.tilt = tilt;
-            placed.origin += before.position - placed.toWorld(f.head).position;
-            out.flyPitch = flyPitch_;
         }
     }
     // The eyes out of what the world is built of (HeadClearance), and the

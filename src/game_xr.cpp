@@ -942,8 +942,8 @@ std::atomic<bool> flyAutoLevelNow{true};
 std::atomic<uint32_t> vanNoFlipsNow{0};
 // 0.0.74 test 10 CAR COLLISION (car_collision074.hpp; live.txt car_collision): 0 ON (the default), 1 OFF.
 std::atomic<uint32_t> carCollisionNow{0};
-// 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; live.txt fly_hold, fly_steer, fly_flips: 0 ON (the default), 1 OFF;
-// fly_look_up: 0 OFF (the default), 1 ON).
+// 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; live.txt fly_hold, fly_steer, fly_flips, fly_look_up: 0 ON (the
+// default), 1 OFF; fly_look_up is the level view, also switched by a tap of Y while flying).
 std::atomic<uint32_t> flyHoldNow{0}, flySteerNow{0}, flyFlipsNow{0}, flyLookUpNow{0};
 std::atomic<uint32_t> promptHandlingNow{0}; // extras385::prompts::Handling
 std::atomic<uint32_t> gestureMovesNow{0};   // Update 38.5: gestures385::Mode (0 OFF, 1 TRAINING, 2 ON)
@@ -2120,7 +2120,10 @@ DWORD WINAPI run(void*) {
         extras385::fly::StickChord flyChord;
         extras385::fly::Roll flyRollState;
         fly_feel::EnterHold flyEnterHold; // 0.0.74 test 10 FLY HOLD
-        fly_feel::LookUp flyLookUp;       // 0.0.74 test 10 FLY LOOK UP
+        fly_feel::LevelView flyLookUp;    // 0.0.74 test 10 FLY LOOK UP (the level view)
+        fly_feel::YTap flyLookUpTap;      // its in-game switch: a tap of Y while flying
+        bool flyLookUpSession = true;     // the switch's state (live.txt ON: starts ON; OFF there: no level view)
+        uint32_t flyLookUpLive = 0;       // live.txt's value the switch last saw (a change there resets it)
         uint32_t flyEnterAsks = 0;
         bool flyDropHeld{};
         float flyDropSeconds{};
@@ -4720,18 +4723,41 @@ DWORD WINAPI run(void*) {
                             game_prompts::note("Update 38.5: FLY ROLL failed and turned itself off");
                         }
                         rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
-                        // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): while FLY flies, the view eased up; off
-                        // (the default) or landed, eased back level.
-                        float pitch = 0;
+                        // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): while FLY flies, the view follows the real
+                        // head only, level with the world (the body's dive / flips no longer pitch it); landed, or
+                        // OFF, eased back to the body's tilt. live.txt's fly_look_up is the master (ON the default);
+                        // a tap of Y while flying turns it off / on for the session (FLY took Y from Web Wings; a Y
+                        // the game names is the game's), with a buzz and a line.
+                        float level = 0;
                         try {
-                            pitch = flyLookUp.update(frame.seconds, fly_feel::offByDefault(flyLookUpNow.load()) &&
-                                                                        flyModeNow.load() != 0 && flyNow.flying && gameplay);
+                            const uint32_t lookLive = flyLookUpNow.load();
+                            if (lookLive != flyLookUpLive) {
+                                flyLookUpLive = lookLive;
+                                flyLookUpSession = true;
+                            }
+                            const bool flyingNow = flyModeNow.load() != 0 && flyNow.flying && gameplay;
+                            const bool yFree = !(namedPress.claimed() & game_pad::NamedPress::controlY);
+                            if (flyLookUpTap.update(frame.seconds, flyingNow && yFree && !calibrationInput,
+                                                    (frame.buttons & buttonY) != 0)) {
+                                if (fly_feel::levelOn(lookLive)) {
+                                    flyLookUpSession = !flyLookUpSession;
+                                    message(3, 0, flyLookUpSession ? "FLY LOOK UP: ON - your view stays level (Y turns it off)"
+                                                                   : "FLY LOOK UP: OFF - your view tilts with your body (Y turns it on)");
+                                    runtime.haptic(0, flyLookUpSession ? .5f : .25f);
+                                    runtime.haptic(1, flyLookUpSession ? .5f : .25f);
+                                } else {
+                                    message(3, 0, "FLY LOOK UP is OFF in live.txt (fly_look_up = on to use Y)");
+                                }
+                            }
+                            level = flyLookUp.update(frame.seconds,
+                                                     fly_feel::levelOn(lookLive) && flyLookUpSession && flyingNow);
                         } catch (...) {
                             flyLookUp.reset();
-                            flyLookUpNow = 0;
+                            flyLookUpTap.reset();
+                            flyLookUpNow = 1;
                             game_prompts::note("0.0.74 test 10: FLY LOOK UP failed and turned itself off");
                         }
-                        rig.flyPitch(std::isfinite(pitch) ? pitch : 0.f);
+                        rig.flyLevel(std::isfinite(level) ? level : 0.f);
                     }
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
                     // 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp, owner pt1380u): while he drives the van or a
@@ -14590,7 +14616,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarCollision(void* v) {
     return setLive(v, 0, 1, 5547, carCollisionNow, asU32);
 }
 // 0.0.74 test 10 FLY FEEL (fly_feel074.hpp), all live: FLY HOLD, FLY STEER, FLY FLIPS 0 ON (the default), 1 OFF;
-// FLY LOOK UP 0 OFF (the default), 1 ON.
+// FLY LOOK UP 0 ON (the default: the level view while flying; Y while flying switches it), 1 OFF.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyHold(void* v) {
     return setLive(v, 0, 1, 5548, flyHoldNow, asU32);
 }

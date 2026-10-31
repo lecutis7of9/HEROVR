@@ -9,14 +9,18 @@
 //   `holdSeconds` in the air (on the ground: with a hand up, the RISE pose) to enter flight; once flying you
 //   stay flying after letting go, and R3 / landing end it as before. OFF: the old auto start.
 // - FLY STEER (fly_steer, ON): RISE and the right stick's climb go along the body's up (the tracking space's
-//   up: FLY ROLL, the flips' tilt and LOOK UP included), not the world's, so a hand up while upside down or
+//   up: FLY ROLL and the flips' tilt included, the view's own up with LOOK UP), not the world's, so a hand up while upside down or
 //   sideways goes the way it looks; the hands' way is smoothed and the flight turns its velocity round
 //   (keeping speed) instead of braking into each new way. OFF: world up, as before.
 // - FLY FLIPS (fly_flips, ON): while FLY flies, REALISTIC FLIPS (only if the player has it on) respond more
 //   readily: more strength and spin, a quicker response, lower speed and arm thresholds. The van / Batmobile
 //   override (vehicle_flips) still turns them off while driving. OFF: the player's own rows.
-// - FLY LOOK UP (fly_look_up, OFF): while flying, the view is pitched up `lookUpDegrees` (a mod-side tracking
-//   space tilt like FLY ROLL, eased in and out), so a belly-down Superman pose sees ahead without craning.
+// - FLY LOOK UP (fly_look_up, ON; owner: "not a fixed tilt"): while flying, the view follows the player's real
+//   head only, level with the world: the flying body's pitch and roll (REALISTIC FLIPS' tilt, the dive /
+//   Superman pose) no longer drag the view toward the ground; the yaw (heading) and position still follow, and
+//   the stick's FLY ROLL still rolls it. On his back he looks up and sees the sky. The body keeps its pose. Eased
+//   in and out over `levelEaseSeconds`. A tap of Y while flying (FLY took Y from the game's Web Wings) turns it
+//   off / on for the session, with a buzz and a line; live.txt is the master: OFF there, Y does nothing.
 // No game address is read or written: everything here is the mod's own state (CONFIRMED by construction; no
 // CANDIDATE). The flight word's extra bits ride in game_swing::Command::reserved7[1] (unused until now): an
 // older bridge ignores them, an older VR module sends 0 (the old flight exactly).
@@ -29,7 +33,7 @@
 
 namespace spidy::fly_feel {
 
-// live.txt values: fly_hold / fly_steer / fly_flips 0 ON (the default), 1 OFF; fly_look_up 0 OFF (the default), 1 ON.
+// live.txt values: fly_hold / fly_steer / fly_flips / fly_look_up 0 ON (the default), 1 OFF.
 // Exports SpidyFlyHold 5548, SpidyFlySteer 5549, SpidyFlyFlips 5550, SpidyFlyLookUp 5551.
 inline constexpr const char* holdHelp =
     "FLY HOLD ON: hold a grip for half a second in the air (or with a hand up on the ground) to start flying, "
@@ -41,10 +45,11 @@ inline constexpr const char* flipsHelp =
     "FLY FLIPS ON: your REALISTIC FLIPS react more readily while you fly (driving still turns them off); "
     "OFF keeps your own flip rows; live, no restart.";
 inline constexpr const char* lookUpHelp =
-    "FLY LOOK UP ON: while you fly your view tilts up as if you raised your head, so a belly-down pose sees "
-    "ahead; OFF (the default) keeps your view as it is; live, no restart.";
+    "FLY LOOK UP ON (the default): while you fly your view follows only your real head and stays level with the "
+    "world, so a dive pose never drags it to the ground, and a tap of Y turns it off or on while flying; OFF tilts "
+    "your view with the flying body as before; live, no restart.";
 inline bool onByDefault(uint32_t value) { return value != 1; } // fly_hold, fly_steer, fly_flips
-inline bool offByDefault(uint32_t value) { return value == 1; } // fly_look_up
+inline bool levelOn(uint32_t value) { return value == 0; } // fly_look_up: 0 ON; 1 or any other value OFF
 
 // ---- The flight's second word (game_swing::Command::reserved7[1]) ----
 enum : uint32_t { bitHold = 1u, bitEnter = 2u, bitSteer = 4u };
@@ -167,38 +172,77 @@ inline RealisticFlipSettings flying(RealisticFlipSettings s, bool flyingNow, boo
     return s;
 }
 
-// ---- FLY LOOK UP ----
-inline constexpr float lookUpDegrees = 30.f, lookUpEaseSeconds = .35f;
-class LookUp {
+// ---- FLY LOOK UP (the level view) ----
+inline constexpr float levelEaseSeconds = .35f, tapSeconds = .5f;
+class LevelView {
   public:
-    // Radians to pitch the view up this frame: eased toward lookUpDegrees while `want`, back to 0 otherwise.
+    // How level the view is this frame, 0 (the body's tilt, as before) .. 1 (level): eased toward 1 while
+    // `want`, back to exactly 0 otherwise.
     float update(float seconds, bool want) {
         const float dt = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
-        const float goal = want ? lookUpDegrees * (3.14159265f / 180.f) : 0.f;
-        angle_ += (goal - angle_) * (1 - std::exp(-dt / lookUpEaseSeconds));
-        if (!want && std::fabs(angle_) < .002f)
-            angle_ = 0;
-        if (!std::isfinite(angle_))
-            angle_ = 0;
-        return angle_;
+        const float goal = want ? 1.f : 0.f;
+        weight_ += (goal - weight_) * (1 - std::exp(-dt / levelEaseSeconds));
+        if (want && weight_ > .998f)
+            weight_ = 1;
+        if (!want && weight_ < .002f)
+            weight_ = 0;
+        if (!std::isfinite(weight_))
+            weight_ = 0;
+        weight_ = std::clamp(weight_, 0.f, 1.f);
+        return weight_;
     }
-    float angle() const { return angle_; }
-    void reset() { angle_ = 0; }
+    float weight() const { return weight_; }
+    void reset() { weight_ = 0; }
 
   private:
-    float angle_{};
+    float weight_{};
 };
-// The turn that pitches a view looking along level `ahead` up by `radians`: about its right (cross(ahead, up)),
-// that right first rolled `roll` about `ahead` (FLY ROLL), so a rolled view tilts up its own way.
-inline Quat pitchUp(Vec3 ahead, float radians, float roll = 0) {
-    const Vec3 h{ahead.x, 0, ahead.z};
-    if (!finite(h) || length(h) < .1f || !std::isfinite(radians) || radians == 0)
+// The tracking space's tilt (pitch and roll about the yaw's frame; the heading is the rig's yaw) taken
+// `weight` of the way to level (none): 0 the tilt, 1 level, the short way; NaN-safe (a bad tilt: level).
+inline Quat levelTilt(Quat tilt, float weight) {
+    if (!std::isfinite(weight) || weight <= 0)
+        return tilt;
+    const float n = std::sqrt(tilt.x * tilt.x + tilt.y * tilt.y + tilt.z * tilt.z + tilt.w * tilt.w);
+    if (!std::isfinite(n) || n < 1e-6f || weight >= 1)
         return {};
-    const Vec3 a = normalized(h);
-    Vec3 right = cross(a, Vec3{0, 1, 0});
-    if (std::isfinite(roll) && roll != 0)
-        right = Quat::around(a, roll).rotate(right);
-    return Quat::around(right, radians);
+    Quat q{tilt.x / n, tilt.y / n, tilt.z / n, tilt.w / n};
+    if (q.w < 0)
+        q = {-q.x, -q.y, -q.z, -q.w};
+    const float k = 1 - weight;
+    Quat r{q.x * k, q.y * k, q.z * k, q.w * k + weight};
+    const float m = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
+    if (!std::isfinite(m) || m < 1e-6f)
+        return {};
+    return {r.x / m, r.y / m, r.z / m, r.w / m};
 }
+// The in-game switch: a tap of Y (pressed and let go within `tapSeconds`) while `active` (FLY flying, the
+// game not naming Y). A press that began while inactive, or held longer, never counts.
+class YTap {
+  public:
+    bool update(float seconds, bool active, bool y) {
+        const float dt = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
+        bool tap = false;
+        if (!active) {
+            spent_ = y;
+            down_ = false;
+        } else if (spent_) {
+            spent_ = y;
+        } else if (y) {
+            held_ = down_ ? held_ + dt : 0.f;
+            down_ = true;
+            if (held_ > tapSeconds)
+                spent_ = true, down_ = false;
+        } else if (down_) {
+            tap = held_ <= tapSeconds;
+            down_ = false;
+        }
+        return tap;
+    }
+    void reset() { down_ = spent_ = false; held_ = 0; }
+
+  private:
+    float held_{};
+    bool down_{}, spent_{};
+};
 
 } // namespace spidy::fly_feel

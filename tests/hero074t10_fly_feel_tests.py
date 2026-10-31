@@ -1,8 +1,8 @@
 """HERO VR 0.0.74 test 10 FLY FEEL (pt1424u, a player's comment: "the way it automatically starts flight instead of
 having a held button makes it so you maneuver kind of stiffly and if you hold your hand up when youre upside down or
 sideways you just go up"): FLY HOLD (a grip held to enter flight, then it stays), FLY STEER (the climb along the
-body's up, eased turning), FLY FLIPS (REALISTIC FLIPS readier while flying) and FLY LOOK UP (the view pitched up while
-flying, off by default) - live.txt only (the wrist HUD is full), ids 5548-5551. No game address.
+body's up, eased turning), FLY FLIPS (REALISTIC FLIPS readier while flying) and FLY LOOK UP (the level view: while flying
+the view follows the real head only, level with the world, on by default, a tap of Y while flying switches it) - live.txt only (the wrist HUD is full), ids 5548-5551. No game address.
 Made by Agent Mulder."""
 import os, re, sys, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,7 +14,7 @@ SWITCHES = (  # key, export, id, atomic, choices (index 0 = the default)
     ('fly_hold', 'SpidyFlyHold', 5548, 'flyHoldNow', ('on', 'off')),
     ('fly_steer', 'SpidyFlySteer', 5549, 'flySteerNow', ('on', 'off')),
     ('fly_flips', 'SpidyFlyFlips', 5550, 'flyFlipsNow', ('on', 'off')),
-    ('fly_look_up', 'SpidyFlyLookUp', 5551, 'flyLookUpNow', ('off', 'on')),
+    ('fly_look_up', 'SpidyFlyLookUp', 5551, 'flyLookUpNow', ('on', 'off')),
 )
 
 class FlyFeel(unittest.TestCase):
@@ -42,8 +42,19 @@ class FlyFeel(unittest.TestCase):
         self.assertLess(word, g.index('submitSwing(&input)', word))
         flips = g.index('const auto flipRows = fly_feel::flying(realisticFlips(values)')
         self.assertLess(flips, g.index('rig.automaticFlips(vehicle_flips::realistic(flipRows, carDriving, noFlips));'))  # the van wins
-        pitch = g.index('rig.flyPitch(std::isfinite(pitch) ? pitch : 0.f);')
-        self.assertLess(pitch, g.index('motion = rig.update(controller, feet', pitch))
+        level = g.index('rig.flyLevel(std::isfinite(level) ? level : 0.f);')
+        self.assertLess(level, g.index('motion = rig.update(controller, feet', level))
+        # LOOK UP: live.txt is the master, the Y tap only while FLY flies and the game is not naming Y, a cue each way
+        look = g[g.index('// 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp)'):level]
+        self.assertIn('fly_feel::levelOn(lookLive) && flyLookUpSession && flyingNow', look)
+        self.assertIn('flyingNow && yFree && !calibrationInput', look)
+        self.assertIn('NamedPress::controlY', look)
+        self.assertIn('(frame.buttons & buttonY) != 0', look)
+        self.assertIn('runtime.haptic(0,', look)
+        self.assertIn('message(3, 0, flyLookUpSession ?', look)
+        self.assertIn('flyLookUpNow = 1;', look)  # a failure turns it off
+        # Y while FLY flies is FLY's (Web Wings taken from the game's pad), so the tap reaches nothing else
+        self.assertIn('if (flyNow.flying && mapping == game_pad::Mapping::gameplay)\n                            pad.buttons = static_cast<uint16_t>(pad.buttons & ~game_pad::y);', g)
         s = src('src/game_swing.cpp')
         self.assertIn('fly_feel::unpack(c.version >= 7 && c.bytes == sizeof(Command) ? c.reserved7[1] : 0u)', s)
         self.assertIn('fi.bodyUp = fly_feel::bodyUp(toWorld);', s)
@@ -51,7 +62,17 @@ class FlyFeel(unittest.TestCase):
         f = src('include/spidy/extras385.hpp')
         self.assertIn('if (in.holdEnter && !in.enter)\n                return o;', f)
         t = src('src/game_tracking.cpp')
-        self.assertLess(t.index('out.flyRoll = flyRoll_;'), t.index('fly_feel::pitchUp(ahead, flyPitch_, out.flyRoll)'))
+        lv = t.index('fly_feel::levelTilt(placed.tilt, flyLevel_)')
+        self.assertLess(lv, t.index('out.flyRoll = flyRoll_;'))  # level first, the stick's roll on top
+        self.assertNotIn('out.flipTilt = fly', t)  # the body keeps its pose
+        self.assertIn('if (flyLevel_ > 0 && !holds && std::isfinite(flyLevel_))', t)
+    def test_bad_value_is_off(self):
+        self.assertEqual(live_settings.parse('fly_look_up = banana\n')[0], {'fly_look_up': 'off'})
+        self.assertEqual(live_settings.parse('fly_look_up = 7\n')[0], {'fly_look_up': 'off'})
+        self.assertEqual(live_settings.export_value('fly_look_up', 'off'), 1)
+        h = src('include/spidy/fly_feel074.hpp')
+        self.assertIn('inline bool levelOn(uint32_t value) { return value == 0; }', h)
+        self.assertNotIn('lookUpDegrees', h)  # no fixed tilt
     def test_pure_header(self):
         h = src('include/spidy/fly_feel074.hpp')
         self.assertEqual(re.findall(r'#include "([^"]+)"', h), ['spidy/math.hpp', 'spidy/realistic_flip.hpp'])

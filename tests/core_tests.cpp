@@ -35425,8 +35425,10 @@ int main() {
         namespace ff = fly_feel;
         namespace fly = extras385::fly;
         const float nan = std::numeric_limits<float>::quiet_NaN();
-        // Switches: hold, steer, flips 0 ON (the default) 1 OFF; look up 0 OFF (the default) 1 ON; help says restart.
-        check(ff::onByDefault(0) && !ff::onByDefault(1) && !ff::offByDefault(0) && ff::offByDefault(1), "fly feel defaults");
+        // Switches: hold, steer, flips, look up 0 ON (the default) 1 OFF (look up: any other value OFF); help says restart.
+        check(ff::onByDefault(0) && !ff::onByDefault(1) && ff::levelOn(0) && !ff::levelOn(1) && !ff::levelOn(2) &&
+                  !ff::levelOn(0xffffffffu),
+              "fly feel defaults");
         for (const char* h : {ff::holdHelp, ff::steerHelp, ff::flipsHelp, ff::lookUpHelp})
             check(std::string(h).find("restart") != std::string::npos, "a FLY FEEL subtext without its restart note");
         // The second word: round trip, enter only with hold, 0 = the old flight.
@@ -35558,25 +35560,71 @@ int main() {
             check(!ff::flying(offRows, true, true).enabled, "FLY FLIPS turned REALISTIC FLIPS on");
             check(!vehicle_flips::realistic(f, true, true).enabled, "FLY FLIPS beat the van's override");
         }
-        // LOOK UP: eases to 30 degrees and back to exactly 0; pitchUp lifts the look (and NaN-safe).
+        // LOOK UP (the level view): the weight eases to exactly 1 and back to exactly 0 (NaN-safe); levelTilt takes a
+        // pitched and rolled tilt to level at 1, leaves it at 0, part way between, and a bad tilt or weight is safe.
         {
-            ff::LookUp l;
-            float a = 0;
+            ff::LevelView l;
+            float w = 0;
             for (int i = 0; i < 270; ++i)
-                a = l.update(1 / 90.f, true);
-            check(std::abs(a - ff::lookUpDegrees * 3.14159265f / 180) < .01f, "LOOK UP did not reach its pitch");
+                w = l.update(1 / 90.f, true);
+            check(w == 1, "LOOK UP did not reach level");
             for (int i = 0; i < 900; ++i)
-                a = l.update(1 / 90.f, false);
-            check(a == 0, "LOOK UP did not ease back to level");
-            check(l.update(nan, true) == 0, "LOOK UP NaN seconds");
-            const Vec3 ahead = ff::pitchUp({0, 0, -1}, .5f).rotate({0, 0, -1});
-            check(ahead.y > .45f && ahead.z < 0, "pitchUp: + pitches the look up");
-            const Vec3 ahead2 = ff::pitchUp({1, 0, 0}, .5f).rotate({1, 0, 0});
-            check(ahead2.y > .45f && ahead2.x > 0, "pitchUp: + pitches up facing +x");
-            const Vec3 rolled = ff::pitchUp({0, 0, -1}, .5f, 1.5707963f).rotate({0, 0, -1});
-            check(std::abs(rolled.y) < 1e-4f && std::abs(rolled.x) > .45f, "pitchUp rolled a quarter: toward the body's up");
-            const Quat id = ff::pitchUp({0, nan, 0}, .5f);
-            check(id.w == 1 && id.x == 0, "pitchUp: no level look, no turn");
+                w = l.update(1 / 90.f, false);
+            check(w == 0, "LOOK UP did not ease back to the body's tilt");
+            check(l.update(nan, true) == 0 && l.update(1 / 90.f, true) > 0, "LOOK UP NaN seconds");
+            const Quat dive = Quat::around({1, 0, 0}, -1.2f) * Quat::around({0, 0, 1}, .7f);
+            const Quat level = ff::levelTilt(dive, 1);
+            check(level.w == 1 && level.x == 0 && level.y == 0 && level.z == 0, "levelTilt 1 is not level");
+            const Quat same = ff::levelTilt(dive, 0);
+            check(same.x == dive.x && same.w == dive.w, "levelTilt 0 changed the tilt");
+            const Quat half = ff::levelTilt(dive, .5f);
+            const float upHalf = half.rotate({0, 1, 0}).y, upDive = dive.rotate({0, 1, 0}).y;
+            check(upHalf > upDive + .05f && upHalf < 1, "levelTilt .5 is not part way");
+            const Quat flipped = ff::levelTilt({-dive.x, -dive.y, -dive.z, -dive.w}, .5f);
+            check(std::abs(flipped.x - half.x) < 1e-5f && std::abs(flipped.w - half.w) < 1e-5f, "levelTilt went the long way");
+            const Quat bad = ff::levelTilt({nan, 0, 0, 1}, .5f);
+            check(bad.w == 1 && bad.x == 0, "levelTilt: a bad tilt is not level");
+            const Quat badW = ff::levelTilt(dive, nan);
+            check(badW.x == dive.x, "levelTilt: a bad weight changed the tilt");
+            // The in-game switch: a tap of Y while flying; a hold, or a press begun on the ground, never counts.
+            ff::YTap y;
+            check(!y.update(1 / 90.f, true, true) && y.update(1 / 90.f, true, false), "a Y tap did not switch");
+            for (int i = 0; i < 60; ++i)
+                check(!y.update(1 / 90.f, true, true), "a held Y switched while held");
+            check(!y.update(1 / 90.f, true, false), "a long Y hold switched");
+            ff::YTap g;
+            g.update(1 / 90.f, false, true);
+            check(!g.update(1 / 90.f, true, true) && !g.update(1 / 90.f, true, false), "a Y from the ground switched");
+            check(!g.update(nan, true, true) && g.update(nan, true, false), "a Y tap with NaN seconds");
+        }
+        // The rig: flying with a flip's tilt, LOOK UP keeps the eyes level and where they were, the body keeps its pose.
+        {
+            auto run = [](float weight) {
+                GameTrackingRig rig;
+                RealisticFlipSettings settings;
+                settings.enabled = true;
+                rig.automaticFlips(settings);
+                rig.flips(true);
+                rig.flipSpeed(3.14159265f);
+                rig.flight({{}, {}, true, false});
+                rig.flyLevel(weight);
+                auto f = trackedFrame();
+                flipFrame(rig, f, false, false);
+                flipFrame(rig, f, false, true);
+                f.hands[0].stickY = 1;
+                GameMotionFrame m;
+                for (int i = 0; i < 45; ++i)
+                    m = flipFrame(rig, f, false, true);
+                return m;
+            };
+            const GameMotionFrame tilted = run(0), levelled = run(1);
+            check(std::abs(tilted.flipTilt.x) > .1f && tilted.flyLevel == 0, "the test's flip did not tilt");
+            check(matrixRow(tilted.head, 1).y > -.99f, "the flip did not tilt the view");
+            check(matrixRow(levelled.head, 1).y < -.999f && levelled.flyLevel == 1, "LOOK UP did not level the view");
+            check(std::abs(levelled.flipTilt.x - tilted.flipTilt.x) < 1e-4f, "LOOK UP took the body's pose");
+            check(length(matrixRow(levelled.head, 3) - matrixRow(tilted.head, 3)) < .001f, "LOOK UP moved the eyes");
+            const Vec3 aheadT = matrixRow(tilted.head, 2), aheadL = matrixRow(levelled.head, 2);
+            check(aheadT.x * aheadL.x + aheadT.z * aheadL.z > -1e-3f, "LOOK UP turned the heading");
         }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";

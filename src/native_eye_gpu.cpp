@@ -336,8 +336,229 @@ struct FoveaTag {
     ID3D12GraphicsCommandList* list{};
     unsigned eye{};
     bool set{};
+    // 0.0.74 test 10 SEE-THROUGH: the job's pair stamp; whether its G-buffer pass was seen (and
+    // its depth view), whether its depth was dealt with (copied or skipped), and the depth view
+    // last cleared on it with its value (the convention check).
+    EyePairState::Stamp stamp{};
+    bool gbuffer{}, depthDone{};
+    SIZE_T gbufferDsv{}, clearedDsv{};
+    float clearedDepth = -1;
 };
 thread_local FoveaTag foveaTag{};
+// 0.0.74 test 10 SEE-THROUGH (Batmobile / van seen through walls): the eye jobs' scene depth for
+// Spidy's world-placed models (d3d12_renderer's occluded models). Passive observers: the
+// OMSetRenderTargets / RSSetViewports hooks above (installed with the eyes now; foveaOn still
+// gates everything they change) and ClearDepthStencilView, which only reads. At the first
+// transition out of DEPTH_WRITE of an eye-sized D32 depth after the job's G-buffer pass, the
+// depth is copied, on the game's own list, into a ring slot of that eye. Anything unexpected
+// (other format or size, another queue, a lost list, an allocation) skips or turns only this
+// off: never `fault`, never the eyes.
+using ClearDepth = void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, D3D12_CPU_DESCRIPTOR_HANDLE,
+                                            D3D12_CLEAR_FLAGS, FLOAT, UINT8, UINT, const D3D12_RECT*);
+ClearDepth originalClearDepth{};
+void* clearDepthHook{};
+std::atomic<bool> clearDepthOn{};
+std::recursive_mutex depthLock; // recursive for the same reason as `recording`
+constexpr unsigned depthRingSize = 3;
+struct DepthSlot {
+    ComPtr<ID3D12Resource> texture; // R32_TYPELESS, PIXEL_SHADER_RESOURCE between copies
+    EyePairState::Stamp stamp{};
+    ID3D12CommandList* list{};       // the game list the copy is recorded on
+    bool pending{}, executed{};
+};
+std::array<std::array<DepthSlot, depthRingSize>, 2> depthRing;
+std::array<unsigned, 2> depthNext{};
+UINT depthW{}, depthH{};
+struct RetiredDepth {
+    ComPtr<ID3D12Resource> texture;
+    uint64_t ms{};
+};
+std::vector<RetiredDepth> retiredDepth;
+// Why depth is off for the session (0: on): 1 standard-Z clear, 2 other clear value,
+// 3 allocation failed, 4 hooks not installed.
+std::atomic<uint32_t> depthOff{};
+std::atomic<uint64_t> depthCaptured{}, depthSkipSize{}, depthSkipFormat{}, depthSkipNoPass{},
+    depthSkipQueue{}, depthSkipLost{}, depthClearReversed{}, depthClearStandard{}, depthClearOther{},
+    depthGiven{}, depthMissed{};
+std::atomic<uint32_t> depthSeenFormat{}, depthSeenW{}, depthSeenH{};
+bool depthFormatOk(DXGI_FORMAT f) { return f == DXGI_FORMAT_D32_FLOAT || f == DXGI_FORMAT_R32_TYPELESS; }
+bool depthFamily(DXGI_FORMAT f) {
+    switch (f) {
+    case DXGI_FORMAT_D32_FLOAT:
+    case DXGI_FORMAT_R32_TYPELESS:
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+    case DXGI_FORMAT_R24G8_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+    case DXGI_FORMAT_R32G8X24_TYPELESS:
+    case DXGI_FORMAT_D16_UNORM:
+    case DXGI_FORMAT_R16_TYPELESS:
+        return true;
+    default:
+        return false;
+    }
+}
+void depthStop(uint32_t why) {
+    uint32_t none = 0;
+    depthOff.compare_exchange_strong(none, why);
+}
+// The G-buffer pass's depth view on the tagged job: the clear seen on it says which way the
+// depth runs (0 far, reversed: as the eye lens is made; 1: standard, depth is not used).
+// Judged whichever comes first, the clear or the pass's binding; a later clear of it to the far
+// value leaves sky (nothing hides), to anything else turns the depth off.
+void depthJudge(FoveaTag& t) {
+    if (!t.gbuffer || !t.gbufferDsv || t.clearedDsv != t.gbufferDsv || t.clearedDepth < 0)
+        return;
+    if (t.clearedDepth == 0.f)
+        ++depthClearReversed;
+    else if (t.clearedDepth == 1.f) {
+        ++depthClearStandard;
+        depthStop(1);
+    } else {
+        ++depthClearOther;
+        depthStop(2);
+    }
+    t.clearedDepth = -1; // counted once
+}
+void depthNotePass(FoveaTag& t, const D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
+    t.gbuffer = true;
+    t.gbufferDsv = dsv ? dsv->ptr : 0;
+    depthJudge(t);
+}
+void STDMETHODCALLTYPE clearDepth(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE dsv,
+                                  D3D12_CLEAR_FLAGS flags, FLOAT depth, UINT8 stencil, UINT rects,
+                                  const D3D12_RECT* rect) {
+    originalClearDepth(list, dsv, flags, depth, stencil, rects, rect);
+    auto& t = foveaTag;
+    if (t.list != list || !(flags & D3D12_CLEAR_FLAG_DEPTH) || rects)
+        return;
+    t.clearedDsv = dsv.ptr;
+    t.clearedDepth = std::isfinite(depth) ? depth : 2.f;
+    depthJudge(t);
+}
+// Barrier hook, before the game's own barrier: on the tagged job after its G-buffer pass.
+void depthBarrier(ID3D12GraphicsCommandList* list, UINT count, const D3D12_RESOURCE_BARRIER* bs) {
+    auto& t = foveaTag;
+    if (!bs || t.eye > 1 || depthOff.load(std::memory_order_relaxed) || !staged)
+        return;
+    for (UINT n = 0; n < count; ++n) {
+        const auto& b = bs[n];
+        if (b.Type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION || b.Flags != D3D12_RESOURCE_BARRIER_FLAG_NONE ||
+            b.Transition.StateBefore != D3D12_RESOURCE_STATE_DEPTH_WRITE || !b.Transition.pResource ||
+            (b.Transition.Subresource != 0 && b.Transition.Subresource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES))
+            continue;
+        auto* res = b.Transition.pResource;
+        const auto d = res->GetDesc();
+        if (d.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || !depthFamily(d.Format))
+            continue;
+        t.depthDone = true; // the first depth out of the pass: this one or none
+        depthSeenFormat = static_cast<uint32_t>(d.Format);
+        depthSeenW = static_cast<uint32_t>(d.Width);
+        depthSeenH = d.Height;
+        UINT w{}, h{};
+        {
+            std::lock_guard recordLock(recording);
+            w = width;
+            h = height;
+        }
+        if (!w || !h || d.Width != w || d.Height != h) {
+            ++depthSkipSize;
+            return;
+        }
+        if (!depthFormatOk(d.Format) || d.MipLevels != 1 || d.DepthOrArraySize != 1 || d.SampleDesc.Count != 1) {
+            ++depthSkipFormat;
+            return;
+        }
+        std::lock_guard lock(depthLock);
+        if (!device)
+            return;
+        const auto now = GetTickCount64();
+        std::erase_if(retiredDepth, [&](const RetiredDepth& r) { return now - r.ms > 3000; });
+        if (depthW != w || depthH != h) { // a new eye size: new slots, the old kept a while
+            for (auto& eye : depthRing)
+                for (auto& slot : eye) {
+                    if (slot.texture)
+                        retiredDepth.push_back({std::move(slot.texture), now});
+                    slot = {};
+                }
+            depthW = w;
+            depthH = h;
+        }
+        auto& slot = depthRing[t.eye][depthNext[t.eye]];
+        if (!slot.texture) {
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+            D3D12_RESOURCE_DESC desc{};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width = w;
+            desc.Height = h;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.Format = DXGI_FORMAT_R32_TYPELESS;
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+            if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                       IID_PPV_ARGS(&slot.texture))) ||
+                !slot.texture) {
+                slot = {};
+                depthStop(3);
+                return;
+            }
+        }
+        depthNext[t.eye] = (depthNext[t.eye] + 1) % depthRingSize;
+        D3D12_RESOURCE_BARRIER to[2]{};
+        to[0].Type = to[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        to[0].Transition = {res, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                            D3D12_RESOURCE_STATE_COPY_SOURCE};
+        to[1].Transition = {slot.texture.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST};
+        originalBarrier(list, 2, to);
+        list->CopyResource(slot.texture.Get(), res);
+        for (auto& b2 : to)
+            std::swap(b2.Transition.StateBefore, b2.Transition.StateAfter);
+        originalBarrier(list, 2, to); // the game's own barrier follows from DEPTH_WRITE, as it expects
+        slot.stamp = t.stamp;
+        slot.list = list;
+        slot.pending = true;
+        slot.executed = false;
+        ++depthCaptured;
+        return;
+    }
+}
+// The game's queue ran these lists (or another queue did: that copy is not trusted), or a
+// list was reset before it ran (its copy never happens).
+void depthExecuted(bool gameQueue, UINT count, ID3D12CommandList* const* commands) {
+    if (!depthCaptured.load(std::memory_order_relaxed) || !commands)
+        return;
+    std::lock_guard lock(depthLock);
+    for (auto& eye : depthRing)
+        for (auto& slot : eye)
+            if (slot.pending)
+                for (UINT n = 0; n < count; ++n)
+                    if (commands[n] == slot.list) {
+                        slot.pending = false;
+                        slot.executed = gameQueue;
+                        if (!gameQueue) {
+                            slot.stamp = {};
+                            ++depthSkipQueue;
+                        }
+                        break;
+                    }
+}
+void depthReset(ID3D12GraphicsCommandList* list) {
+    if (!depthCaptured.load(std::memory_order_relaxed))
+        return; // nothing ever recorded: no lock on every list's Reset
+    std::lock_guard lock(depthLock);
+    for (auto& eye : depthRing)
+        for (auto& slot : eye)
+            if (slot.pending && slot.list == list) {
+                slot.pending = slot.executed = false;
+                slot.stamp = {};
+                slot.list = nullptr;
+                ++depthSkipLost;
+            }
+}
 void stopFovea(uint32_t why) {
     uint32_t none = foveation::fine;
     foveaFault.compare_exchange_strong(none, why);
@@ -367,6 +588,8 @@ void STDMETHODCALLTYPE omSetTargets(ID3D12GraphicsCommandList* list, UINT n, con
     if (!gbuffer)
         return;
     foveaTagged.fetch_add(1, std::memory_order_relaxed);
+    if (!t.gbuffer)
+        depthNotePass(t, dsv); // 0.0.74 test 10 SEE-THROUGH: reads only
     if (!foveaOn.load(std::memory_order_relaxed) || t.eye > 1)
         return;
     auto* image = foveaImage[t.eye].load();
@@ -407,9 +630,12 @@ void foveaMarker(ID3D12GraphicsCommandList* list) {
         if (t.set && t.list && t.list != list)
             t.set = false; // that list's rate was left on: its own job end or Reset clears it
         t = {list, currentMarker.eye, false};
+        t.stamp = currentMarker.stamp; // 0.0.74 test 10 SEE-THROUGH
     } else if (t.list == list) {
         if (t.set)
             clearRate(list);
+        if (t.gbuffer && !t.depthDone)
+            ++depthSkipNoPass; // 0.0.74 test 10 SEE-THROUGH: no depth left the pass in the job
         t = {};
     }
 }
@@ -417,6 +643,9 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
                                const D3D12_RESOURCE_BARRIER* bs) {
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
     native_address_finder::onBarrier(list, count, bs);
+    // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
+    if (enabled && foveaTag.list == list && foveaTag.gbuffer && !foveaTag.depthDone)
+        depthBarrier(list, count, bs);
     if (enabled) {
         const auto* left = watched[0].load();
         const auto* right = watched[1].load();
@@ -458,6 +687,8 @@ HRESULT STDMETHODCALLTYPE reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
     auto result = originalReset(list, a, p);
     if (foveaTag.list == list)
         foveaTag = {}; // Update 37.2: a reset list has no shading rate
+    if (SUCCEEDED(result))
+        depthReset(list); // 0.0.74 test 10 SEE-THROUGH
     if (enabled && SUCCEEDED(result)) {
         std::lock_guard lock(recording);
         lists.erase(list);
@@ -2334,6 +2565,7 @@ void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandL
     // Runtime/overlay queues must not serialize behind the game submission lock.
     if (q != queue.Get()) {
         originalExecute(q, count, commands);
+        depthExecuted(false, count, commands); // 0.0.74 test 10 SEE-THROUGH
         std::lock_guard recordLock(recording);
         for (UINT n = 0; n < count; ++n)
             if (auto found = lists.find(commands[n]); found != lists.end() && !found->second.empty()) {
@@ -2356,6 +2588,7 @@ void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandL
         noteCopies(fence->GetCompletedValue());
     buildFovea(); // Update 37.2: ahead of the game's lists on this queue
     originalExecute(q, count, commands);
+    depthExecuted(true, count, commands); // 0.0.74 test 10 SEE-THROUGH
     std::lock_guard recordLock(recording);
     ++executes;
     bool relevant{};
@@ -3092,6 +3325,88 @@ uint64_t eyeColorPairs() {
 }
 // Update 37.2: FOVEATED. False (and its fault set) when this GPU cannot or a hook failed; OFF
 // always works. The pass hooks go in the first time a level is set.
+// The pass hooks (lifecycle held): FOVEATED's two, and since 0.0.74 test 10 (SEE-THROUGH) put
+// in with the eyes, where they only watch until foveaOn; and the depth clear's, read only.
+bool passHooks() {
+    if (foveaHooked)
+        return true;
+    if (!command)
+        return false;
+    auto vt = *reinterpret_cast<void***>(command.Get());
+    foveaHooks = {vt[46], vt[21]}; // OMSetRenderTargets, RSSetViewports
+    bool ok = true;
+    if (!originalOmSetTargets)
+        ok = MH_CreateHook(foveaHooks[0], reinterpret_cast<void*>(omSetTargets),
+                           reinterpret_cast<void**>(&originalOmSetTargets)) == MH_OK;
+    if (ok && !originalSetViewports)
+        ok = MH_CreateHook(foveaHooks[1], reinterpret_cast<void*>(setViewports),
+                           reinterpret_cast<void**>(&originalSetViewports)) == MH_OK;
+    // Both or neither: the viewport check needs the pass hook and the reverse.
+    ok = ok && MH_EnableHook(foveaHooks[0]) == MH_OK;
+    if (ok && MH_EnableHook(foveaHooks[1]) != MH_OK) {
+        MH_DisableHook(foveaHooks[0]);
+        ok = false;
+    }
+    if (!ok)
+        return false;
+    foveaHooked = true;
+    // SEE-THROUGH's convention check: without it no scene depth, everything else as before.
+    if (!clearDepthHook) {
+        if (MH_CreateHook(vt[47], reinterpret_cast<void*>(clearDepth), reinterpret_cast<void**>(&originalClearDepth)) ==
+            MH_OK)
+            clearDepthHook = vt[47];
+    }
+    clearDepthOn = clearDepthHook && originalClearDepth && MH_EnableHook(clearDepthHook) == MH_OK;
+    if (!clearDepthOn)
+        depthStop(4);
+    return true;
+}
+// 0.0.74 test 10 SEE-THROUGH: the scene depth of exactly this pair, both eyes.
+bool sceneDepth(uint64_t serial, uint64_t generation, SceneDepth& out) {
+    out = {};
+    if (!enabled || !staged || depthOff.load() || !foveaHooked.load() || !clearDepthOn.load() || !serial)
+        return false;
+    const EyePairState::Stamp want{serial, generation};
+    std::lock_guard lock(depthLock);
+    for (unsigned eye = 0; eye < 2; ++eye) {
+        for (const auto& slot : depthRing[eye])
+            if (slot.texture && slot.executed && !slot.pending && slot.stamp == want) {
+                out.eyes[eye] = slot.texture;
+                break;
+            }
+        if (!out.eyes[eye]) {
+            out = {};
+            ++depthMissed;
+            return false;
+        }
+    }
+    out.width = depthW;
+    out.height = depthH;
+    ++depthGiven;
+    return true;
+}
+std::string sceneDepthLine() {
+    try {
+        const auto n = [](const std::atomic<uint64_t>& v) { return std::to_string(v.load()); };
+        std::string eyes;
+        {
+            std::lock_guard recordLock(recording);
+            eyes = std::to_string(width) + "x" + std::to_string(height);
+        }
+        return "0.0.74 test 10 SEE-THROUGH depth: captured " + n(depthCaptured) + ", skipped " +
+               std::to_string(depthSkipSize + depthSkipFormat + depthSkipNoPass + depthSkipQueue + depthSkipLost) +
+               " (size " + n(depthSkipSize) + ", format " + n(depthSkipFormat) + ", no depth out of the pass " +
+               n(depthSkipNoPass) + ", other queue " + n(depthSkipQueue) + ", list lost " + n(depthSkipLost) +
+               "), format " + std::to_string(depthSeenFormat.load()) + " " + std::to_string(depthSeenW.load()) + "x" +
+               std::to_string(depthSeenH.load()) + " (eyes " + eyes +
+               "), clears reversed " + n(depthClearReversed) + " / standard " + n(depthClearStandard) + " / other " +
+               n(depthClearOther) + ", pairs given " + n(depthGiven) + " / missed " + n(depthMissed) + ", hooks " +
+               (foveaHooked.load() ? "pass" : "none") + (clearDepthOn.load() ? "+clear" : "") + ", off " +
+               std::to_string(depthOff.load());
+    } catch (...) {
+        return {};
+    }
+}
 bool setFoveation(uint32_t level, uint32_t inner, bool debug) {
     if (level >= foveation::levels)
         return false;
@@ -3121,27 +3436,9 @@ bool setFoveation(uint32_t level, uint32_t inner, bool debug) {
     }
     if (foveaTier != 2)
         return false;
-    if (!foveaHooked) {
-        auto vt = *reinterpret_cast<void***>(command.Get());
-        foveaHooks = {vt[46], vt[21]}; // OMSetRenderTargets, RSSetViewports
-        bool ok = true;
-        if (!originalOmSetTargets)
-            ok = MH_CreateHook(foveaHooks[0], reinterpret_cast<void*>(omSetTargets),
-                               reinterpret_cast<void**>(&originalOmSetTargets)) == MH_OK;
-        if (ok && !originalSetViewports)
-            ok = MH_CreateHook(foveaHooks[1], reinterpret_cast<void*>(setViewports),
-                               reinterpret_cast<void**>(&originalSetViewports)) == MH_OK;
-        // Both or neither: the viewport check needs the pass hook and the reverse.
-        ok = ok && MH_EnableHook(foveaHooks[0]) == MH_OK;
-        if (ok && MH_EnableHook(foveaHooks[1]) != MH_OK) {
-            MH_DisableHook(foveaHooks[0]);
-            ok = false;
-        }
-        if (!ok) {
-            stopFovea(foveation::hookFailed);
-            return false;
-        }
-        foveaHooked = true;
+    if (!passHooks()) {
+        stopFovea(foveation::hookFailed);
+        return false;
     }
     foveaOn = true;
     return true;
@@ -3610,6 +3907,19 @@ DWORD start(void* input) {
                 MH_DisableHook(t);
             return 1300 + s;
         }
+    // 0.0.74 test 10 SEE-THROUGH: the passive pass hooks, with the headset's eyes only; when they
+    // fail, only the scene depth is missing (FOVEATED tries again when turned on).
+    {
+        std::lock_guard depth(depthLock); // a new start: nothing of the last one's lists
+        for (auto& eye : depthRing)
+            eye = {};
+        depthNext = {};
+        depthW = depthH = 0;
+        retiredDepth.clear();
+        depthOff = 0;
+    }
+    if (staged && !passHooks())
+        depthStop(4);
     // The game's presented frame is optional: without it the headset shows
     // nothing while gameplay is unavailable, as before.
     void* presentAddress{};
@@ -3690,6 +4000,9 @@ DWORD stop() {
             if (h)
                 MH_DisableHook(h);
     foveaHooked = false;
+    if (clearDepthHook) // 0.0.74 test 10 SEE-THROUGH
+        MH_DisableHook(clearDepthHook);
+    clearDepthOn = false;
     std::lock_guard submitLock(submission);
     std::lock_guard recordLock(recording);
     if (fence && fence->GetCompletedValue() < fenceValue) {

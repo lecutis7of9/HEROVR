@@ -11767,6 +11767,9 @@ DWORD WINAPI run(void*) {
                             hero007::appendHero007(vertices, locked, travel, viewer, pixelAngle);
                         } else if (heroDraw->any) // Version 0.0.7 HERO PROFILES
                             hero007::appendHero007(vertices, *heroDraw, travel, viewer, pixelAngle);
+                        // 0.0.74 test 10 SEE-THROUGH: the Batmobile's / van's own models (the last of hero072's look in
+                        // the model sink, seen from outside the car), hidden where the game's scene is nearer.
+                        std::size_t seeThroughFirst{}, seeThroughCount{};
                         if (saved->hero072.any) { // Version 0.0.72 (TEST): THOR, GREEN LANTERN, IRON HUD, PERCH
                             // Build 5: THOR's look (the hammer, its chain, the storm) can never take the frame down:
                             // out of memory or a bad model drops this look for this frame only.
@@ -11787,7 +11790,41 @@ DWORD WINAPI run(void*) {
                                 }
                                 const double now72 = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
                                 const float ahead72 = look72->hammerStamp > 0 ? static_cast<float>(std::clamp(now72 - look72->hammerStamp, 0.0, .06)) : 0.f;
+                                const std::size_t seeFrom = modelVertices.size();
                                 hero072::appendLook(vertices, *look72, travel, viewer, pixelAngle, ahead72);
+                                // SEE-THROUGH: from the end back, the triangles about the car (the car's frame:
+                                // its roof box grown 0.5 m, at least 4.4 x 4.3 x 8 m), van last in the look.
+                                const hero072::Look& lv = *look72;
+                                const Vec3 vanAt = lv.vanAt + travel;
+                                const Vec3 fv{lv.vanForward.x, 0, lv.vanForward.z};
+                                const float fvl = std::sqrt(fv.x * fv.x + fv.z * fv.z);
+                                if (lv.van && fvl > 1e-3f && std::isfinite(vanAt.x + vanAt.y + vanAt.z) &&
+                                    modelVertices.size() > seeFrom && (modelVertices.size() - seeFrom) % 3 == 0 &&
+                                    hero072::roofSeen(lv, viewer - vanAt)) {
+                                    const Vec3 fw{fv.x / fvl, 0, fv.z / fvl}, right{-fw.z, 0, fw.x};
+                                    Vec3 lo{-2.2f, -.8f, -4.f}, hi{2.2f, 3.5f, 4.f};
+                                    if (std::isfinite(lv.roofLow.x + lv.roofLow.y + lv.roofLow.z + lv.roofHigh.x +
+                                                      lv.roofHigh.y + lv.roofHigh.z)) {
+                                        lo = {std::min({lo.x, lv.roofLow.x - .5f, lv.roofHigh.x - .5f}),
+                                              std::min({lo.y, lv.roofLow.y - .5f, lv.roofHigh.y - .5f}),
+                                              std::min({lo.z, lv.roofLow.z - .5f, lv.roofHigh.z - .5f})};
+                                        hi = {std::max({hi.x, lv.roofLow.x + .5f, lv.roofHigh.x + .5f}),
+                                              std::max({hi.y, lv.roofLow.y + .5f, lv.roofHigh.y + .5f}),
+                                              std::max({hi.z, lv.roofLow.z + .5f, lv.roofHigh.z + .5f})};
+                                    }
+                                    std::size_t k = modelVertices.size();
+                                    while (k >= seeFrom + 3) {
+                                        const Vec3 c = (modelVertices[k - 1].position + modelVertices[k - 2].position +
+                                                        modelVertices[k - 3].position) * (1.f / 3.f) - vanAt;
+                                        const float x = c.x * right.x + c.z * right.z, y = c.y,
+                                                    z = -(c.x * fw.x + c.z * fw.z);
+                                        if (!(x > lo.x && x < hi.x && y > lo.y && y < hi.y && z > lo.z && z < hi.z))
+                                            break;
+                                        k -= 3;
+                                    }
+                                    seeThroughFirst = k;
+                                    seeThroughCount = modelVertices.size() - k;
+                                }
                             } catch (...) {
                                 static bool said = false;
                                 if (!said)
@@ -13355,6 +13392,51 @@ DWORD WINAPI run(void*) {
                         const auto drawStart = std::chrono::steady_clock::now(); // Update 37 perf
                         extrasPart.add(std::chrono::duration<double, std::milli>(drawStart - extrasStart).count());
                         if (!saved->flatScreen && !overlayFault) {
+                            // 0.0.74 test 10 SEE-THROUGH: this pair's scene depth for the car's models, only in
+                            // immersive play with the eyes as made (else, and on anything amiss, as before).
+                            try {
+                                static uint64_t seeLogMs{}, seeFrames{}, seeGiven{};
+                                const uint32_t seeDebug = native_gpu::pairEyeDebug();
+                                bool seeOn = false;
+                                if (seeThroughCount && !saved->stereoScreen &&
+                                    eye_debug::eyeDebugSource(seeDebug, 0) == 0 &&
+                                    eye_debug::eyeDebugSource(seeDebug, 1) == 1) {
+                                    ++seeFrames;
+                                    native_gpu::SceneDepth sd;
+                                    if (native_gpu::sceneDepth(imageSerial, imageGeneration, sd)) {
+                                        D3D12Renderer::SceneDepth scene;
+                                        scene.eyes = {sd.eyes[0], sd.eyes[1]};
+                                        scene.width = sd.width;
+                                        scene.height = sd.height;
+                                        scene.gameNear = near_clip::metres();
+                                        scene.gameFar = 0; // the lens's far not known here: infinite, hides less
+                                        scene.overlayNear = .03f; // the overlay's projection above
+                                        scene.overlayFar = 200.f;
+                                        scene.first = seeThroughFirst;
+                                        scene.count = seeThroughCount;
+                                        overlay.setSceneDepth(std::move(scene));
+                                        seeOn = true;
+                                        ++seeGiven;
+                                    }
+                                }
+                                if (!seeOn)
+                                    overlay.setSceneDepth({});
+                                const uint64_t seeNow = GetTickCount64();
+                                if (!seeLogMs || seeNow - seeLogMs >= 10000) {
+                                    if (!seeLogMs)
+                                        consoleLine("0.0.74 test 10 SEE-THROUGH: the Batmobile / van hidden behind "
+                                                    "the game's walls and cars (scene depth, reversed Z, x1.02 + "
+                                                    "0.05 m); anything amiss draws it as before");
+                                    seeLogMs = seeNow;
+                                    consoleLine(native_gpu::sceneDepthLine() + "; car frames " +
+                                                std::to_string(seeFrames) + ", with depth " + std::to_string(seeGiven) +
+                                                ", drawn " + std::to_string(overlay.sceneDrawn()) + " / refused " +
+                                                std::to_string(overlay.sceneRefused()) +
+                                                (overlay.sceneFault().empty() ? std::string() : ", " + overlay.sceneFault()));
+                                }
+                            } catch (...) {
+                                overlay.setSceneDepth({});
+                            }
                             try {
                                 overlay.renderViews(overlayViews, vertices, true, false, translucent, &grade, art, modelVertices);
                             } catch (const std::exception& e) {

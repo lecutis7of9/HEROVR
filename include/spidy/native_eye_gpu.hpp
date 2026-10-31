@@ -2,6 +2,7 @@
 #include "spidy/eye_color.hpp"
 #include <array>
 #include <cstdint>
+#include <string>
 #include <d3d12.h>
 #include <wrl/client.h>
 #include "xr_timing.hpp"
@@ -166,6 +167,19 @@ struct FoveaStatus {
 };
 bool setFoveation(uint32_t level, uint32_t inner, bool debug);
 FoveaStatus foveaStatus();
+// 0.0.74 test 10 SEE-THROUGH: each eye's scene depth (the game's G-buffer depth, reversed Z),
+// copied on the game's list at the end of the eye job's G-buffer pass into Spidy's own textures
+// (R32_TYPELESS, PIXEL_SHADER_RESOURCE between copies), keyed to the eye pair's stamp. Passive:
+// the hooks only watch (and record the copy), nothing in the picture changes. sceneDepth fills
+// `out` only when both eyes of exactly that pair were copied and executed on the game's queue
+// and the depth convention checks out; otherwise false (Spidy's drawings show as before).
+struct SceneDepth {
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> eyes;
+    uint32_t width{}, height{};
+};
+bool sceneDepth(uint64_t serial, uint64_t generation, SceneDepth& out);
+// One log line of the captures since start (counts, the format and size seen, hook state).
+std::string sceneDepthLine();
 void eyeSharpenTiming(TimingMetric& gpu, uint32_t& percent, uint32_t& fault, uint64_t& sharpened);
 // Update 16: the newest GPU time, in ms, of the eye passes now on (AA or the
 // supersample filter, history, sharpening) summed; 0 when none is on; NaN

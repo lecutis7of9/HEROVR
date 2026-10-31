@@ -86,6 +86,31 @@ class D3D12Renderer {
     const std::string& modelFault() const {
         return modelFault_;
     }
+    // 0.0.74 test 10 SEE-THROUGH: the game's scene depth for the next renderViews only. The models
+    // textured[first, first + count) (world-placed, whole triangles) are then hidden per pixel
+    // where the game's scene is nearer: overlay distance > game * scale + bias metres. `eyes`
+    // (R32_TYPELESS in PIXEL_SHADER_RESOURCE, one per view) hold the game's reversed-Z depth made
+    // with near `gameNear` and far `gameFar` (0: infinite); the views' own projection uses
+    // overlayNear / overlayFar (standard Z). Anything that does not fit (sizes, formats, a range
+    // outside the models, the shader) draws those models as without it. Never throws.
+    struct SceneDepth {
+        std::array<ComPtr<ID3D12Resource>, 2> eyes;
+        unsigned width{}, height{};
+        float gameNear{}, gameFar{}, overlayNear{}, overlayFar{}, scale = 1.02f, bias = .05f;
+        std::size_t first{}, count{};
+    };
+    void setSceneDepth(SceneDepth depth) noexcept;
+    // Empty, or why the occluded models' pass is off for the session.
+    const std::string& sceneFault() const {
+        return sceneFault_;
+    }
+    // Frames drawn with the scene depth; frames given one that did not fit.
+    std::uint64_t sceneDrawn() const {
+        return sceneDrawn_;
+    }
+    std::uint64_t sceneRefused() const {
+        return sceneRefused_;
+    }
     // Scales `source` (read as `sourceView`, in PIXEL_SHADER_RESOURCE state)
     // over the whole target, which enters and leaves in RENDER_TARGET state.
     // A display-encoded source reaches an sRGB target with its stored values
@@ -136,6 +161,10 @@ class D3D12Renderer {
     void prepareArt(DXGI_FORMAT targetFormat);
     // The model pass's root signature and pipeline for a target format.
     void prepareModel(DXGI_FORMAT targetFormat);
+    // 0.0.74 test 10 SEE-THROUGH: the occluded models' root signature and pipeline; and whether
+    // `scene` fits these views and models.
+    void prepareOccluded(DXGI_FORMAT targetFormat);
+    bool sceneFits(const SceneDepth& scene, std::span<const ViewTarget> views, std::size_t models) const;
     ComPtr<ID3D12Device> device_;
     ComPtr<ID3D12CommandQueue> queue_;
     ComPtr<ID3D12CommandAllocator> allocator_;
@@ -186,6 +215,14 @@ class D3D12Renderer {
     ComPtr<ID3D12PipelineState> modelPipeline_;
     DXGI_FORMAT modelFormat_ = DXGI_FORMAT_UNKNOWN;
     std::string modelFault_;
+    // 0.0.74 test 10 SEE-THROUGH: the depth for the next frame, the one the last frame read (kept
+    // until its work is done), and the pass.
+    SceneDepth scene_, sceneKept_;
+    ComPtr<ID3D12RootSignature> occludedRoot_;
+    ComPtr<ID3D12PipelineState> occludedPipeline_;
+    DXGI_FORMAT occludedFormat_ = DXGI_FORMAT_UNKNOWN;
+    std::string sceneFault_;
+    std::uint64_t sceneDrawn_{}, sceneRefused_{};
 };
 void addBox(std::vector<Vertex>& out, Vec3 min, Vec3 max, Vec3 color);
 void addBeam(std::vector<Vertex>& out, Vec3 a, Vec3 b, float radius, Vec3 color);

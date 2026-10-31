@@ -759,7 +759,7 @@ bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
         if (!modelHeap_) {
             D3D12_DESCRIPTOR_HEAP_DESC h{};
             h.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-            h.NumDescriptors = 1;
+            h.NumDescriptors = 3; // the skins; 0.0.74 test 10 SEE-THROUGH: each eye's scene depth
             h.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             hr(device_->CreateDescriptorHeap(&h, IID_PPV_ARGS(&modelHeap_)), "Create model descriptor heap");
         }
@@ -871,6 +871,140 @@ float4 ps(Out i):SV_TARGET {
     hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&modelPipeline_)), "Create model pipeline");
     modelFormat_ = targetFormat;
 }
+void D3D12Renderer::setSceneDepth(SceneDepth depth) noexcept {
+    scene_ = std::move(depth);
+}
+bool D3D12Renderer::sceneFits(const SceneDepth& scene, std::span<const ViewTarget> views, std::size_t models) const {
+    if (views.size() != 2 || !scene.count || scene.first % 3 || scene.count % 3 || scene.first > models ||
+        scene.count > models - scene.first || !scene.width || !scene.height || !modelHeap_ ||
+        modelHeap_->GetDesc().NumDescriptors < 3)
+        return false;
+    if (!std::isfinite(scene.gameNear) || scene.gameNear <= 0 || scene.gameNear > 1 || !std::isfinite(scene.gameFar) ||
+        (scene.gameFar != 0 && scene.gameFar <= scene.gameNear) || !std::isfinite(scene.overlayNear) ||
+        !std::isfinite(scene.overlayFar) || scene.overlayNear <= 0 || scene.overlayFar <= scene.overlayNear ||
+        !std::isfinite(scene.scale) || scene.scale < 1 || !std::isfinite(scene.bias) || scene.bias < 0)
+        return false;
+    for (const auto& eye : scene.eyes) {
+        if (!eye)
+            return false;
+        const auto d = eye->GetDesc();
+        if (d.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || d.Format != DXGI_FORMAT_R32_TYPELESS ||
+            d.Width != scene.width || d.Height != scene.height || d.MipLevels != 1 || d.DepthOrArraySize != 1 ||
+            d.SampleDesc.Count != 1)
+            return false;
+    }
+    return true;
+}
+void D3D12Renderer::prepareOccluded(DXGI_FORMAT targetFormat) {
+    if (!occludedRoot_) {
+        D3D12_DESCRIPTOR_RANGE skins{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
+        D3D12_DESCRIPTOR_RANGE scene{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0};
+        D3D12_ROOT_PARAMETER parameters[4]{};
+        parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        parameters[0].Constants.Num32BitValues = 16;
+        parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameters[1].DescriptorTable = {1, &skins};
+        parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameters[2].DescriptorTable = {1, &scene};
+        parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        parameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        parameters[3].Constants.ShaderRegister = 1;
+        parameters[3].Constants.Num32BitValues = 12;
+        parameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_STATIC_SAMPLER_DESC sampler{};
+        sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+        sampler.MaxAnisotropy = 8;
+        sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_ROOT_SIGNATURE_DESC rs{4, parameters, 1, &sampler,
+                                    D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
+        ComPtr<ID3DBlob> signature, error;
+        hr(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
+           "Serialize occluded model root signature");
+        hr(device_->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                        IID_PPV_ARGS(&occludedRoot_)),
+           "Create occluded model root signature");
+    }
+    if (occludedPipeline_ && occludedFormat_ == targetFormat)
+        return;
+    // The model shader, and first: the game's scene depth under this pixel (the same place in the
+    // eye's picture, whatever either image's size). Reversed Z: 0 is the sky (nothing to hide
+    // behind), else the distance n f / (n + d (f - n)) (f = 0: n / d). The overlay's own depth is
+    // standard Z: n f / (f - z (f - n)). Hidden only when clearly behind the scene.
+    const char* shader = R"(
+cbuffer Eye : register(b0) { row_major float4x4 vp; };
+cbuffer Scene : register(b1) { float4 size; float4 lens; float4 bias; };
+Texture2DArray skins : register(t0);
+Texture2D<float> scene : register(t1);
+SamplerState fine : register(s0);
+struct In { float3 position:POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
+struct Out { float4 position:SV_POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
+Out vs(In i) { Out o; o.position=mul(vp,float4(i.position,1)); o.color=i.color; o.shape=i.shape; return o; }
+float4 ps(Out i):SV_TARGET {
+    float2 uv = i.position.xy / size.xy;
+    int2 at = int2(clamp(uv * size.zw, float2(0, 0), size.zw - 1));
+    float d = scene.Load(int3(at, 0));
+    if (d > 1e-7 && d <= 1) {
+        float game = lens.y > 0 ? lens.x * lens.y / (lens.x + d * (lens.y - lens.x)) : lens.x / d;
+        float z = saturate(i.position.z);
+        float mine = lens.z * lens.w / max(lens.w - z * (lens.w - lens.z), 1e-6);
+        if (mine > game * bias.x + bias.y)
+            discard;
+    }
+    float4 t = float4(1, 1, 1, 1);
+    if (i.shape.z >= 0) {
+        t = skins.Sample(fine, float3(i.shape.xy, floor(i.shape.z + .5)));
+        clip(t.a - .5);
+    }
+    return float4(i.color.rgb * t.rgb, 1);
+}
+)";
+    ComPtr<ID3DBlob> vs, ps, error;
+    for (const char* stage : {"vs", "ps"}) {
+        error.Reset();
+        auto& out = stage[0] == 'v' ? vs : ps;
+        if (const HRESULT result = D3DCompile(shader, std::strlen(shader), "spidy_occluded_model", nullptr, nullptr,
+                                              stage, stage[0] == 'v' ? "vs_5_0" : "ps_5_0",
+                                              D3DCOMPILE_ENABLE_STRICTNESS, 0, &out, &error);
+            FAILED(result) || !out)
+            throw std::runtime_error(std::string("Compile occluded model ") + stage + " shader HRESULT=" +
+                                     std::to_string(static_cast<unsigned long>(result)) + ": " +
+                                     compilerText(error.Get()));
+    }
+    D3D12_INPUT_ELEMENT_DESC layout[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    };
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};
+    p.pRootSignature = occludedRoot_.Get();
+    p.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    p.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    p.InputLayout = {layout, 3};
+    p.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    p.NumRenderTargets = 1;
+    p.RTVFormats[0] = targetFormat;
+    p.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+    p.SampleDesc.Count = 1;
+    p.SampleMask = UINT_MAX;
+    p.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    p.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    p.RasterizerState.DepthClipEnable = TRUE;
+    p.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    p.DepthStencilState.DepthEnable = TRUE;
+    p.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    p.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    p.DepthStencilState.FrontFace.StencilFailOp = p.DepthStencilState.FrontFace.StencilDepthFailOp =
+        p.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+    p.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    p.DepthStencilState.BackFace = p.DepthStencilState.FrontFace;
+    occludedPipeline_.Reset();
+    hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&occludedPipeline_)), "Create occluded model pipeline");
+    occludedFormat_ = targetFormat;
+}
 void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<const Vertex> vertices,
                                 bool preserveColor, bool waitForCompletion,
                                 std::span<const Vertex> translucent, const Grade* grade,
@@ -932,6 +1066,40 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     }
     if (!modelReady() || !modelPipeline_)
         textured = {};
+    // 0.0.74 test 10 SEE-THROUGH: the scene depth, only when everything fits; else as before.
+    sceneKept_ = {}; // the last frame's reads are done (waitForSubmission above)
+    SceneDepth scene = std::move(scene_);
+    scene_ = {};
+    bool occlude = false;
+    if (!textured.empty() && scene.count && sceneFault_.empty()) {
+        try {
+            occlude = sceneFits(scene, views, textured.size());
+            if (occlude) {
+                prepareOccluded(format);
+                const auto stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                for (unsigned eye = 0; eye < 2; ++eye) {
+                    D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+                    sv.Format = DXGI_FORMAT_R32_FLOAT;
+                    sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    sv.Texture2D.MipLevels = 1;
+                    auto at = modelHeap_->GetCPUDescriptorHandleForHeapStart();
+                    at.ptr += (1 + eye) * stride;
+                    device_->CreateShaderResourceView(scene.eyes[eye].Get(), &sv, at);
+                }
+                sceneKept_ = scene;
+                ++sceneDrawn_;
+            } else {
+                ++sceneRefused_;
+            }
+        } catch (const std::exception& error) {
+            sceneFault_ = std::string("Occluded models off (") + error.what() + ")";
+            occlude = false;
+        } catch (...) {
+            sceneFault_ = "Occluded models off";
+            occlude = false;
+        }
+    }
     // One buffer: the depth-writing vertices, the art, the translucent ones, then the models.
     const auto bytes = vertices.size_bytes() + art.size_bytes() + translucent.size_bytes() + textured.size_bytes();
     if (bytes > capacity_) {
@@ -1018,8 +1186,32 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                 list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
                 list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
                 list_->SetPipelineState(modelPipeline_.Get());
-                list_->DrawInstanced(static_cast<UINT>(textured.size()), 1,
-                                     static_cast<UINT>(vertices.size() + art.size() + translucent.size()), 0);
+                const auto base = static_cast<UINT>(vertices.size() + art.size() + translucent.size());
+                if (!occlude) {
+                    list_->DrawInstanced(static_cast<UINT>(textured.size()), 1, base, 0);
+                } else { // 0.0.74 test 10 SEE-THROUGH: the world-placed range hidden behind the scene
+                    const auto first = static_cast<UINT>(scene.first), count = static_cast<UINT>(scene.count);
+                    const auto rest = static_cast<UINT>(textured.size()) - first - count;
+                    if (first)
+                        list_->DrawInstanced(first, 1, base, 0);
+                    if (rest)
+                        list_->DrawInstanced(rest, 1, base + first + count, 0);
+                    const auto stride =
+                        device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                    auto depthAt = modelHeap_->GetGPUDescriptorHandleForHeapStart();
+                    depthAt.ptr += (1 + eye) * stride;
+                    const float constants[12] = {static_cast<float>(width), static_cast<float>(height),
+                                                 static_cast<float>(scene.width), static_cast<float>(scene.height),
+                                                 scene.gameNear, scene.gameFar, scene.overlayNear, scene.overlayFar,
+                                                 scene.scale, scene.bias, 0, 0};
+                    list_->SetGraphicsRootSignature(occludedRoot_.Get());
+                    list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
+                    list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
+                    list_->SetGraphicsRootDescriptorTable(2, depthAt);
+                    list_->SetGraphicsRoot32BitConstants(3, 12, constants, 0);
+                    list_->SetPipelineState(occludedPipeline_.Get());
+                    list_->DrawInstanced(count, 1, base + first, 0);
+                }
                 list_->SetGraphicsRootSignature(root_.Get());
                 list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
             }

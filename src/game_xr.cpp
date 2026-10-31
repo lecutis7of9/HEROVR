@@ -31,6 +31,7 @@
 #include "spidy/calibration_panel.hpp"
 #include "spidy/holo_calibration.hpp"
 #include "spidy/fly_lean.hpp"
+#include "spidy/walk_cycle.hpp" // 0.0.74 test 11 WALK LEGS
 #include "spidy/test_notice.hpp"
 #include "spidy/van_screen.hpp"
 #include "spidy/seated_lock074.hpp"
@@ -713,6 +714,9 @@ std::atomic<uint32_t> webRadiusTenthsMm{static_cast<uint32_t>(WebLook{}.radius *
 // Only the picture; the swing attaches when it always did.
 std::atomic<bool> webTravelOn{WebTravel{}.travel};
 std::atomic<uint32_t> webSpeedMs{static_cast<uint32_t>(WebTravel{}.speed)};
+// Version 0.0.74 test 11 WALK LEGS (live.txt walk_legs, SpidyWalkLegs): the drawn suit's and Player 2's legs step
+// with the ground speed (walk_cycle.hpp; on by default); walkAirborne: this frame swinging or flying (no steps).
+std::atomic<bool> walkLegsOn{true}, walkAirborne{false};
 // Update 37: strand physics (live.txt web_physics, web_wiggle, web_bend; web_visual.hpp).
 std::atomic<bool> webPhysicsOn{WebTravel{}.physics};
 std::atomic<uint32_t> webWiggle{static_cast<uint32_t>(WebTravel{}.wiggle)},
@@ -10403,6 +10407,8 @@ DWORD WINAPI run(void*) {
                         const bool rep = !oursFault && c38(combat38::shooterType) == repulsor::repulsor;
                         saved.repulsorLook = rep;
                         saved.flyLean = flyTiltNow; // Version 0.0.73 test 3 (fix 27): the worn suit leans too
+                        // 0.0.74 test 11 WALK LEGS: no steps while swinging or flying
+                        walkAirborne.store(gestureInFlight || (flyModeNow.load() != 0 && flyNow.flying != 0), std::memory_order_relaxed);
                         saved.beamFade = rep ? repulsor::beamFade(static_cast<float>(combatClock - repBeamAt)) : 0.f;
                         if (saved.beamFade > 0) {
                             saved.beamFrom = compose(saved.worldFromTracking, Pose{repBeamFrom, {}}).position;
@@ -12329,6 +12335,18 @@ DWORD WINAPI run(void*) {
                                     // level with the camera where the player could not see it.
                                     if (fly_lean::leaning(saved->flyLean))
                                         t.lean = saved->flyLean;
+                                    {   // 0.0.74 test 11 WALK LEGS: the legs step with the ground speed (the stick or a
+                                        // real step); standing, flying, swinging or OFF: the standing legs exactly.
+                                        static walk_cycle::Cycle suitWalk;
+                                        static auto walkClock = std::chrono::steady_clock::now();
+                                        const auto walkAt = std::chrono::steady_clock::now();
+                                        const float walkDt = std::chrono::duration<float>(walkAt - walkClock).count();
+                                        walkClock = walkAt;
+                                        suitWalk.update(t.eye, t.up, walkDt,
+                                                        walkLegsOn.load(std::memory_order_relaxed) &&
+                                                            !walkAirborne.load(std::memory_order_relaxed) && !fly_lean::leaning(saved->flyLean));
+                                        suitWalk.feet(t.up, 1.f, t.step);
+                                    }
                                     t.eyeForward = rendered.headPose.orientation.rotate(Vec3{0, 0, -1});
                                     t.eyeUp = rendered.headPose.orientation.rotate(Vec3{0, 1, 0});
                                     // 0.0.73 test 5 HERO HANDS (iron_hands ON): the suit's own hand profile (IRON MAN's
@@ -12524,6 +12542,14 @@ DWORD WINAPI run(void*) {
                                         const spidy::mp::Ghost g = spidy::mp::partner(v.state, mpFollow.spot(Vec3{}), mpFollow.ghostYaw(),
                                                                                       !v.buddy, v.buddy);
                                         suit_wear::Tracked gt = spidy::mp::toTracked(g, feet, turn);
+                                        {   // 0.0.74 test 11 WALK LEGS: Player 2 steps with its own ground speed (from its
+                                            // eyes here; nothing new on the wire), not while it flies or swings.
+                                            static walk_cycle::Cycle mpWalk;
+                                            mpWalk.update(gt.eye, gt.up, mpDt,
+                                                          walkLegsOn.load(std::memory_order_relaxed) &&
+                                                              !(v.state.actions & (spidy::mp::flying | spidy::mp::swinging)));
+                                            mpWalk.feet(gt.up, 1.f, gt.step);
+                                        }
                                         bool drawnSuit = false;
                                         const uint32_t gs = spidy::mp::slotOfState(v.state);
                                         if (gs && suitsRigged.load() && overlay.modelReady()) {
@@ -13888,6 +13914,15 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebStart(void* spot) {
 }
 // The shot's flight (Update 15, live.txt web_travel): 1 the tip flies to the
 // anchor, 0 the web is drawn whole at once; refused (3968) otherwise.
+// Version 0.0.74 test 11 WALK LEGS (live.txt walk_legs): 0 on, the drawn suit's and Player 2's legs step as he
+// walks; 1 off, they stand (0.0.74 test 10); refused (7474) otherwise.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWalkLegs(void* v) {
+    const auto value = reinterpret_cast<uintptr_t>(v);
+    if (value > 1)
+        return 7474;
+    walkLegsOn = value == 0;
+    return 0;
+}
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebTravel(void* on) {
     const auto value = reinterpret_cast<uintptr_t>(on);
     if (value > 1)

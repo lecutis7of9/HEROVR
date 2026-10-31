@@ -89,7 +89,9 @@ size_t appendFigure(std::vector<Vertex>& out, const suit_wear::Tracked& t, Vec3 
     const Vec3 hip = base + up * (.95f * s);
     const Vec3 shoulder[2] = {neck - side * (.19f * s) - up * (.05f * s), neck + side * (.19f * s) - up * (.05f * s)};
     const Vec3 hipSide[2] = {hip - side * (.1f * s), hip + side * (.1f * s)};
-    const Vec3 foot[2] = {base - side * (.13f * s), base + side * (.13f * s)};
+    // 0.0.74 test 11 WALK LEGS: the stick figure steps too (Tracked::step; zero: standing)
+    const Vec3 foot[2] = {base - side * (.13f * s) + (finiteV(t.step[0]) ? t.step[0] : Vec3{}),
+                          base + side * (.13f * s) + (finiteV(t.step[1]) ? t.step[1] : Vec3{})};
     const auto view = [&](Vec3 p) { return finiteV(viewer) && length(viewer - p) > 1e-3f ? normalized(viewer - p) : fwd; };
     const float w = .035f * s, soft = .012f * s;
     const auto bar = [&](Vec3 a, Vec3 b, float hw) {

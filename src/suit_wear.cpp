@@ -848,6 +848,8 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
         const float l1 = length(r.at[knee] - r.at[hip]) * s, l2 = length(r.at[foot] - r.at[knee]) * s;
         Vec3 f = out.at[hip] + B(r.at[foot] - r.at[hip]) * s;
         f = f - up * (dot(f - t.feet, up) - r.at[foot].y * s);
+        if (finite(t.step[side])) // 0.0.74 test 11 WALK LEGS: the step (zero: standing)
+            f = f + t.step[side];
         if (length(f - out.at[hip]) > l1 + l2) // in the air (or the floor guessed low): the leg straight
             f = out.at[hip] + normalized(f - out.at[hip]) * (l1 + l2);
         out.at[foot] = f;

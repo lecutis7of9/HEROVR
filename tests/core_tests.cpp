@@ -123,6 +123,7 @@
 #include "spidy/calibration_panel.hpp"
 #include "spidy/holo_calibration.hpp"
 #include "spidy/fly_lean.hpp"
+#include "spidy/walk_cycle.hpp" // 0.0.74 test 11 WALK LEGS
 #include "spidy/health_ring.hpp"
 #include "spidy/combat_input.hpp"
 #include "spidy/combat38.hpp"
@@ -26501,6 +26502,18 @@ int main() {
             bad2.lean = {std::nanf(""), 0, 0, 1};
             check(sw::estimate(rig, bad2, s2), "a bad lean is ignored, never a failure");
         }
+        {   // 0.0.74 test 11 WALK LEGS: a step moves that foot (knee following), the other stays; zero: standing exactly
+            sw::Tracked w = t;
+            w.step[0] = {0, .05f, -.2f};
+            sw::Skeleton ws;
+            check(sw::estimate(rig, w, ws) && ws.ok, "the stepping estimate");
+            check(length(ws.at[sw::footL] - (est.at[sw::footL] + w.step[0])) < 1e-4f && length(ws.at[sw::footR] - est.at[sw::footR]) < 1e-6f,
+                  "the left foot stepped ahead and up, the right stayed");
+            check(ws.at[sw::kneeL].z < est.at[sw::kneeL].z - .05f, "its knee came with it");
+            sw::Tracked z = t;
+            z.step[1] = {std::nanf(""), 0, 0};
+            check(sw::estimate(rig, z, ws) && length(ws.at[sw::footR] - est.at[sw::footR]) < 1e-6f, "a bad step is ignored");
+        }
         t.eye = {std::nanf(""), 0, 0};
         check(!sw::estimate(rig, t, est), "an insane head: no estimate");
         // a mesh without its skin is not worn
@@ -31545,6 +31558,97 @@ int main() {
         const auto& o = combat38::optionInfo[combat38::flyPose];
         const std::string h = o.help;
         check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos, "its subtext");
+    });
+    test("0.0.74 test 11 WALK LEGS: steps by ground speed, the planted foot still, eased to standing, off or flying none", [] {
+        using namespace walk_cycle;
+        // cadence and stride grow with the speed; a planted foot goes back as fast as the body goes on
+        check(cadence(1) < cadence(2) && cadence(2) < cadence(5) && cadence(50) == 1.9f && cadence(0) == .75f, "cadence grows");
+        check(halfStride(1) < halfStride(2) && halfStride(20) == mostHalfStride, "the stride grows, capped");
+        for (float v : {1.f, 2.f, 3.f})
+            check(std::abs(4 * halfStride(v) * cadence(v) - v) < 1e-4f, "planted at " + std::to_string(v) + " m/s");
+        // walking ahead (-z) at 2 m/s on the stick, 90 frames a second
+        const Vec3 up{0, 1, 0};
+        Cycle c;
+        Vec3 eye{0, 1.7f, 0};
+        const float dt = 1.f / 90;
+        for (int i = 0; i < 180; ++i) {
+            eye.z -= 2 * dt;
+            c.update(eye, up, dt, true);
+        }
+        check(c.amount > .99f && std::abs(c.speed - 2) < .02f && c.way.z < -.99f, "two seconds in: full steps along the walk");
+        Vec3 st[2];
+        c.feet(up, 1, st);
+        check(std::abs(st[0].z + st[1].z) < 2 * halfStride(2) + 1e-3f && (st[0].y == 0 || st[1].y == 0), "one foot down at a time");
+        // a foot on the ground stays where it is in the world while the body walks on
+        int planted = 0;
+        float drift = 0;
+        for (int i = 0; i < 90; ++i) {
+            Vec3 a[2], b[2];
+            c.feet(up, 1, a);
+            const Vec3 e0 = eye;
+            eye.z -= 2 * dt;
+            c.update(eye, up, dt, true);
+            c.feet(up, 1, b);
+            for (int f = 0; f < 2; ++f)
+                if (a[f].y == 0 && b[f].y == 0) {
+                    ++planted;
+                    drift = std::max(drift, std::abs((e0.z + a[f].z) - (eye.z + b[f].z)));
+                }
+        }
+        check(planted > 60 && drift < .002f, "the planted foot holds still: " + std::to_string(drift));
+        float high = 0;
+        for (int i = 0; i < 90; ++i) {
+            eye.z -= 2 * dt;
+            c.update(eye, up, dt, true);
+            c.feet(up, 1, st);
+            high = std::max({high, st[0].y, st[1].y});
+        }
+        check(std::abs(high - lift(2)) < .01f, "the swinging foot lifts");
+        // running steps longer and quicker
+        Cycle run;
+        Vec3 re{0, 1.7f, 0};
+        for (int i = 0; i < 180; ++i) {
+            re.x += 5 * dt;
+            run.update(re, up, dt, true);
+        }
+        check(run.way.x > .99f && halfStride(run.speed) > halfStride(2) && cadence(run.speed) > cadence(2), "a run: longer, quicker");
+        // stopping eases back to the standing legs exactly
+        for (int i = 0; i < 270; ++i)
+            c.update(eye, up, dt, true);
+        c.feet(up, 1, st);
+        check(c.amount == 0 && length(st[0]) == 0 && length(st[1]) == 0, "stopped: standing exactly");
+        // room-scale: a slow real step moves them too; a bob in place does not
+        Cycle room;
+        Vec3 re2{0, 1.7f, 0};
+        for (int i = 0; i < 90; ++i) {
+            re2.x += .9f * dt;
+            room.update(re2, up, dt, true);
+        }
+        check(room.amount > .5f, "a real step in the room steps");
+        Cycle bob;
+        for (int i = 0; i < 270; ++i)
+            bob.update(Vec3{.02f * std::sin(i * .2f), 1.7f + .03f * std::sin(i * .3f), 0}, up, dt, true);
+        check(bob.amount == 0, "swaying in place: no steps");
+        // OFF, flying or swinging (walking false), a fall, or a teleport: no steps
+        Cycle off, fall, jump;
+        Vec3 o{0, 1.7f, 0}, fl{0, 50, 0};
+        for (int i = 0; i < 180; ++i) {
+            o.z -= 2 * dt;
+            off.update(o, up, dt, false);
+            fl.z -= 2 * dt, fl.y -= 6 * dt;
+            fall.update(fl, up, dt, true);
+            jump.update(Vec3{i % 30 == 0 ? 10.f * i : 0.f, 1.7f, 0}, up, dt, true);
+        }
+        Vec3 fo[2];
+        off.feet(up, 1, fo);
+        check(off.amount == 0 && length(fo[0]) == 0 && fall.amount == 0, "off or falling: standing");
+        check(jump.amount < .05f, "a teleport is not a walk");
+        // bad input never breaks it
+        Cycle bad;
+        bad.update(Vec3{std::nanf(""), 0, 0}, up, dt, true);
+        bad.update(eye, up, 0, true);
+        bad.feet(up, 1, fo);
+        check(bad.amount == 0 && length(fo[0]) == 0, "bad input: standing");
     });
     test("0.0.73 test 3 FLIGHT POSE (fix 27): the worn suit leans too, LEAN on by default, UPRIGHT still upright", [] {
         using namespace fly_lean;

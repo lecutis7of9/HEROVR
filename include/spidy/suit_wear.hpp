@@ -196,6 +196,9 @@ struct Tracked {
     // in `up` and `feet` (fly_lean::leanSuit). With it the neck stays under the upright head and the body hangs
     // from the neck, its front the lean's (so a flyer looking up never flips onto his back).
     Quat lean{};
+    // Version 0.0.74 test 11 WALK LEGS: each foot's step this frame (world; [0] the left, [1] the right) from
+    // walk_cycle::Cycle, added to the foot on the floor; zero: the standing legs exactly.
+    Vec3 step[2]{};
 };
 // The live skeleton for `rig` from the tracked poses: the head from the eyes, the torso the rest one turned to the
 // head's level facing and scaled to the player's eye height, the arms reaching the wrists (two-bone IK, the elbows

@@ -98,6 +98,7 @@ SETTINGS = {
     'history': ((0, 95), 'SpidyEyeHistory', 'eye history {}% (0 off; settles shimmer, 80-95 heavy: trails when moving)'),
     'web_width': ((0.4, 4), 'SpidyWebWidth', 'web width {} cm'),
     'web_travel': ((0, 1), 'SpidyWebTravel', 'web shot flight {} (0 drawn at once, 1 flies)'),
+    'walk_legs': ((0, 1), 'SpidyWalkLegs', "WALK LEGS {} (0 on: the suit's and Player 2's legs step in time as you walk or run, stick or room; 1 off: they stand still; live, no restart)"),  # Version 0.0.74 test 11
     'web_speed': ((20, 2000), 'SpidyWebSpeed', 'web shot speed {} m/s'),
     # Update 23 (include/spidy/tracking.hpp webStart)
     'web_start': ((0, 1), 'SpidyWebStart', 'webs drawn from the {} (0 wrist, 1 palm)'),
@@ -548,6 +549,7 @@ SCALE = {'web_width': 100, 'hud_scale': 100, 'exposure': 10}  # Update 37.2: exp
 # Settings that take a word: the words, and the number the export is given for each.
 # Update 17: the themes and text colours in wrist_hud::themeKey/textColorKey's order.
 CHOICE_NAMES = {'hud_hand': ('left', 'right'),
+                'walk_legs': ('on', 'off'),  # Version 0.0.74 test 11
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
                 'hud_text_color': ('theme', 'white', 'yellow', 'cyan'),
                 'web_style': WEB_STYLES,
@@ -764,6 +766,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'thor_flight': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'suit_body': {'arms': 0, 'full_body': 1, 'full body': 1, 'body': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
            'cap_sprint': {'on': 0, 'off': 1, '0': 0, '1': 1},
+           'walk_legs': {'on': 0, 'off': 1, '0': 0, '1': 1},  # Version 0.0.74 test 11
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            'shadow_match': {'on': 0, 'off': 1, 'experimental': 0, '0': 0, '1': 1},
            'calib_look': {'holo': 0, 'classic': 1, '0': 0, '1': 1},

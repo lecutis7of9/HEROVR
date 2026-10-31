@@ -900,6 +900,7 @@ hero072::PlayOptions hero072Options() {
     o.punisherSuit = c38(combat38::punisherSuit);
     o.naturalInvincible = O::onFirst(c38(combat38::naturalInvincible));
     o.hulkRage = O::onFirst(c38(combat38::hulkRage));
+    o.throwSwing = combat38::throwSwingOn(c38(combat38::throwSwing)); // 0.0.74 test 10 THROW BY SWING
     o.rageBlood = c38(combat38::rageBlood);
     o.rageTint = c38(combat38::rageTint);
     o.fireDouse = O::onFirst(c38(combat38::fireDouse));
@@ -2350,6 +2351,7 @@ DWORD WINAPI run(void*) {
         grapple073::BatonThrow ddThrow;
         bool ddThrowNow[2]{};
         Vec3 ddThrowVel[2]{};
+        throw_swing::Swing ddThrowSwing[2]{}; // 0.0.74 test 10 THROW BY SWING: the throw's swing window
         bool ddAimHeld[2]{};
         Vec3 cf73Aim[2]{}; // Version 0.0.73 (fix 15): each hand's combat aim (tracking)
         // 0.0.74 test 3 FINGER RAY: each hand's index fingertip and finger direction (tracking; ok false: none)
@@ -4367,6 +4369,7 @@ DWORD WINAPI run(void*) {
                             hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
                             hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                             hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
+                            hin.throwSwing = combat38::throwSwingOn(c38(combat38::throwSwing)); // 0.0.74 test 10 THROW BY SWING
                             hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                             for (unsigned i = 0; i < 2; ++i) {
                                 hin.hands[i].position = grips[i].position;
@@ -4384,6 +4387,8 @@ DWORD WINAPI run(void*) {
                                 const auto thrw = ddThrow.step(i, hin.dt, armed, hin.hands[i].tracked, grips[i].position, squeezes[i]);
                                 ddThrowNow[i] = thrw.throwNow;
                                 ddThrowVel[i] = thrw.velocity;
+                                if (thrw.throwNow)
+                                    ddThrowSwing[i] = thrw.swing;
                                 if (ddThrowNow[i])
                                     hin.hands[i].thrown = true;
                             }
@@ -7430,9 +7435,13 @@ DWORD WINAPI run(void*) {
                                             }
                                             const Vec3 hand = cf.hands[i].position;
                                             // test 3: a thrown baton flies along the throw (captain::throwAim), else the aim
+                                            // 0.0.74 test 10 THROW BY SWING (ON): along the swing's peak window, not the wrist at the release
+                                            const Vec3 ddHeadF = frame.head.orientation.rotate(Vec3{0, 0, -1});
                                             const Vec3 aimDir = trig && ddGrappleOn
-                                                                    ? captain::throwAim(ddThrowVel[i], cf.hands[i].aim,
-                                                                                        frame.head.orientation.rotate(Vec3{0, 0, -1}))
+                                                                    ? throw_swing::direction(combat38::throwSwingOn(c38(combat38::throwSwing)),
+                                                                                             ddThrowSwing[i],
+                                                                                             captain::throwAim(ddThrowVel[i], cf.hands[i].aim, ddHeadF),
+                                                                                             ddHeadF)
                                                                     : cf.hands[i].aim;
                                             batonHand[i] = hand;
                                             batonAimNow[i] = aimDir;
@@ -8146,6 +8155,7 @@ DWORD WINAPI run(void*) {
                                         hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
                                         hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
                                         hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
+                                        hin.throwSwing = combat38::throwSwingOn(c38(combat38::throwSwing)); // 0.0.74 test 10 THROW BY SWING
                                         hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                                         hin.shieldChain = captain::chainOn(c38(combat38::shieldChain));
                                         hin.shieldDamage = c38(combat38::shieldDamage);
@@ -14581,6 +14591,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return
 // 0.0.74 test 10 ENTRY FACING (van072.hpp Tune::boardFaceRoom) and HIDEOUT HOLD (van_screen.hpp Offer::hideoutHold)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEntryFacing(void* v) { return setHero007(v, combat38::entryFacing, 5524); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideoutHold(void* v) { return setHero007(v, combat38::hideoutHold, 5525); }
+// 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON (the default) / 1 OFF (the old aim)
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowSwing(void* v) { return setHero007(v, combat38::throwSwing, 5534); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

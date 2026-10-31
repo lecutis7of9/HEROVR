@@ -259,6 +259,9 @@ enum Option : uint32_t {
     entryFacing,
     // 0.0.74 test 10 HIDEOUT HOLD (van_screen.hpp): HOLD (0, the default: GO TO BATCAVE / SAFEHOUSE held 1 s) or TAP
     hideoutHold,
+    // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): ON (0, the default) every hand throw flies along the arm's
+    // swing (the peak window's mean velocity); OFF (1) the old line (the hand's aim at the release)
+    throwSwing,
     options
 };
 struct OptionInfo {
@@ -645,6 +648,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"belt_zones", "BELT ZONES", "BELTZ", "ON grapple at left hip, batarang at belt front, smoke on forearm; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"entry_facing", "ENTRY FACING", "EFAC", "PLAY SPACE turns your play area to the car's front on entry; no restart needed.", 2, {"PLAY SPACE", "HEAD", nullptr, nullptr}},
     {"hideout_hold", "HIDEOUT HOLD", "HHLD", "HOLD: GO TO BATCAVE / SAFEHOUSE on the dash needs a 1 s hold; no restart needed.", 2, {"HOLD", "TAP", nullptr, nullptr}},
+    {"throw_swing", "THROW BY SWING", "TSWG", "ON throws fly the way your arm swung, OFF is the old aim; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -684,6 +688,8 @@ inline bool wheelFirstOn(uint32_t value) { return value != 1; }
 inline bool entryFacesRoom(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 HIDEOUT HOLD (van_screen.hpp In::hideoutHold): 0 HOLD, the default; 1 TAP.
 inline bool hideoutHoldOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON, the default; 1 OFF (the old aim).
+inline bool throwSwingOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }

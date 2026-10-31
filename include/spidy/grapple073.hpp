@@ -15,6 +15,7 @@
 //    up and down in turn) with the left stick pushed runs at sprintSpeed (the van's CONFIRMED carry
 //    velocity path, game_swing Command v7). Stops the moment the pumping or the stick stops.
 #include "spidy/math.hpp"
+#include "spidy/throw_swing.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -135,6 +136,7 @@ class BatonThrow {
     struct Out {
         bool throwNow{};   // this frame: throw the baton
         Vec3 velocity{};   // the hand's velocity at its fastest in the last throwMemory s (tracking space)
+        throw_swing::Swing swing{}; // 0.0.74 test 10 THROW BY SWING: the peak window's mean velocity (throwNow only)
     };
     // armed: the baton was in this hand LAST frame (drawn, not thrown); squeeze: the real grip.
     Out step(unsigned hand, float dt, bool armed, bool tracked, Vec3 position, float squeeze) {
@@ -142,6 +144,7 @@ class BatonThrow {
         if (hand > 1)
             return o;
         const float t = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+        swing_[hand].step(t, tracked, position);
         // the hand's speed (a lost or jumping hand never counts)
         if (tracked && fineV(position) && have_[hand] && t > 1e-4f) {
             const Vec3 v = (position - last_[hand]) / t;
@@ -166,6 +169,7 @@ class BatonThrow {
         if (letGo && armed && tracked && length(peak_[hand]) >= throwSpeed) {
             o.throwNow = true;
             o.velocity = peak_[hand];
+            o.swing = swing_[hand].swing();
             ++throws_;
         }
         return o;
@@ -178,6 +182,7 @@ class BatonThrow {
     Vec3 last_[2]{}, peak_[2]{};
     float age_[2]{};
     uint64_t throws_{};
+    throw_swing::Tracker swing_[2]{};
 };
 
 // The direction along a held baton (butt to tip), else the controller aim.

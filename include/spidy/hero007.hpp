@@ -32,6 +32,7 @@
 //    SMOKE (Smoke) is a look only, it hides nothing.
 // Pure; no game memory, no address.
 #include "spidy/extras385.hpp"
+#include "spidy/throw_swing.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/holster.hpp"
 #include "spidy/math.hpp"
@@ -480,6 +481,10 @@ struct SmokePellets {
     Vec3 last[2]{}, handVelocity[2]{};
     bool haveLast[2]{}, down[2]{};
     uint64_t grabs{}, throws{}, bursts{}, refused{};
+    // 0.0.74 test 10 THROW BY SWING: the hands' swing windows (also the batarang's, hero007_play) and the
+    // option (ON: a pellet leaves with the swing's peak-window velocity; OFF: the release frame's).
+    throw_swing::Tracker swings[2]{};
+    bool swingOn = true;
     // The grips, at the grip arbitration. Returns the claimed hands (bit 1 << i); grabbed: the hands
     // that took a pellet this frame.
     uint32_t grip(float dt, bool play, Vec3 head, const holster::BodyYaw& body, const Vec3* hand,
@@ -491,6 +496,7 @@ struct SmokePellets {
         uint32_t claimed = 0, took = 0;
         for (unsigned i = 0; i < 2; ++i) {
             const bool live = tracked[i] && finite(hand[i]);
+            swings[i].step(t, live, live ? hand[i] : Vec3{});
             if (live) {
                 if (haveLast[i] && t > 1e-4f)
                     handVelocity[i] = handVelocity[i] * .4f + ((hand[i] - last[i]) / t) * .6f;
@@ -508,6 +514,9 @@ struct SmokePellets {
                     p.state = none;
                 } else if (!down[i]) {
                     Vec3 v = handVelocity[i];
+                    const throw_swing::Swing sw = swings[i].swing();
+                    if (swingOn && sw.ok && sw.speed >= throw_swing::leastSpeed && sw.speed < throw_swing::jumpSpeed)
+                        v = sw.velocity; // THROW BY SWING: the arm's swing, not the (often slowing) release frame
                     const float sp = length(v);
                     if (!finite(v))
                         v = {};

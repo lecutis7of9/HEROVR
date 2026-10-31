@@ -18,6 +18,7 @@
 #include "spidy/punisher_rig.hpp"
 #include "spidy/rep_log.hpp"
 #include "spidy/prop_bounce.hpp"
+#include "spidy/throw_swing.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -32,6 +33,7 @@ struct PlayOptions {
     bool ironHud = true, punisherRage = true, reputation = true, survival = false;
     uint32_t punisherSuit{};
     bool naturalInvincible = true, hulkRage = true;
+    bool throwSwing = true; // 0.0.74 test 10 THROW BY SWING ON: THOR's hammer flies along the arm's swing
     uint32_t rageBlood{}, rageTint{};
     bool fireDouse = true, shieldSlam = true, punisherHook = true, clawClimb = false /* 0.0.73: off by default */, shove = true;
     uint32_t faction{}, testUnlocks{};
@@ -842,6 +844,9 @@ class Play {
         }
         if (gripPressed)
             swingPeak = {}, swingAge = 0;
+        if (gripPressed) // 0.0.74 test 10 THROW BY SWING: the draw's reach back is no part of the throw
+            thorSwing.reset();
+        thorSwing.step(dt, tracked[1] && ok(p[1]), ok(p[1]) ? p[1] : Vec3{});
         // DRAW: the right grip behind the right shoulder (the hammer on the back).
         if (tracked[1] && gripPressed && !hammerFlying) {
             const holster::BodyPoint bp = holster::bodyPoint(p[1], hd, body);
@@ -863,6 +868,8 @@ class Play {
                 // Test build 10: along the pointing blended with the swing, a 12-degree assist.
                 const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : Vec3{};
                 Vec3 dir = throwLine(aim, swingPeak * (1.f / sp));
+                // 0.0.74 test 10 THROW BY SWING (ON): the swing's own line, not 70% the wrist's pointing at the release
+                dir = throw_swing::direction(o.throwSwing, thorSwing.swing(), dir, look, throwMinSpeed);
                 hammerAim = 0;
                 const int e = assistTarget(p[1], dir, in.list, in.count);
                 if (e >= 0) {
@@ -1108,7 +1115,8 @@ class Play {
         // Test build 10 AIM HINT: winding up with the hammer in hand, a faint line along where it would fly.
         if (hammerHeld && tracked[1] && grip && ok(v[1]) && length(v[1]) > hintSpeed && length(v[1]) < 25.f) {
             const Vec3 aim = ok(in.hands[1].aim) && length(in.hands[1].aim) > 1e-3f ? normalized(in.hands[1].aim) : Vec3{};
-            const Vec3 dir = throwLine(aim, normalized(v[1]));
+            const Vec3 dir = throw_swing::direction(o.throwSwing, thorSwing.swing(), throwLine(aim, normalized(v[1])),
+                                                    look, throwMinSpeed);
             const int e = assistTarget(p[1], dir, in.list, in.count);
             out.look.aimHint = true;
             out.look.aimHintFrom = p[1] + dir * .35f;
@@ -1183,6 +1191,7 @@ class Play {
     }
     bool hammerFlying{}, hammerBack{}, blastWas{};
     Vec3 hammerPos{}, hammerVel{}, hammerFrom{}, swingPeak{};
+    throw_swing::Tracker thorSwing{}; // 0.0.74 test 10 THROW BY SWING: the hammer hand's swing window
     float hammerTurn{}; // test build 10: the flying hammer's tumble (radians, by distance flown)
     float hammerAge{}, swingAge{}, blastCool{};
     uint64_t hammerAim{};

@@ -18943,7 +18943,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 166, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 167, "0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18977,7 +18977,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 166, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 167, "0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25295,6 +25295,164 @@ int main() {
             frame(front, 0);
             frame(front, 1);
             check(p.pellets.hands[h].state == SmokePellets::held && !p.batDraw.drawn[h], "OFF: the buckle is the smoke's");
+        }
+    });
+    test("0.0.74 test 10 THROW BY SWING: a throw flies the way the arm swung, not where the hand pointed at release", [] {
+        using namespace spidy;
+        namespace ts = throw_swing;
+        // An arm swing round the shoulder (radius .6 m) at 90 Hz, its speed a bell round the peak (peakAt s),
+        // sampled at 0 .. seconds; `over`: an overhand (above the shoulder, forward then down), else an
+        // underhand (below it, forward then up). Returns the tracker after the release frame.
+        const Vec3 shoulder{.2f, 1.5f, 0};
+        auto arm = [&](bool over, float phiAt, float peakAt, float seconds, float peakSpeed, ts::Tracker& t, Vec3* tangentAtPeak) {
+            const float dt = 1 / 90.f, r = .6f;
+            float phi = phiAt;
+            // integrate backwards from the peak's angle: phi(peak) = phiAt
+            float back = 0;
+            for (float s = 0; s < peakAt; s += dt)
+                back += peakSpeed / r * std::exp(-std::pow((s - peakAt) / .06f, 2.f)) * dt;
+            phi = phiAt - back;
+            for (float s = 0; s <= seconds; s += dt) {
+                const float w = peakSpeed / r * std::exp(-std::pow((s - peakAt) / .06f, 2.f));
+                const Vec3 p = over ? shoulder + Vec3{0, std::cos(phi), -std::sin(phi)} * r
+                                    : shoulder + Vec3{0, -std::cos(phi), -std::sin(phi)} * r;
+                t.step(dt, true, p);
+                phi += w * dt;
+            }
+            if (tangentAtPeak)
+                *tangentAtPeak = over ? normalized(Vec3{0, -std::sin(phiAt), -std::cos(phiAt)})
+                                      : normalized(Vec3{0, std::sin(phiAt), -std::cos(phiAt)});
+        };
+        const Vec3 view{0, 0, -1};
+        // OVERHAND: the peak with the hand over the head going forward; let go 90 ms later with the wrist flicked down.
+        {
+            ts::Tracker t;
+            Vec3 tan{};
+            arm(true, .45f, .2f, .29f, 7.f, t, &tan);
+            const ts::Swing s = t.swing();
+            check(s.ok && s.speed > 4.f && s.speed < 8.f, "overhand: no clean swing (" + std::to_string(s.speed) + ")");
+            const Vec3 wristAtRelease = normalized(Vec3{0, -.8f, -.6f}); // the old line: into the ground
+            const Vec3 d = ts::direction(true, s, wristAtRelease, view);
+            check(d.z < -.9f && d.y > -.3f && std::abs(length(d) - 1) < 1e-4f,
+                  "overhand: not forward and near level: " + std::to_string(d.y) + " " + std::to_string(d.z));
+            check(dot(d, wristAtRelease) < .8f && d.y > wristAtRelease.y + .4f, "overhand: still the release's pointing");
+            check(length(ts::direction(false, s, wristAtRelease, view) - wristAtRelease) < 1e-5f, "OFF: the old line exactly");
+        }
+        // UNDERHAND: the peak at the bottom going forward; let go later with the wrist turned up.
+        {
+            ts::Tracker t;
+            arm(false, .1f, .2f, .29f, 6.f, t, nullptr);
+            const ts::Swing s = t.swing();
+            check(s.ok, "underhand: no clean swing");
+            const Vec3 wristAtRelease = normalized(Vec3{0, .75f, -.66f}); // the old line: up in the air
+            const Vec3 d = ts::direction(true, s, wristAtRelease, view);
+            check(d.z < -.9f && d.y < .3f, "underhand: still up: " + std::to_string(d.y) + " " + std::to_string(d.z));
+        }
+        // SLOW: a gentle lob under the least speed keeps the old line.
+        {
+            ts::Tracker t;
+            arm(true, .45f, .2f, .29f, 1.f, t, nullptr);
+            const ts::Swing s = t.swing();
+            const Vec3 old = normalized(Vec3{.3f, -.2f, -1});
+            check(s.ok && s.speed < ts::leastSpeed, "slow swing not slow");
+            check(length(ts::direction(true, s, old, view) - old) < 1e-5f, "a slow swing took the throw");
+            check(length(ts::direction(true, ts::Swing{{0, 0, -6}, 6, true}, old, view, captain::sweepThrow) -
+                         Vec3{0, 0, -1}) < 1e-5f &&
+                      length(ts::direction(true, ts::Swing{{0, 0, -2}, 2, true}, old, view, captain::sweepThrow) - old) < 1e-5f,
+                  "the shield's trigger threshold (2.5 m/s)");
+            check(length(ts::direction(true, ts::Swing{{0, 0, 6}, 6, true}, old, view) - old) < 1e-5f, "a backswing took the throw");
+        }
+        // BLINKS: a lost frame, a NaN or a tracking jump inside the window: the old line; never NaN.
+        for (int kind = 0; kind < 3; ++kind) {
+            ts::Tracker t;
+            const float dt = 1 / 90.f;
+            for (int f = 0; f < 20; ++f) {
+                Vec3 p{.2f, 1.5f, -.08f * f};
+                bool tracked = true;
+                if (f == 17)
+                    kind == 0 ? (void)(tracked = false) : kind == 1 ? (void)(p.x = NAN) : (void)(p.y += 1.f);
+                t.step(dt, tracked, p);
+            }
+            const ts::Swing s = t.swing();
+            check(!s.ok, "a blink in the window still trusted (" + std::to_string(kind) + ")");
+            const Vec3 old{0, 0, -1};
+            check(length(ts::direction(true, s, old, view) - old) < 1e-5f, "a blink not the old line");
+        }
+        {
+            ts::Tracker t;
+            for (int f = 0; f < 10; ++f)
+                t.step(f % 2 ? NAN : 1 / 90.f, true, {NAN, f * .1f, 0});
+            t.step(-1, true, {});
+            const ts::Swing s = t.swing();
+            check(!s.ok, "NaN in, a swing out");
+            const Vec3 d = ts::direction(true, ts::Swing{{NAN, 0, 0}, NAN, true}, {NAN, NAN, NAN}, {NAN, 0, 0});
+            check(finite(d) && length(d - Vec3{0, 0, -1}) < 1e-5f, "NaN: straight ahead");
+            check(finite(ts::direction(true, ts::Swing{{0, -5, -.01f}, 5, true}, {0, 0, -1}, view)), "a straight-down swing NaN");
+            check(!ts::Tracker{}.swing().ok, "an empty tracker swings");
+        }
+        // THE OPTION: ON by default, OFF the old aim; the wrist subtext one sentence with no restart.
+        check(combat38::throwSwingOn(0) && !combat38::throwSwingOn(1) && hero007::PlayInput{}.throwSwing &&
+                  hero072::PlayOptions{}.throwSwing && hero007::SmokePellets{}.swingOn,
+              "THROW BY SWING on by default");
+        {
+            const auto& oi = combat38::optionInfo[combat38::throwSwing];
+            const std::string help = oi.help;
+            check(std::string(oi.key) == "throw_swing" && oi.count == 2 && std::string(oi.values[0]) == "ON" &&
+                      help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1 &&
+                      help.find("no restart") != std::string::npos,
+                  "the THROW BY SWING row / subtext");
+        }
+        // THOR: an overhand throw with the fist pointing at the ground: ON flies out level-ish, OFF as before.
+        auto thor = [&](bool on) {
+            using namespace hero072;
+            PlayIn in;
+            in.dt = 1 / 72.f;
+            in.play = true;
+            in.hero = hero_modes::thor;
+            in.head.position = {0, 1.7f, 0};
+            in.o.throwSwing = on;
+            for (auto& hh : in.hands)
+                hh.tracked = true;
+            in.hands[0].position = {-.25f, 1.2f, -.2f};
+            in.hands[1].position = {.25f, 1.2f, -.2f};
+            in.hands[1].aim = {0, 0, -1};
+            Play play;
+            PlayOut out;
+            play.step(in, out);
+            in.hands[1].position = {.2f, 1.6f, .1f}; // the draw behind the shoulder
+            in.hands[1].grip = 1;
+            play.step(in, out);
+            for (int f = 0; f < 12; ++f) { // over the head, forward, then down
+                const float phi = -.3f + f * .12f;
+                in.hands[1].position = Vec3{.25f, 1.5f, 0} + Vec3{0, std::cos(phi), -std::sin(phi)} * .6f;
+                in.hands[1].hammer = thor_grip::held(Pose{in.hands[1].position, {}}, ControllerKind::touch);
+                in.hands[1].aim = normalized(Vec3{0, .2f - f * .1f, -1});
+                out = PlayOut{};
+                play.step(in, out);
+            }
+            in.hands[1].grip = 0; // let go, the wrist pointing well down
+            out = PlayOut{};
+            play.step(in, out);
+            return std::pair<bool, Vec3>{play.hammerInAir(), out.look.hammerVel};
+        };
+        const auto onT = thor(true), offT = thor(false);
+        check(onT.first && offT.first, "THOR: no throw");
+        check(offT.second.y < -8.f, "THOR OFF: not the old (down) line: " + std::to_string(offT.second.y));
+        check(onT.second.y > offT.second.y + 4.f && onT.second.z < -15.f,
+              "THOR ON: still into the ground: " + std::to_string(onT.second.y) + " " + std::to_string(onT.second.z));
+        check(std::abs(length(onT.second) - hero072::throwSpeed) < 1e-3f, "THOR ON: the throw speed changed");
+        // DAREDEVIL's BatonThrow hands its window over on the throw frame.
+        {
+            grapple073::BatonThrow bt;
+            const float dt = 1 / 90.f;
+            grapple073::BatonThrow::Out o;
+            for (int f = 0; f < 20; ++f) {
+                const Vec3 p{.25f, 1.4f, -.06f * f};
+                o = bt.step(1, dt, true, true, p, f < 19 ? 1.f : 0.f);
+            }
+            check(o.throwNow && o.swing.ok && dot(normalized(o.swing.velocity), Vec3{0, 0, -1}) > .99f &&
+                      std::abs(o.swing.speed - .06f * 90) < .1f,
+                  "the baton's throw window");
         }
     });
     test("Test build 12: HOLSTERS HIGHER - PUNISHER's pistols at the hip bone, scaled to the player, a pulse in reach", [] {

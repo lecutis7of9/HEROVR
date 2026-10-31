@@ -23,6 +23,7 @@
 #include "spidy/holster.hpp"
 #include "spidy/punisher_rig.hpp"
 #include "spidy/sfx.hpp"
+#include "spidy/throw_swing.hpp"
 
 #include <cstring>
 
@@ -68,6 +69,7 @@ struct PlayInput {
     bool shieldChain = true; // SHIELD CHAIN ON
     uint32_t shieldDamage{}; // SHIELD DAMAGE value (0: 35 HP)
     bool beltZones = true;   // 0.0.74 test 10 BELT ZONES ON: BATMAN's left hip grapple, belt front batarang, forearm smoke
+    bool throwSwing = true;  // 0.0.74 test 10 THROW BY SWING ON: throws fly along the arm's swing (throw_swing.hpp)
 };
 enum BlowKind : uint32_t { kindBatarang = 0, kindClaw, kindHeat, kindFreeze, kindPistol, kindSawedOff, kindShield, kindShieldBash, blowKinds };
 inline constexpr const char* blowKindNames[blowKinds] = {"BATARANG", "CLAWS",     "HEAT VISION", "COLD BREATH",
@@ -355,6 +357,7 @@ class Play {
     uint64_t shieldHits{}, shieldBashes{}, shieldCatches{};
     Vec3 lastHand[2]{}, handVelocity[2]{};
     bool haveLast[2]{};
+    throw_swing::Tracker swings[2]{}; // 0.0.74 test 10 THROW BY SWING: the shield hand's swing window
     uint32_t gunStateWas[holster::maxSlots]{};
     uint64_t dryWas[holster::maxSlots]{};
     uint64_t blows{}, shots{}, shotHits{}, heatTicks{}, freezeTicks{}, clawHits{}, batarangHits{}, smokes{};
@@ -500,6 +503,7 @@ class Play {
                 batarangAt[i] = beltPick[i] == pickBatarang;
             }
             uint32_t took = 0;
+            pellets.swingOn = in.throwSwing;
             const uint32_t pelletHands = pellets.grip(in.dt, in.play, in.head.position, pelletBody, at, tracked, squeeze,
                                                       busy, &took, in.beltZones ? smokeAt : nullptr);
             out.claimed |= pelletHands;
@@ -601,6 +605,7 @@ class Play {
         const float dt = std::isfinite(in.dt) ? std::clamp(in.dt, 0.f, .1f) : 0.f;
         for (unsigned i = 0; i < 2; ++i) { // the hands' speed (REALISTIC's flick)
             const Vec3 p = in.hands[i].position;
+            swings[i].step(dt, in.hands[i].tracked && finite(p), finite(p) ? p : Vec3{});
             if (in.hands[i].tracked && finite(p)) {
                 if (haveLast[i] && dt > 1e-4f)
                     handVelocity[i] = handVelocity[i] * .4f + ((p - lastHand[i]) / dt) * .6f;
@@ -944,7 +949,10 @@ class Play {
             return;
         }
         const Vec3 headF = in.head.orientation.rotate(Vec3{0, 0, -1});
-        const Vec3 aim = captain::throwAim(handVelocity[i], h.aim, headF);
+        // 0.0.74 test 10 THROW BY SWING: a trigger throw, so only a real sweep (captain::sweepThrow) steers it
+        const Vec3 aim = throw_swing::direction(in.throwSwing, swings[i].swing(),
+                                                captain::throwAim(handVelocity[i], h.aim, headF), headF,
+                                                captain::sweepThrow);
         const int aimed = shield.inHandNow() ? hero_modes::batonAim(h.position, aim, in.list, in.count) : -1;
         const uint32_t throwsWas = shield.throws, catchesWas = shield.catches + shield.timeouts;
         const Vec3 flewAt = shield.position;
@@ -1022,8 +1030,11 @@ class Play {
             const bool readyWas = batReady[i];
             batReady[i] = batDraw.drawn[i] && b.inHandNow();
             const bool release = readyWas && (batDraw.events[i] & BatarangDraw::letGo) && b.inHandNow();
-            const Vec3 throwWay = release ? captain::throwAim(pellets.handVelocity[i], h.aim,
-                                                               in.head.orientation.rotate(Vec3{0, 0, -1}))
+            // 0.0.74 test 10 THROW BY SWING (ON): along the swing's peak window, not the wrist at the release
+            const Vec3 batHeadF = in.head.orientation.rotate(Vec3{0, 0, -1});
+            const Vec3 throwWay = release ? throw_swing::direction(in.throwSwing, pellets.swings[i].swing(),
+                                                                   captain::throwAim(pellets.handVelocity[i], h.aim, batHeadF),
+                                                                   batHeadF)
                                           : h.aim;
             const int aimed = b.inHandNow() ? hero_modes::batonAim(h.position, throwWay, in.list, in.count) : -1;
             const uint32_t throwsWas = b.throws;

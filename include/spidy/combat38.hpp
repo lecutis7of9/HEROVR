@@ -250,6 +250,10 @@ enum Option : uint32_t {
     // 0.0.74 test 10 SURE GRAPPLE (grapple074::AskLatch): ON (0, the default) every hero's grapple press is held
     // until the bridge answers it (a grapple or a miss) or 150 ms pass; OFF test 9's one-frame ask
     sureGrapple,
+    // 0.0.74 test 10 BELT ZONES (hero007.hpp pickZone): ON (0, the default) BATMAN's grip draws the grapple gun
+    // only at the left hip, a batarang only at the belt's front centre, a smoke pellet only from the other
+    // forearm (the nearest zone, by a margin); OFF test 9's buckle smoke / side pouches / any other grip's gun
+    beltZones,
     options
 };
 struct OptionInfo {
@@ -633,6 +637,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"punisher_quick_hook", "QUICK HOOK", "QHOOK", "ON fires the Punisher hook as you pull the trigger, no lost press; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"grapple_yank", "GRAPPLE YANK", "GYNK", "ON tries to yank a hooked enemy to you (CANDIDATE); you still reel to him; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"sure_grapple", "SURE GRAPPLE", "SGRP", "ON holds each grapple press until the game takes it, every hero; live.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"belt_zones", "BELT ZONES", "BELTZ", "ON grapple at left hip, batarang at belt front, smoke on forearm; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -672,6 +677,7 @@ inline bool wheelFirstOn(uint32_t value) { return value != 1; }
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }
 inline bool sureGrappleOn(uint32_t value) { return value != 1; }
+inline bool beltZonesOn(uint32_t value) { return value != 1; } // 0.0.74 test 10 BELT ZONES
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
 inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }

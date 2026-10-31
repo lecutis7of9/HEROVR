@@ -483,7 +483,10 @@ struct SmokePellets {
     // The grips, at the grip arbitration. Returns the claimed hands (bit 1 << i); grabbed: the hands
     // that took a pellet this frame.
     uint32_t grip(float dt, bool play, Vec3 head, const holster::BodyYaw& body, const Vec3* hand,
-                  const bool* tracked, const float* squeeze, const bool* busy, uint32_t* grabbed = nullptr) {
+                  const bool* tracked, const float* squeeze, const bool* busy, uint32_t* grabbed = nullptr,
+                  const bool* zone = nullptr) {
+        // zone (0.0.74 test 10 BELT ZONES): hand i is at the pellet's place (the other forearm, pickZone),
+        // in place of the buckle (atBelt).
         const float t = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
         uint32_t claimed = 0, took = 0;
         for (unsigned i = 0; i < 2; ++i) {
@@ -523,7 +526,7 @@ struct SmokePellets {
             }
             if (!play || !live || !down[i] || wasDown || !body.valid || !finite(head))
                 continue;
-            if (!atBelt(holster::bodyPoint(hand[i], head, body)))
+            if (zone ? !zone[i] : !atBelt(holster::bodyPoint(hand[i], head, body)))
                 continue;
             if (busy[i] || p.state == thrown) { // a hand on a web or a wall; this hand's pellet still flying
                 ++refused;
@@ -594,7 +597,9 @@ struct BatarangDraw {
     uint64_t draws{}, releases{};
     // ready[i]: hand i's batarang is back (in the hand's keeping, not flying). Returns the claimed hands.
     uint32_t update(bool play, Vec3 head, const holster::BodyYaw& body, const Vec3* hand, const bool* tracked,
-                    const float* squeeze, const bool* busy, const bool* ready) {
+                    const float* squeeze, const bool* busy, const bool* ready, const bool* zone = nullptr) {
+        // zone (0.0.74 test 10 BELT ZONES): hand i is at the batarang's place (the belt's front, pickZone),
+        // in place of the pouches (atPouch).
         uint32_t claimed = 0;
         for (unsigned i = 0; i < 2; ++i) {
             events[i] = none;
@@ -602,7 +607,7 @@ struct BatarangDraw {
             const float sq = std::isfinite(squeeze[i]) ? squeeze[i] : 0.f;
             const bool wasDown = down[i];
             down[i] = sq >= holster::pressed || (wasDown && sq > holster::released);
-            const bool at = live && atPouch(holster::bodyPoint(hand[i], head, body));
+            const bool at = live && (zone ? zone[i] : atPouch(holster::bodyPoint(hand[i], head, body)));
             if (drawn[i]) {
                 if (!down[i] || !play) {
                     drawn[i] = false;
@@ -631,6 +636,77 @@ struct BatarangDraw {
             drawn[i] = down[i] = nearWas[i] = false, events[i] = none;
     }
 };
+
+// ---- BATMAN: BELT ZONES (0.0.74 test 10) ----------------------------------------------------------
+// The owner: "with batman its grab left for grapple, center waitline for batarand, and grab on forearm for
+// smoke pellet ... right now grabbing your side you can grab either batarang or grapple its anyones guess"
+// (the pouches ran from the buckle out past the hips, and any other grip drew the grapple gun). With BELT
+// ZONES on, three places, each one tool's, and nothing else draws:
+//  - GRAPPLE: the LEFT hip (either hand; the gun is worn there) - a box hipInner..hipOuter to the left.
+//  - BATARANG: the front centre of the belt (the waistline, the old buckle) - |side| <= buckleSide, in front.
+//  - SMOKE PELLET: a grab on the OTHER hand's forearm / gauntlet - within armReach of the segment
+//    armNear..armFar behind that controller (along -aim), the other hand tracked.
+// The two belt boxes never overlap (a buckleSide..hipInner gap between them); the forearm can come near
+// either (an arm hanging by the hip), so the hand's distance to each zone's core (the belt boxes' centre
+// lines, the forearm's bone) decides: the nearest zone wins only when the next is zoneMargin further,
+// otherwise nothing is taken (pickUnsure). Both hands use the same zones (no right-hip mirror).
+enum BeltPick : uint32_t { pickNone = 0, pickGrapple, pickBatarang, pickSmoke, pickUnsure };
+inline constexpr float zoneBelow = .48f, zoneLow = .98f;                     // the belt band (m below the head)
+inline constexpr float buckleSide = .10f, buckleNear = .02f, buckleFar = .40f; // BATARANG: the front centre
+inline constexpr float hipInner = .14f, hipOuter = .36f, hipBack = .18f, hipFar = .30f; // GRAPPLE: left hip
+inline constexpr float armNear = .05f, armFar = .30f, armReach = .09f;           // SMOKE: the other forearm
+inline constexpr float zoneMargin = .04f;
+inline bool inBand(holster::BodyPoint p) {
+    return std::isfinite(p.below) && std::isfinite(p.side) && std::isfinite(p.ahead) && p.below >= zoneBelow &&
+           p.below <= zoneLow;
+}
+inline bool atBuckle(holster::BodyPoint p) {
+    return inBand(p) && std::abs(p.side) <= buckleSide && p.ahead >= buckleNear && p.ahead <= buckleFar;
+}
+inline bool atLeftHip(holster::BodyPoint p) {
+    return inBand(p) && -p.side >= hipInner && -p.side <= hipOuter && p.ahead >= -hipBack && p.ahead <= hipFar;
+}
+// The hand's distance (m) to the other controller's forearm bone (behind its grip, along -aim); +inf when
+// the other hand is not tracked or anything is not finite.
+inline float forearmGap(Vec3 hand, Vec3 otherAt, Vec3 otherAim, bool otherTracked) {
+    const float n = length(otherAim);
+    if (!otherTracked || !finite(hand) || !finite(otherAt) || !finite(otherAim) || !(n > 1e-4f))
+        return INFINITY;
+    const Vec3 back = otherAim * (-1.f / n);
+    const Vec3 a = otherAt + back * armNear, b = otherAt + back * armFar;
+    const Vec3 ab = b - a;
+    const float t = std::clamp(dot(hand - a, ab) / dot(ab, ab), 0.f, 1.f);
+    return length(hand - (a + ab * t));
+}
+struct ZonePick {
+    uint32_t pick = pickNone;
+    float best = INFINITY, next = INFINITY; // the nearest zone's core distance, the runner-up's
+};
+inline ZonePick pickZone(holster::BodyPoint p, float armGap) {
+    ZonePick z;
+    uint32_t bestPick = pickNone;
+    const auto offer = [&](uint32_t what, float d) {
+        if (!std::isfinite(d))
+            return;
+        if (d < z.best) {
+            z.next = z.best;
+            z.best = d;
+            bestPick = what;
+        } else if (d < z.next) {
+            z.next = d;
+        }
+    };
+    if (atBuckle(p))
+        offer(pickBatarang, std::hypot(p.side, p.ahead - (buckleNear + buckleFar) / 2));
+    if (atLeftHip(p))
+        offer(pickGrapple, std::hypot(p.side + (hipInner + hipOuter) / 2, p.ahead - (hipFar - hipBack) / 2));
+    if (std::isfinite(armGap) && armGap <= armReach)
+        offer(pickSmoke, armGap);
+    if (bestPick == pickNone)
+        return z;
+    z.pick = z.next - z.best >= zoneMargin ? bestPick : pickUnsure;
+    return z;
+}
 
 // ---- PUNISHER: SHELL EJECTION (a visual, capped) -------------------------------------------------
 // Each shot throws a spent case out of the gun's right side (the sawed-off: two shells when it is

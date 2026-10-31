@@ -18870,7 +18870,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 163, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 164, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18904,7 +18904,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 163, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 164, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -24362,6 +24362,7 @@ int main() {
                     {
                         hero007::Play p7;
                         hero007::PlayInput in7;
+                        in7.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
                         in7.dt = dt;
                         in7.play = true;
                         in7.hero = hero_modes::daredevil;
@@ -24403,6 +24404,7 @@ int main() {
                     {
                         hero007::Play p7;
                         hero007::PlayInput in7;
+                        in7.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
                         in7.dt = dt;
                         in7.play = true;
                         in7.hero = hero_modes::batman;
@@ -24524,6 +24526,7 @@ int main() {
             {
                 hero007::Play p7;
                 hero007::PlayInput in7;
+                in7.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
                 in7.dt = dt;
                 in7.play = true;
                 in7.hero = hero_modes::daredevil;
@@ -24569,6 +24572,7 @@ int main() {
             for (const bool swing : {true, false}) {
                 hero007::Play p7;
                 hero007::PlayInput in7;
+                in7.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
                 in7.dt = dt;
                 in7.play = true;
                 in7.hero = hero_modes::daredevil;
@@ -24622,6 +24626,7 @@ int main() {
             {
                 hero007::Play p7;
                 hero007::PlayInput in7;
+                in7.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
                 in7.dt = dt;
                 in7.play = true;
                 in7.hero = hero_modes::batman;
@@ -25036,6 +25041,7 @@ int main() {
         using namespace spidy::hero007;
         Play p;
         PlayInput in;
+        in.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
         in.dt = 1 / 90.f;
         in.play = true;
         in.hero = spidy::hero_modes::batman;
@@ -25116,6 +25122,107 @@ int main() {
         frame(front, {0, .6f, -1}, 0, 0);
         o = frame(front, {0, .6f, -1}, 1, 0);
         check(!o.grapple[0] && !o.grapple[1], "nobody else grapples");
+    });
+    test("0.0.74 test 10 BELT ZONES: BATMAN's left hip grapple, belt front batarang, other-forearm smoke; apart", [] {
+        using namespace spidy::hero007;
+        namespace hl = spidy::holster;
+        // The zones never overlap: sampled over the belt band, both sides, front and back.
+        for (float b = zoneBelow; b <= zoneLow; b += .02f)
+            for (float sd = -.45f; sd <= .45f; sd += .01f)
+                for (float a = -.30f; a <= .45f; a += .02f) {
+                    const hl::BodyPoint q{b, sd, a};
+                    check(!(atBuckle(q) && atLeftHip(q)), "the belt front and the left hip overlap");
+                    check(!atLeftHip(q) || -sd >= std::abs(sd) - 1e-6f, "the grapple zone is only on the left");
+                    const uint32_t k = pickZone(q, INFINITY).pick;
+                    check(k != pickSmoke, "no forearm, no smoke");
+                    if (atBuckle(q) || atLeftHip(q))
+                        check(k == (atBuckle(q) ? pickBatarang : pickGrapple), "one belt zone: its own tool");
+                    else
+                        check(k == pickNone, "off the zones: nothing");
+                }
+        check(hipInner - buckleSide >= zoneMargin, "a margin-wide gap between the belt front and the hip");
+        check(pickZone({.75f, .24f, .1f}, INFINITY).pick == pickNone, "the RIGHT hip draws nothing (no mirror)");
+        check(pickZone({.75f, -.25f, .06f}, INFINITY).pick == pickGrapple, "the left hip: the grapple gun");
+        check(pickZone({.75f, 0, .2f}, INFINITY).pick == pickBatarang, "the belt front: a batarang");
+        check(pickZone({.3f, 0, .3f}, .03f).pick == pickSmoke, "on the other forearm (off the belt): smoke");
+        // Near two zones at once: the nearer wins only by the margin, otherwise nothing.
+        check(pickZone({.75f, -.25f, .06f}, .02f).pick == pickUnsure, "the hip and the forearm about as near: unsure");
+        check(pickZone({.75f, -.25f, .06f}, .08f).pick == pickGrapple, "the hip much nearer than the forearm: the gun");
+        check(pickZone({.75f, -.18f, .20f}, .01f).pick == pickSmoke, "the forearm much nearer than the hip's core: smoke");
+        check(pickZone({NAN, 0, .2f}, NAN).pick == pickNone && pickZone({.75f, 0, .2f}, NAN).pick == pickBatarang,
+              "NaN: nothing taken from it");
+        // forearmGap: the bone behind the other controller's grip, along -aim.
+        const Vec3 o{-.2f, 1.2f, -.3f}, aim{0, 0, -1};
+        check(std::abs(forearmGap(o + Vec3{0, .03f, .15f}, o, aim, true) - .03f) < 1e-4f, "on the forearm: its gap");
+        check(forearmGap(o + Vec3{0, 0, -.15f}, o, aim, true) > armReach, "in front of the hand (not the arm): too far");
+        check(forearmGap(o + Vec3{0, 0, .15f}, o, aim, false) == INFINITY && forearmGap(o, o, {0, 0, 0}, true) == INFINITY &&
+                  forearmGap({NAN, 0, 0}, o, aim, true) == INFINITY,
+              "untracked / no aim / NaN: no forearm");
+        check(spidy::combat38::beltZonesOn(0) && !spidy::combat38::beltZonesOn(1) && PlayInput{}.beltZones,
+              "BELT ZONES on by default");
+        // Play: either hand at the left hip draws the gun; the belt front gives a batarang, the forearm smoke.
+        for (unsigned h = 0; h < 2; ++h) {
+            Play p;
+            PlayInput in;
+            in.dt = 1 / 90.f;
+            in.play = true;
+            in.hero = spidy::hero_modes::batman;
+            in.head = {{0, 1.7f, 0}, {}};
+            p.setHero(in.hero);
+            const unsigned g = 1 - h;
+            const Vec3 rest[2] = {{-.3f, 1.4f, -.35f}, {.3f, 1.4f, -.35f}};
+            const auto frame = [&](Vec3 at, float grip, Vec3 otherAt = {}, bool place = false) {
+                in.hands[h] = {at, {0, 0, -1}, true, 0, grip, false};
+                in.hands[g] = {place ? otherAt : rest[g], {0, 0, -1}, true, 0, 0, false};
+                PlayOutput o1, o2;
+                p.holsterStep(in, o1);
+                p.step(in, o2);
+                return o1;
+            };
+            const Vec3 leftHip{-.25f, .95f, -.06f}, rightHip{.25f, .95f, -.06f}, front{0, .95f, -.2f};
+            frame(leftHip, 0);
+            frame(leftHip, 1);
+            check(p.beltPick[h] == pickGrapple && p.gunDrawn[h] && !p.batDraw.drawn[h] &&
+                      p.pellets.hands[h].state != SmokePellets::held,
+                  "either hand: a grip at the left hip draws only the grapple gun");
+            frame(leftHip, 0);
+            frame(rest[h], 0);
+            frame(rightHip, 0);
+            frame(rightHip, 1);
+            check(!p.gunDrawn[h] && !p.batDraw.drawn[h] && p.pellets.hands[h].state != SmokePellets::held,
+                  "the right hip: nothing (not anyone's guess)");
+            frame(rightHip, 0);
+            frame(rest[h], 0, {}, false);
+            frame(rest[h], 1);
+            check(!p.gunDrawn[h], "a grip in the air: no gun with BELT ZONES on");
+            frame(rest[h], 0);
+            frame(front, 0);
+            frame(front, 1);
+            check(p.batDraw.drawn[h] && !p.gunDrawn[h] && p.pellets.hands[h].state != SmokePellets::held,
+                  "the belt front: a batarang, not smoke");
+            frame(rest[h], 0);
+            for (int i = 0; i < 300 && !p.batarangs[h].inHandNow(); ++i)
+                frame(rest[h], 0);
+            // The other forearm, held out in front: the hand on it, 12 cm back from its grip.
+            const Vec3 arm = rest[g] + Vec3{0, .03f, .12f};
+            frame(arm, 0, rest[g], true);
+            frame(arm, 1, rest[g], true);
+            check(p.beltPick[h] == pickSmoke && p.pellets.hands[h].state == SmokePellets::held && !p.gunDrawn[h] &&
+                      !p.batDraw.drawn[h],
+                  "a grab on the other forearm: a smoke pellet");
+            frame(arm, 0, rest[g], true);
+            for (int i = 0; i < 300; ++i)
+                frame(rest[h], 0);
+            // OFF: test 9's draws (the buckle smoke, a grip in the air draws the gun).
+            in.beltZones = false;
+            frame(rest[h], 0);
+            frame(rest[h], 1);
+            check(p.gunDrawn[h] && p.beltPick[h] == pickNone, "OFF: any other grip draws the gun as before");
+            frame(rest[h], 0);
+            frame(front, 0);
+            frame(front, 1);
+            check(p.pellets.hands[h].state == SmokePellets::held && !p.batDraw.drawn[h], "OFF: the buckle is the smoke's");
+        }
     });
     test("Test build 12: HOLSTERS HIGHER - PUNISHER's pistols at the hip bone, scaled to the player, a pulse in reach", [] {
         using namespace spidy::hero007;
@@ -25226,6 +25333,7 @@ int main() {
         using namespace spidy::hero007;
         Play p;
         PlayInput in;
+        in.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
         in.dt = 1 / 90.f;
         in.play = true;
         in.hero = spidy::hero_modes::batman;
@@ -26885,6 +26993,7 @@ int main() {
         gun.hasPivot = true;
         Play p;
         PlayInput in;
+        in.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
         in.dt = 1 / 90.f;
         in.play = true;
         in.hero = spidy::hero_modes::batman;
@@ -26981,6 +27090,7 @@ int main() {
         using namespace spidy::hero007;
         Play p;
         PlayInput in;
+        in.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
         in.dt = 1 / 90.f;
         in.play = true;
         in.hero = spidy::hero_modes::wolverine;
@@ -27045,6 +27155,7 @@ int main() {
         using spidy::hero_modes::BatonEnemy;
         Play p;
         PlayInput in;
+        in.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
         in.dt = 1 / 90.f;
         in.play = true;
         in.hero = spidy::hero_modes::batman;
@@ -27162,6 +27273,7 @@ int main() {
         using namespace spidy::hero007;
         Play p;
         PlayInput in;
+        in.beltZones = false; // 0.0.74 test 10: test 9's BATMAN draws (BELT ZONES OFF)
         in.dt = 1 / 90.f;
         in.play = true;
         in.hero = spidy::hero_modes::batman;

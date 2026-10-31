@@ -4362,6 +4362,7 @@ DWORD WINAPI run(void*) {
                             hin.head = frame.head;
                             hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
                             hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
+                            hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
                             hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                             for (unsigned i = 0; i < 2; ++i) {
                                 hin.hands[i].position = grips[i].position;
@@ -8116,6 +8117,7 @@ DWORD WINAPI run(void*) {
                                         hin.reload = c38(combat38::easyReload);
                                         hin.crossDraw = combat38::holsterCrossDraw(c38(combat38::holsterHands)); hin.eyeHeight = calibratedEye;
                                         hin.batonHolsters = combat38::batonHolstersOn(c38(combat38::batonHolsters));
+                                        hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
                                         hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                                         hin.shieldChain = captain::chainOn(c38(combat38::shieldChain));
                                         hin.shieldDamage = c38(combat38::shieldDamage);
@@ -14440,6 +14442,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherHook(void* v) { retur
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherQuickHook(void* v) { return setHero007(v, combat38::punisherQuickHook, 5530); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGrappleYank(void* v) { return setHero007(v, combat38::grappleYank, 5531); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySureGrapple(void* v) { return setHero007(v, combat38::sureGrapple, 5532); }
+// 0.0.74 test 10 BELT ZONES (hero007.hpp pickZone): ON (0, the default) or OFF (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBeltZones(void* v) { return setHero007(v, combat38::beltZones, 5533); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawClimb(void* v) { return setHero007(v, combat38::clawClimb, 5421); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyNpcShove(void* v) { return setHero007(v, combat38::npcShove, 5422); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFaction(void* v) { return setHero007(v, combat38::faction, 5423); }

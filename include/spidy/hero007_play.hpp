@@ -67,6 +67,7 @@ struct PlayInput {
     bool grappleHeld[2]{};
     bool shieldChain = true; // SHIELD CHAIN ON
     uint32_t shieldDamage{}; // SHIELD DAMAGE value (0: 35 HP)
+    bool beltZones = true;   // 0.0.74 test 10 BELT ZONES ON: BATMAN's left hip grapple, belt front batarang, forearm smoke
 };
 enum BlowKind : uint32_t { kindBatarang = 0, kindClaw, kindHeat, kindFreeze, kindPistol, kindSawedOff, kindShield, kindShieldBash, blowKinds };
 inline constexpr const char* blowKindNames[blowKinds] = {"BATARANG", "CLAWS",     "HEAT VISION", "COLD BREATH",
@@ -302,6 +303,7 @@ class Play {
     bool gunDrawn[2]{}, gunGripWas[2]{};
     grapple073::FireGate grappleGate;
     unsigned grappleHand{1};              // the hand that fired it last (its hip holsters the gun; right at first)
+    uint32_t beltPick[2]{};               // 0.0.74 test 10 BELT ZONES: each hand's place this frame (BeltPick)
     holster::BodyYaw batBody;             // BATMAN: the body's heading for the gun's hip holster
     // Version 0.0.7 BATARANG THROW (test build 12: drawn from a belt pouch by the grip): the batarang is in
     // the hand only while that grip is held; letting go throws it. Never in an idle hand.
@@ -483,8 +485,23 @@ class Play {
                 busy[i] = in.hands[i].busy;
                 squeeze[i] = in.hands[i].squeeze;
             }
+            // 0.0.74 test 10 BELT ZONES (hero007.hpp pickZone): each hand's place - the left hip, the belt's
+            // front or the other forearm - and only that place's tool; OFF: test 9's buckle / pouches / any grip.
+            bool smokeAt[2]{}, batarangAt[2]{};
+            for (unsigned i = 0; i < 2; ++i) {
+                beltPick[i] = pickNone;
+                if (!in.beltZones || !tracked[i] || !pelletBody.valid || !finite(in.head.position) || !finite(at[i]))
+                    continue;
+                const unsigned o = 1 - i;
+                beltPick[i] = pickZone(holster::bodyPoint(at[i], in.head.position, pelletBody),
+                                       forearmGap(at[i], at[o], in.hands[o].aim, tracked[o]))
+                                  .pick;
+                smokeAt[i] = beltPick[i] == pickSmoke;
+                batarangAt[i] = beltPick[i] == pickBatarang;
+            }
             uint32_t took = 0;
-            const uint32_t pelletHands = pellets.grip(in.dt, in.play, in.head.position, pelletBody, at, tracked, squeeze, busy, &took);
+            const uint32_t pelletHands = pellets.grip(in.dt, in.play, in.head.position, pelletBody, at, tracked, squeeze,
+                                                      busy, &took, in.beltZones ? smokeAt : nullptr);
             out.claimed |= pelletHands;
             for (unsigned i = 0; i < 2; ++i)
                 if (took & (1u << i)) {
@@ -498,7 +515,8 @@ class Play {
                               grappling[i] || in.grappleHeld[i] || gunDrawn[i];
                 ready[i] = batarangs[i].inHandNow();
             }
-            out.claimed |= batDraw.update(in.play, in.head.position, pelletBody, at, tracked, squeeze, drawBusy, ready);
+            out.claimed |= batDraw.update(in.play, in.head.position, pelletBody, at, tracked, squeeze, drawBusy, ready,
+                                          in.beltZones ? batarangAt : nullptr);
             for (unsigned i = 0; i < 2; ++i) {
                 if (batDraw.events[i] & BatarangDraw::took) {
                     out.buzz(i, .35f);
@@ -510,7 +528,10 @@ class Play {
             // Version 0.0.73 (fix 3): any other grip draws the grapple gun (a pouch's or the buckle's took it first).
             for (unsigned i = 0; i < 2; ++i) {
                 const bool other = (out.claimed & (1u << i)) && !gunDrawn[i];
-                gunGrip(in, i, !other && !batDraw.drawn[i] && !batReady[i] && pellets.hands[i].state != SmokePellets::held, out);
+                // BELT ZONES: only a grip at the left hip draws it (OFF: any grip the others left)
+                const bool hip = !in.beltZones || beltPick[i] == pickGrapple;
+                gunGrip(in, i, hip && !other && !batDraw.drawn[i] && !batReady[i] && pellets.hands[i].state != SmokePellets::held,
+                        out);
             }
         } else if (hero != hero_modes::captainAmerica) {
             gunDrawn[0] = gunDrawn[1] = gunGripWas[0] = gunGripWas[1] = false;
@@ -663,7 +684,9 @@ class Play {
             }
             if (!gunHeld && batBody.valid && finite(in.head.position)) {
                 Vec3 at{}, fwd{}, up{};
-                wornPose(grappleHand == 0 ? holster::leftHip : holster::rightHip, in.head.position, batBody, at, fwd, up, hipBelt);
+                // BELT ZONES: worn where it is drawn, the left hip (OFF: the hip of the hand that fired it last)
+                wornPose(in.beltZones || grappleHand == 0 ? holster::leftHip : holster::rightHip, in.head.position, batBody,
+                         at, fwd, up, hipBelt);
                 d.worn[0] = item(lookGrappleGun, at, fwd, up, 1);
                 any = true;
             }

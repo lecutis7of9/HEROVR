@@ -323,6 +323,7 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5530'), ['SpidyPunisherQuickHook'])  # 0.0.74 test 10 QUICK HOOK (hero072.hpp)
         self.assertEqual(uses.get('5531'), ['SpidyGrappleYank'])  # 0.0.74 test 10 GRAPPLE YANK (grapple074.hpp)
         self.assertEqual(uses.get('5532'), ['SpidySureGrapple'])  # 0.0.74 test 10 SURE GRAPPLE (grapple074.hpp)
+        self.assertEqual(uses.get('5533'), ['SpidyBeltZones'])  # 0.0.74 test 10 BELT ZONES (hero007.hpp)
         # 0.0.74 test 10: the tests' picture / AA codes are retired with their options (never reused)
         for code in ('5496', '5497', '5502', '5504', '5505', '5506') + tuple(str(c) for c in range(5512, 5524)):
             self.assertIsNone(uses.get(code), code)

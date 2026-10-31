@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <atomic>
 #include <initializer_list>
+#include <optional>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -544,6 +545,27 @@ constexpr float sparkLeft = .030f;
 // thumb's least length.
 constexpr float scrollbarU = (scrollbarU0 + scrollbarU1) / 2, scrollTrackTop = viewTop - .002f,
                 scrollTrackBottom = viewBottom + .012f, thumbLeast = .016f;
+// 0.0.74 test 10: a page the holo roster lays out under its header (HostedArea): its inner area's top is
+// `shift` lower. One a thread: the input (Menu::update) and the drawing set it around their own work.
+thread_local int gHostPage = -1;
+thread_local float gHostShift = 0;
+float shiftOf(int page) {
+    return page == gHostPage ? gHostShift : 0.f;
+}
+float viewTopOf(int page) {
+    return viewTop - shiftOf(page);
+}
+float trackTopOf(int page) {
+    return scrollTrackTop - shiftOf(page);
+}
+// PREV / NEXT from `page`: they wrap (MUSIC <-> STATUS); with the holo tiles they pass COLOR by (its rows are
+// the roster's COLOR tab now). Off COLOR itself (an older session's page) they go on as ever.
+int stepPage(int page, int dir, bool tiles) {
+    int p = (page + dir + pages) % pages;
+    if (tiles && p == colorPage)
+        p = (p + dir + pages) % pages;
+    return p;
+}
 bool slider(Control c) {
     return c == Control::thickness || c == Control::speed || c == Control::history || c == Control::reach ||
            c == Control::monitor || c == Control::supersample || c == Control::sharpen ||
@@ -2604,7 +2626,7 @@ void sectionRow(const Painter& p, const Item& it, const View& view) {
             summary += " / " + rowValue(view, it.sum1);
         summary += it.post;
     } else if (it.count > 0) {
-        const SectionDef& d = sectionsOf(view.page)[it.line];
+        const SectionDef& d = sectionsOf(gHostPage >= 0 ? gHostPage : view.page)[it.line]; // hosted: that page's
         summary = std::to_string(it.count) + " " + (d.word ? d.word : "");
     }
     if (summary.empty())
@@ -2785,7 +2807,7 @@ void scrollbar(const Painter& p, int page, float scroll, float k, bool dragging)
     const Thumb t = scrollThumb(page, scroll, k);
     if (!t.shown)
         return;
-    p.bar(scrollbarU, scrollTrackBottom, scrollbarU, scrollTrackTop, .0010f, p.c.accent, .35f);
+    p.bar(scrollbarU, scrollTrackBottom, scrollbarU, trackTopOf(page), .0010f, p.c.accent, .35f);
     p.bar(scrollbarU, t.v0, scrollbarU, t.v1, dragging ? .0034f : .0026f, dragging ? p.c.text : p.c.line, .9f);
 }
 
@@ -2803,7 +2825,10 @@ void strip(const Painter& p, const View& view, int page) {
         p.triangle(c + d * .0060f, mid, c - d * .0040f, mid + .0060f, c - d * .0040f, mid - .0060f, color, .95f);
     }
     char label[48];
-    std::snprintf(label, sizeof label, "%d/%d %s", page + 1, pages, view.heroTiles && page == powersPage ? "HEROES" : pageName(page)); // 0.0.73 test 4: the tiles
+    // 0.0.74 test 10: with the tiles COLOR is the roster's tab, not a page of its own: seven pages.
+    const bool noColor = view.heroTiles && page != colorPage;
+    std::snprintf(label, sizeof label, "%d/%d %s", noColor && page > colorPage ? page : page + 1, noColor ? pages - 1 : pages,
+                  view.heroTiles && page == powersPage ? "HEROES" : pageName(page)); // 0.0.73 test 4: the tiles
     // A refused setting's note takes the page's place for a while, in red.
     const std::string t = view.note.empty() ? std::string(label) : view.note;
     const float h = fittedHeight(t, .0046f, .084f);
@@ -3026,7 +3051,7 @@ float contentHeight(int page, float text) {
     return viewTop - layoutOf(page, text).bottom;
 }
 float maxScroll(int page, float text) {
-    return std::max(0.f, contentHeight(page, text) - (viewTop - viewBottom));
+    return std::max(0.f, contentHeight(page, text) - (viewTopOf(page) - viewBottom));
 }
 float clampScroll(int page, float scroll, float text) {
     return std::isfinite(scroll) ? std::clamp(scroll, 0.f, maxScroll(page, text)) : 0.f;
@@ -3035,25 +3060,26 @@ Thumb scrollThumb(int page, float scroll, float text) {
     const float most = maxScroll(page, text);
     if (!(most > 0))
         return {false, 0, 0};
-    const float track = scrollTrackTop - scrollTrackBottom;
-    const float length = std::max(thumbLeast, track * (viewTop - viewBottom) / contentHeight(page, text));
-    const float top = scrollTrackTop - (track - length) * clampScroll(page, scroll, text) / most;
+    const float track = trackTopOf(page) - scrollTrackBottom;
+    const float length = std::max(thumbLeast, track * (viewTopOf(page) - viewBottom) / contentHeight(page, text));
+    const float top = trackTopOf(page) - (track - length) * clampScroll(page, scroll, text) / most;
     return {true, top - length, top};
 }
 bool onScrollbar(int page, float u, float v, float text) {
     return std::isfinite(u) && std::isfinite(v) && u >= scrollbarU0 && u <= scrollbarU1 && v >= viewBottom &&
-           v <= viewTop && maxScroll(page, text) > 0;
+           v <= viewTopOf(page) && maxScroll(page, text) > 0;
 }
 Control controlAt(int page, float u, float v, float scroll, float text) {
     if (!onPanel(page, u, v))
         return Control::none;
-    for (const Box& b : {previousBox, nextBox})
-        if (b.in(u, v))
-            return b.control;
+    if (page != gHostPage) // hosted: the strip is the roster's (Menu::update)
+        for (const Box& b : {previousBox, nextBox})
+            if (b.in(u, v))
+                return b.control;
     // Only what shows in the inner area can be pressed, where it shows.
-    if (v < viewBottom || v > viewTop || onScrollbar(page, u, v, text))
+    if (v < viewBottom || v > viewTopOf(page) || onScrollbar(page, u, v, text))
         return Control::none;
-    const float cv = v - clampScroll(page, scroll, text);
+    const float cv = v + shiftOf(page) - clampScroll(page, scroll, text);
     for (const Item& it : layoutOf(page, text).items) {
         if (it.control == Control::none)
             continue;
@@ -3065,6 +3091,30 @@ Control controlAt(int page, float u, float v, float scroll, float text) {
         }
     }
     return Control::none;
+}
+int hostedPage(const holo_roster::State& s) {
+    switch (holo_roster::hosted(s)) {
+    case holo_roster::Hosted::color: return colorPage;
+    case holo_roster::Hosted::music: return musicPage;
+    case holo_roster::Hosted::none: break;
+    }
+    return -1;
+}
+int shownPage(const View& view) {
+    const int hosted = hostedPage(view.roster);
+    return hosted >= 0 ? hosted : view.page;
+}
+int Menu::shownPage() const {
+    const int hosted = roster_.isOpen() ? hostedPage(roster_.state()) : -1;
+    return hosted >= 0 ? hosted : page_;
+}
+HostedArea::HostedArea(int page, float top) : page_(gHostPage), shift_(gHostShift) {
+    gHostPage = page >= 0 && page < pages ? page : -1;
+    gHostShift = std::isfinite(top) ? std::clamp(viewTop - top, 0.f, viewTop - viewBottom - .02f) : 0.f;
+}
+HostedArea::~HostedArea() {
+    gHostPage = page_;
+    gHostShift = shift_;
 }
 // Update 38.5: a control's subtext as drawn now, and where its rows are.
 HelpInfo helpInfo(const View& view, int page, Control c) {
@@ -3091,9 +3141,9 @@ int helpOverflow(const View& view, int page, Control c) {
     return info.found ? std::max(0, info.lines - info.rows) : 0;
 }
 Control helpAt(int page, float u, float v, float scroll, float text) {
-    if (!std::isfinite(u) || !std::isfinite(v) || v < viewBottom || v > viewTop || u < trackLeft || u > trackRight)
+    if (!std::isfinite(u) || !std::isfinite(v) || v < viewBottom || v > viewTopOf(page) || u < trackLeft || u > trackRight)
         return Control::none;
-    const float cv = v - clampScroll(page, scroll, text);
+    const float cv = v + shiftOf(page) - clampScroll(page, scroll, text);
     for (const Item& it : layoutOf(page, text).items) {
         if (it.control == Control::none || it.help.lines.empty())
             continue;
@@ -3135,10 +3185,10 @@ Spot controlSpot(int page, Control c, float scroll, float text) {
     const Item* it = itemOf(layoutOf(p, text), c);
     if (!it)
         return {false, 0, 0, false};
-    const float dv = clampScroll(p, scroll, text);
+    const float dv = clampScroll(p, scroll, text) - shiftOf(p);
     Spot s = it->kind == Kind::slider ? Spot{true, 0, it->track + dv}
                                       : Spot{true, (it->box.u0 + it->box.u1) / 2, (it->box.v0 + it->box.v1) / 2 + dv};
-    s.visible = s.v >= viewBottom && s.v <= viewTop;
+    s.visible = s.v >= viewBottom && s.v <= viewTopOf(p);
     return s;
 }
 std::vector<Area> pageAreas(int page, float text) {
@@ -3906,14 +3956,15 @@ float listRowHeight(float text) {
     return std::max(.012f * textFactor(text), .010f);
 }
 int listRowAt(float u, float v, float scroll, float text, int first, int tracks) {
-    if (!std::isfinite(u) || !std::isfinite(v) || v < viewBottom || v > viewTop || u < trackLeft || u > trackRight)
+    if (!std::isfinite(u) || !std::isfinite(v) || v < viewBottom || v > viewTopOf(musicPage) || u < trackLeft ||
+        u > trackRight)
         return -1;
     const float k = textFactor(text);
     const Item* d = itemOf(layoutOf(musicPage, k), Control::musicTrack);
     const int shown = std::min(listRows, tracks - std::max(first, 0));
     if (!d || shown <= 0)
         return -1;
-    const float row = (d->box.v0 - (v - clampScroll(musicPage, scroll, k))) / listRowHeight(k);
+    const float row = (d->box.v0 - (v + shiftOf(musicPage) - clampScroll(musicPage, scroll, k))) / listRowHeight(k);
     if (!(row >= 0) || row >= static_cast<float>(shown))
         return -1;
     return static_cast<int>(row);
@@ -4092,9 +4143,91 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         drag_ = Drag::none;
         closeList();
     }
-    // 0.0.73 test 3 HOLO ROSTER (fix 28): while the heroes are open on the hologram, the panel is theirs:
-    // the pointer and a fresh pull work their tiles and tabs, the stick scrolls the REP log.
-    if (roster_.isOpen()) {
+    // The roster's data: the tests' or previews', else the game's latest; the hero played from the input.
+    const auto rosterShown = [&]() {
+        const holo_roster::Data* d = in.rosterData;
+        if (!d) {
+            if (holo_roster::version() != rosterVersion_)
+                rosterVersion_ = holo_roster::latest(rosterData_);
+            d = &rosterData_;
+        }
+        holo_roster::Data shown = *d;
+        if (in.hero >= 0 && in.hero < static_cast<int>(holo_roster::heroes))
+            shown.playing = static_cast<uint32_t>(in.hero);
+        return shown;
+    };
+    // 0.0.74 test 10 (the user: "put color profiles on same page as the roster its too far back and add the
+    // music player to its own tab on the roster profile"): the roster's COLOR tab and a hero's MUSIC tab lay
+    // the COLOR and MUSIC pages under the roster's header. The header (and the strip) work the roster as ever;
+    // under it the page is worked by the normal path below, as that page, in the shorter area.
+    std::optional<HostedArea> hostedArea;
+    struct PageBack {
+        int& page;
+        int was = -1;
+        ~PageBack() {
+            if (was >= 0)
+                page = was;
+        }
+    } pageBack{page_};
+    const int hostPage = roster_.isOpen() && !in.heroMenuClassic && in.active ? hostedPage(roster_.state()) : -1;
+    if (hostPage >= 0) {
+        holo_roster::State& rs = roster_.state();
+        rs.settingHelp = nullptr;
+        const float hostTop = holo_roster::hostedTop(rs);
+        const bool finite = in.pointer.hit && std::isfinite(in.pointer.u) && std::isfinite(in.pointer.v);
+        const bool onIt = finite && std::abs(in.pointer.u) <= halfW && std::abs(in.pointer.v) <= halfH;
+        const bool onStrip =
+            tiles && finite && (previousBox.in(in.pointer.u, in.pointer.v) || nextBox.in(in.pointer.u, in.pointer.v));
+        // A slider held or a drag on the page keeps the pointer wherever it goes.
+        const bool busy = down && !relaid && (held_ != Control::none || drag_ != Drag::none);
+        const bool header = onIt && !busy && in.pointer.v > hostTop;
+        if (!touched)
+            claim_ = false;
+        else if (first && (onIt || onStrip))
+            claim_ = true;
+        if (onStrip && !busy && claim_ && press && !relaid) { // the strip: off POWERS (the tiles close)
+            setPage(stepPage(page_, previousBox.in(in.pointer.u, in.pointer.v) ? -1 : 1, tiles));
+            roster_.close();
+            r.rosterClosed = r.pressed = true;
+            hover_ = held_ = Control::none;
+            helpFor_ = Control::none;
+            drag_ = Drag::none;
+            closeList();
+            return r;
+        }
+        const holo_roster::Data shown = rosterShown();
+        const int hoverWas = rs.hover;
+        const holo_roster::Actions a = roster_.update(header && !relaid, in.pointer.u, in.pointer.v,
+                                                      header && claim_ && press && !relaid, 0.f, in.seconds, shown);
+        r.hovered = roster_.state().hover != holo_roster::none && roster_.state().hover != hoverWas;
+        r.pressed = header && claim_ && press && !relaid && hoverWas != holo_roster::none;
+        r.rosterPlayAs = a.playAs;
+        r.rosterSuitHero = a.suitHero;
+        r.rosterSuitIndex = a.suitIndex;
+        r.rosterClosed = a.closed;
+        if (a.closed && tiles && page_ == powersPage)
+            setPage(0); // CLOSE on the tiles' POWERS: back to STATUS
+        if (!roster_.isOpen() || hostedPage(roster_.state()) != hostPage) {
+            // Another tab, BACK or CLOSE: nothing of the page stays held or open.
+            hover_ = held_ = Control::none;
+            helpFor_ = Control::none;
+            drag_ = Drag::none;
+            closeList();
+            return r;
+        }
+        if (header || (onStrip && !busy)) {
+            hover_ = Control::none;
+            helpFor_ = Control::none;
+            if (!down || relaid) {
+                held_ = Control::none;
+                drag_ = Drag::none;
+            }
+            return r;
+        }
+        pageBack.was = page_;
+        page_ = hostPage;
+        hostedArea.emplace(hostPage, hostTop);
+    } else if (roster_.isOpen()) {
         if (in.heroMenuClassic) { // switched to CLASSIC while open: back to the page
             roster_.close();
             r.rosterClosed = true;
@@ -4127,7 +4260,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             return r;
         // The arrow strip under the panel: off POWERS (the tiles close).
         if (onStrip && claim_ && press && !relaid) {
-            setPage(previousBox.in(in.pointer.u, in.pointer.v) ? (page_ + pages - 1) % pages : (page_ + 1) % pages);
+            setPage(stepPage(page_, previousBox.in(in.pointer.u, in.pointer.v) ? -1 : 1, tiles));
             roster_.close();
             r.rosterClosed = r.pressed = true;
             hover_ = held_ = Control::none;
@@ -4137,15 +4270,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                            ? heroSettingAt(rs.hero, rs.settingsPage, in.pointer.u, in.pointer.v)
                            : Control::none;
         const bool rowOff = row != Control::none && (bit(row) & in.disabled) != 0;
-        const holo_roster::Data* d = in.rosterData;
-        if (!d) {
-            if (holo_roster::version() != rosterVersion_)
-                rosterVersion_ = holo_roster::latest(rosterData_);
-            d = &rosterData_;
-        }
-        holo_roster::Data shown = *d;
-        if (in.hero >= 0 && in.hero < static_cast<int>(holo_roster::heroes))
-            shown.playing = static_cast<uint32_t>(in.hero);
+        const holo_roster::Data shown = rosterShown();
         const int hoverWas = roster_.state().hover;
         const float stick = std::isfinite(in.stick) && std::abs(in.stick) > stickDead ? in.stick : 0.f;
         const bool onRow = row != Control::none || sliding;
@@ -4266,11 +4391,11 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             held_ = hover_;
             switch (hover_) {
             case Control::previous: // the arrows wrap (MUSIC <-> STATUS)
-                setPage((page_ + pages - 1) % pages);
+                setPage(stepPage(page_, -1, tiles));
                 closeList();
                 break;
             case Control::next:
-                setPage((page_ + 1) % pages);
+                setPage(stepPage(page_, 1, tiles));
                 closeList();
                 break;
             case Control::section0:
@@ -4665,7 +4790,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             dragV_ = in.pointer.v;
             dragScroll_ = helpScroll_;
             helpManual_ = true;
-        } else if (on && maxScroll(page_, k) > 0 && in.pointer.v >= viewBottom && in.pointer.v <= viewTop &&
+        } else if (on && maxScroll(page_, k) > 0 && in.pointer.v >= viewBottom && in.pointer.v <= viewTopOf(page_) &&
                    std::abs(in.pointer.u) <= halfW) {
             // Empty panel or the scrollbar: a drag that scrolls.
             drag_ = onScrollbar(page_, in.pointer.u, in.pointer.v, k) ? Drag::bar : Drag::content;
@@ -4686,7 +4811,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         float want = dragScroll_ + (in.pointer.v - dragV_); // the content follows the pointer up
         if (drag_ == Drag::bar) {
             const Thumb th = scrollThumb(page_, shown, k);
-            const float room = scrollTrackTop - scrollTrackBottom - (th.v1 - th.v0);
+            const float room = trackTopOf(page_) - scrollTrackBottom - (th.v1 - th.v0);
             want = room > 1e-4f ? dragScroll_ + (dragV_ - in.pointer.v) * maxScroll(page_, k) / room : dragScroll_;
         }
         want = clampScroll(page_, want, k);
@@ -5184,6 +5309,22 @@ void holoRoster(const Painter& p, const View& view) {
     // 0.0.73 test 4 SETTINGS: the hero's setting rows (the old POWERS list's), the menu's own rows.
     if (settingsRows)
         content(p, heroSettingsLayout(st.hero, st.settingsPage), view);
+    // 0.0.74 test 10: COLOR (its tab) or MUSIC (a hero's MUSIC tab) under the header: that page as drawn on its
+    // own - its rows, the player and its song list, its help - in the shorter area, scrolled, with its scrollbar.
+    const int hosted = hostedPage(st);
+    if (hosted >= 0) {
+        const float k = textFactor(view.textScale);
+        const HostedArea area(hosted, hr::hostedTop(st));
+        const float scroll = clampScroll(hosted, view.scroll, k);
+        const size_t from = p.out.size();
+        Painter scrolled = p;
+        scrolled.dv = scroll - shiftOf(hosted);
+        content(scrolled, layoutOf(hosted, k), view);
+        if (hosted == musicPage)
+            songList(scrolled, layoutOf(hosted, k), view);
+        clipBand(p.out, from, p.f, p.s, viewBottom, viewTopOf(hosted));
+        scrollbar(p, hosted, scroll, k, view.pointing && onScrollbar(hosted, view.pointU, view.pointV, k));
+    }
 }
 
 void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, float pixelAngle) {

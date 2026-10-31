@@ -3985,8 +3985,9 @@ DWORD WINAPI run(void*) {
                                     musicTrackNow = musicStatus.track;
                                     wristChanged |= 1u << static_cast<unsigned>(wrist_hud::Control::musicTrack);
                                 }
-                                // What the page shows (only while it is shown: the names are copied).
-                                if (wristMenu.page() == wrist_hud::musicPage) {
+                                // What the page shows (only while it is shown: the names are copied). 0.0.74 test 10:
+                                // shown also on a hero's MUSIC tab in the holo roster.
+                                if (wristMenu.shownPage() == wrist_hud::musicPage) {
                                     auto& m = wristMusic;
                                     m.available = musicStatus.available;
                                     m.tracks = musicStatus.tracks;
@@ -13709,8 +13710,8 @@ DWORD WINAPI run(void*) {
                                             hud.shadowDistanceGame = native_shadow_distance::gameReach();
                                             hud.shadowDistanceLive = native_shadow_distance::liveReach();
                                         }
-                                        if (hud.page == wrist_hud::musicPage)
-                                            hud.music = wristMusic; // Update 19
+                                        if (wrist_hud::shownPage(hud) == wrist_hud::musicPage)
+                                            hud.music = wristMusic; // Update 19 (0.0.74 test 10: or its roster tab)
                                         const unsigned pointHand = 1 - hudHand;
                                         if (wristPointer.hit && (wrist_hud::onPanel(wristMenu.page(), wristPointer.u, wristPointer.v) ||
                                                                  wristMenu.held() != wrist_hud::Control::none) &&
@@ -13742,7 +13743,7 @@ DWORD WINAPI run(void*) {
                                                        ? 0.f
                                                        : hud.helpScroll + 64.f * static_cast<float>(hud.helpFor);
                                         if (hud.helpFor != wrist_hud::Control::none) {
-                                            const int over = wrist_hud::helpOverflow(hud, hud.page, hud.helpFor);
+                                            const int over = wrist_hud::helpOverflow(hud, wrist_hud::shownPage(hud), hud.helpFor);
                                             wristHelpOverflow.store(static_cast<uint32_t>(hud.helpFor) << 8 |
                                                                     static_cast<uint32_t>(std::clamp(over, 0, 254) + 1));
                                         }

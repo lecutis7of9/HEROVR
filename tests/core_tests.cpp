@@ -34513,6 +34513,249 @@ int main() {
                 }
         }
     });
+    test("0.0.74 test 10 roster COLOR and MUSIC tabs: the same pages under the roster's header, big tab text, "
+         "PREV / NEXT pass the old COLOR page", [] {
+        using namespace wrist_hud;
+        namespace hr = holo_roster;
+        // The tabs: in the panel, in order, apart, each word at the tabs' full .0046 (the user reads them).
+        const auto fits = [](const hr::State& s, const hr::Data& d, std::initializer_list<int> want, float v0) {
+            hr::Button bs[hr::buttonsMost];
+            const uint32_t n = hr::buttons(s, d, bs);
+            std::vector<hr::Button> row;
+            for (uint32_t i = 0; i < n; ++i)
+                if (std::abs(bs[i].v0 - v0) < 1e-5f)
+                    row.push_back(bs[i]);
+            check(row.size() == want.size(), "the tab row's count: " + std::to_string(row.size()));
+            const char* words[64]{};
+            words[hr::tabMarvel] = "MARVEL", words[hr::tabDc] = "DC", words[hr::tabSoon] = "SOON", words[hr::tabRep] = "REP";
+            words[hr::tabColor] = "COLOR", words[hr::closeButton] = "CLOSE", words[hr::subControls] = "CONTROLS";
+            words[hr::subOutfits] = "OUTFITS", words[hr::subStats] = "STATS", words[hr::subSettings] = "SETTINGS";
+            words[hr::subMusic] = "MUSIC";
+            size_t k = 0;
+            for (int id : want) {
+                if (k >= row.size())
+                    break;
+                const hr::Button& b = row[k];
+                check(b.id == id && b.id < hr::tile, "a tab out of order: " + std::to_string(b.id));
+                check(b.u0 >= hr::left - 1e-5f && b.u1 <= hr::right + 1e-5f, "a tab off the panel");
+                check(k == 0 || b.u0 >= row[k - 1].u1 + .002f, "two tabs touch");
+                check(textWidth(words[b.id], .0046f) <= b.u1 - b.u0 - .004f + 1e-5f, std::string("a tab's word shrinks: ") + words[b.id]);
+                ++k;
+            }
+            check(std::abs(row.front().u0 - hr::left) < 1e-5f && std::abs(row.back().u1 - hr::right) < 1e-5f,
+                  "the row spans the panel");
+        };
+        for (int soon = 0; soon < 2; ++soon) {
+            hr::Data d;
+            d.comingSoon = soon;
+            hr::State s;
+            for (hr::Screen sc : {hr::Screen::grid, hr::Screen::hero, hr::Screen::rep, hr::Screen::color}) {
+                s.screen = sc;
+                if (soon)
+                    fits(s, d, {hr::tabMarvel, hr::tabDc, hr::tabSoon, hr::tabRep, hr::tabColor, hr::closeButton}, hr::tabY0);
+                else
+                    fits(s, d, {hr::tabMarvel, hr::tabDc, hr::tabRep, hr::tabColor, hr::closeButton}, hr::tabY0);
+            }
+            s.screen = hr::Screen::hero;
+            for (hr::Tab tab : {hr::Tab::controls, hr::Tab::outfits, hr::Tab::stats, hr::Tab::settings, hr::Tab::music}) {
+                s.tab = tab;
+                hr::Button bs[hr::buttonsMost];
+                const uint32_t n = hr::buttons(s, d, bs);
+                float subY0 = 0;
+                for (uint32_t i = 0; i < n; ++i)
+                    if (bs[i].id == hr::subMusic)
+                        subY0 = bs[i].v0;
+                check(subY0 > hr::musicTop, "MUSIC's sub-tab under its page's top");
+                fits(s, d, {hr::subControls, hr::subOutfits, hr::subStats, hr::subSettings, hr::subMusic}, subY0);
+            }
+            s.screen = hr::Screen::color;
+            hr::Button bs[hr::buttonsMost];
+            check(hr::buttons(s, d, bs) == (soon ? 6u : 5u), "COLOR: only the header is the roster's");
+            for (uint32_t i = 0; i < (soon ? 6u : 5u); ++i)
+                check(bs[i].v0 > hr::colorTop, "a header tab under COLOR's top");
+            check(!hr::helpFor(s, d, hr::tabColor).empty() && !hr::helpFor(s, d, hr::subMusic).empty(), "the new tabs' help");
+        }
+        check(hostedPage(hr::State{}) == -1, "nothing hosted closed");
+        // The menu: POWERS (the tiles), COLOR, a COLOR row; then a hero's MUSIC, its player.
+        hr::Data d;
+        resetSections();
+        Menu m;
+        Settings st;
+        m.setPage(powersPage);
+        const int tracks = 12;
+        auto step = [&](float trigger, float u, float v) {
+            Menu::Input in;
+            in.active = true;
+            in.pointer.hit = true;
+            in.pointer.u = u;
+            in.pointer.v = v;
+            in.trigger = trigger;
+            in.hero = hero_modes::spiderMan;
+            in.heroTiles = true;
+            in.rosterData = &d;
+            in.musicTracks = tracks;
+            return m.update(in, st);
+        };
+        auto pressAt = [&](float u, float v) {
+            step(0, u, v);
+            step(.3f, u, v);
+            const auto x = step(.9f, u, v);
+            step(0, u, v);
+            return x;
+        };
+        auto pressId = [&](int id) {
+            hr::Button bs[hr::buttonsMost];
+            const uint32_t n = hr::buttons(m.roster(), d, bs);
+            for (uint32_t i = 0; i < n; ++i)
+                if (bs[i].id == id && bs[i].enabled)
+                    return pressAt((bs[i].u0 + bs[i].u1) / 2, (bs[i].v0 + bs[i].v1) / 2);
+            check(false, "no button " + std::to_string(id));
+            return Menu::Result{};
+        };
+        step(0, 0, 0);
+        check(m.rosterOpen() && m.shownPage() == powersPage, "POWERS: the tiles");
+        auto r = pressId(hr::tabColor);
+        check(r.pressed && m.roster().screen == hr::Screen::color && m.page() == powersPage && m.shownPage() == colorPage,
+              "COLOR tab: the COLOR page under the header");
+        const Control colorRows[] = {Control::colorFx, Control::colorFilter, Control::colorStrength};
+        for (Control c : colorRows) {
+            const HostedArea area(colorPage, hr::colorTop);
+            const Spot at = controlSpot(colorPage, c, m.scroll());
+            check(at.found && at.visible && at.v < hr::colorTop, std::string("a COLOR row not under the header: ") + shortName(c));
+            check(controlAt(colorPage, at.u, at.v, m.scroll()) == c, "a COLOR row's spot");
+        }
+        {
+            // Nothing of the page above its top (the header is the roster's), and its scroll reaches its foot.
+            const HostedArea area(colorPage, hr::colorTop);
+            for (float u = -.08f; u <= .08f; u += .002f)
+                check(controlAt(colorPage, u, hr::colorTop + .002f, 0) == Control::none, "a COLOR control over the header");
+            check(viewTop - hr::colorTop > 0, "the shorter area");
+        }
+        Spot fx;
+        {
+            const HostedArea area(colorPage, hr::colorTop);
+            fx = controlSpot(colorPage, Control::colorFx, m.scroll());
+        }
+        step(0, fx.u, fx.v);
+        check(m.hover() == Control::colorFx, "pointing at COLOR FX under the header");
+        r = pressAt(fx.u, fx.v);
+        check(r.pressed && r.colorFx, "COLOR FX on the COLOR tab");
+        check(m.page() == powersPage && m.rosterOpen() && m.roster().screen == hr::Screen::color, "the press left COLOR");
+        // Pointing at the header: the roster's tab, not a page control.
+        {
+            hr::Button bs[hr::buttonsMost];
+            hr::buttons(m.roster(), d, bs);
+            step(0, (bs[0].u0 + bs[0].u1) / 2, (bs[0].v0 + bs[0].v1) / 2);
+            check(m.hover() == Control::none && m.roster().hover == bs[0].id, "the header under COLOR");
+        }
+        // MUSIC: a hero's tile, its MUSIC tab, the one player.
+        pressId(hr::tabMarvel);
+        check(m.roster().screen == hr::Screen::grid && m.shownPage() == powersPage, "MARVEL from COLOR: the tiles");
+        pressId(hr::tile + static_cast<int>(hero_modes::spiderMan));
+        r = pressId(hr::subMusic);
+        check(m.roster().tab == hr::Tab::music && m.shownPage() == musicPage && m.page() == powersPage, "the MUSIC tab");
+        const std::pair<Control, Menu::Music> buttons[] = {
+            {Control::musicPrevious, Menu::Music::previous}, {Control::musicPlay, Menu::Music::toggle},
+            {Control::musicNext, Menu::Music::next}};
+        const float musicRoom = maxScroll(musicPage, 1);
+        for (auto [c, want] : buttons) {
+            Spot at;
+            {
+                // The shorter area scrolls further: the transport is reached by scrolling, as on any long page.
+                const HostedArea area(musicPage, hr::musicTop);
+                check(maxScroll(musicPage, 1) > musicRoom, "the hosted MUSIC page does not scroll further");
+                at = controlSpot(musicPage, c, 0);
+                if (!at.visible) {
+                    m.setScroll(musicPage, std::min(maxScroll(musicPage, 1), viewBottom + .03f - at.v));
+                    at = controlSpot(musicPage, c, m.scroll());
+                }
+            }
+            check(at.visible && at.v < hr::musicTop, "a player button not under the sub-tabs");
+            check(pressAt(at.u, at.v).music == want, "a player button on the MUSIC tab does the wrong thing");
+        }
+        // The song list opens and picks there, the volume is its slider.
+        Spot drop;
+        {
+            const HostedArea area(musicPage, hr::musicTop);
+            drop = controlSpot(musicPage, Control::musicTrack, m.scroll());
+        }
+        m.setScroll(musicPage, 0);
+        {
+            const HostedArea area(musicPage, hr::musicTop);
+            drop = controlSpot(musicPage, Control::musicTrack, m.scroll());
+        }
+        check(drop.visible && drop.v < hr::musicTop, "the song list's dropdown not under the sub-tabs");
+        pressAt(drop.u, drop.v);
+        check(m.listOpen(), "the song list on the MUSIC tab");
+        float rowV = 0;
+        {
+            const HostedArea area(musicPage, hr::musicTop);
+            for (float v = drop.v; v > viewBottom; v -= .0005f)
+                if (listRowAt(drop.u, v, m.scroll(), 1, m.listFirst(), tracks) == 1) {
+                    rowV = v;
+                    break;
+                }
+        }
+        check(rowV < drop.v, "no song row under the MUSIC tab's dropdown");
+        r = pressAt(drop.u, rowV);
+        check(r.music == Menu::Music::pick && static_cast<int>(r.musicValue) == m.listFirst() + 1 && !m.listOpen(),
+              "picking a song on the MUSIC tab");
+        {
+            const HostedArea area(musicPage, hr::musicTop);
+            check(controlSpot(musicPage, Control::musicVolume, 0).found, "the volume");
+        }
+        // Drawn: the hosted pages, sane, more than the header alone.
+        View v;
+        v.emitter = {0, 1, -.4f};
+        v.opacity = 1;
+        v.page = powersPage;
+        v.heroTiles = true;
+        v.rosterData = &d;
+        v.music.available = true;
+        v.music.tracks = tracks;
+        v.roster = m.roster();
+        check(shownPage(v) == musicPage, "the View's shown page");
+        std::vector<Vertex> music, stats, color;
+        appendWristHud(music, v, {0, 1.6f, 0}, .001f);
+        v.roster.tab = hr::Tab::stats;
+        appendWristHud(stats, v, {0, 1.6f, 0}, .001f);
+        v.roster.screen = hr::Screen::color;
+        appendWristHud(color, v, {0, 1.6f, 0}, .001f);
+        check(!music.empty() && sane(music, 0, {0, 1, -.4f}, 1) && !color.empty() && sane(color, 0, {0, 1, -.4f}, 1),
+              "the hosted pages drew badly");
+        check(color.size() > 2000, "COLOR drew only the header: " + std::to_string(color.size()));
+        // The roster's own BACK leaves MUSIC: nothing of the player stays held.
+        pressId(hr::backButton);
+        check(m.shownPage() == powersPage && !m.listOpen() && m.held() == Control::none, "BACK off MUSIC");
+        // PREV / NEXT with the tiles pass the old COLOR page by; without them (or CLASSIC) it is there.
+        for (int tiles = 0; tiles < 2; ++tiles) {
+            Menu pm;
+            Settings ps;
+            pm.setPage(graphicsPage);
+            auto pstep = [&](float trigger, float u, float vv) {
+                Menu::Input in;
+                in.active = true;
+                in.pointer.hit = true;
+                in.pointer.u = u;
+                in.pointer.v = vv;
+                in.trigger = trigger;
+                in.heroTiles = tiles;
+                in.rosterData = &d;
+                return pm.update(in, ps);
+            };
+            auto ppress = [&](Control c) {
+                const Spot at = controlSpot(pm.page(), c);
+                pstep(0, at.u, at.v);
+                pstep(.3f, at.u, at.v);
+                pstep(.9f, at.u, at.v);
+                pstep(0, at.u, at.v);
+            };
+            ppress(Control::next);
+            check(pm.page() == (tiles ? controlsPage : colorPage), "NEXT from GRAPHICS");
+            ppress(Control::previous);
+            check(pm.page() == graphicsPage, "PREVIOUS back to GRAPHICS");
+        }
+    });
     test("0.0.74 test 10 MONITOR: the crop fits the window's shape about the eye's axis, inside the eye", [] {
         namespace sv = streamer_view;
         const sv::Fov quest{-.942f, .698f, -.960f, .838f}; // a lopsided eye: wider outward and down

@@ -704,6 +704,24 @@ float textFactor(float textScale);
 // and laid out for `text` (a textFactor); none off them all, and none for a
 // control scrolled out of the inner area (viewBottom-viewTop).
 Control controlAt(int page, float u, float v, float scroll = 0, float text = 1);
+// 0.0.74 test 10 (the user: "put color profiles on same page as the roster its too far back and add the music
+// player to its own tab on the roster profile"): the page the holo roster lays out under its own header -
+// COLOR on its COLOR tab, MUSIC on a hero's MUSIC tab - else -1. The same rows, controls and player as that
+// page; only its inner area starts lower (holo_roster::hostedTop).
+int hostedPage(const holo_roster::State&);
+// While one lives (on this thread), `page`'s inner area runs from `top` (not viewTop) to viewBottom: controlAt,
+// helpAt, listRowAt, controlSpot, onScrollbar, scrollThumb, maxScroll and its drawing all use the shorter area.
+class HostedArea {
+public:
+    HostedArea(int page, float top);
+    ~HostedArea();
+    HostedArea(const HostedArea&) = delete;
+    HostedArea& operator=(const HostedArea&) = delete;
+
+private:
+    int page_;
+    float shift_;
+};
 // Whether (u, v) is on the panel or its arrow strip under it.
 bool onPanel(int page, float u, float v);
 // The panel's top edge (v, scale 1). Update 17: panelHeight / 2 on every
@@ -1173,6 +1191,8 @@ class Menu {
     int page() const {
         return page_;
     }
+    // 0.0.74 test 10: the page whose rows show and work now - hostedPage while the roster lays one out, else page().
+    int shownPage() const;
     // Update 39.0.2: a page past the eight (an older layout's) is STATUS.
     void setPage(int page) {
         page_ = page >= 0 && page < pages ? page : 0;
@@ -1206,7 +1226,7 @@ class Menu {
     }
     // Update 17: the page's scroll (panel metres, 0 the top).
     float scroll() const {
-        return scroll_[static_cast<size_t>(page_)];
+        return scroll_[static_cast<size_t>(shownPage())];
     }
     void setScroll(int page, float scroll, float text = 1);
     bool dragging() const {
@@ -1278,6 +1298,8 @@ HelpInfo helpInfo(const View& view, int page, Control c);
 bool greyed(const View& view, Control c);
 // How many lines past its rows the subtext runs (0 when it fits).
 int helpOverflow(const View& view, int page, Control c);
+// 0.0.74 test 10: the page whose rows a View shows - hostedPage(view.roster) while the roster hosts one, else view.page.
+int shownPage(const View& view);
 // The control whose subtext's rows (u, v) is on, at `scroll` and `text`; none off them.
 Control helpAt(int page, float u, float v, float scroll = 0, float text = 1);
 } // namespace spidy::wrist_hud

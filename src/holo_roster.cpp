@@ -17,12 +17,10 @@ Data gData{};
 uint32_t gVersion{};
 
 using roster_page::Status;
-// The header: MARVEL, DC, REP, and CLOSE at the right.
-constexpr float marvelU0 = left, marvelU1 = -.041f, dcU0 = -.038f, dcU1 = -.011f, repU0 = -.008f, repU1 = .030f;
-constexpr float closeU0 = .046f, closeU1 = right;
-// 0.0.73 COMING SOON on: MARVEL, DC, SOON, REP, CLOSE (off: the four above, as test 5).
-constexpr float soonMarvelU1 = -.048f, soonDcU0 = -.045f, soonDcU1 = -.022f, soonTabU0 = -.019f, soonTabU1 = .015f;
-constexpr float soonRepU0 = .018f, soonRepU1 = .042f, soonCloseU0 = .050f;
+// The header: MARVEL, DC, (SOON with COMING SOON on), REP, COLOR, and CLOSE at the right.
+// 0.0.74 test 10: COLOR joined them, so each tab is as wide as its word at the tabs' big text and the room
+// left over is shared out (their words keep the same size as before).
+constexpr float tabText = .0046f, tabGap = .003f, tabPad = .004f;
 // The SOON screen: its title and MARVEL / DC in the row band, then five small tiles a row.
 constexpr float soonSubU0 = -.006f, soonSubMid0 = .037f, soonSubMid1 = .040f;
 constexpr float soonTop = .062f, soonTileH = .039f;
@@ -38,6 +36,24 @@ constexpr float tileGap = .004f, tileTop = .075f, tileH = .056f;
 constexpr float meterY0 = .054f, meterY1 = .0605f, logTop = .033f, pageY0 = -.081f, pageY1 = -.071f;
 constexpr float filterU0 = .028f;
 
+// A row of buttons from `u0` to `u1`, each as wide as its word at `h` plus its share of the room left.
+struct Word {
+    int id;
+    const char* word;
+};
+uint32_t row(const Word* w, uint32_t k, float u0, float u1, float v0, float v1, float h, Button* out) {
+    float words = 0;
+    for (uint32_t i = 0; i < k; ++i)
+        words += textWidth(w[i].word, h) + tabPad;
+    const float spare = std::max(0.f, u1 - u0 - tabGap * static_cast<float>(k - 1) - words) / static_cast<float>(k);
+    float u = u0;
+    for (uint32_t i = 0; i < k; ++i) {
+        const float width = textWidth(w[i].word, h) + tabPad + spare;
+        out[i] = Button{w[i].id, u, v0, i + 1 == k ? u1 : u + width, v1, true};
+        u += width + tabGap;
+    }
+    return k;
+}
 uint32_t count(uint32_t group) { return group == 0 ? marvelCount : dcCount; }
 uint32_t heroAt(uint32_t group, uint32_t k) { return group == 0 ? marvelHeroes[k] : dcHeroes[k]; }
 void tileBox(uint32_t group, uint32_t k, float& u0, float& v0, float& u1, float& v1) {
@@ -216,18 +232,20 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
     if (s.screen == Screen::closed)
         return 0;
     const Screen shown = shownOf(s, d);
-    if (d.comingSoon) {
-        out[n++] = Button{tabMarvel, marvelU0, tabY0, soonMarvelU1, tabY1, true};
-        out[n++] = Button{tabDc, soonDcU0, tabY0, soonDcU1, tabY1, true};
-        out[n++] = Button{tabSoon, soonTabU0, tabY0, soonTabU1, tabY1, true};
-        out[n++] = Button{tabRep, soonRepU0, tabY0, soonRepU1, tabY1, true};
-        out[n++] = Button{closeButton, soonCloseU0, tabY0, closeU1, tabY1, true};
-    } else {
-        out[n++] = Button{tabMarvel, marvelU0, tabY0, marvelU1, tabY1, true};
-        out[n++] = Button{tabDc, dcU0, tabY0, dcU1, tabY1, true};
-        out[n++] = Button{tabRep, repU0, tabY0, repU1, tabY1, true};
-        out[n++] = Button{closeButton, closeU0, tabY0, closeU1, tabY1, true};
+    {
+        Word w[6];
+        uint32_t k = 0;
+        w[k++] = {tabMarvel, "MARVEL"};
+        w[k++] = {tabDc, "DC"};
+        if (d.comingSoon)
+            w[k++] = {tabSoon, "SOON"};
+        w[k++] = {tabRep, "REP"};
+        w[k++] = {tabColor, "COLOR"};
+        w[k++] = {closeButton, "CLOSE"};
+        n += row(w, k, left, right, tabY0, tabY1, tabText, out + n);
     }
+    if (shown == Screen::color)
+        return n; // the COLOR page under the header is wrist_hud's
     if (shown == Screen::soon) {
         out[n++] = Button{soonMarvel, soonSubU0, rowY0, soonSubMid0, rowY1, true};
         out[n++] = Button{soonDc, soonSubMid1, rowY0, right, rowY1, true};
@@ -255,13 +273,11 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
         const uint32_t h = std::min(s.hero, heroes - 1);
         out[n++] = Button{backButton, left, rowY0, backU1, rowY1, true};
         out[n++] = Button{playButton, playU0, rowY0, right, rowY1, d.playing != h};
-        // 0.0.73 test 4: four sub-tabs, CONTROLS, OUTFITS, STATS and SETTINGS.
-        const float gap = .003f, quarter = (right - left - 3 * gap) / 4;
-        const auto at = [&](int k) { return left + static_cast<float>(k) * (quarter + gap); };
-        out[n++] = Button{subControls, at(0), subY0, at(0) + quarter, subY1, true};
-        out[n++] = Button{subOutfits, at(1), subY0, at(1) + quarter, subY1, true};
-        out[n++] = Button{subStats, at(2), subY0, at(2) + quarter, subY1, true};
-        out[n++] = Button{subSettings, at(3), subY0, right, subY1, true};
+        // 0.0.73 test 4: the sub-tabs, CONTROLS, OUTFITS, STATS and SETTINGS; 0.0.74 test 10: and MUSIC (the
+        // hologram's one music player under them), each as wide as its word.
+        const Word w[] = {{subControls, "CONTROLS"}, {subOutfits, "OUTFITS"}, {subStats, "STATS"}, {subSettings, "SETTINGS"},
+                          {subMusic, "MUSIC"}};
+        n += row(w, 5, left, right, subY0, subY1, tabText, out + n);
         if (s.tab == Tab::settings) {
             const uint32_t pages = std::max(1u, s.settingsPages);
             out[n++] = Button{settingsPrev, left, pageY0, -.030f, pageY1, s.settingsPage > 0};
@@ -318,6 +334,8 @@ std::string helpFor(const State& s, const Data& d, int id) {
     case logNewer: return "Scrolls to newer entries (or push the stick up). No restart needed.";
     case logOlder: return "Scrolls to older entries (or pull the stick down). No restart needed.";
     case tabSoon: return "Shows the heroes coming in 0.0.74; they are not playable yet.";
+    case tabColor: return "Shows the COLOR settings: the hologram's look, the filters and their strength. No restart needed.";
+    case subMusic: return "Your music player: play, pause, skip and pick songs from Documents\\HERO VR\\Music.";
     case soonMarvel: return "Shows the MARVEL heroes coming in 0.0.74. No restart needed.";
     case soonDc: return "Shows the DC heroes and suits coming in 0.0.74. No restart needed.";
     default: break;
@@ -325,7 +343,7 @@ std::string helpFor(const State& s, const Data& d, int id) {
     if (id >= soonTile && id < soonTile + static_cast<int>(soonCount))
         return std::string(soonHeroes[id - soonTile].name) + ": coming in 0.0.74, not playable yet.";
     if (id >= tile && id < tile + static_cast<int>(heroes))
-        return std::string("Opens ") + nameOf(static_cast<uint32_t>(id - tile)) + "'s page: controls, outfits, stats, settings.";
+        return std::string("Opens ") + nameOf(static_cast<uint32_t>(id - tile)) + "'s page: controls, outfits, stats, settings, music.";
     if (id >= outfit && d.suitsKnown && static_cast<uint32_t>(id - outfit) < outfitRows(d, h)) {
         const uint32_t i = static_cast<uint32_t>(id - outfit);
         const roster_page::Row& r = d.suits.rows[h][i];
@@ -370,9 +388,13 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
     tabBtn(tabDc, "DC", heroes2 && (shown == Screen::grid ? s.group == 1 : groupOf(s.hero) == 1));
     tabBtn(tabSoon, "SOON", shown == Screen::soon);
     tabBtn(tabRep, "REP", shown == Screen::rep);
+    tabBtn(tabColor, "COLOR", shown == Screen::color);
     tabBtn(closeButton, "CLOSE", false);
+    const bool hostsPage = hosted(s) != Hosted::none; // wrist_hud draws that page's rows and its help
     const uint32_t playing = std::min(d.playing, heroes - 1);
-    if (shown == Screen::soon) {
+    if (shown == Screen::color) {
+        // The COLOR page's rows are wrist_hud's, under the header.
+    } else if (shown == Screen::soon) {
         // 0.0.73 COMING SOON: the title, MARVEL / DC, and a small tile a hero: his picture (the Roster
         // model's soon_* picture) or, without it, a plain head-and-shoulders, and his name. Dim: not playable.
         const uint32_t g = std::min(s.soonGroup, 1u);
@@ -447,7 +469,10 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         tabBtn(subOutfits, "OUTFITS", s.tab == Tab::outfits);
         tabBtn(subStats, "STATS", s.tab == Tab::stats);
         tabBtn(subSettings, "SETTINGS", s.tab == Tab::settings);
-        if (s.tab == Tab::settings) {
+        tabBtn(subMusic, "MUSIC", s.tab == Tab::music);
+        if (s.tab == Tab::music) {
+            // The player is wrist_hud's MUSIC page, under the sub-tabs.
+        } else if (s.tab == Tab::settings) {
             // The rows are wrist_hud's (drawn over this); here only PREV, the page and NEXT.
             const uint32_t pages = std::max(1u, s.settingsPages);
             if (const Button* b = byId(settingsPrev))
@@ -497,7 +522,7 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
                     o.text("OWN SUIT IS ON: EVERY HERO KEEPS HIS OWN MOD OR GAME SUIT", left, contentBottom - .012f, right, .003f,
                            Role::warn);
             }
-        } else {
+        } else if (s.tab == Tab::stats) {
             const int32_t pts = d.heroPoints[h];
             const rep_log::Meter m = rep_log::meterOf(pts);
             const rep_log::Counts& c = d.log.counts(h);
@@ -580,11 +605,30 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         if (const Button* b = byId(logOlder))
             o.button(*b, "OLDER", s.hover == logOlder, false, .0036f);
     }
-    // The help line at the foot: the hovered button's, else what to do here.
+    // The help line at the foot: the hovered button's, else what to do here (a page's own, wrist_hud's, when it
+    // is laid out here).
+    if (hostsPage)
+        return;
     const auto lines = wrap(s.settingHelp && s.hover == none ? std::string(s.settingHelp) : helpFor(s, d, s.hover), helpH,
                             right - left, 3);
     for (size_t i = 0; i < lines.size(); ++i)
         o.text(lines[i], left, helpTop - static_cast<float>(i) * helpPitch, right, helpH, Role::help);
+}
+
+Hosted hosted(const State& s) {
+    if (s.screen == Screen::color)
+        return Hosted::color;
+    if (s.screen == Screen::hero && s.tab == Tab::music)
+        return Hosted::music;
+    return Hosted::none;
+}
+float hostedTop(const State& s) {
+    switch (hosted(s)) {
+    case Hosted::color: return colorTop;
+    case Hosted::music: return musicTop;
+    case Hosted::none: break;
+    }
+    return top;
 }
 
 void Holo::open(uint32_t playing) {
@@ -656,6 +700,8 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     case subControls: s_.tab = Tab::controls; break;
     case subOutfits: s_.tab = Tab::outfits; break;
     case subStats: s_.tab = Tab::stats; break;
+    case subMusic: s_.tab = Tab::music; break;
+    case tabColor: s_.screen = Screen::color; break;
     case subSettings:
         s_.tab = Tab::settings;
         s_.settingsPage = 0;

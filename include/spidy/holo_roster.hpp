@@ -14,6 +14,11 @@
 //                 dropdowns"): the hero's own settings (the old POWERS page's dropdown rows) a short page at a
 //                 time, then EVERY HERO (INVINCIBLE and FLYING); PREV / NEXT page them. wrist_hud lays out and
 //                 works the rows (its own controls) and tells the roster how many pages there are.
+//   COLOR         (0.0.74 test 10, the user: "put color profiles on same page as the roster its too far back"):
+//                 a header tab; wrist_hud lays its COLOR page (the looks, filters and strengths) under the header,
+//                 the same rows and controls as the COLOR page (with the tiles on, PREV / NEXT skip that old page)
+//   MUSIC         (0.0.74 test 10: "add the music player to its own tab on the roster profile"): the hero page's
+//                 fifth sub-tab; wrist_hud lays the MUSIC page (the one player) under the sub-tabs
 //   REP           (the user, 2:13 PM) the rep meter - the played hero's level, title and step, the way to the
 //                 next level - and the log (rep_log.hpp), scrolled with the stick
 //   SOON          (0.0.73 COMING SOON; the owner: "Let's add the profile pictures but put them in a 'coming soon'
@@ -62,8 +67,8 @@ inline constexpr const char* soonSuits =
     "NEW SUITS COMING: BATMAN (BATMAN V SUPERMAN, JUSTICE LEAGUE) AND SUPERMAN (BATMAN V SUPERMAN).";
 inline constexpr int soonPicture(uint32_t k) { return static_cast<int>(roster_page::soonFirst + k); }
 
-enum class Screen : uint8_t { closed, grid, hero, rep, soon };
-enum class Tab : uint8_t { controls, outfits, stats, settings };
+enum class Screen : uint8_t { closed, grid, hero, rep, soon, color }; // color: 0.0.74 test 10
+enum class Tab : uint8_t { controls, outfits, stats, settings, music }; // music: 0.0.74 test 10
 enum Id : int {
     none = -1,
     tabMarvel = 1,
@@ -83,6 +88,8 @@ enum Id : int {
     settingsPrev,  // its pages
     settingsNext,
     tabSoon,     // 0.0.73 COMING SOON: the header's SOON tab
+    tabColor,    // 0.0.74 test 10: the header's COLOR tab
+    subMusic,    // 0.0.74 test 10: the MUSIC sub-tab
     tile = 20,   // + hero
     outfit = 40, // + suit row
     soonMarvel = 50, // the SOON tab's MARVEL / DC
@@ -127,6 +134,12 @@ inline constexpr float logRowPitch = .0094f;
 inline constexpr uint32_t logRows = 11; // the 12th met NEWER / OLDER (seen in roster-holo-rep.png)
 // 0.0.73 test 4 SETTINGS: the band wrist_hud lays the setting rows in (above PREV / NEXT).
 inline constexpr float settingsTop = .047f, settingsBottom = -.068f;
+// 0.0.74 test 10: a page of the hologram's laid out under the roster's header - COLOR under the header's tabs,
+// MUSIC under the hero page's sub-tabs (wrist_hud draws and works it from `hostedTop` down to the panel's foot).
+enum class Hosted : uint8_t { none, color, music };
+Hosted hosted(const State&);
+inline constexpr float colorTop = .077f, musicTop = .048f;
+float hostedTop(const State&); // the band's top (none: `top`)
 struct Button {
     int id = none;
     float u0{}, v0{}, u1{}, v1{};

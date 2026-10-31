@@ -8751,7 +8751,7 @@ DWORD WINAPI run(void*) {
                                         // Build 8 ROSTER page: the suits it shows (published only when they change), and
                                         // a suit picked on it (row 0: the player's own mod or the game's suit).
                                         {
-                                            const bool all72 = hero072::testSuits(in72.o.testUnlocks);
+                                            const bool all72 = hero072::suitsOpen(in72.o.testUnlocks);
                                             if (const uint32_t req = rosterSuitRequest.exchange(0)) {
                                                 const uint32_t h = (req - 1) / 16, i = (req - 1) % 16;
                                                 char line[128];
@@ -8789,7 +8789,7 @@ DWORD WINAPI run(void*) {
                                         if (c38(combat38::heroSuit) == 1) {
                                             combat38Values[combat38::heroSuit].store(0);
                                             const uint32_t h72 = heroWas < hero_modes::heroes ? heroWas : 0u;
-                                            const uint32_t worn = hero072Play.suits.next(h72, hero072::testSuits(in72.o.testUnlocks));
+                                            const uint32_t worn = hero072Play.suits.next(h72, hero072::suitsOpen(in72.o.testUnlocks));
                                             hero072Play.progressDirty = true;
                                             char line[96];
                                             sprintf_s(line, "VERSION 0.0.72 HERO SUIT: suit %u of hero %u", worn, h72);
@@ -8813,7 +8813,7 @@ DWORD WINAPI run(void*) {
                                             // wears his first unlocked loaded suit (the game has no BATMAN body).
                                             if (heroWas < hero_modes::heroes && heroWas != hero_modes::spiderMan)
                                                 if (const hero072::Suit* x = hero072Play.suits.worn(
-                                                        heroWas, out72.suit, hero072::testSuits(in72.o.testUnlocks), [](const char* f) {
+                                                        heroWas, out72.suit, hero072::suitsOpen(in72.o.testUnlocks), [](const char* f) {
                                                             const uint32_t k = mesh_model::suitSlot(f);
                                                             return k && suitsRigged.load() && mesh_model::library().model(k) &&
                                                                    suitRigs[k - mesh_model::slotSuitFirst].ok;

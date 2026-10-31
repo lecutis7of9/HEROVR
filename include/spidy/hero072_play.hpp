@@ -366,7 +366,7 @@ class Play {
             finishLook(out);
             return;
         }
-        const bool allSuits = testSuits(o.testUnlocks);
+        const bool allSuits = suitsOpen(o.testUnlocks); // 0.0.75 EVERY OUTFIT
         suits.unlockFor(h, points);
         out.suit = suits.inUse(h, allSuits, o.ownSuit);
         out.faction = factionFor(h, o.faction);

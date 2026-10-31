@@ -460,4 +460,12 @@ inline bool testSuits(uint32_t v) { return v >= 1 && v <= 3; }
 inline bool testUltimates(uint32_t v) { return v == 2 || v == 3; }
 inline bool testPerks(uint32_t v) { return v == 3; }
 
+// 0.0.75 EVERY OUTFIT (owner: unlock every outfit now, the old rules easy to bring back): every hero's every suit is
+// open from the start, whatever the REP and the TEST UNLOCKS setting (a COMING SOON suit still is not: no model).
+// To restore the old unlock rules (REP unlocks, TEST UNLOCKS SUITS / ULTIMATES / ALL), set everyOutfitOpen to false
+// and rebuild - nothing else changes. Ultimates and perks keep their own rules either way.
+inline constexpr bool everyOutfitOpen = true;
+// The suits' `all` (SuitCatalog): every outfit open, or the old rules (TEST UNLOCKS 1-3).
+inline bool suitsOpen(uint32_t v, bool everyOpen = everyOutfitOpen) { return everyOpen || testSuits(v); }
+
 } // namespace spidy::hero072

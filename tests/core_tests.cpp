@@ -36189,6 +36189,19 @@ int main() {
         check(dd.speed == dd_grapple074::quickTune().speed, "DD unchanged");
         check(dd_grapple074::tuneFor(false, true).speed == cape_glide::GrappleTune{}.speed, "no quick bit: the default");
     });
+test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", [] {
+    using namespace spidy::hero072;
+    check(everyOutfitOpen, "every outfit is open by default");
+    check(suitsOpen(0) && suitsOpen(1) && suitsOpen(3), "open whatever TEST UNLOCKS says");
+    check(!suitsOpen(0, false) && suitsOpen(1, false) && suitsOpen(2, false) && suitsOpen(3, false) && !suitsOpen(4, false),
+          "the old rules: TEST UNLOCKS 1-3 only");
+    check(!testUltimates(0) && !testPerks(0), "ultimates and perks keep their own rules");
+    SuitCatalog c;
+    for (uint32_t h = 0; h < spidy::hero_modes::heroes; ++h)
+        for (uint32_t i = 0; i < c.suits(h); ++i)
+            if (!c.comingSoon(h, i))
+                check(c.isUnlocked(h, i, suitsOpen(0)), "every suit with a model is unlocked at REP 0");
+});
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

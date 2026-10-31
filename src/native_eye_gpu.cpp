@@ -10,6 +10,7 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/monitor_rate.hpp"
 #include "spidy/presentation_gate.hpp"
+#include "spidy/scene_depth_match.hpp"
 #include "spidy/streamer_view.hpp"
 #include <MinHook.h>
 #include <array>
@@ -359,15 +360,28 @@ struct FoveaTag {
     ID3D12GraphicsCommandList* list{};
     unsigned eye{};
     bool set{};
-    // 0.0.74 test 10 SEE-THROUGH: the job's pair stamp; whether its G-buffer pass was seen (and
-    // its depth view), whether its depth was dealt with (copied or skipped), and the depth view
-    // last cleared on it with its value (the convention check).
+};
+thread_local FoveaTag foveaTag{};
+// 0.0.75 SEE-THROUGH: an eye job's list, by the list (0.0.74 kept this per thread, and test 10
+// showed the game records the job's passes on another thread than its begin timestamp: no pass
+// was ever matched). The job's pair stamp; whether its G-buffer pass was seen (and its depth
+// view), whether its depth was dealt with (copied or skipped), and the depth view last cleared
+// on it with its value (the convention check). `window`: tagged by the only eye job open when
+// its G-buffer pass was recorded, not by a marker on the list.
+struct DepthTag {
+    unsigned eye{};
     EyePairState::Stamp stamp{};
-    bool gbuffer{}, depthDone{};
+    bool gbuffer{}, depthDone{}, window{};
     SIZE_T gbufferDsv{}, clearedDsv{};
     float clearedDepth = -1;
 };
-thread_local FoveaTag foveaTag{};
+std::recursive_mutex depthTagLock; // before depthLock, never after it
+std::unordered_map<ID3D12GraphicsCommandList*, DepthTag> depthTags;
+std::atomic<uint32_t> depthTagCount{}, depthOpenMask{};
+std::array<EyePairState::Stamp, 2> depthOpenStamp{}; // under depthTagLock
+std::atomic<uint64_t> depthListsMarked{}, depthListsWindow{}, depthPassesTagged{}, depthPassesUnclaimed{},
+    depthTargetsTagged{}, depthDsvTagged{}, depthExitsTagged{};
+std::atomic<uint32_t> depthMostTargets{};
 // 0.0.74 test 10 SEE-THROUGH (Batmobile / van seen through walls): the eye jobs' scene depth for
 // Spidy's world-placed models (d3d12_renderer's occluded models). Passive observers: the
 // OMSetRenderTargets / RSSetViewports hooks above (installed with the eyes now; foveaOn still
@@ -428,7 +442,7 @@ void depthStop(uint32_t why) {
 // depth runs (0 far, reversed: as the eye lens is made; 1: standard, depth is not used).
 // Judged whichever comes first, the clear or the pass's binding; a later clear of it to the far
 // value leaves sky (nothing hides), to anything else turns the depth off.
-void depthJudge(FoveaTag& t) {
+void depthJudge(DepthTag& t) {
     if (!t.gbuffer || !t.gbufferDsv || t.clearedDsv != t.gbufferDsv || t.clearedDepth < 0)
         return;
     if (t.clearedDepth == 0.f)
@@ -442,7 +456,7 @@ void depthJudge(FoveaTag& t) {
     }
     t.clearedDepth = -1; // counted once
 }
-void depthNotePass(FoveaTag& t, const D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
+void depthNotePass(DepthTag& t, const D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
     t.gbuffer = true;
     t.gbufferDsv = dsv ? dsv->ptr : 0;
     depthJudge(t);
@@ -451,16 +465,19 @@ void STDMETHODCALLTYPE clearDepth(ID3D12GraphicsCommandList* list, D3D12_CPU_DES
                                   D3D12_CLEAR_FLAGS flags, FLOAT depth, UINT8 stencil, UINT rects,
                                   const D3D12_RECT* rect) {
     originalClearDepth(list, dsv, flags, depth, stencil, rects, rect);
-    auto& t = foveaTag;
-    if (t.list != list || !(flags & D3D12_CLEAR_FLAG_DEPTH) || rects)
+    if (!depthTagCount.load(std::memory_order_relaxed) || !(flags & D3D12_CLEAR_FLAG_DEPTH) || rects)
         return;
+    std::lock_guard tagLock(depthTagLock);
+    const auto found = depthTags.find(list);
+    if (found == depthTags.end())
+        return;
+    auto& t = found->second;
     t.clearedDsv = dsv.ptr;
     t.clearedDepth = std::isfinite(depth) ? depth : 2.f;
     depthJudge(t);
 }
 // Barrier hook, before the game's own barrier: on the tagged job after its G-buffer pass.
-void depthBarrier(ID3D12GraphicsCommandList* list, UINT count, const D3D12_RESOURCE_BARRIER* bs) {
-    auto& t = foveaTag;
+void depthBarrier(ID3D12GraphicsCommandList* list, DepthTag& t, UINT count, const D3D12_RESOURCE_BARRIER* bs) {
     if (!bs || t.eye > 1 || depthOff.load(std::memory_order_relaxed) || !staged)
         return;
     for (UINT n = 0; n < count; ++n) {
@@ -474,6 +491,7 @@ void depthBarrier(ID3D12GraphicsCommandList* list, UINT count, const D3D12_RESOU
         if (d.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || !depthFamily(d.Format))
             continue;
         t.depthDone = true; // the first depth out of the pass: this one or none
+        ++depthExitsTagged;
         depthSeenFormat = static_cast<uint32_t>(d.Format);
         depthSeenW = static_cast<uint32_t>(d.Width);
         depthSeenH = d.Height;
@@ -483,10 +501,12 @@ void depthBarrier(ID3D12GraphicsCommandList* list, UINT count, const D3D12_RESOU
             w = width;
             h = height;
         }
-        if (!w || !h || d.Width != w || d.Height != h) {
+        if (!scene_depth::sizeFits(d.Width, d.Height, w, h)) {
             ++depthSkipSize;
             return;
         }
+        w = static_cast<UINT>(d.Width); // 0.0.75: the eye's render size (an upscaler's lower one too)
+        h = d.Height;
         if (!depthFormatOk(d.Format) || d.MipLevels != 1 || d.DepthOrArraySize != 1 || d.SampleDesc.Count != 1) {
             ++depthSkipFormat;
             return;
@@ -582,6 +602,58 @@ void depthReset(ID3D12GraphicsCommandList* list) {
                 ++depthSkipLost;
             }
 }
+// 0.0.75 SEE-THROUGH: a pass's targets on any thread. On a marked list: counted, and its first
+// G-buffer pass (3+ colour targets and a depth) noted. On an unmarked list while exactly one eye
+// job is open: that list is taken as the job's (window tag); otherwise counted as unclaimed.
+void depthTargets(ID3D12GraphicsCommandList* list, UINT n, const D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
+    if (!depthTagCount.load(std::memory_order_relaxed) && !depthOpenMask.load(std::memory_order_relaxed))
+        return;
+    if (depthOff.load(std::memory_order_relaxed))
+        return;
+    const bool gbuffer = n >= 3 && dsv;
+    std::lock_guard tagLock(depthTagLock);
+    auto found = depthTags.find(list);
+    if (found == depthTags.end()) {
+        if (!gbuffer)
+            return;
+        const auto eye = scene_depth::soleOpenEye(depthOpenMask.load());
+        if (eye > 1 || !depthOpenStamp[eye].serial) {
+            if (depthOpenMask.load())
+                ++depthPassesUnclaimed;
+            return;
+        }
+        DepthTag tag{};
+        tag.eye = eye;
+        tag.stamp = depthOpenStamp[eye];
+        tag.window = true;
+        found = depthTags.emplace(list, tag).first;
+        depthTagCount = static_cast<uint32_t>(depthTags.size());
+        ++depthListsWindow;
+    }
+    auto& t = found->second;
+    ++depthTargetsTagged;
+    if (dsv)
+        ++depthDsvTagged;
+    auto most = depthMostTargets.load();
+    while (n > most && !depthMostTargets.compare_exchange_weak(most, n)) {
+    }
+    if (gbuffer && !t.gbuffer) {
+        ++depthPassesTagged;
+        depthNotePass(t, dsv);
+    }
+}
+void depthUntag(ID3D12GraphicsCommandList* list) {
+    if (!depthTagCount.load(std::memory_order_relaxed))
+        return;
+    std::lock_guard tagLock(depthTagLock);
+    const auto found = depthTags.find(list);
+    if (found == depthTags.end())
+        return;
+    if (found->second.gbuffer && !found->second.depthDone)
+        ++depthSkipNoPass; // no depth left the pass in the job
+    depthTags.erase(found);
+    depthTagCount = static_cast<uint32_t>(depthTags.size());
+}
 void stopFovea(uint32_t why) {
     uint32_t none = foveation::fine;
     foveaFault.compare_exchange_strong(none, why);
@@ -599,6 +671,7 @@ void clearRate(ID3D12GraphicsCommandList* list) {
 void STDMETHODCALLTYPE omSetTargets(ID3D12GraphicsCommandList* list, UINT n, const D3D12_CPU_DESCRIPTOR_HANDLE* rtvs,
                                     BOOL single, const D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
     originalOmSetTargets(list, n, rtvs, single, dsv);
+    depthTargets(list, n, dsv); // 0.0.75 SEE-THROUGH: reads only
     auto& t = foveaTag;
     const bool gbuffer = n >= 3 && dsv;
     if (t.list != list) {
@@ -611,8 +684,6 @@ void STDMETHODCALLTYPE omSetTargets(ID3D12GraphicsCommandList* list, UINT n, con
     if (!gbuffer)
         return;
     foveaTagged.fetch_add(1, std::memory_order_relaxed);
-    if (!t.gbuffer)
-        depthNotePass(t, dsv); // 0.0.74 test 10 SEE-THROUGH: reads only
     if (!foveaOn.load(std::memory_order_relaxed) || t.eye > 1)
         return;
     auto* image = foveaImage[t.eye].load();
@@ -648,17 +719,26 @@ void STDMETHODCALLTYPE setViewports(ID3D12GraphicsCommandList* list, UINT n, con
 void foveaMarker(ID3D12GraphicsCommandList* list) {
     if (!foveaHooked.load(std::memory_order_relaxed) || !currentMarker.valid)
         return;
+    if (!currentMarker.ended) { // 0.0.75 SEE-THROUGH: the list, whatever thread records on it
+        if (!depthOff.load(std::memory_order_relaxed) && currentMarker.eye < 2) {
+            std::lock_guard tagLock(depthTagLock);
+            DepthTag tag{};
+            tag.eye = currentMarker.eye;
+            tag.stamp = currentMarker.stamp;
+            depthTags[list] = tag;
+            depthTagCount = static_cast<uint32_t>(depthTags.size());
+            ++depthListsMarked;
+        }
+    } else
+        depthUntag(list);
     auto& t = foveaTag;
     if (!currentMarker.ended) {
         if (t.set && t.list && t.list != list)
             t.set = false; // that list's rate was left on: its own job end or Reset clears it
         t = {list, currentMarker.eye, false};
-        t.stamp = currentMarker.stamp; // 0.0.74 test 10 SEE-THROUGH
     } else if (t.list == list) {
         if (t.set)
             clearRate(list);
-        if (t.gbuffer && !t.depthDone)
-            ++depthSkipNoPass; // 0.0.74 test 10 SEE-THROUGH: no depth left the pass in the job
         t = {};
     }
 }
@@ -667,8 +747,12 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
     native_address_finder::onBarrier(list, count, bs);
     // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
-    if (enabled && foveaTag.list == list && foveaTag.gbuffer && !foveaTag.depthDone)
-        depthBarrier(list, count, bs);
+    if (enabled && depthTagCount.load(std::memory_order_relaxed)) {
+        std::lock_guard tagLock(depthTagLock);
+        const auto found = depthTags.find(list);
+        if (found != depthTags.end() && found->second.gbuffer && !found->second.depthDone)
+            depthBarrier(list, found->second, count, bs);
+    }
     if (enabled) {
         const auto* left = watched[0].load();
         const auto* right = watched[1].load();
@@ -710,8 +794,10 @@ HRESULT STDMETHODCALLTYPE reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
     auto result = originalReset(list, a, p);
     if (foveaTag.list == list)
         foveaTag = {}; // Update 37.2: a reset list has no shading rate
-    if (SUCCEEDED(result))
+    if (SUCCEEDED(result)) {
+        depthUntag(list); // 0.0.75: a reset list is no eye job's any more
         depthReset(list); // 0.0.74 test 10 SEE-THROUGH
+    }
     if (enabled && SUCCEEDED(result)) {
         std::lock_guard lock(recording);
         lists.erase(list);
@@ -3276,6 +3362,31 @@ void enterMarker(unsigned eye, uint64_t serial, uint64_t generation, bool ended)
 void leaveMarker() {
     currentMarker = {};
 }
+void openJob(unsigned eye, uint64_t serial, uint64_t generation) {
+    if (eye > 1)
+        return;
+    std::lock_guard tagLock(depthTagLock);
+    depthOpenStamp[eye] = {serial, generation};
+    depthOpenMask.fetch_or(1u << eye);
+}
+void closeJob(unsigned eye) {
+    if (eye > 1)
+        return;
+    std::lock_guard tagLock(depthTagLock);
+    depthOpenMask.fetch_and(~(1u << eye));
+    const auto stamp = depthOpenStamp[eye];
+    depthOpenStamp[eye] = {};
+    // the lists this job's window tagged end with it (a marked list ends at its own end marker)
+    std::erase_if(depthTags, [&](const auto& kv) {
+        const auto& t = kv.second;
+        if (!t.window || t.eye != eye || !(t.stamp == stamp))
+            return false;
+        if (t.gbuffer && !t.depthDone)
+            ++depthSkipNoPass;
+        return true;
+    });
+    depthTagCount = static_cast<uint32_t>(depthTags.size());
+}
 void copyTiming(TimingMetric& gpu, TimingMetric& pairOut) {
     std::lock_guard lock(copyTimingLock);
     gpu = copyGpu;
@@ -3453,7 +3564,11 @@ std::string sceneDepthLine() {
                "), clears reversed " + n(depthClearReversed) + " / standard " + n(depthClearStandard) + " / other " +
                n(depthClearOther) + ", pairs given " + n(depthGiven) + " / missed " + n(depthMissed) + ", hooks " +
                (foveaHooked.load() ? "pass" : "none") + (clearDepthOn.load() ? "+clear" : "") + ", off " +
-               std::to_string(depthOff.load());
+               std::to_string(depthOff.load()) + "; 0.0.75 lists marked " + n(depthListsMarked) + " / by open job " +
+               n(depthListsWindow) + ", G-buffer passes on them " + n(depthPassesTagged) + " / unclaimed " +
+               n(depthPassesUnclaimed) + ", targets set on them " + n(depthTargetsTagged) + " (with depth " +
+               n(depthDsvTagged) + ", most colour targets " + std::to_string(depthMostTargets.load()) +
+               "), depths out " + n(depthExitsTagged);
     } catch (...) {
         return {};
     }

@@ -38,6 +38,7 @@
 #include "spidy/hero072_progress.hpp"
 #include "spidy/hero072_play.hpp"
 #include "spidy/punisher_rig.hpp"
+#include "spidy/scene_depth_match.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/suit_wear.hpp"
 #include "spidy/glove_overlay.hpp"
@@ -36147,6 +36148,18 @@ int main() {
                   std::string(s1::noRecordLine).find("SM1STYLE: off") == 0, "the other offs");
         check(std::string(s1::windowEdgesLine(1)).find("WINDOW EDGES: on") == 0 &&
                   std::string(s1::windowEdgesLine(2)).find("WINDOW EDGES: off") == 0, "WINDOW EDGES on / off");
+    });
+    test("0.0.75 SEE-THROUGH depth: eye size, scaled render sizes, and the sole open eye job", [] {
+        using namespace spidy::scene_depth;
+        check(sizeFits(2688, 2880, 2688, 2880), "the eye's own size fits");
+        check(sizeFits(1801, 1930, 2688, 2880), "SM1STYLE's 67 % render size fits");
+        check(sizeFits(1344, 1440, 2688, 2880), "half size fits");
+        check(!sizeFits(2560, 1440, 2688, 2880), "the flat screen's 16:9 depth does not fit");
+        check(!sizeFits(2688, 2880, 1344, 1440), "bigger than the eye does not fit");
+        check(!sizeFits(512, 549, 2688, 2880), "a small depth (shadow, probe) does not fit");
+        check(!sizeFits(0, 0, 2688, 2880) && !sizeFits(2688, 2880, 0, 0), "nothing known fits nothing");
+        check(soleOpenEye(1) == 0 && soleOpenEye(2) == 1, "one open job names its eye");
+        check(soleOpenEye(0) == 2 && soleOpenEye(3) == 2, "none or both open: no eye");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

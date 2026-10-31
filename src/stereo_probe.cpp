@@ -2185,16 +2185,38 @@ void markJob(void* view, bool ended) {
         native_gpu::enterMarker(job->eye, job->serial, job->generation, ended);
     ReleaseSRWLockShared(&jobLock);
 }
+// 0.0.75 SEE-THROUGH: the eye whose job `view` is (2: none), read under the job lock.
+unsigned jobEye(void* view, uint64_t* serial = nullptr, uint64_t* generation = nullptr) {
+    AcquireSRWLockShared(&jobLock);
+    unsigned eye = 2;
+    if (const auto job = jobs.find(view)) {
+        eye = job->eye;
+        if (serial)
+            *serial = job->serial;
+        if (generation)
+            *generation = job->generation;
+    }
+    ReleaseSRWLockShared(&jobLock);
+    return eye;
+}
 void beginJob(void* view) {
     jobEvent(view, false);
     markJob(view, false);
     originalBeginJob(view);
     native_gpu::leaveMarker();
+    if (enabled) {
+        uint64_t serial{}, generation{};
+        if (const auto eye = jobEye(view, &serial, &generation); eye < 2)
+            native_gpu::openJob(eye, serial, generation);
+    }
 }
 void endJob(void* view) {
+    const auto eye = enabled ? jobEye(view) : 2u;
     markJob(view, true);
     originalEndJob(view);
     native_gpu::leaveMarker();
+    if (eye < 2)
+        native_gpu::closeJob(eye);
     jobEvent(view, true);
 }
 uint64_t tone(void* a, void* b, void* settings, void* view, void* e, uint64_t genericView) {

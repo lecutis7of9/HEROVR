@@ -31,6 +31,9 @@ static_assert(sizeof(Config) == 48 && sizeof(Data) == 208);
 // attaches the stamp to its actual command list, without adding game commands.
 void enterMarker(unsigned eye, uint64_t serial, uint64_t generation, bool ended);
 void leaveMarker();
+// 0.0.75 SEE-THROUGH: an eye view's render job is open (begin to end, any thread).
+void openJob(unsigned eye, uint64_t serial, uint64_t generation);
+void closeJob(unsigned eye);
 void registerEye(unsigned eye, ID3D12Resource* resource);
 // 0.0.71 MIRROR VIEW (private test): the game's mirror view image (nullptr lets it go), copied as a
 // small picture into both headset eyes. fault: 1 pixel kind, 2 barrier kind, 3 size, 4 other queue,

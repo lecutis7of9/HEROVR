@@ -49,6 +49,11 @@ USER_SOUNDS = {
     'user-lightning-2.mp3': ('b1e73c2f28d8c789437befea7ec0d0e6542f5f80b0e838cbded282bbbfe0f514', 'thor_lightning_2', 'thor_lightning_2'),
 }
 SOUND_FILES = ['Sounds/' + k for k in USER_SOUNDS]
+# Version 0.0.75 MOTORCYCLE (CAPTAIN AMERICA / WOLVERINE): Mert Tetik's "Low-Poly Sci-Fi Motorcycle" (CC BY 4.0), converted
+# by tools/bike075 (not in git: the release packaging copies it in, and checks these files are in the launcher zip).
+RELEASE075_MODEL_FILES = ['Models/Vehicle/Motorcycle/model.glb', 'Models/Vehicle/Motorcycle/layout.json',
+                          'Models/Vehicle/Motorcycle/license.txt', 'Models/Vehicle/Motorcycle/Handlebars/model.glb',
+                          'Models/Vehicle/Motorcycle/Handlebars/license.txt']
 DOC_FILES = ['READ-ME-FIRST.txt', 'SHA256SUMS.txt']
 # Test build 5: the zip's one top folder holds the installer and the notes; the mod files sit under payload/
 # (the installer copies them into the mod folder the player plays from; tools/run_game_vr.py reads the marker).

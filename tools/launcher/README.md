@@ -9,7 +9,9 @@ night city background.
 **HERO VR by Agent Mulder** ([TikTok @agentmulder](https://www.tiktok.com/@agentmulder) · [Discord](https://discord.gg/W2b9YjRXzf)).
 *Built on Spidy by Ilya Mezerowsky* (SpidyVR, GPLv3). See the launcher's Credits page and [NOTICE](NOTICE).
 
-Launcher version **0.0.74.1** (launcher build 15), shipped with HERO VR 0.0.74 (mod Version 0.0.74, build Update 39.7).
+Launcher version **0.0.75.1** (launcher build 16), shipped with HERO VR 0.0.75 (mod Version 0.0.75, build Update 39.8).
+
+Build 16 ships with mod Version 0.0.75 (still EXPERIMENTAL, 0.0.63 the most recent STABLE build): Revert offers 0.0.74 first, then 0.0.73, 0.0.63, 0.0.62, 0.0.6 and 0.0.5; the SPIDER-MAN 2 / SPIDER-MAN 1 choice (Spider-Man 1 runs iilyn's SpidyVR, downloaded from his GitHub, unchanged), the SM1STYLE TAA hint and cleaner reports come with it.
 
 Build 15 ships with mod Version 0.0.74 (still EXPERIMENTAL, 0.0.63 the most recent STABLE build): Revert offers 0.0.73 first, then 0.0.63, 0.0.62, 0.0.6 and 0.0.5; the internet server list (the free Cloudflare lobby), safety checks and the newest crash dump in Reports come with it.
 

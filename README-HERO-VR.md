@@ -1,16 +1,42 @@
-# HERO VR 0.0.74 - Made by Agent Mulder
+# HERO VR 0.0.75 - Made by Agent Mulder
 
 HERO VR is a free, unofficial VR mod for **Marvel's Spider-Man 2** on PC. It is a port of
 **Spidy (SpidyVR) by Ilya Mezerowsky** (https://github.com/IlyaMez/SpidyVR), and it comes with the HERO VR launcher:
 one window with a big **PLAY VR** button, launch options, build, updates, revert and reports.
 
-This zip is the full source of HERO VR 0.0.74 (version number **Version 0.0.74**, build Update 39.7, launcher 0.0.74.1)
+This zip is the full source of HERO VR 0.0.75 (version number **Version 0.0.75**, build Update 39.8, launcher 0.0.75.1)
 plus the prebuilt HERO VR launcher.
 
-**EXPERIMENTAL BUILD: 0.0.74 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.73
-or USE 0.0.63 goes back, settings kept). 0.0.74 includes everything in 0.0.73 and 0.0.72.
+**EXPERIMENTAL BUILD: 0.0.75 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.74
+or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0.0.73 and 0.0.72.
 
-## What's new in 0.0.74
+## What's new in 0.0.75
+- **Supersonic fixed:** flight and the shockwave follow your fist, and you stay level after the coast.
+- **Only Spider-Man wall-crawls.** Other heroes no longer run up or stick to walls (Wolverine with claws out and
+  CLAW CLIMB on can still climb).
+- **Daredevil:** press **A** during his grapple to jump out of it.
+- **Captain America** gets Daredevil's quick grapple.
+- **Motorcycle for Captain America and Wolverine:** tap **X** and it arrives where you look. Grip the left
+  handlebar to get on, turn the bars to steer, ride with the triggers. It is driver only (no passenger seat).
+- **B** while seated recenters you in the seat.
+- **Models hide behind walls** properly (better depth detection).
+- **More enemy types** take damage from the heroes.
+- **Thor's hammer throw** no longer lunges you forward.
+- **All outfits are unlocked** from the start.
+- **Launcher: Spider-Man 1 option.** Pick SPIDER-MAN 2 (HERO VR) or SPIDER-MAN 1. Spider-Man 1 runs **iilyn's
+  SpidyVR** (by Ilya Mezerowsky, https://github.com/IlyaMez/SpidyVR), downloaded from his GitHub, unchanged and
+  credited. The heroes add-on for Spider-Man 1 is still in progress.
+- **Cleaner reports:** only a crash dump from this session is attached.
+- **SM1STYLE hint:** if the game's Anti-Aliasing is not TAA, the launcher tells you to set it to TAA.
+
+### Known issues (being worked on)
+- Aliasing and window edges are still being improved.
+- Damage to the green symbiote enemies is not confirmed yet.
+- The '89 Batmobile can look grey.
+- The motorcycle and the Spider-Man 1 option are untested in a headset.
+- No passenger seats.
+
+## In 0.0.74
 - **SM1STYLE eye anti-aliasing (on by default):** each eye uses the game's own TAA the way SpidyVR does, so edges
   shimmer much less. To go back to the old look, put `sm1style = off` in live.txt (it applies the next time VR starts).
 - **Window-edge lights fixed:** lit windows no longer go dark at the outer edges of each eye.
@@ -34,10 +60,6 @@ or USE 0.0.63 goes back, settings kept). 0.0.74 includes everything in 0.0.73 an
   grapple press is lost.
 - **Launcher (0.0.74.1, build 15):** safety checks (mod check, two-GPU check, clearer errors), Reports include the
   newest crash dump, and **Revert** offers **USE 0.0.73** first, then 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
-
-### Known issues (being worked on for 0.0.75)
-- Aliasing is better but still needs work.
-- Window edges are much better but not fully fixed yet.
 
 ## In 0.0.73
 - **GAME TAA starts OFF** (wrist GRAPHICS > QUALITY, under AA). The 0.0.73 test builds ran the game's own TAA in each

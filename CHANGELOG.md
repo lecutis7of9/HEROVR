@@ -2,6 +2,42 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.75 - HERO VR 0.0.75 (October 31, 2026)
+
+**EXPERIMENTAL BUILD: 0.0.75 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.74
+or USE 0.0.63 goes back, settings kept).
+
+Version 0.0.75 (build Update 39.8), launcher build 16 (0.0.75.1). From the hero-0.0.75 work (a823158), HERO_TEST_BUILD
+OFF. Revert offers 0.0.74 first, then 0.0.73, 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
+
+- **Supersonic fixed:** flight and the shockwave follow your fist, and you stay level after the coast.
+- **Only Spider-Man wall-crawls.** Other heroes no longer run up or stick to walls (Wolverine with claws out and
+  CLAW CLIMB on can still climb).
+- **Daredevil:** press **A** during his grapple to jump out of it.
+- **Captain America** gets Daredevil's quick grapple.
+- **Motorcycle for Captain America and Wolverine:** tap **X** and it arrives where you look. Grip the left
+  handlebar to get on, turn the bars to steer, ride with the triggers. It is driver only (no passenger seat).
+- **B** while seated recenters you in the seat.
+- **Models hide behind walls** properly (better depth detection).
+- **More enemy types** take damage from the heroes.
+- **Thor's hammer throw** no longer lunges you forward.
+- **All outfits are unlocked** from the start.
+- **Launcher: Spider-Man 1 option.** Pick SPIDER-MAN 2 (HERO VR) or SPIDER-MAN 1. Spider-Man 1 runs **iilyn's
+  SpidyVR** (by Ilya Mezerowsky, https://github.com/IlyaMez/SpidyVR), downloaded from his GitHub, unchanged and
+  credited. The heroes add-on for Spider-Man 1 is still in progress.
+- **Cleaner reports:** only a crash dump from this session is attached.
+- **SM1STYLE hint:** if the game's Anti-Aliasing is not TAA, the launcher tells you to set it to TAA.
+
+Known issues:
+- Aliasing and window edges are still being improved.
+- Damage to the green symbiote enemies is not confirmed yet.
+- The '89 Batmobile can look grey.
+- The motorcycle and the Spider-Man 1 option are untested in a headset.
+- No passenger seats.
+
+Credits: the motorcycle is "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme" by Mert Tetik (CC BY 4.0); the Spider-Man 1
+option runs iilyn's SpidyVR (Ilya Mezerowsky, GPL-3.0) unchanged. Made by Agent Mulder.
+
 ## v0.0.74 - HERO VR 0.0.74 (October 31, 2026)
 
 **EXPERIMENTAL BUILD: 0.0.74 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.73

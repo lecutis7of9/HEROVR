@@ -10,6 +10,7 @@ def src(p):
 
 
 class ReleaseLabels0074(unittest.TestCase):
+    @unittest.skip("0.0.74 only: release0075_tests.ReleaseLabels0075 checks the 0.0.75 release")
     def test_version(self):
         self.assertEqual(src('VERSION').strip(), '0.0.74')
         self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.7')
@@ -34,6 +35,7 @@ class ReleaseLabels0074(unittest.TestCase):
                 self.assertIsNone(re.search(r'"[^"]*\b(?:TEST|test) [0-9][^"]*"', code), (fn, line))
                 self.assertNotIn('this test build', code, fn)
 
+    @unittest.skip("0.0.74 only: release0075_tests.ReleaseLabels0075 checks the 0.0.75 release")
     def test_launcher(self):
         m = src('tools/launcher/src/ModVersion.cs')
         self.assertIn('public const string Version = "0.0.74.1";', m)

@@ -32,8 +32,8 @@ class LauncherBuild9(unittest.TestCase):
         cmk = re.search(r'set\(HERO_TEST_VERSION "([0-9.]+)"', (ROOT/'CMakeLists.txt').read_text(encoding='utf-8'))
         test_ver = tuple(int(x) for x in cmk.group(1).split('.')) if cmk else ()
         if test_ver >= (0, 0, 74):   # 0.0.74 test 10 (the user: "go to 73 ... not 6whatever"): 0.0.73 first, the rest kept
-            self.assertEqual(tags, ['v0.0.73', 'v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
-            self.assertIn('public const string PreviousTag = "v0.0.73";', mv)
+            self.assertEqual(tags, ['v0.0.74', 'v0.0.73', 'v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
+            self.assertIn('public const string PreviousTag = "v0.0.74";', mv)
         elif int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 11:   # build 11 (0.0.70): 0.0.63 first
             self.assertEqual(tags, ['v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
         elif int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 10:

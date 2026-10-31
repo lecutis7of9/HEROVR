@@ -12,6 +12,9 @@ inline constexpr uint32_t loopbackAddr = 0x7f000001u; // 127.0.0.1 (host order)
 inline constexpr uint32_t anyAddr = 0;
 std::string addrText(Peer p);
 bool parseAddr(const std::string& text, uint32_t& addr); // dotted IPv4, host order
+// 0.0.74 MP JOIN: a friend's address - dotted IPv4 or a host name (the system's resolver, IPv4 only; it may
+// take a moment: the network thread calls it, never the render thread). False: `why` says.
+bool resolvePeer(const std::string& host, uint16_t port, Peer& out, std::string& why);
 
 class UdpSocket {
   public:

@@ -134,6 +134,13 @@ std::string nameplate(bool buddy, const std::string& buddyName, int pingMs) {
     s += pingMs >= 0 ? std::to_string(std::min(pingMs, 9999)) + " MS" : std::string("--");
     return s;
 }
+std::string nameplate(bool buddy, const std::string& buddyName, int pingMs, bool peerGame) {
+    if (!buddy || !peerGame)
+        return nameplate(buddy, buddyName, pingMs);
+    std::string s = (buddyName.empty() ? std::string("PLAYER 2") : buddyName) + "  PING ";
+    s += pingMs >= 0 ? std::to_string(std::min(pingMs, 9999)) + " MS" : std::string("--");
+    return s;
+}
 
 size_t appendNameplate(std::vector<Vertex>& out, const std::string& text, Vec3 above, Vec3 up, Vec3 viewer, float alpha) {
     const size_t before = out.size();

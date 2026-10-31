@@ -11,6 +11,7 @@
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -56,6 +57,57 @@ bool parseAddr(const std::string& text, uint32_t& addr) {
         return false;
     addr = (a << 24) | (b << 16) | (c << 8) | d;
     return true;
+}
+
+bool resolvePeer(const std::string& host, uint16_t port, Peer& out, std::string& why) {
+    uint32_t a = 0;
+    if (!port) {
+        why = "no port";
+        return false;
+    }
+    if (parseAddr(host, a)) {
+        if (!a) {
+            why = "0.0.0.0 is nobody";
+            return false;
+        }
+        out = {a, port};
+        return true;
+    }
+    if (host.empty() || host.size() > 253) {
+        why = "no address";
+        return false;
+    }
+#ifdef _WIN32
+    WSADATA data;
+    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
+        why = "WSAStartup failed";
+        return false;
+    }
+#endif
+    addrinfo hints{};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    addrinfo* got = nullptr;
+    const int e = ::getaddrinfo(host.c_str(), nullptr, &hints, &got);
+    bool ok = false;
+    if (e == 0) {
+        for (addrinfo* i = got; i && !ok; i = i->ai_next)
+            if (i->ai_family == AF_INET && i->ai_addr) {
+                const auto* sa = reinterpret_cast<const sockaddr_in*>(i->ai_addr);
+                out = {ntohl(sa->sin_addr.s_addr), port};
+                ok = out.addr != 0;
+            }
+        ::freeaddrinfo(got);
+    }
+#ifdef _WIN32
+    WSACleanup();
+#endif
+    if (!ok) {
+        char b[96];
+        std::snprintf(b, sizeof b, "'%s' not found (error %d)", host.substr(0, 40).c_str(), e);
+        why = b;
+    }
+    return ok;
 }
 
 UdpSocket::~UdpSocket() { close(); }

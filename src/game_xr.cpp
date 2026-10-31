@@ -12550,21 +12550,81 @@ DWORD WINAPI run(void*) {
                             static suit_wear::Skinned mpSkinned;
                             static auto mpLast = std::chrono::steady_clock::now();
                             static bool mpFailedOnce = false;
+                            // 0.0.74 MP JOIN (owner pt1360u: "we cant have multiplayer and not see your friend"): a
+                            // real game-to-game join. %APPDATA%\Spidy\MP-PEER.txt naming the friend's address
+                            // (mp::parsePeerSetting) turns MP on by itself - LAN listening, no loopback echo - and
+                            // calls him (HELLO / WELCOME, mp_session.hpp); looked at every 2 s, a change restarts.
+                            static spidy::mp::PeerFacing mpFacing;
+                            static std::string mpPeerText, mpRunText;
+                            static spidy::mp::PeerSetting mpPeer;
+                            static bool mpPeerFile = false, mpRunPeer = false;
+                            static ULONGLONG mpPeerCheck = 0;
                             try {
-                                const bool mpOn = c38(combat38::mpSoloTest) == 1; // 0.0.74 test 1: OFF (the default) is choice 0, ON choice 1
+                                const auto mpDir = [] {
+                                    const auto ini = tabOnlyPath();
+                                    return ini.empty() ? std::wstring{} : ini.substr(0, ini.find_last_of(L'\\'));
+                                };
+                                if (GetTickCount64() >= mpPeerCheck) {
+                                    mpPeerCheck = GetTickCount64() + 2000;
+                                    const std::wstring dir = mpDir();
+                                    mpPeerFile = false;
+                                    std::string text;
+                                    if (!dir.empty()) {
+                                        const std::wstring peerFile = dir + L"\\MP-PEER.txt";
+                                        HANDLE f = CreateFileW(peerFile.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+                                        if (f != INVALID_HANDLE_VALUE) {
+                                            char buf[4096];
+                                            DWORD got = 0;
+                                            if (ReadFile(f, buf, sizeof buf, &got, nullptr))
+                                                text.assign(buf, buf + got), mpPeerFile = true;
+                                            CloseHandle(f);
+                                        }
+                                    }
+                                    if (text != mpPeerText || !mpPeerFile) {
+                                        mpPeerText = mpPeerFile ? text : std::string{};
+                                        mpPeer = spidy::mp::parsePeerSetting(mpPeerText);
+                                        if (mpPeerFile && !mpPeer.ok)
+                                            consoleLine("MP JOIN: MP-PEER.txt has no address in it (write the friend's IP, e.g. "
+                                                        "203.0.113.7 or 203.0.113.7:39470) - not calling");
+                                    }
+                                }
+                                const bool mpJoin = mpPeerFile && mpPeer.ok;
+                                // 0.0.74 test 1: MP SOLO TEST OFF (the default) is choice 0, ON choice 1
+                                const bool mpOn = c38(combat38::mpSoloTest) == 1 || mpJoin;
+                                if (mpSession->started() && (mpJoin != mpRunPeer || (mpJoin && mpRunText != mpPeerText))) {
+                                    mpSession->stop();
+                                    mpFollow = {};
+                                    mpFacing.reset();
+                                    consoleLine("MP JOIN: MP-PEER.txt changed - the network restarts");
+                                }
                                 if (mpOn && !mpSession->started()) {
                                     spidy::mp::SessionConfig cfg;
                                     // LAN (a buddy on another PC) only when %APPDATA%\Spidy\MP-LAN-ON.txt exists.
-                                    const auto ini = tabOnlyPath();
-                                    if (!ini.empty()) {
-                                        const auto lanFile = ini.substr(0, ini.find_last_of(L'\\')) + L"\\MP-LAN-ON.txt";
-                                        cfg.lan = GetFileAttributesW(lanFile.c_str()) != INVALID_FILE_ATTRIBUTES;
+                                    const std::wstring dir = mpDir();
+                                    if (!dir.empty())
+                                        cfg.lan = GetFileAttributesW((dir + L"\\MP-LAN-ON.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
+                                    if (mpJoin) { // a friend on another PC: every interface, PLAYER 2 is him (no echo)
+                                        cfg.lan = true;
+                                        cfg.echo = false;
+                                        cfg.peerHost = mpPeer.host;
+                                        cfg.peerPort = mpPeer.port;
+                                        cfg.name = mpPeer.name;
                                     }
                                     mpSession->start(cfg);
-                                    consoleLine(std::string("MP SOLO TEST: on (") + (cfg.lan ? "LAN" : "localhost") + ")");
+                                    mpRunPeer = mpJoin;
+                                    mpRunText = mpPeerText;
+                                    mpFacing.reset();
+                                    if (mpJoin)
+                                        consoleLine("MP JOIN: on - calling " + mpPeer.host + ":" + std::to_string(mpPeer.port) + " as '" +
+                                                    (mpPeer.name.empty() ? std::string("HERO VR") : mpPeer.name) +
+                                                    "', listening on UDP " + std::to_string(cfg.port) + " (every interface)");
+                                    else
+                                        consoleLine(std::string("MP SOLO TEST: on (") + (cfg.lan ? "LAN" : "localhost") + ")");
                                 } else if (!mpOn && mpSession->started()) {
                                     mpSession->stop();
                                     mpFollow = {};
+                                    mpFacing.reset();
                                     consoleLine("MP SOLO TEST: off");
                                 }
                                 for (const auto& line : mpSession->takeLog())
@@ -12607,9 +12667,15 @@ DWORD WINAPI run(void*) {
                                     const Vec3 lookLocal = back.rotate(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
                                     mpFollow.update(spidy::mp::yawOf(lookLocal), mpDt);
                                     if (v.visible && v.alpha > .01f) {
-                                        // The loopback is the player mirrored like a partner; the buddy walks its own root.
-                                        const spidy::mp::Ghost g = spidy::mp::partner(v.state, mpFollow.spot(Vec3{}), mpFollow.ghostYaw(),
-                                                                                      !v.buddy, v.buddy);
+                                        // The loopback is the player mirrored like a partner; the buddy walks its own root;
+                                        // 0.0.74 MP JOIN: a friend's game stands on the spot, turning as he turns.
+                                        if (!v.peerGame)
+                                            mpFacing.reset();
+                                        const spidy::mp::Ghost g =
+                                            v.peerGame ? spidy::mp::partner(v.state, mpFollow.spot(Vec3{}),
+                                                                            mpFacing.bodyYaw(mpFollow.ghostYaw(), v.state.yaw), false, false)
+                                                       : spidy::mp::partner(v.state, mpFollow.spot(Vec3{}), mpFollow.ghostYaw(), !v.buddy,
+                                                                            v.buddy);
                                         suit_wear::Tracked gt = spidy::mp::toTracked(g, feet, turn);
                                         {   // 0.0.74 test 11 WALK LEGS: Player 2 steps with its own ground speed (from its
                                             // eyes here; nothing new on the wire), not while it flies or swings.
@@ -12645,7 +12711,7 @@ DWORD WINAPI run(void*) {
                                         if (!drawnSuit && !drawnBody)
                                             spidy::mp::appendFigure(translucent, gt, viewer, spidy::mp::heroColor(v.state.hero), v.alpha);
                                         const float tall = std::clamp(gt.standingEye > .8f ? gt.standingEye : 1.65f, 1.f, 2.4f);
-                                        spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs),
+                                        spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs, v.peerGame),
                                                                    gt.feet + gt.up * (tall + .35f), gt.up, viewer, v.alpha);
                                     }
                                 } else if (mpSession->started()) {

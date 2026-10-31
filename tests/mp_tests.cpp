@@ -462,6 +462,82 @@ void testHandshake() {
     check(link.onPacket(bye, other, 5.5) == BuddyLink::Step::bye && !link.connected(5.5), "BYE: gone at once");
 }
 
+// 0.0.74 MP JOIN: another game's HELLO, the WELCOME of the friend called, his poses; MP-PEER.txt; his facing.
+void testJoinLink() {
+    const Peer me{loopbackAddr, 39470}, pal{0x0a000002u, 39470}, palMoved{0x0a000002u, 51111}, stranger{0x0a000009u, 39470};
+    Packet h;
+    h.type = hello;
+    h.role = roleGame;
+    std::snprintf(h.name, sizeof h.name, "peter");
+    Packet w = h;
+    w.type = welcome;
+    Packet gp;
+    gp.type = pose;
+    gp.role = roleGame;
+    Packet bp = gp;
+    bp.role = roleBuddy;
+    {
+        BuddyLink l;
+        l.self(me);
+        check(l.onPacket(h, pal, 0) == BuddyLink::Step::welcome && l.connected(0) && l.peerIsGame(),
+              "JOIN: another game's HELLO is let in (WELCOME back), marked a game");
+        check(l.name() == "PETER", "JOIN: his name");
+        check(l.onPacket(gp, pal, .1) == BuddyLink::Step::pose, "JOIN: his game's poses count");
+        check(l.onPacket(bp, pal, .2) == BuddyLink::Step::ignore, "JOIN: a buddy-marked pose from a game does not");
+        check(l.onPacket(h, me, .3) == BuddyLink::Step::ignore && l.peer() == pal, "JOIN: our own HELLO come back is not let in");
+    }
+    {
+        BuddyLink l;
+        l.self(me);
+        check(l.onPacket(w, pal, 0) == BuddyLink::Step::ignore && !l.connected(0), "JOIN: a WELCOME nobody asked for: ignored");
+        l.dial(pal);
+        check(l.onPacket(w, stranger, 0) == BuddyLink::Step::ignore && !l.connected(0), "JOIN: a stranger's WELCOME: ignored");
+        Packet wb = w;
+        wb.role = roleBuddy;
+        check(l.onPacket(wb, pal, 0) == BuddyLink::Step::ignore, "JOIN: a WELCOME not from a game: ignored");
+        Packet wo = w;
+        wo.protocol = 7;
+        check(l.onPacket(wo, pal, 0) == BuddyLink::Step::ignore, "JOIN: a WELCOME of another protocol: ignored");
+        check(l.onPacket(w, palMoved, 1) == BuddyLink::Step::joined && l.connected(1) && l.peerIsGame() && l.peer() == palMoved,
+              "JOIN: the called friend's WELCOME (his router moved the port) joins us to that port");
+        check(l.onPacket(w, palMoved, 1.5) == BuddyLink::Step::ignore && l.connected(1.5), "JOIN: a repeated WELCOME: still joined");
+        check(l.onPacket(gp, palMoved, 2) == BuddyLink::Step::pose, "JOIN: then his poses count");
+        check(!l.connected(5.1), "JOIN: silent 3 s: gone (calling again)");
+        Packet bye;
+        bye.type = mp::bye;
+        bye.role = roleGame;
+        l.onPacket(w, palMoved, 6);
+        check(l.onPacket(bye, palMoved, 6.5) == BuddyLink::Step::bye && !l.connected(6.5), "JOIN: his BYE");
+    }
+    // MP-PEER.txt
+    PeerSetting a = parsePeerSetting("203.0.113.7\n");
+    check(a.ok && a.host == "203.0.113.7" && a.port == defaultPort && a.name.empty(), "PEER: an address alone, port 39470");
+    a = parsePeerSetting("\xef\xbb\xbf# my friend\r\n\r\n  10.0.0.5:39471  \r\nname = Peter Parker\r\n");
+    check(a.ok && a.host == "10.0.0.5" && a.port == 39471 && a.name == "PETER PARKER", "PEER: Notepad's file - mark, comment, port, name");
+    a = parsePeerSetting("name=MJ\npeer=friend.example.net:40000 # his PC\n");
+    check(a.ok && a.host == "friend.example.net" && a.port == 40000 && a.name == "MJ", "PEER: peer= and a host name");
+    check(!parsePeerSetting("").ok && !parsePeerSetting("# nothing\nname=X\n").ok, "PEER: no address: not ok");
+    check(!parsePeerSetting("1.2.3.4:0").ok && !parsePeerSetting("1.2.3.4:99999").ok && !parsePeerSetting("1.2.3.4:abc").ok &&
+              !parsePeerSetting("bad host name").ok,
+          "PEER: a bad port or host: not ok");
+    a = parsePeerSetting("junk host\n10.1.1.1\n10.2.2.2\n");
+    check(a.ok && a.host == "10.1.1.1", "PEER: the first good address");
+    Peer r{};
+    std::string why;
+    check(resolvePeer("10.1.2.3", 39470, r, why) && r.addr == 0x0a010203u && r.port == 39470, "PEER: dotted address resolved");
+    check(resolvePeer("localhost", 4000, r, why) && r.addr == loopbackAddr, "PEER: a host name resolved (localhost)");
+    check(!resolvePeer("0.0.0.0", 4000, r, why) && !resolvePeer("", 4000, r, why) && !why.empty(), "PEER: nobody: refused, said why");
+    // His facing: starts facing the player, then turns as he turns.
+    PeerFacing f;
+    check(near(f.bodyYaw(3.f, 1.f), 3.f), "FACING: first seen: facing the player");
+    check(near(f.bodyYaw(3.f, 1.5f), wrapAngle(3.5f)), "FACING: he turns 0.5: so does his ghost");
+    f.reset();
+    check(near(f.bodyYaw(-1.f, -2.f), -1.f), "FACING: reset: facing the player again");
+    check(nameplate(true, "PETER", 42, true) == "PETER  PING 42 MS" && nameplate(true, "", -1, true) == "PLAYER 2  PING --" &&
+              nameplate(true, "X", 5, false) == nameplate(true, "X", 5),
+          "JOIN: the friend's nameplate is his name");
+}
+
 PoseState timed(double t) {
     PoseState s = sample();
     s.root = {static_cast<float>(t), 0, 0};
@@ -610,6 +686,77 @@ void testSessionBuddy() {
     session.stop();
 }
 
+// 0.0.74 MP JOIN: two real games on 127.0.0.1 - one calls (MP-PEER.txt), the other only listens; then both call.
+void testSessionJoin() {
+    for (int both = 0; both < 2; ++both) {
+        Session a, b;
+        SessionConfig ca, cb;
+        ca.port = static_cast<uint16_t>(39590 + both * 10);
+        cb.port = static_cast<uint16_t>(39600 + both * 10 + 5);
+        ca.echo = cb.echo = false;
+        ca.buddyTimeout = cb.buddyTimeout = 1.0;
+        ca.name = "alice";
+        cb.name = "bob";
+        check(b.start(cb), "JOIN: the friend's game starts");
+        for (int i = 0; i < 20 && !b.view().running; ++i)
+            sleepMs(5);
+        ca.peerHost = "127.0.0.1";
+        ca.peerPort = b.view().port;
+        if (both) {
+            b.stop();
+            cb.peerHost = "localhost";
+            cb.peerPort = ca.port; // a takes its first free port (ca.port when it is free)
+            check(b.start(cb), "JOIN: the friend's game starts calling too");
+        }
+        check(a.start(ca), "JOIN: the calling game starts");
+        bool joined = false;
+        const double t0 = a.now();
+        while (a.now() - t0 < 3.0) {
+            PoseState pa = sample(), pb = sample();
+            pa.hero = 4, pb.hero = 6;
+            a.publish(pa);
+            b.publish(pb);
+            const SessionView va = a.view(), vb = b.view();
+            if (va.peerGame && vb.peerGame && va.visible && vb.visible && va.state.hero == 6 && vb.state.hero == 4 &&
+                a.now() - t0 > .8) {
+                joined = true;
+                break;
+            }
+            sleepMs(10);
+        }
+        const SessionView va = a.view(), vb = b.view();
+        std::printf("  join%s: a sees '%s' hero %u ping %d; b sees '%s' hero %u ping %d\n", both ? " (both calling)" : "",
+                    va.buddyName.c_str(), va.state.hero, va.pingMs, vb.buddyName.c_str(), vb.state.hero, vb.pingMs);
+        check(joined, both ? "JOIN: both calling: joined, each sees the other" : "JOIN: called: joined, each sees the other");
+        check(va.buddyName == "BOB" && vb.buddyName == "ALICE", "JOIN: each named");
+        check(va.buddy && !va.calling && va.peerText.find("127.0.0.1:") == 0, "JOIN: not calling once joined");
+        bool saidJoined = false;
+        for (const auto& l : a.takeLog())
+            saidJoined = saidJoined || l.find("joined from") != std::string::npos;
+        check(saidJoined, "JOIN: logged");
+        // He quits: a drops him (BYE) and calls again.
+        b.stop();
+        for (int i = 0; i < 40; ++i)
+            a.publish(sample()), sleepMs(5);
+        const SessionView after = a.view();
+        check(!after.buddy && after.calling, "JOIN: he left: dropped, calling again");
+        a.stop();
+    }
+    // A friend nobody can find: logged, no crash, still listening.
+    Session c;
+    SessionConfig cc;
+    cc.port = 39625;
+    cc.echo = false;
+    cc.peerHost = "0.0.0.0"; // (a .invalid name resolves on some networks with DNS wildcards)
+    c.start(cc);
+    sleepMs(300);
+    bool said = false;
+    for (const auto& l : c.takeLog())
+        said = said || l.find("MP-PEER.txt") != std::string::npos;
+    check(said && c.view().running && !c.view().calling, "JOIN: a friend address nobody has: said so, still up");
+    c.stop();
+}
+
 void testSocketFailure() {
     // Port taken by five sockets: the session reports it and stays down - no throw.
     UdpSocket block[5];
@@ -741,8 +888,10 @@ int main() {
     testDelayAndEcho();
     testPartner();
     testHandshake();
+    testJoinLink();
     testSessionLoopback();
     testSessionBuddy();
+    testSessionJoin();
     testSocketFailure();
     testGhostDrawing();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);

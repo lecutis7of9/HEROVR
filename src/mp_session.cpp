@@ -32,7 +32,8 @@ bool Session::start(const SessionConfig& config) {
         loop_.delay = buddy_.delay = config.interpDelay;
         link_ = {};
         link_.timeout = config.buddyTimeout;
-        running_ = buddyOn_ = false;
+        running_ = buddyOn_ = calling_ = false;
+        peerText_.clear();
         loopPing_ = buddyPing_ = -1;
         sent_ = received_ = rejected_ = 0;
         status_ = "starting";
@@ -83,6 +84,9 @@ SessionView Session::view() const {
     v.running = running_;
     v.buddy = buddyOn_;
     v.buddyName = buddyOn_ ? link_.name() : std::string{};
+    v.peerGame = buddyOn_ && link_.peerIsGame();
+    v.calling = calling_ && !buddyOn_;
+    v.peerText = peerText_;
     v.port = port_;
     v.sent = sent_, v.received = received_, v.rejected = rejected_;
     v.dropped = loop_.dropped() + buddy_.dropped();
@@ -116,11 +120,20 @@ void Session::run() {
         log("MP: loopback echo could not open (" + echo.lastError() + ") - no ghost until a buddy connects");
     const Peer gamePeer{loopbackAddr, port};
     const Peer echoPeer{loopbackAddr, echoOk ? echo.localPort() : uint16_t{0}};
+    // 0.0.74 MP JOIN: our name, and the friend to call (resolved here, on the network thread; retried).
+    const std::string myName = cfg.name.empty() ? std::string("HERO VR") : cleanName(cfg.name.c_str());
+    const bool wantCall = !cfg.peerHost.empty();
+    Peer callPeer{};
+    bool callOk = false;
+    double nextResolve = 0, nextCall = 0, nextCallLog = 0;
+    const std::string idle = echoOk ? "loopback" : (wantCall ? "calling" : "waiting for a buddy");
     {
         std::lock_guard<std::mutex> g(lock_);
         running_ = true;
         port_ = port;
-        status_ = echoOk ? "loopback" : "waiting for a buddy";
+        link_.self(gamePeer);
+        status_ = idle;
+        peerText_ = wantCall ? cfg.peerHost + ":" + std::to_string(cfg.peerPort) : std::string{};
     }
     char line[160];
     std::snprintf(line, sizeof line, "MP: UDP %s:%u up%s, protocol %u; loopback echo %s (hold %.0f ms)",
@@ -138,6 +151,20 @@ void Session::run() {
         try {
             const double t = clockSeconds();
             const uint32_t ms = msOf(t);
+            // 0.0.74 MP JOIN: find the friend (a host name may need the resolver; retried every 10 s).
+            if (wantCall && !callOk && t >= nextResolve) {
+                nextResolve = t + 10;
+                std::string why;
+                callOk = resolvePeer(cfg.peerHost, cfg.peerPort, callPeer, why);
+                std::lock_guard<std::mutex> g(lock_);
+                if (callOk) {
+                    link_.dial(callPeer);
+                    peerText_ = addrText(callPeer);
+                    calling_ = true;
+                } else if (log_.size() < 64) {
+                    log_.push_back("MP: the friend in MP-PEER.txt: " + why + " - trying again in 10 s");
+                }
+            }
             // The echo: hold what the game sent, then hand it back as an echo packet.
             if (echoOk) {
                 for (int k = 0; k < 64; ++k) {
@@ -198,11 +225,14 @@ void Session::run() {
                 reply.role = roleGame;
                 reply.sentMs = ms;
                 switch (step) {
-                case BuddyLink::Step::welcome: {
-                    reply.type = welcome;
-                    std::snprintf(reply.name, sizeof reply.name, "HERO VR");
-                    const auto bytes = encode(reply);
-                    game.send(bytes.data(), bytes.size(), from);
+                case BuddyLink::Step::welcome:
+                case BuddyLink::Step::joined: {
+                    if (step == BuddyLink::Step::welcome) {
+                        reply.type = welcome;
+                        std::snprintf(reply.name, sizeof reply.name, "%s", myName.c_str());
+                        const auto bytes = encode(reply);
+                        game.send(bytes.data(), bytes.size(), from);
+                    }
                     if (buddyOn_ && !(before == from)) { // another buddy took over: its own timeline
                         buddy_ = {};
                         buddy_.delay = cfg.interpDelay;
@@ -213,11 +243,17 @@ void Session::run() {
                         buddy_ = {};
                         buddy_.delay = cfg.interpDelay;
                         buddyPing_ = -1;
-                        status_ = "buddy " + link_.name();
+                        const bool friendGame = link_.peerIsGame();
+                        status_ = (friendGame ? "player " : "buddy ") + link_.name();
                         if (log_.size() >= 64)
                             log_.pop_front();
-                        log_.push_back("MP: Test Buddy '" + link_.name() + "' connected from " + addrText(from) +
-                                       " - it replaces the loopback ghost");
+                        if (friendGame)
+                            log_.push_back("MP: player '" + link_.name() + "' joined from " + addrText(from) +
+                                           (step == BuddyLink::Step::joined ? " (answered our call)" : " (called us)") +
+                                           " - PLAYER 2 is your friend now");
+                        else
+                            log_.push_back("MP: Test Buddy '" + link_.name() + "' connected from " + addrText(from) +
+                                           " - it replaces the loopback ghost");
                         nextPing = t;
                     }
                     break;
@@ -238,10 +274,13 @@ void Session::run() {
                     buddyOn_ = false;
                     buddy_ = {};
                     loop_.reset();
-                    status_ = echoOk ? "loopback" : "waiting for a buddy";
+                    status_ = idle;
+                    nextCall = t + 2; // a friend who left: called again after a moment (he may come back)
                     if (log_.size() >= 64)
                         log_.pop_front();
-                    log_.push_back("MP: Test Buddy said bye - back to the loopback ghost");
+                    log_.push_back(link_.peerIsGame() ? "MP: player '" + link_.name() + "' left" +
+                                                            (callOk ? " - calling again" : "")
+                                                      : std::string("MP: Test Buddy said bye - back to the loopback ghost"));
                     break;
                 default: break;
                 }
@@ -254,10 +293,12 @@ void Session::run() {
                     buddyOn_ = false;
                     buddy_ = {};
                     loop_.reset();
-                    status_ = echoOk ? "loopback" : "waiting for a buddy";
+                    status_ = idle;
                     if (log_.size() >= 64)
                         log_.pop_front();
-                    log_.push_back("MP: Test Buddy silent for 3 s - dropped, back to the loopback ghost");
+                    log_.push_back(link_.peerIsGame()
+                                       ? "MP: player '" + link_.name() + "' silent for 3 s - dropped" + (callOk ? ", calling again" : "")
+                                       : std::string("MP: Test Buddy silent for 3 s - dropped, back to the loopback ghost"));
                 }
             }
             // Send.
@@ -294,6 +335,27 @@ void Session::run() {
                 std::lock_guard<std::mutex> g(lock_);
                 buddyNow = buddyOn_;
                 buddyPeer = link_.peer();
+                calling_ = callOk && !buddyOn_;
+            }
+            // 0.0.74 MP JOIN: calling the friend - a HELLO a second until he answers (both calling at once
+            // also opens most home routers' UDP doors for each other).
+            if (callOk && !buddyNow && t >= nextCall) {
+                nextCall = t + cfg.callEvery;
+                Packet h;
+                h.type = hello;
+                h.role = roleGame;
+                h.seq = ++seq;
+                h.sentMs = ms;
+                std::snprintf(h.name, sizeof h.name, "%s", myName.c_str());
+                const auto bytes = encode(h);
+                game.send(bytes.data(), bytes.size(), callPeer);
+                if (t >= nextCallLog) {
+                    const bool first = nextCallLog == 0;
+                    nextCallLog = t + 15;
+                    log(std::string(first ? "MP: calling " : "MP: still calling ") + addrText(callPeer) + " as '" + myName +
+                        "'" + (first ? "" : " - no answer yet: is his game on with MP-PEER.txt, UDP " +
+                                                std::to_string(callPeer.port) + " open to you?"));
+                }
             }
             if (buddyNow && t >= nextPing) {
                 nextPing = t + 1.0;

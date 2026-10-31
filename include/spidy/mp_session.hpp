@@ -28,13 +28,22 @@ struct SessionConfig {
     float interpDelay = .1f;
     double sendHz = 30;
     double buddyTimeout = 3;
+    // 0.0.74 MP JOIN: the friend's game to call (MP-PEER.txt; empty: nobody - wait for a HELLO) - HELLO every
+    // second until his WELCOME (or his own HELLO) comes, again after he goes quiet - and the name he sees.
+    std::string peerHost;
+    uint16_t peerPort = defaultPort;
+    std::string name;             // cleanName'd; empty: "HERO VR"
+    double callEvery = 1.0;       // seconds between HELLOs while calling
 };
 struct SessionView {
     bool running{};               // the socket is up
     bool visible{};               // draw the remote player
     float alpha{};
     PoseState state{};
-    bool buddy{};                 // the remote player is the Test Buddy (else the loopback echo)
+    bool buddy{};                 // a remote is connected: the Test Buddy or another game (else the loopback echo)
+    bool peerGame{};              // 0.0.74 MP JOIN: that remote is another game (a friend), not the Test Buddy
+    bool calling{};               // 0.0.74 MP JOIN: calling the MP-PEER.txt friend (no answer yet)
+    std::string peerText;         // the friend called ("1.2.3.4:39470"), empty: nobody
     std::string buddyName;
     int pingMs = -1;              // -1: not measured yet
     uint16_t port{};
@@ -70,7 +79,8 @@ class Session {
     PoseState local_{};
     Interpolator loop_, buddy_;
     BuddyLink link_;
-    bool running_{}, buddyOn_{};
+    bool running_{}, buddyOn_{}, calling_{};
+    std::string peerText_;
     float loopPing_ = -1, buddyPing_ = -1;
     uint16_t port_{};
     uint32_t sent_{}, received_{}, rejected_{};

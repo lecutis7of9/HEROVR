@@ -30,6 +30,40 @@ network, accounts or servers, and no game memory address is read or written by i
   draw failure hides the remote player and logs one console line (`MP SOLO TEST: ...`). Never a crash,
   never a fall back to flatscreen.
 
+## Playing with a friend (0.0.74 MP JOIN)
+
+Two real games, one on each PC, see each other: the friend is PLAYER 2, standing in front of you
+(his moves, his hero and suit, his name and ping on the nameplate). Both players need this build.
+
+1. Each player finds the address the other can reach:
+   - same house / LAN: the PC's LAN IPv4 (`ipconfig`, e.g. `192.168.1.23`);
+   - over the internet: a VPN such as Tailscale, ZeroTier or Radmin VPN (use its `100.x` / `10.x` /
+     `26.x` address), or forward **UDP 39470** on the router to that PC and use the public IP.
+2. Each player creates `%APPDATA%\Spidy\MP-PEER.txt` (Notepad is fine) holding the *other* player's
+   address, and optionally a name:
+
+   ```
+   # my friend
+   192.168.1.23
+   name=Peter
+   ```
+
+   `host:port` works too (the port defaults to 39470); so do `peer=`, `friend=` or `address=`, and a
+   host name. Only one side really needs the file (the other just answers), but both having it helps
+   through firewalls and NATs (each side's call opens its own firewall for the other's).
+3. Allow the game through Windows Firewall (private networks) when Windows asks, or allow UDP 39470.
+4. Start the game. MP turns on by itself while the file has an address (the MP SOLO TEST setting is
+   not needed; no loopback echo). The console shows:
+   - `MP JOIN: on - calling 192.168.1.23:39470 as 'PETER', listening on UDP 39470 (every interface)`
+   - `MP: calling ...`, then `MP: still calling ...` every 15 s with what to check;
+   - `MP: player 'MJ' joined from 192.168.1.23:39470 (answered our call)` (or `(called us)`).
+   If he quits, `MP: player 'MJ' left - calling again`.
+5. Editing or deleting MP-PEER.txt takes effect within 2 s (the network restarts; deleted = back to
+   the MP SOLO TEST setting).
+
+Solo check of the same path without a friend: `spidy_mp_probe run 39480 60 "" Bob` on any PC, and an
+MP-PEER.txt holding `127.0.0.1:39480` (or that PC's address).
+
 ## Files
 
 | File | Role |

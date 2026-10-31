@@ -1,6 +1,8 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 // Made by Agent Mulder. Version 0.0.73 MP SOLO TEST: the game's network side without the game.
-//   spidy_mp_probe run <port> <seconds>   the real Session, publishing a fake player; prints one JSON line
+//   spidy_mp_probe run <port> <seconds> [peer host[:port]] [name]
+//                                         the real Session, publishing a fake player; prints one JSON line
+//                                         (0.0.74 MP JOIN: with a peer it calls that game, like MP-PEER.txt)
 //                                         a second (tests/mp_buddy_tests.py drives the Test Buddy at it)
 //   spidy_mp_probe golden                 hex of fixed packets (the Python buddy must encode the same bytes)
 #include "spidy/mp_net.hpp"
@@ -66,6 +68,19 @@ int main(int argc, char** argv) {
         SessionConfig cfg;
         cfg.port = static_cast<uint16_t>(std::atoi(argv[2]));
         const double seconds = std::atof(argv[3]);
+        if (argc >= 5)
+            cfg.echo = false; // a game in a join: PLAYER 2 is only the friend ("" = listen, the friend calls)
+        if (argc >= 5 && argv[4][0]) { // 0.0.74 MP JOIN: call another game (two probes = two players)
+            const PeerSetting peer = parsePeerSetting(argv[4]);
+            if (!peer.ok) {
+                std::fprintf(stderr, "bad peer '%s'\n", argv[4]);
+                return 1;
+            }
+            cfg.peerHost = peer.host;
+            cfg.peerPort = peer.port;
+        }
+        if (argc >= 6)
+            cfg.name = argv[5];
         Session s;
         if (!s.start(cfg))
             return 2;
@@ -84,10 +99,10 @@ int main(int argc, char** argv) {
                 const SessionView v = s.view();
                 std::printf("{\"t\": %.1f, \"running\": %d, \"port\": %u, \"visible\": %d, \"buddy\": %d, \"name\": \"%s\", "
                             "\"ping\": %d, \"hero\": %u, \"suit\": %u, \"root\": [%.3f, %.3f, %.3f], \"actions\": %u, "
-                            "\"sent\": %u, \"received\": %u, \"rejected\": %u}\n",
+                            "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d}\n",
                             t, v.running, v.port, v.visible, v.buddy, v.buddyName.c_str(), v.pingMs, v.state.hero,
                             v.state.suit, v.state.root.x, v.state.root.y, v.state.root.z, v.state.actions, v.sent,
-                            v.received, v.rejected);
+                            v.received, v.rejected, v.peerGame, v.calling);
                 for (const auto& l : s.takeLog())
                     std::printf("# %s\n", l.c_str());
                 std::fflush(stdout);
@@ -99,6 +114,6 @@ int main(int argc, char** argv) {
             std::printf("# %s\n", l.c_str());
         return 0;
     }
-    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> | golden\n");
+    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port]] [name] | golden\n");
     return 1;
 }

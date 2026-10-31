@@ -508,28 +508,109 @@ PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t sui
     return s;
 }
 
+void BuddyLink::take(Peer from, uint8_t role, const char* name, double now) {
+    connected_ = true;
+    peer_ = from;
+    peerRole_ = role;
+    name_ = cleanName(name);
+    lastHeard_ = now;
+}
 BuddyLink::Step BuddyLink::onPacket(const Packet& p, Peer from, double now) {
+    if (self_.port && from == self_)
+        return Step::ignore; // our own HELLO come back (MP-PEER.txt naming this very game)
     if (p.type == hello) {
-        if (p.role != roleBuddy || p.protocol != version)
+        if ((p.role != roleBuddy && p.role != roleGame) || p.protocol != version)
             return Step::ignore;
-        if (!connected(now) || !(from == peer_)) {
-            connected_ = true;
-            peer_ = from;
-        }
-        name_ = cleanName(p.name);
-        lastHeard_ = now;
+        take(from, p.role, p.name, now);
         ++hellos_;
         return Step::welcome;
+    }
+    if (p.type == welcome) {
+        // Only the friend we call answers: his address (any port: a router may move it), a game's WELCOME.
+        if (!dial_.addr || from.addr != dial_.addr || p.role != roleGame || p.protocol != version)
+            return Step::ignore;
+        const bool fresh = !connected(now) || !(from == peer_);
+        take(from, roleGame, p.name, now);
+        return fresh ? Step::joined : Step::ignore;
     }
     if (!connected_ || !(from == peer_))
         return Step::ignore;
     lastHeard_ = now;
     switch (p.type) {
-    case pose: return p.role == roleBuddy ? Step::pose : Step::ignore;
+    case pose: return p.role == peerRole_ ? Step::pose : Step::ignore;
     case ping: return Step::ping;
     case pong: return Step::pong;
     case bye: connected_ = false; return Step::bye;
     default: return Step::ignore;
     }
+}
+
+PeerSetting parsePeerSetting(const std::string& text) {
+    PeerSetting out;
+    size_t at = 0;
+    const auto trim = [](std::string v) {
+        const size_t a = v.find_first_not_of(" \t\r\n");
+        if (a == std::string::npos)
+            return std::string{};
+        const size_t b = v.find_last_not_of(" \t\r\n");
+        return v.substr(a, b - a + 1);
+    };
+    while (at <= text.size()) {
+        size_t end = text.find('\n', at);
+        if (end == std::string::npos)
+            end = text.size();
+        std::string line = text.substr(at, end - at);
+        at = end + 1;
+        const size_t hash = line.find('#');
+        if (hash != std::string::npos)
+            line = line.substr(0, hash);
+        if (!line.empty() && static_cast<uint8_t>(line[0]) == 0xef && line.size() >= 3) // a UTF-8 mark (Notepad)
+            line = line.substr(3);
+        line = trim(line);
+        if (line.empty())
+            continue;
+        const size_t eq = line.find('=');
+        if (eq != std::string::npos) {
+            std::string key = trim(line.substr(0, eq));
+            for (char& c : key)
+                c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+            if (key == "name")
+                out.name = trim(cleanName(trim(line.substr(eq + 1)).c_str()));
+            else if ((key == "peer" || key == "friend" || key == "address") && !out.ok)
+                line = trim(line.substr(eq + 1));
+            else
+                continue;
+            if (key == "name")
+                continue;
+        }
+        if (out.ok)
+            continue;
+        std::string host = line;
+        uint32_t port = defaultPort;
+        const size_t colon = line.rfind(':');
+        if (colon != std::string::npos) {
+            host = trim(line.substr(0, colon));
+            const std::string ps = trim(line.substr(colon + 1));
+            if (ps.empty() || ps.size() > 5 || ps.find_first_not_of("0123456789") != std::string::npos)
+                continue;
+            port = static_cast<uint32_t>(std::stoul(ps));
+            if (port == 0 || port > 65535)
+                continue;
+        }
+        if (host.empty() || host.size() > 253 || host.find_first_of(" \t/\\") != std::string::npos)
+            continue;
+        out.ok = true;
+        out.host = host;
+        out.port = static_cast<uint16_t>(port);
+    }
+    return out;
+}
+
+float PeerFacing::bodyYaw(float ghostYaw, float senderYaw) {
+    if (!std::isfinite(senderYaw))
+        senderYaw = 0;
+    if (!set)
+        set = true, ref = senderYaw;
+    return wrapAngle(ghostYaw + wrapAngle(senderYaw - ref));
 }
 } // namespace spidy::mp

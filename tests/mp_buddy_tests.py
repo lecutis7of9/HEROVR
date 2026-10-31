@@ -31,6 +31,8 @@ GOLDEN = {
 
 def find_probe():
     exe = 'spidy_mp_probe.exe' if os.name == 'nt' else 'spidy_mp_probe'
+    if os.environ.get('SPIDY_MP_PROBE') and pathlib.Path(os.environ['SPIDY_MP_PROBE']).is_file():
+        return pathlib.Path(os.environ['SPIDY_MP_PROBE'])
     for d in ('build/windows-ninja', 'build/core-ninja', 'build', 'build/gate', 'build/Release'):
         p = ROOT / d / exe
         if p.is_file():
@@ -187,6 +189,30 @@ class Live(unittest.TestCase):
         self.assertTrue(any(r['visible'] for r in buddy))
         after = [r for r in rows if r['t'] >= 7.5]
         self.assertTrue(after and not after[-1]['buddy'], 'not back to loopback after BYE:\n' + ''.join(lines))
+
+    def test_two_games_join(self):
+        """0.0.74 MP JOIN: two probes are two players' games; one calls the other (MP-PEER.txt), both see a friend."""
+        exe = str(find_probe())
+        listen = subprocess.Popen([exe, 'run', '39640', '6', '', 'Bob'], stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT, text=True)
+        call = subprocess.Popen([exe, 'run', '39645', '5', '127.0.0.1:39640', 'Alice'], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True)
+        outs = []
+        try:
+            for p in (call, listen):
+                outs.append(p.communicate(timeout=30)[0])
+        finally:
+            for p in (call, listen):
+                if p.poll() is None:
+                    p.kill()
+        a_rows = [json.loads(l) for l in outs[0].splitlines() if l.startswith('{')]
+        b_rows = [json.loads(l) for l in outs[1].splitlines() if l.startswith('{')]
+        self.assertTrue(any(r['peerGame'] and r['visible'] and r['name'] == 'BOB' for r in a_rows), outs[0])
+        self.assertTrue(any(r['peerGame'] and r['visible'] and r['name'] == 'ALICE' for r in b_rows), outs[1])
+        self.assertIn("player 'BOB' joined", outs[0])
+        self.assertIn("player 'ALICE' joined", outs[1])
+        # Alice's game quits first: Bob's sees the BYE.
+        self.assertIn("player 'ALICE' left", outs[1])
 
 
 if __name__ == '__main__':

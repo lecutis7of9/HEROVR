@@ -216,10 +216,14 @@ struct Peer {
     uint16_t port{};
     bool operator==(const Peer&) const = default;
 };
+// 0.0.74 MP JOIN (game to game): another game's HELLO (role game) is let in like the buddy's, and a game that
+// CALLS a friend (dial(): HELLO to his address until he answers) is joined by his WELCOME - from that address,
+// any port (a home router may move it). Either way the peer's POSE counts when it carries the peer's own role.
+// A HELLO from ourselves (the same address and port) is never let in.
 class BuddyLink {
   public:
     double timeout = 3.0;
-    enum class Step : uint8_t { ignore, welcome, pose, ping, pong, bye };
+    enum class Step : uint8_t { ignore, welcome, joined, pose, ping, pong, bye };
     // What to do with a decoded packet from `from` at `now`.
     Step onPacket(const Packet& p, Peer from, double now);
     bool connected(double now) const { return connected_ && now - lastHeard_ < timeout; }
@@ -228,13 +232,39 @@ class BuddyLink {
     Peer peer() const { return peer_; }
     const std::string& name() const { return name_; }
     uint32_t hellos() const { return hellos_; }
+    // The connected peer is another game (else the Test Buddy).
+    bool peerIsGame() const { return peerRole_ == roleGame; }
+    // 0.0.74 MP JOIN: the friend this game calls (addr 0: nobody) and our own socket (never let in).
+    void dial(Peer friendAddr) { dial_ = friendAddr; }
+    Peer dialing() const { return dial_; }
+    void self(Peer own) { self_ = own; }
 
   private:
+    void take(Peer from, uint8_t role, const char* name, double now);
     bool connected_{};
-    Peer peer_{};
+    Peer peer_{}, dial_{}, self_{};
+    uint8_t peerRole_ = roleBuddy;
     double lastHeard_{};
     std::string name_;
     uint32_t hellos_{};
+};
+// 0.0.74 MP JOIN: %APPDATA%\Spidy\MP-PEER.txt - the friend to call. Lines: his address ("1.2.3.4", "1.2.3.4:39471"
+// or a host name, the port 39470 when not given) and optionally "name=PETER" (the name he sees over you). '#' starts
+// a comment; blank lines and unknown keys are skipped. ok false: no address in it.
+struct PeerSetting {
+    bool ok{};
+    std::string host;          // as written (resolved by mp_socket's resolvePeer)
+    uint16_t port = defaultPort;
+    std::string name;          // cleanName'd; empty: "PLAYER"
+};
+PeerSetting parsePeerSetting(const std::string& text);
+// 0.0.74 MP JOIN: where a remote GAME's ghost faces. Its body turns as the friend turns (his yaw against the
+// yaw he had when first seen), starting out facing the player from the anchor spot.
+struct PeerFacing {
+    bool set{};
+    float ref{};
+    float bodyYaw(float ghostYaw, float senderYaw);
+    void reset() { set = false; }
 };
 std::string cleanName(const char* raw); // printable, upper case, at most 16
 } // namespace spidy::mp

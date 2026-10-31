@@ -42,6 +42,8 @@ Vec3 heroColor(uint8_t hero);
 
 // "PLAYER 2 (YOU, LOOPBACK)  PING 3 MS"; the buddy: "PLAYER 2 (TEST BUDDY)  PING 4 MS"; ping unknown: "PING --".
 std::string nameplate(bool buddy, const std::string& buddyName, int pingMs);
+// 0.0.74 MP JOIN: a friend's game (peerGame) shows his own name: "PETER  PING 42 MS" ("PLAYER 2" unnamed).
+std::string nameplate(bool buddy, const std::string& buddyName, int pingMs, bool peerGame);
 // The nameplate centred `above` (world), turned to `viewer`, on a dark backing, at `alpha`.
 size_t appendNameplate(std::vector<Vertex>& out, const std::string& text, Vec3 above, Vec3 up, Vec3 viewer, float alpha);
 } // namespace spidy::mp

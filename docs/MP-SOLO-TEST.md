@@ -64,6 +64,20 @@ Two real games, one on each PC, see each other: the friend is PLAYER 2, standing
 Solo check of the same path without a friend: `spidy_mp_probe run 39480 60 "" Bob` on any PC, and an
 MP-PEER.txt holding `127.0.0.1:39480` (or that PC's address).
 
+## Seeing what your friend holds (0.0.74 MP PROPS)
+
+Each pose packet now carries a small 'P' tail (at most 342 bytes, so a packet stays under 512): what the
+player holds in each hand, what they wear (holstered pistols, the batarang on the belt, the shield on the
+back), Thor's hammer (in hand, on the back, or flying, with its spin) and the batons. The ghost draws them
+with the same models your own hero uses; the first time a friend's prop needs a model your game has not
+loaded yet, it is loaded right then and the console says `MP PROPS: PLAYER 2's <folder>: <status>`.
+Thor's hammer is drawn only with its model (never the built-in bars). In the loopback mirror the hands swap,
+as in a mirror. Old 0.0.73/0.0.74 builds ignore the tail (they see the friend without props).
+
+Solo test with the buddy: `python tools/mp_test_buddy.py --props all` (the default) shows a shield in
+the left hand, the hammer in the right, a batarang and a pistol worn. `--props batarang|hammer|batons|shield|guns|claws|none`
+picks one show, P in the buddy window cycles them, `--props-every 5` cycles by itself.
+
 ## Files
 
 | File | Role |

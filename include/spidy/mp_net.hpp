@@ -22,6 +22,8 @@
 //   primary, secondary, emblem (sRGB, 3 bytes each), 0. The look is the worn suit's colours as SuitColours
 //   (vr_mirror.hpp) learned them from the game's own rendered suit - so PLAYER 2 as SPIDER-MAN in a game suit
 //   (no mod model) is drawn in that suit's colours, not the stick figure.
+//   0.0.74 MP PROPS: then, only when he holds, wears or throws something or a power draws, the 'P' PROPS tail
+//   (mp_props.hpp, up to 342 bytes; still version 1 - every older build ignores it).
 // A packet of another version, a wrong magic, length or checksum, or a value that is not finite or out of
 // range, is refused (decode says why) - the caller hides the remote player and logs it; nothing throws.
 // A newer packet of the SAME version may carry more payload bytes than this build knows: they are ignored.
@@ -29,6 +31,7 @@
 // Nothing here reads or writes the game: every value comes from the mod's own tracked poses and state
 // (CONFIRMED: the mod's own data). See docs/MP-SOLO-TEST.md for the CANDIDATE list (game-side multiplayer).
 #include "spidy/math.hpp"
+#include "spidy/mp_props.hpp"
 
 #include <array>
 #include <cstddef>
@@ -67,6 +70,8 @@ struct PoseState {
     bool hasLook{};
     bool lookLearned{};      // learned from the game's own rendered suit (else the classic default)
     uint32_t lookPrimary{}, lookSecondary{}, lookEmblem{};
+    // 0.0.74 MP PROPS: the 'P' tail after LOOK (mp_props.hpp) - only sent when it has something in it.
+    Props props{};
 };
 struct Packet {
     uint8_t type = pose;

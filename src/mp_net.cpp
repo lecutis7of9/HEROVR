@@ -153,7 +153,8 @@ std::string cleanName(const char* raw) {
 }
 
 size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
-    const size_t body = p.type == pose ? poseSentBytes : payloadFor(p.type); // 0.0.73 MPSUIT: + the LOOK tail
+    // 0.0.73 MPSUIT: + the LOOK tail; 0.0.74 MP PROPS: + the PROPS tail when there is one
+    const size_t body = p.type == pose ? poseSentBytes + propsBytes(p.state.props) : payloadFor(p.type);
     if (body == SIZE_MAX || p.role >= roleEnd || !out || capacity < overheadBytes + body)
         return 0;
     Writer w{out, 0, capacity};
@@ -188,6 +189,13 @@ size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
             w.u8(static_cast<uint8_t>(k >> 16)), w.u8(static_cast<uint8_t>(k >> 8)), w.u8(static_cast<uint8_t>(k));
         }
         w.u8(0);
+        if (s.props.any()) { // 0.0.74 MP PROPS
+            uint8_t tail[propsMostBytes];
+            const size_t n = encodeProps(s.props, tail, sizeof tail);
+            if (n != propsBytes(s.props))
+                return 0;
+            w.bytes(tail, n);
+        }
         break;
     }
     case hello:
@@ -277,6 +285,9 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
             if (s.hasLook)
                 s.lookPrimary = c[0], s.lookSecondary = c[1], s.lookEmblem = c[2];
         }
+        // 0.0.74 MP PROPS: the PROPS tail right after LOOK (one that does not parse: no props, the pose still counts)
+        if (body > poseSentBytes)
+            decodeProps(data + headerBytes + poseSentBytes, body - poseSentBytes, s.props);
         break;
     }
     case hello:

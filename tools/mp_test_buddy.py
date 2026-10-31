@@ -7,10 +7,12 @@ Run it on the same PC as the game (or another PC on the LAN, see READ-ME-FIRST) 
 MP SOLO TEST ON. It says HELLO to the game's UDP port 39470; once the game answers WELCOME, its puppet is
 the remote player you see (in place of your loopback ghost): it walks a circle, waves, and changes suit.
 
-Keys (in this window):  S next suit   H next hero (no suit)   W wave on/off   C circle on/off   Q quit
+Keys (in this window):  S next suit   H next hero (no suit)   W wave on/off   C circle on/off
+                        P next props show (0.0.74 MP PROPS: what PLAYER 2 holds, wears and throws)   Q quit
 Plain Python 3 (the HERO VR bundled one), no packages, nothing written anywhere; Ctrl+C quits too.
 The packet is the same as src/mp_net.cpp's (version 1; tests/mp_buddy_tests.py checks them byte for byte; 0.0.74: the
-POSE carries the flight lean, 124 bytes; 112-byte ones still read, upright).
+POSE carries the flight lean, 124 bytes; 112-byte ones still read, upright; 0.0.74 MP PROPS: the 'P' PROPS tail
+after LOOK - fake props, so the batarang, Thor's hammer, the shield and the batons are seen without a second player).
 """
 import argparse
 import math
@@ -36,6 +38,21 @@ assert HEADER.size == 20 and POSE_FMT.size == 112 and LEAN_FMT.size == 12
 # sRGB bytes, 0) = 136 bytes; test 6 builds read the first 112 bytes and ignore the rest, this build reads a pose without it.
 LOOK_BYTES = 12
 LOOK_AT = POSE_FMT.size + LEAN_FMT.size  # 124
+# 0.0.74 MP PROPS: the 'P' tail after LOOK (src/mp_props.cpp: header 8, items 24, lines 14, effects 18; at most
+# 8 / 5 / 4; positions cm i16, directions unit x 32767, spin 1/4096) - only written when there are props.
+PROPS_AT = LOOK_AT + LOOK_BYTES  # 136
+PROPS_HEAD = struct.Struct('<cBBBBBBB')
+PROP_ITEM = struct.Struct('<BBBBh3h3h3h')
+PROP_LINE = struct.Struct('<BB3h3h')
+PROP_FX = struct.Struct('<HBB3h3hBB')
+assert PROPS_HEAD.size == 8 and PROP_ITEM.size == 24 and PROP_LINE.size == 14 and PROP_FX.size == 18
+ITEMS_MOST, LINES_MOST, FX_MOST = 8, 5, 4
+# Kinds (mp_props.hpp PropKind; 1-11 hero007::Look)
+PISTOL, SAWED_OFF, SAWED_OFF_OPEN, BATARANG, CLAWS, CLUB, BATON062, BATON_MODEL, SHIELD, SHIELD_SPIN, GRAPPLE_GUN = range(1, 12)
+HAMMER, BATON, PELLET, RING, BUBBLE, FIST, CHARGE, PALM = range(20, 28)
+F_SIDE, F_PALM, F_IN_HAND, F_SHEATHED, F_FLYING = 8, 16, 32, 64, 128
+LINE_KINDS = ('heat', 'freeze', 'grapple', 'cable', 'bolt', 'lantern', 'chain', 'repulsor', 'chest', 'hook', 'rope')
+FX_KINDS = ('flash', 'flash_shotgun', 'impact', 'smoke', 'scorch', 'splash', 'shock')
 DEFAULT_PORT = 39470
 NO_SUIT = 255
 
@@ -94,7 +111,81 @@ def pose_payload(p):
     return POSE_FMT.pack(p['hero'], p['suit'], p['actions'] & 63, 0, p['suit_hash'], *p['root'], p['yaw'],
                          *hp, *hq, *lp, *lq, *rp, *rq, round(clamp01(p['curl'][0]) * 255),
                          round(clamp01(p['curl'][1]) * 255), round(max(0.0, min(3.0, p['eye'])) * 1000)) + \
-        LEAN_FMT.pack(*safe_lean_up(p.get('lean_up', (0.0, 1.0, 0.0)))) + tail
+        LEAN_FMT.pack(*safe_lean_up(p.get('lean_up', (0.0, 1.0, 0.0)))) + tail + props_tail(p.get('props'))
+
+
+def c_round(x):
+    """C++ std::lround: halves away from zero."""
+    return int(math.floor(abs(x) + 0.5)) * (1 if x >= 0 else -1)
+
+
+def _cm(v):
+    return tuple(max(-32767, min(32767, c_round(c * 100.0))) for c in v)
+
+
+def _unit(v, fallback):
+    n = math.sqrt(sum(c * c for c in v)) if all(math.isfinite(c) for c in v) else 0.0
+    v = tuple(c / n for c in v) if n > 1e-4 else fallback
+    return tuple(max(-32767, min(32767, c_round(c * 32767.0))) for c in v)
+
+
+def _spin(s):
+    if not math.isfinite(s):
+        return 0
+    if abs(s) > 7.99:
+        s = math.remainder(s, 6.2831853)
+    return max(-32767, min(32767, c_round(s * 4096.0)))
+
+
+def props_tail(props):
+    """props: dict(flags, items=[dict(id, kind, flags, variant, spin, at, forward, up)], lines=[dict(kind, fade, from,
+    to)], fx=[dict(seq, kind, age, at, way, param)]) -> the 'P' tail bytes (b'' when empty)."""
+    if not props:
+        return b''
+    items = list(props.get('items', ()))[:ITEMS_MOST]
+    lines = list(props.get('lines', ()))[:LINES_MOST]
+    fx = list(props.get('fx', ()))[:FX_MOST]
+    if not (items or lines or fx):
+        return b''
+    out = PROPS_HEAD.pack(b'P', 1, len(items), len(lines), len(fx), props.get('flags', 0) & 255, 0, 0)
+    for it in items:
+        out += PROP_ITEM.pack(it['id'], it['kind'], it.get('flags', 0), it.get('variant', 0), _spin(it.get('spin', 0.0)),
+                              *_cm(it['at']), *_unit(it.get('forward', (0, 0, -1)), (0.0, 0.0, -1.0)),
+                              *_unit(it.get('up', (0, 1, 0)), (0.0, 1.0, 0.0)))
+    for ln in lines:
+        out += PROP_LINE.pack(ln['kind'], max(0, min(255, c_round(max(0.0, min(1.0, ln.get('fade', 1.0))) * 255.0))),
+                              *_cm(ln['from']), *_cm(ln['to']))
+    for f in fx:
+        out += PROP_FX.pack(f.get('seq', 0) & 0xffff, f['kind'], max(0, min(255, c_round(f.get('age', 0.0) / 0.004))),
+                            *_cm(f['at']), *_unit(f.get('way', (0, 0, -1)), (0.0, 0.0, -1.0)), f.get('param', 0) & 255, 0)
+    return out
+
+
+def decode_props(t):
+    """The 'P' tail as a dict, or None (same checks as decodeProps)."""
+    if len(t) < 8 or t[0] != ord('P') or t[1] != 1:
+        return None
+    ni, nl, nf, flags = t[2], t[3], t[4], t[5]
+    if ni > ITEMS_MOST or nl > LINES_MOST or nf > FX_MOST or len(t) < 8 + 24 * ni + 14 * nl + 18 * nf:
+        return None
+    at, out = 8, dict(flags=flags, items=[], lines=[], fx=[])
+    for _ in range(ni):
+        v = PROP_ITEM.unpack_from(t, at)
+        at += 24
+        out['items'].append(dict(id=v[0], kind=v[1], flags=v[2], variant=v[3], spin=v[4] / 4096,
+                                 at=tuple(c / 100 for c in v[5:8]), forward=tuple(c / 32767 for c in v[8:11]),
+                                 up=tuple(c / 32767 for c in v[11:14])))
+    for _ in range(nl):
+        v = PROP_LINE.unpack_from(t, at)
+        at += 14
+        out['lines'].append(dict(kind=v[0], fade=v[1] / 255, **{'from': tuple(c / 100 for c in v[2:5])},
+                                 to=tuple(c / 100 for c in v[5:8])))
+    for _ in range(nf):
+        v = PROP_FX.unpack_from(t, at)
+        at += 18
+        out['fx'].append(dict(seq=v[0], kind=v[1], age=v[2] * 0.004, at=tuple(c / 100 for c in v[3:6]),
+                              way=tuple(c / 32767 for c in v[6:9]), param=v[9]))
+    return out
 
 
 def safe_lean_up(up):
@@ -142,10 +233,12 @@ def decode(data):
                    head=(v[9:12], v[12:16]), hands=((v[16:19], v[19:23]), (v[23:26], v[26:30])),
                    curl=(v[30] / 255, v[31] / 255), eye=v[32] / 1000,
                    lean_up=safe_lean_up(LEAN_FMT.unpack_from(body, POSE_FMT.size)) if length >= 124 else (0.0, 1.0, 0.0),
-                   look=None)
+                   look=None, props=None)
         if length >= LOOK_AT + LOOK_BYTES and body[LOOK_AT] == ord('L') and body[LOOK_AT + 1] & 1:
             t = body[LOOK_AT:]
             out['look'] = (bool(t[1] & 2),) + tuple(int.from_bytes(t[2 + 3 * i:5 + 3 * i], 'big') for i in range(3))
+        if length > PROPS_AT:  # 0.0.74 MP PROPS (a tail that does not parse: no props, the pose stands)
+            out['props'] = decode_props(body[PROPS_AT:])
         nums = list(out['root']) + [out['yaw']] + list(v[9:30])
         if not all(math.isfinite(x) for x in nums) or out['hero'] >= 32:
             raise BadPacket('bad value')
@@ -185,6 +278,7 @@ class Puppet:
         self.radius = 0.8
         self.angle = 0.0
         self.t = 0.0
+        self.show = 0           # 0.0.74 MP PROPS: PROP_SHOWS[show]
 
     def next_suit(self):
         self.suit = self.suit + 1 if self.suit + 1 < len(SUITS) else -1
@@ -194,6 +288,9 @@ class Puppet:
     def next_hero(self):
         self.suit = -1
         self.hero = (self.hero + 1) % len(HEROES)
+
+    def next_show(self):
+        self.show = (self.show + 1) % len(PROP_SHOWS)
 
     def label(self):
         return SUITS[self.suit] if self.suit >= 0 else HEROES[self.hero] + ' (own look)'
@@ -224,7 +321,45 @@ class Puppet:
         return dict(hero=self.hero, suit=suit, actions=actions,
                     suit_hash=fnv1a(SUITS[self.suit]) if self.suit >= 0 else 0,
                     root=(cx, 0.0, cz), yaw=yaw, head=head, hands=(left, right),
-                    curl=(0.6, 0.0 if self.wave else 0.4), eye=1.65)
+                    curl=(0.6, 0.0 if self.wave else 0.4), eye=1.65,
+                    props=fake_props(PROP_SHOWS[self.show], t, left[0], right[0]))
+
+
+# 0.0.74 MP PROPS: what the puppet shows (P cycles; --props picks the first).
+PROP_SHOWS = ['none', 'batarang', 'hammer', 'batons', 'shield', 'guns', 'claws', 'all']
+
+
+def fake_props(show, t, left, right):
+    """Fake props in the puppet's yawed root frame (the frame of its head and hands; src/mp_prop_look.hpp ids: 1/2
+    held left/right, 3/4 flying, 5-8 worn, 9 the hammer, 10/11 batons). 'all' = shield left, hammer right, a
+    batarang and a pistol worn."""
+    if show == 'none':
+        return None
+    items, flags = [], 0
+    ahead, up = (0.0, 0.0, -1.0), (0.0, 1.0, 0.0)
+    held = F_IN_HAND
+    if show == 'batarang':
+        items.append(dict(id=2, kind=BATARANG, flags=held | F_SIDE, spin=0.0, at=right, forward=ahead, up=up))
+    if show in ('batarang', 'all'):
+        items.append(dict(id=5, kind=BATARANG, flags=1, at=(0.12, 1.0, 0.08), forward=(1, 0, 0), up=up))
+    if show in ('hammer', 'all'):
+        items.append(dict(id=9, kind=HAMMER, flags=held, spin=0.0, at=right, forward=(0, 1, 0), up=(0, 0, -1)))
+    if show == 'batons':
+        flags |= 2  # the club look (no model needed)
+        for i, h in enumerate((left, right)):
+            items.append(dict(id=10 + i, kind=BATON, flags=held | (F_SIDE if i else 0), spin=0.57, at=h,
+                              forward=(0.0, 0.5, -0.866)))
+    if show in ('shield', 'all'):
+        items.append(dict(id=1, kind=SHIELD, flags=held, at=left, forward=ahead, up=up))
+    if show == 'guns':
+        items.append(dict(id=2, kind=PISTOL, flags=held | F_SIDE, at=right, forward=ahead, up=up))
+    if show in ('guns', 'all'):
+        items.append(dict(id=6, kind=PISTOL, flags=2, at=(-0.2, 0.95, 0.0), forward=(0, -1, 0), up=(1, 0, 0)))
+    if show == 'claws':
+        flags |= 1
+        for i, h in enumerate((left, right)):
+            items.append(dict(id=1 + i, kind=CLAWS, flags=held | (F_SIDE if i else 0), spin=1.0, at=h, forward=ahead, up=up))
+    return dict(flags=flags, items=items[:ITEMS_MOST])
 
 
 class Keys:
@@ -295,7 +430,9 @@ def run(args, out=print):
     received = refused = game_poses = 0
     name = clean_name(args.name)
     out(f'HERO VR MP Test Buddy: saying hello to the game at {game[0]}:{game[1]} as {name!r}.')
-    out('Keys: S next suit, H next hero, W wave, C circle, Q quit (Enter after the letter outside Windows).')
+    if getattr(args, 'props', 'none') in PROP_SHOWS:
+        puppet.show = PROP_SHOWS.index(args.props)
+    out('Keys: S next suit, H next hero, W wave, C circle, P props, Q quit (Enter after the letter outside Windows).')
     last = time.monotonic()
     code = 0
     try:
@@ -316,12 +453,19 @@ def run(args, out=print):
                 elif k == 'W':
                     puppet.wave = not puppet.wave
                     out('Wave ' + ('on' if puppet.wave else 'off'))
+                elif k == 'P':
+                    puppet.next_show()
+                    out(f'Props: {PROP_SHOWS[puppet.show]}')
                 elif k == 'C':
                     puppet.circle = not puppet.circle
                     out('Circle ' + ('on' if puppet.circle else 'off'))
             if args.switch_every and puppet.t > 0 and int(puppet.t / args.switch_every) != int((puppet.t - dt) / args.switch_every):
                 puppet.next_suit()
                 out(f'Suit: {puppet.label()}')
+            every = getattr(args, 'props_every', 0)
+            if every and puppet.t > 0 and int(puppet.t / every) != int((puppet.t - dt) / every):
+                puppet.next_show()
+                out(f'Props: {PROP_SHOWS[puppet.show]}')
             # Receive.
             while True:
                 try:
@@ -410,6 +554,11 @@ def selftest():
                 hands=(((-0.25, 1.0, -0.25), (0, 0, 0, 1)), ((0.25, 1.75, -0.25), (0, 0.5, 0, 0.8660254))),
                 curl=(1.0, 0.0), eye=1.65)
     print('pose', encode(POSE, ROLE_BUDDY, 42, 1000, pose_payload(pose)).hex())
+    golden_props = dict(flags=2, items=[
+        dict(id=9, kind=HAMMER, flags=F_FLYING, variant=2, spin=1.25, at=(0.25, 1.5, -2.0), forward=(0, 1, 0), up=(0, 0, -1)),
+        dict(id=2, kind=BATARANG, flags=F_IN_HAND | F_SIDE, variant=3, spin=-0.5, at=(0.25, 1.75, -0.5), forward=(0, 0, -1),
+             up=(1, 0, 0))])
+    print('pose_props', encode(POSE, ROLE_BUDDY, 42, 1000, pose_payload(dict(pose, props=golden_props))).hex())
     print('hello', encode(HELLO, ROLE_BUDDY, 1, 7, name_payload('TEST BUDDY')).hex())
     print('bye', encode(BYE, ROLE_BUDDY, 3, 0).hex())
     print('fnv advanced_suit_2 %08x' % fnv1a('advanced_suit_2'))
@@ -424,6 +573,8 @@ def main(argv=None):
     ap.add_argument('--suit', default='', help='start in this suit folder (e.g. Suit_thor_1)')
     ap.add_argument('--seconds', type=float, default=0, help='quit after this long (0: until Q)')
     ap.add_argument('--switch-every', type=float, default=0, help='change suit every N seconds by itself')
+    ap.add_argument('--props', default='all', choices=PROP_SHOWS, help='0.0.74 MP PROPS: what the buddy holds (P cycles)')
+    ap.add_argument('--props-every', type=float, default=0, help='change the props show every N seconds by itself')
     ap.add_argument('--no-keys', action='store_true')
     ap.add_argument('--selftest', action='store_true')
     args = ap.parse_args(argv)

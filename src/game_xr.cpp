@@ -145,6 +145,7 @@
 #include "spidy/suit_wear.hpp"
 #include "spidy/mp_body.hpp"    // 0.0.73 MPSUIT PLAYER 2 BODY
 #include "spidy/mp_ghost.hpp"   // 0.0.73 MP SOLO TEST
+#include "spidy/mp_prop_look.hpp" // 0.0.74 MP PROPS
 #include "spidy/mp_session.hpp" // 0.0.73 MP SOLO TEST
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
@@ -12661,6 +12662,23 @@ DWORD WINAPI run(void*) {
                                     // so a game suit with no mod model is still drawn in its colours as PLAYER 2.
                                     spidy::mp::setLook(mine, suitPalette.primary, suitPalette.secondary, suitPalette.emblem,
                                                        suitPalette.learned);
+                                    // 0.0.74 MP PROPS (owner pt1360u: "we cant have multiplayer and not see your friend throw a
+                                    // batarand or thors hammer"): what he holds, wears and throws rides in the PROPS tail
+                                    // (mp_props.hpp; mod-internal, no game address), from the feet in his yawed frame.
+                                    {
+                                        spidy::mp::PropSource ps;
+                                        ps.h007 = &saved->hero007;
+                                        ps.h072 = &saved->hero072;
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            ps.batons.on[i] = saved->batonOn[i] > 0;
+                                            ps.batons.grip[i] = saved->batonGrip[i];
+                                            ps.batons.tip[i] = saved->batonTip[i];
+                                            ps.batons.held[i] = saved->batonHeld[i];
+                                        }
+                                        ps.batons.club = saved->batonClub;
+                                        ps.batarangStyle = c38(combat38::batarangStyle);
+                                        mine.props = spidy::mp::captureProps(ps, spidy::mp::sendFrame(rendered.anchor, turn, mine.yaw));
+                                    }
                                     mpSession->publish(mine);
                                     // Draw what came back.
                                     const spidy::mp::SessionView v = mpSession->view();
@@ -12710,6 +12728,67 @@ DWORD WINAPI run(void*) {
                                                                                   v.alpha) > 0;
                                         if (!drawnSuit && !drawnBody)
                                             spidy::mp::appendFigure(translucent, gt, viewer, spidy::mp::heroColor(v.state.hero), v.alpha);
+                                        // 0.0.74 MP PROPS: PLAYER 2's batarangs, guns, shield, claws, batons and THOR's hammer, placed
+                                        // on him like his grips (mirrored for the loopback) and drawn by the player's own draws.
+                                        // His models are loaded the first time his props name them (the built-in look while
+                                        // one is missing; THOR's hammer: the model or nothing, as for the player).
+                                        if (v.state.props.any() && v.alpha > .3f) {
+                                            const spidy::mp::RemoteProps rp = spidy::mp::rebuildProps(
+                                                v.state.props, spidy::mp::ghostFrame(g, !v.peerGame && !v.buddy, feet, turn));
+                                            auto& lib = mesh_model::library();
+                                            const auto mpModel = [&](uint32_t slot) -> const mesh_model::Mesh* {
+                                                if (slot == 0 || slot >= mesh_model::slots)
+                                                    return nullptr;
+                                                if (lib.status[slot] == mesh_model::notTried) {
+                                                    mesh_model::Status st = mesh_model::invalid;
+                                                    try {
+                                                        st = lib.load(slot, modelsRoot());
+                                                    } catch (...) {
+                                                        lib.meshes[slot] = {};
+                                                        lib.status[slot] = mesh_model::invalid;
+                                                        lib.error[slot] = "could not be read (out of memory?)";
+                                                    }
+                                                    consoleLine(std::string("MP PROPS: PLAYER 2's ") + mesh_model::slotFolders[slot] + ": " +
+                                                                mesh_model::statusNames[st < 5 ? static_cast<int>(st) : 0]);
+                                                }
+                                                return lib.model(slot);
+                                            };
+                                            hero007::Draw d2 = rp.h007;
+                                            if (rp.batarangStyle && rp.batarangStyle < mesh_model::styles)
+                                                d2.batarangModel = mpModel(rp.batarangStyle);
+                                            if (rp.gunModels) {
+                                                d2.pistolModel = mpModel(mesh_model::slotPistol);
+                                                d2.sawedFrame = mpModel(mesh_model::slotSawedOffFrame);
+                                                d2.sawedBarrels = mpModel(mesh_model::slotSawedOffBarrels);
+                                            }
+                                            if (rp.shieldModel)
+                                                d2.shieldModel = mpModel(mesh_model::slotShield);
+                                            if (rp.claws)
+                                                for (unsigned i = 0; i < 2; ++i)
+                                                    d2.clawModel[i] = mpModel(i ? mesh_model::slotClawsRight : mesh_model::slotClawsLeft);
+                                            for (const auto& it : d2.held)
+                                                if (it.look == hero007::lookGrappleGun)
+                                                    d2.grappleGunModel = mpModel(mesh_model::slotGrappleGun);
+                                            for (const auto& it : d2.worn)
+                                                if (it.look == hero007::lookGrappleGun)
+                                                    d2.grappleGunModel = mpModel(mesh_model::slotGrappleGun);
+                                            if (d2.any)
+                                                hero007::appendHero007(vertices, d2, Vec3{}, viewer, pixelAngle);
+                                            for (unsigned i = 0; i < 2; ++i)
+                                                if (rp.batons.on[i]) {
+                                                    const mesh_model::Mesh* bm =
+                                                        rp.batonModel ? mpModel(i ? mesh_model::slotBatonRight : mesh_model::slotBatonLeft) : nullptr;
+                                                    if (!(bm && hero007::appendBatonModel(vertices, rp.batons.grip[i], rp.batons.tip[i], *bm, viewer,
+                                                                                          rp.batons.held[i])))
+                                                        hero007::appendBatonClub(vertices, rp.batons.grip[i], rp.batons.tip[i], viewer, pixelAngle);
+                                                }
+                                            if (rp.h072.any) {
+                                                hero072::Look l2 = rp.h072;
+                                                if (l2.hammer)
+                                                    l2.hammerModel = mpModel(mesh_model::hammerSlot(l2.hammerChoice));
+                                                hero072::appendLook(vertices, l2, Vec3{}, viewer, pixelAngle, 0.f);
+                                            }
+                                        }
                                         const float tall = std::clamp(gt.standingEye > .8f ? gt.standingEye : 1.65f, 1.f, 2.4f);
                                         spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs, v.peerGame),
                                                                    gt.feet + gt.up * (tall + .35f), gt.up, viewer, v.alpha);

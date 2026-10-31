@@ -24,6 +24,12 @@ GOLDEN = {
     'pose': '48564d50010102002a000000e80300000000880000032200d43c404b0000003f00000000000080be0000003f00000000cdcccc3f'
             '000000000000000000000000000000000000803f000080be0000803f000080be0000000000000000000000000000803f0000803e'
             '0000e03f000080be000000000000003f00000000d7b35d3fff007206000000000000803f000000004c000000000000000000000084e89fd9',
+    # 0.0.74 MP PROPS: the same pose with a 'P' tail (the club looks; Thor's hammer flying, a batarang in the right hand)
+    'pose_props': '48564d50010102002a000000e80300000000c00000032200d43c404b0000003f00000000000080be0000003f00000000cdcccc3f'
+                  '000000000000000000000000000000000000803f000080be0000803f000080be0000000000000000000000000000803f0000803e'
+                  '0000e03f000080be000000000000003f00000000d7b35d3fff007206000000000000803f000000004c0000000000000000000000'
+                  '50010200000200000914800200141900960038ff0000ff7f00000000000001800204280300f81900af00ceff000000000180ff7f'
+                  '000000007efc25f6',
     'hello': '48564d50010202000100000007000000000014005445535420425544445900000000000001000000aebad988',
     'bye': '48564d50010602000300000000000000000000002421337d',
 }
@@ -130,6 +136,33 @@ class Malformed(unittest.TestCase):
         if why:
             self.assertEqual(str(cm.exception), why)
 
+    def test_props_tail_0074(self):
+        """0.0.74 MP PROPS: the 'P' tail decodes; a pose without one has no props; a broken tail leaves the pose."""
+        p = mb.decode(bytes.fromhex(GOLDEN['pose_props']))
+        pr = p['props']
+        self.assertEqual(pr['flags'], 2)
+        self.assertEqual([(i['id'], i['kind'], i['flags'], i['variant']) for i in pr['items']],
+                         [(9, mb.HAMMER, mb.F_FLYING, 2), (2, mb.BATARANG, mb.F_IN_HAND | mb.F_SIDE, 3)])
+        self.assertAlmostEqual(pr['items'][0]['spin'], 1.25)
+        self.assertEqual(pr['items'][0]['at'], (0.25, 1.5, -2.0))
+        self.assertIsNone(mb.decode(bytes.fromhex(GOLDEN['pose'])).get('props'))
+        self.assertEqual(mb.props_tail(None), b'')
+        self.assertEqual(mb.props_tail(dict(flags=3, items=[])), b'')
+        bad = bytearray(mb.props_tail(dict(items=[dict(id=1, kind=mb.SHIELD, at=(0, 1, 0))])))
+        bad[1] = 9  # a future tail version: ignored
+        self.assertIsNone(mb.decode_props(bytes(bad)))
+        self.assertIsNone(mb.decode_props(bytes(bad[:10])))
+        for show in mb.PROP_SHOWS:
+            pp = mb.Puppet()
+            pp.show = mb.PROP_SHOWS.index(show)
+            payload = mb.pose_payload(pp.state())
+            self.assertLessEqual(24 + len(payload), 512)
+            got = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, 1, 1, payload)).get('props')
+            self.assertEqual(got is None, show == 'none', show)
+            if got:
+                ids = [i['id'] for i in got['items']]
+                self.assertEqual(len(ids), len(set(ids)), show)
+
     def test_short_long_and_flips(self):
         good = bytes.fromhex(GOLDEN['pose'])
         for n in range(len(good)):
@@ -168,7 +201,7 @@ class Live(unittest.TestCase):
             time.sleep(2.2)  # loopback first
             log = []
             args = mb.argparse.Namespace(host='127.0.0.1', port=port, name='Live Buddy', suit='Suit_thor_1',
-                                         seconds=4.0, switch_every=0, no_keys=True)
+                                         seconds=4.0, switch_every=0, no_keys=True, props='all', props_every=0)
             self.assertEqual(mb.run(args, out=log.append), 0)
             self.assertTrue(any(s.startswith('Connected') for s in log), log)
             probe.wait(timeout=20)
@@ -187,6 +220,10 @@ class Live(unittest.TestCase):
         self.assertEqual(buddy[-1]['hero'], 9)
         self.assertEqual(buddy[-1]['suit'], mb.SUITS.index('Suit_thor_1'))
         self.assertTrue(any(r['visible'] for r in buddy))
+        # 0.0.74 MP PROPS: the loopback echoes the probe's own props (hammer, batarang); the buddy's show 'all'
+        # (a worn batarang, the hammer, the shield, a holstered pistol) reaches the game side.
+        self.assertTrue(any(r['props'] == 2 and r['propKinds'][:2] == [20, 4] for r in loop), ''.join(lines))
+        self.assertTrue(any(r['props'] == 4 and r['propKinds'] == [4, 20, 9, 1] for r in buddy), ''.join(lines))
         after = [r for r in rows if r['t'] >= 7.5]
         self.assertTrue(after and not after[-1]['buddy'], 'not back to loopback after BYE:\n' + ''.join(lines))
 
@@ -209,6 +246,9 @@ class Live(unittest.TestCase):
         b_rows = [json.loads(l) for l in outs[1].splitlines() if l.startswith('{')]
         self.assertTrue(any(r['peerGame'] and r['visible'] and r['name'] == 'BOB' for r in a_rows), outs[0])
         self.assertTrue(any(r['peerGame'] and r['visible'] and r['name'] == 'ALICE' for r in b_rows), outs[1])
+        # 0.0.74 MP PROPS: each sees the other's hammer and batarang.
+        for rows, out in ((a_rows, outs[0]), (b_rows, outs[1])):
+            self.assertTrue(any(r['peerGame'] and r['props'] == 2 and r['propKinds'][:2] == [20, 4] for r in rows), out)
         self.assertIn("player 'BOB' joined", outs[0])
         self.assertIn("player 'ALICE' joined", outs[1])
         # Alice's game quits first: Bob's sees the BYE.

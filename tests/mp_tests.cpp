@@ -7,6 +7,8 @@
 #include "spidy/mp_body.hpp"
 #include "spidy/mp_ghost.hpp"
 #include "spidy/mp_net.hpp"
+#include "spidy/mp_prop_look.hpp"
+#include "spidy/mp_props.hpp"
 #include "spidy/mp_session.hpp"
 #include "spidy/mp_socket.hpp"
 
@@ -878,6 +880,182 @@ void testGhostDrawing() {
 }
 } // namespace
 
+// 0.0.74 MP PROPS: the 'P' tail - its wire, its limits, the old builds' tolerance and the props placed on the ghost.
+Props sampleProps() {
+    Props p;
+    p.flags = propsFlagClawSteel | propsFlagBatonModel;
+    PropItem h;
+    h.id = idHammer, h.kind = propHammer, h.flags = propFlagFlying, h.variant = 2, h.spin = 2.5f;
+    h.at = {.4f, 1.3f, -2.5f}, h.forward = normalized(Vec3{0, 1, -1}), h.up = {1, 0, 0};
+    p.add(h);
+    PropItem b;
+    b.id = idHeld + 1, b.kind = hero007::lookBatarang, b.flags = propFlagInHand | propFlagSide, b.variant = 3, b.spin = -1.f;
+    b.at = {.3f, 1.2f, -.4f}, b.forward = {0, 0, -1}, b.up = {0, 1, 0};
+    p.add(b);
+    return p;
+}
+void testPropsWire() {
+    Props p = sampleProps();
+    check(p.items == 2 && p.any(), "two props added");
+    check(propsBytes(p) == propsHeaderBytes + 2 * propItemBytes, "props size: header + 24 a prop");
+    Props none;
+    check(!none.any() && propsBytes(none) == 0, "no props: no tail");
+    // limits: unknown kinds, NaN and far-away props never go on the wire
+    PropItem bad = p.item[0];
+    bad.kind = 200;
+    check(!p.add(bad), "an unknown kind is refused");
+    bad = p.item[0];
+    bad.at.x = NAN;
+    check(!p.add(bad), "a NaN prop is refused");
+    bad = p.item[0];
+    bad.at = {400, 0, 0};
+    check(!p.add(bad), "a prop past 327 m is refused");
+    Props full;
+    for (int i = 0; i < 12; ++i)
+        full.add(p.item[0]);
+    check(full.items == propItemsMost, "at most 8 props");
+    // the pose packet carries it after LOOK, still version 1
+    Packet pk;
+    pk.type = pose;
+    pk.state = sample();
+    pk.state.props = p;
+    const auto w = encode(pk);
+    check(w.size() == overheadBytes + poseSentBytes + propsBytes(p), "pose + LOOK + the PROPS tail");
+    check(w[4] == 1 && w[headerBytes + poseSentBytes] == 'P', "still version 1, the tail tagged 'P'");
+    Packet q;
+    check(decode(w.data(), w.size(), q) == Error::none, "a pose with props decodes");
+    const Props& r = q.state.props;
+    check(r.items == 2 && r.flags == p.flags, "props round trip");
+    check(r.item[0].kind == propHammer && r.item[0].id == idHammer && r.item[0].variant == 2 && r.item[0].flags == propFlagFlying, "hammer ids");
+    check(near(r.item[0].at, p.item[0].at, .006f) && near(r.item[0].forward, p.item[0].forward, .001f) && near(r.item[0].spin, 2.5f, .001f),
+          "hammer place within a centimetre");
+    check(near(r.item[1].spin, -1.f, .001f) && r.item[1].variant == 3, "batarang style and spin");
+    Props qz = quantized(p);
+    check(qz.items == 2 && near(qz.item[0].at, r.item[0].at, 1e-6f), "quantized() is what arrives");
+    // the biggest tail still fits a packet
+    Props most;
+    for (size_t i = 0; i < propItemsMost; ++i)
+        most.add(p.item[0]);
+    PropLine ln;
+    ln.kind = lineHeat, ln.fade = 1, ln.from = {0, 1, 0}, ln.to = {0, 1, -20};
+    for (size_t i = 0; i < propLinesMost; ++i)
+        most.add(ln);
+    PropFx fx;
+    fx.kind = fxImpact, fx.at = {0, 1, -3}, fx.way = {0, 0, 1};
+    for (size_t i = 0; i < propFxMost; ++i)
+        most.add(fx);
+    check(propsBytes(most) == propsMostBytes, "the fullest tail is propsMostBytes");
+    pk.state.props = most;
+    const auto big = encode(pk);
+    check(!big.empty() && big.size() <= maxPacket, "the fullest pose fits 512 bytes");
+    check(decode(big.data(), big.size(), q) == Error::none && q.state.props.items == propItemsMost &&
+              q.state.props.lines == propLinesMost && q.state.props.fx == propFxMost, "the fullest tail round trips");
+    // without a tail (every 0.0.73 packet) or with one this build cannot read, the pose stands and has no props
+    // (a 0.0.73 build itself reads its 136 bytes and ignores the rest: decode takes body >= 112)
+    Packet np = pk;
+    np.state.props = {};
+    const auto cut = encode(np);
+    check(decode(cut.data(), cut.size(), q) == Error::none && !q.state.props.any(), "no tail: no props (the 0.0.73 packet)");
+    std::vector<uint8_t> junk = w;
+    junk[headerBytes + poseSentBytes + 1] = 99; // a props version from the future
+    junk = resealed(junk);
+    check(decode(junk.data(), junk.size(), q) == Error::none && !q.state.props.any(), "a tail it cannot read: the pose, no props");
+    junk = w;
+    junk[headerBytes + poseSentBytes] = 'Q'; // some other tail
+    junk = resealed(junk);
+    check(decode(junk.data(), junk.size(), q) == Error::none && !q.state.props.any() && near(q.state.root, pk.state.root, 0),
+          "an unknown tail: ignored");
+    // a raw decodeProps never reads past its buffer
+    uint8_t raw[propsMostBytes];
+    const size_t n = encodeProps(p, raw, sizeof raw);
+    Props t;
+    bool anyOk = false;
+    for (size_t k = 0; k < n; ++k)
+        anyOk |= decodeProps(raw, k, t);
+    check(!anyOk && decodeProps(raw, n, t), "a short tail is refused, the whole one read");
+    check(encodeProps(p, raw, 10) == 0, "no room: nothing written");
+    // the echo (the buddy's loopback) keeps the props
+    std::vector<uint8_t> echoed;
+    check(echoReply(w.data(), w.size(), 50, echoed) && decode(echoed.data(), echoed.size(), q) == Error::none &&
+              q.state.props.items == 2, "the echo keeps the props");
+}
+void testPropsOnGhost() {
+    // the sender: tracking frame turned 90 degrees, his root yawed 30 degrees, a batarang held a metre in front
+    const Quat turn = Quat::yaw(1.5707963f);
+    const Vec3 anchor{5, 0, 2};
+    const float yaw = .5235988f;
+    const SendFrame sf = sendFrame(anchor, turn, yaw);
+    hero007::Draw d;
+    d.any = true;
+    // in his root frame the batarang is at (0.3, 1.2, -1) pointing ahead (-z): in tracking = anchor + turn*yaw*(local)
+    const Vec3 local{.3f, 1.2f, -1.f};
+    const Quat toTracking = turn * Quat::yaw(yaw);
+    d.held[1].look = hero007::lookBatarang;
+    d.held[1].at = anchor + toTracking.rotate(local);
+    d.held[1].forward = toTracking.rotate(Vec3{0, 0, -1});
+    d.held[1].up = toTracking.rotate(Vec3{0, 1, 0});
+    d.held[1].side = 1;
+    d.worn[0].look = hero007::lookPistol;
+    d.worn[0].holster = 2;
+    d.worn[0].at = anchor + toTracking.rotate(Vec3{-.2f, .9f, 0});
+    d.worn[0].forward = toTracking.rotate(Vec3{0, -1, 0});
+    d.worn[0].up = toTracking.rotate(Vec3{1, 0, 0});
+    hero072::Look l;
+    l.any = l.hammer = true;
+    l.hammerSheathed = true;
+    l.hammerAt = anchor + toTracking.rotate(Vec3{0, 1.4f, .2f});
+    l.hammerForward = toTracking.rotate(Vec3{0, 1, 0});
+    l.hammerUp = toTracking.rotate(Vec3{0, 0, 1});
+    l.hammerChoice = 1;
+    PropSource src;
+    src.h007 = &d;
+    src.h072 = &l;
+    src.batarangStyle = 2;
+    src.batons.on[0] = true;
+    src.batons.held[0] = true;
+    src.batons.grip[0] = anchor + toTracking.rotate(Vec3{-.3f, 1.f, -.3f});
+    src.batons.tip[0] = anchor + toTracking.rotate(Vec3{-.3f, 1.f, -.87f});
+    const Props p = captureProps(src, sf);
+    check(p.items == 4, "held batarang, sheathed hammer, a baton, a worn pistol");
+    check(p.item[0].kind == hero007::lookBatarang && near(p.item[0].at, local, 1e-4f) && near(p.item[0].forward, {0, 0, -1}, 1e-4f),
+          "captured in his root frame (travel and turns gone)");
+    check(p.item[0].variant == 2 && (p.item[0].flags & propFlagSide) && (p.item[0].flags & propFlagInHand), "batarang style, hand");
+    check(p.item[1].kind == propHammer && (p.item[1].flags & propFlagSheathed) && p.item[1].variant == 1, "the hammer on his back");
+    check(p.item[2].kind == propBaton && near(p.item[2].spin, .57f, 1e-3f) && (p.item[2].flags & propFlagInHand), "the baton's span");
+    check(p.item[3].kind == hero007::lookPistol && (p.item[3].flags & propFlagHolster) == 2, "the worn pistol's holster");
+    // nothing held: no tail at all
+    PropSource empty;
+    check(!captureProps(empty, sf).any(), "no props: nothing sent");
+    // the receiver: the ghost 3 m ahead facing back at the viewer, overlay origin and turn
+    Ghost g;
+    g.feet = {0, 0, -3};
+    g.bodyYaw = 3.1415927f;
+    const Vec3 origin{1, 0, 1};
+    const Quat vt = Quat::yaw(-.4f);
+    const GhostFrame gf = ghostFrame(g, false, origin, vt);
+    const RemoteProps r = rebuildProps(quantized(p), gf);
+    const Vec3 want = origin + vt.rotate(g.feet + Quat::yaw(g.bodyYaw).rotate(local));
+    check(r.h007.any && r.h007.held[1].look == hero007::lookBatarang && near(r.h007.held[1].at, want, .01f),
+          "the batarang in PLAYER 2's right hand");
+    check(near(r.h007.held[1].forward, vt.rotate(Quat::yaw(g.bodyYaw).rotate(Vec3{0, 0, -1})), .002f), "pointing his way");
+    check(r.batarangStyle == 2 && r.hammerChoice == 1 && r.hammerSheathed && r.h072.hammer && !r.h072.hammerSheathed && !r.h072.hammerInHand,
+          "style, hammer choice, drawn on his back");
+    check(r.batons.on[0] && r.batons.held[0] && near(length(r.batons.tip[0] - r.batons.grip[0]), .57f, .01f), "his baton");
+    check(r.h007.worn[0].look == hero007::lookPistol && r.h007.worn[0].holster == 2 && r.h007.modelWanted == 0,
+          "the worn pistol, built-in when the model is missing");
+    // the mirror: x flips and the hands swap
+    const RemoteProps m = rebuildProps(quantized(p), ghostFrame(g, true, origin, vt));
+    const Vec3 wantM = origin + vt.rotate(g.feet + Quat::yaw(g.bodyYaw).rotate(Vec3{-local.x, local.y, local.z}));
+    check(m.h007.held[0].look == hero007::lookBatarang && m.h007.held[1].look == 0 && near(m.h007.held[0].at, wantM, .01f) &&
+              m.h007.held[0].side == 0, "mirrored: in the other hand, on the other side");
+    check(m.batons.on[1] && !m.batons.on[0], "mirrored: the baton in the other hand");
+    // a flying hammer goes to the hero072 look
+    Props fly = p;
+    fly.item[1].flags = propFlagFlying;
+    const RemoteProps rf = rebuildProps(fly, gf);
+    check(rf.h072.any && rf.h072.hammer && !rf.h072.hammerInHand && !rf.hammerSheathed, "a flying hammer");
+}
+
 int main() {
     testCrcAndHash();
     testRoundTrip();
@@ -894,6 +1072,8 @@ int main() {
     testSessionJoin();
     testSocketFailure();
     testGhostDrawing();
+    testPropsWire();
+    testPropsOnGhost();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

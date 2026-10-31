@@ -6,6 +6,7 @@
 //                                         a second (tests/mp_buddy_tests.py drives the Test Buddy at it)
 //   spidy_mp_probe golden                 hex of fixed packets (the Python buddy must encode the same bytes)
 #include "spidy/mp_net.hpp"
+#include "spidy/mp_props.hpp"
 #include "spidy/mp_session.hpp"
 
 #include <chrono>
@@ -44,11 +45,28 @@ Packet goldenPose() {
     p.state.standingEye = 1.65f;
     return p;
 }
+// 0.0.74 MP PROPS: the golden pose with a fixed PROPS tail (values the Python buddy rounds the same way).
+Props goldenProps() {
+    Props pr;
+    pr.flags = propsFlagBatonClub;
+    PropItem h;
+    h.id = 9, h.kind = propHammer, h.flags = propFlagFlying, h.variant = 2, h.spin = 1.25f;
+    h.at = {.25f, 1.5f, -2.f}, h.forward = {0, 1, 0}, h.up = {0, 0, -1};
+    pr.add(h);
+    PropItem b;
+    b.id = 2, b.kind = 4 /* batarang */, b.flags = propFlagInHand | propFlagSide, b.variant = 3, b.spin = -.5f;
+    b.at = {.25f, 1.75f, -.5f}, b.forward = {0, 0, -1}, b.up = {1, 0, 0};
+    pr.add(b);
+    return pr;
+}
 } // namespace
 
 int main(int argc, char** argv) {
     if (argc >= 2 && !std::strcmp(argv[1], "golden")) {
         hex("pose", encode(goldenPose()));
+        Packet pp = goldenPose();
+        pp.state.props = goldenProps();
+        hex("pose_props", encode(pp));
         Packet h;
         h.type = hello;
         h.role = roleBuddy;
@@ -93,16 +111,20 @@ int main(int argc, char** argv) {
             const float t = static_cast<float>(s.now() - t0);
             p.head = {{0, 1.6f, 0}, Quat::around({0, 1, 0}, .2f * std::sin(t))};
             p.actions = handLeft | handRight;
+            p.props = goldenProps(); // 0.0.74 MP PROPS: a thrown hammer and a held batarang ride along
             s.publish(p);
             if (s.now() >= nextPrint) {
                 nextPrint += 1;
                 const SessionView v = s.view();
                 std::printf("{\"t\": %.1f, \"running\": %d, \"port\": %u, \"visible\": %d, \"buddy\": %d, \"name\": \"%s\", "
                             "\"ping\": %d, \"hero\": %u, \"suit\": %u, \"root\": [%.3f, %.3f, %.3f], \"actions\": %u, "
-                            "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d}\n",
+                            "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d, "
+                            "\"props\": %u, \"propKinds\": [%u, %u, %u, %u]}\n",
                             t, v.running, v.port, v.visible, v.buddy, v.buddyName.c_str(), v.pingMs, v.state.hero,
                             v.state.suit, v.state.root.x, v.state.root.y, v.state.root.z, v.state.actions, v.sent,
-                            v.received, v.rejected, v.peerGame, v.calling);
+                            v.received, v.rejected, v.peerGame, v.calling, static_cast<unsigned>(v.state.props.items),
+                            v.state.props.item[0].kind, v.state.props.item[1].kind, v.state.props.item[2].kind,
+                            v.state.props.item[3].kind);
                 for (const auto& l : s.takeLog())
                     std::printf("# %s\n", l.c_str());
                 std::fflush(stdout);

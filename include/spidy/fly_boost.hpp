@@ -20,6 +20,9 @@ static_assert(extras385::fly::supersonicTop <= native_movement::motionCeiling, "
 inline constexpr float stickOn = .6f, stickOff = .4f; // the left stick's forward, with hysteresis
 inline constexpr float rearmSeconds = 1.f;            // off this long before another boom
 inline constexpr float shockSeconds = .9f;            // the shockwave's life
+// 0.0.74 test 11: the dash holds this long while the hands-out pose blinks (a hand's tracking drops
+// out, a hand dips) with the stick still forward - it used to end at once and the flight braked.
+inline constexpr float graceSeconds = extras385::fly::Flight::dashGraceSeconds;
 // Command::asks: bit 0 the game's own move (as before), bit 1 SUPERSONIC now, bits 2-3 its speed.
 inline constexpr uint32_t asksBit = 2u, asksMask = 15u;
 inline uint32_t asksOf(bool engaged, uint32_t speedValue) {
@@ -47,7 +50,12 @@ class Boost {
         const float dt = std::isfinite(in.seconds) ? std::clamp(in.seconds, 0.f, .1f) : 0.f;
         const float y = std::isfinite(in.stickY) ? in.stickY : 0.f;
         const bool can = in.on && in.flying && in.handsOut;
-        const bool want = can && (engaged_ ? y > stickOff : y > stickOn);
+        bool want = can && (engaged_ ? y > stickOff : y > stickOn);
+        const bool hold = !want && engaged_ && in.on && in.flying && !in.handsOut && y > stickOff &&
+                          grace_ + dt <= graceSeconds + 1e-5f;
+        grace_ = hold ? grace_ + dt : 0.f;
+        want = want || hold;
+        holding_ = hold;
         boomed_ = false;
         if (want && !engaged_) {
             if (offFor_ >= rearmSeconds) {
@@ -61,14 +69,17 @@ class Boost {
     }
     bool engaged() const { return engaged_; }
     bool boomed() const { return boomed_; }
+    bool holding() const { return holding_; } // engaged on the grace (the pose blinked)
     uint32_t engages() const { return engages_; }
     void reset() {
-        engaged_ = boomed_ = false;
+        engaged_ = boomed_ = holding_ = false;
+        grace_ = 0;
         offFor_ = rearmSeconds;
     }
 
   private:
-    bool engaged_{}, boomed_{};
+    bool engaged_{}, boomed_{}, holding_{};
+    float grace_{};
     float offFor_ = rearmSeconds;
     uint32_t engages_{};
 };

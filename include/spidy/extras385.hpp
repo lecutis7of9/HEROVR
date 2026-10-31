@@ -155,11 +155,23 @@ class Poses {
     static constexpr float punchSpeed = 1.6f; // m/s: a hand faster than this is a punch, not a pose
     Pose update(const PoseInput& in) {
         const float dt = std::isfinite(in.seconds) ? std::clamp(in.seconds, 0.f, .1f) : 0.f;
-        if (!in.live || !in.tracked[0] || !in.tracked[1] || !finite(in.head) || !finite(in.hands[0]) ||
-            !finite(in.hands[1])) {
+        if (!in.live || !finite(in.head)) {
             reset();
             return pose_;
         }
+        // 0.0.74 test 11: a hand's tracking blinking (or a junk sample) keeps the pose for the same
+        // `leaveSeconds` a loose test failing gets, so a moment's loss no longer drops FORWARD (and the
+        // SUPERSONIC dash with it). Lost for longer: nothing, as before.
+        if (!in.tracked[0] || !in.tracked[1] || !finite(in.hands[0]) || !finite(in.hands[1])) {
+            lost_ += dt;
+            seen_ = false; // no hand speed across the gap
+            cand_ = hover;
+            held_ = 0;
+            if (lost_ >= leaveSeconds)
+                reset();
+            return pose_;
+        }
+        lost_ = 0;
         Vec3 f{in.forward.x, 0, in.forward.z};
         f = finite(f) && length(f) > .1f ? normalized(f) : Vec3{0, 0, -1};
         const Vec3 right{-f.z, 0, f.x};
@@ -225,7 +237,7 @@ class Poses {
     uint32_t engaged(Pose p) const { return engaged_[p & 3u]; }
     void reset() {
         pose_ = cand_ = hover;
-        held_ = leave_ = lift_ = 0;
+        held_ = leave_ = lift_ = lost_ = 0;
         seen_ = false;
     }
     static bool test(Pose p, const Vec3 (&h)[2], bool strict) {
@@ -255,7 +267,7 @@ class Poses {
 
   private:
     Pose pose_{hover}, cand_{hover};
-    float held_{}, leave_{}, lift_{};
+    float held_{}, leave_{}, lift_{}, lost_{};
     bool seen_{};
     Vec3 last_[2]{};
     uint32_t engaged_[poses]{};
@@ -395,13 +407,33 @@ struct Out {
     const char* how = "";  // THRUST, DROP, STOP, RISE, FORWARD, STICK, HOVER, LANDED, SUPERSONIC
     float top{};           // Version 0.0.5: this frame's top speed (FAST's, or SUPERSONIC's dash)
     bool supersonic{};     // Version 0.0.5: the dash flies now
+    bool coasting{};       // 0.0.74 test 11: faster than this frame's top (after a dash), slowing gently
 };
+// 0.0.74 test 11 (players: "going SUPERSONIC stalls you and drops you lower"): the way the hands point
+// during the dash (and the coast after it) flies level within `band` degrees of level; past it, the
+// pitch climbs from 0 to straight up / down with no jump.
+inline Vec3 levelled(Vec3 d, float bandDegrees) {
+    constexpr float halfPi = 1.57079633f;
+    const Vec3 h{d.x, 0, d.z};
+    if (!finite(d) || length(h) < 1e-3f)
+        return d;
+    const float pitch = std::atan2(d.y, length(h));
+    const float band = std::clamp(bandDegrees, 0.f, 80.f) * (halfPi / 90.f);
+    const float a = std::fabs(pitch);
+    const float p = a <= band ? 0.f : std::copysign((a - band) * halfPi / (halfPi - band), pitch);
+    return normalized(h) * std::cos(p) + Vec3{0, std::sin(p), 0};
+}
 class Flight {
   public:
     static constexpr float thrustFrom = .15f, stickFrom = .15f;
     static constexpr float accelPerSpeed = 1.6f; // m/s^2 per m/s of top speed: NORMAL reaches 16 m/s in ~0.6 s
     static constexpr float brakeFactor = 2.5f;   // STOP brakes 2.5x as hard, smoothly
     static constexpr float riseShare = .6f, forwardShare = .85f;
+    // 0.0.74 test 11: faster than the top (the dash let go) slows at `coastDecel` keeping its way, not
+    // the old hard brake back to FLY's speed (80 -> 16 m/s in ~2 s read as a stall). STOP still brakes.
+    static constexpr float coastDecel = 10.f;    // m/s^2
+    static constexpr float levelBand = 15.f;     // degrees: the dash and the coast fly level inside this
+    static constexpr float dashGraceSeconds = .4f; // the dash's hold while the hands-out pose blinks (fly_boost)
     static float dropSpeed(float top) { return std::max(4.f, top * .4f); }
     Out update(const In& in) {
         Out o;
@@ -412,18 +444,25 @@ class Flight {
             return o;
         }
         const uint32_t pose = in.word.arms ? in.word.pose & 3u : hover;
-        // Version 0.0.5 SUPERSONIC: hands out, in the air, FAST times the boost (never past supersonicTop).
-        const bool sonic = flying_ && pose == forward && std::isfinite(in.boost) && in.boost > 1.f;
-        const float top = sonic ? std::min(speeds[fast] * in.boost, supersonicTop) : speeds[speed];
-        o.top = top;
-        o.supersonic = sonic;
-        const Vec3 up{0, 1, 0};
-        Vec3 look = finite(in.look) && length(in.look) > .5f ? normalized(in.look) : Vec3{0, 0, -1};
         // R3: the controlled descent, until the ground (or a RISE pose takes you up again).
         if (pose == rise)
             descending_ = false;
         else if (in.word.drop && flying_)
             descending_ = true;
+        const bool boosting = std::isfinite(in.boost) && in.boost > 1.f;
+        // 0.0.74 test 11: the dash goes on along its way while the hands-out pose blinks to HOVER (a
+        // tracking drop-out) as long as the boost still asks (fly_boost holds it ~0.4 s).
+        const bool held = flying_ && dashing_ && pose == hover && boosting && !descending_ &&
+                          in.word.thrust[0] <= thrustFrom && in.word.thrust[1] <= thrustFrom;
+        // Version 0.0.5 SUPERSONIC: hands out, in the air, FAST times the boost (never past supersonicTop).
+        const bool sonic = flying_ && boosting && (pose == forward || held);
+        const float top = sonic ? std::min(speeds[fast] * in.boost, supersonicTop) : speeds[speed];
+        o.top = top;
+        o.supersonic = sonic;
+        const Vec3 up{0, 1, 0};
+        Vec3 look = finite(in.look) && length(in.look) > .5f ? normalized(in.look) : Vec3{0, 0, -1};
+        const float speedNow = length(v_);
+        const bool coasting = flying_ && !sonic && pose != brake && !descending_ && speedNow > top + .01f;
         Vec3 target{};
         float accel = top * accelPerSpeed;
         // 1. A hand pointed with its trigger pulled: thrust along it, the trigger the speed.
@@ -452,19 +491,28 @@ class Flight {
             // 4. One hand up: rise, faster the higher the hand.
             target = up * (top * riseShare * std::clamp(in.word.lift, .2f, 1.f));
             o.how = "RISE";
-        } else if (pose == forward) {
+        } else if (pose == forward || held) {
             // 5. Both hands in front: the way they point (Superman), the look if they are unknown.
             Vec3 d{};
             for (const auto& h : in.hands)
                 if (h.tracked && finite(h.forward) && length(h.forward) > .5f)
                     d = d + normalized(h.forward);
             d = length(d) > .3f ? normalized(d) : look;
+            if (sonic || coasting)
+                d = levelled(d, levelBand); // 0.0.74 test 11: a hand a little low no longer sinks the dash
+            if (held && length(dashWay_) > .5f)
+                d = dashWay_;
+            if (sonic)
+                dashWay_ = d;
             target = d * (sonic ? top : top * forwardShare);
             o.how = sonic ? "SUPERSONIC" : "FORWARD";
         } else if (length(in.move) > stickFrom || std::fabs(in.word.rise) > stickFrom) {
             // 6. The sticks: the left moves (up and down with the head's look), the right rises / sinks.
             const float m = std::min(1.f, length(in.move));
-            target = in.move * top + up * (in.word.rise * top * .6f + look.y * m * top);
+            // 0.0.74 test 11: coasting out of the dash (the stick still forward), a look a little down
+            // no longer sinks you; past the band it steers as before.
+            const Vec3 lk = coasting ? levelled(look, levelBand) : look;
+            target = in.move * top + up * (in.word.rise * top * .6f + lk.y * m * top);
             target = limited(target, top);
             o.how = "STICK";
         } else {
@@ -488,13 +536,30 @@ class Flight {
             o.how = "LANDED";
             return o;
         }
+        if (coasting) {
+            // 0.0.74 test 11: past the top (the dash let go): keep the way you were going (or the way
+            // you steer) and slow at coastDecel. The vertical part is never stretched, so a coast never
+            // speeds up a climb or a sink.
+            const float keep = std::max(top, speedNow - coastDecel * dt);
+            Vec3 h{target.x, 0, target.z};
+            if (length(h) < .5f)
+                h = {v_.x, 0, v_.z};
+            if (length(h) > 1e-3f) {
+                const float vy = std::clamp(target.y, -keep, keep);
+                target = normalized(h) * std::sqrt(std::max(0.f, keep * keep - vy * vy)) + up * vy;
+                accel = std::max(accel, speeds[fast] * accelPerSpeed); // turns like FAST does
+            }
+            o.coasting = true;
+        }
         const Vec3 before = v_;
         v_ = v_ + limited(target - v_, accel * dt);
+        dashing_ = sonic;
         o.drive = true;
         o.moving = pose != brake && length(target) > .5f;
         o.velocity = v_;
         const float a = dt > 0 ? length(v_ - before) / dt : 0;
-        o.vignette = std::clamp(length(v_) / top * .3f + a / (top * accelPerSpeed) * .3f, 0.f, .6f);
+        const float vTop = std::max(top, length(before)); // a coast is not darker than the dash was
+        o.vignette = std::clamp(length(v_) / vTop * .3f + a / (vTop * accelPerSpeed) * .3f, 0.f, .6f);
         return o;
     }
     bool flying() const { return flying_; }
@@ -502,13 +567,13 @@ class Flight {
     uint32_t takeoffs() const { return takeoffs_; }
     uint32_t landings() const { return landings_; }
     void land() {
-        flying_ = descending_ = false;
-        v_ = {};
+        flying_ = descending_ = dashing_ = false;
+        v_ = dashWay_ = {};
     }
 
   private:
-    bool flying_{}, descending_{};
-    Vec3 v_{};
+    bool flying_{}, descending_{}, dashing_{};
+    Vec3 v_{}, dashWay_{};
     uint32_t takeoffs_{}, landings_{};
 };
 // What the swing module's flight reports back (SpidyFlySample): the VR module draws the vignette,
@@ -519,6 +584,30 @@ struct Data {
     float vignette{};
     uint32_t moving{}, descending{};
 };
+// 0.0.74 test 11: the flight's branch this frame for the VR module's FLY log line, through its own
+// optional export (SpidyFlyTrace) so Data's size - shared with older modules - never changes.
+struct Trace {
+    uint32_t how{};      // howCode(Out::how)
+    uint32_t coasting{}; // Out::coasting
+    uint32_t supersonic{};
+    float speed{};       // |Out::velocity|, m/s
+    float top{};         // Out::top
+    float vy{};          // Out::velocity.y
+};
+inline constexpr const char* hows[] = {"", "THRUST", "DROP", "STOP", "RISE", "FORWARD", "STICK", "HOVER", "LANDED", "SUPERSONIC"};
+inline uint32_t howCode(const char* how) {
+    if (!how)
+        return 0;
+    for (uint32_t i = 1; i < sizeof(hows) / sizeof(hows[0]); ++i)
+        for (const char *a = how, *b = hows[i];; ++a, ++b) {
+            if (*a != *b)
+                break;
+            if (!*a)
+                return i;
+        }
+    return 0;
+}
+inline const char* howName(uint32_t code) { return code < sizeof(hows) / sizeof(hows[0]) ? hows[code] : ""; }
 } // namespace fly
 
 // ---- SYMBIOTE LOOK and its gesture --------------------------------------------------------------

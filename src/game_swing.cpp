@@ -59,6 +59,7 @@ AirYield airYield;
 extras385::fly::Flight flight;
 bool lungeFar{}; // Update 38.5: the lunger has the zip strike's reach (FLY MODE's lunge)
 extras385::fly::Data flyData; // under `output`
+extras385::fly::Trace flyTrace; // under `output` (0.0.74 test 11: the FLY log line)
 // Version 0.0.7 BATMAN (cape_glide): his cape glide and grapple gun, and what game_xr reads back.
 cape_glide::Glide capeGlide;
 cape_glide::Grapple capeGrapple;
@@ -807,8 +808,10 @@ void visit(const native_rays::QueryContext& world) {
         }
         // Version 0.0.5: FAST (40 m/s) and the SUPERSONIC dash may pass the swing's own speed
         // (SWING SPEED), never the movement module's ceiling nor 2 m a step; SLOW and NORMAL as before.
-        const float flyCap = fi.word.speed == extras385::fly::fast || flown.supersonic
-                                 ? std::min({std::max(config.maxSpeed, flown.top), native_movement::motionCeiling * (1.f - 1e-6f),
+        // 0.0.74 test 11: the coast after the dash too (else it was cut to the swing's speed at once).
+        const float flyCap = fi.word.speed == extras385::fly::fast || flown.supersonic || flown.coasting
+                                 ? std::min({std::max({config.maxSpeed, flown.top, flown.coasting ? length(flown.velocity) : 0.f}),
+                                             native_movement::motionCeiling * (1.f - 1e-6f),
                                              .875f * native_movement::farthestStep / motion.dt})
                                  : cap;
         if (flown.drive)
@@ -819,6 +822,8 @@ void visit(const native_rays::QueryContext& world) {
         AcquireSRWLockExclusive(&output);
         flyData = {flown.drive ? 1u : 0u, flight.takeoffs(), flight.landings(), flown.vignette,
                    flown.moving ? 1u : 0u, flight.descending() ? 1u : 0u};
+        flyTrace = {extras385::fly::howCode(flown.how), flown.coasting ? 1u : 0u, flown.supersonic ? 1u : 0u,
+                    length(flown.velocity), flown.top, flown.velocity.y};
         ReleaseSRWLockExclusive(&output);
     }
     // Version 0.0.7 BATMAN (cape_glide): the grapple gun, then the cape glide, through this same
@@ -1353,6 +1358,18 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlySample(void* out) {
         sample.vignette = 0;
         sample.moving = sample.descending = 0;
     }
+    ReleaseSRWLockShared(&control);
+    return copy(out, &sample, sizeof(sample)) ? 0 : 2201;
+}
+// 0.0.74 test 11: the flight's branch, speed and coast for the VR module's FLY log line. Optional: an
+// older VR module never asks; zeros while not flying.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyTrace(void* out) {
+    AcquireSRWLockShared(&control);
+    AcquireSRWLockShared(&output);
+    auto sample = flyTrace;
+    ReleaseSRWLockShared(&output);
+    if (!enabled || GetTickCount64() >= deadline || GetTickCount64() >= inputDeadline || !command.focused)
+        sample = {};
     ReleaseSRWLockShared(&control);
     return copy(out, &sample, sizeof(sample)) ? 0 : 2201;
 }

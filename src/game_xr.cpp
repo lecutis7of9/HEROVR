@@ -689,6 +689,7 @@ BridgeCall startPunch{}, samplePunch{}, stopPunch{}, swingSettings{}, sampleStri
 BridgeCall sampleLunge{};
 BridgeCall sampleAirYield{}; // Update 38.5: optional (an older ray module: no yield counts)
 BridgeCall sampleFly{};      // Update 38.5 FLY MODE: optional (an older ray module: no flight)
+BridgeCall sampleFlyTrace{}; // 0.0.74 test 11: optional (an older ray module: no FLY log line's branch)
 BridgeCall sampleCape{};     // Version 0.0.7 BATMAN: optional (an older ray module: no grapple line drawn)
 // Spider-Sense (game_sense, in the same module as the punches): optional, an
 // older module draws no warnings.
@@ -2436,6 +2437,9 @@ DWORD WINAPI run(void*) {
         // Version 0.0.6: SUPERSONIC's reached speed (rep0050: 80 asked, 64 reached), the dash's top and all's.
         float sonicPeak{}, sonicLast{}, sonicBest{};
         bool sonicWas{};
+        // 0.0.74 test 11: the FLY log line's state and throttle (a change at most 4 a second, else 1 in 2 s).
+        uint32_t flyTraceState{};
+        double flyTraceClock{}, flyTraceAt = -10;
         double repBeamAt = -100, repNotedAt = -10;
         double repReadyAt = -100; // Version 0.0.5 BEAM RING: the ready flash's start
         Vec3 repBeamFrom{}, repBeamTo{};
@@ -5606,6 +5610,32 @@ DWORD WINAPI run(void*) {
                                     game_prompts::note(line);
                                 }
                                 input.asks |= fly_boost::asksOf(dash, c38(combat38::supersonicSpeed));
+                                // 0.0.74 test 11 ("SUPERSONIC stalls you and drops you lower"): what the flight
+                                // does - its branch, speed, climb, coast - and the pose and the dash, on a change
+                                // (at most 4 lines a second) and every 2 s while flying; nothing on the ground.
+                                flyTraceClock += std::isfinite(frame.seconds) ? std::clamp(frame.seconds, 0.f, .1f) : 0.f;
+                                extras385::fly::Trace tr{};
+                                if (!sampleFlyTrace || sampleFlyTrace(&tr))
+                                    tr = {};
+                                const uint32_t traceState = (tr.how & 15u) | (tr.coasting ? 16u : 0u) | (tr.supersonic ? 32u : 0u) |
+                                                            ((flyPoses.pose() & 3u) << 6) | (dash ? 256u : 0u) |
+                                                            (flyBoost.holding() ? 512u : 0u) | (flyNow.flying ? 1024u : 0u);
+                                const double since = flyTraceClock - flyTraceAt;
+                                if ((flyNow.flying || flyTraceState) &&
+                                    ((traceState != flyTraceState && since >= .25) || (flyNow.flying && since >= 2.0))) {
+                                    static constexpr const char* poseNames[] = {"HOVER", "RISE", "FORWARD", "STOP"};
+                                    char line[192];
+                                    sprintf_s(line, "VERSION 0.0.74 FLY: how %s, %.1f m/s (top %.0f, climb %+.1f)%s, pose %s, stick %.2f%s%s",
+                                              extras385::fly::howName(tr.how)[0] ? extras385::fly::howName(tr.how) : "-",
+                                              static_cast<double>(std::isfinite(tr.speed) ? tr.speed : 0.f),
+                                              static_cast<double>(std::isfinite(tr.top) ? tr.top : 0.f),
+                                              static_cast<double>(std::isfinite(tr.vy) ? tr.vy : 0.f), tr.coasting ? ", COAST" : "",
+                                              poseNames[flyPoses.pose() & 3u], static_cast<double>(bi.stickY),
+                                              dash ? ", DASH" : "", flyBoost.holding() ? " (grace)" : "");
+                                    game_prompts::note(line);
+                                    flyTraceAt = flyTraceClock;
+                                    flyTraceState = flyNow.flying ? traceState : 0u;
+                                }
                             }
                             if (flyLive && (flyNow.flying || game_swing::airborne(swingState, now.QuadPart,
                                                                                   frequency.QuadPart)))
@@ -13584,6 +13614,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     sampleLunge = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyLungeSample")));
     sampleAirYield = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyAirYieldSample")));
     sampleFly = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyFlySample")));
+    sampleFlyTrace = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyFlyTrace")));
     sampleCape = reinterpret_cast<BridgeCall>(reinterpret_cast<void*>(GetProcAddress(rays, "SpidyCapeSample")));
     sampleSense = reinterpret_cast<BridgeCall>(GetProcAddress(rays, "SpidySenseSample"));
     swingSettings = reinterpret_cast<BridgeCall>(GetProcAddress(rays, "SpidySwingSettings"));

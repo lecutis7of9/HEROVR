@@ -22954,6 +22954,160 @@ int main() {
         appendBeamRing(junk, .5f, 0, hand, eye, std::nanf(""), 1);
         check(junk.empty(), "the ring drew junk");
     });
+    test("0.0.74 test 11 FLY: a tracking blink keeps the pose and the dash; the dash coasts out; it flies level", [] {
+        using namespace spidy;
+        using namespace spidy::extras385::fly;
+        constexpr float dt = 1 / 90.f, toRad = 3.14159265f / 180.f;
+        // Poses: a hand's tracking lost for less than leaveSeconds keeps FORWARD; longer, nothing.
+        PoseInput pin;
+        pin.seconds = dt;
+        pin.live = true;
+        pin.head = {0, 1.6f, 0};
+        pin.forward = {0, 0, -1};
+        pin.tracked[0] = pin.tracked[1] = true;
+        pin.hands[0] = {-.12f, 1.3f, -.55f};
+        pin.hands[1] = {.12f, 1.3f, -.55f};
+        Poses p;
+        for (int i = 0; i < 45; ++i)
+            p.update(pin);
+        check(p.pose() == extras385::fly::forward, "FORWARD (the setup)");
+        pin.tracked[0] = false;
+        for (int i = 0; i < 9; ++i) // 0.1 s
+            p.update(pin);
+        check(p.pose() == extras385::fly::forward, "a 0.1 s tracking blink dropped FORWARD");
+        pin.tracked[0] = true;
+        p.update(pin);
+        check(p.pose() == extras385::fly::forward && p.engaged(extras385::fly::forward) == 1, "FORWARD after the blink");
+        pin.hands[1] = {.12f, 1.3f, std::nanf("")};
+        for (int i = 0; i < 9; ++i)
+            p.update(pin);
+        check(p.pose() == extras385::fly::forward, "a 0.1 s junk sample dropped FORWARD");
+        pin.hands[1] = {.12f, 1.3f, -.55f};
+        pin.tracked[1] = false;
+        for (int i = 0; i < 18; ++i) // 0.2 s
+            p.update(pin);
+        check(p.pose() == hover, "a hand lost for 0.2 s still flew FORWARD");
+        pin.tracked[1] = true;
+        for (int i = 0; i < 45; ++i)
+            p.update(pin);
+        check(p.pose() == extras385::fly::forward, "FORWARD again after tracking came back");
+        pin.live = false;
+        p.update(pin);
+        check(p.pose() == hover, "not live kept the pose (it must end at once)");
+        // Boost: the hands-out pose blinking with the stick still forward holds the dash ~0.4 s, no boom.
+        fly_boost::Boost b;
+        fly_boost::In bi{dt, true, true, true, .9f};
+        int booms = 0;
+        const auto run = [&](float seconds) {
+            for (int i = 0; i < static_cast<int>(seconds / dt + .5f); ++i) {
+                b.update(bi);
+                booms += b.boomed() ? 1 : 0;
+            }
+        };
+        run(.5f);
+        check(b.engaged() && booms == 1, "the dash (the setup)");
+        bi.handsOut = false;
+        run(.3f);
+        check(b.engaged() && b.holding(), "a 0.3 s pose blink ended the dash");
+        bi.handsOut = true;
+        run(.2f);
+        check(b.engaged() && !b.holding() && booms == 1 && b.engages() == 1, "the dash after the blink boomed again");
+        bi.handsOut = false;
+        run(.6f);
+        check(!b.engaged() && !b.holding(), "the dash outlived its grace");
+        bi.handsOut = true;
+        run(1.2f); // back on (no boom: off for less than rearmSeconds)
+        bi.handsOut = false;
+        bi.stickY = 0;
+        run(.05f);
+        check(!b.engaged(), "letting go of the stick during a blink kept the dash");
+        check(fly_boost::graceSeconds == Flight::dashGraceSeconds && Flight::dashGraceSeconds >= .3f &&
+                  Flight::dashGraceSeconds <= .5f,
+              "the grace");
+        // levelled(): flat within 15 degrees, no jump past it, straight up / down stay.
+        const auto pitched = [&](float deg) { return Vec3{0, std::sin(deg * toRad), -std::cos(deg * toRad)}; };
+        check(std::fabs(levelled(pitched(-10), 15).y) < 1e-6f && std::fabs(levelled(pitched(14.9f), 15).y) < 1e-6f &&
+                  std::fabs(levelled(pitched(16), 15).y) < .03f && levelled(pitched(-89.9f), 15).y < -.999f &&
+                  std::fabs(length(levelled(pitched(-40), 15)) - 1) < 1e-4f && levelled(pitched(-40), 15).y < 0 &&
+                  levelled(pitched(-40), 15).y > std::sin(-40 * toRad),
+              "levelled()");
+        // The flight: a dash with the hands 10 degrees low flies level.
+        Flight fl;
+        In in;
+        in.seconds = dt;
+        in.airborne = true;
+        in.look = pitched(-17);
+        const Vec3 aim = pitched(-10);
+        in.hands[0] = {true, aim, {-.2f, -.1f, -.4f}};
+        in.hands[1] = {true, aim, {.2f, -.1f, -.4f}};
+        in.word = unpack(pack(normal, 0, 0, 0, true, extras385::fly::forward));
+        in.boost = fly_boost::multiplierOf(fly_boost::asksOf(true, 0));
+        Out o;
+        for (int i = 0; i < 270; ++i)
+            o = fl.update(in);
+        check(std::string(o.how) == "SUPERSONIC" && std::fabs(length(o.velocity) - 80) < .5f && std::fabs(o.velocity.y) < .05f,
+              "a dash with the hands 10 degrees low sank");
+        // The pose blinks (HOVER) while the boost still asks: the dash goes on, the same way.
+        in.word = unpack(pack(normal, 0, 0, 0, true, hover));
+        for (int i = 0; i < 27; ++i)
+            o = fl.update(in);
+        check(std::string(o.how) == "SUPERSONIC" && o.supersonic && std::fabs(length(o.velocity) - 80) < .5f &&
+                  std::fabs(o.velocity.y) < .05f && o.velocity.z < -79,
+              "the dash braked when the pose blinked");
+        // The boost lets go (arms down): a coast at coastDecel the same way, level, no stall.
+        in.boost = 0;
+        float drop = 0, slowest = 1e9f, before = length(o.velocity), jump = 0;
+        for (int i = 0; i < 90; ++i) {
+            o = fl.update(in);
+            drop = std::min(drop, o.velocity.y);
+            jump = std::max(jump, std::fabs(length(o.velocity) - before));
+            before = length(o.velocity);
+            slowest = std::min(slowest, length(o.velocity));
+        }
+        check(o.coasting && std::fabs(length(o.velocity) - (80 - Flight::coastDecel)) < 1.f && drop > -.05f && o.velocity.z < -65 &&
+                  jump < Flight::coastDecel * dt * 1.5f && o.vignette <= .6f,
+              "letting go of the dash stalled or sank you (it must coast)");
+        // The stick still forward and the look 12 degrees down while coasting: level (STICK's own sink is gone in the band).
+        in.move = {0, 0, -1};
+        in.look = pitched(-12);
+        for (int i = 0; i < 90; ++i)
+            o = fl.update(in);
+        check(o.coasting && std::string(o.how) == "STICK" && o.velocity.y > -.5f && length(o.velocity) > 55,
+              "coasting on the stick with the look a little down sank you");
+        in.move = {};
+        for (int i = 0; i < 900; ++i)
+            o = fl.update(in);
+        check(!o.coasting && std::string(o.how) == "HOVER" && length(o.velocity) < .5f, "the coast never ended in a hover");
+        // STOP still brakes hard out of a dash.
+        Flight st;
+        In si = in;
+        si.look = {0, 0, -1};
+        si.hands[0].forward = si.hands[1].forward = {0, 0, -1};
+        si.word = unpack(pack(normal, 0, 0, 0, true, extras385::fly::forward));
+        si.boost = 2;
+        for (int i = 0; i < 270; ++i)
+            o = st.update(si);
+        si.boost = 0;
+        si.word = unpack(pack(normal, 0, 0, 0, true, brake));
+        int frames = 0;
+        while (length(o.velocity) > .5f && frames < 400) {
+            o = st.update(si);
+            ++frames;
+        }
+        check(std::string(o.how) == "STOP" && !o.coasting && frames < 200, "STOP out of a dash did not brake");
+        // A hover pose with no dash before it never dashes (the boost alone changes nothing).
+        Flight h;
+        In hi = si;
+        hi.word = unpack(pack(normal, 0, 0, 0, true, hover));
+        hi.boost = 3;
+        for (int i = 0; i < 90; ++i)
+            o = h.update(hi);
+        check(!o.supersonic && length(o.velocity) < .01f, "HOVER with the boost dashed");
+        // The log's branch codes.
+        check(howCode("SUPERSONIC") == 9 && std::string(howName(howCode("STICK"))) == "STICK" && howCode("") == 0 &&
+                  howCode(nullptr) == 0 && howCode("SUPER") == 0 && std::string(howName(99)).empty(),
+              "the FLY log's branch codes");
+    });
     test("0.0.5 FLY: FAST is 40 m/s; SUPERSONIC dashes hands-out with the left stick, booms once, then FLY as before", [] {
         using namespace spidy;
         using namespace spidy::extras385::fly;
@@ -23053,7 +23207,8 @@ int main() {
             o = fl.update(in);
         check(length(o.velocity) <= supersonicTop + .01f, "the dash passed supersonicTop");
         in.boost = 0;
-        for (int i = 0; i < 270; ++i)
+        // 0.0.74 test 11: from 120 m/s the dash coasts down at coastDecel (~8.6 s), no hard brake.
+        for (int i = 0; i < 900; ++i)
             o = fl.update(in);
         check(!o.supersonic && std::fabs(length(o.velocity) - 40 * Flight::forwardShare) < .5f, "FLY did not come back from the dash");
         // A boost word without the hands-out pose changes nothing (the sticks still steer as before).

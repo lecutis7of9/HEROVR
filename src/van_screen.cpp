@@ -480,7 +480,11 @@ void drawMusic(Painter& p, const View& v) {
 
 void drawHome(Painter& p, const View& v) {
     const float lx = -W + .010f, top = bodyTop;
-    p.text(v.offer.batman && v.carName ? std::string("HOME - BATMOBILE ") + v.carName : std::string("HOME"), lx, top - .010f, .0062f, khaki);
+    // 0.0.75 MOTORCYCLE: any named vehicle's name (the bike's "HOME - MOTORCYCLE") and its credit below
+    p.text(v.offer.batman && v.carName ? std::string("HOME - BATMOBILE ") + v.carName
+           : v.carName                 ? std::string("HOME - ") + v.carName
+                                       : std::string("HOME"),
+           lx, top - .010f, .0062f, khaki);
     Button b[8];
     const uint32_t n = buttons(home, v.offer, b);
     for (uint32_t k = 0; k < n; ++k) {
@@ -496,7 +500,7 @@ void drawHome(Painter& p, const View& v) {
     else if (v.offer.batman && v.carName && v.offer.car < batmobileCars &&
              std::string_view(batmobileLabels[v.offer.car]).substr(11) != std::string_view(v.carName))
         p.text("THE PICKED BATMOBILE COMES ON THE NEXT SUMMON (X)", lx, bodyBottom + .003f, .0046f, dim * 2.4f);
-    else if (v.offer.batman && v.carCredit)
+    else if (v.carCredit)
         p.text(clipped(v.carCredit, .0042f, 2 * W - .020f), lx, bodyBottom + .003f, .0042f, dim * 2.0f);
 }
 } // namespace

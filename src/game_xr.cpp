@@ -40,6 +40,7 @@
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
 #include "spidy/streamer_view.hpp"
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
+#include "spidy/bike075.hpp" // 0.0.75 MOTORCYCLE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/fly_feel074.hpp"  // 0.0.74 test 10 FLY HOLD / STEER / FLIPS / LOOK UP
@@ -2525,7 +2526,9 @@ DWORD WINAPI run(void*) {
         // 0.0.74 test 1 BATMOBILE (batmobile074.hpp): the one Driver is the van (PUNISHER) or a Batmobile (BATMAN).
         // vehicleKind: what it was last frame (a change and the old one goes first); batCar: the car summoned
         // (latched at the X; test 5: a parked car swaps to the pick); vehicleTune: the numbers in use.
-        enum : uint8_t { kindNone, kindVan, kindBatmobile };
+        // 0.0.75 MOTORCYCLE (bike075.hpp): kindBike, CAPTAIN AMERICA's and WOLVERINE's bike (its body model or no bike;
+        // its bars optional - not drawn when missing); bikeTap: the summon is a short X tap (a hold is the abilities').
+        enum : uint8_t { kindNone, kindVan, kindBatmobile, kindBike };
         uint8_t vehicleKind = kindNone;
         uint32_t batCar = 0, batPickSaved = UINT32_MAX;
         van072::Tune vehicleTune{};
@@ -2536,6 +2539,9 @@ DWORD WINAPI run(void*) {
                    lib.status[mesh_model::slotBatmobileCockpit] == mesh_model::loaded &&
                    lib.status[mesh_model::slotBatmobileWheel] == mesh_model::loaded;
         };
+        const auto bikeReady = [] { return mesh_model::library().status[mesh_model::slotBikeBody] == mesh_model::loaded; };
+        const auto bikeHero = [](uint32_t h) { return h == hero_modes::captainAmerica || h == hero_modes::wolverine; };
+        bike075::Tap bikeTap{};
         uint32_t carMusicAskedSerial{}; // the player's status serial when last told to toggle (no double toggle)
         van072::Probe vanProbe;
         bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
@@ -3506,7 +3512,7 @@ DWORD WINAPI run(void*) {
                     const seated_lock074::Lock carLock = seated_lock074::lockFor(
                         combat38::seatedToolsBlocked(c38(combat38::seatedTools)),
                         vanDriving || (vanCarry.carry && !vanCarry.alighting) || vanDriver.boarding || vanDriver.carried,
-                        vehicleKind == kindBatmobile);
+                        vehicleKind == kindBatmobile || vehicleKind == kindBike); // 0.0.75: the bike's rider too
                     const bool seatedLock = carLock.tools, grappleLock = carLock.grapple;
                     {   // Update 38.5 SYMBIOTE LOOK: both hands grab the chest, then pull outward - on or
                         // off (extras385::symbiote::ChestPull; the ULTIMATE's crossed arms never arm it).
@@ -7058,6 +7064,8 @@ DWORD WINAPI run(void*) {
                         // with MODEL MISSING on the wrist (no stand-in, nothing spawned, X still taken off the game).
                         // Loaded, the tap asks the ray batch for a spot (vanWanted; the probe, above).
                         // Version 0.0.73 test 3: PUNISHER VAN is ON by default (ON is value 0).
+                        if (!bikeHero(heroNow()) || mapping != game_pad::Mapping::gameplay)
+                            bikeTap = {}; // 0.0.75 MOTORCYCLE: a tap starts and ends as CAP / WOLVERINE in play
                         if (c38(combat38::punisherVan) == 0 && heroNow() == hero_modes::punisher &&
                             mapping == game_pad::Mapping::gameplay) {
                             const bool vanX = (buttons.buttons & buttonX) != 0;
@@ -7109,6 +7117,30 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                             vanXWas = batX;
+                        } else if (bikeHero(heroNow()) && mapping == game_pad::Mapping::gameplay) {
+                            // 0.0.75 MOTORCYCLE (bike075.hpp; ON, no switch): CAPTAIN AMERICA's and WOLVERINE's X summons
+                            // the bike. Their X is free like BATMAN's and the PUNISHER's (the gadget wheel is SPIDER-MAN's);
+                            // X held is the abilities' modifier (gestures385, read raw), so only a short TAP (released
+                            // within bike075::tapMost) summons. Riding, an X press pages the dash. Missing body model:
+                            // MODEL MISSING on the wrist, no bike (X still taken off the game).
+                            const bool bikeX = (buttons.buttons & buttonX) != 0;
+                            buttons.buttons &= ~static_cast<uint32_t>(buttonX);
+                            const bool tapped = bikeTap.step(bikeX, frame.seconds);
+                            if (bikeX && !vanXWas && van.state == van072::driving)
+                                vanDashX = true; // the dash's next page
+                            if (tapped && van.state != van072::driving) {
+                                if (bikeReady()) {
+                                    if (!vanProbe.active) {
+                                        vanWanted = true;
+                                        runtime.haptic(0, .1f);
+                                    }
+                                } else {
+                                    runtime.haptic(0, .15f);
+                                    message(3, 0, "MOTORCYCLE: MODEL MISSING: Vehicle/Motorcycle, no bike");
+                                    game_prompts::note("0.0.75 MOTORCYCLE: X tap - MODEL MISSING (Models\\Vehicle\\Motorcycle), no bike spawned");
+                                }
+                            }
+                            vanXWas = bikeX;
                         } else
                             vanXWas = false;
                         // The gadget wheel: X held opens it in front of the hand
@@ -7795,13 +7827,19 @@ DWORD WINAPI run(void*) {
                                             kindNow = kindVan;
                                         else if (heroWas == hero_modes::batman && c38(combat38::batmobile) == 0 && batReady(batCar))
                                             kindNow = kindBatmobile;
+                                        else if (bikeHero(heroWas) && bikeReady()) // 0.0.75 MOTORCYCLE (ON, no switch)
+                                            kindNow = kindBike;
                                         vin.enabled = kindNow != kindNone;
                                         vin.punisher = kindNow != kindNone && kindNow == vehicleKind;
                                         vehicleKind = kindNow;
-                                        vehicleTune = kindNow == kindBatmobile ? batmobile074::tune(batCar) : van072::Tune{};
+                                        vehicleTune = kindNow == kindBatmobile ? batmobile074::tune(batCar)
+                                                      : kindNow == kindBike    ? bike075::tune()
+                                                                               : van072::Tune{};
                                         const bool batNow = kindNow == kindBatmobile;
-                                        const std::string vehName = batNow ? std::string("BATMOBILE ") + batmobile074::names[batCar]
-                                                                           : std::string("PUNISHER VAN");
+                                        const bool bikeNow = kindNow == kindBike;
+                                        const std::string vehName = batNow    ? std::string("BATMOBILE ") + batmobile074::names[batCar]
+                                                                    : bikeNow ? std::string(bike075::name)
+                                                                              : std::string("PUNISHER VAN");
                                         // 0.0.74 test 1 BATMOBILE: the pick saved between sessions (after the saved one is read)
                                         if (batmobilePickRead) {
                                             const uint32_t pickNow = batmobile074::clampCar(c38(combat38::batmobileChoice));
@@ -7950,12 +7988,16 @@ DWORD WINAPI run(void*) {
                                         // Version 0.0.73 test 3 VAN SCREEN: X or a poke (an open hand off the wheel)
                                         // pages it while he drives; it takes nothing from the wheel or the pedals.
                                         // 0.0.74 test 1 BATMOBILE: its screen is always there (the picker and the Batcave are on it).
-                                        if (c38(combat38::vanScreen) == 0 || batNow) {
+                                        // 0.0.75 MOTORCYCLE: the bike's small screen too (over its bars; music, SIT, GET OUT).
+                                        if (c38(combat38::vanScreen) == 0 || batNow || bikeNow) {
                                             try {
                                                 van_screen::In si;
                                                 if (batNow) {
                                                     si.at = batmobile074::layout(batCar).screen;
                                                     si.scale = batmobile074::screenScale;
+                                                } else if (bikeNow) {
+                                                    si.at = bike075::layout().screen;
+                                                    si.scale = bike075::screenScale;
                                                 }
                                                 si.dt = vin.dt;
                                                 si.driving = van.state == van072::driving;
@@ -7989,7 +8031,8 @@ DWORD WINAPI run(void*) {
                                                 // 0.0.74 test 1: the MUSIC / HOME buttons his options leave on the dash
                                                 vanOffer.music = c38(combat38::carMusic) != vehicle074::musicOff;
                                                 // 0.0.74 test 1 BATMOBILE: the van goes to the safehouse, the Batmobile to the Batcave
-                                                vanOffer.hideouts = c38(combat38::hideouts) == 0 && hideoutRoomOk[batNow ? 2 : 1];
+                                                vanOffer.hideouts = c38(combat38::hideouts) == 0 && hideoutRoomOk[batNow ? 2 : 1] &&
+                                                                    !bikeNow; // 0.0.75: the bike has no hideout trip
                                                 vanOffer.batman = batNow;
                                                 vanOffer.car = static_cast<uint8_t>(batmobile074::clampCar(c38(combat38::batmobileChoice)));
                                                 vanOffer.seat = c38(combat38::seatedDriving) != vehicle074::seatOff;
@@ -8063,7 +8106,9 @@ DWORD WINAPI run(void*) {
                                             case van_screen::Action::exitVehicle:
                                                 // 0.0.74 test 2b: the fallback GET OUT (van072 parks him on the next step if stopped)
                                                 if (std::abs(van.speed) > vehicleTune.exitSpeed)
-                                                    message(2, 0, batNow ? "GET OUT: stop the Batmobile first" : "GET OUT: stop the van first");
+                                                    message(2, 0, batNow    ? "GET OUT: stop the Batmobile first"
+                                                                  : bikeNow ? "GET OFF: stop the bike first"
+                                                                            : "GET OUT: stop the van first");
                                                 else
                                                     vanExitAsk = true;
                                                 break;
@@ -8081,7 +8126,9 @@ DWORD WINAPI run(void*) {
                                                 const uint32_t which = act == van_screen::Action::goSafehouse ? 1u : 2u;
                                                 const uint32_t slot = which == 1 ? mesh_model::slotHideoutSafehouse : mesh_model::slotHideoutBatcave;
                                                 const char* why = nullptr;
-                                                if (c38(combat38::hideouts) != 0)
+                                                if (bikeNow) // 0.0.75 MOTORCYCLE: never offered; a stale press stays on the bike
+                                                    why = "the motorcycle has no hideout trip";
+                                                else if (c38(combat38::hideouts) != 0)
                                                     why = "HIDEOUTS is OFF";
                                                 else if (!hideoutRoomOk[which] || !mesh_model::library().model(slot))
                                                     why = "that room's model or room.txt is missing";
@@ -8329,7 +8376,7 @@ DWORD WINAPI run(void*) {
                                             // 0.0.74 test 10 SEAT CENTRE: the seat eye in all three axes (its height as test 1's);
                                             // AUTO SIT .3 s after the boarding; a sit waits while a hand holds the wheel.
                                             Vec3 seatAt = van.frame.world(vanTune.eye);
-                                            seatAt.y = van.frame.world(batNow ? vanTune.eye : vehicle074::seatEye).y;
+                                            seatAt.y = van.frame.world(batNow || bikeNow ? vanTune.eye : vehicle074::seatEye).y; // 0.0.75: the bike's own
                                             // 0.0.75 SEAT RECENTER: B while seated snaps the eye back to the driver's seat.
                                             if (vehicle074::recenterPress((frame.buttons & vehicle074::recenterButton) != 0, seatRecenterWas,
                                                                           static_cast<uint8_t>(c38(combat38::seatedDriving)),
@@ -8358,7 +8405,13 @@ DWORD WINAPI run(void*) {
                                         } catch (...) {
                                             hideoutChairLift = 0;
                                         }
-                                        if (vout.summoned) {
+                                        if (vout.summoned && bikeNow) { // 0.0.75 MOTORCYCLE
+                                            message(1, 0, "MOTORCYCLE: here - grip the left handlebar to get on");
+                                            game_prompts::note("0.0.75 MOTORCYCLE: summoned (the probe's spot, CANDIDATE)");
+                                        } else if (vout.noSpot && bikeNow) {
+                                            message(2, 0, "MOTORCYCLE: no safe spot here, no bike");
+                                            game_prompts::note("0.0.75 MOTORCYCLE: no safe spot (the probe found none)");
+                                        } else if (vout.summoned) {
                                             message(1, 0, (vehName + (batNow ? ": here - grip the driver door handle to get in" : " (EXPERIMENTAL): here - grip the driver door handle to get in")).c_str());
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: summoned (the probe's spot, CANDIDATE)");
                                         } else if (vout.noSpot) {
@@ -8366,16 +8419,22 @@ DWORD WINAPI run(void*) {
                                             game_prompts::note("Version 0.0.73 PUNISHER VAN: no safe spot (the probe found none)");
                                         }
                                         vanBoardShade = std::isfinite(vanCarry.shade) ? std::clamp(vanCarry.shade, 0.f, 1.f) : 0.f;
-                                        if (vout.entered)
+                                        if (vout.entered && bikeNow) // 0.0.75 MOTORCYCLE: the bars are its wheel
+                                            message(1, 0, vanDriver.carried || (vanDriver.boarding && ci.ready)
+                                                              ? "MOTORCYCLE: on - grip both handlebars and turn them to steer; a gripping hand's trigger rides, its trigger + its stick back reverses (both: RT ride, LT reverse, both brake); grip beside the seat's left to get off; B recentres your seat"
+                                                              : "MOTORCYCLE: on - parked (the ride is not ready here); grip beside the seat's left to get off");
+                                        else if (vout.entered)
                                             message(1, 0, (vanDriver.carried || (vanDriver.boarding && ci.ready)
                                                               ? (vehName + ": in - grip the wheel; that hand's trigger drives, its trigger + its stick back reverses (both hands: RT drive, LT reverse, both brake); the inside handle gets you out; B recentres your seat")
                                                               : (vehName + ": in - parked (the drive is not ready here); the inside handle gets you out")).c_str());
                                         if (vout.exited) {
-                                            message(1, 0, (vehName + ": out").c_str());
-                                            vanSlamAt = combatClock + (sfx::engineFadeMs + 40) / 1000.0; // after the fade (loop off: it starts at once)
+                                            message(1, 0, (vehName + (bikeNow ? ": off" : ": out")).c_str());
+                                            if (!bikeNow) // 0.0.75: a bike has no door to slam
+                                                vanSlamAt = combatClock + (sfx::engineFadeMs + 40) / 1000.0; // after the fade (loop off: it starts at once)
                                         }
                                         if (vanCarry.fellBack) {
-                                            message(2, 0, (vehName + ": the drive could not carry you here - parked (get out by the inside handle)").c_str());
+                                            message(2, 0, (vehName + (bikeNow ? ": the ride could not carry you here - parked (get off by the grip beside the seat)"
+                                                                              : ": the drive could not carry you here - parked (get out by the inside handle)")).c_str());
                                             char line[160];
                                             sprintf_s(line, "Version 0.0.73 PUNISHER VAN: carry given up, parked (fallbacks %llu, bridge status %u)",
                                                       static_cast<unsigned long long>(vanDriver.fallbacks), swingState.status);
@@ -11032,15 +11091,21 @@ DWORD WINAPI run(void*) {
                             // its place inside it, the wheel at its hub (its glass as the model came) - the model or no car.
                             const bool batDraw = vehicleKind == kindBatmobile && c38(combat38::batmobile) == 0 &&
                                                  hero007In.hero == hero_modes::batman;
-                            if ((c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) || batDraw) {
+                            // 0.0.75 MOTORCYCLE: CAP's / WOLVERINE's bike - its body, no cab, its bars as the "wheel" (turned round
+                            // +y by the hands; not drawn when Handlebars is missing), no roof.
+                            const bool bikeDraw = vehicleKind == kindBike && bikeHero(hero007In.hero);
+                            if ((c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) || batDraw || bikeDraw) {
                                 const uint32_t carNow = batmobile074::clampCar(batCar);
-                                const mesh_model::Mesh* body = batDraw ? slotModel(mesh_model::slotBatmobileFirst + carNow, "BATMOBILE")
-                                                                       : slotModel(mesh_model::slotVan, "PUNISHER VAN");
-                                const mesh_model::Mesh* cab = batDraw ? slotModel(mesh_model::slotBatmobileCockpit, "BATMOBILE")
-                                                                      : slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
-                                const mesh_model::Mesh* wheel = batDraw ? slotModel(mesh_model::slotBatmobileWheel, "BATMOBILE")
-                                                                        : slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
-                                const van072::Tune drawTune = batDraw ? batmobile074::tune(carNow) : van072::Tune{};
+                                const mesh_model::Mesh* body = bikeDraw  ? slotModel(mesh_model::slotBikeBody, bike075::name)
+                                                               : batDraw ? slotModel(mesh_model::slotBatmobileFirst + carNow, "BATMOBILE")
+                                                                         : slotModel(mesh_model::slotVan, "PUNISHER VAN");
+                                const mesh_model::Mesh* cab = bikeDraw  ? nullptr
+                                                              : batDraw ? slotModel(mesh_model::slotBatmobileCockpit, "BATMOBILE")
+                                                                        : slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
+                                const mesh_model::Mesh* wheel = bikeDraw  ? slotModel(mesh_model::slotBikeBars, bike075::name)
+                                                                : batDraw ? slotModel(mesh_model::slotBatmobileWheel, "BATMOBILE")
+                                                                          : slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
+                                const van072::Tune drawTune = bikeDraw ? bike075::tune() : batDraw ? batmobile074::tune(carNow) : van072::Tune{};
                                 // 0.0.74 test 1 HIDEOUTS: in a room the van is not drawn (nor its dash); the room is.
                                 if (hideoutVisit.active()) {
                                     const auto w = hideoutVisit.which();
@@ -11142,9 +11207,12 @@ DWORD WINAPI run(void*) {
                                     L.wheelForward = -van072::worldDir(van.frame, toward);
                                     L.wheelUp = van072::worldDir(van.frame, up);
                                     // Version 0.0.73 test 3 VAN SCREEN: on the dash where the driver reads it
-                                    if (c38(combat38::vanScreen) == 0 || batDraw)
+                                    if (c38(combat38::vanScreen) == 0 || batDraw || bikeDraw)
                                     {
-                                        saved.vanScreen = batDraw ? van_screen::view(van.frame, vanDash, van.speed, drawTune.topSpeed, vanCarry.rpm,
+                                        saved.vanScreen = bikeDraw ? van_screen::view(van.frame, vanDash, van.speed, drawTune.topSpeed, vanCarry.rpm,
+                                                                                      van.state == van072::driving, bike075::layout().screen,
+                                                                                      bike075::screenScale)
+                                                          : batDraw ? van_screen::view(van.frame, vanDash, van.speed, drawTune.topSpeed, vanCarry.rpm,
                                                                                      van.state == van072::driving, batmobile074::layout(carNow).screen,
                                                                                      batmobile074::screenScale)
                                                                   : van_screen::view(van.frame, vanDash, van.speed, van072::Tune{}.topSpeed,
@@ -11193,6 +11261,11 @@ DWORD WINAPI run(void*) {
                                             V.offer.batman = true;
                                             V.carName = batmobile074::names[carNow];
                                             V.carCredit = batmobile074::creditLines[batmobile074::clampCar(carNow)];
+                                        } else if (bikeDraw) { // 0.0.75 MOTORCYCLE: its name and the CC BY credit on the dash
+                                            V.offer.batman = false;
+                                            V.offer.hideouts = false;
+                                            V.carName = bike075::name;
+                                            V.carCredit = bike075::creditLine;
                                         }
                                     }
                                     // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp; ON by default, live): the cockpit and
@@ -11200,7 +11273,8 @@ DWORD WINAPI run(void*) {
                                     cabin_look::setGlow(cabin_look::optionOn(c38(combat38::cockpitGlow)));
                                     // 0.0.74 test 3 DASH INSIDE (ON by default, live): the cockpit, wheel and dash screen only
                                     // from inside the car's box; the baked handle pad hidden, a small ring near a hand instead.
-                                    const bool insideOnly = cabin_look::optionOn(c38(combat38::dashInside));
+                                    // 0.0.75 MOTORCYCLE: a bike has no inside - its bars and screen are always seen.
+                                    const bool insideOnly = cabin_look::optionOn(c38(combat38::dashInside)) && !bikeDraw;
                                     cabin_look::setInside(insideOnly);
                                     L.insideOnly = insideOnly;
                                     L.insideLow = {-drawTune.width / 2, 0, -drawTune.length / 2};

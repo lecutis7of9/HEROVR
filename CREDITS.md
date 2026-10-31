@@ -34,6 +34,9 @@ It is licensed under the GNU GPL version 3.
   - **fccooper**: "Thor's Hammer: Mjolnir", THOR HAMMER #3. https://sketchfab.com/fccooper
   - **snafuj**: "GMC Vandura1976 Van", the PUNISHER VAN (painted black; its cab and wheel built by Agent Mulder).
     https://sketchfab.com/snafuj
+- **3D model (0.0.75)**, from Sketchfab, CC BY 4.0 (links and changes in THIRD-PARTY-MODELS.md):
+  - **Mert Tetik**: "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme", CAPTAIN AMERICA's and WOLVERINE's MOTORCYCLE
+    (its handlebars split out to steer by Agent Mulder). https://sketchfab.com/merttetik
 - **Worn suits (0.0.72)**, the 23 suits in `Models/Suits/`, from Sketchfab, used under their licences (each suit's own
   `license.txt` ships beside it; links and changes in THIRD-PARTY-MODELS.md):
   - **Light.k**: "Batman Beyond - Textured and Rigged" (CC BY 4.0), `Suit_batman_1`. https://sketchfab.com/Light.k

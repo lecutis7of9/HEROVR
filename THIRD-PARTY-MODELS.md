@@ -137,6 +137,24 @@ driven car's credit on its HOME page.
   other three cars keep their own colours.
 - Body triangles after the cut: 1989 101353, ODAMI 3350, FOREVER 95664, FOREVER 2 91891.
 
+## 0.0.75 MOTORCYCLE (Models/Vehicle/Motorcycle/model.glb and Handlebars/model.glb)
+
+CAPTAIN AMERICA's and WOLVERINE's summonable motorcycle (a short X tap; driver only). Converted by
+`tools/bike075/convert.py` in Blender: turned to x right, y up, -z forward with the ground under its axles,
+scaled so its tyres are 64 cm across (CANDIDATE), the handlebar yoke split out into `Handlebars/model.glb`
+(its steering pivot at the origin) so the rider's hands turn it, materials kept to their base colour
+(textures resized to 1024 or under), never decimated. Its size and grips are measured from the model
+(`layout.json` beside it). The model's `license.txt` ships beside both files.
+
+| Folder | Model | Author | Licence | Changes |
+|---|---|---|---|---|
+| `Vehicle/Motorcycle`, `Vehicle/Motorcycle/Handlebars` | [Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme](https://sketchfab.com/3d-models/low-poly-sci-fi-motorcycle-cyberpunk-theme-50c38758e5134a0b8ffa49780e7fe228) | [Mert Tetik](https://sketchfab.com/merttetik) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | 19860 + 688 triangles kept; the handlebar yoke split into its own file; base colours only; rescaled to 2.85 m long. |
+
+Credit line: This work is based on "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme"
+(https://sketchfab.com/3d-models/low-poly-sci-fi-motorcycle-cyberpunk-theme-50c38758e5134a0b8ffa49780e7fe228)
+by Mert Tetik (https://sketchfab.com/merttetik) licensed under CC-BY-4.0
+(http://creativecommons.org/licenses/by/4.0/), converted for VR. The bike's dash shows it on its HOME page.
+
 ## Reference only (no files used)
 
 The Sketchfab "Daredevil batons" page the player linked was a style reference only. Nothing was

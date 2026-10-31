@@ -36032,6 +36032,24 @@ int main() {
         for (uint32_t r = s1::exeDiffers; r <= s1::hookFailed; ++r)
             check(*s1::reasonText(r) != 0, "a reason without text");
     });
+    test("0.0.75 WALLS ARE SPIDER-MAN'S: no hero but a climber stays on the game's crawl", [] {
+        using namespace hero072;
+        WallRefusal w;
+        int held = 0;
+        for (int i = 0; i < 90; ++i)
+            held += w.update(1.f / 90, true, true);
+        check(held == 0 && w.kicks == 0, "SPIDER-MAN was jumped off his wall");
+        WallRefusal r;
+        held = 0;
+        for (int i = 0; i < 90; ++i)
+            held += r.update(1.f / 90, true, false);
+        check(r.kicks == 2 && held >= 20 && held <= 30, "a non-climber was not jumped off the game's crawl (twice in 1 s)");
+        check(!r.update(1.f / 90, false, false) && r.on == 0 && r.kick == 0, "off the crawl, the jump off went on");
+        check(!r.update(NAN, true, false), "NaN time kicked");
+        check(!climbAllowed(hero_modes::daredevil, true) && !climbAllowed(hero_modes::batman, true) &&
+                  !climbAllowed(hero_modes::captainAmerica, true) && climbAllowed(hero_modes::spiderMan, true),
+              "the climbers");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

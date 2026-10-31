@@ -89,6 +89,36 @@ struct Guard {
 inline bool climbAllowed(uint32_t hero, bool spiderOnly, bool clawsOut = false, bool clawClimb = false) {
     return !spiderOnly || hero == hero_modes::spiderMan || (hero == hero_modes::wolverine && clawsOut && clawClimb);
 }
+// 0.0.75 WALLS ARE SPIDER-MAN'S: the gate on the walls themselves, not just the climb grip. A hero that may not
+// climb (climbAllowed false) gets no swing wall run (SpidySwingSettings walls 0), and the game's own crawl - which
+// then takes a wall he comes into - is left the way the game leaves it, its RT + A (the wall's own jump off),
+// pulsed: kickSeconds held after onSeconds on the crawl, again every againSeconds while he is still on it.
+// Nothing here reads or writes game memory.
+struct WallRefusal {
+    static constexpr float onSeconds = .08f, kickSeconds = .15f, againSeconds = .6f;
+    float on{}, kick{};
+    uint32_t kicks{};
+    // True while the jump off is held this frame.
+    bool update(float dt, bool onGameCrawl, bool allowed) {
+        dt = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
+        if (allowed || !onGameCrawl) {
+            on = kick = 0;
+            return false;
+        }
+        on += dt;
+        if (kick > 0) {
+            kick = std::max(0.f, kick - dt);
+            return true;
+        }
+        if (on >= onSeconds) {
+            kick = kickSeconds;
+            on = onSeconds - againSeconds; // the next pulse againSeconds later if he is still on it
+            ++kicks;
+            return true;
+        }
+        return false;
+    }
+};
 enum class WayUp : uint32_t { wallCrawl, grapple, fly, bigJump, bigLeap, clawClimb, hookLauncher };
 inline WayUp wayUp(uint32_t hero) {
     switch (hero) {

@@ -2253,6 +2253,8 @@ DWORD WINAPI run(void*) {
         // never turn them on for a player who asked for them off.
         game_swing::Settings sentSwingSettings;
         bool swingSettingsSent{}, wallsHandedBack{}, toldHandoverRefused{};
+        bool heroWallsSent{true}; // 0.0.75 WALLS ARE SPIDER-MAN'S: the hero's climb, as last sent to the swing
+        hero072::WallRefusal wallRefusal;
         game_pad::WallHandover wallHandover;
         // What the game's own crawl does with the stick Spidy sends it, which
         // is the last unmeasured step between a wall and a vent that behaves
@@ -3071,6 +3073,13 @@ DWORD WINAPI run(void*) {
         // walls, and the hands that land no blow: the phone's while it is out,
         // and both while the game names its X, whose press a thrown fist is
         // then (NamedPress) - a blow of Spidy's on top would hit as well.
+        // 0.0.75 WALLS ARE SPIDER-MAN'S: whether this hero may hold a wall at all (hero072::climbAllowed: SPIDER-MAN,
+        // WOLVERINE with his claws out and CLAW CLIMB on; SPIDER CLIMB ONLY off lets everyone).
+        auto heroClimbs = [&] {
+            return hero072::climbAllowed(heroNow(), c38(combat38::spiderClimbOnly) == 0,
+                                         hero007Play.clawsOut[0] || hero007Play.clawsOut[1],
+                                         c38(combat38::clawClimb) == 1);
+        };
         auto sendSwingSettings = [&] {
             if (!swingStarted || !swingSettings)
                 return;
@@ -3082,6 +3091,10 @@ DWORD WINAPI run(void*) {
             // Update 37: wall_crawl 1 leaves walls to the game's own crawl (the body flat
             // on the wall, its legs moving: CANDIDATE), 0 the swing's wall run (plan B).
             s.walls = !(config.options & 16384) && !gameWallCrawl.load();
+            // 0.0.75 WALLS ARE SPIDER-MAN'S: no swing wall run for a hero that may not climb.
+            heroWallsSent = heroClimbs();
+            if (!heroWallsSent)
+                s.walls = 0;
             s.arcade = values.arcadeWebs;
             s.handClimb = values.handClimb;
             sentSwingSettings = s;
@@ -6583,8 +6596,13 @@ DWORD WINAPI run(void*) {
                         // player with it and ignores the bridge's keys.
                         game_pad::Walk walk;
                         // Update 37: live.txt wall_crawl and hand_climb, taken here.
-                        if (wallCrawlChanged.exchange(false))
+                        if (wallCrawlChanged.exchange(false) || (swingStarted && heroClimbs() != heroWallsSent)) {
+                            const bool was = heroWallsSent;
                             sendSwingSettings();
+                            if (was != heroWallsSent)
+                                game_prompts::note(heroWallsSent ? "VERSION 0.0.75 WALLS: this hero climbs walls (the swing's wall run on)"
+                                                                 : "VERSION 0.0.75 WALLS: this hero does not climb walls (wall run off, the game's crawl left)");
+                        }
                         if (const int asked = handClimbAsked.exchange(-1); asked >= 0 && (asked != 0) != values.handClimb) {
                             values.handClimb = asked != 0;
                             applySettings();
@@ -6973,6 +6991,13 @@ DWORD WINAPI run(void*) {
                                                  swingState.wall == static_cast<uint32_t>(game_swing::Surface::game);
                             const bool webbed = swingState.webs[0].attached || swingState.webs[1].attached;
                             walk.parkour = onCrawl && (walk.jump || webbed);
+                            // 0.0.75 WALLS ARE SPIDER-MAN'S: a hero that may not climb, on the game's own crawl, is
+                            // jumped off it with the crawl's own RT + A (CONFIRMED path: the leave-wall press above).
+                            if (wallRefusal.update(frame.seconds, onCrawl, heroClimbs())) {
+                                walk.jump = walk.parkour = true;
+                                if (wallRefusal.kicks == 1 && wallRefusal.kick == hero072::WallRefusal::kickSeconds)
+                                    game_prompts::note("VERSION 0.0.75 WALLS: off the game's crawl (this hero does not climb)");
+                            }
                         }
                         walk.scan = templePress.held() && steering;
                         // A perfect dodge: the game slows its own time within a

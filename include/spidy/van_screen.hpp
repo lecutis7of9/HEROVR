@@ -59,7 +59,15 @@ struct Offer {
     bool exit = false;
     // 0.0.74 test 2b CRIME GPS: the MAP page's "OK - TRACK" button while a crime's popup is up.
     bool crimePopup = false;
+    // 0.0.74 test 10 HIDEOUT HOLD (combat38 hideoutHold; owner pt1357u "it can be easy to trigger going to the
+    // batcave when trying to hit seat"): GO TO BATCAVE / SAFEHOUSE goes only after hideoutHoldSeconds held on it
+    // (the touch kept in it, or the ray's trigger kept down on it); false: test 3's - at the touch.
+    bool hideoutHold = true;
 };
+inline constexpr float hideoutHoldSeconds = 1.f;
+// 0.0.74 test 10: HOME's GO TO BATCAVE / SAFEHOUSE row sits at the bottom, this far (design units) under the
+// SIT / picker rows - beyond finger_ray::dashSnap's reach from the SIT button.
+inline constexpr float hideoutGap = .016f;
 // Whether a page is shown for this offer (the Batmobile hides CASES and LOCKER), and the shown pages in
 // tab order into `out` (returns how many, at least 1).
 bool pageShown(uint32_t page, const Offer& offer);
@@ -181,6 +189,8 @@ public:
     int hotButton() const { return hotButton_; }
     // Which shown tab (index) / page button lies at face point f (design units); -1: none.
     static void targetAt(Vec3 f, uint32_t page, const Offer& offer, int& tab, int& button);
+    // 0.0.74 test 10 HIDEOUT HOLD: the hold on GO TO BATCAVE / SAFEHOUSE so far, 0..1 (0: none).
+    float hold() const { return holdAction_ == Action::none ? 0.f : std::min(1.f, holdTime_ / hideoutHoldSeconds); }
     // 0.0.74: the button pressed by the last step (none: none), read once.
     Action takeAction() {
         const Action a = action_;
@@ -200,6 +210,11 @@ private:
     bool pointer_{}, cursorOn_{}, beamOn_{};
     Vec3 cursor_{}, beamFrom_{};
     int hotTab_{-1}, hotButton_{-1};
+    // 0.0.74 test 10 HIDEOUT HOLD: the held button, its time, the hand and whether by the ray
+    Action holdAction_{};
+    float holdTime_{};
+    int holdHand_{-1}, pokeHand_{-1};
+    bool holdRay_{}, pokeRay_{};
     bool pokeAt(Vec3 f); // a touch at face point f (design units): the tab row, CASES' back third, else next
 };
 
@@ -230,6 +245,7 @@ struct View {
     float musicElapsed{}, musicTotal{};
     std::string musicSong, musicNote;
     const char* homeNote{};   // a line under the HOME buttons (the last hideout's fault, say)
+    float hold{};             // 0.0.74 test 10 HIDEOUT HOLD: Screen::hold() (the GO TO button's fill)
     const char* carName{};    // 0.0.74 test 1 BATMOBILE: the car driven (the header), nullptr: none
     const char* carCredit{};  // 0.0.74 test 1 BATMOBILE: its model's credit (HOME's last line), nullptr: none
     // 0.0.74 test 2b CRIME GPS (crime_gps074.hpp): the live crimes (world x, z), the tracked one (-1 none) and

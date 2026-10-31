@@ -2397,6 +2397,10 @@ def main():
     migrated_074t10 = live_settings.migrate_074t10(ROOT/'live.txt')
     if migrated_074t10:
         print(migrated_074t10, flush=True)
+    # 0.0.74 test 10 SEAT: SEATED DRIVING's old SIT BUTTON default moves to AUTO SIT once.
+    migrated_074t10_seat = live_settings.migrate_074t10_seat(ROOT/'live.txt')
+    if migrated_074t10_seat:
+        print(migrated_074t10_seat, flush=True)
     try:
         live_text = (ROOT/'live.txt').read_text(encoding='utf-8-sig', errors='replace')
     except OSError:

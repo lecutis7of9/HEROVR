@@ -2371,7 +2371,7 @@ DWORD WINAPI run(void*) {
         // 0.0.74 test 1 SEATED DRIVING (vehicle074::Seat): the lift the rig holds (next frame's) and how much of
         // it the van's tracking-space place already took back (so the van stays on the street as he rises).
         vehicle074::Seat vanSeat;
-        float vanSeatLift{}, vanSeatTaken{};
+        Vec3 vanSeatLift{}, vanSeatTaken{}; // 0.0.74 test 10 SEAT CENTRE: all three axes (test 1: the height)
         // 0.0.74 test 1 HIDEOUTS (hideout074::Visit): the trip from the dash, the van held where it stands.
         hideout074::Visit hideoutVisit;
         float hideoutExitHeld{};
@@ -4655,7 +4655,7 @@ DWORD WINAPI run(void*) {
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
                     rig.vehicleTurn(vanCarry.turn, van072::seatStickLock(van.state, vanCarry.lockStick)); // 0.0.73 test 3: no stick turn seated
                     // 0.0.74 test 1 SEATED DRIVING: the seat's lift while he drives; out of the van, standing again.
-                    rig.seatLift(van.state != van072::driving ? 0.f : hideoutVisit.active() ? hideoutChairLift : vanSeatLift); // 0.0.74 test 2b: the chair's
+                    rig.seatOffset(van.state != van072::driving ? Vec3{} : hideoutVisit.active() ? Vec3{0, hideoutChairLift, 0} : vanSeatLift); // 0.0.74 test 2b: the chair's
                     vanCarry.turn = 0;
                     motion = rig.update(controller, feet, {camera[8], camera[9], camera[10]}, gameplay,
                                         swingState.owned ? Vec3{0, 1, 0} : heroUp,
@@ -7572,6 +7572,7 @@ DWORD WINAPI run(void*) {
                                         ci.bumper = vanBumperHit;
                                         vanBumperHit = false;
                                         ci.roomToWorld = vanW;
+                                        ci.seated = length(rig.seatOffsetApplied()) > .01f; // 0.0.74 test 10: out under the blink
                                         const auto flat = [&](float, float, float y) { return y; }; // the body keeps the street
                                         const auto open = [](Vec3, Vec3, float) { return true; };  // (the probe checked it)
                                         const auto clearAhead = [](Vec3, Vec3, float) { return true; }; // the bumper ray (ci)
@@ -7580,18 +7581,20 @@ DWORD WINAPI run(void*) {
                                         van072::Tune vanTune = vehicleTune;
                                         vanTune.wheelHandPedals = combat38::vanWheelHandPedals(c38(combat38::vanPedals));
                                         vanTune.wheelFirst = combat38::wheelFirstOn(c38(combat38::wheelFirst)); // 0.0.74 test 3
+                                        vanTune.boardFaceRoom = combat38::entryFacesRoom(c38(combat38::entryFacing)); // 0.0.74 test 10
                                         van072::Out vout{};
                                         // 0.0.74 test 1 SEATED DRIVING: the rig's new lift moves his whole room up or down -
                                         // the van rides in that room while carried, so its place there takes the lift back
                                         // and it stays on the street (CANDIDATE: Windows-only, untested in the headset).
+                                        // 0.0.74 test 10 SEAT CENTRE: the same for the level part (the eye centred on the seat).
                                         if (vanDriver.carried) {
-                                            const float d = rig.seatLiftApplied() - vanSeatTaken;
-                                            if (std::isfinite(d) && d != 0 && van072::fine(vanW.orientation)) {
-                                                vanDriver.room.at -= vanW.orientation.conjugate().rotate(Vec3{0, d, 0});
-                                                vanSeatTaken += d;
+                                            const Vec3 d = rig.seatOffsetApplied() - vanSeatTaken;
+                                            if (van072::fine(d) && length(d) != 0 && van072::fine(vanW.orientation)) {
+                                                vanDriver.room.at -= vanW.orientation.conjugate().rotate(d);
+                                                vanSeatTaken = vanSeatTaken + d;
                                             }
                                         } else
-                                            vanSeatTaken = rig.seatLiftApplied();
+                                            vanSeatTaken = rig.seatOffsetApplied();
                                         // 0.0.74 test 1 HIDEOUTS: a trip ends with the van gone, OFF or another hero.
                                         if (hideoutVisit.active() && (!vin.enabled || !vin.punisher || van.state != van072::driving)) {
                                             hideoutVisit.end();
@@ -7688,6 +7691,7 @@ DWORD WINAPI run(void*) {
                                                 vanOffer.seat = c38(combat38::seatedDriving) != vehicle074::seatOff;
                                                 vanOffer.sat = vanSeat.sat();
                                                 vanOffer.exit = van.state == van072::driving;
+                                                vanOffer.hideoutHold = combat38::hideoutHoldOn(c38(combat38::hideoutHold)); // 0.0.74 test 10
                                                 si.offer = vanOffer;
                                                 if (hideoutAway) // nothing pokes the dash from the hideout
                                                     for (unsigned i = 0; i < 2; ++i)
@@ -7736,7 +7740,9 @@ DWORD WINAPI run(void*) {
                                                 break;
                                             case van_screen::Action::sit:
                                                 vanSeat.sit();
-                                                message(1, 0, "SEATED DRIVING: sat - your eye is at the driver's seat (STAND or getting out stands you up)");
+                                                message(1, 0, van.wheel.latched[0] || van.wheel.latched[1]
+                                                                  ? "SEATED DRIVING: let go of the wheel - you sit the moment both hands are off it"
+                                                                  : "SEATED DRIVING: sat - your eye is at the driver's seat (STAND or getting out stands you up)");
                                                 break;
                                             case van_screen::Action::stand:
                                                 vanSeat.stand();
@@ -8016,12 +8022,16 @@ DWORD WINAPI run(void*) {
                                         }
                                         // 0.0.74 test 1 SEATED DRIVING: next frame's lift (0 out of the seat, OFF or in a hideout).
                                         try {
-                                            const float seatY = van.frame.world(batNow ? vanTune.eye : vehicle074::seatEye).y;
+                                            // 0.0.74 test 10 SEAT CENTRE: the seat eye in all three axes (its height as test 1's);
+                                            // AUTO SIT .3 s after the boarding; a sit waits while a hand holds the wheel.
+                                            Vec3 seatAt = van.frame.world(vanTune.eye);
+                                            seatAt.y = van.frame.world(batNow ? vanTune.eye : vehicle074::seatEye).y;
                                             vanSeatLift = vanSeat.step(static_cast<uint8_t>(c38(combat38::seatedDriving)),
                                                                        van.state == van072::driving, hideoutVisit.active(), vin.dt,
-                                                                       motion.headPose.position.y, seatY);
+                                                                       motion.headPose.position, seatAt, vanDriver.boarding,
+                                                                       van.wheel.latched[0] || van.wheel.latched[1]);
                                         } catch (...) {
-                                            vanSeatLift = 0;
+                                            vanSeatLift = {};
                                         }
                                         // 0.0.74 test 2b BATCOMPUTER CHAIR: sat, the eye goes to the chair's (the room's floor + seatedEye)
                                         try {
@@ -14546,6 +14556,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFingerRay(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashInside(void* v) { return setHero007(v, combat38::dashInside, 5510); }
 // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return setHero007(v, combat38::cockpitGlow, 5511); }
+// 0.0.74 test 10 ENTRY FACING (van072.hpp Tune::boardFaceRoom) and HIDEOUT HOLD (van_screen.hpp Offer::hideoutHold)
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyEntryFacing(void* v) { return setHero007(v, combat38::entryFacing, 5524); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideoutHold(void* v) { return setHero007(v, combat38::hideoutHold, 5525); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

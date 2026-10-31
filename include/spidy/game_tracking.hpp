@@ -283,9 +283,27 @@ class GameTrackingRig {
     // a seated player's eye is at the driver seat's; set every frame (0: standing); reset() clears it. The lift
     // used by the last update is seatLiftApplied() (the van's room is moved back by it, game_xr).
     void seatLift(float metres) {
-        seatLift_ = std::isfinite(metres) ? std::clamp(metres, -.9f, .6f) : 0.f;
+        seatLift_ = Vec3{0, std::isfinite(metres) ? std::clamp(metres, -.9f, .6f) : 0.f, 0};
     }
     float seatLiftApplied() const {
+        return seatLiftApplied_.y;
+    }
+    // 0.0.74 test 10 SEAT CENTRE: the whole offset (world, metres): y as seatLift, the level part at most .5 m
+    // (its way kept) - the seated eye centred on the driver seat too. Any NaN: none. Set every frame.
+    void seatOffset(Vec3 metres) {
+        if (!std::isfinite(metres.x) || !std::isfinite(metres.y) || !std::isfinite(metres.z)) {
+            seatLift_ = {};
+            return;
+        }
+        Vec3 o{metres.x, std::clamp(metres.y, -.9f, .6f), metres.z};
+        const float n = std::sqrt(o.x * o.x + o.z * o.z);
+        if (n > .5f) {
+            o.x *= .5f / n;
+            o.z *= .5f / n;
+        }
+        seatLift_ = o;
+    }
+    Vec3 seatOffsetApplied() const {
         return seatLiftApplied_;
     }
     // Update 38.5 FLY ROLL (extras385::fly::Roll): the view rolled `radians` about the head's level
@@ -412,7 +430,7 @@ class GameTrackingRig {
     bool triggerWebs_{}, buttonsChanged_{};
     float snap_ = .5235988f, smooth_{};
     float vehicleTurn_{}; // Version 0.0.73 PUNISHER VAN
-    float seatLift_{}, seatLiftApplied_{}; // 0.0.74 test 1 SEATED DRIVING
+    Vec3 seatLift_{}, seatLiftApplied_{}; // 0.0.74 test 1 SEATED DRIVING (test 10: all three axes)
     bool stickLocked_{};
     // The stand-off wanted along the surface's normal, and the time on it.
     float surfaceDepth_{}, surfaceSeconds_{};

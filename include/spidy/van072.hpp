@@ -67,6 +67,11 @@ struct Tune {
     // Version 0.0.73 test 3: BOARD THE PLAYER (on; false: 0.0.72 - the drawn van swings round him on entry).
     // On: getting in never moves the van; HE is turned to its forward and carried into the seat (Driver).
     bool boardPlayer = true;
+    // 0.0.74 test 10 ENTRY FACING (combat38 entryFacing; owner pt1357u: "you dont automatically go in facing the
+    // front just the direction you were standing"): true (PLAY SPACE, the default) the turn on getting in puts the
+    // tracking space's forward (where a seated player's chair and body face) along the car's; false (HEAD): 0.0.73
+    // test 3's - the head's look at the grip (turned toward the handle, it left the body that much off).
+    bool boardFaceRoom = true;
     float groundStep = .6f;        // the ground under the van within this of the player's feet
     // 0.0.74 test 3 WHEEL FIRST (on; false: test 2b - the inside handle answers any grip within reach, so a grip
     // on the Batmobiles' wheel, which sits within .2 m of their door handle, could open the door).
@@ -600,6 +605,10 @@ struct CarryTune {
     // (boardSpeed at most, slowing in the last metre) until within boardNear or boardSeconds; then a
     // boardFade-second fade of the comfort blink.
     float boardTurnStep = .9f, boardSpeed = 6.f, boardNear = .06f, boardSeconds = .6f, boardFade = .15f;
+    // 0.0.74 test 10 BOARDING RE-MEASURE: the turn still to give is read from the room each frame (a step the rig
+    // dropped - a stutter, a frame out of play - is asked again); after boardTurnSeconds what is left is let go
+    // (never held under the blink).
+    float boardTurnSeconds = 1.f;
 };
 struct CarryIn {
     bool ready{};        // the bridge runs, its state fresh, gameplay: a carry can be asked
@@ -608,6 +617,9 @@ struct CarryIn {
     Vec3 body{}, bodyVelocity{}; // the player's body (world; the bridge's)
     bool bumper{};       // the bumper ray hit within its reach (its answer this frame)
     Pose roomToWorld{};  // the tracking space in the world, this frame
+    // 0.0.74 test 10 SEAT CENTRE: the seat's offset (vehicle074::Seat) is held now; getting out clears it, so the
+    // exit's step back to the room is under a boardFade blink.
+    bool seated{};
 };
 struct CarryOut {
     bool carry{};       // ask the bridge to drive the body at `velocity`
@@ -623,6 +635,16 @@ struct CarryOut {
 inline bool fine(Quat q) {
     const float n = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
     return std::isfinite(n) && std::abs(n - 1) < .01f;
+}
+// 0.0.74 test 10: the yaw (frame convention, + left of -z) of a pose's forward; false when it is no usable heading.
+inline bool yawOf(const Pose& p, float& yaw) {
+    if (!fine(p.orientation))
+        return false;
+    const Vec3 a = p.orientation.rotate(Vec3{0, 0, -1});
+    if (!fine(a) || std::hypot(a.x, a.z) < .1f)
+        return false;
+    yaw = std::atan2(-a.x, -a.z);
+    return fine(yaw);
 }
 inline Frame frameIn(const Pose& to, const Frame& f) { // a frame carried by `to` (its yaw only)
     Frame w;
@@ -641,6 +663,9 @@ struct Driver {
     // Version 0.0.73 test 3 BOARDING: the room's turn still to give, the time so far, the blink's fade
     bool boarding{}, boarded{};
     float boardTurn{}, boardTime{}, shadeLeft{};
+    // 0.0.74 test 10 BOARDING RE-MEASURE: the room's yaw the turn ends at (known: read back each frame)
+    float boardYaw{};
+    bool boardYawKnown{};
     uint64_t fallbacks{}, bumps{}, alights{};
     template <class Ground, class Clear, class Ahead>
     Out step(const In& in, const CarryIn& ci, CarryOut& co, Ground&& groundAt, Clear&& clear, Ahead&& ahead,
@@ -680,6 +705,8 @@ struct Driver {
                 alightLeft = ct.alightSeconds;
                 ++alights;
                 boarded = false;
+                if (ci.seated) // 0.0.74 test 10: the seat's offset goes next frame, under the blink
+                    shadeLeft = ct.boardFade;
             } else if (van.state == driving) {
                 Vec3 v = dt > 0 ? (van.frame.world(t.eye) - before.world(t.eye)) * (1 / dt) : Vec3{};
                 v.y = 0;
@@ -725,9 +752,15 @@ struct Driver {
                 // (the room about his head) and is carried to the seat (below).
                 Vec3 h{in.look.x, 0, in.look.z};
                 const float headYaw = fine(h) && length(h) > 1e-3f ? std::atan2(-h.x, -h.z) : van.frame.yaw;
-                boardTurn = std::remainder(van.frame.yaw - headYaw, 6.2831853f);
+                // 0.0.74 test 10 ENTRY FACING: PLAY SPACE (the default) turns the room's own forward to the car's
+                // (his chair / body, not the look he grabbed the handle with); HEAD, or no usable room: the look.
+                float roomYaw = 0;
+                const bool roomKnown = poseOk && yawOf(ci.roomToWorld, roomYaw);
+                boardTurn = std::remainder(van.frame.yaw - (t.boardFaceRoom && roomKnown ? roomYaw : headYaw), 6.2831853f);
                 if (!fine(boardTurn))
                     boardTurn = 0;
+                boardYawKnown = roomKnown;
+                boardYaw = roomKnown ? roomYaw + boardTurn : 0.f;
                 boarding = true;
                 boarded = false;
                 boardTime = 0;
@@ -751,10 +784,21 @@ struct Driver {
                 ++alights;
                 boarded = false;
             }
+            if (o.exited && ci.seated) // 0.0.74 test 10: the seat's offset goes next frame, under the blink
+                shadeLeft = ct.boardFade;
             if (boarding && van.state != driving)
                 boarding = false;
             if (boarding) {
                 boardTime += dt;
+                // 0.0.74 test 10 BOARDING RE-MEASURE: what is left of the turn, read from this frame's room (every
+                // step asked so far is in it - or was dropped by the rig, and is asked again).
+                float roomYaw = 0;
+                if (boardYawKnown && !o.entered && poseOk && yawOf(ci.roomToWorld, roomYaw)) {
+                    const float left = std::remainder(boardYaw - roomYaw, 6.2831853f);
+                    boardTurn = fine(left) && std::abs(left) > 2e-4f ? left : 0.f;
+                }
+                if (boardTime >= ct.boardTurnSeconds)
+                    boardTurn = 0; // never held under the blink
                 Vec3 d = van.frame.world(t.eye) - in.head;
                 d.y = 0;
                 const float n = fine(d) ? length(d) : 0.f;

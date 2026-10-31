@@ -58,13 +58,19 @@ inline float stepVolume(float v, int dir) {
     return n < 0 ? 0.f : n > 100 ? 100.f : n;
 }
 
-// ---- SEATED DRIVING (combat38 SEATED DRIVING: SIT BUTTON, AUTO SIT, OFF) ----
-enum SeatMode : uint8_t { seatButton = 0, seatAuto = 1, seatOff = 2 };
-inline constexpr const char* seatHelp = "SIT on the van dash puts your eye at the driver's seat, no restart needed.";
+// ---- SEATED DRIVING (combat38 SEATED DRIVING: AUTO SIT, SIT BUTTON, OFF, HEIGHT ONLY) ----
+// 0.0.74 test 10 (owner pt1357u: "youre not automatically seated ... it puts you too far back and doesnt recenter
+// you on the chair"): AUTO SIT is first and the default (it was SIT BUTTON = 0, so a saved 0 is AUTO SIT now; OFF
+// stays 2), and a sit puts the eye at the seat's eye in all three axes (clamped). HEIGHT ONLY: 0.0.74 test 1's
+// SIT button - the eye's height only.
+enum SeatMode : uint8_t { seatAuto = 0, seatButton = 1, seatOff = 2, seatHeight = 3 };
+inline constexpr const char* seatHelp = "AUTO SIT centres you in the driver's seat as you get in; no restart needed.";
 // The driver's eye in the van frame (vehicle_view's seat: x left, y up, z forward; metres).
 inline constexpr Vec3 seatEye{-.45f, 1.60f, -.55f};
 inline constexpr float liftLow = -.9f, liftHigh = .6f; // the most it moves the eye down / up
-inline constexpr float autoSitDelay = 1.f;            // seconds in the seat before AUTO SIT
+inline constexpr float seatReach = .5f;               // 0.0.74 test 10: the most it moves the eye level (any way)
+inline constexpr float autoSitDelay = .3f;            // seconds after boarding ends before AUTO SIT (test 1: 1 s)
+inline bool seatCentres(uint8_t mode) { return mode != seatHeight; }
 
 // The lift (world y, metres) that puts the eye now at `headY` at the seat eye's `seatY`, on top of `current`.
 inline float seatLift(float current, float headY, float seatY) {
@@ -74,54 +80,88 @@ inline float seatLift(float current, float headY, float seatY) {
     return l < liftLow ? liftLow : l > liftHigh ? liftHigh : l;
 }
 
-// The seat's state: sat (a lift held), cleared on getting out, OFF, or a hideout.
+// 0.0.74 test 10 SEAT CENTRE: the world offset that puts the eye now at `head` at the seat eye `seat`, on top of
+// `current`: y as seatLift, the level part at most seatReach long (its way kept). Any NaN: none.
+inline Vec3 seatOffset(Vec3 current, Vec3 head, Vec3 seat) {
+    const auto bad = [](Vec3 v) { return !(v.x == v.x) || !(v.y == v.y) || !(v.z == v.z); };
+    if (bad(current) || bad(head) || bad(seat))
+        return {};
+    Vec3 o{current.x + (seat.x - head.x), seatLift(current.y, head.y, seat.y), current.z + (seat.z - head.z)};
+    const float n = std::sqrt(o.x * o.x + o.z * o.z);
+    if (!(n == n) || n > 1e6f)
+        return {};
+    if (n > seatReach) {
+        o.x *= seatReach / n;
+        o.z *= seatReach / n;
+    }
+    return o;
+}
+
+// The seat's state: sat (an offset held), cleared on getting out, OFF, or a hideout.
 class Seat {
 public:
-    // One frame: mode, in the driver's seat, the eye's y, the seat eye's world y. Returns the lift to hold.
-    float step(uint8_t mode, bool driving, bool inHideout, float dt, float headY, float seatY) {
+    // One frame: mode, in the driver's seat, in a hideout, the eye now and the seat eye (world), still boarding
+    // (the carry into the seat), a hand latched on the wheel. Returns the offset to hold (world, metres).
+    // 0.0.74 test 10: AUTO SIT autoSitDelay after the boarding ends; a sit (AUTO or SIT) waits while a hand holds
+    // the wheel (the eye - and the hands - jumping under a latched hand would steer), so grip and steering always
+    // work.
+    Vec3 step(uint8_t mode, bool driving, bool inHideout, float dt, Vec3 head, Vec3 seat, bool boarding = false,
+              bool wheelHeld = false) {
         if (mode == seatOff || !driving) {
             sat_ = false;
-            lift_ = 0;
+            want_ = false;
+            offset_ = {};
             wasSat_ = false;
             boarded_ = 0;
             autoDone_ = false;
-            return 0;
+            return {};
         }
         if (inHideout) { // standing in the room; sat again on the way back
             if (sat_)
                 wasSat_ = true;
             sat_ = false;
-            lift_ = 0;
-            return 0;
+            offset_ = {};
+            return {};
         }
         if (wasSat_) {
             wasSat_ = false;
             want_ = true;
         }
-        boarded_ += dt > 0 && dt < 1 ? dt : 0;
-        if (mode == seatAuto && !autoDone_ && boarded_ >= autoSitDelay) {
+        if (!boarding)
+            boarded_ += dt > 0 && dt < 1 ? dt : 0;
+        if (mode == seatAuto && !autoDone_ && !boarding && boarded_ >= autoSitDelay) {
             autoDone_ = true;
-            want_ = !sat_;
+            want_ = want_ || !sat_;
         }
-        if (want_) {
+        if (want_ && !wheelHeld && !boarding) {
             want_ = false;
-            lift_ = seatLift(lift_, headY, seatY);
+            if (seatCentres(mode))
+                offset_ = seatOffset(offset_, head, seat);
+            else
+                offset_ = {0, seatLift(offset_.y, head.y, seat.y), 0};
             sat_ = true;
         }
-        return lift_;
+        return offset_;
     }
-    void sit() { want_ = true; }   // the dash's SIT (again: re-levels)
+    // 0.0.74 test 1's: the eye's y only (the lift), as before.
+    float step(uint8_t mode, bool driving, bool inHideout, float dt, float headY, float seatY) {
+        return step(mode, driving, inHideout, dt, Vec3{0, headY, 0}, Vec3{0, seatY, 0}).y;
+    }
+    void sit() { want_ = true; }   // the dash's SIT (again: re-centres)
     void stand() {                 // the dash's STAND
         sat_ = false;
         want_ = false;
-        lift_ = 0;
+        offset_ = {};
     }
     bool sat() const { return sat_; }
-    float lift() const { return lift_; }
+    bool waiting() const { return want_; } // a sit asked, held back (a hand on the wheel, still boarding)
+    float lift() const { return offset_.y; }
+    Vec3 offset() const { return offset_; }
 
 private:
     bool sat_{}, want_{}, wasSat_{}, autoDone_{};
-    float lift_{}, boarded_{};
+    Vec3 offset_{};
+    float boarded_{};
 };
 
 } // namespace spidy::vehicle074

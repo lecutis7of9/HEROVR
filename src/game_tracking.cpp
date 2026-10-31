@@ -632,7 +632,7 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         }
     }
     seatLiftApplied_ = seatLift_; // 0.0.74 test 1 SEATED DRIVING
-    Rig placed{rig_.origin + standOff_ + headDrop_ + Vec3{0, seatLiftApplied_, 0}, rig_.yaw, rig_.tilt, rig_.pivot};
+    Rig placed{rig_.origin + standOff_ + headDrop_ + seatLiftApplied_, rig_.yaw, rig_.tilt, rig_.pivot};
     const bool turned = surfaceTurn_.x != 0 || surfaceTurn_.y != 0 || surfaceTurn_.z != 0;
     if (turned || length(surfaceShift_) > 0) {
         // The level placement, turned about the feet and moved onto the

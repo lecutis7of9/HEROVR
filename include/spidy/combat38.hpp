@@ -212,7 +212,8 @@ enum Option : uint32_t {
     // (on outside the van too), OFF; live
     carMusic,
     // 0.0.74 test 1 SEATED DRIVING (vehicle074.hpp): the dash's SIT button (SIT BUTTON, the default), AUTO SIT (sat a
-    // second after getting in), OFF; getting out stands him back up; live
+    // second after getting in), OFF; getting out stands him back up; live. 0.0.74 test 10: AUTO SIT (0, the default:
+    // sat and centred on the seat .3 s after the boarding), SIT BUTTON (1), OFF (2), HEIGHT ONLY (3: test 1's SIT)
     seatedDriving,
     // 0.0.74 test 1 BATMOBILE (batmobile074.hpp; owner pt1159u "add the Batmobile's to test 1"): ON (the default)
     // Batman (every suit) summons a drivable Batmobile on X, the van's driving; its models load at start only when ON
@@ -254,6 +255,10 @@ enum Option : uint32_t {
     // only at the left hip, a batarang only at the belt's front centre, a smoke pellet only from the other
     // forearm (the nearest zone, by a margin); OFF test 9's buckle smoke / side pouches / any other grip's gun
     beltZones,
+    // 0.0.74 test 10 ENTRY FACING (van072.hpp Tune::boardFaceRoom): PLAY SPACE (0, the default) or HEAD (1)
+    entryFacing,
+    // 0.0.74 test 10 HIDEOUT HOLD (van_screen.hpp): HOLD (0, the default: GO TO BATCAVE / SAFEHOUSE held 1 s) or TAP
+    hideoutHold,
     options
 };
 struct OptionInfo {
@@ -621,7 +626,7 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"hideouts", "HIDEOUTS", "HIDE", "Safehouse trips from the van dash, Batcave from the Batmobile, needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"car_music", "CAR MUSIC", "CMUS", "The van dash's MUSIC page plays your songs, no restart needed.", 3, {"IN VEHICLES", "ALWAYS", "OFF", nullptr}},
-    {"seated_driving", "SEATED DRIVING", "SEAT", "SIT on the van dash puts your eye at the driver's seat, no restart needed.", 3, {"SIT BUTTON", "AUTO SIT", "OFF", nullptr}},
+    {"seated_driving", "SEATED DRIVING", "SEAT", "AUTO SIT centres you in the driver's seat as you get in; no restart needed.", 4, {"AUTO SIT", "SIT BUTTON", "OFF", "HEIGHT ONLY"}},
     {"batmobile", "BATMOBILE", "BMOB", "Drives a Batmobile as Batman (X summons it), turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"batmobile_choice", "BATMOBILE CHOICE", "BCAR", "Which Batmobile Batman's X summons (also the dash's BATMOBILE), no restart.", 4, {"1989", "ODAMI", "FOREVER", "FOREVER 2"}},
     {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
@@ -638,6 +643,8 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"grapple_yank", "GRAPPLE YANK", "GYNK", "ON tries to yank a hooked enemy to you (CANDIDATE); you still reel to him; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"sure_grapple", "SURE GRAPPLE", "SGRP", "ON holds each grapple press until the game takes it, every hero; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"belt_zones", "BELT ZONES", "BELTZ", "ON grapple at left hip, batarang at belt front, smoke on forearm; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"entry_facing", "ENTRY FACING", "EFAC", "PLAY SPACE turns your play area to the car's front on entry; no restart needed.", 2, {"PLAY SPACE", "HEAD", nullptr, nullptr}},
+    {"hideout_hold", "HIDEOUT HOLD", "HHLD", "HOLD: GO TO BATCAVE / SAFEHOUSE on the dash needs a 1 s hold; no restart needed.", 2, {"HOLD", "TAP", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -673,6 +680,10 @@ inline bool dashPointerOn(uint32_t value) { return value != 1; }
 inline bool crimeGpsOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 3 WHEEL FIRST (van072.hpp Tune::wheelFirst): 0 ON, the default; 1 OFF.
 inline bool wheelFirstOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 10 ENTRY FACING (van072.hpp Tune::boardFaceRoom): 0 PLAY SPACE, the default; 1 HEAD.
+inline bool entryFacesRoom(uint32_t value) { return value != 1; }
+// 0.0.74 test 10 HIDEOUT HOLD (van_screen.hpp In::hideoutHold): 0 HOLD, the default; 1 TAP.
+inline bool hideoutHoldOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }

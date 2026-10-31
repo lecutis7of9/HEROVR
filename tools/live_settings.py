@@ -396,7 +396,7 @@ SETTINGS = {
     'sl_watch': ((0, 1), 'SpidySlWatch', "SL WATCH {} (test: 0 on: the game's Streamline constants, frame token and viewport id logged every 60 frames for the export; 1 off; live)"),  # 0.0.73 SL WATCH
     'hideouts': ((0, 1), 'SpidyHideouts', "HIDEOUTS {} (0 on: the van dash HOME page has GO TO SAFEHOUSE, the Batmobile dash GO TO BATCAVE, mod-built VR rooms you walk in, the car kept; 1 off; turning on needs a restart)"),  # 0.0.74 test 1 HIDEOUTS
     'car_music': ((0, 2), 'SpidyCarMusic', "CAR MUSIC {} (0 in_vehicles: the van dash MUSIC page plays your songs from Documents/HERO VR/Music while in the van; 1 always: on foot too; 2 off; live)"),  # 0.0.74 test 1 CAR MUSIC
-    'seated_driving': ((0, 2), 'SpidySeatedDriving', "SEATED DRIVING {} (0 sit_button: the van dash HOME page's SIT puts your eye at the driver's seat; 1 auto_sit: sat a second after getting in; 2 off; getting out stands you up; live)"),  # 0.0.74 test 1 SEATED DRIVING
+    'seated_driving': ((0, 3), 'SpidySeatedDriving', "SEATED DRIVING {} (0 auto_sit: getting in sits you, your eye centred on the driver's seat at its height; 1 sit_button: the dash HOME page's SIT does it; 2 off; 3 height_only: test 1's SIT, the height only; a hand on the wheel holds it back; getting out stands you up; live)"),  # 0.0.74 test 1 SEATED DRIVING (test 10: AUTO SIT first, centred)
     'batmobile': ((0, 1), 'SpidyBatmobile', "BATMOBILE {} (0 on: Batman, every suit, summons a drivable Batmobile on X - bulletproof, the van's driving, its dash with GO TO BATCAVE, music, SIT and the car picker; 1 off; turning on needs a restart)"),  # 0.0.74 test 1 BATMOBILE
     'batmobile_choice': ((0, 3), 'SpidyBatmobileChoice', "BATMOBILE CHOICE {} (0 1989: Dreamloft3D's; 1 odami: Odami_3D's; 2 forever: SorroW's; 3 forever2: S.York-Designs'; the next summon; live)"),  # 0.0.74 test 1 BATMOBILE CHOICE
     'cabin_clear': ((0, 1), 'SpidyCabinClear', "CABIN CLEAR {} (0 on: the Batmobile's roof and pillars are not drawn while you sit or get in, so you see out; 1 off: drawn always; live)"),  # 0.0.74 test 2
@@ -408,6 +408,8 @@ SETTINGS = {
     'cave_quiet': ((0, 1), 'SpidyCaveQuiet', "CAVE QUIET {} (0 on: in the Batcave and the Punisher safehouse the city sound is turned down and the car engine stops, both back on RETURN TO CITY; 1 off; live)"),  # 0.0.74 test 3
     'finger_ray': ((0, 1), 'SpidyFingerRay', "FINGER RAY {} (0 on: the dash / Batcomputer laser leaves the index fingertip along the finger and snaps to the nearest button; 1 off: test 2b (from the hand); live)"),  # 0.0.74 test 3
     'dash_inside': ((0, 1), 'SpidyDashInside', "DASH INSIDE {} (0 on: the Batmobile cockpit / dash and the van dash screen are not drawn from outside the car, and the door handle marker shows only near a hand; 1 off: test 2b; live)"),  # 0.0.74 test 3
+    'entry_facing': ((0, 1), 'SpidyEntryFacing', "ENTRY FACING {} (0 play_space: getting in a car turns your play area to face its front, so your chair and body face it; 1 head: test 3, the way your head looked; live)"),  # 0.0.74 test 10
+    'hideout_hold': ((0, 1), 'SpidyHideoutHold', "HIDEOUT HOLD {} (0 hold: the dash's GO TO BATCAVE / SAFEHOUSE, now at the bottom of HOME, goes after a 1-second hold; 1 tap: at once; live)"),  # 0.0.74 test 10
     'cockpit_glow': ((0, 1), 'SpidyCockpitGlow', "COCKPIT GLOW {} (0 on: a darker Batmobile cabin with low blue / amber accent light and softly backlit gauges, screens and switch tips; 1 off: test 2b; live)"),  # 0.0.74 test 3
     'punisher_quick_hook': ((0, 1), 'SpidyPunisherQuickHook', "QUICK HOOK {} (0 on: fires the Punisher's hook the instant you pull the trigger and never misses a press; 1 off: the old 0.25 s windup; takes effect immediately, no restart)"),  # 0.0.74 test 10
     'grapple_yank': ((0, 1), 'SpidyGrappleYank', "GRAPPLE YANK {} (0 on, CANDIDATE: a grapple line on an enemy also asks the game to knock him toward you, 1 HP; you still reel to him if he stays; 1 off: test 9's reel only; live)"),  # 0.0.74 test 10
@@ -490,7 +492,7 @@ UPDATE38_DEFAULTS = {'crawl_cap': 'auto', 'zip_mode': 'spidyvr', 'aim_assist': '
                      'image_style': 'off',  # 0.0.73 release: GAME TAA OFF by default (was SPIDYVR since test 4: the image shook in motion); SPIDYVR one wrist press away
                      'dd_baton_tip': 'on',  # 0.0.73 DD BATON: ON (new features ship on, switchable off)
                      'light_checks': 'on', 'glow_check': 'game', 'sl_watch': 'on', 'mp_solo_test': 'off',
-                     'sharpen_match': 'on', 'claw_level': 'on', 'window_pop': 'on', 'mp_player2_body': 'suit_look', 'coming_soon': 'on', 'hideouts': 'on', 'car_music': 'in_vehicles', 'seated_driving': 'sit_button', 'batmobile': 'on', 'batmobile_choice': '1989', 'cabin_clear': 'on', 'car_paint': 'satin', 'seated_tools': 'blocked', 'dash_pointer': 'on', 'crime_gps': 'on', 'wheel_first': 'on', 'cave_quiet': 'on', 'finger_ray': 'on', 'dash_inside': 'on', 'cockpit_glow': 'on', 'punisher_quick_hook': 'on', 'grapple_yank': 'on', 'sure_grapple': 'on', 'belt_zones': 'on'}  # 0.0.73 AA SHARPEN MATCH: ON (new features ship on, switchable off)  # 0.0.73 LIGHT CHECKS: ON (the eyes' light-glow query room)
+                     'sharpen_match': 'on', 'claw_level': 'on', 'window_pop': 'on', 'mp_player2_body': 'suit_look', 'coming_soon': 'on', 'hideouts': 'on', 'car_music': 'in_vehicles', 'seated_driving': 'auto_sit', 'entry_facing': 'play_space', 'hideout_hold': 'hold', 'batmobile': 'on', 'batmobile_choice': '1989', 'cabin_clear': 'on', 'car_paint': 'satin', 'seated_tools': 'blocked', 'dash_pointer': 'on', 'crime_gps': 'on', 'wheel_first': 'on', 'cave_quiet': 'on', 'finger_ray': 'on', 'dash_inside': 'on', 'cockpit_glow': 'on', 'punisher_quick_hook': 'on', 'grapple_yank': 'on', 'sure_grapple': 'on', 'belt_zones': 'on'}  # 0.0.73 AA SHARPEN MATCH: ON (new features ship on, switchable off)  # 0.0.73 LIGHT CHECKS: ON (the eyes' light-glow query room)
 UPDATE38_DEFAULTS.update({'aim_assist': 'smart', 'punch_mode': 'targeted', 'ring_anchor': 'wrist',
                           'holo_open': 'forearm', 'ring_layer': 'hold'})
 # Version 0.0.72 MODEL LOOKS (the user, 27 Oct, after 0.0.71: "the guns look awful and NOT like the
@@ -619,7 +621,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'captain_america': ('off', 'on'), 'shield_arm': ('right', 'left'),
                 'shield_damage': ('35hp', '20hp', '50hp', '70hp'), 'shield_chain': ('on', 'off'),
                 'shield_block': ('off', 'experimental'), 'shield_look': ('built-in', 'model'),
-                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'), 'image_style': ('spidyvr', 'off'), 'dd_baton_tip': ('on', 'off'), 'streamer_mode': ('on', 'off'), 'streamer_smooth': ('low', 'off', 'high'), 'streamer_eye': ('left_eye', 'right_eye'), 'iron_hands': ('on', 'off'), 'dd_grapple_aim': ('on', 'off'), 'wolverine_claws': ('on', 'off'), 'light_checks': ('on', 'off'), 'glow_check': ('game', 'always', 'hidden'), 'sl_watch': ('on', 'off'), 'mp_solo_test': ('off', 'on'), 'sharpen_match': ('on', 'off'), 'claw_level': ('on', 'off'), 'window_pop': ('on', 'off'), 'mp_player2_body': ('suit_look', 'figure'), 'coming_soon': ('on', 'off'), 'hideouts': ('on', 'off'), 'car_music': ('in_vehicles', 'always', 'off'), 'seated_driving': ('sit_button', 'auto_sit', 'off'), 'batmobile': ('on', 'off'), 'batmobile_choice': ('1989', 'odami', 'forever', 'forever2'), 'cabin_clear': ('on', 'off'), 'car_paint': ('satin', 'flat', 'test_1'), 'seated_tools': ('blocked', 'allowed'), 'dash_pointer': ('on', 'off'), 'crime_gps': ('on', 'off'), 'wheel_first': ('on', 'off'), 'cave_quiet': ('on', 'off'), 'finger_ray': ('on', 'off'), 'dash_inside': ('on', 'off'), 'cockpit_glow': ('on', 'off'), 'punisher_quick_hook': ('on', 'off'), 'grapple_yank': ('on', 'off'), 'sure_grapple': ('on', 'off'), 'belt_zones': ('on', 'off'),
+                'thor': ('off', 'on'), 'thor_lightning': ('on', 'off'), 'thor_storm': ('on', 'off'), 'thor_chain': ('on', 'off'), 'green_lantern': ('off', 'on'), 'gl_flight': ('on', 'off'), 'gl_fist': ('on', 'off'), 'gl_beam': ('on', 'off'), 'gl_bubble': ('on', 'off'), 'gl_chain': ('on', 'off'), 'gl_charge': ('on', 'off'), 'spider_climb_only': ('on', 'off'), 'uppercut': ('on', 'off'), 'smoke_blind': ('on', 'off'), 'dd_grapple': ('on', 'off'), 'dd_parry': ('on', 'off'), 'iron_hud': ('on', 'off'), 'punisher_rage': ('on', 'off'), 'reputation': ('on', 'off'), 'survival': ('off', 'on'), 'punisher_suit': ('vest', 'warzone'), 'natural_invincible': ('on', 'off'), 'hulk_rage': ('on', 'off'), 'rage_blood': ('extreme', 'normal', 'off'), 'rage_tint': ('normal', 'strong', 'subtle', 'off'), 'fire_douse': ('on', 'off'), 'shield_slam': ('on', 'off'), 'punisher_hook': ('on', 'off'), 'claw_climb': ('off', 'on'), 'npc_shove': ('on', 'off'), 'faction': ('auto', 'vanilla', 'the hand', 'hydra', 'joker gang'), 'hero_suit': ('default', 'next'), 'test_unlocks': ('off', 'suits', 'ultimates', 'all'), 'ultimates': ('on', 'off'), 'perk_branch': ('auto', 'chain_first', 'hold_points', 'perks_off'), 'own_suit': ('off', 'on'), 'perch_takedown': ('on', 'off'), 'takedown_light': ('on', 'off'), 'punisher_van': ('on', 'off'), 'thor_hammer': ('boooop', 'devilseye', 'love_thunder', 'fccooper'), 'game_body': ('off', 'on'), 'thor_hammer_model': ('on', 'off'), 'thor_flight': ('on', 'off'), 'suit_body': ('arms', 'full_body', 'off'), 'cap_sprint': ('on', 'off'), 'cull_margin': ('10deg', '6deg', '15deg', '20deg'), 'shadow_match': ('on', 'off'), 'calib_look': ('holo', 'classic'), 'fly_pose': ('lean', 'upright'), 'weapon_collision': ('on', 'off'), 'light_hold': ('on', 'strong', 'off'), 'van_screen': ('on', 'off'), 'palm_blast': ('palm', 'aim'), 'hero_menu': ('holo_tiles', 'classic'), 'rep_log': ('on', 'off'), 'van_pedals': ('wheel_hand', 'classic'), 'image': ('spidyvr', 'classic'), 'image_style': ('spidyvr', 'off'), 'dd_baton_tip': ('on', 'off'), 'streamer_mode': ('on', 'off'), 'streamer_smooth': ('low', 'off', 'high'), 'streamer_eye': ('left_eye', 'right_eye'), 'iron_hands': ('on', 'off'), 'dd_grapple_aim': ('on', 'off'), 'wolverine_claws': ('on', 'off'), 'light_checks': ('on', 'off'), 'glow_check': ('game', 'always', 'hidden'), 'sl_watch': ('on', 'off'), 'mp_solo_test': ('off', 'on'), 'sharpen_match': ('on', 'off'), 'claw_level': ('on', 'off'), 'window_pop': ('on', 'off'), 'mp_player2_body': ('suit_look', 'figure'), 'coming_soon': ('on', 'off'), 'hideouts': ('on', 'off'), 'car_music': ('in_vehicles', 'always', 'off'), 'seated_driving': ('auto_sit', 'sit_button', 'off', 'height_only'), 'entry_facing': ('play_space', 'head'), 'hideout_hold': ('hold', 'tap'), 'batmobile': ('on', 'off'), 'batmobile_choice': ('1989', 'odami', 'forever', 'forever2'), 'cabin_clear': ('on', 'off'), 'car_paint': ('satin', 'flat', 'test_1'), 'seated_tools': ('blocked', 'allowed'), 'dash_pointer': ('on', 'off'), 'crime_gps': ('on', 'off'), 'wheel_first': ('on', 'off'), 'cave_quiet': ('on', 'off'), 'finger_ray': ('on', 'off'), 'dash_inside': ('on', 'off'), 'cockpit_glow': ('on', 'off'), 'punisher_quick_hook': ('on', 'off'), 'grapple_yank': ('on', 'off'), 'sure_grapple': ('on', 'off'), 'belt_zones': ('on', 'off'),
                 'web_color': tuple(SHADE_STYLE),
                 **{f'web_color_{style}': WEB_SHADES[style] for style in WEB_STYLES}}
 CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
@@ -800,7 +802,10 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'coming_soon': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'hideouts': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'car_music': {'in_vehicles': 0, 'vehicles': 0, 'car': 0, 'always': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
-           'seated_driving': {'sit_button': 0, 'button': 0, 'sit': 0, 'auto_sit': 1, 'auto': 1, 'off': 2, '0': 0, '1': 1, '2': 2},
+           'seated_driving': {'auto_sit': 0, 'auto': 0, 'sit_button': 1, 'button': 1, 'sit': 1, 'off': 2, 'height_only': 3,
+                              'height': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.74 test 10: AUTO SIT first
+           'entry_facing': {'play_space': 0, 'room': 0, 'head': 1, '0': 0, '1': 1},  # 0.0.74 test 10
+           'hideout_hold': {'hold': 0, 'tap': 1, '0': 0, '1': 1},  # 0.0.74 test 10
            'batmobile': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'batmobile_choice': {'1989': 0, 'odami': 1, 'forever': 2, 'forever2': 3, 'forever_2': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            'cabin_clear': {'on': 0, 'off': 1, '0': 0, '1': 1},
@@ -1077,7 +1082,7 @@ UPDATE38_KEYS = ('crawl_cap', 'zip_mode', 'aim_assist', 'ball_look', 'punch_mode
                  # Version 0.0.7 CAPTAIN AMERICA
                  'captain_america', 'shield_arm', 'shield_damage', 'shield_chain', 'shield_block', 'shield_look',
                  # Version 0.0.72 (TEST)
-                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image', 'image_style', 'dd_baton_tip', 'streamer_mode', 'streamer_smooth', 'streamer_eye', 'iron_hands', 'dd_grapple_aim', 'wolverine_claws', 'light_checks', 'glow_check', 'sl_watch', 'mp_solo_test', 'sharpen_match', 'claw_level', 'window_pop', 'mp_player2_body', 'coming_soon', 'hideouts', 'car_music', 'seated_driving', 'batmobile', 'batmobile_choice', 'cabin_clear', 'car_paint', 'seated_tools', 'dash_pointer', 'crime_gps', 'wheel_first', 'cave_quiet', 'finger_ray', 'dash_inside', 'cockpit_glow', 'punisher_quick_hook', 'grapple_yank', 'sure_grapple', 'belt_zones')
+                 'thor', 'thor_lightning', 'thor_storm', 'thor_chain', 'green_lantern', 'gl_flight', 'gl_fist', 'gl_beam', 'gl_bubble', 'gl_chain', 'gl_charge', 'spider_climb_only', 'uppercut', 'smoke_blind', 'dd_grapple', 'dd_parry', 'iron_hud', 'punisher_rage', 'reputation', 'survival', 'punisher_suit', 'natural_invincible', 'hulk_rage', 'rage_blood', 'rage_tint', 'fire_douse', 'shield_slam', 'punisher_hook', 'claw_climb', 'npc_shove', 'faction', 'hero_suit', 'test_unlocks', 'ultimates', 'perk_branch', 'own_suit', 'perch_takedown', 'takedown_light', 'punisher_van', 'thor_hammer', 'game_body', 'thor_hammer_model', 'thor_flight', 'suit_body', 'cap_sprint', 'cull_margin', 'shadow_match', 'calib_look', 'fly_pose', 'weapon_collision', 'light_hold', 'van_screen', 'palm_blast', 'hero_menu', 'rep_log', 'van_pedals', 'image', 'image_style', 'dd_baton_tip', 'streamer_mode', 'streamer_smooth', 'streamer_eye', 'iron_hands', 'dd_grapple_aim', 'wolverine_claws', 'light_checks', 'glow_check', 'sl_watch', 'mp_solo_test', 'sharpen_match', 'claw_level', 'window_pop', 'mp_player2_body', 'coming_soon', 'hideouts', 'car_music', 'seated_driving', 'batmobile', 'batmobile_choice', 'cabin_clear', 'car_paint', 'seated_tools', 'dash_pointer', 'crime_gps', 'wheel_first', 'cave_quiet', 'finger_ray', 'dash_inside', 'cockpit_glow', 'punisher_quick_hook', 'grapple_yank', 'sure_grapple', 'belt_zones', 'entry_facing', 'hideout_hold')
 # Version 0.0.6: the hero toggles; only one is on at a time (set_value turns the others off).
 # Version 0.0.7: seven; CAPTAIN AMERICA eight.
 # Version 0.0.72: THOR and GREEN LANTERN ten.
@@ -1926,6 +1931,44 @@ def migrate_074t10(path):
 
 
 HEADER += MIGRATED_074T10 + '\n'
+
+
+# 0.0.74 test 10 SEAT: AUTO SIT is SEATED DRIVING's default and first (was SIT BUTTON 0, AUTO SIT 1). Once, a
+# live.txt at the old default moves to AUTO SIT; an old AUTO SIT number keeps its meaning (written as its word).
+MIGRATE_074T10_SEAT = {'seated_driving': (('sit_button', 'auto_sit', 'off'), 'sit_button', 'auto_sit')}
+MIGRATED_074T10_SEAT = ('# Version 0.0.74 test 10: SEATED DRIVING moved to AUTO SIT once (migrated; a value chosen '
+                        'after this line stays, numbers follow the new order)')
+
+
+def migrate_074t10_seat(path):
+    """0.0.74 test 10, once: MIGRATE_074T10_SEAT applied to an existing live.txt (migrate_old_defaults), then the
+    MIGRATED_074T10_SEAT marker. No live.txt: nothing (HEADER carries the marker). The line to show, or None.
+    Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_074T10_SEAT in text:
+        return None
+    try:
+        changed = migrate_old_defaults(text, MIGRATE_074T10_SEAT)
+        if changed:
+            text = write_back(text, changed)
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_074T10_SEAT + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return ('live.txt: set once to the 0.0.74 test 10 defaults: ' +
+            ', '.join(f'{k} = {v}' for k, v in changed.items()) + ' (change it again and it stays).')
+
+
+HEADER += MIGRATED_074T10_SEAT + '\n'
 
 
 def lens_flares_off(text):

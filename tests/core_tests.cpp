@@ -18870,7 +18870,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 164, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 166, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18904,7 +18904,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 164, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 166, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25603,12 +25603,14 @@ int main() {
         vs::Offer bat;
         bat.batman = true;
         bat.hideouts = true;
+        bat.hideoutHold = false; // 0.0.74 test 10 HIDEOUT HOLD TAP: the press goes at once (the hold: its own test)
         vs::Button b[8];
         const uint32_t nb = vs::buttons(vs::home, bat, b);
-        check(nb == 3, "HOME's three buttons");
-        const Vec3 off{b[0].x0 - .02f, (b[0].y0 + b[0].y1) / 2, 0};
+        check(nb == 3 && b[2].action == vs::Action::goBatcave, "HOME's three buttons, GO TO BATCAVE last (0.0.74 test 10)");
+        const Vec3 off{b[2].x0 - .02f, (b[2].y0 + b[2].y1) / 2, 0};
         const Vec3 sn = vs::snapToButton(off, vs::home, bat);
-        check(std::fabs(sn.x - (b[0].x0 + b[0].x1) / 2) < 1e-5f, "a point 2 units off GO TO BATCAVE snaps to it");
+        check(std::fabs(sn.x - (b[2].x0 + b[2].x1) / 2) < 1e-5f && std::fabs(sn.y - (b[2].y0 + b[2].y1) / 2) < 1e-5f,
+              "a point 2 units off GO TO BATCAVE snaps to it");
         const auto& L = bm::layout(0);
         const vs::Mount m = vs::mountLocal(L.screen);
         const auto at = [&](Vec3 f) { return m.centre + (m.right * f.x + m.up * f.y + m.normal * f.z) * bm::screenScale; };
@@ -25763,14 +25765,15 @@ int main() {
         vs::Offer vo;
         vo.exit = true;
         const uint32_t nv = vs::buttons(vs::home, vo, b);
-        check(nv == 3 && b[2].action == vs::Action::exitVehicle && std::string(b[2].label) == "GET OUT" && b[2].x1 > b[2].x0 &&
-                  b[2].y0 >= -vs::height / 2,
+        // 0.0.74 test 10: SIT, GET OUT, then GO TO SAFEHOUSE alone at the bottom
+        check(nv == 3 && b[1].action == vs::Action::exitVehicle && std::string(b[1].label) == "GET OUT" && b[1].x1 > b[1].x0 &&
+                  b[1].y0 >= -vs::height / 2 && b[2].action == vs::Action::goSafehouse && b[2].y0 >= -vs::height / 2,
               "van HOME: GET OUT, on the face");
         vo.batman = true;
         const uint32_t nb = vs::buttons(vs::home, vo, b);
-        check(nb == 4 && b[2].action == vs::Action::nextBatmobile && b[3].action == vs::Action::exitVehicle && b[2].x1 < b[3].x0 &&
-                  b[2].y0 == b[3].y0,
-              "Batmobile HOME: the picker and GET OUT share the last row");
+        check(nb == 4 && b[1].action == vs::Action::nextBatmobile && b[2].action == vs::Action::exitVehicle && b[1].x1 < b[2].x0 &&
+                  b[1].y0 == b[2].y0 && b[3].action == vs::Action::goBatcave,
+              "Batmobile HOME: the picker and GET OUT share a row, GO TO BATCAVE under them");
         vo.exit = false;
         check(vs::buttons(vs::home, vo, b) == 3, "parked: no GET OUT");
     });
@@ -26113,6 +26116,63 @@ int main() {
                       std::abs(std::remainder(r.d.van.frame.yaw - parked.yaw, 6.2831853f)) < 1e-3f,
                   "BOARDING: out - the van untouched");
             check(std::hypot(body.x - step.x, body.z - step.z) < .25f, "BOARDING: out - he is beside the driver door");
+        }
+        // 0.0.74 test 10 ENTRY FACING (owner pt1357u: "you dont automatically go in facing the front just the
+        // direction you were standing"): his head turned 60 degrees off his play space to the handle. PLAY SPACE
+        // (the default): the room's forward ends on the van's; HEAD: test 3's - his look does. And a rig that drops
+        // every third turn step (a stutter) still ends there: the turn left is read back from the room each frame.
+        for (int mode = 0; mode < 3; ++mode) {
+            const bool faceRoom = mode != 1, dropSome = mode == 2;
+            v::Tune tn;
+            tn.boardFaceRoom = faceRoom;
+            Rig r;
+            setUp(r);
+            r.in.summonSpot = true;
+            r.in.spot.ok = true;
+            r.in.spot.frame = {{3, 0, -2}, .4f};
+            r.d.step(r.in, r.ci, r.co, flat, open, clearAhead, tn);
+            r.in.summonSpot = false;
+            const v::Frame parked = r.d.van.frame;
+            const float headTurn = 1.0472f; // the look 60 degrees left of the room's forward
+            r.room.orientation = Quat::yaw(2.2f);
+            const Vec3 door = parked.world(v::doorHandleOut);
+            r.room.position = Vec3{door.x, 0, door.z} - r.room.orientation.rotate(Vec3{r.headRoom.x, 0, r.headRoom.z}) +
+                              parked.right() * -.35f;
+            r.in.hands[0] = door;
+            r.in.grip[0] = 1;
+            bool entered = false;
+            for (int f = 0; f < 140; ++f) {
+                r.in.look = (r.room.orientation * Quat::yaw(headTurn)).rotate(Vec3{0, 0, -1});
+                r.in.head = compose(r.room, Pose{r.headRoom, {}}).position;
+                r.ci.roomToWorld = r.room;
+                r.ci.body = r.in.head - Vec3{0, 1.6f, 0};
+                const v::Out o = r.d.step(r.in, r.ci, r.co, flat, open, clearAhead, tn);
+                entered |= o.entered;
+                r.in.grip[0] = 0;
+                if (r.co.carry) {
+                    r.room.position = r.room.position + r.co.velocity * r.in.dt;
+                    r.ci.bodyVelocity = r.co.velocity;
+                } else
+                    r.ci.bodyVelocity = {};
+                r.ci.carried = r.co.carry;
+                if (r.co.turn != 0.f && !(dropSome && f % 3 == 1)) {
+                    const Vec3 head = compose(r.room, Pose{r.headRoom, {}}).position;
+                    const Quat q = Quat::yaw(r.co.turn);
+                    r.room.orientation = q * r.room.orientation;
+                    r.room.position = head + q.rotate(r.room.position - head);
+                }
+                if (entered && !r.d.boarding && f > 30)
+                    break;
+            }
+            const float roomOff = std::abs(std::remainder(lookOf(r.room) - parked.yaw, 6.2831853f));
+            const float lookOff = std::abs(std::remainder(lookOf(r.room) + headTurn - parked.yaw, 6.2831853f));
+            const std::string name = mode == 0 ? "PLAY SPACE" : mode == 1 ? "HEAD" : "PLAY SPACE, dropped turn steps";
+            check(entered && r.d.carried && !r.d.boarding && r.d.van.state == v::driving, "ENTRY FACING " + name + ": in the seat");
+            if (faceRoom)
+                check(roomOff < 2e-3f, "ENTRY FACING " + name + ": the play space (his chair, his body) faces the van's front");
+            else
+                check(lookOff < 2e-3f, "ENTRY FACING HEAD: his look faces the van's front (test 3)");
+            check(length(r.d.van.frame.at - parked.at) < 1e-3f && r.d.van.frame.yaw == parked.yaw, "ENTRY FACING " + name + ": the van never moved");
         }
         {   // the setting off: the 0.0.72 entry (the drawn van comes round him)
             Rig r;
@@ -32292,10 +32352,12 @@ int main() {
         // HOME
         vs::Offer all;
         // 0.0.74 test 1 BATMOBILE: the van keeps the safehouse only; the Batcave moved to the Batmobile's dash
-        check(vs::buttons(vs::home, all, b) == 2 && b[0].action == vs::Action::goSafehouse && b[1].action == vs::Action::sit,
-              "HOME: safehouse, SIT");
+        // 0.0.74 test 10 (owner pt1357u): SIT first, the safehouse at the bottom, a gap between
+        check(vs::buttons(vs::home, all, b) == 2 && b[0].action == vs::Action::sit && b[1].action == vs::Action::goSafehouse &&
+                  b[1].y1 < b[0].y0 - vs::hideoutGap && std::string(b[1].label) == "HOLD: GO TO SAFEHOUSE",
+              "HOME: SIT, safehouse (HOLD) under it");
         all.sat = true;
-        check(vs::buttons(vs::home, all, b) == 2 && b[1].action == vs::Action::stand && std::string(b[1].label) == "STAND", "sat: STAND");
+        check(vs::buttons(vs::home, all, b) == 2 && b[0].action == vs::Action::stand && std::string(b[0].label) == "STAND", "sat: STAND");
         all.sat = false;
         vs::Offer none;
         none.hideouts = none.seat = false;
@@ -32309,7 +32371,7 @@ int main() {
         hideOff.hideouts = false;
         h.step(in(at(vs::tabCentre(vs::home), tabY, .01f), hideOff));
         h.step(in(away, hideOff));
-        vs::buttons(vs::home, {}, b); // where SIT would be (it moves up to the first row: the second row is empty)
+        vs::buttons(vs::home, {}, b); // where GO TO SAFEHOUSE would be (HIDEOUTS OFF: none)
         check(!h.step(in(at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0), hideOff)) && h.takeAction() == vs::Action::none,
               "a hidden button does not act");
         h.step(in(away, hideOff));
@@ -32321,12 +32383,16 @@ int main() {
         r.step(in(at(vs::tabCentre(vs::home), tabY, .01f)));
         r.step(in(away));
         vs::buttons(vs::home, {}, b);
-        const Vec3 target = at((b[0].x0 + b[0].x1) / 2, (b[0].y0 + b[0].y1) / 2, 0);
+        const Vec3 target = at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0);
         vs::In ray = in(from);
         ray.aim[1] = normalized(target - from);
         r.step(ray);
         ray.trigger[1] = 1;
-        check(r.step(ray) && r.takeAction() == vs::Action::goSafehouse, "the ray + trigger on GO TO SAFEHOUSE");
+        r.step(ray);
+        check(r.takeAction() == vs::Action::none && r.hold() > 0, "HIDEOUT HOLD: the ray + trigger on GO TO SAFEHOUSE starts the hold");
+        for (int k = 0; k < 95 && r.hold() > 0; ++k)
+            r.step(ray);
+        check(r.takeAction() == vs::Action::goSafehouse, "the trigger held a second: GO TO SAFEHOUSE");
         // drawn: finite on MUSIC and HOME with every offer, songs or none
         van072::Frame f;
         f.at = {120, 3, -40};
@@ -32416,9 +32482,11 @@ int main() {
         bat.batman = true;
         bat.car = 2;
         vs::Button b[8];
-        check(vs::buttons(vs::home, bat, b) == 3 && b[0].action == vs::Action::goBatcave && b[1].action == vs::Action::sit &&
-                  b[2].action == vs::Action::nextBatmobile && std::string(b[2].label) == "BATMOBILE: FOREVER",
-              "HOME: GO TO BATCAVE, SIT, the picker naming the pick");
+        check(vs::buttons(vs::home, bat, b) == 3 && b[0].action == vs::Action::sit && b[1].action == vs::Action::nextBatmobile &&
+                  std::string(b[1].label) == "BATMOBILE: FOREVER" && b[2].action == vs::Action::goBatcave &&
+                  std::string(b[2].label) == "HOLD: GO TO BATCAVE" && b[2].y1 <= b[1].y0 - vs::hideoutGap + 1e-5f &&
+                  b[2].y1 < b[0].y0 - vs::hideoutGap,
+              "HOME (0.0.74 test 10): SIT, the picker naming the pick, GO TO BATCAVE (HOLD) at the bottom");
         vs::Offer batNoHide = bat;
         batNoHide.hideouts = false;
         check(vs::buttons(vs::home, batNoHide, b) == 2 && b[0].action == vs::Action::sit && b[1].action == vs::Action::nextBatmobile,
@@ -32459,11 +32527,14 @@ int main() {
         check(!s.pick(vs::cases) && !s.pick(vs::locker) && s.pick(vs::home) && s.page() == vs::home, "CASES and LOCKER cannot be picked");
         s.step(in(away));
         vs::buttons(vs::home, bat, b);
-        check(s.step(in(at((b[2].x0 + b[2].x1) / 2, (b[2].y0 + b[2].y1) / 2, 0))) && s.takeAction() == vs::Action::nextBatmobile,
+        check(s.step(in(at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0))) && s.takeAction() == vs::Action::nextBatmobile,
               "a poke on the picker at the Batmobile's screen");
         s.step(in(away));
-        check(s.step(in(at((b[0].x0 + b[0].x1) / 2, (b[0].y0 + b[0].y1) / 2, 0))) && s.takeAction() == vs::Action::goBatcave,
+        bat.hideoutHold = false;  // TAP mode: a poke goes (the 1 s hold is in the HIDEOUT HOLD test)
+        vs::buttons(vs::home, bat, b);
+        check(s.step(in(at((b[2].x0 + b[2].x1) / 2, (b[2].y0 + b[2].y1) / 2, 0))) && s.takeAction() == vs::Action::goBatcave,
               "a poke on GO TO BATCAVE");
+        bat.hideoutHold = true;
         Vec3 hit{};
         const Vec3 from = L.eye;
         check(vs::rayOnFace(from, normalized(L.screen - from), hit, L.screen, bm::screenScale) && length(hit) < 1e-3f,
@@ -32522,10 +32593,13 @@ int main() {
         check(seat.step(vh::seatButton, true, false, .01f, 1.75f, seatY) == 0 && !seat.sat(), "STAND");
         vh::Seat a;
         float l = 0;
-        for (int i = 0; i < 80; ++i)
+        for (int i = 0; i < 100; ++i) // 0.0.74 test 10: the boarding carry - no sit during it
+            l = a.step(vh::seatAuto, true, false, .01f, Vec3{0, 1.75f, 0}, Vec3{0, seatY, 0}, true).y;
+        check(l == 0 && !a.sat(), "AUTO SIT: not while boarding");
+        for (int i = 0; i < 25; ++i)
             l = a.step(vh::seatAuto, true, false, .01f, 1.75f, seatY);
-        check(l == 0 && !a.sat(), "AUTO SIT waits a second");
-        for (int i = 0; i < 40; ++i)
+        check(l == 0 && !a.sat(), "AUTO SIT waits autoSitDelay (.3 s) after the boarding");
+        for (int i = 0; i < 10; ++i)
             l = a.step(vh::seatAuto, true, false, .01f, 1.75f + l, seatY);
         check(a.sat() && l < -.5f, "then sits him once");
         a.stand();
@@ -32552,13 +32626,186 @@ int main() {
                       std::string(valueName(carMusic, 1)) == "ALWAYS" && std::string(valueName(carMusic, 2)) == "OFF",
                   "CAR MUSIC: IN VEHICLES first, ALWAYS, OFF");
             check(std::string(optionInfo[seatedDriving].key) == "seated_driving" && std::string(optionInfo[seatedDriving].help) == vh::seatHelp &&
-                      optionInfo[seatedDriving].count == 3 && std::string(valueName(seatedDriving, 0)) == "SIT BUTTON" &&
-                      std::string(valueName(seatedDriving, 1)) == "AUTO SIT" && std::string(valueName(seatedDriving, 2)) == "OFF",
-                  "SEATED DRIVING: SIT BUTTON first (auto sit off), AUTO SIT, OFF");
-            check(vh::musicInVehicles == 0 && vh::musicAlways == 1 && vh::musicOff == 2 && vh::seatButton == 0 && vh::seatAuto == 1 && vh::seatOff == 2,
+                      optionInfo[seatedDriving].count == 4 && std::string(valueName(seatedDriving, 0)) == "AUTO SIT" &&
+                      std::string(valueName(seatedDriving, 1)) == "SIT BUTTON" && std::string(valueName(seatedDriving, 2)) == "OFF" &&
+                      std::string(valueName(seatedDriving, 3)) == "HEIGHT ONLY",
+                  "SEATED DRIVING (0.0.74 test 10): AUTO SIT first, SIT BUTTON, OFF, HEIGHT ONLY");
+            check(vh::musicInVehicles == 0 && vh::musicAlways == 1 && vh::musicOff == 2 && vh::seatAuto == 0 && vh::seatButton == 1 &&
+                      vh::seatOff == 2 && vh::seatHeight == 3,
                   "the values match the modes");
         }
         check(std::string(vh::musicReadme).find("No music comes with the mod") != std::string::npos, "the readme says no songs come");
+    });
+    test("0.0.74 test 10 SEAT CENTRE: AUTO SIT centres the eye on the seat in 3D, clamped, never under a hand on the wheel", [] {
+        namespace vh = vehicle074;
+        const Vec3 seat{2.f, 1.2f, -3.f};
+        // the offset: the eye onto the seat eye, the level part clamped to seatReach, NaN safe
+        Vec3 o = vh::seatOffset({}, {2.3f, 1.75f, -2.8f}, seat);
+        check(std::fabs(o.x + .3f) < 1e-5f && std::fabs(o.y + .55f) < 1e-5f && std::fabs(o.z + .2f) < 1e-5f, "the eye onto the seat");
+        o = vh::seatOffset({}, {5.f, 1.75f, -3.f}, seat);
+        check(std::fabs(o.x + vh::seatReach) < 1e-5f && std::fabs(o.z) < 1e-6f, "far off: clamped to seatReach, its way kept");
+        o = vh::seatOffset({}, {2.f, 9.f, -3.f}, seat);
+        check(o.y == vh::liftLow, "the height clamped as test 1's");
+        o = vh::seatOffset({}, {NAN, 1.f, 0}, seat);
+        check(o.x == 0 && o.y == 0 && o.z == 0, "NaN: none");
+        // AUTO SIT: boarding, then .3 s, then the full offset; held: the eye stays
+        vh::Seat a;
+        Vec3 head{2.3f, 1.75f, -2.8f}, off{};
+        for (int i = 0; i < 60; ++i)
+            off = a.step(vh::seatAuto, true, false, 1.f / 90, head, seat, true);
+        check(!a.sat() && length(off) == 0, "boarding: standing");
+        for (int i = 0; i < 40; ++i) {
+            off = a.step(vh::seatAuto, true, false, 1.f / 90, head + a.offset(), seat);
+        }
+        check(a.sat() && length(head + off - seat) < 1e-4f, "AUTO SIT: the eye at the seat eye, all three axes");
+        const Vec3 held = off;
+        off = a.step(vh::seatAuto, true, false, 1.f / 90, head + off + Vec3{.1f, 0, 0}, seat);
+        check(length(off - held) < 1e-6f, "sat: the offset held while he leans (no chase)");
+        // a hand on the wheel holds the sit back; it goes when both hands are off
+        vh::Seat w;
+        for (int i = 0; i < 60; ++i)
+            off = w.step(vh::seatAuto, true, false, 1.f / 90, head, seat, false, true);
+        check(!w.sat() && w.waiting() && length(off) == 0, "a hand latched on the wheel: not yet (grip and steering kept)");
+        off = w.step(vh::seatAuto, true, false, 1.f / 90, head, seat, false, false);
+        check(w.sat() && length(head + off - seat) < 1e-4f, "let go: sat");
+        w.sit(); // SIT again with a hand on the wheel: held back, the old offset kept
+        const Vec3 before = w.offset();
+        off = w.step(vh::seatAuto, true, false, 1.f / 90, head + before + Vec3{0, .2f, 0}, seat, false, true);
+        check(length(off - before) < 1e-6f && w.waiting(), "SIT under a wheel hand: waits");
+        // a hideout: none; out of the car: none
+        check(length(w.step(vh::seatAuto, true, true, 1.f / 90, head, seat)) == 0, "a hideout: zero");
+        check(length(w.step(vh::seatAuto, false, false, 1.f / 90, head, seat)) == 0 && !w.sat(), "out: zero");
+        // HEIGHT ONLY: test 1's SIT, y only
+        vh::Seat y;
+        y.sit();
+        off = y.step(vh::seatHeight, true, false, 1.f / 90, head, seat);
+        check(off.x == 0 && off.z == 0 && std::fabs(off.y + .55f) < 1e-5f && !vh::seatCentres(vh::seatHeight) && vh::seatCentres(vh::seatAuto),
+              "HEIGHT ONLY: the height only");
+        // SIT BUTTON: no auto sit
+        vh::Seat btn;
+        for (int i = 0; i < 200; ++i)
+            off = btn.step(vh::seatButton, true, false, 1.f / 90, head, seat);
+        check(!btn.sat() && length(off) == 0, "SIT BUTTON: standing until SIT");
+        // the rig: the 3D offset, clamped, zero on reset and NaN
+        GameTrackingRig r0, r1;
+        auto f = trackedFrame();
+        r0.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        r1.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        r1.seatOffset({.3f, -.4f, .2f});
+        check(length(r1.seatOffsetApplied()) == 0, "the offset waits for the next placed frame");
+        f.predictedDisplayTime = 2;
+        const auto p0 = r0.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        const auto p1 = r1.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        check(length(r1.seatOffsetApplied() - Vec3{.3f, -.4f, .2f}) < 1e-5f && std::fabs(r1.seatLiftApplied() + .4f) < 1e-5f, "applied");
+        near(p1.head[12] - p0.head[12], .3f);
+        near(p1.head[13] - p0.head[13], -.4f);
+        near(p1.head[14] - p0.head[14], .2f);
+        r1.seatOffset({3.f, 0, 4.f});
+        f.predictedDisplayTime = 3;
+        r1.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        const Vec3 c = r1.seatOffsetApplied();
+        check(std::fabs(std::sqrt(c.x * c.x + c.z * c.z) - .5f) < 1e-4f, "the rig clamps the level part too");
+        r1.seatOffset({NAN, 0, 0});
+        f.predictedDisplayTime = 4;
+        r1.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        check(length(r1.seatOffsetApplied()) == 0, "NaN: zero");
+        r1.seatOffset({.2f, .1f, .1f});
+        f.predictedDisplayTime = 5;
+        r1.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        r1.reset();
+        check(length(r1.seatOffsetApplied()) == 0, "reset: zero");
+        // the options: ON by default, switchable, a one-sentence help with the restart
+        using namespace combat38;
+        check(std::string(optionInfo[entryFacing].key) == "entry_facing" && optionInfo[entryFacing].count == 2 &&
+                  std::string(valueName(entryFacing, 0)) == "PLAY SPACE" && std::string(valueName(entryFacing, 1)) == "HEAD" &&
+                  entryFacesRoom(0) && !entryFacesRoom(1),
+              "ENTRY FACING: PLAY SPACE first, HEAD switches it off");
+        check(std::string(optionInfo[hideoutHold].key) == "hideout_hold" && optionInfo[hideoutHold].count == 2 &&
+                  std::string(valueName(hideoutHold, 0)) == "HOLD" && std::string(valueName(hideoutHold, 1)) == "TAP" && hideoutHoldOn(0) &&
+                  !hideoutHoldOn(1),
+              "HIDEOUT HOLD: HOLD first, TAP switches it off");
+        for (const uint32_t k : {uint32_t{entryFacing}, uint32_t{hideoutHold}, uint32_t{seatedDriving}}) {
+            const std::string t = optionInfo[k].help;
+            check(t.size() <= 80 && std::count(t.begin(), t.end(), '.') == 1 && t.back() == '.' && t.find("restart") != std::string::npos,
+                  "a help line: one sentence, 80 at most, says the restart: " + t);
+        }
+    });
+    test("0.0.74 test 10 HIDEOUT HOLD: GO TO needs a second's touch or trigger, a let-go drops it, TAP is test 3's", [] {
+        namespace vs = van_screen;
+        const vs::Mount m = vs::mountLocal();
+        const auto at = [&](float x, float y, float z) { return m.centre + (m.right * x + m.up * y + m.normal * z) * vs::faceScale; };
+        const Vec3 away{-.45f, 1.0f, -.4f};
+        const auto in = [&](Vec3 hand, vs::Offer offer = {}) {
+            vs::In i;
+            i.dt = 1.f / 90;
+            i.driving = true;
+            i.hand[0] = away;
+            i.tracked[0] = true;
+            i.hand[1] = hand;
+            i.tracked[1] = true;
+            i.offer = offer;
+            return i;
+        };
+        const float tabY = vs::height / 2 - vs::tabHeight / 2;
+        vs::Button b[8];
+        check(vs::buttons(vs::home, {}, b) == 2 && b[1].action == vs::Action::goSafehouse, "the van's HOME");
+        const Vec3 go = at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0);
+        const Vec3 sit = at((b[0].x0 + b[0].x1) / 2, (b[0].y0 + b[0].y1) / 2, 0);
+        vs::Screen s;
+        s.step(in(at(vs::tabCentre(vs::home), tabY, .01f)));
+        s.step(in(away));
+        check(s.page() == vs::home, "on HOME");
+        // a touch: nothing at once, the bar fills, it goes at a second
+        s.step(in(go));
+        check(s.takeAction() == vs::Action::none && s.hold() > 0 && s.hold() < .05f, "a touch on GO TO: the hold starts, nothing yet");
+        for (int k = 0; k < 60; ++k)
+            s.step(in(go));
+        check(s.takeAction() == vs::Action::none && s.hold() > .6f && s.hold() < .75f, "two thirds: still nothing");
+        vs::View v = vs::view(van072::Frame{}, s, 9.f, 16.f, .4f, true);
+        check(v.hold > .6f, "the view carries the hold bar");
+        std::vector<Vertex> out;
+        check(vs::append(out, v, van072::seatEye) && !out.empty(), "drawn with the bar");
+        int k = 0;
+        for (; k < 40 && s.hold() > 0; ++k)
+            s.step(in(go));
+        check(s.takeAction() == vs::Action::goSafehouse && k < 40, "held a second: GO TO SAFEHOUSE");
+        s.step(in(away));
+        // let go early: dropped
+        s.step(in(go));
+        for (int i = 0; i < 45; ++i)
+            s.step(in(go));
+        s.step(in(away));
+        check(s.hold() == 0, "out before a second: dropped");
+        for (int i = 0; i < 120; ++i)
+            s.step(in(away));
+        check(s.takeAction() == vs::Action::none, "nothing goes");
+        // sliding onto SIT: SIT is never held; a slide off GO TO drops the hold
+        s.step(in(go));
+        s.step(in(sit));
+        check(s.hold() == 0, "slid off GO TO: dropped");
+        for (int i = 0; i < 120; ++i)
+            s.step(in(sit));
+        check(s.takeAction() == vs::Action::none, "the slide never goes to the safehouse");
+        s.step(in(away));
+        s.step(in(sit));
+        check(s.takeAction() == vs::Action::sit, "SIT: at the touch, as before");
+        s.step(in(away));
+        // out of the car: dropped
+        s.step(in(go));
+        vs::In parked = in(go);
+        parked.driving = false;
+        s.step(parked);
+        check(s.hold() == 0, "parked / out: dropped");
+        // TAP (HIDEOUT HOLD off): at once, test 3's
+        vs::Offer tap;
+        tap.hideoutHold = false;
+        vs::Screen t;
+        t.step(in(at(vs::tabCentre(vs::home), tabY, .01f), tap));
+        t.step(in(away, tap));
+        vs::buttons(vs::home, tap, b);
+        check(std::string(b[1].label) == "GO TO SAFEHOUSE", "TAP: the plain label");
+        check(t.step(in(at((b[1].x0 + b[1].x1) / 2, (b[1].y0 + b[1].y1) / 2, 0), tap)) && t.takeAction() == vs::Action::goSafehouse,
+              "TAP: at the touch");
     });
     test("0.0.74 test 1 SEATED DRIVING: the rig holds the seat's lift (clamped, safe), HIDEOUT slots", [] {
         GameTrackingRig a, b;

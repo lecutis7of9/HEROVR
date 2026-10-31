@@ -483,8 +483,12 @@ void drawHome(Painter& p, const View& v) {
     p.text(v.offer.batman && v.carName ? std::string("HOME - BATMOBILE ") + v.carName : std::string("HOME"), lx, top - .010f, .0062f, khaki);
     Button b[8];
     const uint32_t n = buttons(home, v.offer, b);
-    for (uint32_t k = 0; k < n; ++k)
+    for (uint32_t k = 0; k < n; ++k) {
         drawButton(p, b[k], v.pointer ? v.hotButton == static_cast<int>(k) : v.hover, b[k].action == Action::goBatcave && !v.offer.batman ? Vec3{.025f, .03f, .05f} : olive);
+        // 0.0.74 test 10 HIDEOUT HOLD: the hold so far, a bar along the GO TO button's foot
+        if ((b[k].action == Action::goBatcave || b[k].action == Action::goSafehouse) && ok(v.hold) && v.hold > 0)
+            p.quad(b[k].x0, b[k].y0, b[k].x0 + (b[k].x1 - b[k].x0) * std::clamp(v.hold, 0.f, 1.f), b[k].y0 + .004f, .0016f, khaki * 1.4f);
+    }
     if (!n)
         p.text("HIDEOUTS AND SEATED DRIVING ARE OFF", lx, top - .032f, .0060f, bone);
     if (v.homeNote)
@@ -515,12 +519,8 @@ uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
     } else if (page == home) {
         const float x0 = -W + .010f, x1 = W - .010f, h = .026f, gap = .005f;
         float y = bodyTop - .016f;
-        // 0.0.74 test 1 BATMOBILE: the van goes to the safehouse, the Batmobile to the Batcave (moved from the van).
-        if (offer.hideouts) {
-            out[n++] = offer.batman ? Button{Action::goBatcave, x0, y - h, x1, y, "GO TO BATCAVE"}
-                                    : Button{Action::goSafehouse, x0, y - h, x1, y, "GO TO SAFEHOUSE"};
-            y -= h + gap;
-        }
+        // 0.0.74 test 10 (owner pt1357u): SIT / STAND first, the picker and GET OUT, then GO TO BATCAVE / SAFEHOUSE
+        // alone at the bottom, hideoutGap under them (test 3: GO TO first, SIT right under it).
         if (offer.seat) {
             out[n++] = Button{offer.sat ? Action::stand : Action::sit, x0, y - h, x1, y, offer.sat ? "STAND" : "SIT (SEATED DRIVING)"};
             y -= h + gap;
@@ -532,6 +532,13 @@ uint32_t buttons(uint32_t page, const Offer& offer, Button out[8]) {
                               batmobileLabels[offer.car < batmobileCars ? offer.car : 0]};
         if (offer.exit)
             out[n++] = Button{Action::exitVehicle, xs, y - h, x1, y, "GET OUT"};
+        // 0.0.74 test 1 BATMOBILE: the van goes to the safehouse, the Batmobile to the Batcave (moved from the van).
+        if (offer.hideouts) {
+            const float yt = bodyTop - .016f - 2 * (h + gap) + gap - hideoutGap, yb = yt - .024f;
+            const char* label = offer.batman ? (offer.hideoutHold ? "HOLD: GO TO BATCAVE" : "GO TO BATCAVE")
+                                             : (offer.hideoutHold ? "HOLD: GO TO SAFEHOUSE" : "GO TO SAFEHOUSE");
+            out[n++] = Button{offer.batman ? Action::goBatcave : Action::goSafehouse, x0, yb, x1, yt, label};
+        }
     }
     return n;
 }
@@ -573,7 +580,24 @@ void Screen::reset() {
     near_[0] = near_[1] = hover_ = false;
     action_ = Action::none;
     aimed_[0] = aimed_[1] = trigWas_[0] = trigWas_[1] = false;
+    holdAction_ = Action::none;
+    holdTime_ = 0;
+    holdHand_ = -1;
 }
+
+namespace {
+// 0.0.74 test 10 HIDEOUT HOLD: the HOME button's action at face point f (none: none).
+Action actionAt(Vec3 f, uint32_t page, const Offer& offer) {
+    int tab = -1, button = -1;
+    Screen::targetAt(f, page, offer, tab, button);
+    if (button < 0)
+        return Action::none;
+    Button b[8];
+    const uint32_t n = buttons(page, offer, b);
+    return static_cast<uint32_t>(button) < n ? b[button].action : Action::none;
+}
+bool held(Action a) { return a == Action::goSafehouse || a == Action::goBatcave; }
+} // namespace
 
 bool Screen::next() {
     if (page_ == cases && file_ + 1 < files && pageShown(cases, offer_))
@@ -628,6 +652,13 @@ bool Screen::pokeAt(Vec3 f) {
         const uint32_t n = buttons(page_, offer_, b);
         for (uint32_t k = 0; k < n; ++k)
             if (f.x >= b[k].x0 - .002f && f.x <= b[k].x1 + .002f && f.y >= b[k].y0 - .002f && f.y <= b[k].y1 + .002f) {
+                if (offer_.hideoutHold && held(b[k].action) && pokeHand_ >= 0) { // 0.0.74 test 10: held, not at once
+                    holdAction_ = b[k].action;
+                    holdTime_ = 0;
+                    holdHand_ = pokeHand_;
+                    holdRay_ = pokeRay_;
+                    return false;
+                }
                 action_ = b[k].action;
                 flash_ = .6f;
                 return true;
@@ -728,7 +759,11 @@ bool Screen::step(const In& in) {
         file_ = 0;
     }
     bool changed = false;
+    bool holdKept = false; // 0.0.74 test 10 HIDEOUT HOLD: the holding hand still on its button this step
     if (!in.driving) {
+        holdAction_ = Action::none;
+        holdTime_ = 0;
+        holdHand_ = -1;
         near_[0] = near_[1] = false;
         aimed_[0] = aimed_[1] = false;
         trigWas_[0] = trigWas_[1] = false;
@@ -747,6 +782,7 @@ bool Screen::step(const In& in) {
             near_[i] = false;
             continue;
         }
+        pokeHand_ = static_cast<int>(i);
         // 0.0.74 test 2 DASH POINTER: the fingertip, out along the aim from the grip pose.
         Vec3 touchAt = in.hand[i];
         if (in.pointer && !in.finger && van072::fine(in.aim[i])) { // FINGER RAY: the hand is the tip
@@ -773,6 +809,10 @@ bool Screen::step(const In& in) {
             cursor_ = {std::clamp(f.x, -W, W), std::clamp(f.y, -H, H), 0};
             targetAt(cursor_, page_, offer_, hotTab_, hotButton_);
         }
+        if (holdAction_ != Action::none && holdHand_ == static_cast<int>(i) && !holdRay_ && near && open && near_[i] &&
+            actionAt(f, page_, offer_) == holdAction_)
+            holdKept = true;
+        pokeRay_ = false;
         if (near && !near_[i] && open)
             changed |= pokeAt(f);
         near_[i] = near; // a hand already in (or gripping in) must come out first
@@ -790,8 +830,34 @@ bool Screen::step(const In& in) {
                 beamFrom_ = in.hand[i];
                 targetAt(hit, page_, offer_, hotTab_, hotButton_);
             }
+            if (holdAction_ != Action::none && holdHand_ == static_cast<int>(i) && holdRay_ && pressed && !fresh &&
+                actionAt(hit, page_, offer_) == holdAction_)
+                holdKept = true;
+            pokeRay_ = true;
             if (fresh)
                 changed |= pokeAt(hit);
+        }
+    }
+    pokeHand_ = -1;
+    pokeRay_ = false;
+    // 0.0.74 test 10 HIDEOUT HOLD: a hold goes on while its hand stays on the button (the touch in, the ray's
+    // trigger down); it goes after hideoutHoldSeconds, and is dropped the step the hand leaves or lets go.
+    if (holdAction_ != Action::none) {
+        if (holdTime_ > 0 && !holdKept) {
+            holdAction_ = Action::none;
+            holdTime_ = 0;
+            holdHand_ = -1;
+        } else {
+            holdTime_ += ok(in.dt) && in.dt > 0 ? std::min(in.dt, .1f) : 0.f;
+            if (holdTime_ <= 0)
+                holdTime_ = 1e-6f; // armed this step
+            if (holdTime_ >= hideoutHoldSeconds) {
+                action_ = holdAction_;
+                flash_ = .6f;
+                holdAction_ = Action::none;
+                holdTime_ = 0;
+                holdHand_ = -1;
+            }
         }
     }
     return changed;
@@ -829,6 +895,7 @@ View view(const van072::Frame& frame, const Screen& s, float speed, float topSpe
     v.driving = driving;
     v.flash = s.flash();
     v.hover = s.hover();
+    v.hold = s.hold();
     if (s.pointer()) { // 0.0.74 test 2 DASH POINTER
         v.pointer = true;
         v.cursorOn = s.cursorOn();

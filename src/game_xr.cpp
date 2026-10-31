@@ -42,6 +42,7 @@
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
+#include "spidy/fly_feel074.hpp"  // 0.0.74 test 10 FLY HOLD / STEER / FLIPS / LOOK UP
 #include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
@@ -941,6 +942,9 @@ std::atomic<bool> flyAutoLevelNow{true};
 std::atomic<uint32_t> vanNoFlipsNow{0};
 // 0.0.74 test 10 CAR COLLISION (car_collision074.hpp; live.txt car_collision): 0 ON (the default), 1 OFF.
 std::atomic<uint32_t> carCollisionNow{0};
+// 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; live.txt fly_hold, fly_steer, fly_flips: 0 ON (the default), 1 OFF;
+// fly_look_up: 0 OFF (the default), 1 ON).
+std::atomic<uint32_t> flyHoldNow{0}, flySteerNow{0}, flyFlipsNow{0}, flyLookUpNow{0};
 std::atomic<uint32_t> promptHandlingNow{0}; // extras385::prompts::Handling
 std::atomic<uint32_t> gestureMovesNow{0};   // Update 38.5: gestures385::Mode (0 OFF, 1 TRAINING, 2 ON)
 static_assert(gestures385::pad::dpadUp == game_pad::dpadUp && gestures385::pad::lb == game_pad::leftShoulder &&
@@ -2115,6 +2119,9 @@ DWORD WINAPI run(void*) {
         float glLift{};
         extras385::fly::StickChord flyChord;
         extras385::fly::Roll flyRollState;
+        fly_feel::EnterHold flyEnterHold; // 0.0.74 test 10 FLY HOLD
+        fly_feel::LookUp flyLookUp;       // 0.0.74 test 10 FLY LOOK UP
+        uint32_t flyEnterAsks = 0;
         bool flyDropHeld{};
         float flyDropSeconds{};
         // Version 0.0.5 SUPERSONIC (fly_boost.hpp): the dash, its boom's time (combatClock) and the
@@ -4712,6 +4719,18 @@ DWORD WINAPI run(void*) {
                             game_prompts::note("Update 38.5: FLY ROLL failed and turned itself off");
                         }
                         rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
+                        // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): while FLY flies, the view eased up; off
+                        // (the default) or landed, eased back level.
+                        float pitch = 0;
+                        try {
+                            pitch = flyLookUp.update(frame.seconds, fly_feel::offByDefault(flyLookUpNow.load()) &&
+                                                                        flyModeNow.load() != 0 && flyNow.flying && gameplay);
+                        } catch (...) {
+                            flyLookUp.reset();
+                            flyLookUpNow = 0;
+                            game_prompts::note("0.0.74 test 10: FLY LOOK UP failed and turned itself off");
+                        }
+                        rig.flyPitch(std::isfinite(pitch) ? pitch : 0.f);
                     }
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
                     // 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp, owner pt1380u): while he drives the van or a
@@ -4720,7 +4739,11 @@ DWORD WINAPI run(void*) {
                     {
                         const bool carDriving = van.state == van072::driving;
                         const bool noFlips = vehicle_flips::on(vanNoFlipsNow.load());
-                        rig.automaticFlips(vehicle_flips::realistic(realisticFlips(values), carDriving, noFlips));
+                        // 0.0.74 test 10 FLY FLIPS (fly_feel074.hpp): REALISTIC FLIPS readier while FLY flies; the
+                        // van's override after it, so driving still turns them off.
+                        const auto flipRows = fly_feel::flying(realisticFlips(values), flyModeNow.load() != 0 && flyNow.flying,
+                                                               fly_feel::onByDefault(flyFlipsNow.load()));
+                        rig.automaticFlips(vehicle_flips::realistic(flipRows, carDriving, noFlips));
                         rig.flips(vehicle_flips::stickFlips(values.flips, carDriving, noFlips));
                         const int edge = vanFlipsWatch.update(vehicle_flips::active(carDriving, noFlips));
                         if (edge > 0 && (values.realisticFlips || values.flips))
@@ -5607,7 +5630,9 @@ DWORD WINAPI run(void*) {
                                 const uint32_t want = flyDefault.update(thorGrounded ? hero_modes::hulk : heroNow(), flyModeNow.load());
                                 if (want != flyModeNow.load()) {
                                     flyModeNow = want;
-                                    game_prompts::note(want ? "Version 0.0.72: FLY MODE on (NORMAL) for this hero - a hand up takes off"
+                                    game_prompts::note(want ? (fly_feel::onByDefault(flyHoldNow.load())
+                                                                   ? "Version 0.0.72: FLY MODE on (NORMAL) for this hero - hold a grip to fly"
+                                                                   : "Version 0.0.72: FLY MODE on (NORMAL) for this hero - a hand up takes off")
                                                             : "Version 0.0.72: FLY MODE back off (it was on for the last hero)");
                                 }
                             }
@@ -5625,7 +5650,9 @@ DWORD WINAPI run(void*) {
                             if (chord == extras385::fly::StickChord::drop) {
                                 flyDropHeld = true;
                                 flyDropSeconds = 0;
-                                message(3, 0, "FLY: R3 - coming down to land (raise a hand to take off again)");
+                                message(3, 0, fly_feel::onByDefault(flyHoldNow.load())
+                                                  ? "FLY: R3 - coming down to land (hold a grip to fly again)"
+                                                  : "FLY: R3 - coming down to land (raise a hand to take off again)");
                             } else if (chord == extras385::fly::StickChord::ultimate) {
                                 message(3, 0, "FLY: L3 + R3 - the ultimate");
                             }
@@ -5645,6 +5672,36 @@ DWORD WINAPI run(void*) {
                                                                             flyHero == hero_modes::greenLantern ? glPose : flyPoses.pose(),
                                                                             flyHero == hero_modes::greenLantern ? glLift : flyPoses.lift(), flyDropHeld)
                                                       : 0u;
+                            // 0.0.74 test 10 FLY HOLD and FLY STEER (fly_feel074.hpp, owner pt1424u): no flight starts
+                            // by itself - a grip held .4 s in the air (on the ground with a hand up, RISE) enters it,
+                            // and it stays after the grip is let go; THOR's hammer hand never counts. The second
+                            // flight word rides in reserved7[1] (an older bridge ignores it).
+                            {
+                                const bool holdOn = fly_feel::onByDefault(flyHoldNow.load());
+                                const bool steerOn = fly_feel::onByDefault(flySteerNow.load());
+                                bool enter = false;
+                                try {
+                                    const bool airborneNow = game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
+                                    const bool risePose = (flyHero == hero_modes::greenLantern ? glPose : flyPoses.pose()) ==
+                                                          extras385::fly::rise;
+                                    const float squeeze[2]{frame.hands[0].squeeze, frame.hands[1].squeeze};
+                                    const bool counts[2]{true, !(flyHero == hero_modes::thor && hero072Play.hammerInHandOrOut())};
+                                    enter = flyEnterHold.update(frame.seconds, flyLive && holdOn, flyNow.flying != 0,
+                                                                airborneNow, risePose, squeeze, counts);
+                                    // On the ground the grip held with a hand up is the takeoff, not a web ball or a grab.
+                                    if (flyLive && holdOn && !flyNow.flying && !airborneNow && risePose)
+                                        for (auto& h : input.hands)
+                                            h.grip = 0;
+                                } catch (...) {
+                                    flyEnterHold.reset();
+                                    enter = false;
+                                }
+                                if (flyEnterHold.asks() != flyEnterAsks) {
+                                    flyEnterAsks = flyEnterHold.asks();
+                                    message(3, 0, "FLY: grip held - flying (let go, you keep flying; R3 lands)");
+                                }
+                                input.reserved7[1] = flyLive ? fly_feel::pack(holdOn, enter, steerOn) : 0u;
+                            }
                             // Version 0.0.5 SUPERSONIC: both hands out (FORWARD) and the left stick forward
                             // dash at SUPERSONIC SPEED x FAST; its first frame booms (sound + shockwave).
                             {
@@ -14530,6 +14587,20 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanNoFlips(void* v) {
 // 0.0.74 test 10 CAR COLLISION (car_collision074.hpp): 0 ON (the default: the parked car is solid on foot), 1 OFF; live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarCollision(void* v) {
     return setLive(v, 0, 1, 5547, carCollisionNow, asU32);
+}
+// 0.0.74 test 10 FLY FEEL (fly_feel074.hpp), all live: FLY HOLD, FLY STEER, FLY FLIPS 0 ON (the default), 1 OFF;
+// FLY LOOK UP 0 OFF (the default), 1 ON.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyHold(void* v) {
+    return setLive(v, 0, 1, 5548, flyHoldNow, asU32);
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlySteer(void* v) {
+    return setLive(v, 0, 1, 5549, flySteerNow, asU32);
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyFlips(void* v) {
+    return setLive(v, 0, 1, 5550, flyFlipsNow, asU32);
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyLookUp(void* v) {
+    return setLive(v, 0, 1, 5551, flyLookUpNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

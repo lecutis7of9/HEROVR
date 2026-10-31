@@ -1,4 +1,5 @@
 #include "spidy/game_tracking.hpp"
+#include "spidy/fly_feel074.hpp"
 #include "spidy/presentation_gate.hpp"
 
 namespace spidy {
@@ -667,6 +668,20 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             placed.tilt = unit(yaw.conjugate() * roll * yaw * placed.tilt);
             placed.origin += before.position - placed.toWorld(f.head).position;
             out.flyRoll = flyRoll_;
+        }
+    }
+    // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp): the view pitched up about its (rolled) right, the head kept
+    // where it was, as FLY ROLL above.
+    if (flyPitch_ != 0 && !holds && std::isfinite(flyPitch_)) {
+        const Pose before = placed.toWorld(f.head);
+        const Vec3 ahead = before.orientation.rotate(Vec3{0, 0, -1});
+        const Quat pitch = fly_feel::pitchUp(ahead, flyPitch_, out.flyRoll);
+        const Quat yaw = Quat::yaw(placed.yaw);
+        const Quat tilt = unit(yaw.conjugate() * pitch * yaw * placed.tilt);
+        if (finite(tilt.rotate(Vec3{0, 1, 0}))) {
+            placed.tilt = tilt;
+            placed.origin += before.position - placed.toWorld(f.head).position;
+            out.flyPitch = flyPitch_;
         }
     }
     // The eyes out of what the world is built of (HeadClearance), and the

@@ -794,6 +794,13 @@ void visit(const native_rays::QueryContext& world) {
         fi.velocity = body.velocity;
         fi.boost = live ? fly_boost::multiplierOf(c.asks) : 0.f; // Version 0.0.5 SUPERSONIC
         const Quat toWorld = trackingTurn(in);
+        { // 0.0.74 test 10 FLY FEEL (fly_feel074.hpp): FLY HOLD and FLY STEER from reserved7[1] (an older VR module: 0)
+            const auto w2 = fly_feel::unpack(c.version >= 7 && c.bytes == sizeof(Command) ? c.reserved7[1] : 0u);
+            fi.holdEnter = w2.hold;
+            fi.enter = w2.enter;
+            fi.bodySteer = w2.steer;
+            fi.bodyUp = fly_feel::bodyUp(toWorld);
+        }
         for (unsigned i = 0; i < 2; ++i) {
             fi.hands[i].tracked = live && in.hands[i].tracked;
             fi.hands[i].forward = in.hands[i].aim.orientation.rotate({0, 0, -1});

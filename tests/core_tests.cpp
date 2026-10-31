@@ -51,6 +51,7 @@
 #include "spidy/vehicle074.hpp"
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
+#include "spidy/fly_feel074.hpp"     // 0.0.74 test 10 FLY FEEL
 #include "spidy/roster_page.hpp"
 #include "spidy/hero_controls.hpp"
 #include <filesystem>
@@ -35174,6 +35175,167 @@ int main() {
             in.body = f.world({0, 0, 0});
             in.head = in.body + Vec3{0, 1.6f, 0};
             check(cc::step(in).push, "inside: carried out");
+        }
+    });
+    // 0.0.74 test 10 FLY FEEL (owner pt1424u: "the way it automatically starts flight instead of having a held
+    // button makes it so you maneuver kind of stiffly and if you hold your hand up when youre upside down or
+    // sideways you just go up").
+    test("0.0.74 test 10 FLY HOLD / STEER / FLIPS / LOOK UP: switches, the word, the hold, the body's up, the view", [] {
+        namespace ff = fly_feel;
+        namespace fly = extras385::fly;
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        // Switches: hold, steer, flips 0 ON (the default) 1 OFF; look up 0 OFF (the default) 1 ON; help says restart.
+        check(ff::onByDefault(0) && !ff::onByDefault(1) && !ff::offByDefault(0) && ff::offByDefault(1), "fly feel defaults");
+        for (const char* h : {ff::holdHelp, ff::steerHelp, ff::flipsHelp, ff::lookUpHelp})
+            check(std::string(h).find("restart") != std::string::npos, "a FLY FEEL subtext without its restart note");
+        // The second word: round trip, enter only with hold, 0 = the old flight.
+        for (int b = 0; b < 8; ++b) {
+            const auto w = ff::unpack(ff::pack(b & 1, b & 2, b & 4));
+            check(w.hold == bool(b & 1) && w.enter == (bool(b & 1) && bool(b & 2)) && w.steer == bool(b & 4), "fly word 2 round trip");
+        }
+        check(!ff::unpack(0).hold && !ff::unpack(0).steer && !ff::unpack(0xFFFFFFF8u).hold, "an older module's 0 / stray bits");
+        // EnterHold: .4 s of grip in the air asks; a short squeeze, the ground without RISE, THOR's hammer hand never.
+        {
+            ff::EnterHold h;
+            const float dt = 1 / 90.f;
+            const float squeezed[2]{0, 1}, open[2]{0, 0};
+            const bool both[2]{true, true}, leftOnly[2]{true, false};
+            bool asked = false;
+            for (int i = 0; i < 20; ++i) // .22 s
+                asked = h.update(dt, true, false, true, false, squeezed, both) || asked;
+            check(!asked, "a short squeeze entered flight");
+            for (int i = 0; i < 20; ++i)
+                asked = h.update(dt, true, false, true, false, squeezed, both) || asked;
+            check(asked && h.asks() == 1, "a .44 s grip in the air did not enter flight");
+            check(!h.update(dt, true, true, true, false, squeezed, both), "the ask kept after flight began");
+            // let go while flying: nothing (flight keeps itself, the swing side's flying_)
+            check(!h.update(dt, true, true, true, false, open, both), "letting go asked again");
+            h.reset();
+            for (int i = 0; i < 90; ++i)
+                asked = h.update(dt, true, false, false, false, squeezed, both);
+            check(!asked, "a grip held on the ground with no hand up entered flight (the grab / web ball)");
+            for (int i = 0; i < 90; ++i)
+                asked = h.update(dt, true, false, false, true, squeezed, both);
+            check(asked, "a grip held with a hand up on the ground did not take off");
+            h.reset();
+            for (int i = 0; i < 90; ++i)
+                asked = h.update(dt, true, false, true, false, squeezed, leftOnly);
+            check(!asked, "THOR's hammer grip entered flight");
+            h.reset();
+            for (int i = 0; i < 90; ++i)
+                asked = h.update(dt, false, false, true, false, squeezed, both);
+            check(!asked, "FLY HOLD off / FLY MODE off asked");
+            const float bad[2]{nan, nan};
+            for (int i = 0; i < 90; ++i)
+                asked = h.update(nan, true, false, true, false, bad, both);
+            check(!asked && std::isfinite(h.progress()), "NaN grips or seconds");
+        }
+        // Flight: FLY HOLD off flies by itself in the air (as before); on, not without the enter; once in, stays.
+        {
+            fly::In in;
+            in.seconds = 1 / 90.f;
+            in.airborne = true;
+            in.look = {0, 0, -1};
+            in.word = fly::unpack(fly::pack(1, 0, 0, 0, true, fly::hover));
+            fly::Flight a;
+            a.update(in);
+            check(a.flying(), "FLY HOLD off: the old auto start is gone");
+            fly::Flight b;
+            in.holdEnter = true;
+            for (int i = 0; i < 30; ++i)
+                b.update(in);
+            check(!b.flying(), "FLY HOLD on: flight started by itself");
+            in.enter = true;
+            b.update(in);
+            check(b.flying(), "FLY HOLD on: the held grip did not enter flight");
+            in.enter = false;
+            for (int i = 0; i < 90; ++i)
+                b.update(in);
+            check(b.flying(), "FLY HOLD on: letting go of the grip ended flight");
+            // on the ground: the enter with RISE lifts off
+            fly::Flight g;
+            fly::In gi = in;
+            gi.airborne = false;
+            gi.grounded = true;
+            gi.enter = true;
+            gi.word = fly::unpack(fly::pack(1, 0, 0, 0, true, fly::rise, 1));
+            const fly::Out go = g.update(gi);
+            check(g.flying() && go.velocity.y > 0, "the ground takeoff (grip + hand up)");
+        }
+        // FLY STEER: RISE upside down goes along the body's up (world down), sideways along its side; off: world up.
+        {
+            const auto rising = [](bool steer, Quat turn) {
+                fly::Flight f;
+                fly::In in;
+                in.seconds = 1 / 90.f;
+                in.airborne = true;
+                in.look = {0, 0, -1};
+                in.word = fly::unpack(fly::pack(2, 0, 0, 0, true, fly::rise, 1));
+                in.bodySteer = steer;
+                in.bodyUp = ff::bodyUp(turn);
+                Vec3 v{};
+                for (int i = 0; i < 180; ++i)
+                    v = f.update(in).velocity;
+                return v;
+            };
+            const Quat upsideDown = Quat::around({0, 0, -1}, 3.14159265f), sideways = Quat::around({0, 0, -1}, 1.5707963f);
+            check(rising(false, upsideDown).y > 5, "FLY STEER off: RISE still world up");
+            check(rising(true, {}).y > 5, "FLY STEER level: RISE up");
+            check(rising(true, upsideDown).y < -5, "FLY STEER upside down: a hand up still went world up");
+            const Vec3 side = rising(true, sideways);
+            check(std::abs(side.x) > 5 && std::abs(side.y) < 1, "FLY STEER sideways: a hand up still went world up");
+            check(length(ff::bodyUp(Quat{nan, 0, 0, 1}) - Vec3{0, 1, 0}) < 1e-5f, "bodyUp NaN: world up");
+        }
+        // Turning keeps speed and is limited; eased way.
+        {
+            const Vec3 v{0, 0, -20};
+            const Vec3 t = ff::turned(v, {20, 0, 0}, 1 / 90.f);
+            check(std::abs(length(t) - 20) < 1e-3f && t.x > 0 && t.x < 20 * std::sin(.03f), "turned: speed kept, rate limited");
+            check(length(ff::turned(v, {0, 0, 20}, 1 / 90.f) - v) < 1e-5f, "turned: straight back left to the brake");
+            check(length(ff::turned(v, {nan, 0, 0}, 1 / 90.f) - v) < 1e-5f, "turned: NaN");
+            const Vec3 e = ff::eased({0, 0, -1}, {1, 0, 0}, 1 / 90.f);
+            check(std::abs(length(e) - 1) < 1e-4f && e.x > 0 && e.x < .2f, "eased: a step, unit");
+            check(length(ff::eased({}, {0, 2, 0}, 1 / 90.f) - Vec3{0, 1, 0}) < 1e-5f, "eased: first way taken");
+        }
+        // FLY FLIPS: readier, inside vr_settings' ranges; untouched off, not flying, or flips off; van still wins.
+        {
+            RealisticFlipSettings s{};
+            s.enabled = true;
+            const auto f = ff::flying(s, true, true);
+            check(f.strength > s.strength && f.speed > s.speed && f.responseMs < s.responseMs &&
+                      f.handStrength > s.handStrength && f.handThreshold < s.handThreshold && f.minimumSpeed <= s.minimumSpeed,
+                  "FLY FLIPS: not readier while flying");
+            check(f.strength <= 100 && f.speed <= 360 && f.minimumSpeed >= 3 && f.responseMs >= 100 && f.handStrength <= 200 &&
+                      f.handThreshold >= 50, "FLY FLIPS: out of the rows' ranges");
+            const auto same = [&](const RealisticFlipSettings& x) {
+                return x.strength == s.strength && x.speed == s.speed && x.responseMs == s.responseMs &&
+                       x.handThreshold == s.handThreshold;
+            };
+            check(same(ff::flying(s, false, true)) && same(ff::flying(s, true, false)), "FLY FLIPS changed rows when off / landed");
+            RealisticFlipSettings offRows = s;
+            offRows.enabled = false;
+            check(!ff::flying(offRows, true, true).enabled, "FLY FLIPS turned REALISTIC FLIPS on");
+            check(!vehicle_flips::realistic(f, true, true).enabled, "FLY FLIPS beat the van's override");
+        }
+        // LOOK UP: eases to 30 degrees and back to exactly 0; pitchUp lifts the look (and NaN-safe).
+        {
+            ff::LookUp l;
+            float a = 0;
+            for (int i = 0; i < 270; ++i)
+                a = l.update(1 / 90.f, true);
+            check(std::abs(a - ff::lookUpDegrees * 3.14159265f / 180) < .01f, "LOOK UP did not reach its pitch");
+            for (int i = 0; i < 900; ++i)
+                a = l.update(1 / 90.f, false);
+            check(a == 0, "LOOK UP did not ease back to level");
+            check(l.update(nan, true) == 0, "LOOK UP NaN seconds");
+            const Vec3 ahead = ff::pitchUp({0, 0, -1}, .5f).rotate({0, 0, -1});
+            check(ahead.y > .45f && ahead.z < 0, "pitchUp: + pitches the look up");
+            const Vec3 ahead2 = ff::pitchUp({1, 0, 0}, .5f).rotate({1, 0, 0});
+            check(ahead2.y > .45f && ahead2.x > 0, "pitchUp: + pitches up facing +x");
+            const Vec3 rolled = ff::pitchUp({0, 0, -1}, .5f, 1.5707963f).rotate({0, 0, -1});
+            check(std::abs(rolled.y) < 1e-4f && std::abs(rolled.x) > .45f, "pitchUp rolled a quarter: toward the body's up");
+            const Quat id = ff::pitchUp({0, nan, 0}, .5f);
+            check(id.w == 1 && id.x == 0, "pitchUp: no level look, no turn");
         }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";

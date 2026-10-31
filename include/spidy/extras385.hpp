@@ -19,6 +19,7 @@
 // - PLAY ON MONITOR uses the shipping VIEW: GAME SCREEN path (live since October 15): the game's own
 //   camera and Xbox-controller play, the headset session kept alive (never stopped, so no device is
 //   lost and nothing restarts). The monitor always shows the game's own view in this port.
+#include "fly_feel074.hpp"
 #include "gestures385.hpp"
 #include "math.hpp"
 #include "soft_shapes.hpp"
@@ -398,6 +399,11 @@ struct In {
     Vec3 velocity{}; // the body's now (a catch from a fall starts from it)
     Hand hands[2]{};
     float boost{};   // Version 0.0.5 SUPERSONIC: times FAST while hands-out (0 or <= 1: none)
+    // 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; the swing command's reserved7[1], 0 from an older VR module):
+    bool holdEnter{};  // FLY HOLD: no flight starts without `enter`
+    bool enter{};      // the grip held to enter flight now
+    bool bodySteer{};  // FLY STEER: RISE and the right stick's climb along `bodyUp`; eased, turning flight
+    Vec3 bodyUp{};     // the body's up, world (the tracking space's: rolls and flips included; zero: world up)
 };
 struct Out {
     bool drive{};
@@ -460,6 +466,9 @@ class Flight {
         o.top = top;
         o.supersonic = sonic;
         const Vec3 up{0, 1, 0};
+        // 0.0.74 test 10 FLY STEER: "a hand up when upside down or sideways just goes up" - the climb goes
+        // along the body's up (the view's, FLY ROLL and the flips included) instead of the world's.
+        const Vec3 climbUp = in.bodySteer && finite(in.bodyUp) && length(in.bodyUp) > .5f ? normalized(in.bodyUp) : up;
         Vec3 look = finite(in.look) && length(in.look) > .5f ? normalized(in.look) : Vec3{0, 0, -1};
         const float speedNow = length(v_);
         const bool coasting = flying_ && !sonic && pose != brake && !descending_ && speedNow > top + .01f;
@@ -489,7 +498,7 @@ class Flight {
             o.how = "STOP";
         } else if (pose == rise) {
             // 4. One hand up: rise, faster the higher the hand.
-            target = up * (top * riseShare * std::clamp(in.word.lift, .2f, 1.f));
+            target = climbUp * (top * riseShare * std::clamp(in.word.lift, .2f, 1.f));
             o.how = "RISE";
         } else if (pose == forward || held) {
             // 5. Both hands in front: the way they point (Superman), the look if they are unknown.
@@ -498,6 +507,8 @@ class Flight {
                 if (h.tracked && finite(h.forward) && length(h.forward) > .5f)
                     d = d + normalized(h.forward);
             d = length(d) > .3f ? normalized(d) : look;
+            if (in.bodySteer) // 0.0.74 test 10 FLY STEER: the hands' way eased (no jitter, no stiff snaps)
+                d = steer_ = fly_feel::eased(steer_, d, dt);
             if (sonic || coasting)
                 d = levelled(d, levelBand); // 0.0.74 test 11: a hand a little low no longer sinks the dash
             if (held && length(dashWay_) > .5f)
@@ -512,13 +523,19 @@ class Flight {
             // 0.0.74 test 11: coasting out of the dash (the stick still forward), a look a little down
             // no longer sinks you; past the band it steers as before.
             const Vec3 lk = coasting ? levelled(look, levelBand) : look;
-            target = in.move * top + up * (in.word.rise * top * .6f + lk.y * m * top);
+            target = in.move * top + climbUp * (in.word.rise * top * .6f) + up * (lk.y * m * top);
             target = limited(target, top);
             o.how = "STICK";
         } else {
             o.how = "HOVER"; // arms down or resting: no gravity, no sink, held where you are
         }
+        if (pose != forward && !held)
+            steer_ = {};
         if (!flying_) {
+            // 0.0.74 test 10 FLY HOLD: no flight starts by itself; the grip held (the VR module's EnterHold)
+            // lets it. Once flying it stays flying with the grip let go.
+            if (in.holdEnter && !in.enter)
+                return o;
             // On the ground the game walks; a jump, or the RISE pose, takes off.
             const bool lift = pose == rise && target.y > .5f;
             if (!lift && (!in.airborne || in.grounded))
@@ -551,6 +568,10 @@ class Flight {
             }
             o.coasting = true;
         }
+        // 0.0.74 test 10 FLY STEER: a new way turns the velocity round (its speed kept) rather than braking
+        // into it; the accel then evens out the speed. Not for STOP, DROP, HOVER or the dash's coast.
+        if (in.bodySteer && !coasting && !descending_ && pose != brake && length(target) > 1.f)
+            v_ = fly_feel::turned(v_, target, dt);
         const Vec3 before = v_;
         v_ = v_ + limited(target - v_, accel * dt);
         dashing_ = sonic;
@@ -568,12 +589,12 @@ class Flight {
     uint32_t landings() const { return landings_; }
     void land() {
         flying_ = descending_ = dashing_ = false;
-        v_ = dashWay_ = {};
+        v_ = dashWay_ = steer_ = {};
     }
 
   private:
     bool flying_{}, descending_{}, dashing_{};
-    Vec3 v_{}, dashWay_{};
+    Vec3 v_{}, dashWay_{}, steer_{};
     uint32_t takeoffs_{}, landings_{};
 };
 // What the swing module's flight reports back (SpidyFlySample): the VR module draws the vignette,

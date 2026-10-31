@@ -57,6 +57,7 @@ struct GameMotionFrame {
     float wallRoll{};
     bool wallRotate{};
     float flyRoll{}; // Update 38.5: FLY ROLL's angle applied this frame (radians)
+    float flyPitch{}; // 0.0.74 test 10: FLY LOOK UP's pitch applied this frame (radians, + up)
     float viewTilt{};
     // For the player's body: the up the view stands him along (the world's
     // until it turns onto a surface), the point of that surface under his
@@ -314,6 +315,12 @@ class GameTrackingRig {
         flyRoll_ = std::isfinite(radians) ? std::clamp(radians, -3.1415927f, 3.1415927f) : 0.f;
         flyStick_ = stickRolls;
     }
+    // 0.0.74 test 10 FLY LOOK UP (fly_feel::LookUp): the view pitched up `radians` about its level (FLY ROLL
+    // rolled) right, the head kept in place; a mod-side view transform like FLY ROLL. Set every frame; reset()
+    // keeps it.
+    void flyPitch(float radians) {
+        flyPitch_ = std::isfinite(radians) ? std::clamp(radians, -1.f, 1.f) : 0.f;
+    }
     // Whether A and the left stick in the air flip the player (FlipMotion;
     // the experimental FLIPS setting); off until set, when A there does
     // nothing and the stick moves the player. Switched off mid-flip, the
@@ -443,7 +450,7 @@ class GameTrackingRig {
     bool handClimb_{};
     float wallDistance_ = .4f;
     WallRollGesture wallRoll_;
-    float flyRoll_{};
+    float flyRoll_{}, flyPitch_{};
     bool flyStick_{};
     Vec3 climbNormal_{}, runNormal_{}, runAhead_{};
     Quat climbView_{};

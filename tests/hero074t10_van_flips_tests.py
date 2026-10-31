@@ -25,10 +25,12 @@ class VanNoFlips(unittest.TestCase):
         self.assertEqual(len(re.findall(r'\b5540\b', g)), 1)
     def test_override_reaches_the_rig_before_update(self):
         g = src('src/game_xr.cpp')
-        j = g.index('rig.automaticFlips(vehicle_flips::realistic(realisticFlips(values), carDriving, noFlips));')
+        # 0.0.74 test 10 FLY FEEL: FLY FLIPS readies the rows first (fly_feel::flying); the van's override still wraps them last.
+        j = g.index('rig.automaticFlips(vehicle_flips::realistic(flipRows, carDriving, noFlips));')
+        self.assertIn('const auto flipRows = fly_feel::flying(realisticFlips(values)', g[j - 400:j])
         self.assertIn('rig.flips(vehicle_flips::stickFlips(values.flips, carDriving, noFlips));', g[j:j + 300])
         self.assertLess(j, g.index('rig.update(', j))
-        self.assertIn('const bool carDriving = van.state == van072::driving;', g[j - 300:j])
+        self.assertIn('const bool carDriving = van.state == van072::driving;', g[j - 700:j])
     def test_saved_settings_never_written(self):
         h = src('include/spidy/vehicle_flips.hpp')
         self.assertNotIn('vr_settings', h.split('#include')[1])

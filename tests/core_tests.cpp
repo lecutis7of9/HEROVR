@@ -36172,6 +36172,12 @@ int main() {
                                     ".?AVHumanBot@@", ".?AVDroneBotMoverManager@@"})
             check(!(bitsOf(not_foe) & enemyBit), not_foe);
     });
+    test("0.0.75 THOR THROW NO LUNGE: only THOR's hammer hand, only with the hammer held or out", [] {
+        check(hero072::hammerHandBusy(hero_modes::thor, 1, true), "the hammer hand is busy");
+        check(!hero072::hammerHandBusy(hero_modes::thor, 1, false), "no hammer: it punches");
+        check(!hero072::hammerHandBusy(hero_modes::thor, 0, true), "the left hand still punches");
+        check(!hero072::hammerHandBusy(hero_modes::captainAmerica, 1, true), "other heroes unchanged");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

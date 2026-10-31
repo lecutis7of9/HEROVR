@@ -7238,6 +7238,9 @@ DWORD WINAPI run(void*) {
                                 // Update 38: SpidyVR's busy rule - a hand whose own web holds or
                                 // carries, a grab, a taken web or a climbing hand punches nothing.
                                 h.busy = !h.free;
+                                // 0.0.75 THOR THROW NO LUNGE: the hammer hand throws, it does not lunge THOR forward.
+                                if (hero072::hammerHandBusy(heroNow(), i, hero072Play.hammerInHandOrOut()))
+                                    h.busy = true;
                                 // Version 0.0.72 PUNISHER VAN: driving, the trigger is the van's pedal and nothing else.
                                 // 0.0.74 test 2 SEATED TOOLS: no punch, web ball, gadget or zip - 0.0.74 test 2b: the car's
                                 // own copy (vanTrigger, vanGrip: wheel, pedals, handles, dash) split off first, never zeroed.

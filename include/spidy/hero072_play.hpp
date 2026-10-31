@@ -144,6 +144,13 @@ struct PlayOut {
 
 // Who a hand at `at` touches (a landed punch's stand-in: within touchRange of a standing chest).
 inline constexpr float touchRange = .65f;
+// 0.0.75 THOR THROW NO LUNGE: the hammer's right hand (held, or thrown and not yet back) is no
+// punching fist for the combat machine - a throw's fast swing at an enemy made its punch-at-range
+// lunge (the bridge's mover) fly THOR forward with the throw. The hammer's own swings (bolt, launch,
+// slam) and its hits stay this file's.
+inline bool hammerHandBusy(uint32_t hero, unsigned hand, bool hammerInHandOrOut) {
+    return hero == hero_modes::thor && hand == 1 && hammerInHandOrOut;
+}
 inline constexpr float hammerReach = .9f;
 inline constexpr float chainJump = 8.f, hammerFlight = .35f;
 // Build 7 THOR's throw: the release speed (the fastest of the last swingMemory s) times throwGain, kept

@@ -39,3 +39,10 @@ Every finding is marked **CONFIRMED** (read in the logs or the code) or **CANDID
 - **Defaults.** None changed: all three stay on, because nothing yet shows which one causes the loss.
 - **Proposed, not applied: SL WATCH default off.** It is a developer diagnostic, it never helps a player's picture, and it is one less hook in every gameplay frame. Apply it once the owner agrees.
 - **Next evidence to collect.** A run on this PC with the pop-up's fix applied (all three off) and HEAP GUARD on, then each one turned back on in turn. That is what moves any of causes 2 to 4 from CANDIDATE to CONFIRMED or ruled out.
+
+## 0.0.74 test 10: the monitor's copy is always on (no switch)
+
+- The owner chose that the PC monitor always shows the headset's left eye with the mod's drawings. 0.0.73's STREAMER MODE copy path is back, always on, with no wrist row, no `live.txt` key and no launcher switch. Old `streamer_mode`, `streamer_smooth` and `streamer_eye` lines are still skipped quietly (RETIRED_073), and the pop-up turns only LIGHT CHECKS off.
+- The copy goes into the mod's own texture on the game's device. The window gets it only if the window's image belongs to the game's device and the window's monitor hangs off the same GPU (DXGI output's adapter LUID == the device's LUID, checked once a session). Otherwise there is no copy on the window (cause 2's cross-GPU path is avoided).
+- On any problem the window keeps the game's own view (0.0.72) for the rest of the session: the window on another GPU, a float back buffer, the shader not building, the copy not possible, GetDeviceRemovedReason failing, the eye bridge's fault or lost eyes. The headset is never touched by this. One console line says which picture the monitor shows (`MONITOR: ...`).
+- Still a risk: a device removal ends that session anyway, and the next session tries the copy again. If cause 2 is the real one on a PC whose monitor is on the game's GPU, the pop-up can no longer turn it off.

@@ -229,17 +229,57 @@ class Migrate72(unittest.TestCase):
 
 
 class Monitor(unittest.TestCase):
-    """The PC window in 0.0.74 test 10 is 0.0.72's: the shown left eye (Spidy's drawings on it) is kept for the
-    window's mirror; no STREAMER MODE."""
+    """0.0.74 test 10 MONITOR (owner's choice (a)): the PC window always shows the headset's left eye with the mod's
+    drawings (0.0.73's STREAMER copy path, always on): no wrist row, no live.txt key, no launcher switch. Sharpening
+    does not stop it. On any problem the window keeps the game's own view (0.0.72) for the session; VR goes on."""
 
-    def test_window_mirror_is_0072s(self):
+    def test_always_on_in_play(self):
         g = src('src/game_xr.cpp')
-        self.assertIn('native_gpu::keepShownEye(targets[0].texture);', g)
-        n = src('src/native_eye_gpu.cpp')
-        self.assertIn('void keepShownEye(ID3D12Resource* left) {', n)
-        self.assertNotIn('streamerWanted', n)
-        self.assertIn("    'monitor': ((0, 240), 'SpidyMonitorRate',", src('tools/live_settings.py'))
+        self.assertIn('const bool inPlay = drawn == Presentation::immersive;', g)
+        self.assertIn('native_gpu::streamer(inPlay);', g)
+        self.assertIn('const auto& shown = targets[0];', g)
+        self.assertIn('native_gpu::keepShownEye(shown.texture, orientation, fov);', g)
+        self.assertIn('native_gpu::keepShownEye(targets[0].texture);', g)  # menus: 0.0.72's mirror
+        self.assertNotIn('combat38::streamer', g)
+        self.assertNotIn('SpidyStreamer', g)
 
+    def test_not_blocked_by_sharpening(self):
+        n = src('src/native_eye_gpu.cpp')
+        self.assertIn('(sharpening && !streaming)', n)
+        self.assertIn('(!sharpening || shownView.streamer)', n)
+        self.assertIn('else if (mirrorWanted || monitorStreaming())', n)
+
+    def test_fail_safe_falls_back_for_the_session(self):
+        n = src('src/native_eye_gpu.cpp')
+        for why in ('otherGpu', 'floatBackBuffer', 'deviceLost', 'pipelineFailed', 'noCopy'):
+            self.assertIn('monitorFallBack(sv0::' + why + ')' if why != 'noCopy'
+                          else 'monitorFallBack(spidy::streamer_view::noCopy)', n, why)
+        self.assertIn('FAILED(device->GetDeviceRemovedReason())', n)
+        self.assertIn('GetContainingOutput', n)
+        self.assertIn('device->GetAdapterLuid()', n)
+        self.assertIn('return; // never the old mirror over the game\'s own view', n)
+        v = src('include/spidy/streamer_view.hpp')
+        self.assertIn('struct Latch', v)
+        self.assertIn('constexpr uint32_t monitorSmooth = smoothLow;', v)
+        self.assertNotIn('modeOn', v)
+        self.assertNotIn('eyeIndex', v)
+
+    def test_one_console_line(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('consoleLine(streamer_view::pathLine(path));', g)
+        self.assertEqual(g.count('streamer_view::pathLine(path)'), 2)
+
+    def test_no_setting_anywhere(self):
+        self.assertNotIn('streamer', src('include/spidy/combat38.hpp').lower().replace('0.0.73 streamer', ''))
+        self.assertNotIn('combatStreamer', src('include/spidy/wrist_hud.hpp'))
+        self.assertNotIn('combatStreamer', src('src/wrist_hud.cpp'))
+        live = src('tools/live_settings.py')
+        for key in ('streamer_mode', 'streamer_smooth', 'streamer_eye'):
+            self.assertIn(key, L.RETIRED_073)  # an old live.txt line is skipped quietly
+            self.assertNotIn(key, L.UPDATE38_DEFAULTS)
+        self.assertNotIn('Streamer', src('tools/launch-game-vr.ps1'))
+        self.assertNotIn('streamer', src('tools/run_game_vr.py').lower())
+        self.assertIn("    'monitor': ((0, 240), 'SpidyMonitorRate',", live)
 
 if __name__ == '__main__':
     unittest.main()

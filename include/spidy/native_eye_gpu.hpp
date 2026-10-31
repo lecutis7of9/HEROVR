@@ -226,6 +226,22 @@ uint32_t mirrored();
 // presents that drew such a copy (diagnostic).
 void keepShownEye(ID3D12Resource* left);
 uint32_t mirroredShown();
+// 0.0.74 test 10 MONITOR (streamer_view.hpp; 0.0.73's STREAMER MODE always on, no setting):
+// in play the window shows the copy of the headset's left eye whether or not the game renders
+// its own view (not on a screen copy), sharpened or colour-graded as the headset shows it,
+// through the streamer shader (the window's shape about the eye's axis, head shake steadied at
+// LOW). keepShownEye's overload takes the copied eye's view (orientation x, y, z, w in the XR
+// space; fov left, right, down, up in radians). On any problem (the copy cannot be made, the
+// shader would not build, a float back buffer, a removed or lost device, the window on another
+// GPU) the window keeps the game's own view (0.0.72) for the rest of the session; the headset
+// is never touched. The game thread sets inPlay each frame.
+void streamer(bool inPlay);
+bool streamerOn();
+void keepShownEye(ID3D12Resource* eye, const float orientation[4], const float fov[4]);
+// Presents that drew the copy, and the session's path (streamer_view::Path; its pathLine is
+// the console line) (diagnostic).
+uint32_t streamerPresents();
+uint32_t monitorPath();
 // The newest copied frame, if one was copied within maxAgeMs.
 bool latestScreen(Screen& out, uint64_t maxAgeMs);
 // How the copy is read: the encoded format of the back buffer's family, or

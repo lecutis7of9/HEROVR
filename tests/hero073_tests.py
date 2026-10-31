@@ -351,19 +351,21 @@ class Hero073Test6(unittest.TestCase):
 
 class Hero074T10PictureGone(unittest.TestCase):
     """0.0.74 test 10: 0.0.72's picture. IMAGE, GAME TAA, GAME AA TAA / KEEP MY GAME AA, SHARPEN MATCH, STREAMER
-    MODE, WINDOW POP FIX, SL WATCH and GLOW CHECK are gone (switch and code), not only off."""
+    MODE's switches, WINDOW POP FIX, SL WATCH and GLOW CHECK are gone (switch and code), not only off. STREAMER MODE's
+    copy path (streamer_view.hpp) is back, always on with no switch (hero074t10_picture_tests.Monitor)."""
 
     def test_switches_and_code_gone(self):
         g = src('src/game_xr.cpp')
         for gone in ('SpidyImage(', 'SpidyImageStyleOption(', 'SpidyGlowCheck(', 'SpidySlWatch(', 'SpidySharpenMatch(',
-                     'SpidyWindowPop(', 'SpidyStreamerMode(', 'image_style::', 'streamer_view', 'window_pop::',
+                     'SpidyWindowPop(', 'SpidyStreamerMode(', 'SpidyStreamerSmooth(', 'SpidyStreamerEye(', 'image_style::',
+                     'combat38::streamer', 'window_pop::',
                      'sl_watch::', 'eye_sharpen::matchOn'):
             self.assertNotIn(gone, g, gone)
-        for header in ('image_style.hpp', 'streamer_view.hpp', 'window_pop.hpp', 'sl_watch.hpp'):
+        for header in ('image_style.hpp', 'window_pop.hpp', 'sl_watch.hpp'):
             self.assertFalse(os.path.exists(os.path.join(ROOT, 'include', 'spidy', header)), header)
         n = src('src/native_eye_gpu.cpp')
         self.assertNotIn('eye_sharpen::matchedPercent(', n)
-        self.assertNotIn('streamerWanted', n)
+        self.assertNotIn('streamerSmoothing', n)
         self.assertNotIn('cleanImage', n)
         self.assertNotIn('keep-game-aa', src('tools/run_game_vr.py'))
         self.assertNotIn('KeepGameAa', src('tools/launch-game-vr.ps1'))

@@ -38,6 +38,7 @@
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
+#include "spidy/streamer_view.hpp"
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
@@ -13464,7 +13465,31 @@ DWORD WINAPI run(void*) {
                         }
                         // The game's window mirrors the left eye as it is now, the
                         // drawings above on it; copied only when the window took the last.
-                        native_gpu::keepShownEye(targets[0].texture);
+                        // 0.0.74 test 10 MONITOR (streamer_view.hpp; always on, no setting): in
+                        // play, the left eye with the view its image was made with (the projection
+                        // layer's), so the window's view can be steadied and cut to its shape. One
+                        // console line says which picture the monitor shows (and one more if the
+                        // session later falls back to the game's own view).
+                        {
+                            const bool inPlay = drawn == Presentation::immersive;
+                            native_gpu::streamer(inPlay);
+                            if (inPlay) {
+                                const auto& shown = targets[0];
+                                const auto& o = shown.view.pose.orientation;
+                                const auto& f = shown.view.fov;
+                                const float orientation[4] = {o.x, o.y, o.z, o.w};
+                                const float fov[4] = {f.angleLeft, f.angleRight, f.angleDown, f.angleUp};
+                                native_gpu::keepShownEye(shown.texture, orientation, fov);
+                            } else {
+                                native_gpu::keepShownEye(targets[0].texture);
+                            }
+                            static uint32_t monitorPathLogged = streamer_view::undecided;
+                            if (const auto path = native_gpu::monitorPath(); path != monitorPathLogged) {
+                                monitorPathLogged = path;
+                                if (*streamer_view::pathLine(path))
+                                    consoleLine(streamer_view::pathLine(path));
+                            }
+                        }
                         if (webGap >= 0 && imageGeneration != gapGeneration) {
                             native_eyes::reportWebGap(webGap);
                             gapGeneration = imageGeneration;

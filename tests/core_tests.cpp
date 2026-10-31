@@ -174,6 +174,7 @@
 #include "spidy/seated_lock074.hpp"
 #include "spidy/cabin_look074.hpp"
 #include "spidy/finger_ray074.hpp"
+#include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
@@ -34509,6 +34510,126 @@ int main() {
                     check(!out.empty() && sane(out, 0, {0, 1, -.4f}, 1), "a SETTINGS page drew badly");
                 }
         }
+    });
+    test("0.0.74 test 10 MONITOR: the crop fits the window's shape about the eye's axis, inside the eye", [] {
+        namespace sv = streamer_view;
+        const sv::Fov quest{-.942f, .698f, -.960f, .838f}; // a lopsided eye: wider outward and down
+        for (uint32_t smooth = 0; smooth < sv::smoothChoices; ++smooth) {
+            const auto c = sv::fitCrop(quest, sv::windowAspect(1920, 1080), sv::marginOf(smooth));
+            check(c.valid && std::abs(c.aspect() - 16.f / 9.f) < 1e-4f, "16:9 on a 16:9 window");
+            check(c.left == -c.right && c.down == -c.up, "centred on the eye's axis");
+            check(std::atan(c.right) < quest.right && std::atan(-c.left) < -quest.left && std::atan(c.up) < quest.up &&
+                      std::atan(-c.down) < -quest.down,
+                  "inside the eye's field");
+            check(sv::slack(quest, c) > 0, "room for the smoothing's lag");
+        }
+        check(sv::marginOf(sv::smoothHigh) > sv::marginOf(sv::smoothLow) &&
+                  sv::marginOf(sv::smoothLow) > sv::marginOf(sv::smoothOff),
+              "more smoothing keeps more room");
+        const auto tall = sv::fitCrop(quest, sv::windowAspect(1080, 1920), .1f);
+        check(tall.valid && std::abs(tall.aspect() - 9.f / 16.f) < 1e-4f, "a portrait window gets a portrait crop");
+        check(sv::windowAspect(0, 0) == 16.f / 9.f && sv::windowAspect(10000, 1) == 16.f / 9.f,
+              "a minimised or absurd window is taken as 16:9");
+        check(!sv::fitCrop({}, 1.7f, .1f).valid && !sv::fitCrop({-.9f, .7f, -.9f, std::nanf("")}, 1.7f, .1f).valid &&
+                  !sv::fitCrop({.1f, .7f, -.9f, .8f}, 1.7f, .1f).valid && !sv::fitCrop(quest, 0, .1f).valid,
+              "no crop for a bad lens or aspect (that picture keeps the game view)");
+        check(sv::slack(quest, {}) == 0, "no crop, no slack");
+    });
+    test("0.0.74 test 10 MONITOR: the smoothing lags a shake, settles, stays inside the image and restarts on a jump", [] {
+        namespace sv = streamer_view;
+        auto yaw = [](float a) { return Quat{0, std::sin(a / 2), 0, std::cos(a / 2)}; };
+        sv::Smoother off;
+        off.step(yaw(0), 1.f / 30, 0, 1);
+        check(sv::angleBetween(off.step(yaw(.2f), 1.f / 30, 0, 1), yaw(.2f)) < 1e-4f, "OFF: the head at once");
+        sv::Smoother low;
+        check(sv::angleBetween(low.step(yaw(.3f), 1.f / 30, .12f, 1), yaw(.3f)) < 1e-4f, "the first picture is the head's");
+        low.reset();
+        low.step(yaw(0), 1.f / 30, .12f, 1);
+        const float lag = sv::angleBetween(low.step(yaw(.2f), 1.f / 30, .12f, 1), yaw(.2f));
+        check(lag > .1f && lag < .2f, "LOW: a shake is followed part of the way");
+        Quat v{};
+        for (int i = 0; i < 60; ++i)
+            v = low.step(yaw(.2f), 1.f / 30, .12f, 1);
+        check(sv::angleBetween(v, yaw(.2f)) < 1e-3f, "and settles on the head in two seconds");
+        sv::Smoother high;
+        high.step(yaw(0), 1.f / 30, .30f, 1);
+        check(sv::angleBetween(high.step(yaw(.2f), 1.f / 30, .30f, 1), yaw(.2f)) > lag, "HIGH lags more than LOW");
+        sv::Smoother held;
+        held.step(yaw(0), 1.f / 30, .30f, .05f);
+        check(sv::angleBetween(held.step(yaw(.4f), 1.f / 30, .30f, .05f), yaw(.4f)) <= .05f + 1e-4f,
+              "never further behind than the crop's slack");
+        sv::Smoother jump;
+        jump.step(yaw(0), 1.f / 30, .12f, 1);
+        check(sv::angleBetween(jump.step(yaw(1.2f), 1.f / 30, .12f, 1), yaw(1.2f)) < 1e-4f, "a recentre restarts at the head");
+        jump.step(yaw(0), 1.f / 30, .12f, 1);
+        check(sv::angleBetween(jump.step(yaw(.2f), 2.f, .12f, 1), yaw(.2f)) < 1e-4f, "so does a gap");
+        check(sv::angleBetween(jump.step(yaw(.1f), std::nanf(""), .12f, 1), yaw(.1f)) < 1e-4f, "and a bad time step");
+        const auto q = jump.step(yaw(.12f), 1.f / 30, .12f, 1);
+        check(std::isfinite(q.x + q.y + q.z + q.w), "the view stays finite");
+    });
+    test("0.0.74 test 10 MONITOR: the shader's mapping - straight through without lag, turned with it, black off the image", [] {
+        namespace sv = streamer_view;
+        auto yaw = [](float a) { return Quat{0, std::sin(a / 2), 0, std::cos(a / 2)}; };
+        const sv::Fov f{-.942f, .698f, -.960f, .838f};
+        const auto c = sv::fitCrop(f, 16.f / 9.f, sv::marginOf(sv::smoothLow));
+        const auto still = sv::turnOf(yaw(.3f), yaw(.3f));
+        for (int i = 0; i < 9; ++i)
+            check(std::abs(still.m[i] - (i % 4 == 0 ? 1.f : 0.f)) < 1e-5f, "no lag: no turn");
+        float s = 0, t = 0;
+        const float l = std::tan(f.left), r = std::tan(f.right), d = std::tan(f.down), u = std::tan(f.up);
+        check(sv::sample(still, c, f, .5f, .5f, s, t) && std::abs(s - (-l) / (r - l)) < 1e-5f &&
+                  std::abs(t - u / (u - d)) < 1e-5f,
+              "the window's middle is the eye's axis");
+        for (float x : {0.f, 1.f})
+            for (float y : {0.f, 1.f})
+                check(sv::sample(still, c, f, x, y, s, t), "the crop's corners are on the image");
+        check(sv::sample(still, c, f, 0, 0, s, t) && s > 0 && t > 0 && sv::sample(still, c, f, 1, 1, s, t) && s < 1 &&
+                  t < 1,
+              "top-left to top-left, bottom-right to bottom-right");
+        // The head turned left of the window's (smoothed) view: straight ahead is right of the eye's axis.
+        const float a = .05f;
+        const auto turned = sv::turnOf(yaw(a), yaw(0));
+        check(sv::sample(turned, c, f, .5f, .5f, s, t) && std::abs(l + s * (r - l) - std::tan(a)) < 1e-4f,
+              "a lag moves the picture by the lag's angle");
+        for (float x : {0.f, 1.f})
+            for (float y : {0.f, 1.f})
+                check(sv::sample(sv::turnOf(yaw(sv::slack(f, c)), yaw(0)), c, f, x, y, s, t),
+                      "within the slack the corners stay on the image");
+        check(!sv::sample(sv::turnOf(yaw(1.2f), yaw(0)), c, f, .5f, .5f, s, t), "far off: black, not a smear");
+        check(!sv::sample(sv::turnOf(yaw(3.1f), yaw(0)), c, f, .5f, .5f, s, t), "behind the eye: black");
+        // The root constants the shader reads.
+        const auto k = sv::constantsOf(turned, c, f, 1920, 1080);
+        check(k.c[0] == turned.m[0] && k.c[2] == turned.m[2] && k.c[4] == turned.m[3] && k.c[10] == turned.m[8] &&
+                  k.c[3] == 0 && k.c[7] == 0 && k.c[11] == 0,
+              "the turn's rows in the first three float4s");
+        check(k.c[12] == c.left && k.c[13] == c.right && k.c[14] == c.down && k.c[15] == c.up, "then the crop");
+        check(k.c[16] == l && k.c[17] == r && k.c[18] == d && k.c[19] == u, "then the lens");
+        check(std::abs(k.c[20] * 1920 - 1) < 1e-6f && std::abs(k.c[21] * 1080 - 1) < 1e-6f, "then the pixel size");
+        check(sv::constantsOf(turned, c, f, 0, 0).c[20] == 0, "no window, no division by zero");
+    });
+    test("0.0.74 test 10 MONITOR: always on, no setting; the first fallback is final and named in one line", [] {
+        namespace sv = streamer_view;
+        check(sv::monitorSmooth == sv::smoothLow, "LOW smoothing, fixed");
+        for (const auto& o : combat38::optionInfo)
+            check(std::string(o.key).find("streamer") == std::string::npos &&
+                      std::string(o.label).find("STREAMER") == std::string::npos,
+                  "no streamer option, wrist row or live.txt key");
+        sv::Latch l;
+        check(l.streaming() && l.path == sv::undecided && !*sv::pathLine(l.path), "undecided: tries, logs nothing");
+        check(l.shown() && !l.shown() && l.path == sv::headsetEye && l.streaming(), "the first picture: one line");
+        check(std::string(sv::pathLine(sv::headsetEye)).find("headset's left eye") != std::string::npos,
+              "it names the headset's eye");
+        check(l.fallBack(sv::deviceLost) && !l.streaming() && l.path == sv::deviceLost, "a lost device: the game view");
+        check(!l.fallBack(sv::pipelineFailed) && l.path == sv::deviceLost, "the first reason stays");
+        check(!l.shown() && !l.streaming(), "and nothing brings the copy back this session");
+        for (uint32_t why : {sv::pipelineFailed, sv::floatBackBuffer, sv::deviceLost, sv::otherGpu, sv::noCopy}) {
+            sv::Latch f;
+            check(f.fallBack(why) && sv::gameView(f.path) && !f.streaming(), "every problem falls back");
+            check(std::string(sv::pathLine(why)).find("game's own view (0.0.72)") != std::string::npos,
+                  "and says so");
+        }
+        sv::Latch n;
+        check(!n.fallBack(sv::undecided) && !n.fallBack(sv::headsetEye) && n.streaming(), "not a reason");
     });
     test("0.0.73 test 5 HERO HANDS: IRON MAN's MARKs have their own profiles; every other suit keeps test 4's hands", [] {
         namespace sw = spidy::suit_wear;

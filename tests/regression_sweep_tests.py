@@ -378,6 +378,8 @@ class SelfUpdateAndRevertAllBuilds(unittest.TestCase):
         self.compile_and_ask(s, cur)
         # build 9: 0.0.6 and 0.0.5; build 10 (Version 0.0.63): 0.0.62 first (launcher_build9_tests pins the order)
         t73 = '"v0.0.73", ' if '"v0.0.73", "v0.0.63"' in s else ''   # 0.0.74 test 10: 0.0.73 first (launcher_build9_tests pins it)
+        if cur >= 16:   # build 16 (0.0.75): 0.0.74 first, then 0.0.73 (launcher_build9_tests pins it)
+            t73 = '"v0.0.74", ' + t73
         self.assertIn('public static readonly string[] PreviousTags = { %s%s%s"v0.0.6", "v0.0.5" };'
                       % (t73, '"v0.0.63", ' if cur >= 11 else '', '"v0.0.62", ' if cur >= 10 else ''), s)   # build 11 (0.0.70): 0.0.63 first
 

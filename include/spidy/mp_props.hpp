@@ -68,6 +68,7 @@ enum PropLineKind : uint8_t {
     lineChest,     // IRON MAN's chest beam
     lineHook,      // PUNISHER's hook line
     lineRope,      // BATMAN's perch rope
+    lineWeb,       // a web ball in flight (from: its tail, to: the ball)
     lineKindEnd
 };
 enum PropFxKind : uint8_t {
@@ -76,8 +77,8 @@ enum PropFxKind : uint8_t {
     fxImpact,      // a bullet's hit puff (way: back along the shot)
     fxSmoke,       // a smoke puff
     fxScorch,      // a heat-vision scorch mark
-    fxSplash,      // a repulsor's splash
-    fxShock,       // a shockwave ring (param: radius / 10 cm)
+    fxSplash,      // a repulsor's splash (param 1: a web ball's)
+    fxShock,       // a shockwave ring (param: radius / 10 cm, bit 7 the subtle ring)
     fxKindEnd
 };
 inline constexpr uint8_t propsFlagClawSteel = 1, propsFlagBatonClub = 2, propsFlagGunModels = 4, propsFlagShieldModel = 8,

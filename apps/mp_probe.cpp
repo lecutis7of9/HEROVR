@@ -6,6 +6,7 @@
 //                                         a second (tests/mp_buddy_tests.py drives the Test Buddy at it)
 //   spidy_mp_probe golden                 hex of fixed packets (the Python buddy must encode the same bytes)
 #include "spidy/mp_net.hpp"
+#include "spidy/mp_prop_look.hpp"
 #include "spidy/mp_props.hpp"
 #include "spidy/mp_session.hpp"
 
@@ -102,6 +103,9 @@ int main(int argc, char** argv) {
         Session s;
         if (!s.start(cfg))
             return 2;
+        hero007::Draw fakeShot;
+        FxRing fx;
+        FxInbox inbox;
         const double t0 = s.now();
         double nextPrint = t0 + 1;
         while (s.now() - t0 < seconds) {
@@ -112,19 +116,35 @@ int main(int argc, char** argv) {
             p.head = {{0, 1.6f, 0}, Quat::around({0, 1, 0}, .2f * std::sin(t))};
             p.actions = handLeft | handRight;
             p.props = goldenProps(); // 0.0.74 MP PROPS: a thrown hammer and a held batarang ride along
+            // phase 3: a lightning bolt from the right hand, and a muzzle flash every half second through the effects ring
+            PropLine bolt;
+            bolt.kind = lineBolt;
+            bolt.from = {.25f, 1.4f, -.4f};
+            bolt.to = {.25f, 1.f, -8.f};
+            p.props.add(bolt);
+            fakeShot.any = true;
+            fakeShot.flashAge[1] = std::fmod(t, .5f);
+            fakeShot.flashAt[1] = {.25f, 1.4f, -.5f};
+            fakeShot.flashWay[1] = {0, 0, -1};
+            fx.feed({&fakeShot, nullptr, nullptr}, s.now());
+            fx.write(p.props, sendFrame({}, Quat{}, 0.f), s.now());
             s.publish(p);
+            {
+                const SessionView w = s.view();
+                inbox.take(w.state.props, GhostFrame{}, s.now());
+            }
             if (s.now() >= nextPrint) {
                 nextPrint += 1;
                 const SessionView v = s.view();
                 std::printf("{\"t\": %.1f, \"running\": %d, \"port\": %u, \"visible\": %d, \"buddy\": %d, \"name\": \"%s\", "
                             "\"ping\": %d, \"hero\": %u, \"suit\": %u, \"root\": [%.3f, %.3f, %.3f], \"actions\": %u, "
                             "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d, "
-                            "\"props\": %u, \"propKinds\": [%u, %u, %u, %u]}\n",
+                            "\"props\": %u, \"propKinds\": [%u, %u, %u, %u], \"lines\": %u, \"fxTaken\": %u}\n",
                             t, v.running, v.port, v.visible, v.buddy, v.buddyName.c_str(), v.pingMs, v.state.hero,
                             v.state.suit, v.state.root.x, v.state.root.y, v.state.root.z, v.state.actions, v.sent,
                             v.received, v.rejected, v.peerGame, v.calling, static_cast<unsigned>(v.state.props.items),
                             v.state.props.item[0].kind, v.state.props.item[1].kind, v.state.props.item[2].kind,
-                            v.state.props.item[3].kind);
+                            v.state.props.item[3].kind, static_cast<unsigned>(v.state.props.lines), inbox.taken());
                 for (const auto& l : s.takeLog())
                     std::printf("# %s\n", l.c_str());
                 std::fflush(stdout);

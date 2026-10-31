@@ -176,6 +176,27 @@ class Malformed(unittest.TestCase):
             self.assertNotEqual(a['at'], b['at'])
             self.assertLess(math.dist(a['at'], b['at']), 1.0)
 
+    def test_effects_show_0074(self):
+        """0.0.74 MP PROPS phase 3: lines by state; each one-off effect rides for FX_SEND_FOR with one seq."""
+        pp = mb.Puppet()
+        pp.show = mb.PROP_SHOWS.index('effects')
+        seen = {}
+        for n in range(90):  # 3 s at 30 Hz
+            pp.t = n / 30
+            pr = mb.decode(mb.encode(mb.POSE, mb.ROLE_BUDDY, n + 1, n, mb.pose_payload(pp.state())))['props']
+            self.assertEqual([i['kind'] for i in pr['items']], [mb.RING, mb.BUBBLE, mb.FIST, mb.PALM])
+            self.assertEqual([l['kind'] for l in pr['lines']], [mb.L_LANTERN, mb.L_BOLT])
+            self.assertLessEqual(len(pr['fx']), mb.FX_MOST)
+            for f in pr['fx']:
+                self.assertLess(f['age'], mb.FX_SEND_FOR + 0.01)
+                seen.setdefault((f['seq'], f['kind']), []).append(n / 30 - f['age'])
+        flashes = [k for k in seen if k[1] == mb.FX_FLASH]
+        self.assertEqual(len(flashes), 6)  # one shot every half second
+        self.assertTrue(any(k[1] == mb.FX_SHOCK for k in seen))
+        for births in seen.values():  # every packet names the same birth (the receiver dedupes by seq)
+            self.assertLess(max(births) - min(births), 0.01)
+            self.assertGreaterEqual(len(births), 8)
+
     def test_short_long_and_flips(self):
         good = bytes.fromhex(GOLDEN['pose'])
         for n in range(len(good)):
@@ -237,6 +258,12 @@ class Live(unittest.TestCase):
         # (a worn batarang, the hammer, the shield, a holstered pistol) reaches the game side.
         self.assertTrue(any(r['props'] == 2 and r['propKinds'][:2] == [20, 4] for r in loop), ''.join(lines))
         self.assertTrue(any(r['props'] == 4 and r['propKinds'] == [4, 20, 9, 1] for r in buddy), ''.join(lines))
+        # phase 3: the probe's own bolt and flashes in the loopback, then the buddy's bolt and shots (flash + hit
+        # every half second) taken once each by the game side's effects inbox (the loopback may print only one
+        # row before the buddy comes, too early for its own first flash on a loaded machine: lines only there)
+        self.assertTrue(any(r['lines'] == 1 for r in loop), ''.join(lines))
+        self.assertTrue(any(r['lines'] == 1 for r in buddy), ''.join(lines))
+        self.assertGreaterEqual(buddy[-1]['fxTaken'] - loop[-1]['fxTaken'], 8, ''.join(lines))
         after = [r for r in rows if r['t'] >= 7.5]
         self.assertTrue(after and not after[-1]['buddy'], 'not back to loopback after BYE:\n' + ''.join(lines))
 
@@ -262,6 +289,10 @@ class Live(unittest.TestCase):
         # 0.0.74 MP PROPS: each sees the other's hammer and batarang.
         for rows, out in ((a_rows, outs[0]), (b_rows, outs[1])):
             self.assertTrue(any(r['peerGame'] and r['props'] == 2 and r['propKinds'][:2] == [20, 4] for r in rows), out)
+            # phase 3: his lightning bolt and his muzzle flashes (2 a second, each taken once)
+            self.assertTrue(any(r['peerGame'] and r['lines'] == 1 for r in rows), out)
+            self.assertGreaterEqual(rows[-1]['fxTaken'], 4, out)
+            self.assertLessEqual(rows[-1]['fxTaken'], 2 * 6 + 2, out)
         self.assertIn("player 'BOB' joined", outs[0])
         self.assertIn("player 'ALICE' joined", outs[1])
         # Alice's game quits first: Bob's sees the BYE.

@@ -83,6 +83,16 @@ spinning shield, Thor's hammer in flight and Batman's smoke pellets are where yo
 moved smoothly between packets (spin the short way round); a catch or a new throw snaps instead of sliding.
 `--props throw` makes the buddy throw the hammer, the shield and a batarang out 8 m and back, and lob pellets.
 
+Beams and hit effects (0.0.74 MP PROPS phase 3). Things that last (heat vision and Superman's freeze breath,
+Iron Man's chest beam, palm glows and repulsor bolts, web balls in flight, Green Lantern's rings, beam, bubble,
+chain and fist, Thor's lightning, grapple lines, Daredevil's cable, the Punisher's hook and Batman's rope) go by
+state like the thrown things, at most 5 lines a packet (the most telling first; extra lightning bolts are cut).
+One-off effects (muzzle flashes, bullet hits, smoke puffs, heat scorch marks, repulsor and web splashes, shock
+rings) go through an effects ring: each is sent with a number in the packets for 0.3 s (about 9 packets, so a
+lost packet loses nothing), your game takes it once, puts it where it happened and plays it out on its own
+clock. At most 4 a packet: in a very busy fight the oldest may be skipped. `--props effects` shows them all on
+the buddy (a shot every half second, a shock ring every 3 s); `--props all` adds a lightning bolt and the shots.
+
 ## Files
 
 | File | Role |

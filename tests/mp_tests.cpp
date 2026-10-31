@@ -1145,6 +1145,135 @@ void testPropsThrown() {
     check(std::abs(z * 2.f - std::round(z * 2.f)) > .05f, "between two packets (not a hop)");
 }
 
+// 0.0.74 MP PROPS phase 3: beams, lines, GREEN LANTERN / IRON MAN items and the effects ring
+void testPropsEffects() {
+    const SendFrame sf = sendFrame({0, 0, 0}, Quat{}, 0.f);
+    Ghost g;
+    g.feet = {0, 0, 0};
+    g.bodyYaw = 0;
+    const GhostFrame gw = ghostFrame(g, false, {10, 0, 0}, Quat{}), gm = ghostFrame(g, true, {10, 0, 0}, Quat{});
+    hero007::Draw d;
+    d.any = true;
+    d.beamFrom[0] = {-.032f, 1.7f, 0};
+    d.beamFrom[1] = {.032f, 1.7f, 0};
+    d.beamTo = {0, 1, -8};
+    d.beamFade = .8f;
+    d.grapple[1] = true;
+    d.grappleFrom[1] = {.3f, 1.2f, -.3f};
+    d.grappleTo[1] = {2, 9, -12};
+    d.grappleOut[1] = 1;
+    hero072::Look l;
+    l.any = true;
+    l.ring[0] = true;
+    l.ringAt[0] = {-.3f, 1.1f, -.2f};
+    l.bubble = true;
+    l.bubbleAt = {0, 1, 0};
+    l.bubbleRadius = 1.6f;
+    l.bolts = 3; // the third is past propLinesMost
+    l.boltFrom[0] = {0, 1.5f, 0};
+    l.boltTo[0] = {0, 1, -9};
+    l.boltFrom[1] = {0, 1.5f, 0};
+    l.boltTo[1] = {1, 1, -9};
+    l.boltFrom[2] = {0, 1.5f, 0};
+    l.boltTo[2] = {-1, 1, -9};
+    ShotSource sh;
+    sh.repulsor = true;
+    sh.palmGlow[1] = .5f;
+    sh.palmAt[1] = {.3f, 1.2f, -.4f};
+    sh.palmWay[1] = {0, 0, -1};
+    sh.fade[2] = 1;
+    sh.from[2] = {.3f, 1.2f, -.4f};
+    sh.at[2] = {.3f, 1.2f, -10.4f};
+    PropSource src;
+    src.h007 = &d;
+    src.h072 = &l;
+    src.shots = &sh;
+    const Props p = captureProps(src, sf);
+    check(p.items == 3 && p.item[0].kind == propRing && p.item[1].kind == propBubble && p.item[2].kind == propPalm,
+          "ring, bubble, palm as items");
+    check(p.lines == 5 && p.line[0].kind == lineHeat && p.line[1].kind == lineGrapple && p.line[2].kind == lineRepulsor &&
+              p.line[3].kind == lineBolt && p.line[4].kind == lineBolt,
+          "beam, grapple, shot, then bolts (cut at propLinesMost)");
+    uint8_t buf[propsMostBytes];
+    Props back;
+    check(decodeProps(buf, encodeProps(p, buf, sizeof buf), back) && back.lines == 5 && back.items == 3, "lines through the wire");
+    const RemoteProps r = rebuildProps(back, gw);
+    check(r.h007.beamFade > .7f && !r.h007.beamFreeze && near(r.h007.beamFrom[0], {9.968f, 1.7f, 0}, .02f) &&
+              near(r.h007.beamTo, {10, 1, -8}, .02f),
+          "heat beam: two eyes, on the ghost");
+    check(r.h007.grapple[0] && near(r.h007.grappleTo[0], {12, 9, -12}, .02f), "grapple line");
+    check(r.h072.ring[0] && r.h072.bubble && near(r.h072.bubbleRadius, 1.6f, .01f) && r.h072.bolts == 2, "rings, bubble, two bolts");
+    check(r.shots.repulsor && r.shots.n == 1 && !r.shots.web[0] && near(r.shots.at[0], {10.3f, 1.2f, -10.4f}, .02f) &&
+              near(length(r.shots.at[0] - r.shots.tail[0]), repulsorTail, .02f),
+          "repulsor shot with its tail");
+    check(near(r.shots.palmGlow[1], .5f, .01f) && near(r.shots.palmAt[1], {10.3f, 1.2f, -.4f}, .02f), "palm glow");
+    const RemoteProps rm = rebuildProps(back, gm);
+    check(rm.h072.ring[1] && !rm.h072.ring[0] && rm.shots.palmGlow[0] > .4f, "mirrored: the other hand");
+
+    // the effects ring: a flash and a hit go out once each, newest first, for fxSendFor
+    hero007::Draw fd;
+    fd.any = true;
+    FxRing ring;
+    ring.feed({&fd, nullptr, nullptr}, 100.0); // learns the ages
+    fd.flashAge[1] = 0;
+    fd.flashAt[1] = {.3f, 1.2f, -.6f};
+    fd.flashWay[1] = {0, 0, -1};
+    fd.impactAge[2] = .01f;
+    fd.impactAt[2] = {0, 1, -20};
+    ring.feed({&fd, nullptr, nullptr}, 100.01);
+    fd.flashAge[1] = .02f;
+    fd.impactAge[2] = .03f;
+    ring.feed({&fd, nullptr, nullptr}, 100.03); // still the same ones: nothing new
+    check(ring.sent() == 2, "two effects noticed once each");
+    Props q;
+    ring.write(q, sf, 100.05);
+    check(q.fx == 2 && q.effect[0].seq == 2 && q.effect[0].kind == fxImpact && q.effect[1].kind == fxFlash && q.effect[1].param == 1,
+          "newest first, the hand in param");
+    Props late;
+    ring.write(late, sf, 100.5);
+    check(late.fx == 0, "gone from the packets after fxSendFor");
+    // a new shot reuses the slot (age back to 0): noticed again
+    fd.flashAge[1] = 0;
+    ring.feed({&fd, nullptr, nullptr}, 100.6);
+    check(ring.sent() == 3, "reused slot noticed");
+    hero072::Look sl;
+    sl.any = sl.shock = true;
+    sl.shockAt = {0, 0, -2};
+    sl.shockRadius = 3.f;
+    sl.shockAge = 0;
+    ring.feed({&fd, &sl, nullptr}, 100.61);
+    check(ring.sent() == 4, "shock ring");
+
+    // the inbox: taken once per seq (eight packets carry it), aged on the receiver's clock, placed on the ghost
+    Props w;
+    ring.write(w, sf, 100.62);
+    check(w.fx == 2, "flash + shock in the packet");
+    Props wq;
+    check(decodeProps(buf, encodeProps(w, buf, sizeof buf), wq), "fx through the wire");
+    FxInbox in;
+    for (int k = 0; k < 8; ++k)
+        in.take(wq, gw, 50.0 + k * .033);
+    RemoteProps rr;
+    in.apply(rr, 50.02);
+    check(rr.h007.flashAge[1] < hero007::flashLife && near(rr.h007.flashAt[1], {10.3f, 1.2f, -.6f}, .02f), "flash on the ghost's hand");
+    check(rr.h072.shock && near(rr.h072.shockRadius, 3.f, .05f) && rr.h072.shockAge < .1f && near(rr.h072.shockAt, {10, 0, -2}, .02f),
+          "shock ring placed");
+    RemoteProps later;
+    in.apply(later, 51.0);
+    check(!later.h072.shock && later.h007.flashAge[1] > 1e8f, "played out on our clock (no repeat from later packets)");
+    check(in.live(51.0) && !in.live(80.0), "kept for fxKeepFor");
+    FxInbox im;
+    im.take(wq, gm, 50.0);
+    RemoteProps rmm;
+    im.apply(rmm, 50.01);
+    check(rmm.h007.flashAge[0] < hero007::flashLife && near(rmm.h007.flashAt[0], {9.7f, 1.2f, -.6f}, .02f), "mirrored flash: other hand");
+    // the whole tail still fits in a pose packet
+    Props full = p;
+    for (const PropFx& x : w.effect)
+        full.add(x);
+    check(encodeProps(full, buf, sizeof buf) <= propsMostBytes, "tail with fx fits");
+}
+
 int main() {
     testCrcAndHash();
     testRoundTrip();
@@ -1164,6 +1293,7 @@ int main() {
     testPropsWire();
     testPropsOnGhost();
     testPropsThrown();
+    testPropsEffects();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

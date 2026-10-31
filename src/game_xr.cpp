@@ -12677,7 +12677,34 @@ DWORD WINAPI run(void*) {
                                         }
                                         ps.batons.club = saved->batonClub;
                                         ps.batarangStyle = c38(combat38::batarangStyle);
-                                        mine.props = spidy::mp::captureProps(ps, spidy::mp::sendFrame(rendered.anchor, turn, mine.yaw));
+                                        // phase 3: IRON MAN's beam and palms, the shots in flight and the one-off effects
+                                        static spidy::mp::ShotSource mpShots;
+                                        mpShots = {};
+                                        mpShots.repulsor = saved->repulsorLook;
+                                        mpShots.chestFrom = saved->beamFrom;
+                                        mpShots.chestTo = saved->beamTo;
+                                        mpShots.chestFade = saved->repulsorLook ? saved->beamFade : 0.f;
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            mpShots.palmAt[i] = saved->palmAt[i];
+                                            mpShots.palmWay[i] = saved->palmWay[i];
+                                            mpShots.palmGlow[i] = saved->repulsorLook ? saved->palmGlow[i] : 0.f;
+                                        }
+                                        for (size_t b = 0; b < spidy::mp::ShotSource::most && b < saved->oursAt.size(); ++b) {
+                                            mpShots.from[b] = saved->oursFrom[b];
+                                            mpShots.at[b] = saved->oursAt[b];
+                                            mpShots.tail[b] = saved->oursTail[b];
+                                            mpShots.fade[b] = saved->oursFade[b];
+                                            mpShots.splashAt[b] = saved->splashAt[b];
+                                            mpShots.splashFade[b] = saved->splashFade[b];
+                                        }
+                                        ps.shots = &mpShots;
+                                        const spidy::mp::SendFrame sf = spidy::mp::sendFrame(rendered.anchor, turn, mine.yaw);
+                                        mine.props = spidy::mp::captureProps(ps, sf);
+                                        static spidy::mp::FxRing mpFx;
+                                        const double fxNow =
+                                            std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                                        mpFx.feed({&saved->hero007, &saved->hero072, &mpShots}, fxNow);
+                                        mpFx.write(mine.props, sf, fxNow);
                                     }
                                     mpSession->publish(mine);
                                     // Draw what came back.
@@ -12732,9 +12759,16 @@ DWORD WINAPI run(void*) {
                                         // on him like his grips (mirrored for the loopback) and drawn by the player's own draws.
                                         // His models are loaded the first time his props name them (the built-in look while
                                         // one is missing; THOR's hammer: the model or nothing, as for the player).
-                                        if (v.state.props.any() && v.alpha > .3f) {
-                                            const spidy::mp::RemoteProps rp = spidy::mp::rebuildProps(
-                                                v.state.props, spidy::mp::ghostFrame(g, !v.peerGame && !v.buddy, feet, turn));
+                                        // phase 3: his one-off effects (flashes, hits, smoke, scorch, splashes, shock rings) are
+                                        // taken once each and aged on this clock, so they play out even between packets.
+                                        static spidy::mp::FxInbox mpInbox;
+                                        const double fxNow2 =
+                                            std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                                        const spidy::mp::GhostFrame gf = spidy::mp::ghostFrame(g, !v.peerGame && !v.buddy, feet, turn);
+                                        mpInbox.take(v.state.props, gf, fxNow2);
+                                        if ((v.state.props.any() || mpInbox.live(fxNow2)) && v.alpha > .3f) {
+                                            spidy::mp::RemoteProps rp = spidy::mp::rebuildProps(v.state.props, gf);
+                                            mpInbox.apply(rp, fxNow2);
                                             auto& lib = mesh_model::library();
                                             const auto mpModel = [&](uint32_t slot) -> const mesh_model::Mesh* {
                                                 if (slot == 0 || slot >= mesh_model::slots)
@@ -12787,6 +12821,43 @@ DWORD WINAPI run(void*) {
                                                 if (l2.hammer)
                                                     l2.hammerModel = mpModel(mesh_model::hammerSlot(l2.hammerChoice));
                                                 hero072::appendLook(vertices, l2, Vec3{}, viewer, pixelAngle, 0.f);
+                                            }
+                                            // phase 3: IRON MAN's chest beam, palms and bolts, the web balls, their splashes
+                                            if (rp.shots.any()) {
+                                                const auto& sh = rp.shots;
+                                                const float flick = static_cast<float>(std::fmod(fxNow2, 600.0));
+                                                if (sh.chestFade > 0)
+                                                    appendChestBeam(vertices, sh.chestFrom, sh.chestTo, viewer, pixelAngle,
+                                                                    sh.chestFade * repulsor_mcu::plasmaFlicker(flick, 41u));
+                                                for (unsigned i = 0; i < 2; ++i)
+                                                    if (sh.palmGlow[i] > 0)
+                                                        repulsor_mcu::appendCharge(vertices, sh.palmAt[i], sh.palmWay[i], viewer, pixelAngle,
+                                                                                   sh.palmGlow[i], flick * 3.f);
+                                                for (uint32_t b = 0; b < sh.n; ++b) {
+                                                    if (sh.web[b]) {
+                                                        appendWebBall(vertices, sh.at[b], sh.tail[b], viewer, pixelAngle, sh.fade[b]);
+                                                        continue;
+                                                    }
+                                                    const float flown = length(sh.at[b] - sh.from[b]);
+                                                    const float bf = std::isfinite(flown) ? std::clamp(1.f - flown / 40.f, .2f, 1.f) : 0.f;
+                                                    appendRepulsorBeam(vertices, sh.from[b], sh.tail[b], viewer, pixelAngle,
+                                                                       bf * sh.fade[b] * repulsor_mcu::plasmaFlicker(flick, b + 13u));
+                                                    repulsor_mcu::appendBolt(vertices, sh.at[b], sh.tail[b], viewer, pixelAngle,
+                                                                             sh.fade[b] * repulsor_mcu::plasmaFlicker(flick, b));
+                                                }
+                                                for (uint32_t b = 0; b < sh.splashes; ++b) {
+                                                    if (sh.splashWeb[b]) {
+                                                        const float fade = 1.f - sh.splashAge[b] / spidy::mp::webSplashLife;
+                                                        if (fade > 0)
+                                                            appendWebSplash(vertices, sh.splashAt[b], viewer, pixelAngle, fade,
+                                                                            .37f + 1.3f * static_cast<float>(b));
+                                                    } else {
+                                                        const float life = repulsor_mcu::impactLife(sh.splashAge[b]);
+                                                        if (life > 0)
+                                                            repulsor_mcu::appendImpact(vertices, sh.splashAt[b], viewer, viewer, pixelAngle,
+                                                                                       life, .2f, b + 7u);
+                                                    }
+                                                }
                                             }
                                         }
                                         const float tall = std::clamp(gt.standingEye > .8f ? gt.standingEye : 1.65f, 1.f, 2.4f);

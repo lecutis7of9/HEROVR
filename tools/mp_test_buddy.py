@@ -51,8 +51,11 @@ ITEMS_MOST, LINES_MOST, FX_MOST = 8, 5, 4
 PISTOL, SAWED_OFF, SAWED_OFF_OPEN, BATARANG, CLAWS, CLUB, BATON062, BATON_MODEL, SHIELD, SHIELD_SPIN, GRAPPLE_GUN = range(1, 12)
 HAMMER, BATON, PELLET, RING, BUBBLE, FIST, CHARGE, PALM = range(20, 28)
 F_SIDE, F_PALM, F_IN_HAND, F_SHEATHED, F_FLYING = 8, 16, 32, 64, 128
-LINE_KINDS = ('heat', 'freeze', 'grapple', 'cable', 'bolt', 'lantern', 'chain', 'repulsor', 'chest', 'hook', 'rope')
+LINE_KINDS = ('heat', 'freeze', 'grapple', 'cable', 'bolt', 'lantern', 'chain', 'repulsor', 'chest', 'hook', 'rope', 'web')
+L_BOLT, L_LANTERN = LINE_KINDS.index('bolt') + 1, LINE_KINDS.index('lantern') + 1
 FX_KINDS = ('flash', 'flash_shotgun', 'impact', 'smoke', 'scorch', 'splash', 'shock')
+FX_FLASH, FX_IMPACT, FX_SHOCK = FX_KINDS.index('flash') + 1, FX_KINDS.index('impact') + 1, FX_KINDS.index('shock') + 1
+FX_SEND_FOR = 0.3  # s each effect rides in the packets (mp_prop_look.hpp fxSendFor)
 DEFAULT_PORT = 39470
 NO_SUIT = 255
 
@@ -326,13 +329,14 @@ class Puppet:
 
 
 # 0.0.74 MP PROPS: what the puppet shows (P cycles; --props picks the first).
-PROP_SHOWS = ['none', 'batarang', 'hammer', 'batons', 'shield', 'guns', 'claws', 'throw', 'all']
+PROP_SHOWS = ['none', 'batarang', 'hammer', 'batons', 'shield', 'guns', 'claws', 'throw', 'effects', 'all']
 
 
 def fake_props(show, t, left, right):
     """Fake props in the puppet's yawed root frame (the frame of its head and hands; src/mp_prop_look.hpp ids: 1/2
     held left/right, 3/4 flying, 5-8 worn, 9 the hammer, 10/11 batons). 'all' = shield left, hammer right, a
-    batarang and a pistol worn."""
+    batarang and a pistol worn, a lightning bolt from the right hand and a shot every half second (flash + hit);
+    'effects' (phase 3) a ring, bubble, fist, palm glow, bolt and lantern beam, shots and a shock ring."""
     if show == 'none':
         return None
     items, flags = [], 0
@@ -366,11 +370,28 @@ def fake_props(show, t, left, right):
                           at=(0.8 + 0.4 * out, 1.6 + 0.2 * math.sin(t * 3.0), -1.0 - out), forward=ahead, up=up))
         p = (t % 1.5) / 1.5  # a smoke pellet lobbed from the left hand, again and again
         items.append(dict(id=12, kind=PELLET, flags=0, at=(left[0], left[1] + 3.0 * p - 4.9 * p * p, left[2] - 5.0 * p)))
+    lines, fx = [], []
+    if show == 'effects':  # 0.0.74 MP PROPS phase 3: beams and constructs by state, one-off effects through the ring
+        items.append(dict(id=15, kind=RING, flags=F_SIDE, at=right))
+        items.append(dict(id=16, kind=BUBBLE, spin=1.4, at=(0.0, 1.0, 0.0)))
+        items.append(dict(id=17, kind=FIST, variant=200, at=(0.0, 1.4, -2.0 - 2.0 * abs(math.sin(t * 2.0))), forward=ahead))
+        items.append(dict(id=19, kind=PALM, variant=180, at=left, forward=ahead))
+        lines.append(dict(kind=L_LANTERN, fade=1.0, **{'from': left}, to=(left[0] - 1.0, 1.2, -6.0)))
+    if show in ('effects', 'all'):
+        lines.append(dict(kind=L_BOLT, fade=1.0, **{'from': right}, to=(right[0], 1.0, -8.0)))
+        k, age = int(t / 0.5), t % 0.5  # a shot every half second: a flash in the right hand and a hit 6 m ahead
+        if age < FX_SEND_FOR:
+            fx.append(dict(seq=(2 * k + 2) & 0xffff or 1, kind=FX_IMPACT, age=age, at=(right[0], 1.2, -6.0), way=(0, 0, 1)))
+            fx.append(dict(seq=(2 * k + 1) & 0xffff or 1, kind=FX_FLASH, age=age, at=right, way=ahead, param=1))
+    if show == 'effects':
+        if (t % 3.0) < FX_SEND_FOR:  # a shock ring every 3 s
+            fx.append(dict(seq=(60000 + int(t / 3.0)) & 0xffff, kind=FX_SHOCK, age=t % 3.0, at=(0.0, 0.0, -1.5),
+                           way=up, param=25))
     if show == 'claws':
         flags |= 1
         for i, h in enumerate((left, right)):
             items.append(dict(id=1 + i, kind=CLAWS, flags=held | (F_SIDE if i else 0), spin=1.0, at=h, forward=ahead, up=up))
-    return dict(flags=flags, items=items[:ITEMS_MOST])
+    return dict(flags=flags, items=items[:ITEMS_MOST], lines=lines[:LINES_MOST], fx=fx[:FX_MOST])
 
 
 class Keys:

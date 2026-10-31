@@ -41,6 +41,7 @@
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
+#include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
 #include "spidy/rep_log.hpp"     // 0.0.73 test 3 REP PAGE
@@ -951,6 +952,8 @@ std::atomic<uint32_t> flyModeNow{0};       // extras385::fly::Speed
 // Update 38.5 FLY ROLL (extras385::fly::RollMode, 1 COMFORT), its speed (degrees a second) and AUTO LEVEL.
 std::atomic<uint32_t> flyRollNow{1}, flyRollSpeedNow{90};
 std::atomic<bool> flyAutoLevelNow{true};
+// 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp; live.txt van_no_flips): 0 ON (the default), 1 OFF.
+std::atomic<uint32_t> vanNoFlipsNow{0};
 std::atomic<uint32_t> promptHandlingNow{0}; // extras385::prompts::Handling
 std::atomic<uint32_t> gestureMovesNow{0};   // Update 38.5: gestures385::Mode (0 OFF, 1 TRAINING, 2 ON)
 static_assert(gestures385::pad::dpadUp == game_pad::dpadUp && gestures385::pad::lb == game_pad::leftShoulder &&
@@ -2371,6 +2374,7 @@ DWORD WINAPI run(void*) {
         // 0.0.74 test 1 SEATED DRIVING (vehicle074::Seat): the lift the rig holds (next frame's) and how much of
         // it the van's tracking-space place already took back (so the van stays on the street as he rises).
         vehicle074::Seat vanSeat;
+        vehicle_flips::Watch vanFlipsWatch; // 0.0.74 test 10 VAN NO FLIPS: the in-car override's edges
         Vec3 vanSeatLift{}, vanSeatTaken{}; // 0.0.74 test 10 SEAT CENTRE: all three axes (test 1: the height)
         // 0.0.74 test 1 HIDEOUTS (hideout074::Visit): the trip from the dash, the van held where it stands.
         hideout074::Visit hideoutVisit;
@@ -4653,6 +4657,20 @@ DWORD WINAPI run(void*) {
                         rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
                     }
                     // Version 0.0.73 DRIVING: the van's turn of the last frame (with its carry, in the command below).
+                    // 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp, owner pt1380u): while he drives the van or a
+                    // Batmobile, REALISTIC FLIPS and FLIPS are off for the rig (a sharp turn rolled the view); his own
+                    // settings are never written, so out of the car this frame's call gives the rig his choice again.
+                    {
+                        const bool carDriving = van.state == van072::driving;
+                        const bool noFlips = vehicle_flips::on(vanNoFlipsNow.load());
+                        rig.automaticFlips(vehicle_flips::realistic(realisticFlips(values), carDriving, noFlips));
+                        rig.flips(vehicle_flips::stickFlips(values.flips, carDriving, noFlips));
+                        const int edge = vanFlipsWatch.update(vehicle_flips::active(carDriving, noFlips));
+                        if (edge > 0 && (values.realisticFlips || values.flips))
+                            game_prompts::note("0.0.74 test 10 VAN NO FLIPS: flips off while you drive (your setting is kept)");
+                        else if (edge < 0 && (values.realisticFlips || values.flips))
+                            game_prompts::note("0.0.74 test 10 VAN NO FLIPS: out of the car, your flips are back");
+                    }
                     rig.vehicleTurn(vanCarry.turn, van072::seatStickLock(van.state, vanCarry.lockStick)); // 0.0.73 test 3: no stick turn seated
                     // 0.0.74 test 1 SEATED DRIVING: the seat's lift while he drives; out of the van, standing again.
                     rig.seatOffset(van.state != van072::driving ? Vec3{} : hideoutVisit.active() ? Vec3{0, hideoutChairLift, 0} : vanSeatLift); // 0.0.74 test 2b: the chair's
@@ -14154,6 +14172,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyRollSpeed(void* speed) {
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyAutoLevel(void* on) {
     return setLive(on, 0, 1, 5352, flyAutoLevelNow, asBool);
+}
+// 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp): 0 ON (the default: no flips while driving), 1 OFF; live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanNoFlips(void* v) {
+    return setLive(v, 0, 1, 5540, vanNoFlipsNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

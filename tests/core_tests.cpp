@@ -49,6 +49,7 @@
 #include "spidy/cave_quiet074.hpp"
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
+#include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/roster_page.hpp"
 #include "spidy/hero_controls.hpp"
 #include <filesystem>
@@ -15108,6 +15109,78 @@ int main() {
         for (int i = 0; i < 60; ++i)
             moved = flipFrame(rig, frame, false, true);
         check(std::abs(first.x - moved.flipTilt.x) > .05f, "rotation must continue after arms stop");
+    });
+    // 0.0.74 test 10 VAN NO FLIPS (pt1380u: the van kept flipping him on sharp turns with REALISTIC FLIPS on).
+    test("0.0.74 test 10 VAN NO FLIPS: flips off only while driving, back on exit, OFF keeps the setting", [] {
+        using namespace vehicle_flips;
+        RealisticFlipSettings saved;
+        saved.enabled = true;
+        saved.strength = 77;
+        check(on(0) && !on(1) && on(7), "van_no_flips: 0 ON (default), 1 OFF");
+        check(active(true, true) && !active(false, true) && !active(true, false) && !active(false, false),
+              "the override holds only while driving with VAN NO FLIPS ON");
+        check(!realistic(saved, true, true).enabled && realistic(saved, true, true).strength == 77,
+              "driving: realistic flips off, the rest of the setting kept");
+        check(realistic(saved, false, true).enabled, "out of the car: the saved REALISTIC FLIPS again");
+        check(realistic(saved, true, false).enabled, "OFF: the saved REALISTIC FLIPS in the car too");
+        RealisticFlipSettings off;
+        check(!realistic(off, false, true).enabled && !realistic(off, true, false).enabled,
+              "a saved OFF is never turned on");
+        check(!stickFlips(true, true, true) && stickFlips(true, false, true) && stickFlips(true, true, false) &&
+                  !stickFlips(false, false, true),
+              "FLIPS follows the same override");
+        Watch w;
+        check(w.update(false) == 0 && w.update(true) == 1 && w.update(true) == 0 && w.update(false) == -1 &&
+                  w.began == 1 && w.ended == 1,
+              "the watch sees one begin and one end");
+        check(std::string(help).find("restart") != std::string::npos, "the subtext says whether it needs a restart");
+
+        // The rig: arm gestures in the air that tilt the view with REALISTIC FLIPS on do nothing while driving.
+        auto run = [&](bool driving, bool noFlips) {
+            GameTrackingRig rig;
+            rig.automaticFlips(realistic(saved, driving, noFlips));
+            rig.flips(stickFlips(true, driving, noFlips));
+            rig.flight({{}, {}, true, false});
+            auto frame = trackedFrame();
+            flipFrame(rig, frame, false, false);
+            GameMotionFrame moved;
+            for (int i = 0; i < 12; ++i) {
+                for (auto& hand : frame.hands)
+                    hand.grip.position.y += .035f;
+                moved = flipFrame(rig, frame, false, true);
+            }
+            frame.hands[0].stickY = 1;
+            for (int i = 0; i < 30; ++i)
+                moved = flipFrame(rig, frame, false, true);
+            return length(moved.flipTilt.rotate({0, 1, 0}) - Vec3{0, 1, 0});
+        };
+        check(run(true, true) < .001f, "driving with VAN NO FLIPS ON: the view stays level");
+        check(run(false, true) > .01f, "out of the car: realistic flips tilt the view again");
+        check(run(true, false) > .01f, "VAN NO FLIPS OFF: the player's realistic flips in the car too");
+
+        // One rig across a drive: level the whole time in the car, tilting again after getting out.
+        GameTrackingRig rig;
+        auto frame = trackedFrame();
+        rig.flight({{}, {}, true, false});
+        GameMotionFrame m;
+        for (int i = 0; i < 60; ++i) {
+            rig.automaticFlips(realistic(saved, true, true));
+            rig.flips(stickFlips(true, true, true));
+            for (auto& hand : frame.hands)
+                hand.grip.position.y += i % 2 ? -.05f : .05f;
+            m = flipFrame(rig, frame, false, true);
+            check(length(m.flipTilt.rotate({0, 1, 0}) - Vec3{0, 1, 0}) < .001f, "a tilt while driving");
+        }
+        float tilted = 0;
+        for (int i = 0; i < 60; ++i) {
+            rig.automaticFlips(realistic(saved, false, true));
+            rig.flips(stickFlips(true, false, true));
+            for (auto& hand : frame.hands)
+                hand.grip.position.y += .035f;
+            m = flipFrame(rig, frame, false, true);
+            tilted = std::max(tilted, length(m.flipTilt.rotate({0, 1, 0}) - Vec3{0, 1, 0}));
+        }
+        check(tilted > .01f, "after getting out the realistic flips work again");
     });
     test("automatic rotation turns eyes and hands about the head without stick input", [] {
         GameTrackingRig rig;

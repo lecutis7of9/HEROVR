@@ -637,6 +637,39 @@ def keep_console(report):
     return path
 
 
+def fresh_lines(before, now):
+    """0.0.75 PROMPTS LOG: the lines of `now` (the game's prompt timeline, newest last, its last 32 only) that
+    `before` did not have: `before`'s longest ending that `now` starts with is skipped."""
+    before, now = list(before or ()), list(now or ())
+    for k in range(min(len(before), len(now)), 0, -1):
+        if before[-k:] == now[:k]:
+            return now[k:]
+    return now
+
+
+class PromptsLog:
+    """0.0.75 PROMPTS LOG: every line of the prompt timeline (the game's prompt calls and this session's presses,
+    the fly notes among them) appended to <report>-prompts.log as it appears; the report keeps only the last 32.
+    collect-reports.ps1 zips it with the report's other logs. Never raises: a log that cannot be written stops."""
+
+    def __init__(self, report):
+        self.last, self.broken, self.path = [], not report, None
+        if report:
+            self.path = pathlib.Path(report).with_name(pathlib.Path(report).stem + '-prompts.log')
+
+    def add(self, timeline):
+        if self.broken or not timeline:
+            return
+        try:
+            new = fresh_lines(self.last, timeline)
+            self.last = list(timeline)
+            if new:
+                with self.path.open('a', encoding='utf-8') as log:
+                    log.write(''.join(str(line) + '\n' for line in new))
+        except Exception:
+            self.broken = True
+
+
 class Startup:
     """How far a session got before VR started. A session that ends there writes this as its report, with the
     game's log and the modules in the game's process (overlays and capture tools among them)."""
@@ -3109,6 +3142,7 @@ def session(a, startup, session_off=()):
         haptics_last = None
         wrist_hud_last = None
         prompt_last = None
+        prompts_log = PromptsLog(a.output)  # 0.0.75 PROMPTS LOG
         eye_jobs = None
         timing = None
         render_memory = None
@@ -3458,6 +3492,7 @@ def session(a, startup, session_off=()):
                     # What the game asked for, and the census of the calls its UI
                     # makes: kept for the report however the session ends.
                     prompt_last = prompt_snapshot(game, xr['SpidyPromptData']) or prompt_last
+                    prompts_log.add((prompt_last or {}).get('timeline'))  # 0.0.75: all of it, in the Reports zip
                     hud = hud_snapshot(game, xr['SpidyHudData'])
                     if hud:
                         hud_last = hud

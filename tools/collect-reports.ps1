@@ -6,12 +6,15 @@
 # It only reads the reports folder and writes send-me.zip there (the old send-me.zip is replaced).
 # 0.0.74 test 3: and the game's newest crash dump (.mdmp) from Documents\Marvel's Spider-Man 2 (-NoCrashDump:
 # without it; the launcher's Privacy > Crash dump in reports passes that when it is off).
+# 0.0.75: only a dump written after this session started (the report's and its logs' earliest creation time); an
+# older one is left out and said why. The report's logs include its -prompts.log (PROMPTS LOG, the fly notes).
 param([switch]$NoCrashDump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $reports = Join-Path $root 'reports'
 if (-not (Test-Path -LiteralPath $reports)) { throw "No reports folder at $reports - play a session first." }
 $files = @()
+$sessionStart = $null
 # Update 38.5: the version these reports came from, first.
 $versionFile = Join-Path $root 'VERSION'
 if (Test-Path -LiteralPath $versionFile) { Write-Host ('SM2 VR Version ' + (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim() + ' - Made by Agent Mulder') }
@@ -25,6 +28,11 @@ if ($report) {
             Sort-Object LastWriteTime -Descending | Select-Object -First 1)
     }
     $files += $logs | ForEach-Object { $_.FullName }
+    # 0.0.75: when this session started, for the crash dump (the oldest of the report and its logs).
+    $sessionStart = (@($report) + @($logs) | Where-Object { $_ } | ForEach-Object { $_.CreationTime } |
+        Sort-Object | Select-Object -First 1)
+    $prompts = $logs | Where-Object { $_.Name -like '*-prompts.log' } | Select-Object -First 1
+    if ($prompts) { Write-Host ('Prompts log: ' + $prompts.Name) }
 } else {
     Write-Host 'No game-vr report yet (game-vr-*.json); collecting what there is.'
 }
@@ -42,7 +50,14 @@ if (-not $NoCrashDump) {
         if (Test-Path -LiteralPath $gameDocs) {
             $dump = Get-ChildItem -LiteralPath $gameDocs -Filter '*.mdmp' -File -ErrorAction SilentlyContinue |
                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
-            if ($dump -and $dump.Length -le 256MB) {
+            if ($dump -and -not $sessionStart) {
+                Write-Host ('Crash dump not added: no session report to date it against (newest ' + $dump.Name + ', ' +
+                    $dump.LastWriteTime.ToString('yyyy-MM-dd HH:mm') + ').')
+            } elseif ($dump -and $dump.LastWriteTime -le $sessionStart) {
+                Write-Host ('Crash dump not added: none newer than this session (started ' +
+                    $sessionStart.ToString('yyyy-MM-dd HH:mm') + '; newest ' + $dump.Name + ', ' +
+                    $dump.LastWriteTime.ToString('yyyy-MM-dd HH:mm') + ').')
+            } elseif ($dump -and $dump.Length -le 256MB) {
                 $files += $dump.FullName
                 Write-Host ('Crash dump: ' + $dump.Name + ' (' + $dump.LastWriteTime.ToString('yyyy-MM-dd HH:mm') + ')')
             } elseif ($dump) {

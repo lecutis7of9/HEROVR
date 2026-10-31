@@ -47,6 +47,9 @@ class DdQuickGrapple(unittest.TestCase):
         self.assertIn('caped = pulled.drive || coasted.drive || glided.drive;', s)
         self.assertIn('ddCoast.stop(); // 0.0.74 test 10 DD QUICK GRAPPLE: no coast past a cancel either', s)
         self.assertIn('|| ddCoast.on();', s)  # the game's fall resumes from the coast (solver.reset)
+        # 0.0.75 DD JUMP OUT: A at any point of the pull or vault ends it and launches up (the coast carries it).
+        self.assertIn('ddJumpOut.update(in.jump, free && !transition.waiting, ddRedirect, capeGrapple.phase(), kept, launch)', s)
+        self.assertIn('ddCoast.start(launch);', s)
     def test_pure_header(self):
         h = src('include/spidy/dd_grapple074.hpp')
         self.assertEqual(re.findall(r'#include "([^"]+)"', h), ['spidy/cape_glide.hpp', 'spidy/math.hpp'])

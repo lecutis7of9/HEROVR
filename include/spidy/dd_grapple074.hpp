@@ -12,6 +12,8 @@
 //    old pull's velocity onto its own line (Grapple::carry, blendSeconds): no stop. A press that hooks nothing
 //    is the CANCEL: the line lets go and he COASTS on (Coast: the kept velocity with gravity for coastSeconds,
 //    then the game's own fall), never a drop to a standstill.
+//  - 0.0.75 JUMP OUT: a jump press (A's rising edge) at any point of a pull or its vault ends the grapple and
+//    launches him up (JumpOut: the kept velocity, never downward, plus jumpUp m/s), coasting like the CANCEL.
 // OFF: test 9's grapple exactly (24 m/s, presses while pulling do nothing, the default tune).
 // Game hooks: none new - the bridge's world raycast and velocity command are the webs' and the grapple's own
 // (CONFIRMED: the webs and the grapple use them). That the game's fall keeps the velocity the coast hands it is
@@ -99,9 +101,32 @@ class Coast {
     uint32_t starts_{};
 };
 
+// 0.0.75 JUMP OUT: A pressed (the rising edge; held from before counts only once let go) while a pull or its vault
+// goes, REDIRECT on: the grapple ends and `launch` is the coast's start - the kept velocity, its fall dropped, and
+// jumpUp m/s more upward.
+inline constexpr float jumpUp = 9.f;
+inline Vec3 launchFrom(Vec3 carried) {
+    Vec3 v = finite(carried) ? carried : Vec3{};
+    v.y = std::max(v.y, 0.f) + jumpUp;
+    return v;
+}
+struct JumpOut {
+    bool was{};
+    uint32_t jumps{};
+    bool update(bool jumpHeld, bool allowed, bool redirectOn, uint32_t phase, Vec3 carried, Vec3& launch) {
+        const bool edge = jumpHeld && !was;
+        was = jumpHeld;
+        if (!edge || !allowed || !mayRedirect(redirectOn, phase))
+            return false;
+        launch = launchFrom(carried);
+        ++jumps;
+        return true;
+    }
+};
+
 // One sentence (the live.txt line's subtext).
 inline constexpr const char* help =
-    "DAREDEVIL's grapple pulls faster and a press while pulled cancels it, keeping your speed, and fires along "
-    "the new aim from either baton, live with no restart.";
+    "DAREDEVIL's grapple pulls faster, a press while pulled cancels it, keeping your speed, and fires along "
+    "the new aim from either baton, and a jump at any point of it ends it and launches you up, live with no restart.";
 
 } // namespace spidy::dd_grapple074

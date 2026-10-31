@@ -70,6 +70,7 @@ uint64_t reelId{}; // Version 0.0.73 ENEMY REEL: the enemy the line is on (0: a 
 // 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp): the CANCEL's coast and the pull's last velocity (kept by a
 // redirect or a cancel).
 dd_grapple074::Coast ddCoast;
+dd_grapple074::JumpOut ddJumpOut; // 0.0.75 DD JUMP OUT
 Vec3 pullVelocityWas{};
 InFlightStep inFlight;
 SRWLOCK lifecycle = SRWLOCK_INIT, control = SRWLOCK_INIT, output = SRWLOCK_INIT, simulation = SRWLOCK_INIT;
@@ -927,6 +928,18 @@ void visit(const native_rays::QueryContext& world) {
                 if (c.enemies[e].id == reelId && finite(c.enemies[e].feet))
                     capeGrapple.retarget(grapple073::reelStop(body.position, c.enemies[e].feet),
                                          c.enemies[e].feet + Vec3{0, grapple073::chestUp, 0});
+        // 0.0.75 DD JUMP OUT (dd_grapple074::JumpOut): A pressed at any point of DAREDEVIL's pull or vault ends the
+        // grapple and launches him up, the coast carrying it (as the CANCEL's); not while the game's own jump lifts
+        // him off the ground for the pull (transition.waiting).
+        {
+            Vec3 launch{};
+            const Vec3 kept = finite(pullVelocityWas) && length(pullVelocityWas) > 0.f ? pullVelocityWas : body.velocity;
+            if (ddJumpOut.update(in.jump, free && !transition.waiting, ddRedirect, capeGrapple.phase(), kept, launch)) {
+                capeGrapple.stop();
+                reelId = 0;
+                ddCoast.start(launch);
+            }
+        }
         // 0.0.72: the pull holds (its clock too) while the game's jump takes him off the ground.
         const bool liftWait = transition.waiting && capeGrapple.phase() == cape_glide::pull && free;
         const auto pulled = liftWait ? cape_glide::GrappleOut{false, {}, cape_glide::pull, capeGrapple.anchor()}

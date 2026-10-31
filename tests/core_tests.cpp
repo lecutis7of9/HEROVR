@@ -36050,6 +36050,31 @@ int main() {
                   !climbAllowed(hero_modes::captainAmerica, true) && climbAllowed(hero_modes::spiderMan, true),
               "the climbers");
     });
+    test("0.0.75 DD JUMP OUT: a jump at any point of DAREDEVIL's grapple ends it and launches him up", [] {
+        using namespace dd_grapple074;
+        JumpOut j;
+        Vec3 launch{};
+        check(!j.update(true, true, true, cape_glide::idle, {}, launch), "a jump with no grapple launched");
+        check(!j.update(true, true, true, cape_glide::pull, {}, launch), "an A held from before launched");
+        check(!j.update(false, true, true, cape_glide::pull, {}, launch), "no press launched");
+        check(j.update(true, true, true, cape_glide::pull, {20, -6, 0}, launch) && j.jumps == 1 &&
+                  std::fabs(launch.y - jumpUp) < 1e-5f && std::fabs(launch.x - 20) < 1e-5f,
+              "the jump out of a pull (kept speed, no fall, launched up)");
+        check(!j.update(true, true, true, cape_glide::pull, {}, launch), "held A launched again");
+        j.update(false, true, true, cape_glide::vault, {}, launch);
+        check(j.update(true, true, true, cape_glide::vault, {0, 4, 0}, launch) && std::fabs(launch.y - (4 + jumpUp)) < 1e-5f,
+              "the jump out of the vault");
+        j.update(false, true, true, cape_glide::pull, {}, launch);
+        check(!j.update(true, true, false, cape_glide::pull, {}, launch), "OFF (or another hero) launched");
+        j.update(false, true, true, cape_glide::pull, {}, launch);
+        check(!j.update(true, false, true, cape_glide::pull, {}, launch), "not allowed, launched");
+        j.update(false, true, true, cape_glide::pull, {}, launch);
+        check(j.update(true, true, true, cape_glide::pull, {NAN, 0, 0}, launch) && finite(launch) &&
+                  std::fabs(launch.y - jumpUp) < 1e-5f,
+              "NaN carried");
+        Coast c;
+        check(c.start(launchFrom({})) && c.update(.05f, false, {0, jumpUp, 0}, true).velocity.y > 0, "the launch did not coast up");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

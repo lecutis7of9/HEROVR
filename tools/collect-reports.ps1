@@ -32,6 +32,9 @@ $files += Get-ChildItem -LiteralPath $reports -Filter 'address-finder-latest*' -
 # Update 37: the newest WORLD LOG journal (NPC talk, spawns, missions; read-only notes).
 $files += Get-ChildItem -LiteralPath $reports -Filter 'world-trace-*.jsonl' -File |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { $_.FullName }
+# 0.0.74 test 10: the WINDOW PROBE logs of the last 3 sessions (read-only; tools/window_probe.py).
+$files += Get-ChildItem -LiteralPath $reports -Filter 'window-probe-*.jsonl' -File |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { $_.FullName }
 # 0.0.74 test 3: the game's newest crash dump (the game writes one when it crashes; it says where in its log).
 if (-not $NoCrashDump) {
     try {

@@ -89,6 +89,9 @@ class ReadOnly(unittest.TestCase):
         big = [v for v in re.findall(r'0x[0-9a-fA-F]+', body) if int(v, 16) >= 0x10000]
         self.assertEqual(set(big), {'0xc2ca220'})  # the game view pointer the mod already reads
 
+    def test_reports_button_takes_the_logs(self):
+        self.assertIn("-Filter 'window-probe-*.jsonl'", src('tools/collect-reports.ps1'))
+
     def test_no_switch(self):
         self.assertNotIn('window_probe', src('tools/live_settings.py'))
 

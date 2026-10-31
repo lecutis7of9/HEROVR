@@ -26,6 +26,7 @@ namespace Sm2VrLauncher
         AccentButton mpHost, mpLeave, btnMultiplayer, mpRefreshBtn;
         InternetSession mpInet;
         bool mpStarted;
+        string mpFailSaid = "";   // 0.0.74 MP FREE LOBBY: the try= whose "could not connect" line is already in the log
 
         static Rectangle MultiplayerBounds() { return Theme.R(170, 196, 840, 436); }
 
@@ -132,6 +133,18 @@ namespace Sm2VrLauncher
                 string h, at;
                 file.TryGetValue("host", out h); file.TryGetValue("join", out at);
                 mpState.Text = "Joining " + (string.IsNullOrEmpty(h) ? at : h) + ": start the game (PLAY VR)."; mpState.ForeColor = Theme.Good;
+                // 0.0.74 MP FREE LOBBY: the game's call got no answer in 30 s and stopped - one clear line, no hanging.
+                var pub = InternetLobby.ReadPublic(null, DateTime.UtcNow);
+                if (pub.Fresh && pub.Failed && pub.Friend.Length == 0)
+                {
+                    string t, relay;
+                    file.TryGetValue("try", out t); file.TryGetValue("relay", out relay);
+                    mpState.Text = InternetLobby.JoinFailText(h, !string.IsNullOrEmpty(relay));
+                    mpState.ForeColor = Theme.Bad;
+                    if ((t ?? "") != mpFailSaid) { mpFailSaid = t ?? ""; sessionLog.Line("Multiplayer: " + mpState.Text, Theme.Bad); }
+                }
+                else if (pub.Fresh && pub.Friend.Length > 0)
+                    mpState.Text = "Playing with " + pub.Friend + (pub.Relayed ? " (through the relay)." : ".");
             }
             else { mpState.Text = "Not in a game. HOST, or JOIN one below."; mpState.ForeColor = Theme.Sub; }
             mpLeave.Enabled = mode == "host" || mode == "join";

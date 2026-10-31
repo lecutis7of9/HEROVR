@@ -12642,6 +12642,9 @@ DWORD WINAPI run(void*) {
                                         cfg.punch = mpLobby.punch;
                                         cfg.relayHost = mpLobby.relayHost, cfg.relayPort = mpLobby.relayPort, cfg.token = mpLobby.token;
                                         cfg.relayAfter = 15; // the host's launcher hears of the joiner within ~5 s and punches back first
+                                        // 0.0.74 MP FREE LOBBY: no relay on the free lobby - a JOIN that gets no answer stops after
+                                        // 30 s with one clear line (console, wrist status, MP-PUBLIC.txt failed=1 for the launcher).
+                                        cfg.giveUpAfter = 30;
                                     } else if (mpJoin) { // a friend on another PC: every interface, PLAYER 2 is him (no echo)
                                         cfg.lan = true;
                                         cfg.echo = false;
@@ -12690,6 +12693,7 @@ DWORD WINAPI run(void*) {
                                                                      "\nplayers=" + std::to_string(pv.peerGame ? 2 : 1) +
                                                                      "\nfriend=" + (pv.peerGame ? pv.buddyName : std::string{}) +
                                                                      "\nrelayed=" + (pv.relayed ? "1" : "0") +
+                                                                     "\nfailed=" + (pv.gaveUp ? "1" : "0") +
                                                                      "\nhero=" + std::to_string(heroNow()) + "\n";
                                             const std::wstring tmp = dir + L"\\MP-PUBLIC.txt.tmp";
                                             HANDLE f = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

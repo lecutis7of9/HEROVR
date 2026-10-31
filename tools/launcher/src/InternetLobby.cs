@@ -62,14 +62,16 @@ namespace Sm2VrLauncher
     {
         public string Public = "", Friend = "";
         public int Port, Players = 1, Hero = 255;
-        public bool Relayed, Fresh;
+        public bool Relayed, Fresh, Failed;   // Failed: 0.0.74 MP FREE LOBBY - the game's JOIN got no answer and stopped
     }
 
     static class InternetLobby
     {
-        /// <summary>CONFIG: the deployed lobby (server/lobby/README.md), e.g. "https://herovr-lobby.NAME.workers.dev".
-        /// Empty: no internet list (LAN only). SM2VR_LOBBY_URL or the settings key LobbyUrl override it.</summary>
-        public const string DefaultUrl = "";
+        /// <summary>CONFIG: the deployed lobby - the free Cloudflare Worker (server/lobby/README.md,
+        /// server/lobby/deploy_cloudflare.py sets this line). Empty: no internet list (LAN only). SM2VR_LOBBY_URL or the
+        /// settings key LobbyUrl override it. The relay (server/vps, optional, later) is not a launcher setting: the
+        /// Worker hands it out once RELAY_ADDR is set there, with no launcher rebuild.</summary>
+        public const string DefaultUrl = "https://herovr-lobby.herovr.workers.dev";
         public const string Protocol = "HVL1";
         public const int TimeoutMs = 6000;
         public const double FreshSeconds = 10;
@@ -241,6 +243,7 @@ namespace Sm2VrLauncher
                     else if (k == "players") p.Players = Int(v, 1, 16, 1);
                     else if (k == "friend") p.Friend = v;
                     else if (k == "relayed") p.Relayed = v == "1";
+                    else if (k == "failed") p.Failed = v == "1";
                     else if (k == "hero") p.Hero = Int(v, 0, 255, 255);
                 }
             }
@@ -287,9 +290,17 @@ namespace Sm2VrLauncher
         public static string JoinText(string name, InetGame g, JoinReply j)
         {
             var sb = new StringBuilder("# HERO VR multiplayer (written by the launcher's server list; LEAVE deletes it)\r\nmode=join\r\njoin=" + j.HostAddr +
-                "\r\nname=" + Lobby.CleanName(name) + "\r\nhost=" + Lobby.CleanName(g.Name) + "\r\ninet=" + g.Id + "\r\n");
+                "\r\nname=" + Lobby.CleanName(name) + "\r\nhost=" + Lobby.CleanName(g.Name) + "\r\ninet=" + g.Id + "\r\ntry=" + Lobby.NewTry() + "\r\n");
             AppendRelay(sb, j.Relay, j.Token);
             return sb.ToString();
+        }
+
+        /// <summary>0.0.74 MP FREE LOBBY: the one line shown when the game's JOIN got no answer in 30 s (no hanging).</summary>
+        public static string JoinFailText(string host, bool relay)
+        {
+            string h = string.IsNullOrEmpty(host) ? "the host" : host;
+            return "Could not connect to " + h + (relay ? " (not even through the relay)" : "") +
+                ": the two home networks did not let each other in. Press JOIN to try again, or HOST and let " + h + " join you.";
         }
 
         static void AppendRelay(StringBuilder sb, string relay, string token)

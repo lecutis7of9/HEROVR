@@ -67,10 +67,15 @@ host Mary` hosts.
   The launcher lists it on the server (`InternetLobby.DefaultUrl`, see docs/LOBBY-OWNER-SETUP.md) and keeps it
   listed while the game runs.
 - **JOIN** on an internet row: the launcher writes `MP-LOBBY.txt` with `join=`, `relay=` and `token=`. Both games
-  then call each other at the same time ("hole punching"). If they are not in after 15 s, they go through the relay.
+  then call each other at the same time ("hole punching"). If they are not in after 15 s, they go through the relay
+  (only once a relay is set up; the free list has none). 0.0.74 MP FREE LOBBY: no answer in 30 s (45 s with a relay):
+  the game stops calling, logs one line "MP: could not connect to ...", writes `failed=1` to MP-PUBLIC.txt, and the
+  launcher shows "Could not connect to MARY: ... Press JOIN to try again". JOIN again writes a new `try=`, which restarts the call.
 - **First start**: a pop-up asks "No" / "Yes, Autosetup" for the one Windows Firewall rule (UDP 39469-39474,
   Private + Public networks, one admin prompt). "No" is remembered; **Allow through firewall** offers it again.
-- No server set (`DefaultUrl` empty): it's LAN only, exactly as before. No internet connection: the LAN still works.
+- The list is the free Cloudflare Worker `https://herovr-lobby.herovr.workers.dev` (server/lobby, no relay).
+  No server set (`DefaultUrl` empty): it's LAN only, exactly as before. No internet connection: the LAN still works.
+- Test against the live list: `LOBBY_URL=https://herovr-lobby.herovr.workers.dev python3 server/lobby/deploy_cloudflare.py --smoke-only`.
 - Test without the real server: `RELAY_SECRET=x RELAY_ADDR=127.0.0.1:3479 node server/vps/herovr-server.mjs --local`
   and `SM2VR_LOBBY_URL=http://127.0.0.1:8080`. The tests are in tests/hero074_mp_internet_tests.py.
 - CONFIRMED by construction (all mod-internal): the files, the ports and the protocol. Untested so far on real

@@ -54,6 +54,10 @@ struct SessionConfig {
     std::string token;            // 16 hex digits
     double relayAfter = 6;
     double relayKeepEvery = 5;
+    // 0.0.74 MP FREE LOBBY: a joiner that never got an answer (directly, or through the relay when there is one)
+    // within giveUpAfter s stops calling and says so in one line (view().gaveUp / status) instead of calling
+    // forever. 0: never gives up (MP-PEER.txt). Once connected, a friend who drops out is called again as before.
+    double giveUpAfter = 0;
 };
 struct SessionView {
     bool running{};               // the socket is up
@@ -74,6 +78,7 @@ struct SessionView {
     std::string lanText;          // this PC's LAN addresses ("192.168.1.5"), for the log and the friend
     std::string publicText;       // 0.0.74 MP INTERNET: what STUN saw ("203.0.113.7:51234"), empty: not known
     bool relayed{};               // the friend is reached through the relay
+    bool gaveUp{};                // 0.0.74 MP FREE LOBBY: no connection within giveUpAfter s - not calling any more
 };
 class Session {
   public:
@@ -116,7 +121,7 @@ class Session {
     uint16_t relayPortWant_{};
     uint32_t targetsGen_{};
     std::string publicText_;
-    bool relayed_{};
+    bool relayed_{}, gaveUp_{};
     std::string peerText_;
     float loopPing_ = -1, buddyPing_ = -1;
     uint16_t port_{};

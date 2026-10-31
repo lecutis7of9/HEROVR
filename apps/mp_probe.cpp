@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
         if (argc >= 6)
             cfg.name = argv[5];
         // 0.0.74 MP INTERNET: stun=host:port (repeatable) relay=host:port token=<16 hex> punch=ip:port (repeatable)
-        // relayafter=<s> lan=1 lobby=<MP-LOBBY.txt re-read every 0.5 s: punch / relay / token live, as the game does>
+        // relayafter=<s> giveup=<s> lan=1 lobby=<MP-LOBBY.txt re-read every 0.5 s: punch / relay / token live, as the game does>
         std::string lobbyPath;
         for (int i = 6; i < argc; ++i) {
             const std::string a = argv[i];
@@ -127,6 +127,8 @@ int main(int argc, char** argv) {
                 cfg.punch.push_back(v);
             else if (k == "relayafter")
                 cfg.relayAfter = std::atof(v.c_str());
+            else if (k == "giveup") // 0.0.74 MP FREE LOBBY: stop calling after <s> without an answer (the game: 30)
+                cfg.giveUpAfter = std::atof(v.c_str());
             else if (k == "lobby")
                 lobbyPath = v;
             else if (k == "lan") // listen on every interface, as a lobby-mode game does (the internet needs it)
@@ -193,13 +195,13 @@ int main(int argc, char** argv) {
                             "\"ping\": %d, \"hero\": %u, \"suit\": %u, \"root\": [%.3f, %.3f, %.3f], \"actions\": %u, "
                             "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d, "
                             "\"props\": %u, \"propKinds\": [%u, %u, %u, %u], \"lines\": %u, \"fxTaken\": %u, "
-                            "\"hosting\": %d, \"beacons\": %u, \"public\": \"%s\", \"relayed\": %d}\n",
+                            "\"hosting\": %d, \"beacons\": %u, \"public\": \"%s\", \"relayed\": %d, \"gaveUp\": %d, \"status\": \"%s\"}\n",
                             t, v.running, v.port, v.visible, v.buddy, v.buddyName.c_str(), v.pingMs, v.state.hero,
                             v.state.suit, v.state.root.x, v.state.root.y, v.state.root.z, v.state.actions, v.sent,
                             v.received, v.rejected, v.peerGame, v.calling, static_cast<unsigned>(v.state.props.items),
                             v.state.props.item[0].kind, v.state.props.item[1].kind, v.state.props.item[2].kind,
                             v.state.props.item[3].kind, static_cast<unsigned>(v.state.props.lines), inbox.taken(), v.hosting, v.beacons,
-                            v.publicText.c_str(), v.relayed);
+                            v.publicText.c_str(), v.relayed, v.gaveUp, v.status.c_str());
                 for (const auto& l : s.takeLog())
                     std::printf("# %s\n", l.c_str());
                 std::fflush(stdout);
@@ -247,10 +249,10 @@ int main(int argc, char** argv) {
         for (const auto& pp : l.punch)
             punch += (punch.empty() ? "\"" : ", \"") + pp + "\"";
         std::printf("{\"mode\": \"%s\", \"join\": \"%s\", \"port\": %u, \"name\": \"%s\", \"host\": \"%s\", "
-                    "\"punch\": [%s], \"relay\": \"%s\", \"relayPort\": %u, \"token\": \"%s\", \"restartKey\": \"%s\"}\n",
+                    "\"punch\": [%s], \"relay\": \"%s\", \"relayPort\": %u, \"token\": \"%s\", \"try\": \"%s\", \"restartKey\": \"%s\"}\n",
                     l.mode == LobbySetting::host ? "host" : l.mode == LobbySetting::join ? "join" : "none", l.joinHost.c_str(),
                     l.joinPort, l.name.c_str(), l.hostName.c_str(), punch.c_str(), l.relayHost.c_str(), l.relayPort,
-                    l.token.c_str(), lobbyRestartKey(l).c_str());
+                    l.token.c_str(), l.attempt.c_str(), lobbyRestartKey(l).c_str());
         return 0;
     }
     if (argc >= 3 && !std::strcmp(argv[1], "lobby")) { // 0.0.74 MP LOBBY: the launcher's list, as JSON once a second
@@ -295,7 +297,7 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port] | host[:lobby port]] [name] [stun=h:p] [relay=h:p] [token=hex16] [punch=ip:port] [relayafter=s] [lobby=MP-LOBBY.txt] | "
+    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port] | host[:lobby port]] [name] [stun=h:p] [relay=h:p] [token=hex16] [punch=ip:port] [relayafter=s] [giveup=s] [lobby=MP-LOBBY.txt] | "
                          "lobby <seconds> [port] | lobbyfile <path> | stunserver <port> <seconds> | golden\n");
     return 1;
 }

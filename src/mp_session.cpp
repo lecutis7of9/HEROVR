@@ -110,6 +110,7 @@ SessionView Session::view() const {
     v.lanText = lanText_;
     v.publicText = publicText_;
     v.relayed = relayed_ && buddyOn_;
+    v.gaveUp = gaveUp_ && !buddyOn_;
     if (!running_)
         return v;
     const Sampled s = buddyOn_ ? buddy_.sample(t) : (config_.echo ? loop_.sample(t) : Sampled{});
@@ -218,6 +219,7 @@ void Session::run() {
     RelayToken token{};
     double nextRelayKeep = 0, nextPunch = 0;
     const double callStart = clockSeconds();
+    bool everMet = false; // 0.0.74 MP FREE LOBBY: a friend answered once (giving up only applies before that)
     // Every send goes through here: to the relay, the packet gets its relay header.
     auto sendTo = [&](const std::vector<uint8_t>& bytes, Peer to) {
         if (relayOk && to == relayPeer) {
@@ -405,6 +407,8 @@ void Session::run() {
                     }
                     if (!buddyOn_) {
                         buddyOn_ = true;
+                        everMet = true;
+                        gaveUp_ = false;
                         buddy_ = {};
                         buddy_.delay = cfg.interpDelay;
                         buddyPing_ = -1;
@@ -579,6 +583,25 @@ void Session::run() {
             {
                 std::lock_guard<std::mutex> g(lock_);
                 relayed_ = relayOk && buddyOn_ && link_.peer() == relayPeer;
+            }
+            // 0.0.74 MP FREE LOBBY: no answer at all - stop calling and say it in one line (no endless "calling").
+            // With a relay the relay gets its own 15 s first.
+            if (wantCall && callOk && !buddyNow && !everMet && cfg.giveUpAfter > 0 &&
+                t - callStart >= std::max(cfg.giveUpAfter, relayOk ? cfg.relayAfter + 15 : 0.0)) {
+                callOk = false;
+                nextResolve = 1e300; // not again until the launcher's JOIN restarts the network
+                const std::string why = "MP: could not connect to " + cfg.peerHost + ":" + std::to_string(cfg.peerPort) + " in " +
+                                        std::to_string(static_cast<int>(t - callStart)) +
+                                        " s - the two home networks did not let each other in" +
+                                        (relayOk ? " (also not through the relay)" : "") +
+                                        ". Press JOIN to try again, or HOST and let your friend join you.";
+                {
+                    std::lock_guard<std::mutex> g(lock_);
+                    gaveUp_ = true;
+                    calling_ = false;
+                    status_ = "no connection";
+                }
+                log(why);
             }
         } catch (const std::exception& e) {
             log(std::string("MP: network step failed (") + e.what() + ") - remote player hidden");

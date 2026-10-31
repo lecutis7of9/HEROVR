@@ -187,7 +187,14 @@ namespace Sm2VrLauncher
         public static string JoinText(string name, LobbyHost h)
         {
             return "# HERO VR multiplayer (written by the launcher's Multiplayer sheet; LEAVE deletes it)\r\nmode=join\r\njoin=" + h.Endpoint +
-                "\r\nname=" + CleanName(name) + "\r\nhost=" + CleanName(h.Beacon.Name) + "\r\n";
+                "\r\nname=" + CleanName(name) + "\r\nhost=" + CleanName(h.Beacon.Name) + "\r\ntry=" + NewTry() + "\r\n";
+        }
+
+        /// <summary>0.0.74 MP FREE LOBBY: try= is new on every JOIN press, so the game restarts the network and calls
+        /// again (a join that gave up after 30 s is retried by pressing JOIN once more).</summary>
+        public static string NewTry()
+        {
+            return DateTime.UtcNow.Ticks.ToString("x", System.Globalization.CultureInfo.InvariantCulture);
         }
 
         /// <summary>Writes MP-LOBBY.txt (UTF-8, no mark; replaced in one step so the game never reads half).</summary>

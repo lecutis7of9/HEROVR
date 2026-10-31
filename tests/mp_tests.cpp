@@ -1512,6 +1512,12 @@ void testInet() {
     l2.name = "BOB";
     check(lobbyRestartKey(l2) != lobbyRestartKey(l), "INTERNET: a new name does");
     check(parseLobbySetting("mode=host\ntoken=xyz\n").token.empty(), "INTERNET: a bad token line is dropped");
+    // 0.0.74 MP FREE LOBBY: try= (a new JOIN press) restarts the network, so a join that gave up can be retried.
+    const LobbySetting t1 = parseLobbySetting("mode=join\njoin=203.0.113.7:51234\nname=peter\ntry=a1\n");
+    const LobbySetting t2 = parseLobbySetting("mode=join\njoin=203.0.113.7:51234\nname=peter\ntry=a2\n");
+    check(t1.attempt == "a1" && lobbyRestartKey(t1) != lobbyRestartKey(t2), "FREE LOBBY: a new try= restarts the network");
+    check(parseLobbySetting(lobbyText(t1)).attempt == "a1", "FREE LOBBY: try= round trip");
+    check(parseLobbySetting("mode=join\njoin=1.2.3.4\ntry=a b\n").attempt.empty(), "FREE LOBBY: a bad try= is dropped");
 }
 
 void testSessionInternet() {
@@ -1617,6 +1623,36 @@ void testSessionInternet() {
         for (const auto& l : j.takeLog())
             joinerSaid = joinerSaid || l.find("calling through the relay") != std::string::npos;
         check(joinerSaid, "INTERNET: the joiner's log says it went through the relay");
+    }
+    // 4) 0.0.74 MP FREE LOBBY (no relay): nobody answers - after giveUpAfter the joiner stops calling and says so in
+    //    one line instead of "calling" forever.
+    {
+        Session j;
+        SessionConfig cj;
+        cj.port = 39720;
+        cj.lan = true;
+        cj.echo = false;
+        cj.name = "peter";
+        cj.peerHost = "127.0.0.1";
+        cj.peerPort = 39729; // nobody there
+        cj.giveUpAfter = .8;
+        j.start(cj);
+        const double t0 = j.now();
+        while (j.now() - t0 < 3.0 && !j.view().gaveUp)
+            sleepMs(20);
+        const SessionView v = j.view();
+        check(v.gaveUp && !v.calling && v.status == "no connection", "FREE LOBBY: no answer - the joiner gives up (not calling)");
+        bool said = false;
+        int lines = 0;
+        for (const auto& l : j.takeLog())
+            if (l.find("could not connect to 127.0.0.1:39729") != std::string::npos)
+                said = true, ++lines;
+        check(said && lines == 1, "FREE LOBBY: one clear line says why and what to do");
+        sleepMs(300);
+        bool again = false;
+        for (const auto& l : j.takeLog())
+            again = again || l.find("could not connect") != std::string::npos || l.find("calling") != std::string::npos;
+        check(!again && j.view().gaveUp, "FREE LOBBY: quiet after giving up (no endless calling)");
     }
     stop = true;
     server.join();

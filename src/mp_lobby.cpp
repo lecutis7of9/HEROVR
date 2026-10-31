@@ -160,6 +160,11 @@ LobbySetting parseLobbySetting(const std::string& text) {
             for (char c : value)
                 hex = hex && std::isxdigit(static_cast<unsigned char>(c));
             s.token = hex ? value : std::string{};
+        } else if (key == "try") {
+            bool ok = !value.empty() && value.size() <= 16;
+            for (char c : value)
+                ok = ok && std::isalnum(static_cast<unsigned char>(c));
+            s.attempt = ok ? value : std::string{};
         }
         if (end == text.size())
             break;
@@ -183,10 +188,12 @@ std::string lobbyText(const LobbySetting& s) {
         t += "relay=" + s.relayHost + ":" + std::to_string(s.relayPort) + "\n";
     if (!s.token.empty())
         t += "token=" + s.token + "\n";
+    if (!s.attempt.empty())
+        t += "try=" + s.attempt + "\n";
     return t;
 }
 
 std::string lobbyRestartKey(const LobbySetting& s) {
-    return std::to_string(int(s.mode)) + "|" + s.joinHost + ":" + std::to_string(s.joinPort) + "|" + s.name + "|" + s.hostName;
+    return std::to_string(int(s.mode)) + "|" + s.joinHost + ":" + std::to_string(s.joinPort) + "|" + s.name + "|" + s.hostName + "|" + s.attempt;
 }
 } // namespace spidy::mp

@@ -77,8 +77,9 @@ struct LobbySetting {
     std::string relayHost;
     uint16_t relayPort = 3479;
     std::string token;                // 16 hex digits, else empty
+    std::string attempt;              // 0.0.74 MP FREE LOBBY: try= (letters / digits, at most 16): a new JOIN restarts
 };
-// The lines that need a network restart when they change (mode, join, name, host) - not punch / relay / token.
+// The lines that need a network restart when they change (mode, join, name, host, try) - not punch / relay / token.
 std::string lobbyRestartKey(const LobbySetting& s);
 LobbySetting parseLobbySetting(const std::string& text);
 std::string lobbyText(const LobbySetting& s); // what the game writes (round-trips through parseLobbySetting)

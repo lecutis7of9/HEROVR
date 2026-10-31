@@ -1,4 +1,4 @@
-# HERO VR server - one small VPS (the chosen design)
+# HERO VR server - one small VPS (optional, later: the free Cloudflare Worker in ../lobby is the list now)
 
 One Node.js process (`herovr-server.mjs`, no npm packages) does all of it:
 

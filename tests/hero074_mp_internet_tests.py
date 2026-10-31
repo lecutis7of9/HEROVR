@@ -205,6 +205,20 @@ namespace Sm2VrLauncher { static class H {
       Console.WriteLine("merged " + string.Join(",", m.Select(e => e.Where + ":" + e.Name).ToArray()));
       Console.WriteLine(Environment.GetEnvironmentVariable("SM2VR_LOBBY_URL") ?? "");
       return 0; }
+    if (a[0] == "fail") {   // 0.0.74 MP FREE LOBBY: a JOIN that got no answer
+      File.WriteAllText(Path.Combine(a[1], "MP-PUBLIC.txt"), "public=1.2.3.4:39470\nport=39470\nplayers=1\nfailed=1\n");
+      var p = InternetLobby.ReadPublic(a[1], DateTime.UtcNow);
+      Console.WriteLine(p.Fresh + " " + p.Failed);
+      File.WriteAllText(Path.Combine(a[1], "MP-PUBLIC.txt"), "public=1.2.3.4:39470\nport=39470\nplayers=2\nfriend=MARY\nfailed=0\n");
+      p = InternetLobby.ReadPublic(a[1], DateTime.UtcNow);
+      Console.WriteLine(p.Failed + " " + p.Friend);
+      Console.WriteLine(InternetLobby.JoinFailText("MARY", false));
+      Console.WriteLine(InternetLobby.JoinFailText("MARY", true));
+      var t1 = Lobby.NewTry(); Thread.Sleep(20); var t2 = Lobby.NewTry();
+      Console.WriteLine((t1 != t2) + " " + (t1.Length <= 16) + " " + t1.All(char.IsLetterOrDigit));
+      var lan = new LobbyHost { Address = IPAddress.Parse("192.168.1.5"), Beacon = new LobbyBeacon { Port = 39470, Name = "MARY", HostId = 0xff, Players = 1, MaxPlayers = 2, Protocol = LobbyBeacon.MpProtocol } };
+      Console.WriteLine(Lobby.JoinText("peter", lan).Contains("\r\ntry="));
+      return 0; }
     if (a[0] == "setup") {
       var fw = Autosetup.FirewallItem();
       fw.IsDone = () => false;
@@ -272,6 +286,17 @@ class LauncherInternet(unittest.TestCase):
         self.assertEqual(out[3], 'full TrueFalseFalse')
         self.assertEqual(out[4], 'merged LAN:MARY,Internet:X')   # the internet MARY is the same game (LAN id ff): shown once, as LAN
 
+    def test_a_join_that_got_no_answer_says_so_in_one_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = self.run_h('fail', d)
+        self.assertEqual(out[0], 'True True')
+        self.assertEqual(out[1], 'False MARY')
+        self.assertEqual(out[2], 'Could not connect to MARY: the two home networks did not let each other in. '
+                                 'Press JOIN to try again, or HOST and let MARY join you.')
+        self.assertIn('(not even through the relay)', out[3])
+        self.assertEqual(out[4], 'True True True')   # every JOIN press is a new try= (the game restarts its call)
+        self.assertEqual(out[5], 'True')
+
     def test_autosetup_one_prompt_and_checked_downloads(self):
         with tempfile.TemporaryDirectory() as d:
             out = self.run_h('setup', d)
@@ -301,7 +326,30 @@ class Wiring(unittest.TestCase):
         lobby = (SRC / 'InternetLobby.cs').read_text(encoding='utf-8')
         self.assertIn('public const string DefaultUrl = ', lobby)   # the endpoint is one constant (docs/LOBBY-OWNER-SETUP.md)
         import re
-        self.assertTrue(re.search(r'public const string DefaultUrl = "[^"]*";', lobby), 'deploy_digitalocean.py sets it by this pattern')
+        self.assertTrue(re.search(r'public const string DefaultUrl = "[^"]*";', lobby), 'deploy_cloudflare.py sets it by this pattern')
+        # 0.0.74 MP FREE LOBBY: the free Cloudflare Worker is the default list (docs/LOBBY-OWNER-SETUP.md)
+        self.assertTrue(re.search(r'public const string DefaultUrl = "https://herovr-lobby\.[a-z0-9-]+\.workers\.dev";', lobby))
+        self.assertIn('InternetLobby.JoinFailText(', mp)
+        g = (ROOT / 'src' / 'game_xr.cpp').read_text(encoding='utf-8', errors='replace')
+        self.assertIn('cfg.giveUpAfter = 30;', g)
+        self.assertIn('"\\nfailed="', g)
+
+    def test_worker_is_free_plan_only(self):
+        toml = (ROOT / 'server/lobby/wrangler.toml').read_text()
+        self.assertIn('new_sqlite_classes = ["LobbyRoom"]', toml)   # SQLite-backed Durable Object: the one kind on Workers Free
+        self.assertIn('workers_dev = true', toml)
+        self.assertIn('RELAY_ADDR = ""', toml)                       # no relay until the owner adds one
+        self.assertNotIn('new_classes', toml)                        # KV-backed Durable Objects need Workers Paid
+        dep = (ROOT / 'server/lobby/deploy_cloudflare.py').read_text()
+        self.assertIn("os.environ.get('CLOUDFLARE_API_TOKEN'", dep)   # the token only from the environment
+
+    @unittest.skipUnless(PROBE, 'spidy_mp_probe not built')
+    def test_game_gives_up_on_a_dead_join_in_one_line(self):
+        r = subprocess.run([str(PROBE), 'run', '39895', '4', '127.0.0.1:39897', 'peter', 'giveup=1'],
+                           capture_output=True, text=True, timeout=60)
+        rows = json_lines(r.stdout)
+        self.assertTrue(rows and rows[-1]['gaveUp'] == 1 and rows[-1]['status'] == 'no connection', r.stdout)
+        self.assertEqual((r.stdout + r.stderr).count('could not connect to 127.0.0.1:39897'), 1, r.stdout + r.stderr)
 
     def test_cloud_init_is_current(self):
         gen = ROOT / 'server/vps/cloud-init.sh'

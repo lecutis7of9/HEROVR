@@ -32,7 +32,8 @@ fallback for VPNs. **Allow through firewall** adds one inbound rule for UDP 3946
 - The window opens on the server list: LAN and internet games together, and Join with one click.
 - At first start, the "No" / "Yes, Autosetup" pop-up adds the firewall rule with one admin prompt (`Autosetup.cs`).
   It can also download a runtime, checked against its SHA-256 before running; none is needed today.
-- The server address is `InternetLobby.DefaultUrl`. `SM2VR_LOBBY_URL` or the setting `LobbyUrl` override it,
+- The server address is `InternetLobby.DefaultUrl`: the free Cloudflare Worker `https://herovr-lobby.herovr.workers.dev`.
+  A JOIN that gets no answer in 30 s shows one line ("Could not connect to ... Press JOIN to try again"). `SM2VR_LOBBY_URL` or the setting `LobbyUrl` override it,
   but only for https:// or a localhost http:// address. Setup: docs/LOBBY-OWNER-SETUP.md.
 
 ## Privacy and reports

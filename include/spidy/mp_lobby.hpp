@@ -64,13 +64,22 @@ class HostList {
 // %APPDATA%\Spidy\MP-LOBBY.txt - written by the launcher's HOST / JOIN (or by hand), deleted by LEAVE:
 //   mode=host | mode=join      join=192.168.1.20[:39470] (join only)      name=PETER (shown to the friend)
 //   host=MARY (join: the host's name, for the log)
+// 0.0.74 MP INTERNET (the launcher's internet list; these change while the game runs - no network restart):
+//   punch=203.0.113.7:51234 (host: a joining friend's public address to open the router to; one line each)
+//   relay=relay.example.org:3479   token=0123456789abcdef (the relay both use when punching fails)
 // '#' comments, blank lines and unknown keys are skipped. mode none: nothing usable (join without an address).
 struct LobbySetting {
     enum Mode : uint8_t { none, host, join } mode = none;
     std::string joinHost;
     uint16_t joinPort = 39470;
     std::string name, hostName;
+    std::vector<std::string> punch;   // "a.b.c.d:port", numeric only (the lobby's), at most 8
+    std::string relayHost;
+    uint16_t relayPort = 3479;
+    std::string token;                // 16 hex digits, else empty
 };
+// The lines that need a network restart when they change (mode, join, name, host) - not punch / relay / token.
+std::string lobbyRestartKey(const LobbySetting& s);
 LobbySetting parseLobbySetting(const std::string& text);
 std::string lobbyText(const LobbySetting& s); // what the game writes (round-trips through parseLobbySetting)
 } // namespace spidy::mp

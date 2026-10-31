@@ -72,7 +72,9 @@ class ProbeLobby(unittest.TestCase):
             f = pathlib.Path(d) / 'MP-LOBBY.txt'
             f.write_bytes(b'\xef\xbb\xbf# from Notepad\r\nmode=join\r\njoin=192.168.1.20\r\nname=Peter\r\nhost=MARY\r\n')
             r = json.loads(subprocess.run([str(PROBE), 'lobbyfile', str(f)], capture_output=True, text=True).stdout)
-            self.assertEqual(r, {'mode': 'join', 'join': '192.168.1.20', 'port': 39470, 'name': 'PETER', 'host': 'MARY'})
+            self.assertEqual({k: r[k] for k in ('mode', 'join', 'port', 'name', 'host')},
+                             {'mode': 'join', 'join': '192.168.1.20', 'port': 39470, 'name': 'PETER', 'host': 'MARY'})
+            self.assertEqual((r['punch'], r['relay']), ([], ''))  # LAN join: no internet extras
             f.write_text('mode=host\nname=mary\n')
             r = json.loads(subprocess.run([str(PROBE), 'lobbyfile', str(f)], capture_output=True, text=True).stdout)
             self.assertEqual((r['mode'], r['name']), ('host', 'MARY'))
@@ -171,7 +173,9 @@ class LauncherLobby(unittest.TestCase):
             self.assertFalse((pathlib.Path(d) / 'MP-LOBBY.txt.tmp').exists())
             if PROBE:
                 r = json.loads(subprocess.run([str(PROBE), 'lobbyfile', d + '/join.txt'], capture_output=True, text=True).stdout)
-                self.assertEqual(r, {'mode': 'join', 'join': '192.168.1.20', 'port': 39471, 'name': 'PETER', 'host': 'MARY'})
+                self.assertEqual({k: r[k] for k in ('mode', 'join', 'port', 'name', 'host')},
+                                 {'mode': 'join', 'join': '192.168.1.20', 'port': 39471, 'name': 'PETER', 'host': 'MARY'})
+                self.assertEqual((r['punch'], r['relay']), ([], ''))  # LAN join: no internet extras
                 r = json.loads(subprocess.run([str(PROBE), 'lobbyfile', d + '/host.txt'], capture_output=True, text=True).stdout)
                 self.assertEqual((r['mode'], r['name']), ('host', 'MARY'))
 
@@ -199,7 +203,7 @@ class Wiring(unittest.TestCase):
         g = (ROOT / 'src' / 'game_xr.cpp').read_text(encoding='utf-8', errors='replace')
         a, b = g.index('readSmall(L"MP-LOBBY.txt"'), g.index('readSmall(L"MP-PEER.txt"')
         self.assertLess(a, b)
-        self.assertIn('mpLobbyOn ? mpLobbyText : mpPeerText', g)   # MP-LOBBY.txt wins, MP-PEER.txt is the fallback
+        self.assertIn('mpLobbyOn ? mpLobbyKey : mpPeerText', g)   # MP-LOBBY.txt wins, MP-PEER.txt is the fallback
         self.assertIn('cfg.host = mpLobby.mode == spidy::mp::LobbySetting::host', g)
         self.assertIn('MP-PEER.txt has no address in it', g)
 

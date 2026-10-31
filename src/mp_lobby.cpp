@@ -3,6 +3,7 @@
 #include "spidy/mp_lobby.hpp"
 
 #include "spidy/mp_net.hpp"
+#include "spidy/mp_socket.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -143,6 +144,22 @@ LobbySetting parseLobbySetting(const std::string& text) {
             s.name = cleanName(value.c_str());
         } else if (key == "host") {
             s.hostName = cleanName(value.c_str());
+        } else if (key == "punch") {
+            uint32_t a = 0;
+            const size_t colon = value.rfind(':');
+            const unsigned long port = colon == std::string::npos ? 0 : std::strtoul(value.c_str() + colon + 1, nullptr, 10);
+            if (colon != std::string::npos && parseAddr(value.substr(0, colon), a) && a != 0 && port > 0 && port < 65536 &&
+                s.punch.size() < 8)
+                s.punch.push_back(value.substr(0, colon) + ":" + std::to_string(port));
+        } else if (key == "relay") {
+            const PeerSetting p = parsePeerSetting(value);
+            if (p.ok)
+                s.relayHost = p.host, s.relayPort = p.port;
+        } else if (key == "token") {
+            bool hex = value.size() == 16;
+            for (char c : value)
+                hex = hex && std::isxdigit(static_cast<unsigned char>(c));
+            s.token = hex ? value : std::string{};
         }
         if (end == text.size())
             break;
@@ -160,6 +177,16 @@ std::string lobbyText(const LobbySetting& s) {
         t += "name=" + s.name + "\n";
     if (!s.hostName.empty())
         t += "host=" + s.hostName + "\n";
+    for (const auto& p : s.punch)
+        t += "punch=" + p + "\n";
+    if (!s.relayHost.empty())
+        t += "relay=" + s.relayHost + ":" + std::to_string(s.relayPort) + "\n";
+    if (!s.token.empty())
+        t += "token=" + s.token + "\n";
     return t;
+}
+
+std::string lobbyRestartKey(const LobbySetting& s) {
+    return std::to_string(int(s.mode)) + "|" + s.joinHost + ":" + std::to_string(s.joinPort) + "|" + s.name + "|" + s.hostName;
 }
 } // namespace spidy::mp

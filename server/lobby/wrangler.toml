@@ -1,0 +1,17 @@
+# HERO VR internet server list. Deploy: see README.md (npx wrangler deploy). Free plan: SQLite-backed Durable Objects.
+name = "herovr-lobby"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-01"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "LobbyRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LobbyRoom"]
+
+[vars]
+# The relay (server/relay on a small VPS), "host:port". Empty: no relay (direct connections only).
+RELAY_ADDR = ""
+# RELAY_SECRET is a secret: npx wrangler secret put RELAY_SECRET (the same value as the relay's).

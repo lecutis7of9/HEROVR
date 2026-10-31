@@ -59,6 +59,23 @@ networks), use MP-PEER.txt.
 Check without a second PC: `spidy_mp_probe lobby 30` lists hosts on the network; `spidy_mp_probe run 39480 60
 host Mary` hosts.
 
+## Internet server list (0.0.74 MP INTERNET)
+
+- The launcher opens on **Multiplayer - servers**. It lists the games on this network (LAN) and on the internet
+  together, refreshes every 15 s (or with **Refresh**), and shows **Join**, **Full**, **Update** (another mod version) or **You**.
+- **HOST**: the game asks public STUN for its internet address and writes `%APPDATA%\Spidy\MP-PUBLIC.txt`.
+  The launcher lists it on the server (`InternetLobby.DefaultUrl`, see docs/LOBBY-OWNER-SETUP.md) and keeps it
+  listed while the game runs.
+- **JOIN** on an internet row: the launcher writes `MP-LOBBY.txt` with `join=`, `relay=` and `token=`. Both games
+  then call each other at the same time ("hole punching"). If they are not in after 15 s, they go through the relay.
+- **First start**: a pop-up asks "No" / "Yes, Autosetup" for the one Windows Firewall rule (UDP 39469-39474,
+  Private + Public networks, one admin prompt). "No" is remembered; **Allow through firewall** offers it again.
+- No server set (`DefaultUrl` empty): it's LAN only, exactly as before. No internet connection: the LAN still works.
+- Test without the real server: `RELAY_SECRET=x RELAY_ADDR=127.0.0.1:3479 node server/vps/herovr-server.mjs --local`
+  and `SM2VR_LOBBY_URL=http://127.0.0.1:8080`. The tests are in tests/hero074_mp_internet_tests.py.
+- CONFIRMED by construction (all mod-internal): the files, the ports and the protocol. Untested so far on real
+  Windows PCs behind real home routers.
+
 ## Playing with a friend by address (0.0.74 MP JOIN, advanced)
 
 Two real games, one on each PC, see each other: the friend is PLAYER 2, standing in front of you

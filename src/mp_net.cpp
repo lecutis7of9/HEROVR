@@ -541,8 +541,12 @@ BuddyLink::Step BuddyLink::onPacket(const Packet& p, Peer from, double now) {
     }
     if (p.type == welcome) {
         // Only the friend we call answers: his address (any port: a router may move it), a game's WELCOME.
-        if (!dial_.addr || from.addr != dial_.addr || p.role != roleGame || p.protocol != version)
+        const bool dialed = dial_.addr && from.addr == dial_.addr;
+        const bool punched = std::find(punch_.begin(), punch_.end(), from.addr) != punch_.end();
+        if ((!dialed && !punched) || p.role != roleGame || p.protocol != version)
             return Step::ignore;
+        if (punched && keepPeer && connected(now) && !(from == peer_))
+            return Step::ignore; // a host with a friend already
         const bool fresh = !connected(now) || !(from == peer_);
         take(from, roleGame, p.name, now);
         return fresh ? Step::joined : Step::ignore;

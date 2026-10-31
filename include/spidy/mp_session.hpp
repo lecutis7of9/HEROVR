@@ -9,6 +9,7 @@
 // player. view() is the remote player as the render thread should draw it (interpolated 0.1 s behind).
 // Any socket error or bad packet: the remote player is hidden and a line is logged - never a throw, never
 // a stall of the caller (publish / view only take a short lock).
+#include "spidy/mp_inet.hpp"
 #include "spidy/mp_lobby.hpp"
 #include "spidy/mp_net.hpp"
 
@@ -41,6 +42,18 @@ struct SessionConfig {
     uint16_t lobbyPort = spidy::mp::lobbyPort;
     std::vector<uint32_t> announceTo;
     double announceEvery = 1.0;
+    // 0.0.74 MP INTERNET: STUN servers ("host:port") asked from the game socket for this game's public address
+    // (empty: none - LAN only); the friends to punch toward (host: the joiners the lobby named, numeric
+    // "a.b.c.d:port"); the relay and its token (both players). A joiner calls the relay once the direct call
+    // got no answer for relayAfter s. setTargets() changes punch / relay / token while running.
+    std::vector<std::string> stun;
+    double stunEvery = 25;        // after the first answer (before it: every 2 s, the next server each time)
+    std::vector<std::string> punch;
+    std::string relayHost;
+    uint16_t relayPort = 3479;
+    std::string token;            // 16 hex digits
+    double relayAfter = 6;
+    double relayKeepEvery = 5;
 };
 struct SessionView {
     bool running{};               // the socket is up
@@ -59,6 +72,8 @@ struct SessionView {
     bool hosting{};               // 0.0.74 MP LOBBY: announcing on the LAN
     uint32_t beacons{};           // beacons sent
     std::string lanText;          // this PC's LAN addresses ("192.168.1.5"), for the log and the friend
+    std::string publicText;       // 0.0.74 MP INTERNET: what STUN saw ("203.0.113.7:51234"), empty: not known
+    bool relayed{};               // the friend is reached through the relay
 };
 class Session {
   public:
@@ -73,6 +88,10 @@ class Session {
     bool started() const { return thread_.joinable(); }
     void publish(const PoseState& local);
     void clearLocal();            // nothing to send (e.g. a loading screen)
+    // 0.0.74 MP INTERNET: new punch list / relay / token (MP-LOBBY.txt changed) - no restart, the socket and
+    // its public port stay.
+    void setTargets(const std::vector<std::string>& punch, const std::string& relayHost, uint16_t relayPort,
+                    const std::string& token);
     SessionView view() const;
     std::vector<std::string> takeLog();
     double now() const;           // the session clock (seconds)
@@ -92,6 +111,12 @@ class Session {
     bool running_{}, buddyOn_{}, calling_{}, hosting_{};
     uint32_t beacons_{};
     std::string lanText_;
+    std::vector<std::string> punchWant_;
+    std::string relayHostWant_, tokenWant_;
+    uint16_t relayPortWant_{};
+    uint32_t targetsGen_{};
+    std::string publicText_;
+    bool relayed_{};
     std::string peerText_;
     float loopPing_ = -1, buddyPing_ = -1;
     uint16_t port_{};

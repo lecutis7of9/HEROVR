@@ -242,6 +242,8 @@ class BuddyLink {
     // 0.0.74 MP JOIN: the friend this game calls (addr 0: nobody) and our own socket (never let in).
     void dial(Peer friendAddr) { dial_ = friendAddr; }
     Peer dialing() const { return dial_; }
+    // 0.0.74 MP INTERNET: a host's punch list (the joiners the internet lobby named): their WELCOME is let in too.
+    void punch(std::vector<uint32_t> addrs) { punch_ = std::move(addrs); }
     void self(Peer own) { self_ = own; }
     // 0.0.74 MP LOBBY: a host keeps the friend it has - another game's HELLO is ignored while he is still here
     // (a 2-player game; the beacon says FULL). Off: a new HELLO takes over (the Test Buddy's old behaviour).
@@ -251,6 +253,7 @@ class BuddyLink {
     void take(Peer from, uint8_t role, const char* name, double now);
     bool connected_{};
     Peer peer_{}, dial_{}, self_{};
+    std::vector<uint32_t> punch_;
     uint8_t peerRole_ = roleBuddy;
     double lastHeard_{};
     std::string name_;

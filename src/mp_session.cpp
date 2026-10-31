@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 
 namespace spidy::mp {
@@ -39,6 +40,10 @@ bool Session::start(const SessionConfig& config) {
         sent_ = received_ = rejected_ = 0;
         status_ = "starting";
         start_ = clockSeconds();
+        punchWant_ = config.punch, relayHostWant_ = config.relayHost, relayPortWant_ = config.relayPort, tokenWant_ = config.token;
+        ++targetsGen_;
+        publicText_.clear();
+        relayed_ = false;
     }
     quit_ = false;
     try {
@@ -61,6 +66,14 @@ void Session::publish(const PoseState& local) {
     std::lock_guard<std::mutex> g(lock_);
     local_ = local;
     haveLocal_ = true;
+}
+void Session::setTargets(const std::vector<std::string>& punch, const std::string& relayHost, uint16_t relayPort,
+                         const std::string& token) {
+    std::lock_guard<std::mutex> g(lock_);
+    if (punch == punchWant_ && relayHost == relayHostWant_ && relayPort == relayPortWant_ && token == tokenWant_)
+        return;
+    punchWant_ = punch, relayHostWant_ = relayHost, relayPortWant_ = relayPort, tokenWant_ = token;
+    ++targetsGen_;
 }
 void Session::clearLocal() {
     std::lock_guard<std::mutex> g(lock_);
@@ -95,6 +108,8 @@ SessionView Session::view() const {
     v.hosting = hosting_ && running_;
     v.beacons = beacons_;
     v.lanText = lanText_;
+    v.publicText = publicText_;
+    v.relayed = relayed_ && buddyOn_;
     if (!running_)
         return v;
     const Sampled s = buddyOn_ ? buddy_.sample(t) : (config_.echo ? loop_.sample(t) : Sampled{});
@@ -163,6 +178,55 @@ void Session::run() {
                   echoOk ? "on" : "off", cfg.echoHold * 1000);
     log(line);
 
+    // 0.0.74 MP INTERNET: STUN (our public address), the punch list and the relay (mp_inet.hpp).
+    // The STUN names are looked up on a helper thread: a PC without internet (or a slow resolver) never holds
+    // up the LAN game.
+    std::vector<Peer> stunPeers;
+    std::mutex stunLock;
+    std::vector<Peer> stunFound;
+    std::atomic<bool> stunDone{cfg.stun.empty() || !cfg.lan};
+    std::thread stunResolver;
+    if (!stunDone)
+        stunResolver = std::thread([&] {
+            std::vector<Peer> found;
+            for (const auto& srv : cfg.stun) {
+                const PeerSetting ps = parsePeerSetting(srv);
+                Peer sp;
+                std::string why;
+                const uint16_t sport = srv.find(':') == std::string::npos ? stunDefaultPort : ps.port;
+                if (ps.ok && resolvePeer(ps.host, sport, sp, why))
+                    found.push_back(sp);
+                else
+                    log("MP INTERNET: STUN server " + srv + " not found" + (why.empty() ? "" : " (" + why + ")") +
+                        " - no internet list for this game (the LAN still works)");
+            }
+            std::lock_guard<std::mutex> g(stunLock);
+            stunFound = found;
+            stunDone = true;
+        });
+    StunTxn stunTxn{};
+    for (size_t i = 0; i < stunTxn.size(); ++i)
+        stunTxn[i] = static_cast<uint8_t>((hostId >> ((i % 4) * 8)) ^ (i * 37u) ^ static_cast<uint32_t>(clockSeconds() * 1e6));
+    size_t stunNext = 0;
+    double nextStun = 0;
+    bool stunGot = false;
+    Peer publicPeer{};
+    uint32_t targetsSeen = ~0u;
+    std::vector<Peer> punchPeers;
+    Peer relayPeer{};
+    bool relayOk = false, onRelay = false;
+    RelayToken token{};
+    double nextRelayKeep = 0, nextPunch = 0;
+    const double callStart = clockSeconds();
+    // Every send goes through here: to the relay, the packet gets its relay header.
+    auto sendTo = [&](const std::vector<uint8_t>& bytes, Peer to) {
+        if (relayOk && to == relayPeer) {
+            const auto framed = relayWrap(token, bytes.data(), bytes.size());
+            return game.send(framed.data(), framed.size(), to);
+        }
+        return game.send(bytes.data(), bytes.size(), to);
+    };
+
     DelayLine delay;
     delay.hold = cfg.echoHold;
     uint32_t seq = 0, pingToken = 0, rejectedLogged = 0;
@@ -173,6 +237,63 @@ void Session::run() {
         try {
             const double t = clockSeconds();
             const uint32_t ms = msOf(t);
+            // 0.0.74 MP INTERNET: new punch / relay / token from MP-LOBBY.txt.
+            {
+                std::vector<std::string> want;
+                std::string rHost, tok;
+                uint16_t rPort = 0;
+                bool changed = false;
+                {
+                    std::lock_guard<std::mutex> g(lock_);
+                    if (targetsGen_ != targetsSeen) {
+                        targetsSeen = targetsGen_, changed = true;
+                        want = punchWant_, rHost = relayHostWant_, rPort = relayPortWant_, tok = tokenWant_;
+                    }
+                }
+                if (changed) {
+                    punchPeers.clear();
+                    for (const auto& w : want) {
+                        const size_t colon = w.rfind(':');
+                        uint32_t a = 0;
+                        if (colon != std::string::npos && parseAddr(w.substr(0, colon), a))
+                            punchPeers.push_back({a, static_cast<uint16_t>(std::strtoul(w.c_str() + colon + 1, nullptr, 10))});
+                    }
+                    {
+                        std::vector<uint32_t> addrs;
+                        for (const Peer& pp : punchPeers)
+                            addrs.push_back(pp.addr);
+                        std::lock_guard<std::mutex> g(lock_);
+                        link_.punch(addrs);
+                    }
+                    RelayToken nt{};
+                    const bool tokOk = parseToken(tok, nt) && tokenSet(nt);
+                    Peer rp{};
+                    std::string why;
+                    const bool rOk = cfg.lan && tokOk && !rHost.empty() && resolvePeer(rHost, rPort, rp, why);
+                    if (!rHost.empty() && !rOk)
+                        log("MP INTERNET: relay " + rHost + " not usable" + (why.empty() ? " (no token)" : " (" + why + ")"));
+                    if (rOk && (!relayOk || !(rp == relayPeer) || nt != token))
+                        log("MP INTERNET: relay " + addrText(rp) + " ready (used only if the direct way fails)");
+                    relayOk = rOk, relayPeer = rp, token = nt;
+                    nextRelayKeep = t, nextPunch = t;
+                    if (!punchPeers.empty())
+                        log("MP INTERNET: opening the way to " + std::to_string(punchPeers.size()) + " joining friend(s)");
+                }
+            }
+            if (stunPeers.empty() && stunDone && stunResolver.joinable()) {
+                stunResolver.join();
+                stunPeers = stunFound;
+            }
+            if (!stunPeers.empty() && t >= nextStun) {
+                nextStun = t + (stunGot ? cfg.stunEvery : 2.0);
+                const auto req = stunRequest(stunTxn);
+                game.send(req.data(), req.size(), stunPeers[stunNext++ % stunPeers.size()]);
+            }
+            if (relayOk && t >= nextRelayKeep) { // the relay learns (and keeps) our address; also our router's door
+                nextRelayKeep = t + cfg.relayKeepEvery;
+                const auto keep = relayWrap(token, nullptr, 0);
+                game.send(keep.data(), keep.size(), relayPeer);
+            }
             // 0.0.74 MP JOIN: find the friend (a host name may need the resolver; retried every 10 s).
             if (wantCall && !callOk && t >= nextResolve) {
                 nextResolve = t + 10;
@@ -218,8 +339,30 @@ void Session::run() {
                 if (n == 0)
                     break;
                 failed = false;
+                const uint8_t* data = buf.data();
+                size_t size = static_cast<size_t>(n);
+                if (isStun(data, size)) { // 0.0.74 MP INTERNET: our public address
+                    Peer mapped;
+                    if (stunMapped(data, size, stunTxn, mapped)) {
+                        const bool news = !stunGot || !(mapped == publicPeer);
+                        stunGot = true, publicPeer = mapped;
+                        nextStun = t + cfg.stunEvery;
+                        std::lock_guard<std::mutex> g(lock_);
+                        publicText_ = addrText(mapped);
+                        if (news && log_.size() < 64)
+                            log_.push_back("MP INTERNET: the internet sees this game at " + publicText_);
+                    }
+                    continue;
+                }
+                if (relayOk && from == relayPeer) {
+                    if (!relayFrame(data, size, token))
+                        continue;
+                    data += relayHeaderBytes, size -= relayHeaderBytes;
+                    if (size == 0)
+                        continue; // the relay's keepalive answer
+                }
                 Packet p;
-                const Error e = decode(buf.data(), static_cast<size_t>(n), p);
+                const Error e = decode(data, size, p);
                 std::lock_guard<std::mutex> g(lock_);
                 if (e != Error::none) {
                     ++rejected_;
@@ -253,7 +396,7 @@ void Session::run() {
                         reply.type = welcome;
                         std::snprintf(reply.name, sizeof reply.name, "%s", myName.c_str());
                         const auto bytes = encode(reply);
-                        game.send(bytes.data(), bytes.size(), from);
+                        sendTo(bytes, from);
                     }
                     if (buddyOn_ && !(before == from)) { // another buddy took over: its own timeline
                         buddy_ = {};
@@ -286,7 +429,7 @@ void Session::run() {
                     reply.token = p.token;
                     reply.pingSentMs = p.sentMs;
                     const auto bytes = encode(reply);
-                    game.send(bytes.data(), bytes.size(), from);
+                    sendTo(bytes, from);
                     break;
                 }
                 case BuddyLink::Step::pong:
@@ -345,7 +488,7 @@ void Session::run() {
                     p.seq = ++seq;
                     p.sentMs = ms;
                     const auto bytes = encode(p);
-                    if (!bytes.empty() && game.send(bytes.data(), bytes.size(), to)) {
+                    if (!bytes.empty() && sendTo(bytes, to)) {
                         std::lock_guard<std::mutex> g(lock_);
                         ++sent_;
                     }
@@ -380,7 +523,7 @@ void Session::run() {
                 std::lock_guard<std::mutex> g(lock_);
                 beacons_ += ok ? 1 : 0;
             }
-                        // 0.0.74 MP JOIN: calling the friend - a HELLO a second until he answers (both calling at once
+            // 0.0.74 MP JOIN: calling the friend - a HELLO a second until he answers (both calling at once
             // also opens most home routers' UDP doors for each other).
             if (callOk && !buddyNow && t >= nextCall) {
                 nextCall = t + cfg.callEvery;
@@ -391,7 +534,7 @@ void Session::run() {
                 h.sentMs = ms;
                 std::snprintf(h.name, sizeof h.name, "%s", myName.c_str());
                 const auto bytes = encode(h);
-                game.send(bytes.data(), bytes.size(), callPeer);
+                sendTo(bytes, callPeer);
                 if (t >= nextCallLog) {
                     const bool first = nextCallLog == 0;
                     nextCallLog = t + 15;
@@ -408,7 +551,34 @@ void Session::run() {
                 p.sentMs = ms;
                 p.token = ++pingToken;
                 const auto bytes = encode(p);
-                game.send(bytes.data(), bytes.size(), buddyPeer);
+                sendTo(bytes, buddyPeer);
+            }
+            // 0.0.74 MP INTERNET: host - a HELLO a second to each joining friend the lobby named (our router then
+            // lets his packets in); joiner - no answer from the host's public address: call through the relay.
+            if (!buddyNow && !punchPeers.empty() && t >= nextPunch) {
+                nextPunch = t + cfg.callEvery;
+                Packet h;
+                h.type = hello;
+                h.role = roleGame;
+                h.seq = ++seq;
+                h.sentMs = ms;
+                std::snprintf(h.name, sizeof h.name, "%s", myName.c_str());
+                const auto bytes = encode(h);
+                for (const Peer& pp : punchPeers)
+                    game.send(bytes.data(), bytes.size(), pp);
+            }
+            if (wantCall && callOk && relayOk && !onRelay && !buddyNow && t - callStart >= cfg.relayAfter) {
+                onRelay = true;
+                log("MP INTERNET: no direct answer from " + addrText(callPeer) + " in " +
+                    std::to_string(static_cast<int>(cfg.relayAfter)) + " s - calling through the relay " + addrText(relayPeer));
+                callPeer = relayPeer;
+                nextCall = t;
+                std::lock_guard<std::mutex> g(lock_);
+                link_.dial(relayPeer);
+            }
+            {
+                std::lock_guard<std::mutex> g(lock_);
+                relayed_ = relayOk && buddyOn_ && link_.peer() == relayPeer;
             }
         } catch (const std::exception& e) {
             log(std::string("MP: network step failed (") + e.what() + ") - remote player hidden");
@@ -421,6 +591,8 @@ void Session::run() {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
+    if (stunResolver.joinable())
+        stunResolver.join();
     // Leaving: tell a buddy.
     bool buddyNow;
     Peer buddyPeer;
@@ -436,7 +608,7 @@ void Session::run() {
         p.role = roleGame;
         p.sentMs = msOf(clockSeconds());
         const auto bytes = encode(p);
-        game.send(bytes.data(), bytes.size(), buddyPeer);
+        sendTo(bytes, buddyPeer);
     }
     log("MP: network stopped");
 }

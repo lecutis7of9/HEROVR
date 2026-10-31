@@ -111,8 +111,9 @@ namespace Sm2VrLauncher
             }
             else
             {
-                tabs.Selected = SheetStatus;
-                ShowPage(SheetStatus);
+                // 0.0.74 MP INTERNET: the window opens on the server list (Status is one click away on the bar).
+                tabs.Selected = SheetMultiplayer;
+                ShowPage(SheetMultiplayer);
             }
             poll.Tick += (s, e) => { if (!preview) RefreshLive(); };
             sessionLog.FilePath = LogFile("session");
@@ -461,6 +462,8 @@ namespace Sm2VrLauncher
             catch { }
             try { ShowJustUpdated(); } catch { }
             poll.Start();
+            // 0.0.74 MP INTERNET: the server list (LAN + internet) listens from the start.
+            try { MultiplayerStart(); } catch (Exception ex) { Program.LogError(ex); }
             if (rollback)
             {
                 var r = MessageBox.Show(this, "The launcher was closed or the PC stopped while it was busy (" + what + ").\n\nPut back the version from before (" +
@@ -473,6 +476,8 @@ namespace Sm2VrLauncher
                 // Version 0.0.6: the opt-in reports, after the window has painted (a crash from last time is asked
                 // about once; the play stats question once ever). Never stops the launcher.
                 try { BeginInvoke(new Action(StartupReports)); } catch { }
+                // Then the multiplayer "No / Yes, Autosetup" pop-up, when this PC still needs something.
+                try { BeginInvoke(new Action(() => { try { MpAutosetup(false); } catch (Exception ex) { Program.LogError(ex); } })); } catch { }
             }
         }
 

@@ -12610,7 +12610,10 @@ DWORD WINAPI run(void*) {
                                 const bool mpLobbyOn = mpLobby.mode != spidy::mp::LobbySetting::none;
                                 const bool mpJoin = mpLobbyOn || (mpPeerFile && mpPeer.ok);
                                 // what the network runs from: a change restarts it (MP-LOBBY.txt first)
-                                const std::string& mpWantText = mpLobbyOn ? mpLobbyText : mpPeerText;
+                                // 0.0.74 MP INTERNET: in MP-LOBBY.txt only mode / join / name / host restart it; punch, relay
+                                // and token are handed over live (the public port STUN found must stay the same).
+                                const std::string mpLobbyKey = spidy::mp::lobbyRestartKey(mpLobby);
+                                const std::string& mpWantText = mpLobbyOn ? mpLobbyKey : mpPeerText;
                                 // 0.0.74 test 1: MP SOLO TEST OFF (the default) is choice 0, ON choice 1
                                 const bool mpOn = c38(combat38::mpSoloTest) == 1 || mpJoin;
                                 if (mpSession->started() && (mpJoin != mpRunPeer || (mpJoin && mpRunText != mpWantText))) {
@@ -12633,6 +12636,12 @@ DWORD WINAPI run(void*) {
                                         cfg.host = mpLobby.mode == spidy::mp::LobbySetting::host;
                                         if (!cfg.host)
                                             cfg.peerHost = mpLobby.joinHost, cfg.peerPort = mpLobby.joinPort;
+                                        // 0.0.74 MP INTERNET: ask public STUN for this game's internet address (MP-PUBLIC.txt
+                                        // tells the launcher, which lists / joins over the internet with it).
+                                        cfg.stun = {"stun.cloudflare.com:3478", "stun.l.google.com:19302"};
+                                        cfg.punch = mpLobby.punch;
+                                        cfg.relayHost = mpLobby.relayHost, cfg.relayPort = mpLobby.relayPort, cfg.token = mpLobby.token;
+                                        cfg.relayAfter = 15; // the host's launcher hears of the joiner within ~5 s and punches back first
                                     } else if (mpJoin) { // a friend on another PC: every interface, PLAYER 2 is him (no echo)
                                         cfg.lan = true;
                                         cfg.echo = false;
@@ -12665,6 +12674,35 @@ DWORD WINAPI run(void*) {
                                 }
                                 for (const auto& line : mpSession->takeLog())
                                     consoleLine("MP SOLO TEST: " + line);
+                                // 0.0.74 MP INTERNET: the launcher's half. New punch / relay / token go to the running network,
+                                // and every 3 s %APPDATA%\Spidy\MP-PUBLIC.txt says where the internet sees this game and who
+                                // is in it (the launcher lists it, or sends it with a JOIN; stale after 10 s = game gone).
+                                static ULONGLONG mpPublicNext = 0;
+                                if (mpSession->started() && mpLobbyOn) {
+                                    mpSession->setTargets(mpLobby.punch, mpLobby.relayHost, mpLobby.relayPort, mpLobby.token);
+                                    if (GetTickCount64() >= mpPublicNext) {
+                                        mpPublicNext = GetTickCount64() + 3000;
+                                        const spidy::mp::SessionView pv = mpSession->view();
+                                        const std::wstring dir = mpDir();
+                                        if (!dir.empty()) {
+                                            const std::string body = "# HERO VR: written by the game every 3 s while multiplayer is on\n"
+                                                                     "public=" + pv.publicText + "\nport=" + std::to_string(pv.port) +
+                                                                     "\nplayers=" + std::to_string(pv.peerGame ? 2 : 1) +
+                                                                     "\nfriend=" + (pv.peerGame ? pv.buddyName : std::string{}) +
+                                                                     "\nrelayed=" + (pv.relayed ? "1" : "0") +
+                                                                     "\nhero=" + std::to_string(heroNow()) + "\n";
+                                            const std::wstring tmp = dir + L"\\MP-PUBLIC.txt.tmp";
+                                            HANDLE f = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                                            if (f != INVALID_HANDLE_VALUE) {
+                                                DWORD put = 0;
+                                                const bool ok = WriteFile(f, body.data(), static_cast<DWORD>(body.size()), &put, nullptr) != 0;
+                                                CloseHandle(f);
+                                                if (ok)
+                                                    MoveFileExW(tmp.c_str(), (dir + L"\\MP-PUBLIC.txt").c_str(), MOVEFILE_REPLACE_EXISTING);
+                                            }
+                                        }
+                                    }
+                                }
                                 const auto mpNow = std::chrono::steady_clock::now();
                                 const float mpDt = std::clamp(std::chrono::duration<float>(mpNow - mpLast).count(), 0.f, .25f);
                                 mpLast = mpNow;

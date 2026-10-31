@@ -1,5 +1,7 @@
 // SM2 VR Launcher - 0.0.74 MP LOBBY: the Multiplayer sheet (HOST, the games on this network, JOIN). No IP typing:
 // a hosting game announces itself on the LAN (Lobby.cs); JOIN writes %APPDATA%\Spidy\MP-LOBBY.txt for the game.
+// 0.0.74 MP INTERNET: it is the server list - the window opens on it, LAN games and the internet list
+// (InternetLobby.cs) merged, listening from the start; the "No / Yes, Autosetup" pop-up (Autosetup.cs) on start.
 // Made by Agent Mulder.
 using System;
 using System.Collections.Generic;
@@ -20,14 +22,16 @@ namespace Sm2VrLauncher
         TextLabel mpState, mpListHead, mpThisPc;
         readonly TextLabel[] mpRowText = new TextLabel[MpRows];
         readonly AccentButton[] mpRowJoin = new AccentButton[MpRows];
-        readonly LobbyHost[] mpRowHost = new LobbyHost[MpRows];
-        AccentButton mpHost, mpLeave, btnMultiplayer;
+        readonly ServerEntry[] mpRowHost = new ServerEntry[MpRows];
+        AccentButton mpHost, mpLeave, btnMultiplayer, mpRefreshBtn;
+        InternetSession mpInet;
+        bool mpStarted;
 
         static Rectangle MultiplayerBounds() { return Theme.R(170, 196, 840, 436); }
 
         void BuildMultiplayer()
         {
-            var card = Add(pages[SheetMultiplayer], new GlassPanel("Multiplayer - same network"), 0, 0, 840, 436);
+            var card = Add(pages[SheetMultiplayer], new GlassPanel("Multiplayer - servers"), 0, 0, 840, 436);
             Add(card, new TextLabel("Your name", Theme.Ui(12), Theme.Sub) { Wrap = false }, 20, 56, 90, 22);
             mpName = Add(card, new Field(), 110, 50, 200, 34);
             mpName.Text = settings.Get("MpName", Lobby.CleanName(Environment.UserName));
@@ -36,32 +40,41 @@ namespace Sm2VrLauncher
             mpHost = Add(card, new AccentButton("Host", ButtonKind.Primary) { Glyph = "play", TextFont = Theme.UiBold(13) }, 326, 48, 130, 38);
             mpLeave = Add(card, new AccentButton("Leave", ButtonKind.Secondary) { Glyph = "stop" }, 466, 48, 120, 38);
             mpState = Add(card, new TextLabel("", Theme.Ui(11.5f), Theme.Sub), 600, 46, 222, 44);
+            mpRefreshBtn = Add(card, new AccentButton("Refresh", ButtonKind.Ghost) { Glyph = "refresh", TextFont = Theme.UiBold(11.5f) }, 690, 100, 130, 28);
+            mpRefreshBtn.Click += (s, e) => { if (mpInet != null) mpInet.Refresh(); MpRefresh(); };
             mpHost.Click += (s, e) => MpHost();
             mpLeave.Click += (s, e) => MpLeave();
-            tip.SetToolTip(mpHost, "Your game shows up in the list of friends on the same Wi-Fi / router while it runs. You do not need to type any address.");
+            tip.SetToolTip(mpHost, "Your game shows up in everyone's server list while it runs (same network and internet). You do not need to type any address.");
             tip.SetToolTip(mpLeave, "Stops hosting or joining (deletes MP-LOBBY.txt). MP-PEER.txt, the typed-address fallback, is left alone.");
 
-            mpListHead = Add(card, new TextLabel("Games on this network", Theme.UiBold(12.5f), Theme.Text) { Wrap = false }, 20, 104, 800, 22);
+            mpListHead = Add(card, new TextLabel("Servers", Theme.UiBold(12.5f), Theme.Text) { Wrap = false }, 20, 104, 660, 22);
             for (int i = 0; i < MpRows; i++)
             {
                 int y = 132 + i * 42;
                 mpRowText[i] = Add(card, new TextLabel("", Theme.Ui(12.5f), Theme.Text) { Wrap = false }, 20, y + 9, 660, 22);
                 mpRowJoin[i] = Add(card, new AccentButton("Join", ButtonKind.Secondary) { Glyph = "play", Visible = false }, 690, y, 130, 36);
                 int row = i;
-                mpRowJoin[i].Click += (s, e) => MpJoin(mpRowHost[row]);
+                mpRowJoin[i].Click += (s, e) => MpJoinEntry(mpRowHost[row]);
             }
             mpThisPc = Add(card, new TextLabel("", Theme.Ui(11.5f), Theme.Sub) { Wrap = false }, 20, 350, 560, 20);
             var fw = Add(card, new AccentButton("Allow through firewall", ButtonKind.Ghost) { TextFont = Theme.UiBold(11.5f) }, 620, 344, 200, 30);
-            fw.Click += (s, e) => MpFirewall();
-            tip.SetToolTip(fw, "Adds one Windows Firewall rule (asks for admin): UDP " + LobbyBeacon.LobbyPort + "-" + (LobbyBeacon.GamePort + 4) + " in, Private networks only.");
-            Add(card, new TextLabel(Lobby.FirewallNote + " Over the internet: MP-PEER.txt (docs\\MP-SOLO-TEST.md).", Theme.Ui(11), Theme.Dim), 20, 378, 800, 44);
+            fw.Click += (s, e) => MpAutosetup(true);
+            tip.SetToolTip(fw, "Multiplayer setup (asks Windows once): one firewall rule, UDP " + Autosetup.PortRange + " in, nothing else.");
+            Add(card, new TextLabel(Lobby.FirewallNote + " Internet games join by themselves; the advanced fallback is MP-PEER.txt (docs\\MP-SOLO-TEST.md).", Theme.Ui(11), Theme.Dim), 20, 378, 800, 44);
             mpTick.Tick += (s, e) => MpRefresh();
         }
 
-        // The tick runs while the sheet is open: the listener starts the first time it is.
+        // 0.0.74 MP INTERNET: the list runs from the start (MultiplayerStart from OnShown), not only while the sheet is open.
         void MultiplayerShown(bool visible)
         {
-            if (!visible) { mpTick.Stop(); return; }
+            MultiplayerStart();
+            if (visible) MpRefresh();
+        }
+
+        void MultiplayerStart()
+        {
+            if (mpStarted) return;
+            mpStarted = true;
             if (mpListener == null && preview)
             {
                 // SM2VR_LAUNCHER_PREVIEW: two made-up hosts (documentation addresses) for the screenshot.
@@ -74,8 +87,34 @@ namespace Sm2VrLauncher
                 mpListener = new LobbyListener(LobbyBeacon.LobbyPort);
                 if (!mpListener.Start()) sessionLog.Line("Multiplayer: cannot listen for games on UDP " + LobbyBeacon.LobbyPort + " (" + mpListener.Error + ")", Theme.Warn);
             }
+            if (!preview)
+            {
+                mpInet = new InternetSession(InternetLobby.Url(settings), null);
+                mpInet.Start();
+                if (!mpInet.On) sessionLog.Line("Multiplayer: no internet server list is set up in this build - games on this network only.", Theme.Dim);
+            }
             MpRefresh();
             mpTick.Start();
+        }
+
+        /// <summary>The pop-up: at start when something is missing and the player did not say No before; from the
+        /// sheet's button always (force).</summary>
+        void MpAutosetup(bool force)
+        {
+            if (preview) return;
+            var need = Autosetup.Needed(Autosetup.All());
+            if (need.Count == 0) { if (force) sessionLog.Line("Multiplayer: this PC is set up (firewall rule '" + Autosetup.FirewallRule + "' is there).", Theme.Good); return; }
+            if (!force && settings.GetBool(Autosetup.KeyDeclined, false)) return;
+            DialogResult r;
+            using (var d = new AutosetupDialog(need)) r = d.ShowDialog(this);
+            if (r != DialogResult.Yes)
+            {
+                settings.SetBool(Autosetup.KeyDeclined, true); settings.Save();
+                sessionLog.Line("Multiplayer setup skipped. Multiplayer > Allow through firewall offers it again.", Theme.Sub);
+                return;
+            }
+            settings.SetBool(Autosetup.KeyDeclined, false); settings.Save();
+            foreach (var l in Autosetup.Run(need)) sessionLog.Line("Multiplayer setup: " + l, l.StartsWith("Done") ? Theme.Good : Theme.Warn);
         }
 
         void MpRefresh()
@@ -98,19 +137,40 @@ namespace Sm2VrLauncher
             mpLeave.Enabled = mode == "host" || mode == "join";
 
             var hosts = mpListener == null ? new List<LobbyHost>() : mpListener.Snapshot(DateTime.UtcNow);
-            mpListHead.Text = hosts.Count == 0 ? "Games on this network: none yet (a friend presses HOST and starts his game)" : "Games on this network";
+            var mineIds = hosts.Where(h => h.ThisPc).Select(h => h.Beacon.HostId).ToList();
+            string inetProblem = "";
+            var inet = new List<InetGame>();
+            if (mpInet != null && mpInet.On)
+            {
+                DateTime at;
+                inet = mpInet.Games(out inetProblem, out at);
+                var me = hosts.FirstOrDefault(h => h.ThisPc);
+                mpInet.SetLocal(me == null ? "" : me.Beacon.HeroName, me == null ? 0u : me.Beacon.HostId);
+                foreach (var m in mpInet.TakeMessages())
+                    sessionLog.Line(m.StartsWith("OK:") ? m.Substring(3) : m, m.StartsWith("OK:") ? Theme.Good : Theme.Warn);
+            }
+            var rows = InternetLobby.Merge(hosts, inet, mineIds);
+            int lanN = rows.Count(r => !r.Internet), netN = rows.Count - lanN;
+            mpListHead.Text = MpHeadText(lanN, netN, mpInet != null && mpInet.On, inetProblem);
             for (int i = 0; i < MpRows; i++)
             {
-                var h = i < hosts.Count ? hosts[i] : null;
+                var h = i < rows.Count ? rows[i] : null;
                 mpRowHost[i] = h;
-                mpRowText[i].Text = h == null ? "" : MpRowText(h);
+                mpRowText[i].Text = h == null ? "" : InternetLobby.RowText(h);
                 mpRowJoin[i].Visible = h != null;
                 if (h != null)
                 {
-                    mpRowJoin[i].Enabled = !h.ThisPc && !h.Beacon.Full && h.Beacon.SameVersion;
-                    mpRowJoin[i].Text = h.ThisPc ? "You" : h.Beacon.Full ? "Full" : !h.Beacon.SameVersion ? "Update" : "Join";
+                    mpRowJoin[i].Enabled = h.CanJoin;
+                    mpRowJoin[i].Text = h.ThisPc ? "You" : h.Full ? "Full" : !h.SameVersion ? "Update" : "Join";
                 }
             }
+        }
+
+        internal static string MpHeadText(int lan, int internet, bool inetOn, string problem)
+        {
+            string n = lan + internet == 0 ? "none yet (a friend presses HOST and starts his game)" : (lan + internet) + (lan + internet == 1 ? " game" : " games");
+            string where = !inetOn ? " - this network only" : problem.Length > 0 ? " - this network only: " + problem : "";
+            return "Servers: " + n + where;
         }
 
         internal static string MpRowText(LobbyHost h)
@@ -129,6 +189,15 @@ namespace Sm2VrLauncher
             }
             catch (Exception ex) { sessionLog.Line("Multiplayer: cannot write MP-LOBBY.txt: " + ex.Message, Theme.Bad); }
             MpRefresh();
+        }
+
+        void MpJoinEntry(ServerEntry e)
+        {
+            if (e == null || !e.CanJoin) return;
+            if (!e.Internet) { MpJoin(e.Lan); return; }
+            if (mpInet == null) return;
+            sessionLog.Line("Multiplayer: asking the server list for " + e.Name + "...", Theme.Sub);
+            mpInet.Join(e.Inet, mpName.Text);
         }
 
         void MpJoin(LobbyHost h)
@@ -150,22 +219,13 @@ namespace Sm2VrLauncher
             MpRefresh();
         }
 
-        void MpFirewall()
-        {
-            try
-            {
-                var psi = new ProcessStartInfo("netsh", Lobby.FirewallArgs()) { Verb = "runas", UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden };
-                using (var p = Process.Start(psi)) { if (p != null) p.WaitForExit(15000); }
-                sessionLog.Line("Multiplayer: firewall rule '" + Lobby.FirewallRule + "' added (Private networks). If you once pressed Block for Spider-Man 2, allow it in Windows Security > Firewall > Allow an app.", Theme.Good);
-            }
-            catch (Exception ex) { sessionLog.Line("Multiplayer: the firewall rule was not added (" + ex.Message + ").", Theme.Warn); }
-        }
-
         void DisposeMultiplayer()
         {
             mpTick.Stop();
             if (mpListener != null) mpListener.Dispose();
             mpListener = null;
+            if (mpInet != null) mpInet.Dispose();
+            mpInet = null;
         }
     }
 }

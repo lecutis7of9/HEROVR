@@ -24,8 +24,16 @@ Build 11 makes the optional HERO VR design smoother (the orb and the lag fixes) 
 The **Multiplayer** sheet (header button; "Multiplayer" link on the new design's home) hosts or joins a friend's game on the same
 network with no IP typing: **Host** announces this PC, the list shows games heard on the network (name, hero, players), **Join**
 picks one, **Leave** stops. It writes `%APPDATA%\Spidy\MP-LOBBY.txt` for the game; the game's `MP-PEER.txt` stays the advanced
-fallback for VPNs. **Allow through firewall** adds one inbound rule for UDP 39469-39474 on Private networks. See
+fallback for VPNs. **Allow through firewall** adds one inbound rule for UDP 39469-39474 (Private + Public networks, 0.0.74 MP INTERNET). See
 [docs/MP-SOLO-TEST.md](../../docs/MP-SOLO-TEST.md).
+
+## Multiplayer over the internet (0.0.74 MP INTERNET)
+
+- The window opens on the server list: LAN and internet games together, and Join with one click.
+- At first start, the "No" / "Yes, Autosetup" pop-up adds the firewall rule with one admin prompt (`Autosetup.cs`).
+  It can also download a runtime, checked against its SHA-256 before running; none is needed today.
+- The server address is `InternetLobby.DefaultUrl`. `SM2VR_LOBBY_URL` or the setting `LobbyUrl` override it,
+  but only for https:// or a localhost http:// address. Setup: docs/LOBBY-OWNER-SETUP.md.
 
 ## Privacy and reports
 

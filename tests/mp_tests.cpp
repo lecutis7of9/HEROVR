@@ -6,6 +6,7 @@
 #include "spidy/hero_modes.hpp"
 #include "spidy/mesh_model.hpp"
 #include "spidy/mp_body.hpp"
+#include "spidy/mp_inet.hpp"
 #include "spidy/mp_lobby.hpp"
 #include "spidy/mp_ghost.hpp"
 #include "spidy/mp_net.hpp"
@@ -15,6 +16,7 @@
 #include "spidy/mp_socket.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -1446,6 +1448,180 @@ void testSessionHost() {
     check(!host.view().hosting, "HOST: stopped: not hosting");
 }
 
+// 0.0.74 MP INTERNET: STUN Binding, the relay frame, MP-LOBBY.txt's punch / relay / token.
+void testInet() {
+    // RFC 5769 2.2 sample IPv4 response (SOFTWARE, XOR-MAPPED-ADDRESS 192.0.2.1:32853, MESSAGE-INTEGRITY, FINGERPRINT).
+    const uint8_t rfc[] = {0x01, 0x01, 0x00, 0x3c, 0x21, 0x12, 0xa4, 0x42, 0xb7, 0xe7, 0xa7, 0x01, 0xbc, 0x34, 0xd6, 0x86, 0xfa, 0x87,
+                           0xdf, 0xae, 0x80, 0x22, 0x00, 0x0b, 0x74, 0x65, 0x73, 0x74, 0x20, 0x76, 0x65, 0x63, 0x74, 0x6f, 0x72, 0x20,
+                           0x00, 0x20, 0x00, 0x08, 0x00, 0x01, 0xa1, 0x47, 0xe1, 0x12, 0xa6, 0x43, 0x00, 0x08, 0x00, 0x14, 0x2b, 0x91,
+                           0xf5, 0x99, 0xfd, 0x9e, 0x90, 0xc3, 0x8c, 0x74, 0x89, 0xf9, 0x2a, 0xf9, 0xba, 0x53, 0xf0, 0x6b, 0xe7, 0xd7,
+                           0x80, 0x28, 0x00, 0x04, 0xc0, 0x7d, 0x4c, 0x96};
+    const StunTxn rfcTxn{0xb7, 0xe7, 0xa7, 0x01, 0xbc, 0x34, 0xd6, 0x86, 0xfa, 0x87, 0xdf, 0xae};
+    Peer m{};
+    check(isStun(rfc, sizeof rfc) && stunMapped(rfc, sizeof rfc, rfcTxn, m) && addrText(m) == "192.0.2.1:32853",
+          "INTERNET: the RFC 5769 sample response reads 192.0.2.1:32853");
+    StunTxn other = rfcTxn;
+    other[11] ^= 1;
+    check(!stunMapped(rfc, sizeof rfc, other, m), "INTERNET: another transaction's answer is not ours");
+    check(!stunMapped(rfc, sizeof rfc - 8, rfcTxn, m), "INTERNET: a cut answer is refused");
+    const StunTxn txn{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    const auto req = stunRequest(txn);
+    check(req.size() == 20 && isStun(req.data(), req.size()), "INTERNET: a Binding request is 20 bytes of STUN");
+    const auto ans = stunAnswer(req.data(), req.size(), {0xcb007107u, 51234});
+    check(stunMapped(ans.data(), ans.size(), txn, m) && addrText(m) == "203.0.113.7:51234", "INTERNET: request -> answer -> mapped round trip");
+    check(stunAnswer(ans.data(), ans.size(), m).empty(), "INTERNET: an answer is not answered");
+    // A game packet is never STUN (and STUN never decodes as a game packet).
+    Packet p;
+    p.type = pose;
+    const auto g = encode(p);
+    Packet q;
+    check(!isStun(g.data(), g.size()) && decode(req.data(), req.size(), q) != Error::none, "INTERNET: game packets and STUN never mix");
+    uint32_t rng = 7;
+    int stunFuzz = 0;
+    for (int i = 0; i < 3000; ++i) {
+        std::vector<uint8_t> junk(ans);
+        rng = rng * 1664525u + 1013904223u;
+        junk[rng % junk.size()] ^= static_cast<uint8_t>(1 + (rng >> 24) % 255);
+        Peer x;
+        stunFuzz += stunMapped(junk.data(), junk.size(), txn, x) && x.port != 0 ? 0 : 0; // must not crash
+    }
+    check(stunFuzz == 0, "INTERNET: 3000 damaged answers read without a crash");
+    // The relay frame.
+    RelayToken tok{};
+    check(parseToken("0123456789abcdef", tok) && tokenText(tok) == "0123456789abcdef" && tokenSet(tok), "INTERNET: token hex round trip");
+    RelayToken bad{};
+    check(!parseToken("0123456789abcdeg", bad) && !parseToken("0123", bad) && !tokenSet(RelayToken{}), "INTERNET: a bad token is refused");
+    const auto framed = relayWrap(tok, g.data(), g.size());
+    check(framed.size() == g.size() + relayHeaderBytes && relayFrame(framed.data(), framed.size(), tok), "INTERNET: relay frame carries the packet");
+    check(decode(framed.data() + relayHeaderBytes, framed.size() - relayHeaderBytes, q) == Error::none, "INTERNET: unwrapped, it decodes");
+    RelayToken tok2 = tok;
+    tok2[0] ^= 1;
+    check(!relayFrame(framed.data(), framed.size(), tok2), "INTERNET: another token's frame is not ours");
+    const auto keep = relayWrap(tok, nullptr, 0);
+    check(keep.size() == relayHeaderBytes && relayFrame(keep.data(), keep.size(), tok), "INTERNET: a keepalive is the header only");
+    // MP-LOBBY.txt's internet lines; only mode / join / name / host restart the network.
+    const LobbySetting l = parseLobbySetting("mode=host\nname=mary\npunch=203.0.113.7:51234\npunch=bad\npunch=198.51.100.2:0\n"
+                                             "punch=198.51.100.9:4000\nrelay=relay.example.org:3479\ntoken=0123456789ABCDEF\n");
+    check(l.punch.size() == 2 && l.punch[0] == "203.0.113.7:51234" && l.punch[1] == "198.51.100.9:4000", "INTERNET: punch lines (bad ones skipped)");
+    check(l.relayHost == "relay.example.org" && l.relayPort == 3479 && l.token == "0123456789ABCDEF", "INTERNET: relay and token");
+    check(parseLobbySetting(lobbyText(l)).punch == l.punch && parseLobbySetting(lobbyText(l)).token == l.token, "INTERNET: lobbyText round trip");
+    LobbySetting l2 = l;
+    l2.punch.push_back("192.0.2.5:1");
+    l2.token = "ffffffffffffffff";
+    check(lobbyRestartKey(l2) == lobbyRestartKey(l), "INTERNET: a new joiner / relay does not restart the network");
+    l2.name = "BOB";
+    check(lobbyRestartKey(l2) != lobbyRestartKey(l), "INTERNET: a new name does");
+    check(parseLobbySetting("mode=host\ntoken=xyz\n").token.empty(), "INTERNET: a bad token line is dropped");
+}
+
+void testSessionInternet() {
+    // A STUN server and a relay on this PC (the relay: the same rules as server/relay/relay.mjs, open tokens).
+    std::atomic<bool> stop{false};
+    UdpSocket stun, relay;
+    check(stun.open(loopbackAddr, 39671) && relay.open(loopbackAddr, 39672), "INTERNET: local STUN and relay up");
+    std::atomic<int> relayed{0};
+    std::thread server([&] {
+        std::vector<Peer> seen;
+        uint8_t b[1500];
+        while (!stop) {
+            Peer from;
+            int n = stun.receive(b, sizeof b, from);
+            if (n > 0) {
+                const auto a = stunAnswer(b, static_cast<size_t>(n), from);
+                if (!a.empty())
+                    stun.send(a.data(), a.size(), from);
+            }
+            n = relay.receive(b, sizeof b, from);
+            if (n >= static_cast<int>(relayHeaderBytes) && !std::memcmp(b, "HVRY", 4)) {
+                if (std::find(seen.begin(), seen.end(), from) == seen.end())
+                    seen.push_back(from);
+                if (n > static_cast<int>(relayHeaderBytes))
+                    for (const Peer& p : seen)
+                        if (!(p == from))
+                            relay.send(b, static_cast<size_t>(n), p), ++relayed;
+            }
+            sleepMs(1);
+        }
+    });
+    // 1) STUN: the game learns its public address (here: 127.0.0.1 and its own port).
+    {
+        Session a;
+        SessionConfig c;
+        c.port = 39680;
+        c.lan = true;
+        c.echo = false;
+        c.host = true;
+        c.announceTo = {loopbackAddr};
+        c.lobbyPort = 39679;
+        c.stun = {"127.0.0.1:39671"};
+        a.start(c);
+        const double t0 = a.now();
+        while (a.now() - t0 < 2.0 && a.view().publicText.empty())
+            sleepMs(10);
+        check(a.view().publicText == "127.0.0.1:" + std::to_string(a.view().port), "INTERNET: STUN tells the game its public address");
+        // 2) Punch: a friend who is NOT calling (he only listens) is reached by the host's punch HELLOs.
+        Session b;
+        SessionConfig cb;
+        cb.port = 39690;
+        cb.lan = true;
+        cb.echo = false;
+        cb.name = "peter";
+        b.start(cb);
+        sleepMs(100);
+        a.setTargets({"127.0.0.1:" + std::to_string(b.view().port)}, "", 3479, "");
+        double t1 = a.now();
+        while (a.now() - t1 < 3.0 && !(a.view().peerGame && b.view().peerGame)) {
+            a.publish(sample()), b.publish(sample());
+            sleepMs(10);
+        }
+        check(a.view().peerGame && b.view().peerGame && a.view().buddyName == "PETER", "INTERNET: the host's punch list joins a friend live (no restart)");
+        check(a.view().port == 39680, "INTERNET: the same port (the public address the lobby has) after setTargets");
+    }
+    // 3) Relay: the joiner's direct call gets no answer (a dead address) - after relayAfter it calls through the relay;
+    //    the host only keeps the relay told where it is. Both see each other, marked relayed.
+    {
+        Session h, j;
+        SessionConfig ch, cj;
+        ch.port = 39700, cj.port = 39710;
+        ch.lan = cj.lan = true;
+        ch.echo = cj.echo = false;
+        ch.host = true;
+        ch.announceTo = {loopbackAddr};
+        ch.lobbyPort = 39699;
+        ch.name = "mary", cj.name = "peter";
+        ch.relayHost = cj.relayHost = "127.0.0.1";
+        ch.relayPort = cj.relayPort = 39672;
+        ch.token = cj.token = "00112233445566ff";
+        ch.relayKeepEvery = cj.relayKeepEvery = .3;
+        cj.peerHost = "127.0.0.1";
+        cj.peerPort = 39719; // nobody there
+        cj.relayAfter = 1.0;
+        h.start(ch);
+        j.start(cj);
+        const double t0 = h.now();
+        while (h.now() - t0 < 5.0 && !(h.view().peerGame && j.view().peerGame)) {
+            h.publish(sample()), j.publish(sample());
+            sleepMs(10);
+        }
+        check(h.view().peerGame && j.view().peerGame && j.view().buddyName == "MARY" && h.view().buddyName == "PETER",
+              "INTERNET: no direct answer - the relay joins them");
+        double t1 = h.now();
+        bool poses = false;
+        while (h.now() - t1 < 1.0 && !poses) {
+            h.publish(sample()), j.publish(sample());
+            poses = h.view().visible && j.view().visible;
+            sleepMs(10);
+        }
+        check(poses && h.view().relayed && j.view().relayed && relayed > 4, "INTERNET: poses flow both ways through the relay");
+        bool joinerSaid = false;
+        for (const auto& l : j.takeLog())
+            joinerSaid = joinerSaid || l.find("calling through the relay") != std::string::npos;
+        check(joinerSaid, "INTERNET: the joiner's log says it went through the relay");
+    }
+    stop = true;
+    server.join();
+}
+
 int main() {
     testCrcAndHash();
     testRoundTrip();
@@ -1468,6 +1644,8 @@ int main() {
     testPropsEffects();
     testLobby();
     testSessionHost();
+    testInet();
+    testSessionInternet();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

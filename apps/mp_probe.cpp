@@ -5,6 +5,7 @@
 //                                         (0.0.74 MP JOIN: with a peer it calls that game, like MP-PEER.txt)
 //                                         a second (tests/mp_buddy_tests.py drives the Test Buddy at it)
 //   spidy_mp_probe golden                 hex of fixed packets (the Python buddy must encode the same bytes)
+#include "spidy/mp_inet.hpp"
 #include "spidy/mp_lobby.hpp"
 #include "spidy/mp_net.hpp"
 #include "spidy/mp_prop_look.hpp"
@@ -108,6 +109,42 @@ int main(int argc, char** argv) {
         }
         if (argc >= 6)
             cfg.name = argv[5];
+        // 0.0.74 MP INTERNET: stun=host:port (repeatable) relay=host:port token=<16 hex> punch=ip:port (repeatable)
+        // relayafter=<s> lan=1 lobby=<MP-LOBBY.txt re-read every 0.5 s: punch / relay / token live, as the game does>
+        std::string lobbyPath;
+        for (int i = 6; i < argc; ++i) {
+            const std::string a = argv[i];
+            const size_t eq = a.find('=');
+            const std::string k = a.substr(0, eq), v = eq == std::string::npos ? std::string{} : a.substr(eq + 1);
+            if (k == "stun")
+                cfg.stun.push_back(v);
+            else if (k == "relay") {
+                const PeerSetting r = parsePeerSetting(v);
+                cfg.relayHost = r.host, cfg.relayPort = r.port;
+            } else if (k == "token")
+                cfg.token = v;
+            else if (k == "punch")
+                cfg.punch.push_back(v);
+            else if (k == "relayafter")
+                cfg.relayAfter = std::atof(v.c_str());
+            else if (k == "lobby")
+                lobbyPath = v;
+            else if (k == "lan") // listen on every interface, as a lobby-mode game does (the internet needs it)
+                cfg.lan = v == "1";
+        }
+        auto readLobby = [&](std::string& text) {
+            std::FILE* f = std::fopen(lobbyPath.c_str(), "rb");
+            text.clear();
+            if (!f)
+                return false;
+            char b[4096];
+            size_t n;
+            while ((n = std::fread(b, 1, sizeof b, f)) > 0)
+                text.append(b, n);
+            std::fclose(f);
+            return true;
+        };
+        double nextLobby = 0;
         Session s;
         if (!s.start(cfg))
             return 2;
@@ -137,6 +174,14 @@ int main(int argc, char** argv) {
             fx.feed({&fakeShot, nullptr, nullptr}, s.now());
             fx.write(p.props, sendFrame({}, Quat{}, 0.f), s.now());
             s.publish(p);
+            if (!lobbyPath.empty() && s.now() >= nextLobby) {
+                nextLobby = s.now() + .5;
+                std::string text;
+                if (readLobby(text)) {
+                    const LobbySetting l = parseLobbySetting(text);
+                    s.setTargets(l.punch, l.relayHost, l.relayPort, l.token);
+                }
+            }
             {
                 const SessionView w = s.view();
                 inbox.take(w.state.props, GhostFrame{}, s.now());
@@ -148,12 +193,13 @@ int main(int argc, char** argv) {
                             "\"ping\": %d, \"hero\": %u, \"suit\": %u, \"root\": [%.3f, %.3f, %.3f], \"actions\": %u, "
                             "\"sent\": %u, \"received\": %u, \"rejected\": %u, \"peerGame\": %d, \"calling\": %d, "
                             "\"props\": %u, \"propKinds\": [%u, %u, %u, %u], \"lines\": %u, \"fxTaken\": %u, "
-                            "\"hosting\": %d, \"beacons\": %u}\n",
+                            "\"hosting\": %d, \"beacons\": %u, \"public\": \"%s\", \"relayed\": %d}\n",
                             t, v.running, v.port, v.visible, v.buddy, v.buddyName.c_str(), v.pingMs, v.state.hero,
                             v.state.suit, v.state.root.x, v.state.root.y, v.state.root.z, v.state.actions, v.sent,
                             v.received, v.rejected, v.peerGame, v.calling, static_cast<unsigned>(v.state.props.items),
                             v.state.props.item[0].kind, v.state.props.item[1].kind, v.state.props.item[2].kind,
-                            v.state.props.item[3].kind, static_cast<unsigned>(v.state.props.lines), inbox.taken(), v.hosting, v.beacons);
+                            v.state.props.item[3].kind, static_cast<unsigned>(v.state.props.lines), inbox.taken(), v.hosting, v.beacons,
+                            v.publicText.c_str(), v.relayed);
                 for (const auto& l : s.takeLog())
                     std::printf("# %s\n", l.c_str());
                 std::fflush(stdout);
@@ -163,6 +209,27 @@ int main(int argc, char** argv) {
         s.stop();
         for (const auto& l : s.takeLog())
             std::printf("# %s\n", l.c_str());
+        return 0;
+    }
+    if (argc >= 4 && !std::strcmp(argv[1], "stunserver")) { // 0.0.74 MP INTERNET: a local STUN server for the tests
+        UdpSocket u;
+        if (!u.open(loopbackAddr, static_cast<uint16_t>(std::atoi(argv[2]))))
+            return 2;
+        const auto t0 = std::chrono::steady_clock::now();
+        uint8_t b[1500];
+        unsigned answered = 0;
+        while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < std::atof(argv[3])) {
+            Peer from;
+            const int n = u.receive(b, sizeof b, from);
+            if (n > 0) {
+                const auto a = stunAnswer(b, static_cast<size_t>(n), from);
+                if (!a.empty() && u.send(a.data(), a.size(), from))
+                    ++answered;
+                continue;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        std::printf("{\"answered\": %u}\n", answered);
         return 0;
     }
     if (argc >= 3 && !std::strcmp(argv[1], "lobbyfile")) { // 0.0.74 MP LOBBY: how the game reads an MP-LOBBY.txt
@@ -176,9 +243,14 @@ int main(int argc, char** argv) {
             text.append(buf, n);
         std::fclose(f);
         const LobbySetting l = parseLobbySetting(text);
-        std::printf("{\"mode\": \"%s\", \"join\": \"%s\", \"port\": %u, \"name\": \"%s\", \"host\": \"%s\"}\n",
+        std::string punch;
+        for (const auto& pp : l.punch)
+            punch += (punch.empty() ? "\"" : ", \"") + pp + "\"";
+        std::printf("{\"mode\": \"%s\", \"join\": \"%s\", \"port\": %u, \"name\": \"%s\", \"host\": \"%s\", "
+                    "\"punch\": [%s], \"relay\": \"%s\", \"relayPort\": %u, \"token\": \"%s\", \"restartKey\": \"%s\"}\n",
                     l.mode == LobbySetting::host ? "host" : l.mode == LobbySetting::join ? "join" : "none", l.joinHost.c_str(),
-                    l.joinPort, l.name.c_str(), l.hostName.c_str());
+                    l.joinPort, l.name.c_str(), l.hostName.c_str(), punch.c_str(), l.relayHost.c_str(), l.relayPort,
+                    l.token.c_str(), lobbyRestartKey(l).c_str());
         return 0;
     }
     if (argc >= 3 && !std::strcmp(argv[1], "lobby")) { // 0.0.74 MP LOBBY: the launcher's list, as JSON once a second
@@ -223,7 +295,7 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port] | host[:lobby port]] [name] | "
-                         "lobby <seconds> [port] | lobbyfile <path> | golden\n");
+    std::fprintf(stderr, "usage: spidy_mp_probe run <port> <seconds> [peer host[:port] | host[:lobby port]] [name] [stun=h:p] [relay=h:p] [token=hex16] [punch=ip:port] [relayafter=s] [lobby=MP-LOBBY.txt] | "
+                         "lobby <seconds> [port] | lobbyfile <path> | stunserver <port> <seconds> | golden\n");
     return 1;
 }

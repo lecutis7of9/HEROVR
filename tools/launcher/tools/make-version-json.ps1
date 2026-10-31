@@ -24,7 +24,7 @@ param(
   [string]$InstallSubfolder = "sm2-port",
   [string]$ChangelogUrl,
   [string]$SourceUrl,
-  [string]$StableVersion = "0.0.73",   # 0.0.74 test 10: the EXPERIMENTAL notice's STABLE build (Revert > USE 0.0.73)
+  [string]$StableVersion = "0.0.63",   # 0.0.74 release: the EXPERIMENTAL notice's STABLE build is 0.0.63 (Revert > USE 0.0.63)
   [string]$Out = "version.json",
   [switch]$NoShaFiles
 )

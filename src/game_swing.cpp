@@ -5,6 +5,7 @@
 #include "spidy/combat_input.hpp"
 #include "spidy/cape_glide.hpp"
 #include "spidy/grapple073.hpp"
+#include "spidy/dd_grapple074.hpp" // 0.0.74 test 10 DD QUICK GRAPPLE
 #include "spidy/extras385.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/air_watch.hpp"
@@ -66,6 +67,10 @@ cape_glide::Grapple capeGrapple;
 cape_glide::Data capeData; // under `output`
 bool grappleHeldWas[2]{};
 uint64_t reelId{}; // Version 0.0.73 ENEMY REEL: the enemy the line is on (0: a surface)
+// 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp): the CANCEL's coast and the pull's last velocity (kept by a
+// redirect or a cancel).
+dd_grapple074::Coast ddCoast;
+Vec3 pullVelocityWas{};
 InFlightStep inFlight;
 SRWLOCK lifecycle = SRWLOCK_INIT, control = SRWLOCK_INIT, output = SRWLOCK_INIT, simulation = SRWLOCK_INIT;
 std::atomic<bool> enabled{};
@@ -158,6 +163,7 @@ void cancelSwing(bool keepWall = false) {
     solver.releaseAll();
     capeGlide.reset(); // Version 0.0.7 BATMAN: no glide or grapple goes on past a cancel
     capeGrapple.stop();
+    ddCoast.stop(); // 0.0.74 test 10 DD QUICK GRAPPLE: no coast past a cancel either
     grappleHeldWas[0] = grappleHeldWas[1] = false;
     if (!keepWall)
         solver.leaveWall();
@@ -843,13 +849,23 @@ void visit(const native_rays::QueryContext& world) {
         // Version 0.0.72: askGrappleOnly grapples with no cape (no glide after it).
         const bool grappleOnly = live && (c.asks & cape_glide::askGrappleOnly) && !flown.drive;
         const bool free = (batman || grappleOnly) && !grasped && !handing && !gameRun && !yielding && !striking && collidable;
-        const bool wasCaped = capeGlide.on() || capeGrapple.phase() != cape_glide::idle;
+        const bool wasCaped = capeGlide.on() || capeGrapple.phase() != cape_glide::idle || ddCoast.on();
+        // 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp): DAREDEVIL's word (the glide word's bits 1-2; a
+        // Version 7 command only, else OFF): QUICK - the faster, eased pull; REDIRECT - a press over a going pull
+        // fires anew (the old line lets go, its velocity kept), a press that hooks nothing cancels into a coast.
+        const uint32_t ddWord = grappleOnly && c.version >= 7 && c.bytes == sizeof(Command) ? c.reserved7[0] : 0u;
+        const bool ddQuick = dd_grapple074::quick(ddWord), ddRedirect = dd_grapple074::redirect(ddWord);
+        if (!free)
+            ddCoast.stop();
         for (unsigned i = 0; i < 2; ++i) {
             const bool held = free && (c.asks & cape_glide::askGrapple[i]) && in.hands[i].tracked;
             // Build 5: never over a takeoff already going (a charged leap's): starting the pull reset it
             // and the leap's velocity was lost (DAREDEVIL "just jumps like a normal guy").
             const bool takingOff = takeoffTransition.phase() != SwingTakeoff::Idle && !grappleLift;
-            if (held && !grappleHeldWas[i] && capeGrapple.phase() == cape_glide::idle && !takingOff) {
+            const bool redirect = dd_grapple074::mayRedirect(ddRedirect, capeGrapple.phase());
+            if (held && !grappleHeldWas[i] && (capeGrapple.phase() == cape_glide::idle || redirect) && !takingOff) {
+                const Vec3 carried = finite(pullVelocityWas) && length(pullVelocityWas) > 0.f ? pullVelocityWas : body.velocity;
+                capeGrapple.tune = dd_grapple074::tuneFor(ddQuick); // every other hero: the default tune, as before
                 const Vec3 from = in.hands[i].aim.position;
                 const Vec3 dir = normalized(in.hands[i].aim.orientation.rotate({0, 0, -1}));
                 const auto hit = finite(from) && length(dir) > .5f ? world.raycast(from, dir, cape_glide::reachMost)
@@ -876,6 +892,9 @@ void visit(const native_rays::QueryContext& world) {
                                           reelFeet[reelOn] + Vec3{0, grapple073::chestUp, 0}, i)) {
                     reelId = reelIds[reelOn];
                     capeGlide.reset();
+                    ddCoast.stop();
+                    if (redirect)
+                        capeGrapple.carry(carried);
                     ++capeData.grapples;
                     ++capeData.reels; // 0.0.74 test 10 GRAPPLE YANK: the VR module's yank asks the game
                     capeData.reelId = reelId;
@@ -885,9 +904,17 @@ void visit(const native_rays::QueryContext& world) {
                     capeGrapple.start(body.position, hit->point, hit->normal, i)) {
                     reelId = 0;
                     capeGlide.reset();
+                    ddCoast.stop();
+                    if (redirect)
+                        capeGrapple.carry(carried);
                     ++capeData.grapples;
                 } else {
                     ++capeData.misses;
+                    if (redirect) { // the CANCEL: the line lets go, he coasts on with its velocity (no stop)
+                        capeGrapple.stop();
+                        reelId = 0;
+                        ddCoast.start(carried);
+                    }
                 }
             }
             grappleHeldWas[i] = held;
@@ -903,6 +930,9 @@ void visit(const native_rays::QueryContext& world) {
         const auto pulled = liftWait ? cape_glide::GrappleOut{false, {}, cape_glide::pull, capeGrapple.anchor()}
                                      : capeGrapple.update(motion.dt, body.position, body.velocity, free);
         capeData.arrivals += pulled.arrived ? 1u : 0u;
+        // 0.0.74 test 10 DD QUICK GRAPPLE: the coast after a CANCEL (only when no pull drives).
+        const auto coasted = pulled.drive ? dd_grapple074::CoastOut{} : ddCoast.update(motion.dt, body.grounded, body.velocity, free);
+        pullVelocityWas = pulled.drive && finite(pulled.velocity) ? pulled.velocity : coasted.drive ? coasted.velocity : Vec3{};
         cape_glide::In gi;
         gi.seconds = motion.dt;
         gi.allowed = free && batman && !pulled.drive; // 0.0.72: no glide for the grapple without the cape
@@ -919,8 +949,8 @@ void visit(const native_rays::QueryContext& world) {
         gi.tilt = live && c.version >= 7 && c.bytes == sizeof(Command) && cape_glide::glideTilt(c.reserved7[0]);
         const auto glided = capeGlide.update(gi);
         capeData.glides += glided.started ? 1u : 0u;
-        caped = pulled.drive || glided.drive;
-        capeVelocity = pulled.drive ? pulled.velocity : glided.velocity;
+        caped = pulled.drive || coasted.drive || glided.drive;
+        capeVelocity = pulled.drive ? pulled.velocity : coasted.drive ? coasted.velocity : glided.velocity;
         if (caped) {
             requested = limited(capeVelocity, cap);
             if (!wasCaped) {

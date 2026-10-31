@@ -133,6 +133,13 @@ class TipFlight {
     void step(bool grappling, Vec3 anchor, float dt) {
         const float d = std::isfinite(dt) ? std::clamp(dt, 0.f, .1f) : 0.f;
         if (grappling && fine(anchor)) {
+            // 0.0.74 test 10 DD QUICK GRAPPLE: a midair redirect by the same hand moves the anchor at once -
+            // the tip flies out anew to the new spot (no jump of the drawn tip).
+            if ((phase_ == out || phase_ == on) && fine(anchor_) && length(anchor - anchor_) > rehookJump) {
+                f_ = 0;
+                phase_ = out;
+                ++rehooks_;
+            }
             anchor_ = anchor;
             if (phase_ == seatedOn || phase_ == reel)
                 phase_ = out;
@@ -161,13 +168,15 @@ class TipFlight {
     bool apart() const { return phase_ != seatedOn && f_ > seatedBelow && fine(anchor_); }
     uint64_t snaps() const { return snaps_; }
     uint64_t reels() const { return reels_; }
+    uint64_t rehooks() const { return rehooks_; }
     void reset() { *this = TipFlight{}; }
+    static constexpr float rehookJump = 1.f; // metres the anchor moves in one step: a new line
 
   private:
     Phase phase_ = seatedOn;
     float f_{};
     Vec3 anchor_{};
-    uint64_t snaps_{}, reels_{};
+    uint64_t snaps_{}, reels_{}, rehooks_{};
 };
 
 // Where the flying tip is drawn: its seam end (back) and its point (front), the rope from the baton's seam to

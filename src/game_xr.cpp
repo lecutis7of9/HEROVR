@@ -115,6 +115,7 @@
 #include "spidy/eye_swap.hpp"
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/grapple074.hpp"      // 0.0.74 test 10 SURE GRAPPLE / GRAPPLE YANK
+#include "spidy/dd_grapple074.hpp"   // 0.0.74 test 10 DD QUICK GRAPPLE
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
 #include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
 #include "spidy/native_address_finder.hpp"
@@ -942,6 +943,8 @@ std::atomic<bool> flyAutoLevelNow{true};
 std::atomic<uint32_t> vanNoFlipsNow{0};
 // 0.0.74 test 10 CAR COLLISION (car_collision074.hpp; live.txt car_collision): 0 ON (the default), 1 OFF.
 std::atomic<uint32_t> carCollisionNow{0};
+// 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp; live.txt dd_quick_grapple): 0 ON (the default), 1 OFF.
+std::atomic<uint32_t> ddQuickGrappleNow{0};
 // 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; live.txt fly_hold, fly_steer, fly_flips, fly_look_up: 0 ON (the
 // default), 1 OFF; fly_look_up enables LOOK UP, which a tap of Y while flying toggles, off each session).
 std::atomic<uint32_t> flyHoldNow{0}, flySteerNow{0}, flyFlipsNow{0}, flyLookUpNow{0};
@@ -5811,6 +5814,9 @@ DWORD WINAPI run(void*) {
                             input.asks |= cape_glide::pack(capeLive, batmanGrapple[0], batmanGrapple[1]);
                             // 0.0.74 test 10 GLIDE TILT: the glide's pitch from the controllers' tilt (the bridge reads it).
                             input.reserved7[0] = cape_glide::glideWord(combat38::glideTiltOn(c38(combat38::glideTilt)));
+                            // 0.0.74 test 10 DD QUICK GRAPPLE: DAREDEVIL's faster pull and midair redirect (bits 1-2).
+                            input.reserved7[0] |= dd_grapple074::word(heroNow() == hero_modes::daredevil,
+                                                                      dd_grapple074::onByDefault(ddQuickGrappleNow.load()));
                             batmanGrapple[0] = batmanGrapple[1] = false;
                             // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
                             // (askGrappleOnly every live frame, so the pull carries on to the point).
@@ -14625,6 +14631,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyFlips(void* v) {
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyLookUp(void* v) {
     return setLive(v, 0, 1, 5551, flyLookUpNow, asU32);
+}
+// 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp), live: 0 ON (the default), 1 OFF.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdQuickGrapple(void* v) {
+    return setLive(v, 0, 1, 5552, ddQuickGrappleNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

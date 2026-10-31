@@ -345,6 +345,10 @@ struct GrappleTune {
     float timeout = 3.0f, timeoutSpare = 1.5f, stuckGrace = .6f, stuckWindow = .5f, stuckMetres = .45f;
     float vaultUp = 7.5f, vaultOver = 4.f, vaultSeconds = .32f;
     float roofStand = 1.1f, ledgeAbove = 1.6f, ledgeOut = .6f;
+    // 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp): rampSeconds eases the pull's acceleration in from 0
+    // (a smoothstep, no jerk) and blendSeconds eases a redirected pull's velocity from the carried one (carry())
+    // onto the new line. Both 0 (every other hero): the pull exactly as before.
+    float rampSeconds = 0, blendSeconds = 0;
 };
 struct GrappleOut {
     bool drive{};
@@ -379,6 +383,9 @@ class Grapple {
         phase_ = pull;
         t_ = 0;
         speed_ = 0;
+        carryT_ = 0;
+        carry_ = {};
+        carrying_ = false;
         progressAt_ = body;
         progressT_ = 0;
         first_ = normalized(target_ - body);
@@ -431,10 +438,18 @@ class Grapple {
                 return o;
             } else {
                 const float now = finite(velocity) ? std::max(0.f, dot(velocity, to / d)) : 0.f;
-                speed_ = std::min(tune.speed, std::max(speed_, now) + tune.accel * dt);
+                speed_ = std::min(tune.speed, std::max(speed_, now) + tune.accel * rampShare(t_, tune.rampSeconds) * dt);
                 const float s = std::min(speed_, tune.slowFrom + d * 5.f);
                 o.drive = true;
                 o.velocity = to / d * s;
+                if (carrying_) { // 0.0.74 test 10 DD QUICK GRAPPLE: a redirect eases from the carried velocity
+                    carryT_ += dt;
+                    const float k = rampShare(carryT_, tune.blendSeconds);
+                    o.velocity = carry_ * (1.f - k) + o.velocity * k;
+                    carrying_ = k < 1.f && finite(o.velocity);
+                    if (!finite(o.velocity))
+                        o.velocity = to / d * s;
+                }
                 o.phase = pull;
                 return o;
             }
@@ -469,6 +484,24 @@ class Grapple {
         }
         return true;
     }
+    // 0.0.74 test 10 DD QUICK GRAPPLE: a redirect - the pull just started eases over blendSeconds from velocity
+    // (the cancelled pull's, kept: no stop) onto its own line. Ignored with blendSeconds 0 or a bad velocity.
+    void carry(Vec3 velocity) {
+        if (phase_ != pull || !(tune.blendSeconds > 0) || !finite(velocity))
+            return;
+        carry_ = velocity;
+        carryT_ = 0;
+        carrying_ = true;
+        speed_ = std::max(0.f, dot(velocity, first_)); // the speed already along the new line is kept
+    }
+    bool carrying() const { return carrying_; }
+    // The share of the full acceleration (or of the blend) at t of `over` seconds: a smoothstep; over 0: 1.
+    static float rampShare(float t, float over) {
+        if (!(over > 0) || !std::isfinite(t))
+            return 1.f;
+        const float k = std::clamp(t / over, 0.f, 1.f);
+        return k * k * (3.f - 2.f * k);
+    }
     // The enemy moved: the line follows him (a reel only).
     void retarget(Vec3 stop, Vec3 enemyChest) {
         if (!reel_ || phase_ != pull || !finite(stop) || !finite(enemyChest))
@@ -487,8 +520,9 @@ class Grapple {
   private:
     uint32_t phase_{}, hand_{};
     Vec3 anchor_{}, target_{}, over_{}, first_{}, progressAt_{};
-    bool roof_{}, reel_{};
-    float t_{}, speed_{}, progressT_{}, progressD_{}, allowed_{3.f};
+    bool roof_{}, reel_{}, carrying_{};
+    Vec3 carry_{};
+    float t_{}, speed_{}, progressT_{}, progressD_{}, allowed_{3.f}, carryT_{};
 };
 
 // Version 0.0.72: a pull from the ground takes off by the game's jump first (game_swing's takeoff, as

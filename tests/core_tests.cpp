@@ -170,6 +170,7 @@
 #include "spidy/cape_glide.hpp"
 #include "spidy/grapple073.hpp"
 #include "spidy/grapple074.hpp" // 0.0.74 test 10 SURE GRAPPLE / GRAPPLE YANK
+#include "spidy/dd_grapple074.hpp" // 0.0.74 test 10 DD QUICK GRAPPLE
 #include "spidy/van072.hpp"
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
@@ -25140,6 +25141,122 @@ int main() {
             on = h.ask(0, true, 40 + f / 90.0, true) && on;
         check(on && h.armed == 1, "BATMAN's held trigger: one press, asked all the while");
         check(spidy::combat38::sureGrappleOn(0) && !spidy::combat38::sureGrappleOn(1), "SURE GRAPPLE on by default");
+    });
+    test("0.0.74 test 10 DD QUICK GRAPPLE: a faster eased pull, the midair redirect keeps the speed, the cancel coasts", [] {
+        using namespace spidy::dd_grapple074;
+        namespace cg = spidy::cape_glide;
+        // The switch and the word: ON by default, DAREDEVIL only, never GLIDE TILT's bit.
+        check(onByDefault(0) && !onByDefault(1) && onByDefault(7), "0 ON (the default), 1 OFF, unread: ON");
+        check(word(true, true) == (quickBit | redirectBit) && word(false, true) == 0 && word(true, false) == 0,
+              "the word: DAREDEVIL with it on only");
+        check(((quickBit | redirectBit) & cg::glideTiltBit) == 0 && !cg::glideTilt(word(true, true)) &&
+                  quick(cg::glideWord(true) | word(true, true)) && redirect(cg::glideWord(true) | word(true, true)) &&
+                  cg::glideTilt(cg::glideWord(true) | word(true, true)) && !quick(cg::glideWord(true)),
+              "the bits never clash with GLIDE TILT");
+        check(std::string(help).find("restart") != std::string::npos &&
+                  std::count(help, help + std::string(help).size(), '.') == 1,
+              "the subtext: one sentence with the restart note");
+        // Every other hero (and OFF): the default tune, the pull exactly as before.
+        const cg::GrappleTune d{};
+        check(d.speed == 24 && d.accel == 55 && d.rampSeconds == 0 && d.blendSeconds == 0 && tuneFor(false).speed == 24 &&
+                  tuneFor(false).rampSeconds == 0,
+              "the default tune unchanged");
+        check(cg::Grapple::rampShare(0, 0) == 1 && cg::Grapple::rampShare(NAN, .1f) == 1 &&
+                  cg::Grapple::rampShare(0, .1f) == 0 && cg::Grapple::rampShare(.2f, .1f) == 1 &&
+                  std::abs(cg::Grapple::rampShare(.05f, .1f) - .5f) < 1e-5f,
+              "the ramp: a smoothstep, 1 with none");
+        const float dt = 1 / 40.f; // the bridge's tick
+        // Pull 40 m straight out from rest: the time to each speed, and the largest step in the velocity.
+        const auto pull = [&](cg::GrappleTune tune, float& t24, float& top, float& jerk) {
+            cg::Grapple g;
+            g.tune = tune;
+            Vec3 body{0, 0, 0}, v{};
+            check(g.start(body, {0, 0, -40}, {0, 0, 1}, 0), "a pull started");
+            t24 = 99, top = 0, jerk = 0;
+            float t = 0, accelWas = 0;
+            for (int f = 0; f < 200 && g.phase() == cg::pull; ++f) {
+                const auto o = g.update(dt, body, v, true);
+                if (!o.drive)
+                    break;
+                const float accel = (length(o.velocity) - length(v)) / dt;
+                jerk = std::max(jerk, std::abs(accel - accelWas) / dt);
+                accelWas = accel;
+                v = o.velocity;
+                body = body + v * dt;
+                t += dt;
+                top = std::max(top, length(v));
+                if (length(v) >= 23.9f && t24 > 90)
+                    t24 = t;
+            }
+        };
+        float t24o, topo, jerko, t24q, topq, jerkq;
+        pull(tuneFor(false), t24o, topo, jerko);
+        pull(quickTune(), t24q, topq, jerkq);
+        check(topo <= 24.01f && topq > 29 && topq <= 30.01f && topq < 32, "QUICK: 30 m/s (was 24), under the bridge's 32");
+        check(t24q < t24o - .05f, "QUICK: reaches test 9's top speed sooner");
+        check(jerkq < jerko, "QUICK: the start eased in (smaller jumps in the acceleration than test 9's step)");
+        // REDIRECT: a pull going one way, a new line at right angles - its first velocity is the old one.
+        cg::Grapple g;
+        g.tune = quickTune();
+        Vec3 body{0, 0, 0};
+        const Vec3 carried{0, 0, -28};
+        check(mayRedirect(true, cg::pull) && mayRedirect(true, cg::vault) && !mayRedirect(true, cg::idle) &&
+                  !mayRedirect(false, cg::pull),
+              "a press over a going pull (or vault) only, with the switch on");
+        check(g.start(body, {40, 0, 0}, {-1, 0, 0}, 1), "the redirect's new line");
+        g.carry(carried);
+        check(g.carrying(), "the old velocity carried");
+        auto o = g.update(dt, body, carried, true);
+        check(o.drive && length(o.velocity) > 20.f && o.velocity.z < -15.f, "the first redirected step keeps the old speed (no stop)");
+        float stepMost = 0;
+        Vec3 v = o.velocity;
+        for (int f = 0; f < 20 && g.phase() == cg::pull; ++f) {
+            o = g.update(dt, body, v, true);
+            stepMost = std::max(stepMost, length(o.velocity - v));
+            v = o.velocity;
+            body = body + v * dt;
+        }
+        check(!g.carrying() && v.x > 25.f && std::abs(v.z) < 1.f, "eased onto the new line");
+        check(stepMost < 12.f, "no snap: the turn spread over the blend");
+        cg::Grapple n; // carry ignored with no blend (every other hero) or a bad velocity
+        check(n.start(body, {40, 0, 0}, {-1, 0, 0}, 0), "a default pull");
+        n.carry(carried);
+        g.carry({NAN, 0, 0});
+        check(!n.carrying(), "no blend: nothing carried");
+        // CANCEL: the coast keeps the velocity, gravity on it, then lets go.
+        Coast c;
+        check(!c.start({0, 0, .2f}) && !c.on() && !c.start({NAN, 0, 0}), "too slow or NaN: no coast");
+        check(c.start(carried) && c.on() && c.starts() == 1, "the coast started");
+        auto co = c.update(dt, false, carried, true);
+        check(co.drive && std::abs(co.velocity.z - carried.z) < 1e-4f && co.velocity.y < 0, "the speed kept, gravity on");
+        int frames = 1;
+        while (c.update(dt, false, co.velocity, true).drive)
+            ++frames;
+        check(!c.on() && frames >= 15 && frames <= 19, "the game's fall takes over after about 0.45 s");
+        c.start(carried);
+        check(c.update(dt, true, carried, true).ended && !c.on(), "landed: ends");
+        c.start(carried);
+        check(c.update(dt, false, carried, false).ended, "not allowed (a hit, a grab): ends");
+        c.start(carried);
+        c.update(dt, false, carried, true);
+        c.update(dt, false, carried, true);
+        c.update(dt, false, carried, true);
+        c.update(dt, false, carried, true);
+        check(c.update(dt, false, {0, 0, -1}, true).ended, "blocked by a wall: ends");
+        c.start(carried);
+        check(c.update(NAN, false, {NAN, 0, 0}, true).drive || !c.on(), "NaN safe");
+        c.stop();
+        check(!c.on() && !c.update(dt, false, carried, true).drive, "stopped: nothing");
+        // The baton tip flies out anew when the same hand's line jumps to a new anchor.
+        spidy::dd_baton073::TipFlight tip;
+        for (int f = 0; f < 20; ++f)
+            tip.step(true, {0, 0, -10}, 1 / 90.f);
+        check(tip.phase() == spidy::dd_baton073::TipFlight::on, "the tip on the first anchor");
+        tip.step(true, {0, 0, -10.3f}, 1 / 90.f);
+        check(tip.phase() == spidy::dd_baton073::TipFlight::on && tip.rehooks() == 0, "a moving enemy: no re-fly");
+        tip.step(true, {10, 0, 0}, 1 / 90.f);
+        check(tip.phase() == spidy::dd_baton073::TipFlight::out && tip.fraction() < .2f && tip.rehooks() == 1,
+              "redirected: the tip flies out to the new anchor");
     });
     test("0.0.74 test 10 GRAPPLE YANK (CANDIDATE): the knockback pulls toward the hero, the move judged", [] {
         namespace g = spidy::grapple074;

@@ -414,6 +414,7 @@ SETTINGS = {
     'punisher_quick_hook': ((0, 1), 'SpidyPunisherQuickHook', "QUICK HOOK {} (0 on: fires the Punisher's hook the instant you pull the trigger and never misses a press; 1 off: the old 0.25 s windup; takes effect immediately, no restart)"),  # 0.0.74 test 10
     'grapple_yank': ((0, 1), 'SpidyGrappleYank', "GRAPPLE YANK {} (0 on, CANDIDATE: a grapple line on an enemy also asks the game to knock him toward you, 1 HP; you still reel to him if he stays; 1 off: test 9's reel only; live)"),  # 0.0.74 test 10
     'sure_grapple': ((0, 1), 'SpidySureGrapple', "SURE GRAPPLE {} (0 on: every hero's grapple press is held until the game takes it, at most 150 ms, so no press is lost; 1 off: test 9's one-frame ask; live)"),  # 0.0.74 test 10
+    'dd_quick_grapple': ((0, 1), 'SpidyDdQuickGrapple', "DD QUICK GRAPPLE {} (0 on: Daredevil's grapple pulls faster with a smooth start, and pressing grapple again with either baton while pulled cancels the line, keeps your speed and fires along the new aim; 1 off: test 9's grapple; live, no restart)"),  # 0.0.74 test 10 DD QUICK GRAPPLE
     'belt_zones': ((0, 1), 'SpidyBeltZones', "BELT ZONES {} (0 on: BATMAN draws the grapple gun only at the left hip, a batarang only at the belt's front centre, a smoke pellet only by grabbing the other forearm, the nearest zone by a margin; 1 off: test 9's buckle smoke, side pouches and any-grip gun; live)"),  # 0.0.74 test 10
     'coming_soon': ((0, 1), 'SpidyComingSoon', "COMING SOON {} (0 on: the hologram's hero tiles show a SOON tab with the heroes coming in 0.0.74, not playable; 1 off: no SOON tab; live)"),  # 0.0.73 COMING SOON
     'light_checks': ((0, 1), 'SpidyLightChecks', "LIGHT CHECKS {} (0 on: each eye's street-light glow checks get the game view's query room, at least 1024; 1 off: the game's 256; next VR start)"),  # 0.0.73 LIGHT CHECKS
@@ -550,6 +551,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'walk_legs': ('on', 'off'),  # Version 0.0.74 test 11
                 'van_no_flips': ('on', 'off'),  # 0.0.74 test 10 VAN NO FLIPS
                 'car_collision': ('on', 'off'),  # 0.0.74 test 10 CAR COLLISION
+                'dd_quick_grapple': ('on', 'off'),  # 0.0.74 test 10 DD QUICK GRAPPLE
                 'fly_hold': ('on', 'off'),  # 0.0.74 test 10 FLY HOLD
                 'fly_steer': ('on', 'off'),  # 0.0.74 test 10 FLY STEER
                 'fly_flips': ('on', 'off'),  # 0.0.74 test 10 FLY FLIPS
@@ -773,6 +775,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'walk_legs': {'on': 0, 'off': 1, '0': 0, '1': 1},  # Version 0.0.74 test 11
            'van_no_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 VAN NO FLIPS
            'car_collision': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 CAR COLLISION
+           'dd_quick_grapple': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 DD QUICK GRAPPLE
            'fly_hold': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY HOLD
            'fly_steer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY STEER
            'fly_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY FLIPS
@@ -1098,6 +1101,7 @@ START_ONLY = START_ONLY + UPDATE38_KEYS
 # 0.0.74 test 10 VAN NO FLIPS: an OFF in live.txt is kept from session to session (ON is the DLL's own default).
 START_ONLY = START_ONLY + ('van_no_flips',)
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
+START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.

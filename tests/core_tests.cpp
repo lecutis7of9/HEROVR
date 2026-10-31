@@ -34661,14 +34661,12 @@ int main() {
         for (auto [c, want] : buttons) {
             Spot at;
             {
-                // The shorter area scrolls further: the transport is reached by scrolling, as on any long page.
+                // The shorter area scrolls further, but the transport row is first: seen with no scrolling.
                 const HostedArea area(musicPage, hr::musicTop);
                 check(maxScroll(musicPage, 1) > musicRoom, "the hosted MUSIC page does not scroll further");
-                at = controlSpot(musicPage, c, 0);
-                if (!at.visible) {
-                    m.setScroll(musicPage, std::min(maxScroll(musicPage, 1), viewBottom + .03f - at.v));
-                    at = controlSpot(musicPage, c, m.scroll());
-                }
+                m.setScroll(musicPage, 0);
+                at = controlSpot(musicPage, c, m.scroll());
+                check(at.visible, "a player button needs scrolling on the MUSIC tab");
             }
             check(at.visible && at.v < hr::musicTop, "a player button not under the sub-tabs");
             check(pressAt(at.u, at.v).music == want, "a player button on the MUSIC tab does the wrong thing");

@@ -1382,6 +1382,21 @@ Layout build(int page, float k, int open) {
     default: { // musicPage
         // Update 19, from the top as in the concept: the song list, the
         // visualizer, the progress, the buttons, the volume.
+        // 0.0.74 test 10: the buttons (PREV .. NEXT) first, so the roster's MUSIC tab shows them without scrolling.
+        {
+            const Control row[6] = {Control::musicPrevious, Control::musicRewind, Control::musicPlay,
+                                    Control::musicStop,     Control::musicForward, Control::musicNext};
+            const float space = .003f, w = (trackRight - trackLeft - 5 * space) / 6;
+            const float th = std::max(.018f * k, .016f), top = c - gapV;
+            for (int i = 0; i < 6; ++i) {
+                Item b = itemOf(Kind::transport, row[i]);
+                const float u0 = trackLeft + static_cast<float>(i) * (w + space);
+                b.box = {row[i], u0, top - th, u0 + w, top};
+                l.items.push_back(std::move(b));
+            }
+            c = top - th;
+            helpUnder(helpText(Control::musicPlay), l.items.back().help); // one line for the row
+        }
         Item d = itemOf(Kind::dropdown, Control::musicTrack);
         const float dh = std::max(.020f * k, .016f);
         d.box = {Control::musicTrack, trackLeft, c - gapV - dh, trackRight, c - gapV};
@@ -1400,20 +1415,6 @@ Layout build(int page, float k, int open) {
         c = g.box.v0;
         helpUnder(helpText(Control::musicSeek), g.help);
         l.items.push_back(std::move(g));
-        {
-            const Control row[6] = {Control::musicPrevious, Control::musicRewind, Control::musicPlay,
-                                    Control::musicStop,     Control::musicForward, Control::musicNext};
-            const float space = .003f, w = (trackRight - trackLeft - 5 * space) / 6;
-            const float th = std::max(.018f * k, .016f), top = c - gapV;
-            for (int i = 0; i < 6; ++i) {
-                Item b = itemOf(Kind::transport, row[i]);
-                const float u0 = trackLeft + static_cast<float>(i) * (w + space);
-                b.box = {row[i], u0, top - th, u0 + w, top};
-                l.items.push_back(std::move(b));
-            }
-            c = top - th;
-            helpUnder(helpText(Control::musicPlay), l.items.back().help); // one line for the row
-        }
         sliderItem(Control::musicVolume);
         cycleItem(Control::musicVisualizer);
         Item m = itemOf(Kind::mirror); // SM2TODO: greyed until the game's music can be muted live

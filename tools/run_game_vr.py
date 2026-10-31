@@ -2281,10 +2281,6 @@ def main():
                         'headset the blur is not where you look)')
     p.add_argument('--game-sharpening', action='store_true',
                    help="Keep the game's own Sharpness setting; without it a session sets it to its lowest")
-    p.add_argument('--keep-game-aa', action='store_true',
-                   help="0.0.73 AA: keep the game's own Anti-Aliasing and upscaler (DLAA, DLSS) in VR; without it "
-                        "a session with --engine-taa and GAME TAA SPIDYVR sets TAA with no upscaler, put back "
-                        'after. Read when the game starts')
     p.add_argument('--keep-game-settings', action='store_true',
                    help="Keep the game's own picture settings (depth of field, sharpness): the session then "
                         'changes only what VR needs (frame generation, vertical sync, ray tracing, Reflex, '
@@ -2393,7 +2389,7 @@ def main():
     if migrated_073t5:
         print(migrated_073t5, flush=True)
     # 0.0.74 test 10: the 0.0.74 tests' picture settings out of live.txt once; the 0.0.73 picture again (before
-    # lens_flares and image_style are read below).
+    # lens_flares is read below).
     migrated_074t10 = live_settings.migrate_074t10(ROOT/'live.txt')
     if migrated_074t10:
         print(migrated_074t10, flush=True)
@@ -2401,6 +2397,10 @@ def main():
     migrated_074t10_seat = live_settings.migrate_074t10_seat(ROOT/'live.txt')
     if migrated_074t10_seat:
         print(migrated_074t10_seat, flush=True)
+    # 0.0.74 test 10 PICTURE 72: the 0.0.73 picture switches out of live.txt once, aa / sharpen back to 0.0.72's.
+    migrated_074t10_72 = live_settings.migrate_074t10_72(ROOT/'live.txt')
+    if migrated_074t10_72:
+        print(migrated_074t10_72, flush=True)
     try:
         live_text = (ROOT/'live.txt').read_text(encoding='utf-8-sig', errors='replace')
     except OSError:
@@ -2413,27 +2413,6 @@ def main():
     else:
         print('LENS FLARES: GAME this session (the game\'s own lens flares; LENS FLARES OFF IN VR + restart VR '
               'if they strobe).', flush=True)
-    # 0.0.73 AA GAME AA TAA (vr_display.SESSION_OFF['game_aa']): with -EngineTaa and GAME TAA SPIDYVR (the
-    # defaults) the game's Anti-Aliasing is TAA with no upscaler while VR runs, as SpidyVR's per-eye TAA has it;
-    # the player's own (DLAA, DLSS) comes back when the game closes. --keep-game-aa keeps it during VR too.
-    # 0.0.73 release: GAME TAA starts OFF; a live.txt at the test builds' SPIDYVR moves once (migrate_0073, run
-    # here before image_style is read for GAME AA TAA and the mip bias). GAME AA TAA follows GAME TAA: OFF leaves
-    # the game's own Anti-Aliasing alone.
-    migrated_0073 = live_settings.migrate_0073(ROOT/'live.txt')
-    if migrated_0073:
-        print(migrated_0073, flush=True)
-    game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
-    if live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False)):
-        session_off = tuple(session_off) + ('game_aa',)
-        print("GAME AA: TAA, no upscaler, this session (0.0.73 AA: the path SpidyVR's per-eye TAA uses; DLAA/DLSS "
-              "biased the textures the eyes share and ran for the monitor alone); your own is put back when the "
-              'game closes (-KeepGameAa keeps it; restart).', flush=True)
-    elif getattr(a, 'engine_taa', False) and game_taa_look == 'spidyvr':
-        print("GAME AA: your own this session (-KeepGameAa); GAME TAA works best with the game's Anti-Aliasing "
-              'at TAA and Upscale Method None.', flush=True)
-    elif getattr(a, 'engine_taa', False):
-        print("GAME AA: your own this session (GAME TAA OFF, the 0.0.73 default: GAME AA TAA only runs with GAME TAA "
-              'SPIDYVR; turn it on in GRAPHICS > QUALITY and restart VR to use it).', flush=True)
     a.session_off = session_off   # session() reads it: it is not a local there (0.0.62 NameError at 'starting the game')
     # SM2 VR (from SM2VR 0.0.27): a Spider-Man 2 that renders no view of its own writes a swapchain back
     # buffer that is not the current one, and the graphics device is lost (DXGI_ERROR_ACCESS_DENIED). The
@@ -2664,25 +2643,7 @@ def session(a, startup, session_off=()):
         print('You may also set these yourself in Settings > Graphics (the launcher leaves them as you set them): ' + ', '.join(UNCONFIRMED_COMFORT) + '.', flush=True)
 
     render_module = {}
-    # 0.0.73 IMAGE: SPIDYVR (live.txt image, the default) starts the textures at mip bias 0 when the launcher
-    # passes the old default 0.5; CLASSIC keeps 0.5; any other -MipBias is the player's and is kept.
-    # 0.0.73 AA: GAME TAA SPIDYVR (live.txt image_style, the default) with -EngineTaa starts at 0 for either
-    # look (no +0.5 blur under a TAA); image_style = off gives IMAGE's choice back.
-    image_look = live_settings.image_in_file(ROOT/'live.txt')
-    game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
-    mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))
-    if mip_bias_asked != a.mip_bias:
-        if game_taa_look == 'spidyvr' and getattr(a, 'engine_taa', False) and image_look != 'spidyvr':
-            print(f'0.0.73 GAME TAA SPIDYVR: texture mip bias {mip_bias_asked} under the game\'s TAA (the '
-                  f'launcher passed {a.mip_bias}; live.txt image_style = off gives IMAGE CLASSIC\'s back; restart).',
-                  flush=True)
-        else:
-            print(f'0.0.73 IMAGE {image_look.upper()}: texture mip bias {mip_bias_asked} (the launcher passed '
-                  f'{a.mip_bias}; image = classic keeps it).', flush=True)
-    try:
-        mip_bias = encode_mip_bias(mip_bias_asked, a.anisotropy)
-    except (ValueError, TypeError):
-        mip_bias = encode_mip_bias(a.mip_bias, a.anisotropy)
+    mip_bias = encode_mip_bias(a.mip_bias, a.anisotropy)
 
     def render_memory_module(pid):
         # In time only in a game that has just started: it creates its render memory once. That is the graphics
@@ -2995,10 +2956,6 @@ def session(a, startup, session_off=()):
         migrated_073t3 = live_settings.migrate_073t3(ROOT/'live.txt')
         if migrated_073t3:
             print(migrated_073t3, flush=True)
-        # 0.0.73 IMAGE: the test 2/3 AA values the build wrote (aa 1, sharpen 140) move to SPIDYVR's once.
-        migrated_073t4 = live_settings.migrate_073t4(ROOT/'live.txt')
-        if migrated_073t4:
-            print(migrated_073t4, flush=True)
         # Update 15: the settings the wrist hologram (or live.txt) kept last time, applied now.
         kept, _ = live_settings.persisted(ROOT/'live.txt')
         for name, value in kept.items():
@@ -3014,10 +2971,7 @@ def session(a, startup, session_off=()):
                 live_file.applied(name, value)
                 print(f'live.txt (kept): {text.format(value)}', flush=True)
         # Update 37: the run36 closing settings are the new defaults, for whatever live.txt does not keep.
-        # 0.0.73 IMAGE: aa and sharpen follow the look (SPIDYVR 0 and 0, CLASSIC 1 and 140).
-        image_now = live_settings.image_of(kept)
-        update37_defaults = live_settings.image_defaults(live_settings.UPDATE37_DEFAULTS, image_now)
-        for name, value in update37_defaults.items():
+        for name, value in live_settings.UPDATE37_DEFAULTS.items():
             if name in kept:
                 continue
             _, export, text = live_settings.SETTINGS[name]
@@ -3026,7 +2980,7 @@ def session(a, startup, session_off=()):
             else:
                 live_file.applied(name, value)
         print('Update 37 defaults (unless live.txt keeps others): ' + ', '.join(
-            f'{k} = {v}' for k, v in update37_defaults.items()), flush=True)
+            f'{k} = {v}' for k, v in live_settings.UPDATE37_DEFAULTS.items()), flush=True)
         # Update 38: the COMBAT defaults (the recommended fixes), for whatever live.txt does not keep.
         for name, value in live_settings.UPDATE38_DEFAULTS.items():
             if name in kept:
@@ -3044,7 +2998,6 @@ def session(a, startup, session_off=()):
             f'{k} = {v}' for k, v in live_settings.UPDATE38_DEFAULTS.items()), flush=True)
         # Update 37.2: the settings that must start on, as the session now runs them.
         print(live_settings.startup_line(live_file.current), flush=True)
-        print(live_settings.image_line(image_now, live_file.current), flush=True)
         # Update 24: what makes far detail shimmer that the player set (strong sharpening), and a flicker
         # test (eye_debug) still in live.txt.
         for line in live_settings.start_notes(ROOT/'live.txt'):

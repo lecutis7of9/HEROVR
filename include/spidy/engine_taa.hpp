@@ -92,8 +92,7 @@ inline constexpr const char* widestValue() { return "OFF (RESTART)"; }
 // - pixels: the Halton step itself, -0.5..0.5 (the stock jitter in render pixels);
 // - none:   no jitter - and 0.0.73 test 4: the game's TemporalAa does not run at all then
 //           (exe-confirmed: handler 0x2c2dc60 returns when the job's jitter is zero), so NONE
-//           is "ENGINE TAA's targets, no TAA"; IMAGE STYLE SPIDYVR uses OURS in its place
-//           (image_style::jitterMode).
+//           is "ENGINE TAA's targets, no TAA".
 // scalePercent (live.txt taa_jitter_scale, 0-200, default 100) multiplies ours / pixels / game.
 enum JitterMode : uint32_t { ours = 0, game = 1, pixels = 2, noJitter = 3, jitterModes = 4 };
 inline const char* jitterName(uint32_t m) {

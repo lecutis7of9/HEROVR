@@ -89,25 +89,6 @@ class Record(unittest.TestCase):
         odd = raw[:-8] + struct.pack('<Q', 3)
         self.assertIsNone(R.parse_eye_bloom(odd))
 
-    def test_sl_watch_record(self):
-        self.assertEqual(R.RECORDS['sl_watch'], ('SpidySlWatchData', 0x54574c53, 1, 1232))
-        self.assertIn('static_assert(sizeof(Data) == 1232);', src('include/spidy/sl_watch.hpp'))
-        none = 0xffffffff
-        views = struct.pack('<8I', 0, 300, 300, 0b111, 300, 600, 2, 0) + struct.pack('<8I', none, 0, 0, 0, 0, none, 0, 0) * 3
-        sample = (struct.pack('<4I', 600, 600, 601, 0) + struct.pack('<9f', .25, -.5, 1 / 2048, 1 / 1024, .1, 0, 1.2, 1.0, 0)
-                  + bytes([1, 1, 0, 0, 0, 0, 2, 2]) + struct.pack('<I', 0x123456))
-        raw = (struct.pack('<3I', 0x54574c53, 1, 1232) + struct.pack('<5I', 1, 15, 60, 1, 1) + struct.pack('<4Q', 300, 300, 300, 0)
-               + views + struct.pack('<2I', 0, 299) + sample + bytes(64 * 15) + struct.pack('<Q', 4))
-        self.assertEqual(len(raw), 1232)
-        d = R.parse_sl_watch(raw)
-        self.assertEqual(len(d['viewports']), 1)
-        self.assertEqual(d['viewports'][0]['tagged'], ['depth', 'motion_vectors', 'hudless_color'])
-        n = d['newest'][0]
-        self.assertEqual((n['frame'], n['viewport'], n['jitter'], n['depth_inverted'], n['motion_vectors_jittered'],
-                          n['struct_version'], n['caller']), (600, 0, [.25, -.5], True, 'invalid', 2, '0x123456'))
-        self.assertTrue(any(l.startswith('0.0.73 SL WATCH: 300 slSetConstants') for l in R.console_lines({'sl_watch': d})))
-        self.assertIsNone(R.parse_sl_watch(raw[:-8] + struct.pack('<Q', 5)))
-
 
 if __name__ == '__main__':
     unittest.main()

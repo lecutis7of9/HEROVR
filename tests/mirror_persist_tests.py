@@ -176,14 +176,14 @@ class MirrorPersist(unittest.TestCase):
         self.assertEqual(L.parse(text)[0]['mirror_view'], 'test')
 
     def test_decode_is_compatible(self):
-        self.assertEqual(L.decode_hud_settings(10, MARKER | 2), {'lens_flares': 'game', 'mirror_view': 'test', 'image': 'spidyvr'})  # 0.0.73 IMAGE: bit 2
+        self.assertEqual(L.decode_hud_settings(10, MARKER | 2), {'lens_flares': 'game', 'mirror_view': 'test'})
         self.assertEqual(L.decode_hud_settings(3, MARKER | 1 << 21), {'mirror_view': True})
         self.assertEqual(L.SELECTOR['mirror_view'], 10)
         self.assertIn('mirror_view', L.PERSISTED)
 
     def test_game_xr_matches_the_simulation(self):
         self.assertRegex(GAME, r'if \(o == combat38::mirrorView\)\s*wristChanged \|= 1u << 21;')
-        self.assertIn('1u << 20 | 1u << 21 | 1u << 22 | 1u << 27 | 1u << 28 | 1u << 29', GAME)  # 0.0.73: + IMAGE (22)
+        self.assertIn('1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29', GAME)  # 0.0.74 test 10 PICTURE 72: IMAGE (22) gone
         self.assertIn('std::min<DWORD>(c38(combat38::mirrorView), 1) << 1', GAME)
         body = GAME[GAME.index('WINAPI SpidyMirrorView(void* v)'):][:900]
         self.assertIn('SpidyMirrorViewWant(c38(combat38::mirrorView));', body)

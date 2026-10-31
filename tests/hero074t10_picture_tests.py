@@ -1,9 +1,13 @@
 # SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-"""0.0.74 test 10: the picture is version 0.0.73's again; the 0.0.74 vehicle work stays.
+"""0.0.74 test 10: the picture is version 0.0.72's again, with only 0.0.73's light-flicker fixes; the 0.0.74
+vehicle work stays.
 
-The owner: "our build looked best in the last public build so go back to that one". Every image / AA setting
-the 0.0.74 tests 2-9 added is retired: parse() skips it, the DLL has no such option or export, and
-live_settings.migrate_074t10 takes the lines (and test 2's SPIDYVR PICTURE overwrites) out of live.txt once.
+The owner: "our build looked best in the last public build so go back to that one", then "Don't you mean going to
+72 since returning it off on 73 made it work for him" and "Keep whatever fixed the flickering lights". Every
+image / AA setting the 0.0.74 tests 2-9 added is retired (migrate_074t10), and so are 0.0.73's picture switches
+0.0.72 never had (RETIRED_073, migrate_074t10_72): parse() skips them quietly, the DLL has no such option or
+export. The flicker fixes stay: EYE BLOOM OFF, LENS FLARES OFF IN VR, LIGHT HOLD, SHADOW MATCH, CULL MARGIN,
+LIGHT CHECKS.
 """
 import pathlib
 import sys
@@ -14,9 +18,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import live_settings as L  # noqa: E402
 
-# The 0.0.73 release's picture defaults (live_settings at the v0.0.73 tag).
-DEFAULTS_0073 = {'image': 'spidyvr', 'image_style': 'off', 'aa': 0, 'sharpen': 0, 'sharpen_match': 'on',
-                 'taa_jitter': 3, 'lens_flares': 'off_in_vr'}
+# The 0.0.72 release's picture defaults (live_settings at the v0.0.72 tag), with 0.0.73's light-flicker fixes.
+DEFAULTS_0072 = {'aa': 1, 'sharpen': 140, 'taa_jitter': 3, 'history': 80, 'eye_temporal': 1,
+                 # kept from 0.0.73 (the flickering lights)
+                 'lens_flares': 'off_in_vr', 'eye_bloom': 0, 'light_hold': 'on', 'shadow_match': 'on',
+                 'cull_margin': '10deg', 'light_checks': 'on'}
 TEST2_FILE = ('crawl_cap = off\n'
               'image = spidyvr\nimage_style = spidyvr\naa = 0\nsharpen = 0\nsharpen_match = off\n'
               'taa_jitter = 0\ntaa_jitter_scale = 100\nlens_flares = off_in_vr\n'
@@ -50,10 +56,16 @@ class Retired(unittest.TestCase):
         self.assertEqual(set(values) & set(L.RETIRED_074), set())
         self.assertEqual(values.get('cave_quiet'), 'off')  # the vehicle work's settings still read
 
-    def test_picture_defaults_are_0073(self):
-        for name, want in DEFAULTS_0073.items():
+    def test_picture_defaults_are_0072(self):
+        for name, want in DEFAULTS_0072.items():
             self.assertEqual(value({}, name), want, name)
-        self.assertEqual(L.image_style_of({}), 'off')
+        for name in L.RETIRED_073:
+            self.assertNotIn(name, L.SETTINGS, name)
+            self.assertNotIn(name, L.UPDATE38_DEFAULTS, name)
+            self.assertNotIn(name, L.UPDATE38_KEYS, name)
+            self.assertNotIn(f'"{name}"', src('include/spidy/combat38.hpp'), name)
+        self.assertFalse(hasattr(L, 'image_style_of'))
+        self.assertIn("p.add_argument('--mip-bias', default='0.5',", src('tools/run_game_vr.py'))  # 0.0.72's
         self.assertTrue(L.lens_flares_off(None))
         self.assertFalse(hasattr(L, 'screen_shake_off'))
 
@@ -85,7 +97,7 @@ class Migrate(unittest.TestCase):
             self.assertEqual(p.read_text(encoding='utf-8'), once, 'a second run changed live.txt')
             return shown, once
 
-    def test_a_test2_file_gets_the_0073_picture(self):
+    def test_a_test2_file_gets_the_0072_picture(self):
         shown, text = self.run_on(TEST2_FILE)
         self.assertIn('0.0.73', shown)
         self.assertIn(L.MIGRATED_074T10, text)
@@ -94,8 +106,8 @@ class Migrate(unittest.TestCase):
         self.assertEqual(warnings, [])
         for name in L.RETIRED_074 + L.RESET_074T10:
             self.assertNotIn(name, values, name)
-        for name, want in DEFAULTS_0073.items():
-            self.assertEqual(value(values, name), want, name)
+        for name in ('aa', 'sharpen', 'taa_jitter', 'lens_flares'):
+            self.assertEqual(value(values, name), DEFAULTS_0072[name], name)
         self.assertEqual(values['crawl_cap'], 'off')    # the player's other settings stay
         self.assertEqual(values['batmobile'], 'off')
         self.assertEqual(values['cave_quiet'], 'on')
@@ -131,8 +143,102 @@ class Migrate(unittest.TestCase):
         r = src('tools/run_game_vr.py')
         at = r.index("live_settings.migrate_074t10(ROOT/'live.txt')")
         self.assertLess(r.index("live_settings.migrate_073t5("), at)
-        self.assertLess(at, r.index('game_taa_look = live_settings.image_style_in_file'))
-        self.assertLess(at, r.index('lens_flares_off('))
+        at72 = r.index("live_settings.migrate_074t10_72(ROOT/'live.txt')")
+        self.assertLess(at, at72)  # the 0.0.74 test lines first, then 0.0.73's picture lines
+        self.assertLess(at72, r.index('lens_flares_off('))
+        self.assertLess(at72, r.index('for name, value in live_settings.UPDATE37_DEFAULTS.items()'))
+        self.assertNotIn('image_style_in_file', r)
+
+
+# A 0.0.73 release live.txt: IMAGE SPIDYVR's migration marker and its aa 0 / sharpen 0, GAME TAA, STREAMER MODE.
+FILE_0073 = ('crawl_cap = off\n'
+             '# Version 0.0.73 IMAGE: test 2/3 AA values moved to SPIDYVR once (migrated)\n'
+             'image = spidyvr\nimage_style = off\naa = 0\nsharpen = 0\nsharpen_match = on\nstreamer_mode = on\n'
+             'streamer_smooth = low\nstreamer_eye = left_eye\nwindow_pop = on\nsl_watch = on\nglow_check = game\n'
+             'light_hold = strong\nlight_checks = off\n')
+
+
+class Migrate72(unittest.TestCase):
+    def run_on(self, text):
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / 'live.txt'
+            p.write_text(text, encoding='utf-8')
+            shown = L.migrate_074t10_72(p)
+            once = p.read_text(encoding='utf-8')
+            again = L.migrate_074t10_72(p)
+            self.assertIsNone(again)
+            self.assertEqual(p.read_text(encoding='utf-8'), once, 'a second run changed live.txt')
+            return shown, once
+
+    def test_old_marker_is_0073s(self):
+        self.assertTrue(L.OLD_MARKER_073T4.startswith('# Version 0.0.73 IMAGE'))
+
+    def test_a_0073_file_gets_the_0072_picture_and_keeps_the_light_fixes(self):
+        shown, text = self.run_on(FILE_0073)
+        self.assertIn('0.0.72', shown)
+        self.assertIn(L.MIGRATED_074T10_72, text)
+        values, warnings = L.parse(text)
+        self.assertEqual(warnings, [])
+        for name in L.RETIRED_073:
+            self.assertNotIn(name, values, name)
+        self.assertEqual(float(values['aa']), 1)
+        self.assertEqual(float(values['sharpen']), 140)
+        self.assertEqual(values['light_hold'], 'strong')   # the player's flicker-fix choices stay
+        self.assertEqual(values['light_checks'], 'off')    # (the two-GPU pop-up's answer)
+        self.assertEqual(values['crawl_cap'], 'off')
+
+    def test_aa_and_sharpen_only_with_the_0073_marker(self):
+        shown, text = self.run_on('aa = 0\nsharpen = 0\nimage = spidyvr\n')
+        values, _ = L.parse(text)
+        self.assertEqual(float(values['aa']), 0)        # set by the player (no 0.0.73 marker): stays
+        self.assertEqual(float(values['sharpen']), 0)
+        self.assertIn('image', shown)
+        self.assertNotIn('image', values)
+
+    def test_other_values_stay(self):
+        _, text = self.run_on(FILE_0073.replace('sharpen = 0', 'sharpen = 90'))
+        values, _ = L.parse(text)
+        self.assertEqual(float(values['aa']), 1)        # 0.0.73 SPIDYVR's 0: back to 0.0.72's FXAA
+        self.assertEqual(float(values['sharpen']), 90)  # a sharpen the player chose stays
+
+    def test_a_0072_file_untouched_but_marked(self):
+        own = 'aa = 1\nsharpen = 140\nhistory = 80\n'
+        shown, text = self.run_on(own)
+        self.assertIsNone(shown)
+        self.assertTrue(text.startswith(own))
+        self.assertIn(L.MIGRATED_074T10_72, text)
+
+    def test_choice_after_the_marker_stays(self):
+        _, text = self.run_on('')
+        text += L.OLD_MARKER_073T4 + '\nsharpen = 0\n'
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d) / 'live.txt'
+            p.write_text(text, encoding='utf-8')
+            self.assertIsNone(L.migrate_074t10_72(p))
+            self.assertIn('sharpen = 0', p.read_text(encoding='utf-8'))
+
+    def test_never_raises_and_header_marked(self):
+        self.assertIsNone(L.migrate_074t10_72('/nonexistent/dir/live.txt'))
+        self.assertIn(L.MIGRATED_074T10_72, L.HEADER)
+
+    def test_parse_skips_retired_quietly(self):
+        values, warnings = L.parse(''.join(f'{n} = on\n' for n in L.RETIRED_073) + 'light_hold = on\n')
+        self.assertEqual(warnings, [])
+        self.assertEqual(set(values) & set(L.RETIRED_073), set())
+        self.assertEqual(values.get('light_hold'), 'on')
+
+
+class Monitor(unittest.TestCase):
+    """The PC window in 0.0.74 test 10 is 0.0.72's: the shown left eye (Spidy's drawings on it) is kept for the
+    window's mirror; no STREAMER MODE."""
+
+    def test_window_mirror_is_0072s(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('native_gpu::keepShownEye(targets[0].texture);', g)
+        n = src('src/native_eye_gpu.cpp')
+        self.assertIn('void keepShownEye(ID3D12Resource* left) {', n)
+        self.assertNotIn('streamerWanted', n)
+        self.assertIn("    'monitor': ((0, 240), 'SpidyMonitorRate',", src('tools/live_settings.py'))
 
 
 if __name__ == '__main__':

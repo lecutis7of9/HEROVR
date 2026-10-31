@@ -3,7 +3,6 @@
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_resolution.hpp"
 #include "spidy/engine_taa.hpp"
-#include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
@@ -22,7 +21,6 @@
 #include "spidy/shadow_camera.hpp"
 #include "spidy/shared_lod.hpp"
 #include "spidy/view_gates.hpp"
-#include "spidy/window_pop.hpp"
 #include "spidy/recording_fov.hpp"
 #include <MinHook.h>
 #include <atomic>
@@ -335,9 +333,6 @@ std::atomic<bool> engineTaaLive{};
 // Update 37: SpidyEngineTaa(3), on by itself the first time it can be (the eyes made with
 // the TAA targets, the game's AA on TAA); cleared by an off or the frame-rate guard.
 std::atomic<bool> engineTaaAuto{};
-// 0.0.73 test 4 IMAGE STYLE (image_style.hpp; SpidyImageStyle, game_xr sets it): SPIDYVR by default.
-// Under SPIDYVR the jitter is never NONE (NONE skips the game's TemporalAa: image_style::jitterMode).
-std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};
 // (SpidyEngineTaa is declared at file scope, in the extern "C" block above: Update 37.1, MSVC C2733.)
 std::atomic<uint32_t> engineTaaWhy{}, engineTaaGameAa{UINT32_MAX}, engineTaaWidened{}, engineTaaMaskSeen{};
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
@@ -477,12 +472,6 @@ bool farWindowsReady{};
 // switch between impostor and full model from one picture to the next. FAR WINDOWS keeps
 // write 1 (LOD REACH, CONFIRMED) only.
 constexpr bool farWindowsCandidateWrite = false;
-// 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): ON (the default) gives the game's widened view flat play's
-// detail distance (activeView sets gameLodFlat, viewScale writes it to the game view's +0x1b28).
-std::atomic<bool> windowPopOn{true};
-std::atomic<float> gameLodFlat{1.f}, gameLodApplied{1.f};
-std::atomic<uintptr_t> gameLodWritten{};
-std::atomic<uint64_t> windowPopWrites{};
 std::atomic<uint64_t> farWindowsCalls{}, farWindowsWrites{};
 std::atomic<float> farWindowsGame{}, farWindowsOurs{};
 // The HUD panel (native_hud.hpp): PlayerModelHudFollower's placement 73ab80,
@@ -1808,21 +1797,6 @@ void sharedLodRestore(unsigned eye) {
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidySharedLodData.restored));
     }
 }
-// 0.0.73 test 6 WINDOW POP FIX: what it wrote to `game`'s +0x1b28 (1 when nothing).
-float gameWritten(uintptr_t game) {
-    return gameLodWritten.load(std::memory_order_relaxed) == game ? gameLodApplied.load(std::memory_order_relaxed) : 1.f;
-}
-// Puts the game view's multiplier back to 1.0 (the stereo's stop), only on the view it wrote while still active.
-void windowPopRestore() {
-    const auto view = gameLodWritten.exchange(0);
-    if (view && view == pointer(base + spidy::shared_lod::activeViewRva)) {
-        const float one = 1.f;
-        uint32_t bits{};
-        std::memcpy(&bits, &one, 4);
-        writeBits(view + spidy::shared_lod::multiplierOffset, bits);
-    }
-    gameLodApplied.store(1.f);
-}
 uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     namespace sl = spidy::shared_lod;
     const auto result = originalViewScale(view, a, b, c);
@@ -1831,23 +1805,6 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     void* l = eyes[0].load(std::memory_order_relaxed);
     void* r = eyes[1].load(std::memory_order_relaxed);
     const int eye = view == l ? 0 : view == r ? 1 : -1;
-    // 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): the game's own view (the active view) gets back the stock
-    // camera's detail distance its widened lens took (+0x1b28, CONFIRMED field); 1.0 when OFF or not immersive.
-    if (eye < 0) {
-        const auto game = pointer(base + spidy::shared_lod::activeViewRva);
-        if (game && game == reinterpret_cast<uintptr_t>(view)) {
-            const float want = windowPopOn.load(std::memory_order_relaxed) ? gameLodFlat.load(std::memory_order_relaxed) : 1.f;
-            if (want != 1.f || gameLodWritten.load(std::memory_order_relaxed) == game) {
-                uint32_t bits{};
-                std::memcpy(&bits, &want, 4);
-                if (writeBits(game + spidy::shared_lod::multiplierOffset, bits)) {
-                    gameLodApplied.store(want, std::memory_order_relaxed);
-                    gameLodWritten.store(want != 1.f ? game : 0, std::memory_order_relaxed);
-                    windowPopWrites.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-        }
-    }
     const uint32_t mode = sharedLodMode.load(std::memory_order_relaxed);
     if (!mode) {
         if (eye >= 0)
@@ -1864,7 +1821,7 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
         float gs = NAN, gm = NAN;
         if (game && game != reinterpret_cast<uintptr_t>(l) && game != reinterpret_cast<uintptr_t>(r) &&
             read(game + sl::scaleOffset, &gs, 4) && read(game + sl::multiplierOffset, &gm, 4))
-            gameScale = gs * spidy::window_pop::ownMultiplier(gm, gameWritten(game)); // without WINDOW POP FIX's boost
+            gameScale = gs * gm;
         bad = !sl::sane(gameScale) || !sl::sane(eyeScale);
         halved = !bad && gameScale < .5f * eyeScale;
         multiplier = bad ? 1.f : sl::multiplier(mode, eyeScale, gameScale);
@@ -2171,7 +2128,6 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
                  (stock.values[0x40c / 4] - stock.values[0x408 / 4]);
     // What that camera shows of the HUD panel sizes the panel in VR.
     stockHalfWidth = (stock.values[0x404 / 4] - stock.values[0x400 / 4]) / 2;
-    gameLodFlat.store(1.f, std::memory_order_relaxed); // WINDOW POP FIX: none unless the head view is placed below
     if (!(config.createViews & 8) || stopRequested || GetTickCount64() >= deadline || live.load() != 2)
         return false;
     if (!head.controlled || head.command.enabled != 1)
@@ -2193,7 +2149,6 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     const auto& pose = head.pose;
     const auto lens = viewLens(head.lens);
     bool placed = head.viewed;
-    gameLodFlat.store(1.f, std::memory_order_relaxed);
     if (placed) {
         out = stock;
         // Keep the stock camera's far plane and temporal jitter. Its near
@@ -2222,11 +2177,6 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     auto& data = SpidyAppearanceData;
     InterlockedIncrement64(&data.sequence);
     if (placed) {
-        // 0.0.73 test 6 WINDOW POP FIX: the stock camera's detail distance for this widened lens.
-        gameLodFlat.store(spidy::window_pop::flatMatch(stockHalfWidth,
-                                                       std::abs(stock.values[0x40c / 4] - stock.values[0x408 / 4]) / 2,
-                                                       (lens.right - lens.left) / 2, std::abs(lens.bottom - lens.top) / 2),
-                          std::memory_order_relaxed);
         ++data.activeAligned;
         data.activeBounds[0] = lens.left;
         data.activeBounds[1] = lens.right;
@@ -2291,9 +2241,7 @@ std::array<float, 2> eyeJitter() {
     if (engine) {
         // Update 34.2: ENGINE TAA's jitter mode (engine_taa::jitterFor): ours, the game
         // camera's, in render pixels, or none.
-        // 0.0.73 test 4 IMAGE STYLE SPIDYVR: NONE is OURS (as SpidyVR; NONE skips the game's TAA).
-        spidy::engine_taa::jitterFor(spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()),
-                                     halton(phase, 2) - .5f, halton(phase, 3) - .5f,
+        spidy::engine_taa::jitterFor(engineTaaJitterMode.load(), halton(phase, 2) - .5f, halton(phase, 3) - .5f,
                                      render[0], render[1], gameJitter[0].load(std::memory_order_relaxed),
                                      gameJitter[1].load(std::memory_order_relaxed), engineTaaJitterScale.load(),
                                      j[0], j[1]);
@@ -2598,11 +2546,10 @@ void placeEyes() {
     }
     latchedImmersive = render && enabled && controlled && desired.enabled == 1;
     // The game's view is on the head and both eyes render: it need not, unless
-    // RECORDING FOV wants it in the window. 0.0.73 STREAMER MODE: the window shows the
-    // headset's image instead, so RECORDING FOV gives way to it (no third view to pay for).
+    // RECORDING FOV wants it in the window.
     restGameView(primary, latchedImmersive && (config.createViews & 32) && live.load() == 2 &&
                               !native_gpu::screenRequested() &&
-                              !(recordingFov.load(std::memory_order_relaxed) && !native_gpu::streamerOn()));
+                              !recordingFov.load(std::memory_order_relaxed));
     // The eyes' jobs of this frame mark into the resting view's list (see rested).
     if (const auto resting = rested.load(); resting && clearDrawn(resting))
         InterlockedIncrement64(&SpidyDrawnFrames);
@@ -3029,9 +2976,7 @@ __declspec(dllexport) spidy::engine_taa::Data SpidyEngineTaaData;
 void engineTaaPublish() {
     auto& d = SpidyEngineTaaData;
     d.packed = SpidyEngineTaaNow();
-    // 0.0.73 AA: the jitter in force (GAME TAA SPIDYVR makes NONE OURS); test 5's console said "jitter NONE"
-    // while OURS ran (the asked mode).
-    d.mode = spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load());
+    d.mode = engineTaaJitterMode.load();
     d.scalePercent = engineTaaJitterScale.load();
     d.gameAa = engineTaaGameAa.load();
     d.maskSeen = engineTaaMaskSeen.load();
@@ -3840,7 +3785,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
     bloomGateWrite(false);
     sharedLodRestore(0);
     sharedLodRestore(1);
-    windowPopRestore(); // 0.0.73 test 6 WINDOW POP FIX
     if (live)
         result = 1401;
     else if (hooked) {
@@ -3957,17 +3901,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarWindows(void* percent) {
     farWindowsPercent = static_cast<uint32_t>(value);
     return 0;
 }
-// 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): 0 off, 1 on (the default); 4475 otherwise. Live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPopOn(void* on) {
-    const auto value = reinterpret_cast<uintptr_t>(on);
-    if (value > 1)
-        return 4475;
-    windowPopOn = value != 0;
-    return 0;
-}
-// Its writes and the boost in force (the console's line).
-extern "C" uint64_t SpidyWindowPopWrites() { return windowPopWrites.load(); }
-extern "C" float SpidyWindowPopBoost() { return gameLodApplied.load(); }
 // 0.0.73 LIGHT CHECKS (eye_queries.hpp): 0 off, 1 on (the default); 4470 otherwise. Read when the eyes are made.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecksOn(void* on) {
     const auto value = reinterpret_cast<uintptr_t>(on);
@@ -3975,42 +3908,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecksOn(void* on) {
         return 4470;
     lightChecksOn = static_cast<uint32_t>(value);
     return 0;
-}
-// 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): 0 GAME, 1 ALWAYS, 2 HIDDEN; live, any thread. 4471 for a
-// bad value, 4472 when a site's bytes are neither the game's nor ours (nothing written, GAME kept there).
-SRWLOCK glowLock = SRWLOCK_INIT;
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheckMode(void* mode) {
-    namespace gc = spidy::glow_check;
-    const auto value = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(mode));
-    if (reinterpret_cast<uintptr_t>(mode) >= gc::modes)
-        return 4471;
-    AcquireSRWLockExclusive(&glowLock);
-    DWORD result = 0;
-    // Put back first, then patch, so the two sites are never both jumps.
-    for (const uintptr_t rva : value == gc::hidden ? std::array{gc::alwaysRva, gc::hiddenRva}
-                                                   : std::array{gc::hiddenRva, gc::alwaysRva}) {
-        const auto at = reinterpret_cast<uint16_t*>(base + rva);
-        uint16_t now{};
-        const uint16_t want = gc::wantAt(rva, value);
-        const uint16_t stock = rva == gc::alwaysRva ? gc::alwaysStock : gc::hiddenStock;
-        if ((reinterpret_cast<uintptr_t>(at) & 1) || !read(base + rva, &now, 2) || (now != stock && now != gc::jump)) {
-            result = 4472;
-            continue;
-        }
-        if (now == want)
-            continue;
-        DWORD protection{};
-        if (!VirtualProtect(at, 2, PAGE_EXECUTE_READWRITE, &protection)) {
-            result = 4472;
-            continue;
-        }
-        std::atomic_ref<uint16_t>(*at).store(want);
-        DWORD unused{};
-        VirtualProtect(at, 2, protection, &unused);
-        FlushInstructionCache(GetCurrentProcess(), at, 2);
-    }
-    ReleaseSRWLockExclusive(&glowLock);
-    return result;
 }
 // LIGHT CHECKS readback: the state (low byte, see lightChecksState) and the left / right eyes' query pools
 // (bits 8-19 and 20-31, each capped at 4095) as the game sized them.
@@ -4263,23 +4160,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
     return 0;
 }
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
-    return spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()); // 0.0.73 test 4: in force
-}
-// 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): 0 SPIDYVR, 1 OFF; refused (4605) otherwise.
-// game_xr's controller sends it when the option changes; it does the rest (ENGINE TAA, the clean picture).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyle(void* style) {
-    const auto value = reinterpret_cast<uintptr_t>(style);
-    if (value >= spidy::image_style::styles)
-        return 4605;
-    if (imageStyle.exchange(static_cast<uint32_t>(value)) != value)
-        OutputDebugStringA(value == spidy::image_style::spidyvr ? "GAME TAA: SPIDYVR (jitter never NONE)\n"
-                                                                : "GAME TAA: OFF\n");
-    return 0;
-}
-// 0.0.73 test 4: why ENGINE TAA could not go on now (engine_taa::Reason; none: it could), without
-// trying (SpidyEngineTaa(1) counts and logs every refusal).
-extern "C" uint32_t SpidyEngineTaaBlocked() {
-    return engineTaaBlocked();
+    return engineTaaJitterMode.load();
 }
 // Update 34.2: the jitter's scale, percent (0-200, 100 as made); refused (4604) above.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitterScale(void* percent) {

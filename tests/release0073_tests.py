@@ -1,6 +1,5 @@
-"""HERO VR 0.0.73 release: GAME TAA (image_style) starts OFF (the owner on test 6: the picture shook under GAME TAA
-SPIDYVR and was steady with it OFF), a live.txt at the test builds' SPIDYVR moves to OFF once, GAME AA TAA follows
-GAME TAA, and the MP SOLO TEST is not in the public build."""
+"""HERO VR 0.0.73 release: the MP SOLO TEST is not in the public build. (0.0.73's GAME TAA / image_style and its
+GAME AA TAA are gone in 0.0.74 test 10, 0.0.72's picture: GameTaaGone.)"""
 import os, pathlib, sys, tempfile, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
@@ -17,63 +16,28 @@ import re as _re  # noqa: E402
 TEST_BUILD = bool(_re.search(r'option\(HERO_TEST_BUILD "[^"]*" ON\)', src('CMakeLists.txt')))
 
 
-class GameTaaOff(unittest.TestCase):
-    def test_defaults(self):
-        self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'off')
-        self.assertEqual(L.export_value('image_style', 'spidyvr'), 0)  # index 0 keeps its meaning
-        self.assertEqual(L.export_value('image_style', 'off'), 1)
-        self.assertEqual(L.image_style_of({}), 'off')
-        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')
-        h = src('include/spidy/image_style.hpp')
-        self.assertIn('inline constexpr uint32_t defaultStyle = gameTaaOff;', h)
-        self.assertIn('return style == spidyvr;', h)
-        g = src('src/game_xr.cpp')
-        self.assertIn('combat38Values[combat38::imageStyle].store(image_style::defaultStyle);', g)
-        self.assertIn('std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};', src('src/stereo_probe.cpp'))
-
-    def test_game_aa_taa_follows_game_taa(self):
-        self.assertFalse(L.game_aa_taa(True, L.image_style_of({}), False))  # the release default: the game's own AA
-        self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))             # switched on: as before
+class GameTaaGone(unittest.TestCase):
+    """0.0.74 test 10 (0.0.72's picture): GAME TAA (image_style), GAME AA TAA and KEEP MY GAME AA are gone, not
+    only off; an old image_style line is skipped quietly and taken out once (migrate_074t10_72)."""
+    def test_gone(self):
+        for name in ('image_style', 'image'):
+            self.assertNotIn(name, L.SETTINGS)
+            self.assertNotIn(name, L.UPDATE38_DEFAULTS)
+            self.assertIn(name, L.RETIRED_073)
+        for gone in ('image_style_of', 'image_style_in_file', 'game_aa_taa', 'migrate_0073', 'MIGRATED_0073'):
+            self.assertFalse(hasattr(L, gone), gone)
+        self.assertFalse(os.path.exists(os.path.join(ROOT, 'include/spidy/image_style.hpp')))
+        self.assertNotIn('imageStyle', src('src/stereo_probe.cpp'))
+        self.assertNotIn('combat38::imageStyle', src('src/game_xr.cpp'))
         r = src('tools/run_game_vr.py')
-        self.assertLess(r.index('live_settings.migrate_0073(ROOT/'), r.index('game_taa_look = live_settings.image_style_in_file'))
+        self.assertNotIn('image_style', r)
+        self.assertNotIn('keep_game_aa', r)
 
-    def run_migration(self, body):
-        with tempfile.TemporaryDirectory() as d:
-            p = pathlib.Path(d, 'live.txt')
-            p.write_text(body, encoding='utf-8')
-            line = L.migrate_0073(p)
-            text = p.read_text(encoding='utf-8')
-            again = L.migrate_0073(p)
-            return line, L.parse(text)[0].get('image_style'), text, again, p.read_text(encoding='utf-8')
-
-    def test_migration_moves_the_old_default_once(self):
-        for old in ('spidyvr', 'SPIDYVR', '0', 'spidy', 'on'):
-            line, value, text, again, after = self.run_migration(f'image_style = {old}\nhistory = 80\n')
-            self.assertEqual(value, 'off', old)
-            self.assertIn('GAME TAA OFF', line)
-            self.assertIn(L.MIGRATED_0073, text)
-            self.assertIsNone(again)
-            self.assertEqual(text, after)  # once only
-            self.assertIn('history = 80', text)
-
-    def test_migration_keeps_off_and_choices_after_the_marker(self):
-        line, value, text, _, _ = self.run_migration('image_style = off\n')
-        self.assertIsNone(line)
-        self.assertEqual(value, 'off')
-        self.assertIn(L.MIGRATED_0073, text)
-        # SPIDYVR chosen after the marker (the wrist writes it back): stays
-        line, value, _, _, _ = self.run_migration('image_style = off\n' + L.MIGRATED_0073 + '\nimage_style = spidyvr\n')
-        self.assertIsNone(line)
-        self.assertEqual(value, 'spidyvr')
-
-    def test_migration_0072_live_txt_and_none(self):
-        line, value, text, _, _ = self.run_migration('history = 80\n')  # 0.0.72 never wrote image_style
-        self.assertIsNone(line)
-        self.assertIsNone(value)
-        self.assertIn(L.MIGRATED_0073, text)
-        self.assertEqual(L.image_style_of(L.parse(text)[0]), 'off')
-        self.assertIsNone(L.migrate_0073('/nonexistent/dir/live.txt'))
-        self.assertIn(L.MIGRATED_0073, L.HEADER)  # a new live.txt starts migrated
+    def test_old_line_skipped_quietly(self):
+        values, warnings = L.parse('image_style = spidyvr\nhistory = 80\n')
+        self.assertEqual(warnings, [])
+        self.assertNotIn('image_style', values)
+        self.assertEqual(values['history'], 80)
 
 
 @unittest.skipIf(TEST_BUILD, "0.0.74 test 1: MP SOLO TEST is in the test build (OFF by default)")

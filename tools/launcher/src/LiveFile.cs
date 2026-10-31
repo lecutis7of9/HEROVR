@@ -1,5 +1,5 @@
 // SM2 VR Launcher - 0.0.74 test 3: reading and changing a setting in the mod folder's live.txt (the file VR reads
-// while it runs: "streamer_mode = off"). Made by Agent Mulder.
+// while it runs: "light_checks = off"). Made by Agent Mulder.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,7 +11,7 @@ namespace Sm2VrLauncher
     {
         public static string PathIn(string root) { return Path.Combine(root ?? "", "live.txt"); }
 
-        // The setting's name on a live.txt line ("streamer_mode = off  # note"), or null.
+        // The setting's name on a live.txt line ("light_checks = off  # note"), or null.
         static string NameOf(string line, out string value)
         {
             value = null;
@@ -87,7 +87,8 @@ namespace Sm2VrLauncher
                                     line.IndexOf("GPU eye bridge: 3301", StringComparison.Ordinal) >= 0);
         }
 
-        // The settings the pop-up turns off (and OPTIONS > SAFETY CHECKS shows).
-        public static readonly string[] TwoGpuKeys = { "streamer_mode", "sl_watch", "light_checks" };
+        // The settings the pop-up turns off (and OPTIONS > SAFETY CHECKS shows). 0.0.74 test 10 PICTURE 72: LIGHT CHECKS
+        // only (STREAMER MODE and SL WATCH are gone).
+        public static readonly string[] TwoGpuKeys = { "light_checks" };
     }
 }

@@ -79,12 +79,12 @@ class Fight(unittest.TestCase):
 class Graphics(unittest.TestCase):
     def test_38_defaults_unchanged(self):
         self.assertEqual(ls.UPDATE37_DEFAULTS, {
-            'history': 80, 'sharpen': 0, 'trail': 0, 'taa_jitter': 3, 'hud_theme': 'raimi', 'web_width': 1.8,
-            'web_speed': 70, 'reticles': 0, 'aa': 0, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 0,  # 0.0.73 lights: EYE BLOOM OFF
+            'history': 80, 'sharpen': 140, 'trail': 0, 'taa_jitter': 3, 'hud_theme': 'raimi', 'web_width': 1.8,
+            'web_speed': 70, 'reticles': 0, 'aa': 1, 'eye_temporal': 1, 'far_shadows': 2, 'eye_bloom': 0,  # 0.0.73 lights: EYE BLOOM OFF
             'shared_lod': 2, 'bloom_fx': 0, 'aim_steer': 0, 'ring_face': 0, 'wall_crawl': 0, 'web_bend': 100,
             'wall_body': 0, 'zip_strike': 1, 'web_yank': 1, 'npc_fade': 'off', 'color_fx': 0, 'foveated': 'off',
-            'lod_fade': 0})  # 0.0.73 IMAGE SPIDYVR: aa 0, sharpen 0 (CLASSIC: 1, 140). test build 12 WINDOW LIGHTS: LOD FADE off by default
-        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2})  # 0.0.73 IMAGE: sharpen follows the look (IMAGE_LOOKS)
+            'lod_fade': 0})  # 0.0.74 test 10 PICTURE 72: aa 1, sharpen 140 (0.0.72's). test build 12 WINDOW LIGHTS: LOD FADE off by default
+        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140})  # 0.0.74 test 10 PICTURE 72: sharpen 140 again
 
 
 class Record(unittest.TestCase):

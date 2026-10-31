@@ -777,8 +777,8 @@ namespace Sm2VrLauncher
             if (!vr.Start(root, Path.Combine(root, "tools", "launch-game-vr.ps1"), args)) { Telemetry.SessionAborted(); job = Job.None; UpdatePlayState(); }
         }
 
-        /// <summary>0.0.74 test 3: after the two-GPU device loss (0x887A002B, bridge 3301), one click turns STREAMER
-        /// MODE, SL WATCH and LIGHT CHECKS off in live.txt; then the player presses START VR (PLAY VR).</summary>
+        /// <summary>0.0.74 test 3: after the two-GPU device loss (0x887A002B, bridge 3301), one click turns LIGHT
+        /// CHECKS off in live.txt (0.0.74 test 10: the only one left); then the player presses START VR (PLAY VR).</summary>
         void OfferTwoGpuFix()
         {
             var answer = MessageBox.Show(this, TwoGpuFixQuestion, LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -792,7 +792,7 @@ namespace Sm2VrLauncher
                     ". Turn them off in OPTIONS > SAFETY CHECKS, then press START VR (PLAY VR).", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            sessionLog.Line("live.txt: streamer_mode = off, sl_watch = off, light_checks = off. Press START VR (PLAY VR).", Theme.Good);
+            sessionLog.Line("live.txt: light_checks = off. Press START VR (PLAY VR).", Theme.Good);
             foreach (var key in LiveFile.TwoGpuKeys)
             {
                 Control row;
@@ -804,10 +804,10 @@ namespace Sm2VrLauncher
         internal const string TwoGpuFixQuestion =
             "VR stopped: the game lost its graphics device (0x887A002B, the eye bridge's 3301). This has happened on PCs " +
             "with two graphics chips (a graphics card beside the processor's or a laptop's own graphics).\n\n" +
-            "Turn STREAMER MODE, SL WATCH and LIGHT CHECKS off now (in live.txt)? They can be turned back on in " +
-            "OPTIONS > SAFETY CHECKS.\n\nYes: turn the three off.   No: leave them as they are.";
+            "Turn LIGHT CHECKS off now (in live.txt)? It can be turned back on in " +
+            "OPTIONS > SAFETY CHECKS.\n\nYes: turn it off.   No: leave it as it is.";
         internal const string TwoGpuFixDone =
-            "Done: STREAMER MODE, SL WATCH and LIGHT CHECKS are off in live.txt.\n\nNow press START VR (PLAY VR). " +
+            "Done: LIGHT CHECKS is off in live.txt.\n\nNow press START VR (PLAY VR). " +
             "If the game is still open, the launcher offers to close it first.";
 
         // run_game_vr.py CLOSE_GAME_EXIT (tools/vr_launcher.py): the running game has to close before VR can start.

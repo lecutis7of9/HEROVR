@@ -76,9 +76,9 @@ def crash_message(found, modules=None, loaders=(), game_name='Spider-Man2.exe', 
 
 
 # 0.0.74 test 3: the two-GPU sessions (RTX 5090 + AMD Radeon graphics, 204133 and 225454) lost the device with
-# DXGI_ERROR_ACCESS_DENIED; the launcher's pop-up turns these three live.txt settings off in one click.
-TWO_GPU_STEP = {'0x887A002B': ' 5) OPTIONS > SAFETY CHECKS: STREAMER MODE, SL WATCH and LIGHT CHECKS off (the launcher '
-                              'offers to do it).'}
+# DXGI_ERROR_ACCESS_DENIED; the launcher's pop-up turns this live.txt setting off in one click (0.0.74 test 10
+# PICTURE 72: LIGHT CHECKS only, STREAMER MODE and SL WATCH are gone).
+TWO_GPU_STEP = {'0x887A002B': ' 5) OPTIONS > SAFETY CHECKS: LIGHT CHECKS off (the launcher offers to do it).'}
 
 
 def device_lost_steps(reason, name, when):

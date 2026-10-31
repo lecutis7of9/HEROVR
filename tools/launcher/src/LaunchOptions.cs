@@ -44,8 +44,7 @@ namespace Sm2VrLauncher
             Opt.Pick("PICTURE", "EyeAA", "EYE ANTI-ALIASING", "Smooths each eye image on its way to the headset.", new[] { "off", "fxaa" }, "fxaa"),
             Opt.Pick("PICTURE", "MipBias", "TEXTURE SHARPNESS (MIP BIAS)", "0.5 is calmer (less roof flicker), 0 is sharper, 'game' keeps the game's.", new[] { "game", "0", "0.25", "0.5", "1" }, "0.5"),
             Opt.Pick("PICTURE", "Anisotropy", "TEXTURE FILTERING", "Anisotropic filtering for textures at an angle. 0 keeps the game's.", new[] { "0", "2", "4", "8", "16" }, "16"),
-            Opt.Sw("PICTURE", "EngineTaa", "ENGINE TAA", "Runs the game's own TAA in each eye, as SpidyVR does (restart to change).", true),
-            Opt.Sw("PICTURE", "KeepGameAa", "KEEP MY GAME AA", "Off: VR sets the game's AA to TAA with no DLSS, put back after; on keeps yours (restart).", false),
+            Opt.Sw("PICTURE", "EngineTaa", "ENGINE TAA", "Prepares the game's TAA for the wrist's ENGINE TAA (set the game's AA to TAA).", true),
             Opt.Num("PICTURE", "BuildingReach", "BUILDING DETAIL DISTANCE", "How far buildings keep their full models, % of the game's distance.", 50, 400, 10, 150, "%"),
             Opt.Sw("PICTURE", "KeepGameSettings", "KEEP MY GAME PICTURE SETTINGS", "Keep your depth of field, motion blur, grain and vignette while VR runs.", false),
             // Desktop
@@ -96,9 +95,8 @@ namespace Sm2VrLauncher
             Opt.Inv("SAFETY CHECKS", "NoModCheck", "MOD CHECK", "Offers to move other mods' loaders (winmm.dll...) aside for VR; no restart needed."),
             Opt.Inv("SAFETY CHECKS", "NoGpuCheck", "TWO-GPU CHECK", "Runs the game and SteamVR on the graphics card; no restart, SteamVR at its next start."),
             Opt.Inv("SAFETY CHECKS", "NoClearErrors", "CLEARER ERRORS", "Says why the game crashed or lost its graphics, with the fix; no restart needed."),
-            // 0.0.74 test 3: the three live.txt settings the two-GPU device-lost pop-up turns off (LiveFile.TwoGpuKeys).
-            Opt.Live("SAFETY CHECKS", "streamer_mode", "STREAMER MODE", "The monitor shows the headset's eye with the mod's drawings; changes live, no restart."),
-            Opt.Live("SAFETY CHECKS", "sl_watch", "SL WATCH", "Logs the game's DLSS (Streamline) calls for bug reports; changes live, no restart."),
+            // 0.0.74 test 3: the live.txt setting the two-GPU device-lost pop-up turns off (LiveFile.TwoGpuKeys); 0.0.74 test 10
+            // PICTURE 72: STREAMER MODE and SL WATCH are gone with the 0.0.73 picture switches, LIGHT CHECKS stays.
             Opt.Live("SAFETY CHECKS", "light_checks", "LIGHT CHECKS", "Gives each eye the game view's street-light glow checks; needs a restart of VR (next START VR)."),
         };
 

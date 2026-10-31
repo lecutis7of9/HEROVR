@@ -139,8 +139,7 @@ class SehSafety(unittest.TestCase):
         self.assertEqual(
             seh,
             ['safeRead', 'sehVtable', 'sehMap', 'sehUnmap', 'sehGpuVa', 'sehGetResourceDesc',
-             'sehHeapInfo', 'sehDeviceOf', 'sehRelease',  # Update 31: descriptor-table trace
-             'sehFrameIndex'],  # 0.0.73 SL WATCH: the FrameToken's index (one call, no C++ objects)
+             'sehHeapInfo', 'sehDeviceOf', 'sehRelease'],  # Update 31: descriptor-table trace; 0.0.74 test 10: SL WATCH gone
         )
         # No leftover __try in callers (onBarrier / detourCopyBuffer / maybeInstallGpuHooks).
         for caller in ('onBarrier', 'detourCopyBuffer', 'maybeInstallGpuHooks', 'maybeInstallTableHooks',

@@ -8,7 +8,6 @@
 #ifndef SPIDY_TEST_VERSION
 #define SPIDY_TEST_VERSION "0.0.74"
 #endif
-#include "spidy/streamer_view.hpp"
 #include "spidy/thor_grip.hpp"
 #include "spidy/mirror_guard.hpp"
 #include "spidy/mirror_props074.hpp" // 0.0.74 test 10 MIRROR PROPS
@@ -119,13 +118,9 @@
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
 #include "spidy/engine_taa.hpp"
-#include "spidy/image_style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
-#include "spidy/sl_watch.hpp"
-#include "spidy/eye_sharpen.hpp" // 0.0.73 AA SHARPEN MATCH (matchOn)
-#include "spidy/window_pop.hpp"  // 0.0.73 test 6 WINDOW POP FIX (on)
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/shared_lod.hpp"
@@ -636,15 +631,9 @@ DWORD WINAPI SpidyCullMarginDegrees(void* degrees);
 DWORD WINAPI SpidyShadowMatchOn(void* on);
 // 0.0.73 LIGHT CHECKS (stereo_probe.cpp, eye_queries.hpp): read when the eyes are made.
 DWORD WINAPI SpidyLightChecksOn(void* on);
-DWORD WINAPI SpidyGlowCheckMode(void* mode); // 0.0.73 GLOW CHECK, live
-DWORD WINAPI SpidySlWatchOn(void* on);       // 0.0.73 SL WATCH (native_address_finder.cpp), live; hooks once
 // 0.0.73 test 3 LIGHT HOLD (native_eye_gpu.cpp): the history shader's bright hold, and the history
 // share its last pass kept (JITTER CALM).
 DWORD WINAPI SpidyEyeLightHold(void* percent);
-// 0.0.73 IMAGE (native_eye_gpu.cpp): the history read sharp (1, SPIDYVR) or bilinear (0, CLASSIC).
-DWORD WINAPI SpidyEyeHistorySharp(void* sharp);
-DWORD WINAPI SpidyEyeSharpenMatch(void* on); // 0.0.73 AA SHARPEN MATCH
-DWORD WINAPI SpidyWindowPopOn(void* on);     // 0.0.73 test 6 WINDOW POP FIX (stereo_probe.cpp)
 float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
 // restart), and its stats for the V003 record.
@@ -658,8 +647,6 @@ uint32_t SpidyShadowCameraNow();        // Update 31: SHADOW CAMERA mode | rever
 uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, reason)
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
-DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
-uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
 uint32_t SpidyFarShadowsNow();            // Update 35: far_shadows::pack(mode, reason)
@@ -779,12 +766,6 @@ std::atomic<uint32_t> combatTapMs{combat_input::Config{}.tapMs}, combatGestureMs
 // Update 38: the COMBAT page's live settings (combat38.hpp; live.txt and the hologram, each at
 // once, no restart), index 0 of each the default.
 std::atomic<uint32_t> combat38Values[combat38::options]{};
-// 0.0.73 release: the start values that are not index 0 (live.txt sends its own as the session starts; until
-// then, and with no live.txt line, these). GAME TAA starts OFF (image_style::defaultStyle).
-[[maybe_unused]] const bool combat38StartValues = [] {
-    combat38Values[combat38::imageStyle].store(image_style::defaultStyle);
-    return true;
-}();
 // Version 0.0.72 MODEL MISSING: one bit per mesh_model slot whose MODEL setting is on and whose model
 // could not be read (the render thread sets it; the wrist names them: "MODEL MISSING: <name>").
 std::atomic<uint32_t> modelMissingMask{0};
@@ -2540,7 +2521,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, windowPopApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, lightHoldApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -4074,16 +4055,6 @@ DWORD WINAPI run(void*) {
                                     // a press the pages never mark changed (as 29 is MUSIC SEEK's).
                                     if (o == combat38::mirrorView)
                                         wristChanged |= 1u << 21;
-                                    // 0.0.73 IMAGE: the look's eye AA (FXAA) and sharpening now; the history
-                                    // read follows in the per-frame apply. Kept for the next start with the
-                                    // two sliders (SpidyHudSettings 3 bits 6 and 11, and 22 with 10 bit 2).
-                                    if (o == combat38::image) {
-                                        const auto look = combat38::imageLook(c38(o));
-                                        SpidyEyeAA(reinterpret_cast<void*>(static_cast<uintptr_t>(look.aa)));
-                                        SpidyEyeSharpen(reinterpret_cast<void*>(static_cast<uintptr_t>(look.sharpen)));
-                                        wristChanged |= 1u << static_cast<unsigned>(wrist_hud::Control::aa) |
-                                                        1u << static_cast<unsigned>(wrist_hud::Control::sharpen) | 1u << 22;
-                                    }
                                 }
                                 if (result.heroRoster && !rosterFault) { // Build 8: the roster page, in front of the head
                                     if (validTrackedPose(frame.head) && rosterPage.open(frame.head, rosterClock))
@@ -11347,52 +11318,6 @@ DWORD WINAPI run(void*) {
                                 engine_taa::stateOf(engine) != engine_taa::on)
                                 engineTaaFallback(engine_taa::reasonOf(engine));
                             previous = engine;
-                            // 0.0.73 test 4 IMAGE STYLE (image_style.hpp): SPIDYVR (default) runs the game's
-                            // own TAA in each eye and sends it clean (no FXAA, history or CAS), as SpidyVR;
-                            // OFF leaves the picture to IMAGE (EYE AA). The clean picture follows ENGINE TAA every
-                            // frame (never a raw frame when it goes off); the rest about once a second.
-                            static image_style::Controller styleControl;
-                            static uint32_t styleSent = UINT32_MAX;
-                            static ULONGLONG styleTick{};
-                            const uint32_t style = c38(combat38::imageStyle);
-                            if (style != styleSent && SpidyImageStyle(reinterpret_cast<void*>(uintptr_t{
-                                                          image_style::spidy(style) ? image_style::spidyvr
-                                                                                    : image_style::gameTaaOff})) == 0)
-                                styleSent = style;
-                            if (const ULONGLONG nowTick = GetTickCount64(); nowTick - styleTick >= 1000 || style != styleSent) {
-                                styleTick = nowTick;
-                                const bool eyeAaOn = (eyeAaNow() & 0xff) == eye_taa::on;
-                                const auto step = styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn);
-                                if (step.note) // 0.0.73 test 5: in the console and the export, not only the debugger
-                                    consoleLine(step.note);
-                                if (step.engineOff) {
-                                    SpidyEngineTaa(nullptr);
-                                    consoleLine("ENGINE TAA: off by GAME TAA OFF");
-                                    engine = SpidyEngineTaaNow();
-                                    previous = engine; // a style change, not a failure: no plan B press
-                                }
-                                if (step.tryOn) {
-                                    const bool on = SpidyEngineTaa(reinterpret_cast<void*>(uintptr_t{1})) == 0;
-                                    styleControl.tried(on);
-                                    if (on) {
-                                        OutputDebugStringA("IMAGE STYLE SPIDYVR: ENGINE TAA on (the game's TAA in each eye)\n");
-                                        engineTaaArm = true; // the FPS guard watches the next seconds
-                                        engine = SpidyEngineTaaNow();
-                                        previous = engine;
-                                    }
-                                }
-                                if ((step.eyeAaOff || (step.tryOn && styleControl.owned())) &&
-                                    (eyeAaNow() & 0xff) == eye_taa::on) {
-                                    native_gpu::setEyeTemporal(false);
-                                    eyeAaState = eye_taa::pack(eye_taa::off, 0);
-                                    OutputDebugStringA("EYE AA: off (IMAGE STYLE SPIDYVR: the game's TAA)\n");
-                                }
-                                if (step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
-                                    engine_taa::stateOf(engine) != engine_taa::on)
-                                    pressEyeAa();
-                            }
-                            native_gpu::setCleanImage(image_style::spidy(style) &&
-                                                      engine_taa::stateOf(engine) == engine_taa::on);
                         }
                         {   // Update 35: FAR SHADOWS' FPS guard: a mode the press chose that halves
                             // the frame rate goes back to OFF (the reason shown).
@@ -12260,42 +12185,11 @@ DWORD WINAPI run(void*) {
                                 lightChecksApplied = checksWant;
                                 SpidyLightChecksOn(reinterpret_cast<void*>(static_cast<uintptr_t>(checksWant)));
                             }
-                            // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
-                            if (const uint32_t glowWant = c38(combat38::glowCheck); glowWant != glowCheckApplied) {
-                                glowCheckApplied = glowWant;
-                                SpidyGlowCheckMode(reinterpret_cast<void*>(static_cast<uintptr_t>(glowWant)));
-                            }
-                            // 0.0.73 SL WATCH: on or off when it changes (value 0 ON); while on, a cheap retry of the
-                            // Streamline hooks every 512 frames (it returns at once once they are in).
-                            if (const uint32_t watchWant = sl_watch::on(c38(combat38::slWatch)) ? 1u : 0u;
-                                watchWant != slWatchApplied || (watchWant && (++slWatchTicks & 511u) == 0)) {
-                                slWatchApplied = watchWant;
-                                SpidySlWatchOn(reinterpret_cast<void*>(static_cast<uintptr_t>(watchWant)));
-                            }
                             // 0.0.73 test 3 LIGHT HOLD: the history shader's hold when it changes.
                             if (const uint32_t holdWant = eye_history::lightHoldPercentOf(c38(combat38::lightHold));
                                 holdWant != lightHoldApplied) {
                                 lightHoldApplied = holdWant;
                                 SpidyEyeLightHold(reinterpret_cast<void*>(static_cast<uintptr_t>(holdWant)));
-                            }
-                            // 0.0.73 IMAGE: the history read (SPIDYVR sharp, CLASSIC bilinear) when it changes;
-                            // the eye AA and sharpening are the launcher's (live.txt) and the wrist press's.
-                            if (const uint32_t sharpWant = combat38::imageLook(c38(combat38::image)).sharpHistory ? 1u : 0u;
-                                sharpWant != imageApplied) {
-                                imageApplied = sharpWant;
-                                SpidyEyeHistorySharp(reinterpret_cast<void*>(static_cast<uintptr_t>(sharpWant)));
-                            }
-                            // 0.0.73 AA SHARPEN MATCH: CAS by the eye history kept (ON, value 0) or as set, when it changes.
-                            if (const uint32_t matchWant = eye_sharpen::matchOn(c38(combat38::sharpenMatch)) ? 1u : 0u;
-                                matchWant != sharpenMatchApplied) {
-                                sharpenMatchApplied = matchWant;
-                                SpidyEyeSharpenMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
-                            }
-                            // 0.0.73 test 6 WINDOW POP FIX: the game view's flat-play detail distance (ON, value 0) or not.
-                            if (const uint32_t popWant = window_pop::on(c38(combat38::windowPop)) ? 1u : 0u;
-                                popWant != windowPopApplied) {
-                                windowPopApplied = popWant;
-                                SpidyWindowPopOn(reinterpret_cast<void*>(static_cast<uintptr_t>(popWant)));
                             }
                             perfStatusShown = perfOn && c38(combat38::perfStatus) == 0;
                             if (perfStatusShown)
@@ -13570,24 +13464,7 @@ DWORD WINAPI run(void*) {
                         }
                         // The game's window mirrors the left eye as it is now, the
                         // drawings above on it; copied only when the window took the last.
-                        // 0.0.73 STREAMER MODE (streamer_view.hpp): in play, the chosen eye
-                        // with the view its image was made with (the projection layer's), so
-                        // the window's view can be steadied and cut to its shape.
-                        {
-                            const bool streaming = streamer_view::modeOn(c38(combat38::streamerMode)) &&
-                                                   drawn == Presentation::immersive;
-                            native_gpu::streamer(streaming, c38(combat38::streamerSmooth));
-                            if (streaming) {
-                                const auto& shown = targets[streamer_view::eyeIndex(c38(combat38::streamerEye))];
-                                const auto& o = shown.view.pose.orientation;
-                                const auto& f = shown.view.fov;
-                                const float orientation[4] = {o.x, o.y, o.z, o.w};
-                                const float fov[4] = {f.angleLeft, f.angleRight, f.angleDown, f.angleUp};
-                                native_gpu::keepShownEye(shown.texture, orientation, fov);
-                            } else {
-                                native_gpu::keepShownEye(targets[0].texture);
-                            }
-                        }
+                        native_gpu::keepShownEye(targets[0].texture);
                         if (webGap >= 0 && imageGeneration != gapGeneration) {
                             native_eyes::reportWebGap(webGap);
                             gapGeneration = imageGeneration;
@@ -14532,12 +14409,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeroMenu(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyRepLog(void* v) { return setHero007(v, combat38::repLog, 5447); }
 // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (0) or CLASSIC (1, the 0.0.72 pedals) (live.txt van_pedals).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanPedals(void* v) { return setHero007(v, combat38::vanPedals, 5448); }
-// 0.0.73 IMAGE: 0 SPIDYVR (default), 1 HERO VR CLASSIC; the history read follows live (the launcher sends
-// the look's aa and sharpen beside it, and its mip bias when the game starts).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyImage(void* v) { return setHero007(v, combat38::image, 5449); }
-// 0.0.73 test 4 IMAGE STYLE: shown as GAME TAA: SPIDYVR (0, default) or OFF (1, IMAGE's look) (live.txt image_style; image_style.hpp).
-// The frame loop's controller does the rest (stereo_probe's SpidyImageStyle, ENGINE TAA, the clean picture).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyImageStyleOption(void* v) { return setHero007(v, combat38::imageStyle, 5460); }
 // 0.0.73 DD BATON: ON (0, the baton seated in the fist, its silver tip flown on a rope) or OFF (1, test 3's) (live.txt dd_baton_tip).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdBatonTip(void* v) { return setHero007(v, combat38::ddBatonTip, 5453); }
 // 0.0.73 LIGHT CHECKS (eye_queries.hpp): ON (0, the eyes' light-glow checks get the game view's room) or OFF (1, the
@@ -14549,17 +14420,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyLightChecks(void* v) {
             static_cast<uintptr_t>(eye_queries::on(combat38Values[combat38::lightChecks].load()) ? 1 : 0)));
     return r;
 }
-// 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): GAME (0), ALWAYS (1) or HIDDEN (2), live (live.txt glow_check).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlowCheck(void* v) { return setHero007(v, combat38::glowCheck, 5471); }
-// 0.0.73 SL WATCH (sl_watch.hpp): ON (0, the game's Streamline constants logged for the export) or OFF (1), live
-// (live.txt sl_watch). The frame loop passes it on.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidySlWatch(void* v) { return setHero007(v, combat38::slWatch, 5472); }
-// 0.0.73 AA SHARPEN MATCH: ON (CAS by the eye history kept) or OFF (as set), live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidySharpenMatch(void* v) { return setHero007(v, combat38::sharpenMatch, 5473); }
-// 0.0.73 test 6: CLAW LEVEL (WOLVERINE's claws level with the hand) and WINDOW POP FIX - ON (0) or OFF (1), live
-// (live.txt claw_level, window_pop).
+// 0.0.73 test 6: CLAW LEVEL (WOLVERINE's claws level with the hand) - ON (0) or OFF (1), live (live.txt claw_level).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyClawLevel(void* v) { return setHero007(v, combat38::clawLevel, 5474); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyWindowPop(void* v) { return setHero007(v, combat38::windowPop, 5475); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlayer2Body(void* v) { return setHero007(v, combat38::mpPlayer2Body, 5477); } // 0.0.73 MPSUIT
 // 0.0.73 COMING SOON: the hero tiles' SOON tab (the 0.0.74 heroes' pictures, not playable) ON (0, default) or OFF (1) (live.txt coming_soon).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyComingSoon(void* v) { return setHero007(v, combat38::comingSoon, 5490); }
@@ -14597,11 +14459,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideoutHold(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlideTilt(void* v) { return setHero007(v, combat38::glideTilt, 5535); }
 // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON (the default) / 1 OFF (the old aim)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowSwing(void* v) { return setHero007(v, combat38::throwSwing, 5534); }
-// 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
-// STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerSmooth(void* v) { return setHero007(v, combat38::streamerSmooth, 5451); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerEye(void* v) { return setHero007(v, combat38::streamerEye, 5452); }
 // 0.0.73 test 5: IRON MAN HERO HANDS, DAREDEVIL GRAPPLE AIM, WOLVERINE CLAW LOOK - ON (0) or OFF (1), live (live.txt
 // iron_hands, dd_grapple_aim, wolverine_claws). 5461: the MP solo test's.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyIronHands(void* v) { return setHero007(v, combat38::ironHands, 5462); }
@@ -14775,8 +14632,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
     case 3:
         // The 20 settings' bits, and Update 19's song (20), music volume (27) and visualizer (28).
         // Version 0.0.62: LENS FLARES (29), kept for the next start. 0.0.7: MIRROR VIEW (21), the same.
-        // 0.0.73 IMAGE (22), the same.
-        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 22 | 1u << 27 | 1u << 28 | 1u << 29));
+        return marker | (wristChanged.exchange(0) & (0xfffffu | 1u << 20 | 1u << 21 | 1u << 27 | 1u << 28 | 1u << 29));
     case 4: // Update 21: sharpening 0-200 in bits 0-7, the reticles shown in bit 8 (Update 16: 0-6 and 7)
         return marker | std::min<DWORD>(native_gpu::eyeSharpen(), 255) | (reticlesShown.load() ? 1u : 0u) << 8;
     case 5: // Update 17: the hologram's height, size, text size, theme and text colour
@@ -14798,9 +14654,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
         return marker | std::min<DWORD>(sessionFpsHigh.load(), 2047) | std::min<DWORD>(sessionFpsLow.load(), 2047) << 11;
     case 10: // Version 0.0.62: LENS FLARES (0 GAME, 1 OFF IN VR), for live.txt and the next start;
              // 0.0.7: MIRROR VIEW (bit 1: 0 OFF, 1 TEST), the same (an older launcher reads bit 0 only)
-             // 0.0.73 IMAGE (bit 2: 0 SPIDYVR, 1 HERO VR CLASSIC), the same (its textures change at the start)
-        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1 |
-               std::min<DWORD>(c38(combat38::image), 1) << 2;
+        return marker | std::min<DWORD>(c38(combat38::lensFlares), 1) | std::min<DWORD>(c38(combat38::mirrorView), 1) << 1;
     default:
         return 3970;
     }

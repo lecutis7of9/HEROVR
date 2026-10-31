@@ -48,25 +48,3 @@ inline uint32_t room(int32_t gameViewCapacity) {
 inline uint8_t roomByte(uint32_t r) { return static_cast<uint8_t>(r >> 8); }
 
 } // namespace spidy::eye_queries
-
-namespace spidy::glow_check {
-// 0.0.73 GLOW CHECK (a live debug switch for one headset session): the street / traffic light halo and
-// streak sprites' visibility test in VFX 0x2deecd0 (CONFIRMED by disassembly, Spider-Man2.exe 2.810.0.0):
-// - 0x2def79a..0x2def7a6: with either query handle missing the game takes its own no-test path to the
-//   draw at 0x2def655 (full glow, no occlusion); `je 0x2def655` at 0x2def7a6 is 0f 84 a9 fe ff ff.
-// - 0x2def8a2: `jle 0x2def98f` (0f 8e e7 00 00 00) skips the sprite when the counted pixels are <= 0.
-// GAME (0, the default): untouched. ALWAYS (1): 0x2def7a6's first two bytes become 90 e9 (nop; jmp to
-// the same 0x2def655: the rel32 ends at the same byte), so every glow draws as if no test ran (through
-// walls too). HIDDEN (2): 0x2def8a2's become 90 e9 (always to 0x2def98f), so no glow draws. One aligned
-// 2-byte write each, the bytes checked first; nothing is written where they differ.
-// ALWAYS steady in the headset = the strobing is the visibility test (query pool, jitter, readback), not
-// the camera record, fog or blending; still strobing = not the test.
-inline constexpr uintptr_t alwaysRva = 0x2def7a6, hiddenRva = 0x2def8a2;
-inline constexpr uint16_t alwaysStock = 0x840f, hiddenStock = 0x8e0f, jump = 0xe990; // little endian
-inline constexpr uint32_t game = 0, always = 1, hidden = 2, modes = 3;
-inline uint16_t wantAt(uintptr_t rva, uint32_t mode) {
-    if (rva == alwaysRva)
-        return mode == always ? jump : alwaysStock;
-    return mode == hidden ? jump : hiddenStock;
-}
-} // namespace spidy::glow_check

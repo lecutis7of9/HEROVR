@@ -18,7 +18,6 @@
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_render_memory.hpp"
 #include "spidy/native_shadow_distance.hpp"
-#include "spidy/sl_watch.hpp"
 #include <MinHook.h>
 #include <algorithm>
 #include <atomic>
@@ -86,7 +85,6 @@ char reportBuf[reportBytes]{};
 std::mutex lock;
 extern "C" spidy::native_address_finder::Data SpidyAddressFinderData;
 extern "C" char SpidyAddressFinderReport[reportBytes];
-extern "C" spidy::sl_watch::Data SpidySlWatchData; // 0.0.73 SL WATCH
 void syncExports() {
     SpidyAddressFinderData = live;
     std::memcpy(SpidyAddressFinderReport, reportBuf, reportBytes);
@@ -1452,149 +1450,6 @@ void STDMETHODCALLTYPE detourDrawIndexed(ID3D12GraphicsCommandList* list, UINT c
     originalDrawIndexed(list, count, start, base, inst);
 }
 
-// ---- 0.0.73 SL WATCH (sl_watch.hpp): what the game hands Streamline, in a normal session ----------------------
-// The detours below always pass the call on unchanged; the watch only reads. Off: one relaxed load per call.
-std::atomic<uint32_t> slWatchOn{1};
-SRWLOCK slWatchLock = SRWLOCK_INIT;
-std::atomic<uintptr_t> slLo{}, slHi{}; // sl.interposer.dll's image, for the frame token's virtual
-
-uint32_t sehFrameIndex(uintptr_t fn, const void* token) {
-    __try {
-        return reinterpret_cast<uint32_t (*)(const void*)>(fn)(token);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return spidy::sl_watch::noFrame;
-    }
-}
-// The FrameToken's index (its virtual operator uint32_t, called only when the token's GUID matches and the
-// function lies in sl.interposer.dll); raw gets the dword at +40 (CANDIDATE: the interposer's own counter).
-uint32_t slFrameIndex(uint64_t token, uint32_t& raw) {
-    namespace sw = spidy::sl_watch;
-    raw = sw::noFrame;
-    uint8_t head[sw::tokenRawAt + 4]{};
-    if (!token || !safeRead(reinterpret_cast<const void*>(token), head, sizeof head))
-        return sw::noFrame;
-    raw = sw::u32(head + sw::tokenRawAt);
-    if (sw::u32(head + sw::tokenGuidAt) != sw::frameTokenGuid)
-        return sw::noFrame;
-    uintptr_t vtbl{}, fn{};
-    std::memcpy(&vtbl, head, sizeof vtbl);
-    if (!vtbl || !safeRead(reinterpret_cast<const void*>(vtbl), &fn, sizeof fn))
-        return sw::noFrame;
-    const uintptr_t lo = slLo.load(std::memory_order_relaxed), hi = slHi.load(std::memory_order_relaxed);
-    if (!lo || fn < lo || fn >= hi)
-        return sw::noFrame;
-    return sehFrameIndex(fn, reinterpret_cast<const void*>(token));
-}
-// A ViewportHandle's value (+32), checked by its GUID; noFrame when it is not one.
-uint32_t slViewportId(uint64_t handle) {
-    namespace sw = spidy::sl_watch;
-    uint8_t h[sw::viewportValueAt + 4]{};
-    if (!handle || !safeRead(reinterpret_cast<const void*>(handle), h, sizeof h) ||
-        sw::u32(h + sw::guidAt) != sw::viewportGuid)
-        return sw::noFrame;
-    return sw::u32(h + sw::viewportValueAt);
-}
-void slWatchConstants(uint64_t a0, uint64_t a1, uint64_t a2) {
-    namespace sw = spidy::sl_watch;
-    auto& d = SpidySlWatchData;
-    const uint64_t call = static_cast<uint64_t>(
-        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.constantsCalls)));
-    uint32_t raw{};
-    const uint32_t frame = slFrameIndex(a1, raw);
-    const uint32_t vp = slViewportId(a2);
-    uint8_t resetFlag{};
-    const bool isConstants = a0 && safeRead(reinterpret_cast<const void*>(a0 + sw::flagsAt + sw::reset), &resetFlag, 1);
-    const bool sample = sw::wantSample(frame, call, d.every);
-    sw::Sample s{};
-    bool decoded = false;
-    if (sample && isConstants) {
-        uint8_t c[sw::constantsBytes];
-        if (safeRead(reinterpret_cast<const void*>(a0), c, sizeof c) && sw::decode(c, s)) {
-            decoded = true;
-            s.call = static_cast<uint32_t>(call);
-            s.frame = frame;
-            s.frameRaw = raw;
-            s.viewport = vp;
-            s.callerRva = returnRva();
-        }
-    }
-    if (!TryAcquireSRWLockExclusive(&slWatchLock))
-        return; // never wait on the render thread
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
-    if (const int slot = sw::slotFor(d.views, vp); slot >= 0) {
-        auto& v = d.views[slot];
-        v.id = vp;
-        ++v.constants;
-        if (frame != v.lastFrame && frame != sw::noFrame && v.lastFrame != sw::noFrame && slot == 0)
-            ++d.distinctFrames;
-        v.lastFrame = frame;
-        if (resetFlag == 1)
-            ++v.resets;
-    } else {
-        ++d.overflow;
-    }
-    if (decoded) {
-        d.ring[d.next % sw::ringSize] = s;
-        d.next = (d.next + 1) % sw::ringSize;
-        ++d.samples;
-    } else if (sample) {
-        ++d.foreign;
-    }
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
-    ReleaseSRWLockExclusive(&slWatchLock);
-}
-// slSetTag(viewport, tags, n) and slSetTagForFrame(token, viewport, tags, n): which buffers each viewport tags.
-void slWatchTags(uint64_t viewport, uint64_t tags, uint64_t count) {
-    namespace sw = spidy::sl_watch;
-    auto& d = SpidySlWatchData;
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.tagCalls));
-    const uint32_t vp = slViewportId(viewport);
-    uint32_t mask = 0;
-    const uint64_t n = count < sw::maxTags ? count : sw::maxTags;
-    for (uint64_t i = 0; tags && i < n; ++i) {
-        uint32_t type{};
-        if (safeRead(reinterpret_cast<const void*>(tags + i * sw::tagBytes + sw::tagTypeAt), &type, sizeof type))
-            mask |= sw::tagBit(type);
-    }
-    if (!TryAcquireSRWLockExclusive(&slWatchLock))
-        return;
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
-    if (const int slot = sw::slotFor(d.views, vp); slot >= 0) {
-        d.views[slot].id = vp;
-        ++d.views[slot].tagCalls;
-        d.views[slot].tagMask |= mask;
-    } else {
-        ++d.overflow;
-    }
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
-    ReleaseSRWLockExclusive(&slWatchLock);
-}
-// slEvaluateFeature(feature, token, inputs, n, cmd): the viewport among its inputs.
-void slWatchEvaluate(uint64_t inputs, uint64_t count) {
-    namespace sw = spidy::sl_watch;
-    auto& d = SpidySlWatchData;
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.evaluateCalls));
-    uint32_t vp = sw::noFrame;
-    const uint64_t n = count < sw::maxInputs ? count : sw::maxInputs;
-    for (uint64_t i = 0; inputs && i < n && vp == sw::noFrame; ++i) {
-        uint64_t p{};
-        if (safeRead(reinterpret_cast<const void*>(inputs + i * 8), &p, sizeof p))
-            vp = slViewportId(p);
-    }
-    if (vp == sw::noFrame || !TryAcquireSRWLockExclusive(&slWatchLock))
-        return;
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
-    if (const int slot = sw::slotFor(d.views, vp); slot >= 0) {
-        d.views[slot].id = vp;
-        ++d.views[slot].evaluates;
-    } else {
-        ++d.overflow;
-    }
-    InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
-    ReleaseSRWLockExclusive(&slWatchLock);
-}
-bool slWatching() { return slWatchOn.load(std::memory_order_relaxed) != 0; }
-
 uint64_t hookExport(ExportFn* original, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4,
                     uint64_t a5, const char* tag, bool decodeSlConstants) {
     if (armed.load() && !failed.load()) {
@@ -1654,23 +1509,15 @@ uint64_t hookExport(ExportFn* original, uint64_t a0, uint64_t a1, uint64_t a2, u
 }
 
 uint64_t detourSlSetConstants(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5) {
-    if (slWatching())
-        slWatchConstants(a0, a1, a2);
     return hookExport(&originalSlSetConstants, a0, a1, a2, a3, a4, a5, "slSetConstants", true);
 }
 uint64_t detourSlEvaluate(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5) {
-    if (slWatching())
-        slWatchEvaluate(a2, a3 & 0xffffffffu);
     return hookExport(&originalSlEvaluate, a0, a1, a2, a3, a4, a5, "slEvaluateFeature", false);
 }
 uint64_t detourSlSetTag(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5) {
-    if (slWatching())
-        slWatchTags(a0, a1, a2 & 0xffffffffu);
     return hookExport(&originalSlSetTag, a0, a1, a2, a3, a4, a5, "slSetTag", false);
 }
 uint64_t detourSlSetTagForFrame(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5) {
-    if (slWatching())
-        slWatchTags(a1, a2, a3 & 0xffffffffu);
     return hookExport(&originalSlSetTagForFrame, a0, a1, a2, a3, a4, a5, "slSetTagForFrame", false);
 }
 uint64_t detourNgxEval(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5) {
@@ -1723,44 +1570,6 @@ void installExportHooks() {
     tryHookExport(L"libxess.dll", "xessD3D12Execute", detourXessExec, &originalXessExec, "xessD3D12Execute");
     tryHookExport(L"ffx_fsr2_x64.dll", "ffxFsr2ContextDispatch", detourFsrDispatch, &originalFsrDispatch,
                   "ffxFsr2ContextDispatch");
-}
-
-// 0.0.73 SL WATCH: the four Streamline hooks, each made once (MinHook freezes the threads while it patches, so
-// one already made is never asked again). Returns sl_watch's hooked bits; 0 while sl.interposer.dll is absent.
-uint32_t slWatchInstall() {
-    namespace sw = spidy::sl_watch;
-    const HMODULE h = GetModuleHandleW(L"sl.interposer.dll");
-    if (!h)
-        return 0;
-    if (!slLo.load()) {
-        const auto base = reinterpret_cast<uintptr_t>(h);
-        IMAGE_DOS_HEADER dos{};
-        IMAGE_NT_HEADERS64 nt{};
-        if (safeRead(h, &dos, sizeof dos) && dos.e_magic == IMAGE_DOS_SIGNATURE &&
-            safeRead(reinterpret_cast<const void*>(base + static_cast<uintptr_t>(dos.e_lfanew)), &nt, sizeof nt) &&
-            nt.Signature == IMAGE_NT_SIGNATURE) {
-            slHi.store(base + nt.OptionalHeader.SizeOfImage);
-            slLo.store(base);
-        }
-    }
-    struct One {
-        const char* name;
-        ExportFn detour;
-        ExportFn* original;
-        uint32_t bit;
-    };
-    const One all[] = {{"slSetConstants", detourSlSetConstants, &originalSlSetConstants, sw::hookConstants},
-                       {"slEvaluateFeature", detourSlEvaluate, &originalSlEvaluate, sw::hookEvaluate},
-                       {"slSetTag", detourSlSetTag, &originalSlSetTag, sw::hookTag},
-                       {"slSetTagForFrame", detourSlSetTagForFrame, &originalSlSetTagForFrame, sw::hookTagForFrame}};
-    uint32_t hooked = 0;
-    for (const auto& o : all) {
-        if (!*o.original)
-            tryHookExport(L"sl.interposer.dll", o.name, o.detour, o.original, o.name);
-        if (*o.original)
-            hooked |= o.bit;
-    }
-    return hooked;
 }
 
 void finaliseReport();
@@ -2494,20 +2303,6 @@ void noteView(unsigned kind, const native_view::Descriptor& d) {
 extern "C" {
 __declspec(dllexport) spidy::native_address_finder::Data SpidyAddressFinderData{};
 __declspec(dllexport) char SpidyAddressFinderReport[spidy::native_address_finder::reportBytes]{};
-// 0.0.73 SL WATCH (sl_watch.hpp): the record (SLWT) and its switch, 0 off / 1 on; on also makes the hooks once.
-__declspec(dllexport) spidy::sl_watch::Data SpidySlWatchData{};
-
-__declspec(dllexport) DWORD WINAPI SpidySlWatchOn(void* on) {
-    using namespace spidy::native_address_finder;
-    const auto v = reinterpret_cast<uintptr_t>(on);
-    if (v > 1)
-        return 4473;
-    slWatchOn.store(static_cast<uint32_t>(v));
-    ::SpidySlWatchData.on = static_cast<uint32_t>(v);
-    if (v)
-        ::SpidySlWatchData.hooked = slWatchInstall();
-    return 0;
-}
 
 __declspec(dllexport) DWORD WINAPI SpidyAddressFinder(void* mode) {
     using namespace spidy::native_address_finder;

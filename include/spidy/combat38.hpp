@@ -154,19 +154,9 @@ enum Option : uint32_t {
     repLog,
     // 0.0.73 test 3 VAN PEDALS: WHEEL HAND (on: a trigger drives only while its hand grips the wheel) or CLASSIC (0.0.72)
     vanPedals,
-    // 0.0.73 IMAGE: SPIDYVR (sharp: no FXAA, no sharpen, the history read Catmull-Rom, mip bias 0 at the
-    // next start) or HERO VR CLASSIC (test 3: FXAA, sharpen 140, bilinear history, mip bias 0.5)
-    image,
-    // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): SPIDYVR (the game's own TAA in each
-    // eye, as SpidyVR) or OFF (IMAGE's look: EYE AA history, FXAA and sharpening as IMAGE sets; the default since
-    // the 0.0.73 release - index 0 stays SPIDYVR, the launcher's default and game_xr's start value are OFF)
-    imageStyle,
     // 0.0.73 DD BATON: ON (the held baton seated in the fist, the grapple fired from its silver tip, the tip flying
     // to the anchor on a rope and reeled back) or OFF (test 3's held baton and grapple line)
     ddBatonTip,
-    // 0.0.73 STREAMER MODE (streamer_view.hpp): the monitor shows the headset's eye, every drawing on it (ON) or not (OFF);
-    // STREAMER SMOOTH: how the monitor's view steadies head shake (LOW, OFF, HIGH); STREAMER EYE: LEFT EYE or RIGHT EYE
-    streamerMode, streamerSmooth, streamerEye,
     // 0.0.73 HERO HANDS (suit_wear::HandProfile): IRON MAN's own hands - each MARK's gauntlet turned so its
     // repulsor is the real palm, the raised hand drawn palm out along the blast (ON) or test 4's shared hands (OFF)
     ironHands,
@@ -180,24 +170,12 @@ enum Option : uint32_t {
     // 0.0.73 LIGHT CHECKS (eye_queries.hpp): ON (each eye's light-glow visibility checks get the game view's
     // room, at least 1024, not the 256 the game gives secondary views) or OFF (the game's 256); next VR start
     lightChecks,
-    // 0.0.73 GLOW CHECK (eye_queries.hpp glow_check): a live debug switch for the lights' halo / streak sprites:
-    // GAME (the game's visibility test), ALWAYS (drawn untested) or HIDDEN (not drawn)
-    glowCheck,
-    // 0.0.73 SL WATCH (sl_watch.hpp): ON (default for the test build) logs what the game hands Streamline
-    // (jitter, motion-vector scale and flags, near/far/FOV, frame token, viewport id) every 60 frames; OFF stops
-    slWatch,
     // 0.0.73 MP SOLO TEST: a loopback ghost of you (or the MP Test Buddy) as PLAYER 2 over the UDP net code (ON) or not (OFF);
     // 0.0.74 test 1: back for the test build, OFF first (the default, value 0), ON to try it
     mpSoloTest,
-    // 0.0.73 AA SHARPEN MATCH (eye_sharpen.hpp matchedPercent): ON (the default) sharpens by the share of
-    // the eye history kept, none while a swing cuts it; OFF sharpens as set (test 5).
-    sharpenMatch,
     // 0.0.73 test 6 CLAW LEVEL (suit_wear.hpp clawLevelDeg): ON (the default) the claws level with the hand (along
     // the hand bone, the same roots); OFF test 5's 8-30 degree tilt toward the back of the hand
     clawLevel,
-    // 0.0.73 test 6 WINDOW POP FIX (window_pop.hpp): ON (the default) the game's widened view keeps flat play's
-    // building detail distance (at most 2x); OFF test 5's
-    windowPop,
     // 0.0.73 MPSUIT PLAYER 2 BODY (mp_body.hpp; the owner: "when im spiderman with ingame suits the other player
     // was that stick figure thing again"): SUIT LOOK (the default) draws PLAYER 2 without a mod suit model as a
     // shaded hero body (Spider-Man in the suit's learned colours); FIGURE test 6's stick figure
@@ -594,18 +572,8 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"van_pedals", "VAN PEDALS", "VPEDL", "WHEEL HAND: the wheel hand's trigger drives, the free hand fires, no restart.",
      2, {"WHEEL HAND", "CLASSIC", nullptr, nullptr}},
-    {"image", "IMAGE", "IMAGE", "SPIDYVR: sharp, no smear; CLASSIC: the older look; textures change on restart.",
-     2, {"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr}},
-    {"image_style", "GAME TAA", "GTAA", "OFF keeps the picture steady; SPIDYVR runs the game's TAA per eye, no restart.",
-     2, {"SPIDYVR", "OFF", nullptr, nullptr}},
     {"dd_baton_tip", "BATON TIP", "DDTIP", "ON: the baton sits in the fist, its silver tip flies on a rope, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"streamer_mode", "STREAMER MODE", "STRMR", "ON shows the headset's view with all its drawings on the monitor, no restart.",
-     2, {"ON", "OFF", nullptr, nullptr}},
-    {"streamer_smooth", "STREAMER SMOOTH", "STRSM", "Steadies head shake in the monitor's view, HIGH the most, no restart.",
-     3, {"LOW", "OFF", "HIGH", nullptr}},
-    {"streamer_eye", "STREAMER EYE", "STREY", "Which headset eye the monitor shows in STREAMER MODE, no restart.",
-     2, {"LEFT EYE", "RIGHT EYE", nullptr, nullptr}},
     {"iron_hands", "HERO HANDS", "IMHND", "ON: Iron Man's own hands, palm out when raised to fire; no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"dd_grapple_aim", "GRAPPLE AIM", "DDAIM", "ON: the baton's silver tip turns to the aim while grappling; no restart.",
@@ -614,17 +582,9 @@ inline constexpr OptionInfo optionInfo[options] = {
      2, {"ON", "OFF", nullptr, nullptr}},
     {"light_checks", "LIGHT CHECKS", "LCHK", "ON lets each eye check every light's glow so halos hold, restart VR to apply.",
      2, {"ON", "OFF", nullptr, nullptr}},
-    {"glow_check", "GLOW CHECK", "GLOW", "Debug: ALWAYS draws every light glow untested, HIDDEN draws none, no restart.",
-     3, {"GAME", "ALWAYS", "HIDDEN", nullptr}},
-    {"sl_watch", "SL WATCH", "SLW", "Test: logs the game's DLSS camera data for the export, no restart.",
-     2, {"ON", "OFF", nullptr, nullptr}},
     {"mp_solo_test", "MP SOLO TEST", "MPSOL", "ON shows you 3 m ahead as PLAYER 2 over the UDP loopback test, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
-    {"sharpen_match", "SHARPEN MATCH", "SHM", "ON sharpens only what the eye history smoothed, none while you move; no restart.",
-     2, {"ON", "OFF", nullptr, nullptr}},
     {"claw_level", "CLAW LEVEL", "CLVL", "ON points the claws level with the hand, OFF keeps the older tilt; no restart.",
-     2, {"ON", "OFF", nullptr, nullptr}},
-    {"window_pop", "WINDOW POP FIX", "WPOP", "ON keeps flat play's building detail in VR, up to 2x (moderate GPU); no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"mp_player2_body", "PLAYER 2 BODY", "P2B", "SUIT LOOK draws PLAYER 2 in game suits as a hero body; no restart.",
      2, {"SUIT LOOK", "FIGURE", nullptr, nullptr}},
@@ -654,21 +614,6 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"throw_swing", "THROW BY SWING", "TSWG", "ON throws fly the way your arm swung, OFF is the old aim; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"glide_tilt", "GLIDE TILT", "GTLT", "ON: tilt your controllers to set the glide dive angle, like Shadow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
-// 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
-// good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
-// 0.6.0) runs the game's own TAA per eye with the game's sharpening at its lowest and no FXAA, CAS or mip
-// bias of its own; HERO VR's engine TAA still shakes distant buildings (CANDIDATE: jitter units, per-eye
-// motion vectors), so SPIDYVR here is the nearest we can run: EYE AA's history kept, read sharp
-// (Catmull-Rom), with the smoothing (FXAA), the sharpening (140) and the softer textures (+0.5) taken off.
-// Live but the textures (the mip bias is set when the game starts).
-struct ImageLook {
-    uint32_t aa;       // SpidyEyeAA: 0 off, 1 FXAA
-    uint32_t sharpen;  // SpidyEyeSharpen, 0-200
-    bool sharpHistory; // SpidyEyeHistorySharp
-};
-inline ImageLook imageLook(uint32_t value) {
-    return value == 1 ? ImageLook{1, 140, false} : ImageLook{0, 0, true};
-}
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }
 // 0.0.73 test 3: SHADOW MATCH value 0 is ON (the default), 1 OFF (test 2 had them the other way round).

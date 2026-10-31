@@ -110,15 +110,7 @@ SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, R
 #   proven without the headset). LensFlares is the name in the game's registry (the October 25 report,
 #   game-vr-20261025-130446: LensFlares = 1 beside its log's "Lens Flares: On", CONFIRMED); 0 for Off is by
 #   the other toggles' encoding (CANDIDATE). Backed up and put back after the session as SESSION's are.
-# - 0.0.73 AA GAME AA TAA (the default with -EngineTaa and live.txt image_style = spidyvr; the launcher's KEEP MY
-#   GAME AA or --keep-game-aa leaves the player's): the game's Anti-Aliasing at TAA with no upscaler for the
-#   session (AA 2, UpscaleMethod 0), the path SpidyVR's per-eye TAA runs on. Test 5 (game-vr-20261029-012428) ran
-#   DLAA/DLSS Quality (AA 2, UpscaleMethod 2): DLSS biased 266 texture samplers negative for its 864 x 480 render
-#   (the eyes share them at 100%, where that sparkles) and evaluated every frame for the monitor view only (SL
-#   WATCH: viewport 0 alone; the eyes never pass through Streamline). Encoding CONFIRMED beside the game's log in
-#   31 reports kept here: AA 2 + UpscaleMethod 0 is "Anti aliasing: TAA / Upscale method: None" (23 of them),
-#   AA 2 or 3 + UpscaleMethod 2 is "DLAA / DLSS" (8). Read by the game at launch (restart); put back after.
-SESSION_OFF = dict(lens_flares=dict(LensFlares=0), game_aa=dict(AA=2, UpscaleMethod=0))
+SESSION_OFF = dict(lens_flares=dict(LensFlares=0))
 
 
 def session_list(off=()):
@@ -346,7 +338,7 @@ def shrink(registry=None, backup=BACKUP, screen=None, height=HEIGHT):
 def prepare_session(registry=None, backup=BACKUP, keep=(), off=()):
     """Turn off what SESSION lists, adding the user's values to the backup (made here if the window
     keeps the user's settings). keep: PICTURE names ('depth_of_field', 'sharpening', 'comfort') to leave as the
-    player has them; off: SESSION_OFF names ('lens_flares', 'game_aa') turned off (or set) too. Returns the values written."""
+    player has them; off: SESSION_OFF names ('lens_flares') turned off too. Returns the values written."""
     registry = registry or Registry()
     session = session_list(off)
     kept = {value for name in keep for value in PICTURE[name]}

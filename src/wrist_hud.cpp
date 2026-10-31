@@ -931,8 +931,7 @@ constexpr SectionDef powersSections[] = {
 constexpr SectionDef vrSections[] = {
     {"BODY AND VIEW", C::none, C::none, "", "", "SETTINGS", -1,
      {C::combatCrawlCap, C::combatWallTilt, C::combatHandFlips, C::npcFade, C::playOnMonitor, C::combatSpiderClimbOnly,
-      C::combatGameBody, C::combatCalibLook, C::combatWeaponCollision, C::combatStreamerMode, C::combatStreamerSmooth,
-      C::combatStreamerEye}},
+      C::combatGameBody, C::combatCalibLook, C::combatWeaponCollision}},
     {"WEBS", C::webStyle, C::webColor, "", "", nullptr, -1,
      {C::thickness, C::speed, C::webStyle, C::webColor, C::reticles, C::combatWebRope}},
     {"HOLOGRAM", C::hudHeight, C::hudScale, "", "", nullptr, -1,
@@ -964,11 +963,11 @@ constexpr SectionDef combatSections[] = {
 };
 constexpr SectionDef graphicsSections[] = {
     {"QUALITY", C::aa, C::sharpen, "", "", nullptr, -1,
-     {C::combatImage, C::aa, C::combatImageStyle, C::sharpen, C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::eyeAa, C::eyeTrail, C::history}},
+     {C::aa, C::sharpen, C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::eyeAa, C::eyeTrail, C::history}},
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
      {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
     {"DISPLAY AND DETAIL", C::monitor, C::none, "WINDOW ", "", nullptr, -1,
-     {C::monitor, C::eyeBloom, C::combatSharpenMatch, C::combatLightHold, C::combatLightChecks, C::combatGlowCheck, C::combatSlWatch, C::combatLensFlares, C::combatWindowPop, C::sharedLod, C::eyeLod}},
+     {C::monitor, C::eyeBloom, C::combatLightHold, C::combatLightChecks, C::combatLensFlares, C::sharedLod, C::eyeLod}},
     {"ADVANCED - TESTS AND ENGINE", C::none, C::none, "", "", "SETTINGS", -1,
      {C::engineTaa, C::taaJitter, C::eyeTest, C::addressFinder, C::webBallTest, C::foveaDebug, C::foveaStats}},
 };
@@ -4596,22 +4595,13 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
             case Control::combatHeroMenu:
             case Control::combatRepLog:
             case Control::combatVanPedals:
-            case Control::combatImage:
-            case Control::combatImageStyle:
             case Control::combatDdBatonTip:
-            case Control::combatStreamerMode:
-            case Control::combatStreamerSmooth:
-            case Control::combatStreamerEye:
             case Control::combatIronHands:
             case Control::combatDdGrappleAim:
             case Control::combatWolverineClaws:
             case Control::combatLightChecks:
-            case Control::combatGlowCheck:
-            case Control::combatSlWatch:
             case Control::combatMpSoloTest:
-            case Control::combatSharpenMatch:
             case Control::combatClawLevel:
-            case Control::combatWindowPop:
             case Control::combatMpPlayer2Body:
             case Control::combatComingSoon:
             case Control::combatHideouts:

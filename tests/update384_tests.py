@@ -162,8 +162,8 @@ class Settings(unittest.TestCase):
 
     def test_graphics_defaults_unchanged(self):
         d = ls.UPDATE37_DEFAULTS
-        self.assertEqual((d['aa'], d['far_shadows'], d['sharpen'], d['shared_lod'], d['eye_bloom']), (0, 2, 0, 2, 0))  # 0.0.73 IMAGE SPIDYVR; 0.0.73 lights: EYE BLOOM OFF
-        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2})  # 0.0.73 IMAGE: sharpen follows the look (IMAGE_LOOKS)
+        self.assertEqual((d['aa'], d['far_shadows'], d['sharpen'], d['shared_lod'], d['eye_bloom']), (1, 2, 140, 2, 0)) # 0.0.74 test 10 PICTURE 72: 0.0.72's aa 1, sharpen 140; 0.0.73 lights: EYE BLOOM OFF
+        self.assertEqual(ls.STARTUP_ON, {'eye_temporal': 1, 'far_shadows': 2, 'sharpen': 140})  # 0.0.74 test 10 PICTURE 72: sharpen 140 again
 
 
 if __name__ == '__main__':

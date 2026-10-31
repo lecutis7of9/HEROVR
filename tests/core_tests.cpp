@@ -109,7 +109,6 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
-#include "spidy/image_style.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/shared_lod.hpp"
@@ -129,7 +128,6 @@
 #include "spidy/combat_input.hpp"
 #include "spidy/combat38.hpp"
 #include "spidy/eye_queries.hpp"
-#include "spidy/sl_watch.hpp"
 #include "spidy/hero_switch.hpp"
 #include "spidy/hand_crawl.hpp"
 #include "spidy/health_log.hpp"
@@ -176,9 +174,7 @@
 #include "spidy/seated_lock074.hpp"
 #include "spidy/cabin_look074.hpp"
 #include "spidy/finger_ray074.hpp"
-#include "spidy/streamer_view.hpp"
 #include "spidy/hit_marks.hpp"
-#include "spidy/window_pop.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
 // Stand-ins for the game's classes, by the names the target scan's rules look
@@ -1659,7 +1655,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 256, "controls count drifted"); // 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 247, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -1999,7 +1995,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 256, "controls count drifted"); // 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 247, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -18943,7 +18939,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 168, "0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 159, "0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -18977,7 +18973,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 168, "0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 159, "0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX (9); 0.0.74 test 10: + GLIDE TILT; 0.0.74 test 10: + THROW BY SWING; 0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -19299,7 +19295,7 @@ int main() {
                 }
             }
         }
-        check(placed == 224 /* 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 215 /* 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -30513,9 +30509,8 @@ int main() {
         check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1 && help.back() == '.' &&
                   help.find("no restart") != std::string::npos, "the subtext: one sentence, 80 at most, the restart said");
     });
-    test("0.0.73 LIGHT CHECKS and GLOW CHECK: the eyes' glow query room and the live glow debug switch", [] {
+    test("0.0.73 LIGHT CHECKS: the eyes' glow query room (kept in 0.0.74 test 10)", [] {
         namespace eq = spidy::eye_queries;
-        namespace gc = spidy::glow_check;
         check(eq::room(0) == 0x400 && eq::room(-1) == 0x400 && eq::room(0x100) == 0x400 && eq::room(0x800) == 0x800 &&
                   eq::room(0x801) == 0x900 && eq::room(100000) == 0x1000,
               "the room: at least 1024, the game view's when bigger, at most 4096, whole 256s");
@@ -30525,147 +30520,28 @@ int main() {
         check(eq::clampBytes[0] == 0xb8 && eq::clampBytes[2] == 0x01 && eq::clampByteRva == eq::clampRva + 2 &&
                   eq::capacityOffset == 0x1c78 + 0x88 && eq::on(0) && !eq::on(1),
               "mov eax, 0x100 at 0x2c98a41; ON is value 0");
-        check(gc::wantAt(gc::alwaysRva, gc::game) == gc::alwaysStock && gc::wantAt(gc::hiddenRva, gc::game) == gc::hiddenStock &&
-                  gc::wantAt(gc::alwaysRva, gc::always) == gc::jump && gc::wantAt(gc::hiddenRva, gc::always) == gc::hiddenStock &&
-                  gc::wantAt(gc::hiddenRva, gc::hidden) == gc::jump && gc::wantAt(gc::alwaysRva, gc::hidden) == gc::alwaysStock &&
-                  gc::alwaysRva % 2 == 0 && gc::hiddenRva % 2 == 0,
-              "GAME leaves both, ALWAYS and HIDDEN one each, both aligned");
         const auto& lc = combat38::optionInfo[combat38::lightChecks];
-        const auto& gl = combat38::optionInfo[combat38::glowCheck];
         check(std::string(lc.key) == "light_checks" && std::string(lc.values[0]) == "ON" && lc.count == 2 &&
                   std::string(lc.help).find("restart VR") != std::string::npos,
               "LIGHT CHECKS: ON first, says a VR restart applies it");
-        check(std::string(gl.key) == "glow_check" && std::string(gl.values[0]) == "GAME" && gl.count == gc::modes &&
-                  std::string(gl.help).find("no restart") != std::string::npos,
-              "GLOW CHECK: GAME first, live");
-        check(static_cast<int>(wrist_hud::Control::combatGlowCheck) - static_cast<int>(wrist_hud::Control::combatLightChecks) == 1 &&
-                  wrist_hud::combatOption(wrist_hud::Control::combatLightChecks) == combat38::lightChecks &&
-                  wrist_hud::combatOption(wrist_hud::Control::combatGlowCheck) == combat38::glowCheck &&
-                  wrist_hud::combatOption(wrist_hud::Control::combatSlWatch) == combat38::slWatch,
-              "each wrist row presses its own option");
+        check(wrist_hud::combatOption(wrist_hud::Control::combatLightChecks) == combat38::lightChecks &&
+                  wrist_hud::restartTag(wrist_hud::Control::combatLightChecks),
+              "the wrist row presses its own option, with the restart tag");
     });
-    test("0.0.73 AA SHARPEN MATCH: CAS follows the eye history kept, as set when off or with no history", [] {
-        namespace es = spidy::eye_sharpen;
-        check(es::matchedPercent(100, true, true, 1.f) == 100 && es::matchedPercent(100, true, true, 0.f) == 0 &&
-                  es::matchedPercent(100, true, true, .5f) == 50 && es::matchedPercent(140, true, true, .25f) == 35,
-              "ON: the percent times the share kept (full still, none when a swing cuts the history)");
-        check(es::matchedPercent(100, false, true, 0.f) == 100 && es::matchedPercent(100, true, false, 0.f) == 100 &&
-                  es::matchedPercent(0, true, true, 1.f) == 0,
-              "OFF, or no history running: the percent as set (test 5); 0 stays 0");
-        check(es::matchedPercent(100, true, true, 2.f) == 100 && es::matchedPercent(100, true, true, -1.f) == 0 &&
-                  es::matchedPercent(100, true, true, std::nanf("")) == 0 &&
-                  es::matchedPercent(200, true, true, 1.f) == 200,
-              "never above the percent, a bad share sharpens none");
-        check(es::matchOn(0) && !es::matchOn(1), "value 0 ON (the default), 1 OFF");
-        const auto& sm = combat38::optionInfo[combat38::sharpenMatch];
-        check(std::string(sm.key) == "sharpen_match" && std::string(sm.values[0]) == "ON" &&
-                  std::string(sm.values[1]) == "OFF" && sm.count == 2 &&
-                  std::string(sm.help).find("no restart") != std::string::npos && std::strlen(sm.help) <= 80 &&
-                  std::string(sm.help).back() == '.',
-              "SHARPEN MATCH: ON first, one sentence, says no restart");
-        check(wrist_hud::combatOption(wrist_hud::Control::combatSharpenMatch) == combat38::sharpenMatch &&
-                  !wrist_hud::restartTag(wrist_hud::Control::combatSharpenMatch),
-              "the wrist row presses its own option, live");
-    });
-    test("0.0.73 test 6 WINDOW POP FIX: the widened game view gets flat play's detail distance back, at most 2x", [] {
-        namespace wp = spidy::window_pop;
-        // a stock 16:9 camera (tangents ~.84 x .47) and our both-eyes lens plus CULL MARGIN (~128 degrees: ~2.05 x 1.2)
-        check(std::abs(wp::flatMatch(.84f, .47f, 1.68f, .94f) - 2.f) < 1e-4f && std::abs(wp::flatMatch(.84f, .47f, 1.26f, 1.41f) - 1.5f) < 1e-4f,
-              "the widening undone: the smaller of the width and height ratios");
-        check(wp::flatMatch(.84f, .47f, 2.05f, 1.2f) == wp::maxBoost && wp::maxBoost == 2.f,
-              "never more than 2x (moderate GPU)");
-        check(wp::flatMatch(.84f, .47f, .7f, .4f) == 1.f, "a lens no wider than the stock camera: 1 (never less detail)");
-        check(wp::flatMatch(0, .47f, 1, 1) == 1.f && wp::flatMatch(std::nanf(""), .47f, 1, 1) == 1.f &&
-                  wp::flatMatch(.84f, .47f, -1, 1) == 1.f && wp::flatMatch(.84f, .47f, 1e9f, 1) == 1.f,
-              "bad bounds: 1 (the game's own)");
-        check(wp::ownMultiplier(1.7f, 1.7f) == 1.f && wp::ownMultiplier(1.f, 1.f) == 1.f && wp::ownMultiplier(1.3f, 1.7f) == 1.3f,
-              "SHARED LOD reads the game view's own multiplier without our boost (the eyes as in test 5)");
-        check(wp::on(0) && !wp::on(1), "value 0 ON (the default), 1 OFF");
-        const auto& w = combat38::optionInfo[combat38::windowPop];
-        check(std::string(w.key) == "window_pop" && std::string(w.values[0]) == "ON" && std::string(w.values[1]) == "OFF" &&
-                  w.count == 2 && std::string(w.help).find("no restart") != std::string::npos &&
-                  std::string(w.help).find("2x") != std::string::npos && std::strlen(w.help) <= 80 &&
-                  std::string(w.help).back() == '.',
-              "WINDOW POP FIX: ON first, one sentence with its strength, says no restart");
-        check(wrist_hud::combatOption(wrist_hud::Control::combatWindowPop) == combat38::windowPop &&
-                  !wrist_hud::restartTag(wrist_hud::Control::combatWindowPop),
-              "WINDOW POP FIX: the wrist row presses its own option, live");
-    });
-    test("0.0.73 SL WATCH: Streamline's Constants read at the SDK header's offsets, sampled every 60 frames", [] {
-        namespace sw = spidy::sl_watch;
-        uint8_t c[sw::constantsBytes]{};
-        const uint32_t guid = sw::constantsGuid;
-        std::memcpy(c + sw::guidAt, &guid, 4);
-        c[sw::versionAt] = 2;
-        const float jit[2] = {.25f, -.125f}, mv[2] = {1.f / 1920, 1.f / 1080}, nf[5] = {.1f, 1000.f, 1.2f, 1.78f, 0.f};
-        std::memcpy(c + 352, jit, 8);
-        std::memcpy(c + 360, mv, 8);
-        std::memcpy(c + 424, nf, 20);
-        c[444] = 1, c[445] = 1, c[447] = 1, c[450] = 2; // depthInverted, cameraMotionIncluded, reset, jittered invalid
-        sw::Sample s;
-        check(sw::decode(c, s) && s.jitter[0] == .25f && s.jitter[1] == -.125f && s.mvecScale[1] == 1.f / 1080 &&
-                  s.nearZ == .1f && s.farZ == 1000.f && s.fov == 1.2f && s.aspect == 1.78f && s.structVersion == 2,
-              "jitter +352, mvecScale +360, near/far/FOV/aspect +424..+436 (sl_consts.h)");
-        check(s.flags[sw::depthInverted] == 1 && s.flags[sw::cameraMotionIncluded] == 1 && s.flags[sw::motionVectors3D] == 0 &&
-                  s.flags[sw::reset] == 1 && s.flags[sw::jittered] == 2,
-              "the seven sl::Boolean from +444, motionVectorsJittered last at +450");
-        c[sw::guidAt] ^= 1;
-        check(!sw::decode(c, s), "not a Constants block: refused");
-        check(sw::wantSample(120, 7, 60) && !sw::wantSample(121, 7, 60) && sw::wantSample(sw::noFrame, 60, 60) &&
-                  !sw::wantSample(sw::noFrame, 61, 60) && !sw::wantSample(0, 0, 0),
-              "every 60th frame (every viewport of it); by call without a frame index");
-        sw::View v[sw::viewSlots]{};
-        v[0].id = 7;
-        check(sw::slotFor(v, 7) == 0 && sw::slotFor(v, 9) == 1, "a viewport keeps its slot, a new one takes the next");
-        for (auto& x : v)
-            x.id = 1;
-        check(sw::slotFor(v, 9) == -1 && sw::tagBit(1) == 2 && sw::tagBit(40) == 0, "full: overflow; tag bits");
-        const auto& o = combat38::optionInfo[combat38::slWatch];
-        check(std::string(o.key) == "sl_watch" && std::string(o.values[0]) == "ON" && sw::on(0) && !sw::on(1) &&
-                  std::string(o.help).find("no restart") != std::string::npos,
-              "SL WATCH: ON first (value 0), live");
-        check(sizeof(sw::Data) == 1232 && offsetof(sw::Data, views) == 64 && offsetof(sw::Data, ring) == 200 &&
-                  offsetof(sw::Data, sequence) == 1224,
-              "the SLWT record's layout (tools/update37_records.py parse_sl_watch)");
-    });
-    test("0.0.73 test 5 GAME TAA SPIDYVR: a press or an early block no longer turns it off for good", [] {
-        namespace et = spidy::engine_taa;
-        namespace is = spidy::image_style;
-        const uint32_t off = et::pack(et::off, et::none), on = et::pack(et::on, et::none);
-        // Test 4: on, then off by a press ("as asked"), and never again in that session.
-        is::Controller c;
-        auto s = c.update(is::spidyvr, off, et::none, true);
-        check(s.tryOn, "SPIDYVR did not try ENGINE TAA when nothing blocked it");
-        c.tried(true);
-        s = c.update(is::spidyvr, on, et::none, false);
-        check(s.clean && c.owned(), "on was not SpidyVR's clean picture");
-        s = c.update(is::spidyvr, off, et::none, false);
-        check(c.gaveUp() && s.eyeAaOn && !s.tryOn && c.lastOff() == et::none, "a press off did not hand over to EYE AA");
-        s = c.update(is::spidyvr, off, et::none, true);
-        check(!s.tryOn, "a press off was undone while the same eyes live");
-        s = c.update(is::spidyvr, off, et::noEyes, true); // a menu or cutscene: the eyes go
-        check(!s.tryOn, "tried with no eyes");
-        s = c.update(is::spidyvr, off, et::none, true); // new eyes with their targets
-        check(s.tryOn && !c.gaveUp() && s.note, "new eyes did not bring ENGINE TAA back");
-        // A halved frame rate holds for the session, new eyes or not.
-        c.tried(true);
-        c.update(is::spidyvr, on, et::none, false);
-        c.update(is::spidyvr, et::pack(et::off, et::slow), et::none, false);
-        c.update(is::spidyvr, off, et::noEyes, true);
-        s = c.update(is::spidyvr, et::pack(et::off, et::slow), et::none, true);
-        check(!s.tryOn && c.gaveUp() && c.lastOff() == et::slow, "a halved frame rate was retried");
-        // "unavailable" read once at the eyes' making (before their targets show) is not forever.
-        is::Controller early;
-        s = early.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
-        check(early.gaveUp() && !s.tryOn && s.note, "a restart block was not shown");
-        s = early.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
-        check(!s.tryOn, "a real block was tried");
-        s = early.update(is::spidyvr, off, et::none, true);
-        check(s.tryOn && !early.gaveUp(), "the cleared block was not retried");
-        // GAME TAA OFF is the switch-off: never tries.
-        is::Controller offStyle;
-        s = offStyle.update(is::gameTaaOff, off, et::none, true);
-        check(!s.tryOn && !offStyle.update(is::gameTaaOff, off, et::none, true).tryOn, "GAME TAA OFF tried");
+    test("0.0.74 test 10: 0.0.72's picture - the 0.0.73 picture switches are gone, the flicker fixes stay", [] {
+        for (int i = 0; i < combat38::options; ++i) {
+            const std::string k = combat38::optionInfo[i].key;
+            for (const char* gone : {"image", "image_style", "keep_game_aa", "sharpen_match", "streamer_mode",
+                                     "streamer_smooth", "streamer_eye", "window_pop", "sl_watch", "glow_check"})
+                check(k != gone, k + ": a 0.0.73 picture switch is back");
+        }
+        bool lights{}, hold{}, shadow{}, cull{}, flares{};
+        for (int i = 0; i < combat38::options; ++i) {
+            const std::string k = combat38::optionInfo[i].key;
+            lights |= k == "light_checks", hold |= k == "light_hold", shadow |= k == "shadow_match",
+                cull |= k == "cull_margin", flares |= k == "lens_flares";
+        }
+        check(lights && hold && shadow && cull && flares, "LIGHT CHECKS, LIGHT HOLD, SHADOW MATCH, CULL MARGIN, LENS FLARES kept");
     });
     test("Version 0.0.73: DD BATON fist - fistFit off leaves test 3's hand exactly, on moves only the held hand", [] {
         namespace mm = spidy::mesh_model;
@@ -32422,71 +32298,6 @@ int main() {
             check(!v::Wheel::onRim(v::wheelHub + Vec3{.5f, .2f, .3f}, a, off, v::Tune{}), "a hand in the lap: off the rim");
         }
     });
-    test("0.0.73 test 4 IMAGE STYLE (GAME TAA): SPIDYVR (default) runs the game's TAA per eye clean, OFF is IMAGE's look", [] {
-        namespace is = spidy::image_style;
-        namespace et = spidy::engine_taa;
-        using namespace wrist_hud;
-        const auto& o = combat38::optionInfo[combat38::imageStyle];
-        const std::string h = o.help;
-        check(std::string(o.key) == "image_style" && std::string(o.label) == "GAME TAA" && o.count == 2 &&
-                  std::string(o.values[0]) == "SPIDYVR" && std::string(o.values[1]) == "OFF",
-              "GAME TAA: SPIDYVR first (index 0), OFF (the default)");
-        check(combat38::imageStyle != combat38::image && combat38::imageLook(0).sharpHistory, "beside IMAGE, its look kept");
-        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
-              "its subtext: one sentence, no restart");
-        check(is::defaultStyle == is::gameTaaOff && is::spidy(0) && !is::spidy(1) && !is::spidy(7),
-              "value 0 SPIDYVR; the default (0.0.73 release) and anything unknown OFF");
-        check((resetSections(), controlSpot(graphicsPage, Control::combatImageStyle)).found, "on the GRAPHICS page");
-        // NONE skips the game's TemporalAa (exe-confirmed): SPIDYVR's jitter is OURS then; the rest as asked.
-        check(is::jitterMode(is::spidyvr, et::noJitter) == et::ours && is::jitterMode(is::spidyvr, et::game) == et::game &&
-                  is::jitterMode(is::spidyvr, et::pixels) == et::pixels && is::jitterMode(is::spidyvr, et::ours) == et::ours,
-              "SPIDYVR never NONE");
-        check(is::jitterMode(is::gameTaaOff, et::noJitter) == et::noJitter, "OFF keeps the NONE asked");
-        const uint32_t off = et::pack(et::off, et::none), on = et::pack(et::on, 0);
-        {   // A new session: waits for the eyes, then turns it on; on: EYE AA off, the clean picture.
-            is::Controller c;
-            auto s = c.update(is::spidyvr, et::pack(et::off, 0), et::noEyes, true);
-            check(!s.tryOn && !s.clean && s.note, "waits while blocked (EYE AA keeps the picture)");
-            s = c.update(is::spidyvr, off, et::none, true);
-            check(s.tryOn && !s.clean && !s.eyeAaOn, "tries when nothing blocks it");
-            c.tried(true);
-            s = c.update(is::spidyvr, on, et::none, true);
-            check(s.clean && s.eyeAaOff && !s.tryOn && c.owned(), "on: clean, EYE AA off");
-            // The FPS guard turns it off (slow): EYE AA in its place, no retry this session.
-            s = c.update(is::spidyvr, et::pack(et::off, et::slow), et::none, false);
-            check(s.eyeAaOn && !s.clean && !s.tryOn && c.gaveUp(), "slow: EYE AA instead");
-            s = c.update(is::spidyvr, off, et::none, true);
-            check(!s.tryOn && !s.clean, "and stays given up");
-            // The player turns it on by hand: SpidyVR's picture again.
-            s = c.update(is::spidyvr, on, et::none, true);
-            check(s.clean && s.eyeAaOff && !c.gaveUp(), "the player's on is honoured");
-            // VR ends: a new start tries again.
-            s = c.update(is::spidyvr, et::pack(et::off, et::vrEnded), et::noEyes, false);
-            check(!s.eyeAaOn && !c.gaveUp() && !c.owned(), "VR ended: not a failure");
-            s = c.update(is::spidyvr, off, et::none, false);
-            check(s.tryOn, "the next VR start tries");
-        }
-        {   // Needs a restart (the game's AA not TAA): no retries, EYE AA (HERO's picture) until then.
-            is::Controller c;
-            auto s = c.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
-            check(!s.tryOn && !s.clean && s.note && c.gaveUp(), "game AA: a hint, no tries");
-            s = c.update(is::spidyvr, et::pack(et::unavailable, et::gameAa), et::gameAa, true);
-            check(!s.tryOn && !s.note, "said once");
-            s = c.update(is::spidyvr, et::pack(et::unavailable, et::noTargets), et::noTargets, true);
-            check(!s.tryOn, "no targets: no tries");
-        }
-        {   // OFF: IMAGE's picture; switching from SPIDYVR turns ENGINE TAA off and EYE AA on.
-            is::Controller c;
-            auto s = c.update(is::gameTaaOff, off, et::none, true);
-            check(!s.tryOn && !s.clean && !s.engineOff && !s.eyeAaOn, "OFF from the start: nothing touched");
-            s = c.update(is::spidyvr, on, et::none, false);
-            check(s.clean, "SPIDYVR");
-            s = c.update(is::gameTaaOff, on, et::none, false);
-            check(s.engineOff && s.eyeAaOn && !s.clean && !s.tryOn, "back to IMAGE's picture");
-            s = c.update(is::gameTaaOff, on, et::none, false);
-            check(!s.engineOff && !s.clean && !s.eyeAaOn, "then the player's own presses rule");
-        }
-    });
     test("0.0.73 test 3 VAN PEDALS: WHEEL HAND (default) or CLASSIC, one sentence, no restart; CLASSIC is the 0.0.72 pedals", [] {
         namespace v = van072;
         const auto& o = combat38::optionInfo[combat38::vanPedals];
@@ -32525,42 +32336,6 @@ int main() {
             check(classic ? van.speed > 1.f : std::abs(van.speed) < 1e-3f,
                   classic ? "CLASSIC: RT drives without the wheel (0.0.72)" : "WHEEL HAND: a free hand's RT never drives");
         }
-    });
-    test("0.0.73 IMAGE: SPIDYVR (default, sharp) or HERO VR CLASSIC (test 3), one sentence naming the restart; the sharp history read", [] {
-        using namespace spidy::eye_history;
-        const auto& o = combat38::optionInfo[combat38::image];
-        const std::string h = o.help;
-        check(std::string(o.key) == "image" && std::string(o.label) == "IMAGE" && o.count == 2 &&
-                  std::string(o.values[0]) == "SPIDYVR" && std::string(o.values[1]) == "HERO VR CLASSIC",
-              "IMAGE: SPIDYVR first, HERO VR CLASSIC");
-        check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos,
-              "its subtext: one sentence, says what needs a restart");
-        const auto spidy = combat38::imageLook(0), classic = combat38::imageLook(1);
-        check(spidy.aa == 0 && spidy.sharpen == 0 && spidy.sharpHistory, "SPIDYVR: no FXAA, no sharpening, sharp history");
-        check(classic.aa == 1 && classic.sharpen == 140 && !classic.sharpHistory, "CLASSIC: test 3's FXAA, sharpen 140, bilinear");
-        check(combat38::imageLook(7).sharpHistory, "an insane value is SPIDYVR");
-        for (const float f : {0.f, .25f, .5f, .75f, 1.f}) {
-            float w[4];
-            catmullRomWeights(f, w);
-            check(std::fabs(w[0] + w[1] + w[2] + w[3] - 1.f) < 1e-5f, "Catmull-Rom weights sum to 1");
-        }
-        float w0[4];
-        catmullRomWeights(0.f, w0);
-        check(w0[0] == 0.f && w0[1] == 1.f && w0[2] == 0.f && w0[3] == 0.f, "no motion: the pixel itself");
-        // The smudge (CONFIRMED in test 3's export: the head moved in 32577 of 32652 pairs): a chain of
-        // half-pixel reads keeps much more of a one-pixel light sharp than bilinear.
-        std::vector<float> sharp(40, 0.f), soft(40, 0.f);
-        sharp[24] = soft[24] = 1.f;
-        for (int i = 0; i < 8; ++i) {
-            sharp = resampleRow(sharp, .5f, true);
-            soft = resampleRow(soft, .5f, false);
-        }
-        const float sharpPeak = *std::max_element(sharp.begin(), sharp.end()), softPeak = *std::max_element(soft.begin(), soft.end());
-        check(sharpPeak > softPeak * 1.4f, "the sharp read keeps the light (" + std::to_string(sharpPeak) + " vs " + std::to_string(softPeak) + ")");
-        float sum = 0.f;
-        for (const float v : sharp)
-            sum += v;
-        check(std::fabs(sum - 1.f) < 1e-3f, "the sharp read keeps the light's energy");
     });
     test("0.0.73 test 3 RAY POKE: the free hand pointed at the dash screen pages it on a trigger press, from the seat", [] {
         namespace vs = van_screen;
@@ -34734,135 +34509,6 @@ int main() {
                     check(!out.empty() && sane(out, 0, {0, 1, -.4f}, 1), "a SETTINGS page drew badly");
                 }
         }
-    });
-    test("0.0.73 STREAMER MODE: ON (default), STREAMER SMOOTH LOW (default), STREAMER EYE LEFT; one sentence each, no restart", [] {
-        namespace sv = streamer_view;
-        const auto& m = combat38::optionInfo[combat38::streamerMode];
-        const auto& s = combat38::optionInfo[combat38::streamerSmooth];
-        const auto& e = combat38::optionInfo[combat38::streamerEye];
-        check(std::string(m.key) == "streamer_mode" && std::string(m.label) == "STREAMER MODE" && m.count == 2 &&
-                  std::string(m.values[0]) == "ON" && std::string(m.values[1]) == "OFF",
-              "STREAMER MODE: ON first (the default), OFF");
-        check(std::string(s.key) == "streamer_smooth" && s.count == 3 && std::string(s.values[0]) == "LOW" &&
-                  std::string(s.values[1]) == "OFF" && std::string(s.values[2]) == "HIGH",
-              "STREAMER SMOOTH: LOW first (the default), OFF, HIGH");
-        check(std::string(e.key) == "streamer_eye" && e.count == 2 && std::string(e.values[0]) == "LEFT EYE" &&
-                  std::string(e.values[1]) == "RIGHT EYE",
-              "STREAMER EYE: LEFT EYE first (the default), RIGHT EYE");
-        for (const auto* o : {&m, &s, &e}) {
-            const std::string h = o->help;
-            check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("no restart") != std::string::npos,
-                  std::string(o->label) + ": its subtext is one sentence and says no restart");
-            check(std::string(o->shortName).size() == 5, std::string(o->label) + ": a five-letter code");
-        }
-        check(sv::modeOn(0) && !sv::modeOn(1), "value 0 is ON");
-        check(sv::smoothSeconds(sv::smoothOff) == 0 && sv::smoothSeconds(sv::smoothLow) > 0 &&
-                  sv::smoothSeconds(sv::smoothHigh) > sv::smoothSeconds(sv::smoothLow),
-              "OFF follows at once, HIGH steadies most");
-        check(sv::eyeIndex(0) == 0 && sv::eyeIndex(1) == 1 && sv::eyeIndex(7) == 0, "LEFT EYE is eye 0, RIGHT EYE eye 1");
-        // On the wrist: BODY AND VIEW, in option order after VAN PEDALS.
-        using C = wrist_hud::Control;
-        check(static_cast<int>(C::combatStreamerMode) - static_cast<int>(C::combatCrawlCap) == combat38::streamerMode &&
-                  static_cast<int>(C::combatStreamerEye) - static_cast<int>(C::combatCrawlCap) == combat38::streamerEye,
-              "the wrist rows are the options");
-        const std::string help = wrist_hud::helpText(C::combatStreamerMode);
-        check(help.find("no restart") != std::string::npos, "the wrist shows STREAMER MODE's subtext");
-    });
-    test("0.0.73 STREAMER MODE: the crop fits the window's shape about the eye's axis, inside the eye", [] {
-        namespace sv = streamer_view;
-        const sv::Fov quest{-.942f, .698f, -.960f, .838f}; // a lopsided eye: wider outward and down
-        for (uint32_t smooth = 0; smooth < sv::smoothChoices; ++smooth) {
-            const auto c = sv::fitCrop(quest, sv::windowAspect(1920, 1080), sv::marginOf(smooth));
-            check(c.valid && std::abs(c.aspect() - 16.f / 9.f) < 1e-4f, "16:9 on a 16:9 window");
-            check(c.left == -c.right && c.down == -c.up, "centred on the eye's axis");
-            check(std::atan(c.right) < quest.right && std::atan(-c.left) < -quest.left && std::atan(c.up) < quest.up &&
-                      std::atan(-c.down) < -quest.down,
-                  "inside the eye's field");
-            check(sv::slack(quest, c) > 0, "room for the smoothing's lag");
-        }
-        check(sv::marginOf(sv::smoothHigh) > sv::marginOf(sv::smoothLow) &&
-                  sv::marginOf(sv::smoothLow) > sv::marginOf(sv::smoothOff),
-              "more smoothing keeps more room");
-        const auto tall = sv::fitCrop(quest, sv::windowAspect(1080, 1920), .1f);
-        check(tall.valid && std::abs(tall.aspect() - 9.f / 16.f) < 1e-4f, "a portrait window gets a portrait crop");
-        check(sv::windowAspect(0, 0) == 16.f / 9.f && sv::windowAspect(10000, 1) == 16.f / 9.f,
-              "a minimised or absurd window is taken as 16:9");
-        check(!sv::fitCrop({}, 1.7f, .1f).valid && !sv::fitCrop({-.9f, .7f, -.9f, std::nanf("")}, 1.7f, .1f).valid &&
-                  !sv::fitCrop({.1f, .7f, -.9f, .8f}, 1.7f, .1f).valid && !sv::fitCrop(quest, 0, .1f).valid,
-              "no crop for a bad lens or aspect (the old mirror stays)");
-        check(sv::slack(quest, {}) == 0, "no crop, no slack");
-    });
-    test("0.0.73 STREAMER MODE: the smoothing lags a shake, settles, stays inside the image and restarts on a jump", [] {
-        namespace sv = streamer_view;
-        auto yaw = [](float a) { return Quat{0, std::sin(a / 2), 0, std::cos(a / 2)}; };
-        sv::Smoother off;
-        off.step(yaw(0), 1.f / 30, 0, 1);
-        check(sv::angleBetween(off.step(yaw(.2f), 1.f / 30, 0, 1), yaw(.2f)) < 1e-4f, "OFF: the head at once");
-        sv::Smoother low;
-        check(sv::angleBetween(low.step(yaw(.3f), 1.f / 30, .12f, 1), yaw(.3f)) < 1e-4f, "the first picture is the head's");
-        low.reset();
-        low.step(yaw(0), 1.f / 30, .12f, 1);
-        const float lag = sv::angleBetween(low.step(yaw(.2f), 1.f / 30, .12f, 1), yaw(.2f));
-        check(lag > .1f && lag < .2f, "LOW: a shake is followed part of the way");
-        Quat v{};
-        for (int i = 0; i < 60; ++i)
-            v = low.step(yaw(.2f), 1.f / 30, .12f, 1);
-        check(sv::angleBetween(v, yaw(.2f)) < 1e-3f, "and settles on the head in two seconds");
-        sv::Smoother high;
-        high.step(yaw(0), 1.f / 30, .30f, 1);
-        check(sv::angleBetween(high.step(yaw(.2f), 1.f / 30, .30f, 1), yaw(.2f)) > lag, "HIGH lags more than LOW");
-        sv::Smoother held;
-        held.step(yaw(0), 1.f / 30, .30f, .05f);
-        check(sv::angleBetween(held.step(yaw(.4f), 1.f / 30, .30f, .05f), yaw(.4f)) <= .05f + 1e-4f,
-              "never further behind than the crop's slack");
-        sv::Smoother jump;
-        jump.step(yaw(0), 1.f / 30, .12f, 1);
-        check(sv::angleBetween(jump.step(yaw(1.2f), 1.f / 30, .12f, 1), yaw(1.2f)) < 1e-4f, "a recentre restarts at the head");
-        jump.step(yaw(0), 1.f / 30, .12f, 1);
-        check(sv::angleBetween(jump.step(yaw(.2f), 2.f, .12f, 1), yaw(.2f)) < 1e-4f, "so does a gap");
-        check(sv::angleBetween(jump.step(yaw(.1f), std::nanf(""), .12f, 1), yaw(.1f)) < 1e-4f, "and a bad time step");
-        const auto q = jump.step(yaw(.12f), 1.f / 30, .12f, 1);
-        check(std::isfinite(q.x + q.y + q.z + q.w), "the view stays finite");
-    });
-    test("0.0.73 STREAMER MODE: the shader's mapping - straight through without lag, turned with it, black off the image", [] {
-        namespace sv = streamer_view;
-        auto yaw = [](float a) { return Quat{0, std::sin(a / 2), 0, std::cos(a / 2)}; };
-        const sv::Fov f{-.942f, .698f, -.960f, .838f};
-        const auto c = sv::fitCrop(f, 16.f / 9.f, sv::marginOf(sv::smoothLow));
-        const auto still = sv::turnOf(yaw(.3f), yaw(.3f));
-        for (int i = 0; i < 9; ++i)
-            check(std::abs(still.m[i] - (i % 4 == 0 ? 1.f : 0.f)) < 1e-5f, "no lag: no turn");
-        float s = 0, t = 0;
-        const float l = std::tan(f.left), r = std::tan(f.right), d = std::tan(f.down), u = std::tan(f.up);
-        check(sv::sample(still, c, f, .5f, .5f, s, t) && std::abs(s - (-l) / (r - l)) < 1e-5f &&
-                  std::abs(t - u / (u - d)) < 1e-5f,
-              "the window's middle is the eye's axis");
-        for (float x : {0.f, 1.f})
-            for (float y : {0.f, 1.f})
-                check(sv::sample(still, c, f, x, y, s, t), "the crop's corners are on the image");
-        check(sv::sample(still, c, f, 0, 0, s, t) && s > 0 && t > 0 && sv::sample(still, c, f, 1, 1, s, t) && s < 1 &&
-                  t < 1,
-              "top-left to top-left, bottom-right to bottom-right");
-        // The head turned left of the window's (smoothed) view: straight ahead is right of the eye's axis.
-        const float a = .05f;
-        const auto turned = sv::turnOf(yaw(a), yaw(0));
-        check(sv::sample(turned, c, f, .5f, .5f, s, t) && std::abs(l + s * (r - l) - std::tan(a)) < 1e-4f,
-              "a lag moves the picture by the lag's angle");
-        for (float x : {0.f, 1.f})
-            for (float y : {0.f, 1.f})
-                check(sv::sample(sv::turnOf(yaw(sv::slack(f, c)), yaw(0)), c, f, x, y, s, t),
-                      "within the slack the corners stay on the image");
-        check(!sv::sample(sv::turnOf(yaw(1.2f), yaw(0)), c, f, .5f, .5f, s, t), "far off: black, not a smear");
-        check(!sv::sample(sv::turnOf(yaw(3.1f), yaw(0)), c, f, .5f, .5f, s, t), "behind the eye: black");
-        // The root constants the shader reads.
-        const auto k = sv::constantsOf(turned, c, f, 1920, 1080);
-        check(k.c[0] == turned.m[0] && k.c[2] == turned.m[2] && k.c[4] == turned.m[3] && k.c[10] == turned.m[8] &&
-                  k.c[3] == 0 && k.c[7] == 0 && k.c[11] == 0,
-              "the turn's rows in the first three float4s");
-        check(k.c[12] == c.left && k.c[13] == c.right && k.c[14] == c.down && k.c[15] == c.up, "then the crop");
-        check(k.c[16] == l && k.c[17] == r && k.c[18] == d && k.c[19] == u, "then the lens");
-        check(std::abs(k.c[20] * 1920 - 1) < 1e-6f && std::abs(k.c[21] * 1080 - 1) < 1e-6f, "then the pixel size");
-        check(sv::constantsOf(turned, c, f, 0, 0).c[20] == 0, "no window, no division by zero");
     });
     test("0.0.73 test 5 HERO HANDS: IRON MAN's MARKs have their own profiles; every other suit keeps test 4's hands", [] {
         namespace sw = spidy::suit_wear;

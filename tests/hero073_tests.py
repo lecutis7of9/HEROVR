@@ -288,21 +288,13 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5442'), ['SpidyWeaponCollision'])
         self.assertEqual(uses.get('5445'), ['SpidyVanScreen'])
         self.assertEqual(uses.get('5448'), ['SpidyVanPedals'])  # 0.0.73 test 3 VAN PEDALS
-        self.assertEqual(uses.get('5449'), ['SpidyImage'])  # 0.0.73 IMAGE
         self.assertEqual(uses.get('5453'), ['SpidyDdBatonTip'])  # 0.0.73 DD BATON
-        self.assertEqual(uses.get('5450'), ['SpidyStreamerMode'])  # 0.0.73 STREAMER MODE (MP SOLO TEST: 5461 since test 6, not 5449)
-        self.assertEqual(uses.get('5451'), ['SpidyStreamerSmooth'])
-        self.assertEqual(uses.get('5452'), ['SpidyStreamerEye'])
         self.assertEqual(uses.get('5462'), ['SpidyIronHands'])  # 0.0.73 test 5 HERO HANDS (5461: MP SOLO TEST, below)
         self.assertEqual(uses.get('5463'), ['SpidyDdGrappleAim'])
         self.assertEqual(uses.get('5464'), ['SpidyWolverineClaws'])
         self.assertEqual(uses.get('5470'), ['SpidyLightChecks'])  # 0.0.73 LIGHT CHECKS
-        self.assertEqual(uses.get('5471'), ['SpidyGlowCheck'])  # 0.0.73 GLOW CHECK
-        self.assertEqual(uses.get('5472'), ['SpidySlWatch'])  # 0.0.73 SL WATCH
         self.assertEqual(uses.get('5461'), ['SpidyMpSoloTest'])  # 0.0.73 test 6: MP SOLO TEST (mp-solo-test's 5449 is IMAGE's)
-        self.assertEqual(uses.get('5473'), ['SpidySharpenMatch'])  # 0.0.73 AA SHARPEN MATCH
         self.assertEqual(uses.get('5474'), ['SpidyClawLevel'])  # 0.0.73 test 6 CLAW LEVEL
-        self.assertEqual(uses.get('5475'), ['SpidyWindowPop'])  # 0.0.73 test 6 WINDOW POP FIX
         self.assertEqual(uses.get('5477'), ['SpidyMpPlayer2Body'])  # 0.0.73 MPSUIT PLAYER 2 BODY
         self.assertEqual(uses.get('5490'), ['SpidyComingSoon'])  # 0.0.73 COMING SOON
         self.assertEqual(uses.get('5491'), ['SpidyHideouts'])  # 0.0.74 test 1 HIDEOUTS
@@ -329,263 +321,11 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5534'), ['SpidyThrowSwing'])  # 0.0.74 test 10 THROW BY SWING (throw_swing.hpp)
         self.assertEqual(uses.get('5535'), ['SpidyGlideTilt'])  # 0.0.74 test 10 GLIDE TILT (cape_glide.hpp)
         # 0.0.74 test 10: the tests' picture / AA codes are retired with their options (never reused)
-        for code in ('5496', '5497', '5502', '5504', '5505', '5506') + tuple(str(c) for c in range(5512, 5524)):
+        # 0.0.74 test 10 (72's picture): IMAGE 5449, STREAMER MODE/SMOOTH/EYE 5450-5452, GAME TAA 5460, GLOW CHECK
+        # 5471, SL WATCH 5472, SHARPEN MATCH 5473 and WINDOW POP FIX 5475 are retired with their options too
+        for code in ('5449', '5450', '5451', '5452', '5460', '5471', '5472', '5473', '5475', '5496', '5497', '5502',
+                     '5504', '5505', '5506') + tuple(str(c) for c in range(5512, 5524)):
             self.assertIsNone(uses.get(code), code)
-
-
-class Hero073Image(unittest.TestCase):
-    """0.0.73 IMAGE (the owner after test 3: sharp and clear like SpidyVR, no smudge): SPIDYVR (default) /
-    HERO VR CLASSIC (test 3's look), and the one-time move of the test 2/3 AA values."""
-    def setUp(self):
-        import sys
-        sys.path.insert(0, os.path.join(ROOT, 'tools'))
-        import live_settings
-        self.L = live_settings
-
-    def test_option_and_subtext(self):
-        c = src('include/spidy/combat38.hpp')
-        m = re.search(r'\{"image", "IMAGE", "IMAGE", "([^"]*)",\s*2,\s*\{"SPIDYVR", "HERO VR CLASSIC", nullptr, nullptr\}\}', c)
-        self.assertIsNotNone(m)
-        help = m.group(1)
-        self.assertLessEqual(len(help), 80)
-        self.assertEqual(help.count('.'), 1)
-        self.assertTrue(help.endswith('.'))
-        self.assertIn('restart', help)  # one sentence saying what needs a restart
-        self.assertIn('value == 1 ? ImageLook{1, 140, false} : ImageLook{0, 0, true}', c)
-
-    def test_defaults_are_spidyvr(self):
-        L = self.L
-        self.assertEqual(L.UPDATE38_DEFAULTS['image'], 'spidyvr')
-        d = L.UPDATE37_DEFAULTS
-        self.assertEqual((d['aa'], d['sharpen']), (0, 0))
-        c = L.image_defaults(d, 'classic')
-        self.assertEqual((c['aa'], c['sharpen']), (1, 140))
-        # the shadows and the rest stay (EYE AA, history 80, FAR SHADOWS, EYE BLOOM)
-        for k in ('eye_temporal', 'history', 'far_shadows', 'eye_bloom', 'shared_lod'):
-            self.assertEqual(c[k], d[k], k)
-        self.assertEqual(L.UPDATE38_DEFAULTS['shadow_match'], 'on')
-        self.assertEqual(L.image_mip_bias('0.5', 'spidyvr'), '0')
-        self.assertEqual(L.image_mip_bias('0.5', 'classic'), '0.5')
-        self.assertEqual(L.image_mip_bias('-0.25', 'spidyvr'), '-0.25')  # the player's own stays
-        # 0.0.73 AA: GAME TAA SPIDYVR with -EngineTaa leaves the game's own bias (0) even with CLASSIC
-        self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', True), '0')
-        self.assertEqual(L.image_mip_bias('0.5', 'classic', 'off', True), '0.5')  # image_style = off: revert
-        self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', False), '0.5')  # no ENGINE TAA prepared
-        self.assertEqual(L.image_mip_bias('0.25', 'classic', 'spidyvr', True), '0.25')  # an explicit -MipBias stays
-        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.73 release: GAME TAA OFF by default
-        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'spidyvr'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'image_style': 'bogus'}), 'off')
-        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')
-        self.assertEqual(L.image_of({}), 'spidyvr')
-        self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
-        self.assertEqual(L.export_value('image', 'classic'), 1)
-
-    def test_wired(self):
-        g, r, n = src('src/game_xr.cpp'), src('tools/run_game_vr.py'), src('src/native_eye_gpu.cpp')
-        self.assertIn('std::min<DWORD>(c38(combat38::image), 1) << 2', g)
-        self.assertIn('SpidyEyeHistorySharp(', g)
-        self.assertIn('row1.w > 0.5 ? sharpOld(old) : previous.SampleLevel(bilinear, old, 0).rgb', n)
-        self.assertIn('std::atomic<bool> sharpHistory{true};', n)
-        self.assertIn("live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))", r)
-        self.assertLess(r.index('migrate_073t3('), r.index('migrate_073t4('))
-        self.assertLess(r.index('migrate_073t4('), r.index("kept, _ = live_settings.persisted(ROOT/'live.txt')"))
-        self.assertIn('image_defaults(live_settings.UPDATE37_DEFAULTS, image_now)', r)
-        self.assertEqual(self.L.SELECTOR['image'], 10)
-        self.assertEqual(self.L.CONTROL_KEYS[22], 'image')
-        self.assertIn('image', self.L.PERSISTED)
-
-    def test_migration_once(self):
-        import tempfile, pathlib
-        L = self.L
-        with tempfile.TemporaryDirectory() as d:
-            p = pathlib.Path(d) / 'live.txt'
-            p.write_text('# old\naa = 1\nsharpen = 140\nhistory = 80\n', encoding='utf-8')
-            line = L.migrate_073t4(p)
-            self.assertIn('sharpen = 0', line)
-            kept, _ = L.persisted(p)
-            self.assertEqual((kept['aa'], kept['sharpen'], kept['history']), (0, 0, 80))
-            self.assertIn(L.MIGRATED_073T4, p.read_text(encoding='utf-8'))
-            self.assertIsNone(L.migrate_073t4(p))  # once
-            # chosen after the marker: stays
-            p.write_text(L.HEADER + 'sharpen = 140\naa = 1\n', encoding='utf-8')
-            self.assertIsNone(L.migrate_073t4(p))
-            self.assertEqual(L.persisted(p)[0]['sharpen'], 140)
-            # image = classic keeps test 3's values
-            p.write_text('image = classic\naa = 1\nsharpen = 140\n', encoding='utf-8')
-            self.assertIsNone(L.migrate_073t4(p))
-            self.assertEqual(L.persisted(p)[0]['sharpen'], 140)
-            self.assertIn(L.MIGRATED_073T4, p.read_text(encoding='utf-8'))
-            # a sharpen the player set stays
-            p.write_text('sharpen = 60\n', encoding='utf-8')
-            self.assertIsNone(L.migrate_073t4(p))
-            self.assertEqual(L.persisted(p)[0]['sharpen'], 60)
-            # no live.txt: nothing made; a new one carries the marker
-            q = pathlib.Path(d) / 'none.txt'
-            self.assertIsNone(L.migrate_073t4(q))
-            self.assertFalse(q.exists())
-            self.assertIn(L.MIGRATED_073T4, L.HEADER)
-            # the launcher's look reads the file; nothing raises on junk
-            p.write_text('image = classic\n', encoding='utf-8')
-            self.assertEqual(L.image_in_file(p), 'classic')
-            self.assertEqual(L.image_in_file(q), 'spidyvr')
-            p.write_bytes(b'\xff\xfe junk = = \n')
-            self.assertEqual(L.image_in_file(p), 'spidyvr')
-            L.migrate_073t4(p)
-
-
-class Hero073Test4ImageStyle(unittest.TestCase):
-    """0.0.73 test 4 IMAGE STYLE (shown as GAME TAA): SPIDYVR (default) runs the game's own TAA in each eye with
-    nothing over it, as SpidyVR; OFF leaves the picture to IMAGE. The owner: "whatever spidyVR does to handle it works"."""
-    def live(self):
-        import sys
-        sys.path.insert(0, os.path.join(ROOT, 'tools'))
-        import live_settings as L
-        return L
-    def test_option_default_and_values(self):
-        L = self.live()
-        self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'off')  # 0.0.73 release: OFF (SPIDYVR stays index 0)
-        self.assertEqual(L.export_value('image_style', 'spidyvr'), 0)
-        self.assertEqual(L.export_value('image_style', 'off'), 1)
-        self.assertEqual(L.export_value('image_style', 'hero_0.0.73'), 1)
-        self.assertEqual(L.parse('image_style = OFF')[0], {'image_style': 'off'})
-        self.assertEqual(L.SETTINGS['image_style'][1], 'SpidyImageStyleOption')
-        self.assertIn('image_style', L.UPDATE38_KEYS)
-        h = src('include/spidy/combat38.hpp')
-        m = re.search(r'\{"image_style", "GAME TAA", "\w+", "([^"]+)",\s*2, \{"SPIDYVR", "OFF", nullptr, nullptr\}\}', h)
-        self.assertIsNotNone(m)
-        self.assertLessEqual(len(m.group(1)), 80)
-        self.assertIn('no restart', m.group(1))
-        self.assertEqual(m.group(1).count('.'), 1)
-        self.assertIn("('image_style', ('SPIDYVR', 'OFF'))", src('tools/update37_records.py'))
-        self.assertIn('{C::combatImage, C::aa, C::combatImageStyle, C::sharpen,', src('src/wrist_hud.cpp'))  # under IMAGE and AA (AA keeps its spot)
-        self.assertEqual(L.UPDATE38_DEFAULTS['image'], 'spidyvr')  # IMAGE's own default kept
-    def test_code_5460_is_its_own(self):
-        hits = []
-        for d in ('src', 'include'):
-            for p in sorted(pathlib.Path(ROOT, d).rglob('*.[ch]pp')):
-                hits += [p.name for _ in re.finditer(r'\b5460\b', p.read_text(encoding='utf-8', errors='replace'))]
-        self.assertEqual(hits, ['game_xr.cpp'])
-    def test_export_and_controller_wired(self):
-        g = src('src/game_xr.cpp')
-        self.assertIn('setHero007(v, combat38::imageStyle, 5460)', g)
-        self.assertIn('styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn)', g)
-        self.assertIn('native_gpu::setCleanImage(image_style::spidy(style) &&', g)
-        # The controller sits after the FPS guard's plan B, so a failure still falls back to EYE AA.
-        self.assertLess(g.index('engineTaaFallback(engine_taa::reasonOf(engine));\n                            previous = engine;'),
-                        g.index('static image_style::Controller styleControl;'))
-        s = src('src/stereo_probe.cpp')
-        self.assertIn('spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load())', s)
-        self.assertIn('extern "C" uint32_t SpidyEngineTaaBlocked()', s)
-        self.assertIn('DWORD WINAPI SpidyImageStyle(void* style)', s)
-    def test_clean_picture_skips_fxaa_history_and_cas(self):
-        n = src('src/native_eye_gpu.cpp')
-        self.assertIn("(down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa()", n)
-        # 0.0.73 AA: SHARPEN MATCH scales the slider; the clean picture still sends no CAS.
-        self.assertIn('cleanImage.load() ? 0u\n                          : eye_sharpen::matchedPercent(\n                                sharpenPercent.load()', n)
-        i = n.index('uint32_t historyNow() {')
-        self.assertIn('if (cleanImage.load(std::memory_order_relaxed))', n[i:i + 200])
-
-
-# 0.0.73 IMAGE: at the end, so every class above runs (it stood after the first class).
-
-class Hero073AaFix(unittest.TestCase):
-    """0.0.73 AA (the owner after test 5: "way too sharp and jagged when i move, too blurry when im still")."""
-
-    def test_sharpen_match_wired(self):
-        n = src('src/native_eye_gpu.cpp')
-        self.assertIn('eye_sharpen::matchedPercent(', n)
-        self.assertIn('std::atomic<bool> sharpenMatch{true}, historyRunning{false};', n)  # ON by default
-        self.assertIn('SpidyEyeSharpenMatch(void* on)', n)
-        g = src('src/game_xr.cpp')
-        self.assertIn('eye_sharpen::matchOn(c38(combat38::sharpenMatch))', g)
-        self.assertIn('SpidyEyeSharpenMatch(reinterpret_cast<void*>', g)
-        import sys
-        sys.path.insert(0, os.path.join(ROOT, 'tools'))
-        import live_settings as L
-        self.assertEqual(L.UPDATE38_DEFAULTS['sharpen_match'], 'on')
-        self.assertIn('sharpen_match', L.UPDATE38_KEYS)
-        self.assertEqual(L.CHOICES['sharpen_match']['off'], 1)
-
-    def test_console_jitter_is_the_mode_in_force(self):
-        s = src('src/stereo_probe.cpp')
-        self.assertIn('d.mode = spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load());', s)
-        self.assertNotIn('d.mode = engineTaaJitterMode.load();', s)
-
-
-
-
-class Hero073AaGameAaTaa(unittest.TestCase):
-    """0.0.73 AA GAME AA TAA: with -EngineTaa and GAME TAA SPIDYVR the session sets the game's AA to TAA with no
-    upscaler (SpidyVR's path), put back after; --keep-game-aa / KEEP MY GAME AA keeps the player's."""
-
-    def tools(self):
-        import sys
-        import types
-        sys.path.insert(0, os.path.join(ROOT, 'tools'))
-        if 'winreg' not in sys.modules:  # vr_display needs winreg only to touch the real registry
-            sys.modules['winreg'] = types.ModuleType('winreg')
-        import live_settings as L
-        import vr_display as D
-        return L, D
-
-    def test_decision(self):
-        L, _ = self.tools()
-        self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))   # GAME TAA SPIDYVR on (OFF is the release default)
-        self.assertFalse(L.game_aa_taa(True, 'spidyvr', True))   # KEEP MY GAME AA
-        self.assertFalse(L.game_aa_taa(True, 'off', False))      # GAME TAA OFF: IMAGE's look, the game's own AA
-        self.assertFalse(L.game_aa_taa(False, 'spidyvr', False)) # no ENGINE TAA prepared
-
-    def test_registry_values_confirmed_and_restorable(self):
-        _, D = self.tools()
-        self.assertEqual(D.SESSION_OFF['game_aa'], dict(AA=2, UpscaleMethod=0))
-        self.assertEqual(D.SESSION_OFF['lens_flares'], dict(LensFlares=0))
-        names = dict((k, w) for k, w, _ in D.session_list(('game_aa',)))[D.KEY]
-        self.assertEqual((names['AA'], names['UpscaleMethod'], names['Sharpness']), (2, 0, 1))
-        self.assertNotIn('AA', dict((k, w) for k, w, _ in D.session_list(()))[D.KEY])  # only when asked
-        import json
-        import pathlib
-        import tempfile
-
-        class Reg:
-            def __init__(self, g): self.g = dict(g)
-            def read(self, names=D.NAMES, key=D.KEY): return {n: v for n, v in self.g.items() if n in names} if key == D.KEY else {}
-            def write(self, values, key=D.KEY):
-                if key != D.KEY: return
-                for n, v in values.items():
-                    if v is None: self.g.pop(n, None)
-                    else: self.g[n] = v
-        user = dict(Fullscreen=1, ExclusiveFullscreen=0, WindowMaximized=0, WindowLeft=0, WindowTop=0,
-                    WindowWidth=2560, WindowHeight=1440, UserWindowWidth=2560, UserWindowHeight=1440,
-                    AA=2, UpscaleMethod=2, UpscaleQuality=3, Sharpness=1)
-        with tempfile.TemporaryDirectory() as folder:
-            backup = pathlib.Path(folder)/'backup.json'
-            r = Reg(user)
-            D.prepare_launch(registry=r, backup=backup, screen=(2560, 1440), off=('game_aa',))
-            self.assertEqual((r.g['AA'], r.g['UpscaleMethod'], r.g['UpscaleQuality']), (2, 0, 3))
-            self.assertEqual(json.loads(backup.read_text())['written'][D.KEY]['UpscaleMethod'], 0)
-            self.assertTrue(D.restore(r, backup))
-            self.assertEqual((r.g['AA'], r.g['UpscaleMethod']), (2, 2))  # the player's DLSS is back
-
-    def test_wired_launcher_script_and_session(self):
-        r = src('tools/run_game_vr.py')
-        self.assertIn("live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False))", r)
-        self.assertIn("session_off = tuple(session_off) + ('game_aa',)", r)
-        self.assertLess(r.index("session_off = tuple(session_off) + ('game_aa',)"), r.index('a.session_off = session_off'))
-        self.assertIn("p.add_argument('--keep-game-aa', action='store_true',", r)
-        ps = src('tools/launch-game-vr.ps1')
-        self.assertIn('[switch]$KeepGameAa,', ps)
-        self.assertIn("$captureArgs+=@('--keep-game-aa')", ps)
-        cs = src('tools/launcher/src/LaunchOptions.cs')
-        import re
-        m = re.search(r'Opt\.Sw\("PICTURE", "KeepGameAa", "KEEP MY GAME AA", "([^"]+)", false\)', cs)
-        self.assertTrue(m)
-        sub = m.group(1)
-        self.assertTrue(len(sub) <= 100 and sub.endswith('.') and 'restart' in sub, sub)
-        m = re.search(r'Opt\.Sw\("PICTURE", "EngineTaa", "ENGINE TAA", "([^"]+)", true\)', cs)
-        self.assertTrue(m and 'restart' in m.group(1), cs)
-
-
 
 
 class Hero073Test6(unittest.TestCase):
@@ -600,25 +340,34 @@ class Hero073Test6(unittest.TestCase):
         self.assertIn('useLevel ? rig.clawWayLevel[side] : rig.clawWay[side]', s)
         self.assertIn('inline constexpr float clawLevelDeg = 0.f;', src('include/spidy/suit_wear.hpp'))
 
-    def test_window_pop_wired(self):
-        p = src('src/stereo_probe.cpp')
-        self.assertIn('std::atomic<bool> windowPopOn{true};', p)  # ON by default
-        self.assertIn('spidy::window_pop::flatMatch(stockHalfWidth', p)
-        self.assertIn('writeBits(game + spidy::shared_lod::multiplierOffset, bits)', p)
-        self.assertIn('spidy::window_pop::ownMultiplier(gm, gameWritten(game))', p)  # the eyes as in test 5
-        self.assertIn('windowPopRestore(); // 0.0.73 test 6 WINDOW POP FIX', p)
-        self.assertIn('SpidyWindowPopOn(void* on)', p)
-        g = src('src/game_xr.cpp')
-        self.assertIn('window_pop::on(c38(combat38::windowPop))', g)
-        self.assertIn('setHero007(v, combat38::windowPop, 5475)', g)
-        self.assertIn('inline constexpr float maxBoost = 2.f;', src('include/spidy/window_pop.hpp'))
-
     def test_live_settings_defaults_on(self):
+        import sys
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
         import live_settings as L
         self.assertEqual(L.UPDATE38_DEFAULTS['claw_level'], 'on')
-        self.assertEqual(L.UPDATE38_DEFAULTS['window_pop'], 'on')
         self.assertEqual(L.export_value('claw_level', 'off'), 1)
-        self.assertEqual(L.export_value('window_pop', 'on'), 0)
+        self.assertNotIn('window_pop', L.UPDATE38_DEFAULTS)  # 0.0.74 test 10: WINDOW POP FIX retired (72's picture)
+
+
+class Hero074T10PictureGone(unittest.TestCase):
+    """0.0.74 test 10: 0.0.72's picture. IMAGE, GAME TAA, GAME AA TAA / KEEP MY GAME AA, SHARPEN MATCH, STREAMER
+    MODE, WINDOW POP FIX, SL WATCH and GLOW CHECK are gone (switch and code), not only off."""
+
+    def test_switches_and_code_gone(self):
+        g = src('src/game_xr.cpp')
+        for gone in ('SpidyImage(', 'SpidyImageStyleOption(', 'SpidyGlowCheck(', 'SpidySlWatch(', 'SpidySharpenMatch(',
+                     'SpidyWindowPop(', 'SpidyStreamerMode(', 'image_style::', 'streamer_view', 'window_pop::',
+                     'sl_watch::', 'eye_sharpen::matchOn'):
+            self.assertNotIn(gone, g, gone)
+        for header in ('image_style.hpp', 'streamer_view.hpp', 'window_pop.hpp', 'sl_watch.hpp'):
+            self.assertFalse(os.path.exists(os.path.join(ROOT, 'include', 'spidy', header)), header)
+        n = src('src/native_eye_gpu.cpp')
+        self.assertNotIn('eye_sharpen::matchedPercent(', n)
+        self.assertNotIn('streamerWanted', n)
+        self.assertNotIn('cleanImage', n)
+        self.assertNotIn('keep-game-aa', src('tools/run_game_vr.py'))
+        self.assertNotIn('KeepGameAa', src('tools/launch-game-vr.ps1'))
+
 
 
 class Hero073MpSuit(unittest.TestCase):

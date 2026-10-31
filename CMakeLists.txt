@@ -468,3 +468,5 @@ if(SPIDY_BUILD_LAUNCHER)
   # Static runtime (Update 24: as every module now; CMAKE_MSVC_RUNTIME_LIBRARY above).
   set_property(TARGET spidy_launcher PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+# HERO VR 0.0.75 SM1: Mulder's Heroes add-on for iilyn's Spider-Man VR mod (separate files; src/sm1).
+add_subdirectory(src/sm1)

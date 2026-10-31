@@ -5,6 +5,8 @@ It is licensed under the GNU GPL version 3.
 
 - **Ilya Mezerowsky**: Spidy (SpidyVR), the VR mod this whole project is built on. Copyright (C) 2026 Ilya Mezerowsky, GPLv3.
   https://github.com/IlyaMez/SpidyVR · https://ko-fi.com/ilyamezerowsky
+  0.0.75: the launcher's SPIDER-MAN 1 option downloads his mod from his GitHub releases and starts it unchanged
+  ("iilyn's Spider-Man VR mod, with Mulder's Heroes add-on"; the add-on is separate files by Agent Mulder).
 - **Sebi (sjrl2000)**: the SpidyVR Linux (Steam Proton) guide, pull request 7. https://github.com/sjrl2000
 - **iplusdvr**: SpidyVR pull requests 21, 22 and 23. https://github.com/iplusdvr
 - **Adrian (AdrianGzzEsc)**: SpidyVR pull request 24. https://github.com/AdrianGzzEsc

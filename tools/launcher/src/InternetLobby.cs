@@ -23,7 +23,7 @@ namespace Sm2VrLauncher
         public int Hero = 255, Players = 1, MaxPlayers = 2, Protocol;
         public uint LanId;
         public bool Full { get { return Players >= MaxPlayers; } }
-        public bool SameVersion { get { return Protocol == LobbyBeacon.MpProtocol; } }
+        public bool SameVersion { get { return LobbyGame.SameVersion(Protocol); } }   // 0.0.75 SM1: per game
     }
 
     /// <summary>One row of the merged list: a game heard on this network (Lan) or listed on the internet (Inet).</summary>
@@ -255,16 +255,24 @@ namespace Sm2VrLauncher
         /// here; mine (this PC's beacon ids) are marked so JOIN is off for them. Joinable before full / other version.</summary>
         public static List<ServerEntry> Merge(IList<LobbyHost> lan, IList<InetGame> inet, ICollection<uint> mine)
         {
+            return Merge(lan, inet, mine, null);
+        }
+
+        /// <summary>0.0.75 SM1: only the picked game's rows ("sm1" or "sm2"; LobbyGame); null keeps every row.</summary>
+        public static List<ServerEntry> Merge(IList<LobbyHost> lan, IList<InetGame> inet, ICollection<uint> mine, string game)
+        {
             var r = new List<ServerEntry>();
             var lanIds = new HashSet<uint>();
             foreach (var h in lan ?? new LobbyHost[0])
             {
                 lanIds.Add(h.Beacon.HostId);
+                if (!LobbyGame.Shown(h.Beacon.Protocol, game)) continue;
                 r.Add(new ServerEntry { Lan = h, ThisPc = h.ThisPc });
             }
             foreach (var g in inet ?? new InetGame[0])
             {
                 if (g.LanId != 0 && lanIds.Contains(g.LanId)) continue;
+                if (!LobbyGame.Shown(g.Protocol, game)) continue;
                 r.Add(new ServerEntry { Inet = g, ThisPc = g.LanId != 0 && mine != null && mine.Contains(g.LanId) });
             }
             return r.Select((e, i) => new { e, i }).OrderBy(x => x.e.ThisPc ? 0 : x.e.CanJoin ? 1 : 2).ThenBy(x => x.i).Select(x => x.e).ToList();
@@ -411,7 +419,7 @@ namespace Sm2VrLauncher
                 string name;
                 file.TryGetValue("name", out name);
                 string body = InternetLobby.Http("POST", Url + "/v1/join", InternetLobby.Form("id", inet, "name", name ?? "", "addr", pub.Public,
-                    "protocol", LobbyBeacon.MpProtocol.ToString(CultureInfo.InvariantCulture)), out problem);
+                    "protocol", LobbyBeacon.MpProtocol.ToString(CultureInfo.InvariantCulture), "game", LobbyGame.Sm2), out problem);
                 var r = body == null ? null : InternetLobby.ParseJoin(body);
                 if (r != null && !r.Ok && (r.Error == "gone" || r.Error == "full")) Say("Internet: that game is " + r.Error + " now.");
             }
@@ -422,7 +430,7 @@ namespace Sm2VrLauncher
             string problem, name;
             lock (gate) name = joinName;
             string body = InternetLobby.Http("POST", Url + "/v1/join", InternetLobby.Form("id", g.Id, "name", Lobby.CleanName(name),
-                "protocol", LobbyBeacon.MpProtocol.ToString(CultureInfo.InvariantCulture)), out problem);
+                "protocol", LobbyBeacon.MpProtocol.ToString(CultureInfo.InvariantCulture), "game", LobbyGame.Sm2), out problem);
             if (body == null) { Say("Internet: cannot reach the server list (" + problem + ") - not joined."); return; }
             var r = InternetLobby.ParseJoin(body);
             if (!r.Ok)
@@ -462,7 +470,7 @@ namespace Sm2VrLauncher
             string body = InternetLobby.Http("POST", Url + "/v1/host", InternetLobby.Form(
                 "name", name ?? "", "hero", pub.Hero.ToString(CultureInfo.InvariantCulture), "heroName", heroName,
                 "players", pub.Players.ToString(CultureInfo.InvariantCulture), "max", "2",
-                "protocol", LobbyBeacon.MpProtocol.ToString(CultureInfo.InvariantCulture), "addr", pub.Public,
+                "protocol", LobbyBeacon.MpProtocol.ToString(CultureInfo.InvariantCulture), "game", LobbyGame.Sm2, "addr", pub.Public,
                 "lan", lanId == 0 ? null : lanId.ToString("x8", CultureInfo.InvariantCulture),
                 "id", myId.Length > 0 ? myId : null, "key", myKey.Length > 0 ? myKey : null), out problem);
             if (body == null) return;   // offline for a moment: the LAN keeps working, try again next time

@@ -14,6 +14,23 @@ using System.Threading;
 
 namespace Sm2VrLauncher
 {
+    /// <summary>0.0.75 SM1: which game a server-list row belongs to. The lobby worker keeps only the fields it knows, so the
+    /// game rides in the protocol number it already stores: Spider-Man 2 (HERO VR) games use 1..127, Spider-Man 1
+    /// (iilyn's mod with Mulder's Heroes add-on) games 129..255 (128 + the multiplayer protocol). Old launchers, which know
+    /// only protocol 1, show a Spider-Man 1 game as "another mod version" and never join it. No server change needed.</summary>
+    static class LobbyGame
+    {
+        public const string Sm2 = "sm2", Sm1 = "sm1";
+        public const int Sm1Band = 128;
+        /// <summary>The protocol number this launcher sends for a game ("sm1" or "sm2").</summary>
+        public static int Protocol(string game) { return game == Sm1 ? Sm1Band + LobbyBeacon.MpProtocol : LobbyBeacon.MpProtocol; }
+        /// <summary>The game a listed protocol number belongs to.</summary>
+        public static string Of(int protocol) { return protocol >= Sm1Band ? Sm1 : Sm2; }
+        public static bool SameVersion(int protocol) { return protocol == Protocol(Of(protocol)); }
+        /// <summary>Shown in the list of the picked game (null or empty game: every row, as before 0.0.75).</summary>
+        public static bool Shown(int protocol, string game) { return string.IsNullOrEmpty(game) || Of(protocol) == game; }
+    }
+
     class LobbyBeacon
     {
         public const int Bytes = 52, LobbyPort = 39469, GamePort = 39470;
@@ -64,7 +81,7 @@ namespace Sm2VrLauncher
         }
 
         public bool Full { get { return Players >= MaxPlayers; } }
-        public bool SameVersion { get { return Protocol == MpProtocol; } }
+        public bool SameVersion { get { return LobbyGame.SameVersion(Protocol); } }   // 0.0.75 SM1: per game (Spider-Man 2: 1, Spider-Man 1: 129)
     }
 
     class LobbyHost

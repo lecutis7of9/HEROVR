@@ -51,6 +51,11 @@ namespace Sm2VrLauncher
             line().Add("Agent Mulder", Theme.UiBold(14), Theme.Text).Add("  - " + LauncherInfo.Title + " for Marvel's Spider-Man 2 and this launcher.", f, Theme.Silver);
             line().Link("TikTok @agentmulder", fb, Credits.TikTokUrl).Add(dot, f, Theme.Dim).Link("Discord server", fb, Credits.DiscordUrl);
 
+            // 0.0.75 SM1: the Spider-Man 1 VR mod is his work; the launcher only downloads it from his GitHub and starts it.
+            head("Spider-Man 1 VR mod");
+            line().Add("iilyn (Ilya Mezerowsky)", Theme.UiBold(14), Theme.Text).Add("  - Spidy, the VR mod for " + Sm1.GameName + " (" + Sm1.License + "), downloaded unchanged from his GitHub.", f, Theme.Silver);
+            line().Link("His GitHub", fb, Sm1.RepoUrl).Add(dot, f, Theme.Dim).Link("Support him on Ko-fi", fb, Sm1.KofiUrl).Add(dot, f, Theme.Dim).Link("His Discord", fb, Sm1.DiscordUrl);
+
             // GPLv3 section 5(d): the Appropriate Legal Notices stay one click away (NOTICE, CREDITS.md, LICENSE).
             head("Copyright notices");
             para(LauncherInfo.Title + " is free software under the GNU General Public License version 3, and it comes with NO WARRANTY. " +

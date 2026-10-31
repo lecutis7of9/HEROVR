@@ -97,11 +97,12 @@ namespace Sm2VrLauncher
             BuildCredits();
             BuildReports();
             BuildMultiplayer();
+            BuildSm1();
             BuildFooter();
             BuildBar();
             foreach (var pg in pages)
                 foreach (Control c in pg.Controls) { var gp = c as GlassPanel; if (gp != null) gp.HandleClicked += (s, e) => tabs.Select(-1); }
-            tabs.SelectedChanged += (s, e) => { HeroSheetChanged(); ShowPage(tabs.Selected); MultiplayerShown(tabs.Selected == SheetMultiplayer); };
+            tabs.SelectedChanged += (s, e) => { if (Sm1Redirect()) return; HeroSheetChanged(); ShowPage(tabs.Selected); MultiplayerShown(tabs.Selected == SheetMultiplayer); };
             slide.Tick += (s, e) => SlideStep();
             KeyPreview = true;
             if (hero)
@@ -113,7 +114,9 @@ namespace Sm2VrLauncher
             {
                 // 0.0.74 MP INTERNET: the window opens on the server list (Status is one click away on the bar).
                 tabs.Selected = SheetMultiplayer;
-                ShowPage(SheetMultiplayer);
+                if (Sm1Selected) tabs.Selected = SheetSm1;   // 0.0.75 SM1: opens on the picked game's page
+                ShowPage(tabs.Selected);
+                BuildGamePicker();
             }
             poll.Tick += (s, e) => { if (!preview) RefreshLive(); };
             sessionLog.FilePath = LogFile("session");
@@ -253,6 +256,7 @@ namespace Sm2VrLauncher
                 Theme.R(36, 76, 1108, 556),    // Credits
                 Theme.R(230, 286, 720, 346),   // Reports and the session log
                 MultiplayerBounds(),           // 0.0.74 MP LOBBY: Multiplayer (HOST / the games on this network / JOIN)
+                Theme.R(36, 196, 1108, 436),   // 0.0.75 SM1: Spider-Man 1 (iilyn's mod, with Mulder's Heroes add-on), under the game picker
             };
             pages = new Page[sheetBounds.Length];
             for (int i = 0; i < pages.Length; i++)
@@ -477,7 +481,9 @@ namespace Sm2VrLauncher
                 // about once; the play stats question once ever). Never stops the launcher.
                 try { BeginInvoke(new Action(StartupReports)); } catch { }
                 // Then the multiplayer "No / Yes, Autosetup" pop-up, when this PC still needs something.
-                try { BeginInvoke(new Action(() => { try { MpAutosetup(false); } catch (Exception ex) { Program.LogError(ex); } })); } catch { }
+                try { BeginInvoke(new Action(() => { try { if (!Sm1Selected) MpAutosetup(false); } catch (Exception ex) { Program.LogError(ex); } })); } catch { }
+                // 0.0.75 SM1: with Spider-Man 1 picked, its own "No / Yes, Autosetup" pop-up for what is missing.
+                try { BeginInvoke(new Action(() => { try { Sm1Startup(); } catch (Exception ex) { Program.LogError(ex); } })); } catch { }
             }
         }
 
@@ -510,6 +516,7 @@ namespace Sm2VrLauncher
 
         void RefreshAll()
         {
+            Sm1Refresh();   // 0.0.75 SM1 (disk only)
             if (preview) return;
             scriptParams = SystemInfo.ScriptParams(Path.Combine(root, "tools", "launch-game-vr.ps1"));
             ApplyScriptParams();
@@ -591,6 +598,7 @@ namespace Sm2VrLauncher
             if (job == Job.Build) { SetState("BUILDING...", Theme.Silver, "Developer build from source is running (see Updates)."); return; }
             if (job == Job.Update) { SetState("UPDATING...", Theme.Silver, "Installing; see Updates."); return; }
             if (job == Job.Reports) { SetState("COLLECTING...", Theme.Silver, "Making reports\\send-me.zip."); return; }
+            if (Sm1Selected) { Sm1State(); return; }   // 0.0.75 SM1: Spider-Man 1's own checks
             if (lastError != null) { SetState("VR STOPPED", Theme.Bad, lastError); return; }
             if (!SystemInfo.IsPortRoot(root)) SetState("MOD NOT FOUND", Theme.Bad, "Pick the mod folder or install an update zip.");
             else if (ModFiles.RepairReason(root) != null) SetState("MOD FILES NEEDED", Theme.Warn, "PLAY VR downloads the ready-made mod files first (a minute; nothing to install by hand).");
@@ -632,6 +640,7 @@ namespace Sm2VrLauncher
 
         bool GuardIdle()
         {
+            if (sm1Busy) { MessageBox.Show(this, "Wait for iilyn's mod to finish downloading first.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information); return false; }
             if (job == Job.None) return true;
             MessageBox.Show(this, "Wait for the current task to finish first (" + job.ToString().ToLower() + ").", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return false;
@@ -639,6 +648,7 @@ namespace Sm2VrLauncher
 
         void PlayVr()
         {
+            if (Sm1Selected && job == Job.None) { Sm1Play(); return; }   // 0.0.75 SM1: Spider-Man 1 picked
             if (!GuardIdle()) return;
             RefreshAll();
             lastError = null;
@@ -878,6 +888,7 @@ namespace Sm2VrLauncher
 
         void PlayFlat()
         {
+            if (Sm1Selected) { Sm1PlayFlat(); return; }   // 0.0.75 SM1
             if (!GuardIdle()) return;
             if (SystemInfo.GameRunning()) { MessageBox.Show(this, "The game is already running.", LauncherInfo.Title); return; }
             sessionLog.Line("> Starting Spider-Man 2 without VR.", Theme.Info);
@@ -973,7 +984,7 @@ namespace Sm2VrLauncher
                 MessageBox.Show(this, "A build from source is running. Close anyway? (The build stops.)", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             { e.Cancel = true; return; }
             settings.Save();
-            if (!e.Cancel) DisposeMultiplayer();
+            if (!e.Cancel) { DisposeMultiplayer(); Sm1Closing(); }
             base.OnFormClosing(e);
             if (hero && !e.Cancel) HeroClosed();
         }

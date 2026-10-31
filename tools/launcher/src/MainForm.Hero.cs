@@ -105,6 +105,7 @@ namespace Sm2VrLauncher
             foreach (var c in keep) { Controls.Remove(c); classicChrome.Controls.Add(c); }
             Controls.Add(classicChrome);
             HeroLayoutSheets();
+            BuildGamePicker();   // HERO VR 0.0.75 SM1: SPIDER-MAN 2 / SPIDER-MAN 1, above the tiles
             scene = new HeroScene();
             scene.T = 0;   // nothing but black until the window is shown and the intro starts
             scene.Version = ShortVersion(SystemInfo.PortVersion(root) ?? LauncherInfo.Version).ToUpperInvariant();
@@ -127,6 +128,7 @@ namespace Sm2VrLauncher
         void HeroLayoutSheets()
         {
             var home = new[] { Theme.R(210, 286, 760, 346), Theme.R(36, 76, 1108, 556), Theme.R(36, 76, 1108, 556), Theme.R(36, 76, 1108, 556), Theme.R(230, 286, 720, 346), MultiplayerBounds() };
+            Array.Resize(ref home, 7); home[6] = Theme.R(36, 196, 1108, 436);   // 0.0.75 SM1: the Spider-Man 1 page
             for (int i = 0; i < home.Length && i < sheetBounds.Length; i++)
             {
                 var r = home[i];
@@ -147,6 +149,7 @@ namespace Sm2VrLauncher
                 orb.Layout(heroK, content.Location);
                 overlayDirty = true;
                 HeroLayoutSheets();
+                Sm1LayoutPicker();
                 foreach (var p in pages) if (p.Visible) { p.Bounds = sheetBounds[Array.IndexOf(pages, p)]; }
                 if (sheetSnapshot != null) HeroTakeSnapshot();
                 Invalidate();
@@ -211,6 +214,7 @@ namespace Sm2VrLauncher
         void HeroSheetChanged()
         {
             if (!hero || scene == null) return;
+            Sm1HeroTick();
             if (SheetOpen) HeroTakeSnapshot();
             else if (sheetSnapshot != null) { sheetSnapshot.Dispose(); sheetSnapshot = null; overlayDirty = true; Invalidate(); }
             HeroPauseCheck();
@@ -344,6 +348,7 @@ namespace Sm2VrLauncher
         {
             try
             {
+                Sm1HeroTick();
                 if (Opacity < 1 && !IsDisposed)
                 {
                     double t0 = shownWatch.Elapsed.TotalSeconds;
@@ -440,7 +445,7 @@ namespace Sm2VrLauncher
                 case 0: if (job == Job.Vr) StopVr(); else PlayVr(); break;
                 case 1: PlayFlat(); break;
                 case 2: tabs.Select(SheetUpdates); break;
-                case 3: tabs.Select(SheetOptions); break;
+                case 3: tabs.Select(Sm1Selected ? SheetSm1 : SheetOptions); break;
                 case 4: Revert(); break;
             }
             HeroSync();
@@ -505,6 +510,7 @@ namespace Sm2VrLauncher
             }
             try { scene.Version = ShortVersion(SystemInfo.PortVersion(root) ?? LauncherInfo.Version).ToUpperInvariant(); } catch { }
             bool nowGame = job == Job.Vr || running;
+            Sm1HeroTiles(t, ref nowGame);
             if (nowGame && !gameOn) HeroGameStarting();
             else if (!nowGame && gameOn) { gameOn = false; HeroPauseCheck(); }
             HeroOverlayChanged();

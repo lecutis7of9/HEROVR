@@ -162,9 +162,9 @@ namespace Sm2VrLauncher
                 foreach (var m in mpInet.TakeMessages())
                     sessionLog.Line(m.StartsWith("OK:") ? m.Substring(3) : m, m.StartsWith("OK:") ? Theme.Good : Theme.Warn);
             }
-            var rows = InternetLobby.Merge(hosts, inet, mineIds);
+            var rows = InternetLobby.Merge(hosts, inet, mineIds, MpGame);   // 0.0.75 SM1: only the picked game's servers
             int lanN = rows.Count(r => !r.Internet), netN = rows.Count - lanN;
-            mpListHead.Text = MpHeadText(lanN, netN, mpInet != null && mpInet.On, inetProblem);
+            mpListHead.Text = (Sm1Selected ? "SPIDER-MAN 1 \u00B7 " : "SPIDER-MAN 2 \u00B7 ") + MpHeadText(lanN, netN, mpInet != null && mpInet.On, inetProblem);
             for (int i = 0; i < MpRows; i++)
             {
                 var h = i < rows.Count ? rows[i] : null;
@@ -193,8 +193,18 @@ namespace Sm2VrLauncher
                 (b.Full ? " FULL" : "") + (b.SameVersion ? "" : "   (another mod version)") + "   " + h.Address + (h.ThisPc ? "   (this PC)" : "");
         }
 
+        /// <summary>0.0.75 SM1: multiplayer is HERO VR's (Spider-Man 2) for now; Spider-Man 1 says so instead of writing MP-LOBBY.txt.</summary>
+        bool Sm1MpGuard()
+        {
+            if (!Sm1Selected) return false;
+            MessageBox.Show(this, "Multiplayer for Spider-Man 1 is not hooked up yet: it needs in-game testing of Mulder's Heroes add-on first.\n\n" +
+                "Pick SPIDER-MAN 2 at the top to host or join HERO VR games.", LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return true;
+        }
+
         void MpHost()
         {
+            if (Sm1MpGuard()) return;
             try
             {
                 Lobby.Write(null, Lobby.HostText(mpName.Text));
@@ -207,6 +217,7 @@ namespace Sm2VrLauncher
         void MpJoinEntry(ServerEntry e)
         {
             if (e == null || !e.CanJoin) return;
+            if (Sm1MpGuard()) return;
             if (!e.Internet) { MpJoin(e.Lan); return; }
             if (mpInet == null) return;
             sessionLog.Line("Multiplayer: asking the server list for " + e.Name + "...", Theme.Sub);

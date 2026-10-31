@@ -79,6 +79,11 @@ foreach ($module in $modules) { Copy-Item -LiteralPath (Join-Path $bin $module) 
 $launcher = Join-Path $bin 'spidy_launcher.exe'
 if (Test-Path -LiteralPath $launcher) { Copy-Item -LiteralPath $launcher -Destination (Join-Path $stage 'tools\Spidy Launcher.exe') }
 else { Write-Warning 'build\windows-ninja\spidy_launcher.exe is missing: the package has no Spidy Launcher.exe (the starter still works).' }
+# HERO VR 0.0.75 SM1: Mulder's Heroes add-on for iilyn's Spider-Man 1 VR mod (src/sm1), optional; the HERO VR launcher
+# copies it next to his mod's files only while Spider-Man 1 plays. His mod itself is never packaged here.
+$sm1Addon = Join-Path $bin 'herovr_sm1_addon.dll'
+if (Test-Path -LiteralPath $sm1Addon) { Copy-Item -LiteralPath $sm1Addon -Destination (Join-Path $stage 'build\windows-ninja') }
+else { Write-Warning 'build\windows-ninja\herovr_sm1_addon.dll is missing: Spider-Man 1 then starts iilyn''s mod without the add-on.' }
 
 foreach ($tool in (@($manifest.tools) + @($probeManifest.tools) | Sort-Object -Unique)) { Copy-Item -LiteralPath (Join-Path $root "tools\$tool.py") -Destination (Join-Path $stage 'tools') }
 foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py')) {

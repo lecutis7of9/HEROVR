@@ -42,6 +42,7 @@
 #include "spidy/batmobile074.hpp" // 0.0.74 test 1 BATMOBILE
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
+#include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
 #include "spidy/rep_log.hpp"     // 0.0.73 test 3 REP PAGE
@@ -937,6 +938,8 @@ std::atomic<uint32_t> flyRollNow{1}, flyRollSpeedNow{90};
 std::atomic<bool> flyAutoLevelNow{true};
 // 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp; live.txt van_no_flips): 0 ON (the default), 1 OFF.
 std::atomic<uint32_t> vanNoFlipsNow{0};
+// 0.0.74 test 10 CAR COLLISION (car_collision074.hpp; live.txt car_collision): 0 ON (the default), 1 OFF.
+std::atomic<uint32_t> carCollisionNow{0};
 std::atomic<uint32_t> promptHandlingNow{0}; // extras385::prompts::Handling
 std::atomic<uint32_t> gestureMovesNow{0};   // Update 38.5: gestures385::Mode (0 OFF, 1 TRAINING, 2 ON)
 static_assert(gestures385::pad::dpadUp == game_pad::dpadUp && gestures385::pad::lb == game_pad::leftShoulder &&
@@ -2427,6 +2430,10 @@ DWORD WINAPI run(void*) {
         // it the van's tracking-space place already took back (so the van stays on the street as he rises).
         vehicle074::Seat vanSeat;
         vehicle_flips::Watch vanFlipsWatch; // 0.0.74 test 10 VAN NO FLIPS: the in-car override's edges
+        // 0.0.74 test 10 CAR COLLISION: the parked car against his body, worked out after the car's step (one frame on,
+        // as the van's carry): the head's face for the rig and the body's walk / carry for the next swing command.
+        car_collision::Out carBump{};
+        car_collision::Watch carBumpWatch;
         Vec3 vanSeatLift{}, vanSeatTaken{}; // 0.0.74 test 10 SEAT CENTRE: all three axes (test 1: the height)
         // 0.0.74 test 1 HIDEOUTS (hideout074::Visit): the trip from the dash, the van held where it stands.
         hideout074::Visit hideoutVisit;
@@ -4653,6 +4660,10 @@ DWORD WINAPI run(void*) {
                                     dot(n, hit.ray.direction) < -.2f)
                                     rig.surfaceFound({hit.position, n});
                             }
+                        // 0.0.74 test 10 CAR COLLISION: the parked car's nearest side, a surface like a wall's (the
+                        // game has no collider for the mod's cars, so no ray ever meets it).
+                        if (carBump.left && carBump.face && finite(carBump.facePoint) && finite(carBump.faceNormal))
+                            rig.surfaceFound({carBump.facePoint, carBump.faceNormal});
                     }
                     // REALISTIC FLIPS turn with the swing's flight: its
                     // velocity, and while it has the player each web's pull
@@ -5765,6 +5776,33 @@ DWORD WINAPI run(void*) {
                                 } else
                                     capSprinting = false;
                             }
+                        }
+                        // 0.0.74 test 10 CAR COLLISION (car_collision074.hpp): on foot by the parked car, the walk into
+                        // its side is taken off and a body inside is carried out (Command v7, the CONFIRMED carry path the
+                        // van's boarding, exit and CAP SPRINT use). The van's own carry (below) always wins.
+                        if (carBump.left) {
+                            --carBump.left;
+                            const bool onFoot = input.focused && !vanCarry.carry && !vanDriving && carBump.active &&
+                                                !game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
+                            if (onFoot && carBump.touching) {
+                                const Vec3 walk = car_collision::clip(input.move, carBump);
+                                if (finite(walk))
+                                    input.move = walk;
+                                if (input.carry) { // CAP SPRINT: its run into the car taken off too
+                                    const Vec3 run = car_collision::clip(input.carryVelocity, carBump);
+                                    if (finite(run) && length(run) <= game_swing::carryMost)
+                                        input.carryVelocity = run;
+                                } else if (carBump.push && finite(carBump.velocity) &&
+                                           length(carBump.velocity) <= game_swing::carryMost) {
+                                    input.carry = 1;
+                                    input.carryVelocity = carBump.velocity;
+                                    input.jump = 0;
+                                    input.leap = 0;
+                                }
+                            }
+                            const int edge = carBumpWatch.update(onFoot && carBump.push);
+                            if (edge > 0 && carBumpWatch.stops <= 3)
+                                game_prompts::note("0.0.74 test 10 CAR COLLISION: the car stopped him (carried out of its box)");
                         }
                         if (vanCarry.carry && input.focused && finite(vanCarry.velocity) &&
                             length(vanCarry.velocity) <= game_swing::carryMost) {
@@ -7683,6 +7721,32 @@ DWORD WINAPI run(void*) {
                                                 vanDriver.carried = vanDriver.boarding = false;
                                                 vanCarry = {};
                                             }
+                                        // 0.0.74 test 10 CAR COLLISION (owner pt1387u; car_collision074.hpp): the parked car is
+                                        // solid on foot - its box from the model's size; the door handle, getting in or out and
+                                        // driving never blocked. Used by the next frame's rig (head) and swing command (body).
+                                        try {
+                                            car_collision::In cin;
+                                            cin.enabled = vin.enabled && car_collision::on(carCollisionNow.load()) && !flatScreen &&
+                                                          !hideoutAway;
+                                            cin.state = van.state;
+                                            cin.frame = van.frame;
+                                            cin.tune = vehicleTune;
+                                            cin.boarding = vanDriver.boarding;
+                                            cin.carried = vanDriver.carried;
+                                            cin.alighting = vanDriver.alightLeft > 0 || vanCarry.alighting;
+                                            cin.airborne = game_swing::airborne(swingState, now.QuadPart, frequency.QuadPart);
+                                            cin.bodyKnown = ci.bodyKnown;
+                                            cin.body = ci.body;
+                                            cin.head = vin.head;
+                                            for (unsigned i = 0; i < 2; ++i) {
+                                                cin.hands[i] = vin.tracked[i] ? vin.hands[i] : Vec3{};
+                                                cin.grip[i] = vin.tracked[i] ? vin.grip[i] : 0.f;
+                                            }
+                                            carBump = car_collision::step(cin);
+                                            carBump.left = 2;
+                                        } catch (...) { // never: it allocates nothing
+                                            carBump = {};
+                                        }
                                         // 0.0.74 test 2b CRIME GPS (ON by default): the enemies the last scan holds round the car,
                                         // grouped into crimes (CANDIDATE: a group of thugs is a crime). A new one pops up on the
                                         // dash's MAP ("OK - TRACK"); tracked, the arrow over the dash points the way. No game waypoint.
@@ -14169,6 +14233,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyAutoLevel(void* on) {
 // 0.0.74 test 10 VAN NO FLIPS (vehicle_flips.hpp): 0 ON (the default: no flips while driving), 1 OFF; live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVanNoFlips(void* v) {
     return setLive(v, 0, 1, 5540, vanNoFlipsNow, asU32);
+}
+// 0.0.74 test 10 CAR COLLISION (car_collision074.hpp): 0 ON (the default: the parked car is solid on foot), 1 OFF; live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarCollision(void* v) {
+    return setLive(v, 0, 1, 5547, carCollisionNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

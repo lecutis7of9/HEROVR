@@ -50,6 +50,7 @@
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
+#include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
 #include "spidy/roster_page.hpp"
 #include "spidy/hero_controls.hpp"
 #include <filesystem>
@@ -34979,6 +34980,201 @@ int main() {
         check(sw::makeRig(m, plain, "Suit_classic") && !plain.clawSuit && !plain.clawOk[0] && !plain.clawOk[1], "not Wolverine: no claw roots");
         check(sw::makeRig(m, wolverine, "Suit_wolverine_1") && wolverine.clawSuit && !wolverine.clawOk[0] && !wolverine.clawOk[1],
               "Wolverine with no fist to root in: none (the grip's claws), the suit still worn");
+    });
+    // 0.0.74 test 10 CAR COLLISION (pt1387u: "make it where you cant just walk into a vehicle it needs collision").
+    test("0.0.74 test 10 CAR COLLISION: every face, the corner, the door, exemptions, exit, OFF, NaN", [] {
+        namespace cc = car_collision;
+        using van072::Frame;
+        check(cc::on(0) && !cc::on(1) && cc::on(9), "car_collision: 0 ON (default), 1 OFF");
+        check(std::string(cc::help).find("restart") != std::string::npos, "the subtext says whether it needs a restart");
+        auto near = [](Vec3 a, Vec3 b, float e = 1e-3f) { return length(a - b) <= e; };
+        for (float yaw : {0.f, .7f, -2.4f, 3.1f}) {
+            const Frame f{{10, 5, -20}, yaw};
+            van072::Tune vt{}; // the van: 4.85 x 2.0 x 1.95
+            cc::In in;
+            in.state = van072::parked;
+            in.frame = f;
+            in.tune = vt;
+            in.bodyKnown = true;
+            auto at = [&](Vec3 local) {
+                in.body = f.world(local);
+                in.head = in.body + Vec3{0, 1.6f, 0};
+                return cc::step(in);
+            };
+            // Each face, .1 m inside the body's .3 m column (well away from the door's notch)
+            const struct {
+                Vec3 local, out;
+            } faces[] = {{{1.2f, 0, 1.6f}, {1, 0, 0}},   // right
+                         {{-1.2f, 0, 1.6f}, {-1, 0, 0}}, // left, behind the driver door
+                         {{0, 0, -2.625f}, {0, 0, -1}},  // the front (-z)
+                         {{.3f, 0, 2.625f}, {0, 0, 1}}}; // the back
+            for (const auto& face : faces) {
+                const cc::Out o = at(face.local);
+                const Vec3 outW = f.right() * face.out.x + f.forward() * (-face.out.z);
+                check(o.active && o.touching && o.push && near(o.normal, outW) && std::abs(o.depth - .1f) < 2e-3f,
+                      "a body .1 m into a face is carried out through it");
+                check(near(o.velocity, outW * std::clamp(.1f * 6.f, .6f, 3.f), 2e-3f), "at a walk, level");
+                const Vec3 walkIn = outW * -1.f;
+                check(length(cc::clip(walkIn, o)) < 1e-4f, "walking straight in: nothing left");
+                const Vec3 along = Vec3{-outW.z, 0, outW.x};
+                const Vec3 slant = cc::clip(walkIn * .5f + along * .5f, o);
+                check(near(slant, along * .5f), "walking in at a slant: slides along the face");
+                check(near(cc::clip(outW, o), outW), "walking away: untouched");
+            }
+            // Deep inside (the middle of the car): out through the nearest side, at the most speed
+            {
+                const cc::Out o = at({.4f, 0, .2f});
+                check(o.push && near(o.normal, f.right()) && std::abs(length(o.velocity) - 3.f) < 1e-3f,
+                      "inside the car: out the nearest side at the most speed");
+            }
+            // The corner: round it, along the diagonal
+            {
+                const cc::Out o = at({1.0f + .15f, 0, 2.425f + .15f});
+                const Vec3 diag = normalized(f.right() + f.forward() * -1.f);
+                check(o.push && near(o.normal, diag) && std::abs(o.depth - (.3f - .15f * std::sqrt(2.f))) < 2e-3f,
+                      "at the corner: out round it");
+                const cc::Out far = at({1.0f + .3f, 0, 2.425f + .3f});
+                check(!far.touching && !far.push, "past the corner's round: clear");
+            }
+            // Clear of the box: nothing
+            {
+                const cc::Out o = at({1.0f + .3f + .2f, 0, 0});
+                check(o.active && !o.touching && !o.push && near(cc::clip(f.right() * -1.f, o), f.right() * -1.f),
+                      "half a metre off the side: the walk is his");
+            }
+            // The head leaning in at the side: its face fed (outside, near), never deep inside
+            {
+                in.body = f.world({1.0f + .4f, 0, 0});
+                in.head = f.world({1.0f - .1f, 1.5f, 0});
+                cc::Out o = cc::step(in);
+                check(o.face && near(o.faceNormal, f.right()) && near(o.facePoint, f.world({1.0f, 1.5f, 0})),
+                      "a head leaning in: the side it came through");
+                in.head = f.world({1.0f + .3f, 1.5f, 0});
+                o = cc::step(in);
+                check(o.face, "a head near the side: fed before it touches");
+                in.head = f.world({0, 1.5f, 0});
+                o = cc::step(in);
+                check(!o.face, "a head deep in the car: never snapped out (the body carry takes it)");
+                in.head = f.world({1.0f + 1.f, 1.5f, 0});
+                o = cc::step(in);
+                check(!o.face, "a head far off: nothing");
+            }
+            // Over the roof or another level down: no sides
+            {
+                in.body = f.world({.5f, 0, 0});
+                in.head = f.world({.5f, 1.95f + 1.6f, 0});
+                check(!cc::step(in).active, "feet on the roof's top: no sides (he can't stand there; slides off)");
+                in.head = f.world({.5f, -3.f + 1.6f, 0});
+                check(!cc::step(in).active, "a level below the car: nothing");
+                in.head = f.world({.5f, 1.6f, 0});
+                in.airborne = true;
+                const cc::Out o = cc::step(in);
+                check(o.active && !o.push && !o.touching, "in the air (a swing owns the body): never carried");
+                in.airborne = false;
+            }
+            // The driver door: the side taken in to the handle, the handle in reach
+            {
+                const Vec3 h = vt.handleOut;
+                in.body = f.world({h.x - .3f - .05f, 0, h.z});
+                in.head = in.body + Vec3{0, 1.6f, 0};
+                check(!cc::step(in).push, "at the door: standing .35 m from the handle is allowed");
+                check(length(in.body - f.world(h)) < 1.3f, "the handle in reach");
+                in.hands[0] = f.world(h);
+                in.grip[0] = 1;
+                in.body = f.world({h.x + .2f, 0, h.z});
+                in.head = in.body + Vec3{0, 1.6f, 0};
+                cc::Out o = cc::step(in);
+                check(o.exempt && !o.active && !o.push && !o.face, "gripping the door handle: no collision");
+                in.grip[0] = .2f;
+                o = cc::step(in);
+                check(o.active && o.push, "the hand let go: solid again");
+                in.hands[0] = {};
+                in.grip[0] = 0;
+            }
+            // Getting in, driving, riding, getting out: never blocked
+            {
+                in.body = f.world({0, 0, 0});
+                in.head = in.body + Vec3{0, 1.6f, 0};
+                in.boarding = true;
+                check(cc::step(in).exempt && !cc::step(in).push, "boarding carry: no collision");
+                in.boarding = false;
+                in.state = van072::driving;
+                check(!cc::step(in).active && !cc::step(in).push, "driving: off");
+                in.state = van072::parked;
+                in.carried = true;
+                check(!cc::step(in).push, "riding: off");
+                in.carried = false;
+                in.alighting = true;
+                check(!cc::step(in).push, "the exit carry: off");
+                in.alighting = false;
+                check(cc::step(in).push, "after the exit, standing inside the car: carried out");
+                in.state = van072::none;
+                check(!cc::step(in).active, "no car: nothing");
+                in.state = van072::parked;
+            }
+            // OFF: like before
+            {
+                in.body = f.world({0, 0, 0});
+                in.head = in.body + Vec3{0, 1.6f, 0};
+                in.enabled = false;
+                const cc::Out o = cc::step(in);
+                check(!o.active && !o.push && !o.face && near(cc::clip(f.right(), o), f.right()), "OFF: walks through");
+                in.enabled = true;
+            }
+            // NaN anywhere: nothing, never a NaN out
+            {
+                const float nan = std::numeric_limits<float>::quiet_NaN();
+                cc::In bad = in;
+                bad.body = {nan, 0, 0};
+                bad.head = {0, nan, 0};
+                cc::Out o = cc::step(bad);
+                check(!o.push && !o.face, "a NaN body and head: nothing");
+                bad = in;
+                bad.frame.yaw = nan;
+                o = cc::step(bad);
+                check(!o.active && !o.push, "a NaN car: nothing");
+                bad = in;
+                bad.tune.width = nan;
+                bad.body = f.world({0, 0, 0});
+                o = cc::step(bad);
+                check(!o.push && finite(o.velocity) && finite(o.normal), "a NaN size: nothing");
+                bad = in;
+                bad.body = f.world({1.1f, 0, 0});
+                bad.head = bad.body + Vec3{0, 1.6f, 0};
+                bad.hands[1] = {nan, nan, nan};
+                bad.grip[1] = nan;
+                o = cc::step(bad);
+                check(o.push && finite(o.velocity), "a NaN hand: collision as usual");
+                const cc::Out none{};
+                const Vec3 w = cc::clip({nan, 0, 0}, none);
+                check(!finite(w), "clip leaves a move it does not touch as it was");
+                check(finite(cc::clip({0, 0, 1}, o)), "a fine walk stays fine");
+            }
+        }
+        // Every car: the exit spot is outside its box (with the body's column), the handle in reach from outside.
+        for (uint32_t car = 0; car <= batmobile074::cars; ++car) {
+            const van072::Tune t = car < batmobile074::cars ? batmobile074::tune(car) : van072::Tune{};
+            const Frame f{{0, 0, 0}, .3f};
+            const cc::Box b = cc::boxAt(f, t, t.exit);
+            const cc::Contact k = cc::contact(b, f.world(t.exit), .3f);
+            check(k.ok && k.depth < 0, "getting out ends outside the car's box (and its column)");
+            cc::In in;
+            in.state = van072::parked;
+            in.frame = f;
+            in.tune = t;
+            in.bodyKnown = true;
+            in.body = f.world(t.exit);
+            in.head = in.body + Vec3{0, 1.6f, 0};
+            check(!cc::step(in).push, "standing on the exit spot: not pushed");
+            // walk to the handle: the nearest spot the box allows is within an arm of it
+            const Vec3 h = t.handleOut;
+            in.body = f.world({h.x - .29f, 0, h.z});
+            in.head = in.body + Vec3{0, 1.6f, 0};
+            check(!cc::step(in).push, "beside the outer handle: allowed within .3 m of it");
+            in.body = f.world({0, 0, 0});
+            in.head = in.body + Vec3{0, 1.6f, 0};
+            check(cc::step(in).push, "inside: carried out");
+        }
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

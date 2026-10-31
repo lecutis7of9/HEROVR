@@ -210,6 +210,7 @@ SETTINGS = {
     'fly_roll_speed': ((30, 180), 'SpidyFlyRollSpeed', 'FLY ROLL SPEED {} (degrees a second the right stick rolls you while flying)'),
     'fly_auto_level': ((0, 1), 'SpidyFlyAutoLevel', 'FLY AUTO LEVEL {} (1 levels the roll back when you let go of the stick)'),
     'van_no_flips': ((0, 1), 'SpidyVanNoFlips', "VAN NO FLIPS {} (0 on: realistic flips turn off by themselves while you drive the van or a Batmobile so sharp turns don't roll you; 1 off: keeps your REALISTIC FLIPS choice; live, no restart)"),  # 0.0.74 test 10
+    'car_collision': ((0, 1), 'SpidyCarCollision', "CAR COLLISION {} (0 on: you can't walk through the Batmobile or the van; 1 off: lets you pass through like before; live, no restart)"),  # 0.0.74 test 10
     'symbiote_look': ((0, 1), 'SpidySymbioteLook', 'SYMBIOTE LOOK {} (1 black goo hands, symbiote webs and a black mirror; not the game suit)'),
     'prompt_handling': ((0, 1), 'SpidyPromptHandling', 'PROMPT HANDLING {} (0 manual PAD MODE; 1 auto, which needs the prompts hooked: not yet in SM2)'),
     'gesture_moves': ((0, 2), 'SpidyGestureMoves', 'GESTURE MOVES {} (0 off; 1 TRAINING draws the picked move path in the air (TRAIN MOVE) and names each move, sends nothing; 2 ON sends abilities, parry and wings)'),
@@ -544,6 +545,7 @@ SCALE = {'web_width': 100, 'hud_scale': 100, 'exposure': 10}  # Update 37.2: exp
 CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'walk_legs': ('on', 'off'),  # Version 0.0.74 test 11
                 'van_no_flips': ('on', 'off'),  # 0.0.74 test 10 VAN NO FLIPS
+                'car_collision': ('on', 'off'),  # 0.0.74 test 10 CAR COLLISION
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
                 'hud_text_color': ('theme', 'white', 'yellow', 'cyan'),
                 'web_style': WEB_STYLES,
@@ -762,6 +764,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'cap_sprint': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'walk_legs': {'on': 0, 'off': 1, '0': 0, '1': 1},  # Version 0.0.74 test 11
            'van_no_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 VAN NO FLIPS
+           'car_collision': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 CAR COLLISION
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            'shadow_match': {'on': 0, 'off': 1, 'experimental': 0, '0': 0, '1': 1},
            'calib_look': {'holo': 0, 'classic': 1, '0': 0, '1': 1},
@@ -1074,6 +1077,7 @@ HERO_KEYS = ('iron_man', 'daredevil', 'hulk', 'batman', 'wolverine', 'superman',
 START_ONLY = START_ONLY + UPDATE38_KEYS
 # 0.0.74 test 10 VAN NO FLIPS: an OFF in live.txt is kept from session to session (ON is the DLL's own default).
 START_ONLY = START_ONLY + ('van_no_flips',)
+START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

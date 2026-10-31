@@ -119,6 +119,8 @@ def main(argv=None):
     p.add_argument("--source-url", help="default: https://github.com/<repo>")
     p.add_argument("--launcher-build", type=int, help="launcher build in the zip (launchers update when it is higher, even at the same mod version)")
     p.add_argument("--whats-new", help="one line shown in the launcher's update prompt")
+    p.add_argument("--stable-version", default="0.0.73",
+                   help="the most recent STABLE build the launcher's EXPERIMENTAL notice and Revert point to (0.0.74: 0.0.73)")
     p.add_argument("--out", default="version.json")
     p.add_argument("--no-sha-files", action="store_true", help="do not write <zip>.sha256 files")
     a = p.parse_args(argv)
@@ -185,6 +187,12 @@ def main(argv=None):
         "license": "GPL-3.0",
         "credits": CREDITS,
     }
+    if a.stable_version:   # 0.0.74 test 10: the EXPERIMENTAL notice's STABLE build (Revert > USE 0.0.73)
+        sv = parse_semver(a.stable_version)
+        if not sv:
+            raise SystemExit("--stable-version %r is not semver" % a.stable_version)
+        manifest["experimental"] = True
+        manifest["stable_version"] = sv[0]
     if a.launcher_build: manifest["launcher_build"] = a.launcher_build
     if a.whats_new: manifest["whats_new"] = a.whats_new
     if note:

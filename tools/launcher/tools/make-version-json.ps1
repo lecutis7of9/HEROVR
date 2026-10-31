@@ -24,6 +24,7 @@ param(
   [string]$InstallSubfolder = "sm2-port",
   [string]$ChangelogUrl,
   [string]$SourceUrl,
+  [string]$StableVersion = "0.0.73",   # 0.0.74 test 10: the EXPERIMENTAL notice's STABLE build (Revert > USE 0.0.73)
   [string]$Out = "version.json",
   [switch]$NoShaFiles
 )
@@ -146,6 +147,10 @@ $manifest = [ordered]@{
   source_url        = $(if ($SourceUrl) { $SourceUrl } else { "https://github.com/$Repo" })
   license           = "GPL-3.0"
   credits           = $credits
+}
+if ($StableVersion) {
+  if ($StableVersion -notmatch $semverRx) { throw "-StableVersion '$StableVersion' is not semver" }
+  $manifest["experimental"] = $true; $manifest["stable_version"] = $Matches[1] + "." + $Matches[2] + "." + $Matches[3]
 }
 if ($note) { $manifest["internal_build"] = $note }   # informational; launchers order by version_number
 $json = ConvertTo-Json $manifest -Depth 6

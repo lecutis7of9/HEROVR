@@ -5883,6 +5883,8 @@ DWORD WINAPI run(void*) {
                             // 0.0.74 test 10 DD QUICK GRAPPLE: DAREDEVIL's faster pull and midair redirect (bits 1-2).
                             input.reserved7[0] |= dd_grapple074::word(heroNow() == hero_modes::daredevil,
                                                                       dd_grapple074::onByDefault(ddQuickGrappleNow.load()));
+                            // 0.0.75 CAPTAIN AMERICA GRAPPLE: DAREDEVIL's quick grapple, CAP's tune (bits 1-3), always on.
+                            input.reserved7[0] |= dd_grapple074::capWord(heroNow() == hero_modes::captainAmerica);
                             batmanGrapple[0] = batmanGrapple[1] = false;
                             // Version 0.0.72 GRAPPLE: DAREDEVIL and the PUNISHER grapple without the cape
                             // (askGrappleOnly every live frame, so the pull carries on to the point).

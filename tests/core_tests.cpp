@@ -36178,6 +36178,17 @@ int main() {
         check(!hero072::hammerHandBusy(hero_modes::thor, 0, true), "the left hand still punches");
         check(!hero072::hammerHandBusy(hero_modes::captainAmerica, 1, true), "other heroes unchanged");
     });
+    test("0.0.75 CAPTAIN AMERICA GRAPPLE: DAREDEVIL's quick grapple with CAP's own tune", [] {
+        const uint32_t w = dd_grapple074::capWord(true);
+        check(dd_grapple074::quick(w) && dd_grapple074::redirect(w) && dd_grapple074::captain(w), "CAP: quick, redirect, his tune");
+        check(dd_grapple074::capWord(false) == 0, "every other hero: nothing from it");
+        check(!dd_grapple074::captain(dd_grapple074::word(true, true)), "DAREDEVIL keeps his own tune");
+        const auto cap = dd_grapple074::tuneFor(true, true), dd = dd_grapple074::tuneFor(true, false);
+        check(cap.speed > cape_glide::GrappleTune{}.speed && cap.speed < dd.speed && cap.speed <= 32.f, "between test 9's and DD's");
+        check(cap.rampSeconds > 0 && cap.blendSeconds > 0 && cap.vaultUp > dd.vaultUp, "eased in, a higher vault");
+        check(dd.speed == dd_grapple074::quickTune().speed, "DD unchanged");
+        check(dd_grapple074::tuneFor(false, true).speed == cape_glide::GrappleTune{}.speed, "no quick bit: the default");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

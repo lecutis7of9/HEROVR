@@ -48,6 +48,28 @@ inline cape_glide::GrappleTune quickTune() {
 }
 inline cape_glide::GrappleTune tuneFor(bool quickOn) { return quickOn ? quickTune() : cape_glide::GrappleTune{}; }
 
+// 0.0.75 CAPTAIN AMERICA GRAPPLE: his grapple gun (the free hand's; 0.0.73 fix 17) gets DAREDEVIL's grapple - the
+// eased QUICK pull, the REDIRECT / CANCEL coast and the JUMP OUT - tuned for him (capBit): a touch slower and
+// heavier than DAREDEVIL's (a soldier with a shield, not an acrobat), with a higher vault over a ledge. Always on
+// for him (no switch: DAREDEVIL's dd_quick_grapple stays DAREDEVIL's). An older bridge reads only bits 1-2 (the
+// DAREDEVIL tune); an older VR module sends 0 (test 9's grapple).
+inline constexpr uint32_t capBit = 1u << 3;
+inline uint32_t capWord(bool captainAmerica) { return captainAmerica ? quickBit | redirectBit | capBit : 0u; }
+inline bool captain(uint32_t glideWord) { return (glideWord & capBit) != 0; }
+inline cape_glide::GrappleTune capTune() {
+    cape_glide::GrappleTune t = quickTune();
+    t.speed = 27;
+    t.accel = 80;
+    t.rampSeconds = .14f;
+    t.blendSeconds = .14f;
+    t.vaultUp = 8.5f;
+    t.vaultOver = 4.5f;
+    return t;
+}
+inline cape_glide::GrappleTune tuneFor(bool quickOn, bool captainOn) {
+    return quickOn && captainOn ? capTune() : tuneFor(quickOn);
+}
+
 // A new press may fire over a going grapple (REDIRECT on and a pull or its vault going).
 inline bool mayRedirect(bool redirectOn, uint32_t phase) {
     return redirectOn && (phase == cape_glide::pull || phase == cape_glide::vault);

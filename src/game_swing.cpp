@@ -868,7 +868,7 @@ void visit(const native_rays::QueryContext& world) {
             const bool redirect = dd_grapple074::mayRedirect(ddRedirect, capeGrapple.phase());
             if (held && !grappleHeldWas[i] && (capeGrapple.phase() == cape_glide::idle || redirect) && !takingOff) {
                 const Vec3 carried = finite(pullVelocityWas) && length(pullVelocityWas) > 0.f ? pullVelocityWas : body.velocity;
-                capeGrapple.tune = dd_grapple074::tuneFor(ddQuick); // every other hero: the default tune, as before
+                capeGrapple.tune = dd_grapple074::tuneFor(ddQuick, dd_grapple074::captain(ddWord)); // 0.0.75: CAP's own // every other hero: the default tune, as before
                 const Vec3 from = in.hands[i].aim.position;
                 const Vec3 dir = normalized(in.hands[i].aim.orientation.rotate({0, 0, -1}));
                 const auto hit = finite(from) && length(dir) > .5f ? world.raycast(from, dir, cape_glide::reachMost)

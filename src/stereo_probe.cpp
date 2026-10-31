@@ -478,6 +478,8 @@ bool distances{};
 // whole off-centre lens from SetPose to Submit. On by default; off (one console line) where the lens setter's two
 // summary writes differ from 2.810.0.0.
 bool eyeCoverReady{};
+// 0.0.75: the check's result for game_xr's one WINDOW EDGES console line (0 not checked yet, 1 on, 2 off).
+std::atomic<uint32_t> eyeCoverState{0};
 // The far buildings' full models (createViews bit 128 off). Far buildings are
 // impostors, and only the engine's active view (189daa0: the view at
 // ViewContextManager +f8) has the impostors it sees draw their full models,
@@ -3849,6 +3851,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                             entry(ec::halfHeightWriteRva, ec::halfHeightWriteBytes, sizeof(ec::halfHeightWriteBytes));
             if (!eyeCoverReady)
                 OutputDebugStringA(ec::fallbackLine);
+            eyeCoverState.store(eyeCoverReady ? 1u : 2u);
         }
         farWindowsReady = entry(0x2a6bc60, impostorQueriesBytes, sizeof(impostorQueriesBytes)) &&
                           entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
@@ -4422,6 +4425,8 @@ extern "C" const spidy::sm1style::Data* SpidySm1StyleNow() {
     d.reason = sm1Reason.load();
     return &d;
 }
+// 0.0.75 WINDOW EDGES: 0 not checked yet, 1 on, 2 off (this game build's lens setter differs); game_xr prints it once.
+extern "C" uint32_t SpidyWindowEdgesNow() { return eyeCoverState.load(); }
 // The safety (game_xr): eye pairs stopped reaching the headset; off for the session.
 extern "C" void SpidySm1StyleStall() { sm1FallBack(spidy::sm1style::stalled); }
 // Update 34: ENGINE TAA. 1 on (refused, 4602, when engineTaaBlocked() says why), 0

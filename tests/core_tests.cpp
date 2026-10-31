@@ -36135,6 +36135,19 @@ int main() {
         mm::keepTexturedPaint(none, false);
         check(none.paint.empty() && mm::paintCount(none).painted == 0, "none left: no paint kept");
     });
+    test("0.0.75 CONSOLE LINES: SM1STYLE and WINDOW EDGES say on / off and why, the AA fall back says TAA", [&] {
+        namespace s1 = spidy::sm1style;
+        const auto aa = s1::reasonLine(s1::gameAa);
+        check(aa.find("SM1STYLE: off") == 0 && aa.find(s1::reasonText(s1::gameAa)) != std::string::npos &&
+                  aa.find(s1::aaFixHint) != std::string::npos, "game AA: off, why, and set TAA");
+        check(s1::reasonLine(s1::exeDiffers).find(s1::aaFixHint) == std::string::npos, "other reasons: no TAA hint");
+        check(s1::reasonLine(s1::upscaleWrong).find("SM1STYLE warning: ") == 0, "upscale: a warning (it runs)");
+        check(std::string(s1::notAskedLine).find("SM1STYLE: off") == 0 &&
+                  std::string(s1::neverStartedLine).find("SM1STYLE: off") == 0 &&
+                  std::string(s1::noRecordLine).find("SM1STYLE: off") == 0, "the other offs");
+        check(std::string(s1::windowEdgesLine(1)).find("WINDOW EDGES: on") == 0 &&
+                  std::string(s1::windowEdgesLine(2)).find("WINDOW EDGES: off") == 0, "WINDOW EDGES on / off");
+    });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.
     if (failed) {

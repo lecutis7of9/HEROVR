@@ -35,6 +35,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
 namespace spidy::sm1style {
 // 0 ON (the default), 1 OFF.
@@ -151,6 +152,35 @@ inline const char* reasonText(uint32_t r) {
     case hookFailed: return "no per-eye TAA log (hook)";
     default: return "";
     }
+}
+
+// 0.0.75: the one console line SM1STYLE prints at a start where it fell back or warns (game_xr). The game's
+// Anti-Aliasing fall back says how to fix it; the launcher looks for aaFixHint (LiveFile.Sm1StyleAaLine).
+inline constexpr const char* aaFixHint = "set the game's Anti-Aliasing to TAA";
+inline std::string reasonLine(uint32_t r) {
+    const bool runs = r == upscaleWrong || r == hookFailed;
+    std::string line = std::string(runs ? "SM1STYLE warning: " : "SM1STYLE: off, not used - ") + reasonText(r);
+    if (r == upscaleWrong)
+        return line + " (live.txt sm1style = off + restart VR if the eyes look wrong)";
+    if (runs)
+        return line;
+    if (r == gameAa)
+        return line + " - the 0.0.72 eye picture this session; " + aaFixHint +
+               " (game Settings > Graphics) and restart VR to use SM1STYLE";
+    return line + " - the 0.0.72 eye picture this session";
+}
+inline constexpr const char* notAskedLine =
+    "SM1STYLE: off - turned off for this start (live.txt sm1style = off); sm1style = on + restart VR to use it";
+inline constexpr const char* neverStartedLine =
+    "SM1STYLE: off - asked for, but no eye pair was made with it in the first minute (the 0.0.72 eye picture)";
+inline constexpr const char* noRecordLine =
+    "SM1STYLE: off - the stereo renderer's SM1STYLE record is missing (the 0.0.72 eye picture)";
+// 0.0.75 WINDOW EDGES (stereo_probe.cpp SpidyWindowEdgesNow: 1 on, 2 off): its one console line.
+inline const char* windowEdgesLine(uint32_t state) {
+    return state == 1 ? "WINDOW EDGES: on - each eye's lens summaries cover its whole off-centre lens (lit windows "
+                        "reach the outer edge)"
+                      : "WINDOW EDGES: off - this game build's lens setter differs (2.810.0.0 expected), eye lenses "
+                        "left as they are";
 }
 
 inline constexpr uint32_t magic = 0x53314d53; // SM1S

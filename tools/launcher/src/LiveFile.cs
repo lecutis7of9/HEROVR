@@ -87,6 +87,16 @@ namespace Sm2VrLauncher
                                     line.IndexOf("GPU eye bridge: 3301", StringComparison.Ordinal) >= 0);
         }
 
+        /// <summary>0.0.75: the game's SM1STYLE console line when it fell back because the game's Anti-Aliasing is not
+        /// TAA (sm1style.hpp reasonLine / aaFixHint); the launcher then tells the player to set it to TAA.</summary>
+        public static bool Sm1StyleAaLine(string line)
+        {
+            return line != null && line.IndexOf("SM1STYLE: off", StringComparison.Ordinal) >= 0 &&
+                   line.IndexOf("Anti-Aliasing makes no TAA targets", StringComparison.Ordinal) >= 0;
+        }
+
+        public const string Sm1StyleAaHint = "SM1STYLE was not used this session because the game's Anti-Aliasing is not TAA: in the game, set Settings > Graphics > Anti-Aliasing to TAA, then restart VR.";
+
         // The settings the pop-up turns off (and OPTIONS > SAFETY CHECKS shows). 0.0.74 test 10 PICTURE 72: LIGHT CHECKS
         // only (STREAMER MODE and SL WATCH are gone).
         public static readonly string[] TwoGpuKeys = { "light_checks" };

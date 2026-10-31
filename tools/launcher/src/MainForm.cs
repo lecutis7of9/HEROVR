@@ -731,6 +731,14 @@ namespace Sm2VrLauncher
             // 0.0.74 test 3: the two-GPU device-lost signature (0x887A002B / bridge 3301) seen in this session.
             bool twoGpuLost = false;
             vr.Output += (line, err) => { if (LiveFile.TwoGpuLostLine(line)) twoGpuLost = true; };
+            // 0.0.75: SM1STYLE fell back because the game's Anti-Aliasing is not TAA - say how to fix it, now and at the end.
+            bool sm1NeedsTaa = false;
+            vr.Output += (line, err) =>
+            {
+                if (sm1NeedsTaa || !LiveFile.Sm1StyleAaLine(line)) return;
+                sm1NeedsTaa = true;
+                Ui(() => sessionLog.Line(LiveFile.Sm1StyleAaHint, Theme.Warn));
+            };
             vr.Exited += code =>
             {
                 // Version 0.0.6: crash check and (opt-in) play stats, off the UI thread (it reads the session report).
@@ -743,6 +751,7 @@ namespace Sm2VrLauncher
                 job = Job.None;
                 bool userStopped = stopAsked != DateTime.MinValue;
                 stopAsked = DateTime.MinValue;
+                if (sm1NeedsTaa) sessionLog.Line(LiveFile.Sm1StyleAaHint, Theme.Warn); // 0.0.75
                 // 0.0.74 test 10 MONITOR MEMORY: a device loss while the monitor's copy was on skips the copy from now on.
                 if (LiveFile.MonitorSkipAfterSession(LiveFile.MonitorMemoryPath(), twoGpuLost))
                     sessionLog.Line("MONITOR: the GPU device was lost with the monitor's copy on; from now on the monitor shows the game's own view (0.0.72).", Theme.Warn);

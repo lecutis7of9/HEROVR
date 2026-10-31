@@ -624,6 +624,8 @@ DWORD WINAPI SpidyEngineTaa(void*); // Update 34: ENGINE TAA, 0 off, 1 on, 2 off
 // 0.0.74 test 10 SM1STYLE (stereo_probe.cpp): its record, and the safety's off.
 const spidy::sm1style::Data* SpidySm1StyleNow();
 void SpidySm1StyleStall();
+// 0.0.75 WINDOW EDGES (stereo_probe.cpp): 0 not checked yet, 1 on, 2 off (the lens setter differs).
+uint32_t SpidyWindowEdgesNow();
 DWORD WINAPI SpidyEyeShadows(void*);
 DWORD WINAPI SpidyMonitorRate(void*);
 // Update 15: the wrist hologram's GRAPHICS page (native_eye_gpu.cpp,
@@ -11627,6 +11629,15 @@ DWORD WINAPI run(void*) {
                             static s1::StallGuard sm1Guard;
                             static bool sm1Started{}, sm1Told{};
                             static ULONGLONG sm1LogAt{};
+                            // 0.0.75: one console line each for SM1STYLE and WINDOW EDGES, on / off and why.
+                            static bool sm1Said{}, edgesSaid{};
+                            static ULONGLONG sm1FirstAt{};
+                            if (!edgesSaid) {
+                                if (const auto edges = SpidyWindowEdgesNow(); edges) {
+                                    edgesSaid = true;
+                                    consoleLine(spidy::sm1style::windowEdgesLine(edges));
+                                }
+                            }
                             const auto* sd = SpidySm1StyleNow();
                             const bool live = sd && (sd->flags & s1::flagLive);
                             sm1StyleActive.store(live);
@@ -11651,6 +11662,7 @@ DWORD WINAPI run(void*) {
                                               s1::phases(SpidyXrData.eyeWidth, sd->renderWidth),
                                               config.renderScale, native_gpu::supersample());
                                 consoleLine(line);
+                                sm1Said = true;
                             }
                             if (sd && sm1Guard.frame(sd->leftJobs, newPair, live)) {
                                 SpidySm1StyleStall();
@@ -11659,14 +11671,20 @@ DWORD WINAPI run(void*) {
                             }
                             if (sd && sd->reason && sd->reason != s1::stalled && !sm1Told &&
                                 (config.options & s1::startOption)) {
-                                sm1Told = true;
-                                const bool runs = sd->reason == s1::upscaleWrong || sd->reason == s1::hookFailed;
-                                consoleLine(std::string(runs ? "SM1STYLE warning: " : "SM1STYLE: not used, ") +
-                                            s1::reasonText(sd->reason) +
-                                            (runs ? (sd->reason == s1::upscaleWrong
-                                                         ? " (live.txt sm1style = off + restart VR if the eyes look wrong)"
-                                                         : "")
-                                                  : " - the 0.0.72 eye picture this session"));
+                                sm1Told = sm1Said = true;
+                                consoleLine(s1::reasonLine(sd->reason));
+                            }
+                            {   // 0.0.75: no line yet - not asked for at this start, or nothing decided in 60 s.
+                                const ULONGLONG at = GetTickCount64();
+                                if (!sm1FirstAt)
+                                    sm1FirstAt = at;
+                                if (!sm1Said && !(config.options & s1::startOption)) {
+                                    sm1Said = true;
+                                    consoleLine(s1::notAskedLine);
+                                } else if (!sm1Said && at - sm1FirstAt >= 60000) {
+                                    sm1Said = true;
+                                    consoleLine(sd ? s1::neverStartedLine : s1::noRecordLine);
+                                }
                             }
                             const ULONGLONG now = GetTickCount64();
                             if (sd && (sd->flags & s1::flagSteps) && now - sm1LogAt >= 10000) {

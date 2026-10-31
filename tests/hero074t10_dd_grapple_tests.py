@@ -41,7 +41,7 @@ class DdQuickGrapple(unittest.TestCase):
         self.assertIn('const uint32_t ddWord = grappleOnly && c.version >= 7 && c.bytes == sizeof(Command) ? c.reserved7[0] : 0u;', s)
         self.assertIn('(capeGrapple.phase() == cape_glide::idle || redirect) && !takingOff', s)
         self.assertIn('held && !grappleHeldWas[i]', s)  # a new press only (the rising edge, either hand)
-        self.assertIn('capeGrapple.tune = dd_grapple074::tuneFor(ddQuick);', s)
+        self.assertIn('capeGrapple.tune = dd_grapple074::tuneFor(ddQuick, dd_grapple074::captain(ddWord));', s)  # 0.0.75: CAP's tune on the same word
         self.assertEqual(s.count('capeGrapple.carry(carried);'), 2)  # a surface or an enemy
         self.assertIn('ddCoast.start(carried);', s)
         self.assertIn('caped = pulled.drive || coasted.drive || glided.drive;', s)

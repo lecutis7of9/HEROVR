@@ -38,8 +38,10 @@ fallback for VPNs. **Allow through firewall** adds one inbound rule for UDP 3946
 
 ## Privacy and reports
 
-The launcher never sends anything on its own. There is no tracking, no account and no server of ours: every report
-opens a pre-filled issue on the mod's GitHub page ([lecutis7of9/HEROVR](https://github.com/lecutis7of9/HEROVR/issues))
+There is no tracking and no account. Multiplayer's internet server list runs on HERO VR's own free Cloudflare
+server (`https://herovr-lobby.herovr.workers.dev`): the list shows only game names, heroes and player counts, never an
+address. A host's address goes only to the player who presses JOIN (and that player's only to that host). Reports
+never go through it or any other server of ours: every report opens a pre-filled issue on the mod's GitHub page ([lecutis7of9/HEROVR](https://github.com/lecutis7of9/HEROVR/issues))
 in your browser, where you can read and edit all of it, and nothing is sent until **you** press *Submit* (a free
 GitHub account is needed for that). Close the page and nothing is sent.
 

@@ -25,6 +25,10 @@ inline constexpr float pi = 3.14159265f;
 inline constexpr float hoverSpeed = 1.5f, fullForward = 14.f, fullBack = 7.f;
 // The most lean: forward to horizontal (90 degrees), back 25 degrees.
 inline constexpr float mostForward = pi / 2, mostBack = 25 * pi / 180;
+// Version 0.0.74 test 11 FLIGHT POSE (fix 27, fourth pass): "more with speed, fully horizontal at supersonic" - a
+// cruise (FLY NORMAL, about 14 m/s) leans cruiseForward (70 degrees, Superman's), then the lean keeps growing with
+// the speed to horizontal at sonicSpeed (FAST is 40 m/s, the SUPERSONIC dash 80 by default).
+inline constexpr float cruiseForward = 70 * pi / 180, sonicSpeed = 60.f;
 // How quickly the lean eases toward its target (a second).
 inline constexpr float ease = 3.5f;
 
@@ -42,14 +46,19 @@ inline float target(Vec3 velocity, Vec3 facing) {
     f = normalized(f);
     const float along = dot(Vec3{velocity.x, 0, velocity.z}, f);
     if (along >= 0)
-        return mostForward * smooth(hoverSpeed, fullForward, along);
+        return cruiseForward * smooth(hoverSpeed, fullForward, along) +
+               (mostForward - cruiseForward) * smooth(fullForward, sonicSpeed, along);
     return -mostBack * smooth(hoverSpeed, fullBack, -along);
 }
 
 // Version 0.0.73 test 3: when the lean is wanted - FLIGHT POSE LEAN (option 0), FLY MODE on, in flight, not on a
 // surface, and the swing bridge's velocity live.
+// Version 0.0.74 test 11 (fix 27, fourth pass): FLY's own "flying" is the word on the air - the tracking's SurfaceHold
+// "standing" (CANDIDATE game surface read) only keeps the lean off when FLY says he is not flying, so a stale or
+// wrong surface flag can no longer hold a flying body upright.
 inline bool wanted(uint32_t flyPose, uint32_t flyMode, uint32_t flying, bool standing, bool liveSwing) {
-    return flyPose == 0 && flyMode != 0 && flying != 0 && !standing && liveSwing;
+    (void)standing;
+    return flyPose == 0 && flyMode != 0 && flying != 0 && liveSwing;
 }
 // Version 0.0.73 test 3 (fix 27): the root cause of "the bodies still fly like they are standing straight up" -
 // a worn suit (IRON MAN, SUPERMAN, ...) stands in for the game's body (suit_wear::gameBodyDrawn), which turns

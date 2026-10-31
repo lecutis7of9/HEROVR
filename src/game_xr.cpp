@@ -10126,6 +10126,31 @@ DWORD WINAPI run(void*) {
                         const Vec3 facing = motion.headPose.orientation.rotate({0, 0, -1});
                         flyLean.update(frame.seconds, leanOn, liveSwing ? swingState.velocity : Vec3{}, facing);
                         flyTiltNow = flyLean.tilt();
+                        // Version 0.0.74 test 11 FLIGHT POSE (fix 27, fourth pass): every gate and the lean in the
+                        // log, every 2 s while FLY flies (and once on landing), so "still upright" says which gate.
+                        static double leanLogClock = 0, leanLogAt = -10;
+                        static bool leanLogged = false;
+                        leanLogClock += std::isfinite(frame.seconds) ? std::clamp(frame.seconds, 0.f, .1f) : 0.f;
+                        if ((flyNow.flying || leanLogged) && leanLogClock - leanLogAt >= 2.0) {
+                            leanLogAt = leanLogClock;
+                            leanLogged = flyNow.flying != 0;
+                            const Vec3 v = liveSwing ? swingState.velocity : Vec3{};
+                            char line[240];
+                            std::snprintf(line, sizeof line,
+                                          "VERSION 0.0.74 FLIGHT POSE: lean %.0f deg (target %.0f), %.1f m/s along the look; "
+                                          "pose %s, fly %u, flying %u, standing %u, swing %u; body %s",
+                                          flyLean.angle() * 57.2958f, fly_lean::target(v, facing) * 57.2958f,
+                                          finite(facing) && std::hypot(facing.x, facing.z) > 1e-3f
+                                              ? dot(Vec3{v.x, 0, v.z}, normalized(Vec3{facing.x, 0, facing.z}))
+                                              : 0.f,
+                                          c38(combat38::flyPose) == 0 ? "LEAN" : "UPRIGHT", flyModeNow.load(),
+                                          static_cast<unsigned>(flyNow.flying), motion.standing ? 1u : 0u,
+                                          liveSwing ? 1u : 0u,
+                                          mesh_model::slotIsSuit(wornSuitSlot.load()) ? "worn suit"
+                                          : bodyStarted                              ? "game body"
+                                                                                     : "none");
+                            game_prompts::note(line);
+                        }
                     }
                     if (bodyStarted) {
                         // The hero's body follows the headset and the controllers,

@@ -26469,7 +26469,7 @@ int main() {
             // upright head (test 3 swung it about the eyes, level with the camera: nothing to see), chest down.
             fly_lean::Lean fl;
             for (int i = 0; i < 900; ++i)
-                fl.update(1.f / 90, true, {0, 0, -30}, {0, 0, -1});
+                fl.update(1.f / 90, true, {0, 0, -80}, {0, 0, -1}); // 0.0.74 test 11: flat at supersonic
             sw::Tracked f = t;
             fly_lean::leanSuit(fl.tilt(), f.eye, f.up, f.feet);
             f.lean = fl.tilt();
@@ -31503,7 +31503,13 @@ int main() {
         check(target({0, 0, 0}, face) == 0, "hovering stands upright");
         check(target({12, 0, 0}, face) == 0, "strafing stands upright");
         check(target({0, -20, 0}, face) == 0 && target({0, 20, 0}, face) == 0, "rising or sinking stands upright");
-        check(std::abs(target({0, 0, -30}, face) - mostForward) < 1e-5f, "full speed forward is horizontal");
+        check(std::abs(target({0, 0, -80}, face) - mostForward) < 1e-5f, "supersonic forward is horizontal");
+        // Version 0.0.74 test 11 (fix 27, fourth pass): more with speed - a cruise is Superman's 70 degrees, FAST more,
+        // supersonic flat.
+        const float cruise = target({0, 0, -fullForward}, face), quick = target({0, 0, -40}, face);
+        check(std::abs(cruise - cruiseForward) < 1e-4f && quick > cruise + .1f && quick < mostForward - .05f &&
+                  std::abs(target({0, 0, -sonicSpeed}, face) - mostForward) < 1e-5f,
+              "the lean grows with the speed to horizontal at supersonic");
         check(std::abs(target({0, 0, 20}, face) + mostBack) < 1e-5f, "full speed back leans back 25 degrees");
         const float slow = target({0, 0, -5}, face), fast = target({0, 0, -10}, face);
         check(slow > 0 && fast > slow && fast < mostForward, "the forward lean blends with the speed");
@@ -31512,10 +31518,10 @@ int main() {
         Lean lean;
         float a = 0;
         for (int i = 0; i < 9; ++i)
-            a = lean.update(1.f / 90, true, {0, 0, -30}, face);
+            a = lean.update(1.f / 90, true, {0, 0, -80}, face);
         check(a > 0 && a < .5f * mostForward, "the lean eases in, never snaps");
         for (int i = 0; i < 900; ++i)
-            a = lean.update(1.f / 90, true, {0, 0, -30}, face);
+            a = lean.update(1.f / 90, true, {0, 0, -80}, face);
         check(std::abs(a - mostForward) < .01f, "it settles horizontal");
         const Vec3 up = lean.tilt().rotate({0, 1, 0}), feet = lean.tilt().rotate({0, -1, 0});
         check(up.z < -.99f && std::abs(up.y) < .02f, "the head points where he flies: " + std::to_string(up.z));
@@ -31523,7 +31529,7 @@ int main() {
         const Vec3 side = lean.tilt().rotate({1, 0, 0});
         check(side.x > .999f, "a forward lean never rolls the body");
         for (int i = 0; i < 900; ++i)
-            a = lean.update(1.f / 90, false, {0, 0, -30}, face);
+            a = lean.update(1.f / 90, false, {0, 0, -80}, face);
         check(std::abs(a) < 1e-3f, "landed (or UPRIGHT) eases back upright");
         for (int i = 0; i < 900; ++i)
             a = lean.update(1.f / 90, true, {0, 0, 20}, face);
@@ -31532,10 +31538,10 @@ int main() {
         // Facing east: the lean follows the facing.
         Lean east;
         for (int i = 0; i < 900; ++i)
-            east.update(1.f / 90, true, {30, 0, 0}, {1, 0, 0});
+            east.update(1.f / 90, true, {80, 0, 0}, {1, 0, 0});
         const Vec3 eastUp = east.tilt().rotate({0, 1, 0});
         check(eastUp.x > .99f, "the lean turns with the facing");
-        check(std::isfinite(east.update(std::nanf(""), true, {30, 0, 0}, {1, 0, 0})), "a bad clock stays finite");
+        check(std::isfinite(east.update(std::nanf(""), true, {80, 0, 0}, {1, 0, 0})), "a bad clock stays finite");
         const auto& o = combat38::optionInfo[combat38::flyPose];
         const std::string h = o.help;
         check(h.size() <= 80 && h.find('.') == h.size() - 1 && h.find("restart") != std::string::npos, "its subtext");
@@ -31546,11 +31552,12 @@ int main() {
         check(wanted(0, 1, 1, false, true), "LEAN, FLY on, flying, in the air: leans");
         check(!wanted(1, 1, 1, false, true), "UPRIGHT never leans");
         check(!wanted(0, 0, 1, false, true) && !wanted(0, 1, 0, false, true), "no FLY or not flying: upright");
-        check(!wanted(0, 1, 1, true, true) && !wanted(0, 1, 1, false, false), "on a surface or no swing: upright");
+        check(!wanted(0, 1, 1, false, false), "no swing: upright");
+        check(wanted(0, 1, 1, true, true), "0.0.74 test 11: FLY flying outranks a stale surface flag (it leans)");
         // Flying forward at full speed, the suit's estimate leans as the game's body does.
         Lean lean;
         for (int i = 0; i < 900; ++i)
-            lean.update(1.f / 90, wanted(0, 1, 1, false, true), {0, 0, -30}, {0, 0, -1});
+            lean.update(1.f / 90, wanted(0, 1, 1, false, true), {0, 0, -80}, {0, 0, -1});
         const Vec3 eye{3, 101.7f, -4};
         Vec3 up{0, 1, 0}, feet{3, 100, -4};
         leanSuit(lean.tilt(), eye, up, feet);

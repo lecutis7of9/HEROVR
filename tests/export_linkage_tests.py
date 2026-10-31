@@ -109,7 +109,7 @@ class ExportLinkage(unittest.TestCase):
     def test_required_exports_are_unmangled(self):
         names, calls = required_exports()
         self.assertEqual(calls, 4)  # bridge, rays, motion, stereo probe
-        self.assertIn('SpidyTaaHoldData', names)
+        self.assertIn('SpidyCrimeGps', names)  # 0.0.74 test 10: TAA HOLD (test 2b's missing export) is gone with the 0.0.74 picture work
         self.assertGreater(len(names), 300)
         mangled = [f'{f}:{line} {n}' for n in sorted(names) for f, line, is_c in self.defs.get(n, ()) if not is_c]
         self.assertEqual(mangled, [], 'dllexport without extern "C" (mangled, so "Missing export" at START VR)')
@@ -119,9 +119,6 @@ class ExportLinkage(unittest.TestCase):
     def test_every_dllexport_is_unmangled(self):
         mangled = [f'{f}:{line} {n}' for n, where in sorted(self.defs.items()) for f, line, is_c in where if not is_c]
         self.assertEqual(mangled, [])
-
-    def test_taa_hold_record_in_extern_c_block(self):
-        self.assertEqual([is_c for *_, is_c in self.defs['SpidyTaaHoldData']], [True])
 
     def test_scanner_catches_the_test2b_bug(self):
         import tempfile

@@ -46,10 +46,6 @@
 #include "spidy/hideout074.hpp"
 #include "spidy/batcave074.hpp"
 #include "spidy/crime_gps074.hpp"
-#include "spidy/taa_hold074.hpp"
-#include "spidy/taa_link074.hpp"
-#include "spidy/miles_taa074.hpp"
-#include "spidy/taa_gate074.hpp"
 #include "spidy/cave_quiet074.hpp"
 #include "spidy/batmobile074.hpp"
 #include "spidy/vehicle074.hpp"
@@ -76,8 +72,6 @@
 #include "spidy/native_hud.hpp"
 #include "spidy/native_eye_history.hpp"
 #include "spidy/eye_history.hpp"
-#include "spidy/jitter_proof.hpp"
-#include "spidy/view_jitter.hpp"
 #include "spidy/web_shading.hpp"
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_pair_state.hpp"
@@ -119,7 +113,6 @@
 #include "spidy/eye_bloom.hpp"
 #include "spidy/shared_lod.hpp"
 #include "spidy/eye_swap.hpp"
-#include "spidy/heap_guard.hpp"
 #include "spidy/web_pull.hpp"
 #include "spidy/web_grab.hpp"
 #include "spidy/lab_props.hpp"
@@ -178,7 +171,6 @@
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
 #include "spidy/seated_lock074.hpp"
-#include "spidy/taa_diag074.hpp"
 #include "spidy/cabin_look074.hpp"
 #include "spidy/finger_ray074.hpp"
 #include "spidy/streamer_view.hpp"
@@ -1319,70 +1311,6 @@ int main() {
         check(noteOrtho(rows, rn, 0x10, 0x40, c) && rn == 2, "a second cascade must add");
         check(noteOrtho(rows, rn, 0x10, 0x80, a) && rn == 3, "another record offset must add");
     });
-    test("0.0.74 test 3 HEAP GUARD: the eyes are let go of and taken again when the game rebuilds its render heaps", [] {
-        namespace hg = heap_guard;
-        check(!hg::on(0) && hg::on(1) && !hg::on(7), "HEAP GUARD: 0 OFF (the default since the test 3 fix), 1 ON, anything else OFF");
-        check(hg::createHeapSlot == 28, "ID3D12Device::CreateHeap is vtable slot 28");
-        // The player's rebuild: an 11272192-byte render-target heap; the eye images 1352x1472.
-        const auto eye = hg::eyeBytes(1352, 1472);
-        check(eye == 1352ull * 1472 * 4, "an eye image's bytes");
-        check(hg::eyeBytes(0, 0) == hg::smallestRenderHeap, "1 MB before an eye image is known");
-        check(hg::renderHeap(1, 0, 11272192, eye), "the game's rebuilt render heap counts");
-        check(!hg::renderHeap(2, 0, 11272192, eye), "an upload heap does not count");
-        check(!hg::renderHeap(3, 0, 11272192, eye), "a readback heap does not count");
-        check(!hg::renderHeap(1, 0x400, 11272192, eye), "a heap denying render targets does not count");
-        check(!hg::renderHeap(1, 0, 4u << 20, eye), "a heap smaller than an eye image does not count");
-        check(!hg::renderHeap(1, 0, 4096), "a tiny heap never counts");
-        hg::Guard g;
-        check(!g.check(3, true, true, 10), "the first look only sets the start (the game's own load)");
-        check(!g.check(3, true, true, 11) && g.mayCopy(11), "no new heap: nothing let go of, pairs copied");
-        check(g.check(4, true, true, 12) && g.rebuilds == 1, "a new render heap: the eyes are let go of");
-        check(!g.mayCopy(12) && !g.mayCopy(13) && g.mayCopy(14), "the pair in flight and the next are not copied");
-        check(!g.check(4, true, true, 14), "the same heap acts once");
-        check(!g.check(5, false, true, 15) && g.rebuilds == 1 && g.mayCopy(16), "OFF only counts");
-        check(!g.check(6, true, false, 16) && g.rebuilds == 1, "no eye image held: nothing to let go of");
-    });
-    test("0.0.74 test 3 fix: HEAP GUARD never keeps the headset black (rate limit, starve fallback)", [] {
-        namespace hg = heap_guard;
-        // The player's test 3 (fa15f5f): streaming heaps every few frames, 797 pairs rendered, 30 copied.
-        hg::Guard g;
-        check(!g.check(1, true, true, 100, 100, 10000), "the start");
-        check(g.check(2, true, true, 101, 100, 10010) && g.rebuilds == 1 && !g.mayCopy(102), "a new heap acts once");
-        check(!g.check(3, true, true, 102, 100, 10020) && g.skipped == 1 && g.rebuilds == 1,
-              "another heap within a second is only counted");
-        check(!g.check(4, true, true, 103, 100, 10500) && g.skipped == 2 && g.holdGeneration == 102,
-              "the hold is not pushed again within a second");
-        check(g.mayCopy(103), "the pair after the hold is copied");
-        // A pair reached the headset: a heap a second later acts again, normally.
-        check(g.check(5, true, true, 110, 103, 11100) && g.rebuilds == 2 && !g.fellBack, "a later rebuild acts");
-        // Now nothing reaches the headset while the game renders on: the last working path.
-        check(!g.check(5, true, true, 110 + hg::starvePairs, 103, 11200) && !g.fellBack, "not yet starved");
-        check(!g.check(5, true, true, 112 + hg::starvePairs, 103, 11300) && g.fellBack, "starved: falls back");
-        check(g.mayCopy(1) && g.mayCopy(112) && g.holdGeneration == 0, "fallen back: every pair may be copied");
-        check(!g.check(6, true, true, 200, 103, 20000) && !g.check(7, true, true, 201, 103, 40000) && g.rebuilds == 2,
-              "fallen back: never lets go of the eyes again (the session)");
-        // Loading (no eye pairs rendered): no fallback however long.
-        hg::Guard l;
-        check(!l.check(1, true, true, 5, 5, 1000) && l.check(2, true, true, 5, 5, 3000), "a load's rebuild acts");
-        check(!l.check(2, true, true, 5, 5, 60000) && !l.fellBack && !l.mayCopy(6) && l.mayCopy(7),
-              "no pairs rendered: holds, no fallback");
-        // OFF: never holds a pair whatever the heaps.
-        hg::Guard o;
-        for (uint64_t e = 1; e < 50; ++e)
-            check(!o.check(e, false, true, e * 2, e * 2, e * 100) && o.mayCopy(e * 2 + 1), "OFF never holds");
-        // The worst stream: a heap every frame with ON. Pairs reach the headset within starvePairs + 2.
-        hg::Guard w;
-        uint64_t copied = 0, firstCopyAfter = 0;
-        for (uint64_t gen = 1; gen < 400; ++gen) {
-            w.check(gen, true, true, gen, copied, 1000 + gen * 11);
-            if (w.mayCopy(gen) && gen > 3) {
-                copied = gen;
-                if (!firstCopyAfter)
-                    firstCopyAfter = gen;
-            }
-        }
-        check(copied == 399, "a heap every frame: pairs still reach the headset");
-    });
     test("Update 32.1: a graphics setting's new eye images are taken over or pause the eyes", [] {
         namespace es = eye_swap;
         const es::Desc eye{3, 1440, 1620, 1, 1, 28, 1, 0x1};
@@ -2049,52 +1977,6 @@ int main() {
         check(far.find("196 m") != std::string::npos && far.find("43 cars") != std::string::npos, "reach " + far);
         check(far.size() <= 80 && far.back() == '.' && std::count(far.begin(), far.end(), '.') == 1, "help " + far);
         check(sd::maxCars == 200 && sd::metresFor(200, 195.7f) == 900, "the slider's top");
-    });
-    test("0.0.73 TAA SHAKE: TAA JITTER FULL/HALF/OFF, default HALF, the per-eye record", [] {
-        namespace et = spidy::engine_taa;
-        check(et::defaultJitterScale == et::halfJitterScale && et::halfJitterScale == 50, "default not HALF");
-        check(et::pressNextScale(100) == 50 && et::pressNextScale(50) == 0 && et::pressNextScale(0) == 100 &&
-                  et::pressNextScale(70) == 100 && et::pressNextScale(200) == 100,
-              "press FULL -> HALF -> OFF");
-        char t[16];
-        const std::pair<uint32_t, const char*> levels[]{{100, "FULL"}, {50, "HALF"}, {0, "OFF"}, {70, "70%"}};
-        for (const auto& [scale, name] : levels) {
-            et::levelText(et::ours, scale, t, sizeof t);
-            check(std::string(t) == name, std::string("level ") + t);
-        }
-        et::levelText(et::noJitter, 50, t, sizeof t);
-        check(std::string(t) == "NONE", "NONE level");
-        et::levelText(et::pixels, 50, t, sizeof t);
-        check(std::string(t) == "PIXELS", "PIXELS level");
-        const uint32_t packed = et::packJitter(et::ours, 50);
-        check(et::jitterModeOf(packed) == et::ours && et::jitterScaleOf(packed) == 50, "packJitter");
-        check(et::jitterModeOf(et::packJitter(et::noJitter, 200)) == et::noJitter &&
-                  et::jitterScaleOf(et::packJitter(et::noJitter, 200)) == 200,
-              "packJitter 200");
-        // OFF keeps the game's TAA running (nonzero) with no visible jitter; NONE stays none.
-        float x = 9, y = 9;
-        et::jitterFor(et::ours, .25f, -.25f, 2000, 1000, .3f, .4f, 0, x, y);
-        check(x != 0 && y != 0 && std::abs(x) < 1e-5f && std::abs(y) < 1e-5f, "OFF must be still, not zero");
-        et::jitterFor(et::pixels, .25f, -.25f, 2000, 1000, .3f, .4f, 0, x, y);
-        check(x == et::stillJitter && y == et::stillJitter, "OFF pixels");
-        et::jitterFor(et::noJitter, .25f, -.25f, 2000, 1000, .3f, .4f, 0, x, y);
-        check(x == 0 && y == 0, "NONE jitters at 0");
-        // HALF is half of FULL: +-0.5 render pixel where FULL is +-1 (TAA takes back 0.5 x stored x W).
-        float fx, fy, hx, hy, px, py;
-        et::jitterFor(et::ours, .5f, -.5f, 3496, 3744, 0, 0, 100, fx, fy);
-        et::jitterFor(et::ours, .5f, -.5f, 3496, 3744, 0, 0, 50, hx, hy);
-        near(hx, fx / 2);
-        near(hy, fy / 2);
-        et::takenBack(fx, fy, 3496, 3744, px, py);
-        near(std::abs(px), .5f);
-        et::takenBack(hx, hy, 3496, 3744, px, py);
-        near(std::abs(px), .25f);
-        // The handler's current-frame weight: 1 on a cut, else the larger of the two ages' 1/(age+1).
-        check(et::currentWeight(1, 100, 100) == 1, "cut weight");
-        near(et::currentWeight(0, 3, 9), .25f);
-        near(et::currentWeight(0, -5, 1000), 1.f);
-        check(sizeof(et::Eyes) == 128 && et::Eyes{}.magic == 0x45544e45 && et::Eyes{}.bytes == 128, "Eyes");
-        check(sizeof(et::Data) == 144, "Data unchanged");
     });
     test("Update 33: SHADOW DISTANCE and EYE AA on GRAPHICS, past the mask, help and texts", [] {
         using namespace wrist_hud;
@@ -18127,160 +18009,7 @@ int main() {
         near(reachMultiplier(std::nanf(""), 200), 2);
         check(callTarget(fadeCallRva, fadeCallBytes) == isActiveViewRva, "the fade call's bytes are not IsActiveView");
         check(std::string(occlusionNotice).rfind("RESTART NOTICE", 0) == 0, "eye_occlusion has no restart notice");
-        check(sizeof(Data) == 432 && Data{}.magic == dataMagic && Data{}.version == 2 && Data{}.bytes == 432,
-              "VGAT record changed");
-    });
-    test("0.0.74 test 5 IMPOSTORS: the five calls, the left eye only, the reasons, IMPOSTOR EYE", [] {
-        using namespace view_gates;
-        const uintptr_t returns[] = {0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c};
-        for (int i = 0; i < 5; ++i)
-            check(impostorSite(returns[i]) == i, "a call's return address is not its site");
-        check(impostorSite(0x2b4f9bd) == -1 && impostorSite(0x2a6af90) == -1 && impostorSite(0) == -1,
-              "the LOD FADE return or a call's own address counted as an impostor site");
-        check(impostorAnswer(0) && !impostorAnswer(1) && !impostorAnswer(2), "not the left eye only");
-        char why[96];
-        impostorWhyText(impFine, why, sizeof why);
-        check(std::string(why).find("left eye") != std::string::npos, "the installed reason");
-        impostorWhyText(impCall0 + 1, why, sizeof why);
-        check(std::string(why).find("0x2a6c346") != std::string::npos, "a call's reason names it");
-        impostorWhyText(impOptedOut, why, sizeof why);
-        check(std::string(why).find("128") != std::string::npos, "opt-out reason");
-        check(offsetof(Data, impostorAsked) == 128 && offsetof(Data, impostorBySite) == 160 &&
-                  offsetof(Data, sequence) == sizeof(Data) - 8,
-              "VGAT v2 layout");
-        check(CleanJitter::logFrames == 300 && CleanJitter{}.frames == 0, "CLEAN JITTER logs 300 frames");
-        using namespace combat38;
-        const std::string h = optionInfo[impostorEye].help;
-        check(optionInfo[impostorEye].key == std::string_view("impostor_eye") && optionInfo[impostorEye].count == 2 &&
-                  std::string_view(optionInfo[impostorEye].values[0]) == "ON" && h.size() <= 80 &&
-                  std::count(h.begin(), h.end(), '.') == 1 && h.find("restart") != std::string::npos &&
-                  cleanValue(impostorEye, 0) == 0,
-              "IMPOSTOR EYE: an ON / OFF row, ON under CLEAN, one sentence with restart");
-        const std::string jh = optionInfo[cleanJitter].help;
-        check(optionInfo[cleanJitter].key == std::string_view("clean_jitter") && optionInfo[cleanJitter].count == 2 &&
-                  std::string_view(optionInfo[cleanJitter].values[0]) == "ON" &&
-                  std::string_view(optionInfo[cleanJitter].values[1]) == "OFF" && jh.size() <= 80 &&
-                  std::count(jh.begin(), jh.end(), '.') == 1 && jh.find("restart") != std::string::npos &&
-                  cleanValue(cleanJitter, 0) == 0 && cleanValue(cleanJitter, 1) == 1,
-              "0.0.74 test 6 CLEAN JITTER: an ON / OFF row, kept under CLEAN, one sentence with restart");
-        // 0.0.74 test 7: JITTER PROOF (ON), JITTER PROOF BIG (OFF), ENGINE TAA STOCK (ON); CLEAN passes them through.
-        const struct { uint32_t o; const char* key; const char* first; const char* second; } rows[] = {
-            {jitterProof, "jitter_proof", "ON", "OFF"},
-            {jitterProofBig, "jitter_proof_big", "OFF", "ON"},
-            {engineTaaStock, "engine_taa_stock", "ON", "OFF"},
-            {viewJitterFix, "view_jitter_fix", "ON", "OFF"}};
-        for (const auto& r : rows) {
-            const std::string th = optionInfo[r.o].help;
-            check(optionInfo[r.o].key == std::string_view(r.key) && optionInfo[r.o].count == 2 &&
-                      std::string_view(optionInfo[r.o].values[0]) == r.first &&
-                      std::string_view(optionInfo[r.o].values[1]) == r.second && th.size() <= 80 &&
-                      std::count(th.begin(), th.end(), '.') == 1 && th.find("restart") != std::string::npos &&
-                      cleanValue(r.o, 0) == 0 && cleanValue(r.o, 1) == 1 && stockValue(r.o, 0) == 0,
-                  "0.0.74 test 7: a two-value row, the default first, kept under CLEAN, one sentence with restart");
-        }
-    });
-    test("0.0.74 test 8 VIEW JITTER: pixels per view, the fix's lens arguments, the Y sign, head STILL", [] {
-        using namespace view_jitter;
-        check(pxRight(.001f, 2000) > .99 && pxRight(.001f, 2000) < 1.01 && pxDown(.001f, 1000) < -.49 &&
-                  pxDown(.001f, 1000) > -.51,
-              "a stored value s moves s * W / 2 px right and -s * H / 2 px down");
-        const Args a = argsFor(.004f, -.002f);
-        check(a.x == .002f && a.y == .001f, "argsFor: the lens stores (2x, -2y), so these arguments store (s_x, s_y)");
-        const Args seven{.004f, -.002f}; // test 7: the stored values passed back as arguments
-        check(2.f * seven.x == .008f && -2.f * seven.y == .004f, "test 7 doubled the jitter and flipped Y");
-        const Args off = fixedArgs(shadowHead, false, true, .004f, -.002f, seven);
-        check(off.x == seven.x && off.y == seven.y && choose(gameHead, false, false) == useTestSeven,
-              "fix OFF: exactly test 7");
-        const Args shadow = fixedArgs(shadowHead, true, true, .004f, -.002f, seven);
-        const Args rested = fixedArgs(gameHead, true, false, .004f, -.002f, seven);
-        const Args drawn = fixedArgs(gameView, true, true, .004f, -.002f, seven);
-        check(shadow.x == 0.f && shadow.y == 0.f && rested.x == 0.f && rested.y == 0.f && drawn.x == .002f &&
-                  drawn.y == .001f && choose(eyeLeft, true, true) == useTestSeven &&
-                  choose(screenEye, true, false) == useTestSeven,
-              "fix ON: the shadow view 0, a rested game view 0, a drawn one the game's own; the eyes keep theirs");
-        Stats st{};
-        add(st, gameHead, .004f, -.002f, 2000, 1000, .002f);
-        add(st, gameHead, .004f, .002f, 2000, 1000, .002f);
-        add(st, gameHead, 0.f, 0.f, 2000, 1000, .002f);
-        check(st.runs[gameHead] == 3 && st.yFlipped[gameHead] == 1 && st.ySame[gameHead] == 1 &&
-                  st.yZero[gameHead] == 1 && st.nonzero[gameHead] == 2 && st.maxPx[gameHead] > 3.99f &&
-                  st.maxPx[gameHead] < 4.01f,
-              "the 10 s stats: runs, Y same / flipped / zero against the game's own, the biggest shift in px");
-        HeadStill still;
-        const float look[3] = {0, 0, 1};
-        float at[3] = {0, 0, 0};
-        for (uint64_t ms = 0; ms <= 10000; ms += 100) {
-            at[0] = .04f * std::sin(static_cast<float>(ms) * .001f); // a standing player's sway
-            still.add(at, look, ms);
-        }
-        check(still.still() && still.seconds == 10, "a 4 cm sway is STILL (test 7's 3 cm said MOVING)");
-        still.restart();
-        at[0] = 0;
-        still.add(at, look, 0);
-        at[0] = .5f;
-        still.add(at, look, 1500);
-        check(!still.still() && still.stillSeconds == 0, "a half-metre step is MOVING");
-        check(std::string(viewName(shadowHead)) == "shadow head" && std::string(viewName(views)) == "?", "view names");
-    });
-    test("0.0.74 test 8 DISPLAY PROOF: the displayed box against the raw one", [] {
-        const std::vector<float> a(16, .5f), b(16, .25f);
-        check(jitter_proof::meanAbsDiff(a, a) == 0.f && jitter_proof::meanAbsDiff(a, b) == .25f &&
-                  jitter_proof::meanAbsDiff(a, std::vector<float>(3)) < 0.f,
-              "the mean difference: 0 for the same box, -1 for a wrong size");
-    });
-    test("0.0.74 test 7 CLEAN JITTER PROOF: the sub-pixel shift between two boxes, and the head's share", [] {
-        using namespace jitter_proof;
-        const auto scene = [](float x, float y) {
-            return std::sin(x * .37f) + std::cos(y * .29f) + .5f * std::sin((x + y) * .11f);
-        };
-        const auto pair = [&](float dx, float dy, std::vector<float>& a, std::vector<float>& b) {
-            a.assign(box * box, 0.f);
-            b.assign(box * box, 0.f);
-            for (uint32_t y = 0; y < box; ++y)
-                for (uint32_t x = 0; x < box; ++x) {
-                    a[y * box + x] = scene(static_cast<float>(x), static_cast<float>(y));
-                    b[y * box + x] = scene(static_cast<float>(x) - dx, static_cast<float>(y) - dy);
-                }
-        };
-        std::vector<float> a, b;
-        bool allFound = true;
-        for (const float d : {0.f, .3125f, -.5f, .0625f, 1.75f}) {
-            pair(d, -d, a, b);
-            const auto s = measure(a, b, range);
-            allFound = allFound && s.ok && std::abs(s.x - d) <= .07f && std::abs(s.y + d) <= .07f;
-        }
-        check(allFound, "the move is found to the nearest sixteenth of a pixel within +-2 pixels");
-        pair(4, -4, a, b);
-        const auto big = measure(a, b, bigRange);
-        check(big.ok && std::abs(big.x - 4) < .07f && std::abs(big.y + 4) < .07f, "JITTER PROOF BIG: a 4 pixel step");
-        std::vector<float> flat(box * box, .5f);
-        check(!measure(flat, flat, range).ok && !measure(a, std::vector<float>(3), range).ok,
-              "a flat box (sky) or a wrong size is not measured");
-        check(kindOf(28) == Kind::rgba8 && kindOf(87) == Kind::rgba8 && kindOf(24) == Kind::rgb10a2 &&
-                  kindOf(10) == Kind::rgba16f && kindOf(2) == Kind::unsupported && rowPitch(Kind::rgba8) == 512 &&
-                  rowPitch(Kind::rgba16f) == 1024 && bytesPer(Kind::unsupported) == 0,
-              "the eye formats read: 8-bit, 10-bit and half float, rows 256-byte aligned; others turn the probe off");
-        check(halfToFloat(0x3c00) == 1.f && halfToFloat(0x3800) == .5f && halfToFloat(0xbc00) == -1.f,
-              "half floats");
-        std::vector<uint8_t> raw(512 * box, 0);
-        raw[0] = 255; raw[1] = 255; raw[2] = 255;
-        std::vector<float> luma;
-        check(toLuma(Kind::rgba8, raw.data(), 512, luma) && luma.size() == box * box && luma[0] == 1.f && luma[1] == 0.f &&
-                  !toLuma(Kind::rgba8, raw.data(), 100, luma) && !toLuma(Kind::unsupported, raw.data(), 512, luma),
-              "a box to luma; a short pitch or unknown kind refused");
-        eye_history::EyeView v;
-        v.world = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-        v.tangents = {-1, 1, -1, 1};
-        std::array<float, 9> h{};
-        float hx = 1, hy = 1;
-        check(eye_history::historyReprojection(v, v, h) && headShift(h, 2000, 2000, hx, hy) && std::abs(hx) < 1e-3f &&
-                  std::abs(hy) < 1e-3f,
-              "a still head adds no move");
-        std::array<float, 9> behind{};
-        behind[8] = -1;
-        check(!headShift(behind, 2000, 2000, hx, hy), "a centre behind the eye is refused");
-        check(std::string_view(faultText(1)) == "the eye format cannot be read" && std::string_view(faultText(99)) == "unknown",
-              "every fault has a reason");
+        check(sizeof(Data) == 352 && Data{}.magic == dataMagic, "VGAT record changed");
     });
     test("Update 37: combat - a tap is the web shooter, a hold does nothing, gestures fire their gadget", [] {
         using namespace combat_input;
@@ -19121,7 +18850,7 @@ int main() {
     });
     test("Update 38: the COMBAT options - one sentence each, the fix the default, packing", [] {
         using namespace combat38;
-        check(options == 178, "one hundred and sixty options (0.0.74 test 8: + VIEW JITTER FIX; 0.0.74 test 7: + JITTER PROOF, JITTER PROOF BIG, ENGINE TAA STOCK; 0.0.74 test 6: + CLEAN JITTER; 0.0.74 test 5: + IMPOSTOR EYE; 0.0.74 test 4: + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; 0.0.74 test 3: + MILES TAA; 0.0.74 test 3: + SPIDYVR STOCK; 0.0.74 test 3: + HEAP GUARD; 0.0.74 test 2b: + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; 0.0.74 test 2: + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
+        check(options == 160, "one hundred and sixty options (0.0.74 test 10: the tests' picture / AA options taken out; 0.0.74 test 3: + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; 0.0.74 test 2b: + CRIME GPS; 0.0.74 test 2: + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; 0.0.74 test 1: + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 38.1: 19, 38.2: + 5, 38.3: + 4, 0.0.2: + 2, 0.0.3: + 7, 0.0.4: + 2, 0.0.5: + 6, 0.0.6: + 3, 0.0.62: + 6, 0.0.7: + 11, CAPTAIN AMERICA + 6, 0.0.72: + 40 (THOR HAMMER, GAME BODY))");
         for (uint32_t i = ropeGrab; i < options; ++i) // Version 0.0.3: 80 characters at most, one full stop
             check(std::string(optionInfo[i].help).size() <= 80 && std::count(optionInfo[i].help, optionInfo[i].help + std::string(optionInfo[i].help).size(), '.') == 1, std::string("0.0.3 subtext: ") + optionInfo[i].key);
         for (const uint32_t o : {ropeGrab, wallStick, autoPerf, mirrorView, shooterType, heroDamage, daredevil, hulk}) // experimental: OFF by default
@@ -19155,7 +18884,7 @@ int main() {
                   // Version 0.0.2
                   std::string(valueName(aimStrength, 0)) == "STRONG" && std::string(valueName(ballHit, 0)) == "OURS ONLY",
               "a default is not the recommended fix");
-        check(options == 178, "0.0.74 test 8 has 178 COMBAT options (+ VIEW JITTER FIX; + JITTER PROOF, JITTER PROOF BIG, ENGINE TAA STOCK; + CLEAN JITTER; + IMPOSTOR EYE; + TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE; + MILES TAA; + SPIDYVR STOCK; + HEAP GUARD; + TAA DIAGNOSTICS, CRIME GPS, TAA HOLD; + SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
+        check(options == 160, "0.0.74 test 10 has 160 COMBAT options (the tests' picture / AA options out; + WHEEL FIRST, CAVE QUIET, FINGER RAY, DASH INSIDE, COCKPIT GLOW; + CRIME GPS; + CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER; + BATMOBILE, BATMOBILE CHOICE, HIDEOUTS, CAR MUSIC, SEATED DRIVING; + COMING SOON; MPSUIT: + PLAYER 2 BODY; test 6: + CLAW LEVEL, WINDOW POP FIX; AA: + SHARPEN MATCH; test 6: + MP SOLO TEST; test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; test 3: + WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 6: + 2; 0.0.72: + 41 with THOR HAMMER and GAME BODY; 0.0.7: 71, 0.0.62: 54, 0.0.6: 48)");
         check(std::string(valueName(shooterType, 0)) == "OFF" && std::string(optionInfo[shooterType].label) == "IRON MAN ABILITIES",
               "0.0.4: IRON MAN ABILITIES defaults to OFF");
         check(sizeof(Data) == 768 && Data{}.magic == 0x38424d43 && Data{}.bytes == 768 && Data{}.version == 5,
@@ -25368,36 +25097,6 @@ int main() {
                   std::string(v::settingHelp).find("EXPERIMENTAL") == 0,
               "the subtext: experimental, the button, restart, one sentence");
     });
-    test("0.0.74 test 2b TAA DIAGNOSTICS: per-frame record counts resets, stamp moves, shared jitter/sets, x2 lens", [] {
-        namespace td = spidy::taa_diag;
-        td::Diag d{};
-        int32_t last[2]{};
-        bool have{};
-        for (uint32_t k = 0; k < 20; ++k) {
-            td::Frame f{};
-            f.frame = 1000 + k;
-            f.sent[0] = .000186f;
-            f.sent[1] = -.00027f;
-            f.stored[0] = f.stored[2] = 2 * f.sent[0];
-            f.stored[1] = f.stored[3] = 2 * f.sent[1];
-            f.weight[0] = f.weight[1] = 1;
-            td::add(d, f, 0x1000, 0x2000, int32_t(1000 + k), int32_t(1000 + k), last, have);
-        }
-        check(d.frames == 20 && d.resets[0] == 20 && d.resets[1] == 20, "every weight-1 frame counted, per eye");
-        check(d.stampChanges[0] == 19 && d.stampChanges[1] == 19, "a stamp moving every frame is seen");
-        check(d.sharedJitterFrames == 20 && d.perEyeSetFrames == 20 && d.sharedSetFrames == 0,
-              "same jitter both eyes, per-eye buffer sets");
-        check(d.sentMismatchFrames == 0 && std::abs(d.storedOverSent[0] - 2) < 1e-3f, "the lens doubling is explained (x2)");
-        check(d.head == 20 % td::ringSize && d.ring[(d.head + td::ringSize - 1) % td::ringSize].frame == 1019, "the ring keeps the newest");
-        td::Frame odd{};
-        odd.sent[0] = .0001f;
-        odd.stored[0] = .00035f;
-        td::add(d, odd, 0x1000, 0x1000, 0, 0, last, have);
-        check(d.sentMismatchFrames == 1 && d.sharedSetFrames == 1, "an unexplained jitter and a shared set are flagged");
-        check(td::ratio(1, 0) == 0 && td::ratio(NAN, 1) == 0, "no ratio from nothing");
-        check(!combat38::taaDiagnosticsOn(0) && combat38::taaDiagnosticsOn(1) && combat38::crimeGpsOn(0) && !combat38::crimeGpsOn(1),
-              "TAA DIAGNOSTICS off by default, CRIME GPS on by default");
-    });
     test("0.0.74 test 3 WHEEL FIRST: switchable; off, a grip on the rim within reach of the handle opens the door (test 2b)", [] {
         namespace v = van072;
         check(combat38::wheelFirstOn(0) && !combat38::wheelFirstOn(1), "WHEEL FIRST on by default");
@@ -25439,165 +25138,6 @@ int main() {
         check(std::fabs(d.step(false, down) - .8f) < 1e-6f && !d.ducked, "RETURN TO CITY: back to what it was");
         check(cq::stale(cq::level) && !cq::stale(1.f) && !cq::stale(.5f), "a duck left by a crash is recognised at the next start");
         check(cq::ducked(NAN) == 0 && cq::ducked(1.f) == cq::level, "never louder, never NaN");
-    });
-    test("0.0.74 test 3 SPIDYVR STOCK: every HERO render option answers SpidyVR's, gameplay untouched", [] {
-        using namespace combat38;
-        check(optionInfo[spidyvrStock].key == std::string_view("spidyvr_stock") && optionInfo[spidyvrStock].count == 2 &&
-                  spidyvrStockOn(0) && !spidyvrStockOn(1),
-              "SPIDYVR STOCK: an option, ON (0) by default, switchable off");
-        check(spidyvrPictureOn(stockValue(spidyvrPicture, 1)) && stockValue(image, 1) == 0 && stockValue(imageStyle, 1) == 0,
-              "the game's TAA per eye (SPIDYVR PICTURE ON, IMAGE SPIDYVR) whatever the player chose");
-        check(!taaHoldOn(stockValue(taaHold, 1)) && stockValue(jitterGuard, 0) == 1 && stockValue(sharpenMatch, 0) == 1 &&
-                  stockValue(lightHold, 0) == 2 && stockValue(taaDiagnostics, 1) == 0,
-              "no TAA HOLD, JITTER GUARD, SHARPEN MATCH or LIGHT HOLD");
-        check(stockValue(lightChecks, 0) == 1 && stockValue(flareBlock, 0) == 1 && stockValue(glowCheck, 2) == 0 &&
-                  stockValue(lensFlares, 1) == 0 && stockValue(windowPop, 0) == 1 && stockValue(slWatch, 0) == 1,
-              "the game's light checks, glow sprites and lens flares; no WINDOW POP or SL WATCH");
-        check(farWindowsPercentOf(stockValue(farWindows, 0)) == 100 && stockValue(autoPerf, 1) == 0 &&
-                  shadowMatchOn(stockValue(shadowMatch, 1)) && stockCullMarginDegrees == 0,
-              "FAR WINDOWS GAME, no AUTO PERFORMANCE, SHADOW MATCH ON (SpidyVR's fitCascades), no cull widening");
-        check(stockValue(heapGuard, 1) == 1 && stockValue(cockpitGlow, 1) == 1 && stockValue(dashInside, 1) == 1 &&
-                  stockValue(fingerRay, 1) == 1 && stockValue(batman, 1) == 1,
-              "gameplay and stability options keep the player's value");
-        for (uint32_t o = 0; o < options; ++o)
-            check(stockValue(o, 0) < optionInfo[o].count, "every stock value is one of the option's own");
-    });
-    test("0.0.74 test 3 MILES TAA: MilesVR's jitter, phases, upscale check, safety and record", [] {
-        namespace mt = spidy::miles_taa;
-        using namespace combat38;
-        check(optionInfo[milesTaa].key == std::string_view("miles_taa") && optionInfo[milesTaa].count == 2 &&
-                  milesTaaOn(0) && !milesTaaOn(1) && mt::on(0) && !mt::on(1),
-              "MILES TAA: an option, ON (0) by default, switchable off");
-        check(stockValue(milesTaa, 0) == 0 && stockValue(milesTaa, 1) == 1, "SPIDYVR STOCK leaves MILES TAA to the player");
-        check(std::string(optionInfo[milesTaa].help).find("restart") != std::string::npos, "its subtext says what needs a restart");
-        // phases = clamp(ceil(8 ratio^2), 8, 32)
-        check(mt::phases(2000, 2000) == 8 && mt::phases(2000, 1340) == 18 && mt::phases(2000, 1000) == 32 &&
-                  mt::phases(2000, 500) == 32 && mt::phases(2000, 0) == 8,
-              "phases: 8 at full size, 18 at 67%, at most 32");
-        check(mt::halton(1, 2) == .5f && mt::halton(2, 2) == .25f && std::fabs(mt::halton(1, 3) - 1.f / 3) < 1e-6f,
-              "Halton (2, 3)");
-        const auto j0 = mt::jitter(0, 2000, 1340, 1400), j1 = mt::jitter(18, 2000, 1340, 1400);
-        check(j0 == j1 && j0[0] == 0.f && std::fabs(j0[1] - 2 * (1.f / 3 - .5f) / 1400) < 1e-9f,
-              "the jitter repeats every phases() frames, the first phase index 1");
-        float most = 0;
-        for (uint64_t f = 0; f < 64; ++f) {
-            const auto j = mt::jitter(f, 2000, 1340, 1400);
-            most = std::max({most, std::fabs(j[0]) * 1340, std::fabs(j[1]) * 1400});
-        }
-        check(most <= 1.f, "within one render pixel (NDC 2/width)");
-        check(mt::madePercent(true, true, true, true) == 67 && mt::madePercent(false, true, true, true) == 100 &&
-                  mt::madePercent(true, false, true, true) == 100 && mt::madePercent(true, true, false, true) == 100 &&
-                  mt::madePercent(true, true, true, false) == 100,
-              "67% only when on at the start and every check passed");
-        check(mt::upscaleOk(1340, 2000, 2000, 1340) &&
-                  mt::upscaleOk(0, 2000, 2000, 2000) && mt::upscaleOk(2000, 2000, 2000, 2000) &&
-                  !mt::upscaleOk(2000, 2000, 2000, 1340) && !mt::upscaleOk(1340, 0, 2000, 1340) &&
-                  !mt::upscaleOk(1340, 1340, 2000, 1340),
-              "upscale: the smaller scene in, the eye's size out");
-        mt::StallGuard g;
-        check(!g.frame(0, false, true) && !g.frame(10, true, true), "armed by a pair");
-        bool tripped = false;
-        for (uint64_t jobs = 11; jobs < 10 + mt::stallPairs; ++jobs)
-            tripped |= g.frame(jobs, false, true);
-        check(!tripped && g.frame(10 + mt::stallPairs, false, true) && g.tripped && !g.frame(500, false, true),
-              "45 eye frames without a pair: trips once");
-        mt::StallGuard idle;
-        check(!idle.frame(0, false, true) && !idle.frame(1000, false, true), "never before the first pair");
-        mt::StallGuard off;
-        off.frame(0, true, true);
-        check(!off.frame(100, false, false) && !off.frame(200, false, true), "off: re-armed only by a pair");
-        check(sizeof(mt::Data) == 256 && mt::Data{}.magic == mt::magic && mt::Data{}.version == 1 && mt::Data{}.bytes == 256,
-              "SpidyMilesTaaData: 256 bytes");
-        check(mt::startOption == 0x1000000 && mt::eyeTemporalBit == 0x20 && mt::upscalePercent == 67 && mt::stallPairs == 45,
-              "the start bit, the eye bit, 67%, 45 pairs");
-        for (uint32_t r = mt::exeDiffers; r <= mt::hookFailed; ++r)
-            check(mt::reasonText(r) && *mt::reasonText(r), "every reason has a line");
-        check(mt::temporalAaRva == 0x2c2dc60 && mt::currentTargetRva == 0x2c98240 && mt::historyTargetRva == 0x2c98290 &&
-                  mt::queueSiteRva == 0x2d017b3 && sizeof(mt::temporalAaBytes) == 32 && sizeof(mt::queueSiteBytes) == 24,
-              "the CONFIRMED addresses and their byte checks (<= 32 bytes each)");
-    });
-    test("0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL: options, ring, requeue guard, main size", [] {
-        namespace tg = spidy::taa_gate;
-        using namespace combat38;
-        for (uint32_t o : {taaGateLog, eyeTaaRequeue, mainViewSmall}) {
-            check(optionInfo[o].count == 2 && std::string_view(optionInfo[o].values[0]) == "ON", "each an ON / OFF row");
-            const std::string h = optionInfo[o].help;
-            check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.find("restart") != std::string::npos,
-                  "a one-sentence subtext that says what needs a restart");
-            check(stockValue(o, 0) == 0 && stockValue(o, 1) == 1, "SPIDYVR STOCK leaves it to the player");
-        }
-        check(optionInfo[taaGateLog].key == std::string_view("taa_gate_log") &&
-                  optionInfo[eyeTaaRequeue].key == std::string_view("eye_taa_requeue") &&
-                  optionInfo[mainViewSmall].key == std::string_view("main_view_small"),
-              "the live.txt keys");
-        check(tg::on(0) && !tg::on(1) && taaGateOn(0) && !taaGateOn(1), "ON (0) or OFF (1); requeue and main small start OFF");
-        tg::JobRing ring;
-        ring.push(0x10);
-        ring.push(0x20);
-        ring.push(0x20);
-        ring.push(0);
-        check(ring.find(0x20) == 0 && ring.find(0x10) == 1 && ring.find(0x30) == -1 && ring.find(0) == -1,
-              "the ring: newest first, no repeats or nulls");
-        for (uintptr_t j = 0x30; j <= 0x60; j += 0x10)
-            ring.push(j);
-        check(ring.find(0x60) == 0 && ring.find(0x30) == 3 && ring.find(0x20) == -1, "four jobs kept");
-        tg::Requeue q;
-        q.newJob(5);
-        check(!q.want(0x100, true), "not after a job that got a call");
-        q.newJob(5);
-        q.newJob(5);
-        check(q.want(0x100, true) && !q.want(0x100, false) && !q.want(0, true), "after 2 jobs with no call, only while active");
-        q.queued(0x100);
-        check(!q.want(0x100, true), "once per job");
-        q.newJob(6);
-        check(q.fails == 0 && q.missed == 0 && !q.pending, "a requeue that brought a run clears the count");
-        bool trips = false;
-        int tripCount = 0;
-        for (uintptr_t j = 0x200; j < 0x200 + 40; ++j) {
-            q.newJob(6);
-            if (q.want(j, true))
-                q.queued(j);
-            if (q.newJob(6)) {
-                trips = true;
-                ++tripCount;
-            }
-        }
-        check(trips && tripCount == 1 && q.tripped && !q.want(0x999, true), "8 requeues with no run: off for good, tripped once");
-        check(tg::mainSize(2000, 1000) == std::array<uint32_t, 2>{1000, 504} && tg::mainSize(1920, 1080)[0] == 960 &&
-                  tg::mainSize(1920, 1080)[1] == 544 && tg::mainSize(10, 4)[0] == 8 && tg::mainSize(10, 4)[1] == 4,
-              "main size: 50%, multiples of 8, never more than the output");
-        check(tg::shrinkMain(true, true, 1920, 1080) && !tg::shrinkMain(false, true, 1920, 1080) &&
-                  !tg::shrinkMain(true, false, 1920, 1080) && !tg::shrinkMain(true, true, 32, 1080) &&
-                  !tg::shrinkMain(true, true, 20000, 1080),
-              "made small only on at the start, with TAA, at a sane size");
-        check(tg::sizeFlags(0xf0, true) == 0xf2 && tg::sizeFlags(0xf3, false) == 0xf1, "only bit 2 of the size flags changes");
-        check(sizeof(tg::Data) == 256 && tg::Data{}.magic == tg::magic && tg::Data{}.bytes == 256, "SpidyTaaGateData: 256 bytes");
-        for (uint32_t r = tg::requeueFailed; r <= tg::mainGameAa; ++r)
-            check(*tg::reasonText(r) && std::string(tg::reasonText(r)).size() < tg::lineMax, "every reason has a line");
-        check(tg::mainStartOption == 0x2000000 && tg::mainEyeTemporalBit == 0x40 && tg::mainEyeTemporalBit != spidy::miles_taa::eyeTemporalBit,
-              "its own start bit and eye bit");
-        check(tg::enqueueRva == 0x2c77810 && tg::viewTaaList == 0x18d0 && tg::temporalAaCommand == 0xb1 &&
-                  tg::mainViewGlobal == 0xc2ca220 && tg::viewBuffers == 0x1e38 && tg::setSizes == 0x1b978,
-              "the CONFIRMED addresses");
-    });
-    test("0.0.74 test 4 AA MODE CLEAN: the option, ahead of SPIDYVR STOCK, the anti-aliasing it answers", [] {
-        using namespace combat38;
-        check(optionInfo[aaMode].key == std::string_view("aa_mode") && optionInfo[aaMode].count == 2 &&
-                  std::string_view(optionInfo[aaMode].values[0]) == "CLEAN" && std::string_view(optionInfo[aaMode].values[1]) == "OFF",
-              "CLEAN (0, the default) / OFF (1)");
-        const std::string h = optionInfo[aaMode].help;
-        check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.find("restart") != std::string::npos,
-              "a one-sentence subtext that says what needs a restart");
-        check(aaModeClean(0) && !aaModeClean(1), "ON by default, switchable off");
-        check(cleanValue(spidyvrStock, 0) == 1 && cleanValue(spidyvrPicture, 0) == 1 && cleanValue(imageStyle, 0) == 1 &&
-                  cleanValue(milesTaa, 0) == 1 && cleanValue(eyeTaaRequeue, 0) == 1 && cleanValue(mainViewSmall, 0) == 1,
-              "no SpidyVR stock / picture, no game TAA, no MILES TAA, no requeue, no small main view");
-        check(cleanValue(image, 0) == 1 && cleanValue(sharpenMatch, 0) == 1 && cleanValue(taaHold, 1) == 0 && cleanValue(lensFlares, 0) == 1,
-              "CLASSIC history read, fixed CAS, no TAA HOLD, lens flares off in VR");
-        check(cleanValue(taaGateLog, 0) == 0 && cleanValue(taaGateLog, 1) == 1 && cleanValue(weaponCollision, 1) == 1,
-              "the diagnostics and every other option stay the player's");
-        for (uint32_t o = 0; o < options; ++o)
-            check(cleanValue(o, 0) < optionInfo[o].count, "every answer is a value the option has");
     });
     test("0.0.74 test 3 COCKPIT GLOW: a darker cabin, cool from above, amber from below, dials backlit, tips soft", [] {
         namespace cl = spidy::cabin_look;
@@ -25721,55 +25261,6 @@ int main() {
               "Batcomputer: a ray 3 units past STAND UP snaps onto it");
         const Vec3 row = bc::snapPoint({0, bc::rowTop - bc::rowStep * 2, 0});
         check(std::fabs(row.x) < 1e-6f, "the rows (which tile the panel) are left alone");
-    });
-    test("0.0.74 test 3 TAA LINK / JITTER GUARD: an unmoved history slot is refused, a moving one is not", [] {
-        namespace tl = spidy::taa_link;
-        check(tl::guardOn(0) && !tl::guardOn(1), "JITTER GUARD on by default, switchable");
-        check(combat38::optionInfo[combat38::jitterGuard].key == std::string_view("jitter_guard"), "the option row");
-        check(tl::frameRva == 0xc2c9d40 && tl::jobSlotIndex == 0x1a38 && tl::jobSlots == 0x1a28 && tl::jobPreviousSet == 0x18e8,
-              "the exe's history gate fields (0x2c98290)");
-        tl::Eye e;
-        bool r = false;
-        for (int f = 100; f < 140; ++f)
-            r = tl::refused(e, true, f - 1) || r;
-        check(!r, "a slot stamped every frame (the linked history) is never refused");
-        tl::Eye s;
-        for (uint32_t k = 0; k < tl::staleJobs; ++k)
-            check(!tl::refused(s, true, 77), "a few unmoved jobs (a pause) are not yet refused");
-        check(tl::refused(s, true, 77), "a slot unmoved for staleJobs jobs is refused (the still-head shimmer)");
-        check(!tl::refused(s, true, 200), "the slot moving again ends it at once");
-        tl::Eye n;
-        check(tl::refused(n, false, 0), "no slot or no previous set: always refused");
-        check(tl::bucket(10, 9) == 1 && tl::bucket(10, 10) == 0 && tl::bucket(10, 8) == 2 && tl::bucket(10, 0) == 3 &&
-              tl::bucket(10, 12) == 0, "the age buckets");
-        check(tl::guardJitter > 0 && tl::guardJitter < 1e-4f, "the guard's jitter is not zero (TemporalAa keeps running) yet far below a pixel");
-        check(sizeof(tl::Data) == 160, "the record the report reads");
-    });
-    test("0.0.74 test 2b TAA HOLD: stuck stamps held 16 frames back, real cuts and OFF left to the game", [] {
-        namespace th = spidy::taa_hold;
-        check(!combat38::taaHoldOn(0) && combat38::taaHoldOn(1), "TAA HOLD off by default (0.0.74 test 3: it never fired)");
-        check(th::settingsFrame == 0xc2c6c30 - 0xc2c64a0 && th::settingsJob == 0xc2c6af0 - 0xc2c64a0,
-              "the context offsets are the globals TemporalAa reads");
-        check(th::share(0, 0, 0) == 1 && th::share(1, 40, 40) == 1, "ages 0 or a cut: no history (the test 2 readback)");
-        th::Eye e;
-        auto p = th::plan(e, true, 0, 100, 100, 100, .01f);
-        check(!p.hold, "one stuck job is a real reset: the game ramps from it");
-        p = th::plan(e, true, 0, 101, 101, 101, .01f);
-        check(p.hold && p.cutFrame == 101 - th::holdAge && p.stamp == 101 - th::holdAge, "the second stuck job is held");
-        check(std::fabs(th::share(0, th::holdAge, th::holdAge) - 1.f / 17) < 1e-6f, "held: the frame's share is 1/17");
-        check(th::holdAge < 64, "the game's own 64-frame staleness cut is never reached");
-        check(!th::plan(e, true, 1, 102, 102, 102, .01f).hold, "the game's cut flag is always respected");
-        th::plan(e, true, 0, 103, 103, 103, .01f);
-        check(!th::plan(e, true, 0, 104, 104, 104, 2.f).hold, "an eye that jumped 2 m is a cut");
-        check(!th::plan(e, true, 0, 105, 105, 105, NAN).hold, "an unknown move is a cut");
-        th::Eye f;
-        th::plan(f, false, 0, 7, 7, 7, 0);
-        check(!th::plan(f, false, 0, 8, 8, 8, 0).hold, "OFF writes nothing");
-        th::Eye g;
-        th::plan(g, true, 0, 50, 45, 30, 0);
-        check(!th::plan(g, true, 0, 51, 45, 30, 0).hold, "a growing history is the game's: never touched");
-        check(!th::stuck(0, 0, 0) && !th::stuck(9, 9, 8), "a frame of 0 or one live stamp is not stuck");
-        check(sizeof(th::Data) == 120 && th::Data{}.bytes == 120, "the report record's size");
     });
     test("0.0.74 test 2b EXIT FIX: SEATED TOOLS on, every car (van + 4 Batmobiles) grips, steers, drives and gets out", [] {
         namespace v = spidy::van072;

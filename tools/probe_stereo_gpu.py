@@ -34,8 +34,6 @@ def snapshot(game, address):
         result.update(zip(('left_state', 'right_state', 'left_known', 'right_known', 'width', 'height'),
                           struct.unpack_from('<6I', raw, 160)))
         result.update(status=struct.unpack_from('<I', raw, 12)[0], error=struct.unpack_from('<I', raw, 24)[0])
-        # 0.0.74 test 3 HEAP GUARD: the times the game rebuilt its render heaps and the eyes were let go of and taken again
-        result['heap_rebuilds'] = struct.unpack_from('<I', raw, 28)[0]
         result.update(zip(('captured','reused','captured_serial'),struct.unpack_from('<3Q',raw,184)))
         return result
     return None

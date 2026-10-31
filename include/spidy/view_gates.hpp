@@ -21,23 +21,14 @@
 //   differ; back to OFF if no eye ever reaches that call.
 // - LOD REACH. 0x2b4f918 multiplies the view's +0x1b28 by +0x1b24 (SHARED LOD's pair):
 //   the eyes' multiplier is scaled by this percent (clamped to shared_lod's 0.25..4).
-// - IMPOSTORS (CANDIDATE until the per-site histogram shows the eyes reaching them). IsActiveView
-//   0x2c991a0 (CONFIRMED: its bytes, and each of the five calls below decodes to it; 0x189daa0, the
-//   old comments' address, has no callers in 2.810: SM1's). The five calls in the impostor code
-//   (impostorCalls): the left eye answers yes there for both eyes, the right eye and the game view
-//   no, so one view picks the far buildings' full models. 0.0.74 test 5: installed without
-//   createViews 32 (SM2 never sets it), not with 128, only where every call's bytes match.
-//   0.0.74 test 6 note: the five calls (returns 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c) are
-//   CANDIDATE, refuted by test 5 histogram (asked 4k-8k times per 10 s, left eye yes ~1.5-1.8k,
-//   no visible change; c467/c477 never asked).
-//   The install machinery is kept; nothing here changes behaviour.
+// - IMPOSTORS. The eyes' stand-in for the game view's impostors (stereo_probe isActiveView
+//   at its five impostor calls, installed with createViews 32 and not 128), now live.
 // - EYE OCCLUSION. giveOcclusion (0x2c9b8e0) runs only when an eye view is created, so it
 //   cannot change in a session: live.txt eye_occlusion applies at the next VR start
 //   (a restart notice says so).
 // - The query cap (#7, [0xc35950c]) stays out: unconfirmed.
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 
@@ -123,63 +114,20 @@ inline const char* impostorHelp(bool installed, bool on) {
         return "N/A this session: the eyes' impostor stand-in was not installed.";
     return on ? "Far buildings drawn as full models for the eyes." : "Far buildings left to the game's impostors.";
 }
-// 0.0.74 test 5: the five impostor calls (CANDIDATE) and the return address each leaves.
-// Return addresses 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c: CANDIDATE, refuted by test 5 histogram.
-inline constexpr uint32_t impostorCallRvas[5] = {0x2a6af90, 0x2a6c346, 0x2a6c356, 0x2a6c467, 0x2a6c477};
-inline constexpr unsigned impostorSites = 5;
-inline int impostorSite(uintptr_t returnRva) {
-    for (unsigned i = 0; i < impostorSites; ++i)
-        if (returnRva == impostorCallRvas[i] + 5u)
-            return static_cast<int>(i);
-    return -1;
-}
-// Who asks: 0 the left eye (eyes[0], OpenXR view 0), 1 the right eye, 2 any other view (the game's).
-// Only the left eye is the active view at those calls while the stand-in is on.
-inline constexpr bool impostorAnswer(int who) { return who == 0; }
-// Why the stand-in is not installed (SpidyViewGatesData.impostorsWhy, game_xr's console line).
-enum ImpostorWhy : uint32_t { impFine = 0, impOptedOut = 1, impCall0 = 2, impReachFirst = 7, impReachLast = 8,
-                              impNotHooked = 9 };
-inline void impostorWhyText(uint32_t why, char* out, unsigned size) {
-    if (why >= impCall0 && why < impCall0 + impostorSites)
-        std::snprintf(out, size, "the call at 0x%x differs from 2.810's bytes", impostorCallRvas[why - impCall0]);
-    else
-        std::snprintf(out, size, "%s",
-                      why == impFine         ? "the left eye picks the far buildings at 5 CANDIDATE calls"
-                      : why == impOptedOut   ? "createViews 128 (the launcher opted out)"
-                      : why == impReachFirst ? "the +0x88 store at 0x2a6bcad differs from 2.810's bytes"
-                      : why == impReachLast  ? "the +0x88 store at 0x2a6bded differs from 2.810's bytes"
-                                             : "the eye views were not hooked");
-}
-// What game_xr reads each frame (SpidyImpostorStats): the switch, and the counts since the start.
-struct ImpostorStats {
-    uint32_t hooked{}, installed{}, on{}, why{};
-    uint64_t asked{}, yes[3]{}, bySite[5]{};
-};
-// 0.0.74 test 5 CLEAN JITTER: the eyes' lens jitter while AA MODE CLEAN is on (it should be none).
-struct CleanJitter {
-    uint32_t clean{}, frames{};          // frames logged (both eyes), up to logFrames
-    uint32_t sentNonzero{}, storedNonzero{}, zeroed{}, kept{}; // kept: upscaled eyes need it (left as is)
-    float maxSent{}, maxStored{};
-    static constexpr uint32_t logFrames = 300;
-};
 inline constexpr const char* occlusionNotice =
     "RESTART NOTICE: eye_occlusion takes effect the next time VR starts.";
 
-// ---- telemetry: SpidyViewGatesData (tools/update37_records.py parse_view_gates) ----
+// ---- telemetry: SpidyViewGatesData (tools/view_gates.py) ----
 inline constexpr uint32_t dataMagic = 0x54414756; // VGAT
 struct Data {
-    uint32_t magic = dataMagic, version = 2, bytes = 432, bloomFx = defaultFx;
+    uint32_t magic = dataMagic, version = 1, bytes = 352, bloomFx = defaultFx;
     uint32_t lodFade = defaultFade, fadeWhy{}, fadeReady{}, lodReach = defaultReach;
-    uint32_t impostorsInstalled{}, impostorsOn = 1, dumps{}, impostorsWhy{}; // version 2: why (was pad)
+    uint32_t impostorsInstalled{}, impostorsOn = 1, dumps{}, pad{};
     uint64_t fxJobs{}, fxWrites{}, fxFailed{};
     uint64_t fadeAsked[2]{}, fadeAnswered[2]{}, fadeGameCalls{}, reachWrites{}, impostorWithheld{};
-    // Version 2 (0.0.74 test 5): the five impostor calls' asks, the yes answers (left eye, right eye, game
-    // view) and the asks per call (impostorCallRvas order), since the start.
-    uint64_t impostorAsked{}, impostorYes[3]{}, impostorBySite[5]{}, impostorPad{};
     uint32_t headDump[dumpDwords]{}, eyeDump[dumpDwords]{};
     uint32_t headGroup[groupFields]{}, eyeGroup[groupFields]{};
     uint64_t sequence{};
 };
-static_assert(sizeof(Data) == 432);
-static_assert(offsetof(Data, impostorAsked) == 128 && offsetof(Data, sequence) == 424);
+static_assert(sizeof(Data) == 352);
 } // namespace spidy::view_gates

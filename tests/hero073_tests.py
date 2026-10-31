@@ -8,7 +8,7 @@ class Hero073(unittest.TestCase):
     def test_release_build_off_test_number_kept(self):  # 0.0.74 test 1: a private test build, HERO_TEST_BUILD ON (the public 0.0.73 release: OFF)
         c = src('CMakeLists.txt')
         self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" ON\)')
-        self.assertIn('set(HERO_TEST_NUMBER "8" CACHE', c)  # 0.0.74 test 8: the notice says TEST 8
+        self.assertIn('set(HERO_TEST_NUMBER "10" CACHE', c)  # 0.0.74 test 10: the notice says TEST 10
         self.assertIn('set(HERO_TEST_VERSION "0.0.74" CACHE', c)
         self.assertRegex(c, r'set\(HERO_TEST_NUMBER "[0-9]+"')
     def test_ci_never_uploads_a_hero_0073_build(self):
@@ -310,28 +310,19 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5493'), ['SpidySeatedDriving'])  # 0.0.74 test 1 SEATED DRIVING
         self.assertEqual(uses.get('5494'), ['SpidyBatmobile'])  # 0.0.74 test 1 BATMOBILE
         self.assertEqual(uses.get('5495'), ['SpidyBatmobileChoice'])  # 0.0.74 test 1 BATMOBILE CHOICE
-        self.assertEqual(uses.get('5496'), ['SpidySpidyvrPicture'])  # 0.0.74 test 2 SPIDYVR PICTURE
-        self.assertEqual(uses.get('5497'), ['SpidyFlareBlock'])  # 0.0.74 test 2 FLARE BLOCK
         self.assertEqual(uses.get('5498'), ['SpidyCabinClear'])  # 0.0.74 test 2 CABIN CLEAR
         self.assertEqual(uses.get('5499'), ['SpidyCarPaint'])  # 0.0.74 test 2 CAR PAINT
         self.assertEqual(uses.get('5500'), ['SpidySeatedTools'])  # 0.0.74 test 2 SEATED TOOLS
         self.assertEqual(uses.get('5501'), ['SpidyDashPointer'])  # 0.0.74 test 2 DASH POINTER
-        self.assertEqual(uses.get('5502'), ['SpidyTaaDiagnostics'])  # 0.0.74 test 2b TAA DIAGNOSTICS
         self.assertEqual(uses.get('5503'), ['SpidyCrimeGps'])  # 0.0.74 test 2b CRIME GPS
-        self.assertEqual(uses.get('5504'), ['SpidyTaaHold'])  # 0.0.74 test 2b TAA HOLD
-        self.assertEqual(uses.get('5505'), ['SpidyHeapGuard'])  # 0.0.74 test 3 HEAP GUARD
-        self.assertEqual(uses.get('5506'), ['SpidyJitterGuard'])  # 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
         self.assertEqual(uses.get('5507'), ['SpidyWheelFirst'])  # 0.0.74 test 3 WHEEL FIRST (van072.hpp)
         self.assertEqual(uses.get('5508'), ['SpidyCaveQuiet'])  # 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp)
         self.assertEqual(uses.get('5509'), ['SpidyFingerRay'])  # 0.0.74 test 3 FINGER RAY (finger_ray074.hpp)
         self.assertEqual(uses.get('5510'), ['SpidyDashInside'])  # 0.0.74 test 3 DASH INSIDE (cabin_look074.hpp)
         self.assertEqual(uses.get('5511'), ['SpidyCockpitGlow'])  # 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
-        self.assertEqual(uses.get('5512'), ['SpidySpidyvrStock'])  # 0.0.74 test 3 SPIDYVR STOCK (combat38.hpp)
-        self.assertEqual(uses.get('5513'), ['SpidyMilesTaa'])  # 0.0.74 test 3 MILES TAA (miles_taa074.hpp)
-        self.assertEqual(uses.get('5514'), ['SpidyTaaGateLog'])  # 0.0.74 test 4 (taa_gate074.hpp)
-        self.assertEqual(uses.get('5515'), ['SpidyEyeTaaRequeue'])
-        self.assertEqual(uses.get('5516'), ['SpidyMainViewSmall'])
-        self.assertEqual(uses.get('5517'), ['SpidyAaMode'])
+        # 0.0.74 test 10: the tests' picture / AA codes are retired with their options (never reused)
+        for code in ('5496', '5497', '5502', '5504', '5505', '5506') + tuple(str(c) for c in range(5512, 5524)):
+            self.assertIsNone(uses.get(code), code)
 
 
 class Hero073Image(unittest.TestCase):
@@ -373,16 +364,11 @@ class Hero073Image(unittest.TestCase):
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'off', True), '0.5')  # image_style = off: revert
         self.assertEqual(L.image_mip_bias('0.5', 'classic', 'spidyvr', False), '0.5')  # no ENGINE TAA prepared
         self.assertEqual(L.image_mip_bias('0.25', 'classic', 'spidyvr', True), '0.25')  # an explicit -MipBias stays
-        # 0.0.74 test 2: SPIDYVR PICTURE (on by default) runs GAME TAA SPIDYVR; CUSTOM: the 0.0.73 release default
-        self.assertEqual(L.image_style_of({'aa_mode': 'off'}), 'spidyvr')  # 0.0.74 test 4: under aa_mode = off
-        self.assertEqual(L.image_style_of({'aa_mode': 'off', 'image_style': 'off'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.74 test 4 AA MODE CLEAN (default): no game TAA
-        self.assertEqual(L.image_style_of({'image_style': 'spidyvr'}), 'off')
-        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'off', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'off')
-        self.assertEqual(L.image_style_of({'image_style': 'spidyvr', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'spidyvr')
-        self.assertEqual(L.image_style_of({'image_style': 'bogus', 'spidyvr_picture': 'custom', 'spidyvr_stock': 'off', 'aa_mode': 'off'}), 'off')
-        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')  # 0.0.74 test 4 AA MODE CLEAN
+        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.73 release: GAME TAA OFF by default
+        self.assertEqual(L.image_style_of({'image_style': 'off'}), 'off')
+        self.assertEqual(L.image_style_of({'image_style': 'spidyvr'}), 'spidyvr')
+        self.assertEqual(L.image_style_of({'image_style': 'bogus'}), 'off')
+        self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')
         self.assertEqual(L.image_of({}), 'spidyvr')
         self.assertEqual(L.image_of({'image': 'hero_vr_classic'}), 'classic')
         self.assertEqual(L.export_value('image', 'classic'), 1)
@@ -476,7 +462,7 @@ class Hero073Test4ImageStyle(unittest.TestCase):
         g = src('src/game_xr.cpp')
         self.assertIn('setHero007(v, combat38::imageStyle, 5460)', g)
         self.assertIn('styleControl.update(style, engine, SpidyEngineTaaBlocked(), eyeAaOn)', g)
-        self.assertIn('native_gpu::setCleanImage(milesActive || picture || (image_style::spidy(style) &&', g)
+        self.assertIn('native_gpu::setCleanImage(image_style::spidy(style) &&', g)
         # The controller sits after the FPS guard's plan B, so a failure still falls back to EYE AA.
         self.assertLess(g.index('engineTaaFallback(engine_taa::reasonOf(engine));\n                            previous = engine;'),
                         g.index('static image_style::Controller styleControl;'))
@@ -486,7 +472,7 @@ class Hero073Test4ImageStyle(unittest.TestCase):
         self.assertIn('DWORD WINAPI SpidyImageStyle(void* style)', s)
     def test_clean_picture_skips_fxaa_history_and_cas(self):
         n = src('src/native_eye_gpu.cpp')
-        self.assertIn("(down || (aaMode.load() == 1 && !cleanImage.load() && !taa)) && prepareAa()", n)  # 0.0.74 test 6: + CLEAN JITTER
+        self.assertIn("(down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa()", n)
         # 0.0.73 AA: SHARPEN MATCH scales the slider; the clean picture still sends no CAS.
         self.assertIn('cleanImage.load() ? 0u\n                          : eye_sharpen::matchedPercent(\n                                sharpenPercent.load()', n)
         i = n.index('uint32_t historyNow() {')

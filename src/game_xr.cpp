@@ -108,12 +108,6 @@
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
-#include "spidy/heap_guard.hpp" // 0.0.74 test 3 HEAP GUARD (off by default since the test 3 fix)
-#include "spidy/taa_link074.hpp" // 0.0.74 test 3 JITTER GUARD (on)
-#include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA (on)
-#include "spidy/view_gates.hpp" // 0.0.74 test 5 IMPOSTORS, CLEAN JITTER
-#include "spidy/view_jitter.hpp" // 0.0.74 test 8 VIEW JITTER
-#include "spidy/taa_gate074.hpp" // 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL (on)
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
 #include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
@@ -646,7 +640,6 @@ DWORD WINAPI SpidyEyeLightHold(void* percent);
 // 0.0.73 IMAGE (native_eye_gpu.cpp): the history read sharp (1, SPIDYVR) or bilinear (0, CLASSIC).
 DWORD WINAPI SpidyEyeHistorySharp(void* sharp);
 DWORD WINAPI SpidyEyeSharpenMatch(void* on); // 0.0.73 AA SHARPEN MATCH
-DWORD WINAPI SpidyEyeHeapGuard(void* on);    // 0.0.74 test 3 HEAP GUARD (native_eye_gpu.cpp)
 DWORD WINAPI SpidyWindowPopOn(void* on);     // 0.0.73 test 6 WINDOW POP FIX (stereo_probe.cpp)
 float SpidyEyeHistoryKept();
 // Version 0.0.4 MIRROR VIEW TEST (stereo_probe.cpp): wanted (made only when the eyes are made: a
@@ -661,25 +654,7 @@ uint32_t SpidyShadowCameraNow();        // Update 31: SHADOW CAMERA mode | rever
 uint32_t SpidyEngineTaaNow();           // Update 34: engine_taa::pack(state, reason)
 DWORD WINAPI SpidyEngineTaaJitter(void* mode); // Update 34.2: engine_taa::JitterMode, 4 the next
 uint32_t SpidyEngineTaaJitterNow();     // Update 34.2
-void SpidyTaaDiagnosticsSet(uint32_t on); // 0.0.74 test 2b TAA DIAGNOSTICS (stereo_probe.cpp)
-void SpidyTaaHoldSet(uint32_t on); // 0.0.74 test 2b TAA HOLD (stereo_probe.cpp)
-void SpidyTaaGuardSet(uint32_t on); // 0.0.74 test 3 JITTER GUARD (stereo_probe.cpp)
-void SpidyStockSet(uint32_t on); // 0.0.74 test 3 SPIDYVR STOCK (stereo_probe.cpp)
-void SpidyMilesTaaSet(uint32_t on); // 0.0.74 test 3 MILES TAA (stereo_probe.cpp)
-const spidy::miles_taa::Data* SpidyMilesTaaNow();
-void SpidyMilesTaaStall();
-void SpidyTaaGateSet(uint32_t log, uint32_t requeue); // 0.0.74 test 4 (stereo_probe.cpp)
-const spidy::taa_gate::Data* SpidyTaaGateNow();
-void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out); // 0.0.74 test 5 IMPOSTORS (stereo_probe.cpp)
-void SpidyCleanSet(uint32_t on);                                // 0.0.74 test 5 CLEAN JITTER (stereo_probe.cpp)
-void SpidyCleanJitter(spidy::view_gates::CleanJitter* out);
-uint64_t SpidyCleanTaaLenses(); // 0.0.74 test 6 CLEAN JITTER (stereo_probe.cpp)
-void SpidyViewJitterFixSet(uint32_t on); // 0.0.74 test 8 VIEW JITTER FIX (stereo_probe.cpp)
-uint32_t SpidyViewJitterFrames(spidy::view_jitter::Frame* out, uint32_t limit);
-void SpidyViewJitterStats(spidy::view_jitter::Stats* out);
-DWORD WINAPI SpidyViewGate(void* argument); // Update 37 (stereo_probe.cpp): selector 3 is IMPOSTORS
 DWORD WINAPI SpidyImageStyle(void* style); // 0.0.73 test 4 IMAGE STYLE (GAME TAA): 0 SPIDYVR, 1 OFF
-DWORD WINAPI SpidyEngineTaaJitterScale(void* percent); // Update 34.2: 0-200 (0.0.74 test 2 SPIDYVR PICTURE: 100)
 uint32_t SpidyEngineTaaBlocked();       // 0.0.73 test 4: engine_taa::Reason, none when it could go on now
 DWORD WINAPI SpidyShadowCamera(void* mode); // Update 31
 DWORD WINAPI SpidyFarShadows(void* mode); // Update 35: far_shadows::Mode, 3 the next, 4 off (slow)
@@ -800,10 +775,6 @@ std::atomic<uint32_t> combat38Values[combat38::options]{};
 // then, and with no live.txt line, these). GAME TAA starts OFF (image_style::defaultStyle).
 [[maybe_unused]] const bool combat38StartValues = [] {
     combat38Values[combat38::imageStyle].store(image_style::defaultStyle);
-    // 0.0.74 test 4 AA MODE CLEAN: MILES TAA, EYE TAA REQUEUE and MAIN VIEW SMALL start OFF (options kept).
-    combat38Values[combat38::milesTaa].store(1u);
-    combat38Values[combat38::eyeTaaRequeue].store(1u);
-    combat38Values[combat38::mainViewSmall].store(1u);
     return true;
 }();
 // Version 0.0.72 MODEL MISSING: one bit per mesh_model slot whose MODEL setting is on and whose model
@@ -869,36 +840,16 @@ std::string modelsRoot() {
     return root;
 }
 std::atomic<float> heroHeightNow{1.f}; // Version 0.0.5 HERO HEIGHT in force (the V005 record)
-// 0.0.74 test 7 ENGINE TAA STOCK (ON by default, live): while ENGINE TAA is on, AA MODE CLEAN steps aside, so
-// the options fall through to SPIDYVR STOCK (SpidyVR's own setup: the game's TAA in each eye, its Halton jitter,
-// nothing of CLEAN's over it). Read straight from the table so it never recurses.
-bool cleanStandsDown() {
-    return combat38::clampValue(combat38::engineTaaStock, combat38Values[combat38::engineTaaStock].load()) == 0 &&
-           engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on;
-}
 uint32_t c38(uint32_t option) {
     // Version 0.0.2 hotfix: a getter that reaches itself again answers the default (0) rather than recursing.
     static thread_local int depth = 0;
     const ReentryGuard guard{depth};
     if (guard.reentered())
         return 0u;
-    if (option >= combat38::options)
-        return 0u;
-    const uint32_t own = combat38::clampValue(option, combat38Values[option].load());
-    // 0.0.74 test 4 AA MODE CLEAN (ON by default): the anti-aliasing options answer combat38::cleanValue, ahead
-    // of SPIDYVR STOCK (which it turns off); read straight from the table so the switch itself never recurses.
-    if (option != combat38::aaMode &&
-        combat38::aaModeClean(combat38::clampValue(combat38::aaMode, combat38Values[combat38::aaMode].load())) &&
-        !cleanStandsDown())
-        return combat38::cleanValue(option, own);
-    // 0.0.74 test 3 SPIDYVR STOCK (ON by default): HERO VR's render options answer SpidyVR's own behaviour
-    // (combat38::stockValue); read straight from the table so the switch itself never recurses.
-    if (option != combat38::spidyvrStock &&
-        combat38::spidyvrStockOn(combat38::clampValue(combat38::spidyvrStock, combat38Values[combat38::spidyvrStock].load())))
-        return combat38::stockValue(option, own);
-    return own;
+    return option < combat38::options ? combat38::clampValue(option, combat38Values[option].load()) : 0u;
 }
-// The player's own value of an option (SPIDYVR STOCK not applied): the wrist / dash cycles step from it.
+// The player's own value of an option: the wrist / dash cycles step from it (0.0.74 test 10: the same as c38,
+// the 0.0.74 tests' picture overrides being gone).
 uint32_t c38Own(uint32_t option) {
     return option < combat38::options ? combat38::clampValue(option, combat38Values[option].load()) : 0u;
 }
@@ -2588,7 +2539,7 @@ DWORD WINAPI run(void*) {
         auto_perf::Knobs perfUser{}, perfApplied{}, perfWant{};
         bool perfWas{}, perfRestoring{}, perfNewPair{}, perfStatusShown{};
         double perfPairSeconds{}, perfPairAt{}, perfRetryAt{}, perfReportAt{};
-        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, heapGuardApplied{~0u}, heapFallbackShown{}, windowPopApplied{~0u}, perfZoneNow{};
+        uint32_t perfRefused{}, perfUserChanged{}, farAppliedPercent{~0u}, cullAppliedDegrees{~0u}, shadowMatchApplied{~0u}, lightChecksApplied{~0u}, glowCheckApplied{~0u}, slWatchApplied{~0u}, slWatchTicks{}, lightHoldApplied{~0u}, imageApplied{~0u}, sharpenMatchApplied{~0u}, windowPopApplied{~0u}, perfZoneNow{};
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
@@ -4125,18 +4076,7 @@ DWORD WINAPI run(void*) {
                                     // 0.0.73 IMAGE: the look's eye AA (FXAA) and sharpening now; the history
                                     // read follows in the per-frame apply. Kept for the next start with the
                                     // two sliders (SpidyHudSettings 3 bits 6 and 11, and 22 with 10 bit 2).
-                                    // 0.0.74 test 7: under AA MODE CLEAN the IMAGE row is held at CLASSIC and
-                                    // its look is not sent (it put CAS 140 over CLEAN's 40); the SHARPEN
-                                    // slider still sets the sharpening.
-                                    if (o == combat38::image && combat38::aaModeClean(c38(combat38::aaMode)) &&
-                                        !cleanStandsDown()) {
-                                        char line[160];
-                                        std::snprintf(line, sizeof line,
-                                                      "IMAGE: CLASSIC is held by AA MODE CLEAN; sharpening stays %u%% "
-                                                      "(the SHARPEN slider changes it)",
-                                                      native_gpu::eyeSharpen());
-                                        consoleLine(line);
-                                    } else if (o == combat38::image) {
+                                    if (o == combat38::image) {
                                         const auto look = combat38::imageLook(c38(o));
                                         SpidyEyeAA(reinterpret_cast<void*>(static_cast<uintptr_t>(look.aa)));
                                         SpidyEyeSharpen(reinterpret_cast<void*>(static_cast<uintptr_t>(look.sharpen)));
@@ -10007,14 +9947,7 @@ DWORD WINAPI run(void*) {
                                   (antialiased ? config.upscale | 7u << 8 : 100u) | reflections |
                                   // Update 34: -EngineTaa (options 0x800000): the eyes' buffers
                                   // get the TAA targets (0x10), for ENGINE TAA.
-                                  ((config.options & 0x800000) ? 0x10u << 8 : 0u) |
-                                  // 0.0.74 test 3 MILES TAA on at the start (run_game_vr MILES_TAA_OPTION):
-                                  // the eyes made with the TAA targets, their scene at its upscale percent.
-                                  ((config.options & miles_taa::startOption) ? miles_taa::eyeTemporalBit << 8
-                                                                              : 0u) |
-                                  // 0.0.74 test 4 MAIN VIEW SMALL on at the start (run_game_vr MAIN_VIEW_SMALL_OPTION).
-                                  ((config.options & taa_gate::mainStartOption) ? taa_gate::mainEyeTemporalBit << 8
-                                                                                : 0u)))),
+                                  ((config.options & 0x800000) ? 0x10u << 8 : 0u)))),
                               "Eye anti-aliasing");
                         check(SpidyEyeShadows(reinterpret_cast<void*>(
                                   static_cast<uintptr_t>((config.options & 0x20000) ? 0 : 1))),
@@ -11027,19 +10960,6 @@ DWORD WINAPI run(void*) {
                 },
                 [&](std::array<XrRuntime::EyeTarget, 2>& targets) {
                     const auto copyStart = std::chrono::steady_clock::now();
-                    // 0.0.74 test 3 fix (the black headset): the eye bridge's own switches every frame, not only
-                    // after a pair reached the headset, so live.txt heap_guard / spidyvr_stock reach the bridge
-                    // even while no picture does; and the one line when HEAP GUARD fell back to test 2's path.
-                    if (const uint32_t guardWant = heap_guard::on(c38(combat38::heapGuard)) ? 1u : 0u;
-                        guardWant != heapGuardApplied) {
-                        heapGuardApplied = guardWant;
-                        SpidyEyeHeapGuard(reinterpret_cast<void*>(static_cast<uintptr_t>(guardWant)));
-                    }
-                    native_gpu::setStockImage(combat38::spidyvrStockOn(c38(combat38::spidyvrStock)));
-                    if (!heapFallbackShown && native_gpu::heapGuardFellBack()) {
-                        heapFallbackShown = 1;
-                        consoleLine("HEAP GUARD: the eye images starved, back to test 2's path for this session (heap_guard = off keeps it so)");
-                    }
                     if (showScreen && stereoScene && !native_gpu::eyesLost() && native_hud::onScreen(sceneHoldMs)) {
                         // The scene's newest pair, once the game has rendered
                         // one with the HUD's panel on its screen; until then
@@ -11253,514 +11173,6 @@ DWORD WINAPI run(void*) {
                                 });
                             }
                         }
-                        // 0.0.74 test 5 IMPOSTORS: IMPOSTOR EYE (ON by default, live) to stereo_probe on a change, the
-                        // "impostors installed = 0/1" line once the hooks are in, then every 10 s the five calls' asks,
-                        // the yes answers (left eye, right eye, game view) and the asks per call.
-                        {
-                            namespace vg = view_gates;
-                            static uint32_t impostorSent = UINT32_MAX;
-                            static bool impostorNoted{};
-                            static ULONGLONG impostorTick{};
-                            static vg::ImpostorStats impostorLast{};
-                            vg::ImpostorStats st{};
-                            SpidyImpostorStats(&st);
-                            if (const uint32_t want = c38(combat38::impostorEye) == 0 ? 1u : 0u;
-                                st.hooked && want != impostorSent) {
-                                impostorSent = want;
-                                if (st.installed)
-                                    SpidyViewGate(reinterpret_cast<void*>(static_cast<uintptr_t>(3u << 16 | want)));
-                            }
-                            if (st.hooked && !impostorNoted) {
-                                impostorNoted = true;
-                                char why[96];
-                                vg::impostorWhyText(st.why, why, sizeof why);
-                                consoleLine(std::string("IMPOSTORS: impostors installed = ") + (st.installed ? "1" : "0") +
-                                            " (" + why + ").");
-                            }
-                            if (const ULONGLONG nowTick = GetTickCount64();
-                                st.hooked && st.installed && nowTick - impostorTick >= 10000) {
-                                impostorTick = nowTick;
-                                auto dl = [](uint64_t now, uint64_t was) { return static_cast<unsigned long long>(now - was); };
-                                char line[256];
-                                std::snprintf(line, sizeof line,
-                                              "IMPOSTORS %s, 10 s: %llu asks, yes L %llu R %llu game %llu; per call "
-                                              "af90 %llu c346 %llu c356 %llu c467 %llu c477 %llu",
-                                              st.on ? "ON" : "OFF", dl(st.asked, impostorLast.asked),
-                                              dl(st.yes[0], impostorLast.yes[0]), dl(st.yes[1], impostorLast.yes[1]),
-                                              dl(st.yes[2], impostorLast.yes[2]), dl(st.bySite[0], impostorLast.bySite[0]),
-                                              dl(st.bySite[1], impostorLast.bySite[1]), dl(st.bySite[2], impostorLast.bySite[2]),
-                                              dl(st.bySite[3], impostorLast.bySite[3]), dl(st.bySite[4], impostorLast.bySite[4]));
-                                consoleLine(line);
-                                impostorLast = st;
-                            }
-                            // 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN to stereo_probe each frame; one line once 300
-                            // eye frames are logged (the eyes' lens jitter, which CLEAN zeroes).
-                            // 0.0.74 test 7 ENGINE TAA STOCK: CLEAN stands down fully while ENGINE TAA is on.
-                            const bool standDown = cleanStandsDown();
-                            const bool cleanAa = combat38::aaModeClean(c38(combat38::aaMode)) && !standDown;
-                            SpidyCleanSet(cleanAa ? 1u : 0u);
-                            {   // 0.0.74 test 8 VIEW JITTER (view_jitter.hpp): VIEW JITTER FIX to stereo_probe each frame;
-                                // its detail frames (200 at the start, 200 after a switch flip, 100 after ENGINE TAA
-                                // flips) one line each, and every 10 s one line per view that ran. Pixels at each view's
-                                // own size (right, down); the shadow head has no picture: the eye size.
-                                namespace vjt = spidy::view_jitter;
-                                const bool vjFix = c38(combat38::viewJitterFix) == 0;
-                                SpidyViewJitterFixSet(vjFix ? 1u : 0u);
-                                static vjt::Frame vjFrames[32];
-                                const uint32_t vjGot = SpidyViewJitterFrames(vjFrames, 32);
-                                for (uint32_t vi = 0; vi < vjGot; ++vi) {
-                                    const vjt::Frame& vf = vjFrames[vi];
-                                    const vjt::Seen& gs = vf.seen[vjt::gameView].count ? vf.seen[vjt::gameView] : vf.seen[vjt::gameHead];
-                                    char vjLine[768];
-                                    int used = std::snprintf(
-                                        vjLine, sizeof vjLine,
-                                        "VIEW JITTER f%llu pass %llu [FIX %s, ENGINE TAA %s, game view %s]: game own (%+.3f, %+.3f) px",
-                                        static_cast<unsigned long long>(vf.frame), static_cast<unsigned long long>(vf.pass ? vf.pass - 1 : 0),
-                                        vf.fix ? "ON" : "OFF", vf.engine ? "ON" : "OFF", vf.rested ? "rested" : "renders",
-                                        vjt::pxRight(vf.ownX, gs.width), vjt::pxDown(vf.ownY, gs.height));
-                                    for (uint32_t v = 0; v < vjt::views && used > 0 && used < static_cast<int>(sizeof vjLine); ++v) {
-                                        const vjt::Seen& sn = vf.seen[v];
-                                        if (!sn.count)
-                                            continue;
-                                        used += std::snprintf(vjLine + used, sizeof vjLine - static_cast<size_t>(used),
-                                                              "; %s x%u (%+.3f, %+.3f) px at %ux%u", vjt::viewName(v), sn.count,
-                                                              vjt::pxRight(sn.x, sn.width), vjt::pxDown(sn.y, sn.height),
-                                                              sn.width, sn.height);
-                                    }
-                                    consoleLine(vjLine);
-                                }
-                                static ULONGLONG vjTick{};
-                                static vjt::Stats vjLast{};
-                                const ULONGLONG vjTickNow = GetTickCount64();
-                                if (!vjTick)
-                                    vjTick = vjTickNow;
-                                if (vjTickNow - vjTick >= 10000) {
-                                    const double vjSeconds = static_cast<double>(vjTickNow - vjTick) / 1000.0;
-                                    vjTick = vjTickNow;
-                                    vjt::Stats vs{};
-                                    SpidyViewJitterStats(&vs);
-                                    const uint64_t vjFramesNow = vs.frames - vjLast.frames;
-                                    const bool vjEngineOn = engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on;
-                                    for (uint32_t v = 0; v < vjt::views; ++v) {
-                                        const uint64_t runs = vs.runs[v] - vjLast.runs[v];
-                                        if (!runs)
-                                            continue;
-                                        auto vd = [&](const uint64_t* now, const uint64_t* was) {
-                                            return static_cast<unsigned long long>(now[v] - was[v]);
-                                        };
-                                        char vjLine[384];
-                                        std::snprintf(
-                                            vjLine, sizeof vjLine,
-                                            "VIEW JITTER 10 s %s [FIX %s, ENGINE TAA %s, game view rested %llu of %llu frames]: "
-                                            "%llu runs (%.1f/s, %.2f per frame) at %ux%u; last (%+.3f, %+.3f) px, max %.3f px; "
-                                            "nonzero %llu; Y vs game own: same %llu flipped %llu zero %llu",
-                                            vjt::viewName(v), vjFix ? "ON" : "OFF", vjEngineOn ? "ON" : "OFF",
-                                            static_cast<unsigned long long>(vs.restedFrames - vjLast.restedFrames),
-                                            static_cast<unsigned long long>(vjFramesNow), static_cast<unsigned long long>(runs),
-                                            static_cast<double>(runs) / vjSeconds,
-                                            vjFramesNow ? static_cast<double>(runs) / static_cast<double>(vjFramesNow) : 0.0,
-                                            vs.width[v], vs.height[v], vjt::pxRight(vs.lastX[v], vs.width[v]),
-                                            vjt::pxDown(vs.lastY[v], vs.height[v]), static_cast<double>(vs.maxPx[v]),
-                                            vd(vs.nonzero, vjLast.nonzero), vd(vs.ySame, vjLast.ySame),
-                                            vd(vs.yFlipped, vjLast.yFlipped), vd(vs.yZero, vjLast.yZero));
-                                        consoleLine(vjLine);
-                                    }
-                                    vjLast = vs;
-                                }
-                            }
-                            {
-                                // 0 CLEAN (or no CLEAN), 1 stood down, 2 ENGINE TAA on under CLEAN with the switch off.
-                                static int standWas = -1;
-                                const bool cleanPicked = combat38::aaModeClean(c38(combat38::aaMode));
-                                const int standNow = standDown ? 1
-                                                     : cleanPicked && c38(combat38::engineTaaStock) != 0 &&
-                                                               engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on
-                                                         ? 2
-                                                         : 0;
-                                if (standNow != standWas) {
-                                    if (standNow == 1)
-                                        consoleLine("CLEAN TAA OFF (ENGINE TAA): CLEAN stands down; ENGINE TAA runs "
-                                                    "SpidyVR's setup");
-                                    else if (standNow == 2)
-                                        consoleLine("CLEAN TAA: kept under ENGINE TAA (ENGINE TAA STOCK off: test 6)");
-                                    else if (standWas > 0 && cleanPicked)
-                                        consoleLine("CLEAN TAA: back (ENGINE TAA off)");
-                                    standWas = standNow;
-                                }
-                            }
-                            // 0.0.74 test 7 HEADSET SHARPENING: the CAS actually sent, whenever it changes.
-                            {
-                                static uint32_t sharpenWas = UINT32_MAX;
-                                if (const uint32_t sharpenNow = native_gpu::eyeSharpen(); sharpenNow != sharpenWas) {
-                                    char line[96];
-                                    if (sharpenWas == UINT32_MAX)
-                                        std::snprintf(line, sizeof line, "HEADSET SHARPENING: now %u%% sent to the headset", sharpenNow);
-                                    else
-                                        std::snprintf(line, sizeof line, "HEADSET SHARPENING: now %u%% sent to the headset (was %u%%)",
-                                                      sharpenNow, sharpenWas);
-                                    consoleLine(line);
-                                    sharpenWas = sharpenNow;
-                                }
-                            }
-                            // 0.0.74 test 7 CLEAN JITTER PROOF (ON by default, live) and JITTER PROOF BIG (OFF).
-                            native_gpu::setJitterProof(c38(combat38::jitterProof) == 0);
-                            native_gpu::setJitterProofBig(c38(combat38::jitterProofBig) == 1);
-                            {
-                                static uint64_t proofSeen{};
-                                static bool proofFaultSaid{};
-                                const auto rd = native_gpu::jitterProof();
-                                if (rd.fault && !proofFaultSaid) {
-                                    proofFaultSaid = true;
-                                    char line[160];
-                                    std::snprintf(line, sizeof line, "CLEAN JITTER PROOF: off for this session (%s)",
-                                                  jitter_proof::faultText(rd.fault));
-                                    consoleLine(line);
-                                }
-                                if (rd.number != proofSeen) {
-                                    proofSeen = rd.number;
-                                    const char* const proofEye[2] = {"L", "R"};
-                                    for (int e = 0; e < 2; ++e) {
-                                        char line[256];
-                                        if (rd.ok[e])
-                                            std::snprintf(line, sizeof line,
-                                                          "CLEAN JITTER PROOF: sent %s (%.2f, %.2f) -> measured (%.2f, %.2f) px "
-                                                          "(head %.2f, %.2f; fit %.4f; %s; skipped moving %llu flat %llu)",
-                                                          proofEye[e], static_cast<double>(rd.sent[e][0]), static_cast<double>(rd.sent[e][1]),
-                                                          static_cast<double>(rd.measured[e][0]), static_cast<double>(rd.measured[e][1]),
-                                                          static_cast<double>(rd.head[e][0]), static_cast<double>(rd.head[e][1]),
-                                                          static_cast<double>(rd.error[e]),
-                                                          rd.big ? "BIG 4 px raw" : rd.stepped ? "CLEAN step" : "no CLEAN step",
-                                                          static_cast<unsigned long long>(rd.skippedMoving),
-                                                          static_cast<unsigned long long>(rd.skippedFlat));
-                                        else
-                                            std::snprintf(line, sizeof line,
-                                                          "CLEAN JITTER PROOF: sent %s (%.2f, %.2f) -> not measured (a flat box, "
-                                                          "e.g. sky; skipped moving %llu flat %llu)",
-                                                          proofEye[e], static_cast<double>(rd.sent[e][0]), static_cast<double>(rd.sent[e][1]),
-                                                          static_cast<unsigned long long>(rd.skippedMoving),
-                                                          static_cast<unsigned long long>(rd.skippedFlat));
-                                        consoleLine(line);
-                                        // 0.0.74 test 8 DISPLAY PROOF: the same pair's box after the history (what the
-                                        // headset copy and CAS read) against its RAW box.
-                                        if (rd.shownRead) {
-                                            char shownLine[256];
-                                            const double diff = static_cast<double>(rd.shownDiff[e]);
-                                            if (rd.shownOk[e] && rd.ok[e])
-                                                std::snprintf(shownLine, sizeof shownLine,
-                                                              "CLEAN DISPLAY PROOF %s: history %s; displayed vs raw mean diff %.4f "
-                                                              "(%.2f of 255); displayed moved (%.2f, %.2f) px, raw (%.2f, %.2f) px",
-                                                              proofEye[e], rd.historyRan ? "RAN" : "NOT RUN", diff, diff * 255.0,
-                                                              static_cast<double>(rd.shownMeasured[e][0]),
-                                                              static_cast<double>(rd.shownMeasured[e][1]),
-                                                              static_cast<double>(rd.measured[e][0]), static_cast<double>(rd.measured[e][1]));
-                                            else
-                                                std::snprintf(shownLine, sizeof shownLine,
-                                                              "CLEAN DISPLAY PROOF %s: history %s; displayed vs raw mean diff %.4f "
-                                                              "(%.2f of 255); move not measured (a flat box)",
-                                                              proofEye[e], rd.historyRan ? "RAN" : "NOT RUN", diff, diff * 255.0);
-                                            consoleLine(shownLine);
-                                        }
-                                    }
-                                }
-                            }
-                            // 0.0.74 test 6 CLEAN JITTER (ON by default, live): CLEAN's own temporal AA, and every 10 s
-                            // while CLEAN is on one CLEAN TAA line: the pairs, how many found their lens step, the
-                            // history's blends and restarts, FXAA, whether CAS ran after the history, the last steps.
-                            native_gpu::setCleanJitter(cleanAa && c38(combat38::cleanJitter) == 0);
-                            {
-                                static ULONGLONG taaTick{};
-                                static native_gpu::CleanTaaStats taaLast{};
-                                static uint64_t lensesLast{};
-                                if (const ULONGLONG taaTickNow = GetTickCount64(); taaTickNow - taaTick >= 10000) {
-                                    taaTick = taaTickNow;
-                                    const auto taaNow = native_gpu::cleanTaaStats();
-                                    const uint64_t taaLenses = SpidyCleanTaaLenses();
-                                    if (cleanAa) {
-                                        auto taaDl = [](uint64_t now, uint64_t was) {
-                                            return static_cast<unsigned long long>(now - was);
-                                        };
-                                        const uint64_t taaBlends = taaNow.blended - taaLast.blended;
-                                        const double taaKeep = taaBlends ? (taaNow.keepSum - taaLast.keepSum) * 100.0 / static_cast<double>(taaBlends) : 0.0;
-                                        const char* taaState = c38(combat38::cleanJitter) != 0   ? "OFF (switch)"
-                                                               : !native_gpu::eyeHistory()       ? "OFF (no eye history)"
-                                                               : native_gpu::eyeHistoryFault()   ? "OFF (history fault)"
-                                                               : taaNow.on                       ? "ON"
-                                                                                                 : "OFF (waiting)";
-                                        char taaLine[384];
-                                        std::snprintf(
-                                            taaLine, sizeof taaLine,
-                                            "CLEAN TAA %s, 10 s: %llu pairs, %llu lenses stepped, jitter found %llu "
-                                            "missing %llu; history blended %llu (avg keep %.0f%%) restarted %llu cuts %llu; "
-                                            "FXAA %llu; CAS %u%% on %llu of %llu sent, after history %llu; last px L (%.2f, "
-                                            "%.2f) R (%.2f, %.2f)",
-                                            taaState, taaDl(taaNow.pairs, taaLast.pairs), taaDl(taaLenses, lensesLast),
-                                            taaDl(taaNow.jittered, taaLast.jittered), taaDl(taaNow.unmatched, taaLast.unmatched), taaDl(taaNow.blended, taaLast.blended),
-                                            taaKeep, taaDl(taaNow.restarted, taaLast.restarted), taaDl(taaNow.cuts, taaLast.cuts),
-                                            taaDl(taaNow.fxaa, taaLast.fxaa), taaNow.casPercent, taaDl(taaNow.sharpened, taaLast.sharpened),
-                                            taaDl(taaNow.presented, taaLast.presented),
-                                            taaDl(taaNow.sharpenedAfterHistory, taaLast.sharpenedAfterHistory),
-                                            static_cast<double>(taaNow.px[0][0]), static_cast<double>(taaNow.px[0][1]),
-                                            static_cast<double>(taaNow.px[1][0]), static_cast<double>(taaNow.px[1][1]));
-                                        consoleLine(taaLine);
-                                        // 0.0.74 test 8 CLEAN BLEND: the effective weight (eye 0: the history's share
-                                        // kept, the new picture gets the rest) and where the headset's picture comes from.
-                                        const bool anyBlend = taaBlends != 0;
-                                        const double loosenAvg = anyBlend ? (taaNow.loosenSum - taaLast.loosenSum) / static_cast<double>(taaBlends) : 0.0;
-                                        char blendLine[384];
-                                        std::snprintf(
-                                            blendLine, sizeof blendLine,
-                                            "CLEAN BLEND 10 s: history kept avg %.0f%% (least %.0f%%, most %.0f%%), new picture avg "
-                                            "%.0f%%; loosen avg %.2f; history ran on %llu pairs, %llu sent; the headset copy reads "
-                                            "the history output (stagedEyes, copied from the history picture)",
-                                            taaKeep, anyBlend ? static_cast<double>(taaNow.keepLeast) * 100.0 : 0.0,
-                                            anyBlend ? static_cast<double>(taaNow.keepMost) * 100.0 : 0.0,
-                                            anyBlend ? 100.0 - taaKeep : 100.0, loosenAvg,
-                                            taaDl(taaNow.historyPairs, taaLast.historyPairs), taaDl(taaNow.presented, taaLast.presented));
-                                        consoleLine(blendLine);
-                                    }
-                                    taaLast = taaNow;
-                                    lensesLast = taaLenses;
-                                }
-                            }
-                            static bool jitterNoted{};
-                            vg::CleanJitter cj{};
-                            SpidyCleanJitter(&cj);
-                            if (!jitterNoted && cj.frames >= vg::CleanJitter::logFrames) {
-                                jitterNoted = true;
-                                char line[256];
-                                std::snprintf(line, sizeof line,
-                                              "CLEAN JITTER: %u eye frames, sent nonzero %u (max %.6f), stored nonzero %u "
-                                              "(max %.6f); zeroed %u, kept %u (upscaled eyes).",
-                                              cj.frames, cj.sentNonzero, cj.maxSent, cj.storedNonzero, cj.maxStored,
-                                              cj.zeroed, cj.kept);
-                                consoleLine(line);
-                            }
-                        }
-                        // 0.0.74 test 3 MILES TAA (miles_taa074.hpp, ON by default, live): MilesVR's four steps in
-                        // stereo_probe; here the switch, the safety (stallPairs eye jobs with no pair at the headset:
-                        // off for the session, one console line), the fall-back line and the per-eye log every 10 s.
-                        bool milesActive = false;
-                        {
-                            static miles_taa::StallGuard milesStall;
-                            static bool milesNoted{};
-                            static ULONGLONG milesTick{};
-                            static miles_taa::Data milesLast{};
-                            const bool milesWant = miles_taa::on(c38(combat38::milesTaa)) && !milesStall.tripped;
-                            SpidyMilesTaaSet(milesWant ? 1u : 0u);
-                            // 0.0.74 test 4 TAA GATE LOG and EYE TAA REQUEUE (taa_gate074.hpp, ON, live).
-                            const bool gateLog = taa_gate::on(c38(combat38::taaGateLog));
-                            SpidyTaaGateSet(gateLog ? 1u : 0u, taa_gate::on(c38(combat38::eyeTaaRequeue)) ? 1u : 0u);
-                            static bool gateNoted{};
-                            static taa_gate::Data gateLast{};
-                            const taa_gate::Data* gd = SpidyTaaGateNow();
-                            if (gd && gd->reason && !gateNoted) {
-                                gateNoted = true;
-                                consoleLine(taa_gate::reasonText(gd->reason));
-                            }
-                            {   // 0.0.74 test 7 TAA COVERAGE and ENGINE TAA COST, every 10 s whatever the AA mode: how
-                                // many eye jobs got a game TemporalAa call and a real run (the 54% / 13% figure), and
-                                // the game's eye pairs per second with the GPU time from an eye pair's submission to
-                                // its headset copy finishing (the game's queue), ENGINE TAA ON or OFF, head still or not.
-                                static ULONGLONG costTick{};
-                                static uint64_t costPairs{}, costFrames{};
-                                static TimingMetric costGpuLast{}, costPairLast{};
-                                static uint64_t covRan[2]{}, covJobs[2]{}, covMissed[2]{};
-                                // 0.0.74 test 8 (view_jitter::HeadStill): STILL is under 10 cm and 8 degrees from where
-                                // the 10 s began (test 7's 3 cm / 3 degrees: a standing player's sway made nearly every
-                                // window MOVING), plus the seconds that stayed within 2 cm and 2 degrees. The head in the
-                                // game world: travel counts.
-                                static spidy::view_jitter::HeadStill still;
-                                ++costFrames;
-                                if (newPair)
-                                    ++costPairs;
-                                if (validTrackedPose(motion.headPose)) {
-                                    const Vec3 lookNow = motion.headPose.orientation.rotate(Vec3{0, 0, -1});
-                                    const float at[3]{motion.headPose.position.x, motion.headPose.position.y, motion.headPose.position.z};
-                                    const float look[3]{lookNow.x, lookNow.y, lookNow.z};
-                                    still.add(at, look, GetTickCount64());
-                                }
-                                const bool stillHead = still.still();
-                                const ULONGLONG costNow = GetTickCount64();
-                                if (!costTick)
-                                    costTick = costNow;
-                                if (costNow - costTick >= 10000) {
-                                    const double seconds = static_cast<double>(costNow - costTick) / 1000.0;
-                                    costTick = costNow;
-                                    const bool engineOnNow = engine_taa::stateOf(SpidyEngineTaaNow()) == engine_taa::on;
-                                    TimingMetric gpuNow{}, pairNow{};
-                                    native_gpu::copyTiming(gpuNow, pairNow);
-                                    const uint64_t pairCount = pairNow.count - costPairLast.count;
-                                    const double pairMs = pairCount ? (pairNow.totalMs - costPairLast.totalMs) / static_cast<double>(pairCount) : 0.0;
-                                    const uint64_t copyCount = gpuNow.count - costGpuLast.count;
-                                    const double copyMs = copyCount ? (gpuNow.totalMs - costGpuLast.totalMs) / static_cast<double>(copyCount) : 0.0;
-                                    const float passes = native_gpu::eyePassesGpuMs();
-                                    char costLine[384];
-                                    std::snprintf(costLine, sizeof costLine,
-                                                  "ENGINE TAA COST 10 s [ENGINE TAA %s] head %s: game %.1f eye pairs/s, headset "
-                                                  "%.1f frames/s; GPU eye pair to headset copy %.2f ms avg (last %.2f), copy "
-                                                  "%.2f ms, HERO passes %.2f ms; head moved %.1f cm %.1f deg, still %u of %u s",
-                                                  engineOnNow ? "ON" : "OFF", stillHead ? "STILL" : "MOVING",
-                                                  static_cast<double>(costPairs) / seconds, static_cast<double>(costFrames) / seconds,
-                                                  pairMs, pairNow.lastMs, copyMs,
-                                                  std::isfinite(passes) ? static_cast<double>(passes) : -1.0,
-                                                  static_cast<double>(still.maxTravel) * 100.0, static_cast<double>(still.maxTurnDeg),
-                                                  still.stillSeconds, still.seconds);
-                                    consoleLine(costLine);
-                                    costGpuLast = gpuNow;
-                                    costPairLast = pairNow;
-                                    costPairs = costFrames = 0;
-                                    still.restart();
-                                    const miles_taa::Data* cov = SpidyMilesTaaNow();
-                                    if (cov && gd) {
-                                        double ranPct[2]{}, callPct[2]{};
-                                        unsigned long long jobsSeen[2]{};
-                                        for (int e = 0; e < 2; ++e) {
-                                            const uint64_t jobs = gd->eyeJobs[e] - covJobs[e];
-                                            const uint64_t missed = std::min(gd->missedJobs[e] - covMissed[e], jobs);
-                                            jobsSeen[e] = static_cast<unsigned long long>(jobs);
-                                            if (jobs) {
-                                                ranPct[e] = std::min(100.0, static_cast<double>(cov->ran[e] - covRan[e]) * 100.0 /
-                                                                                static_cast<double>(jobs));
-                                                callPct[e] = static_cast<double>(jobs - missed) * 100.0 / static_cast<double>(jobs);
-                                            }
-                                            covRan[e] = cov->ran[e];
-                                            covJobs[e] = gd->eyeJobs[e];
-                                            covMissed[e] = gd->missedJobs[e];
-                                        }
-                                        char covLine[256];
-                                        std::snprintf(covLine, sizeof covLine,
-                                                      "TAA COVERAGE 10 s [ENGINE TAA %s]: L TemporalAa ran %.0f%% called %.0f%% of "
-                                                      "%llu eye jobs; R ran %.0f%% called %.0f%% of %llu",
-                                                      engineOnNow ? "ON" : "OFF", ranPct[0], callPct[0], jobsSeen[0], ranPct[1],
-                                                      callPct[1], jobsSeen[1]);
-                                        consoleLine(covLine);
-                                    }
-                                }
-                            }
-                            if (const miles_taa::Data* md = SpidyMilesTaaNow()) {
-                                milesActive = (md->flags & miles_taa::flagLive) != 0;
-                                if (milesStall.frame(md->leftJobs, newPair, milesActive)) {
-                                    SpidyMilesTaaStall();
-                                    milesActive = false;
-                                    consoleLine("MILES TAA: 45 eye frames in a row never reached the headset; off for "
-                                                "this session (SPIDYVR STOCK's path).");
-                                    milesNoted = true;
-                                }
-                                if (md->reason && !milesNoted) {
-                                    milesNoted = true;
-                                    consoleLine(std::string("MILES TAA: ") + miles_taa::reasonText(md->reason) +
-                                                (md->reason == miles_taa::upscaleWrong
-                                                     ? "; set miles_taa = off in live.txt and restart for the full eye size."
-                                                 : md->reason == miles_taa::hookFailed
-                                                     ? "; MILES TAA still runs."
-                                                     : "; SPIDYVR STOCK's path this session."));
-                                }
-                                if (const ULONGLONG nowTick = GetTickCount64();
-                                    (md->flags & (miles_taa::flagLive | miles_taa::flagAtStart)) &&
-                                    nowTick - milesTick >= 10000) {
-                                    milesTick = nowTick;
-                                    if (gateLog && gd) {
-                                        // 0.0.74 test 4 TAA GATE LOG: the same record in lines under 256 characters,
-                                        // with the ring's matches, the unmatched runs and the history weight's inputs.
-                                        char g1[taa_gate::lineMax], g2[taa_gate::lineMax], g3[taa_gate::lineMax],
-                                            g4[taa_gate::lineMax];
-                                        const uint64_t jobs = md->leftJobs - milesLast.leftJobs;
-                                        auto dl = [](uint64_t now, uint64_t was) {
-                                            return static_cast<unsigned long long>(now - was);
-                                        };
-                                        std::snprintf(g1, sizeof g1,
-                                                      "MILES TAA %s (%u%%, %ux%u): %llu eye frames; L calls %llu ran %llu "
-                                                      "hist %llu; R calls %llu ran %llu hist %llu",
-                                                      (md->flags & miles_taa::flagLive) ? "ON" : "OFF", md->percent,
-                                                      md->renderWidth, md->renderHeight,
-                                                      static_cast<unsigned long long>(jobs),
-                                                      dl(md->calls[0], milesLast.calls[0]), dl(md->ran[0], milesLast.ran[0]),
-                                                      dl(md->history[0], milesLast.history[0]),
-                                                      dl(md->calls[1], milesLast.calls[1]), dl(md->ran[1], milesLast.ran[1]),
-                                                      dl(md->history[1], milesLast.history[1]));
-                                        std::snprintf(g2, sizeof g2,
-                                                      "TAA GATE: jobs L %llu R %llu, no call L %llu R %llu, older-job match "
-                                                      "L %llu R %llu, other views %llu; AA set %llu/%llu queued %llu/%llu "
-                                                      "requeued %llu/%llu (failed %llu/%llu)%s",
-                                                      dl(gd->eyeJobs[0], gateLast.eyeJobs[0]), dl(gd->eyeJobs[1], gateLast.eyeJobs[1]),
-                                                      dl(gd->missedJobs[0], gateLast.missedJobs[0]),
-                                                      dl(gd->missedJobs[1], gateLast.missedJobs[1]),
-                                                      dl(gd->matchedOld[0], gateLast.matchedOld[0]),
-                                                      dl(gd->matchedOld[1], gateLast.matchedOld[1]),
-                                                      dl(gd->unmatched, gateLast.unmatched),
-                                                      dl(md->aaWrites[0], milesLast.aaWrites[0]),
-                                                      dl(md->aaWrites[1], milesLast.aaWrites[1]),
-                                                      dl(md->queued[0], milesLast.queued[0]), dl(md->queued[1], milesLast.queued[1]),
-                                                      dl(gd->requeued[0], gateLast.requeued[0]),
-                                                      dl(gd->requeued[1], gateLast.requeued[1]),
-                                                      dl(gd->requeueFailed[0], gateLast.requeueFailed[0]),
-                                                      dl(gd->requeueFailed[1], gateLast.requeueFailed[1]),
-                                                      (gd->flags & taa_gate::flagRequeueOff) ? " REQUEUE OFF" : "");
-                                        std::snprintf(g3, sizeof g3,
-                                                      "TAA GATE weight: L F %d stamp %d prev %d idx %u +18e8 %u cut %u/%d "
-                                                      "+1de8 %d fr %d; R F %d stamp %d prev %d idx %u +18e8 %u cut %u/%d "
-                                                      "+1de8 %d fr %d",
-                                                      md->frame[0], md->stamp[0], md->otherStamp[0], md->slotIndex[0],
-                                                      md->previous[0], gd->cut[0], gd->cutFrame[0], gd->jobStamp[0],
-                                                      gd->frame2[0], md->frame[1], md->stamp[1], md->otherStamp[1],
-                                                      md->slotIndex[1], md->previous[1], gd->cut[1], gd->cutFrame[1],
-                                                      gd->jobStamp[1], gd->frame2[1]);
-                                        // MAIN VIEW SMALL is read at the VR start; say when the wrist's value differs.
-                                        const bool mainNext = taa_gate::on(c38(combat38::mainViewSmall));
-                                        const bool mainAtStart = (gd->flags & taa_gate::flagMainAtStart) != 0;
-                                        std::snprintf(g4, sizeof g4,
-                                                      "TAA GATE main: cut %d/%d +1de8 %d fr %d; TAA in/out L %u/%u R %u/%u; "
-                                                      "MAIN VIEW SMALL %s %ux%u (%llu sizings)%s%s",
-                                                      gd->mainCut, gd->mainCutFrame, gd->mainStamp, gd->mainFrame2,
-                                                      md->inputWidth[0], md->outputWidth[0], md->inputWidth[1],
-                                                      md->outputWidth[1],
-                                                      (gd->flags & taa_gate::flagMainSmall) ? "ON"
-                                                      : (gd->flags & taa_gate::flagMainAtStart) ? "WAITING" : "OFF",
-                                                      gd->mainWidth, gd->mainHeight,
-                                                      static_cast<unsigned long long>(gd->mainResized),
-                                                      (md->flags & miles_taa::flagHooked) ? "" : " (no TemporalAa hook)",
-                                                      mainNext == mainAtStart ? ""
-                                                      : mainNext              ? "; ON at the next VR start"
-                                                                              : "; OFF at the next VR start");
-                                        consoleLine(g1);
-                                        consoleLine(g2);
-                                        consoleLine(g3);
-                                        consoleLine(g4);
-                                        gateLast = *gd;
-                                        milesLast = *md;
-                                    } else {
-                                        char line[512];
-                                        const uint64_t jobs = md->leftJobs - milesLast.leftJobs;
-                                        std::snprintf(line, sizeof line,
-                                                      "MILES TAA %s (%u%%, %ux%u): %llu eye frames; L TemporalAa ran %llu "
-                                                      "(history %llu) R ran %llu (history %llu); AA set %llu/%llu, queued "
-                                                      "%llu/%llu; gate L F %d stamp %d prev-slot %d idx %u +18e8 %u cut %u, R F %d "
-                                                      "stamp %d prev-slot %d idx %u +18e8 %u cut %u; TAA in/out L %u/%u R %u/%u",
-                                                      (md->flags & miles_taa::flagLive) ? "ON" : "OFF", md->percent,
-                                                      md->renderWidth, md->renderHeight,
-                                                      static_cast<unsigned long long>(jobs),
-                                                      static_cast<unsigned long long>(md->ran[0] - milesLast.ran[0]),
-                                                      static_cast<unsigned long long>(md->history[0] - milesLast.history[0]),
-                                                      static_cast<unsigned long long>(md->ran[1] - milesLast.ran[1]),
-                                                      static_cast<unsigned long long>(md->history[1] - milesLast.history[1]),
-                                                      static_cast<unsigned long long>(md->aaWrites[0] - milesLast.aaWrites[0]),
-                                                      static_cast<unsigned long long>(md->aaWrites[1] - milesLast.aaWrites[1]),
-                                                      static_cast<unsigned long long>(md->queued[0] - milesLast.queued[0]),
-                                                      static_cast<unsigned long long>(md->queued[1] - milesLast.queued[1]),
-                                                      md->frame[0], md->stamp[0], md->otherStamp[0], md->slotIndex[0],
-                                                      md->previous[0], md->cut[0], md->frame[1], md->stamp[1],
-                                                      md->otherStamp[1], md->slotIndex[1], md->previous[1], md->cut[1],
-                                                      md->inputWidth[0], md->outputWidth[0], md->inputWidth[1],
-                                                      md->outputWidth[1]);
-                                        if (!(md->flags & miles_taa::flagHooked))
-                                            std::snprintf(line + std::strlen(line), sizeof line - std::strlen(line),
-                                                          " (no TemporalAa hook: ran counts unknown)");
-                                        consoleLine(line);
-                                        milesLast = *md;
-                                    }
-                                }
-                            }
-                        }
                         {   // Update 34: ENGINE TAA's FPS guard and its plan B (EYE AA).
                             static engine_taa::FpsGuard guard;
                             static uint32_t previous{};
@@ -11795,23 +11207,7 @@ DWORD WINAPI run(void*) {
                             static image_style::Controller styleControl;
                             static uint32_t styleSent = UINT32_MAX;
                             static ULONGLONG styleTick{};
-                            // 0.0.74 test 2 SPIDYVR PICTURE (ON, the default): GAME TAA SPIDYVR whatever the
-                            // wrist or live.txt says, SpidyVR's jitter (OURS at 100%: its Halton (2, 3) amplitude),
-                            // and nothing of the mod's over the picture, even while ENGINE TAA is off (no EYE AA,
-                            // FXAA, history or CAS: the game's frame as it is). CUSTOM: the player's own.
-                            const bool picture = combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture));
-                            const uint32_t style = picture ? static_cast<uint32_t>(image_style::spidyvr) : c38(combat38::imageStyle);
-                            if (picture) {
-                                static ULONGLONG jitterTick{};
-                                namespace et = engine_taa;
-                                if (const ULONGLONG nowTick = GetTickCount64(); nowTick - jitterTick >= 1000) {
-                                    jitterTick = nowTick;
-                                    if (SpidyEngineTaaJitterNow() != et::packJitter(et::ours, et::fullJitterScale)) {
-                                        SpidyEngineTaaJitterScale(reinterpret_cast<void*>(uintptr_t{et::fullJitterScale}));
-                                        SpidyEngineTaaJitter(reinterpret_cast<void*>(uintptr_t{et::ours}));
-                                    }
-                                }
-                            }
+                            const uint32_t style = c38(combat38::imageStyle);
                             if (style != styleSent && SpidyImageStyle(reinterpret_cast<void*>(uintptr_t{
                                                           image_style::spidy(style) ? image_style::spidyvr
                                                                                     : image_style::gameTaaOff})) == 0)
@@ -11844,19 +11240,12 @@ DWORD WINAPI run(void*) {
                                     eyeAaState = eye_taa::pack(eye_taa::off, 0);
                                     OutputDebugStringA("EYE AA: off (IMAGE STYLE SPIDYVR: the game's TAA)\n");
                                 }
-                                if ((picture || milesActive) && (eyeAaNow() & 0xff) == eye_taa::on) {
-                                    // SPIDYVR PICTURE and 0.0.74 test 3 MILES TAA: never EYE AA
-                                    native_gpu::setEyeTemporal(false);
-                                    eyeAaState = eye_taa::pack(eye_taa::off, 0);
-                                    OutputDebugStringA(milesActive ? "EYE AA: off (MILES TAA)\n" : "EYE AA: off (SPIDYVR PICTURE)\n");
-                                }
-                                if (!picture && !milesActive && step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
+                                if (step.eyeAaOn && (eyeAaNow() & 0xff) == eye_taa::off &&
                                     engine_taa::stateOf(engine) != engine_taa::on)
                                     pressEyeAa();
                             }
-                            // 0.0.74 test 3 MILES TAA: the game's TAA alone (no FXAA, history or CAS sharpening).
-                            native_gpu::setCleanImage(milesActive || picture || (image_style::spidy(style) &&
-                                                                  engine_taa::stateOf(engine) == engine_taa::on));
+                            native_gpu::setCleanImage(image_style::spidy(style) &&
+                                                      engine_taa::stateOf(engine) == engine_taa::on);
                         }
                         {   // Update 35: FAR SHADOWS' FPS guard: a mode the press chose that halves
                             // the frame rate goes back to OFF (the reason shown).
@@ -12669,10 +12058,7 @@ DWORD WINAPI run(void*) {
                                 SpidyFarWindows(reinterpret_cast<void*>(static_cast<uintptr_t>(farWant)));
                             }
                             // 0.0.73 test 2 CULL MARGIN: its degrees to the game's view lens when they change.
-                            // 0.0.74 test 3 SPIDYVR STOCK: no widening (SpidyVR's head lens x 1.05 only).
-                            if (const uint32_t cullWant = combat38::spidyvrStockOn(c38(combat38::spidyvrStock))
-                                                              ? combat38::stockCullMarginDegrees
-                                                              : recording_fov::cullMarginOf(c38(combat38::cullMargin));
+                            if (const uint32_t cullWant = recording_fov::cullMarginOf(c38(combat38::cullMargin));
                                 cullWant != cullAppliedDegrees) {
                                 cullAppliedDegrees = cullWant;
                                 SpidyCullMarginDegrees(reinterpret_cast<void*>(static_cast<uintptr_t>(cullWant)));
@@ -12690,33 +12076,8 @@ DWORD WINAPI run(void*) {
                                 lightChecksApplied = checksWant;
                                 SpidyLightChecksOn(reinterpret_cast<void*>(static_cast<uintptr_t>(checksWant)));
                             }
-                            // 0.0.74 test 2b TAA DIAGNOSTICS (OFF by default): the per-frame per-eye TAA record.
-                            SpidyTaaDiagnosticsSet(combat38::taaDiagnosticsOn(c38(combat38::taaDiagnostics)) ? 1u : 0u);
-                            SpidyTaaHoldSet(combat38::taaHoldOn(c38(combat38::taaHold)) ? 1u : 0u);
-                            // 0.0.74 test 3 JITTER GUARD (ON, the default): no eye jitter while the game refuses the TAA history.
-                            SpidyTaaGuardSet(spidy::taa_link::guardOn(c38(combat38::jitterGuard)) ? 1u : 0u);
-                            // 0.0.74 test 3 SPIDYVR STOCK (ON, the default): no TAA HOLD / TAA LINK job writes,
-                            // no COLOR grade or foveation over the eyes (the other options answer stockValue in c38).
-                            // 0.0.74 test 4 AA MODE: one console line when it changes (CLEAN answers in c38).
-                            {
-                                static uint32_t aaModeShown = UINT32_MAX;
-                                if (const uint32_t aaModeNow = c38(combat38::aaMode); aaModeNow != aaModeShown) {
-                                    aaModeShown = aaModeNow;
-                                    consoleLine(combat38::aaModeClean(aaModeNow)
-                                                    ? "AA MODE: CLEAN (no game TAA in the eyes; FXAA, per-eye history, light CAS)"
-                                                    : "AA MODE: OFF (the player's own AA options)");
-                                }
-                            }
-                            {
-                                const bool stockWant = combat38::spidyvrStockOn(c38(combat38::spidyvrStock));
-                                SpidyStockSet(stockWant ? 1u : 0u);
-                                native_gpu::setStockImage(stockWant);
-                            }
                             // 0.0.73 GLOW CHECK: the glow sprites' test GAME / ALWAYS / HIDDEN when it changes (live).
-                            // 0.0.74 test 2 FLARE BLOCK (ON, the default): the glow sprites hidden (GLOW CHECK HIDDEN).
-                            if (const uint32_t glowWant = combat38::flareBlockOn(c38(combat38::flareBlock)) ? combat38::glowHidden
-                                                                                                            : c38(combat38::glowCheck);
-                                glowWant != glowCheckApplied) {
+                            if (const uint32_t glowWant = c38(combat38::glowCheck); glowWant != glowCheckApplied) {
                                 glowCheckApplied = glowWant;
                                 SpidyGlowCheckMode(reinterpret_cast<void*>(static_cast<uintptr_t>(glowWant)));
                             }
@@ -12735,25 +12096,16 @@ DWORD WINAPI run(void*) {
                             }
                             // 0.0.73 IMAGE: the history read (SPIDYVR sharp, CLASSIC bilinear) when it changes;
                             // the eye AA and sharpening are the launcher's (live.txt) and the wrist press's.
-                            if (const uint32_t sharpWant = combat38::imageLook(combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture))
-                                                                                   ? 0u : c38(combat38::image)).sharpHistory ? 1u : 0u;
+                            if (const uint32_t sharpWant = combat38::imageLook(c38(combat38::image)).sharpHistory ? 1u : 0u;
                                 sharpWant != imageApplied) {
                                 imageApplied = sharpWant;
                                 SpidyEyeHistorySharp(reinterpret_cast<void*>(static_cast<uintptr_t>(sharpWant)));
                             }
                             // 0.0.73 AA SHARPEN MATCH: CAS by the eye history kept (ON, value 0) or as set, when it changes.
-                            if (const uint32_t matchWant = !combat38::spidyvrPictureOn(c38(combat38::spidyvrPicture)) &&
-                                                           eye_sharpen::matchOn(c38(combat38::sharpenMatch)) ? 1u : 0u;
+                            if (const uint32_t matchWant = eye_sharpen::matchOn(c38(combat38::sharpenMatch)) ? 1u : 0u;
                                 matchWant != sharpenMatchApplied) {
                                 sharpenMatchApplied = matchWant;
                                 SpidyEyeSharpenMatch(reinterpret_cast<void*>(static_cast<uintptr_t>(matchWant)));
-                            }
-                            // 0.0.74 test 3 HEAP GUARD: the eye bridge lets go of the eyes when the game rebuilds
-                            // its render heaps (ON, value 0) or only counts them, when it changes.
-                            if (const uint32_t guardWant = heap_guard::on(c38(combat38::heapGuard)) ? 1u : 0u;
-                                guardWant != heapGuardApplied) {
-                                heapGuardApplied = guardWant;
-                                SpidyEyeHeapGuard(reinterpret_cast<void*>(static_cast<uintptr_t>(guardWant)));
                             }
                             // 0.0.73 test 6 WINDOW POP FIX: the game view's flat-play detail distance (ON, value 0) or not.
                             if (const uint32_t popWant = window_pop::on(c38(combat38::windowPop)) ? 1u : 0u;
@@ -14167,9 +13519,9 @@ DWORD WINAPI run(void*) {
     return error;
 }
 } // namespace
-// Update 34.1: every option bit this build knows (the highest: 0x2000000, 0.0.74 test 4 MAIN VIEW SMALL).
+// Update 34.1: every option bit this build knows (the highest: 0x800000, -EngineTaa).
 // tests/launcher_options_tests.py checks run_game_vr.py sends none past it.
-constexpr uint32_t knownOptions = 0x3ffffff;
+constexpr uint32_t knownOptions = 0xffffff;
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     std::lock_guard life(lifecycle);
     if (worker)
@@ -14884,21 +14236,13 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedDriving(void* v) { retu
 // only when ON; BATMOBILE CHOICE 1989 (0, default) / ODAMI (1) / FOREVER (2) / FOREVER 2 (3), live (the next summon).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatmobile(void* v) { return setHero007(v, combat38::batmobile, 5494); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBatmobileChoice(void* v) { return setHero007(v, combat38::batmobileChoice, 5495); }
-// 0.0.74 test 2: SPIDYVR PICTURE, FLARE BLOCK, CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER (value 0 the fix, 1 off)
-extern "C" __declspec(dllexport) DWORD WINAPI SpidySpidyvrPicture(void* v) { return setHero007(v, combat38::spidyvrPicture, 5496); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlareBlock(void* v) { return setHero007(v, combat38::flareBlock, 5497); }
+// 0.0.74 test 2: CABIN CLEAR, CAR PAINT, SEATED TOOLS, DASH POINTER (value 0 the fix, 1 off)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCabinClear(void* v) { return setHero007(v, combat38::cabinClear, 5498); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCarPaint(void* v) { return setHero007(v, combat38::carPaint, 5499); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySeatedTools(void* v) { return setHero007(v, combat38::seatedTools, 5500); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashPointer(void* v) { return setHero007(v, combat38::dashPointer, 5501); }
-// 0.0.74 test 2b: TAA DIAGNOSTICS OFF (0, default) / ON (1); CRIME GPS ON (0, default) / OFF (1); live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaDiagnostics(void* v) { return setHero007(v, combat38::taaDiagnostics, 5502); }
+// 0.0.74 test 2b: CRIME GPS ON (0, default) / OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCrimeGps(void* v) { return setHero007(v, combat38::crimeGps, 5503); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaHold(void* v) { return setHero007(v, combat38::taaHold, 5504); }
-// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): OFF (0, the default since the test 3 fix) or ON (1); live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeapGuard(void* v) { return setHero007(v, combat38::heapGuard, 5505); }
-// 0.0.74 test 3 JITTER GUARD (taa_link074.hpp): ON (0, the default) or OFF (1); live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterGuard(void* v) { return setHero007(v, combat38::jitterGuard, 5506); }
 // 0.0.74 test 3 WHEEL FIRST (van072.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWheelFirst(void* v) { return setHero007(v, combat38::wheelFirst, 5507); }
 // 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp): ON (0, the default) or OFF (1); live.
@@ -14909,26 +14253,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFingerRay(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDashInside(void* v) { return setHero007(v, combat38::dashInside, 5510); }
 // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyCockpitGlow(void* v) { return setHero007(v, combat38::cockpitGlow, 5511); }
-// 0.0.74 test 3 SPIDYVR STOCK (combat38::stockValue): ON (0, the default) or OFF (1); live (LOD / mip / eye size at the next VR start).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidySpidyvrStock(void* v) { return setHero007(v, combat38::spidyvrStock, 5512); }
-// 0.0.74 test 3 MILES TAA (miles_taa074.hpp): ON (0, the default) or OFF (1); live (the eye size at the next VR start).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyMilesTaa(void* v) { return setHero007(v, combat38::milesTaa, 5513); }
-// 0.0.74 test 4 (taa_gate074.hpp): TAA GATE LOG ON (0, the default) or OFF (1), live; EYE TAA REQUEUE ON (0) or OFF
-// (1, the default), live; MAIN VIEW SMALL ON (0) or OFF (1, the default), read at the VR start.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyTaaGateLog(void* v) { return setHero007(v, combat38::taaGateLog, 5514); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTaaRequeue(void* v) { return setHero007(v, combat38::eyeTaaRequeue, 5515); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyMainViewSmall(void* v) { return setHero007(v, combat38::mainViewSmall, 5516); }
-// 0.0.74 test 4 AA MODE: CLEAN (0, the default) or OFF (1); live, the eye size and texture filtering at the VR start.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyAaMode(void* v) { return setHero007(v, combat38::aaMode, 5517); }
-// 0.0.74 test 5 IMPOSTOR EYE: ON (0, the default) or OFF (1), live (stereo_probe SpidyViewGate selector 3).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyImpostorEye(void* v) { return setHero007(v, combat38::impostorEye, 5518); }
-// 0.0.74 test 6 CLEAN JITTER: ON (0, the default) or OFF (1), live (native_gpu::setCleanJitter each frame).
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyCleanJitterOn(void* v) { return setHero007(v, combat38::cleanJitter, 5519); }
-// 0.0.74 test 7 JITTER PROOF, JITTER PROOF BIG, ENGINE TAA STOCK
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterProof(void* v) { return setHero007(v, combat38::jitterProof, 5520); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyJitterProofBig(void* v) { return setHero007(v, combat38::jitterProofBig, 5521); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaStock(void* v) { return setHero007(v, combat38::engineTaaStock, 5522); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyViewJitterFix(void* v) { return setHero007(v, combat38::viewJitterFix, 5523); }
 // 0.0.73 STREAMER MODE (streamer_view.hpp): ON (0) or OFF (1); STREAMER SMOOTH LOW (0), OFF (1) or HIGH (2);
 // STREAMER EYE LEFT EYE (0) or RIGHT EYE (1) (live.txt streamer_mode, streamer_smooth, streamer_eye).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStreamerMode(void* v) { return setHero007(v, combat38::streamerMode, 5450); }

@@ -6,10 +6,8 @@
 #include "spidy/eye_color.hpp"
 #include "spidy/foveation.hpp"
 #include "spidy/eye_swap.hpp"
-#include "spidy/heap_guard.hpp"
 #include "spidy/eye_debug.hpp"
 #include "spidy/eye_taa.hpp"
-#include "spidy/jitter_proof.hpp"
 #include "spidy/monitor_rate.hpp"
 #include "spidy/presentation_gate.hpp"
 #include "spidy/streamer_view.hpp"
@@ -24,7 +22,6 @@
 #include <dxgi1_4.h>
 #include <limits>
 #include <mutex>
-#include <new>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -105,27 +102,6 @@ struct RetiredEye {
     uint64_t fence{};
 };
 std::vector<RetiredEye> retiredEyes;
-// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): the game's new render heaps (ID3D12Device::CreateHeap,
-// watched only: the game's call goes through untouched), the newest eye job begun, and the eyes
-// let go of when the game rebuilt its heaps and aliases (taken again from its next frame, the same
-// kind only). heapGuard and heapRetake are under `recording`.
-using CreateHeap = HRESULT(STDMETHODCALLTYPE*)(ID3D12Device*, const D3D12_HEAP_DESC*, REFIID, void**);
-CreateHeap originalCreateHeap{};
-void* heapHook{};
-std::atomic<bool> heapGuardWanted{false}; // 0.0.74 test 3 fix: OFF until game_xr says ON (the black headset)
-std::atomic<uint64_t> heapEpoch{}, newestGeneration{}, heapSmallest{heap_guard::smallestRenderHeap};
-heap_guard::Guard heapGuard;
-std::atomic<bool> heapFellBack{}; // 0.0.74 test 3 fix: heapGuard.fellBack, read without the lock
-std::array<bool, 2> heapRetake{};
-std::array<eye_swap::Desc, 2> heapRetakeDesc{};
-HRESULT STDMETHODCALLTYPE createHeap(ID3D12Device* d, const D3D12_HEAP_DESC* desc, REFIID riid, void** heap) {
-    const auto result = originalCreateHeap(d, desc, riid, heap);
-    // A failed one counts too: the game is tearing its aliases down either way.
-    if (desc && heap_guard::renderHeap(static_cast<uint32_t>(desc->Properties.Type),
-                                       static_cast<uint32_t>(desc->Flags), desc->SizeInBytes, heapSmallest.load()))
-        heapEpoch.fetch_add(1);
-    return result;
-}
 // 0.0.71 MIRROR VIEW (private test): the game's third view (stereo_probe.cpp's mirror) as a small
 // picture copied into both staged eyes. Its own state is learned from the game's barriers like
 // an eye's; anything unexpected sets mvFault and only the picture stops (never the eyes, never
@@ -294,7 +270,6 @@ void publish() { // submission and recording held by caller
     auto& d = SpidyGpuData;
     InterlockedIncrement64(&d.sequence);
     d.error = fault.load();
-    d.heapRebuilds = heapGuard.rebuilds; // 0.0.74 test 3 HEAP GUARD
     d.executes = executes;
     d.markers = markers;
     d.matchedMarkers = matchedMarkers;
@@ -345,7 +320,6 @@ OmSetTargets originalOmSetTargets{};
 SetViewports originalSetViewports{};
 std::array<void*, 2> foveaHooks{};
 std::atomic<bool> foveaHooked{}, foveaOn{}, foveaDebug{};
-std::atomic<bool> stockImage{}; // 0.0.74 test 3 SPIDYVR STOCK: no COLOR grade, no foveation
 std::atomic<uint32_t> foveaLevel{}, foveaInner{foveation::defaultInner}, foveaFault{};
 std::atomic<uint32_t> foveaTier{}, foveaTile{}, foveaHas4x4{};
 std::array<std::atomic<float>, 4> foveaCentres{}; // left u, v, right u, v (0: not known yet)
@@ -393,7 +367,7 @@ void STDMETHODCALLTYPE omSetTargets(ID3D12GraphicsCommandList* list, UINT n, con
     if (!gbuffer)
         return;
     foveaTagged.fetch_add(1, std::memory_order_relaxed);
-    if (!foveaOn.load(std::memory_order_relaxed) || stockImage.load(std::memory_order_relaxed) || t.eye > 1)
+    if (!foveaOn.load(std::memory_order_relaxed) || t.eye > 1)
         return;
     auto* image = foveaImage[t.eye].load();
     if (!image || !fence || fence->GetCompletedValue() < foveaReady.load())
@@ -531,7 +505,6 @@ bool makeReadbacks() {
         }
         width = static_cast<UINT>(desc.Width);
         height = desc.Height;
-        heapSmallest = heap_guard::eyeBytes(width, height); // 0.0.74 test 3 HEAP GUARD
         outWidth = wantedOutWidth.load() ? wantedOutWidth.load() : width;
         outHeight = wantedOutHeight.load() ? wantedOutHeight.load() : height;
         if (!captureImages)
@@ -1701,39 +1674,10 @@ std::atomic<bool> sharpHistory{true};
 // 0.0.73 AA SHARPEN MATCH (eye_sharpen.hpp matchedPercent): ON (the default) scales CAS by keptMilli;
 // historyRunning says whether the last pair ran the eye history at all (no history: CAS as set).
 std::atomic<bool> sharpenMatch{true}, historyRunning{false};
-// 0.0.74 test 6 CLEAN JITTER (native_eye_gpu.hpp setCleanJitter): game_xr's switch (AA MODE CLEAN and CLEAN JITTER
-// both on), each pair's lens step by the eyes command's serial (stereo_probe noteEyeJitter: uv units, the lens's own
-// arguments, and render pixels), and the counts for the 10 s console line (cleanTaaLock).
-std::atomic<bool> cleanJitterWanted{false};
-struct NotedJitter {
-    uint64_t serial{};
-    float uv[2][2]{}, px[2][2]{};
-    unsigned eyes{}; // bit per eye noted
-};
-std::mutex cleanTaaLock;
-std::array<NotedJitter, 32> notedJitter{}; // cleanTaaLock
-unsigned nextJitter{};                     // cleanTaaLock
-CleanTaaStats cleanTaaCounts{};            // cleanTaaLock
-float shownJitter[2][2]{};                 // the step of the pair the history was last drawn from (uv)
-bool findJitter(uint64_t serial, float uv[2][2], float px[2][2]) {
-    std::lock_guard lock(cleanTaaLock);
-    for (const auto& n : notedJitter)
-        if (serial && n.serial == serial && n.eyes == 3) {
-            std::memcpy(uv, n.uv, sizeof n.uv);
-            std::memcpy(px, n.px, sizeof n.px);
-            return true;
-        }
-    return false;
-}
 uint32_t historyNow() {
     if (cleanImage.load(std::memory_order_relaxed)) // IMAGE STYLE SPIDYVR: the game's TAA keeps the history
         return 0;
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
-}
-// 0.0.74 test 6 CLEAN JITTER: on while game_xr wants it and the eye history can run (its percent above 0, the pass
-// not failed). Off, stereo_probe sends no step and FXAA runs as in test 5.
-bool cleanTaaReady() {
-    return cleanJitterWanted.load(std::memory_order_relaxed) && historyNow() > 0 && historyFault.load() == 0;
 }
 std::mutex viewLock;
 struct NotedViews {
@@ -1761,7 +1705,7 @@ const char* historyShader = R"(
 Texture2D current : register(t0);
 Texture2D previous : register(t1);
 SamplerState bilinear : register(s0);
-cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; float4 jitter; };
+cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; };
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
@@ -1797,15 +1741,7 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     current.GetDimensions(w, h);
     const int2 p = int2(position.xy);
     const int2 last = int2(w, h) - 1;
-    // 0.0.74 test 6 CLEAN JITTER: jitter.xy is this pair's lens step in uv. The lens moved the scene by +xy
-    // (stereo_probe cleanTaaJitter: its arguments x, y move it x * W pixels right and y * H pixels down), so the
-    // new pair is read at uv + xy, where this pixel's unjittered scene landed. jitter.zw, the step of the pair
-    // the history was drawn from, is not added back: the history holds the blend, which is already unjittered.
-    // Zero (CLEAN JITTER off or no step noted) reads the pixel as before (test 5).
-    const float4 loaded = current.Load(int3(p, 0));
-    const float4 here = any(jitter.xy != 0)
-        ? float4(current.SampleLevel(bilinear, position.xy * extra.yz + jitter.xy, 0).rgb, loaded.a)
-        : loaded;
+    const float4 here = current.Load(int3(p, 0));
     float3 lo = here.rgb, hi = here.rgb;
     [unroll] for (int y = -1; y <= 1; ++y)
         [unroll] for (int x = -1; x <= 1; ++x) {
@@ -1849,8 +1785,6 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     return float4(lerp(plain, karis, bright), here.a);
 }
 )";
-// The history pass's root constants: row0-row2, extra and (0.0.74 test 6) jitter, 4 floats each.
-constexpr UINT historyConstants = 20;
 bool failHistory(uint32_t code) {
     historyFault = code;
     history.ready = false;
@@ -1869,7 +1803,7 @@ bool prepareHistory() {
     parameters[0].DescriptorTable = {1, &range};
     parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    parameters[1].Constants.Num32BitValues = historyConstants; // 0.0.74 test 6: + the jitter float4
+    parameters[1].Constants.Num32BitValues = 16;
     parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_STATIC_SAMPLER_DESC sampler{};
     sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -2009,277 +1943,6 @@ bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out) {
         }
     return false;
 }
-// 0.0.74 test 7 CLEAN JITTER PROOF (jitter_proof.hpp, native_eye_gpu.hpp jitterProof): every ~2 s, two pairs in a
-// row with the head still, a 128 x 128 box from the middle of each staged RAW eye (after the copy or AA, before the
-// history) is copied to a readback buffer; once the GPU is past them (fence), the boxes are read and measured on a
-// thread-pool thread. Every step is checked: a failure is kept in proof::faultCode and the probe stays off.
-namespace proof {
-// 0.0.74 test 8 DISPLAY PROOF: regions 0-3 the two RAW pairs (pair * 2 + eye), 4-5 the second pair after the history.
-constexpr unsigned regions = 6;
-bool shownCopied{}, shownHistory{};
-std::atomic<bool> wanted{true}, big{false};
-std::atomic<uint32_t> faultCode{};
-std::atomic<bool> busy{false};
-ComPtr<ID3D12Resource> buffer;
-jitter_proof::Kind kind{};
-DXGI_FORMAT format{};
-UINT pitch{};
-enum class Stage { idle, first, submitted } stage{Stage::idle};
-uint64_t serials[2]{};
-bool stepped[2]{};
-float sentPx[2][2][2]{}; // first or second pair, eye, axis (render pixels)
-std::array<eye_history::EyeView, 2> views[2]{};
-uint64_t fenceAt{}, lastMs{};
-UINT boxWidth{}, boxHeight{}, eyeWidth{};
-uint64_t skippedMoving{};
-int recordedPair{-1}; // the pair this stagePair recorded (0, 1), -1 none
-std::mutex resultLock;
-jitter_proof::Reading result{}; // resultLock
-struct Job {
-    std::vector<float> luma[3][2]; // first or second pair (RAW), the second after the history; eye
-    jitter_proof::Reading reading{};
-    float range{};
-};
-void fail(uint32_t code) {
-    uint32_t none = 0;
-    faultCode.compare_exchange_strong(none, code); // the first reason is kept; step() then stays idle
-    std::lock_guard lock(resultLock);
-    result.fault = faultCode.load();
-}
-void measureJob(Job& job) {
-    auto r = job.reading;
-    uint64_t flat = 0;
-    for (unsigned i = 0; i < 2; ++i) {
-        const auto s = jitter_proof::measure(job.luma[0][i], job.luma[1][i], job.range);
-        r.ok[i] = s.ok;
-        r.error[i] = s.error;
-        r.measured[i][0] = s.x - r.head[i][0];
-        r.measured[i][1] = s.y - r.head[i][1];
-        flat += s.ok ? 0u : 1u;
-        // 0.0.74 test 8 DISPLAY PROOF
-        r.shownDiff[i] = r.shownRead ? jitter_proof::meanAbsDiff(job.luma[1][i], job.luma[2][i]) : -1.f;
-        if (r.shownRead) {
-            const auto shown = jitter_proof::measure(job.luma[0][i], job.luma[2][i], job.range);
-            r.shownOk[i] = shown.ok;
-            r.shownMeasured[i][0] = shown.x - r.head[i][0];
-            r.shownMeasured[i][1] = shown.y - r.head[i][1];
-        }
-    }
-    std::lock_guard lock(resultLock);
-    r.number = result.number + 1;
-    r.skippedFlat = result.skippedFlat + flat;
-    r.fault = faultCode.load();
-    result = r;
-}
-VOID CALLBACK measureLater(PTP_CALLBACK_INSTANCE, PVOID context) {
-    auto* job = static_cast<Job*>(context);
-    try {
-        measureJob(*job);
-    } catch (...) {
-        fail(5);
-    }
-    delete job;
-    busy.store(false);
-}
-bool prepare() {
-    if (buffer)
-        return true;
-    if (!stagedEyes[0] || !stagedEyes[1]) {
-        fail(1);
-        return false;
-    }
-    const auto desc = stagedEyes[0]->GetDesc();
-    kind = jitter_proof::kindOf(static_cast<uint32_t>(desc.Format));
-    if (kind == jitter_proof::Kind::unsupported) {
-        fail(1);
-        return false;
-    }
-    if (outWidth < jitter_proof::box + 32 || outHeight < jitter_proof::box + 32) {
-        fail(2);
-        return false;
-    }
-    format = desc.Format;
-    pitch = jitter_proof::rowPitch(kind);
-    D3D12_RESOURCE_DESC b{};
-    b.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    b.Width = static_cast<UINT64>(pitch) * jitter_proof::box * regions;
-    b.Height = 1;
-    b.DepthOrArraySize = 1;
-    b.MipLevels = 1;
-    b.SampleDesc.Count = 1;
-    b.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    D3D12_HEAP_PROPERTIES heap{};
-    heap.Type = D3D12_HEAP_TYPE_READBACK;
-    if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &b, D3D12_RESOURCE_STATE_COPY_DEST,
-                                               nullptr, IID_PPV_ARGS(&buffer)))) {
-        buffer.Reset();
-        fail(3);
-        return false;
-    }
-    return true;
-}
-// The staged eyes still match the readback buffer (their format can change when the eyes are made again): a
-// mismatched copy is never recorded.
-bool sameEyes() {
-    for (unsigned i = 0; i < 2; ++i)
-        if (!stagedEyes[i] || stagedEyes[i]->GetDesc().Format != format)
-            return false;
-    return outWidth >= jitter_proof::box + 32 && outHeight >= jitter_proof::box + 32;
-}
-// The boxes of both staged eyes (COPY_SOURCE between uses) into regions pair * 2 + eye.
-void copyBoxes(ID3D12GraphicsCommandList* list, unsigned one) {
-    const UINT x = (outWidth - jitter_proof::box) / 2, y = (outHeight - jitter_proof::box) / 2;
-    const D3D12_BOX area{x, y, 0, x + jitter_proof::box, y + jitter_proof::box, 1};
-    for (unsigned i = 0; i < 2; ++i) {
-        D3D12_TEXTURE_COPY_LOCATION from{}, to{};
-        from.pResource = stagedEyes[i].Get();
-        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        to.pResource = buffer.Get();
-        to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        to.PlacedFootprint.Offset = static_cast<UINT64>(pitch) * jitter_proof::box * (one * 2 + i);
-        to.PlacedFootprint.Footprint = {format, jitter_proof::box, jitter_proof::box, 1, pitch};
-        list->CopyTextureRegion(&to, 0, 0, 0, &from, &area);
-    }
-}
-// Once the GPU is past both pairs: read them and queue the measurement.
-void collect() {
-    if (fence->GetCompletedValue() < fenceAt || busy.load())
-        return;
-    stage = Stage::idle;
-    lastMs = GetTickCount64();
-    const SIZE_T size = static_cast<SIZE_T>(pitch) * jitter_proof::box * regions;
-    const D3D12_RANGE whole{0, size};
-    void* data = nullptr;
-    if (FAILED(buffer->Map(0, &whole, &data)) || !data) {
-        fail(4);
-        return;
-    }
-    auto* job = new (std::nothrow) Job{};
-    bool read = job != nullptr;
-    try {
-        for (unsigned one = 0; read && one < (shownCopied ? 3u : 2u); ++one)
-            for (unsigned i = 0; read && i < 2; ++i)
-                read = jitter_proof::toLuma(kind,
-                                            static_cast<const uint8_t*>(data) +
-                                                static_cast<size_t>(pitch) * jitter_proof::box * (one * 2 + i),
-                                            pitch, job->luma[one][i]);
-    } catch (...) {
-        read = false;
-    }
-    const D3D12_RANGE none{0, 0};
-    buffer->Unmap(0, &none);
-    if (!read) {
-        delete job;
-        fail(5);
-        return;
-    }
-    auto& r = job->reading;
-    r.shownRead = shownCopied;
-    r.historyRan = shownHistory;
-    r.big = big.load();
-    r.stepped = stepped[0] && stepped[1];
-    const float scale = eyeWidth ? static_cast<float>(boxWidth) / static_cast<float>(eyeWidth) : 1.f;
-    for (unsigned i = 0; i < 2; ++i) {
-        std::array<float, 9> h{};
-        if (!eye_history::historyReprojection(views[0][i], views[1][i], h) ||
-            !jitter_proof::headShift(h, boxWidth, boxHeight, r.head[i][0], r.head[i][1]))
-            r.head[i][0] = r.head[i][1] = 0;
-        for (unsigned a = 0; a < 2; ++a)
-            r.sent[i][a] = r.stepped ? (sentPx[1][i][a] - sentPx[0][i][a]) * scale : 0.f;
-    }
-    r.skippedMoving = skippedMoving;
-    job->range = r.big ? jitter_proof::bigRange : jitter_proof::range;
-    busy.store(true);
-    if (!TrySubmitThreadpoolCallback(measureLater, job, nullptr)) {
-        busy.store(false);
-        delete job;
-        fail(6);
-    }
-}
-// In stagePair, after the eyes are copied (or AA'd) into stagedEyes and before the history.
-void step(ID3D12GraphicsCommandList* list, uint64_t serial) {
-    if (!wanted.load(std::memory_order_relaxed) || faultCode.load()) {
-        stage = Stage::idle;
-        return;
-    }
-    if (stage == Stage::submitted) {
-        collect();
-        return;
-    }
-    std::array<eye_history::EyeView, 2> seen{};
-    if (!serial || !findViews(serial, seen)) {
-        stage = Stage::idle;
-        return;
-    }
-    float uv[2][2]{}, px[2][2]{};
-    const bool jittered = findJitter(serial, uv, px);
-    if (stage == Stage::idle) {
-        if (GetTickCount64() - lastMs < jitter_proof::everyMs || busy.load() || !prepare())
-            return;
-        if (!sameEyes()) {
-            fail(1); // the eyes changed format or size: the probe stops rather than copy a mismatched box
-            return;
-        }
-        copyBoxes(list, 0);
-        shownCopied = shownHistory = false;
-        boxWidth = outWidth;
-        serials[0] = serial;
-        stepped[0] = jittered;
-        std::memcpy(sentPx[0], px, sizeof px);
-        views[0] = seen;
-        stage = Stage::first;
-        recordedPair = 0;
-        return;
-    }
-    // Stage::first: the next pair, if the head kept still.
-    if (serial == serials[0])
-        return;
-    const float turn = eye_history::historyTurn(views[0][0], seen[0]);
-    const float travel = eye_history::historyTravel(views[0][0], seen[0]);
-    if (!sameEyes() || outWidth != boxWidth) {
-        stage = Stage::idle; // the eyes were made again between the pairs
-        return;
-    }
-    if (!(turn < jitter_proof::stillTurn) || !(travel < jitter_proof::stillTravel)) {
-        ++skippedMoving;
-        stage = Stage::idle; // try again with the next pair
-        return;
-    }
-    copyBoxes(list, 1);
-    serials[1] = serial;
-    stepped[1] = jittered;
-    std::memcpy(sentPx[1], px, sizeof px);
-    views[1] = seen;
-    boxWidth = outWidth;
-    boxHeight = outHeight;
-    eyeWidth = width;
-    recordedPair = 1; // stagePair's submitted() sets the fence
-}
-// 0.0.74 test 8 DISPLAY PROOF: in stagePair after the history (ran) or none, on the pair whose RAW boxes were just
-// copied second: the same boxes of stagedEyes (COPY_SOURCE again; the headset copy and CAS read it) into regions 4-5.
-void afterHistory(ID3D12GraphicsCommandList* list, bool ran) {
-    if (recordedPair != 1 || stage != Stage::first || !buffer || !sameEyes() || outWidth != boxWidth)
-        return;
-    copyBoxes(list, 2);
-    shownCopied = true;
-    shownHistory = ran;
-}
-// After stagePair's list went to the queue (ok) or failed to.
-void submitted(bool ok, uint64_t fenceValueNow) {
-    const int one = recordedPair;
-    recordedPair = -1;
-    if (stage != Stage::first || one < 0)
-        return;
-    if (!ok) {
-        stage = Stage::idle; // that box never reached the GPU
-        return;
-    }
-    if (one == 1) {
-        fenceAt = fenceValueNow;
-        stage = Stage::submitted;
-    }
-}
-} // namespace proof
 // The staged pair (in COPY_SOURCE) blended with the history, turned to its
 // view: drawn into the other picture, which is copied back into the staged
 // image and kept for the next pair.
@@ -2287,12 +1950,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     std::array<eye_history::EyeView, 2> now{};
     const bool viewed = findViews(serial, now);
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
-    // 0.0.74 test 6 CLEAN JITTER: this pair's lens step (stereo_probe noteEyeJitter), none when it was not jittered.
-    float stepUv[2][2]{}, stepPx[2][2]{};
-    const bool wantStep = cleanJitterWanted.load(std::memory_order_relaxed);
-    const bool stepped = wantStep && findJitter(serial, stepUv, stepPx);
-    const bool bigRaw = stepped && proof::big.load(std::memory_order_relaxed);
-    float frame[2][historyConstants]{};
+    float frame[2][16]{};
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
     for (unsigned i = 0; i < 2; ++i) {
@@ -2323,18 +1981,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             eye_history::turnedLoosen(
                 eye_taa::loosenInForce(eye_history::historyLoosen(loosenPercent), temporalOn.load()), turn),
             travelCut, turnCut);
-        // 0.0.74 test 6 CLEAN JITTER (the shader's jitter float4): xy this pair's step, zw the last drawn pair's.
-        frame[i][16] = stepped ? stepUv[i][0] : 0.f;
-        frame[i][17] = stepped ? stepUv[i][1] : 0.f;
-        frame[i][18] = shownJitter[i][0];
-        frame[i][19] = shownJitter[i][1];
-        // 0.0.74 test 7 JITTER PROOF BIG: the stepped pair shown RAW (no history, no step taken back), so a
-        // 4 pixel lens step can be seen by eye.
-        if (bigRaw) {
-            frame[i][12] = frame[i][3] = 0;
-            frame[i][16] = frame[i][17] = frame[i][18] = frame[i][19] = 0;
-        }
-        blended = blended || (keep > 0 && !bigRaw);
+        blended = blended || keep > 0;
         if (i == 0 && both) {
             maxTravel = travel;
             cut = still > 0 && !(keep > 0);
@@ -2376,7 +2023,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         auto target = history.targets->GetCPUDescriptorHandleForHeapStart();
         target.ptr += static_cast<SIZE_T>(targetStep) * (2 * i + write);
         list->SetGraphicsRootDescriptorTable(0, view);
-        list->SetGraphicsRoot32BitConstants(1, historyConstants, frame[i], 0);
+        list->SetGraphicsRoot32BitConstants(1, 16, frame[i], 0);
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
@@ -2412,30 +2059,6 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     // the next pair's: that one starts again.
     history.valid = viewed;
     history.shown = now;
-    for (unsigned i = 0; i < 2; ++i)
-        for (unsigned a = 0; a < 2; ++a)
-            shownJitter[i][a] = frame[i][16 + a];
-    {
-        std::lock_guard taa(cleanTaaLock);
-        auto& c = cleanTaaCounts;
-        ++c.historyPairs;
-        if (stepped) {
-            ++c.jittered;
-            std::memcpy(c.px, stepPx, sizeof stepPx);
-        } else if (wantStep)
-            ++c.unmatched;
-        if (blended) {
-            ++c.blended;
-            c.keepSum += std::isfinite(leastKeep) ? static_cast<double>(leastKeep) : 0.0;
-            if (std::isfinite(leastKeep)) { // 0.0.74 test 8: the effective blend
-                c.keepLeast = std::min(c.keepLeast, leastKeep);
-                c.keepMost = std::max(c.keepMost, leastKeep);
-            }
-            c.loosenSum += std::isfinite(frame[0][15]) ? static_cast<double>(frame[0][15]) : 0.0;
-        } else
-            ++c.restarted;
-        c.cuts += cut ? 1 : 0;
-    }
     std::lock_guard lock(copyTimingLock);
     if (blended)
         ++SpidyEyeHistoryData.blended;
@@ -2584,9 +2207,7 @@ void stagePair(EyePairState::Stamp stamp) {
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
     // 0.0.73 test 4 IMAGE STYLE SPIDYVR: no FXAA over the game's TAA (the downsample filter stays).
-    // 0.0.74 test 6 CLEAN JITTER: no FXAA either while CLEAN's own temporal AA runs (the history, then CAS).
-    const bool taa = cleanTaaReady();
-    const bool smooth = (down || (aaMode.load() == 1 && !cleanImage.load() && !taa)) && prepareAa();
+    const bool smooth = (down || (aaMode.load() == 1 && !cleanImage.load())) && prepareAa();
     if (down && !smooth) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
@@ -2597,33 +2218,21 @@ void stagePair(EyePairState::Stamp stamp) {
         for (unsigned i = 0; i < 2; ++i)
             copyEyeTexture(slot->list.Get(), resources[i].Get(), states[i], stagedEyes[i].Get(), originalBarrier,
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
-    // 0.0.74 test 7 CLEAN JITTER PROOF: the RAW boxes, before the history.
-    proof::step(slot->list.Get(), stamp.serial);
     // The history after AA: it blends what the headset is shown.
     if (historyNow() && prepareHistory()) {
         historyRunning.store(true, std::memory_order_relaxed); // SHARPEN MATCH: CAS follows keptMilli
         drawHistory(slot->list.Get(), index, stamp.serial);
-        proof::afterHistory(slot->list.Get(), true); // 0.0.74 test 8 DISPLAY PROOF
     } else {
         historyRunning.store(false, std::memory_order_relaxed); // SHARPEN MATCH: CAS as set
         history.valid = false;
         keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
-        proof::afterHistory(slot->list.Get(), false);
     }
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
-    const bool sent = submitCommands(*slot);
-    proof::submitted(sent, slot->fence);
-    if (!sent) {
+    if (!submitCommands(*slot)) {
         history.valid = false;
         return;
     }
     aaPairs += smooth;
-    if (cleanJitterWanted.load(std::memory_order_relaxed)) {
-        std::lock_guard lock(cleanTaaLock);
-        ++cleanTaaCounts.pairs;
-        cleanTaaCounts.fxaa += smooth && !down ? 1 : 0;
-        cleanTaaCounts.on = taa;
-    }
     capturedStamp = stamp;
     capturedMs = GetTickCount64();
     capturedQpc = qpcNow();
@@ -2717,42 +2326,6 @@ void capturePair(EyePairState::Stamp stamp) {
         requestFence = fenceValue;
     copyReady.notify_all();
 }
-eye_swap::Desc swapDesc(const D3D12_RESOURCE_DESC& d) {
-    return {static_cast<uint32_t>(d.Dimension), d.Width, d.Height, d.DepthOrArraySize, d.MipLevels,
-            static_cast<uint32_t>(d.Format), d.SampleDesc.Count, static_cast<uint32_t>(d.Flags)};
-}
-// 0.0.74 test 3 HEAP GUARD (heap_guard.hpp): after the game made a new render heap, let go of the eye
-// images (and the mirror view's) once the bridge's own GPU work reading them is done, forget their
-// states and copy no pair begun before; registerEye/registerMirror take them again from the game's
-// next frame. Submission and recording held. Never submits anything.
-void guardHeaps() {
-    const bool holding = resources[0] || resources[1] || mvResource;
-    // 0.0.74 test 3 fix: the newest pair copied for the headset and a clock, so the guard acts at most
-    // once a second and falls back to test 2's path when the eyes starve (heap_guard.hpp).
-    const uint64_t copied = capturedStamp.generation > lastGeneration ? capturedStamp.generation : lastGeneration;
-    if (!heapGuard.check(heapEpoch.load(), heapGuardWanted.load(), holding, newestGeneration.load(), copied,
-                         GetTickCount64())) {
-        heapFellBack = heapGuard.fellBack;
-        return;
-    }
-    for (unsigned i = 0; i < 2; ++i) {
-        if (!resources[i])
-            continue;
-        heapRetakeDesc[i] = swapDesc(resources[i]->GetDesc());
-        heapRetake[i] = true;
-        retiredEyes.push_back({resources[i], fenceValue});
-        resources[i] = nullptr;
-        watched[i] = nullptr;
-        known[i] = false;
-        eyeViewStale[i] = true;
-    }
-    if (mvResource) {
-        retiredEyes.push_back({mvResource, fenceValue});
-        mvResource = nullptr;
-        mvWatched = nullptr;
-        mvKnown = false;
-    }
-}
 void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandList* const* commands) {
     if (!enabled) {
         originalExecute(q, count, commands);
@@ -2840,16 +2413,15 @@ void STDMETHODCALLTYPE execute(ID3D12CommandQueue* q, UINT count, ID3D12CommandL
                     known[e.eye] = true;
                 }
             }
-    guardHeaps(); // 0.0.74 test 3 HEAP GUARD
     if (!relevant)
         return;
     const auto ready = pair.ready();
     if (staged) {
         if (enabled && !fault && GetTickCount64() < deadline && ready.serial &&
-            ready.generation > capturedStamp.generation && heapGuard.mayCopy(ready.generation))
+            ready.generation > capturedStamp.generation)
             stagePair(ready);
     } else if (enabled && !fault && GetTickCount64() < deadline && ready.serial &&
-               ready.generation > lastGeneration && heapGuard.mayCopy(ready.generation) &&
+               ready.generation > lastGeneration &&
                (!copyToXr || (requestedSerial == ready.serial && !requestFence)))
         capturePair(ready);
     publish();
@@ -3424,11 +2996,6 @@ DWORD readScreen() {
 }
 void enterMarker(unsigned eye, uint64_t serial, uint64_t generation, bool ended) {
     currentMarker = {eye, {serial, generation}, ended, eye < 2};
-    // 0.0.74 test 3 HEAP GUARD: the newest eye job recorded (any pair up to it may use the old heap).
-    if (eye < 2 && !ended)
-        for (auto seen = newestGeneration.load(std::memory_order_relaxed);
-             generation > seen && !newestGeneration.compare_exchange_weak(seen, generation);) {
-        }
 }
 void leaveMarker() {
     currentMarker = {};
@@ -3661,14 +3228,6 @@ bool eyeHistorySharp() {
 void setSharpenMatch(bool on) {
     sharpenMatch = on;
 }
-// 0.0.74 test 3 HEAP GUARD: ON (the default) or OFF (the heap watch only counts).
-void setHeapGuard(bool on) {
-    heapGuardWanted = on;
-}
-// 0.0.74 test 3 fix: true once HEAP GUARD starved the eyes and fell back to test 2's path (session).
-bool heapGuardFellBack() {
-    return heapFellBack.load();
-}
 // 0.0.73 test 3 LIGHT HOLD: 0 off (test 2), 50 ON, 100 STRONG.
 bool setEyeLightHold(uint32_t percent) {
     if (percent > eye_history::lightHoldStrong)
@@ -3692,10 +3251,6 @@ void setCleanImage(bool clean) {
 bool cleanImageNow() {
     return cleanImage.load();
 }
-// 0.0.74 test 3 SPIDYVR STOCK: SpidyVR grades nothing and shades every pixel; the settings are kept.
-void setStockImage(bool stock) {
-    stockImage = stock;
-}
 bool setEyeTemporal(bool on) {
     if (on && historyFault.load())
         return false;
@@ -3714,45 +3269,6 @@ float eyeHistoryMs() { // Update 35: the median of the last 31 passes (was the n
         return std::numeric_limits<float>::quiet_NaN();
     std::lock_guard lock(historyMedianLock);
     return historyMedian.median();
-}
-// 0.0.74 test 6 CLEAN JITTER (native_eye_gpu.hpp).
-void setCleanJitter(bool on) { cleanJitterWanted.store(on, std::memory_order_relaxed); }
-void setJitterProof(bool on) { proof::wanted.store(on, std::memory_order_relaxed); }
-void setJitterProofBig(bool on) { proof::big.store(on, std::memory_order_relaxed); }
-bool jitterProofBig() { return proof::big.load(std::memory_order_relaxed); }
-jitter_proof::Reading jitterProof() {
-    std::lock_guard lock(proof::resultLock);
-    auto r = proof::result;
-    r.fault = proof::faultCode.load();
-    return r;
-}
-bool cleanTaa() { return cleanTaaReady(); }
-void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float pxX, float pxY) {
-    if (!serial || eye > 1)
-        return;
-    std::lock_guard lock(cleanTaaLock);
-    NotedJitter* n = nullptr;
-    for (auto& e : notedJitter)
-        if (e.serial == serial)
-            n = &e;
-    if (!n) {
-        n = &notedJitter[nextJitter];
-        nextJitter = (nextJitter + 1) % static_cast<unsigned>(notedJitter.size());
-        *n = NotedJitter{};
-        n->serial = serial;
-    }
-    n->uv[eye][0] = uvX;
-    n->uv[eye][1] = uvY;
-    n->px[eye][0] = pxX;
-    n->px[eye][1] = pxY;
-    n->eyes |= 1u << eye;
-}
-CleanTaaStats cleanTaaStats() {
-    std::lock_guard lock(cleanTaaLock);
-    const CleanTaaStats now = cleanTaaCounts;
-    cleanTaaCounts.keepLeast = 1; // 0.0.74 test 8: least and most since the last read
-    cleanTaaCounts.keepMost = 0;
-    return now;
 }
 void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views) {
     std::lock_guard lock(viewLock);
@@ -3775,6 +3291,10 @@ void eyeAATiming(TimingMetric& gpu, uint32_t& mode, uint32_t& code, uint64_t& sm
     mode = width && downsampling() ? 2 : aaMode.load();
     code = aaFault.load();
     smoothed = aaPairs.load();
+}
+eye_swap::Desc swapDesc(const D3D12_RESOURCE_DESC& d) {
+    return {static_cast<uint32_t>(d.Dimension), d.Width, d.Height, d.DepthOrArraySize, d.MipLevels,
+            static_cast<uint32_t>(d.Format), d.SampleDesc.Count, static_cast<uint32_t>(d.Flags)};
 }
 uint32_t eyeSwaps() {
     return eyeSwapCount.load();
@@ -3814,16 +3334,6 @@ void registerEye(unsigned eye, ID3D12Resource* resource) {
     if (!sameDevice) {
         fault = 3502;
         return;
-    }
-    // 0.0.74 test 3 HEAP GUARD: an eye let go of after a heap rebuild is taken again only when it is
-    // the same kind of image as before, else the eyes pause (3503), never VR's end.
-    if (heapRetake[eye]) {
-        if (!eye_swap::compatible(heapRetakeDesc[eye], swapDesc(resource->GetDesc()))) {
-            eyesLostCode = eye_swap::lostCode;
-            copyReady.notify_all();
-            return;
-        }
-        heapRetake[eye] = false;
     }
     resources[eye] = resource;
     watched[eye] = resource;
@@ -3936,7 +3446,7 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).
-    const bool graded = staged && !stockImage.load() && (colorOn.load() || // not in the screen-copy mode (as sharpening)
+    const bool graded = staged && (colorOn.load() || // not in the screen-copy mode (as sharpening)
                                    (foveaDebug.load() && foveaLevel.load() != foveation::off));
     const bool sharpened = (percent || graded) && prepareSharpen() &&
                            drawSharpen(slot->list.Get(), slotIndex, incoming, percent, debug);
@@ -3954,13 +3464,6 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     }
     sharpening = sharpened;
     sharpenPairs += sharpened;
-    { // 0.0.74 test 6: whether CAS ran on this pair, and after the eye history (the 10 s CLEAN TAA line)
-        std::lock_guard lock(cleanTaaLock);
-        ++cleanTaaCounts.presented;
-        cleanTaaCounts.sharpened += sharpened && percent ? 1 : 0;
-        cleanTaaCounts.sharpenedAfterHistory += sharpened && percent && historyRunning.load() ? 1 : 0;
-        cleanTaaCounts.casPercent = sharpened ? percent : 0;
-    }
     colorPairs += sharpened && graded;
     if (pendingCount == pendingCopies.size()) { // not seen finishing: drop the oldest
         std::move(pendingCopies.begin() + 1, pendingCopies.end(), pendingCopies.begin());
@@ -4124,21 +3627,6 @@ DWORD start(void* input) {
                 hookedPresent = MH_EnableHook(h) == MH_OK && hookedPresent;
         publishScreen(hookedPresent ? 1 : 2, nullptr, 0);
     }
-    // 0.0.74 test 3 HEAP GUARD: watch the game's CreateHeap (optional: without it nothing changes).
-    // A second start (VR again) enables the hook made the first time.
-    heapRetake = {};
-    if (heapHook) {
-        MH_EnableHook(heapHook);
-    } else if (void** dvt = *reinterpret_cast<void***>(device.Get()); dvt && dvt[heap_guard::createHeapSlot]) {
-        void* target = dvt[heap_guard::createHeapSlot];
-        if (MH_CreateHook(target, reinterpret_cast<void*>(createHeap), reinterpret_cast<void**>(&originalCreateHeap)) ==
-            MH_OK) {
-            if (MH_EnableHook(target) == MH_OK)
-                heapHook = target;
-            else
-                MH_RemoveHook(target);
-        }
-    }
     std::lock_guard lock(telemetry);
     InterlockedIncrement64(&SpidyGpuData.sequence);
     SpidyGpuData.status = 1;
@@ -4196,8 +3684,6 @@ DWORD stop() {
         for (auto h : presentHooks)
             if (h)
                 MH_DisableHook(h);
-        if (heapHook)
-            MH_DisableHook(heapHook); // 0.0.74 test 3 HEAP GUARD
     }
     if (foveaHooked)
         for (auto h : foveaHooks)
@@ -4285,15 +3771,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeHistorySharp(void* sharp) 
     if (value > 1)
         return 3995;
     native_gpu::setEyeHistorySharp(value == 1);
-    return 0;
-}
-// 0.0.74 test 3 HEAP GUARD (combat38 heap_guard): 1 ON (let go of the eyes when the game rebuilds its
-// render heaps), 0 OFF; refused (3993) above 1. Live.
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeHeapGuard(void* on) {
-    const auto value = reinterpret_cast<uintptr_t>(on);
-    if (value > 1)
-        return 3993;
-    native_gpu::setHeapGuard(value == 1);
     return 0;
 }
 // 0.0.73 AA SHARPEN MATCH (combat38 sharpen_match): 1 ON (CAS by the history kept), 0 OFF (as set);

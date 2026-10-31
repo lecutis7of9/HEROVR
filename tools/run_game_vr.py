@@ -1639,166 +1639,9 @@ def engine_taa_line(t):
             f"{t['game_jitter_max'][0]:.6f}/{t['game_jitter_max'][1]:.6f}; targets L{t['targets'][0]} R{t['targets'][1]}.")
 
 
-# 0.0.73 TAA SHAKE: SpidyEngineTaaEyes (include/spidy/engine_taa.hpp Eyes): what each eye's view holds where
-# the game's TemporalAa reads it - the jitter stored, the size it is taken back with, the pixels that makes, the
-# history stamps and the current frame's weight from them (1 = the history thrown away), read every 250 ms.
-ENGINE_TAA_EYES_FORMAT = '<4I4f4I6I2f2I4f2I2IQ'
-ENGINE_TAA_EYES_BYTES = struct.calcsize(ENGINE_TAA_EYES_FORMAT)
-
-
-def jitter_level(mode, scale):
-    """TAA JITTER's wrist word (engine_taa::levelText): FULL / HALF / OFF, the mode by name, else the percent."""
-    if mode != 'OURS':
-        return str(mode)
-    return {100: 'FULL', 50: 'HALF', 0: 'OFF'}.get(scale, f'{scale}%')
-
-
-def engine_taa_eyes_snapshot(game, address):
-    """The per-eye TAA record (None until ENGINE TAA has been on, or from a probe without it)."""
-    if not address:
-        return None
-    raw = game.read(address, ENGINE_TAA_EYES_BYTES)
-    if len(raw) != ENGINE_TAA_EYES_BYTES:
-        return None
-    v = struct.unpack_from(ENGINE_TAA_EYES_FORMAT, raw)
-    if v[:3] != (0x45544e45, 1, ENGINE_TAA_EYES_BYTES) or not v[3]:
-        return None
-    mode = JITTER_MODES.get(v[26], v[26])
-    eyes = {}
-    for i, side in enumerate(('left', 'right')):
-        eyes[side] = dict(stored=[round(x, 8) for x in v[4 + 2 * i:6 + 2 * i]], taa_size=list(v[8 + 2 * i:10 + 2 * i]),
-                          pixels=[round(x, 4) for x in v[22 + 2 * i:24 + 2 * i]], cut=v[12 + i],
-                          cut_age=v[14 + i], stamp_age=v[16 + i], weight=round(v[18 + i], 4),
-                          history_reset_samples=v[28 + i])
-    return dict(samples=v[3], render=[v[20], v[21]], jitter_mode=mode, jitter_scale=v[27],
-                jitter=jitter_level(mode, v[27]), sequence=v[30], **eyes)
-
-
-def engine_taa_eyes_line(e):
-    """The console's word on the per-eye TAA record."""
-    def eye(name):
-        t = e[name]
-        return (f"{name} {t['pixels'][0]:+.3f}/{t['pixels'][1]:+.3f} px at {t['taa_size'][0]}x{t['taa_size'][1]}, "
-                f"weight {t['weight']}, {t['history_reset_samples']} resets")
-    return (f"TAA JITTER {e['jitter']}: eyes render {e['render'][0]}x{e['render'][1]}; newest {eye('left')}; "
-            f"{eye('right')} ({e['samples']} samples).")
-
-
-# 0.0.74 test 2b TAA DIAGNOSTICS: SpidyTaaDiag (include/spidy/taa_diag074.hpp Diag), every frame while the
-# option is ON: per eye the jitter sent vs stored, the history ages and weight, shared or per-eye buffer sets.
-TAA_DIAG_FRAME = 'I2f4f2i2i2f'
-TAA_DIAG_RING = 16
-TAA_DIAG_FORMAT = '<4IQ2I2I4I2f2I' + TAA_DIAG_FRAME * TAA_DIAG_RING + 'Q'
-TAA_DIAG_BYTES = struct.calcsize(TAA_DIAG_FORMAT)
-
-
-def taa_diag_snapshot(game, address):
-    """The TAA DIAGNOSTICS record (None while it is off or missing)."""
-    if not address:
-        return None
-    raw = game.read(address, TAA_DIAG_BYTES)
-    if len(raw) != TAA_DIAG_BYTES:
-        return None
-    v = struct.unpack_from(TAA_DIAG_FORMAT, raw)
-    if v[:3] != (0x44415454, 1, TAA_DIAG_BYTES) or not v[3] or not v[4]:
-        return None
-    head = v[15]
-    frames = []
-    for k in range(TAA_DIAG_RING):
-        o = 17 + 13 * ((head + k) % TAA_DIAG_RING)
-        f = v[o:o + 13]
-        if not f[0] and not any(f[1:]):
-            continue
-        frames.append(dict(frame=f[0], sent=[round(x, 8) for x in f[1:3]],
-                           left=dict(stored=[round(x, 8) for x in f[3:5]], cut_age=f[7], stamp_age=f[9], weight=round(f[11], 4)),
-                           right=dict(stored=[round(x, 8) for x in f[5:7]], cut_age=f[8], stamp_age=f[10], weight=round(f[12], 4))))
-    return dict(frames_recorded=v[4], resets=[v[5], v[6]], stamp_changes=[v[7], v[8]], shared_jitter_frames=v[9],
-                shared_set_frames=v[10], per_eye_set_frames=v[11], sent_mismatch_frames=v[12],
-                stored_over_sent=[round(v[13], 3), round(v[14], 3)], last_frames=frames)
-
-
-def taa_diag_line(d):
-    """The console's word on TAA DIAGNOSTICS."""
-    n = max(1, d['frames_recorded'])
-    history = 'per-eye' if d['per_eye_set_frames'] >= d['shared_set_frames'] else 'SHARED'
-    return (f"TAA DIAGNOSTICS: {d['frames_recorded']} frames; history thrown away L {100 * d['resets'][0] / n:.0f}% "
-            f"R {100 * d['resets'][1] / n:.0f}%; stamp moved L {d['stamp_changes'][0]} R {d['stamp_changes'][1]}; "
-            f"stored/sent {d['stored_over_sent'][0]}x/{d['stored_over_sent'][1]}x; {history} history buffers; "
-            f"same jitter both eyes {100 * d['shared_jitter_frames'] / n:.0f}%; {d['sent_mismatch_frames']} unexplained.")
-
-
-# 0.0.74 test 2b TAA HOLD: SpidyTaaHoldData (include/spidy/taa_hold074.hpp Data), read from the eye JOBS
-# TemporalAa itself reads: zero_ages counts jobs whose history the game was about to throw away.
-TAA_HOLD_FORMAT = '<4I8Q6iI4xQ'
-TAA_HOLD_BYTES = struct.calcsize(TAA_HOLD_FORMAT)
-
-
-def taa_hold_snapshot(game, address):
-    """The TAA HOLD record (None before the first eye job or when missing)."""
-    if not address:
-        return None
-    raw = game.read(address, TAA_HOLD_BYTES)
-    if len(raw) != TAA_HOLD_BYTES:
-        return None
-    v = struct.unpack_from(TAA_HOLD_FORMAT, raw)
-    if v[:3] != (0x444c4854, 1, TAA_HOLD_BYTES) or not (v[4] or v[5]):
-        return None
-    return dict(on=bool(v[3]), jobs=[v[4], v[5]], held=[v[6], v[7]], zero_ages=[v[8], v[9]], cuts=[v[10], v[11]],
-                last_frame=[v[12], v[13]], last_cut_age=[v[14], v[15]], last_stamp_age=[v[16], v[17]])
-
-
-def taa_hold_line(h):
-    """The console's word on TAA HOLD."""
-    def pct(a, b):
-        return f"{100 * a / max(1, b):.0f}%"
-    return (f"TAA HOLD {'ON' if h['on'] else 'OFF'}: history about to be thrown away on L {pct(h['zero_ages'][0], h['jobs'][0])} "
-            f"R {pct(h['zero_ages'][1], h['jobs'][1])} of eye jobs; held L {h['held'][0]} R {h['held'][1]}; "
-            f"game cuts L {h['cuts'][0]} R {h['cuts'][1]}.")
-
-
-# 0.0.74 test 3 TAA LINK / JITTER GUARD: SpidyTaaLinkData (include/spidy/taa_link074.hpp Data). Whether each eye's
-# TAA history slot moves with the frame, as the game's own history check (0x2c98290) needs it to.
-TAA_LINK_FORMAT = '<4I6Q8QQ4iQ'
-TAA_LINK_BYTES = struct.calcsize(TAA_LINK_FORMAT)
-
-
-def taa_link_snapshot(game, address):
-    """The TAA LINK record (None before the first eye job or when missing)."""
-    if not address:
-        return None
-    raw = game.read(address, TAA_LINK_BYTES)
-    if len(raw) != TAA_LINK_BYTES:
-        return None
-    v = struct.unpack_from(TAA_LINK_FORMAT, raw)
-    if v[:3] != (0x4b4e4c54, 1, TAA_LINK_BYTES) or not (v[4] or v[5]):
-        return None
-    return dict(guard=bool(v[3]), jobs=[v[4], v[5]], no_slot=[v[6], v[7]], refused=[v[8], v[9]],
-                ages=[list(v[10:14]), list(v[14:18])], guarded_lenses=v[18], last_index=[v[19], v[20]],
-                last_age=[v[21], v[22]], sequence=v[23])
-
-
-def taa_link_line(t):
-    """The console's word on the eyes' TAA history link."""
-    def pct(a, b):
-        return f"{100 * a / max(1, b):.0f}%"
-    eyes = []
-    for i, name in enumerate('LR'):
-        a = t['ages'][i]
-        refused = t['no_slot'][i] + t['refused'][i]
-        eyes.append(f"{name} refused {pct(refused, t['jobs'][i])} (age 0/1/2/3+: {a[0]}/{a[1]}/{a[2]}/{a[3]})")
-    return (f"TAA LINK: {'; '.join(eyes)}; JITTER GUARD {'ON' if t['guard'] else 'OFF'}, "
-            f"{t['guarded_lenses']} lenses held still.")
-
-
 # Update 34.1: SpidyXrStart's options field: its offset in the config and the ENGINE TAA bit.
 OPTIONS_OFFSET = struct.calcsize('<4I7Q2If')
 ENGINE_TAA_OPTION = 0x800000
-# 0.0.74 test 3 MILES TAA (live.txt miles_taa, on by default): the eyes are made with the game's TAA targets and
-# their scene at 67%, which the game's TemporalAa resolves to the full eye (include/spidy/miles_taa074.hpp).
-MILES_TAA_OPTION = 0x1000000
-# 0.0.74 test 4 MAIN VIEW SMALL (live.txt main_view_small, on by default): the game's own view at 50% per side, its
-# TAA resolving it (include/spidy/taa_gate074.hpp); read when VR starts.
-MAIN_VIEW_SMALL_OPTION = 0x2000000
 
 
 def eye_aa_line(aa, asked):
@@ -2549,15 +2392,17 @@ def main():
     migrated_073t5 = live_settings.migrate_073t5(ROOT/'live.txt')
     if migrated_073t5:
         print(migrated_073t5, flush=True)
+    # 0.0.74 test 10: the 0.0.74 tests' picture settings out of live.txt once; the 0.0.73 picture again (before
+    # lens_flares and image_style are read below).
+    migrated_074t10 = live_settings.migrate_074t10(ROOT/'live.txt')
+    if migrated_074t10:
+        print(migrated_074t10, flush=True)
     try:
         live_text = (ROOT/'live.txt').read_text(encoding='utf-8-sig', errors='replace')
     except OSError:
         live_text = None
     if live_settings.lens_flares_off(live_text):
         session_off = ('lens_flares',)
-        if live_settings.screen_shake_off(live_text):
-            print('LENS FLARES: OFF IN VR this session (AA MODE CLEAN; aa_mode = off + restart VR for your own).',
-                  flush=True)
         print('LENS FLARES: OFF IN VR this session (0.0.73 lights default: no flare strobing or headlight '
               'ghosts; the game\'s own setting is put back when VR closes; LENS FLARES GAME + restart VR to '
               'keep them).', flush=True)
@@ -2573,19 +2418,7 @@ def main():
     migrated_0073 = live_settings.migrate_0073(ROOT/'live.txt')
     if migrated_0073:
         print(migrated_0073, flush=True)
-    # 0.0.74 test 2 SPIDYVR PICTURE: the picture settings set once to SpidyVR's (after migrate_0073, which would
-    # move image_style spidyvr back to off in a live.txt older than 0.0.73), the eye supersample to 100.
-    migrated_074t2 = live_settings.migrate_074t2(ROOT/'live.txt', ROOT/'next-launch.txt')
-    if migrated_074t2:
-        print(migrated_074t2, flush=True)
-    # 0.0.74 test 4 AA MODE CLEAN (default on): the game's ScreenShake 0 while VR runs (SESSION_OFF['screen_shake'],
-    # put back after), and no game TAA in the eyes, so GAME AA TAA does not apply.
-    clean = live_settings.aa_mode_in_file(ROOT/'live.txt')
-    if live_settings.screen_shake_off(live_text):
-        session_off = tuple(session_off) + ('screen_shake',)
-        print('SCREEN SHAKE: OFF this session (AA MODE CLEAN; the game\'s own is put back when VR closes; '
-              'aa_mode = off + restart VR keeps it).', flush=True)
-    game_taa_look = 'off' if clean else live_settings.image_style_in_file(ROOT/'live.txt')
+    game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     if live_settings.game_aa_taa(getattr(a, 'engine_taa', False), game_taa_look, getattr(a, 'keep_game_aa', False)):
         session_off = tuple(session_off) + ('game_aa',)
         print("GAME AA: TAA, no upscaler, this session (0.0.73 AA: the path SpidyVR's per-eye TAA uses; DLAA/DLSS "
@@ -2621,13 +2454,7 @@ def main():
     # Update 23: once, an older next-launch.txt's supersample above 100 goes back to OFF (100).
     if (reset := live_settings.migrate_next_launch(ROOT/'next-launch.txt')):
         print(reset, flush=True)
-    # 0.0.74 test 3 SPIDYVR STOCK (default on): SpidyVR's eye size (100%), whatever next-launch.txt chose.
-    stock_eyes = not a.size and live_settings.stock_in_file(ROOT/'live.txt')
-    if stock_eyes and a.supersample != live_settings.STOCK_SUPERSAMPLE:
-        print(f'0.0.74 SPIDYVR STOCK: eye supersample {live_settings.STOCK_SUPERSAMPLE}% (SpidyVR\'s; '
-              f'{a.supersample}% asked; spidyvr_stock = off keeps it).', flush=True)
-        a.supersample = live_settings.STOCK_SUPERSAMPLE
-    if a.supersample == 100 and not a.size and not stock_eyes:
+    if a.supersample == 100 and not a.size:
         chosen = live_settings.next_launch_supersample(ROOT/'next-launch.txt')
         if chosen and chosen != 100:
             a.supersample = chosen
@@ -2840,20 +2667,7 @@ def session(a, startup, session_off=()):
     image_look = live_settings.image_in_file(ROOT/'live.txt')
     game_taa_look = live_settings.image_style_in_file(ROOT/'live.txt')
     mip_bias_asked = live_settings.image_mip_bias(a.mip_bias, image_look, game_taa_look, bool(getattr(a, 'engine_taa', False)))
-    _, render_preset_name = live_settings.render_preset_in_file(ROOT/'live.txt')
-    if render_preset_name == 'AA MODE CLEAN':
-        # 0.0.74 test 4 AA MODE CLEAN: +0.5 on the samplers the game biases negatively, with --anisotropy (16x by
-        # default); a -MipBias other than the default is the player's and is kept.
-        mip_bias_asked = a.mip_bias if str(a.mip_bias).strip() != '0.5' else live_settings.CLEAN_MIP_BIAS
-        print(f'0.0.74 AA MODE CLEAN: texture mip bias {mip_bias_asked} with {a.anisotropy}x anisotropic filtering '
-              'on the samplers the game biases for its upscaler (aa_mode = off uses your own; restart).', flush=True)
-    elif render_preset_name and str(mip_bias_asked).strip() != '0':
-        # 0.0.74 test 2 SPIDYVR PICTURE / test 3 SPIDYVR STOCK: SpidyVR adds no mip bias (CONFIRMED);
-        # spidyvr_stock = off with spidyvr_picture = custom keeps yours.
-        print(f'0.0.74 {render_preset_name}: texture mip bias 0 (the launcher passed {a.mip_bias}; '
-              'spidyvr_stock = off and spidyvr_picture = custom keep it; restart).', flush=True)
-        mip_bias_asked = '0'
-    elif mip_bias_asked != a.mip_bias:
+    if mip_bias_asked != a.mip_bias:
         if game_taa_look == 'spidyvr' and getattr(a, 'engine_taa', False) and image_look != 'spidyvr':
             print(f'0.0.73 GAME TAA SPIDYVR: texture mip bias {mip_bias_asked} under the game\'s TAA (the '
                   f'launcher passed {a.mip_bias}; live.txt image_style = off gives IMAGE CLASSIC\'s back; restart).',
@@ -3001,10 +2815,7 @@ def session(a, startup, session_off=()):
                                            'SpidyEyeLodData', 'SpidyShadowCamera',
                                            'SpidyShadowCameraData', 'SpidyShadowDistanceData',
                                            'SpidyEyeTrail', 'SpidyEngineTaaJitter', 'SpidyEngineTaaJitterScale',
-                                           'SpidyEngineTaaData', 'SpidyEngineTaaEyes', 'SpidyFarShadowsData',
-                                           'SpidyTaaDiag',  # 0.0.74 test 2b TAA DIAGNOSTICS
-                                           'SpidyTaaHoldData',  # 0.0.74 test 2b TAA HOLD
-                                           'SpidyTaaLinkData',  # 0.0.74 test 3 TAA LINK
+                                           'SpidyEngineTaaData', 'SpidyFarShadowsData',
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -3022,14 +2833,6 @@ def session(a, startup, session_off=()):
         # each eye makes its own shadows. Say so, so the console and the report match what the eyes get.
         reflections_line = ("Reflections: the eyes' extra reflection targets are off "
                            "(not ported to Spider-Man 2; SM2VR has them off too).")
-        miles_taa = live_settings.miles_taa_in_file(ROOT/'live.txt')
-        print('MILES TAA: ' + ('ON - the game\'s TAA in each eye (Miles Morales VR\'s path), the eyes\' scene at 67% '
-                               'resolved by it; miles_taa = off in live.txt for the full eye size (restart).'
-                               if miles_taa else 'OFF (live.txt miles_taa).'), flush=True)
-        main_small = live_settings.main_view_small_in_file(ROOT/'live.txt')
-        print('MAIN VIEW SMALL: ' + ('ON - the flat-screen view at 50% (its TAA resolves it), more GPU time for the eyes; '
-                                     'main_view_small = off in live.txt and restart for the full size.'
-                                     if main_small else 'OFF (live.txt main_view_small).'), flush=True)
         config = struct.pack('<4I7Q2IfI', 0x53585243, 24, 664, game.pid, game.base, queue,
                              bridge_module, ray_module, motion_module, 0, 0,
                              int(a.seconds*1000), a.size, a.swing_speed,
@@ -3045,9 +2848,7 @@ def session(a, startup, session_off=()):
                              (0x20000 if a.own_shadows else 0) | (0 if reflections else 0x40000) |
                              (0x100000 if a.no_prompt_help else 0) | (0x80000 if a.eye_lens_distances else 0) |
                              (0x200000 if a.arcade_webs else 0) | (0x400000 if a.eye_aa == 'off' else 0) |
-                             (ENGINE_TAA_OPTION if a.engine_taa else 0) |
-                             (MILES_TAA_OPTION if miles_taa else 0) |
-                             (MAIN_VIEW_SMALL_OPTION if main_small else 0)) + \
+                             (ENGINE_TAA_OPTION if a.engine_taa else 0)) + \
             runtime_path(manifest) + struct.pack('<14I', a.snap_turn, a.haptics, a.screen_size, a.smooth_turn,
                                                  a.render_scale, a.weight, a.eye_height, a.arm_length, a.hud,
                                                  a.flip_speed, a.upscale, a.monitor_rate, a.screen_depth,
@@ -3106,10 +2907,6 @@ def session(a, startup, session_off=()):
         live_changes = []
         history_last = None  # Update 21: history_snapshot, kept from the samples
         engine_taa_last = engine_taa_said = None  # Update 34.2
-        taa_eyes_last = taa_eyes_said = None  # 0.0.73 TAA SHAKE
-        taa_diag_said = -1e9  # 0.0.74 test 2b TAA DIAGNOSTICS
-        taa_hold_said = -1e9  # 0.0.74 test 2b TAA HOLD
-        taa_link_said = -1e9  # 0.0.74 test 3 TAA LINK
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
         finder_written_gen = None  # finished generation already written to reports/
@@ -3202,50 +2999,6 @@ def session(a, startup, session_off=()):
             else:
                 live_file.applied(name, value)
                 print(f'live.txt (kept): {text.format(value)}', flush=True)
-        # 0.0.74 test 2 SPIDYVR PICTURE (default on): SpidyVR's picture over whatever live.txt kept (live.txt
-        # keeps the player's own for spidyvr_picture = custom); the DLL holds the same while it is on.
-        render_preset, render_preset_name = live_settings.render_preset_in_file(ROOT/'live.txt')
-        if render_preset_name == 'AA MODE CLEAN':
-            # 0.0.74 test 4 AA MODE CLEAN (default on): docs/AA-MODE-CLEAN-074.md; aa_mode = off uses your own.
-            sent = []
-            for name, value in render_preset.items():
-                _, export, text = live_settings.SETTINGS[name]
-                if export not in xr or call_remote(process, xr[export], live_settings.export_value(name, value)):
-                    continue
-                live_file.applied(name, value)
-                kept[name] = value
-                sent.append(f'{name} = {value}')
-            print('0.0.74 AA MODE CLEAN: ON - no game TAA in the eyes, FXAA every eye frame, the per-eye history '
-                  'at 80, a light CAS, building reach 150 (' + ', '.join(sent) + '); aa_mode = off uses your own.',
-                  flush=True)
-        elif render_preset_name == 'SPIDYVR STOCK':
-            # 0.0.74 test 3 SPIDYVR STOCK (default on): SpidyVR's render path - every HERO VR render layer of
-            # live.txt at SpidyVR's value (docs/TAA-074-test3.md); spidyvr_stock = off uses your own.
-            sent = []
-            for name, value in render_preset.items():
-                _, export, text = live_settings.SETTINGS[name]
-                if export not in xr or call_remote(process, xr[export], live_settings.export_value(name, value)):
-                    continue
-                live_file.applied(name, value)
-                kept[name] = value
-                sent.append(f'{name} = {value}')
-            print('0.0.74 SPIDYVR STOCK: ON - SpidyVR\'s own render path: the game\'s TAA in each eye with '
-                  'SpidyVR\'s jitter and nothing of HERO VR\'s AA, TAA, history, sharpening, colour, LOD or light '
-                  'tweaks (' + ', '.join(sent) + '); spidyvr_stock = off uses your own.', flush=True)
-        elif render_preset_name:
-            sent = []
-            for name, value in live_settings.PICTURE_PRESET.items():
-                _, export, text = live_settings.SETTINGS[name]
-                if export not in xr or call_remote(process, xr[export], live_settings.export_value(name, value)):
-                    continue
-                live_file.applied(name, value)
-                kept[name] = value
-                sent.append(f'{name} = {value}')
-            print('0.0.74 SPIDYVR PICTURE: ON - the game\'s TAA in each eye with SpidyVR\'s full jitter, no EYE AA, '
-                  'FXAA, CAS or SHARPEN MATCH, mip bias 0 (' + ', '.join(sent) + '); spidyvr_picture = custom '
-                  'uses your own.', flush=True)
-        else:
-            print('0.0.74 SPIDYVR PICTURE: CUSTOM - your own picture settings (live.txt).', flush=True)
         # Update 37: the run36 closing settings are the new defaults, for whatever live.txt does not keep.
         # 0.0.73 IMAGE: aa and sharpen follow the look (SPIDYVR 0 and 0, CLASSIC 1 and 140).
         image_now = live_settings.image_of(kept)
@@ -3277,9 +3030,7 @@ def session(a, startup, session_off=()):
             f'{k} = {v}' for k, v in live_settings.UPDATE38_DEFAULTS.items()), flush=True)
         # Update 37.2: the settings that must start on, as the session now runs them.
         print(live_settings.startup_line(live_file.current), flush=True)
-        # 0.0.74 test 7: under a preset (AA MODE CLEAN, SPIDYVR STOCK / PICTURE) the line names what it sends.
-        print(live_settings.image_line(image_now, live_file.current,
-                                       live_settings.render_preset_in_file(ROOT/'live.txt')[1]), flush=True)
+        print(live_settings.image_line(image_now, live_file.current), flush=True)
         # Update 24: what makes far detail shimmer that the player set (strong sharpening), and a flicker
         # test (eye_debug) still in live.txt.
         for line in live_settings.start_notes(ROOT/'live.txt'):
@@ -3487,8 +3238,6 @@ def session(a, startup, session_off=()):
                         print(history_line(kept), flush=True)
                     if (taa := result.get('engine_taa')):
                         print(engine_taa_line(taa), flush=True)
-                    if (eyes := result.get('engine_taa_eyes')):
-                        print(engine_taa_eyes_line(eyes), flush=True)
                     if (shadows := eye_shadow_line(result.get('eye_shadows'))):
                         print(shadows, flush=True)
                 except Exception as error:  # noqa: BLE001 - the report matters more than the summary
@@ -3723,30 +3472,6 @@ def session(a, startup, session_off=()):
                         engine_taa_last = taa
                         sample['engine_taa'] = {k: taa[k] for k in ('state', 'reason', 'jitter_mode', 'jitter_scale',
                                                                     'eye_jitter', 'game_jitter', 'on_frames')}
-                    # 0.0.73 TAA SHAKE: the per-eye TAA record each sample, a console line when TAA JITTER changes.
-                    if (eyes := engine_taa_eyes_snapshot(game, xr.get('SpidyEngineTaaEyes'))):
-                        if eyes['jitter'] != taa_eyes_said:
-                            taa_eyes_said = eyes['jitter']
-                            print(engine_taa_eyes_line(eyes), flush=True)
-                        taa_eyes_last = eyes
-                        sample['engine_taa_eyes'] = {k: eyes[k] for k in ('jitter', 'render', 'left', 'right')}
-                    # 0.0.74 test 2b TAA DIAGNOSTICS: the per-frame record each sample, a console line every 10 s.
-                    if (diag := taa_diag_snapshot(game, xr.get('SpidyTaaDiag'))):
-                        sample['taa_diag'] = diag
-                        if time.monotonic() - taa_diag_said >= 10:
-                            taa_diag_said = time.monotonic()
-                            print(taa_diag_line(diag), flush=True)
-                    # 0.0.74 test 2b TAA HOLD: always (a few counters), a console line every 10 s.
-                    if (hold := taa_hold_snapshot(game, xr.get('SpidyTaaHoldData'))):
-                        sample['taa_hold'] = hold
-                        if time.monotonic() - taa_hold_said >= 10:
-                            taa_hold_said = time.monotonic()
-                            print(taa_hold_line(hold), flush=True)
-                    if (link := taa_link_snapshot(game, xr.get('SpidyTaaLinkData'))):
-                        sample['taa_link'] = link
-                        if time.monotonic() - taa_link_said >= 10:
-                            taa_link_said = time.monotonic()
-                            print(taa_link_line(link), flush=True)
                     if history_last:
                         sample['eye_history'] = {k: history_last[k] for k in ('percent', 'blended_pairs',
                                                                               'restarted_pairs', 'fault')}
@@ -4006,8 +3731,7 @@ def session(a, startup, session_off=()):
             eye_snapshots=list(eye_shots), eye_snapshot_folder=str(eye_folder) if eye_shots else None,
             bridge=bridge_snapshot(game, bridge['SpidyBridgeData']), xr_stop=xr_stop, bridge_stop=bridge_stop,
             eye_history=history_snapshot(game, xr['SpidyEyeHistoryData']) or history_last,
-            engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last,
-            engine_taa_eyes=engine_taa_eyes_snapshot(game, xr.get('SpidyEngineTaaEyes')) or taa_eyes_last)
+            engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last)
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))
@@ -4052,11 +3776,6 @@ def session(a, startup, session_off=()):
             print(f"Render memory: two frames used at most {memory['worst_two_frames_mb']:.0f} of "
                   f"{memory['ring_mb']:.0f} MB; {memory['overflow_frames']} of {memory['frames']} frames "
                   'did not fit.', flush=True)
-        # 0.0.74 test 3 HEAP GUARD: the game rebuilt its render heaps and aliases (its log's "[Mem12] ...
-        # Recreating heap and aliases") while VR ran; the eye bridge let go of the eyes and took them again.
-        if (rebuilds := (result.get('gpu') or {}).get('heap_rebuilds')):
-            print(f"Heap guard: the game rebuilt its render memory {rebuilds} time(s) in VR; the eye bridge let go "
-                  'of the eye images and took them again from the next frame.', flush=True)
         if (seen := result.get('mip_bias')):
             if seen['status'] == 'late':
                 print('Texture mip bias: the game made its graphics device before Spidy started, so it was not '

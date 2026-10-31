@@ -1,5 +1,4 @@
 #pragma once
-#include "spidy/jitter_proof.hpp"
 #include "spidy/eye_color.hpp"
 #include <array>
 #include <cstdint>
@@ -20,7 +19,7 @@ struct Config {
 struct Data {
     uint32_t magic = 0x53475044, version = 2, bytes = sizeof(Data), status{};
     int64_t sequence{};
-    uint32_t error{}, heapRebuilds{}; // 0.0.74 test 3 HEAP GUARD: was reserved (0)
+    uint32_t error{}, reserved{};
     uint64_t executes{}, markers{}, matchedMarkers{}, pairs{}, serial{}, generation{}, fence{}, completed{};
     uint64_t begins[2]{}, ends[2]{}, resources[2]{}, pixels[2]{};
     uint32_t states[2]{}, known[2]{}, width{}, height{};
@@ -78,10 +77,6 @@ bool setEyeTemporal(bool on);
 // FXAA, the history blend and CAS stand aside (their settings kept). Live; game_xr sets it.
 void setCleanImage(bool clean);
 bool cleanImageNow();
-// 0.0.74 test 3 SPIDYVR STOCK: COLOR grade and foveation stand aside (their settings kept). Live; game_xr sets it.
-void setStockImage(bool stock);
-// 0.0.74 test 3 fix: HEAP GUARD starved the eyes and fell back to test 2's path (for the session).
-bool heapGuardFellBack();
 // Update 34.2: EYE AA TRAIL (eye_history::movedWeight): the percent of the history kept
 // at swing speed (0-100; default eye_history::defaultTrail). False above 100. Live.
 bool setEyeTrail(uint32_t percent);
@@ -96,41 +91,6 @@ uint32_t monitorRateNow();
 // The views the eyes of the pair with this serial were rendered from (the
 // eyes command's serial), for the history pass to turn the old pair to the new.
 void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views);
-// 0.0.74 test 6 CLEAN JITTER, CLEAN's own temporal AA (no part of the game's TemporalAa): game_xr says each frame
-// whether AA MODE CLEAN and CLEAN JITTER are both on (setCleanJitter); cleanTaa() is that while the eye history
-// can run. Then stereo_probe gives each eye's lens a Halton sub-pixel step and notes it here by the eyes command's
-// serial (noteEyeJitter: uv, the lens's own arguments, and render pixels); the history pass reads the new pair
-// that step back and blends it, FXAA stays off, CAS follows. cleanTaaStats(): running counts for the 10 s line.
-void setCleanJitter(bool on);
-// 0.0.74 test 7 CLEAN JITTER PROOF (jitter_proof.hpp): game_xr's JITTER PROOF switch (on by default) and
-// JITTER PROOF BIG (off: on, stereo_probe sends a 4 pixel step and the stepped pairs are shown RAW, no history).
-// jitterProof(): the last reading (a new one when its number grows; fault nonzero: the probe is off).
-void setJitterProof(bool on);
-void setJitterProofBig(bool on);
-bool jitterProofBig();
-jitter_proof::Reading jitterProof();
-bool cleanTaa();
-void noteEyeJitter(uint64_t serial, unsigned eye, float uvX, float uvY, float pxX, float pxY);
-struct CleanTaaStats {
-    uint64_t pairs{};        // staged pairs while wanted
-    uint64_t fxaa{};         // of those, FXAA ran (not the downsample filter)
-    uint64_t historyPairs{}; // history passes (any mode)
-    uint64_t jittered{};     // history passes that found this pair's step
-    uint64_t unmatched{};    // wanted, but no step noted for the pair
-    uint64_t blended{}, restarted{}, cuts{};
-    double keepSum{};        // eye 0's history share, summed over blended passes
-    // 0.0.74 test 8: the effective blend since the last cleanTaaStats() (which starts them again): the least and most
-    // history share of a blended pass (the new picture gets 1 - keep), and the loosen (the history clamp's slack) summed.
-    float keepLeast{1}, keepMost{};
-    double loosenSum{};
-    uint64_t presented{};    // pairs sent to the headset
-    uint64_t sharpened{};    // of those, CAS ran (percent above 0)
-    uint64_t sharpenedAfterHistory{}; // and the eye history ran on that pair first
-    uint32_t casPercent{};   // the last pair's CAS percent (0: none)
-    float px[2][2]{};        // the last step found, render pixels, per eye (x right, y down)
-    bool on{};               // cleanTaa() on the last staged pair
-};
-CleanTaaStats cleanTaaStats();
 // SpidyEyeHistoryData, for the launcher's report.
 struct HistoryData {
     uint32_t magic = 0x53454844; // SEHD

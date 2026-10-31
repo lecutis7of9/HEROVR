@@ -105,16 +105,9 @@ class SessionLaunchTests(unittest.TestCase):
         # The path a player takes: main() reads live.txt, then session() starts the game.
         # 0.0.73 lights: OFF IN VR is the default (no line, or test 4's 'game' at the old default before the
         # migration's marker); GAME chosen after the marker stays.
-        # 0.0.74 test 3 SPIDYVR STOCK (on by default) leaves the game's flares alone; STOCK off: as before.
-        # 0.0.74 test 4 AA MODE CLEAN (the default): flares and screen shake off; the rest under aa_mode = off.
-        S = 'aa_mode = off\nspidyvr_stock = off\n'
-        for live, off in (('aa_mode = off\nlens_flares = off_in_vr\n', ()), ('aa_mode = off\n', ()),
-                          ('', ('lens_flares', 'screen_shake')),
-                          (S + 'lens_flares = off_in_vr\n', ('lens_flares',)),
-                          (S + 'lens_flares = game\n', ('lens_flares',)),
-                          (live_settings.MIGRATED_073T5 + '\n' + S + 'lens_flares = game\n', ('lens_flares',)),  # 0.0.74 test 2 FLARE BLOCK
-                          (live_settings.MIGRATED_073T5 + '\n' + S + 'flare_block = off\nlens_flares = game\n', ()),
-                          (S, ('lens_flares',))):
+        for live, off in (('lens_flares = off_in_vr\n', ('lens_flares',)),
+                          ('lens_flares = game\n', ('lens_flares',)),
+                          (live_settings.MIGRATED_073T5 + '\nlens_flares = game\n', ()), ('', ('lens_flares',))):
             with self.subTest(live=live), tempfile.TemporaryDirectory() as folder:
                 root = pathlib.Path(folder)
                 (root/'live.txt').write_text(live, encoding='utf-8')

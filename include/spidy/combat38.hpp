@@ -221,10 +221,6 @@ enum Option : uint32_t {
     // 0.0.74 test 1 BATMOBILE CHOICE: 1989 (the default, Dreamloft3D), ODAMI, FOREVER (SorroW), FOREVER 2 (S.York);
     // the dash HOME page's BATMOBILE button steps it too; live (the next summon)
     batmobileChoice,
-    // 0.0.74 test 2 SPIDYVR PICTURE: ON (the default) or CUSTOM
-    spidyvrPicture,
-    // 0.0.74 test 2 FLARE BLOCK: ON (the default) or OFF
-    flareBlock,
     // 0.0.74 test 2 CABIN CLEAR: ON (the default) or OFF
     cabinClear,
     // 0.0.74 test 2 CAR PAINT: SATIN (the default) or FLAT
@@ -233,16 +229,8 @@ enum Option : uint32_t {
     seatedTools,
     // 0.0.74 test 2 DASH POINTER: ON (the default) or OFF
     dashPointer,
-    // 0.0.74 test 2b TAA DIAGNOSTICS: OFF (the default) or ON - every frame's per-eye TAA record for the report
-    taaDiagnostics,
     // 0.0.74 test 2b CRIME GPS: ON (the default) or OFF - crime popups, MAP and HUD arrow in the Batmobile and van
     crimeGps,
-    // 0.0.74 test 2b TAA HOLD: OFF (the default since 0.0.74 test 3; it never fired) or ON
-    taaHold,
-    // 0.0.74 test 3 HEAP GUARD: OFF (the default since the test 3 fix, the black headset) or ON (heap_guard.hpp)
-    heapGuard,
-    // 0.0.74 test 3 JITTER GUARD (taa_link074.hpp)
-    jitterGuard,
     // 0.0.74 test 3 WHEEL FIRST (van072.hpp)
     wheelFirst,
     // 0.0.74 test 3 CAVE QUIET (cave_quiet074.hpp)
@@ -253,26 +241,6 @@ enum Option : uint32_t {
     dashInside,
     // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp)
     cockpitGlow,
-    // 0.0.74 test 3 SPIDYVR STOCK (stockValue below)
-    spidyvrStock,
-    // 0.0.74 test 3 MILES TAA (miles_taa074.hpp)
-    milesTaa,
-    // 0.0.74 test 4 AA fixes 1-3 (taa_gate074.hpp)
-    taaGateLog,
-    eyeTaaRequeue,
-    mainViewSmall,
-    // 0.0.74 test 4 AA MODE (cleanValue below)
-    aaMode,
-    // 0.0.74 test 5 IMPOSTOR EYE (view_gates.hpp impostorAnswer, stereo_probe isActiveView)
-    impostorEye,
-    // 0.0.74 test 6 CLEAN JITTER (stereo_probe cleanTaaJitter, native_eye_gpu cleanTaa): CLEAN's own temporal AA
-    cleanJitter,
-    // 0.0.74 test 7 JITTER PROOF, JITTER PROOF BIG (jitter_proof.hpp, native_eye_gpu proof), ENGINE TAA STOCK (c38)
-    jitterProof,
-    jitterProofBig,
-    engineTaaStock,
-    // 0.0.74 test 8 VIEW JITTER FIX (view_jitter.hpp, stereo_probe activeView / placeEyes): the head views' lens step
-    viewJitterFix,
     options
 };
 struct OptionInfo {
@@ -643,34 +611,16 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"seated_driving", "SEATED DRIVING", "SEAT", "SIT on the van dash puts your eye at the driver's seat, no restart needed.", 3, {"SIT BUTTON", "AUTO SIT", "OFF", nullptr}},
     {"batmobile", "BATMOBILE", "BMOB", "Drives a Batmobile as Batman (X summons it), turning on needs a restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"batmobile_choice", "BATMOBILE CHOICE", "BCAR", "Which Batmobile Batman's X summons (also the dash's BATMOBILE), no restart.", 4, {"1989", "ODAMI", "FOREVER", "FOREVER 2"}},
-    {"spidyvr_picture", "SPIDYVR PICTURE", "SPIC", "ON: the game's TAA per eye like SpidyVR, no mod AA or sharpening; no restart.", 2, {"ON", "CUSTOM", nullptr, nullptr}},
-    {"flare_block", "FLARE BLOCK", "FLRB", "ON hides lens flares and light glow sprites in VR, restart VR to apply.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cabin_clear", "CABIN CLEAR", "CABN", "ON hides the Batmobile roof while you sit inside so you see out; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"car_paint", "CAR PAINT", "PAINT", "SATIN: satin black shine; FLAT: no shine; TEST 1: test 1 car look; no restart.", 3, {"SATIN", "FLAT", "TEST 1", nullptr}},
     {"seated_tools", "SEATED TOOLS", "STOOL", "BLOCKED: no hero tools in Batmobiles, no grapple in any car; no restart.", 2, {"BLOCKED", "ALLOWED", nullptr, nullptr}},
     {"dash_pointer", "DASH POINTER", "DPTR", "ON aims a ray at the car dash screens; trigger or finger presses; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"taa_diagnostics", "TAA DIAGNOSTICS", "TAAD", "ON logs every frame's per-eye TAA jitter and history; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
     {"crime_gps", "CRIME GPS", "CGPS", "ON shows crimes near your car: popup, MAP, HUD arrow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"taa_hold", "TAA HOLD", "TAAH", "ON sets back the TAA stamps; it never fired, so OFF by default; live.", 2, {"OFF", "ON", nullptr, nullptr}},
-    {"heap_guard", "HEAP GUARD", "HEAP", "ON lets the eyes go and retakes them when the game rebuilds its memory; live.", 2, {"OFF", "ON", nullptr, nullptr}},
-    {"jitter_guard", "JITTER GUARD", "JITG", "ON stops the eye jitter while the game refuses that eye's TAA history; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"wheel_first", "WHEEL FIRST", "WHL1", "ON: a hand on or near the wheel steers and never opens the door; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cave_quiet", "CAVE QUIET", "CAVQ", "ON quiets the city and the car engine in the Batcave and safehouse; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"finger_ray", "FINGER RAY", "FRAY", "ON aims the dash laser from your index fingertip and snaps to buttons; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"dash_inside", "DASH INSIDE", "DSIN", "ON hides the cockpit from outside; the door handle glows only near a hand; live.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"cockpit_glow", "COCKPIT GLOW", "CGLO", "ON darkens the Batmobile cabin and softly backlights dials and switches; live.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"spidyvr_stock", "SPIDYVR STOCK", "STCK", "ON runs SpidyVR's render, no HERO AA/TAA/jitter; live, LOD/mip at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"miles_taa", "MILES TAA", "MTAA", "ON runs Miles Morales VR's TAA in each eye at 67%; live, eye size at restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"taa_gate_log", "TAA GATE LOG", "TGLG", "ON logs each eye's TAA runs, misses and history inputs every 10 s; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"eye_taa_requeue", "EYE TAA REQUEUE", "ETRQ", "ON queues the game's TAA again for an eye that stopped getting it; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"main_view_small", "MAIN VIEW SMALL", "MVSM", "ON renders the flat-screen view at half size so eyes get more GPU; restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"aa_mode", "AA MODE", "AAMD", "CLEAN: full-size eyes, FXAA, per-eye history, light CAS; textures at restart.", 2, {"CLEAN", "OFF", nullptr, nullptr}},
-    {"impostor_eye", "IMPOSTOR EYE", "IMPE", "ON lets the left eye pick far buildings' full models for both eyes; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"clean_jitter", "CLEAN JITTER", "CLJT", "ON jitters CLEAN's eyes so the history smooths edges, FXAA off; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"jitter_proof", "JITTER PROOF", "JTPF", "ON logs if CLEAN's jitter moves the eye pixels, every 2 s; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"jitter_proof_big", "JITTER PROOF BIG", "JTPB", "ON steps 4 px and shows the eyes raw, to see it by eye; no restart.", 2, {"OFF", "ON", nullptr, nullptr}},
-    {"engine_taa_stock", "ENGINE TAA STOCK", "ETST", "ON sets CLEAN aside while ENGINE TAA runs, as SpidyVR does; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
-    {"view_jitter_fix", "VIEW JITTER FIX", "VJFX", "ON stops the doubled jitter on the head and shadow views; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
 };
 // 0.0.73 IMAGE (the owner after test 3: "whatever spidyVR does to handle it works and it needs to look as
 // good as that"): value 0 SPIDYVR (the default), 1 HERO VR CLASSIC (test 3's look). SpidyVR (upstream
@@ -694,86 +644,18 @@ inline bool shadowMatchOn(uint32_t value) { return value == 0; }
 // Version 0.0.62 HAND FLIPS / LENS FLARES values
 inline bool handFlipsOn(uint32_t value) { return value != 1; }
 inline bool lensFlaresOffInVr(uint32_t value) { return value == 1; }
-// 0.0.74 test 2: SPIDYVR PICTURE (0 ON, 1 CUSTOM), FLARE BLOCK, CABIN CLEAR, DASH POINTER (0 ON, 1 OFF),
-// CAR PAINT (0 SATIN, 1 FLAT), SEATED TOOLS (0 BLOCKED, 1 ALLOWED); anything unknown: the fix (value 0)'s.
-inline bool spidyvrPictureOn(uint32_t value) { return value != 1; }
-inline bool flareBlockOn(uint32_t value) { return value != 1; }
+// 0.0.74 test 2: CABIN CLEAR, DASH POINTER (0 ON, 1 OFF), CAR PAINT (0 SATIN, 1 FLAT), SEATED TOOLS
+// (0 BLOCKED, 1 ALLOWED); anything unknown: the fix (value 0)'s.
 inline bool cabinClearOn(uint32_t value) { return value != 1; }
 inline bool satinPaintOn(uint32_t value) { return value != 1 && value != 2; }
 // 0.0.74 test 2b CAR PAINT TEST 1 (the quick revert): flat paint and the roof piece always drawn (test 1's look).
 inline bool carLookTest1(uint32_t value) { return value == 2; }
 inline bool seatedToolsBlocked(uint32_t value) { return value != 1; }
 inline bool dashPointerOn(uint32_t value) { return value != 1; }
-// 0.0.74 test 2b: TAA DIAGNOSTICS (0 OFF, the default: a diagnostic, not a fix), CRIME GPS (0 ON, 1 OFF).
-inline bool taaDiagnosticsOn(uint32_t value) { return value == 1; }
+// 0.0.74 test 2b: CRIME GPS (0 ON, 1 OFF).
 inline bool crimeGpsOn(uint32_t value) { return value != 1; }
-// 0.0.74 test 2b TAA HOLD (taa_hold074.hpp). 0.0.74 test 3: 0 OFF, the default (held 0 of 4550 eye jobs in
-// test 2b: it never fired); 1 ON.
-inline bool taaHoldOn(uint32_t value) { return value == 1; }
 // 0.0.74 test 3 WHEEL FIRST (van072.hpp Tune::wheelFirst): 0 ON, the default; 1 OFF.
 inline bool wheelFirstOn(uint32_t value) { return value != 1; }
-inline constexpr uint32_t glowHidden = 2; // GLOW CHECK HIDDEN
-// 0.0.74 test 3 SPIDYVR STOCK (the owner: "our own AA/TAA/render changes may be compounding the building shimmer").
-// 0 ON (the default), 1 OFF. ON: every render option HERO VR added answers SpidyVR's own behaviour instead of
-// the player's choice (c38 in game_xr.cpp asks stockValue for every option), so the eyes run SpidyVR 0.4.1's
-// path: the game's TemporalAa per eye with its full Halton (2, 3) jitter, nothing over it (no EYE AA, FXAA,
-// history, CAS, SHARPEN MATCH, TAA HOLD, JITTER GUARD, LIGHT HOLD), the game's light checks, glow sprites and
-// lens flares, no CULL MARGIN widening, no WINDOW POP boost, FAR WINDOWS GAME (SpidyVR's 150% impostor reach stays),
-// SHADOW MATCH ON (SpidyVR's own fitCascades: both eyes' cascades on one lens), no AUTO PERFORMANCE.
-// docs/TAA-074-test3.md lists every difference and which ones this reverts. Gameplay options are untouched.
-inline bool spidyvrStockOn(uint32_t value) { return value != 1; }
-// 0.0.74 test 3 MILES TAA (miles_taa074.hpp): ON (0, the default) or OFF (1); SPIDYVR STOCK leaves it to the player.
-inline bool milesTaaOn(uint32_t value) { return value != 1; }
-// 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL (taa_gate074.hpp): ON (0) or OFF (1). TAA GATE
-// LOG starts ON; EYE TAA REQUEUE and MAIN VIEW SMALL start OFF (game_xr's start values, live.txt 'off').
-inline bool taaGateOn(uint32_t value) { return value != 1; }
-// 0.0.74 test 4 AA MODE (docs/AA-MODE-CLEAN-074.md). 0 CLEAN (the default), 1 OFF. CLEAN is the anti-aliasing
-// a clean private SM2VR build (0.0.190) runs, rebuilt from HERO VR's own parts: no game TAA in the eyes, the eyes at
-// 100%, FXAA on every eye frame, EYE AA's per-eye history (head-pose reprojection, 3 x 3 clamp, reset on a cut) at
-// 80, a light CAS, mip bias +0.5 with 16x AF on the samplers the game biases negatively, building reach 150% with
-// the left eye choosing the far buildings for both (IMPOSTORS), lens flares and screen shake off. While it is ON
-// the options below answer cleanValue (c38 in game_xr.cpp), ahead of SPIDYVR STOCK / SPIDYVR PICTURE, which it
-// turns off. OFF: the player's own options (SPIDYVR STOCK, PICTURE, MILES TAA as set).
-inline bool aaModeClean(uint32_t value) { return value != 1; }
-inline uint32_t cleanValue(uint32_t option, uint32_t value) {
-    switch (option) {
-    case spidyvrStock: return 1;   // OFF: HERO VR's own render path (the CLEAN layers below)
-    case spidyvrPicture: return 1; // CUSTOM: FXAA, history and CAS run
-    case imageStyle: return 1;     // GAME TAA OFF: no game TAA in the eyes
-    case milesTaa: return 1;       // OFF
-    case eyeTaaRequeue: return 1;  // OFF (no game TAA to requeue)
-    case mainViewSmall: return 1;  // OFF
-    case image: return 1;          // CLASSIC: the history read bilinear (FXAA and the sharpening are the launcher's)
-    case sharpenMatch: return 1;   // OFF: a fixed light CAS
-    case taaHold: return 0;        // OFF
-    case lensFlares: return 1;     // OFF IN VR (read when VR starts)
-    default: return value;
-    }
-}
-inline constexpr uint32_t stockCullMarginDegrees = 0; // SpidyVR: the head's lens x 1.05 only (headView)
-// The value option `option` runs with while SPIDYVR STOCK is ON (`value`, the player's, for anything else).
-inline uint32_t stockValue(uint32_t option, uint32_t value) {
-    switch (option) {
-    case spidyvrPicture: return 0; // ON: the game's TAA per eye, SpidyVR's jitter, the clean picture
-    case image: return 0;          // SPIDYVR (no FXAA / CAS look)
-    case imageStyle: return 0;     // GAME TAA SPIDYVR
-    case sharpenMatch: return 1;   // OFF
-    case lightHold: return 2;      // OFF (no history hold)
-    case taaHold: return 0;        // OFF
-    case jitterGuard: return 1;    // OFF: SpidyVR's jitter always
-    case taaDiagnostics: return 0; // OFF
-    case slWatch: return 1;        // OFF (no Streamline hooks)
-    case lightChecks: return 1;    // OFF: the game's 256 light-glow query room (next eyes made)
-    case glowCheck: return 0;      // GAME
-    case flareBlock: return 1;     // OFF: the game's glow sprites
-    case lensFlares: return 0;     // GAME (read when VR starts)
-    case windowPop: return 1;      // OFF
-    case shadowMatch: return 0;    // ON: SpidyVR's fitCascades
-    case farWindows: return 3;     // GAME: no extra write (SpidyVR's 150% impostor reach is `reach`, kept)
-    case autoPerf: return 0;       // OFF
-    default: return value;
-    }
-}
 // Version 0.0.62 PUNCH HITS / ENEMY TRACKING values
 inline constexpr uint32_t punchHitsBoth = 0, punchHitsGame = 1, punchHitsInstant = 2;
 inline bool instantPunch(uint32_t value) { return value == punchHitsBoth || value == punchHitsInstant; }

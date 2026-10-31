@@ -26,6 +26,8 @@ Every finding is marked **CONFIRMED** (read in the logs or the code) or **CANDID
 
 ## Does HEAP GUARD cover them?
 
+**0.0.74 test 10:** HEAP GUARD is removed with the other 0.0.74 picture options (the eye bridge is v0.0.73's again), so this section is history. The SAFETY CHECKS switches and the pop-up below stay.
+
 - **Cause 5:** yes. With HEAP GUARD on (ON by default in fa15f5f; OFF by default since the test 3 black-headset fix, docs/BLACK-074-test3.md), after the game makes a new render heap the bridge lets go of the eye images, forgets their states, takes them again from the next frame, and copies no pair begun before the heap change.
 - **Causes 1 to 4:** no. HEAP GUARD does not touch the display path, the streamer copy, the query pools or Streamline. 1d, with no Mem12 line, would most likely still fail with HEAP GUARD alone. The player ran 0.0.73, which had no HEAP GUARD, so it was not yet tested on this PC.
 

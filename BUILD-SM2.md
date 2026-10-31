@@ -2662,29 +2662,7 @@ With -EngineTaa and live.txt `image_style = spidyvr`, the session sets the game'
   - CANDIDATE: that this is the pop the owner sees, and that the lit full-model swap follows `+0x1b28`. The impostor query's `+0x88` (145 m) distance remains the other CANDIDATE. It is still gated off (`farWindowsCandidateWrite`) because it flickers.
   - Still pop-in: raise the game's Level of Detail (Very High) and FAR WINDOWS 3X.
 
-## 60. Version 0.0.73 TAA SHAKE: TAA JITTER FULL / HALF / OFF, the per-eye TAA record
-
-The owner after test 6: with GAME TAA SPIDYVR on, medium and far buildings "shake like crazy". GAME TAA OFF stops it (the owner CONFIRMED this).
-- **TAA JITTER** (GRAPHICS, wrist, live, no restart). A press steps FULL -> HALF -> OFF. The default is **HALF**, which is the fix and is ON.
-  - FULL is test 6's jitter (`taa_jitter_scale` 100). This is the revert.
-  - HALF is half of that (50): ±0.5 render pixel, the usual TAA size.
-  - OFF (0) keeps the game's TAA running with a still jitter (`engine_taa::stillJitter`, 1e-6 clip units, about 0.0035 pixel). TemporalAa returns when the jitter is 0, so a true 0 would turn TAA off.
-  - live.txt `taa_jitter_scale` (0-200) still sets any percent, and `taa_jitter` (0-3) still sets the mode.
-  - `SpidyEngineTaaJitterNow` now returns `engine_taa::packJitter`, which is the mode plus the scale in the next byte.
-- **Why** (docs/TAA-SHAKE-0.0.73.md):
-  - CONFIRMED by disassembly: the lens `0x2c75560` shifts the projection by the stored `+0x428`/`+0x42c` in clip units. TemporalAa `0x2c2dc60` takes it back as `0.5·x·W` and `-0.5·y·H` pixels (constants `0x5303de8` and `0x53119d4`). So units, sign and size agree, and they match the flat camera's (test 6: 0.874 vs 0.875 pixel at the largest).
-  - CONFIRMED: the eyes' previous camera is their own (12747/12747).
-  - CANDIDATE: the game's TAA history does not hold under constant head motion (the cut flag `+0x19ab`, ages `+0x19ac`/`+0x1de8`), so the ±1 pixel jitter itself is seen as shake.
-- **Per-eye record** (`SpidyEngineTaaEyes`, `engine_taa::Eyes`, 128 bytes, `ENTE` v1). This is read with read() only, every 250 ms while ENGINE TAA is on, at offsets the handler itself reads. That the handler's job is our eye view is a CANDIDATE. Fields:
-  - the stored jitter;
-  - the set's `+0x3800`/`+0x3804` size, from `[view+0x18e0]`;
-  - the pixels TAA takes back;
-  - the cut flag, the two ages against the frame `0xc2c6c30`, and the current frame's weight from them;
-  - how many samples had weight 1 (history thrown away).
-  - The report has it as `engine_taa_eyes` (final and per sample), and the console prints `TAA JITTER HALF: ...`.
-- **Tests:** core `0.0.73 TAA SHAKE`, `tests/taashake_tests.py`.
-
-## 61. Version 0.0.73 MPSUIT: PLAYER 2 BODY
+## 60. Version 0.0.73 MPSUIT: PLAYER 2 BODY
 
 - **PLAYER 2 BODY** (SURVIVAL AND REPUTATION, beside MP SOLO TEST; `mp_player2_body`, export `SpidyMpPlayer2Body`, 5477; SUIT LOOK default, live). The owner: "when im spiderman with ingame suits the other player was that stick figure thing again it only shows the characters we made normally".
 - **Cause, CONFIRMED in this mod's code:** PLAYER 2 is drawn only with the mod's own models. `mp::suitIdOfSlot(wornSuitSlot)` is `noSuit` for any game suit, because a game suit has no mod suit slot. `slotOfState` then gives 0, so `game_xr` fell to `mp::appendFigure`, the stick figure.
@@ -2699,4 +2677,12 @@ The owner after test 6: with GAME TAA SPIDYVR on, medium and far buildings "shak
 - **CANDIDATE:** the learned palette is how the suit looks on the owner's headset. Untested in game.
 - **Preview:** `tools/mp/mp_preview.py` scenes 3-5.
 - **Tests:** mp_tests (LOOK round trip, old pose, every hero's body, the option), mp_buddy_tests `test_look_tail`, hero073_tests `Hero073MpSuit`.
+
+## 61. Version 0.0.74 test 10: the 0.0.73 picture again
+
+The owner (pt1352u): "our build looked best in the last public build so go back to that one". Test 10 keeps the 0.0.74 vehicle work (Batmobiles and the car swap, the dash screens and laser pointer, CRIME GPS, the Batcomputer, the hideouts, CAR MUSIC, CAVE QUIET, the launcher's safety checks and crash reports, MP SOLO TEST, MPSUIT, COMING SOON, FLIGHT POSE) and puts every picture, AA and image path back to the v0.0.73 tag's.
+- **Removed:** TAA SHAKE (FULL / HALF / OFF), SPIDYVR PICTURE, FLARE BLOCK, TAA DIAGNOSTICS, TAA HOLD, HEAP GUARD, JITTER GUARD, SPIDYVR STOCK, MILES TAA, TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL, AA MODE CLEAN, IMPOSTOR EYE, CLEAN JITTER, JITTER PROOF (BIG), ENGINE TAA STOCK, VIEW JITTER FIX, their logs and proofs, and the 0.0.74 test 2 IMAGE / STOCK presets.
+- **Restored to v0.0.73 byte for byte:** `src/native_eye_gpu.cpp`, `src/stereo_probe.cpp`, `include/spidy/native_eye_gpu.hpp`, `engine_taa.hpp`, `view_gates.hpp`, `tools/vr_display.py`, `tools/probe_stereo_gpu.py`.
+- **live.txt from tests 2-8:** `live_settings.migrate_074t10` runs once at the start (marker `# Version 0.0.74 test 10`). It deletes the retired keys' lines; and, in a file test 2's SPIDYVR PICTURE migration touched (its marker line), the picture keys that migration wrote (`image`, `image_style`, `aa`, `sharpen`, `sharpen_match`, `taa_jitter`, `taa_jitter_scale`, `lens_flares`), so the v0.0.73 defaults apply. Any retired key left in a file is ignored by the parser, never applied.
+- **Tests:** `tests/update38_tests.py` (TEST10 cases), core `combat38` order checks.
 

@@ -118,12 +118,7 @@ SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, R
 #   WATCH: viewport 0 alone; the eyes never pass through Streamline). Encoding CONFIRMED beside the game's log in
 #   31 reports kept here: AA 2 + UpscaleMethod 0 is "Anti aliasing: TAA / Upscale method: None" (23 of them),
 #   AA 2 or 3 + UpscaleMethod 2 is "DLAA / DLSS" (8). Read by the game at launch (restart); put back after.
-# - 0.0.74 test 4 AA MODE CLEAN (the default; aa_mode = off leaves it): the game's screen shake off for the
-#   session. ScreenShake is a name in the game's registry set (CONFIRMED: the string beside LensFlares,
-#   ChromaticAberration and FilmGrainStrength in Spider-Man2.exe 2.810.0.0); 0 for Off by the other toggles'
-#   encoding (CANDIDATE, as LensFlares'). Backed up and put back after the session as SESSION's are.
-SESSION_OFF = dict(lens_flares=dict(LensFlares=0), game_aa=dict(AA=2, UpscaleMethod=0),
-                   screen_shake=dict(ScreenShake=0))
+SESSION_OFF = dict(lens_flares=dict(LensFlares=0), game_aa=dict(AA=2, UpscaleMethod=0))
 
 
 def session_list(off=()):

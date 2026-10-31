@@ -22,10 +22,7 @@ class GameTaaOff(unittest.TestCase):
         self.assertEqual(L.UPDATE38_DEFAULTS['image_style'], 'off')
         self.assertEqual(L.export_value('image_style', 'spidyvr'), 0)  # index 0 keeps its meaning
         self.assertEqual(L.export_value('image_style', 'off'), 1)
-        self.assertEqual(L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), 'off')  # 0.0.74 test 2: under SPIDYVR PICTURE CUSTOM (test 3: STOCK off)
-        self.assertEqual(L.image_style_of({'aa_mode': 'off', 'spidyvr_picture': 'custom'}), 'spidyvr')  # 0.0.74 test 3 SPIDYVR STOCK (aa_mode = off)
-        self.assertEqual(L.image_style_of({'aa_mode': 'off'}), 'spidyvr')  # SPIDYVR PICTURE, the 0.0.74 test 2 default
-        self.assertEqual(L.image_style_of({}), 'off')  # 0.0.74 test 4 AA MODE CLEAN (the default)
+        self.assertEqual(L.image_style_of({}), 'off')
         self.assertEqual(L.image_style_in_file('/nonexistent/live.txt'), 'off')
         h = src('include/spidy/image_style.hpp')
         self.assertIn('inline constexpr uint32_t defaultStyle = gameTaaOff;', h)
@@ -35,10 +32,7 @@ class GameTaaOff(unittest.TestCase):
         self.assertIn('std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};', src('src/stereo_probe.cpp'))
 
     def test_game_aa_taa_follows_game_taa(self):
-        self.assertFalse(L.game_aa_taa(True, L.image_style_of({'spidyvr_picture': 'custom', 'spidyvr_stock': 'off'}), False))  # CUSTOM, STOCK off: the 0.0.73 release default
-        self.assertTrue(L.game_aa_taa(True, L.image_style_of({'aa_mode': 'off', 'spidyvr_picture': 'custom'}), False))  # STOCK: the game's TAA, as upstream
-        self.assertTrue(L.game_aa_taa(True, L.image_style_of({'aa_mode': 'off'}), False))  # 0.0.74 test 2 SPIDYVR PICTURE
-        self.assertFalse(L.game_aa_taa(True, L.image_style_of({}), False))  # 0.0.74 test 4 AA MODE CLEAN
+        self.assertFalse(L.game_aa_taa(True, L.image_style_of({}), False))  # the release default: the game's own AA
         self.assertTrue(L.game_aa_taa(True, 'spidyvr', False))             # switched on: as before
         r = src('tools/run_game_vr.py')
         self.assertLess(r.index('live_settings.migrate_0073(ROOT/'), r.index('game_taa_look = live_settings.image_style_in_file'))
@@ -77,7 +71,7 @@ class GameTaaOff(unittest.TestCase):
         self.assertIsNone(line)
         self.assertIsNone(value)
         self.assertIn(L.MIGRATED_0073, text)
-        self.assertEqual(L.image_style_of(dict(L.parse(text)[0], spidyvr_picture='custom', spidyvr_stock='off')), 'off')  # test 3: STOCK off
+        self.assertEqual(L.image_style_of(L.parse(text)[0]), 'off')
         self.assertIsNone(L.migrate_0073('/nonexistent/dir/live.txt'))
         self.assertIn(L.MIGRATED_0073, L.HEADER)  # a new live.txt starts migrated
 
@@ -120,7 +114,7 @@ class ReleaseLabels(unittest.TestCase):
 
 @unittest.skipUnless(TEST_BUILD, "the public release has no MP SOLO TEST")
 class Hero074Test1(unittest.TestCase):
-    """0.0.74 test 1: MP SOLO TEST back for the test build, OFF by default; the wrist says 0.0.74 TEST 1."""
+    """0.0.74 test 1: MP SOLO TEST back for the test build, OFF by default; the wrist says 0.0.74 TEST <n>."""
     def test_mp_solo_test_off_by_default(self):
         self.assertEqual(L.UPDATE38_DEFAULTS['mp_solo_test'], 'off')
         self.assertEqual(L.export_value('mp_solo_test', 'off'), 0)
@@ -130,7 +124,7 @@ class Hero074Test1(unittest.TestCase):
 
     def test_labels(self):
         c = src('CMakeLists.txt')
-        self.assertIn('set(HERO_TEST_NUMBER "8" CACHE', c)  # 0.0.74 test 8: the notice says TEST 8
+        self.assertIn('set(HERO_TEST_NUMBER "10" CACHE', c)  # 0.0.74 test 10: the notice says TEST 10
         self.assertIn('set(HERO_TEST_VERSION "0.0.74" CACHE', c)
 
 

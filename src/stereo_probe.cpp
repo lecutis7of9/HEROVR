@@ -3,11 +3,6 @@
 #include "spidy/eye_job_table.hpp"
 #include "spidy/eye_resolution.hpp"
 #include "spidy/engine_taa.hpp"
-#include "spidy/taa_diag074.hpp"
-#include "spidy/taa_hold074.hpp"
-#include "spidy/taa_link074.hpp" // 0.0.74 test 3 TAA LINK + JITTER GUARD
-#include "spidy/miles_taa074.hpp" // 0.0.74 test 3 MILES TAA
-#include "spidy/taa_gate074.hpp" // 0.0.74 test 4 TAA GATE LOG, EYE TAA REQUEUE, MAIN VIEW SMALL
 #include "spidy/image_style.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -29,7 +24,6 @@
 #include "spidy/view_gates.hpp"
 #include "spidy/window_pop.hpp"
 #include "spidy/recording_fov.hpp"
-#include "spidy/view_jitter.hpp" // 0.0.74 test 8 VIEW JITTER
 #include <MinHook.h>
 #include <atomic>
 #include <cmath>
@@ -346,67 +340,6 @@ std::atomic<bool> engineTaaAuto{};
 std::atomic<uint32_t> imageStyle{spidy::image_style::defaultStyle};
 // (SpidyEngineTaa is declared at file scope, in the extern "C" block above: Update 37.1, MSVC C2733.)
 std::atomic<uint32_t> engineTaaWhy{}, engineTaaGameAa{UINT32_MAX}, engineTaaWidened{}, engineTaaMaskSeen{};
-// 0.0.74 test 3 MILES TAA (miles_taa074.hpp): MilesVR / SpidyVR 0.4.1's per-eye TAA. milesOn the switch (game_xr,
-// live), eyeTemporal 0x20 it was on when VR started (the eyes made with the TAA targets, at milesPercent), milesExeKnown
-// every byte check passed, milesReason why it fell back (SPIDYVR STOCK's path from there), milesJobs the eye jobs.
-std::atomic<bool> milesOn{true}, milesExeKnown{};
-// The eyes were made with the game's TAA targets while its mask and Anti-Aliasing make them (initBuffers): without
-// them TemporalAa has nowhere to write, so a switch turned on live after a start without them does nothing.
-std::atomic<bool> milesTargetsOk{}, milesTargets{};
-std::atomic<uint32_t> milesReason{}, milesPercent{}, milesUpscaleBad{};
-std::atomic<uintptr_t> milesJobs[2]{};
-} // namespace
-extern "C" {
-__declspec(dllexport) spidy::miles_taa::Data SpidyMilesTaaData;
-}
-namespace {
-// Whether the four steps run now: on, the exe as known, and nothing made it fall back for the session (a wrong
-// upscale or no hook only loses the proof, never the TAA the upscaled eyes need).
-bool milesLive() {
-    namespace mt = spidy::miles_taa;
-    const uint32_t why = milesReason.load(std::memory_order_relaxed);
-    return milesOn.load(std::memory_order_relaxed) && milesExeKnown.load(std::memory_order_relaxed) &&
-           milesTargets.load(std::memory_order_relaxed) && (why == mt::none || why == mt::upscaleWrong || why == mt::hookFailed);
-}
-// Eyes made smaller than their image need the game's TAA every frame (its jitter and the job's AA) whatever the switch
-// or the safety says: without it TemporalAa leaves (0x2c2dccb, 0x2c2dd09) and nothing resolves them to the eye's size.
-bool milesUpscaled() {
-    const uint32_t made = milesPercent.load(std::memory_order_relaxed);
-    return made && made < 100;
-}
-bool milesSteps() { return milesLive() || milesUpscaled(); }
-// The first reason only (one console line: game_xr reads it).
-void milesFallBack(uint32_t why) {
-    uint32_t expected = spidy::miles_taa::none;
-    if (!milesReason.compare_exchange_strong(expected, why))
-        return;
-    SpidyMilesTaaData.reason = why;
-    char line[160];
-    std::snprintf(line, sizeof line, "MILES TAA: %s\n", spidy::miles_taa::reasonText(why));
-    OutputDebugStringA(line);
-}
-// 0.0.74 test 4 (taa_gate074.hpp): TAA GATE LOG and EYE TAA REQUEUE (game_xr's switches, live), MAIN VIEW SMALL
-// (eyeTemporal bit 0x40, read at the VR start). gateLock guards the rings and the requeue states (copyJob,
-// setupDisplay and TemporalAa may run on different threads).
-std::atomic<bool> gateLogOn{true}, requeueOn{false}, requeueOff{};
-std::atomic<uint32_t> gateReason{};
-SRWLOCK gateLock = SRWLOCK_INIT;
-spidy::taa_gate::JobRing gateRings[2];
-spidy::taa_gate::Requeue gateRequeue[2];
-} // namespace
-extern "C" {
-__declspec(dllexport) spidy::taa_gate::Data SpidyTaaGateData;
-}
-namespace {
-// The first reason only (game_xr prints it once).
-void gateFallBack(uint32_t why) {
-    uint32_t expected = spidy::taa_gate::none;
-    if (!gateReason.compare_exchange_strong(expected, why))
-        return;
-    SpidyTaaGateData.reason = why;
-    OutputDebugStringA(spidy::taa_gate::reasonText(why));
-    OutputDebugStringA("\n");
-}
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
@@ -500,30 +433,24 @@ using SetupModels = uint64_t (*)(void*, void*, void*, uint64_t, uint64_t);
 SetupModels originalSetupModels{};
 void* setupModelsHook{};
 bool distances{};
-// The far buildings' full models (createViews bit 128 off). CANDIDATE (0.0.74 test 5: until
-// SpidyViewGatesData's per-site histogram shows the eyes reaching these calls). Far buildings are
-// impostors, and only the engine's active view (IsActiveView 0x2c991a0 in 2.810, CONFIRMED by its
-// bytes and the five calls' targets; the view at [0xc2cae70], read from its cmp) has the impostors it sees draw their
-// full models, with the lit windows and the rooms behind them. The ImpostorHQModelRegJob launchers
-// (2a6c2e0, 2a6c410 here: CANDIDATE names) apply that view's wanted state per impostor, from its
-// visibility queries (2a6bc60), and the impostor submit job (2a6af10, CANDIDATE) marks the view.
-// The 189daa0 / 16fb630 / 16fb750 / 16faf10 / 16f8afa these comments used to give are SM1's
-// (189daa0 has no callers in 2.810): stale, CANDIDATE at best.
-// A resting game view (restGameView) submits no scene, so in VR the
+// The far buildings' full models (createViews bit 128 off). Far buildings are
+// impostors, and only the engine's active view (189daa0: the view at
+// ViewContextManager +f8) has the impostors it sees draw their full models,
+// with the lit windows and the rooms behind them: ImpostorHQModelRegJob
+// (16fb630, 16fb750) applies that view's wanted state per impostor, from its
+// visibility queries (16faf10), and the impostor submit job (16f8afa) marks
+// the view. A resting game view (restGameView) submits no scene, so in VR the
 // buildings beyond the nearest stayed dark cards until a menu, which renders
 // that view again, lit them. While the game view rests the left eye stands in
-// for it at those five checks (isActiveView). 0.0.74 test 5: SM2 never rests the game view
-// (no flag 32), so the left eye stands in while immersive, the game view and the right eye
-// answer no there. One view only: the
+// for it at those five checks (isActiveView). One view only: the
 // registration applies a view's wanted states over everyone's, and two views
 // would undo each other's every frame.
 using IsView = bool (*)(void*);
 IsView originalIsActiveView{};
 void* isActiveViewHook{};
-std::atomic<bool> impostors{};
-std::atomic<uint32_t> impostorsWhy{spidy::view_gates::impNotHooked}; // 0.0.74 test 5
+bool impostors{};
 // How far away an impostor draws its full model then: the eyes' visibility
-// queries (2a6bc60 in 2.810, 16faf10 in SM1) carry the game's distance in their result (+88: 145 m from
+// queries (16faf10) carry the game's distance in their result (+88: 145 m from
 // 7a89170 or 7a89174, which region changes rewrite), and the impostor jobs
 // read it after the queries return. While an eye stands in, both eyes' results
 // get impostorReach percent of it (impostorQueries), so both draw alike;
@@ -663,18 +590,6 @@ uintptr_t pointer(uintptr_t p) {
     uintptr_t v{};
     read(p, &v, 8);
     return v;
-}
-// EYE TAA REQUEUE: the game's Enqueue (0x2c77810, CONFIRMED) for TemporalAa 0xb1 on `list` (a view's +0x18d0),
-// as 0x2d017b3 does; a fault is caught and turns the requeue off (never a crash). No C++ objects here (SEH).
-using GateEnqueue = void (*)(void*, uint32_t, uint64_t, void*);
-bool gateEnqueue(uintptr_t list) {
-    __try {
-        reinterpret_cast<GateEnqueue>(base + spidy::taa_gate::enqueueRva)(reinterpret_cast<void*>(list),
-                                                                         spidy::taa_gate::temporalAaCommand, 1, nullptr);
-        return true;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
 }
 bool owned(void* view) {
     if (!view)
@@ -1023,14 +938,12 @@ uint64_t csmFit(void* csm, void* view, void* lights, void* settings) {
         farShadowsSet(fs::afterFailure(mode, failed), failed, true);
     return result;
 }
-// 2c991a0, "is this the active view" (189daa0 in SM1), where the impostor code asks it (the
-// return addresses after its five calls there, CANDIDATE; impostors above).
+// 189daa0, "is this the active view", where the impostor code asks it (the
+// return addresses after its five calls there; impostors above).
 std::atomic<uint32_t> lodFadeMode{spidy::view_gates::defaultFade}, lodFadeWhy{};
 bool lodFadeKnown{}; // 0x2b4f9b8's bytes as known (install)
 std::atomic<uint64_t> fadeCalls{}, fadeEyeAsks{};
 std::atomic<bool> impostorsOn{true};
-// 0.0.74 test 5: the five impostor calls' asks, yes answers (left, right, game view) and asks per call.
-std::atomic<uint64_t> impostorAsked{}, impostorYes[3]{}, impostorBySite[spidy::view_gates::impostorSites]{};
 std::atomic<uint32_t> lodReachPercent{spidy::view_gates::defaultReach};
 void viewGatesNote(uint64_t spidy::view_gates::Data::*field, unsigned add = 1);
 bool isActiveView(void* view) {
@@ -1072,33 +985,19 @@ bool isActiveView(void* view) {
             }
         }
     }
-    // IMPOSTORS (0.0.74 test 5, CANDIDATE sites): at the five impostor calls only, while immersive and
-    // the switch is on, the left eye is the active view for both eyes; the right eye and the game view
-    // are not (one view picks, as the registration needs). No `rested` gate: that is flag 32's state,
-    // which SM2 never sets, so before test 5 this never answered. Every ask there is counted.
-    if (view && impostors.load(std::memory_order_relaxed) && enabled) {
-        namespace vg = spidy::view_gates;
-        const int site = vg::impostorSite(reinterpret_cast<uintptr_t>(_ReturnAddress()) - base);
-        if (site >= 0) {
-            void* const left = eyes[0].load(std::memory_order_relaxed);
-            const int who = left && view == left                               ? 0
-                            : left && view == eyes[1].load(std::memory_order_relaxed) ? 1
-                                                                                      : 2;
-            const bool standIn = left && impostorsOn.load(std::memory_order_relaxed) &&
-                                 latchedImmersive.load(std::memory_order_relaxed);
-            const bool answer = standIn ? vg::impostorAnswer(who) : originalIsActiveView(view);
-            impostorAsked.fetch_add(1, std::memory_order_relaxed);
-            impostorBySite[site].fetch_add(1, std::memory_order_relaxed);
-            if (answer)
-                impostorYes[who].fetch_add(1, std::memory_order_relaxed);
-            if (standIn && answer && site == 1) { // 0x2a6c34b: the first HQ launcher's first ask
+    if (view && view == eyes[0].load(std::memory_order_relaxed) && impostors && enabled &&
+        impostorsOn.load(std::memory_order_relaxed) && rested.load(std::memory_order_relaxed)) {
+        const auto caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - base;
+        if (caller == 0x2a6af95 || caller == 0x2a6c34b || caller == 0x2a6c35b || caller == 0x2a6c46c ||
+            caller == 0x2a6c47c) {
+            if (caller == 0x2a6c34b) {
                 AcquireSRWLockExclusive(&telemetry);
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
                 ++SpidyAppearanceData.impostorFrames;
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
                 ReleaseSRWLockExclusive(&telemetry);
             }
-            return answer;
+            return true;
         }
     }
     return originalIsActiveView(view);
@@ -1432,32 +1331,10 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
             // 19203c2 queues TemporalAa (0x8a) unless the profile's +68c is set.
             uint8_t left{};
             // SM2: the profile flag is bit 0 of +cc8; TemporalAa is 0xb1 on +18d0 (SM2VR).
-            // 0.0.74 test 3 MILES TAA step 4: as MilesVR, TemporalAa where the profile leaves it out
-            // (0x2d017b3, CONFIRMED; its bytes checked at the start).
-            const bool miles = milesLive();
-            if (((eyeTemporal.load() & 4) || miles) && read(reinterpret_cast<uintptr_t>(profile) + 0xcc8, &left, 1) &&
-                (left & 1)) {
+            if ((eyeTemporal.load() & 4) && read(reinterpret_cast<uintptr_t>(profile) + 0xcc8, &left, 1) &&
+                (left & 1))
                 reinterpret_cast<Enqueue>(base + 0x2c77810)(reinterpret_cast<void*>(address + 0x18d0), 0xb1, 1,
                                                             nullptr);
-                if (miles)
-                    ++SpidyMilesTaaData.queued[eye];
-            } else if (miles && requeueOn.load(std::memory_order_relaxed) && !requeueOff.load()) {
-                // 0.0.74 test 4 EYE TAA REQUEUE: the eye's jobs stopped getting TemporalAa; once more, once per job.
-                const uintptr_t job = milesJobs[eye].load(std::memory_order_relaxed);
-                AcquireSRWLockExclusive(&gateLock);
-                const bool want = gateRequeue[eye].want(job, true);
-                if (want)
-                    gateRequeue[eye].queued(job);
-                ReleaseSRWLockExclusive(&gateLock);
-                if (want) {
-                    if (gateEnqueue(address + spidy::taa_gate::viewTaaList)) {
-                        ++SpidyTaaGateData.requeued[eye];
-                    } else {
-                        requeueOff = true;
-                        gateFallBack(spidy::taa_gate::requeueFault);
-                    }
-                }
-            }
             break;
         }
 }
@@ -1466,44 +1343,7 @@ void setupDisplay(void* view, void* settings, void* profile, uint64_t flags, uin
 std::array<uint32_t, 2> eyeRenderSize() {
     // Update 34: always the eye's own size; ENGINE TAA does not upsample (a size that
     // followed a live switch would change under buffers already made).
-    // 0.0.74 test 3 MILES TAA: the percent the eyes were made at (set once, when the first eye's buffers are made).
-    const uint32_t made = milesPercent.load(std::memory_order_relaxed);
-    return spidy::eyeRenderSize(config.width, config.height, made ? made : 100);
-}
-// 0.0.74 test 4 MAIN VIEW SMALL (taa_gate074.hpp, CANDIDATE): the game's own view's scene at mainPercent of its
-// output when it was on at the VR start and the game's AA makes TAA targets (its TemporalAa resolves it). The
-// output sizes (+0x1b980..) are the game's; only the render size and flag 2 are written. Never view flag 32.
-void mainViewSmall(void* buffers) {
-    namespace tg = spidy::taa_gate;
-    if (!enabled || !(eyeTemporal.load() & tg::mainEyeTemporalBit) || !buffers)
-        return;
-    const uintptr_t main = pointer(base + tg::mainViewGlobal);
-    if (!main || pointer(main + tg::viewBuffers) != reinterpret_cast<uintptr_t>(buffers))
-        return;
-    uint32_t aa = UINT32_MAX, out[2]{};
-    const bool aaOk = read(base + spidy::engine_taa::aaRva, &aa, 4) && spidy::engine_taa::aaMakesTargets(aa);
-    if (!read(reinterpret_cast<uintptr_t>(buffers) + tg::setSizes + 8, out, sizeof out))
-        return;
-    if (!aaOk) {
-        gateFallBack(tg::mainGameAa);
-        return;
-    }
-    if (!tg::shrinkMain(true, aaOk, out[0], out[1]))
-        return;
-    const auto sizes = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(buffers) + tg::setSizes);
-    const auto shrunk = tg::mainSize(out[0], out[1]);
-    sizes[0] = shrunk[0];
-    sizes[1] = shrunk[1];
-    sizes[15] = tg::sizeFlags(sizes[15], shrunk[0] == out[0] && shrunk[1] == out[1]);
-    auto& d = SpidyTaaGateData;
-    ++d.mainResized;
-    d.mainPercent = tg::mainPercent;
-    d.mainWidth = shrunk[0];
-    d.mainHeight = shrunk[1];
-    char line[128];
-    std::snprintf(line, sizeof line, "MAIN VIEW SMALL: the game's view at %ux%u for %ux%u\n", shrunk[0], shrunk[1], out[0],
-                  out[1]);
-    OutputDebugStringA(line);
+    return spidy::eyeRenderSize(config.width, config.height, 100);
 }
 void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t height, uint32_t kind, uint8_t align) {
     originalSizeBuffers(buffers, name, width, height, kind, align);
@@ -1520,10 +1360,8 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
                 eyeWidth = config.width;
                 eyeHeight = config.height;
             }
-    if (!eyeWidth) {
-        mainViewSmall(buffers); // 0.0.74 test 4 MAIN VIEW SMALL
+    if (!eyeWidth)
         return;
-    }
     // SM2 +1b978: render width, height; the anti-aliased image's width,
     // height; those in multiples of 8; the output's width, height (multiples
     // of 8 when aligned, SM2VR +1b990/+1b994); ... flags at +1b9b4, 2 among
@@ -1535,13 +1373,6 @@ void sizeBuffers(void* buffers, const char* name, uint32_t width, uint32_t heigh
     sizes[5] = (eyeHeight + 7) & ~7u;
     sizes[6] = align ? sizes[4] : eyeWidth;
     sizes[7] = align ? sizes[5] : eyeHeight;
-    // 0.0.74 test 3 MILES TAA: eyes made smaller than their image keep the size they were made at (the game's TAA
-    // resolves it to sizes[2..3]); a later re-size must not ask for more than the buffers have.
-    if (const uint32_t made = milesPercent.load(std::memory_order_relaxed); made && made < 100) {
-        const auto render = eyeRenderSize();
-        sizes[0] = render[0];
-        sizes[1] = render[1];
-    }
     if (sizes[0] == eyeWidth && sizes[1] == eyeHeight)
         sizes[15] |= 2;
     else
@@ -1640,31 +1471,7 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
         // needs private scene buffers at its own resolution.
         alignas(16) uint8_t local[32]{};
         if (read(reinterpret_cast<uintptr_t>(description), local, sizeof(local))) {
-            // 0.0.74 test 3 MILES TAA: the eyes' size is chosen once, when the first eye's buffers are made.
-            namespace mt = spidy::miles_taa;
-            const bool miles = (eyeTemporal.load() & mt::eyeTemporalBit) != 0;
-            if (!milesPercent.load()) {
-                uint32_t stock[8]{}, aa = UINT32_MAX;
-                const bool maskStock = read(base + spidy::engine_taa::maskRva, stock, sizeof stock) &&
-                                       spidy::engine_taa::maskIsStock(stock);
-                const bool aaOk = read(base + spidy::engine_taa::aaRva, &aa, 4) &&
-                                  spidy::engine_taa::aaMakesTargets(aa);
-                if (miles && milesExeKnown.load() && !maskStock)
-                    milesFallBack(mt::maskDiffers);
-                else if (miles && milesExeKnown.load() && !aaOk)
-                    milesFallBack(mt::gameAa);
-                milesTargetsOk = maskStock && aaOk;
-                const uint32_t percent = mt::madePercent(miles, milesExeKnown.load(), maskStock, aaOk);
-                milesPercent = percent;
-                SpidyMilesTaaData.percent = percent;
-                char line[128];
-                std::snprintf(line, sizeof line, "MILES TAA: eyes made at %u%% (%s)\n", percent,
-                              miles ? "on at the start" : "off at the start");
-                OutputDebugStringA(line);
-            }
             const auto render = eyeRenderSize();
-            SpidyMilesTaaData.renderWidth = render[0];
-            SpidyMilesTaaData.renderHeight = render[1];
             std::memcpy(local, &render[0], 4);
             std::memcpy(local + 4, &render[1], 4);
             const uint64_t noParent{};
@@ -1673,14 +1480,9 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
             // the TAA target kind as well (engineTaaBuffers).
             sizingEye[0] = config.width;
             sizingEye[1] = config.height;
-            // 0.0.74 test 3 MILES TAA step 2: the TAA targets for the eyes, -EngineTaa or not.
-            const bool taaTargets = (eyeTemporal.load() & 0x10) ||
-                                    (miles && milesExeKnown.load() && milesReason.load() == mt::none);
-            const bool sized = taaTargets ? engineTaaBuffers(buffers, local, name)
-                                          : originalInitBuffers(buffers, local, name);
+            const bool sized = (eyeTemporal.load() & 0x10) ? engineTaaBuffers(buffers, local, name)
+                                                           : originalInitBuffers(buffers, local, name);
             sizingEye[0] = sizingEye[1] = 0;
-            if (taaTargets && sized && milesTargetsOk.load())
-                milesTargets = true;
             return sized;
         }
     }
@@ -1957,13 +1759,6 @@ void lodFadeCheck() {
     d.lodReach = lodReachPercent.load();
     d.impostorsOn = impostorsOn.load() ? 1 : 0;
     d.fadeGameCalls = fadeCalls.load();
-    d.impostorsInstalled = impostors.load() ? 1 : 0;
-    d.impostorsWhy = impostorsWhy.load();
-    d.impostorAsked = impostorAsked.load(std::memory_order_relaxed);
-    for (unsigned i = 0; i < 3; ++i)
-        d.impostorYes[i] = impostorYes[i].load(std::memory_order_relaxed);
-    for (unsigned i = 0; i < spidy::view_gates::impostorSites; ++i)
-        d.impostorBySite[i] = impostorBySite[i].load(std::memory_order_relaxed);
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
     ReleaseSRWLockExclusive(&gatesLock);
 }
@@ -2124,191 +1919,6 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     }
     return result;
 }
-// 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): ON by default, live (SpidyTaaHoldSet from game_xr).
-// extern "C" block (a definition, unlike a bare extern "C" declaration): the report finds it by this exact,
-// unmangled name. Test 2b ended VR with exit code 2 "Missing export: SpidyTaaHoldData" without it.
-extern "C" {
-__declspec(dllexport) spidy::taa_hold::Data SpidyTaaHoldData;
-}
-std::atomic<bool> taaHoldOn{false}; // 0.0.74 test 3: OFF by default (it never fired in test 2b)
-extern "C" void SpidyTaaHoldSet(uint32_t on) { taaHoldOn = on != 0; }
-// 0.0.74 test 3 SPIDYVR STOCK (ON by default, live from game_xr): the eye job gets SpidyVR's write only
-// (the context's TemporalAa on); TAA HOLD and TAA LINK leave it alone.
-std::atomic<bool> stockOn{true};
-extern "C" void SpidyStockSet(uint32_t on) { stockOn = on != 0; }
-void taaHoldJob(unsigned i, void* view, uint8_t* settings, uintptr_t job) {
-    namespace th = spidy::taa_hold;
-    static th::Eye eyeState[2];
-    auto& d = SpidyTaaHoldData;
-    const bool on = taaHoldOn.load(std::memory_order_relaxed);
-    d.on = on ? 1 : 0;
-    int32_t frame{}, cutFrame{}, stamp{};
-    uint8_t cut{};
-    if (!read(job + th::jobCut, &cut, 1) || !read(job + th::jobCutFrame, &cutFrame, 4) ||
-        !read(job + th::jobStamp, &stamp, 4))
-        return;
-    // The frame TemporalAa compares with: the context's +0x790 (CANDIDATE), else the global it is copied to.
-    int32_t global{};
-    std::memcpy(&frame, settings + th::settingsFrame, 4);
-    if (base && read(base + spidy::engine_taa::frameRva, &global, 4) &&
-        (!frame || (!th::stuck(frame, cutFrame, stamp) && th::stuck(global, cutFrame, stamp))))
-        frame = global;
-    float rendered[3]{}, previous[3]{};
-    float moved = 1e9f;
-    const auto v = reinterpret_cast<uintptr_t>(view);
-    if (read(v + 0x30, rendered, sizeof rendered) && read(v + 0x560, previous, sizeof previous)) {
-        const float dx = rendered[0] - previous[0], dy = rendered[1] - previous[1], dz = rendered[2] - previous[2];
-        moved = std::sqrt(dx * dx + dy * dy + dz * dz);
-    }
-    ++d.jobs[i];
-    if (cut)
-        ++d.cuts[i];
-    if (th::stuck(frame, cutFrame, stamp))
-        ++d.zeroAges[i];
-    d.lastFrame[i] = frame;
-    d.lastCutAge[i] = frame - cutFrame;
-    d.lastStampAge[i] = frame - stamp;
-    const auto p = th::plan(eyeState[i], on, cut, frame, cutFrame, stamp, moved);
-    if (p.hold) {
-        std::memcpy(reinterpret_cast<void*>(job + th::jobCutFrame), &p.cutFrame, 4);
-        std::memcpy(reinterpret_cast<void*>(job + th::jobStamp), &p.stamp, 4);
-        ++d.held[i];
-    }
-    ++d.sequence;
-}
-// 0.0.74 test 3 TAA LINK + JITTER GUARD (taa_link074.hpp). extern "C" block: the report finds it by name.
-extern "C" {
-__declspec(dllexport) spidy::taa_link::Data SpidyTaaLinkData;
-}
-std::atomic<bool> taaGuardOn{true};
-std::atomic<uint32_t> taaRefusedEyes{}; // bit per eye: history refused (slot unmoved or missing)
-extern "C" void SpidyTaaGuardSet(uint32_t on) { taaGuardOn = on != 0; }
-// One eye job after the game's copy (read() only): is its history slot moving with the frame?
-void taaLinkJob(unsigned i, uintptr_t job) {
-    namespace tl = spidy::taa_link;
-    static tl::Eye eyeState[2];
-    auto& d = SpidyTaaLinkData;
-    d.guardOn = taaGuardOn.load(std::memory_order_relaxed) ? 1 : 0;
-    ++d.jobs[i];
-    int32_t index{}, stamp{}, frame{};
-    uintptr_t slot{}, previous{};
-    bool have = read(job + tl::jobSlotIndex, &index, 4) && (index == 0 || index == 1) &&
-                read(job + tl::jobSlots + 8 * (1 - index), &slot, 8) && slot && read(slot, &stamp, 4) &&
-                read(job + tl::jobPreviousSet, &previous, 8) && previous;
-    if (!have)
-        ++d.noSlot[i];
-    const bool refused = tl::refused(eyeState[i], have, stamp);
-    if (have && refused)
-        ++d.stale[i];
-    if (have && base && read(base + tl::frameRva, &frame, 4)) {
-        ++d.ages[i][tl::bucket(frame, stamp)];
-        d.lastAge[i] = frame - stamp;
-    }
-    d.lastIndex[i] = index;
-    const uint32_t bit = 1u << i;
-    if (refused)
-        taaRefusedEyes.fetch_or(bit, std::memory_order_relaxed);
-    else
-        taaRefusedEyes.fetch_and(~bit, std::memory_order_relaxed);
-    ++d.sequence;
-}
-// 0.0.74 test 3 MILES TAA: the per-eye proof. TemporalAa 0x2c2dc60 reads no arguments (CONFIRMED); the four
-// registers are passed on as they came. read() only: nothing of the game's is written here.
-using TemporalAa = void (*)(void*, void*, void*, void*);
-TemporalAa originalTemporalAa{};
-void* temporalAaHook{};
-void temporalAa(void* a, void* b, void* c, void* d) {
-    namespace mt = spidy::miles_taa;
-    namespace tg = spidy::taa_gate;
-    const uintptr_t job = enabled ? pointer(base + mt::jobGlobal) : 0;
-    int eye = -1, age = -1;
-    for (int i = 0; job && i < 2; ++i)
-        if (milesJobs[i].load(std::memory_order_relaxed) == job)
-            eye = i, age = 0;
-    // 0.0.74 test 4 TAA GATE LOG: each eye's last 4 jobs, not only the newest (test 3 counted a run for the eye's
-    // previous job as none).
-    const bool gateLog = gateLogOn.load(std::memory_order_relaxed);
-    if (eye < 0 && job && gateLog) {
-        AcquireSRWLockShared(&gateLock);
-        for (int i = 0; i < 2 && eye < 0; ++i)
-            if (const int at = gateRings[i].find(job); at >= 0)
-                eye = i, age = at;
-        ReleaseSRWLockShared(&gateLock);
-    }
-    if (eye < 0) {
-        originalTemporalAa(a, b, c, d);
-        if (job && gateLog) { // the main view's and other views' runs, with what their history weight reads
-            auto& g = SpidyTaaGateData;
-            uint8_t cut{};
-            read(job + tg::jobCut, &cut, 1);
-            g.mainCut = cut;
-            read(job + tg::jobCutFrame, &g.mainCutFrame, 4);
-            read(job + tg::jobStamp, &g.mainStamp, 4);
-            read(base + tg::frameGlobal2, &g.mainFrame2, 4);
-            ++g.unmatched;
-            ++g.sequence;
-        }
-        return;
-    }
-    if (gateLog) {
-        auto& g = SpidyTaaGateData;
-        if (age > 0)
-            ++g.matchedOld[eye];
-        uint8_t cut{};
-        read(job + tg::jobCut, &cut, 1);
-        g.cut[eye] = cut;
-        read(job + tg::jobCutFrame, &g.cutFrame[eye], 4);
-        read(job + tg::jobStamp, &g.jobStamp[eye], 4);
-        read(base + tg::frameGlobal2, &g.frame2[eye], 4);
-        ++g.sequence;
-    }
-    uint32_t aa{}, index{}, input{}, output{};
-    int32_t frame{}, other{}, stamp{};
-    uint8_t cut{}, pick{};
-    float jitter[2]{};
-    read(base + mt::jobAaGlobal, &aa, 4);
-    read(base + mt::frameGlobal, &frame, 4);
-    const bool haveIndex = read(job + mt::jobSlotIndex, &index, 4) && index <= 1;
-    const uintptr_t otherSlot = haveIndex ? pointer(job + mt::jobSlots + 8 * (1 - index)) : 0;
-    const bool haveOther = otherSlot && read(otherSlot, &other, 4);
-    const uintptr_t previous = pointer(job + mt::jobPrevious);
-    read(job + mt::jobCut, &cut, 1);
-    read(job + spidy::engine_taa::jobJitter, jitter, sizeof jitter);
-    if (const uintptr_t set = pointer(job + mt::jobSet)) {
-        read(set + mt::setInputSize, &input, 4);
-        read(base + mt::targetPickGlobal, &pick, 1);
-        read(set + (pick ? mt::setTargetWidthAlt : mt::setTargetWidth), &output, 4);
-    }
-    originalTemporalAa(a, b, c, d);
-    const uintptr_t slot = haveIndex ? pointer(job + mt::jobSlots + 8 * index) : 0;
-    const bool haveStamp = slot && read(slot, &stamp, 4);
-    const bool ran = aa == 1 && frame && (jitter[0] != 0 || jitter[1] != 0) && output && haveStamp && stamp == frame;
-    auto& dd = SpidyMilesTaaData;
-    ++dd.calls[eye];
-    if (ran)
-        ++dd.ran[eye];
-    if (ran && haveOther && other == frame - 1 && previous)
-        ++dd.history[eye];
-    dd.frame[eye] = frame;
-    dd.stamp[eye] = stamp;
-    dd.otherStamp[eye] = other;
-    dd.slotIndex[eye] = index;
-    dd.previous[eye] = previous ? 1 : 0;
-    dd.cut[eye] = cut;
-    dd.aa[eye] = aa;
-    dd.inputWidth[eye] = input;
-    dd.outputWidth[eye] = output;
-    // The upscale (CANDIDATE): TemporalAa must read the smaller scene and write the eye's size. 30 runs that do not
-    // and the console says so (the eyes stay as made: restart with MILES TAA OFF for the full size).
-    if (ran) {
-        const auto render = eyeRenderSize();
-        if (mt::upscaleOk(input, output, config.width, render[0]))
-            milesUpscaleBad = 0;
-        else if (milesUpscaleBad.fetch_add(1) + 1 == 30)
-            milesFallBack(mt::upscaleWrong);
-    }
-    ++dd.sequence;
-}
 void copyJob(void* view, void* settings, void* a, void* b, bool c) {
     // Update 36: EYE BLOOM, before the job copies the view settings (a, its r8).
     if (enabled) {
@@ -2318,7 +1928,6 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             bloomJob(eye, a);
         gatesJob(eye, a); // Update 37: BLOOM FX and the bloom block dumps
         if (eye == 0) {
-            ++SpidyMilesTaaData.leftJobs; // 0.0.74 test 3 MILES TAA's safety counts these
             lodFadeCheck();
             // Update 37: ENGINE TAA's auto, once nothing blocks it (checked every 64th left job).
             static uint32_t taaEvery{};
@@ -2356,40 +1965,10 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             // then had no anti-aliasing at all.
             // SM2 (Update 34): the settings' +0x570, which the frame's copy (0x2c81890 to
             // 0xc2c64a0) puts where TemporalAa 0x2c2dc60 reads it ([0xc2c6a10] == 1).
-            // 0.0.74 test 3 MILES TAA step 3: the same write for each eye job while it is live.
-            const bool miles = milesSteps();
-            milesJobs[i].store(reinterpret_cast<uintptr_t>(job), std::memory_order_relaxed);
-            {   // 0.0.74 test 4 TAA GATE LOG's ring and EYE TAA REQUEUE's count of jobs with no TemporalAa call.
-                auto& g = SpidyTaaGateData;
-                const uint64_t calls = SpidyMilesTaaData.calls[i];
-                AcquireSRWLockExclusive(&gateLock);
-                gateRings[i].push(reinterpret_cast<uintptr_t>(job));
-                const bool missed = calls == gateRequeue[i].callsAtJob;
-                const bool pending = gateRequeue[i].pending;
-                const bool tripped = gateRequeue[i].newJob(calls);
-                ReleaseSRWLockExclusive(&gateLock);
-                ++g.eyeJobs[i];
-                if (missed && g.eyeJobs[i] > 1)
-                    ++g.missedJobs[i];
-                if (pending && missed)
-                    ++g.requeueFailed[i];
-                if (tripped) {
-                    requeueOff = true;
-                    gateFallBack(spidy::taa_gate::requeueFailed);
-                }
-            }
-            if (engineTaaLive.load() || miles) {
+            if (engineTaaLive.load()) {
                 const uint32_t temporal = 1;
                 std::memcpy(static_cast<uint8_t*>(settings) + spidy::engine_taa::jobAa, &temporal, 4);
-                if (miles)
-                    ++SpidyMilesTaaData.aaWrites[i];
             }
-            // 0.0.74 test 2b TAA HOLD (taa_hold074.hpp): the eye's own TAA history kept when the game's stamps
-            // follow the frame (share 1 = no history, the shake). Only this job's copy is written.
-            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed) && !miles)
-                taaHoldJob(i, view, static_cast<uint8_t*>(settings), reinterpret_cast<uintptr_t>(job));
-            if (engineTaaLive.load() && !stockOn.load(std::memory_order_relaxed) && !miles)
-                taaLinkJob(i, reinterpret_cast<uintptr_t>(job)); // 0.0.74 test 3 TAA LINK
             if (shareExposure(reinterpret_cast<uintptr_t>(job), i)) {
                 AcquireSRWLockExclusive(&telemetry);
                 InterlockedIncrement64(&SpidyAppearanceData.sequence);
@@ -2570,109 +2149,6 @@ native_eyes::Bounds viewLens(const native_eyes::Bounds& head) {
                ? recording_fov::covering(wide, degrees, flatAspect.load())
                : wide;
 }
-// 0.0.74 test 8 VIEW JITTER (view_jitter.hpp): every lens call's stored jitter (+0x428 / +0x42c after the call) per
-// view, at that view's own size; detail frames (200 at the start, 200 after a VIEW JITTER FIX flip, 100 after an ENGINE
-// TAA flip) and totals for game_xr's console lines. VIEW JITTER FIX: game_xr's SpidyViewJitterFixSet each frame (ON
-// unless the switch is OFF); ON, the game view, game head and shadow head lenses stop taking the game view's STORED
-// values back as arguments (the lens stores 2x / -2y, so test 7 doubled them and flipped Y on each call).
-namespace vj = spidy::view_jitter;
-std::atomic<uint32_t> viewJitterFix{1};
-SRWLOCK viewJitterLock = SRWLOCK_INIT;
-vj::Frame vjNow{};
-vj::Stats vjStats{};
-constexpr uint32_t vjRingSize = 512;
-vj::Frame vjRing[vjRingSize]{};
-uint32_t vjRingStart{}, vjRingCount{}, vjBudget{200};
-uint32_t vjFixSeen{UINT32_MAX}, vjEngineSeen{UINT32_MAX};
-// The game's own stored jitter this frame (the stock camera at activeView).
-float vjOwn[2]{};
-uint64_t vjOwnFrame{UINT64_MAX};
-bool vjFixOn() { return viewJitterFix.load(std::memory_order_relaxed) != 0; }
-// The game view draws this frame: not rested (restGameView clears its +0x13f8 and SubmitScene then leaves at once,
-// so the view gets no render job and its TAA does not run).
-bool vjGameRendered() {
-    const uintptr_t resting = rested.load(std::memory_order_relaxed);
-    return !resting || resting != pointer(base + spidy::taa_gate::mainViewGlobal);
-}
-// The game view's render size (its buffer set's sizes, taa_gate074.hpp, CONFIRMED).
-std::array<uint32_t, 2> vjGameSize() {
-    uint32_t size[2]{};
-    const uintptr_t mainView = pointer(base + spidy::taa_gate::mainViewGlobal);
-    const uintptr_t buffers = mainView ? pointer(mainView + spidy::taa_gate::viewBuffers) : 0;
-    if (!buffers || !read(buffers + spidy::taa_gate::setSizes, size, sizeof size))
-        return {0, 0};
-    return {size[0], size[1]};
-}
-// Caller holds viewJitterLock: closes the frame being gathered once frameIndex moved on.
-void vjRoll() {
-    if (vjNow.frame == frameIndex && vjNow.pass)
-        return;
-    bool any = false;
-    for (const auto& seen : vjNow.seen)
-        any = any || seen.count != 0;
-    if (any) {
-        ++vjStats.frames;
-        if (vjNow.rested)
-            ++vjStats.restedFrames;
-        if (vjBudget) {
-            --vjBudget;
-            if (vjRingCount == vjRingSize) {
-                vjRingStart = (vjRingStart + 1) % vjRingSize;
-                --vjRingCount;
-            }
-            vjRing[(vjRingStart + vjRingCount) % vjRingSize] = vjNow;
-            ++vjRingCount;
-        }
-    }
-    const uint32_t fix = vjFixOn() ? 1u : 0u;
-    const uint32_t engine = engineTaaLive.load(std::memory_order_relaxed) ? 1u : 0u;
-    if (fix != vjFixSeen) {
-        if (vjFixSeen != UINT32_MAX)
-            vjBudget = std::max(vjBudget, 200u);
-        vjFixSeen = fix;
-    }
-    if (engine != vjEngineSeen) {
-        if (vjEngineSeen != UINT32_MAX)
-            vjBudget = std::max(vjBudget, 100u);
-        vjEngineSeen = engine;
-    }
-    vjNow = vj::Frame{};
-    vjNow.frame = frameIndex;
-    vjNow.pass = offscreenPass + 1; // never 0 (0 marks the empty first frame)
-    vjNow.fix = fix;
-    vjNow.engine = engine;
-    vjNow.rested = vjGameRendered() ? 0u : 1u;
-    if (vjOwnFrame == frameIndex) {
-        vjNow.ownX = vjOwn[0];
-        vjNow.ownY = vjOwn[1];
-    }
-}
-void vjSetOwn(float x, float y) {
-    AcquireSRWLockExclusive(&viewJitterLock);
-    vjRoll();
-    vjOwn[0] = vjNow.ownX = x;
-    vjOwn[1] = vjNow.ownY = y;
-    vjOwnFrame = frameIndex;
-    ReleaseSRWLockExclusive(&viewJitterLock);
-}
-// The game's own stored jitter for this frame's game view and game head (main's when activeView did not see it).
-std::array<float, 2> vjOwnNow(float mainX, float mainY) {
-    AcquireSRWLockShared(&viewJitterLock);
-    const bool fresh = vjOwnFrame == frameIndex;
-    const std::array<float, 2> own{fresh ? vjOwn[0] : mainX, fresh ? vjOwn[1] : mainY};
-    ReleaseSRWLockShared(&viewJitterLock);
-    return own;
-}
-// After a lens call: what the view stored, at its own size (the shadow head and eyes at the eye size).
-void vjNote(uint32_t view, const Descriptor& lens) {
-    const auto size = view == vj::gameView || view == vj::gameHead ? vjGameSize() : eyeRenderSize();
-    const float x = lens.values[0x428 / 4], y = lens.values[0x42c / 4];
-    AcquireSRWLockExclusive(&viewJitterLock);
-    vjRoll();
-    vj::note(vjNow, view, x, y, size[0], size[1]);
-    vj::add(vjStats, view, x, y, size[0], size[1], vjNow.ownY);
-    ReleaseSRWLockExclusive(&viewJitterLock);
-}
 // The engine's active view (ViewContextManager +f8) is its first pool view: the
 // stock camera. Offscreen eyes are never active, and the "drawn in any view"
 // (18a1890) and "sphere in any view" (18a12a0) queries visit pool views only.
@@ -2690,7 +2166,6 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     if (!read(base + 0xc2ca228, &mask, 8) || !(mask & 1) ||
         !read(reinterpret_cast<uintptr_t>(incoming), &stock, sizeof(stock)) || !native_view::valid(stock))
         return false;
-    vjSetOwn(stock.values[0x428 / 4], stock.values[0x42c / 4]); // 0.0.74 test 8 VIEW JITTER: the game's own
     // The flat screen keeps the stock camera's shape whichever view is drawn.
     flatAspect = (stock.values[0x404 / 4] - stock.values[0x400 / 4]) /
                  (stock.values[0x40c / 4] - stock.values[0x408 / 4]);
@@ -2719,10 +2194,6 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
     const auto lens = viewLens(head.lens);
     bool placed = head.viewed;
     gameLodFlat.store(1.f, std::memory_order_relaxed);
-    // 0.0.74 test 8 VIEW JITTER FIX: ON, the game's own jitter while the game view renders (it stores what the game
-    // asked for), 0 while it is rested; OFF, test 7's (the stored values as arguments: doubled, Y flipped).
-    const auto gameArgs = vj::fixedArgs(vj::gameView, vjFixOn(), vjGameRendered(), stock.values[0x428 / 4],
-                                        stock.values[0x42c / 4], vj::Args{stock.values[0x428 / 4], stock.values[0x42c / 4]});
     if (placed) {
         out = stock;
         // Keep the stock camera's far plane and temporal jitter. Its near
@@ -2730,7 +2201,8 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
         // off hands held up before the face (NEAR CLIP).
         reinterpret_cast<Lens>(base + 0x2c75560)(&out, nearZ, stock.farZ(), lens.left,
                                                  lens.right, lens.top, lens.bottom, 0, 0,
-                                                 gameArgs.x, gameArgs.y, false, false);
+                                                 stock.values[0x428 / 4], stock.values[0x42c / 4], false,
+                                                 false);
         reinterpret_cast<SetPose>(base + 0x2c76310)(&out, pose.data(), 0);
         placed = native_view::valid(out);
         if (!placed && nearZ != near_clip::metres()) {
@@ -2740,7 +2212,8 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
             out = stock;
             reinterpret_cast<Lens>(base + 0x2c75560)(&out, near_clip::metres(), stock.farZ(), lens.left,
                                                      lens.right, lens.top, lens.bottom, 0, 0,
-                                                     gameArgs.x, gameArgs.y, false, false);
+                                                     stock.values[0x428 / 4], stock.values[0x42c / 4], false,
+                                                     false);
             reinterpret_cast<SetPose>(base + 0x2c76310)(&out, pose.data(), 0);
             placed = native_view::valid(out);
         }
@@ -2780,10 +2253,8 @@ void submit(void* view, const Descriptor* incoming) {
         activeAligned = replaced;
         // Update 27: feed the ADDRESS FINDER the stock and aligned cameras (read-only).
         Descriptor stock{};
-        if (incoming && read(reinterpret_cast<uintptr_t>(incoming), &stock, sizeof stock)) {
+        if (incoming && read(reinterpret_cast<uintptr_t>(incoming), &stock, sizeof stock))
             native_address_finder::noteView(0, stock);
-            vjNote(vj::gameView, replaced ? aligned : stock); // 0.0.74 test 8 VIEW JITTER: what the game view gets
-        }
         if (replaced)
             native_address_finder::noteView(1, aligned);
         if (replaced) {
@@ -2802,56 +2273,7 @@ bool retiring() {
 // view (descriptor +428, +42c): a Halton (2, 3) point within the pixel, twice
 // the offset over the render size. Temporal anti-aliasing gathers the samples;
 // a scene rendered smaller than the eye needs more of them per eye pixel.
-// 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN (game_xr's SpidyCleanSet) runs no TAA in the eyes, so their lenses
-// get no jitter: logged for the first 300 eye frames, and any left is zeroed while CLEAN is on (upscaled eyes keep
-// theirs: they need the game's TAA, milesUpscaled). +0x428 / +0x42c: the lens's stored jitter (CONFIRMED, et::jobJitter).
-std::atomic<bool> cleanOn{};
-SRWLOCK cleanJitterLock = SRWLOCK_INIT;
-spidy::view_gates::CleanJitter cleanJitter{};
-std::array<float, 2> cleanSent(std::array<float, 2> j) {
-    if (!cleanOn.load(std::memory_order_relaxed))
-        return j;
-    const bool nonzero = j[0] != 0 || j[1] != 0;
-    const bool keep = nonzero && milesUpscaled();
-    AcquireSRWLockExclusive(&cleanJitterLock);
-    auto& c = cleanJitter;
-    if (c.frames < c.logFrames) {
-        ++c.frames;
-        if (nonzero) {
-            ++c.sentNonzero;
-            c.maxSent = std::max(c.maxSent, std::max(std::abs(j[0]), std::abs(j[1])));
-        }
-    }
-    if (nonzero)
-        ++(keep ? c.kept : c.zeroed);
-    ReleaseSRWLockExclusive(&cleanJitterLock);
-    return keep ? j : std::array<float, 2>{0, 0};
-}
-// After the lens: what it stored (logged with the same 300 frames); zeroed while CLEAN is on.
-void cleanStored(Descriptor& lens) {
-    if (!cleanOn.load(std::memory_order_relaxed) || milesUpscaled())
-        return;
-    float& x = lens.values[0x428 / 4];
-    float& y = lens.values[0x42c / 4];
-    if (x == 0 && y == 0)
-        return;
-    AcquireSRWLockExclusive(&cleanJitterLock);
-    if (cleanJitter.frames <= cleanJitter.logFrames) {
-        ++cleanJitter.storedNonzero;
-        cleanJitter.maxStored = std::max(cleanJitter.maxStored, std::max(std::abs(x), std::abs(y)));
-    }
-    ReleaseSRWLockExclusive(&cleanJitterLock);
-    x = y = 0;
-}
 std::array<float, 2> eyeJitter() {
-    // 0.0.74 test 3 MILES TAA step 1: MilesVR's lens jitter as it is (full Halton (2, 3), both eyes, no guard).
-    if (milesSteps()) {
-        const auto render = eyeRenderSize();
-        const auto j = spidy::miles_taa::jitter(frameIndex, config.width, render[0], render[1]);
-        eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
-        eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
-        return j;
-    }
     const bool engine = engineTaaLive.load() && !(eyeTemporal.load() & 1);
     if (!(eyeTemporal.load() & 1) && !engine)
         return {0, 0};
@@ -2875,12 +2297,6 @@ std::array<float, 2> eyeJitter() {
                                      render[0], render[1], gameJitter[0].load(std::memory_order_relaxed),
                                      gameJitter[1].load(std::memory_order_relaxed), engineTaaJitterScale.load(),
                                      j[0], j[1]);
-        // 0.0.74 test 3 JITTER GUARD: an eye whose TAA history the game refuses only shows the jitter (the
-        // still-head shimmer); a near-zero constant keeps TemporalAa running and its history check made.
-        if (taaGuardOn.load(std::memory_order_relaxed) && taaRefusedEyes.load(std::memory_order_relaxed)) {
-            j = {spidy::taa_link::guardJitter, spidy::taa_link::guardJitter};
-            ++SpidyTaaLinkData.guardedLenses;
-        }
         engineTaaLenses.fetch_add(1, std::memory_order_relaxed);
         for (unsigned i = 0; i < 2; ++i) {
             if (std::abs(j[i]) > engineTaaEyeMax[i].load(std::memory_order_relaxed))
@@ -2892,42 +2308,6 @@ std::array<float, 2> eyeJitter() {
     }
     eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
     eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
-    return j;
-}
-// 0.0.74 test 6 CLEAN JITTER: CLEAN's own temporal AA. While AA MODE CLEAN and CLEAN JITTER are on and the eye history
-// can run (native_gpu::cleanTaa), each headset eye's lens gets a Halton (2, 3) step of +-0.5 render pixel (the same
-// phases as eyeJitter), noted for the history pass by the eyes command's serial (native_gpu::noteEyeJitter), which
-// reads the new pair back by it and blends; FXAA is off, CAS follows. Units (CONFIRMED, docs/AA-0.0.73.md and
-// engine_taa.hpp): the lens stores 2x / -2y (+0x428 / +0x42c) and builds its projection with them, which moves the
-// scene x * W pixels right and y * H pixels down; so a pixel step p is the argument p / W, and the uv step is the
-// argument itself. eyeJitter's own 2 (h - .5) / W is a whole pixel each way. The stored step is left as the lens
-// wrote it (cleanStored would zero it under a projection that has it). Off: test 5 (cleanSent, cleanStored).
-std::atomic<uint64_t> cleanTaaLenses{};
-bool cleanWantsJitter() {
-    return cleanOn.load(std::memory_order_relaxed) && latchedSerial.load(std::memory_order_relaxed) != 0 &&
-           !milesSteps() && native_gpu::cleanTaa() &&
-           !engineTaaLive.load(std::memory_order_relaxed); // 0.0.74 test 7: never over ENGINE TAA's own jitter
-}
-std::array<float, 2> cleanTaaJitter(unsigned index) {
-    const auto render = eyeRenderSize();
-    const float ratio = static_cast<float>(config.width) / render[0];
-    const uint32_t phases = std::clamp<uint32_t>(static_cast<uint32_t>(std::ceil(8 * ratio * ratio)), 8, 32);
-    const auto halton = [](uint32_t step, uint32_t radix) {
-        float value = 0, fraction = 1.f / radix;
-        for (; step; step /= radix, fraction /= radix)
-            value += fraction * (step % radix);
-        return value;
-    };
-    const uint32_t phase = static_cast<uint32_t>(frameIndex % phases) + 1;
-    // 0.0.74 test 7 JITTER PROOF BIG (a test, OFF by default): the step 8 times larger (+-4 pixels), shown raw.
-    const float scale = native_gpu::jitterProofBig() ? jitter_proof::bigScale : 1.f;
-    const float px = (halton(phase, 2) - .5f) * scale, py = (halton(phase, 3) - .5f) * scale;
-    const std::array<float, 2> j{px / render[0], py / render[1]};
-    eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
-    eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
-    cleanTaaLenses.fetch_add(1, std::memory_order_relaxed);
-    if (index < 2)
-        native_gpu::noteEyeJitter(latchedSerial.load(std::memory_order_relaxed), index, j[0], j[1], px, py);
     return j;
 }
 // While immersive the game renders three scene views: the eyes and its own,
@@ -3124,8 +2504,6 @@ void eyeLod(void* eye, const Descriptor& lens, const Descriptor& game, unsigned 
 void* impostorQueries(void* view, void* cull) {
     const auto result = originalImpostorQueries(view, cull);
     float reach{};
-    // 0.0.74 test 5: still only with a resting game view (flag 32, never in SM2), so the IMPOSTORS stand-in
-    // writes no +0x88 (build 9's far models flipped with that write); farWindowsCandidateWrite stays false.
     if (result && impostors && enabled && impostorsOn.load(std::memory_order_relaxed) &&
         rested.load(std::memory_order_relaxed) &&
         eyeView(reinterpret_cast<uintptr_t>(view)) >= 0 &&
@@ -3202,12 +2580,9 @@ void placeEyes() {
     const bool activePlaced = activeHeroPlaced;
     activeHeroPlaced = false;
     // Update 34: the game camera's own jitter (a candidate for ENGINE TAA's units: logged).
-    // 0.0.74 test 8 VIEW JITTER FIX ON: the game's own (activeView's stock), not main's, which carries our lens.
-    const bool viewFix = vjFixOn();
-    const auto gameOwn = vjOwnNow(main.values[0x428 / 4], main.values[0x42c / 4]);
     if (render) {
-        gameJitter[0].store(viewFix ? gameOwn[0] : main.values[0x428 / 4], std::memory_order_relaxed);
-        gameJitter[1].store(viewFix ? gameOwn[1] : main.values[0x42c / 4], std::memory_order_relaxed);
+        gameJitter[0].store(main.values[0x428 / 4], std::memory_order_relaxed);
+        gameJitter[1].store(main.values[0x42c / 4], std::memory_order_relaxed);
     }
     native_eyes::Command desired{};
     bool controlled{};
@@ -3295,22 +2670,15 @@ void placeEyes() {
             pose[12] += placed.offset.x;
             pose[13] += placed.offset.y;
             pose[14] += placed.offset.z;
-            // 0.0.74 test 8 VIEW JITTER FIX (view_jitter.hpp): ON, the shadow head (aligned: cascades and the match
-            // lens; no picture) gets 0 and the game head (viewed) the game's own while the game view renders, 0
-            // while rested; OFF, test 7's main stored values as arguments.
-            const auto onHead = [&](const native_eyes::Bounds& b, float nearZ, uint32_t which) {
+            const auto onHead = [&](const native_eyes::Bounds& b, float nearZ) {
                 auto view = main;
-                const auto args = vj::fixedArgs(which, viewFix, vjGameRendered(), gameOwn[0], gameOwn[1],
-                                                vj::Args{main.values[0x428 / 4], main.values[0x42c / 4]});
                 reinterpret_cast<Lens>(base + 0x2c75560)(
                     &view, nearZ, main.farZ(), b.left, b.right, b.top, b.bottom, 0, 0,
-                    args.x, args.y, false, false);
+                    main.values[0x428 / 4], main.values[0x42c / 4], false, false);
                 reinterpret_cast<SetPose>(base + 0x2c76310)(&view, pose.data(), 0);
                 return view;
             };
-            const auto aligned = onHead(lens, near_clip::metres(), vj::shadowHead);
-            if (native_view::valid(aligned))
-                vjNote(vj::shadowHead, aligned);
+            const auto aligned = onHead(lens, near_clip::metres());
             if (native_view::valid(aligned)) {
                 // Covers both eyes: what the first eye fits its shadow cascades to.
                 shadowLens = aligned;
@@ -3328,10 +2696,10 @@ void placeEyes() {
                                            : near_clip::metres();
                 // Build 12 WINDOW LIGHTS: always viewLens (the cull margin), as at the
                 // first submit; the eyes' shadow lens stays `aligned`.
-                auto viewed = onHead(viewLens(lens), gameNear, vj::gameHead);
+                auto viewed = onHead(viewLens(lens), gameNear);
                 if (gameNear != near_clip::metres() && !native_view::valid(viewed)) {
                     shadowCameraFail(shadowCamera::lensRejected);
-                    viewed = onHead(viewLens(lens), near_clip::metres(), vj::gameHead);
+                    viewed = onHead(viewLens(lens), near_clip::metres());
                 }
                 if (!native_view::valid(viewed))
                     viewed = aligned;
@@ -3339,7 +2707,6 @@ void placeEyes() {
                     shadowCameraApplied(shadowMode);
                 } else if ((config.createViews & 8) && native_view::valid(viewed)) {
                     originalSubmit(reinterpret_cast<void*>(primary), &viewed);
-                    vjNote(vj::gameHead, viewed); // 0.0.74 test 8 VIEW JITTER
                     activeAligned = true;
                     shadowCameraApplied(shadowMode);
                 }
@@ -3377,7 +2744,6 @@ void placeEyes() {
                         main.values[0x404 / 4] + shift, main.values[0x408 / 4], main.values[0x40c / 4], 0, 0,
                         jitter[0], jitter[1], false, false);
                     reinterpret_cast<SetPose>(base + 0x2c76310)(&descriptor, pose.data(), 0);
-                    vjNote(vj::screenEye, descriptor); // 0.0.74 test 8 VIEW JITTER: logged, not changed (CANDIDATE)
                 }
                 reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
                 matchDistances(eye, descriptor, index);
@@ -3398,18 +2764,12 @@ void placeEyes() {
             // derived matrices through the verified native lens constructor.
             const float aspect = static_cast<float>(config.width) / config.height;
             const auto& fov = desired.eyes[index].fov;
-            // 0.0.74 test 5: none while CLEAN is on. 0.0.74 test 6 CLEAN JITTER: CLEAN's own step (cleanTaaJitter).
-            const bool cleanTaaStep = controlled && desired.enabled == 1 && index < 2 && cleanWantsJitter();
-            const auto jitter = cleanTaaStep ? cleanTaaJitter(index) : cleanSent(eyeJitter());
+            const auto jitter = eyeJitter();
             const float nearZ = controlled && desired.enabled == 1 ? near_clip::metres() : main.nearZ();
             reinterpret_cast<Lens>(base + 0x2c75560)(
                 &descriptor, nearZ, main.farZ(), controlled ? std::tan(fov[0]) : -aspect,
                 controlled ? std::tan(fov[1]) : aspect, controlled ? -std::tan(fov[3]) : -1,
                 controlled ? -std::tan(fov[2]) : 1, 0, 0, jitter[0], jitter[1], false, false);
-            if (!cleanTaaStep)
-                cleanStored(descriptor);
-            if (index < 2)
-                vjNote(index == 0 ? vj::eyeLeft : vj::eyeRight, descriptor); // 0.0.74 test 8 VIEW JITTER
             if (controlled && desired.enabled == 1)
                 recordLens(index, descriptor,
                            {std::tan(fov[0]), std::tan(fov[1]), -std::tan(fov[3]), -std::tan(fov[2])});
@@ -3665,99 +3025,6 @@ uint8_t renderOffscreen() {
 // OutputDebugString in Update 34/34.1: run341's report could not say if it was on).
 extern "C" {
 __declspec(dllexport) spidy::engine_taa::Data SpidyEngineTaaData;
-// 0.0.73 TAA SHAKE: what each eye's view holds where TemporalAa reads it (engine_taa::Eyes).
-__declspec(dllexport) spidy::engine_taa::Eyes SpidyEngineTaaEyes;
-// 0.0.74 test 2b TAA DIAGNOSTICS (taa_diag074.hpp): every frame's per-eye record while the option is ON.
-__declspec(dllexport) spidy::taa_diag::Diag SpidyTaaDiag;
-}
-std::atomic<bool> taaDiagOn{};
-// 0.0.74 test 2b TAA DIAGNOSTICS: game_xr sets it from the option (0 off, 1 on); read() only, never a write to the game.
-extern "C" void SpidyTaaDiagnosticsSet(uint32_t on) { taaDiagOn = on != 0; }
-// One frame of TAA DIAGNOSTICS: what each eye's view holds for TemporalAa this frame (read() only).
-void taaDiagFrame(void* const views[2]) {
-    namespace et = spidy::engine_taa;
-    namespace td = spidy::taa_diag;
-    static int32_t lastStamp[2]{};
-    static bool haveLast{};
-    auto& d = SpidyTaaDiag;
-    d.bytes = sizeof(td::Diag);
-    d.on = 1;
-    td::Frame f{};
-    int32_t frame{};
-    const bool haveFrame = base && read(base + et::frameRva, &frame, 4);
-    f.frame = static_cast<uint32_t>(frame);
-    f.sent[0] = eyeJitterSent[0].load(std::memory_order_relaxed);
-    f.sent[1] = eyeJitterSent[1].load(std::memory_order_relaxed);
-    uintptr_t sets[2]{};
-    int32_t stamps[2]{};
-    for (unsigned i = 0; i < 2; ++i) {
-        const auto v = reinterpret_cast<uintptr_t>(views[i]);
-        if (!v)
-            return;
-        float stored[2]{};
-        if (read(v + et::jobJitter, stored, sizeof stored)) {
-            f.stored[2 * i] = stored[0];
-            f.stored[2 * i + 1] = stored[1];
-        }
-        read(v + et::viewSet, &sets[i], sizeof sets[i]);
-        uint8_t cut{};
-        int32_t cutFrame{}, stamp{};
-        if (haveFrame && read(v + et::viewCut, &cut, 1) && read(v + et::viewCutFrame, &cutFrame, 4) &&
-            read(v + et::viewStamp, &stamp, 4)) {
-            f.cutAge[i] = frame - cutFrame;
-            f.stampAge[i] = frame - stamp;
-            f.weight[i] = et::currentWeight(cut, f.cutAge[i], f.stampAge[i]);
-            stamps[i] = stamp;
-        }
-    }
-    td::add(d, f, sets[0], sets[1], stamps[0], stamps[1], lastStamp, haveLast);
-}
-// 0.0.73 TAA SHAKE: read back (read() only) what TemporalAa 0x2c2dc60 takes from each eye: the stored
-// jitter, the size it takes it back with, the history stamps and the current frame's weight from them.
-void engineTaaEyesPublish(void* const views[2]) {
-    namespace et = spidy::engine_taa;
-    auto& e = SpidyEngineTaaEyes;
-    int32_t frame{};
-    const bool haveFrame = base && read(base + et::frameRva, &frame, 4);
-    for (unsigned i = 0; i < 2; ++i) {
-        const auto v = reinterpret_cast<uintptr_t>(views[i]);
-        if (!v)
-            continue;
-        float stored[2]{};
-        if (read(v + et::jobJitter, stored, sizeof stored)) {
-            e.stored[2 * i] = stored[0];
-            e.stored[2 * i + 1] = stored[1];
-        }
-        uintptr_t set{};
-        uint32_t size[2]{};
-        if (read(v + et::viewSet, &set, sizeof set) && set && read(set + et::setTaaWidth, size, sizeof size)) {
-            e.taaSize[2 * i] = size[0];
-            e.taaSize[2 * i + 1] = size[1];
-        }
-        const auto render = eyeRenderSize();
-        // The handler takes the set's size when its width is set, else its own target's (render size here).
-        const uint32_t w = size[0] ? size[0] : render[0], h = size[0] ? size[1] : render[1];
-        et::takenBack(e.stored[2 * i], e.stored[2 * i + 1], w, h, e.pixels[2 * i], e.pixels[2 * i + 1]);
-        uint8_t cut{};
-        int32_t cutFrame{}, stamp{};
-        if (haveFrame && read(v + et::viewCut, &cut, 1) && read(v + et::viewCutFrame, &cutFrame, 4) &&
-            read(v + et::viewStamp, &stamp, 4)) {
-            const int32_t cutAge = frame - cutFrame, stampAge = frame - stamp;
-            e.cut[i] = cut;
-            e.cutAge[i] = static_cast<uint32_t>(cutAge > 0 ? cutAge : 0);
-            e.stampAge[i] = static_cast<uint32_t>(stampAge > 0 ? stampAge : 0);
-            e.weight[i] = et::currentWeight(cut, cutAge, stampAge);
-            if (e.weight[i] >= 1)
-                ++e.resetSamples[i];
-        }
-    }
-    const auto render = eyeRenderSize();
-    e.render[0] = render[0];
-    e.render[1] = render[1];
-    e.mode = spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load());
-    e.scale = engineTaaJitterScale.load();
-    ++e.samples;
-    ++e.sequence;
 }
 void engineTaaPublish() {
     auto& d = SpidyEngineTaaData;
@@ -3799,21 +3066,6 @@ void engineTaaWatch() {
         SpidyEngineTaaData.targetsLeft = usable && l && engineTaaTargets(l) ? 1 : 0;
         SpidyEngineTaaData.targetsRight = usable && r && engineTaaTargets(r) ? 1 : 0;
         engineTaaPublish();
-        if (usable && engineTaaLive.load() && l && r) {
-            void* const views[2]{l, r};
-            engineTaaEyesPublish(views);
-        }
-    }
-    // 0.0.74 test 2b TAA DIAGNOSTICS: every frame (not every 250 ms) while ON and ENGINE TAA is on.
-    if (taaDiagOn.load() && engineTaaLive.load()) {
-        void* l = eyes[0].load();
-        void* r = eyes[1].load();
-        if (l && r && !retired[0] && !retired[1] && !retiring() && !stopRequested) {
-            void* const views[2]{l, r};
-            taaDiagFrame(views);
-        }
-    } else {
-        SpidyTaaDiag.on = 0;
     }
     if (!engineTaaLive.load())
         return;
@@ -4283,8 +3535,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
         // both ImpostorHQModelRegJob launchers 2a6c2e0 and 2a6c410). Update 36:
         // these and reachLast were SM1's addresses, so `impostors` was always
         // off here; see docs/main-view-gates-audit.md.
-        // 0.0.74 test 6 note: the five calls' returns 0x2a6af95, 0x2a6c34b, 0x2a6c35b, 0x2a6c46c, 0x2a6c47c:
-        // CANDIDATE, refuted by test 5 histogram (asked, the left eye said yes, no visible change). Kept as is.
         const unsigned char isActiveViewBytes[] = {0x48, 0x3b, 0x0d, 0xc9, 0x1c, 0x63, 0x09, 0x0f, 0x94, 0xc0, 0xc3};
         const struct {
             uintptr_t rva;
@@ -4368,22 +3618,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                     entry(0x1da9ba8, lensScaleBytes, sizeof(lensScaleBytes)) &&
                     entry(0x4413c08, numeratorBytes, sizeof(numeratorBytes)) &&
                     entry(0x3dcf678, widescreenBytes, sizeof(widescreenBytes));
-        // 0.0.74 test 5: no createViews 32 needed (SM2 never sets it, so this was always off); 128 still opts
-        // out, and every byte check stays: the first that differs keeps it off and is the console's reason.
-        {
-            namespace vg = spidy::view_gates;
-            uint32_t why = (config.createViews & 128) ? vg::impOptedOut : vg::impFine;
-            for (unsigned i = 0; i < vg::impostorSites && why == vg::impFine; ++i)
-                if (impostorCalls[i].rva != vg::impostorCallRvas[i] ||
-                    !entry(impostorCalls[i].rva, impostorCalls[i].bytes, sizeof(impostorCalls[i].bytes)))
-                    why = vg::impCall0 + i;
-            if (why == vg::impFine && !entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)))
-                why = vg::impReachFirst;
-            if (why == vg::impFine && !entry(0x2a6bded, reachLastBytes, sizeof(reachLastBytes)))
-                why = vg::impReachLast;
-            impostorsWhy = why;
-            impostors = why == vg::impFine;
-        }
+        impostors = !(config.createViews & 128) && (config.createViews & 32);
+        for (const auto& call : impostorCalls)
+            impostors = impostors && entry(call.rva, call.bytes, sizeof(call.bytes));
+        impostors = impostors && entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
+                    entry(0x2a6bded, reachLastBytes, sizeof(reachLastBytes));
         // Update 38.3 FAR WINDOWS write 2: checked on its own (SM2 never sets flag 32).
         farWindowsReady = entry(0x2a6bc60, impostorQueriesBytes, sizeof(impostorQueriesBytes)) &&
                           entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
@@ -4435,16 +3674,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                 lodFadeKnown = entry(spidy::view_gates::fadeCallRva, spidy::view_gates::fadeCallBytes,
                                      sizeof(spidy::view_gates::fadeCallBytes)) &&
                                entry(0x2c991a0, isActiveViewBytes, sizeof(isActiveViewBytes));
-            }
-            {   // 0.0.74 test 3 MILES TAA: every address it uses checked against 2.810's bytes.
-                namespace mt = spidy::miles_taa;
-                milesExeKnown = entry(mt::temporalAaRva, mt::temporalAaBytes, sizeof(mt::temporalAaBytes)) &&
-                                entry(mt::temporalAaCheckRva, mt::temporalAaCheckBytes, sizeof(mt::temporalAaCheckBytes)) &&
-                                entry(mt::currentTargetRva, mt::currentTargetBytes, sizeof(mt::currentTargetBytes)) &&
-                                entry(mt::historyTargetRva, mt::historyTargetBytes, sizeof(mt::historyTargetBytes)) &&
-                                entry(mt::queueSiteRva, mt::queueSiteBytes, sizeof(mt::queueSiteBytes));
-                if (!milesExeKnown)
-                    milesFallBack(mt::exeDiffers);
             }
             s = MH_CreateHook(maintainHook, reinterpret_cast<void*>(maintain),
                               reinterpret_cast<void**>(&originalMaintain));
@@ -4518,15 +3747,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
                 break;
             }
             hooked = true;
-            // 0.0.74 test 3 MILES TAA's per-eye log: its own hook, never a reason to start no VR.
-            if (milesExeKnown.load()) {
-                temporalAaHook = reinterpret_cast<void*>(base + spidy::miles_taa::temporalAaRva);
-                if (MH_CreateHook(temporalAaHook, reinterpret_cast<void*>(temporalAa),
-                                  reinterpret_cast<void**>(&originalTemporalAa)) != MH_OK) {
-                    temporalAaHook = nullptr;
-                    milesFallBack(spidy::miles_taa::hookFailed);
-                }
-            }
         }
         attempted = false;
         stopRequested = false;
@@ -4553,11 +3773,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             break;
         }
         enabled = true;
-        if (temporalAaHook && enableHook(temporalAaHook) != MH_OK) { // 0.0.74 test 3 MILES TAA (non-fatal)
-            removeHook(temporalAaHook);
-            temporalAaHook = nullptr;
-            milesFallBack(spidy::miles_taa::hookFailed);
-        }
         native_hud::panelHooked(hudPlaceHook != nullptr); // 0.0.70: never in SM2 (SM2_STEREO_HUD 0)
         SpidyShadowCameraData.fitHook = fitCascadesHook ? 1 : 0; // Update 31
         SpidyFarShadowsData.hooked = csmFitHook ? 1 : 0; // Update 35
@@ -4576,7 +3791,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
             auto& g = SpidyViewGatesData;
             g.fadeReady = lodFadeKnown ? 1 : 0;
             g.impostorsInstalled = impostors ? 1 : 0;
-            g.impostorsWhy = impostorsWhy.load();
             if (!lodFadeKnown && lodFadeMode.load()) {
                 lodFadeMode = spidy::view_gates::fadeOff;
                 lodFadeWhy = spidy::view_gates::fadeNoHook;
@@ -4634,7 +3848,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStop(void*) {
         for (auto hook : {maintainHook, updateHook, copyFinalHook, toneHook, copyJobHook, beginJobHook,
                           endJobHook, initBuffersHook, sizeBuffersHook, renderActorHook, setupModelsHook,
                           isActiveViewHook, impostorQueriesHook, setupDisplayHook, submitHook, renderOffscreenHook,
-                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook, temporalAaHook}) {
+                          hudPlaceHook, submitSceneHook, fitCascadesHook, csmFitHook, viewScaleHook}) {
             auto s = disableHook(hook);
             if (s != MH_OK && s != MH_ERROR_DISABLED)
                 result = 1500 + s;
@@ -4968,56 +4182,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyViewGate(void* argument) {
 }
 // The four: fx | fade << 4 | fadeWhy << 8 | impostorsOn << 12 | impostors installed << 13 |
 // fade ready << 14 | reach << 16.
-// 0.0.74 test 5 IMPOSTORS: the stand-in's state and counts since the start (game_xr's console lines).
-extern "C" void SpidyImpostorStats(spidy::view_gates::ImpostorStats* out) {
-    if (!out)
-        return;
-    out->hooked = hooked ? 1 : 0;
-    out->installed = impostors.load() ? 1 : 0;
-    out->on = impostorsOn.load() ? 1 : 0;
-    out->why = hooked ? impostorsWhy.load() : spidy::view_gates::impNotHooked;
-    out->asked = impostorAsked.load(std::memory_order_relaxed);
-    for (unsigned i = 0; i < 3; ++i)
-        out->yes[i] = impostorYes[i].load(std::memory_order_relaxed);
-    for (unsigned i = 0; i < spidy::view_gates::impostorSites; ++i)
-        out->bySite[i] = impostorBySite[i].load(std::memory_order_relaxed);
-}
-// 0.0.74 test 8 VIEW JITTER FIX (game_xr, each frame): 1 on (the default), 0 off (test 7's lens calls).
-extern "C" void SpidyViewJitterFixSet(uint32_t on) { viewJitterFix.store(on ? 1u : 0u, std::memory_order_relaxed); }
-// 0.0.74 test 8 VIEW JITTER: takes up to max detail frames (oldest first), for game_xr's console lines.
-extern "C" uint32_t SpidyViewJitterFrames(spidy::view_jitter::Frame* out, uint32_t limit) {
-    if (!out)
-        return 0;
-    AcquireSRWLockExclusive(&viewJitterLock);
-    const uint32_t n = std::min(limit, vjRingCount);
-    for (uint32_t i = 0; i < n; ++i)
-        out[i] = vjRing[(vjRingStart + i) % vjRingSize];
-    vjRingStart = (vjRingStart + n) % vjRingSize;
-    vjRingCount -= n;
-    ReleaseSRWLockExclusive(&viewJitterLock);
-    return n;
-}
-extern "C" void SpidyViewJitterStats(spidy::view_jitter::Stats* out) {
-    if (!out)
-        return;
-    AcquireSRWLockExclusive(&viewJitterLock);
-    *out = vjStats;
-    for (auto& biggest : vjStats.maxPx)
-        biggest = 0; // each read gets the biggest shift since the last
-    ReleaseSRWLockExclusive(&viewJitterLock);
-}
-// 0.0.74 test 5 CLEAN JITTER: AA MODE CLEAN on or off (game_xr, each frame), and the 300-frame log.
-extern "C" void SpidyCleanSet(uint32_t on) { cleanOn.store(on != 0, std::memory_order_relaxed); }
-// 0.0.74 test 6 CLEAN JITTER: eye lenses given CLEAN's own step so far (cleanTaaJitter), for game_xr's CLEAN TAA line.
-extern "C" uint64_t SpidyCleanTaaLenses() { return cleanTaaLenses.load(std::memory_order_relaxed); }
-extern "C" void SpidyCleanJitter(spidy::view_gates::CleanJitter* out) {
-    if (!out)
-        return;
-    AcquireSRWLockShared(&cleanJitterLock);
-    *out = cleanJitter;
-    ReleaseSRWLockShared(&cleanJitterLock);
-    out->clean = cleanOn.load() ? 1 : 0;
-}
 extern "C" uint32_t SpidyViewGatesNow() {
     return bloomFxMode.load() | lodFadeMode.load() << 4 | (lodFadeWhy.load() & 0xf) << 8 |
            (impostorsOn.load() ? 1u : 0u) << 12 | (impostors ? 1u : 0u) << 13 | (lodFadeKnown ? 1u : 0u) << 14 |
@@ -5042,40 +4206,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeTemporal(void* packed) {
     // stores 0 here: no jittered lens, no eye temporal AA, no extra reflection
     // targets (SM2VR 0.0.3/0.0.5). Update 34: bit 0x10 (-EngineTaa) is kept: the
     // eyes' buffers get the TAA targets for ENGINE TAA (engineTaaBuffers).
-    // 0.0.74 test 3: bit 0x20, MILES TAA on at the start (miles_taa074.hpp).
-    // 0.0.74 test 4: bit 0x40, MAIN VIEW SMALL on at the start (taa_gate074.hpp).
-    eyeTemporal = static_cast<uint32_t>(value >> 8) &
-                  (0x10 | spidy::miles_taa::eyeTemporalBit | spidy::taa_gate::mainEyeTemporalBit);
+    eyeTemporal = static_cast<uint32_t>(value >> 8) & 0x10;
     return 0;
-}
-// 0.0.74 test 3 MILES TAA: the switch (game_xr, every frame) and its record (flags kept current here).
-extern "C" void SpidyMilesTaaSet(uint32_t on) { milesOn = on != 0; }
-extern "C" const spidy::miles_taa::Data* SpidyMilesTaaNow() {
-    namespace mt = spidy::miles_taa;
-    auto& d = SpidyMilesTaaData;
-    d.flags = (milesOn.load() ? mt::flagOn : 0u) | (milesLive() ? mt::flagLive : 0u) |
-              (temporalAaHook ? mt::flagHooked : 0u) | (milesExeKnown.load() ? mt::flagExeKnown : 0u) |
-              ((eyeTemporal.load() & mt::eyeTemporalBit) ? mt::flagAtStart : 0u) |
-              (milesReason.load() ? mt::flagFellBack : 0u);
-    d.reason = milesReason.load();
-    return &d;
-}
-// The safety (game_xr): eye pairs stopped reaching the headset; off for the session.
-extern "C" void SpidyMilesTaaStall() { milesFallBack(spidy::miles_taa::stalled); }
-// 0.0.74 test 4 TAA GATE LOG / EYE TAA REQUEUE switches (game_xr, every frame) and their record.
-extern "C" void SpidyTaaGateSet(uint32_t log, uint32_t requeue) {
-    gateLogOn = log != 0;
-    requeueOn = requeue != 0;
-}
-extern "C" const spidy::taa_gate::Data* SpidyTaaGateNow() {
-    namespace tg = spidy::taa_gate;
-    auto& d = SpidyTaaGateData;
-    const bool atStart = (eyeTemporal.load() & tg::mainEyeTemporalBit) != 0;
-    d.flags = (gateLogOn.load() ? tg::flagLog : 0u) | (requeueOn.load() ? tg::flagRequeue : 0u) |
-              (requeueOff.load() ? tg::flagRequeueOff : 0u) | (atStart ? tg::flagMainAtStart : 0u) |
-              (d.mainResized ? tg::flagMainSmall : 0u);
-    d.reason = gateReason.load();
-    return &d;
 }
 // Update 34: ENGINE TAA. 1 on (refused, 4602, when engineTaaBlocked() says why), 0
 // off, 2 off because the frame rate halved (game_xr's guard). SpidyEngineTaaNow:
@@ -5107,7 +4239,6 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaa(void* on) {
     }
     engineTaaWhy = 0;
     if (!engineTaaLive.exchange(true)) {
-        taaRefusedEyes = 0; // 0.0.74 test 3 JITTER GUARD: each start re-checks the history
         ++engineTaaOns;
         OutputDebugStringA("ENGINE TAA: on\n");
     }
@@ -5122,29 +4253,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
     const auto value = reinterpret_cast<uintptr_t>(mode);
     if (value > et::jitterModes)
         return 4603;
-    // 0.0.73 TAA SHAKE: the wrist's press (value 4) steps TAA JITTER FULL -> HALF -> OFF (the scale, OURS);
-    // live.txt taa_jitter 0..3 still sets the mode, taa_jitter_scale the scale.
-    const bool press = value == et::jitterModes;
-    const uint32_t next = press ? static_cast<uint32_t>(et::ours) : static_cast<uint32_t>(value);
+    const uint32_t next = value == et::jitterModes ? et::pressNext(engineTaaJitterMode.load()) // Update 35
+                                                    : static_cast<uint32_t>(value);
     if (engineTaaJitterMode.exchange(next) != next)
         ++engineTaaModeChanges;
-    if (press) {
-        const uint32_t scale = et::pressNextScale(engineTaaJitterScale.load());
-        engineTaaJitterScale = scale;
-        ++engineTaaModeChanges;
-    }
-    char level[16], line[96];
-    et::levelText(spidy::image_style::jitterMode(imageStyle.load(), next), engineTaaJitterScale.load(), level,
-                  sizeof level);
-    std::snprintf(line, sizeof line, "ENGINE TAA: jitter %s (%s, %u%%)\n", level, et::jitterName(next),
-                  engineTaaJitterScale.load());
+    char line[96];
+    std::snprintf(line, sizeof line, "ENGINE TAA: jitter %s\n", et::jitterName(next));
     OutputDebugStringA(line);
     return 0;
 }
-// The mode in force (0.0.73 test 4) and, 0.0.73 TAA SHAKE, the scale (engine_taa::packJitter).
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
-    return spidy::engine_taa::packJitter(spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()),
-                                         engineTaaJitterScale.load());
+    return spidy::image_style::jitterMode(imageStyle.load(), engineTaaJitterMode.load()); // 0.0.73 test 4: in force
 }
 // 0.0.73 test 4 IMAGE STYLE, shown as GAME TAA (image_style.hpp): 0 SPIDYVR, 1 OFF; refused (4605) otherwise.
 // game_xr's controller sends it when the option changes; it does the rest (ENGINE TAA, the clean picture).

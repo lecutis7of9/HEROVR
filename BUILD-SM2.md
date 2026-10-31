@@ -2686,3 +2686,30 @@ The owner (pt1352u): "our build looked best in the last public build so go back 
 - **live.txt from tests 2-8:** `live_settings.migrate_074t10` runs once at the start (marker `# Version 0.0.74 test 10`). It deletes the retired keys' lines; and, in a file test 2's SPIDYVR PICTURE migration touched (its marker line), the picture keys that migration wrote (`image`, `image_style`, `aa`, `sharpen`, `sharpen_match`, `taa_jitter`, `taa_jitter_scale`, `lens_flares`), so the v0.0.73 defaults apply. Any retired key left in a file is ignored by the parser, never applied.
 - **Tests:** `tests/update38_tests.py` (TEST10 cases), core `combat38` order checks.
 
+
+## 62. Version 0.0.74 test 10 WINDOW EDGES: lit windows at the eyes' outer edges
+
+The owner (pt1465u): "no do the windows". Lit windows went dark in a band about 10-15% wide at the left edge of the
+left eye and the right edge of the right eye, column by column, and lit again when the head turned toward them. The
+buildings stayed; only the light went.
+
+- **Ruled out before:** the game view's frustum (CULL MARGIN), the eye frustums, the 90-degree creation lens and eye
+  occlusion.
+- **CONFIRMED (2.810.0.0, disassembly):** the lens setter 0x2c75560 keeps, beside the exact tangents (+400..+40c),
+  symmetric summaries: +420 = (right - left) / 2 (0x2c7584c), +424 = (bottom - top) / 2 (0x2c7589c), the angles
+  +410 / +414. A headset eye is off-centre (left -1.486, right .906), so +420 is 1.196 while the outer edge is at
+  1.486. Many render readers use the summaries without the "symmetric" flag (+438 bit 0).
+- **CANDIDATE cause:** a symmetric frustum from those summaries culls the lit-window layer. It leaves out 12% (+420)
+  to 14% (+410) of the eye's width, only on the outer side, which matches the band, and it is the eye's own lens, so
+  CULL MARGIN could not change it. The exact reader is not found yet.
+- **The fix (on, no wrist row, no live.txt key):** each eye's Submit gets summaries that cover the whole lens (+420 =
+  max(|left|, |right|), +424 = max(|top|, |bottom|), +410 / +414 their full angles), written after SetPose so the
+  matrices and the exact tangents are untouched; the descriptor gets its own values back after Submit. The texture
+  request scale (setupModels) now reads the exact tangents. `include/spidy/eye_cover.hpp`, `src/stereo_probe.cpp`
+  `submitEye`.
+- **Guard:** the two summary writes' bytes in 0x2c75560; when they differ the eyes keep their lenses as made and the
+  console says `WINDOW EDGES: off - this game build's lens setter differs ...` once.
+- **Risks:** readers that use 1 / +420 as a scale (ApplyLighting's constant at 0x2abb0c5, occlusion reprojection
+  0x2bcc1b0) see a 24% wider lens; the game's detail scale (0x2c9a000) is a little lower for the eyes (SHARED LOD
+  HIGHER keeps the game view's when that is higher).
+- **Tests:** `tests/hero074t10_window_edges_tests.py`, core `WINDOW EDGES`.

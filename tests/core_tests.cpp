@@ -113,6 +113,7 @@
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp"
+#include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/shared_lod.hpp"
@@ -35924,6 +35925,56 @@ int main() {
             check(std::abs(looked.flipTilt.x - tilted.flipTilt.x) < 1e-4f, "LOOK UP took the body's pose");
             check(length(matrixRow(looked.head, 3) - matrixRow(tilted.head, 3)) < .001f, "LOOK UP moved the eyes");
         }
+    });
+    test("0.0.74 test 10 WINDOW EDGES: an eye's symmetric lens summaries cover its whole off-centre lens", [] {
+        namespace ec = spidy::eye_cover;
+        // The probe's left eye: left -1.486, right .906, top -1.043, bottom 1.542.
+        const float l = -1.486f, r = .906f, t = -1.043f, b = 1.542f;
+        const float stockHalf = (r - l) / 2; // what 0x2c75560 puts at +420: 1.196
+        const float band = ec::bandOutside(l, r, stockHalf);
+        check(band > .10f && band < .15f, "the stock +420 leaves out the reported 10-15% outer band");
+        const float angleHalf = std::tan((std::atan(r) - std::atan(l)) / 2); // half of +410
+        const float bandAngle = ec::bandOutside(l, r, angleHalf);
+        check(bandAngle > .10f && bandAngle < .15f, "half of the stock +410 leaves out the band too");
+        const auto c = ec::cover(l, r, t, b);
+        check(c.valid && c.halfWide == 1.486f && c.halfHigh == 1.542f, "the cover is the outer tangents");
+        check(ec::bandOutside(l, r, c.halfWide) == 0 && ec::bandOutside(t, b, c.halfHigh) == 0, "no band left");
+        check(std::abs(c.angleWide - 2 * std::atan(1.486f)) < 1e-6f && c.angleWide > std::atan(r) - std::atan(l),
+              "the cover's angle is at least the lens's");
+        // The mirrored right eye covers the same.
+        const auto m = ec::cover(-r, -l, t, b);
+        check(m.valid && m.halfWide == c.halfWide && m.halfHigh == c.halfHigh, "the right eye's cover");
+        // A centred lens is left as the setter made it.
+        const auto s = ec::cover(-1.2f, 1.2f, -1, 1);
+        check(s.valid && s.halfWide == 1.2f && s.halfHigh == 1.f, "a centred lens unchanged");
+        // Bad lenses: nothing written.
+        check(!ec::cover(1, -1, -1, 1).valid && !ec::cover(-1, 1, 1, -1).valid &&
+                  !ec::cover(std::nanf(""), 1, -1, 1).valid && !ec::cover(-200, 1, -1, 1).valid,
+              "a bad lens has no cover");
+        // apply / save / restore on a 0x440-byte descriptor touch only +410, +414, +420, +424.
+        float v[272]{};
+        for (int i = 0; i < 272; ++i)
+            v[i] = static_cast<float>(i) * .01f;
+        v[0x400 / 4] = l, v[0x404 / 4] = r, v[0x408 / 4] = t, v[0x40c / 4] = b;
+        float before[272];
+        std::memcpy(before, v, sizeof v);
+        const auto saved = ec::save(v);
+        check(ec::apply(v), "apply on the eye lens");
+        check(v[0x420 / 4] == 1.486f && v[0x424 / 4] == 1.542f && v[0x410 / 4] == c.angleWide &&
+                  v[0x414 / 4] == c.angleHigh,
+              "apply wrote the cover");
+        int changed = 0;
+        for (int i = 0; i < 272; ++i)
+            changed += v[i] != before[i];
+        check(changed == 4, "apply touched only the four summaries");
+        ec::restore(v, saved);
+        check(!std::memcmp(v, before, sizeof v), "restore gives the descriptor its own values back");
+        float bad[272]{};
+        check(!ec::apply(bad), "an empty descriptor is left alone");
+        check(ec::halfWidthWriteRva == 0x2c7584c && ec::halfHeightWriteRva == 0x2c7589c, "the guarded writes");
+        check(sizeof(ec::halfWidthWriteBytes) == 8 && ec::halfWidthWriteBytes[4] == 0x20 &&
+                  ec::halfHeightWriteBytes[4] == 0x24,
+              "the guard bytes name +420 and +424");
     });
     test("0.0.74 test 10 SM1STYLE: SpidyVR's jitter, phases, the 67% eyes, the fallbacks, the safety", [] {
         namespace s1 = spidy::sm1style;

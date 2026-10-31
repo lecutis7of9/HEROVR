@@ -5,6 +5,7 @@
 #include "spidy/engine_taa.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
+#include "spidy/eye_cover.hpp" // 0.0.74 test 10 WINDOW EDGES
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/mirror_probe.hpp"
@@ -473,6 +474,10 @@ using SetupModels = uint64_t (*)(void*, void*, void*, uint64_t, uint64_t);
 SetupModels originalSetupModels{};
 void* setupModelsHook{};
 bool distances{};
+// 0.0.74 test 10 WINDOW EDGES (eye_cover.hpp): the eyes' symmetric lens summaries (+410/+414/+420/+424) cover the
+// whole off-centre lens from SetPose to Submit. On by default; off (one console line) where the lens setter's two
+// summary writes differ from 2.810.0.0.
+bool eyeCoverReady{};
 // The far buildings' full models (createViews bit 128 off). Far buildings are
 // impostors, and only the engine's active view (189daa0: the view at
 // ViewContextManager +f8) has the impostors it sees draw their full models,
@@ -781,6 +786,19 @@ void renderActor(void* context, void* actor, uint8_t visibility) {
     }
     originalRenderActor(context, actor, visibility);
 }
+// 0.0.74 test 10 WINDOW EDGES (eye_cover.hpp): an eye's Submit (2c95200) copies the descriptor into the eye view
+// with summaries that cover its whole off-centre lens; the descriptor gets its own back afterwards.
+void submitEye(void* eye, Descriptor& descriptor) {
+    namespace ec = spidy::eye_cover;
+    if (!eyeCoverReady) {
+        reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
+        return;
+    }
+    const auto saved = ec::save(descriptor.values);
+    ec::apply(descriptor.values);
+    reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
+    ec::restore(descriptor.values, saved);
+}
 // 1796d20 sets up a view's model job (the view at context +8): its distance
 // scale (+2f8, view +1cc4 x +1cc8; +310, 16 times that, for texture requests)
 // and how strongly it asks for textures (+2fc, requestScale of the view's
@@ -801,8 +819,13 @@ uint64_t setupModels(void* context, void* job, void* third, uint64_t fourth, uin
     }
 #endif
     const auto view = enabled && distances ? pointer(reinterpret_cast<uintptr_t>(context) + 8) : 0;
-    float half[2]{};
-    if (eyeView(view) < 0 || !read(view + 0x420, half, sizeof(half)) || !(half[0] > 0) || !(half[1] > 0))
+    // The exact half tangents (+400..+40c): an eye's +420/+424 cover its whole lens (WINDOW EDGES).
+    float lens[4]{}, half[2]{};
+    if (eyeView(view) < 0 || !read(view + 0x400, lens, sizeof(lens)))
+        return result;
+    half[0] = (lens[1] - lens[0]) / 2;
+    half[1] = (lens[3] - lens[2]) / 2;
+    if (!(half[0] > 0) || !(half[1] > 0))
         return result;
     const float wanted = native_view::requestScale(static_cast<float>(config.width),
                                                    static_cast<float>(config.height), half[0], half[1]);
@@ -2942,7 +2965,7 @@ void placeEyes() {
                         jitter[0], jitter[1], false, false);
                     reinterpret_cast<SetPose>(base + 0x2c76310)(&descriptor, pose.data(), 0);
                 }
-                reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
+                submitEye(eye, descriptor); // 0.0.74 test 10 WINDOW EDGES
                 matchDistances(eye, descriptor, index);
                 eyeLod(eye, descriptor, main, index);
                 // Update 29: the ADDRESS FINDER also tries the eyes' cameras (read-only).
@@ -2971,7 +2994,7 @@ void placeEyes() {
                 recordLens(index, descriptor,
                            {std::tan(fov[0]), std::tan(fov[1]), -std::tan(fov[3]), -std::tan(fov[2])});
             reinterpret_cast<SetPose>(base + 0x2c76310)(&descriptor, pose.data(), 0);
-            reinterpret_cast<Submit>(base + 0x2c95200)(eye, &descriptor);
+            submitEye(eye, descriptor); // 0.0.74 test 10 WINDOW EDGES
             matchDistances(eye, descriptor, index);
             eyeLod(eye, descriptor, main, index);
             if (index < 2)
@@ -3819,6 +3842,14 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStart(void* value) {
         impostors = impostors && entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
                     entry(0x2a6bded, reachLastBytes, sizeof(reachLastBytes));
         // Update 38.3 FAR WINDOWS write 2: checked on its own (SM2 never sets flag 32).
+        // 0.0.74 test 10 WINDOW EDGES: the lens setter's +420 / +424 writes as the exe has them.
+        {
+            namespace ec = spidy::eye_cover;
+            eyeCoverReady = entry(ec::halfWidthWriteRva, ec::halfWidthWriteBytes, sizeof(ec::halfWidthWriteBytes)) &&
+                            entry(ec::halfHeightWriteRva, ec::halfHeightWriteBytes, sizeof(ec::halfHeightWriteBytes));
+            if (!eyeCoverReady)
+                OutputDebugStringA(ec::fallbackLine);
+        }
         farWindowsReady = entry(0x2a6bc60, impostorQueriesBytes, sizeof(impostorQueriesBytes)) &&
                           entry(0x2a6bcad, reachFirstBytes, sizeof(reachFirstBytes)) &&
                           entry(0x2a6bded, reachLastBytes, sizeof(reachLastBytes));

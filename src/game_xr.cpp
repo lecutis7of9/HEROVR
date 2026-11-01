@@ -5916,12 +5916,14 @@ DWORD WINAPI run(void*) {
                                 input.reserved7[1] = flyLive ? fly_feel::pack(holdOn, enter, steerOn) : 0u;
                                 // HERO VR 0.0.76 FLIGHT: its own word (fly076::pack) beside FLY HOLD's enter - B the air
                                 // brake, the roll stick and Y's orientation brake hold the heading, the left stick's
-                                // throttle. The 0.0.75 grip enter never counts for it.
+                                // throttle; HOVER FLIGHT (pt1616u): no cruise, the right stick's up / down climbs.
+                                // The 0.0.75 grip enter never counts for it.
                                 if (new076)
                                     input.reserved7[1] =
                                         fly_feel::pack(true, enter076, false) |
                                         fly076::pack(true, fly076Flying && (frame.buttons & buttonB) != 0,
-                                                     fly076Roll.rolling() || fly076Y.braking(), frame.hands[0].stickY);
+                                                     fly076Roll.rolling() || fly076Y.braking(), frame.hands[0].stickY,
+                                                     true, frame.hands[1].stickY);
                             }
                             // Version 0.0.5 SUPERSONIC: both hands out (FORWARD) and the left stick forward
                             // dash at SUPERSONIC SPEED x FAST; its first frame booms (sound + shockwave).
@@ -7096,8 +7098,9 @@ DWORD WINAPI run(void*) {
                         // down by the hip) took the stick to rest and spent a heal under the thumb.
                         const auto& turning = frame.hands[1];
                         // Not a push the game names a D-pad way for (NamedPress).
+                        // HOVER FLIGHT: mid-flight the right stick's up / down is the climb - no heal or zip from it.
                         const bool sticking =
-                            steering && !calibrationInput && !layerOn &&
+                            steering && !calibrationInput && !layerOn && !fly076Flying &&
                             !(named & (game_pad::NamedPress::stickUp | game_pad::NamedPress::stickLeft |
                                        game_pad::NamedPress::stickRight));
                         // Update 37: heal_hold_ms, how long a push is held before it counts.

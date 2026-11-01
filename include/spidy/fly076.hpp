@@ -38,8 +38,9 @@ namespace spidy::fly076 {
 
 // live.txt fly_classic: 0 the 0.0.76 flight (the default), 1 the 0.0.75 flight. Export SpidyFlyClassic 5553.
 inline constexpr const char* classicHelp =
-    "FLY CLASSIC OFF (the default) flies the 0.0.76 way (both hands up or A held to take off, your arms steer, the "
-    "right stick rolls), while ON puts the 0.0.75 flight back (grip to take off, the poses and the triggers); live, "
+    "FLY CLASSIC OFF (the default) flies the 0.0.76 way (both hands up or A held to take off, then you hover still: "
+    "the left stick moves and strafes, the right stick up or down climbs, an arm reached out steers, its left or right "
+    "rolls), while ON puts the 0.0.75 flight back (grip to take off, the poses and the triggers); live, "
     "no restart.";
 inline bool newFlight(uint32_t classicValue) { return classicValue != 1; }
 

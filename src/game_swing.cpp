@@ -823,7 +823,7 @@ void visit(const native_rays::QueryContext& world) {
         const auto w076 = fly076::unpack(c.version >= 7 && c.bytes == sizeof(Command) ? c.reserved7[1] : 0u);
         bool sameFlight = wasFlying;
         if (w076.on) {
-            // HERO VR 0.0.76 FLIGHT (fly076.hpp): continuous, steered by the arms; SUPERSONIC is speed only.
+            // HERO VR 0.0.76 FLIGHT (fly076.hpp): HOVER FLIGHT (sticks and arms, still with nothing held); SUPERSONIC.
             if (flight.flying())
                 flight.land(); // the 0.0.75 flight never flies beside it
             sameFlight = flight076Drove;
@@ -847,6 +847,12 @@ void visit(const native_rays::QueryContext& world) {
             Vec3 offsets[2]{fi.hands[0].offset, fi.hands[1].offset};
             const bool tracked[2]{fi.hands[0].tracked, fi.hands[1].tracked};
             ni.want = fly076::steerWay(offsets, tracked, fi.bodyUp);
+            // HOVER FLIGHT (pt1616u, both games): the VR module's word says hover - no cruise; the left stick (the
+            // walk's head-relative way) moves and strafes, the right stick's up / down climbs, nothing held hangs still.
+            // An older VR module's word has no hover bit: the 0.0.76 cruise as it was.
+            ni.hover = w076.hover;
+            ni.move = live && w076.hover && finite(in.move) ? in.move : Vec3{};
+            ni.rise = live && w076.hover ? w076.rise : 0.f;
             // Never into a wall (walls are SPIDER-MAN's): a steep fixed surface just ahead of the flight takes
             // the part of it into the wall away, so the body slides along and the game never grasps it.
             if (flight076.flying() && !suspend) {

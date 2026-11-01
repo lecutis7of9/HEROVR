@@ -9,7 +9,7 @@ Exit code 0 = OK, 1 = not usable (the reason is printed)."""
 import io, os, re, struct, subprocess, sys, tempfile, zipfile
 
 STDLIB = ["encodings", "argparse", "json", "ctypes", "subprocess", "zipfile", "socket", "hashlib", "threading", "uuid", "statistics",
-          "datetime", "pathlib", "shutil", "signal", "struct", "bisect", "ast", "collections", "importlib", "re"]
+          "datetime", "pathlib", "shutil", "signal", "struct", "bisect", "ast", "collections", "importlib", "re", "inspect", "traceback", "platform", "io"]
 NATIVE = ["_ctypes.pyd", "_socket.pyd", "_hashlib.pyd", "select.pyd", "libffi-8.dll", "libcrypto-3.dll", "vcruntime140.dll", "python3.dll"]
 IMPORTS = "import sys, argparse, json, ctypes, subprocess, zipfile, socket, hashlib, threading, uuid, statistics, datetime, pathlib, shutil, signal, struct, msvcrt, winreg"
 

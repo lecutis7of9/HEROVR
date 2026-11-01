@@ -83,9 +83,10 @@ class Sm1Suits(unittest.TestCase):
             prog = toc.read_asset(assets.AID_PROGRESSION if isinstance(assets.AID_PROGRESSION, int) else assets.aid(assets.AID_PROGRESSION), 0)
             toc.close()
             self.assertIsNotNone(prog)
-            self.assertEqual(assets.suits_in_progression(prog), ['SUIT_classic'])  # one item: read as a scalar, kept a list
-            new = assets.edit_progression(prog, ['herovr_thor', 'herovr_hulk'])
-            got = assets.suits_in_progression(new)
+            names = lambda d: [x['Name'] if isinstance(x, dict) else x for x in assets.suits_in_progression(d)]
+            self.assertEqual(names(prog), ['SUIT_classic'])  # one item: read as a scalar, kept a list
+            new = assets.edit_progression(prog, [('herovr_thor', True), ('herovr_hulk', True)])
+            got = names(new)
             self.assertIn('SUIT_classic', got)
             self.assertEqual(len(got), 3)
             assets.read_config(new)  # the empty Gadgets list survives a save and reads back
@@ -135,7 +136,8 @@ class Sm1Suits(unittest.TestCase):
     def test_flat_normals(self):
         for fmt in (71, 72, 77, 83, 84, 98):
             self.assertIsNotNone(bcn.flat_normal(fmt), fmt)
-        self.assertEqual(bcn.decode_bc7_mode6_block(bcn.flat_normal(98))[:3], (128, 128, 255))
+        for got, want in zip(bcn.decode_bc7_mode6_block(bcn.flat_normal(98))[:3], (128, 128, 255)):
+            self.assertLessEqual(abs(got - want), 1)  # one shared p-bit: within 1
 
     def test_source_rules(self):
         for root, _, names in os.walk(TOOL):

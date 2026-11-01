@@ -150,5 +150,23 @@ class Sm1Suits(unittest.TestCase):
         self.assertNotIn('spidy', s.lower().replace('spidyvr', ''))  # never touches SpidyVR's files
 
 
+class EmbeddedPython(unittest.TestCase):
+    """The launcher's embedded Python has a ._pth file, so the script's own folder is not on sys.path.
+    python -I simulates that: the tool must still find its sibling modules."""
+
+    def test_isolated_mode_finds_sibling_modules(self):
+        import subprocess
+        tmp = tempfile.mkdtemp()
+        try:
+            r = subprocess.run([sys.executable, '-I', '-B', os.path.join(TOOL, 'sm1suits.py'), 'status',
+                                '--game', tmp, '--packs', tmp], cwd=tmp, capture_output=True, text=True,
+                               timeout=120)
+            last = [l for l in r.stdout.splitlines() if l.startswith('RESULT ')]
+            self.assertTrue(last, r.stdout + r.stderr)
+            self.assertNotIn('ModuleNotFoundError', r.stdout + r.stderr)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == '__main__':
     unittest.main()

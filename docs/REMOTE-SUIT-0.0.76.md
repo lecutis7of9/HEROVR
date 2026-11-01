@@ -77,3 +77,35 @@ GPU, the suit's asset id in the MP WORLD packet, and drawing it on the receiver 
   (loadout/model/mask), path, id and chain, e.g. `record+0x030 -> +0x038 -> +0x010 +0x008`, and a
   "worn suit (CANDIDATE ...)" line when exactly one suit is named by an id only it has.
 - Every place it prints is CANDIDATE until a run shows it following the swaps.
+
+## Run 3 (draft 2a86d3b) - PROBE 2 never ran
+- No SUIT PROBE line: `suit_probe` was off in the new folder's live.txt. No crash. The SM1 branch since
+  (e7362f6) starts the probe on in TEST builds and logs one start-up line every session saying so and where
+  sm2scan.json was found.
+
+## Run 4 (draft e7362f6, 2026-11-01 15:31 ET, pt1611u: Advanced Suit 2.0, then Classic, then Hybrid)
+- Loaded: "SUIT PROBE 2: 96 suits, 283 ids from ...\Downloads\sm2scan.json". 14 changes, clean exit.
+- NOT CONFIRMED: none of the 9 ids of those three suits (their loadouts, models and masks) was seen once.
+- Why: every pass hit the 6000-object cap, so each pass read different memory and the set flickered (43-51
+  "suits named at once"); most hits were loadout ids in one list (the unlocked suits); the 12-line cap hid
+  the rest. The only model ids seen were two other suits' bodies, deep under record+0x030 -> +0x080.
+
+## SUIT PROBE 3 (same `suit_probe`, still read-only)
+- The same memory every pass: breadth first from the record, instance and hero, words in offset order; what
+  is at or under the depth the object cap (now 10000) cut is not counted, so every pass counts the same
+  objects ("complete to depth D" in each line).
+- A set is told only when two passes in a row agree; after the first set ("baseline") only the changes are
+  printed ("+" added, "-" removed with where it was), up to 40 lines a change, and a "swap ... A -> B" line
+  when one suit's own ids go and another's come.
+- An object holding 3 or more loadout ids is a list (the unlocked suits): its ids are counted, never shown,
+  and it is not walked into.
+- Loaded models: an object holding a suit's model/mask id or a pointer to any .model path is read 0x400 bytes
+  wide (not 0x200) and walked 2 more steps (past the 6-step depth); its children are read wide too.
+- WATCH: for i30_Advanced_Suit, SUIT_CLASSIC and SUIT_NWH_HYBRID (the names his sm2scan.json gives the run-4
+  swaps), every place their model and mask ids are seen (up to 16 each) is logged as "SUIT PROBE 3: WATCH
+  ..." when those places change (two passes agreeing), or "none of its model or mask ids in the memory read".
+- Throttle: 24 objects a frame (about 10 s a pass at 45 fps), a 2 s pause between passes, 48 failed reads stop
+  a frame; VirtualQuery then the one SEH peek, as before. Every place is CANDIDATE.
+- Test: load into the city, wait about 30 s (two passes for the baseline), swap to Advanced Suit 2.0, wait
+  about 30 s, Classic, wait about 30 s, Hybrid, wait about 30 s, quit, Reports, send send-me.zip. A chain is
+  CONFIRMED only when its WATCH or "+" lines follow those swaps in that order.

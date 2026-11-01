@@ -403,6 +403,8 @@ inline uint64_t hexId(std::string_view s) {
 }
 
 // The ids PROBE 2 looks for, from the user's own sm2scan.json.
+// PROBE 3 watches these suits of run 4 (pt1611u's swaps, the names his sm2scan.json gives them) in every place.
+constexpr const char* watchNames[3] = {"i30_Advanced_Suit", "SUIT_CLASSIC", "SUIT_NWH_HYBRID"}; // run 4's swaps
 enum Kind : uint8_t { kindLoadout = 0, kindModel = 1, kindMask = 2 };
 struct Target {
     Kind kind{};
@@ -418,6 +420,9 @@ struct Table {
         return it != ids.end() && it->first == id ? &it->second : nullptr;
     }
     bool empty() const { return ids.empty(); }
+    std::vector<uint16_t> watchSuits; // the watchNames found in the scan
+    std::vector<uint64_t> watchIds;   // their model and mask ids (each path's own id too), sorted
+    bool watched(uint64_t id) const { return std::binary_search(watchIds.begin(), watchIds.end(), id); }
     // sm2scan.json's text -> the table (empty for a file that is not one). Never throws.
     static Table fromScan(std::string_view text) {
         Table t;
@@ -467,6 +472,19 @@ struct Table {
             }
             std::sort(all.begin(), all.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
             t.ids = std::move(all);
+            for (const char* w : watchNames)
+                for (size_t i = 0; i < t.names.size(); ++i)
+                    if (t.names[i] == w) {
+                        t.watchSuits.push_back(static_cast<uint16_t>(i));
+                        break;
+                    }
+            for (const auto& e : t.ids)
+                if (e.second.kind != kindLoadout)
+                    for (uint16_t s : t.watchSuits)
+                        if (std::find(e.second.suits.begin(), e.second.suits.end(), s) != e.second.suits.end()) {
+                            t.watchIds.push_back(e.first);
+                            break;
+                        }
         } catch (...) {
             return {};
         }
@@ -495,89 +513,165 @@ inline size_t assetPath(const char* text, size_t max) {
     return tail == ".config" || tail.substr(1) == ".model" ? n : 0;
 }
 
+// 0.0.76 SUIT PROBE 3 (still the live.txt suit_probe; still READ-ONLY). Run 4 (pt1611u: Advanced Suit 2.0, then
+// Classic, then Hybrid) found none of those three suits' ids: every pass hit its object cap, so each covered
+// different memory and the found set flickered; most hits were loadout ids in one list (the unlocked suits);
+// the 12-line cap hid the rest. PROBE 3: (1) a pass walks the same memory in a fixed order (roots, then word
+// offsets) and reports only what it read completely (the depths the cap never cut); (2) a list holding
+// listMin+ loadout ids is the unlocked suits: its ids are kept but hidden, and it is not walked into; (3) a
+// change is reported only when two passes in a row agree, and then only what was added or removed; (4) an
+// object holding a suit's model or mask id or a .model path (a loaded model) is read wider (modelWords) and
+// walked modelExtra steps further; (5) the three suits of run 4 (watchNames, read from his sm2scan.json) get
+// every place their model and mask ids are seen logged as WATCH lines. Every place is CANDIDATE.
+
 struct DeepLimits {
-    uint32_t words = 0x40;     // words read of each object (0x200 bytes)
-    uint32_t depth = 5;        // pointer steps from a root
-    uint32_t objects = 6000;   // objects a pass
-    uint32_t perStep = 16;     // objects a frame (at most perStep * (words + 1) reads a frame)
-    size_t text = 200;         // longest path read
+    uint32_t words = 0x40;      // words read of each object (0x200 bytes)
+    uint32_t modelWords = 0x80; // ... of a loaded-model object and its children (0x400 bytes)
+    uint32_t depth = 6;         // pointer steps from a root
+    uint32_t modelExtra = 2;    // steps below a loaded-model object even past depth
+    uint32_t objects = 10000;   // objects a pass
+    uint32_t perStep = 24;      // objects a frame (at most perStep * (modelWords * 2 + 2) reads a frame)
+    uint32_t listMin = 3;       // an object holding this many loadout ids is a list (the unlocked suits)
+    uint32_t placesPerId = 16;  // places kept of each watched id
+    size_t text = 200;          // longest path read
     uint64_t skipLo = 0, skipHi = 0; // never walked into (the game's exe: vtables and code), still matched
     uint32_t faultsPerObject = 8;  // an object whose words mostly fail to read is not pointers: the rest skipped
     uint32_t faultsPerStep = 48;   // a frame stops early after this many failed reads
 };
 
-// One search pass, done a few objects at a time (step), breadth first.
+// One search pass, done a few objects at a time (step), breadth first in a fixed order.
 class Deep {
 public:
     struct Found {
         uint64_t id{};
         bool viaPath{}; // a path whose id it is, rather than the id itself
+        bool inList{};  // seen only inside a list of loadout ids (the unlocked suits)
         std::string chain;
     };
+    struct Place {
+        uint64_t id{};
+        std::string chain;
+    };
+    static constexpr uint8_t whole = 0xff;
     static constexpr const char* rootNames[3] = {"record", "instance", "hero"};
     void start(const uint64_t roots[3]) {
         nodes.clear();
         visited.clear();
-        found.clear();
+        seen.clear();
+        places.clear();
         next = 0;
+        cut = whole;
         for (uint8_t r = 0; r < 3; ++r)
             if (plausible(roots[r]) && !(roots[r] & 7) && visited.insert(roots[r]).second)
-                nodes.push_back(Node{roots[r], -1, 0, 0, r});
+                nodes.push_back(Node{roots[r], -1, 0, 0, r, 0, false});
         running = !nodes.empty();
     }
     bool busy() const { return running; }
     size_t objects() const { return next; }
-    const std::vector<Found>& results() const { return found; }
-    // Reads up to lim.perStep objects; true when the pass is done (then results() is the whole pass).
+    // Objects shallower than this were all read (the cap cut deeper ones); whole: the cap was never reached.
+    uint8_t complete() const { return cut; }
+    // The ids found in the completely read depths, sorted by id (the same memory every pass).
+    std::vector<Found> settled() const {
+        std::vector<Found> out;
+        for (const auto& s : seen) {
+            const bool out1 = s.outDepth < cut, list1 = s.listDepth < cut;
+            if (out1 || list1)
+                out.push_back(Found{s.id, out1 ? s.outPath : s.listPath, !out1, out1 ? s.outChain : s.listChain});
+        }
+        std::sort(out.begin(), out.end(), [](const Found& a, const Found& b) { return a.id < b.id; });
+        return out;
+    }
+    // Every place (up to placesPerId each) a watched id was seen in the completely read depths, in read order.
+    std::vector<Place> watchedPlaces() const {
+        std::vector<Place> out;
+        for (const auto& p : places)
+            if (p.depth < cut)
+                out.push_back(Place{p.id, p.chain});
+        return out;
+    }
+    // Reads up to lim.perStep objects; true when the pass is done (then settled() is the whole pass).
     template <class Peek> bool step(Peek& peek, const Table& suits, const DeepLimits& lim) {
         if (!running)
             return false;
-        std::vector<uint64_t> words(lim.words);
+        std::vector<uint64_t> words(std::max(lim.words, lim.modelWords));
         uint32_t faults = 0;
         for (uint32_t k = 0; k < lim.perStep && next < nodes.size() && faults < lim.faultsPerStep; ++k) {
             const Node node = nodes[next];
             const int32_t me = static_cast<int32_t>(next++);
-            uint32_t count = lim.words;
-            if (!peek(node.addr, words.data(), count * 8)) {
-                ++faults;
-                const uint64_t toPage = 0x1000 - (node.addr & 0xfff);
-                count = static_cast<uint32_t>(std::min<uint64_t>(toPage / 8, lim.words));
-                if (!count || !peek(node.addr, words.data(), count * 8)) {
-                    ++faults;
-                    continue;
+            uint32_t count = read(peek, node.addr, words.data(), node.wide ? lim.modelWords : lim.words, faults);
+            if (!count)
+                continue;
+            std::vector<Hit> hits;
+            std::vector<std::pair<uint64_t, uint16_t>> kids; // pointers to walk, in word order
+            bool model = false;
+            uint32_t loadouts = 0, mine = 0;
+            auto look = [&](uint32_t from, uint32_t to) {
+                for (uint32_t i = from; i < to && mine < lim.faultsPerObject; ++i) {
+                    const uint64_t w = words[i];
+                    if (!w)
+                        continue;
+                    if (const Target* t = suits.find(w)) {
+                        hits.push_back(Hit{w, false, static_cast<uint16_t>(i * 8), {}});
+                        model = model || t->kind != kindLoadout;
+                        loadouts += t->kind == kindLoadout ? 1u : 0u;
+                        continue;
+                    }
+                    if (!plausible(w))
+                        continue;
+                    std::string path;
+                    const Text text = readAsset(peek, w, lim, path);
+                    if (text == unreadable) { // never walked into either
+                        ++mine;
+                        ++faults;
+                        continue;
+                    }
+                    if (text == asset) {
+                        model = model || (path.size() > 6 && path.compare(path.size() - 6, 6, ".model") == 0);
+                        const uint64_t id = assetId(path);
+                        if (const Target* t = suits.find(id)) {
+                            hits.push_back(Hit{id, true, static_cast<uint16_t>(i * 8), path});
+                            loadouts += t->kind == kindLoadout ? 1u : 0u;
+                        }
+                        continue;
+                    }
+                    if (!(w & 7))
+                        kids.emplace_back(w, static_cast<uint16_t>(i * 8));
+                }
+            };
+            look(0, count);
+            if (model && count < lim.modelWords) { // a loaded model: look further inside it
+                const uint32_t more = read(peek, node.addr, words.data(), lim.modelWords, faults);
+                if (more > count) {
+                    look(count, more);
+                    count = more;
                 }
             }
-            uint32_t mine = 0; // this object's failed reads
-            for (uint32_t i = 0; i < count && mine < lim.faultsPerObject; ++i) {
-                const uint64_t w = words[i];
-                if (!w)
-                    continue;
-                if (suits.find(w)) {
-                    keep(w, false, chainOf(me) + " +" + hex3(i * 8));
-                    continue;
-                }
-                if (!plausible(w))
-                    continue;
-                std::string path;
-                const Text text = readAsset(peek, w, lim, path);
-                if (text == unreadable) { // never walked into either
-                    ++mine;
-                    ++faults;
-                    continue;
-                }
-                if (text == asset) {
-                    const uint64_t id = assetId(path);
-                    if (suits.find(id))
-                        keep(id, true, chainOf(me) + " +" + hex3(i * 8) + " -> \"" + path + "\"");
-                    continue;
-                }
-                if ((w & 7) || node.depth + 1u > lim.depth || nodes.size() >= lim.objects)
-                    continue;
+            const bool list = loadouts >= lim.listMin;
+            const std::string base = chainOf(me);
+            for (auto& h : hits) {
+                std::string chain = base + " +" + hex3(h.off) + (h.viaPath ? " -> \"" + h.path + "\"" : "");
+                if (suits.watched(h.id))
+                    place(h.id, node.depth, chain, lim);
+                keep(h.id, h.viaPath, list, node.depth, std::move(chain));
+            }
+            if (list) // the unlocked suits: its ids kept, never walked into
+                continue;
+            const uint32_t reach = std::max<uint32_t>(std::max<uint32_t>(lim.depth, node.reach),
+                                                      model ? node.depth + lim.modelExtra : 0u);
+            if (node.depth + 1u > reach)
+                continue;
+            for (const auto& [w, off] : kids) {
                 if (lim.skipHi > lim.skipLo && w >= lim.skipLo && w < lim.skipHi)
                     continue;
-                if (!visited.insert(w).second)
+                if (visited.count(w))
                     continue;
-                nodes.push_back(Node{w, me, static_cast<uint16_t>(i * 8), static_cast<uint8_t>(node.depth + 1), node.root});
+                if (nodes.size() >= lim.objects) { // the cap: what is this deep or deeper is not complete
+                    cut = std::min<uint8_t>(cut, static_cast<uint8_t>(node.depth + 1));
+                    break;
+                }
+                visited.insert(w);
+                nodes.push_back(Node{w, me, off, static_cast<uint8_t>(node.depth + 1), node.root,
+                                     static_cast<uint8_t>(std::min<uint32_t>(reach, 0xfe)), model || node.wide});
             }
         }
         if (next >= nodes.size())
@@ -591,6 +685,25 @@ private:
         int32_t parent;
         uint16_t off; // where in the parent the pointer to it was
         uint8_t depth, root;
+        uint8_t reach; // the deepest step its children may go (a loaded model's lets them past lim.depth)
+        bool wide;     // under a loaded model: read modelWords
+    };
+    struct Hit {
+        uint64_t id;
+        bool viaPath;
+        uint16_t off;
+        std::string path;
+    };
+    struct Seen {
+        uint64_t id{};
+        uint8_t outDepth = whole, listDepth = whole; // its shallowest place outside a list, inside one
+        bool outPath{}, listPath{};
+        std::string outChain, listChain;
+    };
+    struct Placed {
+        uint64_t id;
+        uint8_t depth;
+        std::string chain;
     };
     static std::string hex3(uint32_t v) {
         static const char* d = "0123456789abcdef";
@@ -598,6 +711,18 @@ private:
         for (int i = 2; i >= 0; --i)
             s.push_back(d[(v >> (i * 4)) & 15]);
         return s;
+    }
+    template <class Peek> static uint32_t read(Peek& peek, uint64_t addr, uint64_t* out, uint32_t want, uint32_t& faults) {
+        if (peek(addr, out, want * 8))
+            return want;
+        ++faults;
+        const uint64_t toPage = 0x1000 - (addr & 0xfff);
+        const auto count = static_cast<uint32_t>(std::min<uint64_t>(toPage / 8, want));
+        if (!count || !peek(addr, out, count * 8)) {
+            ++faults;
+            return 0;
+        }
+        return count;
     }
     std::string chainOf(int32_t n) const {
         std::vector<uint16_t> offs;
@@ -611,11 +736,27 @@ private:
             s += (it == offs.rbegin() ? "+" : " -> +") + hex3(*it);
         return s;
     }
-    void keep(uint64_t id, bool viaPath, std::string chain) {
-        for (const auto& f : found)
-            if (f.id == id)
-                return; // its nearest place only
-        found.push_back(Found{id, viaPath, std::move(chain)});
+    void keep(uint64_t id, bool viaPath, bool inList, uint8_t depth, std::string chain) {
+        Seen* s = nullptr;
+        for (auto& e : seen)
+            if (e.id == id)
+                s = &e;
+        if (!s) {
+            seen.emplace_back();
+            s = &seen.back();
+            s->id = id;
+        }
+        if (inList && depth < s->listDepth) // its shallowest place of each sort (the first read, breadth first)
+            s->listDepth = depth, s->listPath = viaPath, s->listChain = std::move(chain);
+        else if (!inList && depth < s->outDepth)
+            s->outDepth = depth, s->outPath = viaPath, s->outChain = std::move(chain);
+    }
+    void place(uint64_t id, uint8_t depth, const std::string& chain, const DeepLimits& lim) {
+        uint32_t n = 0;
+        for (const auto& p : places)
+            n += p.id == id ? 1u : 0u;
+        if (n < lim.placesPerId)
+            places.push_back(Placed{id, depth, chain});
     }
     enum Text { notText, asset, unreadable };
     template <class Peek> static Text readAsset(Peek& peek, uint64_t p, const DeepLimits& lim, std::string& out) {
@@ -648,70 +789,186 @@ private:
     }
     std::vector<Node> nodes;
     std::unordered_set<uint64_t> visited;
-    std::vector<Found> found;
+    std::vector<Seen> seen;
+    std::vector<Placed> places;
     size_t next{};
+    uint8_t cut{whole};
     bool running{};
 };
 
-// PROBE 2's console lines for a finished pass (empty when the set of found ids did not change).
+// PROBE 3's console lines. A pass's set counts only when the pass before it found the same ids (two passes
+// agree); then only what changed since the last set logged is printed (the first set in full, its list ids
+// counted, not shown). WATCH lines: every place of the watched suits' model and mask ids, when they change.
 class Watch2 {
 public:
-    std::vector<std::string> pass(const Table& suits, const std::vector<Deep::Found>& found, size_t objects) {
+    static constexpr size_t maxLines = 40; // lines of one change at most (then "... N more")
+    std::vector<std::string> pass(const Table& suits, const Deep& deep) {
         std::vector<std::string> lines;
-        std::vector<uint64_t> now;
-        for (const auto& f : found)
-            now.push_back(f.id);
-        std::sort(now.begin(), now.end());
         ++passes;
-        if (logged && now == last)
+        const std::vector<Deep::Found> now = deep.settled();
+        std::vector<uint64_t> ids;
+        for (const auto& f : now)
+            ids.push_back(f.id);
+        const bool agree = havePrev && ids == prev;
+        prev = ids;
+        havePrev = true;
+        if (!agree || (logged && ids == idsOf(last)))
             return lines;
+        const bool first = !logged;
+        const std::vector<Deep::Found> before = last;
         logged = true;
         last = now;
         ++changes;
-        const std::string head = "SUIT PROBE 2: change " + std::to_string(changes) + " (pass " +
-                                 std::to_string(passes) + ", " + std::to_string(objects) + " objects): ";
-        if (found.empty()) {
+        const std::string head = std::string("SUIT PROBE 3: ") + (first ? "baseline" : "change " + std::to_string(changes - 1)) +
+                                 " (passes " + std::to_string(passes - 1) + " and " + std::to_string(passes) +
+                                 " agree, " + std::to_string(deep.objects()) + " objects, " + reach(deep) + "): ";
+        if (now.empty() && first) {
             lines.push_back(head + "none of the " + std::to_string(suits.names.size()) +
                             " suits' ids near the player (CANDIDATE layout missed; send this log)");
             return lines;
         }
-        lines.push_back(head + std::to_string(found.size()) + " suit id(s), every place CANDIDATE:");
-        // A suit named by an id only it has (a shared model, as a body several suits wear, names none alone).
-        std::vector<uint16_t> alone;
-        size_t shown = 0;
-        for (const auto& f : found) {
-            const Target* t = suits.find(f.id);
-            if (!t)
-                continue;
-            if (t->suits.size() == 1 &&
-                std::find(alone.begin(), alone.end(), t->suits[0]) == alone.end())
-                alone.push_back(t->suits[0]);
-            if (++shown > 12) {
-                continue;
+        std::vector<const Deep::Found*> added, removed;
+        size_t listAdded = 0, listRemoved = 0, listNow = 0;
+        for (const auto& f : now) {
+            listNow += f.inList ? 1 : 0;
+            if (!has(before, f.id)) {
+                if (f.inList)
+                    ++listAdded;
+                else
+                    added.push_back(&f);
             }
-            std::string who = t->suits.size() == 1 ? suits.names[t->suits[0]]
-                                                   : "shared by " + std::to_string(t->suits.size()) + " suits";
-            static const char* kinds[3] = {"loadout", "model", "mask"};
-            lines.push_back("SUIT PROBE 2: " + who + " " + kinds[t->kind] + " " + t->path + " id " +
-                            Watch::hex(f.id) + (f.viaPath ? " (its path)" : "") + " at " + f.chain);
         }
-        if (shown > 12)
-            lines.push_back("SUIT PROBE 2: ... " + std::to_string(shown - 12) + " more");
-        if (alone.size() == 1)
-            lines.push_back("SUIT PROBE 2: worn suit (CANDIDATE until it follows the swaps): " + suits.names[alone[0]]);
-        else if (alone.size() > 1)
-            lines.push_back("SUIT PROBE 2: " + std::to_string(alone.size()) + " suits named at once (not one worn suit)");
+        for (const auto& f : before)
+            if (!has(now, f.id)) {
+                if (f.inList)
+                    ++listRemoved;
+                else
+                    removed.push_back(&f);
+            }
+        if (first)
+            lines.push_back(head + std::to_string(now.size()) + " suit id(s); " + std::to_string(listNow) +
+                            " loadout id(s) in lists (the unlocked suits) not shown; every place CANDIDATE:");
+        else
+            lines.push_back(head + "+" + std::to_string(added.size()) + " -" + std::to_string(removed.size()) +
+                            " (lists: +" + std::to_string(listAdded) + " -" + std::to_string(listRemoved) +
+                            ", not shown); every place CANDIDATE:");
+        size_t shown = 0, hidden = 0;
+        auto say = [&](const char* sign, const Deep::Found& f, const char* at) {
+            if (++shown > maxLines) {
+                ++hidden;
+                return;
+            }
+            lines.push_back(std::string("SUIT PROBE 3: ") + sign + " " + describe(suits, f.id, f.viaPath) + at + f.chain);
+        };
+        for (const auto* f : added)
+            say(first ? "=" : "+", *f, " at ");
+        for (const auto* f : removed)
+            say("-", *f, " was at ");
+        if (hidden)
+            lines.push_back("SUIT PROBE 3: ... " + std::to_string(hidden) + " more");
+        const std::vector<uint16_t> nowAlone = alone(suits, now), wasAlone = alone(suits, before);
+        std::vector<uint16_t> gained, lost;
+        for (uint16_t s : nowAlone)
+            if (std::find(wasAlone.begin(), wasAlone.end(), s) == wasAlone.end())
+                gained.push_back(s);
+        for (uint16_t s : wasAlone)
+            if (std::find(nowAlone.begin(), nowAlone.end(), s) == nowAlone.end())
+                lost.push_back(s);
+        if (first && nowAlone.size() == 1)
+            lines.push_back("SUIT PROBE 3: worn suit (CANDIDATE until it follows the swaps): " + suits.names[nowAlone[0]]);
+        else if (first && nowAlone.size() > 1)
+            lines.push_back("SUIT PROBE 3: " + std::to_string(nowAlone.size()) +
+                            " suits named outside lists at once (not one worn suit)");
+        else if (!first && gained.size() == 1)
+            lines.push_back("SUIT PROBE 3: swap (CANDIDATE until it follows the swaps): " +
+                            (lost.size() == 1 ? suits.names[lost[0]] : std::string("?")) + " -> " +
+                            suits.names[gained[0]]);
         return lines;
     }
-    void reset() {
-        logged = false;
-        last.clear();
+    // The watched suits: every place, when the (agreed) set of places changes.
+    std::vector<std::string> watch(const Table& suits, const Deep& deep) {
+        std::vector<std::string> lines;
+        if (suits.watchSuits.empty())
+            return lines;
+        const std::vector<Deep::Place> now = deep.watchedPlaces();
+        std::vector<std::string> sig;
+        for (const auto& p : now)
+            sig.push_back(std::to_string(p.id) + " " + p.chain);
+        std::sort(sig.begin(), sig.end());
+        const bool agree = haveWatchPrev && sig == watchPrev;
+        watchPrev = sig;
+        haveWatchPrev = true;
+        if (!agree || (watchLogged && sig == watchLast))
+            return lines;
+        watchLogged = true;
+        watchLast = sig;
+        ++watchChanges;
+        lines.push_back("SUIT PROBE 3: WATCH " + std::to_string(watchChanges) + " (passes " + std::to_string(passes - 1) +
+                        " and " + std::to_string(passes) + " agree, " + reach(deep) + "): " +
+                        std::to_string(now.size()) + " place(s) of the watched suits' model and mask ids, every place CANDIDATE:");
+        for (uint16_t s : suits.watchSuits) {
+            size_t n = 0;
+            for (const auto& p : now) {
+                const Target* t = suits.find(p.id);
+                if (!t || std::find(t->suits.begin(), t->suits.end(), s) == t->suits.end())
+                    continue;
+                ++n;
+                lines.push_back("SUIT PROBE 3: WATCH " + suits.names[s] + " " + kinds[t->kind] + " " + t->path +
+                                " id " + Watch::hex(p.id) + " at " + p.chain);
+            }
+            if (!n)
+                lines.push_back("SUIT PROBE 3: WATCH " + suits.names[s] + ": none of its model or mask ids in the memory read");
+        }
+        return lines;
     }
-    uint32_t changes{}, passes{};
+    // A new player (a load): the next set needs two new passes, but changes are still against the last logged.
+    void newPlayer() {
+        havePrev = haveWatchPrev = false;
+        prev.clear();
+        watchPrev.clear();
+    }
+    void reset() { *this = Watch2{}; }
+    uint32_t changes{}, passes{}, watchChanges{};
 
 private:
-    bool logged{};
-    std::vector<uint64_t> last;
+    static constexpr const char* kinds[3] = {"loadout", "model", "mask"};
+    static std::string reach(const Deep& deep) {
+        return deep.complete() == Deep::whole ? std::string("every object in reach read")
+                                              : "complete to depth " + std::to_string(deep.complete() - 1);
+    }
+    static std::vector<uint64_t> idsOf(const std::vector<Deep::Found>& v) {
+        std::vector<uint64_t> out;
+        for (const auto& f : v)
+            out.push_back(f.id);
+        return out;
+    }
+    static bool has(const std::vector<Deep::Found>& v, uint64_t id) {
+        const auto it = std::lower_bound(v.begin(), v.end(), id,
+                                         [](const Deep::Found& f, uint64_t value) { return f.id < value; });
+        return it != v.end() && it->id == id;
+    }
+    static std::string describe(const Table& suits, uint64_t id, bool viaPath) {
+        const Target* t = suits.find(id);
+        if (!t)
+            return Watch::hex(id);
+        const std::string who = t->suits.size() == 1 ? suits.names[t->suits[0]]
+                                                     : "shared by " + std::to_string(t->suits.size()) + " suits";
+        return who + " " + kinds[t->kind] + " " + t->path + " id " + Watch::hex(id) + (viaPath ? " (its path)" : "");
+    }
+    // Suits named outside lists by an id only they have.
+    static std::vector<uint16_t> alone(const Table& suits, const std::vector<Deep::Found>& v) {
+        std::vector<uint16_t> out;
+        for (const auto& f : v) {
+            const Target* t = f.inList ? nullptr : suits.find(f.id);
+            if (t && t->suits.size() == 1 && std::find(out.begin(), out.end(), t->suits[0]) == out.end())
+                out.push_back(t->suits[0]);
+        }
+        return out;
+    }
+    bool havePrev{}, logged{}, haveWatchPrev{}, watchLogged{};
+    std::vector<uint64_t> prev;
+    std::vector<Deep::Found> last;
+    std::vector<std::string> watchPrev, watchLast;
 };
 
 // src/suit_probe.cpp (Windows): PROBE 1 at most once a second, PROBE 2 a few objects a frame (a pass, then a

@@ -10,6 +10,10 @@ plus the prebuilt HERO VR launcher.
 **EXPERIMENTAL BUILD: 0.0.75 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.74
 or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0.0.73 and 0.0.72.
 
+## 0.0.75 hotfix 1 (v0.0.75.1, build Update 39.8.1, launcher 0.0.75.2 build 17)
+- **Fixed: the freeze right after loading a save in 0.0.75** (the see-through depth lock). Everything else is the
+  same as 0.0.75. Spider-Man 1's heroes and wrist menu are not working yet; they come in the next hotfix.
+
 ## What's new in 0.0.75
 - **Supersonic fixed:** flight and the shockwave follow your fist, and you stay level after the coast.
 - **Only Spider-Man wall-crawls.** Other heroes no longer run up or stick to walls (Wolverine with claws out and

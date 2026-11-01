@@ -112,7 +112,17 @@ namespace Sm2VrLauncher
             var test = TestBuildVersion(root);   // 0.0.74 test 10: a test build keeps 0.0.73's VERSION file, so USE 0.0.73 is offered
             if (test != null && (have == null || test > have)) have = test;
             var prev = ModVersion.Parse(tag);
+            if (prev != null && have != null && prev.Equals(have) && string.Equals(tag, LauncherInfo.HotfixOf, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(InstalledBuild(root), LauncherInfo.HotfixBuild, StringComparison.OrdinalIgnoreCase))
+                return true;   // build 17: the 0.0.75 hotfix (same VERSION, build Update 39.8.1) can go back to 0.0.75 itself
             return prev != null && (have == null || have > prev);
+        }
+
+        /// <summary>The installed PORT-VERSION first line ("Update 39.8.1"), or "".</summary>
+        static string InstalledBuild(string root)
+        {
+            try { return (ModVersion.FirstLine(Path.Combine(root ?? "", "PORT-VERSION")) ?? "").Trim(); }
+            catch { return ""; }
         }
 
         /// <summary>0.0.74 test 10: a test build's own version ("version=0.0.74" in HERO-VR-TEST-BUILD.txt, written by

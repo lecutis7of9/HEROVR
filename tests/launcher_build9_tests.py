@@ -31,7 +31,11 @@ class LauncherBuild9(unittest.TestCase):
         self.assertEqual(tags[-2:], ['v0.0.6', 'v0.0.5'])
         cmk = re.search(r'set\(HERO_TEST_VERSION "([0-9.]+)"', (ROOT/'CMakeLists.txt').read_text(encoding='utf-8'))
         test_ver = tuple(int(x) for x in cmk.group(1).split('.')) if cmk else ()
-        if test_ver >= (0, 0, 74):   # 0.0.74 test 10 (the user: "go to 73 ... not 6whatever"): 0.0.73 first, the rest kept
+        build = int(re.search(r'public const int Build = (\d+);', mv).group(1))
+        if build >= 17:   # 0.0.75 hotfix 1 (v0.0.75.1, build 17): 0.0.75 itself first, then 0.0.74 and the rest
+            self.assertEqual(tags, ['v0.0.75', 'v0.0.74', 'v0.0.73', 'v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
+            self.assertIn('public const string PreviousTag = "v0.0.75";', mv)
+        elif test_ver >= (0, 0, 74):   # 0.0.74 test 10 (the user: "go to 73 ... not 6whatever"): 0.0.73 first, the rest kept
             self.assertEqual(tags, ['v0.0.74', 'v0.0.73', 'v0.0.63', 'v0.0.62', 'v0.0.6', 'v0.0.5'])
             self.assertIn('public const string PreviousTag = "v0.0.74";', mv)
         elif int(re.search(r'public const int Build = (\d+);', mv).group(1)) >= 11:   # build 11 (0.0.70): 0.0.63 first
@@ -41,7 +45,10 @@ class LauncherBuild9(unittest.TestCase):
             self.assertIn('public const string PreviousTag = "v0.0.62";', mv)
         cur = tuple(int(x) for x in (ROOT/'VERSION').read_text(encoding='utf-8').strip().split('.'))
         cur = max(cur, test_ver)   # a test build (0.0.74) still carries the release's VERSION (0.0.73)
-        self.assertTrue(all(tuple(int(x) for x in t[1:].split('.')) < cur for t in tags), tags)
+        # a hotfix (same VERSION, newer PORT-VERSION) may offer the release it fixes (LauncherInfo.HotfixOf)
+        hm = re.search(r'public const string HotfixOf = "(v[0-9.]+)";', mv)
+        hotfix = hm.group(1) if hm and (ROOT/'PORT-VERSION').read_text(encoding='utf-8').strip() in mv else None
+        self.assertTrue(all(tuple(int(x) for x in t[1:].split('.')) < cur or t == hotfix for t in tags), tags)
         rd = src('RevertDialog.cs')
         self.assertIn('foreach (string tag in LauncherInfo.PreviousTags)', rd)
         self.assertIn('PreviousTag = t;', rd)

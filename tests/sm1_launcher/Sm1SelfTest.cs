@@ -1,6 +1,7 @@
 // HERO VR 0.0.75 SM1: logic checks for the launcher's Spider-Man 1 option (game tags in the server list, his release's
 // zip handling). Compiled with the launcher sources by tests/sm1_launcher_tests.py. GPLv3. Made by Agent Mulder.
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -125,6 +126,50 @@ namespace Sm2VrLauncher
             Check(ini.Contains("hero=5\n") && ini.Contains("outfit.5=2\n") && ini.Contains("outfit.1=1\n") && !ini.Contains("outfit.x"), "addon.ini keeps hero and outfits");
             Check(ini.Contains("wrist_menu=0\n") && ini.Contains("flight=0\n") && ini.Contains("heroes=1\n"), "addon.ini switches");
             Check(Sm1.Features.Length == 8 && Sm1.Features.Count(x => x[1] == "stub") == 2 && Sm1.FeatureSummary().Contains("holo suit switch"), "feature list");
+
+
+            // 0.0.76 SM1: his launcher.ini read as his loadSettings reads it, and his sessionArguments.
+            var o0 = Sm1Session.Parse("");
+            var a0 = Sm1Session.Arguments(o0, @"C:\r\game-vr-1.json", "", @"Local\HeroVrSm1Stop-1-2", false);
+            Check(string.Join(" ", a0.ToArray()) == @"--auto-launch --seconds 0 --swing-speed 32 --output C:\r\game-vr-1.json --stop-event Local\HeroVrSm1Stop-1-2", "session arguments: his defaults add nothing");
+            var o1 = Sm1Session.Parse("game=D:\\g\\Spider-Man.exe\r\nsmall_window=0\r\naim_markers=0\nflips=1\ngame_sharpening=1\nrender_scale=250\nupscale=80\nmonitor_rate=0\nswing_speed=99\nsnap_turn=45\nhud=7\nweight_percent=80\nweight=120\neye_height_mm=1700\narm_length_mm=650\nxr_runtime=\njunk\n");
+            var a1 = string.Join(" ", Sm1Session.Arguments(o1, "C:\\a b\\r.json", "", "E", true).ToArray());
+            Check(a1 == "--auto-launch --seconds 0 --swing-speed 65 --output C:\\a b\\r.json --full-desktop-view --no-aim-markers --flips --game-sharpening --eye-height 1700 --arm-length 650 --upscale 80 --snap-turn 45 --hud 3 --monitor-rate 0 --stop-event E --close-game", "session arguments: " + a1);
+            Check(o1.RenderScale == 100 && o1.Runtime == "auto" && o1.GameExe == "D:\\g\\Spider-Man.exe", "launcher.ini: out-of-range render scale is his default; empty runtime is auto");
+            var o2 = Sm1Session.Parse("gravity_percent=150\nweight_percent=90\neye_height_mm=900\narm_length_mm=650\ncalibration_prompt=0\n");
+            Check(o2.Weight == 150 && o2.EyeHeightMm == 0 && o2.ArmLengthMm == 0, "launcher.ini: gravity_percent wins; a half calibration is none");
+            Check(Sm1Session.Arguments(o2, "r", "", "", false).Contains("--no-calibration-prompt"), "no calibration and no prompt: --no-calibration-prompt");
+            Check(Sm1Session.Parse("weight=120\nweight_percent=80\n").Weight == 100 && Sm1Session.Parse("weight=120\n").Weight == 120 && Sm1Session.Parse("weight=60\n").Weight == 100 && Sm1Session.Parse("weight_percent=80\n").Weight == 100, "launcher.ini: old default weights are today's");
+            Check(Sm1Session.Quote("plain") == "plain" && Sm1Session.Quote("") == "\"\"" && Sm1Session.Quote("a b") == "\"a b\"" &&
+                  Sm1Session.Quote("C:\\a b\\") == "\"C:\\a b\\\\\"" && Sm1Session.Quote("say \"hi\"") == "\"say \\\"hi\\\"\"", "quoteArgument as his");
+            Check(Sm1Session.CommandLine("C:\\Spidy 0.7\\tools\\run_game_vr.py", new List<string> { "--output", "x y" }) == "-B -u -X utf8 \"C:\\Spidy 0.7\\tools\\run_game_vr.py\" --output \"x y\"", "command line");
+            var rt = Sm1Session.OpenVrRuntimes("{\"config\":[\"C:\\\\x\"],\"runtime\" : [ \"C:\\\\Program Files (x86)\\\\Steam\\\\steamapps\\\\common\\\\SteamVR\" ],\"version\":1}");
+            Check(rt.Count == 1 && rt[0] == @"C:\Program Files (x86)\Steam\steamapps\common\SteamVR", "openvrpaths runtime folder");
+            var bl = Sm1Session.Blockers(null, "x.exe", "4.629.0.0", false, true);
+            Check(bl.Count == 4 && Sm1Session.Blockers(tmp, null, null, true, false).Count == 2, "pre-start checks: mod, version, runtime, administrator");
+            Check(Sm1Session.NewReportPath(new DateTime(2026, 11, 1, 3, 4, 5)).EndsWith(Path.Combine("HERO VR SM1", "reports", "game-vr-20261101-030405.json")), "report in HERO VR SM1\\reports");
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+            {
+                // A stand-in for his python: prints its arguments; our session pipes them to the log file.
+                string mod = Path.Combine(tmp, "spidy");
+                Directory.CreateDirectory(Path.Combine(mod, "python")); Directory.CreateDirectory(Path.Combine(mod, "tools"));
+                string py = Path.Combine(mod, Sm1Session.Python.Replace('\\', Path.DirectorySeparatorChar));
+                File.WriteAllText(py, "#!/bin/sh\necho \"started $*\"\necho oops >&2\n");
+                System.Diagnostics.Process.Start("chmod", "+x \"" + py + "\"").WaitForExit();
+                var session = new Sm1VrSession();
+                var lines = new List<string>(); int exit = -99;
+                var done = new ManualResetEvent(false);
+                try
+                {
+                    session.Start(mod, o0, false, l => { lock (lines) lines.Add(l); }, c => { exit = c; done.Set(); });
+                    Check(done.WaitOne(20000) && exit == 0, "session ran and ended");
+                    Thread.Sleep(300);
+                    string logText = File.ReadAllText(session.LogPath);
+                    Check(logText.Contains("started -B -u -X utf8") && logText.Contains("--stop-event Local") && logText.Contains("oops"), "his output piped to our log");
+                    Check(!session.Running && !session.Stop(), "ended session: not running, no stop");
+                }
+                catch (Exception ex) { Check(false, "session start: " + ex.Message); }
+            }
 
             try { Directory.Delete(tmp, true); } catch { }
             Console.WriteLine(fails == 0 ? "ALL PASS" : fails + " FAILED");

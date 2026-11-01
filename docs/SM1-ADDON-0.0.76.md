@@ -91,7 +91,7 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
 
 ## First in-game test
 
-1. Pick SPIDER-MAN 1, PLAY, press PLAY in his launcher.
+1. Pick SPIDER-MAN 1, press PLAY VR (his VR starts directly with his launcher.ini settings; OPEN IILYN'S LAUNCHER changes them).
 2. Open `%APPDATA%\HERO VR SM1\layer.log`: it says whether the layer started, which formats it chose and which
    features turned off and why. `addon.log` says whether `herovr_sm1_layer.dll` was loaded.
 3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, hold a grip: take off.

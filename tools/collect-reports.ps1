@@ -11,6 +11,9 @@
 # 0.0.76 SM1: the SM1 add-on's own files from %APPDATA%\HERO VR SM1 (layer.log, addon.log, live.txt, addon.ini) and
 # its research scan (scan\sm1scan-*.jsonl/.bin/.txt, the newest 2 sessions); an SM1-only player has no reports
 # folder yet, so it is made instead of stopping.
+# 0.0.76 SM1 test 2: the SM1 session's own report and log (%APPDATA%\HERO VR SM1\reports, game-vr-*.json and the
+# HERO launcher's sm1-session-*.log), and every file is copied first with shared read (the game keeps layer.log
+# and the scan open for writing while it runs; zipping them directly failed with a sharing violation).
 param([switch]$NoCrashDump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -57,6 +60,18 @@ try {
             $files += Get-ChildItem -LiteralPath $sm1 -File |
                 Where-Object { @('layer.log', 'addon.log', 'live.txt', 'addon.ini') -contains $_.Name } |
                 ForEach-Object { $_.FullName }
+            $sm1Reports = Join-Path $sm1 'reports'
+            if (Test-Path -LiteralPath $sm1Reports) {
+                $sm1Report = Get-ChildItem -LiteralPath $sm1Reports -Filter 'game-vr-*.json' -File |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+                if ($sm1Report) {
+                    $files += $sm1Report.FullName
+                    $files += Get-ChildItem -LiteralPath $sm1Reports -Filter ($sm1Report.BaseName + '*.log') -File | ForEach-Object { $_.FullName }
+                    Write-Host ('SM1 report: ' + $sm1Report.Name)
+                }
+                $files += Get-ChildItem -LiteralPath $sm1Reports -Filter 'sm1-session-*.log' -File |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 2 | ForEach-Object { $_.FullName }
+            }
             $sm1Scan = Join-Path $sm1 'scan'
             if (Test-Path -LiteralPath $sm1Scan) {
                 $scanSessions = @(Get-ChildItem -LiteralPath $sm1Scan -Filter 'sm1scan-*.jsonl' -File |
@@ -95,6 +110,26 @@ if (-not $NoCrashDump) {
 if (-not $files) { throw "Nothing to collect in $reports." }
 $zip = Join-Path $reports 'send-me.zip'
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-Compress-Archive -LiteralPath $files -DestinationPath $zip -CompressionLevel Optimal
-foreach ($f in $files) { Write-Host ('  ' + (Split-Path -Leaf $f)) }
+# Copies with shared read and write (files the game still has open), each name once, then the zip of the copies.
+$stage = Join-Path ([IO.Path]::GetTempPath()) ('herovr-reports-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stage -Force | Out-Null
+try {
+    $copies = @()
+    foreach ($f in ($files | Select-Object -Unique)) {
+        $name = Split-Path -Leaf $f
+        $dest = Join-Path $stage $name
+        if (Test-Path -LiteralPath $dest) { $dest = Join-Path $stage ([IO.Path]::GetFileNameWithoutExtension($name) + '-' + $copies.Count + [IO.Path]::GetExtension($name)) }
+        try {
+            $in = [IO.File]::Open($f, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
+            try {
+                $out = [IO.File]::Create($dest)
+                try { $in.CopyTo($out) } finally { $out.Dispose() }
+            } finally { $in.Dispose() }
+            $copies += $dest
+            Write-Host ('  ' + $name)
+        } catch { Write-Host ('  not added: ' + $name + ' (' + $_.Exception.Message + ')') }
+    }
+    if (-not $copies) { throw "Nothing could be read to collect." }
+    Compress-Archive -LiteralPath $copies -DestinationPath $zip -CompressionLevel Optimal
+} finally { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Host $zip

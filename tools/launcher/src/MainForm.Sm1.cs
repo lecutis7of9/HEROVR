@@ -20,6 +20,7 @@ namespace Sm2VrLauncher
         AccentButton sm1BtnPlay, sm1BtnFlat, sm1BtnLauncher, sm1BtnUpdate;
         ToggleRow sm1Addon, sm1Wrist, sm1Flight, sm1News;
         Sm1AddonWatcher sm1Watcher;
+        readonly Sm1VrSession sm1Session = new Sm1VrSession();
         string sm1Game, sm1GameWhere = "not searched", sm1GameVersion, sm1Mod;
         Sm1Release sm1Latest;
         volatile bool sm1Busy;
@@ -177,7 +178,7 @@ namespace Sm2VrLauncher
             {
                 try { Directory.CreateDirectory(Sm1.AddonDataFolder); SystemInfo.OpenFolder(Sm1.AddonDataFolder, null); } catch (Exception ex) { Program.LogError(ex); }
             };
-            tip.SetToolTip(sm1BtnLauncher, "Opens Spidy Launcher.exe, his own launcher, with all of his settings. Press PLAY there.");
+            tip.SetToolTip(sm1BtnLauncher, "Opens Spidy Launcher.exe, his own launcher: change his settings there (PLAY VR here uses them), or press PLAY there instead.");
             tip.SetToolTip(gh, Sm1.ReleasesUrl);
             tip.SetToolTip(kofi, "Support iilyn: " + Sm1.KofiUrl);
             tip.SetToolTip(disc, "iilyn's Discord: " + Sm1.DiscordUrl);
@@ -290,7 +291,7 @@ namespace Sm2VrLauncher
             else if (sm1Mod == null) { title = "IILYN'S MOD NEEDED"; c = Theme.Warn; sub = "PLAY VR downloads his mod from his GitHub first (a minute; nothing to do by hand)."; }
             else if (running) { title = "GAME RUNNING"; c = Theme.Warn; sub = "Spider-Man 1 is running; iilyn's launcher controls VR."; }
             else if (sm1GameVersion != null && sm1GameVersion != Sm1.SupportedVersion) { title = "READY"; c = Theme.Warn; sub = Sm1.VersionWarning(sm1GameVersion); }
-            else { title = "READY"; c = Theme.Good; sub = "Spider-Man 1: PLAY VR opens iilyn's launcher; press PLAY there. Mulder's Heroes add-on loads once his VR runs."; }
+            else { title = "READY"; c = Theme.Good; sub = "Spider-Man 1: PLAY VR starts iilyn's VR directly with his launcher's settings. Mulder's Heroes add-on loads once his VR runs."; }
             SetState(title, c, sub);
             if (sm1StateText != null) { sm1StateText.Text = sub; sm1StateText.ForeColor = c == Theme.Good ? Theme.Sub : c; }
             HeroSync();
@@ -305,8 +306,10 @@ namespace Sm2VrLauncher
             if (!Sm1Selected) { t[3].Title = sm1Tile3Title; t[3].Sub = sm1Tile3Sub; t[3].Icon = sm1Tile3Icon; return; }
             bool running = !preview && Sm1.GameRunning();
             t[0].Title = "PLAY VR"; t[0].Icon = "helmet";
-            t[0].Sub = sm1Busy ? "DOWNLOADING IILYN'S MOD..." : "SPIDER-MAN 1 \u00B7 IILYN'S MOD";
-            t[0].Enabled = job == Job.None && !sm1Busy;
+            bool vrOn = sm1Session.Running;
+            t[0].Title = vrOn ? "STOP VR" : "PLAY VR";
+            t[0].Sub = sm1Busy ? "DOWNLOADING IILYN'S MOD..." : vrOn ? "SPIDER-MAN 1 VR IS RUNNING" : "SPIDER-MAN 1 \u00B7 IILYN'S MOD";
+            t[0].Enabled = vrOn || (job == Job.None && !sm1Busy);
             t[1].Enabled = job == Job.None && !sm1Busy && !running;
             t[1].Sub = running ? "GAME IS RUNNING" : "SPIDER-MAN 1 ON MONITOR";
             t[3].Title = "SPIDER-MAN 1"; t[3].Sub = "IILYN'S MOD \u00B7 ADD-ON";
@@ -321,12 +324,19 @@ namespace Sm2VrLauncher
             using (var d = new AutosetupDialog("Spider-Man 1 setup", text)) return d.ShowDialog(this) == DialogResult.Yes;
         }
 
-        /// <summary>PLAY VR with Spider-Man 1 picked: anything missing gets a pop-up (No / Yes, Autosetup), then his
-        /// launcher opens (the player presses PLAY there) and the add-on is loaded once his VR runs.</summary>
+        /// <summary>PLAY VR with Spider-Man 1 picked: anything missing gets a pop-up (No / Yes, Autosetup), the
+        /// checks run (game version, a VR runtime, not as administrator, game not already running), then his
+        /// run_game_vr.py starts directly with his own settings (Sm1Session) and the add-on is loaded once his VR
+        /// runs. While it runs, the same tile is STOP VR (our stop event).</summary>
         void Sm1Play()
         {
             try
             {
+                if (sm1Session.Running)
+                {
+                    if (sm1Session.Stop()) sessionLog.Line("Spider-Man 1: stopping iilyn's VR session...", Theme.Info);
+                    return;
+                }
                 if (!GuardIdle() || sm1Busy) return;
                 Sm1Refresh();
                 if (sm1Game == null)
@@ -343,7 +353,7 @@ namespace Sm2VrLauncher
                     if (Sm1Ask(Sm1.ModMissingText())) Sm1InstallMod(true);
                     return;
                 }
-                if (sm1GameVersion != Sm1.SupportedVersion) sessionLog.Line("Spider-Man 1: " + Sm1.VersionWarning(sm1GameVersion), Theme.Warn);
+                if (!Sm1Checks()) return;
                 string staged = null;
                 if (!settings.GetBool(Sm1.KeyAddon, true) && Environment.OSVersion.Platform == PlatformID.Win32NT) Sm1.RemoveLayers();
                 if (settings.GetBool(Sm1.KeyAddon, true))
@@ -405,9 +415,61 @@ namespace Sm2VrLauncher
             }
         }
 
+        /// <summary>The checks before a direct start; each failure is said in the log and a pop-up.</summary>
+        bool Sm1Checks()
+        {
+            if (preview) return true;
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT) { sessionLog.Line("Spider-Man 1: VR runs on Windows only.", Theme.Bad); return false; }
+            if (Sm1.GameRunning())
+            {
+                sessionLog.Line("Spider-Man 1 is already running: close it first, then press PLAY VR (iilyn's VR starts the game itself).", Theme.Warn);
+                return false;
+            }
+            string runtime;
+            bool vrRuntime = Sm1Session.VrRuntimePresent(out runtime);
+            var blockers = Sm1Session.Blockers(sm1Mod, sm1Game, sm1GameVersion, vrRuntime, Sm1Session.RunningAsAdministrator());
+            if (blockers.Count == 0)
+            {
+                sessionLog.Line("Spider-Man 1: checks passed (game " + sm1GameVersion + ", VR runtime " + Path.GetFileName(runtime) + ", not administrator).", Theme.Sub);
+                return true;
+            }
+            foreach (var b in blockers) sessionLog.Line("Spider-Man 1: " + b, Theme.Bad);
+            MessageBox.Show(this, "Spider-Man 1 VR cannot start yet:\n\n" + string.Join("\n\n", blockers.ToArray()), LauncherInfo.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        /// <summary>Starts his run_game_vr.py with his launcher.ini's settings (read only); his lines go to the log
+        /// and to %APPDATA%\HERO VR SM1\reports. False (said in the log) when it could not start.</summary>
+        bool Sm1StartDirect()
+        {
+            if (preview) { sessionLog.Line("Preview: would start " + Sm1Session.Script + " directly.", Theme.Dim); return true; }
+            try
+            {
+                string note;
+                var options = Sm1Session.Load(out note);
+                if (note != null) sessionLog.Line("Spider-Man 1: " + note + ".", Theme.Sub);
+                sm1Session.Start(sm1Mod, options, false,
+                    line => Ui(() => sessionLog.Line("SM1 VR: " + line, Theme.Sub)),
+                    code => Ui(() =>
+                    {
+                        sessionLog.Line("Spider-Man 1: iilyn's VR session ended (exit " + code + "). Its report: " + sm1Session.Report, code == 0 ? Theme.Info : Theme.Warn);
+                        Sm1Refresh();
+                    }));
+                sessionLog.Line("Spider-Man 1: iilyn's VR is starting with his launcher's settings (render scale " + options.RenderScale + "%, upscale " + options.Upscale + "%). Log: " + sm1Session.LogPath, Theme.Good);
+                Sm1Refresh();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Program.LogError(ex);
+                sessionLog.Line("Spider-Man 1: iilyn's VR could not start directly (" + ex.Message + "). Use OPEN IILYN'S LAUNCHER and press PLAY there.", Theme.Bad);
+                return false;
+            }
+        }
+
         void Sm1Start(string addon)
         {
-            if (!Sm1OpenLauncher()) return;
+            if (!Sm1StartDirect()) { Sm1.RemoveLayers(); return; }
             HeroGameStarting();
             if (addon == null) return;
             if (Environment.OSVersion.Platform != PlatformID.Win32NT) { sessionLog.Line("Spider-Man 1: Mulder's Heroes add-on loads on Windows only.", Theme.Sub); return; }

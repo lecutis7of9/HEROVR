@@ -980,6 +980,16 @@ namespace Sm2VrLauncher
                 Cursor = Cursors.WaitCursor;
                 while (vr.Running && DateTime.Now < until) { Application.DoEvents(); Thread.Sleep(100); }
             }
+            // 0.0.76 SM1: his VR session prints to this launcher; closing it would cut that pipe mid-session.
+            if (sm1Session.Running)
+            {
+                var r = MessageBox.Show(this, "Spider-Man 1 VR is running. Stop VR and close the launcher?\n\n(iilyn's VR session ends as his STOP ends it.)", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (r != DialogResult.Yes) { e.Cancel = true; return; }
+                sm1Session.Stop();
+                var until = DateTime.Now.AddSeconds(30);
+                Cursor = Cursors.WaitCursor;
+                while (sm1Session.Running && DateTime.Now < until) { Application.DoEvents(); Thread.Sleep(100); }
+            }
             if (job == Job.Build &&
                 MessageBox.Show(this, "A build from source is running. Close anyway? (The build stops.)", LauncherInfo.Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             { e.Cancel = true; return; }

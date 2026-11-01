@@ -25,6 +25,7 @@
 // passes his calls through unchanged. It never fails his xrCreateInstance or xrEndFrame.
 #include "spidy/hero_modes.hpp"
 #include "spidy/math.hpp"
+#include "spidy/eye_color.hpp"
 
 #include <cstdint>
 #include <string>
@@ -89,6 +90,9 @@ inline constexpr Feature features[] = {
     {"flight in game", Evidence::confirmed, State::untested,
      "IRON MAN, SUPERMAN, THOR, GREEN LANTERN: hold a grip to take off, stay up after letting go; his SpidyMotionSubmit "
      "export moves the body, with the layer keeping his serial numbers in order so his swinging never shuts off"},
+    {"color", Evidence::confirmed, State::untested,
+     "the SM2 build's COLOR / ATMOSPHERE (its looks incl. METROPOLIS, SMALLVILLE, GOTHAM, CYBERPUNK, SYNTHWAVE and its "
+     "sliders) on the wrist's COLOR page, drawn by the layer on his eye images at release; OFF by default (no GPU work)"},
     {"hero suits", Evidence::candidate, State::stub,
      "the launcher adds each hero as a NEW SM1 suit next to Spider-Man's (purely additive, through the game's toc; CANDIDATE, "
      "not yet seen in the game); nothing of the game's own suits is replaced"},
@@ -137,6 +141,16 @@ struct Live {
     int menuSize = 100;    // menu_size=100 (60..160 %)
     bool scan = true;      // sm1scan=1 (the read-only research scan, sm1_scan.hpp)
     bool grapple = true;   // grapple=1 (CAPTAIN AMERICA and DAREDEVIL, sm1_grapple.hpp)
+    // 0.0.76 COLOR (the holo's COLOR page): the SM2 build's colour grade (eye_color.hpp, the same looks and sliders),
+    // drawn by the layer on his two eye images. OFF by default: then the layer does no GPU work at all and his
+    // picture, anti-aliasing and performance are exactly his.
+    bool colorFx = false;     // color_fx=0
+    uint32_t colorFilter = 0; // color_filter=none (none, vivid, golden, neon, raimi, noir, animated, metropolis, ...)
+    uint32_t colorStrength = 100;
+    int32_t colorExposure = 0; // tenths of an EV, -20..20
+    uint32_t colorContrast = 100, colorSaturation = 100, colorVibrance = 0;
+    int32_t colorWarmth = 0, colorTint = 0;
+    uint32_t colorVignette = 0;
 };
 Live parseLive(std::string_view text);
 // The file the add-on writes when there is none: every switch with its one-sentence subtext.
@@ -153,7 +167,26 @@ inline constexpr LiveSwitch liveSwitches[] = {
     {"menu_size", "The wrist menu's size, 60 to 160 percent; applies live, no restart."},
     {"sm1scan", "A read-only research scan that only reads game memory and writes logs to %APPDATA%\\HERO VR SM1\\scan for the Reports zip (it pauses at 0 and stops by itself after about 15 minutes); applies live, no restart."},
     {"grapple", "CAPTAIN AMERICA and DAREDEVIL grapple instead of web swinging: hold a grip and pull its trigger to fire a line at a wall or roof, let go of the grip to coast, press A to jump out; applies live, no restart."},
+    {"color_fx", "COLOR: 1 draws the colour grade below on both eyes, 0 (default) leaves iilyn's picture exactly as it is with no extra GPU work; applies live, no restart."},
+    {"color_filter", "COLOR FILTER: none, vivid, golden, neon, raimi, noir, animated, metropolis, smallville, gotham, cyberpunk or synthwave; applies live, no restart."},
+    {"color_strength", "COLOR STRENGTH: how much of the filter is used, 0 to 100; applies live, no restart."},
+    {"color_exposure", "COLOR EXPOSURE in tenths of a stop, -20 to 20 (0 is the game's); applies live, no restart."},
+    {"color_contrast", "COLOR CONTRAST 50 to 150 (100 is the game's); applies live, no restart."},
+    {"color_saturation", "COLOR SATURATION 0 to 200 (100 is the game's, 0 black and white); applies live, no restart."},
+    {"color_vibrance", "COLOR VIBRANCE 0 to 100: boosts dull colours most and leaves skin nearly alone; applies live, no restart."},
+    {"color_warmth", "COLOR WARMTH -100 (blue) to 100 (amber); applies live, no restart."},
+    {"color_tint", "COLOR TINT -100 (green) to 100 (magenta); applies live, no restart."},
+    {"color_vignette", "COLOR VIGNETTE 0 to 100: darkens the edges of each eye; applies live, no restart."},
 };
+// The SM2 grade's settings from live.txt (90s ANIMATED's cel pass and the DAREDEVIL sonar are the SM2 build's own:
+// here 90s ANIMATED is its colour grade only).
+eye_color::Config colorConfig(const Live& l);
+// The COLOR page's rows: 0 COLOR on/off, 1 FILTER, 2.. the sliders. delta +1 / -1 (a pick or a right flick: +1;
+// a left flick: -1). Steps as the SM2 holo's (eye_color.hpp limits); a slider past its end wraps round.
+inline constexpr int colorRows = 10;
+const char* colorRowName(int row);
+std::string colorRowValue(const Live& l, int row);
+void adjustColor(Live& l, int row, int delta);
 // The live.txt lines missing from an older file (a switch added in a later build), with their subtexts; empty when
 // none is missing. The layer appends them so every switch is in the file the player edits.
 std::string missingLive(std::string_view text);
@@ -215,15 +248,16 @@ struct WristInput {
     bool trigger = false; // right trigger past half
     float dt = 0;
 };
-enum class Page : uint32_t { heroes, outfits, powers, addon, count };
+enum class Page : uint32_t { heroes, outfits, powers, addon, color, count };
 // POWERS page rows: what a pick there toggles.
 enum class Toggle : int { powers = 0, flight, heroWebs, beams, count };
-enum class Pick { none, hero, outfit, toggle, closeMenu };
+enum class Pick { none, hero, outfit, toggle, closeMenu, color }; // color: adjust row by delta
 struct WristMenu {
     bool open = false;
     Page page = Page::heroes;
     int row = 0;
-    bool stickArmed = true, triggerArmed = true;
+    bool stickArmed = true, triggerArmed = true, stickXArmed = true;
+    int delta = 0;        // Pick::color: +1 or -1
     uint32_t outfits = 1; // rows on the OUTFITS page (the caller sets it for the hero)
     int rows() const;
     // One frame; returns what the trigger picked (the row is in row).
@@ -272,6 +306,7 @@ struct MenuView {
     std::string powerState; // "READY", "NO TARGET", "HIT"...
     std::string status[6];  // the ADD-ON page's lines
     std::string notice;     // a short line on the holo card after a pick (the suit hint), "" when none
+    std::string color[colorRows]; // the COLOR page's values ("ON", "GOTHAM", "100"...)
 };
 inline constexpr int menuWidth = 512, menuHeight = 640;
 void paintMenu(Canvas& c, const MenuView& v);

@@ -1392,6 +1392,10 @@ void step() {
             default:
                 break;
             }
+        } else if (pick == Pick::color && menu.row >= 0 && menu.row < colorRows) {
+            adjustColor(live, menu.row, menu.delta);
+            writeLive(live);
+            logLine("COLOR %s: %s", colorRowName(menu.row), colorRowValue(live, menu.row).c_str());
         }
     } else if (menu.open) {
         menu.open = false;
@@ -1558,6 +1562,486 @@ XRAPI_ATTR XrResult XRAPI_CALL waitFrame(XrSession s, const XrFrameWaitInfo* wi,
     return r;
 }
 
+// --- COLOR (0.0.76): the SM2 build's colour grade, drawn on his two eye images ----------------------------------------
+// eye_color.hpp's apply() (the SM2 build's COLOR / ATMOSPHERE, its looks METROPOLIS .. SYNTHWAVE and its sliders), as
+// one fullscreen draw per eye image at his xrReleaseSwapchainImage: the image is copied, then drawn back graded. It goes
+// on his own graphics-binding queue (the game's queue, his 0.7.0 xr_session.cpp), right after his own work and before
+// the runtime gets the image, so nothing waits on the CPU. His swapchains are learnt from his projection layer (the
+// first graded frame is the one after); our quads never pass through these hooks. live.txt color_fx=0 (the default)
+// or a neutral grade: no GPU work at all, his picture, anti-aliasing and timing exactly as without the add-on.
+// Anything that fails (the shader, a format it does not know) turns COLOR off for the session, logged; nothing else.
+FeatureState fColor{"COLOR"};
+struct EyeChain {
+    int64_t format = 0; // what he asked for (the view format)
+    uint32_t width = 0, height = 0;
+    bool usable = false; // 8-bit RGBA / BGRA, one sample, one layer, a colour attachment
+    bool his = false;    // in his projection layer
+    std::vector<ID3D12Resource*> images;
+    uint32_t acquired = UINT32_MAX;
+    ID3D12Resource* copy = nullptr; // the source the draw reads (typeless, same size)
+    bool warned = false;
+};
+SRWLOCK colorLock = SRWLOCK_INIT;
+std::map<XrSwapchain, EyeChain> chains;
+std::atomic<bool> colorOn{false};
+eye_color::Params colorParams; // colorLock
+int colorFamily(int64_t f) {   // 1 RGBA8, 2 BGRA8, 0 another format
+    switch (static_cast<DXGI_FORMAT>(f)) {
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        return 1;
+    case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8A8_UNORM:
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        return 2;
+    default:
+        return 0;
+    }
+}
+bool isSrgb(DXGI_FORMAT f) { return f == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || f == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; }
+bool isTypeless(DXGI_FORMAT f) { return f == DXGI_FORMAT_R8G8B8A8_TYPELESS || f == DXGI_FORMAT_B8G8R8A8_TYPELESS; }
+// eye_color.hpp apply(), the same steps in the same order, display-encoded (the SM2 build's native_eye_gpu.cpp grade()).
+const char* colorShader = R"(
+Texture2D source : register(t0);
+cbuffer Grade : register(b0) {
+    float gain; float contrast; float crush; float saturation;
+    float vibrance; float mono; float vignette; float linearOut;
+    float4 balance; float4 shadowTone; float4 highTone;
+};
+float4 vs(uint id : SV_VertexID) : SV_POSITION {
+    const float2 corner = float2((id << 1) & 2, id & 2);
+    return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
+}
+float3 toLinear(float3 c) {
+    return lerp(pow((c + 0.055) / 1.055, 2.4), c / 12.92, step(c, 0.04045));
+}
+float3 toDisplay(float3 l) {
+    return lerp(1.055 * pow(max(l, 0.0), 1.0 / 2.4) - 0.055, l * 12.92, step(l, 0.0031308));
+}
+float3 shoulder(float3 x) {
+    return lerp(x, 0.8 + 0.2 * (1.0 - exp(-max(x - 0.8, 0.0) / 0.2)), step(0.8, x));
+}
+float3 grade(float3 c, float2 uv) {
+    c = saturate(c);
+    if (gain != 1.0)
+        c = shoulder(toDisplay(toLinear(c) * gain));
+    c = saturate(((c - 0.5) * contrast + 0.5 - crush) / (1.0 - crush));
+    const float3 lw = float3(0.2126, 0.7152, 0.0722);
+    float y = dot(c, lw);
+    const float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+    const float skin = saturate((c.r - c.g) * 4.0) * saturate((c.g - c.b) * 4.0);
+    const float boost = saturation * (1.0 + vibrance * (1.0 - (mx - mn)) * (1.0 - 0.7 * skin));
+    c = saturate(y + (c - y) * boost);
+    c = saturate(c * balance.rgb);
+    y = dot(c, lw);
+    c = saturate(c + shadowTone.rgb * (1.0 - y) * (1.0 - y) + highTone.rgb * y * y);
+    y = dot(c, lw);
+    c = c + (y - c) * mono;
+    const float2 d = uv - 0.5;
+    const float d2 = dot(d, d) * 2.0;
+    return saturate(c * saturate(1.0 - vignette * 0.7 * d2));
+}
+float4 ps(float4 position : SV_POSITION) : SV_TARGET {
+    uint w, h;
+    source.GetDimensions(w, h);
+    const float4 s = source.Load(int3(int2(position.xy), 0));
+    const float3 o = grade(s.rgb, position.xy / float2(w, h));
+    return float4(lerp(o, toLinear(o), linearOut), s.a);
+}
+)";
+using CompileFn = HRESULT(WINAPI*)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT,
+                                   UINT, ID3DBlob**, ID3DBlob**);
+constexpr int colorSlots = 8; // two eyes a frame, four frames in flight at most
+struct Grader {
+    bool tried = false, ready = false;
+    ID3D12RootSignature* root = nullptr;
+    ID3DBlob* vs = nullptr;
+    ID3DBlob* ps = nullptr;
+    std::map<DXGI_FORMAT, ID3D12PipelineState*> states;
+    ID3D12DescriptorHeap* views = nullptr;   // shader visible, one SRV a slot
+    ID3D12DescriptorHeap* targets = nullptr; // one RTV a slot
+    UINT viewStep = 0, targetStep = 0;
+    ID3D12CommandAllocator* allocators[colorSlots]{};
+    UINT64 done[colorSlots]{};
+    int slot = 0;
+    ID3D12GraphicsCommandList* list = nullptr;
+    ID3D12Fence* fence = nullptr;
+    UINT64 value = 0;
+    HANDLE event = nullptr;
+    uint64_t graded = 0, skipped = 0;
+} grader;
+template <class T> void release(T*& p) {
+    if (p)
+        p->Release();
+    p = nullptr;
+}
+// The GPU has finished everything COLOR gave it (bounded: a lost device must not hang his frame).
+void colorIdle() {
+    if (!grader.fence || grader.fence->GetCompletedValue() >= grader.value || !grader.event)
+        return;
+    if (SUCCEEDED(grader.fence->SetEventOnCompletion(grader.value, grader.event)))
+        WaitForSingleObject(grader.event, 2000);
+}
+void dropChain(EyeChain& c) { release(c.copy); }
+void dropGrader() { // colorLock held
+    colorIdle();
+    for (auto& [h, c] : chains)
+        dropChain(c);
+    for (auto& [f, s] : grader.states)
+        release(s);
+    grader.states.clear();
+    for (auto*& a : grader.allocators)
+        release(a);
+    release(grader.list);
+    release(grader.fence);
+    release(grader.views);
+    release(grader.targets);
+    release(grader.root);
+    release(grader.vs);
+    release(grader.ps);
+    if (grader.event)
+        CloseHandle(grader.event);
+    grader = Grader{};
+}
+bool colorFail(const char* why) {
+    fColor.turnOff(why);
+    colorOn = false;
+    return false;
+}
+bool prepareGrader() { // colorLock held
+    if (grader.ready)
+        return true;
+    if (grader.tried)
+        return false;
+    grader.tried = true;
+    ID3D12Device* d = session.device;
+    if (!d || !session.queue)
+        return colorFail("the session is not D3D12 (no device or queue)");
+    HMODULE compiler = LoadLibraryW(L"d3dcompiler_47.dll");
+    const auto compile = compiler ? reinterpret_cast<CompileFn>(GetProcAddress(compiler, "D3DCompile")) : nullptr;
+    if (!compile)
+        return colorFail("d3dcompiler_47.dll (D3DCompile) is not there");
+    ID3DBlob* error = nullptr;
+    const size_t n = std::strlen(colorShader);
+    if (FAILED(compile(colorShader, n, "herovr_sm1_color", nullptr, nullptr, "vs", "vs_5_0", 1u << 11, 0, &grader.vs,
+                       &error)) ||
+        FAILED(compile(colorShader, n, "herovr_sm1_color", nullptr, nullptr, "ps", "ps_5_0", 1u << 11, 0, &grader.ps,
+                       &error))) {
+        if (error)
+            logLine("COLOR shader: %.400s", static_cast<const char*>(error->GetBufferPointer()));
+        release(error);
+        return colorFail("the colour shader did not compile");
+    }
+    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
+    D3D12_ROOT_PARAMETER parameters[2]{};
+    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[0].DescriptorTable = {1, &range};
+    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[1].Constants.Num32BitValues = 20;
+    parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_SIGNATURE_DESC rs{2, parameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    ID3DBlob* signature = nullptr;
+    const bool rootOk = SUCCEEDED(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error)) &&
+                        SUCCEEDED(d->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                                         IID_PPV_ARGS(&grader.root)));
+    release(signature);
+    release(error);
+    if (!rootOk)
+        return colorFail("the colour pass's root signature could not be made");
+    D3D12_DESCRIPTOR_HEAP_DESC h{D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, colorSlots,
+                                 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, 0};
+    D3D12_DESCRIPTOR_HEAP_DESC t{D3D12_DESCRIPTOR_HEAP_TYPE_RTV, colorSlots, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0};
+    if (FAILED(d->CreateDescriptorHeap(&h, IID_PPV_ARGS(&grader.views))) ||
+        FAILED(d->CreateDescriptorHeap(&t, IID_PPV_ARGS(&grader.targets))))
+        return colorFail("the colour pass's descriptor heaps could not be made");
+    grader.viewStep = d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    grader.targetStep = d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    for (auto*& a : grader.allocators)
+        if (FAILED(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&a))))
+            return colorFail("the colour pass's command allocators could not be made");
+    if (FAILED(d->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, grader.allocators[0], nullptr,
+                                    IID_PPV_ARGS(&grader.list))) ||
+        FAILED(grader.list->Close()) || FAILED(d->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&grader.fence))))
+        return colorFail("the colour pass's command list or fence could not be made");
+    grader.event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!grader.event)
+        return colorFail("the colour pass's fence event could not be made");
+    grader.ready = true;
+    logLine("COLOR: the colour pass is ready (D3D12, his graphics queue)");
+    return true;
+}
+ID3D12PipelineState* gradeState(DXGI_FORMAT target) { // colorLock held
+    auto it = grader.states.find(target);
+    if (it != grader.states.end())
+        return it->second;
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC d{};
+    d.pRootSignature = grader.root;
+    d.VS = {grader.vs->GetBufferPointer(), grader.vs->GetBufferSize()};
+    d.PS = {grader.ps->GetBufferPointer(), grader.ps->GetBufferSize()};
+    d.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    d.NumRenderTargets = 1;
+    d.RTVFormats[0] = target;
+    d.SampleDesc.Count = 1;
+    d.SampleMask = UINT_MAX;
+    d.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    d.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    d.RasterizerState.DepthClipEnable = TRUE;
+    auto& blend = d.BlendState.RenderTarget[0];
+    blend.SrcBlend = blend.SrcBlendAlpha = D3D12_BLEND_ONE;
+    blend.DestBlend = blend.DestBlendAlpha = D3D12_BLEND_ZERO;
+    blend.BlendOp = blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    ID3D12PipelineState* s = nullptr;
+    if (FAILED(session.device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&s))))
+        s = nullptr;
+    grader.states[target] = s;
+    return s;
+}
+void barrier(ID3D12GraphicsCommandList* l, ID3D12Resource* r, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
+    D3D12_RESOURCE_BARRIER b{};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition.pResource = r;
+    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    b.Transition.StateBefore = from;
+    b.Transition.StateAfter = to;
+    l->ResourceBarrier(1, &b);
+}
+// One of his eye images, graded in place before the runtime gets it. colorLock held.
+void gradeImage(EyeChain& c) {
+    if (!prepareGrader())
+        return;
+    ID3D12Resource* image = c.images[c.acquired];
+    const D3D12_RESOURCE_DESC desc = image->GetDesc();
+    const int family = colorFamily(desc.Format);
+    if (family == 0 || desc.SampleDesc.Count != 1 || desc.DepthOrArraySize != 1 ||
+        !(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) || desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+        if (!c.warned)
+            logLine("COLOR: an eye image it cannot draw on (format %d, %u samples, %u layers, flags %#x): that eye is left "
+                    "as it is", static_cast<int>(desc.Format), desc.SampleDesc.Count, desc.DepthOrArraySize,
+                    static_cast<unsigned>(desc.Flags));
+        c.warned = true;
+        return;
+    }
+    const DXGI_FORMAT typeless = family == 1 ? DXGI_FORMAT_R8G8B8A8_TYPELESS : DXGI_FORMAT_B8G8R8A8_TYPELESS;
+    const DXGI_FORMAT unorm = family == 1 ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
+    // A typed image takes only its own format; a typeless one the format he asked for.
+    const DXGI_FORMAT target = isTypeless(desc.Format) ?
+        (colorFamily(c.format) == family ? static_cast<DXGI_FORMAT>(c.format) : unorm) : desc.Format;
+    ID3D12PipelineState* state = gradeState(target);
+    if (!state) {
+        colorFail("the colour pass's pipeline could not be made for his eye format");
+        return;
+    }
+    ID3D12Device* d = session.device;
+    if (c.copy) {
+        const D3D12_RESOURCE_DESC have = c.copy->GetDesc();
+        if (have.Width != desc.Width || have.Height != desc.Height || have.Format != typeless)
+            release(c.copy);
+    }
+    if (!c.copy) {
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC cd{};
+        cd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        cd.Width = desc.Width;
+        cd.Height = desc.Height;
+        cd.DepthOrArraySize = 1;
+        cd.MipLevels = 1;
+        cd.Format = typeless;
+        cd.SampleDesc.Count = 1;
+        cd.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        if (FAILED(d->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &cd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                                              nullptr, IID_PPV_ARGS(&c.copy)))) {
+            c.copy = nullptr;
+            colorFail("the colour pass's copy of an eye could not be made (GPU memory)");
+            return;
+        }
+    }
+    // The slot's last use has to be finished (4 frames back; normally long done). If not, this eye goes ungraded.
+    const int s = grader.slot;
+    if (grader.fence->GetCompletedValue() < grader.done[s]) {
+        if (FAILED(grader.fence->SetEventOnCompletion(grader.done[s], grader.event)) ||
+            WaitForSingleObject(grader.event, 4) != WAIT_OBJECT_0) {
+            ++grader.skipped;
+            return;
+        }
+    }
+    grader.slot = (s + 1) % colorSlots;
+    ID3D12GraphicsCommandList* l = grader.list;
+    if (FAILED(grader.allocators[s]->Reset()) || FAILED(l->Reset(grader.allocators[s], state))) {
+        colorFail("the colour pass's command list could not be reset");
+        return;
+    }
+    D3D12_CPU_DESCRIPTOR_HANDLE srv = grader.views->GetCPUDescriptorHandleForHeapStart();
+    srv.ptr += static_cast<SIZE_T>(s) * grader.viewStep;
+    D3D12_GPU_DESCRIPTOR_HANDLE srvGpu = grader.views->GetGPUDescriptorHandleForHeapStart();
+    srvGpu.ptr += static_cast<UINT64>(s) * grader.viewStep;
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv = grader.targets->GetCPUDescriptorHandleForHeapStart();
+    rtv.ptr += static_cast<SIZE_T>(s) * grader.targetStep;
+    D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+    sv.Format = unorm; // display-encoded values, as the SM2 grade reads them
+    sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    sv.Texture2D.MipLevels = 1;
+    d->CreateShaderResourceView(c.copy, &sv, srv);
+    D3D12_RENDER_TARGET_VIEW_DESC tv{};
+    tv.Format = target;
+    tv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    d->CreateRenderTargetView(image, &tv, rtv);
+    // OpenXR D3D12: a colour image is in RENDER_TARGET when he releases it, and must be left so.
+    barrier(l, image, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    barrier(l, c.copy, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_TEXTURE_COPY_LOCATION dst{}, src{};
+    dst.pResource = c.copy;
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src.pResource = image;
+    src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    l->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+    barrier(l, c.copy, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    barrier(l, image, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    const eye_color::Params& p = colorParams;
+    const float constants[20] = {p.gain, p.contrast, p.crush, p.saturation, p.vibrance, p.mono, p.vignette,
+                                 isSrgb(target) ? 1.f : 0.f, p.balance[0], p.balance[1], p.balance[2], 1,
+                                 p.shadow[0], p.shadow[1], p.shadow[2], 0, p.high[0], p.high[1], p.high[2], 0};
+    l->SetGraphicsRootSignature(grader.root);
+    l->SetDescriptorHeaps(1, &grader.views);
+    l->SetGraphicsRootDescriptorTable(0, srvGpu);
+    l->SetGraphicsRoot32BitConstants(1, 20, constants, 0);
+    const D3D12_VIEWPORT vp{0, 0, static_cast<float>(desc.Width), static_cast<float>(desc.Height), 0, 1};
+    const D3D12_RECT sc{0, 0, static_cast<LONG>(desc.Width), static_cast<LONG>(desc.Height)};
+    l->RSSetViewports(1, &vp);
+    l->RSSetScissorRects(1, &sc);
+    l->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    l->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    l->DrawInstanced(3, 1, 0, 0);
+    if (FAILED(l->Close())) {
+        colorFail("the colour pass's command list could not be closed");
+        return;
+    }
+    ID3D12CommandList* lists[] = {l};
+    session.queue->ExecuteCommandLists(1, lists);
+    if (FAILED(session.queue->Signal(grader.fence, ++grader.value))) {
+        colorFail("his queue refused the colour pass's fence");
+        return;
+    }
+    grader.done[s] = grader.value;
+    if (++grader.graded == 1)
+        logLine("COLOR: first eye image graded (%ux%u, view format %d)", static_cast<unsigned>(desc.Width), desc.Height,
+                static_cast<int>(target));
+}
+void tryGrade(XrSwapchain sc) {
+    AcquireSRWLockExclusive(&colorLock);
+    auto it = chains.find(sc);
+    if (it != chains.end() && it->second.his && it->second.usable && it->second.acquired < it->second.images.size() &&
+        fColor.on) {
+        SM1_TRY {
+            gradeImage(it->second);
+        }
+        SM1_EXCEPT {
+            colorFail("a fault in the colour pass");
+        }
+    }
+    ReleaseSRWLockExclusive(&colorLock);
+}
+// Once a frame (his xrEndFrame): his projection swapchains, and live.txt's grade.
+void colorFrame(const XrFrameEndInfo* info) {
+    AcquireSRWLockShared(&settings.lock);
+    const eye_color::Params p = eye_color::params(colorConfig(settings.live));
+    ReleaseSRWLockShared(&settings.lock);
+    const bool want = fColor.on && !eye_color::neutral(p);
+    AcquireSRWLockExclusive(&colorLock);
+    colorParams = p;
+    if (want)
+        for (uint32_t i = 0; i < info->layerCount; ++i)
+            if (info->layers[i] && info->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+                const auto* pl = reinterpret_cast<const XrCompositionLayerProjection*>(info->layers[i]);
+                for (uint32_t v = 0; pl->views && v < pl->viewCount; ++v) {
+                    auto it = chains.find(pl->views[v].subImage.swapchain);
+                    if (it != chains.end() && !it->second.his) {
+                        it->second.his = true;
+                        logLine("COLOR: his eye swapchain %ux%u (format %d)%s", it->second.width, it->second.height,
+                                static_cast<int>(it->second.format), it->second.usable ? "" : ": not a format it draws on");
+                    }
+                }
+            }
+    ReleaseSRWLockExclusive(&colorLock);
+    if (colorOn.exchange(want) != want)
+        logLine("COLOR %s", want ? "on (the grade is drawn on his eye images)" : "off (his picture as it is, no GPU work)");
+}
+XRAPI_ATTR XrResult XRAPI_CALL createSwapchain(XrSession s, const XrSwapchainCreateInfo* ci, XrSwapchain* out) {
+    const XrResult r = next.createSwapchain(s, ci, out);
+    if (XR_SUCCEEDED(r) && ci && out && s == session.handle) {
+        EyeChain c;
+        c.format = ci->format;
+        c.width = ci->width;
+        c.height = ci->height;
+        c.usable = colorFamily(ci->format) && ci->sampleCount == 1 && ci->arraySize == 1 && ci->faceCount == 1 &&
+                   (ci->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT);
+        AcquireSRWLockExclusive(&colorLock);
+        chains[*out] = c;
+        ReleaseSRWLockExclusive(&colorLock);
+    }
+    return r;
+}
+XRAPI_ATTR XrResult XRAPI_CALL destroySwapchain(XrSwapchain sc) {
+    AcquireSRWLockExclusive(&colorLock);
+    auto it = chains.find(sc);
+    if (it != chains.end()) {
+        colorIdle();
+        dropChain(it->second);
+        chains.erase(it);
+    }
+    ReleaseSRWLockExclusive(&colorLock);
+    return next.destroySwapchain(sc);
+}
+XRAPI_ATTR XrResult XRAPI_CALL enumerateImages(XrSwapchain sc, uint32_t capacity, uint32_t* count,
+                                               XrSwapchainImageBaseHeader* images) {
+    const XrResult r = next.enumerateImages(sc, capacity, count, images);
+    if (XR_SUCCEEDED(r) && images && capacity && count && images->type == XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR) {
+        AcquireSRWLockExclusive(&colorLock);
+        auto it = chains.find(sc);
+        if (it != chains.end()) {
+            const auto* d3d = reinterpret_cast<const XrSwapchainImageD3D12KHR*>(images);
+            it->second.images.clear();
+            for (uint32_t i = 0; i < *count && i < capacity; ++i)
+                it->second.images.push_back(d3d[i].texture);
+        }
+        ReleaseSRWLockExclusive(&colorLock);
+    }
+    return r;
+}
+XRAPI_ATTR XrResult XRAPI_CALL acquireImage(XrSwapchain sc, const XrSwapchainImageAcquireInfo* info, uint32_t* index) {
+    const XrResult r = next.acquireImage(sc, info, index);
+    if (XR_SUCCEEDED(r) && index) {
+        AcquireSRWLockExclusive(&colorLock);
+        auto it = chains.find(sc);
+        if (it != chains.end())
+            it->second.acquired = *index;
+        ReleaseSRWLockExclusive(&colorLock);
+    }
+    return r;
+}
+XRAPI_ATTR XrResult XRAPI_CALL releaseImage(XrSwapchain sc, const XrSwapchainImageReleaseInfo* info) {
+    if (colorOn.load(std::memory_order_relaxed))
+        tryGrade(sc);
+    const XrResult r = next.releaseImage(sc, info);
+    AcquireSRWLockExclusive(&colorLock);
+    auto it = chains.find(sc);
+    if (it != chains.end())
+        it->second.acquired = UINT32_MAX;
+    ReleaseSRWLockExclusive(&colorLock);
+    return r;
+}
+void dropColor() {
+    AcquireSRWLockExclusive(&colorLock);
+    dropGrader();
+    chains.clear();
+    ReleaseSRWLockExclusive(&colorLock);
+    colorOn = false;
+}
+
 // --- xrEndFrame: his frame as it is, plus the add-on's quads on top -----------------------------------------------------
 MenuView currentView(uint32_t hero, const Config& config, const Live& live) {
     MenuView v;
@@ -1584,6 +2068,10 @@ MenuView currentView(uint32_t hero, const Config& config, const Live& live) {
     if (GetTickCount64() < play.suitNoticeUntil)
         v.notice = play.suitNotice;
     v.status[5] = "OUTFIT: " + outfitOf(hero, config.outfit[hero]).name;
+    for (int i = 0; i < colorRows; ++i)
+        v.color[i] = colorRowValue(live, i);
+    if (!fColor.on)
+        v.color[0] = "OFF (SEE LOG)";
     for (auto& s : v.status)
         for (auto& ch : s)
             ch = static_cast<char>(ch >= 'a' && ch <= 'z' ? ch - 32 : ch);
@@ -1660,6 +2148,8 @@ void tryAddOns(const XrFrameEndInfo* info, XrSpace space, std::vector<XrComposit
     }
 }
 XRAPI_ATTR XrResult XRAPI_CALL endFrame(XrSession s, const XrFrameEndInfo* info) {
+    if (s == session.handle && info)
+        colorFrame(info);
     if (s != session.handle || !info || !fDraw.on)
         return next.endFrame(s, info);
     std::vector<XrCompositionLayerQuad> quads;
@@ -1708,6 +2198,7 @@ void dropSession() {
     dropQuad(session.menu);
     dropQuad(session.beam);
     dropUploader();
+    dropColor();
     session = Session{};
     play = Play{};
     frameSpace = XR_NULL_HANDLE;
@@ -1854,6 +2345,16 @@ XRAPI_ATTR XrResult XRAPI_CALL getInstanceProcAddr(XrInstance inst, const char* 
         return mine(&waitFrame);
     if (n == "xrEndFrame")
         return mine(&endFrame);
+    if (n == "xrCreateSwapchain")
+        return mine(&createSwapchain);
+    if (n == "xrDestroySwapchain")
+        return mine(&destroySwapchain);
+    if (n == "xrEnumerateSwapchainImages")
+        return mine(&enumerateImages);
+    if (n == "xrAcquireSwapchainImage")
+        return mine(&acquireImage);
+    if (n == "xrReleaseSwapchainImage")
+        return mine(&releaseImage);
     return r;
 }
 } // namespace

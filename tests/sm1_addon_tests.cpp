@@ -592,6 +592,81 @@ void grappleTests() {
 }
 } // namespace
 
+void colorTests() {
+    // OFF by default: the grade is neutral, so the layer does no GPU work.
+    const Live d{};
+    check(!d.colorFx && eye_color::neutral(eye_color::params(colorConfig(d))), "COLOR is off and neutral by default");
+    Live on = d;
+    on.colorFx = true;
+    check(eye_color::neutral(eye_color::params(colorConfig(on))), "COLOR on with the NONE look and no sliders: neutral");
+    // live.txt round trip, the look by key or by number.
+    Live l = parseLive("color_fx=1\ncolor_filter=gotham\ncolor_exposure=-5\ncolor_warmth=40\ncolor_vignette=30\n");
+    check(l.colorFx && l.colorExposure == -5 && l.colorWarmth == 40 && l.colorVignette == 30, "color keys parse");
+    check(l.colorFilter != 0 && std::string(eye_color::filterKeys[l.colorFilter]) == "gotham", "a look by its key");
+    check(!eye_color::neutral(eye_color::params(colorConfig(l))), "GOTHAM grades");
+    const Live back = parseLive(liveText(l));
+    check(back.colorFx == l.colorFx && back.colorFilter == l.colorFilter && back.colorExposure == l.colorExposure &&
+              back.colorWarmth == l.colorWarmth && back.colorVignette == l.colorVignette &&
+              back.colorStrength == l.colorStrength && back.colorContrast == l.colorContrast,
+          "live.txt keeps the colour settings");
+    check(parseLive("color_filter=3\n").colorFilter == 3, "a look by its number");
+    check(parseLive("color_filter=99\ncolor_exposure=500\n").colorFilter == 0 &&
+              parseLive("color_exposure=500\n").colorExposure <= 20,
+          "out-of-range values never pass");
+    const std::string added = missingLive("powers=1\n");
+    check(added.find("color_fx=") != std::string::npos && added.find("color_vignette=") != std::string::npos,
+          "the colour keys are added to an older live.txt");
+    // The menu rows: a toggle, a look that cycles, sliders that step and wrap.
+    Live m{};
+    adjustColor(m, 0, 1);
+    check(m.colorFx, "row 0 turns COLOR on");
+    adjustColor(m, 1, -1);
+    check(m.colorFilter == static_cast<uint32_t>(eye_color::filters) - 1, "the look wraps backwards");
+    adjustColor(m, 1, 1);
+    check(m.colorFilter == 0, "and forwards");
+    for (int i = 0; i < colorRows; ++i) {
+        check(std::strlen(colorRowName(i)) > 2, "every colour row has a name");
+        check(!colorRowValue(m, i).empty(), "every colour row has a value");
+        Live w = m;
+        for (int k = 0; k < 200; ++k)
+            adjustColor(w, i, 1);
+        const Live r = parseLive(liveText(w));
+        check(r.colorStrength <= 100 && r.colorExposure >= -20 && r.colorExposure <= 20 && r.colorContrast >= 50 &&
+                  r.colorContrast <= 150 && r.colorSaturation <= 200 && r.colorVibrance <= 100 &&
+                  r.colorWarmth >= -100 && r.colorWarmth <= 100 && r.colorTint >= -100 && r.colorTint <= 100 &&
+                  r.colorVignette <= 100,
+              "stepping never leaves the limits");
+    }
+    // The COLOR page: up/down picks the row, a left / right flick steps it, the last row goes on.
+    WristMenu w;
+    WristInput in;
+    in.toggled = true;
+    w.step(in);
+    in.toggled = false;
+    w.step(in);
+    w.page = Page::color;
+    w.row = 2;
+    check(w.rows() == colorRows, "the COLOR page has its rows");
+    in.stickX = 1;
+    check(w.step(in) == Pick::color && w.delta == 1, "a right flick steps up");
+    check(w.step(in) == Pick::none, "held: once");
+    in.stickX = 0;
+    w.step(in);
+    in.stickX = -1;
+    check(w.step(in) == Pick::color && w.delta == -1, "a left flick steps down");
+    in.stickX = 0;
+    w.step(in);
+    in.trigger = true;
+    check(w.step(in) == Pick::color && w.delta == 1, "the trigger steps up");
+    in.trigger = false;
+    w.step(in);
+    w.row = w.rows();
+    in.trigger = true;
+    w.step(in);
+    check(w.page == Page::heroes, "COLOR's last row goes back to the first page");
+    check(std::string(pageName(Page::color)) == "COLOR", "the page's name");
+}
+
 int main() {
     hostTests();
     featureTests();
@@ -608,6 +683,7 @@ int main() {
     scanTests();
     combatTests();
     grappleTests();
+    colorTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

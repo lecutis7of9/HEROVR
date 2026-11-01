@@ -93,6 +93,16 @@ static bool parseBool(std::string_view v, bool& out) {
     }
     return false;
 }
+static bool parseSigned(std::string_view v, long& out) {
+    const bool minus = !v.empty() && v.front() == '-';
+    unsigned long n = 0;
+    std::string_view d = minus ? v.substr(1) : v;
+    if (d.empty() || d.size() > 4 || !std::all_of(d.begin(), d.end(), [](char ch) { return ch >= '0' && ch <= '9'; }))
+        return false;
+    n = std::strtoul(std::string(d).c_str(), nullptr, 10);
+    out = minus ? -static_cast<long>(n) : static_cast<long>(n);
+    return true;
+}
 static bool parseSmall(std::string_view v, unsigned long& out) {
     if (v.empty() || v.size() > 4 || !std::all_of(v.begin(), v.end(), [](char ch) { return ch >= '0' && ch <= '9'; }))
         return false;
@@ -150,6 +160,7 @@ Live parseLive(std::string_view text) {
     eachLine(text, [&](std::string_view key, std::string_view value) {
         bool b = false;
         unsigned long n = 0;
+        long sn = 0;
         if (key == "powers" && parseBool(value, b))
             l.powers = b;
         else if (key == "hero_webs" && parseBool(value, b))
@@ -164,6 +175,31 @@ Live parseLive(std::string_view text) {
             l.scan = b;
         else if (key == "grapple" && parseBool(value, b))
             l.grapple = b;
+        else if (key == "color_fx" && parseBool(value, b))
+            l.colorFx = b;
+        else if (key == "color_filter") {
+            if (parseSmall(value, n) && n < eye_color::filters)
+                l.colorFilter = static_cast<uint32_t>(n);
+            else
+                for (uint32_t f = 0; f < eye_color::filters; ++f)
+                    if (value == eye_color::filterKeys[f])
+                        l.colorFilter = f;
+        } else if (key == "color_strength" && parseSmall(value, n))
+            l.colorStrength = std::min<uint32_t>(static_cast<uint32_t>(n), 100);
+        else if (key == "color_exposure" && parseSigned(value, sn))
+            l.colorExposure = static_cast<int32_t>(std::clamp(sn, -20l, 20l));
+        else if (key == "color_contrast" && parseSmall(value, n))
+            l.colorContrast = std::clamp<uint32_t>(static_cast<uint32_t>(n), 50, 150);
+        else if (key == "color_saturation" && parseSmall(value, n))
+            l.colorSaturation = std::min<uint32_t>(static_cast<uint32_t>(n), 200);
+        else if (key == "color_vibrance" && parseSmall(value, n))
+            l.colorVibrance = std::min<uint32_t>(static_cast<uint32_t>(n), 100);
+        else if (key == "color_warmth" && parseSigned(value, sn))
+            l.colorWarmth = static_cast<int32_t>(std::clamp(sn, -100l, 100l));
+        else if (key == "color_tint" && parseSigned(value, sn))
+            l.colorTint = static_cast<int32_t>(std::clamp(sn, -100l, 100l));
+        else if (key == "color_vignette" && parseSmall(value, n))
+            l.colorVignette = std::min<uint32_t>(static_cast<uint32_t>(n), 100);
     });
     return l;
 }
@@ -172,7 +208,12 @@ std::string liveText(const Live& l) {
                     "# Read again every 2 seconds while the game runs.\n";
     const std::string values[] = {l.powers ? "1" : "0", l.heroWebs ? "1" : "0", l.beams ? "1" : "0",
                                   std::to_string(l.damage), std::to_string(l.menuSize), l.scan ? "1" : "0",
-                                  l.grapple ? "1" : "0"};
+                                  l.grapple ? "1" : "0", l.colorFx ? "1" : "0",
+                                  eye_color::filterKeys[l.colorFilter < eye_color::filters ? l.colorFilter : 0],
+                                  std::to_string(l.colorStrength), std::to_string(l.colorExposure),
+                                  std::to_string(l.colorContrast), std::to_string(l.colorSaturation),
+                                  std::to_string(l.colorVibrance), std::to_string(l.colorWarmth),
+                                  std::to_string(l.colorTint), std::to_string(l.colorVignette)};
     static_assert(sizeof(values) / sizeof(values[0]) == sizeof(liveSwitches) / sizeof(liveSwitches[0]),
                   "one value per live switch");
     int i = 0;
@@ -181,6 +222,87 @@ std::string liveText(const Live& l) {
         s += std::string(w.key) + "=" + values[i++] + "\n";
     }
     return s;
+}
+
+eye_color::Config colorConfig(const Live& l) {
+    eye_color::Config c;
+    c.on = l.colorFx;
+    c.filter = l.colorFilter < eye_color::filters ? l.colorFilter : 0;
+    c.strength = l.colorStrength;
+    c.exposureTenths = l.colorExposure;
+    c.contrast = l.colorContrast;
+    c.saturation = l.colorSaturation;
+    c.vibrance = l.colorVibrance;
+    c.warmth = l.colorWarmth;
+    c.tint = l.colorTint;
+    c.vignette = l.colorVignette;
+    return c;
+}
+const char* colorRowName(int row) {
+    static constexpr const char* names[colorRows] = {"COLOR",    "FILTER",     "STRENGTH", "EXPOSURE", "CONTRAST",
+                                                     "SATURATION", "VIBRANCE", "WARMTH",   "TINT",     "VIGNETTE"};
+    return row >= 0 && row < colorRows ? names[row] : "";
+}
+namespace {
+struct ColorSlider {
+    eye_color::Limits limits;
+    int Live::*signedField;
+    uint32_t Live::*plainField;
+};
+// rows 2..9
+const ColorSlider& sliderOf(int row) {
+    static const ColorSlider sliders[] = {
+        {eye_color::strengthLimits, nullptr, &Live::colorStrength},
+        {eye_color::exposureLimits, &Live::colorExposure, nullptr},
+        {eye_color::contrastLimits, nullptr, &Live::colorContrast},
+        {eye_color::saturationLimits, nullptr, &Live::colorSaturation},
+        {eye_color::vibranceLimits, nullptr, &Live::colorVibrance},
+        {eye_color::warmthLimits, &Live::colorWarmth, nullptr},
+        {eye_color::tintLimits, &Live::colorTint, nullptr},
+        {eye_color::vignetteLimits, nullptr, &Live::colorVignette},
+    };
+    return sliders[std::clamp(row - 2, 0, 7)];
+}
+} // namespace
+std::string colorRowValue(const Live& l, int row) {
+    if (row == 0)
+        return l.colorFx ? "ON" : "OFF";
+    if (row == 1)
+        return eye_color::filterName(l.colorFilter);
+    if (row < 2 || row >= colorRows)
+        return "";
+    const ColorSlider& s = sliderOf(row);
+    const int v = s.signedField ? l.*s.signedField : static_cast<int>(l.*s.plainField);
+    if (row == 3) { // exposure in stops
+        const int a = v < 0 ? -v : v;
+        return std::string(v < 0 ? "-" : v > 0 ? "+" : "") + std::to_string(a / 10) + "." + std::to_string(a % 10) + " EV";
+    }
+    return (s.signedField && v > 0 ? "+" : "") + std::to_string(v);
+}
+void adjustColor(Live& l, int row, int delta) {
+    const int d = delta < 0 ? -1 : 1;
+    if (row == 0) {
+        l.colorFx = !l.colorFx;
+        return;
+    }
+    if (row == 1) {
+        const int n = static_cast<int>(eye_color::filters);
+        l.colorFilter = static_cast<uint32_t>(((static_cast<int>(l.colorFilter) + d) % n + n) % n);
+        return;
+    }
+    if (row < 2 || row >= colorRows)
+        return;
+    const ColorSlider& s = sliderOf(row);
+    int v = s.signedField ? l.*s.signedField : static_cast<int>(l.*s.plainField);
+    v += d * s.limits.step;
+    if (v > s.limits.hi)
+        v = s.limits.lo;
+    else if (v < s.limits.lo)
+        v = s.limits.hi;
+    if (s.signedField)
+        l.*s.signedField = v;
+    else
+        l.*s.plainField = static_cast<uint32_t>(v);
 }
 
 std::string missingLive(std::string_view text) {
@@ -380,6 +502,8 @@ const char* pageName(Page p) {
         return "POWERS";
     case Page::addon:
         return "ADD-ON";
+    case Page::color:
+        return "COLOR";
     case Page::count:
         break;
     }
@@ -408,6 +532,8 @@ int WristMenu::rows() const {
         return static_cast<int>(std::max(1u, outfits));
     case Page::powers:
         return static_cast<int>(Toggle::count);
+    case Page::color:
+        return colorRows;
     case Page::addon:
     case Page::count:
         break;
@@ -432,6 +558,17 @@ Pick WristMenu::step(const WristInput& in) {
         stickArmed = false;
         row = ((row + (stick > 0 ? -1 : 1)) % n + n) % n;
     }
+    // The COLOR page: a left / right flick steps the row's value down / up.
+    const float sx = std::isfinite(in.stickX) ? in.stickX : 0.f;
+    if (std::fabs(sx) < .3f)
+        stickXArmed = true;
+    else if (stickXArmed && std::fabs(sx) > .6f) {
+        stickXArmed = false;
+        if (page == Page::color && row < rows()) {
+            delta = sx > 0 ? 1 : -1;
+            return Pick::color;
+        }
+    }
     if (!in.trigger) {
         triggerArmed = true;
         return Pick::none;
@@ -451,6 +588,9 @@ Pick WristMenu::step(const WristInput& in) {
         return Pick::outfit;
     case Page::powers:
         return Pick::toggle;
+    case Page::color:
+        delta = 1;
+        return Pick::color;
     default:
         return Pick::none;
     }
@@ -661,6 +801,10 @@ void paintMenu(Canvas& c, const MenuView& v) {
         for (int i = 0; i < static_cast<int>(Toggle::count); ++i)
             rows.push_back(std::string("  ") + toggleName(static_cast<Toggle>(i)) + ": " + (v.toggles[i] ? "ON" : "OFF"));
         break;
+    case Page::color:
+        for (int i = 0; i < colorRows; ++i)
+            rows.push_back(std::string("  ") + colorRowName(i) + ": " + v.color[i]);
+        break;
     case Page::addon:
         break;
     case Page::count:
@@ -716,6 +860,9 @@ bool sameView(const MenuView& a, const MenuView& b) {
             return false;
     for (int i = 0; i < 6; ++i)
         if (a.status[i] != b.status[i])
+            return false;
+    for (int i = 0; i < colorRows; ++i)
+        if (a.color[i] != b.color[i])
             return false;
     return a.page == b.page && a.row == b.row && a.hero == b.hero && a.outfit == b.outfit && a.flying == b.flying &&
            a.powerState == b.powerState && a.notice == b.notice;

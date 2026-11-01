@@ -12,12 +12,12 @@ def src(p):
 class ReleaseLabels0075(unittest.TestCase):
     def test_version(self):
         self.assertEqual(src('VERSION').strip(), '0.0.75')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8')
+        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8.1')
         c = src('CMakeLists.txt')
         self.assertRegex(c, r'project\(Spidy VERSION 0\.0\.75 ')
         self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
         self.assertIn('#define SPIDY_PUBLIC_VERSION "0.0.75"', src('include/spidy/version.hpp'))
-        self.assertIn('build = "39.8";', src('include/spidy/version.hpp'))
+        self.assertIn('build = "39.8.1";', src('include/spidy/version.hpp'))
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.75.md')))
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'docs/HERO-0.0.75.md')))
 
@@ -36,12 +36,9 @@ class ReleaseLabels0075(unittest.TestCase):
 
     def test_launcher(self):
         m = src('tools/launcher/src/ModVersion.cs')
-        self.assertIn('public const string Version = "0.0.75.1";', m)
-        self.assertIn('public const int Build = 16;', m)
-        self.assertIn('PreviousTag = "v0.0.74";', m)
-        self.assertIn('PreviousTags = { "v0.0.74", "v0.0.73", "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };', m)
-        self.assertIn('[assembly: AssemblyInformationalVersion("0.0.75.1 (launcher build 16)")]',
-                      src('tools/launcher/src/AssemblyInfo.cs'))
+        # 0.0.75 hotfix 1 (v0.0.75.1): launcher 0.0.75.2 build 17, 0.0.75 first (release00751_tests pins it)
+        self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', m).group(1)), 16)
+        self.assertIn('"v0.0.74", "v0.0.73", "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };', m)
 
     def test_multiplayer_kept(self):
         self.assertIn('DefaultUrl = "https://herovr-lobby.herovr.workers.dev"', src('tools/launcher/src/InternetLobby.cs'))

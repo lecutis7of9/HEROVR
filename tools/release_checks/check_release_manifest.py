@@ -5,7 +5,7 @@
 prebuilt mod zip for the same tag, with a SHA-256, a size and a download URL on that tag, and the asset folder
 must hold that zip with the same hash, the launcher zip and SHA256SUMS.txt.
 Usage: check_release_manifest.py ASSET_DIR [--tag vX.Y.Z] [--min-launcher-build N]"""
-import argparse, hashlib, json, os, sys
+import re, argparse, hashlib, json, os, sys
 
 
 def problems(d, tag=None, min_build=None, allow_launcher_build=False):
@@ -17,7 +17,8 @@ def problems(d, tag=None, min_build=None, allow_launcher_build=False):
     t = m.get('tag', '')
     if tag and t != tag:
         out.append(f'tag {t!r} is not {tag!r}')
-    if t != 'v' + str(m.get('version_number', '')):
+    # 0.0.75 hotfix 1: a same-version hotfix is tagged v<version>.<n> (v0.0.75.1 for version_number 0.0.75)
+    if t != 'v' + str(m.get('version_number', '')) and not re.fullmatch(re.escape('v' + str(m.get('version_number', ''))) + r'\.\d+', t):
         out.append(f"tag {t!r} does not match version_number {m.get('version_number')!r}")
     if min_build is not None and int(m.get('launcher_build_in_zip', m.get('launcher_build', 0)) or 0) < min_build:
         out.append(f"launcher build in the zip {m.get('launcher_build_in_zip', m.get('launcher_build'))} < {min_build}")

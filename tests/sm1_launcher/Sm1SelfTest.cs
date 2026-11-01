@@ -101,6 +101,8 @@ namespace Sm2VrLauncher
             Check(manifest != null && manifest.StartsWith(Path.Combine(Sm1.DataFolder, "layer")) && File.Exists(manifest) &&
                   File.Exists(Path.Combine(Path.GetDirectoryName(manifest), Sm1.LayerDll)), "layer staged in SM1\\layer\\<sha>");
             Check(Sm1.StageLayer(tmp) == manifest, "staging again: the same copy");
+            string rootFile = Path.Combine(Path.GetDirectoryName(manifest), Sm1.LayerRootFile);
+            Check(File.Exists(rootFile) && File.ReadAllText(rootFile) == Path.GetFullPath(tmp), "the staged layer knows HERO VR's folder (herovr_root.txt)");
             const string key = @"Software\HEROVR-sm1-selftest\Implicit";
             using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key))
             {

@@ -57,6 +57,7 @@ namespace Sm2VrLauncher
         public const string AddonDll = "herovr_sm1_addon.dll";                      // ours (src/sm1)
         public const string LayerDll = "herovr_sm1_layer.dll";                      // ours (src/sm1/sm1_layer.cpp)
         public const string LayerJson = "herovr_sm1_layer.json";                    // ours (src/sm1/herovr_sm1_layer.json)
+        public const string LayerRootFile = "herovr_root.txt";                      // beside the staged layer: HERO VR's folder (its Models)
         public const string LayerName = "XR_APILAYER_HEROVR_sm1_heroes";
         // CONFIRMED (OpenXR loader 1.1.49, src/loader/manifest_file.cpp): implicit layers are read from this key in
         // HKLM and, when the game is not run as administrator, HKCU; value name = manifest path, DWORD 0 = enabled.
@@ -465,7 +466,24 @@ namespace Sm2VrLauncher
                 File.Copy(src, dest + ".tmp", true);
                 File.Move(dest + ".tmp", dest);
             }
+            WriteLayerRoot(dir, root);
             return Path.Combine(dir, LayerJson);
+        }
+
+        /// <summary>0.0.76 HERO PROPS: the staged layer is in SM1\layer\&lt;sha&gt;\, not in HERO VR's build folder, so it
+        /// cannot find HERO VR's Models (the props, the portraits) from its own path: HERO VR's folder goes in
+        /// herovr_root.txt beside it (UTF-8, one line), replaced whole (written to .tmp first). Never throws.</summary>
+        public static bool WriteLayerRoot(string dir, string root)
+        {
+            try
+            {
+                string dest = Path.Combine(dir, LayerRootFile), tmp = dest + ".tmp";
+                File.WriteAllText(tmp, Path.GetFullPath(root), new System.Text.UTF8Encoding(false));
+                if (File.Exists(dest)) File.Delete(dest);
+                File.Move(tmp, dest);
+                return true;
+            }
+            catch { return false; }
         }
 
         static bool OurLayerValue(string name)

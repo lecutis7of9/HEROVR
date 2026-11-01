@@ -4,6 +4,8 @@
 #include "spidy/sm1_combat.hpp"
 #include "spidy/sm1_grapple.hpp"
 #include "spidy/sm1_holo.hpp"
+#include "spidy/sm1_props.hpp"
+#include "spidy/thor_grip.hpp"
 #include "spidy/eye_color.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
@@ -110,6 +112,8 @@ void configTests() {
     const Live merged = parseLive(old + add);
     check(!merged.powers && merged.damage == 80 && merged.scan, "the player's values stay");
     check(missingLive(liveText(Live{})).empty(), "nothing missing from a current live.txt");
+    check(Live{}.props && !parseLive("props=0\n").props && !parseLive(liveText(parseLive("props=0\n"))).props, "props: on unless set to 0");
+    check(missingLive("powers=1\ncolor_vignette=0\n").find("props=1") != std::string::npos, "an older live.txt gets props=1");
 }
 
 void scanTests() {
@@ -962,6 +966,162 @@ void holoTests() {
     painter.stop();
 }
 
+bool near3(Vec3 a, Vec3 b, float e = 1e-3f) { return length(a - b) <= e; }
+
+void propsTests() {
+    namespace pr = spidy::sm1::props;
+    check(pr::modelsFor(hero_modes::thor).size() == 1 && pr::modelsFor(hero_modes::thor)[0] == pr::hammer, "THOR holds the hammer");
+    check(pr::modelsFor(hero_modes::captainAmerica)[0] == pr::shield, "CAP holds the shield");
+    check(pr::modelsFor(hero_modes::wolverine).size() == 2, "WOLVERINE has claws on both hands");
+    check(!pr::hasProps(hero_modes::spiderMan) && !pr::hasProps(hero_modes::ironMan), "Spider-Man and Iron Man hold nothing");
+    check(pr::thrownBy(hero_modes::thor, 1) == pr::hammer && pr::thrownBy(hero_modes::thor, 0) == pr::none,
+          "the right trigger throws THOR's hammer; the left keeps the lightning");
+    check(pr::slotOf(pr::hammer) == mesh_model::slotHammer && pr::slotOf(pr::shield) == mesh_model::slotShield, "the SM2 model slots");
+
+    // The SM2 appendModel frame: world = at + right x + up y - forward z.
+    const pr::Place k = pr::placed({1, 2, 3}, {0, 0, -2}, {0, 1, .3f});
+    check(k.ok && near3(pr::apply(k, {0, 0, -1}), {1, 2, 2}) && near3(pr::apply(k, {0, 1, 0}), {1, 3, 3}) &&
+              near3(pr::apply(k, {1, 0, 0}), {2, 2, 3}),
+          "a placed model: -z forward, +y up, +x right");
+    check(!pr::placed({0, 0, 0}, {0, 1, 0}, {0, 2, 0}).ok, "a degenerate frame places nothing");
+
+    // THOR's hammer in the right fist: its handle end gripAlong below the palm, +y along the handle.
+    Pose grip{{.2f, 1.1f, -.3f}, Quat::around({1, 0, 0}, -.4f)};
+    const pr::Place h = pr::hammerInHand(grip, ControllerKind::touch);
+    const thor_grip::Held held = thor_grip::held(grip, ControllerKind::touch);
+    check(h.ok && held.ok && near3(pr::apply(h, {0, thor_grip::gripAlong, 0}), grip.position), "the hammer's grip is in the palm");
+    check(near3(normalized(h.y), held.handle) && near3(h.z * -1.f, held.face), "the hammer's handle and face from thor_grip");
+    const pr::Place spun = pr::hammerPlace(held.at, held.handle, held.face, 3.14159265f);
+    check(spun.ok && near3(spun.y, held.handle * -1.f), "half a turn of spin points the handle back");
+    check(!pr::hammerInHand(Pose{{0, 0, 0}, Quat{0, 0, 0, 0}}, ControllerKind::touch).ok, "a broken grip pose draws no hammer");
+
+    // CAP's shield: shieldPlace is captain::place(forSide(m)) for both arms.
+    const captain::ShieldPose arm = pr::shieldOnForearm(grip, 1, ControllerKind::touch);
+    check(arm.ok, "the shield on the right forearm");
+    const Vec3 low{-.3f, -.42f, -.05f}, high{.3f, .2f, .04f};
+    for (uint32_t side : {0u, 1u}) {
+        const pr::Place s = pr::shieldPlace(arm, side, captain::pivotLeft, low, high, 0);
+        bool same = s.ok;
+        for (Vec3 m : {Vec3{0, 0, 0}, Vec3{.1f, -.2f, .03f}, Vec3{-.25f, .1f, -.04f}})
+            same = same && near3(pr::apply(s, m), captain::place(arm, captain::forSide(m, side)));
+        check(same, side ? "the right arm's shield is captain::place" : "the left arm's shield is captain::place");
+        const pr::Place r = pr::shieldPlace(arm, side, captain::pivotLeft, low, high, 1.3f);
+        const Vec3 mid = (low + high) * .5f;
+        check(r.ok && near3(pr::apply(r, mid), pr::apply(s, mid)), "a spinning shield turns about its disc's middle");
+    }
+    const pr::Place fly = pr::shieldFlying({4, 2, -6}, {0, 0, -1}, 1, captain::pivotLeft, low, high, .7f);
+    check(fly.ok && near3(pr::apply(fly, (low + high) * .5f), {4, 2, -6}) && near3(normalized(fly.z * -1.f), {0, 1, 0}),
+          "a flying shield: flat, face up, its middle on the flight");
+
+    // The other held props: placed off the grip, finite, near the hand.
+    for (unsigned hand : {0u, 1u}) {
+        const pr::Place c = pr::clawsPlace(grip, hand, ControllerKind::touch);
+        const pr::Place b = pr::batonPlace(grip, hand, ControllerKind::touch, {-.03f, -.03f, -.4f}, {.03f, .03f, .17f});
+        const pr::Place g = pr::pistolPlace(grip, hand, ControllerKind::touch);
+        check(c.ok && length(c.at - grip.position) < .1f, "the claws at the knuckles");
+        check(b.ok && length(b.at - grip.position) < .6f, "the baton in the fist");
+        check(g.ok && length(g.at - grip.position) < .1f, "the pistol in the palm");
+    }
+    const pr::Place l = pr::clawsPlace(grip, 0, ControllerKind::touch), r = pr::clawsPlace(grip, 1, ControllerKind::touch);
+    check(near3(l.y, r.y * -1.f) && near3(l.z, r.z), "each hand's claws out of its own back of the hand, along the punch");
+    check(std::abs(pr::clawReach({0, 0, -.3f}) - .3f) < 1e-6f && pr::clawReach({0, 0, .2f}) == .05f, "the claws' reach");
+    const pr::Place bat = pr::batarangFlying({0, 1, -3}, {0, 0, -1}, 0, {-.2f, -.01f, -.1f}, {.2f, .01f, .1f});
+    check(bat.ok && near3(pr::apply(bat, {0, 0, 0}), {0, 1, -3}) && std::abs(length(bat.x) - .4f) < 1e-3f,
+          "a flying batarang: centred, 16 cm across");
+
+    // The throw: out to the enemy (the hit once, on arrival), back to the moving hand, caught. Never moves the player.
+    pr::Flight f;
+    const Vec3 enemy{0, 1, -10};
+    check(pr::launch(f, {0, 1, 0}, {0, 0, -1}, &enemy, pr::hammerThrow) && f.phase == pr::Flight::out, "the hammer is thrown");
+    check(!pr::launch(f, {0, 1, 0}, {0, 0, -1}, &enemy, pr::hammerThrow), "a hammer in the air cannot be thrown again");
+    int arrivals = 0, steps = 0;
+    bool caught = false;
+    Vec3 hand{.2f, 1, .1f};
+    float arrivedAt = 0;
+    while (!caught && steps < 2000) {
+        hand = hand + Vec3{.001f, 0, 0};
+        const pr::FlightStep st = pr::step(f, pr::hammerThrow, hand, &enemy, 1.f / 90);
+        arrivals += st.arrived;
+        if (st.arrived)
+            arrivedAt = f.age;
+        caught = st.caught;
+        ++steps;
+    }
+    check(arrivals == 1, "the hammer hits once");
+    check(arrivedAt > .4f && arrivedAt < .5f, "out at 22 m/s: 10 m in under half a second");
+    check(caught && f.phase == pr::Flight::held && near3(f.pos, hand), "the hammer comes back into the hand");
+    check(steps < 2 * 90, "the hammer is back within two seconds");
+    pr::Flight miss;
+    pr::launch(miss, {0, 1, 0}, {1, 0, 0}, nullptr, pr::hammerThrow);
+    float furthest = 0;
+    for (int i = 0; i < 1000 && miss.phase != pr::Flight::held; ++i) {
+        const pr::FlightStep st = pr::step(miss, pr::hammerThrow, {0, 1, 0}, nullptr, 1.f / 90);
+        check(!st.arrived, "a throw with no enemy hits nothing");
+        furthest = std::max(furthest, miss.pos.x);
+    }
+    check(furthest > 20 && furthest < 23.5f && miss.phase == pr::Flight::held, "an unaimed throw flies its second and comes back");
+    pr::Flight b;
+    pr::launch(b, {0, 1, 0}, {0, 0, -1}, nullptr, pr::batarangThrow);
+    bool gone = false;
+    for (int i = 0; i < 200 && !gone; ++i)
+        gone = pr::step(b, pr::batarangThrow, {0, 1, 0}, nullptr, 1.f / 90).caught;
+    check(gone && b.phase == pr::Flight::held, "the batarang does not come back: it ends");
+    pr::Flight stuck;
+    pr::launch(stuck, {0, 1, 0}, {0, 0, -1}, nullptr, pr::shieldThrow);
+    for (int i = 0; i < 90 * 7 && stuck.phase != pr::Flight::held; ++i)
+        pr::step(stuck, pr::shieldThrow, {1e6f, 0, 0}, nullptr, 1.f / 90);
+    check(stuck.phase == pr::Flight::held, "a prop that cannot reach the hand is recalled");
+
+    // Game <-> OpenXR through the head: round trip, and the game head's forward is the headset's -z.
+    const Pose xrHead{{.1f, 1.6f, -.2f}, Quat::yaw(.7f)};
+    const pr::HeadMap m = pr::headMap({100, 20, -50}, {0, 0, 1}, {0, -1, 0}, {-1, 0, 0}, xrHead);
+    check(m.ok, "a head map");
+    const Vec3 g{103, 19, -48};
+    check(near3(pr::toGame(m, pr::toXr(m, g)), g), "game -> OpenXR -> game");
+    check(near3(pr::toXr(m, Vec3{99, 20, -50}), xrHead.position + xrHead.orientation.rotate({0, 0, -1})),
+          "a metre ahead of the game head is a metre ahead of the headset");
+    check(near3(pr::dirToXr(m, {0, 1, 0}), xrHead.orientation.rotate({0, 1, 0})), "the game's up is the head's up");
+    check(!pr::headMap({0, 0, 0}, {0, 0, 0}, {0, -1, 0}, {0, 0, 1}, xrHead).ok, "no head axes: no map");
+
+    // The GPU's vertices: one a corner, the texture layer (cutout flagged) and the tint.
+    mesh_model::Mesh tri;
+    tri.corners = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    tri.colors = {{.5f, .5f, .5f}, {.2f, .3f, .4f}};
+    tri.uvs = {0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1};
+    tri.tints = {{1, .5f, .25f}, {1, 1, 1}};
+    tri.image = {0, -1};
+    tri.images.resize(1);
+    tri.images[0].cutout = true;
+    tri.images[0].layer = 3;
+    std::vector<pr::GpuVertex> verts;
+    check(pr::pack(tri, verts) && verts.size() == 6, "three vertices a triangle");
+    check(verts[0].layer == 3 + pr::cutoutLayer && verts[0].colour[1] == .5f, "a cutout texture's layer and tint");
+    check(verts[3].layer == -1 && verts[3].colour[2] == .4f, "an untextured triangle's own colour");
+    check(std::abs(verts[0].normal[2] - 1) < 1e-5f && std::abs(verts[3].normal[0] - 1) < 1e-5f, "the face normals");
+    mesh_model::Mesh broken;
+    broken.corners = {{0, 0, 0}};
+    broken.colors = {{1, 1, 1}};
+    check(!pr::pack(broken, verts) && verts.size() == 6, "a broken mesh adds nothing");
+
+    // The eye: a point a metre straight ahead is in the middle of the picture, in depth 0..1.
+    const Pose eye{{0, 1.6f, 0}, Quat::yaw(.5f)};
+    const Mat4 vp = pr::eyeViewProjection(eye, -.8f, .8f, .8f, -.8f);
+    const Vec3 ahead = eye.position + eye.orientation.rotate({0, 0, -1});
+    float clip[4]{};
+    for (int r = 0; r < 4; ++r)
+        clip[r] = vp[r * 4] * ahead.x + vp[r * 4 + 1] * ahead.y + vp[r * 4 + 2] * ahead.z + vp[r * 4 + 3];
+    check(clip[3] > 0 && std::abs(clip[0] / clip[3]) < 1e-4f && std::abs(clip[1] / clip[3]) < 1e-4f && clip[2] / clip[3] > 0 &&
+              clip[2] / clip[3] < 1,
+          "the eye's projection");
+    float model[12], normal[9];
+    pr::Place scaled;
+    scaled.at = {1, 2, 3}, scaled.x = {2, 0, 0}, scaled.y = {0, 1, 0}, scaled.z = {0, 0, 1}, scaled.ok = true;
+    check(pr::modelMatrices(scaled, model, normal) && model[0] == 2 && model[3] == 1 && model[11] == 3 && std::abs(normal[0] - .5f) < 1e-6f,
+          "the model and normal matrices");
+    scaled.x = {0, 0, 0};
+    check(!pr::modelMatrices(scaled, model, normal), "a flat place has no normal matrix");
+}
+
 int main() {
     hostTests();
     featureTests();
@@ -980,6 +1140,7 @@ int main() {
     grappleTests();
     colorTests();
     holoTests();
+    propsTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

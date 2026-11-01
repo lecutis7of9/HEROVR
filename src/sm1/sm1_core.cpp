@@ -200,6 +200,8 @@ Live parseLive(std::string_view text) {
             l.colorTint = static_cast<int32_t>(std::clamp(sn, -100l, 100l));
         else if (key == "color_vignette" && parseSmall(value, n))
             l.colorVignette = std::min<uint32_t>(static_cast<uint32_t>(n), 100);
+        else if (key == "props" && parseBool(value, b))
+            l.props = b;
     });
     return l;
 }
@@ -213,7 +215,8 @@ std::string liveText(const Live& l) {
                                   std::to_string(l.colorStrength), std::to_string(l.colorExposure),
                                   std::to_string(l.colorContrast), std::to_string(l.colorSaturation),
                                   std::to_string(l.colorVibrance), std::to_string(l.colorWarmth),
-                                  std::to_string(l.colorTint), std::to_string(l.colorVignette)};
+                                  std::to_string(l.colorTint), std::to_string(l.colorVignette),
+                                  l.props ? "1" : "0"};
     static_assert(sizeof(values) / sizeof(values[0]) == sizeof(liveSwitches) / sizeof(liveSwitches[0]),
                   "one value per live switch");
     int i = 0;

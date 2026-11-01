@@ -102,6 +102,12 @@ inline constexpr Feature features[] = {
     {"hero suits", Evidence::candidate, State::stub,
      "the launcher adds each hero as a NEW SM1 suit next to Spider-Man's (purely additive, through the game's toc; CANDIDATE, "
      "not yet seen in the game); nothing of the game's own suits is replaced"},
+    {"hero props", Evidence::confirmed, State::untested,
+     "the heroes' own 3D weapons from the SM2 build's models (their artists in THIRD-PARTY-MODELS.md), drawn by the layer as "
+     "one extra OpenXR projection layer in both eyes: THOR's hammer in the right hand (the right trigger throws it at the "
+     "ringed enemy and it flies back into the hand; no lunge), CAP's shield on the right forearm (thrown the same way), "
+     "WOLVERINE's claws, DAREDEVIL's batons, PUNISHER's pistol, BATMAN's thrown batarang; no depth: they always draw "
+     "over the game (walls do not hide them) and a thrown one flies through walls"},
     {"holo suit switch", Evidence::candidate, State::stub,
      "no confirmed suit-equip call in 4.630.0.0, so picking a hero on the wrist does not change the suit live: the holo "
      "tells the player to pick that hero's suit in the game's Suits menu (or to install the suits in the launcher)"},
@@ -157,6 +163,9 @@ struct Live {
     uint32_t colorContrast = 100, colorSaturation = 100, colorVibrance = 0;
     int32_t colorWarmth = 0, colorTint = 0;
     uint32_t colorVignette = 0;
+    // 0.0.76 HERO PROPS (sm1_props.hpp): the heroes' own 3D weapons in the hands (THOR's hammer, CAP's shield, ...),
+    // drawn by the layer as one extra projection layer over his picture; 0: none drawn and no GPU work for them.
+    bool props = true; // props=1
 };
 Live parseLive(std::string_view text);
 // The file the add-on writes when there is none: every switch with its one-sentence subtext.
@@ -183,6 +192,7 @@ inline constexpr LiveSwitch liveSwitches[] = {
     {"color_warmth", "COLOR WARMTH -100 (blue) to 100 (amber); applies live, no restart."},
     {"color_tint", "COLOR TINT -100 (green) to 100 (magenta); applies live, no restart."},
     {"color_vignette", "COLOR VIGNETTE 0 to 100: darkens the edges of each eye; applies live, no restart."},
+    {"props", "HERO PROPS: 1 (default) puts the heroes' own 3D weapons in your hands (THOR throws his hammer and it comes back, CAP throws his shield, WOLVERINE's claws, DAREDEVIL's batons, PUNISHER's pistol, BATMAN's batarang), drawn over the game's picture so walls never hide them, 0 draws none; applies live, no restart."},
 };
 // The SM2 grade's settings from live.txt (90s ANIMATED's cel pass and the DAREDEVIL sonar are the SM2 build's own:
 // here 90s ANIMATED is its colour grade only).

@@ -401,10 +401,10 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
     const bool holds = finite(held) && length(held) > .5f && finite(surface.anchor);
     // A flip tilts the tracking space about the head where it began.
     FlipMotion::Sample flip;
-    flip.jump = f.jump;
+    flip.jump = f.jump && !flyOwns_; // 0.0.76 FLIGHT: A is the flight's while it flies
     flip.airborne = airborne && !holds;
     flip.surface = onSurface || holds;
-    if (handValid(f.hands[0])) {
+    if (handValid(f.hands[0]) && !flyOwns_) {
         flip.stickX = f.hands[0].stickX;
         flip.stickY = f.hands[0].stickY;
     }
@@ -427,6 +427,8 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             automaticBrakeFromAir_ = false;
         automaticBrakeHeld_ = f.jump;
         controls.brake = autoSettings_.airBrake && air && f.jump && automaticBrakeFromAir_;
+        if (flyOwns_) // 0.0.76 FLIGHT: no A air brake while flying; Y held (the orientation brake) rights instead
+            controls.brake = air && flyUpright_;
         const Vec3 want = stickTurn(flip);
         if (!air)
             automaticStickReady_ = false;
@@ -439,6 +441,8 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             automaticHands_.reset();
         // Version 0.0.62 HAND FLIPS off: no arm movement reaches the flip.
         flight.handMomentum = handFlips_ ? automaticHands_.update(f, autoSettings_.handThreshold) : Vec3{};
+        if (flyOwns_) // 0.0.76 FLIGHT: the arms steer the flight, never a flip
+            flight.handMomentum = {};
         rig_.tilt = automatic_.update(flight, flip.airborne, flip.surface, rig_.yaw, f.seconds, autoSettings_,
                                       controls);
         // Where the spin leaves the player facing is the heading: the yaw
@@ -683,6 +687,8 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         const Pose before = placed.toWorld(f.head);
         Vec3 ahead = before.orientation.rotate(Vec3{0, 0, -1});
         ahead = {ahead.x, 0, ahead.z};
+        if (length(flyAxis_) > .5f) // HERO VR 0.0.76 FLIGHT: about the flight's own axis
+            ahead = flyAxis_;
         if (finite(ahead) && length(ahead) > .1f) {
             const Quat roll = Quat::around(normalized(ahead), flyRoll_);
             const Quat yaw = Quat::yaw(placed.yaw);

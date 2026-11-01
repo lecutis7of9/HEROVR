@@ -319,6 +319,18 @@ class GameTrackingRig {
     // about the body's own right axis toward the body's head direction, the head kept in place; the hands and all
     // the tracking space places turn with it. A mod-side view transform like FLY ROLL (applied before it). Set
     // every frame; reset() keeps it.
+    // HERO VR 0.0.76 FLIGHT (fly076::BodyRoll): FLY ROLL's angle about this world axis (the flight's own way)
+    // instead of the head's level look; zero: the level look as before. Set every frame; reset() keeps it.
+    void flyRollAxis(Vec3 worldAxis) {
+        flyAxis_ = finite(worldAxis) && length(worldAxis) > .5f ? normalized(worldAxis) : Vec3{};
+    }
+    // HERO VR 0.0.76 FLIGHT: while it flies, no control of the player's flips the player (A, the left stick, the
+    // arms' swing: they are the flight's); `upright` (Y held, the orientation brake) rights the flip as the old
+    // A air brake did. Set every frame; reset() keeps it.
+    void flyControls(bool flying, bool upright) {
+        flyOwns_ = flying;
+        flyUpright_ = flying && upright;
+    }
     void flyLookUp(float weight) {
         flyLookUp_ = std::isfinite(weight) ? std::clamp(weight, 0.f, 1.f) : 0.f;
     }
@@ -453,6 +465,8 @@ class GameTrackingRig {
     WallRollGesture wallRoll_;
     float flyRoll_{}, flyLookUp_{};
     bool flyStick_{};
+    Vec3 flyAxis_{};
+    bool flyOwns_{}, flyUpright_{};
     Vec3 climbNormal_{}, runNormal_{}, runAhead_{};
     Quat climbView_{};
     float runYaw_{}, runHeadYaw_{};

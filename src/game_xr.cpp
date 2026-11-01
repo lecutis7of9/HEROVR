@@ -44,6 +44,7 @@
 #include "spidy/vehicle074.hpp" // 0.0.74 test 1 CAR MUSIC, SEATED DRIVING
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/fly_feel074.hpp"  // 0.0.74 test 10 FLY HOLD / STEER / FLIPS / LOOK UP
+#include "spidy/fly076.hpp"       // HERO VR 0.0.76 FLIGHT (the rework)
 #include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
@@ -975,6 +976,8 @@ std::atomic<uint32_t> ddQuickGrappleNow{0};
 // 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; live.txt fly_hold, fly_steer, fly_flips, fly_look_up: 0 ON (the
 // default), 1 OFF; fly_look_up enables LOOK UP, which a tap of Y while flying toggles, off each session).
 std::atomic<uint32_t> flyHoldNow{0}, flySteerNow{0}, flyFlipsNow{0}, flyLookUpNow{0};
+// HERO VR 0.0.76 FLIGHT (fly076.hpp; live.txt fly_classic): 0 the 0.0.76 flight (the default), 1 the 0.0.75 one.
+std::atomic<uint32_t> flyClassicNow{0};
 std::atomic<uint32_t> promptHandlingNow{0}; // extras385::prompts::Handling
 std::atomic<uint32_t> gestureMovesNow{0};   // Update 38.5: gestures385::Mode (0 OFF, 1 TRAINING, 2 ON)
 static_assert(gestures385::pad::dpadUp == game_pad::dpadUp && gestures385::pad::lb == game_pad::leftShoulder &&
@@ -2178,6 +2181,17 @@ DWORD WINAPI run(void*) {
         fly_feel::YTap flyLookUpTap;      // its in-game switch: a tap of Y while flying
         bool flyLookUpSession = false;    // the switch: OFF at the start of every session
         uint32_t flyEnterAsks = 0;
+        // HERO VR 0.0.76 FLIGHT (fly076.hpp): both hands up or A held takes off, A held again comes down, B the air
+        // brake, Y held the orientation brake, the right stick the body roll about the flight's axis, the left
+        // stick full forward SUPERSONIC. fly076Flying: this frame's flight has A, B and Y (the walk stage below).
+        fly076::Start fly076Start;
+        fly076::YHold fly076Y;
+        fly076::Sonic fly076Sonic;
+        fly076::BodyRoll fly076Roll;
+        uint32_t fly076Asks = 0, fly076Descends = 0;
+        bool fly076Flying{}, fly076Flyer{};
+        // HERO VR 0.0.76 WALLS: after a kick off the game's crawl the walk stick points away from the wall.
+        fly076::PushOff wallPushOff;
         bool flyDropHeld{};
         float flyDropSeconds{};
         // Version 0.0.5 SUPERSONIC (fly_boost.hpp): the dash, its boom's time (combatClock) and the
@@ -3108,6 +3122,12 @@ DWORD WINAPI run(void*) {
             return hero072::climbAllowed(heroNow(), c38(combat38::spiderClimbOnly) == 0,
                                          hero007Play.clawsOut[0] || hero007Play.clawsOut[1],
                                          c38(combat38::clawClimb) == 1);
+        };
+        // HERO VR 0.0.76 FLIGHT: the reworked flight is this hero's (a hero who really flies; live.txt fly_classic 0).
+        auto flyNew076 = [&] {
+            const uint32_t h = heroNow();
+            return fly076::newFlight(flyClassicNow.load()) && hero072::flyer(h) &&
+                   !(h == hero_modes::thor && c38(combat38::thorFlight) == 1);
         };
         auto sendSwingSettings = [&] {
             if (!swingStarted || !swingSettings)
@@ -4784,7 +4804,36 @@ DWORD WINAPI run(void*) {
                       // levels itself while hovering or landed. A mod-side view transform, not the game camera.
                         float rollAngle = 0;
                         bool stickRolls = false;
-                        try {
+                        const bool new076 = flyNew076();
+                        if (new076) { // HERO VR 0.0.76 FLIGHT: the body's roll about the flight's own axis
+                            try {
+                                const bool flying076 = flyModeNow.load() != 0 && flyNow.flying && gameplay;
+                                const bool upright = fly076Y.update(frame.seconds, flying076 && !calibrationInput,
+                                                                    (frame.buttons & buttonY) != 0);
+                                const float a = fly076Roll.update(frame.seconds, flying076 && !calibrationInput,
+                                                                  frame.hands[1].stickX,
+                                                                  static_cast<float>(flyRollSpeedNow.load()), upright);
+                                Vec3 axis{};
+                                if (flying076 && finite(swingState.velocity) && length(swingState.velocity) > 2.f)
+                                    axis = normalized(swingState.velocity);
+                                rig.flyRollAxis(axis);
+                                rig.flyRoll(std::isfinite(a) ? a : 0.f, flying076);
+                                rig.flyControls(flying076, upright);
+                            } catch (...) {
+                                fly076Roll.reset();
+                                fly076Y.reset();
+                                rig.flyRollAxis({});
+                                rig.flyRoll(0.f, false);
+                                rig.flyControls(false, false);
+                            }
+                            flyRollState.reset();
+                        } else {
+                            rig.flyRollAxis({});
+                            rig.flyControls(false, false);
+                            fly076Roll.reset();
+                            fly076Y.reset();
+                        }
+                        if (!new076) try {
                             const bool rolling = flyModeNow.load() != 0 && flyNow.flying && flyNow.moving &&
                                                  !flyNow.descending && gameplay;
                             rollAngle = flyRollState.update(frame.seconds, flyRollNow.load(),
@@ -4796,7 +4845,8 @@ DWORD WINAPI run(void*) {
                             flyRollNow = extras385::fly::rollOff;
                             game_prompts::note("Update 38.5: FLY ROLL failed and turned itself off");
                         }
-                        rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
+                        if (!new076)
+                            rig.flyRoll(std::isfinite(rollAngle) ? rollAngle : 0.f, stickRolls);
                         // 0.0.74 test 10 FLY LOOK UP (fly_feel074.hpp, the tester's final spec): a tap of Y while
                         // FLY flies (FLY took Y from Web Wings; a Y the game names is the game's) turns the view's
                         // pitch up on or off, with a haptic tick and a line; OFF every session until pressed. On,
@@ -5729,7 +5779,9 @@ DWORD WINAPI run(void*) {
                                 const uint32_t want = flyDefault.update(thorGrounded ? hero_modes::hulk : heroNow(), flyModeNow.load());
                                 if (want != flyModeNow.load()) {
                                     flyModeNow = want;
-                                    game_prompts::note(want ? (fly_feel::onByDefault(flyHoldNow.load())
+                                    game_prompts::note(want && flyNew076()
+                                                           ? "HERO VR 0.0.76: FLY MODE on (NORMAL) for this hero - both hands up or hold A to fly"
+                                                           : want ? (fly_feel::onByDefault(flyHoldNow.load())
                                                                    ? "Version 0.0.72: FLY MODE on (NORMAL) for this hero - hold a grip to fly"
                                                                    : "Version 0.0.72: FLY MODE on (NORMAL) for this hero - a hand up takes off")
                                                             : "Version 0.0.72: FLY MODE back off (it was on for the last hero)");
@@ -5739,7 +5791,12 @@ DWORD WINAPI run(void*) {
                             // Version 0.0.7 BATMAN: no flight at all (his cape glide and grapple instead).
                             const bool batmanNow = heroNow() == hero_modes::batman ||
                                                    (heroNow() == hero_modes::thor && c38(combat38::thorFlight) == 1); // build 6: THOR FLIGHT OFF
-                            const bool flyLive = fm && !batmanNow && !calibrationInput && !padLayer.latched() && !phone.open();
+                            // HERO VR 0.0.76 (the owner, pt1538u: "only on heroes who actually fly"): no flight but a flyer's.
+                            const bool flyLive = fm && !batmanNow && hero072::flyer(heroNow()) && !calibrationInput &&
+                                                 !padLayer.latched() && !phone.open();
+                            const bool new076 = flyLive && flyNew076();
+                            fly076Flyer = new076;
+                            fly076Flying = new076 && flyNow.flying != 0;
                             // R3 drops and lands (FLY stays on; a hand up takes off again); L3+R3 within
                             // StickChord::window is still the game's ultimate.
                             const auto chord = flyChord.update(frame.seconds, flyLive && flyNow.flying,
@@ -5749,7 +5806,8 @@ DWORD WINAPI run(void*) {
                             if (chord == extras385::fly::StickChord::drop) {
                                 flyDropHeld = true;
                                 flyDropSeconds = 0;
-                                message(3, 0, fly_feel::onByDefault(flyHoldNow.load())
+                                message(3, 0, new076 ? "FLY: R3 - coming down to land (both hands up or A held flies again)"
+                                              : fly_feel::onByDefault(flyHoldNow.load())
                                                   ? "FLY: R3 - coming down to land (hold a grip to fly again)"
                                                   : "FLY: R3 - coming down to land (raise a hand to take off again)");
                             } else if (chord == extras385::fly::StickChord::ultimate) {
@@ -5765,12 +5823,53 @@ DWORD WINAPI run(void*) {
                             // batons, batarangs, claws, guns) never thrusts by it (hero_modes::flyThrust);
                             // the poses, the sticks and R3 fly him.
                             const uint32_t flyHero = heroNow();
+                            // HERO VR 0.0.76 FLIGHT: both hands straight up or A held takes off; A held again in
+                            // flight comes down as R3 does (fly076::Start). Grip never starts it (THOR's hammer).
+                            bool enter076 = false;
+                            if (new076) {
+                                try {
+                                    const Quat toWorld = trackingTurn(motion.swing);
+                                    const Vec3 up = fly_feel::bodyUp(toWorld);
+                                    Vec3 offsets[2]{};
+                                    bool tracked[2]{};
+                                    for (unsigned i = 0; i < 2; ++i) {
+                                        tracked[i] = motion.swing.hands[i].tracked;
+                                        offsets[i] = toWorld.rotate(motion.swing.hands[i].gripRelativeToHead);
+                                    }
+                                    enter076 = fly076Start.update(frame.seconds, true, flyNow.flying != 0,
+                                                                  fly076::armsUp(offsets, tracked, up), frame.jump);
+                                } catch (...) {
+                                    fly076Start.reset();
+                                    enter076 = false;
+                                }
+                                if (fly076Start.asks() != fly076Asks) {
+                                    fly076Asks = fly076Start.asks();
+                                    message(3, 0, "FLY: taking off - your arms steer, left stick the speed, A held lands");
+                                }
+                                if (fly076Start.descends() != fly076Descends) {
+                                    fly076Descends = fly076Start.descends();
+                                    flyDropHeld = true;
+                                    flyDropSeconds = 0;
+                                    message(3, 0, "FLY: A held - coming down to land (both hands up or A held flies again)");
+                                }
+                                // A is the flight's from its press on: no jump of the game's or the swing's with it.
+                                if (fly076Flying || fly076Start.asking())
+                                    input.jump = 0;
+                            } else {
+                                fly076Start.reset();
+                                fly076Sonic.reset();
+                            }
                             input.reserved6 = flyLive ? extras385::fly::pack(fm, hero_modes::flyThrust(flyHero, input.hands[0].trigger),
                                                                             hero_modes::flyThrust(flyHero, input.hands[1].trigger),
                                                                             frame.hands[1].stickY, true,
                                                                             flyHero == hero_modes::greenLantern ? glPose : flyPoses.pose(),
                                                                             flyHero == hero_modes::greenLantern ? glLift : flyPoses.lift(), flyDropHeld)
                                                       : 0u;
+                            // HERO VR 0.0.76 FLIGHT: no trigger thrust (a trigger is the hero's weapon), no pose, no
+                            // right stick rise: the speed and the descent alone (fly076 steers by the arms).
+                            if (new076)
+                                input.reserved6 = extras385::fly::pack(fm, 0.f, 0.f, 0.f, true, extras385::fly::hover, 0.f,
+                                                                       flyDropHeld);
                             // 0.0.74 test 10 FLY HOLD and FLY STEER (fly_feel074.hpp, owner pt1424u): no flight starts
                             // by itself - a grip held .4 s in the air (on the ground with a hand up, RISE) enters it,
                             // and it stays after the grip is let go; THOR's hammer hand never counts. The second
@@ -5785,10 +5884,10 @@ DWORD WINAPI run(void*) {
                                                           extras385::fly::rise;
                                     const float squeeze[2]{frame.hands[0].squeeze, frame.hands[1].squeeze};
                                     const bool counts[2]{true, !(flyHero == hero_modes::thor && hero072Play.hammerInHandOrOut())};
-                                    enter = flyEnterHold.update(frame.seconds, flyLive && holdOn, flyNow.flying != 0,
+                                    enter = flyEnterHold.update(frame.seconds, flyLive && holdOn && !new076, flyNow.flying != 0,
                                                                 airborneNow, risePose, squeeze, counts);
                                     // On the ground the grip held with a hand up is the takeoff, not a web ball or a grab.
-                                    if (flyLive && holdOn && !flyNow.flying && !airborneNow && risePose)
+                                    if (flyLive && holdOn && !new076 && !flyNow.flying && !airborneNow && risePose)
                                         for (auto& h : input.hands)
                                             h.grip = 0;
                                 } catch (...) {
@@ -5800,6 +5899,14 @@ DWORD WINAPI run(void*) {
                                     message(3, 0, "FLY: grip held - flying (let go, you keep flying; R3 lands)");
                                 }
                                 input.reserved7[1] = flyLive ? fly_feel::pack(holdOn, enter, steerOn) : 0u;
+                                // HERO VR 0.0.76 FLIGHT: its own word (fly076::pack) beside FLY HOLD's enter - B the air
+                                // brake, the roll stick and Y's orientation brake hold the heading, the left stick's
+                                // throttle. The 0.0.75 grip enter never counts for it.
+                                if (new076)
+                                    input.reserved7[1] =
+                                        fly_feel::pack(true, enter076, false) |
+                                        fly076::pack(true, fly076Flying && (frame.buttons & buttonB) != 0,
+                                                     fly076Roll.rolling() || fly076Y.braking(), frame.hands[0].stickY);
                             }
                             // Version 0.0.5 SUPERSONIC: both hands out (FORWARD) and the left stick forward
                             // dash at SUPERSONIC SPEED x FAST; its first frame booms (sound + shockwave).
@@ -5809,6 +5916,10 @@ DWORD WINAPI run(void*) {
                                 bi.on = flyLive && !flyDropHeld && c38(combat38::supersonic) == 0;
                                 bi.flying = flyNow.flying != 0;
                                 bi.handsOut = flyPoses.pose() == extras385::fly::forward;
+                                // HERO VR 0.0.76 FLIGHT: SUPERSONIC is the left stick full forward (no pose to hold);
+                                // the swing module flies it as speed only, along the heading.
+                                if (new076)
+                                    bi.handsOut = fly076Sonic.update(bi.on && bi.flying, frame.hands[0].stickY);
                                 bi.stickY = frame.hands[0].stickY;
                                 const bool dash = flyBoost.update(bi);
                                 // Version 0.0.6: the speed SUPERSONIC reached, logged as the dash ends.
@@ -6580,6 +6691,10 @@ DWORD WINAPI run(void*) {
                                           !swingState.owned && !mounting && !swingState.takeoff &&
                                           !swingState.takeoffPhase && !swingState.webs[0].attached &&
                                           !swingState.webs[1].attached && !calibrationInput;
+                    // HERO VR 0.0.76 FLIGHT: while a hero flies, A is the flight's (A held comes down): never the
+                    // game's jump. A flyer's A on the ground is a plain jump (its hold is the takeoff, not a charge).
+                    if (fly076Flying)
+                        keys &= ~swingJumpKey;
                     const bool aNow = (keys & swingJumpKey) && !swingState.takeoff;
                     if (aNow && !aWas72 && !standing && steering) {
                         // Build 5: why a press is a plain jump, not a charge (the console, at most every 2 s).
@@ -6595,7 +6710,7 @@ DWORD WINAPI run(void*) {
                         }
                     }
                     aWas72 = aNow;
-                    const auto leap = chargeJump.update(frame.seconds, aNow, standing);
+                    const auto leap = chargeJump.update(frame.seconds, aNow, standing && !fly076Flyer);
                     if (!swingState.takeoff)
                         keys = (keys & ~swingJumpKey) | (leap.jump ? swingJumpKey : 0u);
                     leapOut = leap.leap;
@@ -6738,7 +6853,7 @@ DWORD WINAPI run(void*) {
                                     h.world = motion.grips[i].position;
                                 }
                                 hand_crawl::Config cc;
-                                cc.on = climbOn.load();
+                                cc.on = climbOn.load() && heroClimbs(); // 0.0.76 WALLS: SPIDER-MAN's hand climb only
                                 cc.pull = climbPull.load();
                                 cc.grip = climbGrip.load();
                                 const auto climb = climber.update(cf, cc);
@@ -6786,6 +6901,8 @@ DWORD WINAPI run(void*) {
                             // while a web carries the player, nor while B skips the
                             // calibration.
                             walk.dodge = (origins.play() & buttonB) && !calibrationInput;
+                            if (fly076Flying) // HERO VR 0.0.76 FLIGHT: B is the air brake while flying
+                                walk.dodge = false;
                         }
                         // What each hand points at among the game's interactions near
                         // the player, on Spidy's wall only: off it the game offers its
@@ -7026,8 +7143,20 @@ DWORD WINAPI run(void*) {
                             // jumped off it with the crawl's own RT + A (CONFIRMED path: the leave-wall press above).
                             if (wallRefusal.update(frame.seconds, onCrawl, heroClimbs())) {
                                 walk.jump = walk.parkour = true;
+                                // HERO VR 0.0.76 WALLS: and the stick away from the wall for a moment, so the
+                                // player's own stick (or a flight's) never walks him straight back onto it.
+                                wallPushOff.kicked(swingState.wallNormal);
                                 if (wallRefusal.kicks == 1 && wallRefusal.kick == hero072::WallRefusal::kickSeconds)
                                     game_prompts::note("VERSION 0.0.75 WALLS: off the game's crawl (this hero does not climb)");
+                            }
+                        }
+                        // HERO VR 0.0.76 WALLS: after a kick off the game's crawl (a hero who may not climb), the
+                        // walk stick points out of the wall for PushOff::awaySeconds.
+                        if (!heroClimbs()) {
+                            float awayRight = 0, awayForward = 0;
+                            if (wallPushOff.update(frame.seconds, Vec3{camera[8], 0, camera[10]}, awayRight, awayForward)) {
+                                walk.right = awayRight;
+                                walk.forward = awayForward;
                             }
                         }
                         walk.scan = templePress.held() && steering;
@@ -14917,6 +15046,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyFlips(void* v) {
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyLookUp(void* v) {
     return setLive(v, 0, 1, 5551, flyLookUpNow, asU32);
+}
+// HERO VR 0.0.76 FLIGHT (fly076.hpp), live: FLY CLASSIC 0 OFF (the default: the reworked flight), 1 ON (0.0.75's).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyClassic(void* v) {
+    return setLive(v, 0, 1, 5553, flyClassicNow, asU32);
 }
 // 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp), live: 0 ON (the default), 1 OFF.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdQuickGrapple(void* v) {

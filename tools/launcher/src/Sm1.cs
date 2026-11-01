@@ -64,6 +64,9 @@ namespace Sm2VrLauncher
         public const string KnownVersion = "0.7.0";                                 // CONFIRMED: latest on 2026-10-31
 
         // ---- Settings (settings.ini) ---------------------------------------------------------------------
+        /// <summary>0.0.76 SM1 PAUSED (the user paused Spider-Man 1): the SPIDER-MAN 1 choice is hidden from the launcher and
+        /// a saved Spider-Man 1 pick reads as Spider-Man 2. All the Spider-Man 1 code stays; set this to false to bring it back.</summary>
+        public static readonly bool Paused = true;
         public const string KeyGame = "Game";                 // "sm2" (HERO VR, default) or "sm1"
         public const string KeyGamePath = "Sm1.GamePath";
         public const string KeyModFolder = "Sm1.ModFolder";

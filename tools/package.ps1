@@ -79,18 +79,23 @@ foreach ($module in $modules) { Copy-Item -LiteralPath (Join-Path $bin $module) 
 $launcher = Join-Path $bin 'spidy_launcher.exe'
 if (Test-Path -LiteralPath $launcher) { Copy-Item -LiteralPath $launcher -Destination (Join-Path $stage 'tools\Spidy Launcher.exe') }
 else { Write-Warning 'build\windows-ninja\spidy_launcher.exe is missing: the package has no Spidy Launcher.exe (the starter still works).' }
-# HERO VR 0.0.75 SM1: Mulder's Heroes add-on for iilyn's Spider-Man 1 VR mod (src/sm1), optional; the HERO VR launcher
-# copies it next to his mod's files only while Spider-Man 1 plays. His mod itself is never packaged here.
-$sm1Addon = Join-Path $bin 'herovr_sm1_addon.dll'
-if (Test-Path -LiteralPath $sm1Addon) { Copy-Item -LiteralPath $sm1Addon -Destination (Join-Path $stage 'build\windows-ninja') }
-else { Write-Warning 'build\windows-ninja\herovr_sm1_addon.dll is missing: Spider-Man 1 then starts iilyn''s mod without the add-on.' }
-# 0.0.76 SM1 layer (hotfix 0.0.75.2): the OpenXR implicit layer and its manifest. The launcher registers it under
-# HKCU only while Spider-Man 1 plays, and removes the entry when the game ends.
-foreach ($sm1Layer in @('herovr_sm1_layer.dll', 'herovr_sm1_layer.json')) {
-    $sm1LayerPath = Join-Path $bin $sm1Layer
-    if (Test-Path -LiteralPath $sm1LayerPath) { Copy-Item -LiteralPath $sm1LayerPath -Destination (Join-Path $stage 'build\windows-ninja') }
-    else { Write-Warning "build\windows-ninja\$sm1Layer is missing: Spider-Man 1 then has no wrist menu, heroes or flight." }
-}
+# 0.0.76 SM1 PAUSED (the user paused Spider-Man 1): the test zips are SM2-only, so the SM1 add-on is not shipped. The
+# code below stays; set $shipSm1 = $true to ship it again (build-prebuilt.yml's zip check reads this line).
+$shipSm1 = $false
+if ($shipSm1) {
+    # HERO VR 0.0.75 SM1: Mulder's Heroes add-on for iilyn's Spider-Man 1 VR mod (src/sm1), optional; the HERO VR launcher
+    # copies it next to his mod's files only while Spider-Man 1 plays. His mod itself is never packaged here.
+    $sm1Addon = Join-Path $bin 'herovr_sm1_addon.dll'
+    if (Test-Path -LiteralPath $sm1Addon) { Copy-Item -LiteralPath $sm1Addon -Destination (Join-Path $stage 'build\windows-ninja') }
+    else { Write-Warning 'build\windows-ninja\herovr_sm1_addon.dll is missing: Spider-Man 1 then starts iilyn''s mod without the add-on.' }
+    # 0.0.76 SM1 layer (hotfix 0.0.75.2): the OpenXR implicit layer and its manifest. The launcher registers it under
+    # HKCU only while Spider-Man 1 plays, and removes the entry when the game ends.
+    foreach ($sm1Layer in @('herovr_sm1_layer.dll', 'herovr_sm1_layer.json')) {
+        $sm1LayerPath = Join-Path $bin $sm1Layer
+        if (Test-Path -LiteralPath $sm1LayerPath) { Copy-Item -LiteralPath $sm1LayerPath -Destination (Join-Path $stage 'build\windows-ninja') }
+        else { Write-Warning "build\windows-ninja\$sm1Layer is missing: Spider-Man 1 then has no wrist menu, heroes or flight." }
+    }
+} else { Write-Host 'SM1 paused: the Spider-Man 1 add-on (herovr_sm1_*) is not in this zip.' }
 
 foreach ($tool in (@($manifest.tools) + @($probeManifest.tools) | Sort-Object -Unique)) { Copy-Item -LiteralPath (Join-Path $root "tools\$tool.py") -Destination (Join-Path $stage 'tools') }
 foreach ($script in @('launch-game-vr.ps1', 'package_manifest.py')) {

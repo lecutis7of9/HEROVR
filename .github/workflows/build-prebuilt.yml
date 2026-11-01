@@ -130,8 +130,12 @@ jobs:
             $r = New-Object IO.StreamReader($pv.Open()); $inner = $r.ReadLine().Trim(); $r.Close()
             if ($inner -ne $port) { throw "The zip says $inner, not $port." }
             if ($env:GITHUB_REF_NAME -like 'hero-0.0.76*') {
+              # 0.0.76 SM1 PAUSED: tools/package.ps1's $shipSm1 says whether the SM1 add-on ships; the zip must match.
+              $shipSm1 = [bool](Select-String -LiteralPath tools/package.ps1 -Pattern '^\$shipSm1 = \$true' -Quiet)
               foreach ($sm1 in @('herovr_sm1_addon.dll', 'herovr_sm1_layer.dll', 'herovr_sm1_layer.json')) {
-                if (-not ($entries -contains "$name/build/windows-ninja/$sm1")) { throw "The zip has no $sm1 (SM1 add-on)." }
+                $has = $entries -contains "$name/build/windows-ninja/$sm1"
+                if ($shipSm1 -and -not $has) { throw "The zip has no $sm1 (SM1 add-on)." }
+                if (-not $shipSm1 -and $has) { throw "The zip has $sm1, but SM1 is paused (tools/package.ps1 `$shipSm1)." }
               }
             }
             Write-Output "$($entries.Count) entries; modules: $($dlls -join ', ')"

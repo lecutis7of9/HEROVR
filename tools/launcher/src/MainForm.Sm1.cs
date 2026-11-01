@@ -31,7 +31,7 @@ namespace Sm2VrLauncher
         bool sm1SuitsChecked;
 
         /// <summary>SPIDER-MAN 1 is the game picked at the top (saved; SPIDER-MAN 2 / HERO VR is the default).</summary>
-        bool Sm1Selected { get { return settings != null && settings.Get(Sm1.KeyGame, LobbyGame.Sm2) == LobbyGame.Sm1; } }
+        bool Sm1Selected { get { return !Sm1.Paused && settings != null && settings.Get(Sm1.KeyGame, LobbyGame.Sm2) == LobbyGame.Sm1; } }
 
         /// <summary>The game tag the server list shows (sm1 / sm2).</summary>
         string MpGame { get { return Sm1Selected ? LobbyGame.Sm1 : LobbyGame.Sm2; } }
@@ -40,6 +40,7 @@ namespace Sm2VrLauncher
 
         void BuildGamePicker()
         {
+            if (Sm1.Paused) return;   // 0.0.76 SM1 PAUSED: no SPIDER-MAN 2 / SPIDER-MAN 1 picker; the launcher is Spider-Man 2 only
             gamePicker = new GamePicker { Game = Sm1Selected ? LobbyGame.Sm1 : LobbyGame.Sm2, Black = hero };
             Controls.Add(gamePicker);
             gamePicker.BringToFront();
@@ -609,7 +610,7 @@ namespace Sm2VrLauncher
         {
             if (preview || sm1Checked) return;
             sm1Checked = true;
-            if (settings.GetBool(Sm1.KeyNews, true))
+            if (!Sm1.Paused && settings.GetBool(Sm1.KeyNews, true))   // 0.0.76 SM1 PAUSED: no Spider-Man 1 news while hidden
             {
                 var t = new Thread(() =>
                 {

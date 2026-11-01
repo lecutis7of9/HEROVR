@@ -46,6 +46,14 @@ class Wiring(unittest.TestCase):
         self.assertIn('wallPushOff.kicked(swingState.wallNormal);', XR)
         self.assertIn('if (!heroClimbs()) {', XR)
 
+    def test_nobody_but_spider_man_climbs(self):
+        h = (ROOT / 'include' / 'spidy' / 'hero072.hpp').read_text(encoding='utf-8')
+        body = re.search(r'inline bool climbAllowed\([^)]*\) \{(.*?)\n\}', h, re.S).group(1)
+        self.assertEqual(body.strip(), 'return hero == hero_modes::spiderMan;')
+        self.assertIn('Retired in 0.0.76', (ROOT / 'include' / 'spidy' / 'combat38.hpp').read_text(encoding='utf-8'))
+        self.assertIn('OFF no longer lets other heroes', (ROOT / 'include' / 'spidy' / 'combat38.hpp').read_text(encoding='utf-8'))
+        self.assertNotIn('(CLAW CLIMB on)', (ROOT / 'include' / 'spidy' / 'hero_controls.hpp').read_text(encoding='utf-8'))
+
     def test_sm1_status(self):
         self.assertIn('"FLIGHT: ARMS UP OR HOLD A"', SM1)
         self.assertIn('"FLIGHT: BOTH ARMS UP"', SM1)

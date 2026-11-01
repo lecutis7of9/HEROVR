@@ -478,7 +478,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"gl_charge", "RING CHARGE", "GLCHRG", "ON: the left wrist's ring charge drains with powers, not flight, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.72 (TEST): the list's rules.
-    {"spider_climb_only", "SPIDER CLIMB ONLY", "SPCLMB", "ON: only Spider-Man crawls on walls, the other heroes cannot, live (no restart).",
+    {"spider_climb_only", "SPIDER CLIMB ONLY", "SPCLMB", "Only Spider-Man climbs or sticks to walls, always (OFF no longer lets other heroes), no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     {"uppercut", "UPPERCUT LAUNCH", "UPPER", "ON: a fast upward punch that lands launches the enemy, live (no restart).",
      2, {"ON", "OFF", nullptr, nullptr}},
@@ -516,7 +516,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"punisher_hook", "GRAPPLE HOOK", "PHOOK", "ON: grip at the chest draws the hook, trigger fires it, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
     // Version 0.0.73 (fixes 11 + 18): OFF by default - only SPIDER-MAN climbs walls unless this is turned on.
-    {"claw_climb", "CLAW CLIMB", "CLAWUP", "OFF by default; ON lets Wolverine climb walls with claws out, no restart.",
+    {"claw_climb", "CLAW CLIMB", "CLAWUP", "Retired in 0.0.76: only Spider-Man climbs walls, so Wolverine never does, no restart.",
      2, {"OFF", "ON", nullptr, nullptr}},
     {"npc_shove", "SHOVE", "SHOVE", "ON: push both open hands fast at a close enemy to shove him back, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},

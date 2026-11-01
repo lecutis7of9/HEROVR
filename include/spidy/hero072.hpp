@@ -7,7 +7,7 @@
 // CONFIRMED path (game_xr's queue); everything else is the mod's own (looks, the HUD, the colour
 // pass, the pad). Each feature has its own toggle (combat38) and turns itself off (Guard) when its
 // numbers come out insane, so nothing here can crash the game or drop VR to the flat screen.
-//  - SPIDER CLIMB ONLY: only SPIDER-MAN crawls walls (the mod's climb, wall stick, crawl asks).
+//  - SPIDER CLIMB ONLY: only SPIDER-MAN crawls walls (the mod's climb, wall stick, crawl asks); always, 0.0.76.
 //  - UPPERCUT: a punch that lands while the fist moves up fast launches (a big upward knock).
 //  - SMOKE BLIND: BATMAN's smoke cloud staggers the enemies inside it (CONFIRMED blows; true AI
 //    blindness is CANDIDATE - the game's perception is not found).
@@ -84,10 +84,13 @@ struct Guard {
 // SPIDER CLIMB ONLY.
 // The user (8:35): ONLY SPIDER-MAN wall-crawls. The ways up for the rest (wayUp): BATMAN and DAREDEVIL
 // grapple, SUPERMAN, IRON MAN, THOR and GREEN LANTERN fly, HULK jumps big, CAP leaps big, the
-// PUNISHER fires a tactical grappling hook (HookLauncher) and WOLVERINE claws up: with his claws out
-// (CLAW CLIMB) the game's own crawl is allowed and moved by the hands' pull (hand_crawl, grip only).
-inline bool climbAllowed(uint32_t hero, bool spiderOnly, bool clawsOut = false, bool clawClimb = false) {
-    return !spiderOnly || hero == hero_modes::spiderMan || (hero == hero_modes::wolverine && clawsOut && clawClimb);
+// PUNISHER fires a tactical grappling hook (HookLauncher) and WOLVERINE slashes and leaps (no wall climb).
+// HERO VR 0.0.76 WALLS (the user): NOBODY BUT SPIDER-MAN climbs or sticks to walls. SPIDER CLIMB ONLY is always on
+// for the other heroes (its OFF no longer lets them) and the 0.0.73 CLAW CLIMB is gone: the old arguments are kept
+// only so a saved setting still reads, and change nothing.
+inline bool climbAllowed(uint32_t hero, bool /*spiderOnly: always, 0.0.76*/ = true, bool /*clawsOut*/ = false,
+                         bool /*clawClimb: retired, 0.0.76*/ = false) {
+    return hero == hero_modes::spiderMan;
 }
 // 0.0.75 WALLS ARE SPIDER-MAN'S: the gate on the walls themselves, not just the climb grip. A hero that may not
 // climb (climbAllowed false) gets no swing wall run (SpidySwingSettings walls 0), and the game's own crawl - which
@@ -119,7 +122,7 @@ struct WallRefusal {
         return false;
     }
 };
-enum class WayUp : uint32_t { wallCrawl, grapple, fly, bigJump, bigLeap, clawClimb, hookLauncher };
+enum class WayUp : uint32_t { wallCrawl, grapple, fly, bigJump, bigLeap, clawLeap, hookLauncher }; // 0.0.76: no claw climb
 inline WayUp wayUp(uint32_t hero) {
     switch (hero) {
     case hero_modes::spiderMan: return WayUp::wallCrawl;
@@ -127,7 +130,7 @@ inline WayUp wayUp(uint32_t hero) {
     case hero_modes::daredevil: return WayUp::grapple;
     case hero_modes::hulk: return WayUp::bigJump;
     case hero_modes::captainAmerica: return WayUp::bigLeap;
-    case hero_modes::wolverine: return WayUp::clawClimb;
+    case hero_modes::wolverine: return WayUp::clawLeap;
     case hero_modes::punisher: return WayUp::hookLauncher;
     default: return WayUp::fly; // SUPERMAN, IRON MAN, THOR, GREEN LANTERN
     }

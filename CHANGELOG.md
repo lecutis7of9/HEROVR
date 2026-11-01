@@ -16,7 +16,7 @@ From hero-0.0.76-sm1 (faecbe9). **Built and unit-tested, not yet tried in the ga
 - **live.txt `fly_classic`** (off by default): on brings back the 0.0.75 flight (grip take-off, poses, trigger
   thrust); live, no restart.
 - **Walls:** only Spider-Man climbs or sticks to walls (also after flight and grapples); another hero touching a wall
-  is pushed off it. Wolverine's claw climb and SPIDER CLIMB ONLY off stay the player's own opt-ins.
+  is pushed off it. Wolverine's CLAW CLIMB is gone and SPIDER CLIMB ONLY off no longer lets other heroes climb.
 - **SM1 add-on:** the same flight (arms up or A held, arms steer, left stick speed, SUPERSONIC, B brake, A held
   lands); iilyn's graphics untouched. Not in SM1 yet: the body roll, the Y brake and the walls rule (no CONFIRMED
   export for them). The A/B buttons need SpidyVR's bindings to name them (CANDIDATE); arms up always works.

@@ -29412,13 +29412,13 @@ int main() {
         check(bite >= 30 && bite <= 45, "the hook is not the slower grapple (wind-up)");
         hk.step(.016f, true, 0.f, false, {}, {0, 0, -1});
         check(hk.state == HookLauncher::stowed, "let go did not stow it");
-        check(wayUp(hero_modes::punisher) == WayUp::hookLauncher && wayUp(hero_modes::wolverine) == WayUp::clawClimb &&
+        check(wayUp(hero_modes::punisher) == WayUp::hookLauncher && wayUp(hero_modes::wolverine) == WayUp::clawLeap &&
                   wayUp(hero_modes::batman) == WayUp::grapple && wayUp(hero_modes::thor) == WayUp::fly,
               "the ways up");
-        check(climbAllowed(hero_modes::spiderMan, true) && !climbAllowed(hero_modes::batman, true) &&
-                  climbAllowed(hero_modes::wolverine, true, true, true) && !climbAllowed(hero_modes::wolverine, true, false, true) &&
-                  !climbAllowed(hero_modes::wolverine, true, true, false) && climbAllowed(hero_modes::batman, false),
-              "only SPIDER-MAN crawls; WOLVERINE with claws out");
+        check(climbAllowed(hero_modes::spiderMan, true) && climbAllowed(hero_modes::spiderMan, false) &&
+                  !climbAllowed(hero_modes::batman, true) && !climbAllowed(hero_modes::wolverine, true, true, true) &&
+                  !climbAllowed(hero_modes::wolverine, false, true, true) && !climbAllowed(hero_modes::batman, false),
+              "0.0.76 WALLS: only SPIDER-MAN crawls, whatever SPIDER CLIMB ONLY / CLAW CLIMB say");
     });
     test("Version 0.0.72: UPPERCUT per hero, GRAPPLE PULL, the PARRY's timing, SHOVE, FACTIONS, REPUTATION per hero, ROSTER", [] {
         using namespace hero072;
@@ -29537,8 +29537,9 @@ int main() {
             play.step(in, out);
             check(!out.climbAllowed, "0.0.73 (fixes 11 + 18): WOLVERINE claws out, CLAW CLIMB off by default: no climb");
             in.o.clawClimb = true;
+            in.o.spiderClimbOnly = false;
             play.step(in, out);
-            check(out.climbAllowed, "WOLVERINE claws out: CLAW CLIMB");
+            check(!out.climbAllowed, "0.0.76 WALLS: WOLVERINE never climbs (CLAW CLIMB on, SPIDER CLIMB ONLY off)");
         }
         // UPPERCUT: a fast upward punch into the enemy.
         {

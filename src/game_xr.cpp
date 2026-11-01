@@ -3116,8 +3116,8 @@ DWORD WINAPI run(void*) {
         // walls, and the hands that land no blow: the phone's while it is out,
         // and both while the game names its X, whose press a thrown fist is
         // then (NamedPress) - a blow of Spidy's on top would hit as well.
-        // 0.0.75 WALLS ARE SPIDER-MAN'S: whether this hero may hold a wall at all (hero072::climbAllowed: SPIDER-MAN,
-        // WOLVERINE with his claws out and CLAW CLIMB on; SPIDER CLIMB ONLY off lets everyone).
+        // 0.0.75 WALLS ARE SPIDER-MAN'S: whether this hero may hold a wall at all (hero072::climbAllowed). HERO VR
+        // 0.0.76 WALLS: SPIDER-MAN only, always (no CLAW CLIMB; SPIDER CLIMB ONLY off no longer lets the others).
         auto heroClimbs = [&] {
             return hero072::climbAllowed(heroNow(), c38(combat38::spiderClimbOnly) == 0,
                                          hero007Play.clawsOut[0] || hero007Play.clawsOut[1],
@@ -5743,9 +5743,9 @@ DWORD WINAPI run(void*) {
                             }
                             input.wallPositions[i] = motion.grips[i].position;
                             // Update 37: climb_grip, the button that holds the wall.
-                            // Version 0.0.73 (fix 11/18): ONLY SPIDER-MAN wall-climbs (SPIDER CLIMB ONLY, on by
-                            // default); WOLVERINE only with his claws out and CLAW CLIMB on (off by default). Every
-                            // other hero's grip is the UNIVERSAL GRAPPLE's draw, never a hold on the wall.
+                            // HERO VR 0.0.76 WALLS: ONLY SPIDER-MAN wall-climbs, always (no CLAW CLIMB, and
+                            // SPIDER CLIMB ONLY off no longer lets the others). Every other hero's grip is the
+                            // UNIVERSAL GRAPPLE's draw, never a hold on the wall.
                             const bool climbOk = hero072::climbAllowed(heroNow(), c38(combat38::spiderClimbOnly) == 0,
                                                                        hero007Play.clawsOut[0] || hero007Play.clawsOut[1],
                                                                        c38(combat38::clawClimb) == 1);

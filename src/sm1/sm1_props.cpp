@@ -210,6 +210,92 @@ Place batarangFlying(Vec3 at, Vec3 way, float spin, Vec3 low, Vec3 high, float s
     return p;
 }
 
+Bounds boundsOf(Model m, const mesh_model::Mesh& mesh) {
+    Bounds b;
+    if (!mesh.ok() || !finite(mesh.low) || !finite(mesh.high))
+        return b;
+    b.low = mesh.low;
+    b.high = mesh.high;
+    b.pivot = m == shield ? captain::pivotLeft : mesh.pivot; // the SM2 build: captain::forSide about pivotLeft
+    b.ok = finite(b.pivot);
+    return b;
+}
+Place hammerFlying(Vec3 middle, Vec3 way, float spin, Vec3 low, Vec3 high) {
+    if (!finite(middle) || !finite(way) || !(length(way) > 1e-4f))
+        return {};
+    const Vec3 w = normalized(way);
+    Vec3 face = Vec3{0, 1, 0} - w * w.y; // a face up while it flies level
+    if (!(length(face) > 1e-3f))
+        face = {0, 0, -1};
+    Place p = hammerPlace({}, w, face, spin);
+    if (!p.ok)
+        return {};
+    p.at = p.at + (middle - apply(p, (low + high) * .5f));
+    p.ok = finite(p.at);
+    return p;
+}
+
+std::vector<Item> scene(uint32_t hero, const Hands& hands, const Bounds (&bounds)[modelCount], const Flying& flying) {
+    std::vector<Item> out;
+    const auto add = [&](Model m, const Place& p, bool steel = false) {
+        if (!p.ok)
+            return;
+        Item it;
+        it.model = m;
+        it.place = p;
+        it.steel = steel;
+        it.reach = steel ? clawReach(bounds[m].low) : 0.f;
+        out.push_back(it);
+    };
+    const auto held = [&](unsigned hand) { return hand < 2 && hands.tracked[hand] && usable(hands.grip[hand]); };
+    for (const Model m : modelsFor(hero)) {
+        const Bounds& b = bounds[m];
+        if (!b.ok)
+            continue;
+        const bool out_ = flying.model == m && finite(flying.middle);
+        switch (m) {
+        case hammer:
+            if (out_)
+                add(m, hammerFlying(flying.middle, flying.way, flying.spin, b.low, b.high));
+            else if (held(1))
+                add(m, hammerInHand(hands.grip[1], hands.kind));
+            break;
+        case shield:
+            if (out_)
+                add(m, shieldFlying(flying.middle, flying.way, 1, b.pivot, b.low, b.high, flying.spin));
+            else if (held(1))
+                add(m, shieldPlace(shieldOnForearm(hands.grip[1], 1, hands.kind), 1, b.pivot, b.low, b.high, 0));
+            break;
+        case clawsLeft:
+        case clawsRight: {
+            const unsigned hand = m == clawsRight ? 1u : 0u;
+            if (held(hand))
+                add(m, clawsPlace(hands.grip[hand], hand, hands.kind), true);
+            break;
+        }
+        case batonLeft:
+        case batonRight: {
+            const unsigned hand = m == batonRight ? 1u : 0u;
+            if (held(hand))
+                add(m, batonPlace(hands.grip[hand], hand, hands.kind, b.low, b.high));
+            break;
+        }
+        case pistol:
+            for (unsigned hand = 0; hand < 2; ++hand)
+                if (held(hand))
+                    add(m, pistolPlace(hands.grip[hand], hand, hands.kind));
+            break;
+        case batarang:
+            if (out_)
+                add(m, batarangFlying(flying.middle, flying.way, flying.spin, b.low, b.high));
+            break;
+        default:
+            break;
+        }
+    }
+    return out;
+}
+
 bool launch(Flight& f, Vec3 from, Vec3 dir, const Vec3* target, const Tuning& t) {
     if (f.phase != Flight::held || !finite(from) || !finite(dir) || !(length(dir) > 1e-4f))
         return false;

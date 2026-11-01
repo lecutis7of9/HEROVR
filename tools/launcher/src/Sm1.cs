@@ -85,6 +85,7 @@ namespace Sm2VrLauncher
             new[] { "flight in game", "untested", "Iron Man, Superman, Thor, Green Lantern: both arms up or A held to take off, the arms steer" },
             new[] { "color", "untested", "the SM2 COLOR looks (Metropolis, Smallville, Gotham, Cyberpunk, Synthwave and more) and sliders under the heroes on the wrist HEROES page; off by default, no GPU work when off" },
             new[] { "hero suits", "stub", "Install suits adds each hero as a new suit next to Spider-Man's in the game's Suits menu; nothing is replaced (not yet seen in the game)" },
+            new[] { "hero props", "untested", "the heroes' 3D weapons in your hands: Thor's hammer and Cap's shield fly to the enemy and come back, Batman's batarang, Wolverine's claws, Daredevil's batons, Punisher's pistols; always drawn over the game (walls do not hide them)" },
             new[] { "holo suit switch", "stub", "Picking a hero on the wrist holo tells you to pick that hero's suit in the game's Suits menu; a live switch is not in yet" },
         };
 

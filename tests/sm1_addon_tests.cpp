@@ -1120,6 +1120,48 @@ void propsTests() {
           "the model and normal matrices");
     scaled.x = {0, 0, 0};
     check(!pr::modelMatrices(scaled, model, normal), "a flat place has no normal matrix");
+
+    // One frame's props.
+    pr::Bounds bounds[pr::modelCount];
+    for (auto& b : bounds)
+        b = {{-.05f, -.1f, -.2f}, {.05f, .3f, .02f}, {}, true};
+    pr::Hands hands;
+    hands.grip[0] = Pose{{-.2f, 1.1f, -.3f}, Quat::around({1, 0, 0}, -.4f)};
+    hands.grip[1] = grip;
+    hands.tracked[0] = hands.tracked[1] = true;
+    auto items = pr::scene(hero_modes::thor, hands, bounds, {});
+    check(items.size() == 1 && items[0].model == pr::hammer && near3(items[0].place.at, h.at) && !items[0].steel,
+          "THOR: the hammer in the right fist");
+    pr::Flying flying;
+    flying.model = pr::hammer, flying.middle = {0, 1, -5}, flying.way = {0, 0, -1}, flying.spin = 1;
+    items = pr::scene(hero_modes::thor, hands, bounds, flying);
+    check(items.size() == 1 && near3(pr::apply(items[0].place, (bounds[pr::hammer].low + bounds[pr::hammer].high) * .5f), flying.middle),
+          "THOR: the thrown hammer flies, none in the hand");
+    hands.tracked[1] = false;
+    check(pr::scene(hero_modes::thor, hands, bounds, {}).empty(), "an untracked hand holds nothing");
+    hands.tracked[1] = true;
+    items = pr::scene(hero_modes::captainAmerica, hands, bounds, {});
+    check(items.size() == 1 && items[0].model == pr::shield, "CAP: the shield on the forearm");
+    flying.model = pr::shield;
+    items = pr::scene(hero_modes::captainAmerica, hands, bounds, flying);
+    check(items.size() == 1 && near3(pr::apply(items[0].place, (bounds[pr::shield].low + bounds[pr::shield].high) * .5f), flying.middle),
+          "CAP: the thrown shield flies");
+    items = pr::scene(hero_modes::wolverine, hands, bounds, {});
+    check(items.size() == 2 && items[0].steel && items[1].steel && std::abs(items[0].reach - .2f) < 1e-6f, "WOLVERINE: steel claws on both");
+    check(pr::scene(hero_modes::punisher, hands, bounds, {}).size() == 2, "PUNISHER: a pistol in each hand");
+    check(pr::scene(hero_modes::daredevil, hands, bounds, {}).size() == 2, "DAREDEVIL: a baton in each hand");
+    check(pr::scene(hero_modes::batman, hands, bounds, {}).empty(), "BATMAN: the batarang only while it flies");
+    flying.model = pr::batarang;
+    check(pr::scene(hero_modes::batman, hands, bounds, flying).size() == 1, "BATMAN: the flying batarang");
+    bounds[pr::hammer].ok = false;
+    check(pr::scene(hero_modes::thor, hands, bounds, {}).empty(), "a model not loaded draws nothing");
+    check(pr::scene(hero_modes::spiderMan, hands, bounds, {}).empty(), "Spider-Man holds nothing");
+    mesh_model::Mesh sm;
+    check(!pr::boundsOf(pr::shield, sm).ok, "an empty mesh has no bounds");
+    sm.corners = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    sm.colors = {{1, 1, 1}};
+    sm.low = {0, 0, 0}, sm.high = {1, 1, 0};
+    check(pr::boundsOf(pr::shield, sm).ok && near3(pr::boundsOf(pr::shield, sm).pivot, captain::pivotLeft), "the shield turns about pivotLeft");
 }
 
 int main() {

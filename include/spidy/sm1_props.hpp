@@ -72,6 +72,38 @@ Place pistolPlace(const Pose& grip, unsigned hand, ControllerKind kind);
 // A flying batarang (mesh_model::fit: span metres across, flat, its nose along the flight), spinning flat.
 Place batarangFlying(Vec3 at, Vec3 way, float spin, Vec3 low, Vec3 high, float span = .16f);
 
+// --- One frame's props ------------------------------------------------------------------------------------------
+// A loaded model's bounds (mesh_model::Mesh low / high / pivot), what the placements need.
+struct Bounds {
+    Vec3 low{}, high{}, pivot{};
+    bool ok = false;
+};
+// From a loaded mesh (the shield: captain::pivotLeft, as the SM2 build turns it). ok false on an empty mesh.
+Bounds boundsOf(Model m, const mesh_model::Mesh& mesh);
+struct Hands {
+    Pose grip[2];         // his projection space (OpenXR, Y up)
+    bool tracked[2]{};
+    ControllerKind kind = ControllerKind::touch;
+};
+// The thrown prop while it is out of the hand, already in his projection space (the layer maps the game's flight).
+struct Flying {
+    Model model = none;
+    Vec3 middle{}, way{}; // its middle, its way (unit)
+    float spin = 0;       // radians
+};
+struct Item {
+    Model model = none;
+    Place place;
+    bool steel = false; // the claws: drawn as polished steel (hero007_visual), not textured
+    float reach = 0;    // the steel's root-to-tip (model metres)
+};
+// What is drawn this frame for the hero: the held props on tracked hands (THOR's hammer and CAP's shield on the RIGHT
+// hand / forearm, the claws and batons on both, a pistol in each hand) and the flying one; the batarang only flies.
+// A model whose bounds are not loaded, or a hand that is not tracked, draws nothing.
+std::vector<Item> scene(uint32_t hero, const Hands& hands, const Bounds (&bounds)[modelCount], const Flying& flying);
+// The flying hammer: head first along the way, tumbling end over end, its middle at `middle`.
+Place hammerFlying(Vec3 middle, Vec3 way, float spin, Vec3 low, Vec3 high);
+
 // --- Throws -------------------------------------------------------------------------------------------------------
 // The SM2 build's THOR throw (hero072_play.hpp): out at `speed` for at most `seconds` / `range` metres (or to the
 // target), back at most `back` m/s slowing near the hand (`near` m/s a metre, at least `slowest`), turning at most

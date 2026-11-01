@@ -21,8 +21,11 @@
 #include "spidy/sm1_combat.hpp"
 #include "spidy/sm1_grapple.hpp"
 #include "spidy/sm1_holo.hpp"
+#include "spidy/sm1_props.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
+
+#include "sm1_props_gpu.hpp"
 
 #include <windows.h>
 #include <d3d12.h>
@@ -205,13 +208,13 @@ struct FeatureState {
 FeatureState fInput{"INPUT"}, fMenu{"WRIST MENU"}, fDraw{"DRAWING"}, fPowers{"POWERS"}, fFlight{"FLIGHT"};
 
 // --- Files ----------------------------------------------------------------------------------------------------------
-bool readFile(const std::wstring& path, std::string& out, FILETIME* stamp = nullptr) {
+bool readFile(const std::wstring& path, std::string& out, FILETIME* stamp = nullptr, int64_t most = 1 << 20) {
     HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE)
         return false;
     LARGE_INTEGER size{};
-    bool ok = GetFileSizeEx(f, &size) && size.QuadPart >= 0 && size.QuadPart < (1 << 20);
+    bool ok = GetFileSizeEx(f, &size) && size.QuadPart >= 0 && size.QuadPart < most;
     if (ok) {
         out.assign(static_cast<size_t>(size.QuadPart), '\0');
         DWORD got = 0;
@@ -718,6 +721,16 @@ struct Play {
     // the last head pose in his projection space
     bool headKnown = false;
     Pose head;
+    // 0.0.76 HERO PROPS: the thrown prop (THOR's hammer, CAP's shield, BATMAN's batarang; game world) and its hit
+    props::Flight throwFlight;
+    props::Model throwModel = props::none;
+    uint32_t throwHero = 0;
+    uint64_t throwTarget = 0; // the enemy it flies at (0: along the aim)
+    float throwAmount = 0;
+    int32_t throwKnockback = 0;
+    ControllerKind controllerKind = ControllerKind::touch; // the right hand's interaction profile (Index or Touch)
+    ULONGLONG kindAsked = 0;
+    bool scaleLogged = false;
 } play;
 
 // --- Hero suits: the holo's hint (no live switch: see features[] "holo suit switch") ---------------------------------
@@ -1282,7 +1295,34 @@ DWORD guardedStrikeSample(his::Strikes* s) {
     }
     return r;
 }
+// Area powers: HULK's clap hits everyone close in front, THOR's lightning (and his hammer's hit) jumps to two more.
+// The extra hits (the first one is the caller's).
+int areaHits(uint32_t hero, const std::vector<combat::Target>& foes, uint64_t first, uint64_t player, Vec3 from, Vec3 dir,
+             Vec3 hitPoint, float amount, int32_t knockback) {
+    if (hero != hero_modes::hulk && hero != hero_modes::thor)
+        return 0;
+    const Vec3 centre = hero == hero_modes::hulk ? from + normalized(dir) * 2.5f : hitPoint;
+    const float reach = hero == hero_modes::hulk ? 3.f : 5.f;
+    const size_t most = hero == hero_modes::hulk ? 6 : 3;
+    int hits = 0;
+    for (const int k : combat::nearby(foes, centre, reach, most)) {
+        const auto& t = foes[static_cast<size_t>(k)];
+        if (t.record == first)
+            continue;
+        blow(t.record, player, t.chest(), hero == hero_modes::hulk ? from : hitPoint, amount * .7f, knockback);
+        if (++hits + 1 >= static_cast<int>(most))
+            break;
+    }
+    return hits;
+}
+// 0.0.76 HERO PROPS: how the thrown prop flies (sm1_props.hpp, the SM2 build's throws).
+const props::Tuning& tuningOf(props::Model m) {
+    return m == props::hammer ? props::hammerThrow : m == props::shield ? props::shieldThrow : props::batarangThrow;
+}
 void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
+    // 0.0.76 HERO PROPS: the thrown prop is still out: this press does nothing (it comes back to the hand by itself)
+    if (live.props && props::thrownBy(hero, hand) != props::none && play.throwFlight.phase != props::Flight::held)
+        return;
     const Power& p = powerOf(hero);
     play.cooldown = p.cooldown;
     const GameView gv = gameView();
@@ -1316,26 +1356,31 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         first = foes[static_cast<size_t>(k)].record;
         hitPoint = foes[static_cast<size_t>(k)].chest();
     }
+    // 0.0.76 HERO PROPS: THOR's hammer, CAP's shield and BATMAN's batarang leave the RIGHT hand and fly (to the enemy
+    // when one is aimed at, else along the aim); the hit lands when the prop gets there (step()), the hammer and the
+    // shield come back to the hand. Only when the model is on the GPU (else the old beam, so a press is never lost).
+    const props::Model thrown = live.props && !eyes ? props::thrownBy(hero, hand) : props::none;
+    if (thrown != props::none && propsgpu::ready(thrown)) {
+        const Vec3 way = first && length(hitPoint - from) > .05f ? normalized(hitPoint - from) : normalized(dir);
+        if (props::launch(play.throwFlight, from, way, first ? &hitPoint : nullptr, tuningOf(thrown))) {
+            play.throwModel = thrown;
+            play.throwHero = hero;
+            play.throwTarget = first;
+            play.throwAmount = amount;
+            play.throwKnockback = p.knockback;
+            play.powerState = "THROWN";
+            logLine("throw: %s from the right hand, %s", props::modelNames[thrown],
+                    first ? "at an enemy (the hit lands when it gets there)" : "along the aim (no enemy aimed at)");
+            return;
+        }
+    }
     int hits = 0;
     if (first) {
         blow(first, gv.player, hitPoint, from, amount, p.knockback);
         ++hits;
         beamDir = normalized(hitPoint - from);
         beamLength = length(hitPoint - from);
-        // Area powers: HULK's clap hits everyone close in front, THOR's lightning jumps to two more.
-        if (hero == hero_modes::hulk || hero == hero_modes::thor) {
-            const Vec3 centre = hero == hero_modes::hulk ? from + normalized(dir) * 2.5f : hitPoint;
-            const float reach = hero == hero_modes::hulk ? 3.f : 5.f;
-            const size_t most = hero == hero_modes::hulk ? 6 : 3;
-            for (const int k : combat::nearby(foes, centre, reach, most)) {
-                const auto& t = foes[static_cast<size_t>(k)];
-                if (t.record == first)
-                    continue;
-                blow(t.record, gv.player, t.chest(), hero == hero_modes::hulk ? from : hitPoint, amount * .7f, p.knockback);
-                if (++hits >= static_cast<int>(most))
-                    break;
-            }
-        }
+        hits += areaHits(hero, foes, first, gv.player, from, dir, hitPoint, amount, p.knockback);
         play.powerState = hits > 1 ? "HIT " + std::to_string(hits) : "HIT";
     } else {
         play.powerState = s.cueTarget || !foes.empty() ? "MISSED" : "NO TARGET";
@@ -1354,6 +1399,120 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         play.beamUntil = GetTickCount64() + 180;
         (void)xrFrom;
     }
+}
+// 0.0.76 HERO PROPS: the thrown prop's hit, when it reaches its enemy. The enemy is looked up again first (the enemy
+// list's record, else his ringed enemy); one that is gone (dead, out of the list) takes no blow.
+void landThrow(const GameView& gv) {
+    const uint64_t victim = play.throwTarget;
+    if (!victim)
+        return;
+    std::vector<combat::Target> foes;
+    if (targetsUsable())
+        targets::fighting(foes);
+    Vec3 at{};
+    bool found = false;
+    for (const auto& t : foes)
+        if (t.record == victim) {
+            at = t.chest();
+            found = true;
+            break;
+        }
+    if (!found) {
+        his::Strikes s{};
+        if (!guardedStrikeSample(&s) && s.magic == 0x53535452 && s.bytes == sizeof(s) && s.cueTarget == victim) {
+            at = s.cuePoint;
+            found = true;
+        }
+    }
+    if (!found) {
+        play.powerState = "TARGET GONE";
+        logLine("throw: %s got there, the enemy is gone (no blow)", props::modelNames[play.throwModel]);
+        return;
+    }
+    const Vec3 from = play.throwFlight.from;
+    blow(victim, gv.player, at, from, play.throwAmount, play.throwKnockback);
+    const int hits = 1 + areaHits(play.throwHero, foes, victim, gv.player, from, at - from, at, play.throwAmount,
+                                  play.throwKnockback);
+    play.powerState = hits > 1 ? "HIT " + std::to_string(hits) : "HIT";
+    logLine("throw: %s hit (%d enem%s, %.0f damage)", props::modelNames[play.throwModel], hits, hits > 1 ? "ies" : "y",
+            static_cast<double>(play.throwAmount));
+}
+void endThrow(const char* why) {
+    if (play.throwFlight.phase != props::Flight::held)
+        logLine("throw: %s back in the hand (%s)", props::modelNames[play.throwModel], why);
+    const uint32_t throws = play.throwFlight.throws;
+    play.throwFlight = {};
+    play.throwFlight.throws = throws;
+    play.throwModel = props::none;
+    play.throwTarget = 0;
+}
+// One step of the thrown prop (game world): out to the enemy or along the aim, the hit, back to his right hand.
+void stepThrow(uint32_t hero, const Live& live, float dt) {
+    if (play.throwFlight.phase == props::Flight::held)
+        return;
+    const GameView gv = gameView();
+    if (!live.props || !propsgpu::on() || hero != play.throwHero || !gv.ok) {
+        endThrow(!live.props ? "props switched off" : hero != play.throwHero ? "hero changed" : !gv.ok ? "no VR data" : "props off");
+        return;
+    }
+    const props::Tuning& t = tuningOf(play.throwModel);
+    Vec3 liveTarget{};
+    bool haveTarget = false;
+    if (play.throwFlight.phase == props::Flight::out && play.throwTarget && targetsUsable()) {
+        std::vector<combat::Target> foes;
+        targets::fighting(foes);
+        for (const auto& f : foes)
+            if (f.record == play.throwTarget) {
+                liveTarget = f.chest();
+                haveTarget = true;
+                break;
+            }
+    }
+    const props::FlightStep r = props::step(play.throwFlight, t, gv.handPos[1], haveTarget ? &liveTarget : nullptr, dt);
+    // the tumble: the hammer end over end with the distance flown, the shield and the batarang spinning flat
+    play.throwFlight.spin = play.throwModel == props::hammer ? play.throwFlight.travelled * props::hammerSpinPerMetre
+                            : play.throwModel == props::shield ? play.throwFlight.age * 14.f
+                                                               : play.throwFlight.age * 22.f;
+    if (r.arrived)
+        landThrow(gv);
+    if (r.caught) {
+        const char* why = t.returns ? "caught" : "flight over";
+        play.throwFlight.phase = props::Flight::out; // endThrow logs only a prop that was out
+        endThrow(why);
+        if (play.powerState == "THROWN")
+            play.powerState = "READY";
+    }
+}
+// The right hand's controller (the props sit in the hand as on that controller): Index or Touch, asked every 2 s.
+void askControllerKind() {
+    const ULONGLONG now = GetTickCount64();
+    if (now - play.kindAsked < 2000 || !instance || !session.handle || !session.hand[1])
+        return;
+    play.kindAsked = now;
+    static PFN_xrGetCurrentInteractionProfile get = nullptr;
+    static bool tried = false;
+    if (!tried) {
+        tried = true;
+        PFN_xrVoidFunction f = nullptr;
+        if (next.getInstanceProcAddr(instance, "xrGetCurrentInteractionProfile", &f) == XR_SUCCESS && f)
+            get = reinterpret_cast<PFN_xrGetCurrentInteractionProfile>(f);
+        else
+            logLine("props: no xrGetCurrentInteractionProfile, the props sit as on Touch controllers");
+    }
+    if (!get)
+        return;
+    XrInteractionProfileState st{XR_TYPE_INTERACTION_PROFILE_STATE};
+    if (get(session.handle, session.hand[1], &st) != XR_SUCCESS || st.interactionProfile == XR_NULL_PATH)
+        return;
+    const std::string name = pathText(st.interactionProfile);
+    const ControllerKind kind = name.find("valve/index_controller") != std::string::npos ? ControllerKind::index
+                                                                                          : ControllerKind::touch;
+    static std::string said;
+    if (name != said) {
+        said = name;
+        logLine("props: right hand %s, props sit as on %s", name.c_str(), kind == ControllerKind::index ? "Index" : "Touch");
+    }
+    play.controllerKind = kind;
 }
 // --- 0.0.76 SM1 HOLO: the SM2 build's hologram ----------------------------------------------------------------------
 // The user (0.0.76 test): "the wrist menu is awful it should look exactly like sm2 holo does". The SM2 build's own panel
@@ -1398,7 +1557,13 @@ bool wicDecode(const uint8_t* data, size_t size, mesh_model::Picture& out) {
     releaseCom(factory);
     return ok;
 }
-// HERO VR's folder: this layer is <HERO VR>\build\windows-ninja\herovr_sm1_layer.dll.
+// HERO VR's folder. The launcher stages this layer in a folder of its own and writes herovr_root.txt beside it (0.0.76
+// HERO PROPS: the props and the portraits read <HERO VR>\Models); a layer still in <HERO VR>\build\windows-ninja\
+// finds it three folders up. The file's folder is used only when its Models folder is there.
+bool isFolder(const std::wstring& p) {
+    const DWORD a = GetFileAttributesW(p.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
+}
 std::wstring heroVrRoot() {
     HMODULE self = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -1409,6 +1574,27 @@ std::wstring heroVrRoot() {
     if (!n || n >= MAX_PATH)
         return L"";
     std::wstring p(buf, n);
+    const size_t dir = p.find_last_of(L"\\/");
+    if (dir != std::wstring::npos) {
+        std::string text;
+        if (readFile(p.substr(0, dir) + L"\\herovr_root.txt", text) && !text.empty() && text.size() < 4096) {
+            if (text.size() >= 3 && static_cast<unsigned char>(text[0]) == 0xef && static_cast<unsigned char>(text[1]) == 0xbb &&
+                static_cast<unsigned char>(text[2]) == 0xbf)
+                text.erase(0, 3);
+            while (!text.empty() && (text.back() == '\r' || text.back() == '\n' || text.back() == ' ' || text.back() == '\\' ||
+                                     text.back() == '/'))
+                text.pop_back();
+            const int wn = text.empty() ? 0
+                                        : MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+                                                              static_cast<int>(text.size()), nullptr, 0);
+            if (wn > 0) {
+                std::wstring root(static_cast<size_t>(wn), L'\0');
+                MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), root.data(), wn);
+                if (isFolder(root + L"\\Models"))
+                    return root;
+            }
+        }
+    }
     for (int up = 0; up < 3; ++up) {
         const size_t i = p.find_last_of(L"\\/");
         if (i == std::wstring::npos)
@@ -1424,7 +1610,8 @@ DWORD WINAPI portraitsThread(void*) {
     std::string glb;
     auto pics = std::make_shared<holo::Portraits>();
     std::string why;
-    const bool ok = readFile(path, glb) &&
+    // 0.0.76 HERO PROPS: the Roster is 1.7 MB (the 1 MB settings limit kept the portraits out: initials only)
+    const bool ok = readFile(path, glb, nullptr, int64_t{64} << 20) &&
                     holo::loadPortraits(reinterpret_cast<const uint8_t*>(glb.data()), glb.size(), &wicDecode, *pics, why);
     if (glb.empty())
         why = "Models\\Roster\\scene.glb was not found beside HERO VR";
@@ -1820,6 +2007,10 @@ void step() {
     }
     for (int i = 0; i < 2; ++i)
         play.triggerWas[i] = play.trigger[i] > .5f;
+    // 0.0.76 HERO PROPS: the thrown prop, and the controller the held props sit on
+    stepThrow(nowHero, live, dt);
+    if (!nowSpiderMan && live.props)
+        askControllerKind();
 
     // what his reads see from now on
     MaskInput mi;
@@ -2450,12 +2641,91 @@ void tryAddOns(const XrFrameEndInfo* info, XrSpace space, std::vector<XrComposit
         fDraw.turnOff("a fault while drawing");
     }
 }
+// --- 0.0.76 HERO PROPS: the heroes' 3D weapons, one projection layer of the add-on's own after his ----------------------
+// Drawn by sm1_props_gpu.cpp into a swapchain of its own with his views' poses and fovs. Not occluded by the game: no
+// depth of his is read (his views' depth info is only logged), so the props always draw over the game's picture.
+bool propsFrame(const XrFrameEndInfo* info, const XrCompositionLayerProjection& his, XrCompositionLayerProjection& out) {
+    if (!propsgpu::on() || !session.device || !session.queue || !play.headKnown)
+        return false;
+    static bool depthLogged = false;
+    if (!depthLogged && his.views) {
+        depthLogged = true;
+        bool depth = false;
+        for (uint32_t v = 0; v < his.viewCount; ++v)
+            for (auto* n = static_cast<const XrBaseInStructure*>(his.views[v].next); n; n = n->next)
+                if (n->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
+                    depth = true;
+        logLine("props: his projection layer %s depth info; the props do not use it and always draw over the game",
+                depth ? "carries" : "carries no");
+    }
+    AcquireSRWLockShared(&settings.lock);
+    const Config config = settings.config;
+    const Live live = settings.live;
+    ReleaseSRWLockShared(&settings.lock);
+    const uint32_t hero = config.hero < heroCount ? config.hero : 0;
+    if (!config.heroes || hero == 0 || !live.props || !props::hasProps(hero))
+        return false;
+    static std::wstring models;
+    if (models.empty()) {
+        const std::wstring root = heroVrRoot();
+        if (root.empty() || !isFolder(root + L"\\Models")) {
+            propsgpu::turnOff("HERO VR's Models folder was not found (herovr_root.txt beside the layer)");
+            return false;
+        }
+        models = root + L"\\Models\\";
+    }
+    propsgpu::want(hero, models, session.device);
+    props::Bounds bounds[props::modelCount];
+    propsgpu::bounds(bounds);
+    props::Hands hands;
+    hands.kind = play.controllerKind;
+    for (int i = 0; i < 2; ++i)
+        hands.tracked[i] = locate(session.gripSpace[i], his.space, info->displayTime, hands.grip[i]);
+    props::Flying flying;
+    if (play.throwFlight.phase != props::Flight::held && play.throwModel != props::none) {
+        const GameView gv = gameView();
+        const props::HeadMap m = gv.ok ? props::headMap(gv.headPos, gv.headRight, gv.headDown, gv.headForward, play.head)
+                                       : props::HeadMap{};
+        if (m.ok) {
+            flying.model = play.throwModel;
+            flying.middle = props::toXr(m, play.throwFlight.pos);
+            const Vec3 way = props::dirToXr(m, play.throwFlight.vel);
+            flying.way = length(way) > 1e-4f ? normalized(way) : play.head.orientation.rotate({0, 0, -1});
+            flying.spin = play.throwFlight.spin;
+        }
+        // CANDIDATE: the game's world is in metres. Logged once: the game's and the headset's hand-to-head distances.
+        if (!play.scaleLogged && gv.ok && hands.tracked[1]) {
+            play.scaleLogged = true;
+            const float game = length(gv.handPos[1] - gv.headPos), xr = length(hands.grip[1].position - play.head.position);
+            logLine("props: right hand to head %.3f game units, %.3f m in the headset (ratio %.2f; 1.00 means metres)",
+                    static_cast<double>(game), static_cast<double>(xr), xr > .05f ? static_cast<double>(game / xr) : 0.0);
+        }
+    }
+    const std::vector<props::Item> items = props::scene(hero, hands, bounds, flying);
+    if (items.empty())
+        return false;
+    return propsgpu::render(session.handle, session.device, session.queue, his, items, out);
+}
+// No C++ objects to unwind here: a fault turns the props off for the session.
+bool tryProps(const XrFrameEndInfo* info, const XrCompositionLayerProjection* his, XrCompositionLayerProjection* out) {
+    bool ok = false;
+    SM1_TRY {
+        ok = propsFrame(info, *his, *out);
+    }
+    SM1_EXCEPT {
+        ok = false;
+        propsgpu::turnOff("a fault while drawing the props");
+    }
+    return ok;
+}
 XRAPI_ATTR XrResult XRAPI_CALL endFrame(XrSession s, const XrFrameEndInfo* info) {
     if (s == session.handle && info)
         colorFrame(info);
-    if (s != session.handle || !info || !fDraw.on)
+    if (s != session.handle || !info || (!fDraw.on && !propsgpu::on()))
         return next.endFrame(s, info);
     std::vector<XrCompositionLayerQuad> quads;
+    XrCompositionLayerProjection propsLayer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+    bool withProps = false;
     AcquireSRWLockExclusive(&playLock);
     const XrCompositionLayerProjection* projection = nullptr;
     for (uint32_t i = 0; i < info->layerCount; ++i)
@@ -2469,23 +2739,42 @@ XRAPI_ATTR XrResult XRAPI_CALL endFrame(XrSession s, const XrFrameEndInfo* info)
         const Pose b = projection->viewCount >= 2 ? toPose(projection->views[1].pose) : a;
         play.head = {(a.position + b.position) * .5f, a.orientation};
         play.headKnown = true;
-        tryAddOns(info, projection->space, &quads);
+        if (fDraw.on)
+            tryAddOns(info, projection->space, &quads);
+        // the props first (a projection layer, under the hologram's and the beam's quads)
+        withProps = info->layerCount < session.maxLayers && tryProps(info, projection, &propsLayer);
     }
     ReleaseSRWLockExclusive(&playLock);
-    if (quads.empty())
+    if (quads.empty() && !withProps)
         return next.endFrame(s, info);
     std::vector<const XrCompositionLayerBaseHeader*> layers(info->layers, info->layers + info->layerCount);
+    if (withProps)
+        layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&propsLayer));
     for (auto& q : quads)
         if (layers.size() < session.maxLayers)
             layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader*>(&q));
     XrFrameEndInfo mine = *info;
     mine.layerCount = static_cast<uint32_t>(layers.size());
     mine.layers = layers.data();
-    const XrResult r = next.endFrame(s, &mine);
+    XrResult r = next.endFrame(s, &mine);
     if (XR_SUCCEEDED(r) || r == XR_ERROR_SESSION_LOST || r == XR_ERROR_INSTANCE_LOST)
         return r;
-    logLine("xrEndFrame refused the add-on's quads (%d): his frame goes again without them", static_cast<int>(r));
-    fDraw.turnOff("the runtime refused the quad layers");
+    if (withProps) {
+        logLine("xrEndFrame refused the props' layer (%d): the frame goes again without it", static_cast<int>(r));
+        propsgpu::turnOff("the runtime refused the props' projection layer");
+        layers.erase(layers.begin() + info->layerCount);
+        if (!quads.empty()) {
+            mine.layerCount = static_cast<uint32_t>(layers.size());
+            mine.layers = layers.data();
+            r = next.endFrame(s, &mine);
+            if (XR_SUCCEEDED(r) || r == XR_ERROR_SESSION_LOST || r == XR_ERROR_INSTANCE_LOST)
+                return r;
+        }
+    }
+    if (!quads.empty()) {
+        logLine("xrEndFrame refused the add-on's quads (%d): his frame goes again without them", static_cast<int>(r));
+        fDraw.turnOff("the runtime refused the quad layers");
+    }
     return next.endFrame(s, info);
 }
 
@@ -2504,6 +2793,7 @@ void dropSession() {
     dropQuad(session.dot);
     dropQuad(session.beam);
     dropUploader();
+    propsgpu::drop();
     dropColor();
     session = Session{};
     play = Play{};
@@ -2525,9 +2815,9 @@ XRAPI_ATTR XrResult XRAPI_CALL createSession(XrInstance inst, const XrSessionCre
         }
     next.stringToPath(inst, "/user/hand/left", &session.hand[0]);
     next.stringToPath(inst, "/user/hand/right", &session.hand[1]);
-    XrSystemProperties props{XR_TYPE_SYSTEM_PROPERTIES};
-    if (next.getSystemProperties(inst, ci->systemId, &props) == XR_SUCCESS && props.graphicsProperties.maxLayerCount)
-        session.maxLayers = props.graphicsProperties.maxLayerCount;
+    XrSystemProperties system{XR_TYPE_SYSTEM_PROPERTIES};
+    if (next.getSystemProperties(inst, ci->systemId, &system) == XR_SUCCESS && system.graphicsProperties.maxLayerCount)
+        session.maxLayers = system.graphicsProperties.maxLayerCount;
     ReleaseSRWLockExclusive(&playLock);
     loadSettings();
     logLine("session: D3D12 %s, %u layers at most", session.device && session.queue ? "yes" : "no", session.maxLayers);
@@ -2622,6 +2912,17 @@ XRAPI_ATTR XrResult XRAPI_CALL createApiLayerInstance(const XrInstanceCreateInfo
         load(*out, "xrAcquireSwapchainImage", next.acquireImage) && load(*out, "xrWaitSwapchainImage", next.waitImage) &&
         load(*out, "xrReleaseSwapchainImage", next.releaseImage);
     passthrough = !host || !ok;
+    if (!passthrough) {
+        propsgpu::Xr xr;
+        xr.enumerateFormats = next.enumerateFormats;
+        xr.createSwapchain = next.createSwapchain;
+        xr.destroySwapchain = next.destroySwapchain;
+        xr.enumerateImages = next.enumerateImages;
+        xr.acquireImage = next.acquireImage;
+        xr.waitImage = next.waitImage;
+        xr.releaseImage = next.releaseImage;
+        propsgpu::setup(xr, [](const char* line) { logLine("%s", line); }, &wicDecode);
+    }
     if (host)
         logLine("%s %s (%s) in %s: %s", addonName, addonVersion, layerName, exeA,
                 passthrough ? "PASSTHROUGH (an OpenXR function is missing)" : "on");

@@ -58,6 +58,11 @@ std::string className(std::string_view decorated);
 bool interesting(std::string_view name, Area& area);
 // An enemy's components (his game_targets.cpp RTTI names): a bot's mover manager or a character bot class.
 bool botClass(std::string_view name);
+// Dump mode (0.0.76): the suit / loadout classes the scan watches before and after a suit change.
+// SkinManager, SunsetVanityEquippedInventory, ItemLoadoutComponent, HeroCharacterManager (exact class or a namespaced one).
+bool suitClass(std::string_view name);
+// Dump mode (0.0.76): a vehicle's classes ("Vehicle", "Traffic", "Driv..." in the name; not "Card"/"Carried").
+bool vehicleClass(std::string_view name);
 
 // His actor transform check (game_player.cpp transform): finite, |v| < 1e7, orthonormal rows.
 bool actorTransform(const float m[16]);
@@ -77,12 +82,17 @@ struct Limits {
     uint32_t startDelayMs = 15000;      // after his VR starts, before anything is read
     uint32_t snapshotMs = 2000;         // one snapshot
     uint32_t eventPollMs = 250;         // a blow landed / a web attached: an extra snapshot
-    uint32_t censusMs = 30000;          // the registry walked again
+    uint32_t censusMs = 120000;         // the registry walked again (0.0.76: every 2 minutes, was 30 s)
     uint32_t runMs = 15 * 60 * 1000;    // the whole scan, after the player is found
     uint64_t maxFileBytes = 48ull << 20; // the session's .jsonl and .bin together
     uint32_t maxBots = 48, maxRopeDumps = 120, keepSessions = 5;
-    uint32_t chunkBytes = 256 << 10;    // read between sleeps (signature and RTTI passes)
-    uint32_t chunkEntries = 2048;       // registry entries between sleeps
+    uint32_t chunkBytes = 64 << 10;     // read between sleeps (signature and RTTI passes; 0.0.76: was 256 KB)
+    uint32_t chunkEntries = 512;        // registry entries between sleeps (0.0.76: was 2048)
+    uint32_t breatheMs = 5;             // the sleep between chunks (0.0.76: was 1 ms)
+    uint32_t suitWatchBytes = 0x600;    // dump mode: each suit/loadout component's bytes compared per snapshot
+    uint32_t maxSuitDumps = 400, maxSuitDumpsEach = 40;
+    float vehicleNearMeters = 25;       // dump mode: a vehicle record's components when the player is this close
+    uint32_t maxVehicleDumps = 200;
 };
 // "sm1scan-20261101-013000".
 std::string sessionName(int year, int month, int day, int hour, int minute, int second);

@@ -122,6 +122,11 @@ void scanTests() {
     check(interesting("HeroRopeManager", a) && a == Area::grapple, "the rope manager is a grapple lead");
     check(!interesting("TextureStreamer", a), "unrelated classes are left out");
     check(botClass("ThugBot") && botClass("BotMoverManagerGame") && !botClass("HeroHealth"), "bot classes");
+    check(suitClass("SkinManager") && suitClass("Game::HeroCharacterManager") && suitClass("SunsetVanityEquippedInventory") &&
+              suitClass("ItemLoadoutComponent") && !suitClass("SkinManagerHelper") && !suitClass("XSkinManager"),
+          "suit classes (dump mode)");
+    check(vehicleClass("VehicleComponent") && vehicleClass("TrafficManager") && !vehicleClass("CardDeck") && !vehicleClass("Carried"),
+          "vehicle classes (dump mode)");
     const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 6, 7, 1};
     float bad[16];
     std::memcpy(bad, id, sizeof(bad));

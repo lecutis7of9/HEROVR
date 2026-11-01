@@ -66,26 +66,41 @@ bool copyGuarded(void* dst, const void* src, size_t n) {
 struct Region {
     uintptr_t lo = 0, hi = 0;
     bool ok = false;
-} region;
-void forgetRegion() { region = Region{}; }
+};
+// 0.0.76: a few regions remembered (the registry's objects are spread over many heaps; one cached
+// region meant a VirtualQuery for nearly every read, the census's cost).
+constexpr size_t regionSlots = 16;
+Region regions[regionSlots];
+size_t regionNext = 0;
+void forgetRegion() {
+    for (auto& r : regions)
+        r = Region{};
+    regionNext = 0;
+}
+const Region* regionOf(uintptr_t p) {
+    for (const auto& r : regions)
+        if (r.hi && p >= r.lo && p < r.hi)
+            return &r;
+    MEMORY_BASIC_INFORMATION m{};
+    if (!VirtualQuery(reinterpret_cast<const void*>(p), &m, sizeof(m)))
+        return nullptr;
+    Region& r = regions[regionNext++ % regionSlots];
+    r.lo = reinterpret_cast<uintptr_t>(m.BaseAddress);
+    r.hi = r.lo + m.RegionSize;
+    constexpr DWORD canRead = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
+                              PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+    r.ok = m.State == MEM_COMMIT && (m.Protect & (PAGE_GUARD | PAGE_NOACCESS)) == 0 && (m.Protect & canRead) != 0;
+    return r.hi > p ? &r : nullptr;
+}
 bool readable(uintptr_t p, size_t n) {
     const uintptr_t end = p + n;
     if (end < p)
         return false;
     while (p < end) {
-        if (p < region.lo || p >= region.hi) {
-            MEMORY_BASIC_INFORMATION m{};
-            if (!VirtualQuery(reinterpret_cast<const void*>(p), &m, sizeof(m)))
-                return false;
-            region.lo = reinterpret_cast<uintptr_t>(m.BaseAddress);
-            region.hi = region.lo + m.RegionSize;
-            constexpr DWORD canRead = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
-                                      PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-            region.ok = m.State == MEM_COMMIT && (m.Protect & (PAGE_GUARD | PAGE_NOACCESS)) == 0 && (m.Protect & canRead) != 0;
-        }
-        if (!region.ok)
+        const Region* r = regionOf(p);
+        if (!r || !r->ok)
             return false;
-        p = region.hi;
+        p = r->hi;
     }
     return true;
 }
@@ -319,7 +334,7 @@ uint64_t deadline = 0;
 bool stopping() { return out.full || (deadline && nowMs() > deadline); }
 // Between chunks: a short sleep, and a wait while live.txt has sm1scan=0 (the deadline does not move).
 bool breathe() {
-    Sleep(1);
+    Sleep(limits.breatheMs);
     while (!on()) {
         Sleep(1000);
         forgetRegion();
@@ -714,7 +729,16 @@ bool census() {
 uintptr_t playerRecord = 0;
 std::unordered_set<uintptr_t> dumpedObjects;
 std::unordered_map<uintptr_t, std::vector<size_t>> byRecord; // only for records the scan follows
-std::vector<uintptr_t> botRecords, spawnRecords;
+std::vector<uintptr_t> botRecords, spawnRecords, vehicleRecords;
+struct SuitWatch {
+    uintptr_t obj = 0, vtable = 0, record = 0;
+    std::vector<uint8_t> last;
+    uint32_t dumps = 0;
+};
+std::vector<SuitWatch> suitWatch;
+uint32_t suitDumps = 0, vehicleDumps = 0;
+std::unordered_map<uintptr_t, uint32_t> vehicleDumped; // record -> dumps (3 at most: each close approach)
+std::unordered_set<uintptr_t> vehicleNear;
 uintptr_t ropeComp = 0;
 uint32_t ropeDumps = 0, censusCount = 0, hitEvents = 0, rigDumps = 0;
 uint64_t lastLanded = 0, lastKnockouts = 0;
@@ -777,6 +801,28 @@ void classify() {
     }
     botRecords.assign(bots.begin(), bots.end());
     spawnRecords.assign(spawns.begin(), spawns.end());
+    // Dump mode (0.0.76): the suit / loadout components (any record) and the vehicles' records.
+    {
+        std::unordered_set<uintptr_t> seenSuit, cars;
+        for (const auto& c : comps) {
+            const Rtti& r = rttiOf(c.vtable);
+            if (any(r, suitClass) && !seenSuit.count(c.obj) && seenSuit.size() < 24) {
+                seenSuit.insert(c.obj);
+                bool known = false;
+                for (const auto& w : suitWatch)
+                    known = known || w.obj == c.obj;
+                if (!known)
+                    suitWatch.push_back({c.obj, c.vtable, c.record, {}, 0});
+            }
+            if (any(r, vehicleClass))
+                cars.insert(c.record);
+        }
+        // drop watched objects the census no longer has
+        suitWatch.erase(std::remove_if(suitWatch.begin(), suitWatch.end(),
+                                       [&](const SuitWatch& w) { return !seenSuit.count(w.obj); }),
+                        suitWatch.end());
+        vehicleRecords.assign(cars.begin(), cars.end());
+    }
     // Nearest first, so the caps keep the ones that matter.
     auto nearest = [](std::vector<uintptr_t>& v) {
         if (!havePlayerPos)
@@ -1093,6 +1139,78 @@ void snapshot(bool websChanged) {
     j.write();
 }
 
+// ---- dump mode (0.0.76) ----
+// Suits: each watched component's bytes per snapshot; on a change, the bytes before and after
+// (change a suit in the game's Suits menu: the "suitChange" lines are the before/after pairs).
+void watchSuits() {
+    for (auto& w : suitWatch) {
+        std::vector<uint8_t> b(limits.suitWatchBytes);
+        if (!rd(w.obj, b.data(), b.size())) {
+            // a shorter object near the end of its region: the first 0x100 bytes
+            b.resize(0x100);
+            if (!rd(w.obj, b.data(), b.size()))
+                continue;
+        }
+        if (w.last.empty()) {
+            if (suitDumps < limits.maxSuitDumps) {
+                ++suitDumps;
+                ++w.dumps;
+                J j("suitBaseline");
+                j.a("obj", w.obj).a("record", w.record).raw("vtableRva", rvaText(w.vtable)).raw("rtti", names(rttiOf(w.vtable)));
+                j.raw("dump", out.blob(b.data(), b.size())).write();
+            }
+        } else if (b.size() == w.last.size() && std::memcmp(b.data(), w.last.data(), b.size())) {
+            uint32_t changed = 0, firstAt = 0xffffffff;
+            for (size_t i = 0; i < b.size(); ++i)
+                if (b[i] != w.last[i]) {
+                    ++changed;
+                    firstAt = std::min<uint32_t>(firstAt, static_cast<uint32_t>(i));
+                }
+            if (suitDumps < limits.maxSuitDumps && w.dumps < limits.maxSuitDumpsEach) {
+                ++suitDumps;
+                ++w.dumps;
+                J j("suitChange");
+                j.a("obj", w.obj).a("record", w.record).raw("vtableRva", rvaText(w.vtable)).raw("rtti", names(rttiOf(w.vtable)));
+                j.u("changedBytes", changed).u("firstChangedAt", firstAt);
+                j.raw("before", out.blob(w.last.data(), w.last.size())).raw("after", out.blob(b.data(), b.size())).write();
+            }
+        }
+        w.last = std::move(b);
+    }
+}
+// Vehicles: when the player comes within vehicleNearMeters of a vehicle record, that record's components
+// (names and their first 0x300 bytes); again on a later approach, at most 3 times per record.
+void watchVehicles() {
+    if (!havePlayerPos || vehicleDumps >= limits.maxVehicleDumps)
+        return;
+    const float near2 = limits.vehicleNearMeters * limits.vehicleNearMeters;
+    for (const uintptr_t rec : vehicleRecords) {
+        float m[16];
+        const bool close = transformAt(rec, m) && dist2(m + 12, playerPos) < near2;
+        if (!close) {
+            vehicleNear.erase(rec);
+            continue;
+        }
+        if (vehicleNear.count(rec) || vehicleDumped[rec] >= 3 || vehicleDumps >= limits.maxVehicleDumps)
+            continue;
+        vehicleNear.insert(rec);
+        ++vehicleDumped[rec];
+        ++vehicleDumps;
+        J j("vehicleComponents");
+        j.a("record", rec).raw("position", floats(m + 12, 3)).num("distance", std::sqrt(dist2(m + 12, playerPos)));
+        j.raw("recordDump", out.dump(rec, 0xc0));
+        std::string list = "[";
+        bool first = true;
+        for (const auto& c : comps)
+            if (c.record == rec) {
+                list += (first ? "" : ",") + std::string("{\"obj\":") + addr(c.obj) + ",\"vtableRva\":" + rvaText(c.vtable) +
+                        ",\"rtti\":" + names(rttiOf(c.vtable)) + ",\"dump\":" + out.dump(c.obj, 0x300) + "}";
+                first = false;
+            }
+        j.raw("components", list + "]").write();
+    }
+}
+
 void summary(const char* why, uint64_t began) {
     std::string s;
     char b[256];
@@ -1115,6 +1233,9 @@ void summary(const char* why, uint64_t began) {
     s += b;
     std::snprintf(b, sizeof(b), "registry %u entries, %zu components, %u censuses; bots followed %zu; spawn-class records %zu\r\n",
                   registryCount, comps.size(), censusCount, botRecords.size(), spawnRecords.size());
+    s += b;
+    std::snprintf(b, sizeof(b), "dump mode: suit/loadout components watched %zu, suit dumps %u; vehicle records %zu, vehicle dumps %u\r\n",
+                  suitWatch.size(), suitDumps, vehicleRecords.size(), vehicleDumps);
     s += b;
     std::snprintf(b, sizeof(b), "player record 0x%llx; hits recorded %u; rope dumps %u; lines %llu; bytes %llu\r\n",
                   static_cast<unsigned long long>(playerRecord), hitEvents, ropeDumps,
@@ -1151,14 +1272,19 @@ void run() {
     say("sm1scan: static pass done (%zu RTTI classes)", catalog.size());
     // Phase B: wait for the player (his XrData record, or heroLocal in the registry), at most 20 minutes.
     deadline = nowMs() + 20 * 60 * 1000;
+    uint64_t nextWaitCensus = 0;
     while (!stopping() && !playerRecord) {
         if (Export* x = exported("SpidyXrData")) {
             uint64_t rec = 0;
             if (get(x->at + xrPlayerRecordAt, rec) && rec)
                 playerRecord = static_cast<uintptr_t>(rec);
         }
-        if (!playerRecord && census())
-            classify();
+        // 0.0.76: the registry at most every 30 s while waiting (his XrData usually names the player first)
+        if (!playerRecord && nowMs() >= nextWaitCensus) {
+            nextWaitCensus = nowMs() + 30000;
+            if (census())
+                classify();
+        }
         if (!playerRecord) {
             for (int i = 0; i < 50 && on(); ++i)
                 Sleep(100);
@@ -1186,6 +1312,8 @@ void run() {
         const bool webs = exportsChanged(t >= nextSnap);
         if (t >= nextSnap || (webs && ropeDumps < limits.maxRopeDumps)) {
             snapshot(webs);
+            watchSuits();
+            watchVehicles();
             nextSnap = t + limits.snapshotMs;
         }
         Sleep(limits.eventPollMs);

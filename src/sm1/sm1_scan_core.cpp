@@ -233,6 +233,22 @@ bool botClass(std::string_view name) {
     return false;
 }
 
+bool suitClass(std::string_view name) {
+    for (const char* n : {"SkinManager", "SunsetVanityEquippedInventory", "ItemLoadoutComponent", "HeroCharacterManager"}) {
+        const std::string_view w(n);
+        // the whole class name, or its last part after "::"
+        if (name == w || (name.size() > w.size() + 2 && name.substr(name.size() - w.size()) == w &&
+                          name.substr(name.size() - w.size() - 2, 2) == "::"))
+            return true;
+    }
+    return false;
+}
+
+bool vehicleClass(std::string_view name) {
+    return name.find("Vehicle") != std::string_view::npos || name.find("Traffic") != std::string_view::npos ||
+           name.find("Driv") != std::string_view::npos;
+}
+
 bool interesting(std::string_view name, Area& area) {
     struct Key {
         const char* word;

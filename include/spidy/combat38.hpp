@@ -243,6 +243,9 @@ enum Option : uint32_t {
     // 0.0.74 test 10 GLIDE TILT (cape_glide.hpp handTilt / tiltPitch): ON (0, the default) BATMAN's glide pitch is
     // the controllers' tilt, directly (Shadow's way); OFF (1) the arm poses' pitch (out glides, tuck dives, raise pulls up)
     glideTilt,
+    // 0.0.76 MP WORLD (mp_world.hpp): WORLD (0, the default) PLAYER 2 stands at his real spot in the city when
+    // his game sends it; BUDDY (1) the 0.0.74 spot 3 m ahead of you
+    mpPlace,
     options
 };
 struct OptionInfo {
@@ -613,6 +616,7 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"hideout_hold", "HIDEOUT HOLD", "HHLD", "HOLD: GO TO BATCAVE / SAFEHOUSE on the dash needs a 1 s hold; no restart needed.", 2, {"HOLD", "TAP", nullptr, nullptr}},
     {"throw_swing", "THROW BY SWING", "TSWG", "ON throws fly the way your arm swung, OFF is the old aim; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"glide_tilt", "GLIDE TILT", "GTLT", "ON: tilt your controllers to set the glide dive angle, like Shadow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"mp_place", "PLAYER 2 PLACE", "P2PL", "WORLD shows your friend at his real city spot, BUDDY 3 m ahead; no restart.", 2, {"WORLD", "BUDDY", nullptr, nullptr}},
 };
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }
@@ -641,6 +645,8 @@ inline bool hideoutHoldOn(uint32_t value) { return value != 1; }
 inline bool throwSwingOn(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 GLIDE TILT (cape_glide.hpp): 0 ON, the default; 1 OFF (the arm poses' pitch).
 inline bool glideTiltOn(uint32_t value) { return value != 1; }
+// 0.0.76 MP WORLD (mp_world.hpp): 0 WORLD, the default; 1 BUDDY (the 0.0.74 spot ahead of you).
+inline bool mpPlaceWorld(uint32_t value) { return value != 1; }
 // 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }

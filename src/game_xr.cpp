@@ -152,6 +152,7 @@
 #include "spidy/mp_ghost.hpp"   // 0.0.73 MP SOLO TEST
 #include "spidy/mp_prop_look.hpp" // 0.0.74 MP PROPS
 #include "spidy/mp_session.hpp" // 0.0.73 MP SOLO TEST
+#include "spidy/mp_world.hpp"   // 0.0.76 MP WORLD
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
@@ -818,6 +819,10 @@ std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
 // 0.0.73 MP SOLO TEST: the player's action flags (mp::Action: flying, swinging, grapple, firing) for the packet,
 // set on the game thread, read on the render thread (mod-internal state - CONFIRMED, no game address).
 std::atomic<uint32_t> mpActionsNow{0};
+// 0.0.76 MP WORLD: the player is in the city (the game's own camera follows his hero this frame), so his feet are
+// a real city spot for PLAYER 2's game (mp_world.hpp); menus, loading and cutscenes: false (his friend falls back
+// to the buddy spot).
+std::atomic<bool> mpInCity{false};
 // Test build 10 ONE BODY: when the render thread last drew the worn suit's SUIT BODY part (GetTickCount64; 0 never):
 // the game's own body and the fallback gloves are off while it is fresh (suit_wear::shownNow).
 std::atomic<uint64_t> suitShownAtMs{0};
@@ -3459,6 +3464,7 @@ DWORD WINAPI run(void*) {
                                            static_cast<double>(now.QuadPart - game.qpc) / frequency.QuadPart < .1;
                     const bool followsPlayer = native_view::validPose(body) && native_view::validPose(camera);
                     const bool gameplay = player.hero && bridgeRunning && committed && followsPlayer;
+                    mpInCity.store(gameplay, std::memory_order_relaxed); // 0.0.76 MP WORLD
                     uint64_t moverTable{};
                     read(game.mover, &moverTable, sizeof(moverTable));
                     // The headset is worn, focused and tracked: an image can be shown.
@@ -13245,6 +13251,11 @@ DWORD WINAPI run(void*) {
                                     }
                                     lp.standingEye = suitStanding > .8f ? suitStanding : 1.65f;
                                     lp.worldFeet = feet;
+                                    // 0.0.76 MP WORLD: the WORLD tail - his facing in the city and whether he is in it
+                                    // (the feet above are the player actor's transform, CONFIRMED; mp_world.hpp).
+                                    lp.sendWorld = true;
+                                    lp.worldValid = mpInCity.load(std::memory_order_relaxed);
+                                    lp.worldYaw = spidy::mp::yawOf(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
                                     // 0.0.74 FLIGHT POSE (fix 27): Player 2 leans too (the lean in the level frame)
                                     lp.leanUp = back.rotate(fly_lean::upOf(saved->flyLean));
                                     const uint8_t suitId = spidy::mp::suitIdOfSlot(wornSuitSlot.load());
@@ -13310,12 +13321,23 @@ DWORD WINAPI run(void*) {
                                         // 0.0.74 MP JOIN: a friend's game stands on the spot, turning as he turns.
                                         if (!v.peerGame)
                                             mpFacing.reset();
+                                        // 0.0.76 MP WORLD (mp_world.hpp): a friend in the city stands at his real spot, facing
+                                        // his real way (PLAYER 2 PLACE WORLD, the default); else the 0.0.74 buddy spot.
+                                        const bool mpWorld = spidy::mp::useWorld(c38(combat38::mpPlace) == 1 ? spidy::mp::placeBuddy
+                                                                                                               : spidy::mp::placeWorld,
+                                                                                 v.peerGame, v.buddy, v.state);
                                         const spidy::mp::Ghost g =
-                                            v.peerGame ? spidy::mp::partner(v.state, mpFollow.spot(Vec3{}),
-                                                                            mpFacing.bodyYaw(mpFollow.ghostYaw(), v.state.yaw), false, false)
-                                                       : spidy::mp::partner(v.state, mpFollow.spot(Vec3{}), mpFollow.ghostYaw(), !v.buddy,
-                                                                            v.buddy);
-                                        suit_wear::Tracked gt = spidy::mp::toTracked(g, feet, turn);
+                                            mpWorld      ? spidy::mp::partner(v.state, Vec3{}, v.state.worldYaw, false, false)
+                                            : v.peerGame ? spidy::mp::partner(v.state, mpFollow.spot(Vec3{}),
+                                                                              mpFacing.bodyYaw(mpFollow.ghostYaw(), v.state.yaw), false, false)
+                                                         : spidy::mp::partner(v.state, mpFollow.spot(Vec3{}), mpFollow.ghostYaw(), !v.buddy,
+                                                                              v.buddy);
+                                        const Vec3 gOrigin = mpWorld ? v.state.root : feet;
+                                        const Quat gTurn = mpWorld ? Quat{} : turn;
+                                        const float mpDistance = mpWorld ? length(v.state.root - feet) : 0.f;
+                                        // far away: the body fades out (150 - 250 m), only his tag (and the arrow) stay
+                                        const float bodyFade = mpWorld ? spidy::mp::bodyAlpha(mpDistance) : 1.f;
+                                        suit_wear::Tracked gt = spidy::mp::toTracked(g, gOrigin, gTurn);
                                         {   // 0.0.74 test 11 WALK LEGS: Player 2 steps with its own ground speed (from its
                                             // eyes here; nothing new on the wire), not while it flies or swings.
                                             static walk_cycle::Cycle mpWalk;
@@ -13326,7 +13348,7 @@ DWORD WINAPI run(void*) {
                                         }
                                         bool drawnSuit = false;
                                         const uint32_t gs = spidy::mp::slotOfState(v.state);
-                                        if (gs && suitsRigged.load() && overlay.modelReady()) {
+                                        if (gs && bodyFade > .99f && suitsRigged.load() && overlay.modelReady()) {
                                             const mesh_model::Mesh* gm = mesh_model::library().model(gs);
                                             const suit_wear::Rig& gr = suitRigs[gs - mesh_model::slotSuitFirst];
                                             suit_wear::Skeleton gl;
@@ -13343,12 +13365,13 @@ DWORD WINAPI run(void*) {
                                         // player was that stick figure thing"): no mod suit model for it (a game suit, the hero's
                                         // own look, or not installed) draws a shaded hero body in the LOOK's colours (SUIT LOOK,
                                         // the default); FIGURE, or a body that cannot be drawn, keeps test 6's stick figure.
-                                        bool drawnBody = false;
-                                        if (!drawnSuit && spidy::mp::bodyOn(c38(combat38::mpPlayer2Body)))
+                                        bool drawnBody = bodyFade <= .01f; // 0.0.76 MP WORLD: too far, no body
+                                        if (!drawnSuit && !drawnBody && spidy::mp::bodyOn(c38(combat38::mpPlayer2Body)))
                                             drawnBody = spidy::mp::appendHeroBody(vertices, gt, spidy::mp::lookOf(v.state), viewer,
-                                                                                  v.alpha) > 0;
+                                                                                  v.alpha * bodyFade) > 0;
                                         if (!drawnSuit && !drawnBody)
-                                            spidy::mp::appendFigure(translucent, gt, viewer, spidy::mp::heroColor(v.state.hero), v.alpha);
+                                            spidy::mp::appendFigure(translucent, gt, viewer, spidy::mp::heroColor(v.state.hero),
+                                                                    v.alpha * bodyFade);
                                         // 0.0.74 MP PROPS: PLAYER 2's batarangs, guns, shield, claws, batons and THOR's hammer, placed
                                         // on him like his grips (mirrored for the loopback) and drawn by the player's own draws.
                                         // His models are loaded the first time his props name them (the built-in look while
@@ -13358,9 +13381,9 @@ DWORD WINAPI run(void*) {
                                         static spidy::mp::FxInbox mpInbox;
                                         const double fxNow2 =
                                             std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-                                        const spidy::mp::GhostFrame gf = spidy::mp::ghostFrame(g, !v.peerGame && !v.buddy, feet, turn);
+                                        const spidy::mp::GhostFrame gf = spidy::mp::ghostFrame(g, !v.peerGame && !v.buddy, gOrigin, gTurn);
                                         mpInbox.take(v.state.props, gf, fxNow2);
-                                        if ((v.state.props.any() || mpInbox.live(fxNow2)) && v.alpha > .3f) {
+                                        if ((v.state.props.any() || mpInbox.live(fxNow2)) && v.alpha > .3f && bodyFade > .01f) {
                                             spidy::mp::RemoteProps rp = spidy::mp::rebuildProps(v.state.props, gf);
                                             mpInbox.apply(rp, fxNow2);
                                             auto& lib = mesh_model::library();
@@ -13455,8 +13478,23 @@ DWORD WINAPI run(void*) {
                                             }
                                         }
                                         const float tall = std::clamp(gt.standingEye > .8f ? gt.standingEye : 1.65f, 1.f, 2.4f);
-                                        spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs, v.peerGame),
-                                                                   gt.feet + gt.up * (tall + .35f), gt.up, viewer, v.alpha);
+                                        const Vec3 above = gt.feet + gt.up * (tall + .35f);
+                                        if (!mpWorld) {
+                                            spidy::mp::appendNameplate(translucent, spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs, v.peerGame),
+                                                                       above, gt.up, viewer, v.alpha);
+                                        } else {
+                                            // 0.0.76 MP WORLD: his tag with his distance, kept readable far away (drawn nearer
+                                            // along the line to him), and an arrow at the edge of the view when he is out of it.
+                                            spidy::mp::appendNameplate(
+                                                translucent,
+                                                spidy::mp::worldNameplate(spidy::mp::nameplate(v.buddy, v.buddyName, v.pingMs, v.peerGame),
+                                                                          mpDistance),
+                                                spidy::mp::tagSpot(viewer, above), Vec3{0, 1, 0}, viewer, v.alpha);
+                                            const spidy::mp::Arrow arrow = spidy::mp::offscreenArrow(
+                                                viewer, rendered.headPose.orientation.rotate(Vec3{0, 0, -1}),
+                                                rendered.headPose.orientation.rotate(Vec3{0, 1, 0}), above);
+                                            spidy::mp::appendArrow(translucent, arrow, .09f, spidy::mp::heroColor(v.state.hero), v.alpha * .9f);
+                                        }
                                     }
                                 } else if (mpSession->started()) {
                                     mpSession->clearLocal();
@@ -15482,6 +15520,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEntryFacing(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideoutHold(void* v) { return setHero007(v, combat38::hideoutHold, 5525); }
 // 0.0.74 test 10 GLIDE TILT (cape_glide.hpp tiltPitch): ON (0, the default) or OFF (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlideTilt(void* v) { return setHero007(v, combat38::glideTilt, 5535); }
+// 0.0.76 MP WORLD PLAYER 2 PLACE (mp_world.hpp): WORLD (0, the default) or BUDDY (1); live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlace(void* v) { return setHero007(v, combat38::mpPlace, 5536); }
 // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON (the default) / 1 OFF (the old aim)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowSwing(void* v) { return setHero007(v, combat38::throwSwing, 5534); }
 // 0.0.73 test 5: IRON MAN HERO HANDS, DAREDEVIL GRAPPLE AIM, WOLVERINE CLAW LOOK - ON (0) or OFF (1), live (live.txt

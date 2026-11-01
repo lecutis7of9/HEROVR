@@ -144,6 +144,26 @@ lost packet loses nothing), your game takes it once, puts it where it happened a
 clock. At most 4 a packet: in a very busy fight the oldest may be skipped. `--props effects` shows them all on
 the buddy (a shot every half second, a shock ring every 3 s); `--props all` adds a lightning bolt and the shots.
 
+## 0.0.76 MP WORLD - your friend at his real spot
+
+Each pose now ends with a 6-byte **WORLD tail** (`'W'`, version 1, flags bit 0 = in the city, his world facing as
+an int16 of pi, a spare byte) after the LOOK and PROPS tails. His feet were already on the wire (`root`, the world
+feet since 0.0.73). With `mp_place = world` (live.txt, the default) a friend's game whose pose carries the tail and
+says he is in the city is drawn **at his real spot, facing his real way**; his tag shows his distance (`230 M`,
+`1.2 KM`) and is drawn 6 m along the line to him when he is farther, so it stays readable; his body fades out
+between 150 m and 250 m; when he is out of view a small chevron at the edge of your view points the way to him.
+The pose interpolation (0.1 s behind, 0.25 s hold) smooths him; a jump over 50 m between packets (fast travel,
+respawn) snaps instead of sweeping across the city.
+
+Falls back to the 0.0.74 buddy spot (3 m ahead of you) when: `mp_place = buddy`; the friend runs an older build
+(no WORLD tail - a 0.0.74 build likewise ignores ours: its props reader drops a tail that is not `'P'`); he is in
+a menu, loading or a cutscene (the in-city flag is off); his values are not finite; the loopback or the Test
+Buddy. The fullest packet is 24 + 136 + 342 + 6 = 508 bytes (under 512).
+
+Test: both players on this build, host / join as before, both in the city. Swing to each other: he should stand
+where his game shows him (same street, same roof), his tag counting down the metres. Turn away: the arrow points
+to him. Set `mp_place = buddy` in live.txt: he jumps back in front of you at once (no restart).
+
 ## Files
 
 | File | Role |
@@ -155,6 +175,7 @@ the buddy (a shot every half second, a shock ring every 3 s); `--props all` adds
 | `include/spidy/mp_session.hpp`, `src/mp_session.cpp` | the network thread: loopback echo, buddy link, ping |
 | `include/spidy/mp_ghost.hpp`, `src/mp_ghost.cpp` | placement, stick figure, nameplate (pure) |
 | `include/spidy/mp_body.hpp`, `src/mp_body.cpp` | 0.0.73 MPSUIT PLAYER 2 BODY: the shaded hero body for a suit with no mod model, and its LOOK (pure) |
+| `include/spidy/mp_world.hpp`, `src/mp_world.cpp` | 0.0.76 MP WORLD: world-or-buddy placement, distance tag, far tag spot, body fade, off-screen arrow (pure) |
 | `src/game_xr.cpp` | wiring: publish the pose, draw the remote player (after the suit, before the mirror) |
 | `tools/mp_test_buddy.py` | the Test Buddy (stdlib only), `--selftest` matches `spidy_mp_probe golden` byte for byte |
 | `tests/mp_tests.cpp`, `tests/mp_buddy_tests.py`, `tests/hero074_mp_lobby_tests.py` | round trip, versioning, malformed packets, interpolation, loopback delay, buddy handshake, live buddy |
@@ -168,7 +189,11 @@ the buddy (a shot every half second, a shock ring every 3 s); `--props all` adds
 | Remote body drawn from `suit_wear` / `mesh_model` only | CONFIRMED (mod-internal) |
 | Loopback + Test Buddy on localhost | CONFIRMED (Linux tests and CI; in-headset: to be confirmed by the tester) |
 | Buddy on another PC over LAN (opt-in: empty file `%APPDATA%\Spidy\MP-LAN-ON.txt`, UDP 39470 through Windows Firewall) | CANDIDATE |
-| Remote player's placement in the world (drawn relative to you, ~3 m ahead; not at its real world position) | CANDIDATE design for the solo test |
+| Remote player's placement, `mp_place = buddy` (drawn relative to you, ~3 m ahead) | CONFIRMED (mod-internal; the 0.0.74 behaviour) |
+| 0.0.76 world feet: the local player actor's transform (registry HeroLocal record -> 4x4 matrix, translation at +0x30), as `rendered.anchor + travel` | CONFIRMED (the VR rig, webs, enemy tracking and the 0.0.75 world trace all read it live) |
+| 0.0.76 world facing: the eye's level facing in the overlay's world frame | CONFIRMED (mod-internal) |
+| 0.0.76 both games share the same absolute city coordinates (no per-session origin shift) | CANDIDATE - needs the two-player test |
+| The actor matrix's forward row as a facing | NOT USED (axis/sign CANDIDATE) |
 | LAN lobby beacon / list / MP-LOBBY.txt (no game data, mod-internal) | CONFIRMED by construction (Linux tests); across two real Windows PCs and Windows Firewall: CANDIDATE, to be confirmed by the tester |
 | Game's own suit id at `+0x8c` | NOT USED |
 | Any game body / actor address for a remote player | NOT USED (none invented) |

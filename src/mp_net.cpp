@@ -102,6 +102,28 @@ Quat nlerp(Quat a, Quat b, float t) {
 }
 Vec3 lerp(Vec3 a, Vec3 b, float t) { return a + (b - a) * t; }
 Vec3 mirrorX(Vec3 v) { return {-v.x, v.y, v.z}; }
+
+// 0.0.76 MP WORLD: how many bytes a PROPS tail at `p` takes on the wire, by its own header (0: not a PROPS tail
+// this build knows - then the WORLD tail, if any, starts there; a tail longer than what is left: all of it).
+size_t propsWireBytes(const uint8_t* p, size_t left) {
+    if (!p || left < propsHeaderBytes || p[0] != propsTag || p[1] != propsVersion)
+        return 0;
+    const size_t n = propsHeaderBytes + p[2] * propItemBytes + p[3] * propLineBytes + p[4] * propFxBytes;
+    return std::min(n, left);
+}
+// The WORLD tail at payload offset `at` (of `body` bytes): hasWorld only when it is all there and marked.
+void decodeWorld(const uint8_t* payload, size_t body, size_t at, PoseState& s) {
+    s.hasWorld = s.worldValid = false;
+    s.worldYaw = 0;
+    if (!payload || at + worldBytes > body || payload[at] != worldTag || payload[at + 1] != worldVersion)
+        return;
+    const uint16_t u = static_cast<uint16_t>(payload[at + 3] | (payload[at + 4] << 8));
+    const float y = static_cast<float>(static_cast<int16_t>(u)) / 32767.f * pi;
+    s.hasWorld = true;
+    s.worldValid = (payload[at + 2] & worldInCity) != 0 && within(s.root, 1e5f);
+    s.worldYaw = wrapAngle(y);
+}
+
 } // namespace
 
 const char* errorName(Error e) {
@@ -154,7 +176,9 @@ std::string cleanName(const char* raw) {
 
 size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
     // 0.0.73 MPSUIT: + the LOOK tail; 0.0.74 MP PROPS: + the PROPS tail when there is one
-    const size_t body = p.type == pose ? poseSentBytes + propsBytes(p.state.props) : payloadFor(p.type);
+    // 0.0.76 MP WORLD: + the WORLD tail when the state has one
+    const size_t body = p.type == pose ? poseSentBytes + propsBytes(p.state.props) + (p.state.hasWorld ? worldBytes : 0)
+                                       : payloadFor(p.type);
     if (body == SIZE_MAX || p.role >= roleEnd || !out || capacity < overheadBytes + body)
         return 0;
     Writer w{out, 0, capacity};
@@ -195,6 +219,13 @@ size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
             if (n != propsBytes(s.props))
                 return 0;
             w.bytes(tail, n);
+        }
+        if (s.hasWorld) { // 0.0.76 MP WORLD
+            const float y = wrapAngle(s.worldYaw);
+            const long q = std::lround(std::clamp(y / pi, -1.f, 1.f) * 32767.f);
+            const uint16_t u = static_cast<uint16_t>(static_cast<int16_t>(q));
+            w.u8(worldTag), w.u8(worldVersion), w.u8(s.worldValid ? worldInCity : 0);
+            w.u8(static_cast<uint8_t>(u & 0xff)), w.u8(static_cast<uint8_t>(u >> 8)), w.u8(0);
         }
         break;
     }
@@ -286,8 +317,14 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
                 s.lookPrimary = c[0], s.lookSecondary = c[1], s.lookEmblem = c[2];
         }
         // 0.0.74 MP PROPS: the PROPS tail right after LOOK (one that does not parse: no props, the pose still counts)
-        if (body > poseSentBytes)
+        size_t used = poseSentBytes;
+        if (body > poseSentBytes) {
             decodeProps(data + headerBytes + poseSentBytes, body - poseSentBytes, s.props);
+            used += propsWireBytes(data + headerBytes + poseSentBytes, body - poseSentBytes);
+        }
+        // 0.0.76 MP WORLD: the WORLD tail right after the props (or LOOK); one that does not parse: no world
+        // (the pose still counts, the receiver keeps the buddy placement).
+        decodeWorld(data + headerBytes, body, used, s);
         break;
     }
     case hello:
@@ -339,7 +376,11 @@ Vec3 safeLeanUp(Vec3 up) {
 PoseState blend(const PoseState& a, const PoseState& b, float t) {
     t = std::isfinite(t) ? std::clamp(t, 0.f, 1.f) : 1.f;
     PoseState s = b;
-    s.root = lerp(a.root, b.root, t);
+    // 0.0.76 MP WORLD: a jump farther than a sprint between two packets (a fast travel, a respawn) snaps there,
+    // never sweeps a ghost across the city; the world yaw turns the short way like the yaw.
+    s.root = length(b.root - a.root) > worldSnap ? b.root : lerp(a.root, b.root, t);
+    if (a.hasWorld && b.hasWorld && a.worldValid && b.worldValid)
+        s.worldYaw = wrapAngle(a.worldYaw + wrapAngle(b.worldYaw - a.worldYaw) * t);
     s.yaw = wrapAngle(a.yaw + wrapAngle(b.yaw - a.yaw) * t);
     s.head.position = lerp(a.head.position, b.head.position, t);
     s.head.orientation = nlerp(a.head.orientation, b.head.orientation, t);
@@ -517,6 +558,10 @@ PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t sui
     s.actions = a;
     s.standingEye = l.standingEye;
     s.leanUp = safeLeanUp(back.rotate(safeLeanUp(l.leanUp))); // 0.0.74 FLIGHT POSE
+    // 0.0.76 MP WORLD: the WORLD tail - only in the city with a real feet position
+    s.hasWorld = l.sendWorld;
+    s.worldValid = l.sendWorld && l.worldValid && finite(l.worldFeet) && within(l.worldFeet, 1e5f) && std::isfinite(l.worldYaw);
+    s.worldYaw = s.worldValid ? wrapAngle(l.worldYaw) : 0.f;
     return s;
 }
 

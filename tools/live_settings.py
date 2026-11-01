@@ -1245,6 +1245,58 @@ def shimmer_notes(kept, live_values):
     return lines
 
 
+# 0.0.76 SUIT PROBE start-up line (test builds): one console line every session, on or off, and whether the user's
+# sm2scan.json is found and where (the same places, in the same order, as src/suit_probe.cpp lookForScan; only looked
+# at, never opened for writing). A TEST build (HERO-VR-TEST-BUILD.txt in the folder, written only by the test-build
+# script) starts the probe ON when live.txt does not say; a release keeps the DLL's own default, OFF.
+TEST_BUILD_MARKER = 'HERO-VR-TEST-BUILD.txt'
+
+
+def sm2scan_places(root, profile=None):
+    """Where the probe looks for sm2scan.json, first match wins (suit_probe.cpp lookForScan's order)."""
+    places = [pathlib.PureWindowsPath(str(root)) / 'sm2scan.json',
+              pathlib.PureWindowsPath(str(root)) / 'reports' / 'sm2scan.json'] if root else []
+    if profile:
+        p = pathlib.PureWindowsPath(str(profile))
+        places += [p / 'Desktop' / 'sm2scan.json', p / 'OneDrive' / 'Desktop' / 'sm2scan.json',
+                   p / 'Downloads' / 'sm2scan.json']
+    return places
+
+
+def find_sm2scan(root, profile=None, exists=None):
+    """The first sm2scan.json the probe would read (2 bytes to 16 MB), or None. `exists(path)` -> size or None."""
+    def size_of(place):
+        try:
+            return os.path.getsize(str(place))
+        except OSError:
+            return None
+    exists = exists or size_of
+    for place in sm2scan_places(root, profile):
+        size = exists(place)
+        if size is not None and 2 <= size <= (16 << 20):
+            return place
+    return None
+
+
+def suit_probe_start(root, kept, test_build, profile=None, exists=None):
+    """(the value to send at the start or None, the one start-up line). kept: live.txt's kept settings."""
+    said = kept.get('suit_probe')
+    send = None
+    if said is None and test_build:
+        send = 'on'
+    on = (said if said is not None else ('on' if test_build else 'off')) in ('on', 1, '1')
+    live = pathlib.PureWindowsPath(str(root)) / 'live.txt' if root else 'live.txt'
+    found = find_sm2scan(root, profile, exists)
+    scan = (f'sm2scan.json found: {found}' if found else
+            'sm2scan.json NOT found (looked in: ' + '; '.join(str(p) for p in sm2scan_places(root, profile)) + ')')
+    if on:
+        why = 'the TEST build default' if said is None else 'live.txt says on'
+        line = f'SUIT PROBE: on, read-only ({why}; set suit_probe = off in {live} to stop it) - {scan}'
+    else:
+        line = f'SUIT PROBE: off (set suit_probe = on in {live}) - {scan}'
+    return send, line
+
+
 def start_notes(path):
     """shimmer_notes for the live.txt at `path` (none when it cannot be read)."""
     try:

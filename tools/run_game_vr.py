@@ -3039,6 +3039,21 @@ def session(a, startup, session_off=()):
             else:
                 live_file.applied(name, value)
                 print(f'live.txt (kept): {text.format(value)}', flush=True)
+        # 0.0.76 SUIT PROBE: one start-up line every session (on or off, and where sm2scan.json is); a TEST build starts
+        # it on when live.txt does not say (live_settings.suit_probe_start). Read-only either way.
+        try:
+            probe_send, probe_line = live_settings.suit_probe_start(
+                ROOT, kept, (ROOT/live_settings.TEST_BUILD_MARKER).is_file(), os.environ.get('USERPROFILE'))
+            if probe_send is not None:
+                if 'SpidySuitProbe' not in xr:
+                    probe_line += ' (this DLL has no SUIT PROBE)'
+                elif call_remote(process, xr['SpidySuitProbe'], live_settings.export_value('suit_probe', probe_send)):
+                    probe_line += ' (refused: it stays off)'
+                else:
+                    live_file.applied('suit_probe', probe_send)
+            print(probe_line, flush=True)
+        except Exception as error:  # never stops the start-up
+            print(f'SUIT PROBE: the start-up line could not be made ({error})', flush=True)
         # Update 37: the run36 closing settings are the new defaults, for whatever live.txt does not keep.
         for name, value in live_settings.UPDATE37_DEFAULTS.items():
             if name in kept:

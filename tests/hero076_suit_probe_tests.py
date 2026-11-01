@@ -67,6 +67,40 @@ class SuitProbe(unittest.TestCase):
         self.assertEqual(text.count('. '), 0)  # one sentence
         self.assertIn('CANDIDATE', h)
         self.assertIn('CONFIRMED', h)
+    def test_startup_line_always(self):
+        # 0.0.76 test 3 steering: one start-up line every session, on or off, saying whether sm2scan.json is found and where
+        root, prof = 'C:\\HERO VR', 'C:\\Users\\p'
+        none = lambda p: None
+        send, line = live_settings.suit_probe_start(root, {}, False, prof, none)
+        self.assertIsNone(send)  # a release: the DLL's own default (OFF), nothing sent
+        self.assertTrue(line.startswith('SUIT PROBE: off (set suit_probe = on in C:\\HERO VR\\live.txt)'))
+        self.assertIn('sm2scan.json NOT found (looked in: C:\\HERO VR\\sm2scan.json;', line)
+        self.assertIn('C:\\Users\\p\\Downloads\\sm2scan.json', line)
+        send, line = live_settings.suit_probe_start(root, {}, True, prof, none)
+        self.assertEqual(send, 'on')  # a TEST build: on when live.txt does not say
+        self.assertTrue(line.startswith('SUIT PROBE: on, read-only (the TEST build default;'))
+        send, line = live_settings.suit_probe_start(root, {KEY: 'off'}, True, prof, none)
+        self.assertIsNone(send)  # live.txt's off is kept, even on a test build
+        self.assertTrue(line.startswith('SUIT PROBE: off'))
+        desk = lambda p: 1234 if str(p).endswith('Desktop\\sm2scan.json') else None
+        send, line = live_settings.suit_probe_start(root, {KEY: 'on'}, False, prof, desk)
+        self.assertIsNone(send)  # already kept (sent with the other kept settings)
+        self.assertIn('live.txt says on', line)
+        self.assertTrue(line.endswith('sm2scan.json found: C:\\Users\\p\\Desktop\\sm2scan.json'))
+        tiny = lambda p: 1
+        self.assertIn('NOT found', live_settings.suit_probe_start(root, {}, False, prof, tiny)[1])
+        # the same places, in the same order, as the DLL's lookForScan
+        c = src('src/suit_probe.cpp')
+        self.assertLess(c.index('L"reports" / L"sm2scan.json"'), c.index('L"Desktop" / L"sm2scan.json"'))
+        self.assertLess(c.index('L"OneDrive" / L"Desktop"'), c.index('L"Downloads" / L"sm2scan.json"'))
+        self.assertEqual([str(p) for p in live_settings.sm2scan_places(root, prof)],
+                         ['C:\\HERO VR\\sm2scan.json', 'C:\\HERO VR\\reports\\sm2scan.json',
+                          'C:\\Users\\p\\Desktop\\sm2scan.json', 'C:\\Users\\p\\OneDrive\\Desktop\\sm2scan.json',
+                          'C:\\Users\\p\\Downloads\\sm2scan.json'])
+        g = src('tools/run_game_vr.py')
+        self.assertIn('live_settings.suit_probe_start(', g)
+        self.assertIn("(ROOT/live_settings.TEST_BUILD_MARKER).is_file()", g)
+        self.assertEqual(live_settings.TEST_BUILD_MARKER, 'HERO-VR-TEST-BUILD.txt')
     def test_no_forbidden_name(self):
         for p in ('include/spidy/suit_probe.hpp', 'src/suit_probe.cpp', 'tests/suit_probe_tests.cpp',
                   'tests/hero076_suit_probe_tests.py', 'tools/sm2_suits/sm2scan.py', 'tools/live_settings.py'):

@@ -93,6 +93,7 @@ New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their s
 | `hero_webs` | Every hero keeps iilyn's web swinging on the grips (the flying heroes fly with their arms and A, not the grips); applies live, no restart. |
 | `beams` | Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart. |
 | `power_damage` | How hard the powers hit, 25 to 200 percent; applies live, no restart. |
+| `props` | HERO PROPS: 1 (default) puts the heroes' own 3D weapons in your hands (THOR throws his hammer and it comes back, CAP throws his shield, WOLVERINE's claws, DAREDEVIL's batons, PUNISHER's pistol, BATMAN's batarang), drawn over the game's picture so walls never hide them, 0 draws none; applies live, no restart. |
 | `menu_size` | The wrist menu's size, 60 to 160 percent; applies live, no restart. |
 | `grapple` | CAPTAIN AMERICA and DAREDEVIL grapple instead of web swinging: hold a grip and pull its trigger to fire a line at a wall or roof, let go of the grip to coast, press A to jump out; applies live, no restart. |
 | `color_fx` | COLOR: 1 draws the colour grade on both eyes, 0 (default) leaves iilyn's picture exactly as it is with no extra GPU work; applies live, no restart. |
@@ -177,3 +178,46 @@ different resource per eye, in every pass (2 passes at least); anything less sta
   press as its own web or gadget shot.
 - **No held weapons.** The add-on draws flat quads only (OpenXR quad layers). It has no 3D model renderer, and
   SpidyVR submits no depth, so a held model would also draw over walls. Held weapons are not in this build.
+
+## Hero props (0.0.76 SM1, commits 0ca47cf, f7b17b5)
+
+The heroes' real 3D weapons, the same models as the SM2 build (Models folder; artists credited in
+THIRD-PARTY-MODELS.md), drawn by a small D3D12 renderer inside the layer as one extra projection layer over his:
+
+| Hero | Props | Trigger (right hand) |
+| --- | --- | --- |
+| THOR | Mjolnir in the right hand (the launcher's hammer choice is not read yet: always BOOOOP's) | throws the hammer at the ringed enemy (or straight ahead); it hits on arrival and flies back into your hand; no lunge |
+| CAPTAIN AMERICA | the shield on the right forearm | throws the shield; it hits on arrival and comes back |
+| BATMAN | (nothing held) | throws a batarang; it hits on arrival and is gone |
+| WOLVERINE | claws on both hands, polished steel | his power as before |
+| DAREDEVIL | a baton in each hand | his power as before |
+| PUNISHER | a pistol in each hand | his power as before |
+
+While the hammer or shield is out, that hand's trigger does nothing (you have to catch it first). The blow lands
+only if the enemy is still there when the prop arrives ("TARGET GONE" otherwise).
+
+**Depth: none.** His views carry no per-eye depth we can trust (the layer logs once whether they carry
+`XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR`), so the props are always drawn over the game: a wall or an enemy in front
+of the hammer does not hide it, and a thrown prop flies visibly through walls.
+
+Known limits: the throw flies in the game's world and is drawn through the head (game-to-headset map), so the catch
+can snap a few centimetres; "game units are metres" is a CANDIDATE (the layer logs the measured ratio once: `props: right hand to head ... (ratio N; 1.00 means metres)`). Any D3D12 or OpenXR failure turns only the props off (logged) and leaves his picture as it is.
+
+Off-headset preview (developer tool, Linux, not shipped): `tools/sm1_props_preview/sm1_props_preview.cpp` draws the
+same scene from the real models on the CPU with the shader's lighting, both eyes:
+
+    g++ -std=c++20 -O2 -Iinclude tools/sm1_props_preview/sm1_props_preview.cpp \
+        build/gate-sm1/src/sm1/libherovr_sm1_core.a build/gate-sm1/libspidy_core.a -o sm1pp
+    ./sm1pp <HERO VR>/Models/ out/
+
+### Headset test
+
+1. live.txt `props=1` (default). Pick THOR: Mjolnir in your right hand. Ring an enemy and pull the right trigger:
+   the hammer flies to him, he takes the hit, it comes back to your hand. Pull again while it is out: nothing.
+2. CAPTAIN AMERICA: shield on the right forearm; throw it the same way.
+3. WOLVERINE / DAREDEVIL / PUNISHER: claws / batons / pistols follow both hands in both eyes (close one eye, then the
+   other: same place). BATMAN: the trigger throws a batarang.
+4. `props=0` while playing: they vanish, no restart. layer.log: the `props:` lines (renderer, depth info, the scale ratio,
+   which controllers) and the `throw:` lines (thrown, hit or enemy gone, back in the hand).
+
+Made by Agent Mulder.

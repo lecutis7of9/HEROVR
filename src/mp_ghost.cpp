@@ -59,6 +59,7 @@ suit_wear::Tracked toTracked(const Ghost& g, Vec3 origin, Quat turn) {
         t.curl[i] = std::clamp(std::isfinite(g.curl[i]) ? g.curl[i] : 0.f, 0.f, 1.f);
     }
     t.standingEye = g.standingEye;
+    t.elbowsBack = true; // 0.0.76 MP ARMS: Player 2's elbows hang down and back
     // 0.0.74 FLIGHT POSE (fix 27): Player 2 leans as the player does (0.0.73 never sent it: always upright).
     const Quat lean = fly_lean::fromUp(t.up, dir(g.up));
     if (fly_lean::leaning(lean)) {

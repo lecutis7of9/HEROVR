@@ -153,6 +153,7 @@
 #include "spidy/mp_prop_look.hpp" // 0.0.74 MP PROPS
 #include "spidy/mp_session.hpp" // 0.0.73 MP SOLO TEST
 #include "spidy/mp_world.hpp"   // 0.0.76 MP WORLD
+#include "spidy/suit_probe.hpp" // 0.0.76 SUIT PROBE (read-only)
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
@@ -982,6 +983,8 @@ std::atomic<uint32_t> vanNoFlipsNow{0};
 std::atomic<uint32_t> carCollisionNow{0};
 // 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp; live.txt dd_quick_grapple): 0 ON (the default), 1 OFF.
 std::atomic<uint32_t> ddQuickGrappleNow{0};
+// 0.0.76 SUIT PROBE (suit_probe.hpp; live.txt suit_probe): 0 OFF (the default, nothing read), 1 ON (read-only).
+std::atomic<uint32_t> suitProbeNow{0};
 // 0.0.74 test 10 FLY FEEL (fly_feel074.hpp; live.txt fly_hold, fly_steer, fly_flips, fly_look_up: 0 ON (the
 // default), 1 OFF; fly_look_up enables LOOK UP, which a tap of Y while flying toggles, off each session).
 std::atomic<uint32_t> flyHoldNow{0}, flySteerNow{0}, flyFlipsNow{0}, flyLookUpNow{0};
@@ -10308,6 +10311,9 @@ DWORD WINAPI run(void*) {
                                           "Spider-Sense on your vest - it connects by itself");
                         }
                     }
+                    // 0.0.76 SUIT PROBE (suit_probe.hpp): read-only, at most once a second while on; off reads nothing.
+                    suit_probe::frame(player.record, suitProbeNow.load() == 1,
+                                      [](const char* line) { consoleLine(line); });
                     {
                         std::lock_guard lock(telemetry);
                         auto& d = SpidyXrData;
@@ -15128,6 +15134,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyClassic(void* v) {
 // 0.0.74 test 10 DD QUICK GRAPPLE (dd_grapple074.hpp), live: 0 ON (the default), 1 OFF.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdQuickGrapple(void* v) {
     return setLive(v, 0, 1, 5552, ddQuickGrappleNow, asU32);
+}
+// 0.0.76 SUIT PROBE (suit_probe.hpp), live: 0 OFF (the default), 1 ON (read-only, logs the worn .model paths).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitProbe(void* v) {
+    return setLive(v, 0, 1, 5553, suitProbeNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

@@ -219,6 +219,9 @@ add_test(NAME replay COMMAND spidy_replay_tests)
 add_executable(spidy_mirror_probe_tests tests/mirror_probe_tests.cpp)
 target_include_directories(spidy_mirror_probe_tests PRIVATE include)
 add_test(NAME mirror_probe COMMAND spidy_mirror_probe_tests)
+add_executable(spidy_suit_probe_tests tests/suit_probe_tests.cpp)
+target_include_directories(spidy_suit_probe_tests PRIVATE include)
+add_test(NAME suit_probe COMMAND spidy_suit_probe_tests)
 # Settings profiles (launcher_profile.hpp) hold the SPIDY VR tab's settings: the launcher's programs build
 # vr_settings themselves, as the launcher has the static runtime and spidy_core the DLL one.
 add_executable(spidy_launcher_tests tests/launcher_tests.cpp src/vr_settings.cpp)
@@ -421,7 +424,8 @@ if(SPIDY_BUILD_XR)
     target_sources(spidy_stereo_probe PRIVATE src/game_xr.cpp src/game_player.cpp src/native_game_body.cpp src/game_pad.cpp src/sm2_damage.cpp
                    src/game_menu.cpp src/game_time.cpp src/game_prompts.cpp src/game_steam.cpp
                    src/phone_music.cpp src/music_audio_win.cpp src/sfx_win.cpp
-                   src/game_duck_win.cpp) # 0.0.74 test 3 CAVE QUIET
+                   src/game_duck_win.cpp # 0.0.74 test 3 CAVE QUIET
+                   src/suit_probe.cpp) # 0.0.76 SUIT PROBE (read-only)
     # Update 19: the MUSIC page's player (Media Foundation decodes, WASAPI plays).
     target_link_libraries(spidy_stereo_probe PRIVATE spidy_openxr spidy_bhaptics shell32 ole32 uuid mfplat
                           mfreadwrite mfuuid windowscodecs)

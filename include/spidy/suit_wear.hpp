@@ -190,6 +190,9 @@ struct Tracked {
     // open: the profile's open hand (handOpen: IRON MAN's repulsor) this frame, per hand.
     bool heroHands{};
     bool open[2]{};
+    // 0.0.76 MP ARMS: the elbows hang down and back, close to the body (Player 2 - mp::toTracked); false: the
+    // player's own suit exactly as before (elbows pushed out: a low hand by the belly read as a hand on the hip).
+    bool elbowsBack{};
     Vec3 feet{}, up{0, 1, 0};
     float standingEye = 0; // the player's standing eye height above the feet (0: this frame's, crouching shrinks him)
     // Version 0.0.74 FLIGHT POSE (fix 27): the flight's lean (world; identity: upright, exactly the old body) already

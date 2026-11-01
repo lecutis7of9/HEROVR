@@ -198,3 +198,11 @@ to him. Set `mp_place = buddy` in live.txt: he jumps back in front of you at onc
 | Game's own suit id at `+0x8c` | NOT USED |
 | Any game body / actor address for a remote player | NOT USED (none invented) |
 | Steam P2P / NAT traversal / more than 2 players | FUTURE |
+
+## 0.0.76 MP fixes from the first two-player test (v0.0.75.1)
+
+- **PLAYER 2's hands:** a hand his headset is not tracking (or a broken value) is sent, and read, as a hand resting at
+  his side, never as a far-away point; a 0.0.75 reader refused such a pose ("refused ... bad value") and Player 2
+  stuttered. A whole pose is now refused only for a broken head.
+- **PLAYER 2's arms:** his elbows bend down and back (they pointed out, a "hand on the hip" look). Your own body is unchanged.
+- Both players should run the same build.

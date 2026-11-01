@@ -77,3 +77,7 @@ linked. The ArkWeb research checkout is likewise not bundled or linked. See
 The SM1 suits tool (`tools/sm1_suits`, HERO VR 0.0.76) contains a copy of `dat1lib` from
 [ALERT by Tkachov](https://github.com/Tkachov/ALERT), commit `bc90ed9b`, GPL-3.0. The licence is retained in
 `tools/sm1_suits/vendor/LICENSE-ALERT.txt`; the one HERO VR change is listed in `tools/sm1_suits/vendor/README.md`.
+
+The SM2 suit scanner (`tools/sm2_suits/sm2scan.py`, HERO VR 0.0.76) is independent code that follows the file
+formats documented by [Overstrike](https://github.com/Tkachov/Overstrike) (GPL-3.0) and ALERT's `dat1lib`; no
+code of either is copied into it. It only reads the user's own installed game files and copies nothing out.

@@ -96,6 +96,7 @@ int main(int argc, char** argv) {
         int ping;
         int look;    // 0.0.73 MPSUIT: 0 no LOOK tail (the classic colours), 1 the default palette sent, 2 a learned black and red one
         bool figure; // PLAYER 2 BODY FIGURE (the switch reverted): the stick figure
+        bool relaxed{}; // 0.0.76 MP ARMS: both hands low by the hips, the controllers pointing ahead and down
     };
     const Scene scenes[] = {
         {"LOOPBACK GHOST - you in THOR's suit, mirrored, your raised RIGHT hand is its LEFT", 9, "Suit_thor_1", false, "", 3, 0, false},
@@ -104,6 +105,8 @@ int main(int argc, char** argv) {
         {"SPIDER-MAN in a GAME suit (no mod model): PLAYER 2 BODY, the suit's colours (red and black)", 0, nullptr, false, "", 3, 1, false},
         {"SPIDER-MAN in a GAME suit, its colours learned from the game's render (a black and red suit)", 0, nullptr, false, "", 3, 2, false},
         {"PLAYER 2 BODY = FIGURE (the switch reverted): test 6's stick figure", 0, nullptr, false, "", 3, 1, true},
+        {"0.0.76 MP ARMS - SPIDER-MAN in a GAME suit standing relaxed, hands by his hips (the user's screenshot pose)", 0, nullptr, false, "CASH", 88, 1, false, true},
+        {"0.0.76 MP ARMS - the same pose in THOR's suit", 9, "Suit_thor_1", false, "CASH", 88, 0, false, true},
     };
     std::string js = "{\n \"layers\": " + std::to_string(array.layers.size()) + ",\n \"misses\": " + std::to_string(misses.size()) + ",\n \"scenes\": [";
     std::vector<Vertex> model, soft;
@@ -117,6 +120,13 @@ int main(int argc, char** argv) {
         l.grip[0] = {{-.25f, 1.05f, -.25f}, {}};
         l.grip[1] = {{.38f, 1.78f, -.18f}, {}};
         l.curl[0] = .2f, l.curl[1] = 0;
+        if (sc.relaxed) { // the grips 22 cm out, 62 cm under the eye, 18 cm ahead; the controllers pitched 35 deg down
+            const float c = std::cos(-.3f), sn = std::sin(-.3f);
+            const Quat pitch{sn, 0, 0, c};
+            l.grip[0] = {{-.22f, 1.03f, -.18f}, pitch};
+            l.grip[1] = {{.22f, 1.03f, -.18f}, pitch};
+            l.curl[0] = l.curl[1] = .3f;
+        }
         l.standingEye = 1.65f;
         l.worldFeet = sc.buddy ? Vec3{.6f, 0, .3f} : Vec3{};
         const int si = sc.suit ? suitIndex(sc.suit) : -1;

@@ -34,7 +34,11 @@ The OpenXR loader ignores HKCU layers when the game runs as administrator: then 
 | Holo card | The hero's card on the wrist (2D). | built, not tried in game |
 | Hero powers | Trigger of an outstretched hand (more than 0.42 m from the head) fires the hero's power at the enemy his combat has ringed, through his `SpidyPunchTest`; a beam in the hero's colour. | built, not tried in game |
 | Flight | Iron Man, Superman, Thor, Green Lantern: hold a grip 0.4 s to take off, you stay up after letting go. Left stick moves relative to where you look, right stick up/down climbs, a held grip boosts along that hand. Touching ground after 1 s in the air lands. | built, not tried in game |
+| Powers on every enemy | The powers hit every enemy type the game lists (read-only enemy list), each blow through `SpidyPunchTest` on its own worker thread in order; HULK hits an area, THOR's lightning chains. | built, not tried in game |
+| Grapple | CAPTAIN AMERICA and DAREDEVIL (live.txt `grapple=1`): hold a grip and pull its trigger to fire a line at a wall or roof (2.5 to 80 m, his `SpidyAimSample` preview), it pulls you there and vaults you over the edge; let go of the grip to coast; press **A** while pulled to jump out (DAREDEVIL's JUMP OUT). The SM2 build's pull, tunes, coast and jump-out code, unchanged. | built, not tried in game |
+| COLOR | The SM2 build's COLOR / ATMOSPHERE on a new wrist page: look (NONE, VIVID, GOLDEN, NEON, RAIMI, NOIR, ANIMATED, METROPOLIS, SMALLVILLE, GOTHAM, CYBERPUNK, SYNTHWAVE) and the sliders STRENGTH, EXPOSURE, CONTRAST, SATURATION, VIBRANCE, WARMTH, TINT, VIGNETTE. Drawn by the layer as its own pass on his two eye images when he releases them (one copy and one fullscreen draw per eye on his graphics queue, the SM2 grade shader). **OFF by default**: with it off (or a neutral grade) there is no GPU work at all, so his picture, anti-aliasing and performance are exactly as without the add-on. His own overlays already in the eye image (webs, HUD panels) are graded too. ANIMATED is its colour grade only (the SM2 cel outline pass is not in SM1). | built, not tried in game |
 | Hero models | Needs Spider-Man 1's character model slots. | **not done** |
+| Held props (Thor's hammer, Cap's shield, Wolverine's claws) | Left out: the layer only draws flat quads on top of his frame and gets no depth from the game, so a 3D prop would float over walls and hands; a real version needs a 3D model renderer in the layer that is depth-tested against the game. | **not done** |
 
 While the menu is open the right trigger and stick go to the menu only; a hero's power trigger and a flying hero's
 grips are hidden from his mod, so his webs never fire by mistake. Spider-Man (hero 0) leaves every input to his mod.
@@ -86,6 +90,14 @@ New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their s
 | `beams` | Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart. |
 | `power_damage` | How hard the powers hit, 25 to 200 percent; applies live, no restart. |
 | `menu_size` | The wrist menu's size, 60 to 160 percent; applies live, no restart. |
+| `grapple` | CAPTAIN AMERICA and DAREDEVIL grapple instead of web swinging: hold a grip and pull its trigger to fire a line at a wall or roof, let go of the grip to coast, press A to jump out; applies live, no restart. |
+| `color_fx` | COLOR: 1 draws the colour grade on both eyes, 0 (default) leaves iilyn's picture exactly as it is with no extra GPU work; applies live, no restart. |
+| `color_filter` | The look by name (`none` ... `synthwave`) or number 0 to 11; applies live, no restart. |
+| `color_strength`, `color_exposure`, `color_contrast`, `color_saturation`, `color_vibrance`, `color_warmth`, `color_tint`, `color_vignette` | The SM2 build's sliders, same ranges and steps; applies live, no restart. |
+
+On the wrist menu's COLOR page: stick up/down picks a row, a left or right flick (or the trigger) steps its value;
+the last row goes on to the next page. A failure in the colour pass turns only COLOR off (the page then shows
+OFF (SEE LOG)) and leaves his picture as it is.
 
 The menu's FLIGHT toggle is for this session only; the launcher's Flight switch is the saved one.
 
@@ -95,6 +107,11 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
 2. Open `%APPDATA%\HERO VR SM1\layer.log`: it says whether the layer started, which formats it chose and which
    features turned off and why. `addon.log` says whether `herovr_sm1_layer.dll` was loaded.
 3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, hold a grip: take off.
+4. Pick CAPTAIN AMERICA or DAREDEVIL, hold a grip and pull its trigger at a wall: the line pulls you; press A to jump out.
+5. Open the COLOR page, flick right on COLOR to turn it on, then flick through the looks (GOTHAM, SYNTHWAVE ...).
+   layer.log says `COLOR: the colour pass is ready` and `first eye image graded`.
+6. Change a suit in the game's Suits menu and drive or walk close to cars, so the research scan's dump mode records
+   the suit and vehicle components.
 
 ## Research scan (live.txt `sm1scan`, on by default)
 

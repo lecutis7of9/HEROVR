@@ -375,7 +375,7 @@ struct DepthTag {
     SIZE_T gbufferDsv{}, clearedDsv{};
     float clearedDepth = -1;
 };
-std::recursive_mutex depthTagLock; // before depthLock, never after it
+std::recursive_mutex depthTagLock; // after `recording`, never held while taking it or depthLock
 std::unordered_map<ID3D12GraphicsCommandList*, DepthTag> depthTags;
 std::atomic<uint32_t> depthTagCount{}, depthOpenMask{};
 std::array<EyePairState::Stamp, 2> depthOpenStamp{}; // under depthTagLock
@@ -747,11 +747,30 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
     native_address_finder::onBarrier(list, count, bs);
     // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
+    // 0.0.76 FREEZE FIX: the tag is copied out and depthTagLock let go before depthBarrier, which
+    // takes `recording` and depthLock. Holding depthTagLock across it was the reverse of execute()
+    // and the monitor (`recording`, then our own OMSetRenderTargets into depthTargets'
+    // depthTagLock): two threads could wait on each other for ever (0.0.75's freeze on loading).
     if (enabled && depthTagCount.load(std::memory_order_relaxed)) {
-        std::lock_guard tagLock(depthTagLock);
-        const auto found = depthTags.find(list);
-        if (found != depthTags.end() && found->second.gbuffer && !found->second.depthDone)
-            depthBarrier(list, found->second, count, bs);
+        DepthTag tag{};
+        bool wanted = false;
+        {
+            std::lock_guard tagLock(depthTagLock);
+            const auto found = depthTags.find(list);
+            if (found != depthTags.end() && found->second.gbuffer && !found->second.depthDone) {
+                tag = found->second;
+                wanted = true;
+            }
+        }
+        if (wanted) {
+            depthBarrier(list, tag, count, bs); // no depthTagLock held here
+            if (tag.depthDone) {
+                std::lock_guard tagLock(depthTagLock);
+                const auto found = depthTags.find(list);
+                if (found != depthTags.end() && found->second.stamp == tag.stamp)
+                    found->second.depthDone = true;
+            }
+        }
     }
     if (enabled) {
         const auto* left = watched[0].load();

@@ -34,6 +34,18 @@ class SeeThrough(unittest.TestCase):
         for words in ('lists marked', 'by open job', 'unclaimed', 'most colour targets', 'depths out'):
             self.assertIn(words, gpu)
 
+    def test_no_lock_order_freeze(self):
+        # 0.0.76: barrier() must not hold depthTagLock while depthBarrier takes `recording` (freeze on load).
+        gpu = src('src/native_eye_gpu.cpp')
+        body = gpu[gpu.index('void STDMETHODCALLTYPE barrier('):]
+        body = body[:body.index('if (enabled) {\n        const auto* left')]
+        self.assertIn('depthBarrier(list, tag, count, bs); // no depthTagLock held here', body)
+        self.assertNotIn('depthBarrier(list, found->second', body)
+        call = body.index('depthBarrier(list, tag')
+        opened = body.rfind('std::lock_guard tagLock(depthTagLock);', 0, call)
+        self.assertLess(body.rfind('}', 0, call), call)
+        self.assertLess(opened, body.rfind('}', 0, call))
+
 
 if __name__ == '__main__':
     unittest.main()

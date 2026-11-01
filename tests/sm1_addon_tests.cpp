@@ -194,7 +194,10 @@ void inputTests() {
     check(classify("/user/hand/left/input/thumbstick").role == Role::stick, "stick");
     check(classify("/user/hand/left/input/grip/pose").role == Role::gripPose, "grip pose");
     check(classify("/user/hand/right/input/aim/pose").role == Role::aimPose, "aim pose");
-    check(classify("/user/hand/right/input/a/click").role == Role::none, "buttons are his");
+    b = classify("/user/hand/right/input/a/click");
+    check(b.role == Role::faceLower && b.side == 1, "0.0.76: the right A (read, hidden only in flight)");
+    check(classify("/user/hand/right/input/b/click").role == Role::faceUpper, "0.0.76: the right B");
+    check(classify("/user/hand/right/input/a/touch").role == Role::none, "a touch is no press");
     check(classify("/user/head/input/trigger/value").role == Role::none, "only hands");
     MaskInput mi;
     Mask m = maskFor(mi);
@@ -212,10 +215,15 @@ void inputTests() {
     check(!m.trigger[0], "swinging (grip held, hero webs on): the trigger reels as his");
     mi.flightArmed = true;
     m = maskFor(mi);
-    check(m.grip[0] && m.grip[1] && m.trigger[0], "a flying hero: grips fly, never web");
+    check(!m.grip[0] && !m.grip[1] && !m.trigger[0] && !m.faceLower[1],
+          "0.0.76: a flying hero on the ground: grips web, A jumps (its hold takes off)");
     mi.flying = true;
     m = maskFor(mi);
-    check(m.stick[0] && m.stickY[1] && !m.stick[1], "flying: left stick and right up/down are ours, his turn stays");
+    check(m.stick[0] && !m.stickY[1] && !m.stick[1] && m.faceLower[1] && m.faceUpper[1] && !m.faceLower[0],
+          "0.0.76 flying: the left stick, the right A and B are ours; the right stick stays his");
+    mi.flying = false;
+    mi.aHeld = true;
+    check(maskFor(mi).faceLower[1], "0.0.76: an A held from the flight is no jump on landing");
 }
 
 void wristTests() {
@@ -369,61 +377,79 @@ void quadTests() {
 }
 
 void flightTests() {
+    // HERO VR 0.0.76 FLIGHT: fly076's feel on his SpidyMotionSubmit.
+    const float dt = 1.f / 90;
     FlightState s;
     FlightInput in;
-    in.dt = 1.f / 90;
+    in.dt = dt;
     in.allowed = true;
-    in.grip[1] = true;
-    in.aim[1] = {0, 0, 1};
+    in.grounded = true;
+    in.headForward = {0, 0, 1};
+    in.headRight = {1, 0, 0};
+    in.a = true;
     FlightEvent e = FlightEvent::none;
     int frames = 0;
     while (e == FlightEvent::none && frames < 200) {
         e = stepFlight(s, in);
         ++frames;
     }
-    check(e == FlightEvent::tookOff && s.on && frames >= 35 && frames <= 38, "a held grip takes off after 0.4 s");
-    check(s.velocity.y > 3, "lifts off");
+    check(e == FlightEvent::tookOff && s.on && frames >= 35 && frames <= 38, "A held 0.4 s takes off");
+    check(s.velocity.y > 0, "lifts off");
+    in.grounded = false;
     for (int i = 0; i < 90; ++i)
         stepFlight(s, in);
-    check(std::fabs(s.velocity.z) < .5f, "the take-off grip never boosts until let go");
-    in.grip[1] = false;
+    check(s.on, "the same A held never also comes down");
+    in.a = false;
     for (int i = 0; i < 90 * 3; ++i)
         stepFlight(s, in);
-    check(s.on && length(s.velocity) < .5f, "stays flying after release, hovering");
-    in.moveY = 1;
+    check(s.on && s.velocity.z > 12 && std::fabs(s.velocity.y) < 2, "flies on by itself along the head's way");
+    in.steer = {1, 0, 0};
+    for (int i = 0; i < 90 * 4; ++i)
+        stepFlight(s, in);
+    check(s.velocity.x > 12 && std::fabs(s.velocity.z) < 4, "the arms steer");
+    in.throttle = 1;
     for (int i = 0; i < 90 * 3; ++i)
         stepFlight(s, in);
-    check(s.velocity.z > 11, "left stick forward flies along the head's facing");
-    in.headForward = {1, 0, 0};
-    in.headRight = {0, 0, -1};
-    for (int i = 0; i < 90 * 3; ++i)
+    check(s.velocity.x > 26 && length(s.velocity) <= 28.01f && std::fabs(s.velocity.y) < .5f,
+          "full forward: SUPERSONIC, speed only, never down");
+    in.throttle = -1;
+    for (int i = 0; i < 90 * 4; ++i)
         stepFlight(s, in);
-    check(s.velocity.x > 11, "turning the head turns the flight (body relative)");
-    in.moveY = 0;
-    in.grip[1] = true;
-    for (int i = 0; i < 90 * 3; ++i)
+    check(s.on && length(s.velocity) < 1, "stick back: a hover");
+    in.throttle = 0;
+    for (int i = 0; i < 90; ++i)
         stepFlight(s, in);
-    check(s.velocity.z > 10 && length(s.velocity) <= 28.01f, "a held grip boosts along that hand, capped");
-    in.grip[1] = false;
-    in.grounded = true;
-    in.climb = 0;
-    for (int i = 0; i < 90 * 3 && s.on; ++i)
-        e = stepFlight(s, in);
-    check(!s.on && e == FlightEvent::landed, "touching the ground lands");
-    in.grounded = false;
-    in.grip[0] = true;
+    in.b = true;
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.on && length(s.velocity) < .5f, "B: the air brake");
+    in.b = false;
+    in.a = true;
     for (int i = 0; i < 60; ++i)
         stepFlight(s, in);
-    check(s.on, "takes off again");
+    check(s.on && s.velocity.y < -3, "A held in flight comes down");
+    in.grounded = true;
+    for (int i = 0; i < 90 * 2 && s.on; ++i)
+        e = stepFlight(s, in);
+    check(!s.on && e == FlightEvent::landed, "and lands on the ground");
+    for (int i = 0; i < 90; ++i)
+        stepFlight(s, in);
+    check(!s.on, "the A still down never takes off again");
+    in.a = false;
+    in.armsUp = true;
+    for (int i = 0; i < 40 && !s.on; ++i)
+        stepFlight(s, in);
+    check(s.on, "both arms up take off");
+    in.armsUp = false;
     in.allowed = false;
     check(stepFlight(s, in) == FlightEvent::stopped && !s.on, "a hero who does not fly stops");
     in.allowed = true;
-    in.grip[0] = true;
     s = {};
-    s.on = true;
-    s.velocity = {std::numeric_limits<float>::quiet_NaN(), 0, 0};
-    in.moveX = std::numeric_limits<float>::infinity();
-    stepFlight(s, in);
+    in.throttle = std::numeric_limits<float>::quiet_NaN();
+    in.steer = {std::numeric_limits<float>::infinity(), 0, 0};
+    in.a = true;
+    for (int i = 0; i < 60; ++i)
+        stepFlight(s, in);
     check(finite(s.velocity), "NaN never spreads");
 }
 

@@ -132,7 +132,7 @@ namespace Sm2VrLauncher
                 settings.GetBool(Sm1.KeyAddon, true)), 670, 112, 418, 58);
             sm1Wrist = Add(card, new ToggleRow("Wrist menu", "Touch your left wrist with your right hand and pull the right trigger to open or close the hero menu, as in SM2; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyWrist, true)), 670, 170, 418, 58);
-            sm1Flight = Add(card, new ToggleRow("Flight", "Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play.",
+            sm1Flight = Add(card, new ToggleRow("Flight", "Iron Man, Superman, Thor and Green Lantern take off with both arms straight up or A held, steer with their arms and fly on until A held brings them down; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyFlight, true)), 670, 228, 418, 58);
             sm1News = Add(card, new ToggleRow("Tell me about his new releases", "Looks at his GitHub once when the launcher starts (nothing installs by itself); takes effect the next time the launcher starts.",
                 settings.GetBool(Sm1.KeyNews, true)), 670, 286, 418, 58);

@@ -33,11 +33,15 @@ The OpenXR loader ignores HKCU layers when the game runs as administrator: then 
 | Outfits | Each hero's outfits with artist and licence; saved (`outfit.N=`). Spider-Man 1 shows **no hero models yet**. | built, not tried in game |
 | Holo card | The hero's card on the wrist (2D). | built, not tried in game |
 | Hero powers | Trigger of an outstretched hand (more than 0.42 m from the head) fires the hero's power at the enemy his combat has ringed, through his `SpidyPunchTest`; a beam in the hero's colour. | built, not tried in game |
-| Flight | Iron Man, Superman, Thor, Green Lantern: hold a grip 0.4 s to take off, you stay up after letting go. Left stick moves relative to where you look, right stick up/down climbs, a held grip boosts along that hand. Touching ground after 1 s in the air lands. | built, not tried in game |
+| Flight (0.0.76) | Iron Man, Superman, Thor, Green Lantern: both arms straight up, or A held 0.4 s, takes off. You fly on by yourself where your arms point (smooth steering); left stick forward/back sets the speed (back: a hover), full forward is SUPERSONIC (faster only, never lower). B is the air brake; A held again comes down and lands. The A/B face buttons work only if SpidyVR's bindings name them (CANDIDATE) - otherwise the status says BOTH ARMS UP. No body roll and no Y orientation brake in SM1 (the body pose is SpidyVR's). | built, not tried in game |
 | Hero models | Needs Spider-Man 1's character model slots. | **not done** |
 
 While the menu is open the right trigger and stick go to the menu only; a hero's power trigger and a flying hero's
-grips are hidden from his mod, so his webs never fire by mistake. Spider-Man (hero 0) leaves every input to his mod.
+left stick and A/B are hidden from his mod while flying (A until it is let go), so his movement, jump and dodge never
+fight the flight. Spider-Man (hero 0) leaves every input to his mod.
+
+**Walls (not done in SM1):** in SM2 only Spider-Man climbs or sticks to walls. In SM1 the wall climb is SpidyVR's own and
+no CONFIRMED export reports or stops it, so the add-on cannot turn it off for the other heroes yet (no invented addresses).
 
 ## His exports the layer uses
 
@@ -74,7 +78,7 @@ menu are kept:
 | --- | --- |
 | Load Mulder's Heroes add-on | Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play. |
 | Wrist menu | Touch your left wrist with your right hand and pull the right trigger to open or close the hero menu, as in SM2; takes effect the next time you press Play. |
-| Flight | Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play. |
+| Flight | Iron Man, Superman, Thor and Green Lantern take off with both arms straight up or A held, steer with their arms and fly on until A held brings them down; takes effect the next time you press Play. |
 
 New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their subtexts on first run, read again every
 2 seconds):
@@ -82,7 +86,7 @@ New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their s
 | Key | Subtext |
 | --- | --- |
 | `powers` | Hero powers: the trigger of an outstretched hand fires the hero's power at the ringed enemy; applies live, no restart. |
-| `hero_webs` | Heroes who do not fly keep iilyn's web swinging on the grips (the flying heroes use the grips to fly); applies live, no restart. |
+| `hero_webs` | Every hero keeps iilyn's web swinging on the grips (the flying heroes fly with their arms and A, not the grips); applies live, no restart. |
 | `beams` | Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart. |
 | `power_damage` | How hard the powers hit, 25 to 200 percent; applies live, no restart. |
 | `menu_size` | The wrist menu's size, 60 to 160 percent; applies live, no restart. |
@@ -94,7 +98,7 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
 1. Pick SPIDER-MAN 1, PLAY, press PLAY in his launcher.
 2. Open `%APPDATA%\HERO VR SM1\layer.log`: it says whether the layer started, which formats it chose and which
    features turned off and why. `addon.log` says whether `herovr_sm1_layer.dll` was loaded.
-3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, hold a grip: take off.
+3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, put both arms straight up (or hold A): take off.
 
 ## Research scan (live.txt `sm1scan`, on by default)
 

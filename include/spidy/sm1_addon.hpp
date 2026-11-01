@@ -23,6 +23,7 @@
 //    rising order, his commands wait while a hero flies, and his telemetry gets his own serials back (Handover).
 // Any step that fails is logged to %APPDATA%\HERO VR SM1\layer.log and turns off only that feature; the layer then
 // passes his calls through unchanged. It never fails his xrCreateInstance or xrEndFrame.
+#include "spidy/fly076.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/math.hpp"
 
@@ -87,7 +88,8 @@ inline constexpr Feature features[] = {
     {"hero powers", Evidence::confirmed, State::untested,
      "trigger of an outstretched hand: the hero's blast hits the ringed enemy through SpidyPunchTest, with a beam"},
     {"flight in game", Evidence::confirmed, State::untested,
-     "IRON MAN, SUPERMAN, THOR, GREEN LANTERN: hold a grip to take off, stay up after letting go; his SpidyMotionSubmit "
+     "IRON MAN, SUPERMAN, THOR, GREEN LANTERN (0.0.76): both arms straight up or A held to take off, the arms steer, the "
+     "left stick sets the speed (full forward: SUPERSONIC), B brakes, A held comes down; his SpidyMotionSubmit "
      "export moves the body, with the layer keeping his serial numbers in order so his swinging never shuts off"},
     {"hero suits", Evidence::candidate, State::stub,
      "the launcher adds each hero as a NEW SM1 suit next to Spider-Man's (purely additive, through the game's toc; CANDIDATE, "
@@ -120,7 +122,7 @@ std::string_view fileNameOf(std::string_view path);
 struct Config {
     bool heroes = true;    // heroes=1
     bool wristMenu = true; // wrist_menu=1
-    bool flight = true;    // flight=1 (the flying heroes take off on a held grip)
+    bool flight = true;    // flight=1 (the flying heroes take off with both arms up or A held)
     uint32_t hero = 0;     // hero=0..heroCount-1 (SPIDER-MAN by default)
     uint32_t outfit[heroCount]{}; // outfit.<hero>=<index> (0: his first)
 };
@@ -146,7 +148,7 @@ struct LiveSwitch {
 };
 inline constexpr LiveSwitch liveSwitches[] = {
     {"powers", "Hero powers: the trigger of an outstretched hand fires the hero's power at the ringed enemy; applies live, no restart."},
-    {"hero_webs", "Heroes who do not fly keep iilyn's web swinging on the grips (the flying heroes use the grips to fly); applies live, no restart."},
+    {"hero_webs", "Every hero keeps iilyn's web swinging on the grips (the flying heroes fly with their arms and A, not the grips); applies live, no restart."},
     {"beams", "Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart."},
     {"power_damage", "How hard the powers hit, 25 to 200 percent; applies live, no restart."},
     {"menu_size", "The wrist menu's size, 60 to 160 percent; applies live, no restart."},
@@ -181,7 +183,8 @@ bool aimedAt(Vec3 from, Vec3 dir, Vec3 target, float maxDegrees, float range);
 inline constexpr float aimDegrees = 15, outstretched = .42f; // a hand this far from the head fires (nearer: his scan/suit power)
 
 // --- Input: the bindings his actions suggested, and what the layer hides from him ------------------------------
-enum class Role { none, trigger, grip, stick, gripPose, aimPose };
+// 0.0.76 FLIGHT: faceLower is A (right) / X (left), faceUpper B / Y - read only where his own bindings name them.
+enum class Role { none, trigger, grip, stick, gripPose, aimPose, faceLower, faceUpper };
 struct Binding {
     Role role = Role::none;
     int side = -1; // 0 left, 1 right
@@ -192,12 +195,14 @@ struct MaskInput {
     bool menuOpen = false;
     uint32_t holoHands = 0; // bit per hand: the SM2 wrist click holds that hand's trigger and grip (wrist_hud::Toggle)
     bool spiderMan = true, powers = true, heroWebs = true;
-    bool flightArmed = false; // a flying hero with flight on: the grips are his take-off and boost
-    bool flying = false;      // in the air on our flight: the left stick and the right stick's up/down are ours
+    bool flightArmed = false; // a flying hero with flight on (0.0.76: the grips stay his; A held is the take-off)
+    bool flying = false;      // in the air on our flight: the left stick, the right A and B are ours
+    bool aHeld = false;       // the right A held since it came down in flight: never also his jump
     bool grip[2]{}, handOut[2]{};
 };
 struct Mask {
     bool trigger[2]{}, grip[2]{}, stick[2]{}, stickY[2]{};
+    bool faceLower[2]{}, faceUpper[2]{}; // 0.0.76: A/X, B/Y
 };
 Mask maskFor(const MaskInput& in);
 
@@ -285,33 +290,34 @@ Pose beamPose(Vec3 from, Vec3 dir, float length, Vec3 head);
 
 // --- Flight (the flying heroes; moved through his SpidyMotionSubmit by the layer) --------------------------------
 bool flies(uint32_t hero); // IRON MAN, SUPERMAN, THOR, GREEN LANTERN
+// HERO VR 0.0.76 FLIGHT (the SM2 build's fly076.hpp, the same feel): both hands straight up over the head for a
+// quarter second, or the right A held .4 s, takes off; the arms steer (both out together: their average way,
+// smoothly, slower at speed); it flies on by itself; the left stick forward is faster (full forward SUPERSONIC:
+// speed only, never the path, never down), back slower to a hover; the right B held is the air brake; the right A
+// held in flight comes down (an arm up climbs again) and lands. The grips stay his (webs), the triggers the powers.
 struct FlightTuning {
-    float enterHold = .4f;  // seconds a grip is held to take off
-    float liftOff = 4;      // m/s up on take-off
-    float cruise = 12;      // m/s at full left stick
-    float climb = 8;        // m/s at full right stick up/down
-    float boost = 14;       // m/s along each held grip's hand aim
-    float response = 4;     // 1/s: how fast the velocity follows the sticks
-    float maxSpeed = 28;    // m/s (his movement module allows up to its own cap)
-    float landAfter = 1;    // seconds in the air before touching the ground lands
+    float cruise = 16;   // m/s flying on (extras385::fly NORMAL)
+    float maxSpeed = 28; // m/s SUPERSONIC (his movement module allows up to its own cap)
 };
 struct FlightInput {
     bool allowed = false;     // a flying hero, heroes and flight on, the menu closed
     bool stop = false;        // the menu's FLIGHT toggle turned off
-    bool grip[2]{};           // grips past half
-    Vec3 aim[2]{};            // hand forward, game world (Y up)
+    bool armsUp = false;      // fly076::armsUp on the tracked hands
+    bool a = false, b = false; // the right A and B held (false where his bindings have none)
+    Vec3 steer{};             // fly076::steerWay, game world (Y up); zero: the arms say nothing
     Vec3 headForward{0, 0, 1}, headRight{1, 0, 0}; // the head's axes, game world
-    float moveX = 0, moveY = 0; // left stick (body-relative: right, forward)
-    float climb = 0;          // right stick up/down
+    float throttle = 0;       // left stick forward / back
     bool grounded = false;    // his movement telemetry: the body stands on something
     float dt = 0;
 };
 enum class FlightEvent { none, tookOff, landed, stopped };
 struct FlightState {
     bool on = false;
-    float gripHeld = 0, airTime = 0;
-    bool gripArmed[2]{}; // a grip counts as boost only after it was let go once in the air
     Vec3 velocity{};
+    const char* how = "";
+    fly076::Start start;
+    fly076::Sonic sonic;
+    fly076::Flight flight;
 };
 // One frame. While on, `s.velocity` is what the layer submits (enabled, a short lease); off, nothing is submitted.
 FlightEvent stepFlight(FlightState& s, const FlightInput& in, const FlightTuning& t = {});

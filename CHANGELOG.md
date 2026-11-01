@@ -2,6 +2,25 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.76-flight - the flight rework (DRAFT branch, not released)
+
+From hero-0.0.76-sm1 (faecbe9). **Built and unit-tested, not yet tried in the game.**
+
+- **New flight (SM2), only for heroes who fly** (Iron Man, Superman, Thor unless his hammer flight is off, Green
+  Lantern): both hands straight up, or A held, takes off. You fly on by yourself; your hands steer, smoothly.
+  Left stick forward/back sets the speed (back: a hover); full forward is **SUPERSONIC**, which only makes you faster
+  and never lowers or grounds you. **A** is the flight tool (held in flight: come down and land), **B** the air brake,
+  **holding Y** the orientation brake (rights you), the **right stick** rolls your body round the flight axis (full
+  360, holds where you leave it). The flips keep the old non-realistic sensitivity; Thor's hammer grip stays behind the
+  back. While flying A is never the game's jump and B never its dodge. R3 still lands.
+- **live.txt `fly_classic`** (off by default): on brings back the 0.0.75 flight (grip take-off, poses, trigger
+  thrust); live, no restart.
+- **Walls:** only Spider-Man climbs or sticks to walls (also after flight and grapples); another hero touching a wall
+  is pushed off it. Wolverine's claw climb and SPIDER CLIMB ONLY off stay the player's own opt-ins.
+- **SM1 add-on:** the same flight (arms up or A held, arms steer, left stick speed, SUPERSONIC, B brake, A held
+  lands); iilyn's graphics untouched. Not in SM1 yet: the body roll, the Y brake and the walls rule (no CONFIRMED
+  export for them). The A/B buttons need SpidyVR's bindings to name them (CANDIDATE); arms up always works.
+
 ## v0.0.75.2 - HERO VR 0.0.75 hotfix 2: Spider-Man 1 heroes (DRAFT, not released)
 
 Shows as v0.0.75 (VERSION unchanged; at release: a PORT-VERSION bump and launcher build 18). From hero-0.0.76-sm1 on

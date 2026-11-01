@@ -209,6 +209,7 @@ SETTINGS = {
     'blood_visor': ((0, 1), 'SpidyBloodVisor', 'VISOR DROPS {} (EXTREME only: 1 a few drops land on your visor after a close hit and run off; 0 none, the default)'),
     # Update 38.5 EXTRAS (extras385.hpp), each 0 by default; the cheats start OFF every session.
     'invincible': ((0, 1), 'SpidyInvincible', 'INVINCIBLE {} (1 keeps your health topped up; one-shot and scripted deaths still happen)'),
+    'double_health': ((0, 1), 'SpidyDoubleHealth', 'DOUBLE HEALTH {} (1 every hit takes half the health it would, for every hero, a blow past your health still downs you; 0 off, the default; live, no restart)'),  # 0.0.76 DOUBLE HEALTH
     'fly_mode': ((0, 3), 'SpidyFlyMode', 'FLY MODE {} (0 off, 1 slow, 2 normal, 3 fast: free flight in the air, jump to take off)'),
     'fly_vignette': ((0, 1), 'SpidyFlyVignette', 'FLY VIGNETTE {} (1 darkens the edges of your view while you fly fast, for comfort)'),
     'fly_roll': ((0, 2), 'SpidyFlyRoll', 'FLY ROLL {} (0 off, 1 comfort: tilts up to 45 degrees with a dark edge and a horizon line, 2 full roll)'),
@@ -220,6 +221,7 @@ SETTINGS = {
     'fly_steer': ((0, 1), 'SpidyFlySteer', "FLY STEER {} (0 on: a raised hand and the right stick climb toward your body's up even upside down or sideways, with smoother turns; 1 off: always the world's up as before; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
     'fly_flips': ((0, 1), 'SpidyFlyFlips', "FLY FLIPS {} (0 on: your REALISTIC FLIPS react more readily while you fly, driving still turns them off; 1 off: keeps your own flip rows; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
     'fly_look_up': ((0, 1), 'SpidyFlyLookUp', "FLY LOOK UP {} (0 on, the default: a tap of Y while flying smoothly pans your view and your arms up toward your body's head, so lying flat you look ahead instead of down, off each session until you tap it, another tap pans back; 1 off: no Y switch, and a value it can't read is off too; live, no restart)"),  # 0.0.74 test 10 FLY FEEL
+    'fly_classic': ((0, 1), 'SpidyFlyClassic', "FLY CLASSIC {} (off, the default: flyers take off with both hands straight up or A held, your arms steer, the left stick sets the speed, B brakes, held Y rights you and the right stick rolls your body; on: the 0.0.75 flight with grip to take off, the poses and trigger thrust; live, no restart)"),  # HERO VR 0.0.76 FLIGHT
     'symbiote_look': ((0, 1), 'SpidySymbioteLook', 'SYMBIOTE LOOK {} (1 black goo hands, symbiote webs and a black mirror; not the game suit)'),
     'prompt_handling': ((0, 1), 'SpidyPromptHandling', 'PROMPT HANDLING {} (0 manual PAD MODE; 1 auto, which needs the prompts hooked: not yet in SM2)'),
     'gesture_moves': ((0, 2), 'SpidyGestureMoves', 'GESTURE MOVES {} (0 off; 1 TRAINING draws the picked move path in the air (TRAIN MOVE) and names each move, sends nothing; 2 ON sends abilities, parry and wings)'),
@@ -348,7 +350,7 @@ SETTINGS = {
     'gl_bubble': ((0, 1), 'SpidyGlBubble', 'SHIELD BUBBLE {} (0 on: both grips held and the hands pulled apart raise a bubble that blocks hits, CANDIDATE; 1 off, live)'),
     'gl_chain': ((0, 1), 'SpidyGlChain', 'CHAIN CONSTRUCT {} (0 on: the left trigger throws a green chain (a projectile) that yanks the enemy it hits; 1 off, live)'),
     'gl_charge': ((0, 1), 'SpidyGlCharge', "RING CHARGE {} (0 on: the left wrist's ring charge drains with the powers (not flight) and refills at rest; 1 off: unlimited, live)"),
-    'spider_climb_only': ((0, 1), 'SpidySpiderClimbOnly', 'SPIDER CLIMB ONLY {} (0 on: only SPIDER-MAN crawls walls; 1 off: every hero, as 0.0.7, live)'),
+    'spider_climb_only': ((0, 1), 'SpidySpiderClimbOnly', 'SPIDER CLIMB ONLY {} (always on for the other heroes since 0.0.76: only SPIDER-MAN climbs or sticks to walls, 1 off changes nothing; live, no restart)'),
     'uppercut': ((0, 1), 'SpidyUppercut', 'UPPERCUT LAUNCH {} (0 on: a fast upward punch that lands launches the enemy; 1 off, live)'),
     'smoke_blind': ((0, 1), 'SpidySmokeBlind', "SMOKE BLIND {} (0 on: enemies in BATMAN's smoke stagger blind; 1 off, live)"),
     'dd_grapple': ((0, 1), 'SpidyDdGrapple', "BATON GRAPPLE {} (0 on: DAREDEVIL's grip draws a baton from the back, the trigger grapples along it, a throw with the grip let go throws it, no glide; 1 off: the trigger throws, live)"),
@@ -365,7 +367,7 @@ SETTINGS = {
     'fire_douse': ((0, 1), 'SpidyFireDouse', "FIRE DOUSE {} (0 on: each hero's own way to put fires out; the game's fire hook is CANDIDATE, so a look only for now; 1 off, live)"),
     'shield_slam': ((0, 1), 'SpidyShieldSlam', "SHIELD SLAM {} (0 on: CAP's shield driven down fast knocks back and hurts enemies near and douses fire; 1 off, live)"),
     'punisher_hook': ((0, 1), 'SpidyPunisherHook', "GRAPPLE HOOK {} (0 on: the PUNISHER's tactical hook launcher, drawn by the grip at the chest, fired by the trigger, slower than BATMAN's; 1 off, live)"),
-    'claw_climb': ((0, 1), 'SpidyClawClimb', "CLAW CLIMB {} (0 off, the default: only SPIDER-MAN climbs walls; 1 on: WOLVERINE with claws out climbs walls by pulling with his hands, grip only; live)"),
+    'claw_climb': ((0, 1), 'SpidyClawClimb', "CLAW CLIMB {} (retired in 0.0.76: only SPIDER-MAN climbs walls, so WOLVERINE never does whatever this says; live, no restart)"),
     'npc_shove': ((0, 1), 'SpidyNpcShove', "SHOVE {} (0 on: both open hands pushed fast at a close enemy knock him back; grabbing people is CANDIDATE, not in; 1 off, live)"),
     'faction': ((0, 4), 'SpidyFaction', "ENEMY FACTION {} (0 auto: the enemies match the hero, Batman the joker gang; 1 vanilla, 2 the hand, 3 hydra, 4 joker gang (no model yet: vanilla); the game-side swap is CANDIDATE, so shown only; live)"),
     'hero_suit': ((0, 1), 'SpidyHeroSuit', "HERO SUIT {} (0 the hero's default suit, 1 his next unlocked one; suits unlock with that hero's reputation, live)"),
@@ -564,6 +566,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'fly_steer': ('on', 'off'),  # 0.0.74 test 10 FLY STEER
                 'fly_flips': ('on', 'off'),  # 0.0.74 test 10 FLY FLIPS
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
+                'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
                 'hud_text_color': ('theme', 'white', 'yellow', 'cyan'),
                 'web_style': WEB_STYLES,
@@ -792,6 +795,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'fly_steer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY STEER
            'fly_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY FLIPS
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
+           'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
            'shadow_match': {'on': 0, 'off': 1, 'experimental': 0, '0': 0, '1': 1},
            'calib_look': {'holo': 0, 'classic': 1, '0': 0, '1': 1},
@@ -1116,6 +1120,7 @@ START_ONLY = START_ONLY + ('sm1style',)  # 0.0.74 test 10 SM1STYLE: an OFF kept 
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
+START_ONLY = START_ONLY + ('fly_classic',)  # HERO VR 0.0.76 FLIGHT: an ON kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

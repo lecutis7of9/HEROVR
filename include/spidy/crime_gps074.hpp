@@ -10,6 +10,12 @@
 // over the dash with its bearing and distance. The game's own waypoint is NOT set (no CONFIRMED hook).
 // When a crime's group is gone it moves to the past cases: CLEARED when the player was near it at the end,
 // LOST otherwise. The Batcomputer's ONGOING / PAST CASES, MAP and POLICE SCANNER read the same list.
+// 0.0.76 CRIME GPS FIX (the owner: "its GPS doesn't lead you to crimes"): nothing was tracked unless OK was
+// pressed on the MAP within 12 s, a crime spotted while another was popped up or tracked was never offered,
+// and a stale enemy list (a slow scan, WORLD LOG off) ended every crime as LOST. Now the nearest live crime is
+// tracked by itself whenever none is (the arrow always leads to one; OK on a popup or the Batcomputer still
+// picks another), a new crime pops up whenever no popup is showing, the tracked crime is held 10 s past its
+// last sight, and a stale list (step's `fresh` false) holds every crime instead of ending it (10 s at most).
 // Pure: no game reads, no addresses, no allocation in step (fixed arrays). Every number is checked.
 #include "spidy/math.hpp"
 
@@ -28,6 +34,8 @@ inline constexpr float groupMetres = 20.f;    // two thugs this near are one cri
 inline constexpr uint32_t groupLeast = 2;     // the fewest thugs that make a crime (CANDIDATE)
 inline constexpr float matchMetres = 35.f;    // a group this near last scan's crime is the same crime
 inline constexpr float goneSeconds = 4.f;     // unseen this long: over
+inline constexpr float trackedGoneSeconds = 10.f; // 0.0.76: the tracked one is held longer (a scan's gap)
+inline constexpr float staleHoldSeconds = 10.f;   // 0.0.76: a stale enemy list holds the crimes this long
 inline constexpr float clearedMetres = 45.f;  // the player this near at the end: CLEARED
 inline constexpr float popupSeconds = 12.f;   // the popup waits this long for OK
 inline constexpr float reachMetres = 600.f;   // world_trace enemiesFar's reach
@@ -78,7 +86,9 @@ class Tracker {
 public:
     // One scan: the clock (seconds), the enemies' feet (world), the player (world). `on` false clears the
     // live list and the popup (the past cases and the log are kept).
-    Event step(float now, const Vec3* thugs, uint32_t count, Vec3 player, bool on);
+    // `fresh` false: the enemy list is stale (not a sight of "no thugs"): the crimes are held, none end, for
+    // staleHoldSeconds at most.
+    Event step(float now, const Vec3* thugs, uint32_t count, Vec3 player, bool on, bool fresh = true);
     // The popup's crime (0: none) and the seconds it has left.
     uint32_t popup() const { return popup_; }
     float popupLeft(float now) const;
@@ -105,8 +115,9 @@ private:
     std::array<LogLine, mostLog> log_{};
     uint32_t pastHead_{}, pastN_{}, logHead_{}, logN_{};
     uint32_t nextId_{1}, popup_{}, tracked_{};
-    float popupAt_{};
+    float popupAt_{}, lastNow_{-1.f}, staleFor_{};
     Vec3 player_{};
+    void followNearest(float now);
     void addPast(const Crime& c, float now, Outcome o);
     void addLog(LogKind k, const Crime& c, float now);
 };

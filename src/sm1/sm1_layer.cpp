@@ -666,6 +666,9 @@ struct Play {
     // raw inputs this sync (before any hiding)
     float trigger[2]{}, grip[2]{};
     XrVector2f stick[2]{};
+    float faceLower[2]{}, faceUpper[2]{}; // 0.0.76 FLIGHT: A/X and B/Y, where his bindings name them
+    bool faceBound = false;               // his bindings name the right A
+    bool aOurs = false;                   // an A held in flight, until it is let go
     bool handOut[2]{};
     bool triggerWas[2]{};
     float cooldown = 0;
@@ -677,7 +680,6 @@ struct Play {
     float beamWidth = .06f;
     uint32_t beamColor = 0xffffffff;
     // CAPTAIN AMERICA's and DAREDEVIL's grapple (sm1_grapple.hpp)
-    bool jump = false; // his "jump" action (A), read only
     GrappleDriver grapple;
     bool grappling = false; // our velocity goes to his movement module
     std::string grappleState = "GRAPPLE: READY";
@@ -805,17 +807,26 @@ float readValue(XrAction action, ActionInfo& info, int side) {
 void readInputs() {
     for (int i = 0; i < 2; ++i) {
         play.trigger[i] = play.grip[i] = 0;
+        play.faceLower[i] = play.faceUpper[i] = 0;
         play.stick[i] = {};
     }
-    play.jump = false;
+    play.faceBound = false;
     auto list = knownActions();
     for (auto& [action, info] : list) {
-        if (info.role == Role::jump) { // his "jump" has no subaction paths (CONFIRMED in his 0.7.0 xr_session.cpp)
+        if (info.role == Role::faceLower || info.role == Role::faceUpper) {
+            // His A, B, X and Y have no subaction paths (CONFIRMED in his 0.7.0 xr_session.cpp: jump, button_b,
+            // button_x... made with perHand false), so they are read without one, for the hand their binding names.
             XrActionStateGetInfo g{XR_TYPE_ACTION_STATE_GET_INFO};
             g.action = action;
             XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
-            if (next.getBoolean(session.handle, &g, &b) == XR_SUCCESS && b.isActive && b.currentState)
-                play.jump = true;
+            const float v = next.getBoolean(session.handle, &g, &b) == XR_SUCCESS && b.isActive && b.currentState ? 1.f : 0.f;
+            float* face = info.role == Role::faceLower ? play.faceLower : play.faceUpper;
+            for (int side = 0; side < 2; ++side)
+                if (info.sides[side]) {
+                    face[side] = std::max(face[side], v);
+                    if (info.role == Role::faceLower && side == 1)
+                        play.faceBound = true;
+                }
             continue;
         }
         for (int side = 0; side < 2; ++side) {
@@ -868,6 +879,10 @@ bool hidden(XrAction action, XrPath subaction, bool* yOnly) {
         return any(m.trigger);
     case Role::grip:
         return any(m.grip);
+    case Role::faceLower:
+        return any(m.faceLower);
+    case Role::faceUpper:
+        return any(m.faceUpper);
     case Role::stick:
         if (any(m.stick))
             return true;
@@ -1192,6 +1207,7 @@ void endFlight(const char* why) {
     ReleaseSRWLockExclusive(&motionLock);
     play.flying = false;
     play.flight = {};
+    play.flight.start.reset(); // an A still down never takes off again by itself
     logLine("flight ended: %s", why);
 }
 void endGrapple(const char* why) {
@@ -1417,15 +1433,28 @@ void step() {
         FlightInput in;
         in.allowed = flightArmed && gv.ok && !menu.open;
         in.stop = !flightSwitch;
+        // HERO VR 0.0.76 FLIGHT: the arms in his projection space (metres, Y up), from the head; their steer is
+        // laid onto the game's head (its level forward and right) so turning the head and the arms agree.
+        Vec3 offset[2]{};
+        bool tracked[2]{};
         for (int i = 0; i < 2; ++i) {
-            in.grip[i] = play.grip[i] > .5f;
-            in.aim[i] = gv.handForward[i];
+            tracked[i] = gripTracked[i] && play.headKnown;
+            offset[i] = tracked[i] ? grips[i].position - play.head.position : Vec3{};
         }
+        const Vec3 up{0, 1, 0};
+        const auto flat = [](Vec3 v) { return Vec3{v.x, 0, v.z}; };
+        in.armsUp = fly076::armsUp(offset, tracked, up);
+        const Vec3 way = fly076::steerWay(offset, tracked, up);
+        const Vec3 tf = fly076::unitOr(flat(play.head.orientation.rotate({0, 0, -1})), {0, 0, -1});
+        const Vec3 tr{-tf.z, 0, tf.x};
+        const Vec3 gf = fly076::unitOr(flat(gv.headForward), {0, 0, 1});
+        const Vec3 gr = fly076::unitOr(flat(gv.headRight), {gf.z, 0, -gf.x});
+        in.steer = length(way) > .5f ? normalized(gf * dot(way, tf) + gr * dot(way, tr) + up * way.y) : Vec3{};
+        in.a = play.faceLower[1] > .5f;
+        in.b = play.faceUpper[1] > .5f;
         in.headForward = gv.headForward;
         in.headRight = gv.headRight;
-        in.moveX = play.stick[0].x;
-        in.moveY = play.stick[0].y;
-        in.climb = play.stick[1].y;
+        in.throttle = play.stick[0].y;
         his::MotionData d{};
         in.grounded = sampleOurs(d) && d.steps && d.grounded;
         in.dt = dt;
@@ -1478,7 +1507,7 @@ void step() {
         in.body = moved ? d.position : gv.headPos;
         in.velocity = moved ? d.achievedVelocity : Vec3{};
         in.grounded = moved && d.grounded;
-        in.jump = play.jump;
+        in.jump = play.faceLower[1] > .5f; // the right A (his jump)
         in.dt = dt;
         if (!moved)
             in.allowed = false;
@@ -1523,7 +1552,7 @@ void step() {
         for (int i = 0; i < 2; ++i) {
             const bool down = play.trigger[i] > .5f;
             if (down && !play.triggerWas[i] && play.handOut[i] &&
-                (play.grip[i] < .5f || (!live.heroWebs && !grappleArmed) || flightArmed) && play.cooldown <= 0)
+                (play.grip[i] < .5f || (!live.heroWebs && !grappleArmed)) && play.cooldown <= 0)
                 firePower(i, nowHero, live, aim[i].position);
         }
     }
@@ -1540,6 +1569,9 @@ void step() {
     mi.flightArmed = flightArmed;
     mi.flying = play.flying;
     mi.grappleArmed = grappleArmed;
+    // An A that came down in flight stays ours until it is let go (no jump on landing).
+    play.aOurs = play.faceLower[1] > .5f && (play.flying || play.aOurs);
+    mi.aHeld = play.aOurs;
     for (int i = 0; i < 2; ++i) {
         mi.grip[i] = play.grip[i] > .5f;
         mi.handOut[i] = play.handOut[i];
@@ -2066,7 +2098,7 @@ MenuView currentView(uint32_t hero, const Config& config, const Live& live) {
     v.powerState = fPowers.on ? play.powerState : "POWERS OFF";
     v.status[0] = std::string("LAYER ON ") + addonVersion;
     v.status[1] = !fFlight.on ? "FLIGHT: OFF (SEE LOG)" : !motionReady ? "FLIGHT: WAITING FOR SPIDY" :
-                  play.flying ? "FLIGHT: FLYING" : flies(hero) ? "FLIGHT: HOLD A GRIP" : "FLIGHT: NOT THIS HERO";
+                  play.flying ? "FLIGHT: FLYING" : flies(hero) ? (play.faceBound ? "FLIGHT: ARMS UP OR HOLD A" : "FLIGHT: BOTH ARMS UP") : "FLIGHT: NOT THIS HERO";
     if ((hero == hero_modes::captainAmerica || hero == hero_modes::daredevil) && config.heroes && live.grapple && fFlight.on &&
         motionReady)
         v.status[1] = play.grappleState;

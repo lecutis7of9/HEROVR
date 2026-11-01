@@ -122,16 +122,51 @@ bool Tracker::track(uint32_t id, float now) {
     return true;
 }
 
-Event Tracker::step(float now, const Vec3* thugs, uint32_t count, Vec3 player, bool on) {
+void Tracker::followNearest(float now) {
+    if (tracked_ && find(tracked_))
+        return;
+    tracked_ = 0;
+    const Crime* best = nullptr;
+    float bestD = 1e30f;
+    for (const Crime& c : live_)
+        if (c.id) {
+            const float d = flat(player_, c.at);
+            if (std::isfinite(d) && d < bestD)
+                bestD = d, best = &c;
+        }
+    if (best)
+        track(best->id, now);
+}
+
+Event Tracker::step(float now, const Vec3* thugs, uint32_t count, Vec3 player, bool on, bool fresh) {
     Event e;
     if (!std::isfinite(now))
         return e;
+    const float dt = lastNow_ >= 0 && now >= lastNow_ ? now - lastNow_ : 0.f;
+    lastNow_ = now;
     if (fine(player))
         player_ = player;
     if (!on) {
         live_ = {};
         popup_ = tracked_ = 0;
+        staleFor_ = 0;
         return e;
+    }
+    // 0.0.76: a stale list is not a sight of "no thugs": hold every crime (its unseen time paused)
+    if (!fresh) {
+        staleFor_ += dt;
+        if (staleFor_ <= staleHoldSeconds) {
+            for (Crime& c : live_)
+                if (c.id)
+                    c.last += dt;
+            if (popup_)
+                popupAt_ += dt;
+            followNearest(now);
+            return e;
+        }
+        count = 0; // stale too long: the crimes run out as unseen
+    } else {
+        staleFor_ = 0;
     }
     // this scan's groups (greedy: each thug joins the first group whose centre is near)
     struct Group {
@@ -185,7 +220,7 @@ Event Tracker::step(float now, const Vec3* thugs, uint32_t count, Vec3 player, b
             addLog(LogKind::spotted, n, now);
             if (!e.appeared)
                 e.appeared = n.id;
-            if (!popup_ && !tracked_) {
+            if (!popup_ && n.id != tracked_) {
                 popup_ = n.id;
                 popupAt_ = now;
             }
@@ -200,7 +235,7 @@ Event Tracker::step(float now, const Vec3* thugs, uint32_t count, Vec3 player, b
     }
     // the ones unseen long enough are over
     for (Crime& c : live_) {
-        if (!c.id || now - c.last < goneSeconds)
+        if (!c.id || now - c.last < (c.id == tracked_ ? trackedGoneSeconds : goneSeconds))
             continue;
         const Outcome o = c.nearSeen ? Outcome::cleared : Outcome::lost;
         addPast(c, now, o);
@@ -217,6 +252,7 @@ Event Tracker::step(float now, const Vec3* thugs, uint32_t count, Vec3 player, b
     }
     if (popup_ && now - popupAt_ > popupSeconds)
         popup_ = 0;
+    followNearest(now); // 0.0.76: the arrow always leads to a crime while there is one
     return e;
 }
 

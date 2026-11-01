@@ -2713,3 +2713,35 @@ buildings stayed; only the light went.
   0x2bcc1b0) see a 24% wider lens; the game's detail scale (0x2c9a000) is a little lower for the eyes (SHARED LOD
   HIGHER keeps the game view's when that is higher).
 - **Tests:** `tests/hero074t10_window_edges_tests.py`, core `WINDOW EDGES`.
+
+## 63. Version 0.0.76: DOUBLE HEALTH, INVINCIBLE at the top of POWERS, the CRIME GPS fix
+
+- **DOUBLE HEALTH (live.txt `double_health`, export `SpidyDoubleHealth` 5554, OFF by default, no restart):** every
+  hit takes half the health it would, for every hero. The mod gives back half of each drop in the hero's health
+  (CONFIRMED HeroHealth record: vtable 0x541edd0, hit points +0xd0, most +0xa0) and never revives a dead hero, so a
+  blow bigger than what is left still kills. It is N/A while INVINCIBLE is on. `include/spidy/extras385.hpp`
+  `double_health`. SM1: not done. The add-on writes no game health, and SM1's HeroHealth (vtable 0x38a6df0, HP +0x88)
+  is only read by the research scan; its most-HP field is not CONFIRMED.
+- **INVINCIBLE and DOUBLE HEALTH first:** they are the first rows of POWERS under "HEALTH - EVERY HERO", the first
+  group on every hero's page, and two buttons under PLAYING on the holo roster's grid (ids 90/91).
+- **CRIME GPS fix** (the owner: "its GPS doesn't lead you to crimes"). Causes found by reading the code:
+  1. Nothing was tracked unless OK was pressed on the MAP within 12 s, and a crime spotted while another was popped
+     up or tracked was never offered.
+  2. WORLD LOG off stopped the enemy scan, so the GPS saw no thugs.
+  3. The scan kept the registry's *first* 64 enemies, not the nearest, so far or idle enemies could hide a crime
+     nearby.
+  4. A stale enemy list ended every crime as LOST after 4 s.
+
+  Now:
+  - The nearest live crime is tracked by itself, so the arrow always leads somewhere. OK and the Batcomputer still
+    pick another crime.
+  - New crimes pop up whenever no popup is showing.
+  - The tracked crime is held for 10 s after it was last seen.
+  - A stale list holds every crime (for 10 s at most).
+  - The scan runs for the GPS while driving even with WORLD LOG off. It writes no log events and rests 2 s after the
+    GPS stops asking.
+  - The 64 enemy records are the 64 nearest the hero.
+
+  Addresses: the component registry 0xc2d3d20/0xc2d3d40 and the actor transform are CONFIRMED (as before). That a
+  group of ThugBot/foe records is a crime, and how far out the game keeps them, are CANDIDATE. No new address.
+  `crime_gps074`, `world_trace`. Tests: core `0.0.76 CRIME GPS FIX`.

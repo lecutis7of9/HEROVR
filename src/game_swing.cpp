@@ -7,6 +7,7 @@
 #include "spidy/grapple073.hpp"
 #include "spidy/dd_grapple074.hpp" // 0.0.74 test 10 DD QUICK GRAPPLE
 #include "spidy/extras385.hpp"
+#include "spidy/fly076.hpp"
 #include "spidy/fly_boost.hpp"
 #include "spidy/air_watch.hpp"
 #include "spidy/sm2_port.hpp"
@@ -58,6 +59,10 @@ InputHold inputHold;
 AirYield airYield;
 // Update 38.5 FLY MODE (extras385::fly): its flight, and what game_xr reads back.
 extras385::fly::Flight flight;
+// HERO VR 0.0.76 FLIGHT (fly076.hpp): the reworked flight (reserved7[1]'s fly076::bitNew), and whether it drove the
+// body the frame before (a game move it waits out is no landing).
+fly076::Flight flight076;
+bool flight076Drove{};
 bool lungeFar{}; // Update 38.5: the lunger has the zip strike's reach (FLY MODE's lunge)
 extras385::fly::Data flyData; // under `output`
 extras385::fly::Trace flyTrace; // under `output` (0.0.74 test 11: the FLY log line)
@@ -815,8 +820,67 @@ void visit(const native_rays::QueryContext& world) {
             fi.hands[i].forward = in.hands[i].aim.orientation.rotate({0, 1, 0});
             fi.hands[i].offset = toWorld.rotate(in.hands[i].gripRelativeToHead);
         }
-        flown = flight.update(fi);
-        if (flown.drive && !wasFlying) {
+        const auto w076 = fly076::unpack(c.version >= 7 && c.bytes == sizeof(Command) ? c.reserved7[1] : 0u);
+        bool sameFlight = wasFlying;
+        if (w076.on) {
+            // HERO VR 0.0.76 FLIGHT (fly076.hpp): continuous, steered by the arms; SUPERSONIC is speed only.
+            if (flight.flying())
+                flight.land(); // the 0.0.75 flight never flies beside it
+            sameFlight = flight076Drove;
+            const bool suspend = grasped || handing || gameRun || yielding || striking || !collidable;
+            fly076::In ni;
+            ni.seconds = motion.dt;
+            ni.speed = extras385::fly::unpack(c.version >= 6 && c.bytes == sizeof(Command) ? c.reserved6 : 0u).speed & 3u;
+            ni.top = extras385::fly::speeds[ni.speed];
+            ni.suspend = suspend;
+            ni.grounded = body.grounded;
+            ni.airborne = !body.grounded;
+            ni.enter = fi.enter;
+            ni.drop = fi.word.drop;
+            ni.brake = live && w076.brake;
+            ni.holdWay = w076.holdWay;
+            ni.throttle = live ? w076.throttle : 0.f;
+            ni.boost = fi.boost;
+            ni.sonicTop = extras385::fly::supersonicTop;
+            ni.look = in.look;
+            ni.velocity = body.velocity;
+            Vec3 offsets[2]{fi.hands[0].offset, fi.hands[1].offset};
+            const bool tracked[2]{fi.hands[0].tracked, fi.hands[1].tracked};
+            ni.want = fly076::steerWay(offsets, tracked, fi.bodyUp);
+            // Never into a wall (walls are SPIDER-MAN's): a steep fixed surface just ahead of the flight takes
+            // the part of it into the wall away, so the body slides along and the game never grasps it.
+            if (flight076.flying() && !suspend) {
+                const Vec3 ahead = flight076.heading();
+                const float reach = 1.5f + std::max(0.f, length(body.velocity)) * std::max(motion.dt, 0.f) * 2.f;
+                if (finite(ahead) && length(ahead) > .5f) {
+                    const auto hit = world.raycast(body.position, normalized(ahead), std::min(reach, 12.f));
+                    if (hit && hit->fixed && finite(hit->normal) && length(hit->normal) > .5f &&
+                        std::fabs(normalized(hit->normal).y) < .7f)
+                        ni.wall = normalized(hit->normal);
+                }
+                if (world.error()) {
+                    fault(world.error());
+                    return;
+                }
+            }
+            const auto no = flight076.update(ni);
+            flown = {};
+            flown.drive = no.drive;
+            flown.moving = no.moving;
+            flown.velocity = no.velocity;
+            flown.vignette = no.vignette;
+            flown.how = no.how;
+            flown.top = no.top;
+            flown.supersonic = no.supersonic;
+            flown.coasting = no.coasting;
+            flight076Drove = no.drive;
+        } else {
+            if (flight076.flying())
+                flight076.land();
+            flight076Drove = false;
+            flown = flight.update(fi);
+        }
+        if (flown.drive && !sameFlight) {
             solver.releaseAll(); // FLY replaces the webs (and Web Wings) while it flies
             solver.leaveWall();
             takeoffTransition.reset();
@@ -832,10 +896,15 @@ void visit(const native_rays::QueryContext& world) {
                                  : cap;
         if (flown.drive)
             requested = limited(flown.velocity, flyCap);
-        else if (wasFlying) {
+        else if (sameFlight) {
             solver.reset(body); // the swing goes on from where the flight left him
         }
         AcquireSRWLockExclusive(&output);
+        if (w076.on) // 0.0.76: still flying while a game move has him (the flight goes on after it)
+            flyData = {flight076.flying() ? 1u : 0u, flight.takeoffs() + flight076.takeoffs(),
+                       flight.landings() + flight076.landings(), flown.vignette, flown.moving ? 1u : 0u,
+                       flight076.descending() ? 1u : 0u};
+        else
         flyData = {flown.drive ? 1u : 0u, flight.takeoffs(), flight.landings(), flown.vignette,
                    flown.moving ? 1u : 0u, flight.descending() ? 1u : 0u};
         flyTrace = {extras385::fly::howCode(flown.how), flown.coasting ? 1u : 0u, flown.supersonic ? 1u : 0u,

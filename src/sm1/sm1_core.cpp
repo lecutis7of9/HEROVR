@@ -464,8 +464,12 @@ Binding classify(std::string_view path) {
         b.role = Role::gripPose;
     else if (path == "input/aim/pose")
         b.role = Role::aimPose;
-    else if (path == "input/a/click" && b.side == 1)
-        b.role = Role::jump; // his "jump" action (CONFIRMED in his 0.7.0 controller_layout.hpp)
+    // His A on the right (his "jump", CONFIRMED in his 0.7.0 controller_layout.hpp), X on the left (Index: the left
+    // a/click). The Steam Frame has X and Y on the right too: those are not A and B, so only the left x / y count.
+    else if (path == "input/a/click" || (path == "input/x/click" && b.side == 0))
+        b.role = Role::faceLower;
+    else if (path == "input/b/click" || (path == "input/y/click" && b.side == 0))
+        b.role = Role::faceUpper;
     else
         return {};
     return b;
@@ -479,12 +483,12 @@ Mask maskFor(const MaskInput& in) {
     for (int i = 0; i < 2; ++i)
         if (in.holoHands >> i & 1u)
             m.trigger[i] = m.grip[i] = true; // the SM2 wrist click's pull: never a web, punch or power
-    if (in.flightArmed)
-        m.grip[0] = m.grip[1] = true;
     if (in.flying) {
-        m.stick[0] = true;
-        m.stickY[1] = true;
+        m.stick[0] = true;                  // the speed
+        m.faceLower[1] = m.faceUpper[1] = true; // A comes down, B brakes
     }
+    if (in.aHeld)
+        m.faceLower[1] = true; // an A held in flight is never also his jump, even once landed
     if (in.grappleArmed)
         for (int i = 0; i < 2; ++i) {
             m.grip[i] = true;
@@ -496,7 +500,7 @@ Mask maskFor(const MaskInput& in) {
             m.grip[0] = m.grip[1] = true;
         if (in.powers)
             for (int i = 0; i < 2; ++i)
-                if (in.handOut[i] && (!in.grip[i] || !in.heroWebs || in.flightArmed))
+                if (in.handOut[i] && (!in.grip[i] || !in.heroWebs))
                     m.trigger[i] = true;
     }
     return m;
@@ -981,48 +985,48 @@ Pose beamPose(Vec3 from, Vec3 dir, float len, Vec3 head) {
 
 // --- Flight --------------------------------------------------------------------------------------------------------
 FlightEvent stepFlight(FlightState& s, const FlightInput& in, const FlightTuning& t) {
-    const float dt = std::isfinite(in.dt) ? std::clamp(in.dt, 0.f, .1f) : 0.f;
+    const float dt = fly076::seconds(in.dt);
     if (!finite(s.velocity))
         s.velocity = {};
-    const auto axis = [](float v) { return std::isfinite(v) ? std::clamp(v, -1.f, 1.f) : 0.f; };
-    if (!s.on) {
-        s.velocity = {};
-        const bool grip = in.grip[0] || in.grip[1];
-        s.gripHeld = in.allowed && grip ? s.gripHeld + dt : 0;
-        if (s.gripHeld >= t.enterHold) {
-            s.on = true;
-            s.gripHeld = 0;
-            s.airTime = 0;
-            s.gripArmed[0] = !in.grip[0];
-            s.gripArmed[1] = !in.grip[1];
-            s.velocity = {0, t.liftOff, 0};
-            return FlightEvent::tookOff;
-        }
-        return FlightEvent::none;
-    }
-    if (!in.allowed || in.stop) {
+    const bool live = in.allowed && !in.stop;
+    if (s.on && !live) {
         s = {};
+        s.start.reset(); // the A still down never takes off again by itself
         return FlightEvent::stopped;
     }
-    s.airTime += dt;
-    Vec3 forward{in.headForward.x, 0, in.headForward.z}, right{in.headRight.x, 0, in.headRight.z};
-    forward = normalized(finite(forward) ? forward : Vec3{});
-    right = normalized(finite(right) ? right : Vec3{});
-    Vec3 goal = forward * (axis(in.moveY) * t.cruise) + right * (axis(in.moveX) * t.cruise) +
-                Vec3{0, axis(in.climb) * t.climb, 0};
-    for (int i = 0; i < 2; ++i) {
-        if (!in.grip[i])
-            s.gripArmed[i] = true;
-        else if (s.gripArmed[i] && finite(in.aim[i]))
-            goal += normalized(in.aim[i]) * t.boost;
+    const bool enter = s.start.update(dt, live, s.on, in.armsUp, in.a);
+    const float cruise = std::isfinite(t.cruise) && t.cruise > 1 ? t.cruise : 16.f;
+    const float most = std::isfinite(t.maxSpeed) && t.maxSpeed > cruise ? t.maxSpeed : cruise;
+    fly076::In fi;
+    fi.seconds = dt;
+    fi.speed = live ? 2u : 0u;
+    fi.top = cruise;
+    fi.grounded = in.grounded;
+    fi.airborne = !in.grounded;
+    fi.enter = enter;
+    fi.drop = s.start.descend();
+    fi.brake = s.on && in.b;
+    fi.throttle = fly076::axis(in.throttle);
+    fi.boost = s.sonic.update(s.on, in.throttle) ? most / cruise : 1.f;
+    fi.sonicTop = most;
+    fi.look = finite(in.headForward) ? in.headForward : Vec3{0, 0, 1};
+    fi.want = finite(in.steer) ? in.steer : Vec3{};
+    fi.velocity = s.velocity;
+    const fly076::Out o = s.flight.update(fi);
+    s.how = o.how;
+    if (o.tookOff && !s.on) {
+        s.on = true;
+        s.velocity = finite(o.velocity) ? limited(o.velocity, most) : Vec3{};
+        return FlightEvent::tookOff;
     }
-    goal = limited(goal, t.maxSpeed);
-    s.velocity += (goal - s.velocity) * std::min(1.f, t.response * dt);
-    s.velocity = limited(s.velocity, t.maxSpeed);
-    if (s.airTime >= t.landAfter && in.grounded && s.velocity.y <= .5f && axis(in.climb) <= 0) {
-        s = {};
-        return FlightEvent::landed;
+    if (o.landed || (s.on && !s.flight.flying())) {
+        const bool landed = o.landed;
+        s.on = false;
+        s.velocity = {};
+        s.flight.land();
+        return landed ? FlightEvent::landed : FlightEvent::stopped;
     }
+    s.velocity = s.on && o.drive && finite(o.velocity) ? limited(o.velocity, most) : Vec3{};
     return FlightEvent::none;
 }
 

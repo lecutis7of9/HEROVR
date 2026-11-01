@@ -75,7 +75,7 @@ inline constexpr Guide guides[hero_modes::heroes] = {
     {5,
      {{"CLAWS", "grip: the claws slide out (SNIKT)"},
       {"SLASH", "swing with the claws out"},
-      {"CLAW CLIMB", "claws out on a wall (CLAW CLIMB on)"},
+      {"CLAW LEAP", "no wall climb: only Spider-Man climbs walls"},
       {"HEALING", "no hits for a few seconds: health back"},
       {"DODGE / USE", "B dodges, Y interacts"}}},
     // SUPERMAN

@@ -270,6 +270,9 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
             tileBox(g, k, b.u0, b.v0, b.u1, b.v1);
             out[n++] = b;
         }
+        // 0.0.76 HEALTH: INVINCIBLE and DOUBLE HEALTH, the first thing POWERS shows.
+        out[n++] = Button{healthInvincible, left, healthY0, -.002f, healthY1, true};
+        out[n++] = Button{healthDouble, .002f, healthY0, right, healthY1, true};
         return n;
     }
     if (shown == Screen::hero) {
@@ -329,7 +332,9 @@ std::string helpFor(const State& s, const Data& d, int id) {
     case subControls: return "How to play " + who + ": each move and its button or gesture.";
     case subOutfits: return "Pick " + who + "'s outfit; locked ones open with his rep. No restart needed.";
     case subStats: return "What the mod has counted for " + who + ": his rep, level and fights.";
-    case subSettings: return who + "'s own settings, then INVINCIBLE and FLYING for every hero.";
+    case subSettings: return "INVINCIBLE and DOUBLE HEALTH first, then " + who + "'s own settings and FLYING.";
+    case healthInvincible: return "INVINCIBLE for every hero: keeps your health topped up; no restart.";
+    case healthDouble: return "DOUBLE HEALTH for every hero: every hit takes half the health; no restart.";
     case settingsPrev: return "The previous page of settings. No restart needed.";
     case settingsNext: return "The next page of settings. No restart needed.";
     case seeLog: return "Opens the REP log with only " + who + "'s entries. No restart needed.";
@@ -453,8 +458,15 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
             const std::string sub = now ? std::string("PLAYING") : rep_log::rankText(d.heroPoints[h]);
             o.text(sub, b->u0 + .002f, b->v1 - .0278f, b->u1 - .002f, .0025f, now ? Role::good : Role::value, true);
         }
-        // One line under the tiles (the COLOR rows are under it).
+        // One line under the tiles, then INVINCIBLE / DOUBLE HEALTH (the COLOR rows are under them).
         o.text("PLAYING: " + std::string(nameOf(playing)), left, playingV, -.012f, .0034f, Role::label);
+        // 0.0.76 HEALTH: lit while on; N/A off the confirmed health record (as the wrist rows).
+        const auto state = [&](bool on) { return std::string(d.healthNa ? "N/A" : on ? "ON" : "OFF"); };
+        if (const Button* b = byId(healthInvincible))
+            o.button(*b, "INVINCIBLE: " + state(d.invincible), s.hover == healthInvincible, d.invincible && !d.healthNa, .0036f);
+        if (const Button* b = byId(healthDouble))
+            o.button(*b, "DOUBLE HEALTH: " + state(d.doubleHealth), s.hover == healthDouble, d.doubleHealth && !d.healthNa,
+                     .0036f);
         if (d.reputation)
             o.textRight(rep_log::rankText(d.heroPoints[playing]) + "   " + rep_log::nextText(d.heroPoints[playing]), -.010f,
                         playingV, right, .0030f, Role::value);
@@ -702,6 +714,8 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     case subStats: s_.tab = Tab::stats; break;
     case subMusic: s_.tab = Tab::music; break;
     case tabColor: s_.screen = Screen::grid; break; // no COLOR tab since 0.0.76 (never shown)
+    case healthInvincible: a.invincible = true; break; // 0.0.76 HEALTH
+    case healthDouble: a.doubleHealth = true; break;
     case subSettings:
         s_.tab = Tab::settings;
         s_.settingsPage = 0;

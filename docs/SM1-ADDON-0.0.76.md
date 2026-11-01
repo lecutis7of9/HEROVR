@@ -33,7 +33,7 @@ The OpenXR loader ignores HKCU layers when the game runs as administrator: then 
 | Outfits | Each hero's outfits with artist and licence; saved (`outfit.N=`). Spider-Man 1 shows **no hero models yet**. | built, not tried in game |
 | Holo card | The hero's card on the wrist (2D). | built, not tried in game |
 | Hero powers | Trigger of an outstretched hand (more than 0.42 m from the head) fires the hero's power at the enemy his combat has ringed, through his `SpidyPunchTest`; a beam in the hero's colour. | built, not tried in game |
-| Flight | Iron Man, Superman, Thor, Green Lantern: hold a grip 0.4 s to take off, you stay up after letting go. Left stick moves relative to where you look, right stick up/down climbs, a held grip boosts along that hand. Touching ground after 1 s in the air lands. | built, not tried in game |
+| Flight (0.0.76) | Iron Man, Superman, Thor, Green Lantern: both arms straight up, or A held 0.4 s, takes off. You fly on by yourself where your arms point (smooth steering); left stick forward/back sets the speed (back: a hover), full forward is SUPERSONIC (faster only, never lower). B is the air brake; A held again comes down and lands. The grips are SpidyVR's again (no more grip-to-fly). A and B are his `jump` and `button_b` actions on the right hand (CONFIRMED in his 0.7.0 controller_layout.hpp for Touch, Index and Steam Frame); they have no per-hand paths, so the layer reads them without one. If his bindings ever lack them the status says BOTH ARMS UP. An A held in flight never also jumps once you land. No body roll and no Y orientation brake in SM1 (the body pose is SpidyVR's). | built, not tried in game |
 | Powers on every enemy | The powers hit every enemy type the game lists (read-only enemy list), each blow through `SpidyPunchTest` on its own worker thread in order; HULK hits an area, THOR's lightning chains. | built, not tried in game |
 | Grapple | CAPTAIN AMERICA and DAREDEVIL (live.txt `grapple=1`): hold a grip and pull its trigger to fire a line at a wall or roof (2.5 to 80 m, his `SpidyAimSample` preview), it pulls you there and vaults you over the edge; let go of the grip to coast; press **A** while pulled to jump out (DAREDEVIL's JUMP OUT). The SM2 build's pull, tunes, coast and jump-out code, unchanged. | built, not tried in game |
 | COLOR | The SM2 build's COLOR / ATMOSPHERE under the heroes on the wrist's HEROES page (the same page, not a separate tab): look (NONE, VIVID, GOLDEN, NEON, RAIMI, NOIR, ANIMATED, METROPOLIS, SMALLVILLE, GOTHAM, CYBERPUNK, SYNTHWAVE) and the sliders STRENGTH, EXPOSURE, CONTRAST, SATURATION, VIBRANCE, WARMTH, TINT, VIGNETTE. Drawn by the layer as its own pass on his two eye images when he releases them (one copy and one fullscreen draw per eye on his graphics queue, the SM2 grade shader). **OFF by default**: with it off (or a neutral grade) there is no GPU work at all, so his picture, anti-aliasing and performance are exactly as without the add-on. His own overlays already in the eye image (webs, HUD panels) are graded too. ANIMATED is its colour grade only (the SM2 cel outline pass is not in SM1). | built, not tried in game |
@@ -41,7 +41,11 @@ The OpenXR loader ignores HKCU layers when the game runs as administrator: then 
 | Held props (Thor's hammer, Cap's shield, Wolverine's claws) | Left out: the layer only draws flat quads on top of his frame and gets no depth from the game, so a 3D prop would float over walls and hands; a real version needs a 3D model renderer in the layer that is depth-tested against the game. | **not done** |
 
 While the menu is open the right trigger and stick go to the menu only; a hero's power trigger and a flying hero's
-grips are hidden from his mod, so his webs never fire by mistake. Spider-Man (hero 0) leaves every input to his mod.
+left stick and A/B are hidden from his mod while flying (A until it is let go), so his movement, jump and dodge never
+fight the flight. Spider-Man (hero 0) leaves every input to his mod.
+
+**Walls (not done in SM1):** in SM2 only Spider-Man climbs or sticks to walls. In SM1 the wall climb is SpidyVR's own and
+no CONFIRMED export reports or stops it, so the add-on cannot turn it off for the other heroes yet (no invented addresses).
 
 ## His exports the layer uses
 
@@ -78,7 +82,7 @@ menu are kept:
 | --- | --- |
 | Load Mulder's Heroes add-on | Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play. |
 | Wrist menu | Touch your left wrist with your right hand and pull the right trigger to open or close the hero menu, as in SM2; takes effect the next time you press Play. |
-| Flight | Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play. |
+| Flight | Iron Man, Superman, Thor and Green Lantern take off with both arms straight up or A held, steer with their arms and fly on until A held brings them down; takes effect the next time you press Play. |
 
 New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their subtexts on first run, read again every
 2 seconds):
@@ -86,7 +90,7 @@ New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their s
 | Key | Subtext |
 | --- | --- |
 | `powers` | Hero powers: the trigger of an outstretched hand fires the hero's power at the ringed enemy; applies live, no restart. |
-| `hero_webs` | Heroes who do not fly keep iilyn's web swinging on the grips (the flying heroes use the grips to fly); applies live, no restart. |
+| `hero_webs` | Every hero keeps iilyn's web swinging on the grips (the flying heroes fly with their arms and A, not the grips); applies live, no restart. |
 | `beams` | Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart. |
 | `power_damage` | How hard the powers hit, 25 to 200 percent; applies live, no restart. |
 | `menu_size` | The wrist menu's size, 60 to 160 percent; applies live, no restart. |
@@ -107,7 +111,9 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
 1. Pick SPIDER-MAN 1, press PLAY VR (his VR starts directly with his launcher.ini settings; OPEN IILYN'S LAUNCHER changes them).
 2. Open `%APPDATA%\HERO VR SM1\layer.log`: it says whether the layer started, which formats it chose and which
    features turned off and why. `addon.log` says whether `herovr_sm1_layer.dll` was loaded.
-3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, hold a grip: take off.
+3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, put both arms straight up (or hold A):
+   take off. Point your arms to steer, left stick forward to speed up (full forward: SUPERSONIC), back to hover,
+   B to brake, hold A again to come down and land.
 4. Pick CAPTAIN AMERICA or DAREDEVIL, hold a grip and pull its trigger at a wall: the line pulls you; press A to jump out.
 5. On the HEROES page, move down past the heroes to the COLOR rows, flick right on COLOR to turn it on, then flick through the looks (GOTHAM, SYNTHWAVE ...).
    layer.log says `COLOR: the colour pass is ready` and `first eye image graded`.

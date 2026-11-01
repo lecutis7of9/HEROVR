@@ -133,6 +133,64 @@ class Sm1Suits(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+
+    def test_install_is_purely_additive(self):
+        # SM2 style: the heroes are new suits next to Spider-Man's; no game suit, model, texture or config is replaced
+        tmp = tempfile.mkdtemp()
+        try:
+            synth.make_game(tmp, template('zup'))
+            P = sm1suits.paths(tmp)
+
+            def table(t):
+                return {(a, t.span_of(i)): (t.offsets[i].archive_index, t.offsets[i].offset, t.sizes[i].value)
+                        for i, a in enumerate(t.ids)}
+            t = sm1suits.open_toc(P)
+            before = table(t)
+            prog0 = t.read_asset(assets.AID_PROGRESSION, 0)
+            t.close()
+            args = ['--game', tmp, '--packs', PACKS, '--log', os.path.join(tmp, 'log.txt')]
+            self.assertEqual(sm1suits.main(['install', '--heroes', 'herovr_captainamerica'] + args), 0)
+            t = sm1suits.open_toc(P)
+            after = table(t)
+            prog1 = t.read_asset(assets.AID_PROGRESSION, 0)
+            t.close()
+            for key, where in before.items():
+                self.assertIn(key, after)
+                if key[0] not in sm1suits.SHARED_LISTS:
+                    self.assertEqual(after[key], where, '%016X re-pointed' % key[0])
+            self.assertGreater(len(after), len(before))
+            names = lambda d: [i.get('Name') for i in assets.suits_in_progression(d)]  # noqa: E731
+            self.assertEqual(names(prog1)[:len(names(prog0))], names(prog0))
+            self.assertIn('SUIT_herovr_captainamerica', names(prog1))
+            # a hero whose new path is already a game asset is skipped, the rest still go in
+            self.assertEqual(sm1suits.main(['revert'] + args), 0)
+            t = sm1suits.open_toc(P)
+            plan = sm1suits.Plan(Quiet())
+            plan.add('herovr/thor/thor.model', b'x')
+            a = plan.assets[0][0]
+            self.assertLess(t.find(a, 0), 0)
+            t.close()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_additive_check_refuses_a_replacement(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            synth.make_game(tmp, template('zup'))
+            t = sm1suits.open_toc(sm1suits.paths(tmp))
+            plan = sm1suits.Plan(Quiet())
+            plan.add(t.ids[0], b'not the game asset', t.span_of(0), 'a game asset')
+            if t.ids[0] not in sm1suits.SHARED_LISTS:
+                with self.assertRaises(assets.AssetError):
+                    sm1suits.check_additive(t, plan)
+            prog = t.read_asset(assets.AID_PROGRESSION, 0)
+            plan = sm1suits.Plan(Quiet())
+            plan.add(assets.AID_PROGRESSION, assets.edit_progression(prog, [('herovr_thor', True)]), 0, 'progression')
+            self.assertEqual(sm1suits.check_additive(t, plan)['shared_lists_edited'], 1)
+            t.close()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_flat_normals(self):
         for fmt in (71, 72, 77, 83, 84, 98):
             self.assertIsNotNone(bcn.flat_normal(fmt), fmt)

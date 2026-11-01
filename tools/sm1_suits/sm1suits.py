@@ -351,6 +351,9 @@ def make_plan(toc, packs, wanted, log):
             if not os.path.isfile(pack_path(packs, entry['id'])):
                 raise assets.AssetError('pack missing: ' + pack_path(packs, entry['id']))
             plan.report['heroes'][entry['id']] = plan_hero(plan, entry, packs, tpl, mat, counter)
+            for a, span, _, path in plan.assets[n0:]:
+                if toc.find(a, span) >= 0:
+                    raise assets.AssetError('%s is already a game asset: suits are only ever added, never replaced' % path)
             plan.report['heroes'][entry['id']]['ok'] = True
             done.append(entry)
             log('%s: ready' % entry['name'])
@@ -401,7 +404,45 @@ def make_plan(toc, packs, wanted, log):
         else:
             log('%s (%016X) not in the toc: left alone' % (what, a))
     plan.report['installed'] = [e['id'] for e in done]
+    plan.report['additive'] = check_additive(toc, plan)
     return plan
+
+
+# The only game assets an install re-points: the five shared lists, each an edited copy that keeps every entry the
+# game had (Overstrike's suit install does the same). Everything else is a new asset under our own paths.
+SHARED_LISTS = (assets.AID_PROGRESSION, assets.AID_LOADOUTLIST, assets.AID_VANITY_MASTER, assets.AID_VANITY_LAUNCH,
+                assets.AID_LOCALIZATION)
+
+
+def check_additive(toc, plan):
+    """Raises unless the plan only adds: no existing suit, model, texture or config is replaced, and every shared
+    list keeps all of the game's own entries (suits, unlocks, loadouts, strings) unchanged."""
+    rep = {'shared_lists_edited': 0}
+    for a, span, data, path in plan.assets:
+        if toc.find(a, span) < 0:
+            continue
+        if a not in SHARED_LISTS:
+            raise assets.AssetError('the install would replace the game asset %s: refused (suits are only added)' % path)
+        old = toc.read_asset(a, span)
+        if a == assets.AID_PROGRESSION:
+            names = lambda d: [i.get('Name') for i in assets.suits_in_progression(d)]  # noqa: E731
+            if names(data)[:len(names(old))] != names(old):
+                raise assets.AssetError('the tech web edit would change the game\'s own suits: refused')
+            if not set(assets.unlocked_for_free(old)) <= set(assets.unlocked_for_free(data)):
+                raise assets.AssetError('the tech web edit would drop a free unlock: refused')
+        elif a == assets.AID_LOADOUTLIST:
+            o, n = assets.vanity_loadouts(old), assets.vanity_loadouts(data)
+            if n[:len(o)] != o:
+                raise assets.AssetError('the loadout list edit would change the game\'s own suits: refused')
+        elif a == assets.AID_LOCALIZATION:
+            o, n = assets.localization_table(old), assets.localization_table(data)
+            for k, v in o.items():
+                if n.get(k) != v:
+                    raise assets.AssetError('the localization edit would change the game string %s: refused' % k)
+        elif data != old:
+            raise assets.AssetError('the vanity list %s would change: refused' % path)
+        rep['shared_lists_edited'] += 1
+    return rep
 
 
 # --- commands --------------------------------------------------------------------------------------------

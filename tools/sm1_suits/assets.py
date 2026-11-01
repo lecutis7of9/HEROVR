@@ -207,6 +207,19 @@ def suits_in_progression(data):
     return []
 
 
+def unlocked_for_free(data):
+    """system_progression's UnlockForFree names (for the additive check)."""
+    return [x for x in _as_list(read_config(data).get_content_section().root, "UnlockForFree") or []]
+
+
+def vanity_loadouts(data):
+    """masteritemloadoutlist's kVanity ItemLoadoutConfigs (for the additive check)."""
+    for c in _as_list(read_config(data).get_content_section().root, "ItemLoadoutCategoryList") or []:
+        if isinstance(c, dict) and c.get("Category") == "kVanity":
+            return list(_as_list(c, "ItemLoadoutConfigs") or [])
+    return []
+
+
 def edit_loadout_list(data, suit_ids):
     """masteritemloadoutlist: each suit's item loadout in the kVanity category (Overstrike)."""
     cfg = read_config(data)
@@ -320,6 +333,23 @@ def edit_localization(data, entries):
     body = io.BytesIO()
     d.save(body)
     return struct.pack('<II', magic, d.header.size) + unk + body.getvalue()
+
+
+def localization_table(data):
+    """{key: value} of a localization asset (for the additive check)."""
+    magic, size = struct.unpack('<II', data[:8])
+    d = dat1lib.types.dat1.DAT1(io.BytesIO(data[36:36 + size]), None, ignore_sections_exceptions=True, version=dat1lib.VERSION_MSMR)
+    S = lambda t: bytes(d._sections_data[d._sections_map[t]])  # noqa: E731
+    n = struct.unpack('<I', S(T_LOC_COUNT)[:4])[0]
+    keys, vals = _strings(S(T_LOC_KEYS)), _strings(S(T_LOC_VALS))
+    ko = struct.unpack('<%dI' % n, S(T_LOC_KEYOFF)[:4 * n])
+    vo = struct.unpack('<%dI' % n, S(T_LOC_VALOFF)[:4 * n])
+    out = {}
+    for i in range(n):
+        k = keys.get(ko[i])
+        if k is not None:
+            out[k] = vals.get(vo[i], '')  # the last copy wins, as in edit_localization
+    return out
 
 
 def read_localization(data, key):

@@ -51,6 +51,43 @@ inline float refill(float hp, float most, float reduce) {
 }
 } // namespace invincible
 
+// ---- 0.0.76 DOUBLE HEALTH (owner steering: "really halve incoming damage or double max HP") ----
+// Every hero: each fall in the CONFIRMED HeroHealth record's current HP (+0xd0) is half given back at
+// once, through the same CONFIRMED record (vtable checked), cap ((1 - reduce) * max, +0x208/+0xa0) and
+// compare-and-write as INVINCIBLE: never above the game's cap, never a revive (a blow that empties the
+// bar still kills). So every hit costs half: as much damage again to go down, the same as double max HP.
+namespace double_health {
+inline constexpr const char* help = "Every hit takes half the health it would, for every hero; no restart.";
+struct Halver {
+    float was = -1;     // the HP after last frame's (and our own) changes; -1 unknown
+    float mostWas = -1; // the max it was read against (a new max: start again)
+    // What to write into +0xd0 this frame, or a negative number for nothing.
+    float step(float hp, float most, float reduce, bool on) {
+        const bool ok = std::isfinite(hp) && std::isfinite(most) && most > 0 && most <= 1e5f;
+        if (!on || !ok || !(hp > 0) || std::abs(most - mostWas) > 1e-3f) {
+            was = ok && hp > 0 ? hp : -1;
+            mostWas = ok ? most : -1;
+            return -1;
+        }
+        float cap = most;
+        if (std::isfinite(reduce) && reduce > 0 && reduce < 1)
+            cap = std::min(most, (1 - reduce) * most);
+        const float before = was;
+        was = hp;
+        if (!(before > 0) || !(hp < before - 1e-4f))
+            return -1;
+        const float to = std::min(cap, hp + (before - hp) * .5f);
+        if (!(to > hp + 1e-4f))
+            return -1;
+        was = to;
+        return to;
+    }
+    // The write of `step`'s answer failed: what the record holds is the HP now.
+    void missed(float hp) { was = std::isfinite(hp) && hp > 0 ? hp : -1; }
+    void reset() { was = mostWas = -1; }
+};
+} // namespace double_health
+
 // ---- FLY MODE --------------------------------------------------------------------------------
 namespace fly {
 enum Speed : uint32_t { off = 0, slow = 1, normal = 2, fast = 3 };

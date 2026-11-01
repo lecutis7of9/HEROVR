@@ -962,6 +962,10 @@ std::atomic<float> perfHeroX{std::numeric_limits<float>::quiet_NaN()}, perfHeroZ
     perfHeroSpeed{0.f}, perfEnemyMetres{std::numeric_limits<float>::infinity()};
 // Update 38.5 EXTRAS (extras385.hpp), each OFF by default and live; the cheats start OFF each session.
 std::atomic<bool> invincibleOn{false}, flyVignetteOn{false}, symbioteOn{false};
+// 0.0.76 DOUBLE HEALTH (extras385::double_health): every hit costs half, OFF by default, live (live.txt double_health).
+std::atomic<bool> doubleHealthOn{false};
+std::atomic<uint32_t> doubleHealthHalves{0};
+extras385::double_health::Halver doubleHealthHalver; // the game thread's
 std::atomic<float> vanBoardShade{0.f}; // Version 0.0.73 test 3: the van's boarding blink (van072 CarryOut::shade)
 std::atomic<uint32_t> flyModeNow{0};       // extras385::fly::Speed
 // Update 38.5 FLY ROLL (extras385::fly::RollMode, 1 COMFORT), its speed (degrees a second) and AUTO LEVEL.
@@ -4147,6 +4151,8 @@ DWORD WINAPI run(void*) {
                                 // Update 38.5 EXTRAS (extras385.hpp)
                                 if (result.invincible)
                                     invincibleOn = !invincibleOn.load();
+                                if (result.doubleHealth) // 0.0.76 DOUBLE HEALTH
+                                    doubleHealthOn = !doubleHealthOn.load();
                                 if (result.flyMode)
                                     flyModeNow = (flyModeNow.load() + 1) % 4;
                                 if (result.flyVignette)
@@ -10170,9 +10176,29 @@ DWORD WINAPI run(void*) {
                             }
                             if (!record || heroNow() != hero_modes::captainAmerica)
                                 hero007Play.block.hpWas = -1; // a stale reading never refunds later
+                            // 0.0.76 DOUBLE HEALTH: half of each fall in HP given back, through the same CONFIRMED
+                            // record (vtable checked above), cap and compare-and-write: never above the cap, never a
+                            // revive. INVINCIBLE (and the natural / van refill) already undo the whole hit.
+                            {
+                                const bool halve = doubleHealthOn.load() && record && !invincibleOn.load() &&
+                                                   !hero072KeepTopped && !vanDriving;
+                                float cap = std::numeric_limits<float>::quiet_NaN();
+                                if (halve)
+                                    read(h + extras385::invincible::reduceAt, &cap, sizeof(cap));
+                                const float to = doubleHealthHalver.step(hitPoints, mostHitPoints, cap, halve);
+                                if (to >= 0) {
+                                    if (writeFloatIf(h + game_player::hitPointsAt, hitPoints, to)) {
+                                        ++doubleHealthHalves;
+                                        hitPoints = to;
+                                    } else {
+                                        doubleHealthHalver.missed(hitPoints);
+                                    }
+                                }
+                            }
                             healAt = frame.seconds;
                         } else {
                             invincibleNa = 1u;
+                            doubleHealthHalver.reset(); // 0.0.76: no record, no stale reading
                         }
                         heroShare = health_ring::healthShare(hitPoints, mostHitPoints);
                         // Version 0.0.72: the share lost since the last hero072 step (SURVIVAL, RAGE, rep).
@@ -14084,6 +14110,7 @@ DWORD WINAPI run(void*) {
                                             hud.bloodVisor = bloodVisor.load(); // Update 38.5
                                             hud.invincible = invincibleOn.load(); // Update 38.5 EXTRAS
                                             hud.invincibleNa = invincibleNa.load() != 0;
+                                            hud.doubleHealth = doubleHealthOn.load(); // 0.0.76 DOUBLE HEALTH
                                             hud.flyMode = flyModeNow.load();
                                             hud.flyVignette = flyVignetteOn.load();
                                             hud.flyRoll = flyRollNow.load();
@@ -15008,6 +15035,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyBloodVisor(void* on) {
 // Update 38.5 EXTRAS: INVINCIBLE, FLY MODE (0-3), FLY VIGNETTE, SYMBIOTE LOOK, PROMPT HANDLING.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyInvincible(void* on) {
     return setLive(on, 0, 1, 5344, invincibleOn, asBool);
+}
+// 0.0.76 DOUBLE HEALTH (live.txt double_health 0 off / 1 on): every hit costs half, live.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyDoubleHealth(void* on) {
+    return setLive(on, 0, 1, 5554, doubleHealthOn, asBool);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyFlyMode(void* speed) {
     return setLive(speed, 0, 3, 5345, flyModeNow, asU32);

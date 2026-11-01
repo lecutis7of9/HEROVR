@@ -505,6 +505,8 @@ const char* const scrollFooter = "STICK UP/DOWN OR DRAG TO SCROLL";
 const char* const heroTabsHelp = "Opens a hero's own page: their powers, flying and INVINCIBLE.";
 // Update 39.0.2: POWERS' heading over the hero sections, its banner, and a section's subtext.
 const char* const heroProfilesHeading = "HERO PROFILES - ONE HERO AT A TIME";
+// 0.0.76: the top of POWERS (and of every hero's SETTINGS, and the tiles' foot): INVINCIBLE and DOUBLE HEALTH.
+const char* const healthHeading = "HEALTH - EVERY HERO";
 const char* const activeHeroWidest = "ACTIVE HERO: SPIDER-MAN";
 const char* const activeHeroHelp = "Turn a hero ON in its profile below; only one hero is on at a time.";
 const char* const sectionHelp = "Opens this group of settings and closes the page's other open group.";
@@ -582,7 +584,7 @@ bool off(const View& view, Control c) {
     // Update 38.5: 90s ANIMATED's own rows do nothing under another FILTER (or with its shader failed).
     if (c == Control::bloodVisor) // Update 38.5: VISOR DROPS is EXTREME's own
         return !blood_splatter::isExtreme(view.blood);
-    if (c == Control::invincible) // Update 38.5: only on the confirmed health record
+    if (c == Control::invincible || c == Control::doubleHealth) // Update 38.5 (0.0.76): only on the confirmed health record
         return view.invincibleNa;
     if (c == Control::flyVignette || c == Control::flyRoll) // Update 38.5: FLY MODE's own
         return view.flyMode == 0;
@@ -689,6 +691,8 @@ const char* labelOf(Control c) {
         return "VISOR DROPS";
     case Control::invincible:
         return "INVINCIBLE";
+    case Control::doubleHealth:
+        return "DOUBLE HEALTH";
     case Control::flyMode:
         return "FLY MODE";
     case Control::flyVignette:
@@ -1038,9 +1042,10 @@ int rowsIn(const SectionDef& d) {
     return n;
 }
 // The rows outside every section, per page (STATUS and the arrows: none).
-constexpr Control alwaysShown[] = {C::invincible, C::heroRoster, C::recalibrate, C::fpsReset, C::supersample,
-                                   C::colorFx,    C::colorFilter, C::colorStrength};
-constexpr int alwaysShownPage[] = {powersPage, powersPage, vrPage, graphicsPage, graphicsPage, colorPage, colorPage, colorPage};
+constexpr Control alwaysShown[] = {C::invincible, C::doubleHealth, C::heroRoster, C::recalibrate, C::fpsReset, C::supersample,
+                                   C::colorFx,    C::colorFilter,  C::colorStrength};
+constexpr int alwaysShownPage[] = {powersPage, powersPage,   powersPage, vrPage,   graphicsPage,
+                                   graphicsPage, colorPage, colorPage,   colorPage};
 static_assert(std::size(alwaysShown) == std::size(alwaysShownPage));
 bool isSliderRow(Control c) {
     switch (c) {
@@ -1300,7 +1305,11 @@ Layout build(int page, float k, int open) {
     };
     switch (page) {
     case powersPage: {
-        // ACTIVE HERO, INVINCIBLE and FLYING for every hero, then a profile per hero (the one played open).
+        // 0.0.76 (owner: "INVINCIBLE is way too hard to find"): HEALTH first - INVINCIBLE and DOUBLE HEALTH -
+        // then ACTIVE HERO and FLYING for every hero, then a profile per hero (the one played open).
+        heading(healthHeading);
+        row(Control::invincible);
+        row(Control::doubleHealth);
         Item b = itemOf(Kind::banner);
         b.text = activeHeroWidest;
         b.h = fittedHeight(activeHeroWidest, .0046f * k, trackRight - trackLeft);
@@ -1308,7 +1317,6 @@ Layout build(int page, float k, int open) {
         c = b.v;
         helpUnder(activeHeroHelp, b.help);
         l.items.push_back(std::move(b));
-        row(Control::invincible);
         row(Control::heroRoster); // Build 8: the roster page (pictures, stories, PLAY AS, suits)
         section(0);
         heading(heroProfilesHeading);
@@ -1589,12 +1597,16 @@ const Item* itemOf(const Layout& l, Control c) {
 constexpr float heroRowPitch = .0165f, heroRowH = .0135f, heroHeadingH = .0095f;
 constexpr float heroBoxU0 = .028f, heroBoxU1 = .074f;
 constexpr uint32_t heroPageUnits = 6; // a row 1, a slider 2
-constexpr Control everyHeroRows[] = {C::invincible,  C::flyMode,      C::combatSupersonic, C::combatSupersonicSpeed,
-                                     C::flyVignette, C::flyRoll,      C::flyRollSpeed,     C::flyAutoLevel,
-                                     C::combatFlyPose};
+// 0.0.76 (owner: "INVINCIBLE is way too hard to find"): the SETTINGS sub-tab opens on HEALTH - INVINCIBLE
+// and DOUBLE HEALTH, for every hero - then the hero's own rows, then FLYING for every hero.
+constexpr Control healthRows[] = {C::invincible, C::doubleHealth};
+constexpr Control everyHeroRows[] = {C::flyMode,     C::combatSupersonic, C::combatSupersonicSpeed,
+                                     C::flyVignette, C::flyRoll,          C::flyRollSpeed,
+                                     C::flyAutoLevel, C::combatFlyPose};
 struct HeroSettingsPage {
     std::vector<Control> rows;
     bool everyHero{};
+    bool health{}; // 0.0.76: the HEALTH page (the first)
 };
 // A hero's own rows: his old profile's, without its first (the hero's ON switch / PLAY AS SPIDER-MAN).
 std::vector<Control> heroOwnRows(uint32_t hero) {
@@ -1624,9 +1636,10 @@ const std::vector<HeroSettingsPage>& heroPagesOf(uint32_t hero) {
     if (made[h])
         return cache[h];
     auto& pagesOut = cache[h];
-    const auto group = [&](const std::vector<Control>& rows, bool every) {
+    const auto group = [&](const std::vector<Control>& rows, bool every, bool health = false) {
         HeroSettingsPage pg;
         pg.everyHero = every;
+        pg.health = health;
         uint32_t units = 0;
         for (const Control c : rows) {
             const uint32_t u = isSliderRow(c) ? 2u : 1u;
@@ -1641,6 +1654,7 @@ const std::vector<HeroSettingsPage>& heroPagesOf(uint32_t hero) {
         if (!pg.rows.empty())
             pagesOut.push_back(pg);
     };
+    group(std::vector<Control>(std::begin(healthRows), std::end(healthRows)), true, true); // 0.0.76: first
     group(heroOwnRows(h), false);
     group(std::vector<Control>(std::begin(everyHeroRows), std::end(everyHeroRows)), true);
     made[h] = true;
@@ -1663,8 +1677,9 @@ Layout heroSettingsLayout(uint32_t hero, uint32_t page) {
                 a[i] = std::string(hero_modes::heroNames[i]) + " ONLY";
             return a;
         }();
-        h.text = pg.everyHero ? "EVERY HERO: INVINCIBLE AND FLYING"
-                              : only[std::min<uint32_t>(hero, hero_modes::heroes - 1)].c_str();
+        h.text = pg.health      ? healthHeading
+                 : pg.everyHero ? "EVERY HERO: FLYING"
+                                : only[std::min<uint32_t>(hero, hero_modes::heroes - 1)].c_str();
         h.track = c - .001f;
         h.h = fittedHeight(h.text, .0040f, trackRight - trackLeft);
         h.v = h.track - .0030f - h.h;
@@ -2548,6 +2563,7 @@ std::string buttonValue(const View& view, Control c) {
            : c == Control::blood        ? bloodValue(view)
            : c == Control::bloodVisor   ? std::string(view.bloodVisor ? "ON" : "OFF")
            : c == Control::invincible   ? std::string(view.invincible ? "ON" : "OFF")
+           : c == Control::doubleHealth ? std::string(view.doubleHealth ? "ON" : "OFF")
            : c == Control::flyMode      ? std::string(extras385::fly::speedName(view.flyMode))
            : c == Control::flyVignette  ? std::string(view.flyVignette ? "ON" : "OFF")
            : c == Control::flyRoll      ? std::string(extras385::fly::rollName(view.flyRoll))
@@ -3432,6 +3448,8 @@ const char* helpText(Control c) {
         return blood_splatter::visorHelp;
     case Control::invincible:
         return extras385::invincible::help;
+    case Control::doubleHealth:
+        return extras385::double_health::help;
     case Control::flyMode:
         return extras385::fly::help;
     case Control::flyVignette:
@@ -3810,6 +3828,8 @@ const char* shortName(Control c) {
         return "VISOR";
     case Control::invincible:
         return "INVINCIBLE";
+    case Control::doubleHealth:
+        return "2X HEALTH";
     case Control::flyMode:
         return "FLY";
     case Control::flyVignette:
@@ -4101,6 +4121,7 @@ namespace {
 void pressHeroSetting(Control c, Menu::Result& r) {
     switch (c) {
     case Control::invincible: r.invincible = true; break;
+    case Control::doubleHealth: r.doubleHealth = true; break;
     case Control::flyMode: r.flyMode = true; break;
     case Control::flyVignette: r.flyVignette = true; break;
     case Control::flyRoll: r.flyRoll = true; break;
@@ -4206,6 +4227,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         r.rosterSuitHero = a.suitHero;
         r.rosterSuitIndex = a.suitIndex;
         r.rosterClosed = a.closed;
+        r.invincible = r.invincible || a.invincible; // 0.0.76 HEALTH (the tiles' buttons)
+        r.doubleHealth = r.doubleHealth || a.doubleHealth;
         if (a.closed && tiles && page_ == powersPage)
             setPage(0); // CLOSE on the tiles' POWERS: back to STATUS
         if (!roster_.isOpen() || hostedPage(roster_.state()) != hostPage) {
@@ -4284,6 +4307,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         r.rosterSuitHero = a.suitHero;
         r.rosterSuitIndex = a.suitIndex;
         r.rosterClosed = r.rosterClosed || a.closed;
+        r.invincible = r.invincible || a.invincible; // 0.0.76 HEALTH (the tiles' buttons)
+        r.doubleHealth = r.doubleHealth || a.doubleHealth;
         if (onRow) {
             hover_ = sliding ? held_ : row;
             r.hovered = r.hovered || (hover_ != hoverWasRow);
@@ -4513,6 +4538,9 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
                 break;
             case Control::invincible:
                 r.invincible = true;
+                break;
+            case Control::doubleHealth:
+                r.doubleHealth = true;
                 break;
             case Control::flyMode:
                 r.flyMode = true;
@@ -5214,7 +5242,11 @@ void holoRoster(const Painter& p, const View& view) {
         st.settingsPages = heroSettingsPages(st.hero);
         st.settingsPage = std::min(st.settingsPage, st.settingsPages - 1);
     }
-    hr::pieces(st, *d, ps);
+    hr::Data withHealth = *d; // 0.0.76 HEALTH: the tiles' buttons say the wrist's state
+    withHealth.invincible = view.invincible;
+    withHealth.doubleHealth = view.doubleHealth;
+    withHealth.healthNa = view.invincibleNa;
+    hr::pieces(st, withHealth, ps);
     const auto colour = [&](const hr::Piece& x) {
         switch (x.role) {
         case hr::Role::text: return p.c.text;

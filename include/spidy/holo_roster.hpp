@@ -95,6 +95,10 @@ enum Id : int {
     soonMarvel = 50, // the SOON tab's MARVEL / DC
     soonDc = 51,
     soonTile = 60, // + soonHeroes index (never pressable: not playable yet)
+    // 0.0.76 (owner: "INVINCIBLE is way too hard to find"): the tiles' foot, under PLAYING - INVINCIBLE and
+    // DOUBLE HEALTH for every hero, a press each (the wrist rows' own toggles).
+    healthInvincible = 70,
+    healthDouble = 71,
 };
 struct State {
     Screen screen = Screen::closed;
@@ -122,6 +126,8 @@ struct Data {
     bool repLog = true;     // REP LOG on
     bool comingSoon = true; // 0.0.73 COMING SOON on: the SOON tab shown
     rep_log::Log log{};
+    // 0.0.76 HEALTH: what the tiles' INVINCIBLE and DOUBLE HEALTH say (the wrist's View, not published).
+    bool invincible{}, doubleHealth{}, healthNa{};
 };
 void publish(const Data&);
 uint32_t latest(Data& out); // its version (0: nothing published yet)
@@ -134,6 +140,8 @@ inline constexpr float logRowPitch = .0094f;
 inline constexpr uint32_t logRows = 11; // the 12th met NEWER / OLDER (seen in roster-holo-rep.png)
 // 0.0.73 test 4 SETTINGS: the band wrist_hud lays the setting rows in (above PREV / NEXT).
 inline constexpr float settingsTop = .047f, settingsBottom = -.068f;
+// 0.0.76 HEALTH: the tiles' INVINCIBLE and DOUBLE HEALTH buttons' band (under PLAYING and the rep line).
+inline constexpr float healthY0 = -.080f, healthY1 = -.069f;
 // 0.0.74 test 10: a page of the hologram's laid out under the roster's header - COLOR under the header's tabs,
 // MUSIC under the hero page's sub-tabs (wrist_hud draws and works it from `hostedTop` down to the panel's foot).
 enum class Hosted : uint8_t { none, color, music };
@@ -177,6 +185,7 @@ struct Actions {
     int playAs = -1;                    // switch to this hero (hero_modes)
     int suitHero = -1, suitIndex = -1;  // pick this suit
     bool closed{};
+    bool invincible{}, doubleHealth{}; // 0.0.76 HEALTH: the tiles' INVINCIBLE / DOUBLE HEALTH pressed
 };
 class Holo {
   public:

@@ -1664,7 +1664,7 @@ int main() {
         check(std::string(helpText(Control::eyeTest)).size() <= 80, "EYE TEST's help is past two lines");
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
-        check(controls == 247, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 248, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
               "ADDRESS FINDER is not on the GRAPHICS page");
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
@@ -2004,7 +2004,7 @@ int main() {
             a.want(c, 1);
             check(a.due(0, Control::none) == 0, "due as a setting");
         }
-        check(controls == 247, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
+        check(controls == 248, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
         const Range r = range(Control::shadowDistance);
         check(r.low == 0 && r.high == 200 && r.step == 1, "SHADOW DISTANCE range"); // Update 34.2: was 100
         Settings s;
@@ -19386,7 +19386,7 @@ int main() {
                 }
             }
         }
-        check(placed == 215 /* 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 216 /* 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -34554,7 +34554,7 @@ int main() {
                 continue;
             }
             check(home >= 0, std::string("not on any hero's SETTINGS: ") + shortName(c));
-            if (section != "FLYING" && c != Control::invincible)
+            if (section != "FLYING" && c != Control::invincible && c != Control::doubleHealth)
                 check(std::string(hero_modes::heroNames[home]) == section && !heroSettingsEveryHero(home, homePage),
                       std::string("not on its own hero's SETTINGS: ") + shortName(c));
             else
@@ -34627,6 +34627,7 @@ int main() {
                 const auto r = pressAt(at.u, at.v);
                 const bool asked = combatOption(c) >= 0 ? r.combat38 == combatOption(c)
                                    : c == Control::invincible   ? r.invincible
+                                   : c == Control::doubleHealth ? r.doubleHealth
                                    : c == Control::flyMode      ? r.flyMode
                                    : c == Control::flyVignette  ? r.flyVignette
                                    : c == Control::flyRoll      ? r.flyRoll
@@ -34640,10 +34641,14 @@ int main() {
         }
         check(viaPlayAs == hero_modes::heroes, "every hero's ON switch is PLAY AS: " + std::to_string(viaPlayAs));
         check(viaSettings + viaPlayAs + 1 == former.size(), "a POWERS row went nowhere");
-        // Short pages (a row 1, a slider 2: at most 6), each hero's own rows first, then EVERY HERO.
+        // Short pages (a row 1, a slider 2: at most 6): 0.0.76 HEALTH (INVINCIBLE, DOUBLE HEALTH) first, then
+        // each hero's own rows, then EVERY HERO's FLYING.
         for (uint32_t h = 0; h < hero_modes::heroes; ++h) {
             bool every = false;
-            for (uint32_t pg = 0; pg < heroSettingsPages(h); ++pg) {
+            check(heroSettingsRows(h, 0) == std::vector<Control>{Control::invincible, Control::doubleHealth} &&
+                      heroSettingsEveryHero(h, 0),
+                  "SETTINGS does not open on INVINCIBLE and DOUBLE HEALTH");
+            for (uint32_t pg = 1; pg < heroSettingsPages(h); ++pg) {
                 uint32_t units = 0;
                 for (const Control c : heroSettingsRows(h, pg))
                     units += c == Control::flyRollSpeed ? 2u : 1u;
@@ -34653,7 +34658,55 @@ int main() {
             }
             check(every, "no EVERY HERO page");
         }
-        check(heroSettingsEveryHero(hero_modes::superman, 0), "SUPERMAN has rows of his own?");
+        check(heroSettingsEveryHero(hero_modes::superman, 1), "SUPERMAN has rows of his own?");
+    });
+    test("0.0.76 DOUBLE HEALTH: half of every hit given back, never a revive, at the top of POWERS", [] {
+        namespace dh = extras385::double_health;
+        dh::Halver h;
+        check(h.step(100, 100, 0, true) < 0, "the first frame wrote");
+        const float back = h.step(60, 100, 0, true);
+        check(std::abs(back - 80) < 1e-3f, "a 40 hit did not become 20: " + std::to_string(back));
+        check(h.step(80, 100, 0, true) < 0, "our own write read as a hit");
+        check(std::abs(h.step(70, 100, 0, true) - 75) < 1e-3f, "the second hit");
+        check(h.step(0, 100, 0, true) < 0, "a lethal blow was revived");
+        check(h.step(50, 100, 0, true) < 0, "the frame after a death wrote");
+        check(std::abs(h.step(30, 100, .5f, true) - 40) < 1e-3f, "the hit under the cap");
+        check(h.step(40, 100, .5f, true) < 0 && std::abs(h.step(38, 100, .9f, true) - 10) > 0, "the cap");
+        dh::Halver off;
+        off.step(100, 100, 0, false);
+        check(off.step(50, 100, 0, false) < 0, "OFF wrote");
+        dh::Halver grown;
+        grown.step(100, 100, 0, true);
+        check(grown.step(90, 150, 0, true) < 0, "a new max read as a hit");
+        dh::Halver miss;
+        miss.step(100, 100, 0, true);
+        miss.step(60, 100, 0, true);
+        miss.missed(60);
+        check(miss.step(60, 100, 0, true) < 0, "a missed write read as a hit");
+        const std::string help = dh::help;
+        check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1 && help.back() == '.' &&
+                  help.find("restart") != std::string::npos,
+              "DOUBLE HEALTH's help");
+        using namespace wrist_hud;
+        check(placeOf(Control::doubleHealth).page == powersPage && placeOf(Control::doubleHealth).section == -1,
+              "DOUBLE HEALTH is not on POWERS");
+        check(std::string(shortName(Control::doubleHealth)) == "2X HEALTH" && helpText(Control::doubleHealth) == help,
+              "DOUBLE HEALTH's row");
+        namespace hr = holo_roster;
+        hr::State st;
+        st.screen = hr::Screen::grid;
+        hr::Data d;
+        hr::Button bs[hr::buttonsMost];
+        const uint32_t n = hr::buttons(st, d, bs);
+        bool inv = false, dbl = false;
+        for (uint32_t i = 0; i < n; ++i) {
+            inv = inv || bs[i].id == hr::healthInvincible;
+            dbl = dbl || bs[i].id == hr::healthDouble;
+            for (uint32_t j = 0; j < i; ++j)
+                check(bs[i].u1 <= bs[j].u0 || bs[j].u1 <= bs[i].u0 || bs[i].v1 <= bs[j].v0 || bs[j].v1 <= bs[i].v0,
+                      "the tiles' buttons overlap");
+        }
+        check(inv && dbl, "the tiles do not show INVINCIBLE and DOUBLE HEALTH");
     });
     test("0.0.73 test 4 hero tiles only: POWERS is the tiles (never the list), the strip leaves it, CLASSIC keeps it", [] {
         using namespace wrist_hud;

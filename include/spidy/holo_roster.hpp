@@ -14,8 +14,9 @@
 //                 dropdowns"): the hero's own settings (the old POWERS page's dropdown rows) a short page at a
 //                 time, then EVERY HERO (INVINCIBLE and FLYING); PREV / NEXT page them. wrist_hud lays out and
 //                 works the rows (its own controls) and tells the roster how many pages there are.
-//   COLOR         (0.0.74 test 10, the user: "put color profiles on same page as the roster its too far back"):
-//                 a header tab; wrist_hud lays its COLOR page (the looks, filters and strengths) under the header,
+//   COLOR         (0.0.74 test 10, the user: "put color profiles on same page as the roster its too far back";
+//                 0.0.76: on the SAME page as the heroes, not a tab): wrist_hud lays its COLOR page (the looks,
+//                 the city profiles, filters, strengths and their subtexts) under the MARVEL / DC hero tiles,
 //                 the same rows and controls as the COLOR page (with the tiles on, PREV / NEXT skip that old page)
 //   MUSIC         (0.0.74 test 10: "add the music player to its own tab on the roster profile"): the hero page's
 //                 fifth sub-tab; wrist_hud lays the MUSIC page (the one player) under the sub-tabs
@@ -88,7 +89,7 @@ enum Id : int {
     settingsPrev,  // its pages
     settingsNext,
     tabSoon,     // 0.0.73 COMING SOON: the header's SOON tab
-    tabColor,    // 0.0.74 test 10: the header's COLOR tab
+    tabColor,    // 0.0.74 test 10: the header's COLOR tab (0.0.76: gone, its rows are under the hero tiles)
     subMusic,    // 0.0.74 test 10: the MUSIC sub-tab
     tile = 20,   // + hero
     outfit = 40, // + suit row
@@ -138,7 +139,8 @@ inline constexpr float settingsTop = .047f, settingsBottom = -.068f;
 // MUSIC under the hero page's sub-tabs (wrist_hud draws and works it from `hostedTop` down to the panel's foot).
 enum class Hosted : uint8_t { none, color, music };
 Hosted hosted(const State&);
-inline constexpr float colorTop = .077f, musicTop = .048f;
+// 0.0.76: COLOR is under the MARVEL / DC page's hero tiles and its PLAYING line (no COLOR tab).
+inline constexpr float colorTop = -.004f, musicTop = .048f;
 float hostedTop(const State&); // the band's top (none: `top`)
 struct Button {
     int id = none;

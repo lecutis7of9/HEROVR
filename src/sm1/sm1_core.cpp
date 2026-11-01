@@ -243,6 +243,17 @@ const char* colorRowName(int row) {
                                                      "SATURATION", "VIBRANCE", "WARMTH",   "TINT",     "VIGNETTE"};
     return row >= 0 && row < colorRows ? names[row] : "";
 }
+const char* colorRowSubtext(int row) {
+    static constexpr const char* keys[colorRows] = {"color_fx",         "color_filter",   "color_strength", "color_exposure",
+                                                    "color_contrast",   "color_saturation", "color_vibrance", "color_warmth",
+                                                    "color_tint",       "color_vignette"};
+    if (row < 0 || row >= colorRows)
+        return "";
+    for (const LiveSwitch& w : liveSwitches)
+        if (std::string_view(w.key) == keys[row])
+            return w.subtext;
+    return "";
+}
 namespace {
 struct ColorSlider {
     eye_color::Limits limits;
@@ -502,8 +513,6 @@ const char* pageName(Page p) {
         return "POWERS";
     case Page::addon:
         return "ADD-ON";
-    case Page::color:
-        return "COLOR";
     case Page::count:
         break;
     }
@@ -527,18 +536,20 @@ const char* toggleName(Toggle t) {
 int WristMenu::rows() const {
     switch (page) {
     case Page::heroes:
-        return static_cast<int>(heroCount);
+        return static_cast<int>(heroCount) + colorRows; // the heroes, then the COLOR rows
     case Page::outfits:
         return static_cast<int>(std::max(1u, outfits));
     case Page::powers:
         return static_cast<int>(Toggle::count);
-    case Page::color:
-        return colorRows;
     case Page::addon:
     case Page::count:
         break;
     }
     return 0;
+}
+int WristMenu::colorRow() const {
+    const int k = row - static_cast<int>(heroCount);
+    return page == Page::heroes && k >= 0 && k < colorRows ? k : -1;
 }
 Pick WristMenu::step(const WristInput& in) {
     if (in.toggled) {
@@ -558,13 +569,13 @@ Pick WristMenu::step(const WristInput& in) {
         stickArmed = false;
         row = ((row + (stick > 0 ? -1 : 1)) % n + n) % n;
     }
-    // The COLOR page: a left / right flick steps the row's value down / up.
+    // A COLOR row (on the HEROES page): a left / right flick steps the row's value down / up.
     const float sx = std::isfinite(in.stickX) ? in.stickX : 0.f;
     if (std::fabs(sx) < .3f)
         stickXArmed = true;
     else if (stickXArmed && std::fabs(sx) > .6f) {
         stickXArmed = false;
-        if (page == Page::color && row < rows()) {
+        if (colorRow() >= 0) {
             delta = sx > 0 ? 1 : -1;
             return Pick::color;
         }
@@ -583,14 +594,15 @@ Pick WristMenu::step(const WristInput& in) {
     }
     switch (page) {
     case Page::heroes:
+        if (colorRow() >= 0) {
+            delta = 1;
+            return Pick::color;
+        }
         return Pick::hero;
     case Page::outfits:
         return Pick::outfit;
     case Page::powers:
         return Pick::toggle;
-    case Page::color:
-        delta = 1;
-        return Pick::color;
     default:
         return Pick::none;
     }
@@ -786,11 +798,74 @@ void paintMenu(Canvas& c, const MenuView& v) {
     }
     // The rows.
     std::vector<std::string> rows;
+    int y = 228;
+    const int rowH = 28;
+    const auto selected = [&](int x0, int y0, int w, int h) {
+        c.rect(x0, y0 - 3, w, h - 2, rgba(holo::accent, 70));
+        c.rect(x0, y0 - 3, 3, h - 2, accent);
+    };
     switch (v.page) {
-    case Page::heroes:
-        for (uint32_t h = 0; h < heroCount; ++h)
-            rows.push_back(std::string(h == hero ? "> " : "  ") + heroName(h));
-        break;
+    case Page::heroes: {
+        // 0.0.76: the heroes and the COLOR rows on one page, each in two columns (down the left, then the right),
+        // then the selected COLOR row's subtext.
+        const int colW = (c.width - 40) / 2 - 3, pitch = 22;
+        const auto grid = [&](int first, int count, int top, auto label) {
+            const int perCol = (count + 1) / 2;
+            for (int i = 0; i < count; ++i) {
+                const int x0 = 20 + (i / perCol) * (colW + 6), y0 = top + (i % perCol) * pitch;
+                if (first + i == v.row)
+                    selected(x0, y0, colW, pitch);
+                const std::string t = label(i);
+                c.text(x0 + 6, y0 + 1, t, fitScale(t, colW - 10, 2), white);
+            }
+            return top + perCol * pitch;
+        };
+        y = grid(0, static_cast<int>(heroCount), y, [&](int h) {
+            return std::string(static_cast<uint32_t>(h) == hero ? "> " : "  ") + heroName(static_cast<uint32_t>(h));
+        });
+        c.rect(20, y + 3, c.width - 40, 1, rgba(holo::accent, 120));
+        c.text(20, y + 7, "COLOR", 2, accent);
+        y = grid(static_cast<int>(heroCount), colorRows, y + 24, [&](int i) {
+            return std::string(colorRowName(i)) + ": " + v.color[i];
+        });
+        const int k = v.row - static_cast<int>(heroCount);
+        std::string sub = k >= 0 && k < colorRows ? colorRowSubtext(k)
+                          : v.row >= 0 && v.row < static_cast<int>(heroCount)
+                              ? std::string("TRIGGER: PLAY AS ") + heroName(static_cast<uint32_t>(v.row))
+                              : std::string();
+        for (auto& ch : sub)
+            ch = static_cast<char>(ch >= 'a' && ch <= 'z' ? ch - 32 : ch);
+        // Wrapped at spaces into up to three lines.
+        std::vector<std::string> lines;
+        std::string line;
+        size_t i = 0;
+        while (i <= sub.size()) {
+            size_t sp = sub.find(' ', i);
+            if (sp == std::string::npos)
+                sp = sub.size();
+            const std::string word = sub.substr(i, sp - i);
+            const std::string tryLine = line.empty() ? word : line + " " + word;
+            if (!line.empty() && Canvas::textWidth(tryLine, 2) > c.width - 40) {
+                lines.push_back(line);
+                line = word;
+            } else {
+                line = tryLine;
+            }
+            i = sp + 1;
+        }
+        if (!line.empty())
+            lines.push_back(line);
+        for (size_t l = 0; l < lines.size() && l < 3; ++l)
+            c.text(20, y + 4 + static_cast<int>(l) * 16, lines[l], fitScale(lines[l], c.width - 40, 2), dim);
+        y += 4 + 3 * 16 + 6;
+        const bool nextSel = v.row == static_cast<int>(heroCount) + colorRows;
+        if (nextSel)
+            selected(20, y, c.width - 40, rowH);
+        c.text(28, y + 2, "  NEXT PAGE >", 3, nextSel ? white : dim);
+        c.text(30, c.height - 54, "MADE BY AGENT MULDER", 2, dim);
+        c.text(30, c.height - 32, "SPIDER-MAN VR: SPIDYVR BY IILYN", 2, dim);
+        return;
+    }
     case Page::outfits:
         for (uint32_t i = 0; i < outfitCount(hero); ++i) {
             const OutfitInfo oi = outfitOf(hero, i);
@@ -801,22 +876,14 @@ void paintMenu(Canvas& c, const MenuView& v) {
         for (int i = 0; i < static_cast<int>(Toggle::count); ++i)
             rows.push_back(std::string("  ") + toggleName(static_cast<Toggle>(i)) + ": " + (v.toggles[i] ? "ON" : "OFF"));
         break;
-    case Page::color:
-        for (int i = 0; i < colorRows; ++i)
-            rows.push_back(std::string("  ") + colorRowName(i) + ": " + v.color[i]);
-        break;
     case Page::addon:
         break;
     case Page::count:
         break;
     }
-    const int rowsTop = 228, rowH = 28;
-    int y = rowsTop;
     for (size_t i = 0; i < rows.size(); ++i, y += rowH) {
-        if (static_cast<int>(i) == v.row) {
-            c.rect(20, y - 3, c.width - 40, rowH - 2, rgba(holo::accent, 70));
-            c.rect(20, y - 3, 3, rowH - 2, accent);
-        }
+        if (static_cast<int>(i) == v.row)
+            selected(20, y, c.width - 40, rowH);
         c.text(28, y + 2, rows[i], fitScale(rows[i], c.width - 56, 3), white);
     }
     if (v.page == Page::addon) {
@@ -828,10 +895,8 @@ void paintMenu(Canvas& c, const MenuView& v) {
         y += 6;
     }
     const bool nextSel = v.row == static_cast<int>(rows.size());
-    if (nextSel) {
-        c.rect(20, y - 3, c.width - 40, rowH - 2, rgba(holo::accent, 70));
-        c.rect(20, y - 3, 3, rowH - 2, accent);
-    }
+    if (nextSel)
+        selected(20, y, c.width - 40, rowH);
     c.text(28, y + 2, "  NEXT PAGE >", 3, nextSel ? white : dim);
     // Credits.
     c.text(30, c.height - 54, "MADE BY AGENT MULDER", 2, dim);

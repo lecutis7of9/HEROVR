@@ -17,9 +17,11 @@ Data gData{};
 uint32_t gVersion{};
 
 using roster_page::Status;
-// The header: MARVEL, DC, (SOON with COMING SOON on), REP, COLOR, and CLOSE at the right.
-// 0.0.74 test 10: COLOR joined them, so each tab is as wide as its word at the tabs' big text and the room
-// left over is shared out (their words keep the same size as before).
+// The header: MARVEL, DC, (SOON with COMING SOON on), REP, and CLOSE at the right. Each tab is as wide as its
+// word at the tabs' big text and the room left over is shared out.
+// 0.0.76 (the user: the color profiles on the SAME page as the heroes roster, not a separate COLOR tab): no
+// COLOR tab; the COLOR rows (the looks, the city profiles, the sliders, their subtexts) are laid under the
+// hero tiles on the MARVEL / DC page itself.
 constexpr float tabText = .0046f, tabGap = .003f, tabPad = .004f;
 // The SOON screen: its title and MARVEL / DC in the row band, then five small tiles a row.
 constexpr float soonSubU0 = -.006f, soonSubMid0 = .037f, soonSubMid1 = .040f;
@@ -30,8 +32,9 @@ constexpr float rowY0 = .065f, rowY1 = .076f, backU1 = -.061f, playU0 = .024f;
 constexpr float subY0 = .051f, subY1 = .062f;
 constexpr float contentTop = .047f, contentBottom = -.064f;
 constexpr float helpTop = -.086f, helpH = .0033f, helpPitch = .0052f;
-// The grid.
-constexpr float tileGap = .004f, tileTop = .075f, tileH = .056f;
+// The grid: tiles short enough that the COLOR rows fit under them (colorTop), then the PLAYING line.
+constexpr float tileGap = .004f, tileTop = .075f, tileH = .030f;
+constexpr float playingV = .0005f;
 // REP.
 constexpr float meterY0 = .054f, meterY1 = .0605f, logTop = .033f, pageY0 = -.081f, pageY1 = -.071f;
 constexpr float filterU0 = .028f;
@@ -64,8 +67,11 @@ void tileBox(uint32_t group, uint32_t k, float& u0, float& v0, float& u1, float&
     v1 = tileTop - static_cast<float>(k / cols) * (tileH + tileGap);
     v0 = v1 - tileH;
 }
-// The screen drawn: SOON with COMING SOON off is the grid.
-Screen shownOf(const State& s, const Data& d) { return s.screen == Screen::soon && !d.comingSoon ? Screen::grid : s.screen; }
+// The screen drawn: SOON with COMING SOON off is the grid; so is COLOR (an older session's screen: its rows are
+// the grid's now).
+Screen shownOf(const State& s, const Data& d) {
+    return (s.screen == Screen::soon && !d.comingSoon) || s.screen == Screen::color ? Screen::grid : s.screen;
+}
 uint32_t soonIn(uint32_t group) {
     uint32_t n = 0;
     for (const SoonHero& x : soonHeroes)
@@ -233,19 +239,16 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
         return 0;
     const Screen shown = shownOf(s, d);
     {
-        Word w[6];
+        Word w[5];
         uint32_t k = 0;
         w[k++] = {tabMarvel, "MARVEL"};
         w[k++] = {tabDc, "DC"};
         if (d.comingSoon)
             w[k++] = {tabSoon, "SOON"};
         w[k++] = {tabRep, "REP"};
-        w[k++] = {tabColor, "COLOR"};
         w[k++] = {closeButton, "CLOSE"};
         n += row(w, k, left, right, tabY0, tabY1, tabText, out + n);
     }
-    if (shown == Screen::color)
-        return n; // the COLOR page under the header is wrist_hud's
     if (shown == Screen::soon) {
         out[n++] = Button{soonMarvel, soonSubU0, rowY0, soonSubMid0, rowY1, true};
         out[n++] = Button{soonDc, soonSubMid1, rowY0, right, rowY1, true};
@@ -334,7 +337,6 @@ std::string helpFor(const State& s, const Data& d, int id) {
     case logNewer: return "Scrolls to newer entries (or push the stick up). No restart needed.";
     case logOlder: return "Scrolls to older entries (or pull the stick down). No restart needed.";
     case tabSoon: return "Shows the heroes coming in 0.0.74; they are not playable yet.";
-    case tabColor: return "Shows the COLOR settings: the hologram's look, the filters and their strength. No restart needed.";
     case subMusic: return "Your music player: play, pause, skip and pick songs from Documents\\HERO VR\\Music.";
     case soonMarvel: return "Shows the MARVEL heroes coming in 0.0.74. No restart needed.";
     case soonDc: return "Shows the DC heroes and suits coming in 0.0.74. No restart needed.";
@@ -388,13 +390,10 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
     tabBtn(tabDc, "DC", heroes2 && (shown == Screen::grid ? s.group == 1 : groupOf(s.hero) == 1));
     tabBtn(tabSoon, "SOON", shown == Screen::soon);
     tabBtn(tabRep, "REP", shown == Screen::rep);
-    tabBtn(tabColor, "COLOR", shown == Screen::color);
     tabBtn(closeButton, "CLOSE", false);
     const bool hostsPage = hosted(s) != Hosted::none; // wrist_hud draws that page's rows and its help
     const uint32_t playing = std::min(d.playing, heroes - 1);
-    if (shown == Screen::color) {
-        // The COLOR page's rows are wrist_hud's, under the header.
-    } else if (shown == Screen::soon) {
+    if (shown == Screen::soon) {
         // 0.0.73 COMING SOON: the title, MARVEL / DC, and a small tile a hero: his picture (the Roster
         // model's soon_* picture) or, without it, a plain head-and-shoulders, and his name. Dim: not playable.
         const uint32_t g = std::min(s.soonGroup, 1u);
@@ -444,20 +443,21 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
             o.outline(b->u0, b->v0, b->u1, b->v1, hov ? Role::line : now ? Role::good : Role::accent);
             const hero072::Bio& bio = hero072::bio(h);
             const Vec3 c{bio.color[0], bio.color[1], bio.color[2]};
-            const float cu = (b->u0 + b->u1) / 2, cv = b->v1 - .0175f;
+            const float cu = (b->u0 + b->u1) / 2, cv = b->v1 - .0095f;
             // 0.0.73 test 3 PORTRAITS: the hero's portrait (the old popup's, the Roster model's picture h)
             // where the disc is; the disc and its initials when there is none.
-            o.disc(cu, cv, .0115f, c, static_cast<int>(h));
-            o.text(initials(h), cu - .011f, cv - .0026f, cu + .011f, .0052f, Role::custom, true, Vec3{1, 1, 1});
+            o.disc(cu, cv, .0075f, c, static_cast<int>(h));
+            o.text(initials(h), cu - .007f, cv - .0018f, cu + .007f, .0036f, Role::custom, true, Vec3{1, 1, 1});
             o.p.back().portrait = static_cast<int>(h), o.p.back().fallback = true;
-            o.text(bio.name, b->u0 + .0015f, b->v1 - .039f, b->u1 - .0015f, .0042f, hov ? Role::line : Role::text, true);
+            o.text(bio.name, b->u0 + .0015f, b->v1 - .0215f, b->u1 - .0015f, .0034f, hov ? Role::line : Role::text, true);
             const std::string sub = now ? std::string("PLAYING") : rep_log::rankText(d.heroPoints[h]);
-            o.text(sub, b->u0 + .002f, b->v1 - .049f, b->u1 - .002f, .0031f, now ? Role::good : Role::value, true);
+            o.text(sub, b->u0 + .002f, b->v1 - .0278f, b->u1 - .002f, .0025f, now ? Role::good : Role::value, true);
         }
-        o.text("PLAYING: " + std::string(nameOf(playing)), left, -.054f, right, .0042f, Role::label);
+        // One line under the tiles (the COLOR rows are under it).
+        o.text("PLAYING: " + std::string(nameOf(playing)), left, playingV, -.012f, .0034f, Role::label);
         if (d.reputation)
-            o.text(rep_log::rankText(d.heroPoints[playing]) + "   " + rep_log::nextText(d.heroPoints[playing]), left, -.064f,
-                   right, .0036f, Role::value);
+            o.textRight(rep_log::rankText(d.heroPoints[playing]) + "   " + rep_log::nextText(d.heroPoints[playing]), -.010f,
+                        playingV, right, .0030f, Role::value);
     } else if (shown == Screen::hero) {
         const uint32_t h = std::min(s.hero, heroes - 1);
         if (const Button* b = byId(backButton))
@@ -616,7 +616,7 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
 }
 
 Hosted hosted(const State& s) {
-    if (s.screen == Screen::color)
+    if (s.screen == Screen::grid || s.screen == Screen::color) // 0.0.76: COLOR under the hero tiles
         return Hosted::color;
     if (s.screen == Screen::hero && s.tab == Tab::music)
         return Hosted::music;
@@ -701,7 +701,7 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     case subOutfits: s_.tab = Tab::outfits; break;
     case subStats: s_.tab = Tab::stats; break;
     case subMusic: s_.tab = Tab::music; break;
-    case tabColor: s_.screen = Screen::color; break;
+    case tabColor: s_.screen = Screen::grid; break; // no COLOR tab since 0.0.76 (never shown)
     case subSettings:
         s_.tab = Tab::settings;
         s_.settingsPage = 0;

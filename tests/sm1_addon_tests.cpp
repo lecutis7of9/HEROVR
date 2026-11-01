@@ -637,16 +637,24 @@ void colorTests() {
                   r.colorVignette <= 100,
               "stepping never leaves the limits");
     }
-    // The COLOR page: up/down picks the row, a left / right flick steps it, the last row goes on.
+    // 0.0.76: the COLOR rows are on the HEROES page under the heroes (no COLOR page): up/down picks the row, a
+    // left / right flick steps it, the last row goes on.
     WristMenu w;
     WristInput in;
     in.toggled = true;
     w.step(in);
     in.toggled = false;
     w.step(in);
-    w.page = Page::color;
-    w.row = 2;
-    check(w.rows() == colorRows, "the COLOR page has its rows");
+    check(w.page == Page::heroes && w.rows() == static_cast<int>(heroCount) + colorRows, "the heroes and the COLOR rows");
+    for (uint32_t p = 0; p < static_cast<uint32_t>(Page::count); ++p)
+        check(std::string(pageName(static_cast<Page>(p))) != "COLOR", "no separate COLOR page");
+    w.row = 1;
+    in.stickX = 1;
+    check(w.step(in) == Pick::none && w.colorRow() == -1, "a flick on a hero row changes nothing");
+    in.stickX = 0;
+    w.step(in);
+    w.row = static_cast<int>(heroCount) + 2;
+    check(w.colorRow() == 2, "the COLOR row under the heroes");
     in.stickX = 1;
     check(w.step(in) == Pick::color && w.delta == 1, "a right flick steps up");
     check(w.step(in) == Pick::none, "held: once");
@@ -657,14 +665,38 @@ void colorTests() {
     in.stickX = 0;
     w.step(in);
     in.trigger = true;
-    check(w.step(in) == Pick::color && w.delta == 1, "the trigger steps up");
+    check(w.step(in) == Pick::color && w.delta == 1 && w.colorRow() == 2, "the trigger steps up");
+    in.trigger = false;
+    w.step(in);
+    w.row = static_cast<int>(heroCount) - 1;
+    in.trigger = true;
+    check(w.step(in) == Pick::hero, "the last hero row still picks the hero");
     in.trigger = false;
     w.step(in);
     w.row = w.rows();
     in.trigger = true;
     w.step(in);
-    check(w.page == Page::heroes, "COLOR's last row goes back to the first page");
-    check(std::string(pageName(Page::color)) == "COLOR", "the page's name");
+    check(w.page == Page::outfits && w.colorRow() == -1, "the HEROES page's last row goes on to OUTFITS");
+    in.trigger = false;
+    w.step(in);
+    w.page = Page::addon;
+    w.row = w.rows();
+    in.trigger = true;
+    w.step(in);
+    check(w.page == Page::heroes, "ADD-ON's last row goes back to HEROES");
+    for (int i = 0; i < colorRows; ++i)
+        check(std::strlen(colorRowSubtext(i)) > 20, "every COLOR row keeps its subtext");
+    // Drawn: the heroes page with a COLOR row selected paints its subtext (more dim text than with a hero row).
+    Canvas c1, c2;
+    MenuView v1;
+    v1.row = 0;
+    for (int i = 0; i < colorRows; ++i)
+        v1.color[i] = colorRowValue(m, i);
+    MenuView v2 = v1;
+    v2.row = static_cast<int>(heroCount) + 1;
+    paintMenu(c1, v1);
+    paintMenu(c2, v2);
+    check(c1.pixels != c2.pixels, "the selected COLOR row repaints");
 }
 
 int main() {

@@ -1397,10 +1397,11 @@ void step() {
             default:
                 break;
             }
-        } else if (pick == Pick::color && menu.row >= 0 && menu.row < colorRows) {
-            adjustColor(live, menu.row, menu.delta);
+        } else if (pick == Pick::color && menu.colorRow() >= 0) {
+            const int k = menu.colorRow();
+            adjustColor(live, k, menu.delta);
             writeLive(live);
-            logLine("COLOR %s: %s", colorRowName(menu.row), colorRowValue(live, menu.row).c_str());
+            logLine("COLOR %s: %s", colorRowName(k), colorRowValue(live, k).c_str());
         }
     } else if (menu.open) {
         menu.open = false;

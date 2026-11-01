@@ -34810,9 +34810,9 @@ int main() {
             for (hr::Screen sc : {hr::Screen::grid, hr::Screen::hero, hr::Screen::rep, hr::Screen::color}) {
                 s.screen = sc;
                 if (soon)
-                    fits(s, d, {hr::tabMarvel, hr::tabDc, hr::tabSoon, hr::tabRep, hr::tabColor, hr::closeButton}, hr::tabY0);
+                    fits(s, d, {hr::tabMarvel, hr::tabDc, hr::tabSoon, hr::tabRep, hr::closeButton}, hr::tabY0);
                 else
-                    fits(s, d, {hr::tabMarvel, hr::tabDc, hr::tabRep, hr::tabColor, hr::closeButton}, hr::tabY0);
+                    fits(s, d, {hr::tabMarvel, hr::tabDc, hr::tabRep, hr::closeButton}, hr::tabY0);
             }
             s.screen = hr::Screen::hero;
             for (hr::Tab tab : {hr::Tab::controls, hr::Tab::outfits, hr::Tab::stats, hr::Tab::settings, hr::Tab::music}) {
@@ -34826,12 +34826,27 @@ int main() {
                 check(subY0 > hr::musicTop, "MUSIC's sub-tab under its page's top");
                 fits(s, d, {hr::subControls, hr::subOutfits, hr::subStats, hr::subSettings, hr::subMusic}, subY0);
             }
-            s.screen = hr::Screen::color;
-            hr::Button bs[hr::buttonsMost];
-            check(hr::buttons(s, d, bs) == (soon ? 6u : 5u), "COLOR: only the header is the roster's");
-            for (uint32_t i = 0; i < (soon ? 6u : 5u); ++i)
-                check(bs[i].v0 > hr::colorTop, "a header tab under COLOR's top");
-            check(!hr::helpFor(s, d, hr::tabColor).empty() && !hr::helpFor(s, d, hr::subMusic).empty(), "the new tabs' help");
+            // 0.0.76: no COLOR tab; COLOR's rows are under the MARVEL / DC page's hero tiles (the same page).
+            for (uint32_t g = 0; g < 2; ++g)
+                for (hr::Screen sc : {hr::Screen::grid, hr::Screen::color}) {
+                    s.screen = sc;
+                    s.group = g;
+                    check(hr::hosted(s) == hr::Hosted::color, "COLOR under the hero tiles");
+                    hr::Button bs[hr::buttonsMost];
+                    const uint32_t n = hr::buttons(s, d, bs);
+                    uint32_t tiles = 0;
+                    for (uint32_t i = 0; i < n; ++i) {
+                        check(bs[i].id != hr::tabColor, "a COLOR tab");
+                        check(bs[i].v0 > hr::colorTop, "a roster button under COLOR's top");
+                        tiles += bs[i].id >= hr::tile && bs[i].id < hr::tile + static_cast<int>(hr::heroes);
+                    }
+                    check(tiles == (g == 0 ? hr::marvelCount : hr::dcCount), "the hero tiles with COLOR");
+                    std::vector<hr::Piece> ps;
+                    hr::pieces(s, d, ps);
+                    for (const hr::Piece& x : ps)
+                        check(std::min(x.v0, x.v1) > hr::colorTop, "a roster piece under COLOR's top: " + x.words);
+                }
+            check(!hr::helpFor(s, d, hr::subMusic).empty(), "the MUSIC tab's help");
         }
         check(hostedPage(hr::State{}) == -1, "nothing hosted closed");
         // The menu: POWERS (the tiles), COLOR, a COLOR row; then a hero's MUSIC, its player.
@@ -34871,16 +34886,30 @@ int main() {
             return Menu::Result{};
         };
         step(0, 0, 0);
-        check(m.rosterOpen() && m.shownPage() == powersPage, "POWERS: the tiles");
-        auto r = pressId(hr::tabColor);
-        check(r.pressed && m.roster().screen == hr::Screen::color && m.page() == powersPage && m.shownPage() == colorPage,
-              "COLOR tab: the COLOR page under the header");
-        const Control colorRows[] = {Control::colorFx, Control::colorFilter, Control::colorStrength};
+        check(m.rosterOpen() && m.roster().screen == hr::Screen::grid && m.page() == powersPage && m.shownPage() == colorPage,
+              "POWERS: the tiles, and the COLOR page under them");
+        Menu::Result r;
+        // 0.0.76 (COLOR under the hero tiles on the same page): COLOR FX and FILTER show at once; the rest of the
+        // COLOR rows (STRENGTH and the folded slider sections) are reached by scrolling the area under the tiles.
+        const Control colorRows[] = {Control::colorFx, Control::colorFilter};
         for (Control c : colorRows) {
             const HostedArea area(colorPage, hr::colorTop);
             const Spot at = controlSpot(colorPage, c, m.scroll());
             check(at.found && at.visible && at.v < hr::colorTop, std::string("a COLOR row not under the header: ") + shortName(c));
             check(controlAt(colorPage, at.u, at.v, m.scroll()) == c, "a COLOR row's spot");
+        }
+        {
+            const HostedArea area(colorPage, hr::colorTop);
+            const float room = maxScroll(colorPage, 1);
+            const Control sliders[] = {Control::colorStrength}; // the other sliders are in its folded sections, below
+            for (Control c : sliders) {
+                bool reached = false;
+                for (float sc = 0; sc <= room + 1e-4f && !reached; sc += .005f) {
+                    const Spot at = controlSpot(colorPage, c, sc);
+                    reached = at.found && at.visible && at.v < hr::colorTop && controlAt(colorPage, at.u, at.v, sc) == c;
+                }
+                check(reached, std::string("a COLOR slider reached by scrolling under the tiles: ") + shortName(c));
+            }
         }
         {
             // Nothing of the page above its top (the header is the roster's), and its scroll reaches its foot.
@@ -34897,8 +34926,8 @@ int main() {
         step(0, fx.u, fx.v);
         check(m.hover() == Control::colorFx, "pointing at COLOR FX under the header");
         r = pressAt(fx.u, fx.v);
-        check(r.pressed && r.colorFx, "COLOR FX on the COLOR tab");
-        check(m.page() == powersPage && m.rosterOpen() && m.roster().screen == hr::Screen::color, "the press left COLOR");
+        check(r.pressed && r.colorFx, "COLOR FX under the hero tiles");
+        check(m.page() == powersPage && m.rosterOpen() && m.roster().screen == hr::Screen::grid, "the press left the tiles");
         // Pointing at the header: the roster's tab, not a page control.
         {
             hr::Button bs[hr::buttonsMost];
@@ -34908,7 +34937,7 @@ int main() {
         }
         // MUSIC: a hero's tile, its MUSIC tab, the one player.
         pressId(hr::tabMarvel);
-        check(m.roster().screen == hr::Screen::grid && m.shownPage() == powersPage, "MARVEL from COLOR: the tiles");
+        check(m.roster().screen == hr::Screen::grid && m.shownPage() == colorPage, "MARVEL: the tiles, COLOR under them");
         pressId(hr::tile + static_cast<int>(hero_modes::spiderMan));
         r = pressId(hr::subMusic);
         check(m.roster().tab == hr::Tab::music && m.shownPage() == musicPage && m.page() == powersPage, "the MUSIC tab");
@@ -34982,7 +35011,7 @@ int main() {
         check(color.size() > 2000, "COLOR drew only the header: " + std::to_string(color.size()));
         // The roster's own BACK leaves MUSIC: nothing of the player stays held.
         pressId(hr::backButton);
-        check(m.shownPage() == powersPage && !m.listOpen() && m.held() == Control::none, "BACK off MUSIC");
+        check(m.shownPage() == colorPage && !m.listOpen() && m.held() == Control::none, "BACK off MUSIC");
         // PREV / NEXT with the tiles pass the old COLOR page by; without them (or CLASSIC) it is there.
         for (int tiles = 0; tiles < 2; ++tiles) {
             Menu pm;

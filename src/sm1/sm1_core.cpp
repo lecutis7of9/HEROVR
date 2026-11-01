@@ -444,25 +444,29 @@ bool flies(uint32_t hero) {
 }
 Vec3 fistSteer(const Vec3 (&offset)[2], const Vec3 (&point)[2], const bool (&tracked)[2], Vec3 up) {
     up = fly076::unitOr(up, {0, 1, 0});
-    constexpr float chestBelow = .30f, near = .16f, full = .38f, lowest = -.22f, reachOut = .28f;
+    // HOVER FLIGHT (pt1616u, "you just keep flying"): the controllers held at the chest pointing ahead (the way
+    // they are simply held) said "fly forward" before, so he never stopped. Now only an arm reached out flies him:
+    // the hand at least `near` from the shoulders' middle (`shoulderBelow` under the head), full at `full`, and its
+    // fist pointing along the arm. Arm's length is about .6-.7 m; a hand held at the chest is about .25-.35 m away.
+    constexpr float shoulderBelow = .25f, near = .45f, full = .58f, lowest = -.22f, reachOut = .28f, along = .5f;
     Vec3 sum{};
     float weight = 0;
     for (int i = 0; i < 2; ++i) {
         if (!tracked[i] || !finite(offset[i]) || !finite(point[i]) || length(point[i]) < .5f)
             continue;
-        const Vec3 d = offset[i] + up * chestBelow; // from the chest
+        const Vec3 d = offset[i] + up * shoulderBelow; // from the shoulders
         const float n = length(d);
         if (!(n > near))
-            continue; // the hand at the chest says nothing
+            continue; // a hand held in, not reached out: says nothing
         const float height = dot(d, up), out = length(d - up * height);
         if (height < lowest && out < reachOut)
             continue; // hanging at the side
         const Vec3 fist = normalized(point[i]), arm = d / n;
-        if (dot(fist, up) < -.85f && out < reachOut)
-            continue; // the fist straight down by the leg
+        if (dot(fist, arm) < along)
+            continue; // the fist does not point the arm's way (a hand out to the side, the controller held up)
         const float w = std::clamp((n - near) / (full - near), 0.f, 1.f);
         const Vec3 way = fist * .65f + arm * .35f;
-        if (length(way) < .2f)
+        if (length(way) < .2f || !(w > 0))
             continue;
         sum = sum + normalized(way) * w;
         weight += w;
@@ -529,9 +533,11 @@ Mask maskFor(const MaskInput& in) {
         if (in.holoHands >> i & 1u)
             m.trigger[i] = m.grip[i] = true; // the SM2 wrist click's pull: never a web, punch or power
     if (in.flying) {
-        m.stick[0] = true;                  // the speed
+        m.stick[0] = true;                  // move and strafe (HOVER FLIGHT)
         m.faceLower[1] = m.faceUpper[1] = true; // A comes down, B brakes
-        m.stick[1] = true; // 0.0.76 test: no zip, heal or flip from the right stick mid-flight (one control, one job)
+        // HOVER FLIGHT (pt1616u): the right stick's up / down is the climb (no zip or heal from it mid-flight); its
+        // left / right stays his - SpidyVR's own turn (snap or smooth, his setting) turns the flying hero.
+        m.stickY[1] = true;
     }
     if (in.aHeld)
         m.faceLower[1] = true; // an A held in flight is never also his jump, even once landed
@@ -1117,6 +1123,9 @@ FlightEvent stepFlight(FlightState& s, const FlightInput& in, const FlightTuning
     fi.look = finite(in.headForward) ? in.headForward : Vec3{0, 0, 1};
     fi.want = finite(in.steer) ? in.steer : Vec3{};
     fi.velocity = s.velocity;
+    fi.hover = true; // HOVER FLIGHT: no cruise, still with nothing held
+    fi.move = finite(in.move) ? limited(Vec3{in.move.x, 0, in.move.z}, 1.f) : Vec3{};
+    fi.rise = fly076::axis(in.rise);
     const fly076::Out o = s.flight.update(fi);
     s.how = o.how;
     if (o.tookOff && !s.on) {

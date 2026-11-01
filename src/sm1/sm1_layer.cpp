@@ -2001,9 +2001,8 @@ void step() {
         const Vec3 up{0, 1, 0};
         const auto flat = [](Vec3 v) { return Vec3{v.x, 0, v.z}; };
         in.armsUp = fly076::armsUp(offset, tracked, up);
-        // 0.0.76 test ("flying you just kinda keep going with no control"): fly076::steerWay counts an arm only
-        // .45 m out from his chest; his flight log's hands were .17-.45 m from it, so no steer reached the flight
-        // and it held its heading. fistSteer (sm1_core) steers from a fist .16 m out, the way the fists point.
+        // fistSteer (sm1_core): only an arm reached out (.45 m from the shoulders), its fist pointing along it,
+        // flies him that way; controllers simply held at the chest no longer do (pt1616u "you just keep flying").
         Vec3 point[2]{};
         for (int i = 0; i < 2; ++i)
             point[i] = aimOk[i] ? aim[i].orientation.rotate({0, 0, -1}) : Vec3{};
@@ -2024,6 +2023,23 @@ void step() {
         in.headForward = gv.headForward;
         in.headRight = gv.headRight;
         in.throttle = play.stick[0].y;
+        // HOVER FLIGHT (pt1616u): the left stick moves the way the head faces and strafes across it, laid onto the
+        // game's level ground the same way as the fists; the right stick's up / down climbs and sinks (masked from
+        // his heal and zip mid-flight); its left / right is passed to him untouched (his turn). Nothing held: still.
+        {
+            const float sx = std::isfinite(play.stick[0].x) ? std::clamp(play.stick[0].x, -1.f, 1.f) : 0.f;
+            const float sy = std::isfinite(play.stick[0].y) ? std::clamp(play.stick[0].y, -1.f, 1.f) : 0.f;
+            const Vec3 local = tf * sy + tr * sx;
+            const float amount = std::min(1.f, length(local));
+            Vec3 move{};
+            if (amount > .01f) {
+                const Vec3 g = headMap.ok ? flat(props::dirToGame(headMap, normalized(local))) : Vec3{};
+                move = finite(g) && length(g) > .5f ? normalized(g) * amount
+                                                    : limited(gf * sy + gr * sx, 1.f);
+            }
+            in.move = move;
+            in.rise = std::isfinite(play.stick[1].y) ? std::clamp(play.stick[1].y, -1.f, 1.f) : 0.f;
+        }
         his::MotionData d{};
         in.grounded = sampleOurs(d) && d.steps && d.grounded;
         in.dt = dt;
@@ -2039,9 +2055,10 @@ void step() {
             const ULONGLONG nowMs = GetTickCount64();
             if (nowMs - play.steerLogged > 2000) {
                 play.steerLogged = nowMs;
-                logLine("flight: %s, speed %.1f m/s, fists %s", in.steer.x || in.steer.y || in.steer.z ? "steering" : "holding its heading",
+                logLine("flight: %s, speed %.1f m/s, fists %s, stick %.2f/%.2f, climb %.2f", play.flight.how ? play.flight.how : "",
                         static_cast<double>(length(play.flight.velocity)),
-                        length(way) > .5f ? "pointing the way" : "in (not steering)");
+                        length(way) > .5f ? "pointing the way" : "in (not steering)",
+                        static_cast<double>(length(in.move)), static_cast<double>(in.throttle), static_cast<double>(in.rise));
             }
             const DWORD r = submitOurs(true, play.flight.velocity);
             if (r) {

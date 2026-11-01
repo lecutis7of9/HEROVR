@@ -278,8 +278,8 @@ void inputTests() {
           "0.0.76: a flying hero on the ground: grips web, A jumps (its hold takes off)");
     mi.flying = true;
     m = maskFor(mi);
-    check(m.stick[0] && m.stick[1] && m.faceLower[1] && m.faceUpper[1] && !m.faceLower[0],
-          "0.0.76 flying: the sticks, the right A and B are ours (no zip, flip or heal mid-flight)");
+    check(m.stick[0] && !m.stick[1] && m.stickY[1] && m.faceLower[1] && m.faceUpper[1] && !m.faceLower[0],
+          "HOVER FLIGHT: the left stick, the right stick's up / down (the climb), A and B are ours; his turn is his");
     mi.flying = false;
     mi.aHeld = true;
     check(maskFor(mi).faceLower[1], "0.0.76: an A held from the flight is no jump on landing");
@@ -528,25 +528,64 @@ void flightTests() {
         stepFlight(s, in);
     check(s.on, "the same A held never also comes down");
     in.a = false;
-    for (int i = 0; i < 90 * 3; ++i)
+    for (int i = 0; i < 90 * 2; ++i)
         stepFlight(s, in);
-    check(s.on && s.velocity.z > 12 && std::fabs(s.velocity.y) < 2, "flies on by itself along the head's way");
+    check(s.on && length(s.velocity) == 0, "HOVER FLIGHT: nothing held, no arm out - he hangs exactly still");
+    in.move = {0, 0, 1};
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.velocity.z > 12 && std::fabs(s.velocity.x) < .1f && std::fabs(s.velocity.y) < .1f, "left stick: forward");
+    in.move = {};
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.on && length(s.velocity) == 0, "let go: he stops, no drift");
+    in.move = {-.9f, 0, 0};
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.velocity.x < -8 && std::fabs(s.velocity.z) < .1f, "left stick across: a strafe");
+    in.move = {};
+    in.rise = 1;
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.velocity.y > 6 && std::fabs(s.velocity.x) < .5f, "right stick up: climbs");
+    in.rise = -1;
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.on && s.velocity.y < -6, "right stick down: sinks, still flying");
+    in.rise = .1f;
+    in.move = {.1f, 0, .1f};
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(length(s.velocity) == 0, "inside the dead zone: still");
+    in.rise = 0;
+    in.move = {};
     in.steer = {1, 0, 0};
-    for (int i = 0; i < 90 * 4; ++i)
-        stepFlight(s, in);
-    check(s.velocity.x > 12 && std::fabs(s.velocity.z) < 4, "the arms steer");
-    in.throttle = 1;
     for (int i = 0; i < 90 * 3; ++i)
         stepFlight(s, in);
-    check(s.velocity.x > 26 && length(s.velocity) <= 28.01f && std::fabs(s.velocity.y) < .5f,
-          "full forward: SUPERSONIC, speed only, never down");
-    in.throttle = -1;
-    for (int i = 0; i < 90 * 4; ++i)
+    check(s.velocity.x > 12 && std::fabs(s.velocity.z) < .5f, "an arm pointed flies him along it");
+    in.steer = {};
+    in.throttle = 1;
+    in.move = {0, 0, 1};
+    float lowest = 1e9f;
+    for (int i = 0; i < 90 * 3; ++i) {
         stepFlight(s, in);
-    check(s.on && length(s.velocity) < 1, "stick back: a hover");
+        lowest = std::min(lowest, s.velocity.y);
+    }
+    check(s.velocity.z > 26 && length(s.velocity) <= 28.01f && lowest > -.01f,
+          "full forward: SUPERSONIC, never down");
+    in.grounded = true;
+    stepFlight(s, in);
+    check(s.on, "SUPERSONIC never grounds you");
+    in.grounded = false;
     in.throttle = 0;
+    in.move = {};
+    for (int i = 0; i < 90 * 2; ++i)
+        stepFlight(s, in);
+    check(s.on && length(s.velocity) == 0, "and from SUPERSONIC, let go: still");
+    in.move = {0, 0, 1};
     for (int i = 0; i < 90; ++i)
         stepFlight(s, in);
+    in.move = {};
     in.b = true;
     for (int i = 0; i < 90 * 2; ++i)
         stepFlight(s, in);
@@ -1238,20 +1277,35 @@ void propsTests() {
 }
 
 // 0.0.76 test 4 ("flying you just kinda keep going with no control"; "they veer off to the left"; the soundless beam)
+static const Vec3 (&fwd2())[2] {
+    static const Vec3 f[2]{{0, 0, -1}, {0, 0, -1}};
+    return f;
+}
 void aimAndGunfireTests() {
     const Vec3 up{0, 1, 0};
     const bool both[2]{true, true};
-    // his flight log: fists at his chest, .17-.45 m from the old steer's chest point - fly076::steerWay said nothing
+    // pt1616u ("you just keep flying"): the controllers held at the chest pointing ahead are no steer any more
     {
-        const Vec3 offset[2]{{-.15f, -.25f, -.22f}, {.15f, -.25f, -.22f}}; // from the head: a fist each side, chest high
+        const Vec3 held[2]{{-.15f, -.25f, -.22f}, {.15f, -.25f, -.22f}}; // a fist each side, chest high, held in
+        const Vec3 fwd[2]{{0, 0, -1}, {0, 0, -1}};
+        check(length(fistSteer(held, fwd, both, up)) < 1e-3f, "controllers held at the chest: no steer (he hovers)");
+        const Vec3 rest[2]{{-.18f, -.45f, -.25f}, {.18f, -.45f, -.25f}}; // resting at the waist
+        const Vec3 down45[2]{{0, -.7f, -.7f}, {0, -.7f, -.7f}};
+        check(length(fistSteer(rest, down45, both, up)) < 1e-3f, "hands resting at the waist: no steer");
+    }
+    {
+        const Vec3 offset[2]{{-.15f, -.2f, -.62f}, {.15f, -.2f, -.62f}}; // both arms reached out ahead
         const Vec3 point[2]{{0, 0, -1}, {0, 0, -1}};
         const Vec3 w = fistSteer(offset, point, both, up);
-        check(length(w) > .99f && w.z < -.9f, "fists out in front: fly forward");
-        const Vec3 left[2]{{-.7f, 0, -.7f}, {-.7f, 0, -.7f}};
-        const Vec3 l = fistSteer(offset, left, both, up);
-        check(l.x < -.3f, "fists turned left: fly left");
-        const Vec3 high[2]{{0, .7f, -.7f}, {0, .7f, -.7f}};
-        check(fistSteer(offset, high, both, up).y > .3f, "fists up: climb");
+        check(length(w) > .99f && w.z < -.9f, "arms reached out in front: fly forward");
+        const Vec3 leftArm[2]{{-.55f, -.2f, -.35f}, {-.45f, -.2f, -.45f}};
+        const Vec3 left[2]{{-.8f, 0, -.6f}, {-.7f, 0, -.7f}};
+        check(fistSteer(leftArm, left, both, up).x < -.3f, "arms out to the left: fly left");
+        const Vec3 upArm[2]{{-.1f, .35f, -.25f}, {.1f, .35f, -.25f}};
+        const Vec3 high[2]{{0, .8f, -.6f}, {0, .8f, -.6f}};
+        check(fistSteer(upArm, high, both, up).y > .3f, "arms up ahead: climb");
+        const Vec3 side[2]{{-.65f, -.2f, 0}, {.65f, -.2f, 0}};
+        check(length(fistSteer(side, fwd2(), both, up)) < 1e-3f, "arms out to the sides, fists ahead: no steer");
     }
     {
         const Vec3 hang[2]{{-.2f, -.65f, 0}, {.2f, -.65f, 0}}; // arms down at his sides

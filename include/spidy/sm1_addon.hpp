@@ -382,18 +382,18 @@ Vec3 gameToHeadLocal(Vec3 dir, Vec3 headRight, Vec3 headDown, Vec3 headForward);
 
 // --- Flight (the flying heroes; moved through his SpidyMotionSubmit by the layer) --------------------------------
 bool flies(uint32_t hero); // IRON MAN, SUPERMAN, THOR, GREEN LANTERN
-// 0.0.76 SM1 FLIGHT STEER (the test: "flying you just kinda keep going with no control"). The shared fly076::steerWay
-// only counts an arm held .45 m out from a point .30 m under the head; in the test's flight the hands stayed .17 to .45 m
-// from it the whole time, so the heading never turned. Here each hand that is up (not hanging at the side) steers by
-// where its fist points (the controller's aim ray) and where the arm reaches, weighted by how far out it is; both hands
-// down at the sides say nothing (the heading holds). offset: each grip from the head; point: each aim ray's way;
-// all in one frame whose up is `up`. Unit, or zero.
+// 0.0.76 SM1 FLIGHT STEER. A fist steers only on an arm reached out (the hand .45 m or more from the shoulders' middle,
+// full at .58 m) with the fist pointing along that arm; controllers held at the chest, hands hanging at the sides or
+// tucked in say nothing (HOVER FLIGHT then hangs still: pt1616u "you just keep flying"). offset: each grip from the
+// head; point: each aim ray's way; all in one frame whose up is `up`. Unit, or zero.
 Vec3 fistSteer(const Vec3 (&offset)[2], const Vec3 (&point)[2], const bool (&tracked)[2], Vec3 up);
-// HERO VR 0.0.76 FLIGHT (the SM2 build's fly076.hpp, the same feel): both hands straight up over the head for a
-// quarter second, or the right A held .4 s, takes off; the arms steer (both out together: their average way,
-// smoothly, slower at speed); it flies on by itself; the left stick forward is faster (full forward SUPERSONIC:
-// speed only, never the path, never down), back slower to a hover; the right B held is the air brake; the right A
-// held in flight comes down (an arm up climbs again) and lands. The grips stay his (webs), the triggers the powers.
+// HERO VR 0.0.76 FLIGHT (the SM2 build's fly076.hpp, its HOVER FLIGHT): both hands straight up over the head for a
+// quarter second, or the right A held .4 s, takes off straight up and then hangs still. Nothing moves him but the
+// sticks and an arm: the left stick forward / back and strafe (the way the head faces), the right stick up / down
+// climbs and sinks, a fist pointed out flies him along it; let go and he stops where he is (no drift). The left stick
+// full forward is SUPERSONIC (never lower, never grounded). The right stick's left / right stays SpidyVR's turn (it
+// is passed through); the head turns him too. The right B held is the air brake; the right A held comes down and
+// lands. The grips stay his (webs), the triggers the powers. No body roll in SM1: his mod draws the body and view.
 struct FlightTuning {
     float cruise = 16;   // m/s flying on (extras385::fly NORMAL)
     float maxSpeed = 28; // m/s SUPERSONIC (his movement module allows up to its own cap)
@@ -405,7 +405,12 @@ struct FlightInput {
     bool a = false, b = false; // the right A and B held (false where his bindings have none)
     Vec3 steer{};             // fly076::steerWay, game world (Y up); zero: the arms say nothing
     Vec3 headForward{0, 0, 1}, headRight{1, 0, 0}; // the head's axes, game world
-    float throttle = 0;       // left stick forward / back
+    float throttle = 0;       // left stick forward / back (full forward: SUPERSONIC)
+    // HOVER FLIGHT (fly076 In::hover; pt1616u): the left stick as a level game-world way (forward / back the head's,
+    // strafe across it, at most 1 long) and the right stick's up / down (the climb). Nothing held and no arm pointed:
+    // he hangs still.
+    Vec3 move{};
+    float rise = 0;
     bool grounded = false;    // his movement telemetry: the body stands on something
     float dt = 0;
 };

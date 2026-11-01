@@ -1,7 +1,7 @@
 # HERO VR 0.0.76 SM1: Mulder's Heroes add-on for iilyn's Spider-Man VR mod (Spidy by Ilya Mezerowsky, GPL-3.0,
 # https://github.com/IlyaMez/SpidyVR). Separate files: nothing here builds into or changes his mod.
 # sm1_scan_core.cpp: the research scan's pure part (anchors, joint hash, RTTI names), tested here.
-add_library(herovr_sm1_core STATIC sm1_core.cpp sm1_scan_core.cpp sm1_combat.cpp sm1_grapple.cpp)
+add_library(herovr_sm1_core STATIC sm1_core.cpp sm1_scan_core.cpp sm1_combat.cpp sm1_grapple.cpp sm1_holo.cpp)
 # spidy_core: the SM2 build's own code reused as is (pixel_font, the outfits, and the wrist click: wrist_hud::Toggle).
 target_link_libraries(herovr_sm1_core PUBLIC spidy_core)
 target_include_directories(herovr_sm1_core PUBLIC "${PROJECT_SOURCE_DIR}/include")
@@ -38,7 +38,7 @@ if(WIN32 AND TARGET minhook)
     target_compile_options(herovr_sm1_layer PRIVATE /W4 /permissive-)
   endif()
   set_property(TARGET herovr_sm1_layer PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-  target_link_libraries(herovr_sm1_layer PRIVATE herovr_sm1_core minhook d3d12 version)
+  target_link_libraries(herovr_sm1_layer PRIVATE herovr_sm1_core minhook d3d12 version windowscodecs ole32)
   set_target_properties(herovr_sm1_layer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
                         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
   configure_file(herovr_sm1_layer.json "${CMAKE_BINARY_DIR}/herovr_sm1_layer.json" COPYONLY)

@@ -3,6 +3,8 @@
 #include "spidy/sm1_addon.hpp"
 #include "spidy/sm1_combat.hpp"
 #include "spidy/sm1_grapple.hpp"
+#include "spidy/sm1_holo.hpp"
+#include "spidy/eye_color.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
@@ -11,6 +13,8 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <chrono>
+#include <thread>
 #include <vector>
 
 using namespace spidy;
@@ -753,6 +757,172 @@ void colorTests() {
     check(c1.pixels != c2.pixels, "the selected COLOR row repaints");
 }
 
+// 0.0.76 SM1 HOLO: the SM2 build's own panel, painted into the quad's picture.
+Vertex vtx(float x, float y, Vec3 c, float a) {
+    Vertex v;
+    v.position = {x, y, 0};
+    v.color = c;
+    v.alpha = a;
+    return v;
+}
+uint32_t at(const Canvas& c, int x, int y) {
+    return c.pixels[static_cast<size_t>(y) * static_cast<size_t>(c.width) + static_cast<size_t>(x)];
+}
+void holoTests() {
+    using namespace spidy::sm1::holo;
+    // a white square of two triangles over a 10x10 picture of a 1x1 area: every pixel once, no seam
+    std::vector<Vertex> sq = {vtx(-.5f, -.5f, {1, 1, 1}, .5f), vtx(.5f, -.5f, {1, 1, 1}, .5f), vtx(.5f, .5f, {1, 1, 1}, .5f),
+                              vtx(-.5f, -.5f, {1, 1, 1}, .5f), vtx(.5f, .5f, {1, 1, 1}, .5f), vtx(-.5f, .5f, {1, 1, 1}, .5f)};
+    Canvas c(10, 10);
+    raster(sq, {}, nullptr, .5f, .5f, c);
+    bool same = true;
+    for (uint32_t p : c.pixels)
+        same = same && p == c.pixels[0];
+    check(same, "two triangles of one square blend each pixel once (no seam)");
+    check((c.pixels[0] >> 24) == 128 && (c.pixels[0] & 0xffffff) == 0xffffff, "half white: straight white, alpha 128");
+    // over: red at .5 over the white half - straight colour sRGB-encoded, alpha .75
+    std::vector<Vertex> two = sq;
+    for (Vertex v : sq) {
+        v.color = {1, 0, 0};
+        two.push_back(v);
+    }
+    raster(two, {}, nullptr, .5f, .5f, c);
+    const uint32_t p = at(c, 5, 5);
+    check((p >> 24) == 191, "red over white: alpha .75");
+    check((p & 0xff) == 255 && ((p >> 8) & 0xff) > 150 && ((p >> 8) & 0xff) < 200, "red over white: linear blend, sRGB out");
+    // a triangle covers only its half
+    std::vector<Vertex> tri = {vtx(-.5f, .5f, {0, 1, 0}, 1), vtx(.5f, .5f, {0, 1, 0}, 1), vtx(-.5f, -.5f, {0, 1, 0}, 1)};
+    raster(tri, {}, nullptr, .5f, .5f, c);
+    check(at(c, 1, 1) == 0xff00ff00u && at(c, 8, 8) == 0, "a triangle fills its side only (y up, top row first)");
+    // either winding draws
+    std::swap(tri[1], tri[2]);
+    raster(tri, {}, nullptr, .5f, .5f, c);
+    check(at(c, 1, 1) == 0xff00ff00u, "either winding draws");
+    // a textured triangle samples its picture, tinted
+    Portraits pics;
+    pics.ok = true;
+    pics.layers.resize(1);
+    pics.layers[0].width = pics.layers[0].height = 2;
+    pics.layers[0].rgba.assign(16, 255);
+    std::vector<Vertex> tex = sq;
+    for (Vertex& v : tex) {
+        v.alpha = 1;
+        v.shape = {v.position.x + .5f, .5f - v.position.y, 0, 1};
+    }
+    raster({}, tex, &pics, .5f, .5f, c);
+    check(at(c, 4, 4) == 0xffffffffu, "a portrait's pixels are drawn");
+    raster({}, tex, nullptr, .5f, .5f, c);
+    check(at(c, 4, 4) == 0, "no portraits: no textured pixels");
+    check(hashOf(sq, {}) != hashOf(two, {}) && hashOf(sq, {}) == hashOf(sq, {}) && hashOf(sq, {}) != hashOf({}, sq),
+          "the picture's key follows its vertices");
+
+    // what it shows: each hero only what works
+    Now now;
+    holo_roster::Data d = rosterData(now);
+    check(d.sm1.on && d.healthNa && d.suitsKnown && !d.comingSoon, "SM1 data: no health, no SOON, the outfits known");
+    check(d.sm1.switches[hero_modes::spiderMan].empty() && d.sm1.power[hero_modes::spiderMan].empty(),
+          "SPIDER-MAN: no switches, no power (iilyn's)");
+    const auto has = [&](uint32_t h, int key) {
+        for (const auto& w : d.sm1.switches[h])
+            if (w.key == key)
+                return true;
+        return false;
+    };
+    check(has(hero_modes::ironMan, swPowers) && has(hero_modes::ironMan, swFlight) && !has(hero_modes::ironMan, swGrapple),
+          "IRON MAN: POWERS, FLIGHT, no GRAPPLE");
+    check(has(hero_modes::captainAmerica, swGrapple) && !has(hero_modes::captainAmerica, swFlight),
+          "CAPTAIN AMERICA: GRAPPLE, no FLIGHT");
+    check(has(hero_modes::daredevil, swGrapple), "DAREDEVIL: GRAPPLE");
+    check(d.sm1.power[hero_modes::superman] == std::string("HEAT VISION"), "SUPERMAN: HEAT VISION");
+    for (uint32_t h = 0; h < heroCount; ++h) {
+        check(d.sm1.lines[h].size() <= holo_roster::sm1LinesMost && d.sm1.switches[h].size() <= holo_roster::sm1SwitchesMost,
+              "the rows fit");
+        check(d.suits.count[h] > 0, "every hero has outfits");
+    }
+    now.config.outfit[hero_modes::batman] = 1;
+    d = rosterData(now);
+    check(d.suits.rows[hero_modes::batman][1].status == roster_page::Status::inUse &&
+              d.suits.rows[hero_modes::batman][0].status != roster_page::Status::inUse,
+          "the saved outfit is the one marked");
+    now.live.powers = false;
+    d = rosterData(now);
+    check(!d.sm1.switches[hero_modes::ironMan][0].on && d.sm1.switches[hero_modes::ironMan][0].key == swPowers,
+          "the POWERS switch shows the live value");
+    check(!playLines(hero_modes::ironMan, now).empty() && !playLines(hero_modes::spiderMan, now).empty(), "PLAY AS says what works");
+
+    // COLOR: the SM2 build's mapping, round trip; every filter (none first)
+    Live l;
+    l.colorExposure = -7;
+    l.colorWarmth = 30;
+    l.colorContrast = 120;
+    Live back;
+    takeColor(colorSettings(l), back);
+    check(back.colorExposure == -7 && back.colorWarmth == 30 && back.colorContrast == 120 && back.colorStrength == 100,
+          "COLOR sliders round trip");
+    l.colorFx = true;
+    l.colorFilter = 3;
+    check(colorBits(l) == (1u | 3u << 8), "COLOR bits as the SM2 build packs them");
+    check(nextFilter(eye_color::filters - 1) == 0 && nextFilter(0) == 1, "FILTER steps through every look");
+    check(!Live{}.colorFx, "COLOR is off by default");
+
+    // the whole hologram: the SM2 panel with the heroes' tiles draws, and the hero picked changes it
+    wrist_hud::setSm1Mode(true);
+    now = Now{};
+    d = rosterData(now);
+    wrist_hud::Menu menu;
+    menu.setPage(wrist_hud::powersPage);
+    wrist_hud::Settings set = colorSettings(now.live);
+    wrist_hud::Menu::Input in;
+    in.active = true;
+    in.heroTiles = true;
+    in.rosterData = &d;
+    in.hero = 0;
+    menu.update(in, set);
+    const auto paint = [&](uint32_t hero, Canvas& out) {
+        wrist_hud::View v;
+        v.page = menu.page();
+        v.scroll = menu.scroll();
+        v.roster = menu.roster();
+        v.heroTiles = true;
+        v.rosterData = &d;
+        v.settings = set;
+        v.color = colorBits(now.live);
+        d.playing = hero;
+        std::vector<Vertex> tr, tx;
+        panel(v, tr, tx);
+        out = Canvas(width, height);
+        raster(tr, tx, nullptr, halfWidth, halfHeight, out);
+        return tr.size();
+    };
+    Canvas a, b;
+    check(paint(0, a) > 1000, "the hologram has the SM2 panel's geometry");
+    size_t lit = 0;
+    for (uint32_t px : a.pixels)
+        lit += (px >> 24) > 20;
+    check(lit > a.pixels.size() / 10, "the hologram's picture is drawn");
+    paint(hero_modes::ironMan, b);
+    check(a.pixels != b.pixels, "the hero played shows on the hologram");
+    wrist_hud::setSm1Mode(false);
+    std::vector<Vertex> n;
+    note("PLAYING IRON MAN", playLines(hero_modes::ironMan, now), n);
+    check(!n.empty(), "the PLAY AS note draws");
+    Canvas dot;
+    paintDot(dot);
+    check(dot.width == dotSize && (at(dot, dotSize / 2, dotSize / 2) >> 24) > 200 && at(dot, 0, 0) == 0, "the pointer's dot");
+    // the painter thread: what it is asked, once
+    Painter painter;
+    painter.ask(7, sq, {}, .5f, .5f, 10, 10);
+    Canvas got;
+    uint64_t key = 0;
+    for (int i = 0; i < 2000 && !painter.take(got, key); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    check(key == 7 && got.width == 10 && (got.pixels[0] >> 24) == 128, "the painter paints off the frame");
+    painter.ask(7, sq, {}, .5f, .5f, 10, 10);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    check(!painter.take(got, key), "the same picture is not painted twice");
+    painter.stop();
+}
+
 int main() {
     hostTests();
     featureTests();
@@ -770,6 +940,7 @@ int main() {
     combatTests();
     grappleTests();
     colorTests();
+    holoTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

@@ -1015,6 +1015,7 @@ struct PageSections {
     const SectionDef* list;
     int count;
 };
+std::atomic<bool> sm1On{false};
 template <size_t N> constexpr PageSections of(const SectionDef (&a)[N]) { return {a, static_cast<int>(N)}; }
 PageSections pageSections(int page) {
     switch (page) {
@@ -1026,8 +1027,8 @@ PageSections pageSections(int page) {
         return of(combatSections);
     case graphicsPage:
         return of(graphicsSections);
-    case colorPage:
-        return of(colorSections);
+    case colorPage: // HERO VR 0.0.76 SM1: ADJUST only (90s ANIMATED is SM2's own shader)
+        return sm1On.load(std::memory_order_relaxed) ? PageSections{colorSections, 1} : of(colorSections);
     case controlsPage:
         return of(controlsSections);
     default:
@@ -1382,7 +1383,7 @@ Layout build(int page, float k, int open) {
         row(Control::colorFx);
         row(Control::colorFilter);
         row(Control::colorStrength);
-        sections(0, 2);
+        sections(0, pageSections(colorPage).count); // SM1: ADJUST only
         break;
     case controlsPage:
         sections(0, 4);
@@ -1574,7 +1575,7 @@ const Layout& layoutOf(int page, float text) {
         return a;
     }();
     const int open = openSection(p); // read once: the key and the build agree
-    const long want = std::lround(k * 1000) * 16 + (open + 1);
+    const long want = (std::lround(k * 1000) * 16 + (open + 1)) * 2 + (sm1On.load(std::memory_order_relaxed) ? 1 : 0);
     if (key[static_cast<size_t>(p)] != want) {
         cache[static_cast<size_t>(p)] = build(p, k, open);
         key[static_cast<size_t>(p)] = want;
@@ -4198,8 +4199,8 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         const float hostTop = holo_roster::hostedTop(rs);
         const bool finite = in.pointer.hit && std::isfinite(in.pointer.u) && std::isfinite(in.pointer.v);
         const bool onIt = finite && std::abs(in.pointer.u) <= halfW && std::abs(in.pointer.v) <= halfH;
-        const bool onStrip =
-            tiles && finite && (previousBox.in(in.pointer.u, in.pointer.v) || nextBox.in(in.pointer.u, in.pointer.v));
+        const bool onStrip = tiles && finite && !sm1On.load(std::memory_order_relaxed) &&
+                             (previousBox.in(in.pointer.u, in.pointer.v) || nextBox.in(in.pointer.u, in.pointer.v));
         // A slider held or a drag on the page keeps the pointer wherever it goes.
         const bool busy = down && !relaid && (held_ != Control::none || drag_ != Drag::none);
         const bool header = onIt && !busy && in.pointer.v > hostTop;
@@ -4227,6 +4228,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         r.rosterSuitHero = a.suitHero;
         r.rosterSuitIndex = a.suitIndex;
         r.rosterClosed = a.closed;
+        r.rosterSwitch = a.sm1Switch;
         r.invincible = r.invincible || a.invincible; // 0.0.76 HEALTH (the tiles' buttons)
         r.doubleHealth = r.doubleHealth || a.doubleHealth;
         if (a.closed && tiles && page_ == powersPage)
@@ -4276,7 +4278,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         const bool onIt = in.active && in.pointer.hit && std::isfinite(in.pointer.u) && std::isfinite(in.pointer.v) &&
                           std::abs(in.pointer.u) <= halfW && std::abs(in.pointer.v) <= halfH;
         const bool onStrip = tiles && in.active && in.pointer.hit && std::isfinite(in.pointer.u) &&
-                             std::isfinite(in.pointer.v) &&
+                             std::isfinite(in.pointer.v) && !sm1On.load(std::memory_order_relaxed) &&
                              (previousBox.in(in.pointer.u, in.pointer.v) || nextBox.in(in.pointer.u, in.pointer.v));
         if (first && (onIt || onStrip))
             claim_ = true;
@@ -4307,6 +4309,7 @@ Menu::Result Menu::update(const Input& in, Settings& settings) {
         r.rosterSuitHero = a.suitHero;
         r.rosterSuitIndex = a.suitIndex;
         r.rosterClosed = r.rosterClosed || a.closed;
+        r.rosterSwitch = a.sm1Switch;
         r.invincible = r.invincible || a.invincible; // 0.0.76 HEALTH (the tiles' buttons)
         r.doubleHealth = r.doubleHealth || a.doubleHealth;
         if (onRow) {
@@ -5412,6 +5415,80 @@ void appendWristHud(std::vector<Vertex>& out, const View& view, Vec3 viewer, flo
         pointerMark(p, view);
     for (size_t i = from; i < out.size(); ++i)
         out[i].alpha *= opacity;
+}
+
+void setSm1Mode(bool on) {
+    sm1On.store(on, std::memory_order_relaxed);
+}
+bool sm1Mode() {
+    return sm1On.load(std::memory_order_relaxed);
+}
+
+// HERO VR 0.0.76 SM1: the panel as appendWristHud draws it - the same backing, roster or page, frame and pointer,
+// in the same palette - on a flat frame for the Spider-Man 1 layer's own rasterizer. No light or rays (the layer has
+// no wrist emitter to draw from) and no strip (SM1 has no other pages).
+void appendPanelFlat(std::vector<Vertex>& out, const View& view, float pixel) {
+    const Frame f{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    const Palette colors = palette(view.theme, view.textColor);
+    Painter painter{out, f, 1.f, std::isfinite(pixel) && pixel > 0 ? pixel : .00025f, {0, 0, 1}, colors};
+    painter.pixel = view.theme == raimiTheme;
+    painter.seconds = view.seconds;
+    const Painter& p = painter;
+    const int page = view.page >= 0 && view.page < pages ? view.page : 0;
+    const float top = panelTop(page);
+    if (p.pixel)
+        raimiHalo(p, top);
+    backing(p, top);
+    if (p.pixel)
+        spiderMark(p, 0, (top - halfH) / 2 - .01f, .085f);
+    const size_t clipFrom = out.size();
+    if (view.roster.screen != holo_roster::Screen::closed || (view.heroTiles && page == powersPage))
+        holoRoster(p, view);
+    else {
+        const float k = textFactor(view.textScale);
+        const float scroll = clampScroll(page, view.scroll, k);
+        Painter scrolled = p;
+        scrolled.dv = scroll;
+        content(scrolled, layoutOf(page, k), view);
+    }
+    clipBand(out, clipFrom, f, 1.f, viewBottom, viewTop);
+    frame(p, top);
+    if (view.pointing)
+        pointerMark(p, view);
+}
+
+void appendNoticeFlat(std::vector<Vertex>& out, const std::string& title, const std::vector<std::string>& lines, float halfWidth,
+                      float pixel, float seconds) {
+    const Frame f{{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    const Palette colors = palette(0, 0);
+    Painter painter{out, f, 1.f, std::isfinite(pixel) && pixel > 0 ? pixel : .00025f, {0, 0, 1}, colors};
+    painter.seconds = seconds;
+    const Painter& p = painter;
+    constexpr float titleH = .0062f, lineH = .0042f, pitch = .0068f, pad = .007f, c = .008f;
+    const float w = std::clamp(halfWidth, .03f, .2f);
+    const float h = (titleH + pad * 2 + static_cast<float>(lines.size()) * pitch) / 2 + .002f;
+    const std::array<std::array<float, 2>, 8> o{{{-w + c, h}, {w - c, h}, {w, h - c}, {w, -h + c}, {w - c, -h}, {-w + c, -h},
+                                                 {-w, -h + c}, {-w, h - c}}};
+    for (size_t i = 0; i < o.size(); ++i) {
+        const auto& a = o[i];
+        const auto& b = o[(i + 1) % o.size()];
+        out.insert(out.end(), {Vertex{p.at(0, 0), p.c.backing, p.c.backingAlpha}, Vertex{p.at(a[0], a[1]), p.c.backing, p.c.backingAlpha},
+                               Vertex{p.at(b[0], b[1]), p.c.backing, p.c.backingAlpha}});
+    }
+    for (size_t i = 0; i < o.size(); ++i) {
+        const auto& a = o[i];
+        const auto& b = o[(i + 1) % o.size()];
+        p.bar(a[0], a[1], b[0], b[1], .006f, p.c.frame, .12f);
+        p.bar(a[0], a[1], b[0], b[1], .0015f, p.c.frame, .95f);
+    }
+    float v = h - pad - titleH;
+    p.text(title, -textWidth(title, titleH) / 2, v, titleH, p.c.accent);
+    v -= pad * .4f;
+    for (const std::string& l : lines) {
+        v -= pitch;
+        const float lw = std::min(textWidth(l, lineH), 2 * w - .012f);
+        p.text(l, -lw / 2, v, lineH, p.c.text);
+    }
 }
 
 void appendVisualizer(std::vector<Vertex>& out, const View& view, Vec3 viewer, float pixelAngle, int kind, float u0,

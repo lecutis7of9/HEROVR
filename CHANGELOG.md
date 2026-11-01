@@ -21,6 +21,17 @@ From hero-0.0.76-sm1 (faecbe9). **Built and unit-tested, not yet tried in the ga
   lands); iilyn's graphics untouched. Not in SM1 yet: the body roll, the Y brake and the walls rule (no CONFIRMED
   export for them). The A/B buttons need SpidyVR's bindings to name them (CANDIDATE); arms up always works.
 
+## hero-0.0.76-sm1 - SM1 hologram (DRAFT test build, not released)
+
+**Built and unit-tested, not yet tried in the game.**
+
+- **SM1 wrist menu is now the SM2 hologram:** the same SM2 panel code (frame, fonts, colours, tabs, portrait tiles,
+  CONTROLS / OUTFITS / POWERS, COLOR under the tiles, off by default) painted onto a quad. Point with the right hand
+  and pull the trigger to pick.
+- **Picking a hero now works:** PLAY AS closes the hologram (powers, flight and grapple were blocked while it was
+  open, which is why the first test did nothing) and shows what the hero does. Every power shot is logged.
+- Still not in: a live suit/model change (no CONFIRMED call), health rows in SM1.
+
 ## v0.0.75.2 - HERO VR 0.0.75 hotfix 2: Spider-Man 1 heroes (DRAFT, not released)
 
 Shows as v0.0.75 (VERSION unchanged; at release: a PORT-VERSION bump and launcher build 18). From hero-0.0.76-sm1 on

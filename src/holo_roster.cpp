@@ -38,6 +38,8 @@ constexpr float playingV = .0005f;
 // REP.
 constexpr float meterY0 = .054f, meterY1 = .0605f, logTop = .033f, pageY0 = -.081f, pageY1 = -.071f;
 constexpr float filterU0 = .028f;
+// HERO VR 0.0.76 SM1: the POWERS tab's switch rows, under his power's lines.
+constexpr float sm1SwitchTop = .026f, sm1SwitchPitch = .0122f;
 
 // A row of buttons from `u0` to `u1`, each as wide as its word at `h` plus its share of the room left.
 struct Word {
@@ -243,9 +245,10 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
         uint32_t k = 0;
         w[k++] = {tabMarvel, "MARVEL"};
         w[k++] = {tabDc, "DC"};
-        if (d.comingSoon)
+        if (d.comingSoon && !d.sm1.on)
             w[k++] = {tabSoon, "SOON"};
-        w[k++] = {tabRep, "REP"};
+        if (!d.sm1.on) // SM1 keeps no rep
+            w[k++] = {tabRep, "REP"};
         w[k++] = {closeButton, "CLOSE"};
         n += row(w, k, left, right, tabY0, tabY1, tabText, out + n);
     }
@@ -270,7 +273,10 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
             tileBox(g, k, b.u0, b.v0, b.u1, b.v1);
             out[n++] = b;
         }
-        // 0.0.76 HEALTH: INVINCIBLE and DOUBLE HEALTH, the first thing POWERS shows.
+        // 0.0.76 HEALTH: INVINCIBLE and DOUBLE HEALTH, the first thing POWERS shows (SM1: no confirmed health
+        // record, so not there).
+        if (d.sm1.on)
+            return n;
         out[n++] = Button{healthInvincible, left, healthY0, -.002f, healthY1, true};
         out[n++] = Button{healthDouble, .002f, healthY0, right, healthY1, true};
         return n;
@@ -283,8 +289,18 @@ uint32_t buttons(const State& s, const Data& d, Button (&out)[buttonsMost]) {
         // hologram's one music player under them), each as wide as its word.
         const Word w[] = {{subControls, "CONTROLS"}, {subOutfits, "OUTFITS"}, {subStats, "STATS"}, {subSettings, "SETTINGS"},
                           {subMusic, "MUSIC"}};
-        n += row(w, 5, left, right, subY0, subY1, tabText, out + n);
-        if (s.tab == Tab::settings) {
+        const Word w1[] = {{subControls, "CONTROLS"}, {subOutfits, "OUTFITS"}, {subPowers, "POWERS"}}; // SM1
+        if (d.sm1.on)
+            n += row(w1, 3, left, right, subY0, subY1, tabText, out + n);
+        else
+            n += row(w, 5, left, right, subY0, subY1, tabText, out + n);
+        if (d.sm1.on && s.tab == Tab::powers) {
+            const auto& sw = d.sm1.switches[h];
+            for (uint32_t i = 0; i < std::min<uint32_t>(sm1SwitchesMost, static_cast<uint32_t>(sw.size())) && n < buttonsMost; ++i) {
+                const float v1 = sm1SwitchTop - static_cast<float>(i) * sm1SwitchPitch;
+                out[n++] = Button{sm1Row + static_cast<int>(i), left, v1 - sm1SwitchPitch + .0016f, right, v1, true};
+            }
+        } else if (s.tab == Tab::settings) {
             const uint32_t pages = std::max(1u, s.settingsPages);
             out[n++] = Button{settingsPrev, left, pageY0, -.030f, pageY1, s.settingsPage > 0};
             out[n++] = Button{settingsNext, .030f, pageY0, right, pageY1, s.settingsPage + 1 < pages};
@@ -321,6 +337,30 @@ int buttonAt(const State& s, const Data& d, float u, float v) {
 std::string helpFor(const State& s, const Data& d, int id) {
     const uint32_t h = std::min(s.hero, heroes - 1);
     const std::string who = nameOf(h);
+    if (d.sm1.on) { // HERO VR 0.0.76 SM1: what each does in Spider-Man 1
+        switch (id) {
+        case closeButton: return "Closes the hologram (or click your wrist again).";
+        case playButton:
+            return d.playing == h ? "You are playing " + who + " now." : "Plays " + who + " now and closes the hologram: his powers work at once.";
+        case subControls: return "How to play " + who + " in Spider-Man 1: each move and its button.";
+        case subOutfits: return "Pick " + who + "'s outfit (saved for him).";
+        case subPowers: return who + "'s power and the add-on's switches for it.";
+        default: break;
+        }
+        if (id >= tile && id < tile + static_cast<int>(heroes))
+            return std::string("Opens ") + nameOf(static_cast<uint32_t>(id - tile)) + "'s page: controls, outfits, powers.";
+        if (id >= sm1Row && id < sm1Row + static_cast<int>(sm1SwitchesMost)) {
+            const auto& sw = d.sm1.switches[h];
+            if (static_cast<size_t>(id - sm1Row) < sw.size())
+                return sw[static_cast<size_t>(id - sm1Row)].help;
+        }
+        if (id >= outfit && d.suitsKnown && static_cast<uint32_t>(id - outfit) < outfitRows(d, h))
+            return d.suits.rows[h][id - outfit].status == Status::inUse
+                       ? "Picked and saved for " + who + ". The game's model does not change yet (no confirmed suit call)."
+                       : "Saves this as " + who + "'s outfit. The game's model does not change yet (no confirmed suit call).";
+        if (s.screen == Screen::grid)
+            return "Point at a hero and pull the trigger to open his page.";
+    }
     switch (id) {
     case tabMarvel: return "Shows the MARVEL heroes, a tile each. No restart needed.";
     case tabDc: return "Shows the DC heroes, a tile each. No restart needed.";
@@ -370,6 +410,8 @@ std::string helpFor(const State& s, const Data& d, int id) {
         return "Point at a hero and pull the trigger to open his page.";
     if (s.screen == Screen::rep)
         return "Push the stick to scroll the log. Kept across sessions.";
+    if (d.sm1.on)
+        return "Point and pull the trigger to pick. CLOSE closes the hologram.";
     return "Point and pull the trigger to pick. CLOSE goes back to the hologram.";
 }
 
@@ -455,7 +497,7 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
             o.text(initials(h), cu - .007f, cv - .0018f, cu + .007f, .0036f, Role::custom, true, Vec3{1, 1, 1});
             o.p.back().portrait = static_cast<int>(h), o.p.back().fallback = true;
             o.text(bio.name, b->u0 + .0015f, b->v1 - .0215f, b->u1 - .0015f, .0034f, hov ? Role::line : Role::text, true);
-            const std::string sub = now ? std::string("PLAYING") : rep_log::rankText(d.heroPoints[h]);
+            const std::string sub = now ? std::string("PLAYING") : d.sm1.on ? d.sm1.power[h] : rep_log::rankText(d.heroPoints[h]);
             o.text(sub, b->u0 + .002f, b->v1 - .0278f, b->u1 - .002f, .0025f, now ? Role::good : Role::value, true);
         }
         // One line under the tiles, then INVINCIBLE / DOUBLE HEALTH (the COLOR rows are under them).
@@ -467,7 +509,9 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         if (const Button* b = byId(healthDouble))
             o.button(*b, "DOUBLE HEALTH: " + state(d.doubleHealth), s.hover == healthDouble, d.doubleHealth && !d.healthNa,
                      .0036f);
-        if (d.reputation)
+        if (d.sm1.on)
+            o.textRight(d.sm1.status, -.010f, playingV, right, .0030f, Role::value);
+        else if (d.reputation)
             o.textRight(rep_log::rankText(d.heroPoints[playing]) + "   " + rep_log::nextText(d.heroPoints[playing]), -.010f,
                         playingV, right, .0030f, Role::value);
     } else if (shown == Screen::hero) {
@@ -482,7 +526,34 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
         tabBtn(subStats, "STATS", s.tab == Tab::stats);
         tabBtn(subSettings, "SETTINGS", s.tab == Tab::settings);
         tabBtn(subMusic, "MUSIC", s.tab == Tab::music);
-        if (s.tab == Tab::music) {
+        tabBtn(subPowers, "POWERS", s.tab == Tab::powers);
+        if (d.sm1.on && s.tab == Tab::powers) {
+            // HERO VR 0.0.76 SM1: his power, how it is used, then the add-on's switches (each lit while on).
+            const std::string& facts = d.sm1.facts[h];
+            const auto lines = wrap(facts, .0036f, right - left, 3);
+            for (size_t i = 0; i < lines.size(); ++i)
+                o.text(lines[i], left, contentTop - .0062f - static_cast<float>(i) * .0062f, right, .0036f,
+                       i == 0 ? Role::text : Role::value);
+            const auto& sw = d.sm1.switches[h];
+            for (uint32_t i = 0; i < std::min<uint32_t>(sm1SwitchesMost, static_cast<uint32_t>(sw.size())); ++i)
+                if (const Button* b = byId(sm1Row + static_cast<int>(i)))
+                    o.button(*b, sw[i].name + ": " + (sw[i].on ? "ON" : "OFF"), s.hover == b->id, sw[i].on, .0038f);
+            if (sw.empty())
+                o.text("SPIDER-MAN PLAYS AS IILYN'S MOD MADE HIM: NO EXTRA SWITCHES.", left, sm1SwitchTop - .008f, right, .0034f,
+                       Role::help);
+        } else if (d.sm1.on && s.tab == Tab::controls) {
+            const auto& ls = d.sm1.lines[h];
+            const uint32_t lines = std::min<uint32_t>(sm1LinesMost, static_cast<uint32_t>(ls.size()));
+            const float pitch = std::min(.0124f, (contentTop - contentBottom - .004f) / static_cast<float>(std::max(1u, lines)));
+            for (uint32_t i = 0; i < lines; ++i) {
+                const float v1 = contentTop - static_cast<float>(i) * pitch, v0 = v1 - pitch + .001f;
+                if (i % 2 == 0)
+                    o.fill(left, v0, right, v1, Role::backing, .45f);
+                const float base = (v0 + v1) / 2 - .0017f;
+                o.text(ls[i].name, left + .002f, base, left + .046f, .0034f, Role::label);
+                o.text(ls[i].how, left + .048f, base, right - .002f, .0034f, Role::text);
+            }
+        } else if (s.tab == Tab::music) {
             // The player is wrist_hud's MUSIC page, under the sub-tabs.
         } else if (s.tab == Tab::settings) {
             // The rows are wrist_hud's (drawn over this); here only PREV, the page and NEXT.
@@ -520,11 +591,14 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
                     o.outline(b->u0, b->v0, b->u1, b->v1, hov && b->enabled ? Role::line : Role::accent, b->enabled ? .9f : .4f);
                     if (r.status == Status::inUse)
                         o.fill(b->u0, b->v0, b->u0 + .0015f, b->v1, Role::good);
-                    const std::string state = i == 0 && d.suits.ownSuit ? "IN USE (OWN SUIT)" : statusText(r);
+                    const std::string state = d.sm1.on && r.status == Status::inUse ? std::string("PICKED")
+                                              : i == 0 && d.suits.ownSuit                ? std::string("IN USE (OWN SUIT)")
+                                                                                         : statusText(r);
                     const float stateH = .0030f, stateW = textWidth(state, stateH);
                     const float mid = (b->v0 + b->v1) / 2;
-                    const std::string name = i == 0 ? std::string("OWN MOD OR GAME SUIT") : std::string(r.name) + (r.final ? " - FINAL" : "");
-                    const std::string by = i == 0 ? std::string("THE GAME'S OWN, OR YOUR SUIT MOD'S")
+                    const bool own = i == 0 && !(d.sm1.on && r.name[0]); // SM1: his first outfit by its name
+                    const std::string name = own ? std::string("OWN MOD OR GAME SUIT") : std::string(r.name) + (r.final ? " - FINAL" : "");
+                    const std::string by = own ? std::string("THE GAME'S OWN, OR YOUR SUIT MOD'S")
                                                   : std::string("BY ") + r.artist + (r.licence[0] ? std::string(" (") + r.licence + ")" : "");
                     o.text(name, b->u0 + .003f, mid + .0004f, b->u1 - stateW - .006f, .0034f, hov ? Role::line : Role::text);
                     o.text(by, b->u0 + .003f, mid - .0044f, b->u1 - stateW - .006f, .0024f, Role::help);
@@ -533,6 +607,11 @@ void pieces(const State& s, const Data& d, std::vector<Piece>& p) {
                 if (d.suits.ownSuit)
                     o.text("OWN SUIT IS ON: EVERY HERO KEEPS HIS OWN MOD OR GAME SUIT", left, contentBottom - .012f, right, .003f,
                            Role::warn);
+                if (d.sm1.on && !d.sm1.outfitNote.empty()) {
+                    const auto lines = wrap(d.sm1.outfitNote, .003f, right - left, 2);
+                    for (size_t l = 0; l < lines.size(); ++l)
+                        o.text(lines[l], left, contentBottom - .008f - static_cast<float>(l) * .0048f, right, .003f, Role::warn);
+                }
             }
         } else if (s.tab == Tab::stats) {
             const int32_t pts = d.heroPoints[h];
@@ -713,6 +792,7 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
     case subOutfits: s_.tab = Tab::outfits; break;
     case subStats: s_.tab = Tab::stats; break;
     case subMusic: s_.tab = Tab::music; break;
+    case subPowers: s_.tab = Tab::powers; break; // SM1
     case tabColor: s_.screen = Screen::grid; break; // no COLOR tab since 0.0.76 (never shown)
     case healthInvincible: a.invincible = true; break; // 0.0.76 HEALTH
     case healthDouble: a.doubleHealth = true; break;
@@ -738,6 +818,10 @@ Actions Holo::update(bool hit, float u, float v, bool press, float stick, float 
             s_.screen = Screen::hero;
             s_.hero = static_cast<uint32_t>(id - tile);
             s_.settingsPage = 0;
+        } else if (id >= sm1Row && id < sm1Row + static_cast<int>(sm1SwitchesMost)) {
+            const auto& sw = d.sm1.switches[std::min(s_.hero, heroes - 1)];
+            if (static_cast<size_t>(id - sm1Row) < sw.size())
+                a.sm1Switch = sw[static_cast<size_t>(id - sm1Row)].key;
         } else if (id >= outfit && id < outfit + static_cast<int>(roster_page::suitsMost)) {
             a.suitHero = static_cast<int>(std::min(s_.hero, heroes - 1));
             a.suitIndex = id - outfit;

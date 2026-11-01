@@ -1180,6 +1180,7 @@ class Menu {
         // as the popup's PLAY AS and suit picks; rosterClosed: its CLOSE pressed.
         int rosterPlayAs = -1, rosterSuitHero = -1, rosterSuitIndex = -1;
         bool rosterClosed{};
+        int rosterSwitch = -1; // HERO VR 0.0.76 SM1: holo_roster::Sm1Switch::key pressed on a hero's POWERS tab
         bool heroSpider{};  // Update 39.0.1: PLAY AS SPIDER-MAN pressed (every hero toggle off)
         bool section{};     // Update 39.0.2: a section header pressed (opened or closed)
         bool remapMove{}, remapRecord{}, remapKeep{}, remapAgain{}, remapCancel{}; // Update 38.5 GESTURE REMAP
@@ -1275,6 +1276,20 @@ class Menu {
     uint32_t rosterVersion_{};
 };
 
+// HERO VR 0.0.76 SM1 (the user: "the wrist menu ... should look exactly like sm2 holo does"): the Spider-Man 1
+// add-on runs this same Menu and painter for its hologram. On (the add-on sets it once; SM2 never does): the
+// arrow strip is not there (SM1 has only the heroes, their outfits and powers, and COLOR) and COLOR shows only
+// ADJUST (90s ANIMATED is SM2's own shader).
+void setSm1Mode(bool on);
+bool sm1Mode();
+// The panel alone, flat, for a layer to rasterize: the panel's (u, v) is (x, y) metres, +z towards the viewer,
+// `pixel` the size of one output pixel in panel metres. The backing, the roster or page, the frame and the pointer;
+// no light, rays or strip, and no fade with `view.opacity`.
+void appendPanelFlat(std::vector<Vertex>& out, const View&, float pixel);
+// A note in the panel's style (its backing, frame and text), flat as appendPanelFlat, centred on (0, 0):
+// `title` in the accent, `lines` under it.
+void appendNoticeFlat(std::vector<Vertex>& out, const std::string& title, const std::vector<std::string>& lines, float halfWidth,
+                      float pixel, float seconds);
 // Appends the light, its rays and the panel to `out` (the overlay's
 // translucent list): nothing when it is hidden.
 void appendWristHud(std::vector<Vertex>& out, const View&, Vec3 viewer, float pixelAngle);

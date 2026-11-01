@@ -80,12 +80,16 @@ inline constexpr Feature features[] = {
     {"host check", Evidence::confirmed, State::ready, "exe, version and iilyn's modules, read only"},
     {"add-on settings", Evidence::confirmed, State::ready, "%APPDATA%\\HERO VR SM1\\addon.ini and live.txt, never his folder"},
     {"wrist hero menu", Evidence::confirmed, State::untested,
-     "opens like the SM2 build: touch your left wrist/forearm with the right hand and pull the right trigger (the same "
-     "click opens and closes it); right stick moves, right trigger picks (OpenXR quad layer)"},
-    {"hero select", Evidence::confirmed, State::untested, "picks one of the 11 heroes, saved in addon.ini"},
+     "the SM2 build's own hologram (0.0.76: its panel, fonts, colours, tabs and the heroes' portrait tiles, painted "
+     "onto an OpenXR quad): touch your left wrist/forearm with the right hand and pull the right trigger (the same "
+     "click opens and closes it); point with the right hand and pull its trigger to pick; CLOSE or PLAY AS closes it"},
+    {"hero select", Evidence::confirmed, State::untested,
+     "a hero's tile, then PLAY AS: saved in addon.ini, the hologram closes and his powers, flight or grapple work at once "
+     "(a note in front of you says what he does now)"},
     {"outfits", Evidence::confirmed, State::untested,
-     "each hero's outfits listed with their artists and saved; the wrist pick does not change the model in the game yet"},
-    {"holo card", Evidence::confirmed, State::untested, "the hero's card on the wrist (2D, not the 3D hologram)"},
+     "each hero's outfits on his OUTFITS tab, saved; the pick does not change the model in the game yet"},
+    {"holo card", Evidence::confirmed, State::untested,
+     "the hero's CONTROLS / OUTFITS / POWERS tabs on the hologram (only what works in SM1; no health rows)"},
     {"hero powers", Evidence::confirmed, State::untested,
      "trigger of an outstretched hand: the hero's blast hits the ringed enemy through SpidyPunchTest, with a beam"},
     {"flight in game", Evidence::confirmed, State::untested,

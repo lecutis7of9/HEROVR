@@ -20,12 +20,15 @@
 #include "spidy/sm1_addon.hpp"
 #include "spidy/sm1_combat.hpp"
 #include "spidy/sm1_grapple.hpp"
+#include "spidy/sm1_holo.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
 #include <windows.h>
 #include <d3d12.h>
+#include <objbase.h>
 #include <unknwn.h>
+#include <wincodec.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
@@ -40,6 +43,7 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -56,6 +60,7 @@
 namespace {
 using namespace spidy;
 using namespace spidy::sm1;
+namespace holo = spidy::sm1::holo;
 
 // --- His structures (copied from his 0.7.0 headers; sizes checked) ------------------------------------------------
 namespace his {
@@ -641,7 +646,8 @@ struct Session {
     bool bgra = false;
     XrSpace gripSpace[2]{}, aimSpace[2]{};
     bool spacesTried = false;
-    Quad menu, beam;
+    // 0.0.76 SM1 HOLO: the SM2 build's hologram (holo::width x height), the PLAY AS note, the pointer's dot; the beam
+    Quad holo, note, dot, beam;
     // the upload
     ID3D12CommandAllocator* allocator = nullptr;
     ID3D12GraphicsCommandList* list = nullptr;
@@ -686,8 +692,26 @@ struct Play {
     std::string powerState = "READY";
     std::string suitNotice;    // the holo's suit line after a hero pick
     ULONGLONG suitNoticeUntil = 0;
-    MenuView shown;
-    bool menuPainted = false;
+    // 0.0.76 SM1 HOLO: the SM2 build's own hologram menu (wrist_hud::Menu, its POWERS page with the heroes' tiles)
+    spidy::wrist_hud::Menu holoMenu;
+    Pose holoPose;              // where it shows (his projection space, this frame)
+    bool holoPlaced = false;
+    float holoScale = 1;        // menu_size / 100
+    spidy::wrist_hud::Pointer pointer; // the right hand's, on the hologram
+    uint64_t holoAsked = 0;     // the picture asked of the painter (its vertices' key)
+    bool holoShown = false;     // a picture of this opening is on the quad
+    std::vector<Vertex> holoTranslucent, holoTextured;
+    float holoClock = 0;
+    // the PLAY AS note: in front of the eyes for a few seconds after a hero pick
+    std::string noteTitle;
+    std::vector<std::string> noteLines;
+    ULONGLONG noteUntil = 0;
+    uint64_t noteKey = 0, noteUploaded = 0;
+    bool noteFresh = false;     // place it once, where the eyes look now
+    Pose notePose;
+    bool dotReady = false;
+    bool holoArmed = false;     // the right trigger let go since the hologram opened
+    ULONGLONG ignoredAt[2]{};   // the last "trigger did nothing" log line per hand (rate limit)
     uint64_t lastGameSerial = 0;
     XrTime displayTime = 0;
     // the last head pose in his projection space
@@ -984,9 +1008,10 @@ bool makeUploader() {
         FAILED(session.list->Close()) || FAILED(d->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&session.fence))))
         return false;
     session.fenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    // one buffer big enough for the menu (the largest picture), rows 256-byte aligned
-    const UINT64 pitch = (static_cast<UINT64>(menuWidth) * 4 + 255) & ~UINT64(255);
-    session.uploadBytes = pitch * menuHeight;
+    // one buffer big enough for the largest picture (the hologram), rows 256-byte aligned
+    static_assert(holo::width >= holo::noteWidth && holo::height >= holo::noteHeight && holo::width >= 16 && holo::height >= 64);
+    const UINT64 pitch = (static_cast<UINT64>(holo::width) * 4 + 255) & ~UINT64(255);
+    session.uploadBytes = pitch * holo::height;
     D3D12_HEAP_PROPERTIES heap{};
     heap.Type = D3D12_HEAP_TYPE_UPLOAD;
     D3D12_RESOURCE_DESC desc{};
@@ -1013,7 +1038,7 @@ bool drawReady() {
     static XrSession tried = XR_NULL_HANDLE;
     if (!fDraw.on)
         return false;
-    if (session.menu.swapchain && session.beam.swapchain && session.upload)
+    if (session.holo.swapchain && session.note.swapchain && session.dot.swapchain && session.beam.swapchain && session.upload)
         return true;
     if (tried == session.handle)
         return false;
@@ -1026,15 +1051,20 @@ bool drawReady() {
         fDraw.turnOff("no RGBA8 swapchain format offered");
         return false;
     }
-    if (!makeQuad(session.menu, menuWidth, menuHeight) || !makeQuad(session.beam, 16, 64)) {
-        dropQuad(session.menu);
+    if (!makeQuad(session.holo, holo::width, holo::height) || !makeQuad(session.note, holo::noteWidth, holo::noteHeight) ||
+        !makeQuad(session.dot, holo::dotSize, holo::dotSize) || !makeQuad(session.beam, 16, 64)) {
+        dropQuad(session.holo);
+        dropQuad(session.note);
+        dropQuad(session.dot);
         dropQuad(session.beam);
         fDraw.turnOff("the quad swapchains could not be made");
         return false;
     }
     if (!makeUploader()) {
         dropUploader();
-        dropQuad(session.menu);
+        dropQuad(session.holo);
+        dropQuad(session.note);
+        dropQuad(session.dot);
         dropQuad(session.beam);
         fDraw.turnOff("the upload buffer could not be made");
         return false;
@@ -1309,6 +1339,9 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
     } else {
         play.powerState = s.cueTarget || !foes.empty() ? "MISSED" : "NO TARGET";
     }
+    // 0.0.76: every shot in the log (the first test's log showed no shot at all: the menu stayed open)
+    logLine("power: %s fired from the %s, %s (%.0f damage%s)", p.name, eyes ? "eyes" : hand ? "right hand" : "left hand",
+            play.powerState.c_str(), static_cast<double>(amount), first ? "" : ", nothing hit");
     if (live.beams && fDraw.on) {
         // game direction -> his head's axes -> the headset's view -> his projection space
         Vec3 local{dot(beamDir, gv.headRight), -dot(beamDir, gv.headDown), -dot(beamDir, gv.headForward)};
@@ -1319,6 +1352,269 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         play.beamWidth = .06f;
         play.beamUntil = GetTickCount64() + 180;
         (void)xrFrom;
+    }
+}
+// --- 0.0.76 SM1 HOLO: the SM2 build's hologram ----------------------------------------------------------------------
+// The user (0.0.76 test): "the wrist menu is awful it should look exactly like sm2 holo does". The SM2 build's own panel
+// (wrist_hud::appendPanelFlat: its frame, fonts, colours, tabs, the heroes' tiles with their portraits) is painted into
+// the hologram quad's picture by holo::Painter off the frame thread, and worked by the SM2 build's own wrist_hud::Menu
+// and wrist_hud::point (the right hand's pointer). Spider-Man 1's own rows only: heroes, outfits, powers, COLOR.
+holo::Painter* painter = nullptr; // made once, never deleted (the DLL is pinned; no thread join at unload)
+std::atomic<int> portraitsAsked{0};
+std::atomic<const holo::Portraits*> portraitsNow{nullptr}; // published once, kept for good
+// mixed into every picture's key, new each session (the painter skips a key it was asked before; a new session's
+// quads are empty, so its pictures are painted afresh)
+uint64_t holoGen = 0x9e3779b97f4a7c15ull;
+// A Roster texture (PNG or JPEG) to RGBA8 with WIC, as the SM2 build reads it (game_xr's wicDecode); COM set up by
+// the caller (the portraits' own thread).
+bool wicDecode(const uint8_t* data, size_t size, mesh_model::Picture& out) {
+    if (!data || !size || size > mesh_model::mostImageBytes)
+        return false;
+    IWICImagingFactory* factory = nullptr;
+    IWICStream* stream = nullptr;
+    IWICBitmapDecoder* decoder = nullptr;
+    IWICBitmapFrameDecode* frame = nullptr;
+    IWICFormatConverter* converter = nullptr;
+    bool ok = SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) &&
+              SUCCEEDED(factory->CreateStream(&stream)) &&
+              SUCCEEDED(stream->InitializeFromMemory(const_cast<BYTE*>(data), static_cast<DWORD>(size))) &&
+              SUCCEEDED(factory->CreateDecoderFromStream(stream, nullptr, WICDecodeMetadataCacheOnDemand, &decoder)) &&
+              SUCCEEDED(decoder->GetFrame(0, &frame)) && SUCCEEDED(factory->CreateFormatConverter(&converter)) &&
+              SUCCEEDED(converter->Initialize(frame, GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0,
+                                              WICBitmapPaletteTypeCustom));
+    UINT w = 0, h = 0;
+    ok = ok && SUCCEEDED(converter->GetSize(&w, &h)) && w && h && w <= 8192 && h <= 8192;
+    if (ok) {
+        out.width = w;
+        out.height = h;
+        out.rgba.assign(size_t{w} * h * 4, 0);
+        ok = SUCCEEDED(converter->CopyPixels(nullptr, w * 4, static_cast<UINT>(out.rgba.size()), out.rgba.data()));
+    }
+    releaseCom(converter);
+    releaseCom(frame);
+    releaseCom(decoder);
+    releaseCom(stream);
+    releaseCom(factory);
+    return ok;
+}
+// HERO VR's folder: this layer is <HERO VR>\build\windows-ninja\herovr_sm1_layer.dll.
+std::wstring heroVrRoot() {
+    HMODULE self = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(&heroVrRoot), &self))
+        return L"";
+    wchar_t buf[MAX_PATH]{};
+    const DWORD n = GetModuleFileNameW(self, buf, MAX_PATH);
+    if (!n || n >= MAX_PATH)
+        return L"";
+    std::wstring p(buf, n);
+    for (int up = 0; up < 3; ++up) {
+        const size_t i = p.find_last_of(L"\\/");
+        if (i == std::wstring::npos)
+            return L"";
+        p.resize(i);
+    }
+    return p;
+}
+// The heroes' portraits from HERO VR's Models\Roster (the SM2 build's own), once, on their own thread.
+DWORD WINAPI portraitsThread(void*) {
+    const HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const std::wstring path = heroVrRoot() + L"\\Models\\Roster\\scene.glb";
+    std::string glb;
+    auto pics = std::make_shared<holo::Portraits>();
+    std::string why;
+    const bool ok = readFile(path, glb) &&
+                    holo::loadPortraits(reinterpret_cast<const uint8_t*>(glb.data()), glb.size(), &wicDecode, *pics, why);
+    if (glb.empty())
+        why = "Models\\Roster\\scene.glb was not found beside HERO VR";
+    if (ok) {
+        static std::shared_ptr<holo::Portraits> kept;
+        kept = pics;
+        painter->setPortraits(pics);
+        portraitsNow.store(kept.get(), std::memory_order_release);
+        logLine("holo: portraits ready (%s)", why.c_str());
+    } else {
+        logLine("holo: no portraits, the tiles show initials (%s)", why.c_str());
+    }
+    if (SUCCEEDED(co))
+        CoUninitialize();
+    return 0;
+}
+bool holoReady() {
+    if (!painter) {
+        try {
+            painter = new holo::Painter();
+        } catch (...) {
+            fMenu.turnOff("the hologram's painter thread did not start");
+            return false;
+        }
+    }
+    if (!portraitsAsked.exchange(1)) {
+        if (HANDLE t = CreateThread(nullptr, 0, portraitsThread, nullptr, 0, nullptr))
+            CloseHandle(t);
+        else
+            logLine("holo: the portraits' thread did not start (initials shown)");
+    }
+    return true;
+}
+// What the hologram shows now, from the add-on's own state.
+holo::Now holoNow(const Config& config, const Live& live) {
+    holo::Now n;
+    n.config = config;
+    n.live = live;
+    n.flightSwitch = flightSwitch;
+    n.flying = play.flying;
+    n.powersWork = fPowers.on && rayReady();
+    n.flightWorks = fFlight.on && motionReady;
+    n.grappleWorks = n.flightWorks;
+    n.powerState = fPowers.on ? play.powerState : "OFF (SEE LOG)";
+    n.why[0] = !fPowers.on ? "see layer.log" : "waiting for SpidyVR's ray bridge";
+    n.why[1] = !fFlight.on ? "see layer.log" : "waiting for SpidyVR's movement module";
+    n.why[2] = n.why[1];
+    const uint32_t hero = config.hero;
+    n.flightLine = !fFlight.on ? "FLIGHT: OFF (SEE LOG)" : !motionReady ? "FLIGHT: WAITING FOR SPIDY" :
+                   play.flying ? "FLIGHT: FLYING" : flies(hero) ? (play.faceBound ? "FLIGHT: ARMS UP OR HOLD A" : "FLIGHT: BOTH ARMS UP") : "FLIGHT: NOT THIS HERO";
+    return n;
+}
+void closeHolo(const char* why) {
+    if (!play.menu.open)
+        return;
+    play.menu.open = false;
+    play.holo.set(false);
+    play.holoShown = false;
+    play.holoPlaced = false;
+    play.pointer = {};
+    play.holoArmed = false;
+    logLine("holo closed (%s)", why);
+}
+void showNote(const std::string& title, const std::vector<std::string>& lines) {
+    play.noteTitle = title;
+    play.noteLines = lines;
+    play.noteUntil = GetTickCount64() + 6000;
+    play.noteFresh = true;
+    if (!painter)
+        return;
+    std::vector<Vertex> verts;
+    holo::note(title, lines, verts);
+    play.noteKey = holo::hashOf(verts, {}) ^ holoGen ^ 1;
+    play.noteUploaded = 0;
+    painter->ask(play.noteKey, std::move(verts), {}, holo::noteHalfWidth, holo::noteHalfHeight, holo::noteWidth,
+                 holo::noteHeight);
+}
+// The hologram this frame: placed on the left wrist as before, pointed at with the right hand, its picks applied.
+void stepHolo(Config& config, Live& live, const Pose* grips, const bool* gripTracked, float dt) {
+    play.holoScale = std::clamp(static_cast<float>(live.menuSize) / 100.f, .6f, 1.6f);
+    const float h = 2 * holo::halfHeight * play.holoScale;
+    play.holoPose = menuPose(grips[0], play.head.position, .06f + h / 2);
+    play.holoPlaced = true;
+    const Vec3 right = play.holoPose.orientation.rotate({1, 0, 0}), up = play.holoPose.orientation.rotate({0, 1, 0});
+    play.pointer = gripTracked[1] ? wrist_hud::point(wrist_hud::Frame{play.holoPose.position, right, up}, play.holoScale, grips[1], 1)
+                                  : wrist_hud::Pointer{};
+    const uint32_t hero = config.hero < heroCount ? config.hero : 0;
+    holo::Now now = holoNow(config, live);
+    const holo_roster::Data data = holo::rosterData(now);
+    wrist_hud::Settings set = holo::colorSettings(live);
+    wrist_hud::Menu& m = play.holoMenu;
+    if (m.page() != wrist_hud::powersPage)
+        m.setPage(wrist_hud::powersPage);
+    wrist_hud::Menu::Input in;
+    in.active = true;
+    in.pointer = play.pointer;
+    // the trigger that opened it (or a pick that is still held) does nothing until it is let go once
+    if (play.trigger[1] < .3f)
+        play.holoArmed = true;
+    in.trigger = play.holoArmed ? play.trigger[1] : 0.f;
+    in.stick = play.stick[1].y;
+    in.seconds = dt;
+    in.hero = static_cast<int>(hero);
+    in.heroTiles = true;
+    in.rosterData = &data;
+    const wrist_hud::Menu::Result r = m.update(in, set);
+    if (r.rosterPlayAs >= 0 && static_cast<uint32_t>(r.rosterPlayAs) < heroCount) {
+        AcquireSRWLockExclusive(&settings.lock);
+        settings.config.hero = static_cast<uint32_t>(r.rosterPlayAs);
+        config = settings.config;
+        ReleaseSRWLockExclusive(&settings.lock);
+        saveConfig(config.hero, config.outfit);
+        pickSuit(config.hero);
+        now = holoNow(config, live); // the picked hero's own lines (flight's for him, not the last hero's)
+        now.suitLine = play.suitNotice;
+        const uint32_t picked = config.hero;
+        logLine("hero: %s (PLAY AS on the holo); powers %s, flight %s, grapple %s", heroName(picked),
+                powerOf(picked).source == Source::none ? "none (SpidyVR's own)" : live.powers ? (fPowers.on ? "on" : "OFF (see above)") : "switched off",
+                !flies(picked) ? "not this hero" : config.flight && flightSwitch ? (fFlight.on && motionReady ? "ready" : "waiting/off") : "switched off",
+                !holo::grapples(picked) ? "not this hero" : live.grapple ? (fFlight.on && motionReady ? "ready" : "waiting/off") : "switched off");
+        closeHolo("PLAY AS: the hologram closes so the hero's powers work at once");
+        showNote(std::string("PLAYING ") + heroName(picked), holo::playLines(picked, now));
+        return;
+    }
+    if (r.rosterSuitHero >= 0 && static_cast<uint32_t>(r.rosterSuitHero) < heroCount && r.rosterSuitIndex >= 0) {
+        const uint32_t sh = static_cast<uint32_t>(r.rosterSuitHero);
+        AcquireSRWLockExclusive(&settings.lock);
+        settings.config.outfit[sh] = static_cast<uint32_t>(r.rosterSuitIndex);
+        config = settings.config;
+        ReleaseSRWLockExclusive(&settings.lock);
+        saveConfig(config.hero, config.outfit);
+        logLine("outfit %u saved for %s (the game's model does not change: no confirmed suit call)", config.outfit[sh], heroName(sh));
+    }
+    if (r.rosterSwitch >= 0) {
+        switch (r.rosterSwitch) {
+        case holo::swPowers: live.powers = !live.powers; break;
+        case holo::swBeams: live.beams = !live.beams; break;
+        case holo::swGrapple: live.grapple = !live.grapple; break;
+        case holo::swHeroWebs: live.heroWebs = !live.heroWebs; break;
+        case holo::swFlight: flightSwitch = !flightSwitch; break;
+        default: break;
+        }
+        if (r.rosterSwitch != holo::swFlight)
+            writeLive(live);
+        logLine("holo switch %s: %s", holo::switchName(r.rosterSwitch),
+                (r.rosterSwitch == holo::swPowers ? live.powers : r.rosterSwitch == holo::swBeams ? live.beams
+                 : r.rosterSwitch == holo::swGrapple ? live.grapple : r.rosterSwitch == holo::swHeroWebs ? live.heroWebs
+                 : flightSwitch) ? "ON" : "OFF");
+    }
+    if (r.colorFx) {
+        live.colorFx = !live.colorFx;
+        writeLive(live);
+        logLine("COLOR FX: %s", live.colorFx ? "ON" : "OFF");
+    }
+    if (r.colorFilter) {
+        live.colorFilter = holo::nextFilter(live.colorFilter);
+        writeLive(live);
+        logLine("COLOR FILTER: %u (COLOR FX %s)", live.colorFilter, live.colorFx ? "ON" : "OFF");
+    }
+    if (r.colorSlider) {
+        holo::takeColor(set, live);
+        writeLive(live);
+    }
+    if (r.rosterClosed) {
+        closeHolo("CLOSE pressed");
+        return;
+    }
+    // the picture: the SM2 panel as it stands now (painted off this thread when it changed)
+    play.holoClock = std::fmod(play.holoClock + dt, 3600.f);
+    now = holoNow(config, live);
+    const holo_roster::Data shown = holo::rosterData(now);
+    wrist_hud::View v;
+    v.page = m.page();
+    v.scroll = m.scroll();
+    v.roster = m.roster();
+    v.heroTiles = true;
+    v.rosterData = &shown;
+    const holo::Portraits* pics = portraitsNow.load(std::memory_order_acquire);
+    v.rosterPictures = pics ? pics->at : nullptr; // none (yet): the SM2 holo's initials discs
+    v.settings = holo::colorSettings(live);
+    v.hover = m.hover();
+    v.held = m.held();
+    v.helpFor = m.helpFor();
+    v.helpScroll = m.helpScroll();
+    v.color = holo::colorBits(live);
+    v.seconds = std::floor(play.holoClock * 10.f) / 10.f; // the light's slow pulse, ten steps a second
+    holo::panel(v, play.holoTranslucent, play.holoTextured);
+    const uint64_t key = holo::hashOf(play.holoTranslucent, play.holoTextured) ^ holoGen;
+    if (key != play.holoAsked) {
+        play.holoAsked = key;
+        painter->ask(key, play.holoTranslucent, play.holoTextured, holo::halfWidth, holo::halfHeight, holo::width, holo::height);
     }
 }
 void step() {
@@ -1338,7 +1634,6 @@ void step() {
 
     readInputs();
     makeSpaces();
-    const uint32_t hero = config.hero < heroCount ? config.hero : 0;
 
     // poses (his projection space, the frame he is about to show)
     Pose grips[2], aim[2];
@@ -1352,11 +1647,10 @@ void step() {
         play.handOut[i] = aimOk[i] && play.headKnown && length(aim[i].position - play.head.position) > outstretched;
     }
 
-    // the wrist menu
-    WristMenu& menu = play.menu;
+    // the wrist menu: the SM2 build's hologram (0.0.76 SM1 HOLO), opened and closed by the SM2 wrist click
+    WristMenu& menu = play.menu; // menu.open: the hologram is up (powers, flight and grapple wait while it is)
     play.holoHands = 0;
-    if (config.wristMenu && fMenu.on && gripOk) {
-        menu.outfits = std::max(1u, outfitCount(hero));
+    if (config.wristMenu && fMenu.on && gripOk && holoReady()) {
         // The SM2 wrist click (wrist_hud::Toggle mode 4, FOREARM): hologram on the left wrist (hand 0), the
         // right hand touches it and clicks its trigger. Its thresholds are the SM2 build's own.
         play.holo.setMode(4);
@@ -1366,62 +1660,22 @@ void step() {
         const float squeezes[2]{play.grip[0], play.grip[1]};
         play.holo.update(dt, true, 0, grips, gripTracked, triggers, squeezes);
         play.holoHands = play.holo.hands();
-        WristInput in;
-        in.toggled = play.holo.on() != menu.open; // it opened or closed on this click
-        in.stickX = play.stick[1].x;
-        in.stickY = play.stick[1].y;
-        in.trigger = play.trigger[1] > .5f;
-        in.dt = dt;
-        const bool wasOpen = menu.open;
-        const Pick pick = menu.step(in);
-        if (!wasOpen && menu.open)
-            logLine("wrist menu open (SM2 wrist click)");
-        else if (wasOpen && !menu.open)
-            logLine("wrist menu closed (SM2 wrist click)");
-        if (pick == Pick::hero && menu.row >= 0 && static_cast<uint32_t>(menu.row) < heroCount) {
-            AcquireSRWLockExclusive(&settings.lock);
-            settings.config.hero = static_cast<uint32_t>(menu.row);
-            config = settings.config;
-            ReleaseSRWLockExclusive(&settings.lock);
-            saveConfig(config.hero, config.outfit);
-            logLine("hero: %s", heroName(config.hero));
-            pickSuit(config.hero);
-        } else if (pick == Pick::outfit && menu.row >= 0) {
-            AcquireSRWLockExclusive(&settings.lock);
-            settings.config.outfit[hero] = static_cast<uint32_t>(menu.row);
-            config = settings.config;
-            ReleaseSRWLockExclusive(&settings.lock);
-            saveConfig(config.hero, config.outfit);
-            logLine("outfit %u for %s: %s", config.outfit[hero], heroName(hero), outfitOf(hero, config.outfit[hero]).name.c_str());
-        } else if (pick == Pick::toggle) {
-            switch (static_cast<Toggle>(menu.row)) {
-            case Toggle::powers:
-                live.powers = !live.powers;
-                writeLive(live);
-                break;
-            case Toggle::heroWebs:
-                live.heroWebs = !live.heroWebs;
-                writeLive(live);
-                break;
-            case Toggle::beams:
-                live.beams = !live.beams;
-                writeLive(live);
-                break;
-            case Toggle::flight:
-                flightSwitch = !flightSwitch;
-                break;
-            default:
-                break;
+        if (play.holo.on() != menu.open) {
+            if (play.holo.on()) {
+                menu.open = true;
+                play.holoShown = false;
+                play.holoArmed = false;
+                play.holoAsked = 0;
+                play.noteUntil = 0; // the note gives way to the hologram
+                logLine("holo open (SM2 wrist click): powers, flight and grapple wait until it closes");
+            } else {
+                closeHolo("SM2 wrist click");
             }
-        } else if (pick == Pick::color && menu.colorRow() >= 0) {
-            const int k = menu.colorRow();
-            adjustColor(live, k, menu.delta);
-            writeLive(live);
-            logLine("COLOR %s: %s", colorRowName(k), colorRowValue(live, k).c_str());
         }
+        if (menu.open)
+            stepHolo(config, live, grips, gripTracked, dt);
     } else if (menu.open) {
-        menu.open = false;
-        play.holo.set(false);
+        closeHolo(!config.wristMenu ? "wrist menu switched off" : !gripOk ? "left hand lost tracking" : "the hologram is off (see above)");
     }
     const uint32_t nowHero = config.hero < heroCount ? config.hero : 0;
     const bool nowSpiderMan = !config.heroes || nowHero == 0;
@@ -2084,40 +2338,6 @@ void dropColor() {
 }
 
 // --- xrEndFrame: his frame as it is, plus the add-on's quads on top -----------------------------------------------------
-MenuView currentView(uint32_t hero, const Config& config, const Live& live) {
-    MenuView v;
-    v.page = play.menu.page;
-    v.row = play.menu.row;
-    v.hero = hero;
-    v.outfit = config.outfit[hero];
-    v.toggles[static_cast<int>(Toggle::powers)] = live.powers;
-    v.toggles[static_cast<int>(Toggle::flight)] = flightSwitch && config.flight;
-    v.toggles[static_cast<int>(Toggle::heroWebs)] = live.heroWebs;
-    v.toggles[static_cast<int>(Toggle::beams)] = live.beams;
-    v.flying = play.flying;
-    v.powerState = fPowers.on ? play.powerState : "POWERS OFF";
-    v.status[0] = std::string("LAYER ON ") + addonVersion;
-    v.status[1] = !fFlight.on ? "FLIGHT: OFF (SEE LOG)" : !motionReady ? "FLIGHT: WAITING FOR SPIDY" :
-                  play.flying ? "FLIGHT: FLYING" : flies(hero) ? (play.faceBound ? "FLIGHT: ARMS UP OR HOLD A" : "FLIGHT: BOTH ARMS UP") : "FLIGHT: NOT THIS HERO";
-    if ((hero == hero_modes::captainAmerica || hero == hero_modes::daredevil) && config.heroes && live.grapple && fFlight.on &&
-        motionReady)
-        v.status[1] = play.grappleState;
-    v.status[2] = !fPowers.on ? "POWERS: OFF (SEE LOG)" : rayReady() ? "POWERS: " + play.powerState : "POWERS: WAITING FOR SPIDY";
-    v.status[3] = fDraw.on ? "DRAWING: ON" : "DRAWING: OFF";
-    v.status[4] = !suitIdOf(hero) ? "HERO SUITS: GAME'S OWN" :
-                  suitsInstalledFor(hero) ? "HERO SUITS: PICK IN SUITS MENU" : "HERO SUITS: NOT INSTALLED";
-    if (GetTickCount64() < play.suitNoticeUntil)
-        v.notice = play.suitNotice;
-    v.status[5] = "OUTFIT: " + outfitOf(hero, config.outfit[hero]).name;
-    for (int i = 0; i < colorRows; ++i)
-        v.color[i] = colorRowValue(live, i);
-    if (!fColor.on)
-        v.color[0] = "OFF (SEE LOG)";
-    for (auto& s : v.status)
-        for (auto& ch : s)
-            ch = static_cast<char>(ch >= 'a' && ch <= 'z' ? ch - 32 : ch);
-    return v;
-}
 XrCompositionLayerQuad quadLayer(const Quad& q, XrSpace space, const Pose& pose, float w, float h) {
     XrCompositionLayerQuad l{XR_TYPE_COMPOSITION_LAYER_QUAD};
     l.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
@@ -2132,30 +2352,61 @@ XrCompositionLayerQuad quadLayer(const Quad& q, XrSpace space, const Pose& pose,
 void addOns(const XrFrameEndInfo* info, XrSpace space, std::vector<XrCompositionLayerQuad>& quads) {
     if (!drawReady())
         return;
-    AcquireSRWLockShared(&settings.lock);
-    const Config config = settings.config;
-    const Live live = settings.live;
-    ReleaseSRWLockShared(&settings.lock);
-    const uint32_t hero = config.hero < heroCount ? config.hero : 0;
-    if (play.menu.open) {
-        const MenuView v = currentView(hero, config, live);
-        if (!play.menuPainted || !sameView(v, play.shown)) {
-            Canvas c(menuWidth, menuHeight);
-            paintMenu(c, v);
-            if (upload(session.menu, c)) {
-                play.shown = v;
-                play.menuPainted = true;
-            } else {
-                fDraw.turnOff("the menu picture could not be uploaded");
-                return;
+    // 0.0.76 SM1 HOLO: the painter's newest picture onto its quad (the hologram's or the PLAY AS note's)
+    if (painter) {
+        Canvas c;
+        uint64_t key = 0;
+        if (painter->take(c, key)) {
+            const bool isNote = key == play.noteKey;
+            Quad& q = isNote ? session.note : session.holo;
+            if (c.width == static_cast<int>(q.width) && c.height == static_cast<int>(q.height)) {
+                if (!upload(q, c)) {
+                    fDraw.turnOff("the hologram picture could not be uploaded");
+                    return;
+                }
+                if (isNote)
+                    play.noteUploaded = key;
+                else if (play.menu.open)
+                    play.holoShown = true;
             }
         }
+    }
+    if (play.menu.open && play.holoPlaced && play.holoShown && session.holo.released) {
+        const float k = play.holoScale;
+        Pose pose = play.holoPose;
         Pose grip;
-        if (session.menu.released && locate(session.gripSpace[0], space, info->displayTime, grip)) {
-            const float w = .20f * static_cast<float>(live.menuSize) / 100.f;
-            const float h = w * static_cast<float>(menuHeight) / static_cast<float>(menuWidth);
-            quads.push_back(quadLayer(session.menu, space, menuPose(grip, play.head.position, .06f + h / 2), w, h));
+        if (locate(session.gripSpace[0], space, info->displayTime, grip))
+            pose = menuPose(grip, play.head.position, .06f + holo::halfHeight * k);
+        quads.push_back(quadLayer(session.holo, space, pose, 2 * holo::halfWidth * k, 2 * holo::halfHeight * k));
+        if (play.pointer.hit) {
+            if (!play.dotReady) {
+                Canvas d(holo::dotSize, holo::dotSize);
+                holo::paintDot(d);
+                play.dotReady = upload(session.dot, d);
+            }
+            if (play.dotReady && session.dot.released) {
+                Pose at = pose;
+                at.position = pose.position + pose.orientation.rotate({play.pointer.u * k, play.pointer.v * k, .003f});
+                quads.push_back(quadLayer(session.dot, space, at, .012f * k, .012f * k));
+            }
         }
+    }
+    if (!play.menu.open && play.noteUntil > GetTickCount64() && play.noteKey && play.noteUploaded == play.noteKey &&
+        session.note.released) {
+        if (play.noteFresh && play.headKnown) {
+            // once, where the eyes look now: a metre ahead, a little low, facing them
+            Vec3 f = play.head.orientation.rotate({0, 0, -1});
+            f.y = 0;
+            const float n = length(f);
+            f = n > .1f ? f * (1.f / n) : Vec3{0, 0, -1};
+            Pose base;
+            base.position = play.head.position + f * 1.f + Vec3{0, -.12f, 0};
+            play.notePose = menuPose(base, play.head.position, 0);
+            play.noteFresh = false;
+        }
+        if (!play.noteFresh)
+            quads.push_back(quadLayer(session.note, space, play.notePose, .44f,
+                                      .44f * static_cast<float>(holo::noteHeight) / static_cast<float>(holo::noteWidth)));
     }
     if (play.beamUntil > GetTickCount64() && length(play.beamDirGame) > .5f) {
         static uint32_t painted = 0xffffffff;
@@ -2229,6 +2480,7 @@ XRAPI_ATTR XrResult XRAPI_CALL endFrame(XrSession s, const XrFrameEndInfo* info)
 
 // --- Sessions and the instance ----------------------------------------------------------------------------------------
 void dropSession() {
+    holoGen = holoGen * 6364136223846793005ull + 1442695040888963407ull;
     endFlight("the session ended");
     for (int i = 0; i < 2; ++i) {
         if (session.gripSpace[i] && next.destroySpace)
@@ -2236,7 +2488,9 @@ void dropSession() {
         if (session.aimSpace[i] && next.destroySpace)
             next.destroySpace(session.aimSpace[i]);
     }
-    dropQuad(session.menu);
+    dropQuad(session.holo);
+    dropQuad(session.note);
+    dropQuad(session.dot);
     dropQuad(session.beam);
     dropUploader();
     dropColor();

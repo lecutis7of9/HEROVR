@@ -76,12 +76,12 @@ namespace Sm2VrLauncher
         /// <summary>What the add-on does in Spider-Man 1 and how far each part is (include/spidy/sm1_addon.hpp features[];
         /// sm1_launcher_tests.py checks they match). "untested": built and wired, not yet tried in the game.</summary>
         public static readonly string[][] Features = {
-            new[] { "wrist hero menu", "untested", "opens like SM2: right hand on the left wrist plus the right trigger; right stick moves, right trigger picks" },
-            new[] { "hero select", "untested", "11 heroes, saved in addon.ini" },
-            new[] { "outfits", "untested", "listed with their artists and saved; the wrist pick does not change the model in the game yet" },
-            new[] { "holo card", "untested", "the hero's card on the wrist (2D)" },
+            new[] { "wrist hero menu", "untested", "the SM2 hologram: right hand on the left wrist plus the right trigger opens it; point and pull the right trigger to pick" },
+            new[] { "hero select", "untested", "11 heroes: a tile, then PLAY AS; the hologram closes and his powers work at once" },
+            new[] { "outfits", "untested", "on each hero's OUTFITS tab, saved; the pick does not change the model in the game yet" },
+            new[] { "holo card", "untested", "the hero's CONTROLS, OUTFITS and POWERS tabs on the hologram" },
             new[] { "hero powers", "untested", "trigger of an outstretched hand hits the ringed enemy, with a beam" },
-            new[] { "flight in game", "untested", "Iron Man, Superman, Thor, Green Lantern: hold a grip to take off" },
+            new[] { "flight in game", "untested", "Iron Man, Superman, Thor, Green Lantern: both arms up or A held to take off, the arms steer" },
             new[] { "color", "untested", "the SM2 COLOR looks (Metropolis, Smallville, Gotham, Cyberpunk, Synthwave and more) and sliders under the heroes on the wrist HEROES page; off by default, no GPU work when off" },
             new[] { "hero suits", "stub", "Install suits adds each hero as a new suit next to Spider-Man's in the game's Suits menu; nothing is replaced (not yet seen in the game)" },
             new[] { "holo suit switch", "stub", "Picking a hero on the wrist holo tells you to pick that hero's suit in the game's Suits menu; a live switch is not in yet" },

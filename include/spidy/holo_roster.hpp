@@ -69,7 +69,7 @@ inline constexpr const char* soonSuits =
 inline constexpr int soonPicture(uint32_t k) { return static_cast<int>(roster_page::soonFirst + k); }
 
 enum class Screen : uint8_t { closed, grid, hero, rep, soon, color }; // color: 0.0.74 test 10
-enum class Tab : uint8_t { controls, outfits, stats, settings, music }; // music: 0.0.74 test 10
+enum class Tab : uint8_t { controls, outfits, stats, settings, music, powers }; // music: 0.0.74 test 10; powers: SM1
 enum Id : int {
     none = -1,
     tabMarvel = 1,
@@ -100,6 +100,9 @@ enum Id : int {
     // DOUBLE HEALTH for every hero, a press each (the wrist rows' own toggles).
     healthInvincible = 90, // past soonTile's range (60 + soonCount)
     healthDouble = 91,
+    // HERO VR 0.0.76 SM1 (the Spider-Man 1 add-on, Data::sm1.on): the hero page's POWERS sub-tab and its switches.
+    subPowers = 92,
+    sm1Row = 100, // + Sm1::switches row (100..105)
 };
 static_assert(soonTile + static_cast<int>(soonCount) <= healthInvincible, "the health buttons past the SOON tiles");
 struct State {
@@ -118,6 +121,32 @@ struct State {
     uint32_t settingsPages = 1;
     const char* settingHelp{};
 };
+// HERO VR 0.0.76 SM1 (the user: "the wrist menu ... should look exactly like sm2 holo does"): the Spider-Man 1
+// add-on (sm1_layer) draws this same roster with wrist_hud's own painter. What differs there, all from the add-on
+// (off, the default: SM2 exactly as before):
+//   the header   MARVEL, DC and CLOSE (no SOON, no REP: SM1 keeps no rep)
+//   the tiles    no INVINCIBLE / DOUBLE HEALTH (SM1 has no confirmed health record), each tile's power under its name
+//   a hero page  CONTROLS (his SM1 moves, `lines`), OUTFITS and POWERS (his power and the add-on's switches,
+//                `switches`); no STATS, SETTINGS or MUSIC (SM2 only)
+struct Sm1Line {
+    std::string name, how;
+};
+struct Sm1Switch {
+    std::string name; // "POWERS", "FLIGHT" ...
+    bool on{};
+    int key{};        // the add-on's own number, back in Actions::sm1Switch
+    std::string help;
+};
+inline constexpr uint32_t sm1LinesMost = 9, sm1SwitchesMost = 6;
+struct Sm1 {
+    bool on{};
+    std::string power[heroes];              // each tile's power ("REPULSOR"); "" none
+    std::string status;                     // the tiles' foot, right of PLAYING ("POWERS: READY")
+    std::vector<Sm1Line> lines[heroes];     // CONTROLS (at most sm1LinesMost)
+    std::vector<Sm1Switch> switches[heroes]; // POWERS (at most sm1SwitchesMost)
+    std::string facts[heroes];              // POWERS: his power's line ("REPULSOR: 14 DAMAGE, 30 M")
+    std::string outfitNote;                 // OUTFITS: the line under the rows
+};
 // What the roster shows, as the game thread has it (publish / latest; tests pass their own).
 struct Data {
     roster_page::Snapshot suits{};
@@ -130,6 +159,7 @@ struct Data {
     rep_log::Log log{};
     // 0.0.76 HEALTH: what the tiles' INVINCIBLE and DOUBLE HEALTH say (the wrist's View, not published).
     bool invincible{}, doubleHealth{}, healthNa{};
+    Sm1 sm1{}; // HERO VR 0.0.76 SM1 (never published: the add-on passes its own Data)
 };
 void publish(const Data&);
 uint32_t latest(Data& out); // its version (0: nothing published yet)
@@ -190,6 +220,7 @@ struct Actions {
     int suitHero = -1, suitIndex = -1;  // pick this suit
     bool closed{};
     bool invincible{}, doubleHealth{}; // 0.0.76 HEALTH: the tiles' INVINCIBLE / DOUBLE HEALTH pressed
+    int sm1Switch = -1;                 // HERO VR 0.0.76 SM1: this Sm1Switch::key pressed
 };
 class Holo {
   public:

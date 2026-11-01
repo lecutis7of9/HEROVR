@@ -10,6 +10,13 @@ plus the prebuilt HERO VR launcher.
 **EXPERIMENTAL BUILD: 0.0.75 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.74
 or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0.0.73 and 0.0.72.
 
+## 0.0.75 hotfix 2 (v0.0.75.2, build Update 39.8.2, launcher 0.0.75.3 build 18)
+- **Spider-Man 1 (iilyn's SpidyVR), untested in-game:** the wrist hero menu, hero select, outfits, the holo card,
+  hero powers and flight; the launcher's Install suits adds the heroes as **new** suits in the game's Suits menu
+  (nothing replaced; Remove suits restores the game's files). Picking a hero on the wrist tells you to pick his suit
+  in the Suits menu (no live switch yet). Not in yet: held props, the heroes' grapples, vehicles.
+  See RELEASE-NOTES-v0.0.75.2.md.
+
 ## 0.0.75 hotfix 1 (v0.0.75.1, build Update 39.8.1, launcher 0.0.75.2 build 17)
 - **Fixed: the freeze right after loading a save in 0.0.75** (the see-through depth lock). Everything else is the
   same as 0.0.75. Spider-Man 1's heroes and wrist menu are not working yet; they come in the next hotfix.

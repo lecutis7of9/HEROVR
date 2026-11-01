@@ -12,12 +12,12 @@ def src(p):
 class ReleaseLabels0075(unittest.TestCase):
     def test_version(self):
         self.assertEqual(src('VERSION').strip(), '0.0.75')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8.1')
+        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8.2')
         c = src('CMakeLists.txt')
         self.assertRegex(c, r'project\(Spidy VERSION 0\.0\.75 ')
         self.assertRegex(c, r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
         self.assertIn('#define SPIDY_PUBLIC_VERSION "0.0.75"', src('include/spidy/version.hpp'))
-        self.assertIn('build = "39.8.1";', src('include/spidy/version.hpp'))
+        self.assertIn('build = "39.8.2";', src('include/spidy/version.hpp'))
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.75.md')))
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'docs/HERO-0.0.75.md')))
 

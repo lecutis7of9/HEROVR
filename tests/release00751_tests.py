@@ -13,21 +13,21 @@ def src(p):
 class Release00751(unittest.TestCase):
     def test_versions(self):
         self.assertEqual(src('VERSION').strip(), '0.0.75')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8.1')
+        self.assertRegex(src('PORT-VERSION').strip(), r'^Update 39\.8\.[12]$')  # 39.8.2: hotfix 2 (release00752_tests)
         self.assertRegex(src('CMakeLists.txt'), r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
-        self.assertIn('build = "39.8.1";', src('include/spidy/version.hpp'))
+        self.assertRegex(src('include/spidy/version.hpp'), r'build = "39\.8\.[12]";')
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.75.1.md')))
 
     def test_launcher_build_17(self):
         m = src('tools/launcher/src/ModVersion.cs')
-        self.assertIn('public const string Version = "0.0.75.2";', m)
-        self.assertIn('public const int Build = 17;', m)
+        self.assertRegex(m, r'public const string Version = "0\.0\.75\.[23]";')
+        self.assertRegex(m, r'public const int Build = 1[78];')  # 18: hotfix 2
         self.assertIn('public const string PreviousTag = "v0.0.75";', m)
         self.assertIn('public const string HotfixOf = "v0.0.75";', m)
-        self.assertIn('public const string HotfixBuild = "Update 39.8.1";', m)
+        self.assertRegex(m, r'public const string HotfixBuild = "Update 39\.8\.[12]";')
         self.assertIn('PreviousTags = { "v0.0.75", "v0.0.74", "v0.0.73", "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };', m)
-        self.assertIn('[assembly: AssemblyInformationalVersion("0.0.75.2 (launcher build 17)")]',
-                      src('tools/launcher/src/AssemblyInfo.cs'))
+        self.assertRegex(src('tools/launcher/src/AssemblyInfo.cs'),
+                         r'AssemblyInformationalVersion\("0\.0\.75\.[23] \(launcher build 1[78]\)"\)')
 
     def test_revert_offers_the_release_it_fixes(self):
         rd = src('tools/launcher/src/RevertDialog.cs')

@@ -114,11 +114,11 @@ namespace Sm2VrLauncher
             var prev = ModVersion.Parse(tag);
             if (prev != null && have != null && prev.Equals(have) && string.Equals(tag, LauncherInfo.HotfixOf, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(InstalledBuild(root), LauncherInfo.HotfixBuild, StringComparison.OrdinalIgnoreCase))
-                return true;   // build 17: the 0.0.75 hotfix (same VERSION, build Update 39.8.1) can go back to 0.0.75 itself
+                return true;   // builds 17-18: a 0.0.75 hotfix (same VERSION, build Update 39.8.1 / 39.8.2) can go back to 0.0.75 itself
             return prev != null && (have == null || have > prev);
         }
 
-        /// <summary>The installed PORT-VERSION first line ("Update 39.8.1"), or "".</summary>
+        /// <summary>The installed PORT-VERSION first line ("Update 39.8.2"), or "".</summary>
         static string InstalledBuild(string root)
         {
             try { return (ModVersion.FirstLine(Path.Combine(root ?? "", "PORT-VERSION")) ?? "").Trim(); }

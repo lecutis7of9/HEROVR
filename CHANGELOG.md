@@ -2,28 +2,22 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
-## v0.0.75.2 - HERO VR 0.0.75 hotfix 2: Spider-Man 1 heroes (DRAFT, not released)
+## v0.0.75.2 - HERO VR 0.0.75 hotfix 2: Spider-Man 1 heroes (November 1, 2026)
 
-Shows as v0.0.75 (VERSION unchanged; at release: a PORT-VERSION bump and launcher build 18). From hero-0.0.76-sm1 on
-v0.0.75.1 (efac6a8). **Built, not yet tried in the game.**
+**EXPERIMENTAL BUILD: 0.0.75 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.75,
+USE 0.0.74 or USE 0.0.63 goes back, settings kept). Still shows as v0.0.75 (VERSION unchanged; PORT-VERSION
+Update 39.8.2, launcher 0.0.75.3 build 18). **Spider-Man 1 is untested in-game.** Details:
+[RELEASE-NOTES-v0.0.75.2.md](RELEASE-NOTES-v0.0.75.2.md).
 
-- **Spider-Man 1 (iilyn's Spider-Man VR mod):** Mulder's Heroes add-on now runs inside the game as an OpenXR layer,
-  registered for your Windows user only while Spider-Man 1 plays. His graphics, performance and anti-aliasing are
-  untouched.
-- **Wrist hero menu:** opens like SM2 (right hand on the left wrist, pull the right trigger; the same click closes
-  it), with the SM2 hologram look; right stick and right trigger pick. Hero select, outfits (names and artists), the holo card.
-- **Flight:** Iron Man, Superman, Thor and Green Lantern hold a grip to take off and stay up; the left stick steers
-  where you look.
-- **Hero powers** hit the enemy his combat has ringed, with a beam.
-- The Spider-Man 1 page lists which hero features Spider-Man 1 has and which not yet.
-- **Hero suits in Spider-Man 1 (new, not yet seen in the game):** the Spider-Man 1 page's Install suits button fits
-  the ten heroes to the game's own suit on your PC and adds them to the game's Suits menu (the way Overstrike suit
-  mods work; Overstrike / ALERT by Tkachov). Pick them in the Suits menu; the wrist menu does not switch them yet.
-  Remove suits puts the game's files back exactly; Game info only reads the game and saves a report. Close the game
-  first; each takes effect the next time the game starts. iilyn's files are never touched.
-  See [docs/SM1-SUITS-0.0.76.md](docs/SM1-SUITS-0.0.76.md).
+- **Spider-Man 1 (iilyn's SpidyVR):** the add-on runs as an OpenXR layer only while Spider-Man 1 plays. His graphics,
+  performance and anti-aliasing are untouched. Wrist hero menu, hero select, outfits, the holo card, hero powers
+  and flight (Iron Man, Superman, Thor, Green Lantern).
+- **Hero suits as new options:** Install suits adds the ten heroes as new suits next to Spider-Man's (never replacing
+  one; the install refuses if it would); Remove suits restores the game's files exactly. Picking a hero on the
+  wrist tells you to pick his suit in the game's Suits menu (no live switch yet: no confirmed way in 4.630.0.0).
+- **Not in yet for Spider-Man 1:** held props, the heroes' grapples, vehicles.
 - Everything in v0.0.75.1 (the freeze fix on load) is included.
-- Credits: iilyn (Ilya Mezerowsky) for SpidyVR; the model artists; made by Agent Mulder.
+- Credits: iilyn (Ilya Mezerowsky) for SpidyVR; Tkachov for Overstrike / ALERT; the model artists; made by Agent Mulder.
 
 ## v0.0.75.1 - HERO VR 0.0.75 hotfix 1 (October 31, 2026)
 

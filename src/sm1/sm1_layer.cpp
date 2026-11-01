@@ -271,11 +271,18 @@ void loadSettings() {
         }
     } else if (!livePath().empty() && !writeFile(livePath(), liveText(l)))
         logLine("live.txt could not be written (the defaults stay)");
+    // 0.0.76 test 3: the hero picked last time (CAPTAIN AMERICA, with his grapple on the grips) came back at the next
+    // start while the game still showed Spider-Man, so web swinging looked broken. Every game now starts as plain
+    // Spider-Man (nothing of his input touched); a hero is picked on the wrist hologram each time.
+    const uint32_t lastPick = c.hero;
+    c.hero = 0;
     AcquireSRWLockExclusive(&settings.lock);
     settings.config = c;
     settings.live = l;
     settings.liveStamp = stamp;
     ReleaseSRWLockExclusive(&settings.lock);
+    logLine("hero: this game starts as SPIDER-MAN, every input his (the last pick, %s, is not brought back; pick a hero "
+            "on the wrist hologram)", lastPick < heroCount ? heroName(lastPick) : "none");
     logLine("settings: heroes=%d wrist_menu=%d flight=%d hero=%u powers=%d hero_webs=%d beams=%d damage=%d menu=%d sm1scan=%d",
             c.heroes, c.wristMenu, c.flight, c.hero, l.powers, l.heroWebs, l.beams, l.damage, l.menuSize, l.scan);
 }
@@ -1374,6 +1381,11 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
             return;
         }
     }
+    if (thrown != props::none && !propsgpu::ready(thrown)) {
+        static int told = 0;
+        if (told++ < 3)
+            logLine("throw: %s is not on the GPU (yet), so this press is the old beam", props::modelNames[thrown]);
+    }
     int hits = 0;
     if (first) {
         blow(first, gv.player, hitPoint, from, amount, p.knockback);
@@ -2016,6 +2028,9 @@ void step() {
     MaskInput mi;
     mi.menuOpen = menu.open;
     mi.holoHands = play.holoHands;
+    for (int i = 0; i < 2; ++i)
+        if (holoClicked && (play.holoHands >> i & 1u) && play.trigger[i] > .1f)
+            mi.holoClick |= 1u << i;
     mi.spiderMan = nowSpiderMan;
     mi.powers = live.powers && fPowers.on;
     mi.heroWebs = live.heroWebs;
@@ -2674,7 +2689,7 @@ bool propsFrame(const XrFrameEndInfo* info, const XrCompositionLayerProjection& 
         }
         models = root + L"\\Models\\";
     }
-    propsgpu::want(hero, models, session.device);
+    propsgpu::want(session.handle, hero, models, session.device);
     props::Bounds bounds[props::modelCount];
     propsgpu::bounds(bounds);
     props::Hands hands;

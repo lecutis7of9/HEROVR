@@ -29,7 +29,7 @@ The OpenXR loader ignores HKCU layers when the game runs as administrator: then 
 | Feature | How | State |
 | --- | --- | --- |
 | Wrist hero menu | **The SM2 build's own hologram** (0.0.76 first-test fix: "the wrist menu is awful it should look exactly like sm2 holo does"). The SM2 panel code itself (`wrist_hud::appendPanelFlat`, the same frame, fonts, colours, MARVEL / DC / CLOSE tabs, the heroes' tiles with their portraits from HERO VR's `Models\Roster`) is painted on the CPU into an extra quad layer on his finished frame (`sm1_holo.cpp`, on its own thread, only when the picture changes). Opens exactly like the SM2 build: touch your left wrist/forearm with the right hand and pull the right trigger (the same click closes it). Point at it with the right hand (a dot shows where) and pull the right trigger to pick. COLOR is under the tiles, as in SM2. No health rows (INVINCIBLE / DOUBLE HEALTH are SM2 only). | built, not tried in game |
-| Hero select | A hero's tile, then **PLAY AS**: saved to `addon.ini` (`hero=`), the hologram **closes** (powers, flight and grapple wait while it is open) and a note in front of you says what he does now. The first test's log showed the menu open nearly the whole time, so no power, flight or grapple ever ran. | built, not tried in game |
+| Hero select | A hero's tile, then **PLAY AS** (every game starts as plain SPIDER-MAN: the last pick is written to `addon.ini` `hero=` but not brought back), the hologram **closes** (powers, flight and grapple wait while it is open) and a note in front of you says what he does now. The first test's log showed the menu open nearly the whole time, so no power, flight or grapple ever ran. | built, not tried in game |
 | Outfits | The hero's OUTFITS tab, as in SM2: picked and saved (`outfit.N=`). The game's model does **not** change (no CONFIRMED suit call); the launcher's Install hero suits plus the game's Suits menu is the only way to look like the hero. | built, not tried in game |
 | Holo card | The hero's CONTROLS / OUTFITS / POWERS tabs: only what works in SM1, his switches (POWERS or BEAMS, FLIGHT, GRAPPLE, WEBS) live. | built, not tried in game |
 | Hero powers | Trigger of an outstretched hand (more than 0.42 m from the head) fires the hero's power at the enemy his combat has ringed, through his `SpidyPunchTest`; a beam in the hero's colour. | built, not tried in game |
@@ -178,6 +178,23 @@ different resource per eye, in every pass (2 passes at least); anything less sta
   press as its own web or gadget shot.
 - **No held weapons.** The add-on draws flat quads only (OpenXR quad layers). It has no 3D model renderer, and
   SpidyVR submits no depth, so a held model would also draw over walls. Held weapons are not in this build.
+
+## Fixes after the 0.0.76 SM1 test 3 (build 2a86d3b)
+
+- **"Spider-Man can't swing."** layer.log: the game started with `hero=8` (CAPTAIN AMERICA, the pick kept in
+  `addon.ini` from the session before), then THOR, then CAPTAIN AMERICA again; SPIDER-MAN was never picked. The game's
+  model never changes, so it looked like Spider-Man, but CAP with `grapple=1` takes both grips (the grapple instead
+  of web swinging) and his outstretched trigger is the shield throw. Now every game starts as plain SPIDER-MAN
+  (logged: `hero: this game starts as SPIDER-MAN ...`), and plain Spider-Man's input is his, untouched: his grips
+  (webs), A, B, X, Y and the left stick are never hidden; only the trigger that clicks the wrist hologram (to its
+  release) and, while the hologram is up, the right trigger and stick are the menu's. Before, a hand pressed near the
+  left forearm (the SM2 build's wrist zone) could also swallow a grip. Tested over every combination of switches
+  (`spiderManPassThroughTests`).
+- **The weapons never showed and the throws were beams.** layer.log had `PROPS: ready: Cap's shield ...` (the
+  models loaded) but never `PROPS: renderer ready`: the loaded set was checked against a device only the draw step
+  set, and that step never ran without a set, so the first set was always thrown away and never loaded again. The
+  frame's device and session are now bound before the set is taken; a dropped set is logged and loaded again. A throw
+  whose model is not on the GPU yet says so in the log (`throw: ... is not on the GPU (yet)`).
 
 ## Hero props (0.0.76 SM1, commits 0ca47cf, f7b17b5)
 

@@ -247,6 +247,7 @@ Binding classify(std::string_view path);
 struct MaskInput {
     bool menuOpen = false;
     uint32_t holoHands = 0; // bit per hand: the SM2 wrist click holds that hand's trigger and grip (wrist_hud::Toggle)
+    uint32_t holoClick = 0; // bit per hand: its trigger clicked the hologram open or shut this frame
     bool spiderMan = true, powers = true, heroWebs = true;
     bool flightArmed = false; // a flying hero with flight on (0.0.76: the grips stay his; A held is the take-off)
     bool flying = false;      // in the air on our flight: the left stick, the right A and B are ours
@@ -263,6 +264,8 @@ struct Mask {
     bool trigger[2]{}, grip[2]{}, stick[2]{}, stickY[2]{};
     bool faceLower[2]{}, faceUpper[2]{}; // 0.0.76: A/X, B/Y
 };
+// Plain Spider-Man (spiderMan): nothing hidden but the hologram's own click and, while it is up, the right trigger and
+// stick. His grips, face buttons and left stick always reach him.
 Mask maskFor(const MaskInput& in);
 
 // --- The wrist menu (pure state machine) ----------------------------------------------------------------------

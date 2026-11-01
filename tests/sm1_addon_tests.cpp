@@ -285,6 +285,52 @@ void inputTests() {
     check(maskFor(mi).faceLower[1], "0.0.76: an A held from the flight is no jump on landing");
 }
 
+// 0.0.76 test 3: plain Spider-Man (no hero picked) - the add-on passes every input of his through untouched, whatever
+// else is set (powers, hero webs, grapple, flight, held grips, hands out, a hand near the wrist). Only the hologram's
+// own click (and the right trigger and stick while it is up) are ever the menu's; his grips never are.
+void spiderManPassThroughTests() {
+    int cases = 0, untouched = 0, gripsHis = 0;
+    for (uint32_t bits = 0; bits < (1u << 13); ++bits) {
+        MaskInput mi;
+        mi.spiderMan = true;
+        mi.powers = bits & 1u;
+        mi.heroWebs = bits >> 1 & 1u;
+        mi.flightArmed = bits >> 2 & 1u;
+        mi.flying = bits >> 3 & 1u;
+        mi.aHeld = bits >> 4 & 1u;
+        mi.grappleArmed = bits >> 5 & 1u;
+        mi.grip[0] = bits >> 6 & 1u;
+        mi.grip[1] = bits >> 7 & 1u;
+        mi.handOut[0] = bits >> 8 & 1u;
+        mi.handOut[1] = bits >> 9 & 1u;
+        mi.holoHands = bits >> 10 & 3u;
+        mi.menuOpen = bits >> 12 & 1u;
+        const Mask m = maskFor(mi);
+        ++cases;
+        bool none = true;
+        for (int i = 0; i < 2; ++i)
+            none = none && !m.trigger[i] && !m.grip[i] && !m.stick[i] && !m.stickY[i] && !m.faceLower[i] && !m.faceUpper[i];
+        if (!mi.menuOpen && none)
+            ++untouched;
+        if (!m.grip[0] && !m.grip[1] && !m.faceLower[0] && !m.faceLower[1] && !m.faceUpper[0] && !m.faceUpper[1] &&
+            !m.stick[0] && !m.stickY[0] && !m.trigger[0])
+            ++gripsHis;
+    }
+    check(untouched == cases / 2, "plain Spider-Man, hologram shut: every input his, in every combination");
+    check(gripsHis == cases, "plain Spider-Man: grips, A/B/X/Y, the left stick and left trigger always his");
+    MaskInput click;
+    click.holoClick = 1u << 1;
+    Mask m = maskFor(click);
+    check(m.trigger[1] && !m.trigger[0] && !m.grip[1] && !m.stick[1], "plain Spider-Man: only the hologram's click is hidden");
+    check(keepTrigger(1.f, m.trigger[1]), "the click's press stays the menu's to its release");
+    MaskInput after;
+    after.triggerOurs[1] = true;
+    check(maskFor(after).trigger[1] && !maskFor(after).grip[1], "held after the click: the trigger only");
+    after.triggerOurs[1] = keepTrigger(0.f, true);
+    m = maskFor(after);
+    check(!m.trigger[1], "let go: the trigger is his again");
+}
+
 void wristTests() {
     WristMenu m;
     WristInput in;
@@ -384,7 +430,13 @@ void wristTests() {
     check((t.hands() >> 1 & 1u) != 0, "SM2 click: that pull is the menu's, not his web's");
     MaskInput hm;
     hm.holoHands = t.hands();
+    hm.holoClick = 1u << 1;
     check(maskFor(hm).trigger[1], "the mask hides the click's trigger from him");
+    check(!maskFor(hm).grip[1] && !maskFor(hm).grip[0], "plain Spider-Man: the click never takes a grip (his webs)");
+    hm.holoClick = 0;
+    check(!maskFor(hm).trigger[1], "plain Spider-Man: a hand near the wrist without a click is still his");
+    hm.spiderMan = false;
+    check(maskFor(hm).trigger[1] && maskFor(hm).grip[1], "a hero: the wrist zone's pull is the menu's (the SM2 build's)");
     for (uint32_t p = 0; p < static_cast<uint32_t>(Page::count); ++p)
         check(std::strlen(pageName(static_cast<Page>(p))) > 0, "page names");
 }
@@ -1171,6 +1223,7 @@ int main() {
     outfitTests();
     powerTests();
     inputTests();
+    spiderManPassThroughTests();
     wristTests();
     drawTests();
     quadTests();

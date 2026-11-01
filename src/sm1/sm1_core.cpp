@@ -479,6 +479,19 @@ Binding classify(std::string_view path) {
 }
 Mask maskFor(const MaskInput& in) {
     Mask m;
+    // Plain Spider-Man (no hero picked): every input is his. Only the trigger that clicks the wrist hologram open or
+    // shut (held to its release), and the right trigger and stick while the hologram is up, are the menu's. His grips
+    // (the webs), A, B, X, Y and the left stick are never touched (0.0.76 test 3).
+    if (in.spiderMan) {
+        if (in.menuOpen) {
+            m.trigger[1] = true;
+            m.stick[1] = true;
+        }
+        for (int i = 0; i < 2; ++i)
+            if ((in.holoClick >> i & 1u) || in.triggerOurs[i])
+                m.trigger[i] = true;
+        return m;
+    }
     if (in.menuOpen) {
         m.trigger[1] = true;
         m.stick[1] = true;

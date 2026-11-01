@@ -8,11 +8,17 @@
 # without it; the launcher's Privacy > Crash dump in reports passes that when it is off).
 # 0.0.75: only a dump written after this session started (the report's and its logs' earliest creation time); an
 # older one is left out and said why. The report's logs include its -prompts.log (PROMPTS LOG, the fly notes).
+# 0.0.76 SM1: the SM1 add-on's own files from %APPDATA%\HERO VR SM1 (layer.log, addon.log, live.txt, addon.ini) and
+# its research scan (scan\sm1scan-*.jsonl/.bin/.txt, the newest 2 sessions); an SM1-only player has no reports
+# folder yet, so it is made instead of stopping.
 param([switch]$NoCrashDump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $reports = Join-Path $root 'reports'
-if (-not (Test-Path -LiteralPath $reports)) { throw "No reports folder at $reports - play a session first." }
+if (-not (Test-Path -LiteralPath $reports)) {
+    # No SM2 session yet (SM1 only): the folder is made so send-me.zip has a place; nothing else is written.
+    New-Item -ItemType Directory -Path $reports -Force | Out-Null
+}
 $files = @()
 $sessionStart = $null
 # Update 38.5: the version these reports came from, first.
@@ -43,6 +49,26 @@ $files += Get-ChildItem -LiteralPath $reports -Filter 'world-trace-*.jsonl' -Fil
 # 0.0.74 test 10: the WINDOW PROBE logs of the last 3 sessions (read-only; tools/window_probe.py).
 $files += Get-ChildItem -LiteralPath $reports -Filter 'window-probe-*.jsonl' -File |
     Sort-Object LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { $_.FullName }
+# 0.0.76 SM1: the add-on's logs and settings, and its research scan's newest 2 sessions (read only).
+try {
+    if ($env:APPDATA) {
+        $sm1 = Join-Path $env:APPDATA 'HERO VR SM1'
+        if (Test-Path -LiteralPath $sm1) {
+            $files += Get-ChildItem -LiteralPath $sm1 -File |
+                Where-Object { @('layer.log', 'addon.log', 'live.txt', 'addon.ini') -contains $_.Name } |
+                ForEach-Object { $_.FullName }
+            $sm1Scan = Join-Path $sm1 'scan'
+            if (Test-Path -LiteralPath $sm1Scan) {
+                $scanSessions = @(Get-ChildItem -LiteralPath $sm1Scan -Filter 'sm1scan-*.jsonl' -File |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 2)
+                foreach ($s in $scanSessions) {
+                    $files += Get-ChildItem -LiteralPath $sm1Scan -Filter ($s.BaseName + '.*') -File | ForEach-Object { $_.FullName }
+                }
+                if ($scanSessions) { Write-Host ('SM1 scan: ' + (($scanSessions | ForEach-Object { $_.BaseName }) -join ', ')) }
+            }
+        }
+    }
+} catch { Write-Host ('SM1 add-on files not added: ' + $_.Exception.Message) }
 # 0.0.74 test 3: the game's newest crash dump (the game writes one when it crashes; it says where in its log).
 if (-not $NoCrashDump) {
     try {

@@ -2,15 +2,19 @@
 // Mulder's Heroes add-on for iilyn's Spider-Man VR mod (SpidyVR by Ilya Mezerowsky, GPL-3.0,
 // https://github.com/IlyaMez/SpidyVR). See include/spidy/sm1_addon.hpp for what it does and does not touch.
 //
-// Addresses: none. Everything here goes through OpenXR (the loader hands the layer his calls) and through his own
+// Addresses: none for any feature (only the read-only research scan below reads game memory). Everything here goes through OpenXR (the loader hands the layer his calls) and through his own
 // exported functions, found by name with GetProcAddress (CONFIRMED in his 0.7.0 sources):
 //   SpidyXrData (data)  spidy_stereo_probe.dll    XrData v43, 1312 bytes (seqlock `sequence`)
 //   SpidyStrikeSample   spidy_ray_bridge.dll      Strikes v3, 328 bytes (cueTarget, cuePoint)
 //   SpidyPunchTest      spidy_ray_bridge.dll      Test v1, 80 bytes (blocks up to 1 s: called on a worker thread)
 //   SpidyMotionSubmit   spidy_movement_bridge.dll Command v1, 48 bytes (serial must rise; 2001 bad, 2002 off, 2003 old)
 //   SpidyMotionSample   spidy_movement_bridge.dll Data v4, 176 bytes (serial at +48, grounded at +168)
+// The research scan (sm1_scan.cpp, live.txt sm1scan) is the one part that reads game addresses: CANDIDATE RVAs from
+// his 0.7.0 sources, READ ONLY (VirtualQuery + SEH copies, no writes, no game or Spidy calls), on its own
+// lowest-priority thread, into %APPDATA%\HERO VR SM1\scan. Nothing else in the layer uses what it finds.
 // Every failure is logged to %APPDATA%\HERO VR SM1\layer.log and turns off only its own feature.
 #include "spidy/sm1_addon.hpp"
+#include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
 #include <windows.h>
@@ -58,6 +62,7 @@ struct XrData { // src/game_xr.cpp, only the leading part the layer reads
 };
 static_assert(offsetof(XrData, head) == 96 && offsetof(XrData, hands) == 160);
 constexpr size_t xrDataBytes = 1312, playerRecordOffset = 608;
+static_assert(xrDataBytes == scan::xrDataBytes && playerRecordOffset == scan::xrPlayerRecordAt);
 struct Command { // include/spidy/native_movement.hpp
     uint32_t magic = 0x534d564d, version = 1, bytes = sizeof(Command), enabled{};
     uint64_t serial{};
@@ -103,6 +108,15 @@ struct Strikes { // include/spidy/game_punch.hpp
     uint64_t swung, strikeCalled, passedOver;
 };
 static_assert(sizeof(Strikes) == 328);
+// The research scan reads the same exports by offset (sm1_scan.hpp): kept equal to these copies.
+static_assert(offsetof(Strikes, landed) == scan::strikeLandedAt && offsetof(Strikes, enemies) == scan::strikeEnemiesAt &&
+              offsetof(Strikes, target) == scan::strikeTargetAt && offsetof(Strikes, cueTarget) == scan::strikeCueTargetAt &&
+              offsetof(Strikes, cuePoint) == scan::strikeCuePointAt && offsetof(Strikes, lastPoint) == scan::strikeLastPointAt &&
+              offsetof(Strikes, lastDamage) == scan::strikeLastDamageAt &&
+              offsetof(Strikes, knockouts) == scan::strikeKnockoutsAt && sizeof(Strikes) == scan::strikeBytes);
+static_assert(offsetof(MotionData, position) == scan::motionPositionAt &&
+              offsetof(MotionData, grounded) == scan::motionGroundedAt && sizeof(MotionData) == scan::motionDataBytes);
+static_assert(offsetof(XrData, head) == scan::xrHeadAt && offsetof(XrData, hands) == scan::xrHandsAt);
 struct Test {
     uint32_t magic = 0x53505554, version = 1, bytes = sizeof(Test), type = 1;
     uint64_t victim{}, damager{};
@@ -218,17 +232,25 @@ void loadSettings() {
         c = parseConfig(text);
     Live l;
     FILETIME stamp{};
-    if (readFile(livePath(), text, &stamp))
+    if (readFile(livePath(), text, &stamp)) {
         l = parseLive(text);
-    else if (!livePath().empty() && !writeFile(livePath(), liveText(l)))
+        // A switch added by a later build (sm1scan in 0.0.76): its line and subtext appended, the player's values kept.
+        if (const std::string add = missingLive(text); !add.empty()) {
+            const std::string joined = text + (text.empty() || text.back() == '\n' ? "" : "\n") + add;
+            if (writeFile(livePath(), joined))
+                readFile(livePath(), text, &stamp);
+            else
+                logLine("live.txt: the new switches could not be added (their defaults apply)");
+        }
+    } else if (!livePath().empty() && !writeFile(livePath(), liveText(l)))
         logLine("live.txt could not be written (the defaults stay)");
     AcquireSRWLockExclusive(&settings.lock);
     settings.config = c;
     settings.live = l;
     settings.liveStamp = stamp;
     ReleaseSRWLockExclusive(&settings.lock);
-    logLine("settings: heroes=%d wrist_menu=%d flight=%d hero=%u powers=%d hero_webs=%d beams=%d damage=%d menu=%d",
-            c.heroes, c.wristMenu, c.flight, c.hero, l.powers, l.heroWebs, l.beams, l.damage, l.menuSize);
+    logLine("settings: heroes=%d wrist_menu=%d flight=%d hero=%u powers=%d hero_webs=%d beams=%d damage=%d menu=%d sm1scan=%d",
+            c.heroes, c.wristMenu, c.flight, c.hero, l.powers, l.heroWebs, l.beams, l.damage, l.menuSize, l.scan);
 }
 // Every 2 s: live.txt again when its time stamp moved.
 void refreshLive() {
@@ -250,8 +272,8 @@ void refreshLive() {
     settings.live = l;
     settings.liveStamp = stamp;
     ReleaseSRWLockExclusive(&settings.lock);
-    logLine("live.txt: powers=%d hero_webs=%d beams=%d damage=%d menu=%d", l.powers, l.heroWebs, l.beams, l.damage,
-            l.menuSize);
+    logLine("live.txt: powers=%d hero_webs=%d beams=%d damage=%d menu=%d sm1scan=%d", l.powers, l.heroWebs, l.beams,
+            l.damage, l.menuSize, l.scan);
 }
 // The menu's picks: addon.ini is read again first so the launcher's switches stay as it wrote them.
 void saveConfig(uint32_t hero, const uint32_t* outfit) {
@@ -1502,6 +1524,16 @@ XRAPI_ATTR XrResult XRAPI_CALL createSession(XrInstance inst, const XrSessionCre
     ReleaseSRWLockExclusive(&playLock);
     loadSettings();
     logLine("session: D3D12 %s, %u layers at most", session.device && session.queue ? "yes" : "no", session.maxLayers);
+    // The research scan: read only, its own thread; it waits while live.txt has sm1scan=0.
+    scan::Feed feed;
+    feed.enabled = [] { // live.txt is re-read by step() every 2 s; the scan only reads the shared value
+        AcquireSRWLockShared(&settings.lock);
+        const bool on = settings.live.scan;
+        ReleaseSRWLockShared(&settings.lock);
+        return on;
+    };
+    feed.log = [](const char* line) { logLine("%s", line); };
+    scan::start(feed);
     if (!motionThreadStarted.exchange(true)) {
         HANDLE h = CreateThread(nullptr, 0, installMotionHooks, nullptr, 0, nullptr);
         if (h)

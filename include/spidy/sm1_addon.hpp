@@ -14,7 +14,8 @@
 //  - it adds its own quad layers (the wrist menu, the holo card, a power's beam) on top of his finished frame. His
 //    eye images, resolution, anti-aliasing and frame pacing are passed through untouched;
 //  - a hero's power lands through his own exported test call SpidyPunchTest (spidy_ray_bridge.dll) on the enemy
-//    his combat has ringed (SpidyStrikeSample's cueTarget). No game address of our own is used;
+//    his combat has ringed (SpidyStrikeSample's cueTarget). No game address of our own is used by any feature (the
+//    read-only research scan, sm1_scan.hpp, only reads CANDIDATE addresses into its logs);
 //  - flight moves the player through his own export SpidyMotionSubmit (spidy_movement_bridge.dll). His movement
 //    module refuses any command whose serial is not above the last one, and his swing switches itself off on a
 //    refusal; so the layer puts a small hand-over on his two movement exports (SpidyMotionSubmit and
@@ -134,6 +135,7 @@ struct Live {
     bool beams = true;     // beams=1
     int damage = 100;      // power_damage=100 (25..200 %)
     int menuSize = 100;    // menu_size=100 (60..160 %)
+    bool scan = true;      // sm1scan=1 (the read-only research scan, sm1_scan.hpp)
 };
 Live parseLive(std::string_view text);
 // The file the add-on writes when there is none: every switch with its one-sentence subtext.
@@ -148,7 +150,11 @@ inline constexpr LiveSwitch liveSwitches[] = {
     {"beams", "Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart."},
     {"power_damage", "How hard the powers hit, 25 to 200 percent; applies live, no restart."},
     {"menu_size", "The wrist menu's size, 60 to 160 percent; applies live, no restart."},
+    {"sm1scan", "A read-only research scan that only reads game memory and writes logs to %APPDATA%\\HERO VR SM1\\scan for the Reports zip (it pauses at 0 and stops by itself after about 15 minutes); applies live, no restart."},
 };
+// The live.txt lines missing from an older file (a switch added in a later build), with their subtexts; empty when
+// none is missing. The layer appends them so every switch is in the file the player edits.
+std::string missingLive(std::string_view text);
 
 // --- Outfits (each hero's suits from HERO VR's roster, with their artists) --------------------------------------
 uint32_t outfitCount(uint32_t hero);

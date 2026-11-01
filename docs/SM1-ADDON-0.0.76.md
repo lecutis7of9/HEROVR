@@ -41,7 +41,7 @@ grips are hidden from his mod, so his webs never fire by mistake. Spider-Man (he
 
 ## His exports the layer uses
 
-No game address of our own is used. All are his exported functions, read by name in his 0.7.0 source:
+No game address of our own is used by any feature (the research scan below only reads them). All are his exported functions, read by name in his 0.7.0 source:
 
 | Export | Module | Use | Evidence |
 | --- | --- | --- | --- |
@@ -95,3 +95,32 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
 2. Open `%APPDATA%\HERO VR SM1\layer.log`: it says whether the layer started, which formats it chose and which
    features turned off and why. `addon.log` says whether `herovr_sm1_layer.dll` was loaded.
 3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, hold a grip: take off.
+
+## Research scan (live.txt `sm1scan`, on by default)
+
+A one-session research log for the next SM1 features: held props, enemies and damage, grapple anchors, vehicle /
+seat / spawn classes. It is **read only**: it copies memory (VirtualQuery-checked, each copy under SEH) and his
+exported *data* (SpidyXrData, SpidyStrikeData, SpidyMotionData, SpidyBodyPoses, SpidyRope/Swing/Grab/Throw...); it
+never writes game memory and never calls a game function or one of his functions. One lowest-priority thread, small
+chunks with 1 ms sleeps, a 48 MB cap, and it ends by itself 15 minutes after the player is found. `sm1scan=0` in
+live.txt pauses it at once. A fault ends the scan only.
+
+Output: `%APPDATA%\HERO VR SM1\scan\sm1scan-<date>-<time>.jsonl` (one JSON object per line), `.bin` (raw dumps,
+referenced as `[offset, length]`) and `.txt` (a summary); the newest 5 sessions are kept. The launcher's Reports
+zip (tools/collect-reports.ps1) adds the newest 2 sessions and layer.log, addon.log, live.txt, addon.ini.
+
+Every value it writes is **CANDIDATE**. The RVAs come from SpidyVR 0.7.0's sources (include/spidy/sm1_scan.hpp
+names the file for each) for 4.630.0.0; the scan records what is really there so each can be checked offline.
+
+| Line `kind` | What it records |
+| --- | --- |
+| `image` | exe base, SizeOfImage, timestamp, checksum, sections, file version; his modules and data exports (address, magic, version, size) |
+| `anchor` | each of his RVAs: 64 bytes, a match with his own entry-byte check, vtable RTTI names and first 16 functions, data globals' values and 256 bytes of what they point at |
+| `signature` | where his entry-byte patterns occur in the code (up to 8 hits each) |
+| `rttiClass` | MSVC RTTI classes whose names match the research areas (Vehicle, Seat, Driver, Spawn, Prop, Attach, Rope, Web, Anchor, Bot, Health, Damage, Hero, Mover, Physics...), with locator and vtable RVAs and first 12 functions |
+| `census` | the component registry (his game_player.cpp walk): count, class histogram with RTTI and base classes |
+| `playerComponents`, `botComponents`, `spawnComponents` | each followed actor's components (class, object, raw first bytes once) and position |
+| `snapshot` (every 2 s, more while webs change) | his head/hands and player record, his motion position/grounded, the player transform, HeroHealth +0x88, the nearest 48 bots (position, distance, health +0x88), spawn-class positions, the hand joints (his SpidyBodyPoses copy and the game's own pose buffer), the HeroRopeManager dump when his web data changes |
+| `rig` | the hero's joint table (hashes, parents) with the hand joints found by name hash |
+| `hit`, `hitTarget` | when his strike counters move: the strike record, the target's record and health/mover components at 0, 600 and 1500 ms |
+| `hisData` | raw copies of his other data exports when they change |

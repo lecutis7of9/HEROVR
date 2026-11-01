@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <vector>
 
 namespace spidy::sm1 {
 const char* evidenceText(Evidence e) {
@@ -159,6 +160,8 @@ Live parseLive(std::string_view text) {
             l.damage = std::clamp(static_cast<int>(n), 25, 200);
         else if (key == "menu_size" && parseSmall(value, n))
             l.menuSize = std::clamp(static_cast<int>(n), 60, 160);
+        else if (key == "sm1scan" && parseBool(value, b))
+            l.scan = b;
     });
     return l;
 }
@@ -166,13 +169,32 @@ std::string liveText(const Live& l) {
     std::string s = "# Mulder's Heroes add-on (HERO VR) for iilyn's Spider-Man VR mod: the add-on's live switches.\n"
                     "# Read again every 2 seconds while the game runs.\n";
     const std::string values[] = {l.powers ? "1" : "0", l.heroWebs ? "1" : "0", l.beams ? "1" : "0",
-                                  std::to_string(l.damage), std::to_string(l.menuSize)};
+                                  std::to_string(l.damage), std::to_string(l.menuSize), l.scan ? "1" : "0"};
+    static_assert(sizeof(values) / sizeof(values[0]) == sizeof(liveSwitches) / sizeof(liveSwitches[0]),
+                  "one value per live switch");
     int i = 0;
     for (const LiveSwitch& w : liveSwitches) {
         s += std::string("# ") + w.subtext + "\n";
         s += std::string(w.key) + "=" + values[i++] + "\n";
     }
     return s;
+}
+
+std::string missingLive(std::string_view text) {
+    std::vector<std::string> keys;
+    eachLine(text, [&](std::string_view key, std::string_view) { keys.emplace_back(key); });
+    const std::string defaults = liveText(Live{});
+    std::string add;
+    for (const LiveSwitch& w : liveSwitches) {
+        if (std::find(keys.begin(), keys.end(), w.key) != keys.end())
+            continue;
+        const std::string want = std::string(w.key) + "=";
+        const size_t at = defaults.find("\n" + want);
+        const size_t end = at == std::string::npos ? at : defaults.find('\n', at + 1);
+        add += std::string("# ") + w.subtext + "\n";
+        add += at == std::string::npos ? want + "1\n" : defaults.substr(at + 1, end - at);
+    }
+    return add;
 }
 
 // --- Hero suits ----------------------------------------------------------------------------------------------------

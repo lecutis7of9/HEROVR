@@ -1,6 +1,7 @@
 // HERO VR 0.0.76 SM1: tests for Mulder's Heroes add-on core (iilyn's Spider-Man VR mod is Spidy by Ilya
 // Mezerowsky, GPL-3.0, https://github.com/IlyaMez/SpidyVR). Made by Agent Mulder.
 #include "spidy/sm1_addon.hpp"
+#include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 using namespace spidy;
 using namespace spidy::sm1;
@@ -91,6 +93,70 @@ void configTests() {
         check(std::strstr(w.subtext, "no restart") != nullptr, "every live switch says it needs no restart");
         check(text.find(w.subtext) != std::string::npos, "live.txt carries each subtext");
     }
+    check(Live{}.scan && !parseLive("sm1scan=0\n").scan && parseLive("powers=1\n").scan, "sm1scan: on unless set to 0");
+    check(parseLive(liveText(Live{})).scan, "sm1scan round trip");
+    const std::string old = "powers=0\nhero_webs=1\nbeams=1\npower_damage=80\nmenu_size=100\n";
+    const std::string add = missingLive(old);
+    check(add.find("sm1scan=1") != std::string::npos && add.find(liveSwitches[5].subtext) != std::string::npos &&
+              add.find("powers") == std::string::npos,
+          "an older live.txt gets only the missing switch, with its subtext");
+    const Live merged = parseLive(old + add);
+    check(!merged.powers && merged.damage == 80 && merged.scan, "the player's values stay");
+    check(missingLive(liveText(Live{})).empty(), "nothing missing from a current live.txt");
+}
+
+void scanTests() {
+    using namespace spidy::sm1::scan;
+    // His nameHash (native_body.cpp) and the values it gives.
+    check(jointHash("") == 0xedb88320u, "joint hash: the seed, no final inversion");
+    check(jointHash("LF_wrist") == 0x5cdc16fbu && jointHash("RT_wrist") == 0xc5acb805u, "joint hash: the wrists");
+    bool wrists = false;
+    for (const auto& n : jointNames())
+        wrists |= n == "RT_wrist";
+    check(wrists && jointNames().size() >= 20, "the hand joints are listed");
+    check(className(".?AVHeroHealth@@") == "HeroHealth", "rtti: a plain class");
+    check(className(".?AVBar@Foo@@") == "Foo::Bar", "rtti: a namespace");
+    check(className(".?AUThing@@") == "Thing" && className("HeroHealth").empty(), "rtti: a struct; not a name");
+    Area a{};
+    check(interesting("VehicleSeatComponent", a) && a == Area::spawning, "a seat class is a spawning lead");
+    check(interesting("HeroRopeManager", a) && a == Area::grapple, "the rope manager is a grapple lead");
+    check(!interesting("TextureStreamer", a), "unrelated classes are left out");
+    check(botClass("ThugBot") && botClass("BotMoverManagerGame") && !botClass("HeroHealth"), "bot classes");
+    const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 6, 7, 1};
+    float bad[16];
+    std::memcpy(bad, id, sizeof(bad));
+    bad[0] = 3;
+    check(actorTransform(id) && !actorTransform(bad), "his transform check");
+    const uint8_t buf[] = {1, 2, 0x48, 0x8b, 0xc4, 9, 0x48, 0x8b, 0xc4};
+    const uint8_t pat[] = {0x48, 0x8b, 0xc4};
+    std::vector<uint64_t> hits;
+    findAll(buf, sizeof(buf), 0x1000, pat, sizeof(pat), hits, 8);
+    check(hits.size() == 2 && hits[0] == 0x1002 && hits[1] == 0x1006, "signature hits");
+    hits.clear();
+    findAll(buf, sizeof(buf), 0, pat, sizeof(pat), hits, 1);
+    check(hits.size() == 1, "signature hits are capped");
+    check(hex(pat, 3) == "488bc4" && quoted("a\"b\n") == "\"a\\\"b\\u000a\"", "hex and json text");
+    check(number(std::numeric_limits<double>::infinity()) == "null", "a json number");
+    check(handleOf(3, 5) == (3u << 20 | 5u), "his handle layout");
+    check(sessionName(2026, 11, 1, 1, 2, 3) == "sm1scan-20261101-010203", "session name");
+    const auto drop = oldSessions({"sm1scan-20260101-000000.jsonl", "sm1scan-20260101-000000.bin",
+                                   "sm1scan-20260102-000000.jsonl", "sm1scan-20260103-000000.jsonl", "other.txt"},
+                                  2);
+    check(drop.size() == 2 && drop[0] == "sm1scan-20260101-000000.bin", "the oldest session goes");
+    // Every anchor: a name, a source in his sources, an RVA inside a 4.630 image, and the area it serves.
+    bool areas[static_cast<int>(Area::count)] = {};
+    bool sane = true;
+    for (const auto& an : anchors()) {
+        sane &= an.name && *an.name && an.source && *an.source && an.rva > 0x1000 && an.rva < 0x10000000;
+        sane &= !an.expect || (an.expectBytes >= 8 && an.kind == Kind::code);
+        areas[static_cast<int>(an.area)] = true;
+    }
+    bool every = true;
+    for (const bool b : areas)
+        every &= b;
+    check(sane && every, "anchors: named, sourced, every area covered");
+    const Limits lim;
+    check(lim.runMs <= 20 * 60 * 1000 && lim.maxFileBytes <= (64ull << 20) && lim.keepSessions >= 2, "the scan's caps");
 }
 
 void outfitTests() {
@@ -429,6 +495,7 @@ int main() {
     flightTests();
     handoverTests();
     suitTests();
+    scanTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

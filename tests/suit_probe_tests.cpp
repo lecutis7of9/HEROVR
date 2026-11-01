@@ -1,7 +1,8 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
 // 0.0.76 SUIT PROBE's logic (include/spidy/suit_probe.hpp) on a fake address space: the game's asset ids,
 // the path rule, the walk (direct and one object deep), a fault anywhere is skipped, and the console lines;
-// PROBE 2: the suits of an sm2scan.json, the deep walk (ids, paths, chains, caps, faults) and its lines. Given a
+// PROBE 2/3: the suits of an sm2scan.json, the deep walk (ids, paths, chains, lists, loaded models, caps, the
+// complete depths, faults), two passes agreeing, the changes only, the watched suits' every place. Given a
 // path (a real sm2scan.json) it also reads that and says how many suits and ids it holds.
 #include "spidy/suit_probe.hpp"
 
@@ -43,6 +44,7 @@ struct Memory {
 } // namespace
 
 int main(int argc, char** argv) {
+    std::setvbuf(stdout, nullptr, _IONBF, 0); // every line out, even if a check aborts
     check(assetId("configs/system/system_progression.config") == 0x9C9C72A303FCFA30ull, "the suit list's asset id");
     check(assetId("CONFIGS\\System//system_progression.config") == 0x9C9C72A303FCFA30ull, "normalized first");
     check(assetId("characters/hero/hero_spiderman_advanced/hero_spiderman_advanced_removesymbiote.model") ==
@@ -120,9 +122,12 @@ int main(int argc, char** argv) {
                   {"id": "A000000000000099", "path": "characters/hero/shared/shared_body.model"}],
        "mask": null},
       {"name": "SUIT_MOD", "id": "", "item": "configs/inventory/mod.config",
-       "models": [{"path": "mods/hero/fortnite daredevil billy clubs.model"}]}]})";
+       "models": [{"path": "mods/hero/fortnite daredevil billy clubs.model"}]},
+      {"name": "SUIT_CLASSIC", "id": "BC46538AB3E8C1A5", "item": "configs/inventory/inv_c.config",
+       "models": [{"id": "A000000000000005", "path": "characters/hero/hero_c/hero_c.model"}],
+       "mask": {"id": "A000000000000006", "path": "characters/prop/mask_c.model"}}]})";
     const Table table = Table::fromScan(scanText);
-    check(table.names.size() == 3 && table.ids.size() == 14, "3 suits, 14 ids (each path's own id too, the shared model once)");
+    check(table.names.size() == 4 && table.ids.size() == 20, "4 suits, 20 ids (each path's own id too, the shared model once)");
     const Target* shared = table.find(0xA000000000000099ull);
     check(shared && shared->suits.size() == 2 && shared->kind == kindModel, "a shared model names both suits");
     check(table.find(0xA000000000000002ull) && table.find(0xA000000000000002ull)->kind == kindMask, "the mask");
@@ -149,70 +154,213 @@ int main(int argc, char** argv) {
     d.put64(0x19000000, 0xA000000000000003ull);
     d.put64(0x16000000 + 0x40, rec);           // a loop back to the record: visited once
     d.put64(0x16000000 + 0x48, 0xA000000000000099ull); // the shared body
+    // the unlocked suits: a list of loadout ids (hidden), and what hangs under it is not walked
+    d.put64(hero + 0x108, 0x1a100000);
+    d.put64(0x1a100000 + 0x00, 0xBC46538AB3E876D2ull);
+    d.put64(0x1a100000 + 0x08, 0xBC46538AB3E87600ull);
+    d.put64(0x1a100000 + 0x10, 0xBC46538AB3E8C1A5ull);
+    d.put64(0x1a100000 + 0x18, assetId("configs/inventory/mod.config"));
+    d.put64(0x1a100000 + 0x20, 0x1a200000);    // under the list
+    d.put64(0x1a200000 + 0x08, 0xA000000000000006ull); // SUIT_CLASSIC's mask: never reached
     DeepLimits lim;
     lim.skipLo = 0x19000000;
     lim.skipHi = 0x1a000000;
     Deep deep;
     const uint64_t droots[3] = {rec, inst, hero};
-    deep.start(droots);
-    int steps = 0;
-    while (!deep.step(d, table, lim) && ++steps < 1000) {
-    }
-    const auto& got = deep.results();
-    auto chainOf = [&](uint64_t id) {
-        for (const auto& f : got)
-            if (f.id == id)
-                return f.chain;
-        return std::string("-");
+    auto run = [&](Deep& dp, Memory& mem, const uint64_t* r, const DeepLimits& l) {
+        dp.start(r);
+        int guard = 0;
+        while (!dp.step(mem, table, l) && ++guard < 100000) {
+        }
     };
-    check(got.size() == 3, "three ids found (the exe-range one never walked into)");
+    run(deep, d, droots, lim);
+    auto got = deep.settled();
+    auto findOf = [](const std::vector<Deep::Found>& v, uint64_t id) -> const Deep::Found* {
+        for (const auto& f : v)
+            if (f.id == id)
+                return &f;
+        return nullptr;
+    };
+    auto chainOf = [&](uint64_t id) {
+        const Deep::Found* f = findOf(got, id);
+        return f ? f->chain : std::string("-");
+    };
+    check(got.size() == 7, "seven ids found (the exe-range one never walked into, nothing under the list)");
     check(chainOf(0xA000000000000001ull) == "record+0x030 -> +0x038 -> +0x010 +0x008", "the deep chain of a model id");
     check(chainOf(assetId("configs/inventory/inv_reward_loadout_a.config")).find("hero +0x100 -> \"configs/") == 0,
           "a loadout path's chain");
     check(chainOf(0xA000000000000003ull) == "-", "the exe range is not walked");
-    check(deep.objects() < 20, "each object once");
+    check(findOf(got, 0xBC46538AB3E876D2ull) && findOf(got, 0xBC46538AB3E876D2ull)->inList &&
+              findOf(got, 0xBC46538AB3E87600ull)->inList,
+          "loadout ids in a list are marked as the list");
+    check(chainOf(0xA000000000000006ull) == "-", "a list is not walked into");
+    check(!findOf(got, assetId("configs/inventory/inv_reward_loadout_a.config"))->inList, "a lone loadout path is not a list");
+    check(deep.objects() < 20 && deep.complete() == Deep::whole, "each object once, all of it read");
+    bool sorted = true;
+    for (size_t i = 1; i < got.size(); ++i)
+        sorted = sorted && got[i - 1].id < got[i].id;
+    check(sorted, "the found set in a fixed order (by id)");
 
+    // A loaded model (an object with a .model path): read wider and walked modelExtra steps past depth.
+    Memory lm;
+    uint64_t at = 0x41000000;
+    const uint64_t lroots[3] = {at, 0, 0};
+    for (int i = 0; i < 6; ++i, at += 0x100000) // depth 0..6: a plain chain at +0x018
+        lm.put64(at + 0x18, at + 0x100000);
+    const uint64_t loaded = at;               // depth 6 (the last plain step): a loaded model
+    lm.put64(loaded + 0x00, 0x4f000000);
+    lm.putText(0x4f000000, "characters/hero/hero_x/hero_x.model");
+    lm.put64(loaded + 0x300, 0xA000000000000005ull);     // SUIT_CLASSIC's model, past the first 0x40 words
+    lm.put64(loaded + 0x08, 0x48000000);                  // depth 7
+    lm.put64(0x48000000 + 0x10, 0x49000000);              // depth 8
+    lm.put64(0x49000000 + 0x2f0, 0xA000000000000006ull); // its mask, deep and wide
+    lm.put64(0x48000000 + 0x20, 0x4b000000);              // depth 8, plain (no id of its own)
+    lm.put64(0x4b000000 + 0x18, 0x4a000000);              // depth 9: past modelExtra
+    lm.put64(0x4a000000, 0xA000000000000001ull);
+    Deep ld;
+    run(ld, lm, lroots, lim);
+    const auto lgot = ld.settled();
+    check(findOf(lgot, 0xA000000000000005ull) &&
+              findOf(lgot, 0xA000000000000005ull)->chain.find("+0x018 -> +0x018 -> +0x018 -> +0x018 -> +0x018 -> +0x018 +0x300") != std::string::npos,
+          "a loaded model is read wider (a model id at +0x300)");
+    check(findOf(lgot, 0xA000000000000006ull) != nullptr, "and walked past depth (two steps below it, read wide)");
+    check(!findOf(lgot, 0xA000000000000001ull), "but no further than modelExtra");
+    Memory plain = lm;
+    plain.putText(0x4f000000, "not a path at all");
+    plain.put64(loaded + 0x300, 0);
+    Deep pd;
+    run(pd, plain, lroots, lim);
+    check(!findOf(pd.settled(), 0xA000000000000006ull), "a plain object at depth 6 is not walked into");
+
+    // The watched suits: every place their model and mask ids are seen (not just the nearest).
+    check(table.watchSuits.size() == 1 && table.names[table.watchSuits[0]] == "SUIT_CLASSIC" && table.watchIds.size() == 4,
+          "the watched suit of the scan, its model and mask ids (and their paths' own)");
+    check(!table.watched(0xA000000000000001ull) && table.watched(0xA000000000000005ull) &&
+              !table.watched(0xBC46538AB3E8C1A5ull),
+          "only the watched suits' models and masks (not their loadout)");
+    Memory wm;
+    const uint64_t wroot = 0x51000000;
+    wm.put64(wroot + 0x08, 0x52000000);
+    wm.put64(wroot + 0x10, 0x53000000);
+    wm.put64(0x52000000 + 0x20, 0xA000000000000005ull);
+    wm.put64(0x53000000 + 0x28, 0xA000000000000005ull);
+    wm.put64(0x53000000 + 0x30, 0xA000000000000006ull);
+    const uint64_t wr3[3] = {wroot, 0, 0};
+    Deep wd;
+    run(wd, wm, wr3, lim);
+    const auto wplaces = wd.watchedPlaces();
+    check(wplaces.size() == 3 && wplaces[0].chain == "record+0x008 +0x020" && wplaces[1].chain == "record+0x010 +0x028",
+          "every place of a watched id, in read order");
+    Watch2 ww;
+    check(ww.watch(table, wd).empty(), "one pass: no WATCH line yet");
+    auto wl = ww.watch(table, wd);
+    check(wl.size() == 4 && wl[0].find("SUIT PROBE 3: WATCH 1 (passes") == 0 &&
+              wl[1].find("SUIT_CLASSIC model characters/hero/hero_c/hero_c.model id 0xa000000000000005 at record+0x008 +0x020") !=
+                  std::string::npos &&
+              wl[3].find("mask") != std::string::npos,
+          "two passes agree: every place told");
+    check(ww.watch(table, wd).empty(), "the same places: quiet");
+    wm.put64(0x52000000 + 0x20, 0);
+    wm.put64(0x53000000 + 0x28, 0);
+    wm.put64(0x53000000 + 0x30, 0);
+    run(wd, wm, wr3, lim);
+    check(ww.watch(table, wd).empty(), "a change: quiet until the next pass agrees");
+    wl = ww.watch(table, wd);
+    check(wl.size() == 2 && wl[1] == "SUIT PROBE 3: WATCH SUIT_CLASSIC: none of its model or mask ids in the memory read",
+          "gone: said");
+    DeepLimits few = lim;
+    few.placesPerId = 1;
+    wm.put64(0x52000000 + 0x20, 0xA000000000000005ull);
+    wm.put64(0x53000000 + 0x28, 0xA000000000000005ull);
+    run(wd, wm, wr3, few);
+    check(wd.watchedPlaces().size() == 1, "places a watched id are capped");
+
+    // The lines: two passes agree first, then only the changes; the list's ids counted, never shown.
     Watch2 w2;
-    auto l2 = w2.pass(table, got, deep.objects());
-    check(l2.size() == 5 && l2[0].find("SUIT PROBE 2: change 1") == 0 && l2[0].find("3 suit id(s)") != std::string::npos,
-          "the first pass is logged");
-    check(l2.back() == "SUIT PROBE 2: worn suit (CANDIDATE until it follows the swaps): SUIT_A", "the worn suit");
+    run(deep, d, droots, lim);
+    check(w2.pass(table, deep).empty(), "one pass: nothing told yet");
+    auto l2 = w2.pass(table, deep);
+    check(!l2.empty() && l2[0].find("SUIT PROBE 3: baseline (passes 1 and 2 agree,") == 0 &&
+              l2[0].find("7 suit id(s); 4 loadout id(s) in lists") != std::string::npos,
+          "two passes agree: the baseline");
+    check(l2.size() == 5, "the baseline shows the ids outside lists only");
+    for (const auto& line : l2)
+        if (line.find("inv_reward_loadout_b") != std::string::npos || line.find("0xbc46538ab3e87600") != std::string::npos)
+            check(false, "a list id is never shown");
+    check(l2.back() == "SUIT PROBE 3: worn suit (CANDIDATE until it follows the swaps): SUIT_A", "the worn suit");
     bool sharedLine = false;
     for (const auto& line : l2)
         sharedLine = sharedLine || line.find("shared by 2 suits model characters/hero/shared/shared_body.model") != std::string::npos;
     check(sharedLine, "a shared model says so");
-    check(w2.pass(table, got, deep.objects()).empty(), "the same ids: quiet");
-    d.put64(0x16000000 + 0x08, 0xA000000000000003ull); // a swap to SUIT_B's model
+    check(w2.pass(table, deep).empty(), "the same ids: quiet");
+    d.put64(0x16000000 + 0x08, 0xA000000000000005ull); // a swap to SUIT_CLASSIC's model
     d.put64(hero + 0x100, 0);
-    deep.start(droots);
-    while (!deep.step(d, table, lim)) {
-    }
-    l2 = w2.pass(table, deep.results(), deep.objects());
-    check(!l2.empty() && l2[0].find("change 2") != std::string::npos && l2.back().find("SUIT_B") != std::string::npos,
-          "a swap is logged with the new suit");
-    l2 = w2.pass(table, {}, 5);
+    d.put64(0x1a100000 + 0x10, 0);                      // and the list loses one (not shown)
+    run(deep, d, droots, lim);
+    check(w2.pass(table, deep).empty(), "a change: quiet until the next pass agrees");
+    run(deep, d, droots, lim);
+    l2 = w2.pass(table, deep);
+    check(l2.size() == 5 && l2[0].find("SUIT PROBE 3: change 1 (passes 4 and 5 agree,") == 0 &&
+              l2[0].find("+1 -2 (lists: +0 -1, not shown)") != std::string::npos,
+          "the change: only what was added or removed");
+    check(l2[1].find("SUIT PROBE 3: + SUIT_CLASSIC model") == 0 && l2[2].find("SUIT PROBE 3: - SUIT_A") == 0 &&
+              l2[2].find(" was at ") != std::string::npos,
+          "added and removed lines");
+    check(l2[4] == "SUIT PROBE 3: swap (CANDIDATE until it follows the swaps): SUIT_A -> SUIT_CLASSIC", "the swap");
+    w2.newPlayer(); // a load: two new passes, still told against the last set
+    run(deep, d, droots, lim);
+    check(w2.pass(table, deep).empty() && w2.pass(table, deep).empty(), "the same set after a load: quiet");
+    // A flicker (one pass different) is never told.
+    d.put64(0x16000000 + 0x08, 0xA000000000000001ull);
+    run(deep, d, droots, lim);
+    check(w2.pass(table, deep).empty(), "one pass different");
+    d.put64(0x16000000 + 0x08, 0xA000000000000005ull);
+    run(deep, d, droots, lim);
+    check(w2.pass(table, deep).empty(), "back again: nothing told");
+    Watch2 w3;
+    Deep none3;
+    w3.pass(table, none3);
+    l2 = w3.pass(table, none3);
     check(l2.size() == 1 && l2[0].find("CANDIDATE layout missed") != std::string::npos, "nothing found: said once");
+    check(w3.pass(table, none3).empty(), "and once only");
 
-    // Caps: a wide tree stops at `objects`, a step reads at most perStep objects.
+    // Caps: a wide tree stops at `objects`, a step reads at most perStep objects; the depth the cap cut is not
+    // told, so every pass tells the same memory.
     Memory wide;
     for (uint64_t i = 0; i < 0x40; ++i) {
         wide.put64(0x21000000 + i * 8, 0x22000000 + i * 0x1000);
         for (uint64_t j = 0; j < 0x40; ++j)
             wide.put64(0x22000000 + i * 0x1000 + j * 8, 0x30000000 + (i * 0x40 + j) * 0x1000);
     }
+    wide.put64(0x22000000 + 0x3f * 8, 0xBC46538AB3E876D2ull);   // an id at depth 1: told
+    wide.put64(0x30000000, 0xA000000000000003ull);               // an id at depth 2 under the cut: not told
+    Memory full = wide; // the grandchildren mapped (readable, so walked) for the caps
+    for (uint64_t g = 0; g < 0x40 * 0x40; ++g)
+        full.put64(0x30000000 + g * 0x1000 + 0x100, 1);
     DeepLimits small;
-    small.objects = 50;
+    small.objects = 100;
     small.faultsPerObject = small.faultsPerStep = 1u << 30; // the caps of objects alone first
     Deep capped;
     const uint64_t wroots[3] = {0x21000000, 0, 0};
     capped.start(wroots);
-    wide.reads = 0;
-    capped.step(wide, table, small);
-    check(capped.objects() == small.perStep && wide.reads <= small.perStep * (small.words + 1) * 2 + small.perStep,
+    full.reads = 0;
+    capped.step(full, table, small);
+    check(capped.objects() == small.perStep &&
+              full.reads <= small.perStep * (small.modelWords * 2 + 2) + small.perStep,
           "one step: perStep objects, bounded reads");
-    while (!capped.step(wide, table, small)) {
+    while (!capped.step(full, table, small)) {
     }
-    check(capped.objects() == 50, "a pass stops at its cap");
+    check(capped.objects() == 100, "a pass stops at its cap");
+    check(capped.complete() == 2, "the cap cut depth 2: depths 0 and 1 complete");
+    const auto c1 = capped.settled();
+    check(findOf(c1, 0xBC46538AB3E876D2ull) && !findOf(c1, 0xA000000000000003ull), "only the complete depths are told");
+    Deep again;
+    run(again, full, wroots, small);
+    const auto c2 = again.settled();
+    bool same = c1.size() == c2.size();
+    for (size_t i = 0; same && i < c1.size(); ++i)
+        same = c1[i].id == c2[i].id && c1[i].chain == c2[i].chain;
+    check(same && again.objects() == capped.objects(), "the same memory, the same order, every pass");
     // Faults: the grandchildren are unmapped, so each object stops after faultsPerObject, a step after faultsPerStep.
     DeepLimits careful;
     Deep faulty;
@@ -233,6 +381,11 @@ int main(int argc, char** argv) {
         const Table real = Table::fromScan(text);
         std::printf("  %s: %zu suits, %zu ids\n", argv[1], real.names.size(), real.ids.size());
         check(!real.empty(), "the real scan reads");
+        std::printf("  watched:");
+        for (uint16_t s : real.watchSuits)
+            std::printf(" %s", real.names[s].c_str());
+        std::printf(" (%zu model/mask ids)\n", real.watchIds.size());
+        check(real.watchSuits.size() == 3 && real.watchIds.size() >= 6, "the three watched suits are in it");
     }
     std::printf("%s\n", failures ? "FAILED" : "ALL PASSED");
     return failures ? 1 : 0;

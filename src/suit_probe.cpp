@@ -1,5 +1,5 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-// 0.0.76 SUIT PROBE 1 + 2 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
+// 0.0.76 SUIT PROBE 1 + 2/3 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
 // (SEH); nothing here writes game memory, calls a game function, changes page protection or makes a hook.
 // The only file read is the user's own sm2scan.json (tools/sm2_suits/sm2scan.py), never written.
 #include <windows.h>
@@ -126,6 +126,13 @@ void lookForScan(void (*log)(const char*)) {
         const std::string line = "SUIT PROBE 2: " + std::to_string(scanTable.names.size()) + " suits, " +
                                  std::to_string(scanTable.ids.size()) + " ids from " + tableFrom;
         log(line.c_str());
+        std::string watching = "SUIT PROBE 3: watching every place of " + std::to_string(scanTable.watchIds.size()) +
+                               " model/mask ids of";
+        for (uint16_t s : scanTable.watchSuits)
+            watching += " " + scanTable.names[s];
+        if (scanTable.watchSuits.empty())
+            watching += " none (none of the watched suits is in this sm2scan.json)";
+        log(watching.c_str());
         return;
     }
     if (!toldMissing) {
@@ -160,10 +167,10 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
         deepRecord = 0;
         return;
     }
-    if (record != deepRecord) { // a new player (a load): start again, and say the first pass whatever it finds
+    if (record != deepRecord) { // a new player (a load): start again; changes are still told against the last set
         deepRecord = record;
         deep = Deep{};
-        watch2.reset();
+        watch2.newPlayer();
         passEnded = 0;
     }
     if (!deep.busy()) {
@@ -177,7 +184,9 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
     auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
     if (deep.step(reader, scanTable, limits)) {
         passEnded = now ? now : 1;
-        for (const auto& line : watch2.pass(scanTable, deep.results(), deep.objects()))
+        for (const auto& line : watch2.pass(scanTable, deep))
+            log(line.c_str());
+        for (const auto& line : watch2.watch(scanTable, deep))
             log(line.c_str());
     }
 }

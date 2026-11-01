@@ -234,7 +234,7 @@ SETTINGS = {
     'npc_fade': ((0, 2), 'SpidyNpcFade', "NPC NEAR FADE {} (0 game: people near you fade as on the flat screen, 1 off: they stay, 2 switch only; candidate)"),
     # COLOR / ATMOSPHERE (eye_color.hpp; the hologram's COLOR page), both eyes alike, default OFF.
     'color_fx': ((0, 1), 'SpidyColorFx', 'COLOR FX {} (1 the colour grade below is drawn on both eyes; 0 the game\'s own colours)'),
-    'color_filter': ((0, 6), 'SpidyColorFilter', 'FILTER {} (a look: none, vivid, golden, neon, raimi, noir or animated, the 90s cartoon)'),
+    'color_filter': ((0, 11), 'SpidyColorFilter', 'FILTER {} (a look: none, vivid, golden, neon, raimi, noir, animated (the 90s cartoon), metropolis, smallville, gotham, cyberpunk or synthwave)'),
     # Update 38.5: 90s ANIMATED's own (eye_color.hpp toon), live; nothing under another filter.
     'color_cartoon': ((0, 100), 'SpidyColorCartoon', 'CARTOON STRENGTH {}% (90s ANIMATED: how flat and painted it looks, and how bold the ink lines are)'),
     'color_outlines': ((0, 1), 'SpidyColorOutlines', 'OUTLINES {} (90s ANIMATED: 1 dark ink lines around shapes, the same in both eyes; 0 none)'),
@@ -572,7 +572,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'address_finder': ('off', 'on'),
                 'eye_lod': ('off', 'on'),
                 'music_visualizer': VISUALIZERS,
-                'color_filter': ('none', 'vivid', 'golden', 'neon', 'raimi', 'noir', 'animated'),
+                'color_filter': ('none', 'vivid', 'golden', 'neon', 'raimi', 'noir', 'animated', 'metropolis', 'smallville',
+                                 'gotham', 'cyberpunk', 'synthwave'),
                 'foveated': ('off', 'light', 'balanced', 'aggressive'),
                 'npc_fade': ('game', 'off', 'switch'),
                 # Update 38 (combat38::optionInfo's values, in order)
@@ -650,7 +651,8 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'eye_lod': {'off': 0, 'on': 1, '0': 0, '1': 1},
            'color_filter': {'none': 0, 'vivid': 1, 'golden': 2, 'golden_hour': 2, 'neon': 3, 'night_neon': 3,
                             'raimi': 4, '2000s_raimi': 4, '2000s': 4, 'noir': 5, 'animated': 6, '90s_animated': 6,
-                            '90s': 6, 'cartoon': 6, **{str(i): i for i in range(7)}},
+                            '90s': 6, 'cartoon': 6, 'metropolis': 7, 'smallville': 8, 'gotham': 9, 'cyberpunk': 10,
+                            'synthwave': 11, **{str(i): i for i in range(12)}},
            'foveated': {'off': 0, 'light': 1, 'balanced': 2, 'aggressive': 3, **{str(i): i for i in range(4)}},
            'npc_fade': {'game': 0, 'off': 1, 'switch': 2, 'switch_only': 2, **{str(i): i for i in range(3)}},
            # Update 38: each COMBAT setting's words (and its numbers, and a few spellings)

@@ -319,7 +319,8 @@ def parse_perf(raw):
                 blood_ms=r(blood), mirror_ms=r(mirror), world_scan_ms=r(scan))
 
 
-COLOR_FILTERS = ('NONE', 'VIVID', 'GOLDEN HOUR', 'NIGHT NEON', '2000s RAIMI', 'NOIR', '90s ANIMATED')
+COLOR_FILTERS = ('NONE', 'VIVID', 'GOLDEN HOUR', 'NIGHT NEON', '2000s RAIMI', 'NOIR', '90s ANIMATED', 'METROPOLIS',
+                 'SMALLVILLE', 'GOTHAM', 'CYBERPUNK', 'SYNTHWAVE')
 TOON_FAULTS = ('NONE', 'SHADER FAILED', 'PIPELINE FAILED')
 FOVEA_LEVELS = ('OFF', 'LIGHT', 'BALANCED', 'AGGRESSIVE')
 FOVEA_FAULTS = ('none', 'NO VRS TIER 2', 'LIST REFUSED', 'IMAGE FAILED', 'OTHER SIZE', 'HOOK FAILED')

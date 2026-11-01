@@ -27,11 +27,18 @@
 
 namespace spidy::eye_color {
 // Update 38.5: ANIMATED90S, the 1994 animated series' look (cel bands, ink lines, painted flats).
-enum Filter : uint32_t { none = 0, vivid, goldenHour, nightNeon, raimi2000s, noir, animated90s, filters };
+// 0.0.76: the five city profiles after it (METROPOLIS, SMALLVILLE, GOTHAM, CYBERPUNK, SYNTHWAVE); appended,
+// so every saved number (0-6) keeps its look. The SM1 add-on's colour pass uses these same looks.
+enum Filter : uint32_t {
+    none = 0, vivid, goldenHour, nightNeon, raimi2000s, noir, animated90s,
+    metropolis, smallville, gotham, cyberpunk, synthwave, filters
+};
 inline constexpr const char* filterNames[filters] = {"NONE", "VIVID", "GOLDEN HOUR", "NIGHT NEON", "2000s RAIMI",
-                                                     "NOIR", "90s ANIMATED"};
+                                                     "NOIR", "90s ANIMATED", "METROPOLIS", "SMALLVILLE", "GOTHAM",
+                                                     "CYBERPUNK", "SYNTHWAVE"};
 inline const char* filterName(uint32_t f) { return f < filters ? filterNames[f] : "NONE"; }
-inline constexpr const char* filterKeys[filters] = {"none", "vivid", "golden", "neon", "raimi", "noir", "animated"};
+inline constexpr const char* filterKeys[filters] = {"none", "vivid", "golden", "neon", "raimi", "noir", "animated",
+                                                    "metropolis", "smallville", "gotham", "cyberpunk", "synthwave"};
 
 // The player's settings (whole numbers, as the sliders and live.txt hold them).
 struct Config {
@@ -99,6 +106,33 @@ inline Look look(uint32_t f) {
         l.ev = .06f; l.contrast = 1.10f; l.saturation = 1.30f; l.vibrance = .30f;
         l.shadow = {-.04f, 0, .08f};
         l.high = {.05f, .025f, -.03f};
+        break;
+    case metropolis: // clean bright daylight: crisp, clear blue sky, a little gold on the steel
+        l.ev = .1f; l.contrast = 1.08f; l.saturation = 1.15f; l.vibrance = .25f; l.warmth = .08f;
+        l.shadow = {-.01f, 0, .03f};
+        l.high = {.03f, .025f, 0};
+        break;
+    case smallville: // farm-town afternoon: soft, warm, green-gold, gentle contrast
+        l.ev = .12f; l.contrast = .95f; l.saturation = 1.05f; l.vibrance = .15f; l.warmth = .45f; l.tint = -.08f;
+        l.vignette = .2f;
+        l.shadow = {.02f, .015f, -.02f};
+        l.high = {.05f, .05f, -.02f};
+        break;
+    case gotham: // dark, cold and grim: low colour, crushed blacks, teal shadows, sodium-lamp highlights
+        l.ev = -.3f; l.contrast = 1.25f; l.saturation = .7f; l.warmth = -.2f; l.crush = .05f; l.vignette = .45f;
+        l.shadow = {-.02f, .02f, .04f};
+        l.high = {.05f, .02f, -.02f};
+        break;
+    case cyberpunk: // neon city: hot magenta highlights over cyan shadows, punchy colour
+        l.ev = -.05f; l.contrast = 1.2f; l.saturation = 1.35f; l.vibrance = .45f; l.warmth = -.15f; l.tint = .4f;
+        l.vignette = .25f;
+        l.shadow = {0, .03f, .06f};
+        l.high = {.07f, -.01f, .05f};
+        break;
+    case synthwave: // 80s sunset: purple shadows, pink and orange highlights
+        l.contrast = 1.12f; l.saturation = 1.25f; l.vibrance = .35f; l.warmth = .1f; l.tint = .45f; l.vignette = .3f;
+        l.shadow = {.04f, -.01f, .08f};
+        l.high = {.08f, .02f, -.02f};
         break;
     default:
         break;
@@ -200,7 +234,7 @@ inline std::array<float, 3> apply(const Params& p, std::array<float, 3> c, float
 
 // The subtexts: one sentence each.
 inline constexpr const char* help = "Live colour grading for both eyes in one cheap pass; OFF is the game's look.";
-inline constexpr const char* filterHelp = "A look: VIVID, GOLDEN HOUR, NIGHT NEON, 2000s RAIMI, NOIR or 90s ANIMATED.";
+inline constexpr const char* filterHelp = "A look: VIVID, NOIR, 90s ANIMATED, METROPOLIS, GOTHAM, SYNTHWAVE and more.";
 inline constexpr const char* strengthHelp = "How much of the FILTER is used: 0 none, 100 all of it.";
 inline constexpr const char* exposureHelp = "Brightens or darkens the picture in EV steps: 0 is the game's.";
 inline constexpr const char* contrastHelp = "Darker darks and brighter brights above 100, flatter below.";

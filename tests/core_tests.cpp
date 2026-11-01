@@ -18721,6 +18721,34 @@ int main() {
                 for (float x : apply(params(k), {v, v * .5f, 1 - v}, 0, 1))
                     check(std::isfinite(x) && x >= 0 && x <= 1, "a filter left the 0-1 range");
             }
+        // 0.0.76: the five city profiles, appended (0-6 keep their looks), each its own look on a grey-blue pixel.
+        check(filters == 12 && std::string(filterName(metropolis)) == "METROPOLIS" &&
+                  std::string(filterName(synthwave)) == "SYNTHWAVE" && std::string(filterKeys[gotham]) == "gotham" &&
+                  std::string(filterName(animated90s)) == "90s ANIMATED",
+              "the city profiles' names");
+        {
+            std::vector<std::array<float, 3>> seen;
+            for (uint32_t f : {uint32_t(none), uint32_t(metropolis), uint32_t(smallville), uint32_t(gotham),
+                               uint32_t(cyberpunk), uint32_t(synthwave)}) {
+                Config k;
+                k.on = true;
+                k.filter = f;
+                const auto o = apply(params(k), {.45f, .5f, .6f}, .3f, .3f);
+                for (const auto& s : seen)
+                    check(std::abs(s[0] - o[0]) + std::abs(s[1] - o[1]) + std::abs(s[2] - o[2]) > .03f,
+                          "two city profiles look the same");
+                seen.push_back(o);
+                k.strength = 0;
+                const auto z = apply(params(k), {.45f, .5f, .6f}, .3f, .3f);
+                check(std::abs(z[0] - .45f) + std::abs(z[1] - .5f) + std::abs(z[2] - .6f) < 1e-3f,
+                      "a city profile at STRENGTH 0 still changed the picture");
+            }
+            Config g;
+            g.on = true;
+            g.filter = gotham;
+            const auto dark = apply(params(g), {.45f, .5f, .6f}, .5f, .5f);
+            check(dark[0] + dark[1] + dark[2] < 1.5f, "GOTHAM is not darker");
+        }
         for (const char* h : {help, filterHelp, strengthHelp, exposureHelp, contrastHelp, saturationHelp, vibranceHelp,
                               warmthHelp, tintHelp, vignetteHelp})
             check(std::string(h).size() > 10 && std::string(h).back() == '.', "a COLOR subtext is not one sentence");

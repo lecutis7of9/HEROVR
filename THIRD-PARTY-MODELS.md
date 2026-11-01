@@ -155,23 +155,6 @@ Credit line: This work is based on "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme
 by Mert Tetik (https://sketchfab.com/merttetik) licensed under CC-BY-4.0
 (http://creativecommons.org/licenses/by/4.0/), converted for VR. The bike's dash shows it on its HOME page.
 
-## 0.0.76 MP SPIDER-MAN (Models/Suits/Remote_spiderMan/scene.glb)
-
-PLAYER 2 in multiplayer when he is Spider-Man in one of the game's own suits (the game's suit mesh cannot be read
-safely, so the mod draws this model instead, posed from his head and hands like the worn suits). Never worn by the
-player, not in the roster. Converted by `tools/suits/convert_suit.py` (row `Remote_spiderMan`) like the worn suits:
-decimated, re-skinned to the suits' 16-bone skeleton, textures atlased. Not in git; its `license.txt` ships beside it.
-Without it PLAYER 2 is drawn as the PLAYER 2 BODY.
-
-| Folder | Model | Author | Licence | Changes |
-|---|---|---|---|---|
-| `Suits/Remote_spiderMan` | [Spider-Man No Way Home (Rigged) V2](https://sketchfab.com/3d-models/spider-man-no-way-home-rigged-v2-acae364526cf4811ab77978383fe929f) | [Visiion](https://sketchfab.com/Visiion) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Decimated to the suits' budget; re-skinned to 16 bones; textures atlased; rescaled to 1.8 m. |
-
-Credit line: This work is based on "Spider-Man No Way Home (Rigged) V2"
-(https://sketchfab.com/3d-models/spider-man-no-way-home-rigged-v2-acae364526cf4811ab77978383fe929f)
-by Visiion (https://sketchfab.com/Visiion) licensed under CC-BY-4.0
-(http://creativecommons.org/licenses/by/4.0/), converted for VR.
-
 ## Reference only (no files used)
 
 The Sketchfab "Daredevil batons" page the player linked was a style reference only. Nothing was

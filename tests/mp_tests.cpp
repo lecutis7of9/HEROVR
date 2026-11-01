@@ -389,30 +389,6 @@ void testRemoteArms() {
     }
 }
 
-// 0.0.76 MP SPIDER-MAN: which model Player 2 is drawn in.
-void testRemoteSpider() {
-    std::printf("remote spider-man\n");
-    namespace mm = mesh_model;
-    PoseState s;
-    s.hero = 0, s.suit = noSuit;
-    check(remoteSlotOf(s, true) == mm::slotRemoteSpider, "SPIDER-MAN in a game suit: the Spider-Man model");
-    check(remoteSlotOf(s, false) == 0, "the model missing: PLAYER 2 BODY as before");
-    s.hero = 1;
-    check(remoteSlotOf(s, true) == 0, "IRON MAN's own look: not Spider-Man");
-    s.hero = 9, s.suit = 18, s.suitHash = suitHashOf(18);
-    check(remoteSlotOf(s, true) == mm::slotSuitFirst + 18 && remoteSlotOf(s, true) == slotOfState(s), "a mod suit: that suit");
-    s.hero = 0, s.suit = 4, s.suitHash = suitHashOf(4);
-    check(remoteSlotOf(s, true) == mm::slotSuitFirst + 4, "a mod suit worn as SPIDER-MAN: still that suit");
-    s.suit = 200, s.suitHash = 0x1234;
-    check(remoteSlotOf(s, true) == mm::slotRemoteSpider, "a suit this build does not have, as SPIDER-MAN: the Spider-Man model");
-    check(mm::slotIsSkinnedBody(mm::slotRemoteSpider) && !mm::slotIsSuit(mm::slotRemoteSpider) && mm::slotRemoteSpider < mm::slots &&
-              std::string(mm::slotFolders[mm::slotRemoteSpider]) == std::string("Suits/") + mm::remoteSpiderFolder &&
-              mm::slotDrawCap[mm::slotRemoteSpider] == mm::drawTriangles && !mm::slotMayDecimate[mm::slotRemoteSpider],
-          "its slot: Models/Suits/Remote_spiderMan, a skinned body, never decimated, not in the roster");
-    check(suitIdOfSlot(mm::slotRemoteSpider) == noSuit && mm::suitSlot(mm::remoteSpiderFolder) == 0,
-          "never sent as a suit id (the wire and the roster unchanged)");
-}
-
 void testInterpolation() {
     Interpolator in;
     in.delay = .1f;
@@ -1962,7 +1938,6 @@ int main() {
     testMalformed();
     testHandsSent();
     testRemoteArms();
-    testRemoteSpider();
     testInterpolation();
     testDelayAndEcho();
     testPartner();

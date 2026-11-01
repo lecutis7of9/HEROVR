@@ -20,12 +20,6 @@ bool finiteV(Vec3 v) {
 }
 } // namespace
 
-uint32_t remoteSlotOf(const PoseState& s, bool spiderReady) {
-    if (const uint32_t slot = slotOfState(s))
-        return slot;
-    return s.hero == 0 /* hero_modes::spiderMan */ && spiderReady ? mesh_model::slotRemoteSpider : 0u;
-}
-
 uint8_t suitIdOfSlot(uint32_t slot) {
     if (!mesh_model::slotIsSuit(slot))
         return noSuit;

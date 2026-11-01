@@ -27202,7 +27202,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 + 2 + 1 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 MP SPIDER-MAN */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 /* 0.0.75 MOTORCYCLE body + bars */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;

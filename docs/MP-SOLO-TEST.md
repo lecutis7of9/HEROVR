@@ -205,8 +205,4 @@ to him. Set `mp_place = buddy` in live.txt: he jumps back in front of you at onc
   his side, never as a far-away point; a 0.0.75 reader refused such a pose ("refused ... bad value") and Player 2
   stuttered. A whole pose is now refused only for a broken head.
 - **PLAYER 2's arms:** his elbows bend down and back (they pointed out, a "hand on the hip" look). Your own body is unchanged.
-- **PLAYER 2 as Spider-Man in a game suit:** drawn in a real Spider-Man model ("Spider-Man No Way Home (Rigged) V2" by
-  Visiion, CC BY 4.0, `Models/Suits/Remote_spiderMan`), posed from his head and hands like the mod suits. The game's own
-  suit cannot be read safely, so it is not matched. Without the model the console says MODEL MISSING and the
-  PLAYER 2 BODY is drawn. No new setting.
 - Both players should run the same build.

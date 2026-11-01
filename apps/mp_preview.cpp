@@ -80,7 +80,6 @@ int main(int argc, char** argv) {
     mm::Library lib;
     for (uint32_t s = mm::slotSuitFirst; s < mm::slotSuitEnd; ++s)
         lib.load(s, root);
-    lib.load(mm::slotRemoteSpider, root); // 0.0.76 MP SPIDER-MAN (missing: the last scene says so)
     const auto array = mm::prepareTextures(lib, cacheDecoder, size, levels);
     for (size_t l = 0; l < array.layers.size(); ++l) {
         std::ofstream f(out + "layer_" + std::to_string(l) + ".rgba", std::ios::binary);
@@ -108,7 +107,6 @@ int main(int argc, char** argv) {
         {"PLAYER 2 BODY = FIGURE (the switch reverted): test 6's stick figure", 0, nullptr, false, "", 3, 1, true},
         {"0.0.76 MP ARMS - SPIDER-MAN in a GAME suit standing relaxed, hands by his hips (the user's screenshot pose)", 0, nullptr, false, "CASH", 88, 1, false, true},
         {"0.0.76 MP ARMS - the same pose in THOR's suit", 9, "Suit_thor_1", false, "CASH", 88, 0, false, true},
-        {"0.0.76 MP SPIDER-MAN - a GAME suit drawn with the remote Spider-Man model (Models/Suits/Remote_spiderMan)", 0, nullptr, false, "CASH", 88, 1, false, true},
     };
     std::string js = "{\n \"layers\": " + std::to_string(array.layers.size()) + ",\n \"misses\": " + std::to_string(misses.size()) + ",\n \"scenes\": [";
     std::vector<Vertex> model, soft;
@@ -159,18 +157,14 @@ int main(int argc, char** argv) {
         model.clear();
         soft.clear();
         bool drawnSuit = false;
-        // 0.0.76 MP SPIDER-MAN: game_xr's choice - his mod suit, else (SPIDER-MAN, a game suit) the remote Spider-Man
-        // model when it is there (the scenes before the last one ask for the PLAYER 2 BODY: no model)
-        const bool spiderScene = k + 1 == sizeof scenes / sizeof scenes[0];
-        const uint32_t slot = mp::remoteSlotOf(back.state, spiderScene && lib.model(mm::slotRemoteSpider));
-        if (mm::slotIsSkinnedBody(slot)) {
+        const uint32_t slot = mp::slotOfState(back.state);
+        if (slot) {
             const mm::Mesh* m = lib.model(slot);
             sw::Rig rig;
             sw::Skeleton live;
             sw::BoneMove mv[sw::bones];
             sw::Skinned sk;
-            const char* folder = slot == mm::slotRemoteSpider ? mm::remoteSpiderFolder : mm::suitFolders[slot - mm::slotSuitFirst];
-            if (m && sw::makeRig(*m, rig, folder) && sw::estimate(rig, t, live) && sw::moves(rig, live, mv) &&
+            if (m && sw::makeRig(*m, rig, mm::suitFolders[slot - mm::slotSuitFirst]) && sw::estimate(rig, t, live) && sw::moves(rig, live, mv) &&
                 sw::skin(rig, mv, sk)) {
                 if (rig.hasCape)
                     sw::cape(rig, mv, live, 0.f, sk);
@@ -190,7 +184,7 @@ int main(int argc, char** argv) {
         std::snprintf(line, sizeof line,
                       "%s\n  {\"title\": \"%s\", \"plate\": \"%s\", \"packetBytes\": %zu, \"suit\": \"%s\", \"suitDrawn\": %s, \"bodyDrawn\": %s, \"modelVertices\": %zu, "
                       "\"softVertices\": %zu, \"feet\": [%.3f, %.3f, %.3f]}",
-                      k ? "," : "", sc.title, plate.c_str(), bytes.size(), slot == mm::slotRemoteSpider ? mm::remoteSpiderFolder : sc.suit ? sc.suit : "", drawnSuit ? "true" : "false", drawnBody ? "true" : "false", model.size(),
+                      k ? "," : "", sc.title, plate.c_str(), bytes.size(), sc.suit ? sc.suit : "", drawnSuit ? "true" : "false", drawnBody ? "true" : "false", model.size(),
                       soft.size(), t.feet.x, t.feet.y, t.feet.z);
         js += line;
     }

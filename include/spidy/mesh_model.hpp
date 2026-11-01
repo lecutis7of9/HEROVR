@@ -200,12 +200,6 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // frame), Handlebars the yoke (its pivot at the origin, -z forward, the grips toward +z; turned round
                        // +y). Loaded at the start (game_xr). Missing body: no bike; missing bars: the bike without them.
                        slotBikeBody = slotBatmobileRoofFirst + 4, slotBikeBars,
-                       // 0.0.76 MP SPIDER-MAN (owner: Player 2 in a game suit "a proper, real Spider-Man model"):
-                       // Models\Suits\Remote_spiderMan (tools/suits/convert_suit.py, the suits' own skinned format;
-                       // "Spider-Man No Way Home (Rigged) V2" by Visiion, CC BY 4.0). Never worn by the player and not
-                       // in suitFolders (the roster and the suit ids on the wire unchanged): only PLAYER 2 as SPIDER-MAN
-                       // in one of the game's own suits wears it (mp::remoteSlotOf). Missing: PLAYER 2 BODY as before.
-                       slotRemoteSpider,
                        slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
@@ -224,7 +218,7 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Vehicle/Batmobile/SteeringWheel", "Vehicle/Batmobile/1989/Roof",
                                                    "Vehicle/Batmobile/ODAMI/Roof", "Vehicle/Batmobile/FOREVER/Roof",
                                                    "Vehicle/Batmobile/FOREVER2/Roof", "Vehicle/Motorcycle",
-                                                   "Vehicle/Motorcycle/Handlebars", "Suits/Remote_spiderMan"};
+                                                   "Vehicle/Motorcycle/Handlebars"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
@@ -233,8 +227,7 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
                                                 vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles};
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -265,9 +258,6 @@ inline constexpr bool slotIsVehicle(uint32_t slot) {
 // Build 9: the suits never (vertex clustering would lose their skin and flatten them).
 inline constexpr bool slotMayDecimate[slots] = {false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false};
 inline constexpr bool slotIsSuit(uint32_t slot) { return slot >= slotSuitFirst && slot < slotSuitEnd; }
-// 0.0.76 MP SPIDER-MAN: the skinned suit-format models (the roster's suits and PLAYER 2's Spider-Man).
-inline constexpr bool slotIsSkinnedBody(uint32_t slot) { return slotIsSuit(slot) || slot == slotRemoteSpider; }
-inline constexpr const char* remoteSpiderFolder = "Remote_spiderMan";
 // A suit's slot by its folder ("Suit_batman_1"), 0 when it is not one.
 inline uint32_t suitSlot(const char* folder) {
     if (!folder)
@@ -283,7 +273,7 @@ inline uint32_t suitSlot(const char* folder) {
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
-                  slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 && slotRemoteSpider == 58 && slots == 59, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+                  slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 && slots == 58, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

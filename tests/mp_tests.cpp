@@ -1853,6 +1853,88 @@ void testWorldTail() {
     check(!fromLocal(l, 0, 0, 0, 0).hasWorld, "fromLocal: not asked, not sent");
 }
 
+// 0.0.76 REMOTE SUIT: the 'S' GAME SUIT tail - round trip, with and without WORLD, too big to fit, old builds.
+void testGameSuitTail() {
+    Packet p;
+    p.type = pose;
+    p.role = roleGame;
+    p.state = sample();
+    Packet q;
+    const auto plain = encode(p);
+    check(decode(plain.data(), plain.size(), q) == Error::none && !q.state.hasGameSuit && q.state.gameSuitId == 0,
+          "no GAME SUIT asked: none sent, none read");
+    Packet g = p;
+    g.state.hasGameSuit = true, g.state.gameSuitKnown = true, g.state.gameSuitId = 0xBC46538AB3E876D2ull;
+    const auto gb = encode(g);
+    check(gb.size() == plain.size() + gameSuitBytes && gb[headerBytes + poseSentBytes] == gameSuitTag,
+          "the GAME SUIT tail: 12 bytes after the pose (no WORLD)");
+    check(decode(gb.data(), gb.size(), q) == Error::none && q.state.hasGameSuit && q.state.gameSuitKnown &&
+              q.state.gameSuitId == 0xBC46538AB3E876D2ull && !q.state.hasWorld,
+          "the GAME SUIT tail round trips; an 'S' where WORLD would be is still no world");
+    Packet both = g;
+    both.state.hasWorld = both.state.worldValid = true, both.state.worldYaw = 1.f;
+    both.state.root = {10, 0, 10};
+    const auto bb = encode(both);
+    check(bb.size() == plain.size() + worldBytes + gameSuitBytes && bb[headerBytes + poseSentBytes] == worldTag &&
+              bb[headerBytes + poseSentBytes + worldBytes] == gameSuitTag,
+          "WORLD then GAME SUIT");
+    check(decode(bb.data(), bb.size(), q) == Error::none && q.state.hasWorld && q.state.worldValid && q.state.hasGameSuit &&
+              q.state.gameSuitId == 0xBC46538AB3E876D2ull,
+          "both round trip");
+    {   // a 0.0.74 build: its props reader drops it
+        Props old;
+        check(!decodeProps(gb.data() + headerBytes + poseSentBytes, gameSuitBytes, old) && !old.any(),
+              "a 0.0.74 build: the GAME SUIT tail is no props tail (ignored)");
+    }
+    Packet unknown = g;
+    unknown.state.gameSuitKnown = false;
+    const auto ub = encode(unknown);
+    check(decode(ub.data(), ub.size(), q) == Error::none && q.state.hasGameSuit && !q.state.gameSuitKnown && q.state.gameSuitId == 0,
+          "not known: sent as not known, id 0");
+    // the fullest pose (508 bytes with WORLD) has no room: it goes without, still fits
+    Props most;
+    PropItem it;
+    it.id = 1, it.kind = 1, it.at = {0, 1.2f, -.3f};
+    for (size_t i = 0; i < propItemsMost; ++i)
+        most.add(it);
+    PropLine ln;
+    ln.kind = lineHeat, ln.fade = 1, ln.from = {0, 1, 0}, ln.to = {0, 1, -20};
+    for (size_t i = 0; i < propLinesMost; ++i)
+        most.add(ln);
+    PropFx fx;
+    fx.kind = fxImpact, fx.at = {0, 1, -3}, fx.way = {0, 0, 1};
+    for (size_t i = 0; i < propFxMost; ++i)
+        most.add(fx);
+    Packet big = both;
+    big.state.props = most;
+    const auto fb = encode(big);
+    check(!fb.empty() && fb.size() == overheadBytes + poseSentBytes + propsMostBytes + worldBytes && fb.size() <= maxPacket,
+          "the fullest pose drops the GAME SUIT tail and still fits 512");
+    check(decode(fb.data(), fb.size(), q) == Error::none && q.state.hasWorld && !q.state.hasGameSuit, "and reads as no game suit");
+    // broken tails: a later version, a cut one
+    {
+        auto later = gb;
+        later[headerBytes + poseSentBytes + 1] = 9;
+        later = resealed(later);
+        check(decode(later.data(), later.size(), q) == Error::none && !q.state.hasGameSuit, "a GAME SUIT tail from the future: ignored");
+        auto cut = gb;
+        cut.erase(cut.end() - 4 - 3, cut.end() - 4);
+        cut[18] = static_cast<uint8_t>(poseSentBytes + gameSuitBytes - 3);
+        cut = resealed(cut);
+        check(decode(cut.data(), cut.size(), q) == Error::none && !q.state.hasGameSuit, "a cut GAME SUIT tail: ignored");
+    }
+    // fromLocal
+    LocalPose l;
+    l.eye.position = {0, 1.6f, 0};
+    l.sendGameSuit = true, l.gameSuitId = 0x8D8AFEEAD1484A57ull;
+    PoseState f = fromLocal(l, 0, 0, 0, 0);
+    check(f.hasGameSuit && f.gameSuitKnown && f.gameSuitId == 0x8D8AFEEAD1484A57ull, "fromLocal: the game suit");
+    l.gameSuitId = 0;
+    check(fromLocal(l, 0, 0, 0, 0).hasGameSuit && !fromLocal(l, 0, 0, 0, 0).gameSuitKnown, "fromLocal: not known");
+    l.sendGameSuit = false;
+    check(!fromLocal(l, 0, 0, 0, 0).hasGameSuit, "fromLocal: not asked, not sent");
+}
+
 // 0.0.76 MP WORLD: smoothing, placement, the fallback, the far tag and the off-screen arrow.
 void testWorldPlace() {
     PoseState a = sample(), b = sample();
@@ -1957,6 +2039,7 @@ int main() {
     testInet();
     testSessionInternet();
     testWorldTail();
+    testGameSuitTail();
     testWorldPlace();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;

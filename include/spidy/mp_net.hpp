@@ -31,6 +31,16 @@
 //   reads only the bytes its own header counts, or drops a tail that is not 'P') and never sees it. The largest
 //   pose is 24 + 136 + 342 + 6 = 508 bytes, under maxPacket (512). A pose without it (an older build, the Test
 //   Buddy): hasWorld false - the receiver keeps the buddy placement (mp_world.hpp).
+//   0.0.76 REMOTE SUIT: then (after WORLD, or where WORLD would be when there is none) the 12-byte 'S' GAME SUIT
+//   tail, only when the sender fills it (hasGameSuit) AND the whole packet still fits maxPacket (the largest pose
+//   above is 508 bytes, so a pose carrying every prop goes without it that frame - the next one carries it):
+//   'S', game suit version 1, flags (1 known: the suit probe knows the worn suit), 0, then the worn suit's
+//   loadout asset id u64 (the scan's id, e.g. Advanced 2.0 BC46538AB3E876D2; 0 when not known). The receiver
+//   will look the id up in his own game archives (include/spidy/sm2_model.hpp, tools/sm2_suits/sm2model.py) to
+//   draw the friend in the same suit; the .model layouts that needs are CANDIDATE, and nothing fills the id yet
+//   (the probe's place is CANDIDATE too). Still version 1: every older build ignores it (a 0.0.73-0.0.75 PROPS
+//   reader drops a tail that is not 'P'; a WORLD reader reads only its own 6 bytes, and a tail that is not 'W'
+//   is no world, so a pose with 'S' but no WORLD is still no world).
 // A packet of another version, a wrong magic, length or checksum, or a value that is not finite or out of
 // range, is refused (decode says why) - the caller hides the remote player and logs it; nothing throws.
 // A newer packet of the SAME version may carry more payload bytes than this build knows: they are ignored.
@@ -56,6 +66,9 @@ inline constexpr size_t maxPacket = 512;
 // 0.0.76 MP WORLD: the 'W' tail (see above).
 inline constexpr uint8_t worldTag = 'W', worldVersion = 1, worldInCity = 1;
 inline constexpr size_t worldBytes = 6;
+// 0.0.76 REMOTE SUIT: the 'S' GAME SUIT tail (see above).
+inline constexpr uint8_t gameSuitTag = 'S', gameSuitVersion = 1, gameSuitKnownFlag = 1;
+inline constexpr size_t gameSuitBytes = 12;
 inline constexpr uint16_t defaultPort = 39470; // the game's UDP port (the buddy connects to it)
 inline constexpr uint8_t noSuit = 255;
 
@@ -88,6 +101,11 @@ struct PoseState {
     bool hasWorld{};
     bool worldValid{};
     float worldYaw{};
+    // 0.0.76 REMOTE SUIT: the 'S' tail - sent only when hasGameSuit and it fits (decoded: true only when it was
+    // there). gameSuitKnown: the sender's probe knows his worn suit; gameSuitId: its loadout asset id (0 if not).
+    bool hasGameSuit{};
+    bool gameSuitKnown{};
+    uint64_t gameSuitId{};
 };
 struct Packet {
     uint8_t type = pose;
@@ -233,6 +251,10 @@ struct LocalPose {
     bool sendWorld{};
     bool worldValid{};
     float worldYaw{};
+    // 0.0.76 REMOTE SUIT: the 'S' tail - sendGameSuit fills it; gameSuitId the worn suit's loadout asset id when
+    // the suit probe knows it (0: not known). Nothing sets these yet (the probe's place is CANDIDATE).
+    bool sendGameSuit{};
+    uint64_t gameSuitId{};
 };
 PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t suitHash, uint8_t actions);
 // 0.0.76 MP HANDS: the hand at rest by the hip (side 0 left), in the head's level frame - what an untracked or

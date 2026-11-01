@@ -218,6 +218,10 @@ add_test(NAME mirror_probe COMMAND spidy_mirror_probe_tests)
 add_executable(spidy_suit_probe_tests tests/suit_probe_tests.cpp)
 target_include_directories(spidy_suit_probe_tests PRIVATE include)
 add_test(NAME suit_probe COMMAND spidy_suit_probe_tests)
+# 0.0.76 REMOTE SUIT: the .model reader (pure; CANDIDATE layouts) on the synthetic model in tests/data/sm2model
+add_executable(spidy_sm2_model_tests tests/sm2_model_tests.cpp)
+target_include_directories(spidy_sm2_model_tests PRIVATE include)
+add_test(NAME sm2_model COMMAND spidy_sm2_model_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/sm2model)
 # Settings profiles (launcher_profile.hpp) hold the SPIDY VR tab's settings: the launcher's programs build
 # vr_settings themselves, as the launcher has the static runtime and spidy_core the DLL one.
 add_executable(spidy_launcher_tests tests/launcher_tests.cpp src/vr_settings.cpp)

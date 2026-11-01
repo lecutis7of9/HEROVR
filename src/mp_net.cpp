@@ -124,6 +124,24 @@ void decodeWorld(const uint8_t* payload, size_t body, size_t at, PoseState& s) {
     s.worldYaw = wrapAngle(y);
 }
 
+// 0.0.76 REMOTE SUIT: the GAME SUIT tail at payload offset `at`: hasGameSuit only when it is all there and marked.
+void decodeGameSuit(const uint8_t* payload, size_t body, size_t at, PoseState& s) {
+    s.hasGameSuit = s.gameSuitKnown = false;
+    s.gameSuitId = 0;
+    if (!payload || at + gameSuitBytes > body || payload[at] != gameSuitTag || payload[at + 1] != gameSuitVersion)
+        return;
+    uint64_t id = 0;
+    for (int i = 7; i >= 0; --i)
+        id = (id << 8) | payload[at + 4 + static_cast<size_t>(i)];
+    s.hasGameSuit = true;
+    s.gameSuitKnown = (payload[at + 2] & gameSuitKnownFlag) != 0 && id != 0;
+    s.gameSuitId = s.gameSuitKnown ? id : 0;
+}
+// 0.0.76 REMOTE SUIT: the GAME SUIT tail goes only when the whole packet still fits maxPacket.
+bool sendsGameSuit(const PoseState& s, size_t bodyWithout) {
+    return s.hasGameSuit && overheadBytes + bodyWithout + gameSuitBytes <= maxPacket;
+}
+
 } // namespace
 
 const char* errorName(Error e) {
@@ -177,8 +195,12 @@ std::string cleanName(const char* raw) {
 size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
     // 0.0.73 MPSUIT: + the LOOK tail; 0.0.74 MP PROPS: + the PROPS tail when there is one
     // 0.0.76 MP WORLD: + the WORLD tail when the state has one
-    const size_t body = p.type == pose ? poseSentBytes + propsBytes(p.state.props) + (p.state.hasWorld ? worldBytes : 0)
-                                       : payloadFor(p.type);
+    // 0.0.76 REMOTE SUIT: + the GAME SUIT tail when the state has one and it fits
+    size_t body = p.type == pose ? poseSentBytes + propsBytes(p.state.props) + (p.state.hasWorld ? worldBytes : 0)
+                                 : payloadFor(p.type);
+    const bool suitTail = p.type == pose && body != SIZE_MAX && sendsGameSuit(p.state, body);
+    if (suitTail)
+        body += gameSuitBytes;
     if (body == SIZE_MAX || p.role >= roleEnd || !out || capacity < overheadBytes + body)
         return 0;
     Writer w{out, 0, capacity};
@@ -226,6 +248,13 @@ size_t encode(const Packet& p, uint8_t* out, size_t capacity) {
             const uint16_t u = static_cast<uint16_t>(static_cast<int16_t>(q));
             w.u8(worldTag), w.u8(worldVersion), w.u8(s.worldValid ? worldInCity : 0);
             w.u8(static_cast<uint8_t>(u & 0xff)), w.u8(static_cast<uint8_t>(u >> 8)), w.u8(0);
+        }
+        if (suitTail) { // 0.0.76 REMOTE SUIT
+            const bool known = s.gameSuitKnown && s.gameSuitId != 0;
+            w.u8(gameSuitTag), w.u8(gameSuitVersion), w.u8(known ? gameSuitKnownFlag : 0), w.u8(0);
+            const uint64_t id = known ? s.gameSuitId : 0;
+            for (int i = 0; i < 8; ++i)
+                w.u8(static_cast<uint8_t>(id >> (8 * i)));
         }
         break;
     }
@@ -329,6 +358,9 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
         // 0.0.76 MP WORLD: the WORLD tail right after the props (or LOOK); one that does not parse: no world
         // (the pose still counts, the receiver keeps the buddy placement).
         decodeWorld(data + headerBytes, body, used, s);
+        // 0.0.76 REMOTE SUIT: the GAME SUIT tail right after WORLD (or where WORLD would be); one that does not
+        // parse: no game suit (the pose still counts).
+        decodeGameSuit(data + headerBytes, body, used + (s.hasWorld ? worldBytes : 0), s);
         break;
     }
     case hello:
@@ -578,6 +610,10 @@ PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t sui
     s.hasWorld = l.sendWorld;
     s.worldValid = l.sendWorld && l.worldValid && finite(l.worldFeet) && within(l.worldFeet, 1e5f) && std::isfinite(l.worldYaw);
     s.worldYaw = s.worldValid ? wrapAngle(l.worldYaw) : 0.f;
+    // 0.0.76 REMOTE SUIT: the GAME SUIT tail
+    s.hasGameSuit = l.sendGameSuit;
+    s.gameSuitKnown = l.sendGameSuit && l.gameSuitId != 0;
+    s.gameSuitId = s.gameSuitKnown ? l.gameSuitId : 0;
     return s;
 }
 

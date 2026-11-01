@@ -16,9 +16,11 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -559,6 +561,8 @@ public:
         visited.clear();
         seen.clear();
         places.clear();
+        outs.clear();
+        outCount.clear();
         next = 0;
         cut = whole;
         for (uint8_t r = 0; r < 3; ++r)
@@ -587,6 +591,17 @@ public:
         for (const auto& p : places)
             if (p.depth < cut)
                 out.push_back(Place{p.id, p.chain});
+        return out;
+    }
+    // Every place (up to placesPerId each) a suit id was seen outside lists in the completely read depths, sorted
+    // by id, then place (run 5: diffs by place, not by id - an id that moved or gained a place is told).
+    std::vector<Found> settledPlaces() const {
+        std::vector<Found> out;
+        for (const auto& p : outs)
+            if (p.depth < cut)
+                out.push_back(Found{p.id, p.viaPath, false, p.chain});
+        std::sort(out.begin(), out.end(),
+                  [](const Found& a, const Found& b) { return a.id != b.id ? a.id < b.id : a.chain < b.chain; });
         return out;
     }
     // Reads up to lim.perStep objects; true when the pass is done (then settled() is the whole pass).
@@ -652,6 +667,8 @@ public:
                 std::string chain = base + " +" + hex3(h.off) + (h.viaPath ? " -> \"" + h.path + "\"" : "");
                 if (suits.watched(h.id))
                     place(h.id, node.depth, chain, lim);
+                if (!list) // PROBE 3 (run 5): every place outside lists, so a new place of a known id is told
+                    outPlace(h.id, h.viaPath, node.depth, chain, lim);
                 keep(h.id, h.viaPath, list, node.depth, std::move(chain));
             }
             if (list) // the unlocked suits: its ids kept, never walked into
@@ -758,6 +775,13 @@ private:
         if (n < lim.placesPerId)
             places.push_back(Placed{id, depth, chain});
     }
+    void outPlace(uint64_t id, bool viaPath, uint8_t depth, const std::string& chain, const DeepLimits& lim) {
+        uint32_t& n = outCount[id];
+        if (n >= lim.placesPerId)
+            return;
+        ++n;
+        outs.push_back(Out{id, depth, viaPath, chain});
+    }
     enum Text { notText, asset, unreadable };
     template <class Peek> static Text readAsset(Peek& peek, uint64_t p, const DeepLimits& lim, std::string& out) {
         char head[8]{};
@@ -791,6 +815,14 @@ private:
     std::unordered_set<uint64_t> visited;
     std::vector<Seen> seen;
     std::vector<Placed> places;
+    struct Out {
+        uint64_t id;
+        uint8_t depth;
+        bool viaPath;
+        std::string chain;
+    };
+    std::vector<Out> outs;                          // every place outside lists (placesPerId each)
+    std::unordered_map<uint64_t, uint32_t> outCount; // places kept of each id
     size_t next{};
     uint8_t cut{whole};
     bool running{};
@@ -805,19 +837,25 @@ public:
     std::vector<std::string> pass(const Table& suits, const Deep& deep) {
         std::vector<std::string> lines;
         ++passes;
-        const std::vector<Deep::Found> now = deep.settled();
-        std::vector<uint64_t> ids;
+        const std::vector<Deep::Found> now = deep.settled();          // by id (lists, the worn suit)
+        const std::vector<Deep::Found> nowAt = deep.settledPlaces(); // by place (run 5: what the lines diff)
+        std::vector<std::string> sig;
         for (const auto& f : now)
-            ids.push_back(f.id);
-        const bool agree = havePrev && ids == prev;
-        prev = ids;
+            if (f.inList)
+                sig.push_back("L " + Watch::hex(f.id));
+        for (const auto& f : nowAt)
+            sig.push_back(key(f));
+        const bool agree = havePrev && sig == prev;
+        prev = sig;
         havePrev = true;
-        if (!agree || (logged && ids == idsOf(last)))
+        if (!agree || (logged && sig == lastSig))
             return lines;
         const bool first = !logged;
-        const std::vector<Deep::Found> before = last;
+        const std::vector<Deep::Found> before = last, beforeAt = lastAt;
         logged = true;
         last = now;
+        lastAt = nowAt;
+        lastSig = sig;
         ++changes;
         const std::string head = std::string("SUIT PROBE 3: ") + (first ? "baseline" : "change " + std::to_string(changes - 1)) +
                                  " (passes " + std::to_string(passes - 1) + " and " + std::to_string(passes) +
@@ -831,25 +869,27 @@ public:
         size_t listAdded = 0, listRemoved = 0, listNow = 0;
         for (const auto& f : now) {
             listNow += f.inList ? 1 : 0;
-            if (!has(before, f.id)) {
-                if (f.inList)
-                    ++listAdded;
-                else
-                    added.push_back(&f);
-            }
+            if (f.inList && !has(before, f.id))
+                ++listAdded;
         }
         for (const auto& f : before)
-            if (!has(now, f.id)) {
-                if (f.inList)
-                    ++listRemoved;
-                else
-                    removed.push_back(&f);
-            }
+            if (f.inList && !has(now, f.id))
+                ++listRemoved;
+        for (const auto& f : nowAt)
+            if (!hasPlace(beforeAt, f))
+                added.push_back(&f);
+        for (const auto& f : beforeAt)
+            if (!hasPlace(nowAt, f))
+                removed.push_back(&f);
+        size_t outIds = 0;
+        for (const auto& f : now)
+            outIds += f.inList ? 0 : 1;
         if (first)
-            lines.push_back(head + std::to_string(now.size()) + " suit id(s); " + std::to_string(listNow) +
+            lines.push_back(head + std::to_string(outIds) + " suit id(s) at " + std::to_string(nowAt.size()) +
+                            " place(s); " + std::to_string(listNow) +
                             " loadout id(s) in lists (the unlocked suits) not shown; every place CANDIDATE:");
         else
-            lines.push_back(head + "+" + std::to_string(added.size()) + " -" + std::to_string(removed.size()) +
+            lines.push_back(head + "places +" + std::to_string(added.size()) + " -" + std::to_string(removed.size()) +
                             " (lists: +" + std::to_string(listAdded) + " -" + std::to_string(listRemoved) +
                             ", not shown); every place CANDIDATE:");
         size_t shown = 0, hidden = 0;
@@ -936,12 +976,6 @@ private:
         return deep.complete() == Deep::whole ? std::string("every object in reach read")
                                               : "complete to depth " + std::to_string(deep.complete() - 1);
     }
-    static std::vector<uint64_t> idsOf(const std::vector<Deep::Found>& v) {
-        std::vector<uint64_t> out;
-        for (const auto& f : v)
-            out.push_back(f.id);
-        return out;
-    }
     static bool has(const std::vector<Deep::Found>& v, uint64_t id) {
         const auto it = std::lower_bound(v.begin(), v.end(), id,
                                          [](const Deep::Found& f, uint64_t value) { return f.id < value; });
@@ -965,14 +999,336 @@ private:
         }
         return out;
     }
+    static std::string key(const Deep::Found& f) { return Watch::hex(f.id) + " " + f.chain; }
+    static bool hasPlace(const std::vector<Deep::Found>& v, const Deep::Found& f) {
+        for (const auto& e : v)
+            if (e.id == f.id && e.chain == f.chain)
+                return true;
+        return false;
+    }
     bool havePrev{}, logged{}, haveWatchPrev{}, watchLogged{};
-    std::vector<uint64_t> prev;
-    std::vector<Deep::Found> last;
+    std::vector<std::string> prev, lastSig;
+    std::vector<Deep::Found> last, lastAt;
     std::vector<std::string> watchPrev, watchLast;
 };
 
+// 0.0.76 SUIT PROBE 4 (still the live.txt suit_probe; still READ-ONLY). Run 5 (pt1611u: Advanced Suit 2.0,
+// Classic, Hybrid) saw Classic and then Hybrid at record+0x080 -> +0x028 -> (an entry: +0x008 or +0x188) ->
+// (+0x0e8, +0x0f0 or +0x128) +0x028, the entries moving around, but PROBE 3's deep pass took about 15 s and was
+// cut at its object cap. PROBE 4 reads that container directly about once a second: the object B at
+// record+0x080 -> +0x028 (words B words wide), every pointer in B (an entry E, entryWords wide), every suit id in E,
+// and one step into every pointer in E (innerWords wide) for the ids there (+0x028 in run 5). Each id of the
+// user's sm2scan.json found is a place "record+0x080 -> +0x028 -> +E +F +I"; the set of places is told when two
+// passes agree, as what was added and removed (by place, as the entries move), then the suits it names. Every
+// place is CANDIDATE until a run shows it following the three swaps in order.
+struct ContainerLimits {
+    uint32_t words = 0x80;       // words read of B (0x400 bytes: entries at +0x008 and +0x188 in run 5)
+    uint32_t entryWords = 0x40;  // words read of each entry (0x200: +0x0e8, +0x0f0, +0x128 in run 5)
+    uint32_t innerWords = 0x10;  // words read one step into an entry's pointer (0x80: +0x028 in run 5)
+    uint32_t perStep = 8;        // entries read a frame (at most perStep * (entryWords + 2) reads a frame)
+    uint32_t faultsPerStep = 64; // a frame stops early after this many failed reads
+    uint32_t placesMost = 256;   // places kept a pass
+    uint64_t skipLo = 0, skipHi = 0; // never walked into (the game's exe)
+};
+
+class Container {
+public:
+    static constexpr uint32_t headOff = 0x080, listOff = 0x028;
+    enum State : uint8_t { idle, noHead, noList, reading, done };
+    struct Place {
+        uint64_t id{};
+        std::string chain; // from B: "+0x188 -> +0x0e8 +0x028"
+    };
+    // A new pass over the container of this record (B read now, its entries in the steps that follow).
+    template <class Peek> void start(Peek& peek, uint64_t record, const Table& suits, const ContainerLimits& lim) {
+        places.clear();
+        kids.clear();
+        next = 0;
+        entries = 0;
+        b = 0;
+        uint64_t head = 0;
+        if (!plausible(record) || !peek(record + headOff, &head, 8) || !plausible(head) || (head & 7)) {
+            state = noHead;
+            return;
+        }
+        if (!peek(head + listOff, &b, 8) || !plausible(b) || (b & 7)) {
+            b = 0;
+            state = noList;
+            return;
+        }
+        std::vector<uint64_t> w(lim.words);
+        uint32_t faults = 0;
+        const uint32_t n = readWords(peek, b, w.data(), lim.words, faults);
+        if (!n) {
+            state = noList;
+            return;
+        }
+        for (uint32_t i = 0; i < n; ++i) {
+            if (!w[i])
+                continue;
+            if (suits.find(w[i]))
+                add(w[i], "+" + hex3(i * 8), lim);
+            else if (plausible(w[i]) && !(w[i] & 7) && !(lim.skipHi > lim.skipLo && w[i] >= lim.skipLo && w[i] < lim.skipHi))
+                kids.emplace_back(w[i], static_cast<uint16_t>(i * 8));
+        }
+        state = reading;
+        if (kids.empty())
+            state = done;
+    }
+    // Reads up to lim.perStep entries; true when the pass is done (then places() is the whole pass).
+    template <class Peek> bool step(Peek& peek, const Table& suits, const ContainerLimits& lim) {
+        if (state != reading)
+            return state == done;
+        std::vector<uint64_t> e(lim.entryWords), in(lim.innerWords);
+        uint32_t faults = 0;
+        for (uint32_t k = 0; k < lim.perStep && next < kids.size() && faults < lim.faultsPerStep; ++k) {
+            const auto [addr, off] = kids[next++];
+            const uint32_t n = readWords(peek, addr, e.data(), lim.entryWords, faults);
+            if (!n)
+                continue;
+            ++entries;
+            const std::string base = "+" + hex3(off) + " -> ";
+            for (uint32_t j = 0; j < n && faults < lim.faultsPerStep; ++j) {
+                const uint64_t w = e[j];
+                if (!w)
+                    continue;
+                if (suits.find(w)) {
+                    add(w, base + "+" + hex3(j * 8), lim);
+                    continue;
+                }
+                if (!plausible(w) || (w & 7) || (lim.skipHi > lim.skipLo && w >= lim.skipLo && w < lim.skipHi))
+                    continue;
+                if (!peek(w, in.data(), lim.innerWords * 8)) { // one read: most words are not pointers to objects
+                    ++faults;
+                    continue;
+                }
+                for (uint32_t i = 0; i < lim.innerWords; ++i)
+                    if (in[i] && suits.find(in[i]))
+                        add(in[i], base + "+" + hex3(j * 8) + " +" + hex3(i * 8), lim);
+            }
+        }
+        if (next >= kids.size())
+            state = done;
+        return state == done;
+    }
+    State status() const { return state; }
+    uint64_t list() const { return b; }
+    size_t entriesRead() const { return entries; }
+    // The places of this pass, sorted by id, then place.
+    std::vector<Place> found() const {
+        std::vector<Place> out = places;
+        std::sort(out.begin(), out.end(),
+                  [](const Place& x, const Place& y) { return x.id != y.id ? x.id < y.id : x.chain < y.chain; });
+        return out;
+    }
+    static std::string hex3(uint32_t v) {
+        static const char* d = "0123456789abcdef";
+        std::string s = "0x";
+        for (int i = 2; i >= 0; --i)
+            s.push_back(d[(v >> (i * 4)) & 15]);
+        return s;
+    }
+
+private:
+    template <class Peek> static uint32_t readWords(Peek& peek, uint64_t addr, uint64_t* out, uint32_t want, uint32_t& faults) {
+        if (peek(addr, out, want * 8))
+            return want;
+        ++faults;
+        const uint64_t toPage = 0x1000 - (addr & 0xfff);
+        const auto count = static_cast<uint32_t>(std::min<uint64_t>(toPage / 8, want));
+        if (!count || !peek(addr, out, count * 8)) {
+            ++faults;
+            return 0;
+        }
+        return count;
+    }
+    void add(uint64_t id, std::string chain, const ContainerLimits& lim) {
+        if (places.size() < lim.placesMost)
+            places.push_back(Place{id, std::move(chain)});
+    }
+    std::vector<Place> places;
+    std::vector<std::pair<uint64_t, uint16_t>> kids;
+    size_t next{}, entries{};
+    uint64_t b{};
+    State state{idle};
+};
+
+// PROBE 4's console lines: the container's state when it changes (not readable / readable again), and the set
+// of places when two passes agree on a new one: what was added and removed, then the suits named.
+class Watch4 {
+public:
+    static constexpr size_t maxLines = 40;
+    static constexpr const char* where = "record+0x080 -> +0x028";
+    std::vector<std::string> pass(const Table& suits, const Container& c) {
+        std::vector<std::string> lines;
+        ++passes;
+        const Container::State st = c.status();
+        if (st != lastState && (st == Container::noHead || st == Container::noList || lastState == Container::noHead ||
+                                lastState == Container::noList || lastState == Container::idle)) {
+            if (st == Container::noHead)
+                lines.push_back(std::string("SUIT PROBE 4: record+0x080 is not a readable pointer (") + where +
+                                " CANDIDATE; not read)");
+            else if (st == Container::noList)
+                lines.push_back(std::string("SUIT PROBE 4: ") + where + " is not readable (CANDIDATE; not read)");
+            else
+                lines.push_back(std::string("SUIT PROBE 4: reading ") + where + " = " + Watch::hex(c.list()) +
+                                " about once a second (every place CANDIDATE)");
+        }
+        lastState = st;
+        if (st != Container::done) {
+            havePrev = false;
+            return lines;
+        }
+        const std::vector<Container::Place> now = c.found();
+        std::vector<std::string> sig;
+        for (const auto& p : now)
+            sig.push_back(Watch::hex(p.id) + " " + p.chain);
+        const bool agree = havePrev && sig == prev;
+        prev = sig;
+        havePrev = true;
+        if (!agree || (logged && sig == lastSig))
+            return lines;
+        const bool first = !logged;
+        const std::vector<Container::Place> before = last;
+        logged = true;
+        last = now;
+        lastSig = sig;
+        ++changes;
+        std::vector<const Container::Place*> added, removed;
+        for (const auto& p : now)
+            if (!has(before, p))
+                added.push_back(&p);
+        for (const auto& p : before)
+            if (!has(now, p))
+                removed.push_back(&p);
+        lines.push_back(std::string("SUIT PROBE 4: ") + (first ? "baseline" : "change " + std::to_string(changes - 1)) +
+                        " (passes " + std::to_string(passes - 1) + " and " + std::to_string(passes) + " agree, " +
+                        where + " = " + Watch::hex(c.list()) + ", " + std::to_string(c.entriesRead()) + " entries read): " +
+                        (first ? std::to_string(now.size()) + " place(s)"
+                               : "+" + std::to_string(added.size()) + " -" + std::to_string(removed.size())) +
+                        ", every place CANDIDATE:");
+        size_t shown = 0, hidden = 0;
+        auto say = [&](const char* sign, const Container::Place& p, const char* at) {
+            if (++shown > maxLines) {
+                ++hidden;
+                return;
+            }
+            lines.push_back(std::string("SUIT PROBE 4: ") + sign + " " + describe(suits, p.id) + at + where + " -> " + p.chain);
+        };
+        for (const auto* p : added)
+            say(first ? "=" : "+", *p, " at ");
+        for (const auto* p : removed)
+            say("-", *p, " was at ");
+        if (hidden)
+            lines.push_back("SUIT PROBE 4: ... " + std::to_string(hidden) + " more");
+        lines.push_back("SUIT PROBE 4: suits now: " + named(suits, now));
+        return lines;
+    }
+    // A new player (a load) or the probe turned off: start again.
+    void reset() { *this = Watch4{}; }
+    uint32_t passes{}, changes{};
+
+private:
+    static bool has(const std::vector<Container::Place>& v, const Container::Place& p) {
+        for (const auto& e : v)
+            if (e.id == p.id && e.chain == p.chain)
+                return true;
+        return false;
+    }
+    static std::string describe(const Table& suits, uint64_t id) {
+        static constexpr const char* kinds[3] = {"loadout", "model", "mask"};
+        const Target* t = suits.find(id);
+        if (!t)
+            return Watch::hex(id);
+        const std::string who = t->suits.size() == 1 ? suits.names[t->suits[0]]
+                                                     : "shared by " + std::to_string(t->suits.size()) + " suits";
+        return who + " " + kinds[t->kind] + " " + t->path + " id " + Watch::hex(id);
+    }
+    // Each suit named by an id only it has, with the kinds seen ("SUIT_CLASSIC (model, mask)"), in order of first place.
+    static std::string named(const Table& suits, const std::vector<Container::Place>& v) {
+        std::vector<std::pair<uint16_t, uint8_t>> seen; // suit, kind bits
+        for (const auto& p : v) {
+            const Target* t = suits.find(p.id);
+            if (!t || t->suits.size() != 1)
+                continue;
+            bool found = false;
+            for (auto& s : seen)
+                if (s.first == t->suits[0]) {
+                    s.second = static_cast<uint8_t>(s.second | (1u << t->kind));
+                    found = true;
+                }
+            if (!found)
+                seen.emplace_back(t->suits[0], static_cast<uint8_t>(1u << t->kind));
+        }
+        if (seen.empty())
+            return "none";
+        std::string out;
+        for (const auto& [s, bits] : seen) {
+            out += (out.empty() ? "" : ", ") + suits.names[s] + " (";
+            std::string k;
+            if (bits & 1)
+                k += "loadout";
+            if (bits & 2)
+                k += std::string(k.empty() ? "" : ", ") + "model";
+            if (bits & 4)
+                k += std::string(k.empty() ? "" : ", ") + "mask";
+            out += k + ")";
+        }
+        return out;
+    }
+    Container::State lastState{Container::idle};
+    bool havePrev{}, logged{};
+    std::vector<std::string> prev, lastSig;
+    std::vector<Container::Place> last;
+};
+
+// Every probe line gets a time (run 5 had none): seconds since the probe was turned on and the local clock,
+// "SUIT PROBE 4 [t+12.3 s 16:57:16.123]: ..." (a line without "SUIT PROBE" in front: the stamp in front).
+inline std::string stamped(const std::string& line, uint64_t msSinceOn, unsigned hour, unsigned minute, unsigned second,
+                           unsigned milli) {
+    char t[64];
+    std::snprintf(t, sizeof t, "[t+%llu.%01llu s %02u:%02u:%02u.%03u]", static_cast<unsigned long long>(msSinceOn / 1000),
+                  static_cast<unsigned long long>((msSinceOn % 1000) / 100), hour % 24, minute % 60, second % 60, milli % 1000);
+    const std::string head = "SUIT PROBE";
+    if (line.compare(0, head.size(), head) != 0)
+        return std::string(t) + " " + line;
+    const size_t colon = line.find(':');
+    if (colon == std::string::npos)
+        return line + " " + t;
+    return line.substr(0, colon) + " " + t + line.substr(colon);
+}
+
+// What the probe costs the VR thread: each frame's time inside frame() (microseconds), told every `every` ms
+// while it is on: the frames, the mean and the peak of that stretch, and the total since it was turned on.
+struct Cost {
+    uint64_t frames{}, totalUs{}, peakUs{};       // since on
+    uint64_t winFrames{}, winUs{}, winPeak{};     // since the last line
+    void add(uint64_t us) {
+        ++frames, totalUs += us, peakUs = std::max(peakUs, us);
+        ++winFrames, winUs += us, winPeak = std::max(winPeak, us);
+    }
+    // The line, and the stretch starts again.
+    std::string line(uint64_t msSinceOn) {
+        char t[256];
+        const double sec = static_cast<double>(msSinceOn) / 1000.0;
+        std::snprintf(t, sizeof t,
+                      "SUIT PROBE cost: %llu frames, mean %llu us, peak %llu us this stretch; since on %llu frames, "
+                      "mean %llu us, peak %llu us, total %llu ms (%.2f ms a second)",
+                      static_cast<unsigned long long>(winFrames),
+                      static_cast<unsigned long long>(winFrames ? winUs / winFrames : 0),
+                      static_cast<unsigned long long>(winPeak), static_cast<unsigned long long>(frames),
+                      static_cast<unsigned long long>(frames ? totalUs / frames : 0),
+                      static_cast<unsigned long long>(peakUs), static_cast<unsigned long long>(totalUs / 1000),
+                      sec > 0 ? static_cast<double>(totalUs) / 1000.0 / sec : 0.0);
+        winFrames = winUs = winPeak = 0;
+        return t;
+    }
+    void reset() { *this = Cost{}; }
+};
+
 // src/suit_probe.cpp (Windows): PROBE 1 at most once a second, PROBE 2 a few objects a frame (a pass, then a
-// two-second pause), both through an SEH peek; sm2scan.json is read from the HERO VR folder or the Desktop.
+// two-second pause), PROBE 4 about once a second (perStep entries a frame), all through an SEH peek, each line
+// stamped, and the cost told every 30 s; sm2scan.json is read from the HERO VR folder or the Desktop.
 // Each new console line goes to log. Never throws; off reads nothing.
 void frame(uint64_t hero, uint64_t record, bool on, void (*log)(const char*)) noexcept;
 

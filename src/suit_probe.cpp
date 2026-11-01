@@ -1,5 +1,5 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-// 0.0.76 SUIT PROBE 1 + 2/3 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
+// 0.0.76 SUIT PROBE 1 + 2/3 + 4 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
 // (SEH); nothing here writes game memory, calls a game function, changes page protection or makes a hook.
 // The only file read is the user's own sm2scan.json (tools/sm2_suits/sm2scan.py), never written.
 #include <windows.h>
@@ -83,6 +83,27 @@ Watch2 watch2;
 DeepLimits limits;
 uint64_t deepRecord{};
 ULONGLONG passEnded{};
+Container container; // PROBE 4
+Watch4 watch4;
+ContainerLimits containerLimits;
+uint64_t containerRecord{};
+ULONGLONG containerStarted{};
+Cost cost; // what frame() costs the VR thread while on
+ULONGLONG onSince{}, costTold{};
+LARGE_INTEGER qpf{};
+void (*sink)(const char*) = nullptr; // the caller's log, for stampedLog
+
+// Every line with its time: since the probe was turned on, and the local clock.
+void stampedLog(const char* line) {
+    if (!sink || !line)
+        return;
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    const ULONGLONG now = GetTickCount64();
+    const std::string s = stamped(line, onSince && now >= onSince ? now - onSince : 0, st.wHour, st.wMinute, st.wSecond,
+                                  st.wMilliseconds);
+    sink(s.c_str());
+}
 
 std::string narrow(const std::wstring& w) {
     if (w.empty())
@@ -151,8 +172,39 @@ void exeRange() {
     if (!base || !peek(base, &dos, sizeof dos) || dos.e_magic != IMAGE_DOS_SIGNATURE ||
         !peek(base + static_cast<uint32_t>(dos.e_lfanew), &nt, sizeof nt) || nt.Signature != IMAGE_NT_SIGNATURE)
         return;
-    limits.skipLo = base;
-    limits.skipHi = base + nt.OptionalHeader.SizeOfImage;
+    limits.skipLo = containerLimits.skipLo = base;
+    limits.skipHi = containerLimits.skipHi = base + nt.OptionalHeader.SizeOfImage;
+}
+
+// PROBE 4: record+0x080 -> +0x028 read directly, a pass about once a second (perStep entries a frame).
+void containerFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
+    if (scanTable.empty())
+        return;
+    if (!record) {
+        containerRecord = 0;
+        return;
+    }
+    if (record != containerRecord) { // a new player (a load): start again
+        containerRecord = record;
+        container = Container{};
+        watch4.reset();
+        containerStarted = 0;
+    }
+    auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
+    if (container.status() != Container::reading) {
+        if (containerStarted && now - containerStarted < 1000)
+            return;
+        containerStarted = now ? now : 1;
+        container.start(reader, record, scanTable, containerLimits);
+        if (container.status() != Container::reading) {
+            for (const auto& line : watch4.pass(scanTable, container))
+                log(line.c_str());
+            return;
+        }
+    }
+    if (container.step(reader, scanTable, containerLimits))
+        for (const auto& line : watch4.pass(scanTable, container))
+            log(line.c_str());
 }
 
 void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const char*)) {
@@ -192,36 +244,68 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
 }
 } // namespace
 
-void frame(uint64_t hero, uint64_t record, bool on, void (*log)(const char*)) noexcept {
+void frame(uint64_t hero, uint64_t record, bool on, void (*rawLog)(const char*)) noexcept {
     try {
-        if (!log)
+        if (!rawLog)
             return;
+        sink = rawLog;
+        void (*log)(const char*) = stampedLog;
         const ULONGLONG now = GetTickCount64();
+        LARGE_INTEGER t0{};
+        if (on) {
+            if (!qpf.QuadPart)
+                QueryPerformanceFrequency(&qpf);
+            QueryPerformanceCounter(&t0);
+            if (!onSince)
+                onSince = costTold = now ? now : 1;
+        }
         if (now - regionsAt >= 3000) {
             regions.clear();
             regionsAt = now;
         }
         if (on && !limits.skipHi)
             exeRange();
-        if (on)
+        if (on) {
             deepFrame(hero, record, now, log);
-        else if (wasOn) {
+            containerFrame(record, now, log);
+        } else if (wasOn) {
             deep = Deep{};
             deepRecord = 0;
             watch2.reset();
+            container = Container{};
+            containerRecord = 0;
+            watch4.reset();
         }
-        if (on == wasOn && (!on || now - lastScan < 1000))
-            return;
-        wasOn = on;
-        lastScan = now;
-        std::vector<Hit> hits;
-        if (on && record) {
-            const uint64_t roots[2] = {record, peek64(record)};
-            auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
-            hits = scan(roots, reader);
+        const bool scanNow = !(on == wasOn && (!on || now - lastScan < 1000));
+        if (scanNow) {
+            const bool turnedOff = wasOn && !on;
+            wasOn = on;
+            lastScan = now;
+            std::vector<Hit> hits;
+            if (on && record) {
+                const uint64_t roots[2] = {record, peek64(record)};
+                auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
+                hits = scan(roots, reader);
+            }
+            for (const auto& line : watch.update(on, record, hits))
+                log(line.c_str());
+            if (turnedOff) {
+                if (cost.frames)
+                    log(cost.line(now - onSince).c_str());
+                cost.reset();
+                onSince = costTold = 0;
+            }
         }
-        for (const auto& line : watch.update(on, record, hits))
-            log(line.c_str());
+        if (on && qpf.QuadPart) {
+            LARGE_INTEGER t1{};
+            QueryPerformanceCounter(&t1);
+            const long long ticks = t1.QuadPart - t0.QuadPart;
+            cost.add(ticks > 0 ? static_cast<uint64_t>(ticks) * 1000000ull / static_cast<uint64_t>(qpf.QuadPart) : 0);
+            if (now - costTold >= 30000) {
+                costTold = now;
+                log(cost.line(now - onSince).c_str());
+            }
+        }
     } catch (...) {
     }
 }

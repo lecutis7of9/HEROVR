@@ -2,7 +2,8 @@
 // 0.0.76 SUIT PROBE's logic (include/spidy/suit_probe.hpp) on a fake address space: the game's asset ids,
 // the path rule, the walk (direct and one object deep), a fault anywhere is skipped, and the console lines;
 // PROBE 2/3: the suits of an sm2scan.json, the deep walk (ids, paths, chains, lists, loaded models, caps, the
-// complete depths, faults), two passes agreeing, the changes only, the watched suits' every place. Given a
+// complete depths, faults), two passes agreeing, the changes only (by place), the watched suits' every place;
+// PROBE 4: the container record+0x080 -> +0x028 read directly, the stamps, the cost. Given a
 // path (a real sm2scan.json) it also reads that and says how many suits and ids it holds.
 #include "spidy/suit_probe.hpp"
 
@@ -281,7 +282,7 @@ int main(int argc, char** argv) {
     check(w2.pass(table, deep).empty(), "one pass: nothing told yet");
     auto l2 = w2.pass(table, deep);
     check(!l2.empty() && l2[0].find("SUIT PROBE 3: baseline (passes 1 and 2 agree,") == 0 &&
-              l2[0].find("7 suit id(s); 4 loadout id(s) in lists") != std::string::npos,
+              l2[0].find("3 suit id(s) at 3 place(s); 4 loadout id(s) in lists") != std::string::npos,
           "two passes agree: the baseline");
     check(l2.size() == 5, "the baseline shows the ids outside lists only");
     for (const auto& line : l2)
@@ -317,12 +318,116 @@ int main(int argc, char** argv) {
     d.put64(0x16000000 + 0x08, 0xA000000000000005ull);
     run(deep, d, droots, lim);
     check(w2.pass(table, deep).empty(), "back again: nothing told");
+    // Run 5: the same id at a new place (an entry that moved) is told, by place; no swap (the same suit).
+    d.put64(0x16000000 + 0x08, 0);
+    d.put64(0x16000000 + 0x18, 0xA000000000000005ull);
+    run(deep, d, droots, lim);
+    check(w2.pass(table, deep).empty(), "a move: quiet until the next pass agrees");
+    run(deep, d, droots, lim);
+    l2 = w2.pass(table, deep);
+    check(l2.size() == 3 && l2[0].find("places +1 -1 (lists: +0 -0") != std::string::npos &&
+              l2[1].find("SUIT PROBE 3: + SUIT_CLASSIC model") == 0 && l2[2].find("SUIT PROBE 3: - SUIT_CLASSIC model") == 0,
+          "a move: told by place, no swap line");
     Watch2 w3;
     Deep none3;
     w3.pass(table, none3);
     l2 = w3.pass(table, none3);
     check(l2.size() == 1 && l2[0].find("CANDIDATE layout missed") != std::string::npos, "nothing found: said once");
     check(w3.pass(table, none3).empty(), "and once only");
+
+    // PROBE 4: record+0x080 -> +0x028 read directly; ids in B, in its entries, and one step into an entry.
+    {
+        Memory c;
+        const uint64_t crec = 0x60000000, A = 0x61000000, B = 0x62000000, E1 = 0x63000000, E2 = 0x64000000, P = 0x65000000;
+        c.put64(crec + 0x80, A);
+        c.put64(A + 0x28, B);
+        c.put64(B + 0x008, E1);
+        c.put64(B + 0x010, 0xA000000000000002ull); // SUIT_A's mask right in B
+        c.put64(B + 0x188, E2);
+        c.put64(B + 0x190, 0x66000000);            // an entry on a missing page: skipped
+        c.put64(E1 + 0x0e8, P);
+        c.put64(P + 0x028, 0xA000000000000005ull); // SUIT_CLASSIC's model one step in (run 5)
+        c.put64(E2 + 0x0f0, 0xA000000000000006ull); // its mask in the entry
+        c.put64(E2 + 0x128, 0x67000000);            // a pointer to a missing page: skipped
+        ContainerLimits cl;
+        Container box;
+        Watch4 w4;
+        auto pass4 = [&]() {
+            box.start(c, crec, table, cl);
+            while (!box.step(c, table, cl)) {
+            }
+            return w4.pass(table, box);
+        };
+        auto p1 = pass4();
+        check(p1.size() == 1 && p1[0] == "SUIT PROBE 4: reading record+0x080 -> +0x028 = 0x0000000062000000 about once a second (every place CANDIDATE)",
+              "PROBE 4: the container is told once, nothing else after one pass");
+        auto p2 = pass4();
+        const auto f = box.found();
+        check(f.size() == 3 && f[0].chain == "+0x010" && f[1].chain == "+0x008 -> +0x0e8 +0x028" &&
+                  f[2].chain == "+0x188 -> +0x0f0",
+              "PROBE 4: the three places (in B, one step in, in an entry)");
+        check(box.entriesRead() == 2, "PROBE 4: the missing entry is skipped");
+        check(p2.size() == 5 && p2[0].find("SUIT PROBE 4: baseline (passes 1 and 2 agree,") == 0 &&
+                  p2[0].find("2 entries read): 3 place(s), every place CANDIDATE:") != std::string::npos &&
+                  p2[2].find("SUIT PROBE 4: = SUIT_CLASSIC model characters/hero/hero_c/hero_c.model id 0xa000000000000005 at record+0x080 -> +0x028 -> +0x008 -> +0x0e8 +0x028") == 0 &&
+                  p2[4] == "SUIT PROBE 4: suits now: SUIT_A (mask), SUIT_CLASSIC (model, mask)",
+              "PROBE 4: the baseline, by place, then the suits");
+        check(pass4().empty(), "PROBE 4: the same places: quiet");
+        c.put64(P + 0x028, 0xA000000000000001ull); // a swap to SUIT_A's model
+        check(pass4().empty(), "PROBE 4: a change: quiet until the next pass agrees");
+        auto p3 = pass4();
+        check(p3.size() == 4 && p3[0].find("SUIT PROBE 4: change 1 (passes 4 and 5 agree,") == 0 &&
+                  p3[0].find("): +1 -1, every place CANDIDATE:") != std::string::npos &&
+                  p3[1].find("SUIT PROBE 4: + SUIT_A model") == 0 && p3[2].find("SUIT PROBE 4: - SUIT_CLASSIC model") == 0 &&
+                  p3[2].find(" was at record+0x080") != std::string::npos &&
+                  p3[3] == "SUIT PROBE 4: suits now: SUIT_A (model, mask), SUIT_CLASSIC (mask)",
+              "PROBE 4: the change, then the suits");
+        c.reads = 0;
+        box.start(c, crec, table, cl);
+        const uint32_t startReads = c.reads;
+        c.reads = 0;
+        box.step(c, table, cl);
+        check(startReads <= 3 && c.reads <= cl.perStep * (cl.entryWords + 2), "PROBE 4: bounded reads a frame");
+        ContainerLimits skip = cl; // the exe is never walked into
+        skip.skipLo = E1, skip.skipHi = E1 + 0x1000;
+        box.start(c, crec, table, skip);
+        while (!box.step(c, table, skip)) {
+        }
+        check(box.found().size() == 2 && box.entriesRead() == 1, "PROBE 4: never into the exe");
+        Memory blank;
+        blank.put64(crec, 1);
+        Watch4 w5;
+        box.start(blank, crec, table, cl);
+        auto n1 = w5.pass(table, box);
+        box.start(blank, crec, table, cl);
+        check(n1.size() == 1 && n1[0].find("SUIT PROBE 4: record+0x080 is not a readable pointer") == 0 &&
+                  w5.pass(table, box).empty(),
+              "PROBE 4: an unreadable container: said once");
+        blank.put64(crec + 0x80, A);
+        box.start(blank, crec, table, cl);
+        auto n2 = w5.pass(table, box);
+        check(n2.size() == 1 && n2[0].find("SUIT PROBE 4: record+0x080 -> +0x028 is not readable") == 0,
+              "PROBE 4: a missing list: said");
+        box.start(c, 0, table, cl);
+        check(box.status() == Container::noHead, "PROBE 4: no record: nothing read");
+    }
+    check(stamped("SUIT PROBE 4: x", 12345, 16, 57, 16, 123) == "SUIT PROBE 4 [t+12.3 s 16:57:16.123]: x",
+          "every probe line stamped");
+    check(stamped("hello", 0, 0, 0, 0, 0) == "[t+0.0 s 00:00:00.000] hello", "another line: the stamp in front");
+    {
+        Cost cost;
+        cost.add(10);
+        cost.add(30);
+        const std::string a = cost.line(1000);
+        check(a.find("SUIT PROBE cost: 2 frames, mean 20 us, peak 30 us this stretch; since on 2 frames") == 0 &&
+                  a.find("(0.04 ms a second)") != std::string::npos,
+              "the cost line");
+        cost.add(5);
+        const std::string b = cost.line(2000);
+        check(b.find("1 frames, mean 5 us, peak 5 us this stretch; since on 3 frames, mean 15 us, peak 30 us") !=
+                  std::string::npos,
+              "the cost: a stretch, then since on");
+    }
 
     // Caps: a wide tree stops at `objects`, a step reads at most perStep objects; the depth the cap cut is not
     // told, so every pass tells the same memory.

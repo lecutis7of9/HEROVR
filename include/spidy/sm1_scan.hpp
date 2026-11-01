@@ -93,6 +93,8 @@ struct Limits {
     uint32_t maxSuitDumps = 400, maxSuitDumpsEach = 40;
     float vehicleNearMeters = 25;       // dump mode: a vehicle record's components when the player is this close
     uint32_t maxVehicleDumps = 200;
+    uint32_t eyeTargetsMs = 60000;      // dump mode: each eye's render target set again after this long
+    uint32_t maxEyeTargetPasses = 6;    // dump mode: passes per session (both eyes each pass)
 };
 // "sm1scan-20261101-013000".
 std::string sessionName(int year, int month, int day, int hour, int minute, int second);
@@ -109,10 +111,52 @@ inline constexpr size_t strikeLandedAt = 32, strikeEnemiesAt = 132, strikeTarget
 inline constexpr size_t posesJointsAt = 12, posesRigAt = 24, posesInstanceAt = 32, posesCapturedAt = 48,
                         posesTransformAt = 56, posesGameAt = 120, posesMaxJoints = 256;
 
+// Dump mode (0.0.76): each eye's render target set, to find where the eye's depth is.
+// His SpidyStereoData (spidy_stereo_probe.dll, stereo_probe.cpp Data v4, CONFIRMED in his 0.7.0 sources): magic,
+// version, bytes, state; sequence (a seqlock: odd while he writes) at 16; eyes[2] at 64, 144 bytes each: view +0,
+// texture +8, textureObject +16, width +36, height +40, renderWidth +128, renderHeight +132.
+inline constexpr size_t stereoSequenceAt = 16, stereoEyesAt = 64, stereoEyeBytes = 144, stereoDataBytes = 352;
+inline constexpr size_t eyeViewAt = 0, eyeWidthAt = 36, eyeHeightAt = 40, eyeRenderWidthAt = 128, eyeRenderHeightAt = 132;
+// The game side, CANDIDATE (RVAs and offsets from his stereo_probe.cpp and VALIDATION.md for 4.630.0.0):
+// the eye view's buffer set is inline at view +0x1f80 (his initBuffers: view = buffers - 0x1f80); its records from
+// the set's +0x14a0, 0x1e8 bytes each, record i is the target table's entry i (0x30 bytes each at RVA 0x609b060),
+// 132 of them; a record's size (two u32) at +0x1cc.
+// His eye colour chain: texture = *(view +0x1f70), object = *(texture +0x40) whose vtable is RVA 0x4e56c80,
+// the ID3D12Resource = *(*(object +0x38)).
+inline constexpr uint32_t eyeSetAt = 0x1f80, setRecordsAt = 0x14a0, setRecordBytes = 0x1e8, setRecordSizeAt = 0x1cc,
+                          setRecordCount = 132, targetTableRva = 0x609b060, targetEntryBytes = 0x30;
+inline constexpr uint32_t eyeTextureAt = 0x1f70, textureObjectAt = 0x40, textureObjectVtableRva = 0x4e56c80,
+                          objectResourceAt = 0x38;
+// Record i's offset from the eye view.
+inline constexpr uint32_t setRecordOffset(uint32_t i) { return eyeSetAt + setRecordsAt + i * setRecordBytes; }
+// A DXGI format a depth buffer can have: D32_FLOAT, R32_TYPELESS, D24_UNORM_S8_UINT, R24G8_TYPELESS,
+// D32_FLOAT_S8X24_UINT, R32G8X24_TYPELESS, D16_UNORM, R16_TYPELESS.
+bool depthFormat(uint32_t dxgi);
+// Its name ("D32_FLOAT"...), or "" for a format that is not one of those.
+const char* depthFormatName(uint32_t dxgi);
+// One target's verdict: "depthAtEyeSize" (a depth format at the eye's render size), "depthOtherSize",
+// "atEyeSize" (another format at the eye's size) or "other".
+const char* eyeTargetVerdict(uint32_t dxgi, uint64_t width, uint32_t height, uint32_t renderWidth, uint32_t renderHeight);
+// A record across the session: how often it was a depth target at the eye's size (each pass counts each eye),
+// and whether both eyes ever had the same resource in it.
+struct EyeDepthTally {
+    uint32_t index = 0;
+    std::string name;
+    uint32_t atEyeSize = 0;
+    bool shared = false;
+};
+// The session's verdict: "CONFIRMED record N (name)" when exactly one record was a depth target at the eye's size on
+// both eyes in every pass (at least 2 passes), with a resource per eye; "CANDIDATE records ..." when some were;
+// "not found" otherwise.
+std::string eyeDepthStatus(const std::vector<EyeDepthTally>& tally, uint32_t passes);
+
 // The layer's side (Windows only; sm1_scan.cpp). Started once, after his VR session starts.
 struct Feed {
     bool (*enabled)() = nullptr;           // live.txt sm1scan
     void (*log)(const char* line) = nullptr; // layer.log
+    // The vtable of an ID3D12Resource the runtime made (one of his swapchain images), 0 when none yet. The eye
+    // target pass calls ID3D12Resource::GetDesc only on objects with exactly this vtable.
+    uintptr_t (*resourceVtable)() = nullptr;
 };
 void start(const Feed& feed);
 } // namespace spidy::sm1::scan

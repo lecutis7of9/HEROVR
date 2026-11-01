@@ -129,6 +129,29 @@ void scanTests() {
           "suit classes (dump mode)");
     check(vehicleClass("VehicleComponent") && vehicleClass("TrafficManager") && !vehicleClass("CardDeck") && !vehicleClass("Carried"),
           "vehicle classes (dump mode)");
+    // Eye targets (dump mode): records 105 and 106 sit at the set's +0xdcc8 and +0xdeb0 (his VALIDATION.md).
+    check(setRecordOffset(105) - eyeSetAt == 0xdcc8 && setRecordOffset(106) - eyeSetAt == 0xdeb0, "eye target record offsets");
+    check(depthFormat(40) && depthFormat(39) && depthFormat(45) && depthFormat(20) && !depthFormat(28) && !depthFormat(10),
+          "depth formats");
+    check(!std::strcmp(eyeTargetVerdict(40, 2016, 2240, 2016, 2240), "depthAtEyeSize") &&
+              !std::strcmp(eyeTargetVerdict(40, 1008, 1120, 2016, 2240), "depthOtherSize") &&
+              !std::strcmp(eyeTargetVerdict(28, 2016, 2240, 2016, 2240), "atEyeSize") &&
+              !std::strcmp(eyeTargetVerdict(40, 2016, 2240, 0, 0), "depthOtherSize"),
+          "eye target verdicts");
+    {
+        std::vector<EyeDepthTally> t(3);
+        t[0] = {12, "kMrtDepth", 4, false};
+        t[1] = {40, "kHiZ", 1, false};
+        t[2] = {50, "", 0, false};
+        check(eyeDepthStatus(t, 2) == "CONFIRMED record 12 (kMrtDepth)", "eye depth: one record every pass is CONFIRMED");
+        check(eyeDepthStatus(t, 1).rfind("CANDIDATE", 0) == 0, "eye depth: one pass stays CANDIDATE");
+        t[0].shared = true;
+        check(eyeDepthStatus(t, 2) == "CANDIDATE records 12 (kMrtDepth), 40 (kHiZ)", "eye depth: a shared resource stays CANDIDATE");
+        t[0].shared = false;
+        t[1].atEyeSize = 4;
+        check(eyeDepthStatus(t, 2).rfind("CANDIDATE", 0) == 0, "eye depth: two records every pass stay CANDIDATE");
+        check(eyeDepthStatus({}, 3) == "not found", "eye depth: none");
+    }
     const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 6, 7, 1};
     float bad[16];
     std::memcpy(bad, id, sizeof(bad));

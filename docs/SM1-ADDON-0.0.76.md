@@ -113,13 +113,18 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
    layer.log says `COLOR: the colour pass is ready` and `first eye image graded`.
 6. Change a suit in the game's Suits menu and drive or walk close to cars, so the research scan's dump mode records
    the suit and vehicle components.
+7. Stay in VR with the game running (swinging is fine) for at least 3 minutes after the player is found, so the
+   eye targets pass runs at least twice (the first pass once his eyes are there, then every 60 s, 6 at most). The
+   scan's `.txt` then says `eye targets: passes N; the eye depth location: CONFIRMED record N (name)`, or
+   `CANDIDATE records ...`, or `not found`; layer.log has a `sm1scan: eye targets pass N logged (...)` line per pass.
 
 ## Research scan (live.txt `sm1scan`, on by default)
 
 A one-session research log for the next SM1 features: held props, enemies and damage, grapple anchors, vehicle /
 seat / spawn classes. It is **read only**: it copies memory (VirtualQuery-checked, each copy under SEH) and his
 exported *data* (SpidyXrData, SpidyStrikeData, SpidyMotionData, SpidyBodyPoses, SpidyRope/Swing/Grab/Throw...); it
-never writes game memory and never calls a game function or one of his functions. One lowest-priority thread, small
+never writes game memory and never calls a game function or one of his functions (its one call is described under
+`eyeTargets` below). One lowest-priority thread, small
 chunks with 1 ms sleeps, a 48 MB cap, and it ends by itself 15 minutes after the player is found. `sm1scan=0` in
 live.txt pauses it at once. A fault ends the scan only.
 
@@ -142,3 +147,11 @@ names the file for each) for 4.630.0.0; the scan records what is really there so
 | `rig` | the hero's joint table (hashes, parents) with the hand joints found by name hash |
 | `hit`, `hitTarget` | when his strike counters move: the strike record, the target's record and health/mover components at 0, 600 and 1500 ms |
 | `hisData` | raw copies of his other data exports when they change |
+| `eyeTargetTable` | dump mode: the game's render target table (RVA 0x609b060, 132 entries of 0x30 bytes, raw in the .bin) with each entry's kind (low byte of its flags) and the first printable name an entry points at |
+| `eyeTargets` | dump mode, one per eye per pass: the eye view (from his SpidyStereoData), its render and texture size, his colour chain check, and its 132 render target records (view +0x1f80 +0x14a0 + i*0x1e8): the record's size (+0x1cc), the textures it points at, each texture's D3D12 format / width / height / flags, a verdict (`depthAtEyeSize`, `depthOtherSize`, `atEyeSize`, `other`, `noDesc`) and the record's 0x1e8 raw bytes |
+
+The eye targets pass makes the scan's one call: the D3D12 runtime's `ID3D12Resource::GetDesc` (a const getter, not a
+game or SpidyVR function), only on an object whose vtable is exactly that of one of his swapchain images (an
+ID3D12Resource the runtime made), under SEH; otherwise it records the raw bytes only. The session verdict is
+CONFIRMED only when exactly one record held a depth-format texture at the eye's render size on both eyes, with a
+different resource per eye, in every pass (2 passes at least); anything less stays CANDIDATE.

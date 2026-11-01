@@ -3,7 +3,8 @@
 // https://github.com/IlyaMez/SpidyVR). The RTTI walk follows the MSVC x64 layout as documented publicly and as
 // Tkachov's Overstrike/ALERT research tools (GPL-3) read Insomniac's data; nothing of theirs is copied.
 //
-// READ-ONLY: this file never writes game memory and never calls a game function or one of his functions. Each
+// READ-ONLY: this file never writes game memory and never calls a game function or one of his functions (the one
+// call it makes is the D3D12 runtime's ID3D12Resource::GetDesc, a const getter, in the eye targets pass). Each
 // read checks VirtualQuery (committed, readable, not a guard page) and copies under SEH; a fault ends the scan only.
 // One lowest-priority thread, small chunks with sleeps between them, a time cap and a size cap.
 // Output: %APPDATA%\HERO VR SM1\scan\sm1scan-<time>.jsonl (+ .bin for raw dumps, + .txt summary). Every value is a
@@ -13,6 +14,7 @@
 #include "spidy/sm1_addon.hpp"
 
 #include <windows.h>
+#include <d3d12.h>
 
 #include <algorithm>
 #include <atomic>
@@ -1211,6 +1213,214 @@ void watchVehicles() {
     }
 }
 
+// Eye targets (dump mode, 0.0.76): each eye's render target set, to find where the eye's depth is. His
+// SpidyStereoData names the eye views; each view's 132 records are logged (size at +0x1cc, raw bytes in the .bin)
+// with the textures they point at. The one call in this file is here: ID3D12Resource::GetDesc (a const getter of
+// the D3D12 runtime, not a game or SpidyVR function), and only on an object whose vtable is exactly the vtable of a
+// swapchain image the runtime made (Feed::resourceVtable), under SEH. Without that vtable, no call: raw bytes only.
+uintptr_t stereoAt = 0;
+uint32_t eyeTargetPasses = 0;
+uint64_t nextEyeTargets = 0;
+uintptr_t lastEyeViews[2] = {};
+std::vector<std::string> targetNames; // the table's names, when its entries point at one
+std::map<uint32_t, EyeDepthTally> eyeTally;
+
+std::string eyeStatus();
+
+bool descGuarded(uintptr_t resource, D3D12_RESOURCE_DESC& d) {
+    bool ok = true;
+    SCAN_TRY { d = reinterpret_cast<ID3D12Resource*>(resource)->GetDesc(); }
+    SCAN_EXCEPT { ok = false; }
+    return ok;
+}
+// A printable name of 3..80 characters at `p` (the table's name field, wherever it is in the entry).
+std::string printable(uintptr_t p) {
+    if (!p)
+        return {};
+    const std::string s = cstr(p, 80);
+    if (s.size() < 3 || s.size() >= 80)
+        return {};
+    for (const char c : s)
+        if (c < 0x20 || c > 0x7e)
+            return {};
+    return s;
+}
+// The target table, once: its raw bytes and, per entry, the first printable string an entry's word points at.
+void readTargetTable() {
+    if (!targetNames.empty())
+        return;
+    targetNames.assign(setRecordCount, std::string());
+    const uintptr_t table = img.base + targetTableRva;
+    std::string list = "[";
+    for (uint32_t i = 0; i < setRecordCount; ++i) {
+        uint64_t w[targetEntryBytes / 8] = {};
+        if (rd(table + i * targetEntryBytes, w, sizeof(w)))
+            for (uint32_t k = 0; k < targetEntryBytes / 8 && targetNames[i].empty(); ++k)
+                targetNames[i] = printable(static_cast<uintptr_t>(w[k]));
+        uint32_t flags = 0;
+        get(table + i * targetEntryBytes, flags);
+        // the kind is the low byte of the entry's flags (his VALIDATION.md: depth targets are kind 4)
+        list += (i ? "," : "") + std::string("{\"i\":") + std::to_string(i) + ",\"name\":" + quoted(targetNames[i]) +
+                ",\"kind\":" + std::to_string(flags & 0xff) + "}";
+    }
+    J j("eyeTargetTable");
+    j.raw("tableRva", addr(targetTableRva)).u("entries", setRecordCount).u("entryBytes", targetEntryBytes);
+    j.raw("dump", out.dump(table, setRecordCount * targetEntryBytes)).raw("names", list + "]").write();
+}
+// His eye sample, under his seqlock (at most 4 tries).
+bool stereoEye(int eye, uint8_t s[stereoEyeBytes]) {
+    for (int t = 0; t < 4; ++t) {
+        int64_t a = 0, b = 0;
+        if (!get(stereoAt + stereoSequenceAt, a) || (a & 1) ||
+            !rd(stereoAt + stereoEyesAt + static_cast<size_t>(eye) * stereoEyeBytes, s, stereoEyeBytes) ||
+            !get(stereoAt + stereoSequenceAt, b))
+            continue;
+        if (a == b)
+            return true;
+    }
+    return false;
+}
+template <class T> T at(const uint8_t* b, size_t o) {
+    T v;
+    std::memcpy(&v, b + o, sizeof(T));
+    return v;
+}
+// A texture object: its vtable is his texture vtable (RVA 0x4e56c80), directly or one step through +0x40.
+uintptr_t textureObject(uintptr_t v) {
+    const uintptr_t vt = img.base + textureObjectVtableRva;
+    if (!v)
+        return 0;
+    if (ptr(v) == vt)
+        return v;
+    const uintptr_t o = ptr(v + textureObjectAt);
+    return o && ptr(o) == vt ? o : 0;
+}
+struct Desc {
+    bool read = false;
+    uint32_t format = 0, height = 0, flags = 0, dimension = 0;
+    uint64_t width = 0;
+};
+// The resource's description: only for exactly the runtime's ID3D12Resource vtable.
+Desc describe(uintptr_t resource, uintptr_t resourceVt) {
+    Desc d;
+    D3D12_RESOURCE_DESC r{};
+    if (resource && resourceVt && ptr(resource) == resourceVt && descGuarded(resource, r)) {
+        d.read = true;
+        d.format = static_cast<uint32_t>(r.Format);
+        d.width = r.Width;
+        d.height = r.Height;
+        d.flags = static_cast<uint32_t>(r.Flags);
+        d.dimension = static_cast<uint32_t>(r.Dimension);
+    }
+    return d;
+}
+std::string descJson(const Desc& d, uintptr_t resource, uintptr_t resourceVt) {
+    if (!d.read)
+        return std::string("{\"resource\":") + addr(resource) + ",\"vtableMatch\":" +
+               (resource && resourceVt && ptr(resource) == resourceVt ? "true" : "false") + ",\"desc\":null}";
+    return std::string("{\"resource\":") + addr(resource) + ",\"vtableMatch\":true,\"format\":" + std::to_string(d.format) +
+           ",\"formatName\":" + quoted(depthFormatName(d.format)) + ",\"width\":" + std::to_string(d.width) +
+           ",\"height\":" + std::to_string(d.height) + ",\"dimension\":" + std::to_string(d.dimension) +
+           ",\"flags\":" + std::to_string(d.flags) + ",\"depthStencil\":" +
+           ((d.flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) ? "true" : "false") + "}";
+}
+
+// One pass: both eyes, each eye's 132 records. False when nothing was logged (no eyes yet).
+bool eyeTargetsPass() {
+    if (!stereoAt) {
+        if (HMODULE h = GetModuleHandleA(spidyVrModule))
+            stereoAt = reinterpret_cast<uintptr_t>(GetProcAddress(h, "SpidyStereoData"));
+        uint32_t head[3] = {};
+        if (!stereoAt || !rd(stereoAt, head, sizeof(head)) || head[0] != 0x53535042 || head[1] != 4 || head[2] != stereoDataBytes) {
+            stereoAt = 0; // not his v4 layout (or not loaded yet): nothing is read
+            return false;
+        }
+    }
+    uint8_t e[2][stereoEyeBytes] = {};
+    uintptr_t views[2] = {};
+    for (int i = 0; i < 2; ++i)
+        if (stereoEye(i, e[i]))
+            views[i] = static_cast<uintptr_t>(at<uint64_t>(e[i], eyeViewAt));
+    if (!views[0] || !views[1])
+        return false;
+    readTargetTable();
+    const uintptr_t resourceVt = feed.resourceVtable ? feed.resourceVtable() : 0;
+    const uint32_t pass = eyeTargetPasses++;
+    std::vector<uintptr_t> depthRes[2]; // per record index, the resource seen at the eye's size
+    depthRes[0].assign(setRecordCount, 0);
+    depthRes[1].assign(setRecordCount, 0);
+    for (int eye = 0; eye < 2; ++eye) {
+        const uintptr_t view = views[eye];
+        const uint32_t rw = at<uint32_t>(e[eye], eyeRenderWidthAt), rh = at<uint32_t>(e[eye], eyeRenderHeightAt);
+        // His colour chain, as a check of the texture vtable and the resource vtable.
+        const uintptr_t colourObj = textureObject(ptr(view + eyeTextureAt));
+        const uintptr_t colourRes = colourObj ? ptr(ptr(colourObj + objectResourceAt)) : 0;
+        const Desc colour = describe(colourRes, resourceVt);
+        J h("eyeTargets");
+        h.u("pass", pass).u("eye", static_cast<uint64_t>(eye)).a("view", view).raw("newView", lastEyeViews[eye] != view ? "true" : "false");
+        h.u("renderWidth", rw).u("renderHeight", rh).u("width", at<uint32_t>(e[eye], eyeWidthAt)).u("height", at<uint32_t>(e[eye], eyeHeightAt));
+        h.a("resourceVtable", resourceVt).a("renderBuffers1640", ptr(view + 0x1640)).a("set", view + eyeSetAt);
+        h.raw("colourChainVtableOk", colourObj ? "true" : "false").raw("colour", descJson(colour, colourRes, resourceVt));
+        lastEyeViews[eye] = view;
+        std::string list = "[";
+        for (uint32_t i = 0; i < setRecordCount; ++i) {
+            if (i && !(i % 16) && !breathe())
+                return true;
+            const uintptr_t rec = view + setRecordOffset(i);
+            std::vector<uint8_t> b(setRecordBytes);
+            if (!rd(rec, b.data(), b.size())) {
+                list += (i ? "," : "") + std::string("{\"i\":") + std::to_string(i) + ",\"read\":false}";
+                continue;
+            }
+            const uint32_t sw = at<uint32_t>(b.data(), setRecordSizeAt), sh = at<uint32_t>(b.data(), setRecordSizeAt + 4);
+            std::string res = "[";
+            const char* best = "other";
+            int found = 0;
+            for (uint32_t o = 0; o + 8 <= setRecordBytes && found < 4; o += 8) {
+                const uintptr_t obj = textureObject(static_cast<uintptr_t>(at<uint64_t>(b.data(), o)));
+                if (!obj)
+                    continue;
+                const uintptr_t r = ptr(ptr(obj + objectResourceAt));
+                const Desc d = describe(r, resourceVt);
+                const char* v = d.read ? eyeTargetVerdict(d.format, d.width, d.height, rw, rh) : "noDesc";
+                if (!std::strcmp(v, "depthAtEyeSize")) {
+                    best = v;
+                    depthRes[eye][i] = r;
+                }
+                res += (found++ ? "," : "") + std::string("{\"at\":") + std::to_string(o) + ",\"object\":" + addr(obj) +
+                       ",\"verdict\":" + quoted(v) + ",\"d3d\":" + descJson(d, r, resourceVt) + "}";
+            }
+            list += (i ? "," : "") + std::string("{\"i\":") + std::to_string(i) + ",\"name\":" + quoted(targetNames[i]) +
+                    ",\"size\":[" + std::to_string(sw) + "," + std::to_string(sh) + "],\"sizeAtEye\":" +
+                    (sw == rw && sh == rh && rw ? "true" : "false") + ",\"verdict\":" + quoted(best) +
+                    ",\"textures\":" + res + "],\"dump\":" + out.blob(b.data(), b.size()) + "}";
+        }
+        h.raw("records", list + "]").write();
+    }
+    for (uint32_t i = 0; i < setRecordCount; ++i) {
+        auto& t = eyeTally[i];
+        t.index = i;
+        t.name = targetNames[i];
+        t.atEyeSize += (depthRes[0][i] ? 1 : 0) + (depthRes[1][i] ? 1 : 0);
+        if (depthRes[0][i] && depthRes[0][i] == depthRes[1][i])
+            t.shared = true;
+    }
+    say("sm1scan: eye targets pass %u logged (%s)", pass + 1, eyeStatus().c_str());
+    return true;
+}
+std::string eyeStatus() {
+    std::vector<EyeDepthTally> t;
+    for (const auto& kv : eyeTally)
+        t.push_back(kv.second);
+    return eyeDepthStatus(t, eyeTargetPasses);
+}
+// From the main loop: the first pass when both eyes are there, then every eyeTargetsMs, at most maxEyeTargetPasses.
+void watchEyeTargets(uint64_t t) {
+    if (eyeTargetPasses >= limits.maxEyeTargetPasses || t < nextEyeTargets)
+        return;
+    nextEyeTargets = t + (eyeTargetsPass() ? limits.eyeTargetsMs : 5000);
+}
+
 void summary(const char* why, uint64_t began) {
     std::string s;
     char b[256];
@@ -1237,6 +1447,8 @@ void summary(const char* why, uint64_t began) {
     std::snprintf(b, sizeof(b), "dump mode: suit/loadout components watched %zu, suit dumps %u; vehicle records %zu, vehicle dumps %u\r\n",
                   suitWatch.size(), suitDumps, vehicleRecords.size(), vehicleDumps);
     s += b;
+    std::snprintf(b, sizeof(b), "eye targets: passes %u; the eye depth location: ", eyeTargetPasses);
+    s += b + (eyeTargetPasses ? eyeStatus() : std::string("no pass (his eye views were never there)")) + "\r\n";
     std::snprintf(b, sizeof(b), "player record 0x%llx; hits recorded %u; rope dumps %u; lines %llu; bytes %llu\r\n",
                   static_cast<unsigned long long>(playerRecord), hitEvents, ropeDumps,
                   static_cast<unsigned long long>(out.lines), static_cast<unsigned long long>(out.bytes));
@@ -1314,6 +1526,7 @@ void run() {
             snapshot(webs);
             watchSuits();
             watchVehicles();
+            watchEyeTargets(nowMs());
             nextSnap = t + limits.snapshotMs;
         }
         Sleep(limits.eventPollMs);

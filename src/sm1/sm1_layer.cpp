@@ -2243,6 +2243,17 @@ XRAPI_ATTR XrResult XRAPI_CALL createSession(XrInstance inst, const XrSessionCre
         return on;
     };
     feed.log = [](const char* line) { logLine("%s", line); };
+    feed.resourceVtable = []() -> uintptr_t { // one of his swapchain images: an ID3D12Resource the runtime made
+        uintptr_t vt = 0;
+        AcquireSRWLockShared(&colorLock);
+        for (const auto& kv : chains)
+            if (!kv.second.images.empty() && kv.second.images[0]) {
+                vt = *reinterpret_cast<const uintptr_t*>(kv.second.images[0]);
+                break;
+            }
+        ReleaseSRWLockShared(&colorLock);
+        return vt;
+    };
     scan::start(feed);
     if (!motionThreadStarted.exchange(true)) {
         HANDLE h = CreateThread(nullptr, 0, installMotionHooks, nullptr, 0, nullptr);

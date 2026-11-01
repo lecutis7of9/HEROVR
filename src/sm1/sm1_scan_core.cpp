@@ -249,6 +249,50 @@ bool vehicleClass(std::string_view name) {
            name.find("Driv") != std::string_view::npos;
 }
 
+const char* depthFormatName(uint32_t dxgi) {
+    switch (dxgi) {
+    case 19: return "R32G8X24_TYPELESS";
+    case 20: return "D32_FLOAT_S8X24_UINT";
+    case 39: return "R32_TYPELESS";
+    case 40: return "D32_FLOAT";
+    case 44: return "R24G8_TYPELESS";
+    case 45: return "D24_UNORM_S8_UINT";
+    case 53: return "R16_TYPELESS";
+    case 55: return "D16_UNORM";
+    default: return "";
+    }
+}
+bool depthFormat(uint32_t dxgi) { return *depthFormatName(dxgi) != 0; }
+
+const char* eyeTargetVerdict(uint32_t dxgi, uint64_t width, uint32_t height, uint32_t renderWidth, uint32_t renderHeight) {
+    const bool eyeSize = renderWidth && renderHeight && width == renderWidth && height == renderHeight;
+    if (depthFormat(dxgi))
+        return eyeSize ? "depthAtEyeSize" : "depthOtherSize";
+    return eyeSize ? "atEyeSize" : "other";
+}
+
+std::string eyeDepthStatus(const std::vector<EyeDepthTally>& tally, uint32_t passes) {
+    std::vector<const EyeDepthTally*> every, some;
+    for (const auto& t : tally) {
+        if (!t.atEyeSize)
+            continue;
+        some.push_back(&t);
+        if (passes && t.atEyeSize == passes * 2 && !t.shared)
+            every.push_back(&t);
+    }
+    auto named = [](const EyeDepthTally& t) {
+        return std::to_string(t.index) + (t.name.empty() ? std::string() : " (" + t.name + ")");
+    };
+    if (passes >= 2 && every.size() == 1)
+        return "CONFIRMED record " + named(*every[0]);
+    if (some.empty())
+        return "not found";
+    std::string s = "CANDIDATE records";
+    for (size_t i = 0; i < some.size(); ++i)
+        s += (i ? ", " : " ") + named(*some[i]);
+    return s;
+}
+
 bool interesting(std::string_view name, Area& area) {
     struct Key {
         const char* word;

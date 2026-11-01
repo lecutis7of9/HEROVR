@@ -1,14 +1,14 @@
 """HERO VR 0.0.76 SUIT PROBE (pt1572u: "It should be the existing in game model with whatever suit he's wearing";
 "It should just read the files"): the first step of drawing PLAYER 2 from each PC's own installed game files
 in his worn suit - a READ-ONLY probe that logs which .model assets the local Spider-Man wears, live.txt only
-(the wrist HUD is full), id 5553, OFF by default. No game address."""
+(the wrist HUD is full), id 5555, OFF by default. No game address."""
 import os, re, sys, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import live_settings  # noqa: E402
 def src(p): return open(os.path.join(ROOT, p), encoding='utf-8').read()
 
-KEY, EXPORT, IDENT, ATOMIC = 'suit_probe', 'SpidySuitProbe', 5553, 'suitProbeNow'
+KEY, EXPORT, IDENT, ATOMIC = 'suit_probe', 'SpidySuitProbe', 5555, 'suitProbeNow'
 
 class SuitProbe(unittest.TestCase):
     def test_live_txt_option(self):

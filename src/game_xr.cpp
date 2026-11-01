@@ -15137,7 +15137,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdQuickGrapple(void* v) {
 }
 // 0.0.76 SUIT PROBE (suit_probe.hpp), live: 0 OFF (the default), 1 ON (read-only, logs the worn .model paths).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitProbe(void* v) {
-    return setLive(v, 0, 1, 5553, suitProbeNow, asU32);
+    return setLive(v, 0, 1, 5555, suitProbeNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

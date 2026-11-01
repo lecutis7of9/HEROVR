@@ -1,5 +1,5 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-// 0.0.76 SUIT PROBE (live.txt suit_probe, export SpidySuitProbe 5553; the wrist HUD is full). READ-ONLY, the
+// 0.0.76 SUIT PROBE (live.txt suit_probe, export SpidySuitProbe 5555; the wrist HUD is full). READ-ONLY, the
 // first step of the remote suit: PLAYER 2 is drawn from each PC's own installed game files in the suit his
 // friend wears, so the sender has to learn which .model asset its Spider-Man wears. CONFIRMED: the suit list
 // (system_progression.config) names each suit's .model paths (tools/sm2_suits/sm2scan.py reads them from the

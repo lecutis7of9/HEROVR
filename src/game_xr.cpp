@@ -867,6 +867,11 @@ std::string modelsRoot() {
     return root;
 }
 std::atomic<float> heroHeightNow{1.f}; // Version 0.0.5 HERO HEIGHT in force (the V005 record)
+// 0.0.76 GAME WEBS ONLY (live.txt game_webs): 0 ON (the default) - SPIDER-MAN in SM2 shows only the game's own
+// web lines (from the tracked wrists, native_webs), the game's web balls (BALL LOOK OURS / GLOB fire as WRIST) and
+// the game's webbed-up enemies; none of HERO VR's drawn webs, web balls, nets or cocoons. 1 OFF: as before.
+// Only the drawing and the ball's look change: swing input, zips, attach points and hits are the same.
+std::atomic<uint32_t> gameWebsNow{0};
 uint32_t c38(uint32_t option) {
     // Version 0.0.2 hotfix: a getter that reaches itself again answers the default (0) rather than recursing.
     static thread_local int depth = 0;
@@ -893,6 +898,14 @@ uint32_t heroNow() {
                                    c38(combat38::superman) == 1, c38(combat38::punisher) == 1, // Version 0.0.7
                                    c38(combat38::captainAmerica) == 1,                         // CAPTAIN AMERICA
                                    c38(combat38::thor) == 1, c38(combat38::greenLantern) == 1); // Version 0.0.72
+}
+// 0.0.76 GAME WEBS ONLY: on, and the hero is SPIDER-MAN (every other hero keeps his own look and tethers).
+bool gameWebsOnly() { return gameWebsNow.load() == 0 && heroNow() == hero_modes::spiderMan; }
+// BALL LOOK as it plays: under GAME WEBS ONLY, OURS and GLOB are WRIST - the game's own web ball, fired from the
+// pulled hand's wrist along the same aim (the player's own value is unchanged and comes back when it is off).
+uint32_t ballLookNow() {
+    const uint32_t look = c38(combat38::ballLook);
+    return gameWebsOnly() && (look == combat38::lookOurs || look == combat38::lookGlob) ? combat38::lookWrist : look;
 }
 // Version 0.0.72 (TEST): every 0.0.72 option (hero072_play.hpp PlayOptions) from combat38, live.
 hero072::PlayOptions hero072Options() {
@@ -1054,7 +1067,7 @@ combat_input::Config combatConfig() {
     }
     c.ballOnPress = c38(combat38::ballFire) == 0;
     // Version 0.0.2 BALL LOOK OURS: a web-shooter press fires our own ball, no RB to the game.
-    c.ballOurs = c38(combat38::ballLook) == combat38::lookOurs;
+    c.ballOurs = ballLookNow() == combat38::lookOurs; // 0.0.76: GAME WEBS ONLY plays OURS as WRIST
     // Version 0.0.4 IRON MAN ABILITIES (REPULSOR): the trigger makes the mod's own shot at the press only
     // (no RB, no game ball) and no trigger gadget, yank or Sonic Burst (repulsor.hpp planFor).
     // Version 0.0.6: DAREDEVIL (the trigger throws a baton) and HULK (no trigger power) the same: no web.
@@ -7580,7 +7593,7 @@ DWORD WINAPI run(void*) {
                             {   // Update 38.5 BALL LOOK WRIST / GLOB: the wrists (world), and the ball
                                 // whose RB just went down: its muzzle, its wrist (GAME ONLY: none).
                                 // Version 0.0.4: never in REPULSOR (no game web ball, no web look at all).
-                                const bool wristBall = combat38::wristMuzzle(c38(combat38::ballLook)) &&
+                                const bool wristBall = combat38::wristMuzzle(ballLookNow()) &&
                                                        heroNow() == hero_modes::spiderMan; // 0.0.6: every hero but SPIDER-MAN
                                 wrist_muzzle::setEnabled(wristBall);
                                 for (unsigned i = 0; i < 2; ++i) {
@@ -9166,7 +9179,7 @@ DWORD WINAPI run(void*) {
                                 globs[i].update(frame.seconds);
                                 // Update 38 BALL LOOK GLOB: our glob flies with the web ball.
                                 // Update 38.3: GLOB is 1 (GAME ONLY, 0, the default: the game's ball alone).
-                                if (fightOut.fired[i] == combat_input::webShooter && c38(combat38::ballLook) == combat38::lookGlob &&
+                                if (fightOut.fired[i] == combat_input::webShooter && ballLookNow() == combat38::lookGlob &&
                                     heroNow() == hero_modes::spiderMan) { // 0.0.4/0.0.6: no glob for any other hero
                                     // Update 38.1: from the web shooter's nozzle (AIM AXIS HAND), 38: the grip.
                                     const Vec3 from = c38(combat38::aimAxis) == 0 && validTrackedPose(frame.hands[i].grip)
@@ -10452,7 +10465,10 @@ DWORD WINAPI run(void*) {
                         check(SpidyStart(&views), "Start native views");
                         nativeStarted = true;
                         // Game-drawn webs are optional: without them the overlay draws webs.
-                        websStarted = !(config.options & 2) && !native_webs::start(config.base, player.record);
+                        // 0.0.76 GAME WEBS ONLY (on, the default): the game's own web lines from the wrists even
+                        // when the launcher asked for overlay webs (--overlay-webs); off: as before.
+                        websStarted = (!(config.options & 2) || gameWebsNow.load() == 0) &&
+                                      !native_webs::start(config.base, player.record);
                         // The player's body is optional too: without it the hero stays
                         // hidden and the overlay draws gloves, as before.
                         // GAME BODY on: not before its checks pass (the frame loop starts it).
@@ -11983,6 +11999,25 @@ DWORD WINAPI run(void*) {
                         const auto fromHand = [startSpot](Vec3 start, Vec3 gripAt, Vec3 toward) {
                             return startSpot == webStartPalm ? webFromGrip(start, gripAt, toward) : start;
                         };
+                        // 0.0.76 GAME WEBS ONLY (live.txt game_webs, on by default): for SPIDER-MAN none of the
+                        // webs below is drawn - not the swing's or zip's line, the piece between the hands, the
+                        // let-go web, GRAB WEB's rope or WALL STICK's nets; nor, further down, the webbed-up
+                        // cocoons or the OURS / GLOB balls. The game draws its own lines from the wrists
+                        // (native_webs, still fed from here: ropeHands, webGap and the shooters are worked out as
+                        // before) and its own balls and webbed enemies. Only the picture: the swing, zips, attach
+                        // points and hits are untouched. Never an invisible web: while the game's lines are not
+                        // running (their hook failed, or GAME WEBS ONLY was turned on after a start without them)
+                        // the swing's own line is still drawn as before.
+                        const bool gameWebsDrawn = gameWebsOnly();
+                        const bool gameLinesRunning = native_webs::drawing(0) || native_webs::drawing(1);
+                        const auto drawWeb = [&](const WebLine& l) {
+                            if (!(gameWebsDrawn && gameLinesRunning))
+                                appendWeb(vertices, l, viewer, pixelAngle, webLook);
+                        };
+                        const auto drawOurWeb = [&](const WebLine& l) { // GRAB WEB's rope, WALL STICK's nets
+                            if (!gameWebsDrawn)
+                                appendWeb(vertices, l, viewer, pixelAngle, webLook);
+                        };
                         for (unsigned hand = 0; !saved->flatScreen && hand < 2; ++hand) {
                             const auto& web = saved->webs[hand];
                             const auto& timing = saved->webTimes[hand];
@@ -12020,7 +12055,7 @@ DWORD WINAPI run(void*) {
                             if (!rendered.swing.hands[hand].tracked) {
                                 if (!gameWeb && WebAnimation::released((shown - timing.releasedAt) * 1e-9f,
                                                                        timing.wrist + travel, timing.anchor, line))
-                                    appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                    drawWeb(line);
                                 continue;
                             }
                             const Vec3 shooter = webStart(grip, hand, startSpot);
@@ -12031,7 +12066,7 @@ DWORD WINAPI run(void*) {
                                 // itself where it can (native_webs::Held).
                                 if (lower && !native_webs::drawsHeld()) {
                                     between(shooter);
-                                    appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                    drawWeb(line);
                                 } else if (web.attached && slot == static_cast<int>(hand) &&
                                            native_eyes::renderWebStart(imageGeneration, hand, ropeStarts[hand])) {
                                     ropeHands |= 1u << hand;
@@ -12040,7 +12075,7 @@ DWORD WINAPI run(void*) {
                                 continue;
                             } else if (lower) {
                                 between(shooter);
-                                appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                drawWeb(line);
                             } else if (web.attached) {
                                 line.start = fromHand(shooter, grip.position, web.anchor);
                                 line.end = web.anchor;
@@ -12082,10 +12117,10 @@ DWORD WINAPI run(void*) {
                                     if (!webShot.physics)
                                         ropeBends[hand].reset();
                                 }
-                                appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                drawWeb(line);
                             } else if (WebAnimation::released((shown - timing.releasedAt) * 1e-9f, shooter,
                                                               timing.anchor, line)) {
-                                appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                drawWeb(line);
                             }
                         }
                         // Update 38.2 GRAB WEB: the rope from the web shooter to the enemy it holds.
@@ -12096,7 +12131,7 @@ DWORD WINAPI run(void*) {
                                 line.end = saved->grabTo[g] + travel;
                                 line.seed = g ? .71f : .29f;
                                 if (finite(line.start) && finite(line.end) && length(line.end - line.start) > .05f)
-                                    appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                    drawOurWeb(line);
                             }
                         // Version 0.0.3 WALL STICK: a web net where an enemy hit a wall or the floor (ours, not
                         // the game's web takedown), moved with the player.
@@ -12117,7 +12152,7 @@ DWORD WINAPI run(void*) {
                                 line.end = b[k];
                                 line.seed = net.seed + .013f * static_cast<float>(k);
                                 if (finite(line.start) && finite(line.end) && length(line.end - line.start) > .02f)
-                                    appendWeb(vertices, line, viewer, pixelAngle, webLook);
+                                    drawOurWeb(line);
                             }
                         }
                         // Version 0.0.3 AUTO PERFORMANCE SHOW STATUS: one line over the left wrist.
@@ -12163,7 +12198,7 @@ DWORD WINAPI run(void*) {
                         }
                         // Version 0.0.3 WEB BALL HIT: the webbed-up look (the mod's strands round a struck enemy).
                         for (const auto& c0 : saved->cocoons) {
-                            if (!c0.on)
+                            if (!c0.on || gameWebsDrawn) // 0.0.76 GAME WEBS ONLY: the game's own webbed-up look
                                 continue;
                             web_cocoon::Cocoon c = c0;
                             c.feet = c0.feet + travel;
@@ -12345,7 +12380,7 @@ DWORD WINAPI run(void*) {
                                 repulsor_mcu::appendImpact(vertices, saved->splashAt[b] + travel, viewer, viewer, pixelAngle,
                                                            saved->splashFade[b], .2f, static_cast<unsigned>(b) + 7u);
                         }
-                        for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook; ++b) {
+                        for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook && !gameWebsDrawn; ++b) { // 0.0.76
                             if (saved->oursFade[b] > 0)
                                 appendWebBall(vertices, saved->oursAt[b] + travel, saved->oursTail[b] + travel, viewer,
                                               pixelAngle, saved->oursFade[b]);
@@ -12388,7 +12423,7 @@ DWORD WINAPI run(void*) {
                             }
                         }
                         // Update 38 BALL LOOK GLOB: the web-ball globs, moved with the player to this image.
-                        for (unsigned g = 0; g < 2; ++g)
+                        for (unsigned g = 0; g < 2 && !gameWebsDrawn; ++g) // 0.0.76 GAME WEBS ONLY: none
                             if (saved->globFade[g] > 0)
                                 appendWebBall(vertices, saved->globAt[g] + travel, saved->globTail[g] + travel, viewer,
                                               pixelAngle, saved->globFade[g]);
@@ -14969,7 +15004,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyDdQuickGrapple(void* v) {
 }
 // 0.0.76 SUIT PROBE (suit_probe.hpp), live: 0 OFF (the default), 1 ON (read-only, logs the worn .model paths).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitProbe(void* v) {
-    return setLive(v, 0, 1, 5553, suitProbeNow, asU32);
+    return setLive(v, 0, 1, 5555, suitProbeNow, asU32);
+}
+// 0.0.76 GAME WEBS ONLY, live: 0 ON (the default: only the game's webs, web balls and webbed enemies for
+// SPIDER-MAN), 1 OFF (HERO VR's drawn webs as before).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameWebs(void* v) {
+    return setLive(v, 0, 1, 5556, gameWebsNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

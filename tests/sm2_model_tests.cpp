@@ -103,6 +103,7 @@ int main(int argc, char** argv) {
     const std::string dir = argc > 1 ? argv[1] : "tests/data/sm2model";
     const auto model = file(dir + "/synth.model"), packed = file(dir + "/synth.lz4");
     check(!model.empty() && !packed.empty(), "the synthetic model (tests/data/sm2model)");
+    if (model.empty() || packed.empty()) { std::printf("FAILED (pass the tests/data/sm2model folder)\n"); return 1; }
     std::vector<uint8_t> unpacked;
     check(lz4Block(packed.data(), packed.size(), model.size(), unpacked) && unpacked == model,
           "its LZ4 block (written by the Python test's compressor) reads back");

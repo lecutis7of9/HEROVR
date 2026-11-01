@@ -489,6 +489,9 @@ Mask maskFor(const MaskInput& in) {
     }
     if (in.aHeld)
         m.faceLower[1] = true; // an A held in flight is never also his jump, even once landed
+    for (int i = 0; i < 2; ++i)
+        if (in.triggerOurs[i])
+            m.trigger[i] = true;
     if (in.grappleArmed)
         for (int i = 0; i < 2; ++i) {
             m.grip[i] = true;
@@ -504,6 +507,9 @@ Mask maskFor(const MaskInput& in) {
                     m.trigger[i] = true;
     }
     return m;
+}
+bool keepTrigger(float trigger, bool hiddenNow) {
+    return hiddenNow && std::isfinite(trigger) && trigger > .1f;
 }
 
 // --- Wrist menu ----------------------------------------------------------------------------------------------------
@@ -981,6 +987,12 @@ Pose beamPose(Vec3 from, Vec3 dir, float len, Vec3 head) {
     const Vec3 x = normalized(cross(y, z));
     p.orientation = fromBasis(x, y, z);
     return p;
+}
+Vec3 xrDataForward(const float* m) {
+    return normalized(Vec3{m[8], m[9], m[10]});
+}
+Vec3 gameToHeadLocal(Vec3 dir, Vec3 headRight, Vec3 headDown, Vec3 headForward) {
+    return {dot(dir, headRight), -dot(dir, headDown), -dot(dir, headForward)};
 }
 
 // --- Flight --------------------------------------------------------------------------------------------------------

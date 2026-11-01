@@ -361,7 +361,7 @@ GameView gameView() {
     v.headPos = {h[12], h[13], h[14]};
     for (int i = 0; i < 2; ++i) {
         const float* m = x.hands[i];
-        v.handForward[i] = normalized(Vec3{-m[8], -m[9], -m[10]});
+        v.handForward[i] = xrDataForward(m); // +row 2: where the hand points (not -row 2, which is behind it)
         v.handPos[i] = {m[12], m[13], m[14]};
     }
     v.ok = finite(v.headPos) && length(v.headForward) > .5f;
@@ -677,6 +677,7 @@ struct Play {
     bool aOurs = false;                   // an A held in flight, until it is let go
     bool handOut[2]{};
     bool triggerWas[2]{};
+    bool triggerOurs[2]{}; // a press hidden from his reads when it went down, until it is let go
     float cooldown = 0;
     // the beam on screen
     ULONGLONG beamUntil = 0;
@@ -1262,7 +1263,7 @@ void showLine(const GameView& gv, int hand, Vec3 anchor) {
     if (!(len > .3f) || !play.headKnown)
         return;
     const Vec3 dir = d / len;
-    Vec3 local{dot(dir, gv.headRight), -dot(dir, gv.headDown), -dot(dir, gv.headForward)};
+    const Vec3 local = gameToHeadLocal(dir, gv.headRight, gv.headDown, gv.headForward);
     play.beamDirGame = normalized(play.head.orientation.rotate(local));
     play.beamLength = len;
     play.beamHand = hand;
@@ -1344,7 +1345,7 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
             play.powerState.c_str(), static_cast<double>(amount), first ? "" : ", nothing hit");
     if (live.beams && fDraw.on) {
         // game direction -> his head's axes -> the headset's view -> his projection space
-        Vec3 local{dot(beamDir, gv.headRight), -dot(beamDir, gv.headDown), -dot(beamDir, gv.headForward)};
+        const Vec3 local = gameToHeadLocal(beamDir, gv.headRight, gv.headDown, gv.headForward);
         play.beamDirGame = play.headKnown ? normalized(play.head.orientation.rotate(local)) : Vec3{};
         play.beamLength = beamLength;
         play.beamHand = eyes ? -1 : hand;
@@ -1650,6 +1651,7 @@ void step() {
     // the wrist menu: the SM2 build's hologram (0.0.76 SM1 HOLO), opened and closed by the SM2 wrist click
     WristMenu& menu = play.menu; // menu.open: the hologram is up (powers, flight and grapple wait while it is)
     play.holoHands = 0;
+    bool holoClicked = false; // the wrist click opened or closed the hologram this frame
     if (config.wristMenu && fMenu.on && gripOk && holoReady()) {
         // The SM2 wrist click (wrist_hud::Toggle mode 4, FOREARM): hologram on the left wrist (hand 0), the
         // right hand touches it and clicks its trigger. Its thresholds are the SM2 build's own.
@@ -1661,6 +1663,7 @@ void step() {
         play.holo.update(dt, true, 0, grips, gripTracked, triggers, squeezes);
         play.holoHands = play.holo.hands();
         if (play.holo.on() != menu.open) {
+            holoClicked = true;
             if (play.holo.on()) {
                 menu.open = true;
                 play.holoShown = false;
@@ -1802,6 +1805,11 @@ void step() {
     else
         targets::want(false);
     play.cooldown = std::max(0.f, play.cooldown - dt);
+    // The trigger that clicked the hologram (and any trigger held while it was up) is never also a power: it has to be
+    // let go first (0.0.76 test: the click that closed the hologram fired a power in the same frame).
+    for (int i = 0; i < 2; ++i)
+        if (holoClicked || menu.open || (play.holoHands >> i & 1u))
+            play.triggerWas[i] = true;
     if (!nowSpiderMan && live.powers && fPowers.on && !menu.open && rayReady()) {
         for (int i = 0; i < 2; ++i) {
             const bool down = play.trigger[i] > .5f;
@@ -1829,8 +1837,11 @@ void step() {
     for (int i = 0; i < 2; ++i) {
         mi.grip[i] = play.grip[i] > .5f;
         mi.handOut[i] = play.handOut[i];
+        mi.triggerOurs[i] = play.triggerOurs[i];
     }
     play.mask = config.heroes || menu.open ? maskFor(mi) : Mask{};
+    for (int i = 0; i < 2; ++i)
+        play.triggerOurs[i] = keepTrigger(play.trigger[i], play.mask.trigger[i]);
 }
 XRAPI_ATTR XrResult XRAPI_CALL syncActions(XrSession s, const XrActionsSyncInfo* info) {
     const XrResult r = next.syncActions(s, info);

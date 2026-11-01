@@ -453,7 +453,10 @@ void Painter::ask(uint64_t key, std::vector<Vertex> translucent, std::vector<Ver
                   int h) {
     {
         std::lock_guard<std::mutex> g(m_);
-        if (asked_ == key && (pending_ || done_ || resultKey_ == key))
+        // The same picture is not painted twice while it is still waiting to be painted or taken. Once taken it
+        // can be asked again (0.0.76 test: a reopened hologram with the same panel asked for the picture it had
+        // already taken, got nothing, and stayed invisible until the next click closed it).
+        if (asked_ == key && (pending_ || done_))
             return;
         asked_ = key;
         job_ = Job{key, std::move(translucent), std::move(textured), halfW, halfH, w, h};

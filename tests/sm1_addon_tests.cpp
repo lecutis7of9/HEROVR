@@ -7,6 +7,7 @@
 #include "spidy/eye_color.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
+#include "spidy/native_view.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -251,6 +252,22 @@ void inputTests() {
     mi.grip[0] = true;
     m = maskFor(mi);
     check(!m.trigger[0], "swinging (grip held, hero webs on): the trigger reels as his");
+    {
+        // 0.0.76 test: the arm came in with the power's trigger still held and his game fired its own shot.
+        MaskInput held;
+        held.spiderMan = false;
+        held.handOut[1] = true;
+        Mask first = maskFor(held);
+        bool ours = keepTrigger(1.f, first.trigger[1]);
+        check(ours, "a power's press is kept while it is held");
+        held.handOut[1] = false;
+        held.triggerOurs[1] = ours;
+        check(maskFor(held).trigger[1], "the arm comes in, the press is still hidden from his reads");
+        check(!keepTrigger(0.f, true), "let go: the next press is judged afresh");
+        held.triggerOurs[1] = false;
+        check(!maskFor(held).trigger[1], "a press begun with the arm in is his");
+        check(!keepTrigger(std::numeric_limits<float>::quiet_NaN(), true), "no trigger value keeps nothing");
+    }
     mi.flightArmed = true;
     m = maskFor(mi);
     check(!m.grip[0] && !m.grip[1] && !m.trigger[0] && !m.faceLower[1],
@@ -401,6 +418,23 @@ void drawTests() {
 }
 
 void quadTests() {
+    {
+        // 0.0.76 test: the beams went out behind the hand. SpidyVR 0.7.0 writes each hand into SpidyXrData through
+        // native_view::relativePose (the aim pose in the renderer's rows: right, down, forward).
+        const Mat4 basis = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1};
+        Pose aimPose;
+        aimPose.orientation = fromBasis({0, 0, 1}, {0, 1, 0}, {-1, 0, 0}); // pointing along +X
+        aimPose.position = {1, 2, 3};
+        const Mat4 row = native_view::relativePose(basis, aimPose);
+        const Vec3 points = aimPose.orientation.rotate({0, 0, -1});
+        const Vec3 f = xrDataForward(row.data());
+        check(length(f - points) < 1e-4f && f.x > .99f, "a hand's forward in SpidyXrData is where its aim points");
+        // the game head looking along +X (right +Z... its rows right, down, forward): straight ahead is -Z head-local
+        const Vec3 local = gameToHeadLocal({1, 0, 0}, {0, 0, 1}, {0, -1, 0}, {1, 0, 0});
+        check(length(local - Vec3{0, 0, -1}) < 1e-5f, "the game head's forward is OpenXR's -Z");
+        const Vec3 upLocal = gameToHeadLocal({0, 1, 0}, {0, 0, 1}, {0, -1, 0}, {1, 0, 0});
+        check(length(upLocal - Vec3{0, 1, 0}) < 1e-5f, "the game's up is the headset's up");
+    }
     const Quat q = fromBasis({0, 0, -1}, {0, 1, 0}, {1, 0, 0});
     const Vec3 x = q.rotate({1, 0, 0});
     check(std::fabs(x.z + 1) < 1e-4f, "basis to turn");
@@ -917,9 +951,14 @@ void holoTests() {
     for (int i = 0; i < 2000 && !painter.take(got, key); ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     check(key == 7 && got.width == 10 && (got.pixels[0] >> 24) == 128, "the painter paints off the frame");
+    // 0.0.76 test: the hologram reopened with the same panel asked for the picture it had already taken; the
+    // painter answered nothing and the hologram stayed invisible. A taken picture is painted again when asked.
     painter.ask(7, sq, {}, .5f, .5f, 10, 10);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    check(!painter.take(got, key), "the same picture is not painted twice");
+    got = Canvas();
+    key = 0;
+    for (int i = 0; i < 2000 && !painter.take(got, key); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    check(key == 7 && got.width == 10, "a reopened hologram gets its picture again");
     painter.stop();
 }
 

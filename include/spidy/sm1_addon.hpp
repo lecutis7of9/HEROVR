@@ -243,7 +243,12 @@ struct MaskInput {
     bool aHeld = false;       // the right A held since it came down in flight: never also his jump
     bool grappleArmed = false; // CAPTAIN AMERICA / DAREDEVIL with grapple on: the grips are ours, and a held grip's trigger
     bool grip[2]{}, handOut[2]{};
+    // A trigger press that was ours when it went down stays ours until it is let go (0.0.76 test: a power fired with
+    // the arm out, the arm came in with the trigger still held, and his game took the same press as its own shot).
+    bool triggerOurs[2]{};
 };
+// Whether a trigger press stays ours on the next frame: still held, and hidden from his reads this frame.
+bool keepTrigger(float trigger, bool hiddenNow);
 struct Mask {
     bool trigger[2]{}, grip[2]{}, stick[2]{}, stickY[2]{};
     bool faceLower[2]{}, faceUpper[2]{}; // 0.0.76: A/X, B/Y
@@ -337,6 +342,13 @@ Quat fromBasis(Vec3 x, Vec3 y, Vec3 z); // unit, orthogonal axes -> the turn tha
 Pose menuPose(Pose leftGrip, Vec3 head, float lift);
 // A beam `length` long from `from` along unit `dir`, its face turned to the head (the quad's +Y along the beam).
 Pose beamPose(Vec3 from, Vec3 dir, float length, Vec3 head);
+// SpidyXrData's head and hands (16 floats, row-major) carry the renderer's rows: right, down, forward, position
+// (SpidyVR 0.7.0 game_xr.cpp writes each hand's OpenXR aim pose through native_view::relativePose). Where a hand
+// points is its +row 2; the 0.0.76 test's beams used -row 2 and went out behind the hand.
+Vec3 xrDataForward(const float* m);
+// A direction in the game's world, put on the game head's axes (right, down, forward) as OpenXR head-local axes
+// (right, up, back); the headset's orientation then takes it into his projection space.
+Vec3 gameToHeadLocal(Vec3 dir, Vec3 headRight, Vec3 headDown, Vec3 headForward);
 
 // --- Flight (the flying heroes; moved through his SpidyMotionSubmit by the layer) --------------------------------
 bool flies(uint32_t hero); // IRON MAN, SUPERMAN, THOR, GREEN LANTERN

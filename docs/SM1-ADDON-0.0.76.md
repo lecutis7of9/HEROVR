@@ -161,3 +161,19 @@ game or SpidyVR function), only on an object whose vtable is exactly that of one
 ID3D12Resource the runtime made), under SEH; otherwise it records the raw bytes only. The session verdict is
 CONFIRMED only when exactly one record held a depth-format texture at the eye's render size on both eyes, with a
 different resource per eye, in every pass (2 passes at least); anything less stays CANDIDATE.
+
+## Fixes after the 0.0.76 SM1 test (build ce7ea4e)
+
+- **Beams went out behind the hand.** SpidyVR 0.7.0 (game_xr.cpp) writes each hand into SpidyXrData through
+  `native_view::relativePose`: the aim pose in the renderer's rows (right, down, forward). The add-on read a hand's
+  forward as -row 2, which is behind it. It now reads +row 2 (`xrDataForward`), the same convention as the head.
+- **The hologram opened once and then stayed invisible.** Reopened with the same panel, it asked the painter for the
+  picture it had already taken; the painter answered nothing, so the hologram stayed open but unseen until the next
+  click shut it. A taken picture is now painted again when it is asked for (the PLAY AS note had the same fault).
+- **The click that shut the hologram also fired a power.** A trigger that clicks the hologram, or is held while it
+  is up, now has to be let go before it fires a power.
+- **A power's trigger reached the game when the arm came in.** The trigger is hidden from SpidyVR only while the
+  arm is out; a press that began as a power now stays hidden until it is let go, so SpidyVR does not take the same
+  press as its own web or gadget shot.
+- **No held weapons.** The add-on draws flat quads only (OpenXR quad layers). It has no 3D model renderer, and
+  SpidyVR submits no depth, so a held model would also draw over walls. Held weapons are not in this build.

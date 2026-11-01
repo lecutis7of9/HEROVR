@@ -449,8 +449,9 @@ his::Test punchQueued;
 bool punchPending = false;
 std::atomic<DWORD> punchResult{0};
 std::atomic<uint64_t> punchHits{0};
+std::atomic<bool> punchRun{true}; // never cleared: the worker lives as long as the game
 DWORD WINAPI punchWorker(void*) {
-    for (;;) {
+    while (punchRun.load()) {
         AcquireSRWLockExclusive(&punchLock);
         while (!punchPending)
             SleepConditionVariableSRW(&punchWake, &punchLock, INFINITE, 0);
@@ -472,6 +473,7 @@ DWORD WINAPI punchWorker(void*) {
         else
             logLine("SpidyPunchTest %lu", static_cast<unsigned long>(r));
     }
+    return 0; // MSVC C4716: a thread function with __try needs a return it can see
 }
 void queuePunch(const his::Test& t) {
     static std::atomic<bool> started{false};

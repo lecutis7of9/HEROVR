@@ -13,7 +13,7 @@ add_test(NAME sm1_addon COMMAND herovr_sm1_tests)
 if(WIN32)
   # Beside the other modules in build\windows-ninja (tools\package.ps1 ships it when present).
   add_library(herovr_sm1_addon SHARED sm1_addon_dll.cpp)
-  target_compile_definitions(herovr_sm1_addon PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_compile_definitions(herovr_sm1_addon PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
   if(MSVC)
     target_compile_options(herovr_sm1_addon PRIVATE /W4 /permissive-)
   endif()
@@ -28,7 +28,7 @@ if(WIN32 AND TARGET minhook)
   add_library(herovr_sm1_layer SHARED sm1_layer.cpp)
   target_include_directories(herovr_sm1_layer PRIVATE "${PROJECT_SOURCE_DIR}/include"
                              "${PROJECT_SOURCE_DIR}/third_party/OpenXR-SDK/include")
-  target_compile_definitions(herovr_sm1_layer PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX XR_USE_PLATFORM_WIN32
+  target_compile_definitions(herovr_sm1_layer PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS XR_USE_PLATFORM_WIN32
                              XR_USE_GRAPHICS_API_D3D12)
   if(MSVC)
     target_compile_options(herovr_sm1_layer PRIVATE /W4 /permissive-)

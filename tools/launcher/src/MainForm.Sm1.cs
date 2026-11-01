@@ -24,6 +24,10 @@ namespace Sm2VrLauncher
         Sm1Release sm1Latest;
         volatile bool sm1Busy;
         bool sm1Checked;
+        TextLabel sm1SuitsText;
+        AccentButton sm1BtnSuitsInstall, sm1BtnSuitsRemove, sm1BtnSuitsDump;
+        volatile bool sm1SuitsBusy;
+        bool sm1SuitsChecked;
 
         /// <summary>SPIDER-MAN 1 is the game picked at the top (saved; SPIDER-MAN 2 / HERO VR is the default).</summary>
         bool Sm1Selected { get { return settings != null && settings.Get(Sm1.KeyGame, LobbyGame.Sm2) == LobbyGame.Sm1; } }
@@ -123,18 +127,35 @@ namespace Sm2VrLauncher
             var disc = Add(card, new AccentButton("His Discord", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 390, 392, 110, 30);
             var log = Add(card, new AccentButton("Add-on log", ButtonKind.Ghost) { TextFont = Theme.UiBold(12) }, 510, 392, 130, 30);
 
-            Add(card, new TextLabel(GlassPanel.Spaced("Mulder's Heroes add-on"), Theme.UiBold(11), hs ? Theme.Neon : Theme.Red) { Wrap = false }, 670, 90, 418, 18);
+            var addonHead = Add(card, new TextLabel(GlassPanel.Spaced("Mulder's Heroes add-on"), Theme.UiBold(11), hs ? Theme.Neon : Theme.Red) { Wrap = false }, 670, 90, 418, 18);
             sm1Addon = Add(card, new ToggleRow("Load Mulder's Heroes add-on", "Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyAddon, true)), 670, 112, 418, 58);
             sm1Wrist = Add(card, new ToggleRow("Wrist menu", "Touch your left wrist with your right hand and pull the right trigger to open or close the hero menu, as in SM2; takes effect the next time you press Play.",
-                settings.GetBool(Sm1.KeyWrist, true)), 670, 172, 418, 58);
+                settings.GetBool(Sm1.KeyWrist, true)), 670, 170, 418, 58);
             sm1Flight = Add(card, new ToggleRow("Flight", "Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play.",
-                settings.GetBool(Sm1.KeyFlight, true)), 670, 232, 418, 58);
+                settings.GetBool(Sm1.KeyFlight, true)), 670, 228, 418, 58);
             sm1News = Add(card, new ToggleRow("Tell me about his new releases", "Looks at his GitHub once when the launcher starts (nothing installs by itself); takes effect the next time the launcher starts.",
-                settings.GetBool(Sm1.KeyNews, true)), 670, 292, 418, 58);
+                settings.GetBool(Sm1.KeyNews, true)), 670, 286, 418, 58);
             // 0.0.76: which hero features Spider-Man 1 has (Sm1.Features, the same list as the add-on's own).
-            var featureText = Add(card, new TextLabel(Sm1.FeatureSummary(), Theme.Ui(10f), Theme.Sub), 670, 352, 418, 76);
-            tip.SetToolTip(featureText, Sm1.FeatureDetails());
+            // (0.0.76: shown as the add-on heading's tooltip and in the session log at Play, to make room for hero suits.)
+            tip.SetToolTip(addonHead, Sm1.FeatureSummary() + "\n\n" + Sm1.FeatureDetails());
+
+            // 0.0.76: hero suits - the launcher adds the heroes to Spider-Man 1 as suits through the game's own toc
+            // (Overstrike-style, Sm1Suits.cs); only the game's asset_archive changes, never iilyn's files.
+            var suitsHead = Add(card, new TextLabel(GlassPanel.Spaced("Hero suits in Spider-Man 1"), Theme.UiBold(11), hs ? Theme.Neon : Theme.Red) { Wrap = false }, 670, 348, 418, 18);
+            sm1SuitsText = Add(card, new TextLabel("Hero suits: not checked yet. Each button takes effect the next time the game starts.", Theme.Ui(10f), Theme.Sub), 670, 366, 418, 30);
+            sm1BtnSuitsInstall = Add(card, new AccentButton("Install suits", ButtonKind.Ghost) { Glyph = "build", TextFont = Theme.UiBold(12) }, 670, 398, 136, 30);
+            sm1BtnSuitsRemove = Add(card, new AccentButton("Remove suits", ButtonKind.Ghost) { Glyph = "revert", TextFont = Theme.UiBold(12) }, 811, 398, 136, 30);
+            sm1BtnSuitsDump = Add(card, new AccentButton("Game info", ButtonKind.Ghost) { Glyph = "download", TextFont = Theme.UiBold(12) }, 952, 398, 136, 30);
+            tip.SetToolTip(suitsHead, "Install fits the ten heroes to Spider-Man 1's own suit and adds them to its Suits menu (pick them there; the wrist menu does not switch them yet); takes effect the next time the game starts. " +
+                "Remove puts the game's files back exactly as they were; takes effect the next time the game starts. " +
+                "Game info only reads the game and saves a report for Agent Mulder; it changes nothing. iilyn's mod files are never touched.");
+            tip.SetToolTip(sm1BtnSuitsInstall, "Converts Models\\SM1Suits on this PC (a minute or two), backs up asset_archive\\toc, writes asset_archive\\HeroVR. Close the game first. Takes effect the next time the game starts.");
+            tip.SetToolTip(sm1BtnSuitsRemove, "Puts back the toc saved before Install and deletes asset_archive\\HeroVR. Takes effect the next time the game starts.");
+            tip.SetToolTip(sm1BtnSuitsDump, "Reads the game (nothing is written there) and saves herovr_sm1_dump.json in " + Sm1Suits.DumpFolder + ". Send that folder to Agent Mulder.");
+            sm1BtnSuitsInstall.Click += (s, e) => Sm1SuitsRun("install");
+            sm1BtnSuitsRemove.Click += (s, e) => Sm1SuitsRun("revert");
+            sm1BtnSuitsDump.Click += (s, e) => Sm1SuitsRun("dump");
 
             sm1Addon.Changed += (s, e) => { settings.SetBool(Sm1.KeyAddon, sm1Addon.Checked); settings.Save(); sm1Wrist.Enabled = sm1Flight.Enabled = sm1Addon.Checked; Sm1Refresh(); UpdatePlayState(); };
             sm1Wrist.Changed += (s, e) => { settings.SetBool(Sm1.KeyWrist, sm1Wrist.Checked); settings.Save(); };
@@ -193,8 +214,54 @@ namespace Sm2VrLauncher
                 else if (Sm1.AddonPresent(root) && Sm1.LayerPresent(root)) sm1RowAddon.Set(CheckState.Ok, "Ready: heroes, wrist menu and flight join his VR. " + Sm1LastAddonLine());
                 else if (Sm1.AddonPresent(root)) sm1RowAddon.Set(CheckState.Warn, "Only the report part is here (no " + Sm1.LayerDll + "): no wrist menu, heroes or flight. Repair gets it.");
                 else sm1RowAddon.Set(CheckState.Warn, "Not here yet: PLAY offers to get it; his mod also runs alone.");
+                if (!sm1SuitsChecked && !preview && sm1Game != null) { sm1SuitsChecked = true; Sm1SuitsRun("status"); }
             }
             catch (Exception ex) { Program.LogError(ex); }
+        }
+
+        /// <summary>Runs the hero suits tool (status, install, revert, dump) in the background; one at a time.</summary>
+        void Sm1SuitsRun(string command)
+        {
+            if (preview || sm1SuitsBusy || sm1BtnSuitsInstall == null) return;
+            if (command != "status" && Sm1.GameRunning())
+            {
+                sessionLog.Line("Hero suits: close Spider-Man first; its files cannot change while it runs.", Theme.Warn);
+                return;
+            }
+            string why = Sm1Suits.Missing(root, sm1Game);
+            if (why != null) { sm1SuitsText.Text = "Hero suits: " + why + "."; if (command != "status") sessionLog.Line("Hero suits: " + why + ".", Theme.Warn); return; }
+            sm1SuitsBusy = true;
+            sm1BtnSuitsInstall.Enabled = sm1BtnSuitsRemove.Enabled = sm1BtnSuitsDump.Enabled = false;
+            string verb = command == "install" ? "Installing hero suits (a minute or two)..." : command == "revert" ? "Removing hero suits..." :
+                          command == "dump" ? "Reading the game for the report (about two minutes)..." : "Checking hero suits...";
+            sm1SuitsText.Text = verb;
+            if (command != "status") sessionLog.Line("Hero suits: " + verb, Theme.Info);
+            string game = sm1Game, r = root;
+            var t = new Thread(() =>
+            {
+                Sm1Suits.Result res;
+                try { res = Sm1Suits.Run(r, game, command, line => { if (command != "status") Ui(() => sessionLog.Line("  " + line, Theme.Sub)); }); }
+                catch (Exception ex) { res = new Sm1Suits.Result { Error = ex.Message }; }
+                Sm1Suits.Result st = null;
+                if (command != "status") { try { st = Sm1Suits.Run(r, game, "status", null); } catch { } }
+                Ui(() =>
+                {
+                    sm1SuitsBusy = false;
+                    sm1BtnSuitsInstall.Enabled = sm1BtnSuitsRemove.Enabled = sm1BtnSuitsDump.Enabled = true;
+                    if (command == "status") { sm1SuitsText.Text = Sm1Suits.Describe(res); return; }
+                    if (st != null) sm1SuitsText.Text = Sm1Suits.Describe(st);
+                    if (!res.Ok) { sessionLog.Line("Hero suits: " + command + " failed: " + res.Error + (command == "install" ? " A part-way install is undone by the tool." : "") + " Log: " + Sm1Suits.LogPath, Theme.Bad); return; }
+                    if (command == "install") sessionLog.Line("Hero suits installed. Start Spider-Man 1 and pick them in its Suits menu (looks not yet checked in the game).", Theme.Good);
+                    else if (command == "revert") sessionLog.Line("Hero suits removed; the game's toc is back as it was.", Theme.Good);
+                    else
+                    {
+                        sessionLog.Line("Game info saved in " + Sm1Suits.DumpFolder + ". Send that folder to Agent Mulder.", Theme.Good);
+                        try { SystemInfo.OpenFolder(Sm1Suits.DumpFolder, null); } catch { }
+                    }
+                });
+            });
+            t.IsBackground = true;
+            t.Start();
         }
 
         static string Sm1LastAddonLine()

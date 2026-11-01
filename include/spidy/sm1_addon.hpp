@@ -81,14 +81,14 @@ inline constexpr Feature features[] = {
      "click opens and closes it); right stick moves, right trigger picks (OpenXR quad layer)"},
     {"hero select", Evidence::confirmed, State::untested, "picks one of the 11 heroes, saved in addon.ini"},
     {"outfits", Evidence::confirmed, State::untested,
-     "each hero's outfits listed with their artists and saved; Spider-Man 1 shows no hero models yet"},
+     "each hero's outfits listed with their artists and saved; the wrist pick does not change the model in the game yet"},
     {"holo card", Evidence::confirmed, State::untested, "the hero's card on the wrist (2D, not the 3D hologram)"},
     {"hero powers", Evidence::confirmed, State::untested,
      "trigger of an outstretched hand: the hero's blast hits the ringed enemy through SpidyPunchTest, with a beam"},
     {"flight in game", Evidence::confirmed, State::untested,
      "IRON MAN, SUPERMAN, THOR, GREEN LANTERN: hold a grip to take off, stay up after letting go; his SpidyMotionSubmit "
      "export moves the body, with the layer keeping his serial numbers in order so his swinging never shuts off"},
-    {"hero models", Evidence::candidate, State::stub, "needs SM1's character model slots and drawing into his frame"},
+    {"hero models", Evidence::candidate, State::stub, "the launcher adds the heroes as SM1 suits (game's toc, CANDIDATE, not yet seen in the game); the add-on does not switch them"},
 };
 inline constexpr int featureCount = static_cast<int>(sizeof(features) / sizeof(features[0]));
 const char* evidenceText(Evidence e);

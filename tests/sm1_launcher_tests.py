@@ -11,7 +11,7 @@ HAVE_MONO = shutil.which('mcs') and shutil.which('mono') and os.path.isfile(API 
 def src(n): return (SRC/n).read_text(encoding='utf-8')
 NEW = [SRC/'Sm1.cs', SRC/'MainForm.Sm1.cs', ROOT/'tests/sm1_launcher/Sm1SelfTest.cs', ROOT/'include/spidy/sm1_addon.hpp',
        ROOT/'src/sm1/sm1_core.cpp', ROOT/'src/sm1/sm1_addon_dll.cpp', ROOT/'src/sm1/CMakeLists.txt', ROOT/'tests/sm1_addon_tests.cpp',
-       ROOT/'docs/SM1-ADDON-0.0.75.md', ROOT/'src/sm1/sm1_layer.cpp', ROOT/'src/sm1/herovr_sm1_layer.json']
+       ROOT/'docs/SM1-ADDON-0.0.75.md', ROOT/'src/sm1/sm1_layer.cpp', ROOT/'src/sm1/herovr_sm1_layer.json', SRC/'Sm1Suits.cs']
 
 
 class Picker(unittest.TestCase):
@@ -104,6 +104,37 @@ class Layer(unittest.TestCase):
         self.assertEqual(m['api_layer']['disable_environment'], 'HEROVR_SM1_LAYER_DISABLE')
         pkg = (ROOT/'tools/package.ps1').read_text(encoding='utf-8')
         self.assertIn("'herovr_sm1_layer.dll', 'herovr_sm1_layer.json'", pkg)
+
+
+
+class HeroSuits(unittest.TestCase):
+    """0.0.76: the hero suits buttons run tools/sm1_suits/sm1suits.py with the mod's own Python."""
+    def test_arguments_match_the_tool(self):
+        c, py = src('Sm1Suits.cs'), (ROOT/'tools/sm1_suits/sm1suits.py').read_text(encoding='utf-8')
+        for flag in ('--game', '--packs', '--log', '--out'):
+            self.assertIn('" %s "' % flag, c)
+            self.assertIn("ap.add_argument('%s'" % flag, py)
+        for cmd in ('install', 'revert', 'dump', 'status'):
+            self.assertIn("'%s'" % cmd, py)
+        for key in ("'installed'", "'suits'", "'toc_matches_install'", "'ok'", "'error'", "'result'"):
+            self.assertIn(key, py)
+            self.assertIn('"%s"' % key.strip("'"), c)
+        self.assertIn("print('RESULT ' + json.dumps(", py)
+        self.assertIn('StartsWith("RESULT ", StringComparison.Ordinal)', c)
+        self.assertIn('ModFiles.BundledPython(root)', c)
+
+    def test_safe_buttons(self):
+        f, c = src('MainForm.Sm1.cs'), src('Sm1Suits.cs')
+        self.assertIn('if (command != "status" && Sm1.GameRunning())', f)
+        self.assertIn('if (command != "status" && Sm1.GameRunning())', c)
+        self.assertIn('if (preview || sm1SuitsBusy', f)
+        self.assertNotIn('sm1Mod', c)                      # never his folder: only the game's asset_archive and ours
+        self.assertIn('Sm1.AddonDataFolder', c)
+        tips = re.findall(r'tip\.SetToolTip\(sm1BtnSuits(Install|Remove), "([^;]*?)"\);', f)
+        self.assertEqual(len(tips), 2)
+        for _, t in tips:
+            self.assertTrue(t.endswith('Takes effect the next time the game starts.'), t)
+        self.assertIn('it changes nothing', f)
 
 
 class Multiplayer(unittest.TestCase):

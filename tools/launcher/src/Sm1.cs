@@ -78,11 +78,11 @@ namespace Sm2VrLauncher
         public static readonly string[][] Features = {
             new[] { "wrist hero menu", "untested", "opens like SM2: right hand on the left wrist plus the right trigger; right stick moves, right trigger picks" },
             new[] { "hero select", "untested", "11 heroes, saved in addon.ini" },
-            new[] { "outfits", "untested", "listed with their artists and saved; no hero models in Spider-Man 1 yet" },
+            new[] { "outfits", "untested", "listed with their artists and saved; the wrist pick does not change the model in the game yet" },
             new[] { "holo card", "untested", "the hero's card on the wrist (2D)" },
             new[] { "hero powers", "untested", "trigger of an outstretched hand hits the ringed enemy, with a beam" },
             new[] { "flight in game", "untested", "Iron Man, Superman, Thor, Green Lantern: hold a grip to take off" },
-            new[] { "hero models", "stub", "needs Spider-Man 1's character model slots (not done)" },
+            new[] { "hero models", "stub", "Install hero suits adds them to the game's Suits menu (not yet seen in the game); the wrist menu does not switch them" },
         };
 
         /// <summary>The feature list for the Spider-Man 1 page: what runs in the game and what does not yet.</summary>

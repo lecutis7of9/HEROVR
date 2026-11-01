@@ -125,7 +125,7 @@ namespace Sm2VrLauncher
             string ini = File.ReadAllText(Path.Combine(Sm1.AddonDataFolder, "addon.ini"));
             Check(ini.Contains("hero=5\n") && ini.Contains("outfit.5=2\n") && ini.Contains("outfit.1=1\n") && !ini.Contains("outfit.x"), "addon.ini keeps hero and outfits");
             Check(ini.Contains("wrist_menu=0\n") && ini.Contains("flight=0\n") && ini.Contains("heroes=1\n"), "addon.ini switches");
-            Check(Sm1.Features.Length == 8 && Sm1.Features.Count(x => x[1] == "stub") == 2 && Sm1.FeatureSummary().Contains("holo suit switch"), "feature list");
+            Check(Sm1.Features.Length == 9 && Sm1.Features.Count(x => x[1] == "stub") == 2 && Sm1.FeatureSummary().Contains("holo suit switch") && Sm1.FeatureSummary().Contains("color"), "feature list");
 
 
             // 0.0.76 SM1: his launcher.ini read as his loadSettings reads it, and his sessionArguments.

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -15,6 +16,8 @@
 #include <mutex>
 
 namespace spidy::sm1::propsgpu {
+void drop(); // below; bind() drops a set of an earlier session
+
 namespace {
 
 using CompileFn = HRESULT(WINAPI*)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT,
@@ -160,12 +163,14 @@ struct Gpu {
 } gpu;
 
 std::atomic<bool> enabled{true};
+std::atomic<uint32_t> readyModels{0}; // a bit per model of the set on the GPU (read by the input thread's throws)
 
 bool fail(const char* why) {
     if (!gpu.off)
         say("PROPS: off for this session (%s); the game and the rest of the add-on go on", why);
     gpu.off = true;
     enabled = false;
+    readyModels = 0;
     return false;
 }
 
@@ -440,13 +445,34 @@ void takePending() {
     }
     if (!fresh)
         return;
-    if (fresh->device != gpu.device) { // a set for an earlier session's device
+    if (fresh->device != gpu.device) { // a set for an earlier session's device: dropped, and loaded again
+        say("PROPS: a loaded set was for another device (ours %p, the set's %p): dropped, loading again",
+            static_cast<void*>(gpu.device), static_cast<void*>(fresh->device));
         delete fresh;
+        std::lock_guard<std::mutex> g(setLock);
+        wantedKey.clear();
         return;
     }
     if (gpu.current)
         gpu.retired.push_back(gpu.current);
     gpu.current = fresh;
+    uint32_t mask = 0;
+    for (uint32_t m = 0; m < props::modelCount; ++m)
+        if (fresh->range[m].count)
+            mask |= 1u << m;
+    readyModels = mask;
+    say("PROPS: hero %u's set is on the GPU (%u of its models ready to draw and throw)", fresh->hero,
+        static_cast<unsigned>(std::popcount(mask)));
+}
+// The frame's session and device, before anything is loaded or taken (0.0.76 test 3: the loaded set was compared with
+// a device only render() had set, so the first set was always dropped and the props never drew).
+void bind(XrSession session, ID3D12Device* d) {
+    if (gpu.device != d || gpu.session != session) {
+        if (gpu.device || gpu.session)
+            drop();
+        gpu.device = d;
+        gpu.session = session;
+    }
 }
 
 DXGI_FORMAT pickFormat(XrSession s, bool& encode) {
@@ -658,9 +684,10 @@ void setup(const Xr& x, Log log, mesh_model::Decoder d) {
     decoder = d;
 }
 
-void want(uint32_t hero, const std::wstring& modelsRoot, ID3D12Device* device) {
-    if (!device || !enabled.load() || !props::hasProps(hero))
+void want(XrSession session, uint32_t hero, const std::wstring& modelsRoot, ID3D12Device* device) {
+    if (!device || !session || gpu.off || !enabled.load() || !props::hasProps(hero))
         return;
+    bind(session, device);
     const std::wstring key = std::to_wstring(hero) + L"|" + std::to_wstring(reinterpret_cast<uintptr_t>(device)) + L"|" + modelsRoot;
     {
         std::lock_guard<std::mutex> g(setLock);
@@ -702,7 +729,7 @@ void bounds(props::Bounds (&out)[props::modelCount]) {
 }
 
 bool ready(props::Model m) {
-    return !gpu.off && enabled.load() && gpu.current && m < props::modelCount && gpu.current->range[m].count > 0;
+    return enabled.load() && m < props::modelCount && (readyModels.load() >> m & 1u);
 }
 
 bool on() { return enabled.load() && !gpu.off; }
@@ -713,12 +740,7 @@ bool render(XrSession session, ID3D12Device* d, ID3D12CommandQueue* queue, const
             const std::vector<props::Item>& items, XrCompositionLayerProjection& out) {
     if (gpu.off || !d || !queue || !session)
         return false;
-    if (gpu.device != d || gpu.session != session) {
-        if (gpu.device || gpu.session)
-            drop();
-        gpu.device = d;
-        gpu.session = session;
-    }
+    bind(session, d);
     retireDone();
     takePending();
     Set* set = gpu.current;
@@ -868,6 +890,7 @@ void drop() {
         xr.destroySwapchain(gpu.swapchain); // the runtime's; the session is ending anyway
     }
     gpu = Gpu{};
+    readyModels = 0;
     enabled = true; // a new session tries again
 }
 

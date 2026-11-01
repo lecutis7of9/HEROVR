@@ -35,7 +35,8 @@ void setup(const Xr& xr, Log log, mesh_model::Decoder decoder);
 
 // The hero's models, from modelsRoot (HERO VR's Models folder, "...\Models\"), loaded on a thread of their own; a new
 // hero's set replaces the old one when it is ready. Cheap when nothing changed (call it every frame).
-void want(uint32_t hero, const std::wstring& modelsRoot, ID3D12Device* device);
+// The frame's session and device are bound first (a change of either drops the old set and loads again).
+void want(XrSession session, uint32_t hero, const std::wstring& modelsRoot, ID3D12Device* device);
 // The loaded set's bounds (ok false where a model is not on the GPU yet, or failed).
 void bounds(props::Bounds (&out)[props::modelCount]);
 // True when the model is ready to draw (its set loaded, the renderer not turned off).

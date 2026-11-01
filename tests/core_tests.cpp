@@ -33436,8 +33436,8 @@ int main() {
         // the tracked one: the car drives there, then it goes quiet -> CLEARED; the other: LOST
         const Vec3 there{110, 0, 0};
         e = t.step(1.f, g2, 5, there, true);
-        e = t.step(6.f, nullptr, 0, there, true);
-        check(e.ended != 0 && t.liveCount() == 0 && t.tracked() == 0 && t.pastCount() == 2, "unseen 4 s: over");
+        e = t.step(12.f, nullptr, 0, there, true); // 0.0.76: the tracked one is held 10 s
+        check(e.ended != 0 && t.liveCount() == 0 && t.tracked() == 0 && t.pastCount() == 2, "unseen 4 s (tracked 10 s): over");
         bool sawCleared = false, sawLost = false;
         for (uint32_t k = 0; k < t.pastCount(); ++k) {
             sawCleared |= t.past(k).id == first && t.past(k).outcome == cg::Outcome::cleared;
@@ -33447,18 +33447,18 @@ int main() {
         check(t.logCount() >= 5 && t.log(0).kind != cg::LogKind::none, "the scanner log, newest first");
         // the popup times out; OFF clears the live list, keeps the past
         Vec3 g3[2]{{0, 0, -50}, {2, 0, -52}};
-        t.step(10, g3, 2, car, true);
+        t.step(20, g3, 2, car, true);
         check(t.popup() != 0, "a new crime pops up");
-        t.step(10 + cg::popupSeconds + 1, g3, 2, car, true);
+        t.step(20 + cg::popupSeconds + 1, g3, 2, car, true);
         check(!t.popup() && t.liveCount() == 1, "the popup waits only so long");
-        t.step(30, g3, 2, car, false);
+        t.step(40, g3, 2, car, false);
         check(t.liveCount() == 0 && t.pastCount() == 2, "OFF: live cleared, past kept");
         // garbage: NaN thugs and clock, too many thugs
         Vec3 bad[40];
         for (auto& b : bad)
             b = {NAN, 0, 0};
         t.step(NAN, bad, 40, car, true);
-        t.step(31, bad, 40, {NAN, 0, 0}, true);
+        t.step(41, bad, 40, {NAN, 0, 0}, true);
         check(t.liveCount() == 0, "NaN enemies: nothing");
         cg::Tracker full;
         Vec3 many[32];
@@ -33466,6 +33466,43 @@ int main() {
             many[2 * i] = {i * 100.f, 0, 0}, many[2 * i + 1] = {i * 100.f + 1, 0, 0};
         full.step(0, many, 32, car, true);
         check(full.liveCount() == cg::mostCrimes, "at most mostCrimes live");
+    });
+    test("0.0.76 CRIME GPS FIX: the nearest crime tracked by itself, later crimes offered, held past gaps and stale lists", [] {
+        namespace cg = spidy::crime_gps074;
+        cg::Tracker t;
+        const Vec3 car{0, 0, 0};
+        // two crimes, nothing pressed: the nearest is tracked anyway (the arrow leads to it)
+        Vec3 g[4]{{-300, 0, 0}, {-302, 0, 1}, {60, 0, 0}, {62, 0, 1}};
+        t.step(0, g, 4, car, true);
+        const cg::Crime* near = t.tracked() ? t.find(t.tracked()) : nullptr;
+        check(t.liveCount() == 2 && near && std::abs(near->at.x - 61) < .01f, "no OK: the nearest crime is tracked");
+        const uint32_t nearId = t.tracked();
+        // a crime spotted while one is tracked: it is offered (a popup), the track stays
+        t.dismiss();
+        Vec3 g2[6]{{-300, 0, 0}, {-302, 0, 1}, {60, 0, 0}, {62, 0, 1}, {0, 0, 200}, {1, 0, 202}};
+        cg::Event e = t.step(.5f, g2, 6, car, true);
+        check(e.appeared && t.popup() == e.appeared && t.tracked() == nearId, "a later crime pops up; the track stays");
+        check(t.accept(.6f) && t.tracked() == e.appeared, "OK switches the track to it");
+        check(t.track(nearId, .7f) && t.tracked() == nearId, "the Batcomputer's track still picks");
+        // a stale list (a slow scan, the log off) ends nothing
+        for (float s = 1; s <= 9; s += 1)
+            t.step(s, nullptr, 0, car, true, false);
+        check(t.liveCount() == 3 && t.tracked() == nearId, "stale list: every crime held");
+        // the tracked one unseen 6 s (fresh lists without it): still tracked; the others (4 s) end
+        Vec3 g3[4]{{-300, 0, 0}, {-302, 0, 1}, {0, 0, 200}, {1, 0, 202}};
+        t.step(9.5f, g3, 4, car, true);
+        t.step(15.f, g3, 4, car, true);
+        check(t.tracked() == nearId && t.find(nearId), "the tracked one is held past 4 s unseen");
+        // it ends at 10 s unseen: the next nearest is tracked by itself
+        t.step(20.f, g3, 4, car, true);
+        check(!t.find(nearId) && t.tracked() && t.tracked() != nearId && t.liveCount() == 2, "it ends: the next nearest is tracked");
+        const cg::Crime* next = t.find(t.tracked());
+        check(next && std::abs(next->at.z - 201) < .01f, "the next one is the nearer of the two");
+        // stale too long: the crimes run out
+        for (float s = 21; s <= 40; s += 1)
+            t.step(s, nullptr, 0, car, true, false);
+        check(t.liveCount() == 0 && t.tracked() == 0, "stale past 10 s: they end");
+        check(std::string(cg::help).size() <= 80, "help fits 80");
     });
     test("0.0.74 test 2b BATCAVE: Batcomputer pages, sit / stand, tracking, wrist button, the draw stays finite", [] {
         namespace bc = spidy::batcave074;

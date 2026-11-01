@@ -30,6 +30,16 @@ constexpr size_t mostActors = 30000, mostWatched = 4096;
 constexpr float slowScanMs = 25, failScanMs = 250;
 
 std::atomic<bool> master{true}, kindOn[kinds]{true, true, true}, running{};
+// 0.0.76 CRIME GPS FIX: when the GPS last asked for the enemy lists (steady clock ms; 0 never). A call stops
+// counting 2 s later, so a frame that no longer asks (out of the car) lets the scan rest by itself.
+std::atomic<int64_t> enemiesWantedMs{};
+int64_t steadyMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+bool enemiesWanted() {
+    const int64_t at = enemiesWantedMs.load(std::memory_order_relaxed);
+    return at != 0 && steadyMs() - at < 2000;
+}
 std::atomic<float> lookX{}, lookY{}, lookZ{-1};
 std::atomic<float> nearestEnemy{1e9f}; // metres at the last scan (BLOOD SPLATTER's plan B)
 std::atomic<float> nearestPerson{1e9f}; // Update 37.2: any civilian / pedestrian (NPC NEAR FADE's log)
@@ -388,7 +398,7 @@ void run() {
             const float dt = std::chrono::duration<float>(now - lastTick).count();
             lastTick = now;
             clock += dt;
-            if (!any) {
+            if (!any && !enemiesWanted()) {
                 work.status = 0;
                 nearestEnemy.store(1e9f, std::memory_order_relaxed);
                 nearestPerson.store(1e9f, std::memory_order_relaxed);
@@ -504,8 +514,20 @@ void run() {
                 healthOf.swap(nowHealthOf);
                 healthFound.store(healthOf.size(), std::memory_order_relaxed);
                 enemyNames.clear();
+                // 0.0.76 CRIME GPS FIX: the 64 nearest the hero (guarded position reads; unknown ones last)
+                std::vector<std::pair<float, uintptr_t>> byNear;
                 for (const auto& [record, bits] : nowActors)
-                    if (bits & enemyBit && record != hero && enemyRecords.size() < 64) {
+                    if (bits & enemyBit && record != hero) {
+                        Vec3 p{};
+                        const float d = heroKnown && position(record, p) && finite(p) ? length(p - heroAt) : 1e30f;
+                        byNear.emplace_back(std::isfinite(d) ? d : 1e30f, record);
+                    }
+                const size_t keep = std::min<size_t>(byNear.size(), 64);
+                std::partial_sort(byNear.begin(), byNear.begin() + static_cast<std::ptrdiff_t>(keep), byNear.end(),
+                                  [](const auto& a, const auto& b) { return a.first < b.first; });
+                for (size_t q = 0; q < keep; ++q) {
+                    const uintptr_t record = byNear[q].second;
+                    {
                         enemyRecords.push_back(record);
                         std::array<char, nameChars> name{};
                         if (const auto a = nowArchetype.find(record); a != nowArchetype.end() && a->second)
@@ -513,6 +535,7 @@ void run() {
                                 name[k] = a->second[k];
                         enemyNames.emplace(record, name);
                     }
+                }
             }
             refreshEnemies();
             if (!baseline) {
@@ -587,7 +610,7 @@ void run() {
                         if (!(w.cls & dialogueBit) && !nowWatched.count(address) && limits[mission].take(0))
                             push(missionStop, w.name, "", {}, 180.f, w.cls, 0, 1);
             }
-            baseline = false;
+            baseline = !any; // 0.0.76: a scan for the CRIME GPS alone logs nothing; a log turned on starts fresh
             watched.swap(nowWatched);
             actors.swap(nowActors);
             archetype.swap(nowArchetype);
@@ -666,6 +689,7 @@ void look(Vec3 forward) {
     lookZ.store(forward.z, std::memory_order_relaxed);
 }
 void setOn(bool on) { master = on; }
+void setEnemiesWanted(bool on) { enemiesWantedMs.store(on ? steadyMs() : 0, std::memory_order_relaxed); }
 float nearestEnemyMetres() { return running.load() ? nearestEnemy.load(std::memory_order_relaxed) : 1e9f; }
 bool isOn() { return master.load(); }
 float nearestPersonMetres() { return running.load() ? nearestPerson.load(std::memory_order_relaxed) : 1e9f; }

@@ -8100,15 +8100,20 @@ DWORD WINAPI run(void*) {
                                             crimeGpsClock += std::isfinite(vin.dt) && vin.dt > 0 && vin.dt < 1 ? vin.dt : 0.f;
                                             std::array<Vec3, world_trace::farSlots> crimeFar{};
                                             float farAge = 0;
+                                            // 0.0.76 CRIME GPS FIX: the scan runs for it with WORLD LOG off; a stale list holds the crimes
+                                            // (it is no sight of "no thugs"); the nearest crime is tracked by itself (crime_gps074.hpp).
+                                            world_trace::setEnemiesWanted(gpsOn);
                                             const uint32_t farN = gpsOn ? std::min<uint32_t>(world_trace::enemiesFar(crimeFar, farAge), world_trace::farSlots) : 0u;
-                                            const crime_gps074::Event ce = crimeTracker.step(crimeGpsClock, crimeFar.data(), farN, van.frame.at, gpsOn);
+                                            const bool farFresh = std::isfinite(farAge) && farAge <= 1.f;
+                                            const crime_gps074::Event ce = crimeTracker.step(crimeGpsClock, crimeFar.data(), farN, van.frame.at, gpsOn, farFresh);
                                             const uint32_t pop = crimeTracker.popup();
                                             if (pop && pop != crimeGpsPopupShown && !hideoutVisit.active()) {
                                                 crimeGpsPopupShown = pop;
                                                 vanDash.pick(van_screen::map);
                                                 runtime.haptic(0, .12f);
                                                 runtime.haptic(1, .12f);
-                                                message(1, 0, "CRIME IN PROGRESS - press OK on the dash's MAP to track it");
+                                                message(1, 0, pop == crimeTracker.tracked() ? "CRIME IN PROGRESS - the GPS arrow over the dash leads to it"
+                                                                                            : "CRIME IN PROGRESS - press OK on the dash's MAP to track this one");
                                                 game_prompts::note("0.0.74 test 2b CRIME GPS: a crime popped up (a group of enemies, CANDIDATE)");
                                             }
                                             if (ce.ended && ce.ended == crimeGpsTrackedWas && ce.outcome != crime_gps074::Outcome::none)

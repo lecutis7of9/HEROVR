@@ -97,9 +97,10 @@ enum Id : int {
     soonTile = 60, // + soonHeroes index (never pressable: not playable yet)
     // 0.0.76 (owner: "INVINCIBLE is way too hard to find"): the tiles' foot, under PLAYING - INVINCIBLE and
     // DOUBLE HEALTH for every hero, a press each (the wrist rows' own toggles).
-    healthInvincible = 70,
-    healthDouble = 71,
+    healthInvincible = 90, // past soonTile's range (60 + soonCount)
+    healthDouble = 91,
 };
+static_assert(soonTile + static_cast<int>(soonCount) <= healthInvincible, "the health buttons past the SOON tiles");
 struct State {
     Screen screen = Screen::closed;
     uint32_t group{};                   // the grid's tab: 0 MARVEL, 1 DC

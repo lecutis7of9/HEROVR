@@ -226,6 +226,11 @@ uint32_t enemiesWorld(std::array<Vec3, enemySlots>& out, std::array<uint64_t, en
 inline constexpr uint32_t farSlots = 32;
 inline constexpr float farReach = 600.f;
 uint32_t enemiesFar(std::array<Vec3, farSlots>& out, float& ageSeconds);
+// 0.0.76 CRIME GPS FIX: while true (CRIME GPS on in a car) the scan keeps the enemy lists even with every log
+// off (WORLD LOG off used to stop the scan, so the GPS saw no thugs; a call counts 2 s); no log events. The
+// scan's 64 enemy records are now the 64 nearest the hero (they were the registry's first 64, so a crowd of
+// far or idle enemies could hide a crime nearby).
+void setEnemiesWanted(bool on);
 // Version 0.0.5 DAMAGE PROBE (damage_probe.hpp), read-only: the same enemies' hit points, each one's
 // BotHealth component (vtable 0x531b0a0, owner record +0x10, as the CONFIRMED HeroHealth; hit
 // points +0xd0, most +0xa0) found in the full scan and re-read with the 10 Hz refresh.

@@ -12014,8 +12014,11 @@ DWORD WINAPI run(void*) {
                             if (!(gameWebsDrawn && gameLinesRunning))
                                 appendWeb(vertices, l, viewer, pixelAngle, webLook);
                         };
-                        const auto drawOurWeb = [&](const WebLine& l) { // GRAB WEB's rope, WALL STICK's nets
-                            if (!gameWebsDrawn)
+                        // GRAB WEB's rope, WALL STICK's nets. The TEST 0.0.76 3c47385 report (web_state failed,
+                        // 0 creates: Spider-Man 2's web hook is not ported, sm2::websNotPorted) showed these went
+                        // invisible with no game line in their place; now they hide only while the game's lines run.
+                        const auto drawOurWeb = [&](const WebLine& l) {
+                            if (!(gameWebsDrawn && gameLinesRunning))
                                 appendWeb(vertices, l, viewer, pixelAngle, webLook);
                         };
                         for (unsigned hand = 0; !saved->flatScreen && hand < 2; ++hand) {

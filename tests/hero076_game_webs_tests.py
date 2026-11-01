@@ -50,7 +50,9 @@ class GameWebs(unittest.TestCase):
         # Every web line goes through one of the two gates; nothing else draws a web.
         self.assertEqual(r.count('appendWeb(vertices,'), 2)
         self.assertIn('if (!(gameWebsDrawn && gameLinesRunning))\n                                appendWeb(', r)
-        self.assertIn('if (!gameWebsDrawn)\n                                appendWeb(', r)
+        # The GRAB WEB rope and the nets hide only while the game's lines run too (Spider-Man 2 has no web hook yet).
+        self.assertEqual(r.count('if (!(gameWebsDrawn && gameLinesRunning))\n                                appendWeb('), 2)
+        self.assertNotIn('if (!gameWebsDrawn)\n                                appendWeb(', r)
         self.assertEqual(r.count('drawWeb(line);'), 5)     # the swing's, zip's, held and let-go lines
         self.assertEqual(r.count('drawOurWeb(line);'), 2)  # GRAB WEB's rope, WALL STICK's nets
         self.assertIn('if (!c0.on || gameWebsDrawn)', r)   # the webbed-up cocoons

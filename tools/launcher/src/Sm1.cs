@@ -76,7 +76,7 @@ namespace Sm2VrLauncher
         /// <summary>What the add-on does in Spider-Man 1 and how far each part is (include/spidy/sm1_addon.hpp features[];
         /// sm1_launcher_tests.py checks they match). "untested": built and wired, not yet tried in the game.</summary>
         public static readonly string[][] Features = {
-            new[] { "wrist hero menu", "untested", "left palm up opens it; right stick moves, right trigger picks" },
+            new[] { "wrist hero menu", "untested", "opens like SM2: right hand on the left wrist plus the right trigger; right stick moves, right trigger picks" },
             new[] { "hero select", "untested", "11 heroes, saved in addon.ini" },
             new[] { "outfits", "untested", "listed with their artists and saved; no hero models in Spider-Man 1 yet" },
             new[] { "holo card", "untested", "the hero's card on the wrist (2D)" },

@@ -258,9 +258,10 @@ Mask maskFor(const MaskInput& in) {
     if (in.menuOpen) {
         m.trigger[1] = true;
         m.stick[1] = true;
-    } else if (in.palmReady) {
-        m.trigger[1] = true;
     }
+    for (int i = 0; i < 2; ++i)
+        if (in.holoHands >> i & 1u)
+            m.trigger[i] = m.grip[i] = true; // the SM2 wrist click's pull: never a web, punch or power
     if (in.flightArmed)
         m.grip[0] = m.grip[1] = true;
     if (in.flying) {
@@ -324,23 +325,13 @@ int WristMenu::rows() const {
     return 0;
 }
 Pick WristMenu::step(const WristInput& in) {
-    const float dt = std::isfinite(in.dt) ? std::clamp(in.dt, 0.f, .25f) : 0.f;
-    const float palm = std::isfinite(in.palmUp) ? in.palmUp : 0.f;
-    if (!open) {
-        held = palm >= openDot ? held + dt : 0;
-        if (held >= openHold) {
-            open = true;
-            held = 0;
-            stickArmed = triggerArmed = false; // a stick or trigger already held never picks on opening
-        }
+    if (in.toggled) {
+        open = !open;
+        stickArmed = triggerArmed = false; // the click's own pull (and a stick already pushed) never picks
+        return open ? Pick::none : Pick::closeMenu;
+    }
+    if (!open)
         return Pick::none;
-    }
-    held = palm <= closeDot ? held + dt : 0;
-    if (held >= closeHold) {
-        open = false;
-        held = 0;
-        return Pick::closeMenu;
-    }
     const int n = rows() + 1; // the last row goes to the next page
     if (row >= n)
         row = n - 1;
@@ -440,25 +431,110 @@ static int fitScale(std::string_view s, int w, int scale) {
         --scale;
     return scale;
 }
+// The SM2 build's hologram look (wrist_hud.cpp: its Spider-Man palette, palettes[0], in sRGB): translucent dark
+// glass with cut corners, a red frame with a soft glow, a thin electric-blue inner line, ticks in the corners and
+// the spider on a dark disc on the top edge; blue lines and pale blue-white text.
+namespace holo {
+constexpr uint32_t frame = 0xff473f, accent = 0x59bcff, line = 0xbcefff, text = 0xeffaff, help = 0xcee0f1,
+                   backing = 0x0d223f;
+constexpr uint32_t backingAlpha = 148; // SM2's .58
+constexpr int cut = 30, top = 18;      // the corner cut, and the panel's top edge (the spider sits on it)
+} // namespace holo
+static void plot(Canvas& c, float x0, float y0, float x1, float y1, float t, uint32_t col) {
+    const float dx = x1 - x0, dy = y1 - y0, len = std::sqrt(dx * dx + dy * dy);
+    const int n = std::max(1, static_cast<int>(len));
+    const int r = std::max(1, static_cast<int>(t));
+    // premultiplied, as blend() leaves the canvas (the quad layer is SOURCE_ALPHA, premultiplied)
+    const uint32_t a = col >> 24;
+    col = (a << 24) | ((col >> 16 & 255) * a / 255) << 16 | ((col >> 8 & 255) * a / 255) << 8 | (col & 255) * a / 255;
+    for (int i = 0; i <= n; ++i) {
+        const float k = static_cast<float>(i) / static_cast<float>(n);
+        const int x = static_cast<int>(x0 + dx * k), y = static_cast<int>(y0 + dy * k);
+        for (int j = y - r / 2; j < y - r / 2 + r; ++j)
+            for (int q = x - r / 2; q < x - r / 2 + r; ++q)
+                if (q >= 0 && j >= 0 && q < c.width && j < c.height) {
+                    auto& px = c.pixels[static_cast<size_t>(j) * c.width + q];
+                    // max per channel: overlapping stamps never build up past the colour
+                    uint32_t out = 0;
+                    for (int b = 0; b < 4; ++b)
+                        out |= std::max(px >> (8 * b) & 255, col >> (8 * b) & 255) << (8 * b);
+                    px = out;
+                }
+    }
+}
+static void disc(Canvas& c, int cx, int cy, int r0, int r1, uint32_t col) {
+    for (int j = cy - r1; j <= cy + r1; ++j)
+        for (int i = cx - r1; i <= cx + r1; ++i) {
+            const int d2 = (i - cx) * (i - cx) + (j - cy) * (j - cy);
+            if (d2 <= r1 * r1 && d2 >= r0 * r0)
+                c.rect(i, j, 1, 1, col);
+        }
+}
+static void holoPanel(Canvas& c) {
+    using namespace holo;
+    c.clear(0); // transparent outside the panel
+    const int w = c.width, h = c.height, y0 = top, y1 = h - 1;
+    // the glass, cut at the four corners
+    for (int y = y0; y <= y1; ++y) {
+        const int in = std::max({0, cut - (y - y0), cut - (y1 - y)});
+        c.rect(in, y, w - 2 * in, 1, rgba(backing, backingAlpha));
+    }
+    const float a = 1, b = static_cast<float>(w - 2);
+    const float pts[8][2] = {{a + cut, float(y0)}, {b - cut, float(y0)}, {b, float(y0 + cut)}, {b, float(y1 - cut)},
+                             {b - cut, float(y1)}, {a + cut, float(y1)}, {a, float(y1 - cut)}, {a, float(y0 + cut)}};
+    for (int i = 0; i < 8; ++i) { // the glow, then the bright frame
+        const auto& p = pts[i];
+        const auto& q = pts[(i + 1) % 8];
+        plot(c, p[0], p[1], q[0], q[1], 7, rgba(frame, 40));
+    }
+    for (int i = 0; i < 8; ++i) {
+        const auto& p = pts[i];
+        const auto& q = pts[(i + 1) % 8];
+        plot(c, p[0], p[1], q[0], q[1], 2, rgba(frame, 242));
+    }
+    const float m = 7; // the inner accent line
+    const float ip[8][2] = {{a + cut + m * .4f, y0 + m}, {b - cut - m * .4f, y0 + m}, {b - m, y0 + cut + m * .4f},
+                            {b - m, y1 - cut - m * .4f}, {b - cut - m * .4f, y1 - m}, {a + cut + m * .4f, y1 - m},
+                            {a + m, y1 - cut - m * .4f}, {a + m, y0 + cut + m * .4f}};
+    for (int i = 0; i < 8; ++i)
+        plot(c, ip[i][0], ip[i][1], ip[(i + 1) % 8][0], ip[(i + 1) % 8][1], 1, rgba(accent, 90));
+    for (int i = 1; i < 8; i += 2) // a tick inside each cut corner
+        plot(c, (pts[i][0] + pts[(i + 1) % 8][0]) / 2 + (i == 1 || i == 3 ? -8.f : 8.f),
+             (pts[i][1] + pts[(i + 1) % 8][1]) / 2 + (i == 1 || i == 7 ? 8.f : -8.f),
+             (pts[i][0] + pts[(i + 1) % 8][0]) / 2 + (i == 1 || i == 3 ? -14.f : 14.f),
+             (pts[i][1] + pts[(i + 1) % 8][1]) / 2 + (i == 1 || i == 7 ? 14.f : -14.f), 2, rgba(frame, 190));
+    // the spider on the top edge, on a dark disc
+    const int cx = w / 2, cy = y0;
+    disc(c, cx, cy, 0, 16, rgba(backing, 242));
+    disc(c, cx, cy, 14, 16, rgba(frame, 242));
+    disc(c, cx, cy - 4, 0, 3, rgba(frame, 255)); // head
+    for (int j = 0; j < 9; ++j)                  // body
+        c.rect(cx - 3 + (j < 2 || j > 6 ? 1 : 0), cy - 1 + j, 6 - (j < 2 || j > 6 ? 2 : 0), 1, rgba(frame, 255));
+    const float fx = static_cast<float>(cx), fy = static_cast<float>(cy);
+    const float legs[4][4] = {{3, -2, 10, -9}, {3, 1, 11, -2}, {3, 4, 11, 6}, {3, 6, 9, 11}};
+    for (const auto& l : legs)
+        for (const float side : {-1.f, 1.f})
+            plot(c, fx + side * l[0], fy + l[1], fx + side * l[2], fy + l[3], 1, rgba(frame, 255));
+}
 void paintMenu(Canvas& c, const MenuView& v) {
     if (c.width != menuWidth || c.height != menuHeight)
         c = Canvas(menuWidth, menuHeight);
     const uint32_t hero = v.hero < heroCount ? v.hero : 0;
     const Power& p = powerOf(hero);
-    const uint32_t accent = rgba(hero == 0 ? 0xff3030 : p.color), white = rgba(0xffffff), dim = rgba(0x9aa4b4);
-    c.clear(rgba(0x0a1020, 215));
-    c.frame(0, 0, c.width, c.height, 4, accent);
+    const uint32_t accent = rgba(holo::accent), white = rgba(holo::text), dim = rgba(holo::help),
+                   heroColour = rgba(hero == 0 ? holo::frame : p.color);
+    holoPanel(c);
     // The holo card: the hero, the outfit and its artist, the power.
-    c.rect(12, 12, c.width - 24, 150, rgba(0x18243c, 230));
-    c.frame(12, 12, c.width - 24, 150, 2, accent);
+    c.rect(18, 34, c.width - 36, 146, rgba(holo::accent, 26));
+    c.frame(18, 34, c.width - 36, 146, 1, rgba(holo::accent, 150));
     const char* name = heroName(hero);
-    c.text(26, 24, name, fitScale(name, c.width - 52, 5), white);
+    c.text(30, 44, name, fitScale(name, c.width - 60, 5), white);
     const OutfitInfo o = outfitOf(hero, v.outfit);
     const std::string outfit = "OUTFIT: " + (o.name.empty() ? std::string("DEFAULT") : o.name);
-    c.text(26, 72, outfit, fitScale(outfit, c.width - 52, 3), white);
+    c.text(30, 92, outfit, fitScale(outfit, c.width - 60, 3), rgba(holo::line));
     const std::string by = o.artist.empty() ? std::string() : "BY " + o.artist + (o.licence.empty() ? "" : " (" + o.licence + ")");
     if (!by.empty())
-        c.text(26, 100, by, fitScale(by, c.width - 52, 2), dim);
+        c.text(30, 120, by, fitScale(by, c.width - 60, 2), dim);
     std::string power = std::string(p.name);
     if (hero != 0)
         power += flies(hero) ? "  FLIES" : "";
@@ -466,14 +542,14 @@ void paintMenu(Canvas& c, const MenuView& v) {
         power += "  " + v.powerState;
     if (v.flying)
         power += "  FLYING";
-    c.text(26, 128, power, fitScale(power, c.width - 52, 3), accent);
+    c.text(30, 148, power, fitScale(power, c.width - 60, 3), heroColour);
     // The page tabs.
-    int x = 14;
+    int x = 20;
     for (uint32_t i = 0; i < static_cast<uint32_t>(Page::count); ++i) {
         const auto page = static_cast<Page>(i);
         const int w = Canvas::textWidth(pageName(page), 2) + 16;
-        c.rect(x, 172, w, 26, page == v.page ? accent : rgba(0x223048, 230));
-        c.text(x + 8, 178, pageName(page), 2, page == v.page ? rgba(0x000000) : white);
+        c.rect(x, 190, w, 26, page == v.page ? accent : rgba(holo::accent, 40));
+        c.text(x + 8, 196, pageName(page), 2, page == v.page ? rgba(0x000000) : white);
         x += w + 6;
     }
     // The rows.
@@ -498,12 +574,14 @@ void paintMenu(Canvas& c, const MenuView& v) {
     case Page::count:
         break;
     }
-    const int rowsTop = 210, rowH = 30;
+    const int rowsTop = 228, rowH = 28;
     int y = rowsTop;
     for (size_t i = 0; i < rows.size(); ++i, y += rowH) {
-        if (static_cast<int>(i) == v.row)
-            c.rect(12, y - 3, c.width - 24, rowH - 2, rgba(0x2c4a7a, 235));
-        c.text(20, y + 2, rows[i], fitScale(rows[i], c.width - 40, 3), white);
+        if (static_cast<int>(i) == v.row) {
+            c.rect(20, y - 3, c.width - 40, rowH - 2, rgba(holo::accent, 70));
+            c.rect(20, y - 3, 3, rowH - 2, accent);
+        }
+        c.text(28, y + 2, rows[i], fitScale(rows[i], c.width - 56, 3), white);
     }
     if (v.page == Page::addon) {
         for (const std::string& line : v.status) {
@@ -514,12 +592,14 @@ void paintMenu(Canvas& c, const MenuView& v) {
         y += 6;
     }
     const bool nextSel = v.row == static_cast<int>(rows.size());
-    if (nextSel)
-        c.rect(12, y - 3, c.width - 24, rowH - 2, rgba(0x2c4a7a, 235));
-    c.text(20, y + 2, "  NEXT PAGE >", 3, nextSel ? white : dim);
+    if (nextSel) {
+        c.rect(20, y - 3, c.width - 40, rowH - 2, rgba(holo::accent, 70));
+        c.rect(20, y - 3, 3, rowH - 2, accent);
+    }
+    c.text(28, y + 2, "  NEXT PAGE >", 3, nextSel ? white : dim);
     // Credits.
-    c.text(20, c.height - 50, "MADE BY AGENT MULDER", 2, dim);
-    c.text(20, c.height - 28, "SPIDER-MAN VR: SPIDYVR BY IILYN", 2, dim);
+    c.text(30, c.height - 54, "MADE BY AGENT MULDER", 2, dim);
+    c.text(30, c.height - 32, "SPIDER-MAN VR: SPIDYVR BY IILYN", 2, dim);
 }
 void paintBeam(Canvas& c, uint32_t rgb) {
     if (c.width <= 0 || c.height <= 0)
@@ -568,9 +648,6 @@ Quat fromBasis(Vec3 x, Vec3 y, Vec3 z) {
     }
     const float n = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
     return n > 1e-6f ? Quat{q.x / n, q.y / n, q.z / n, q.w / n} : Quat{};
-}
-float palmUp(Quat leftGrip) {
-    return dot(leftGrip.rotate({1, 0, 0}), {0, 1, 0});
 }
 Pose menuPose(Pose leftGrip, Vec3 head, float lift) {
     Pose p;

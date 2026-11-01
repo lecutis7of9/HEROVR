@@ -11,6 +11,7 @@
 //   SpidyMotionSample   spidy_movement_bridge.dll Data v4, 176 bytes (serial at +48, grounded at +168)
 // Every failure is logged to %APPDATA%\HERO VR SM1\layer.log and turns off only its own feature.
 #include "spidy/sm1_addon.hpp"
+#include "spidy/wrist_hud.hpp"
 
 #include <windows.h>
 #include <d3d12.h>
@@ -562,6 +563,10 @@ struct Session {
 struct Play {
     LARGE_INTEGER lastSync{};
     WristMenu menu;
+    // The SM2 build's hologram toggle, unchanged (its FOREARM mode, the SM2 default): the right hand on the
+    // left wrist or forearm and a right-trigger click opens or closes the menu.
+    spidy::wrist_hud::Toggle holo;
+    uint32_t holoHands = 0;
     FlightState flight;
     bool flying = false;
     Mask mask;
@@ -1109,8 +1114,11 @@ void step() {
     const uint32_t hero = config.hero < heroCount ? config.hero : 0;
 
     // poses (his projection space, the frame he is about to show)
-    Pose leftGrip, aim[2];
-    const bool gripOk = locate(session.gripSpace[0], frameSpace, play.displayTime, leftGrip);
+    Pose grips[2], aim[2];
+    bool gripTracked[2]{};
+    for (int i = 0; i < 2; ++i)
+        gripTracked[i] = locate(session.gripSpace[i], frameSpace, play.displayTime, grips[i]);
+    const bool gripOk = gripTracked[0];
     bool aimOk[2]{};
     for (int i = 0; i < 2; ++i) {
         aimOk[i] = locate(session.aimSpace[i], frameSpace, play.displayTime, aim[i]);
@@ -1119,10 +1127,20 @@ void step() {
 
     // the wrist menu
     WristMenu& menu = play.menu;
+    play.holoHands = 0;
     if (config.wristMenu && fMenu.on && gripOk) {
         menu.outfits = std::max(1u, outfitCount(hero));
+        // The SM2 wrist click (wrist_hud::Toggle mode 4, FOREARM): hologram on the left wrist (hand 0), the
+        // right hand touches it and clicks its trigger. Its thresholds are the SM2 build's own.
+        play.holo.setMode(4);
+        play.holo.set(menu.open);
+        play.holo.look(play.head, play.headKnown);
+        const float triggers[2]{play.trigger[0], play.trigger[1]};
+        const float squeezes[2]{play.grip[0], play.grip[1]};
+        play.holo.update(dt, true, 0, grips, gripTracked, triggers, squeezes);
+        play.holoHands = play.holo.hands();
         WristInput in;
-        in.palmUp = palmUp(leftGrip.orientation);
+        in.toggled = play.holo.on() != menu.open; // it opened or closed on this click
         in.stickX = play.stick[1].x;
         in.stickY = play.stick[1].y;
         in.trigger = play.trigger[1] > .5f;
@@ -1130,7 +1148,9 @@ void step() {
         const bool wasOpen = menu.open;
         const Pick pick = menu.step(in);
         if (!wasOpen && menu.open)
-            logLine("wrist menu open");
+            logLine("wrist menu open (SM2 wrist click)");
+        else if (wasOpen && !menu.open)
+            logLine("wrist menu closed (SM2 wrist click)");
         if (pick == Pick::hero && menu.row >= 0 && static_cast<uint32_t>(menu.row) < heroCount) {
             AcquireSRWLockExclusive(&settings.lock);
             settings.config.hero = static_cast<uint32_t>(menu.row);
@@ -1168,6 +1188,7 @@ void step() {
         }
     } else if (menu.open) {
         menu.open = false;
+        play.holo.set(false);
     }
     const uint32_t nowHero = config.hero < heroCount ? config.hero : 0;
     const bool nowSpiderMan = !config.heroes || nowHero == 0;
@@ -1230,7 +1251,7 @@ void step() {
     // what his reads see from now on
     MaskInput mi;
     mi.menuOpen = menu.open;
-    mi.palmReady = !menu.open && menu.held > 0;
+    mi.holoHands = play.holoHands;
     mi.spiderMan = nowSpiderMan;
     mi.powers = live.powers && fPowers.on;
     mi.heroWebs = live.heroWebs;

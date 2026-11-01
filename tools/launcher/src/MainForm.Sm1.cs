@@ -126,7 +126,7 @@ namespace Sm2VrLauncher
             Add(card, new TextLabel(GlassPanel.Spaced("Mulder's Heroes add-on"), Theme.UiBold(11), hs ? Theme.Neon : Theme.Red) { Wrap = false }, 670, 90, 418, 18);
             sm1Addon = Add(card, new ToggleRow("Load Mulder's Heroes add-on", "Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyAddon, true)), 670, 112, 418, 58);
-            sm1Wrist = Add(card, new ToggleRow("Wrist menu", "Turn your left palm up to open the hero menu and pull the right trigger to pick; takes effect the next time you press Play.",
+            sm1Wrist = Add(card, new ToggleRow("Wrist menu", "Touch your left wrist with your right hand and pull the right trigger to open or close the hero menu, as in SM2; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyWrist, true)), 670, 172, 418, 58);
             sm1Flight = Add(card, new ToggleRow("Flight", "Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyFlight, true)), 670, 232, 418, 58);
@@ -327,7 +327,7 @@ namespace Sm2VrLauncher
                 }
                 Sm1.RegisterLayer(manifest);
                 Sm1.RemoveLayersAfterGame(line => Ui(() => sessionLog.Line(line, Theme.Sub)));
-                sessionLog.Line("Spider-Man 1: the heroes' OpenXR layer is on for this game (removed when it closes). In VR: left palm up, right trigger picks.", Theme.Good);
+                sessionLog.Line("Spider-Man 1: the heroes' OpenXR layer is on for this game (removed when it closes). In VR: right hand on the left wrist and pull the right trigger for the menu.", Theme.Good);
                 foreach (var f in Sm1.Features)
                     sessionLog.Line("  " + f[0] + ": " + (f[1] == "stub" ? "NOT YET - " : "built, not yet tried in the game - ") + f[2], f[1] == "stub" ? Theme.Warn : Theme.Sub);
             }

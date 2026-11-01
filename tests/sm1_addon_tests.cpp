@@ -1,6 +1,7 @@
 // HERO VR 0.0.76 SM1: tests for Mulder's Heroes add-on core (iilyn's Spider-Man VR mod is Spidy by Ilya
 // Mezerowsky, GPL-3.0, https://github.com/IlyaMez/SpidyVR). Made by Agent Mulder.
 #include "spidy/sm1_addon.hpp"
+#include "spidy/wrist_hud.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -155,13 +156,13 @@ void wristTests() {
     WristMenu m;
     WristInput in;
     in.dt = .1f;
-    in.palmUp = .9f;
-    in.trigger = true; // held while opening: must not pick
+    in.trigger = true; // the click's own pull: must not pick
     for (int i = 0; i < 3; ++i)
         m.step(in);
-    check(!m.open, "not open before the hold");
-    m.step(in);
-    check(m.open, "opens after 0.35 s palm up");
+    check(!m.open, "no wrist click: stays closed (the palm-up gesture is gone)");
+    in.toggled = true;
+    check(m.step(in) == Pick::none && m.open, "the SM2 wrist click opens it");
+    in.toggled = false;
     check(m.step(in) == Pick::none, "a trigger held from before never picks");
     in.trigger = false;
     m.step(in);
@@ -209,15 +210,48 @@ void wristTests() {
     m.step(in);
     check(m.page == Page::addon && m.rows() == 0, "add-on page: status only");
     in.trigger = false;
-    in.palmUp = 0;
     m.step(in);
     m.step(in);
-    check(m.step(in) == Pick::closeMenu, "closes after 0.25 s palm down");
+    check(m.open, "stays open without a click");
+    in.toggled = true;
+    check(m.step(in) == Pick::closeMenu, "the same wrist click closes it");
     check(!m.open, "closed");
-    in.palmUp = std::numeric_limits<float>::quiet_NaN();
+    in.toggled = false;
+    in.stickY = std::numeric_limits<float>::quiet_NaN();
     in.dt = std::numeric_limits<float>::infinity();
-    m.step(in);
-    check(!m.open, "NaN input never opens");
+    in.trigger = true;
+    check(m.step(in) == Pick::none && !m.open, "closed: NaN, the stick and the trigger never open or pick");
+    in.stickY = 0;
+    in.trigger = false;
+
+    // The SM2 detector itself (wrist_hud::Toggle, FOREARM mode 4, as the layer runs it).
+    spidy::wrist_hud::Toggle t;
+    t.setMode(4);
+    Pose grips[2];
+    grips[0].position = {-.2f, 1.1f, -.3f};
+    grips[1].position = {.3f, 1.1f, -.3f};
+    const bool tracked[2]{true, true};
+    float triggers[2]{0, 0};
+    const float squeezes[2]{0, 0};
+    for (int i = 0; i < 10; ++i)
+        t.update(.011f, true, 0, grips, tracked, triggers, squeezes);
+    triggers[1] = 1;
+    t.update(.011f, true, 0, grips, tracked, triggers, squeezes);
+    check(!t.on(), "SM2 click: a right trigger away from the wrist never opens");
+    triggers[1] = 0;
+    for (int i = 0; i < 40; ++i)
+        t.update(.011f, true, 0, grips, tracked, triggers, squeezes);
+    grips[1].position = spidy::wrist_hud::wrist(grips[0], 0) + Vec3{.03f, 0, 0};
+    for (int i = 0; i < 40; ++i)
+        t.update(.011f, true, 0, grips, tracked, triggers, squeezes);
+    triggers[1] = 1;
+    for (int i = 0; i < 3; ++i)
+        t.update(.011f, true, 0, grips, tracked, triggers, squeezes);
+    check(t.on(), "SM2 click: right hand on the left wrist plus the right trigger opens");
+    check((t.hands() >> 1 & 1u) != 0, "SM2 click: that pull is the menu's, not his web's");
+    MaskInput hm;
+    hm.holoHands = t.hands();
+    check(maskFor(hm).trigger[1], "the mask hides the click's trigger from him");
     for (uint32_t p = 0; p < static_cast<uint32_t>(Page::count); ++p)
         check(std::strlen(pageName(static_cast<Page>(p))) > 0, "page names");
 }
@@ -230,10 +264,16 @@ void drawTests() {
     v.powerState = "READY";
     paintMenu(c, v);
     check(c.width == menuWidth && c.height == menuHeight, "menu size");
-    int lit = 0;
-    for (uint32_t p : c.pixels)
-        lit += (p & 0xffffff) == 0xffffff;
-    check(lit > 2000, "the menu has white text");
+    int lit = 0, red = 0, clear = 0;
+    for (uint32_t p : c.pixels) {
+        const uint32_t r = p & 255, g = p >> 8 & 255, b = p >> 16 & 255;
+        lit += r > 200 && g > 200 && b > 200;
+        red += r > 200 && g < 110 && (p >> 24) > 200;
+        clear += (p >> 24) == 0;
+    }
+    check(lit > 2000, "the menu has bright text");
+    check(red > 1500, "the SM2 holo's red frame");
+    check(clear > 500 && (c.pixels[0] >> 24) == 0, "the cut corners are see-through, as SM2's");
     MenuView w = v;
     check(sameView(v, w), "same view");
     w.row = 3;
@@ -252,8 +292,6 @@ void quadTests() {
     const Quat q = fromBasis({0, 0, -1}, {0, 1, 0}, {1, 0, 0});
     const Vec3 x = q.rotate({1, 0, 0});
     check(std::fabs(x.z + 1) < 1e-4f, "basis to turn");
-    check(palmUp(Quat::around({0, 0, 1}, 3.14159265f / 2)) > .99f, "+X turned up: palm up");
-    check(palmUp(Quat{}) < .1f, "palm sideways");
     Pose grip;
     grip.position = {0, 1, -.3f};
     const Pose menu = menuPose(grip, {0, 1.6f, 0}, .15f);

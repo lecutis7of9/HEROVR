@@ -77,7 +77,8 @@ inline constexpr Feature features[] = {
     {"host check", Evidence::confirmed, State::ready, "exe, version and iilyn's modules, read only"},
     {"add-on settings", Evidence::confirmed, State::ready, "%APPDATA%\\HERO VR SM1\\addon.ini and live.txt, never his folder"},
     {"wrist hero menu", Evidence::confirmed, State::untested,
-     "left palm up opens it over the wrist; right stick moves, right trigger picks (OpenXR quad layer)"},
+     "opens like the SM2 build: touch your left wrist/forearm with the right hand and pull the right trigger (the same "
+     "click opens and closes it); right stick moves, right trigger picks (OpenXR quad layer)"},
     {"hero select", Evidence::confirmed, State::untested, "picks one of the 11 heroes, saved in addon.ini"},
     {"outfits", Evidence::confirmed, State::untested,
      "each hero's outfits listed with their artists and saved; Spider-Man 1 shows no hero models yet"},
@@ -177,7 +178,8 @@ struct Binding {
 // "/user/hand/left/input/trigger/value" -> trigger, left. Clicks, values and touches: only value/click count.
 Binding classify(std::string_view path);
 struct MaskInput {
-    bool menuOpen = false, palmReady = false; // palmReady: the left palm is up (the menu opens soon)
+    bool menuOpen = false;
+    uint32_t holoHands = 0; // bit per hand: the SM2 wrist click holds that hand's trigger and grip (wrist_hud::Toggle)
     bool spiderMan = true, powers = true, heroWebs = true;
     bool flightArmed = false; // a flying hero with flight on: the grips are his take-off and boost
     bool flying = false;      // in the air on our flight: the left stick and the right stick's up/down are ours
@@ -189,11 +191,12 @@ struct Mask {
 Mask maskFor(const MaskInput& in);
 
 // --- The wrist menu (pure state machine) ----------------------------------------------------------------------
-// Open: the left palm faces up (palmUp >= openDot) for openHold seconds. Close: palm down for closeHold seconds.
-// The right stick moves the row up/down (one step per flick); the last row of a page goes to the next page; the
-// right trigger picks.
+// Open and close exactly as the SM2 build's hologram (wrist_hud::Toggle, its FOREARM mode, mode 4): the right
+// hand touches the left wrist or forearm and pulls the right trigger; the same click closes it. The layer runs
+// the SM2 detector and passes each toggle in `toggled`. The right stick moves the row up/down (one step per
+// flick); the last row of a page goes to the next page; the right trigger picks.
 struct WristInput {
-    float palmUp = 0;     // dot(left palm normal, world up)
+    bool toggled = false; // the SM2 wrist click toggled the hologram this frame
     float stickX = 0, stickY = 0; // right stick, -1..1 (up and right are +)
     bool trigger = false; // right trigger past half
     float dt = 0;
@@ -203,11 +206,9 @@ enum class Page : uint32_t { heroes, outfits, powers, addon, count };
 enum class Toggle : int { powers = 0, flight, heroWebs, beams, count };
 enum class Pick { none, hero, outfit, toggle, closeMenu };
 struct WristMenu {
-    static constexpr float openDot = .7f, closeDot = .3f, openHold = .35f, closeHold = .25f;
     bool open = false;
     Page page = Page::heroes;
     int row = 0;
-    float held = 0;
     bool stickArmed = true, triggerArmed = true;
     uint32_t outfits = 1; // rows on the OUTFITS page (the caller sets it for the hero)
     int rows() const;
@@ -250,7 +251,6 @@ bool sameView(const MenuView& a, const MenuView& b);
 
 // --- Where the layer puts its quads (pure; the space is his projection layer's, Y up) -----------------------------
 Quat fromBasis(Vec3 x, Vec3 y, Vec3 z); // unit, orthogonal axes -> the turn that takes +X,+Y,+Z to them
-float palmUp(Quat leftGrip);            // dot(the left grip's +X, the palm's normal, world up)
 // The menu: centred `lift` metres over the left grip, turned to face the head, upright.
 Pose menuPose(Pose leftGrip, Vec3 head, float lift);
 // A beam `length` long from `from` along unit `dir`, its face turned to the head (the quad's +Y along the beam).

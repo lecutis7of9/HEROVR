@@ -10,7 +10,8 @@ v0.0.75.1 (efac6a8). **Built, not yet tried in the game.**
 - **Spider-Man 1 (iilyn's Spider-Man VR mod):** Mulder's Heroes add-on now runs inside the game as an OpenXR layer,
   registered for your Windows user only while Spider-Man 1 plays. His graphics, performance and anti-aliasing are
   untouched.
-- **Wrist hero menu:** left palm up, right stick and right trigger. Hero select, outfits (names and artists; no
+- **Wrist hero menu:** opens like SM2 (right hand on the left wrist, pull the right trigger; the same click closes
+  it), with the SM2 hologram look; right stick and right trigger pick. Hero select, outfits (names and artists; no
   hero models in Spider-Man 1 yet), the holo card.
 - **Flight:** Iron Man, Superman, Thor and Green Lantern hold a grip to take off and stay up; the left stick steers
   where you look.

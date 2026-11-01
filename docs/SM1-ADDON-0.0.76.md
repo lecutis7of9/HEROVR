@@ -28,7 +28,7 @@ The OpenXR loader ignores HKCU layers when the game runs as administrator: then 
 
 | Feature | How | State |
 | --- | --- | --- |
-| Wrist hero menu | Left palm up opens it over the left wrist; right stick moves, right trigger picks. Pages HEROES, OUTFITS, POWERS, ADD-ON. Drawn as an extra quad layer on his finished frame. | built, not tried in game |
+| Wrist hero menu | Opens exactly like the SM2 build: touch or point at your left wrist/forearm with the right hand and pull the right trigger (the same click closes it; the SM2 code, wrist_hud::Toggle, is reused unchanged). The palm-up gesture is gone. It has the SM2 hologram look (red cut-corner frame, spider, blue lines on dark glass); right stick moves, right trigger picks. Pages HEROES, OUTFITS, POWERS, ADD-ON. Drawn as an extra quad layer on his finished frame. | built, not tried in game |
 | Hero select | 11 heroes; the pick is saved to `addon.ini` (`hero=`). | built, not tried in game |
 | Outfits | Each hero's outfits with artist and licence; saved (`outfit.N=`). Spider-Man 1 shows **no hero models yet**. | built, not tried in game |
 | Holo card | The hero's card on the wrist (2D). | built, not tried in game |
@@ -73,7 +73,7 @@ menu are kept:
 | Setting | Subtext |
 | --- | --- |
 | Load Mulder's Heroes add-on | Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play. |
-| Wrist menu | Turn your left palm up to open the hero menu and pull the right trigger to pick; takes effect the next time you press Play. |
+| Wrist menu | Touch your left wrist with your right hand and pull the right trigger to open or close the hero menu, as in SM2; takes effect the next time you press Play. |
 | Flight | Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play. |
 
 New switches live only in `%APPDATA%\HERO VR SM1\live.txt` (written with their subtexts on first run, read again every
@@ -94,4 +94,4 @@ The menu's FLIGHT toggle is for this session only; the launcher's Flight switch 
 1. Pick SPIDER-MAN 1, PLAY, press PLAY in his launcher.
 2. Open `%APPDATA%\HERO VR SM1\layer.log`: it says whether the layer started, which formats it chose and which
    features turned off and why. `addon.log` says whether `herovr_sm1_layer.dll` was loaded.
-3. Left palm up: the menu. Pick IRON MAN, hold a grip: take off.
+3. Right hand on the left wrist, pull the right trigger: the menu. Pick IRON MAN, hold a grip: take off.

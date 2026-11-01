@@ -175,6 +175,63 @@ std::string liveText(const Live& l) {
     return s;
 }
 
+// --- Hero suits ----------------------------------------------------------------------------------------------------
+namespace {
+struct SuitEntry {
+    const char* id;
+    const char* name;
+};
+constexpr SuitEntry suitTable[] = {
+    {nullptr, ""},
+    {"herovr_ironman", "Iron Man"},
+    {"herovr_daredevil", "Daredevil"},
+    {"herovr_hulk", "Hulk"},
+    {"herovr_batman", "Batman"},
+    {"herovr_wolverine", "Wolverine"},
+    {"herovr_superman", "Superman"},
+    {"herovr_punisher", "Punisher"},
+    {"herovr_captainamerica", "Captain America"},
+    {"herovr_thor", "Thor"},
+    {"herovr_greenlantern", "Green Lantern"},
+};
+static_assert(sizeof(suitTable) / sizeof(suitTable[0]) == heroCount, "one suit row per hero");
+} // namespace
+
+const char* suitIdOf(uint32_t hero) { return hero < heroCount ? suitTable[hero].id : nullptr; }
+const char* suitNameOf(uint32_t hero) { return hero < heroCount ? suitTable[hero].name : ""; }
+
+bool suitInstalled(std::string_view json, uint32_t hero) {
+    const char* id = suitIdOf(hero);
+    if (!id)
+        return false;
+    // sm1suits.py writes json.dump's default separators; a half-done install keeps "pending": true
+    if (json.find("\"pending\": false") == std::string_view::npos)
+        return false;
+    const size_t at = json.find("\"suits\": [");
+    if (at == std::string_view::npos)
+        return false;
+    const size_t end = json.find(']', at);
+    const std::string quoted = std::string("\"") + id + "\"";
+    const size_t hit = json.find(quoted, at);
+    return hit != std::string_view::npos && hit < end;
+}
+
+std::string suitHint(uint32_t hero, bool installed) {
+    if (!suitIdOf(hero))
+        return "SUIT: YOUR SPIDER-MAN SUIT (GAME'S SUITS MENU)";
+    std::string name = suitNameOf(hero);
+    for (auto& ch : name)
+        ch = static_cast<char>(ch >= 'a' && ch <= 'z' ? ch - 32 : ch);
+    if (!installed)
+        return "SUIT: INSTALL HERO SUITS IN THE LAUNCHER";
+    return "SUIT: PICK " + name + " IN THE GAME'S SUITS MENU";
+}
+
+std::string_view folderOf(std::string_view path) {
+    const size_t i = path.find_last_of("\\/");
+    return i == std::string_view::npos ? std::string_view() : path.substr(0, i + 1);
+}
+
 // --- Outfits -------------------------------------------------------------------------------------------------------
 static const hero072::SuitCatalog& suits() {
     static const hero072::SuitCatalog catalog;
@@ -533,7 +590,9 @@ void paintMenu(Canvas& c, const MenuView& v) {
     const std::string outfit = "OUTFIT: " + (o.name.empty() ? std::string("DEFAULT") : o.name);
     c.text(30, 92, outfit, fitScale(outfit, c.width - 60, 3), rgba(holo::line));
     const std::string by = o.artist.empty() ? std::string() : "BY " + o.artist + (o.licence.empty() ? "" : " (" + o.licence + ")");
-    if (!by.empty())
+    if (!v.notice.empty())
+        c.text(30, 120, v.notice, fitScale(v.notice, c.width - 60, 2), rgba(holo::accent));
+    else if (!by.empty())
         c.text(30, 120, by, fitScale(by, c.width - 60, 2), dim);
     std::string power = std::string(p.name);
     if (hero != 0)
@@ -626,7 +685,7 @@ bool sameView(const MenuView& a, const MenuView& b) {
         if (a.status[i] != b.status[i])
             return false;
     return a.page == b.page && a.row == b.row && a.hero == b.hero && a.outfit == b.outfit && a.flying == b.flying &&
-           a.powerState == b.powerState;
+           a.powerState == b.powerState && a.notice == b.notice;
 }
 
 // --- Quads ---------------------------------------------------------------------------------------------------------

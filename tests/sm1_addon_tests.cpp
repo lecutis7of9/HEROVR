@@ -383,6 +383,37 @@ void handoverTests() {
     h.release();
     check(h.his(6) > d, "his again above");
 }
+
+void suitTests() {
+    check(suitIdOf(0) == nullptr, "SPIDER-MAN keeps the game's own suits");
+    check(std::string(suitIdOf(9)) == "herovr_thor", "THOR's suit id");
+    check(suitIdOf(heroCount) == nullptr, "out of range");
+    const std::string done = "{\"tool_version\": 1, \"pending\": false, \"archive\": \"HeroVR\\\\herovr_suits\", "
+                             "\"suits\": [\"herovr_ironman\", \"herovr_thor\"], \"assets\": [[\"herovr_hulk\"]]}";
+    check(suitInstalled(done, 9), "THOR listed");
+    check(suitInstalled(done, 1), "IRON MAN listed");
+    check(!suitInstalled(done, 3), "HULK only outside the suits list");
+    check(!suitInstalled(done, 0), "SPIDER-MAN never");
+    std::string pending = done;
+    pending.replace(pending.find("false"), 5, "true");
+    check(!suitInstalled(pending, 9), "a half-done install counts as not installed");
+    check(!suitInstalled("", 9), "no file: not installed");
+    check(suitHint(9, true) == "SUIT: PICK THOR IN THE GAME'S SUITS MENU", "installed hint");
+    check(suitHint(9, false) == "SUIT: INSTALL HERO SUITS IN THE LAUNCHER", "not installed hint");
+    check(suitHint(0, false).find("SPIDER-MAN") != std::string::npos, "SPIDER-MAN hint");
+    check(folderOf("C:\\g\\Spider-Man.exe") == "C:\\g\\", "game folder");
+    check(folderOf("x.exe").empty(), "no folder");
+    bool stub = false;
+    for (const auto& f : features)
+        if (std::string(f.name) == "holo suit switch")
+            stub = f.state == State::stub;
+    check(stub, "the live suit switch is reported as not done");
+    MenuView a, b;
+    b.notice = suitHint(9, true);
+    check(!sameView(a, b), "the hint repaints the holo");
+    Canvas c(menuWidth, menuHeight);
+    paintMenu(c, b);
+}
 } // namespace
 
 int main() {
@@ -397,6 +428,7 @@ int main() {
     quadTests();
     flightTests();
     handoverTests();
+    suitTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

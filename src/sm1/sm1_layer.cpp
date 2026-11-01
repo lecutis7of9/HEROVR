@@ -583,6 +583,8 @@ struct Play {
     float beamLength = 0;
     uint32_t beamColor = 0xffffffff;
     std::string powerState = "READY";
+    std::string suitNotice;    // the holo's suit line after a hero pick
+    ULONGLONG suitNoticeUntil = 0;
     MenuView shown;
     bool menuPainted = false;
     uint64_t lastGameSerial = 0;
@@ -591,6 +593,48 @@ struct Play {
     bool headKnown = false;
     Pose head;
 } play;
+
+// --- Hero suits: the holo's hint (no live switch: see features[] "holo suit switch") ---------------------------------
+std::string gameFolder; // set in xrCreateApiLayerInstance from the host exe's path
+
+// The launcher's state.json (our own file in the game's asset_archive\HeroVR; never SpidyVR's). Read only, small.
+std::string readSuitState() {
+    if (gameFolder.empty())
+        return "";
+    const std::string path = gameFolder + "asset_archive\\HeroVR\\state.json";
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f)
+        return "";
+    std::string s;
+    char buf[4096];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0 && s.size() < (1u << 20))
+        s.append(buf, n);
+    std::fclose(f);
+    return s;
+}
+
+// Cached: the view asks every frame, the file is read at most every 5 seconds (and on every hero pick).
+std::string suitState;
+ULONGLONG suitStateAt = 0;
+bool suitsInstalledFor(uint32_t hero, bool fresh = false) {
+    const ULONGLONG now = GetTickCount64();
+    if (fresh || suitStateAt == 0 || now - suitStateAt > 5000) {
+        suitState = readSuitState();
+        suitStateAt = now ? now : 1;
+    }
+    return suitInstalled(suitState, hero);
+}
+
+void pickSuit(uint32_t hero) {
+    const bool installed = suitIdOf(hero) && suitsInstalledFor(hero, true);
+    play.suitNotice = suitHint(hero, installed);
+    play.suitNoticeUntil = GetTickCount64() + 10000;
+    if (suitIdOf(hero))
+        logLine("suit: %s %s; no confirmed suit-equip call in this game version, so no live switch: the holo asks the "
+                "player to pick it in the game's Suits menu",
+                suitIdOf(hero), installed ? "installed" : "NOT installed (launcher: Install suits)");
+}
 
 // --- Paths and bindings ------------------------------------------------------------------------------------------------
 std::string pathText(XrPath p) {
@@ -1158,6 +1202,7 @@ void step() {
             ReleaseSRWLockExclusive(&settings.lock);
             saveConfig(config.hero, config.outfit);
             logLine("hero: %s", heroName(config.hero));
+            pickSuit(config.hero);
         } else if (pick == Pick::outfit && menu.row >= 0) {
             AcquireSRWLockExclusive(&settings.lock);
             settings.config.outfit[hero] = static_cast<uint32_t>(menu.row);
@@ -1303,7 +1348,10 @@ MenuView currentView(uint32_t hero, const Config& config, const Live& live) {
                   play.flying ? "FLIGHT: FLYING" : flies(hero) ? "FLIGHT: HOLD A GRIP" : "FLIGHT: NOT THIS HERO";
     v.status[2] = !fPowers.on ? "POWERS: OFF (SEE LOG)" : rayReady() ? "POWERS: " + play.powerState : "POWERS: WAITING FOR SPIDY";
     v.status[3] = fDraw.on ? "DRAWING: ON" : "DRAWING: OFF";
-    v.status[4] = "HERO MODELS: NOT IN SM1 YET";
+    v.status[4] = !suitIdOf(hero) ? "HERO SUITS: GAME'S OWN" :
+                  suitsInstalledFor(hero) ? "HERO SUITS: PICK IN SUITS MENU" : "HERO SUITS: NOT INSTALLED";
+    if (GetTickCount64() < play.suitNoticeUntil)
+        v.notice = play.suitNotice;
     v.status[5] = "OUTFIT: " + outfitOf(hero, config.outfit[hero]).name;
     for (auto& s : v.status)
         for (auto& ch : s)
@@ -1507,6 +1555,7 @@ XRAPI_ATTR XrResult XRAPI_CALL createApiLayerInstance(const XrInstanceCreateInfo
     char exeA[MAX_PATH]{};
     WideCharToMultiByte(CP_UTF8, 0, exe, -1, exeA, MAX_PATH, nullptr, nullptr);
     const bool host = sameFileName(fileNameOf(exeA), hostExe);
+    gameFolder = std::string(folderOf(exeA));
     const bool ok =
         load(*out, "xrDestroyInstance", next.destroyInstance) && load(*out, "xrCreateSession", next.createSession) &&
         load(*out, "xrDestroySession", next.destroySession) &&

@@ -88,7 +88,12 @@ inline constexpr Feature features[] = {
     {"flight in game", Evidence::confirmed, State::untested,
      "IRON MAN, SUPERMAN, THOR, GREEN LANTERN: hold a grip to take off, stay up after letting go; his SpidyMotionSubmit "
      "export moves the body, with the layer keeping his serial numbers in order so his swinging never shuts off"},
-    {"hero models", Evidence::candidate, State::stub, "the launcher adds the heroes as SM1 suits (game's toc, CANDIDATE, not yet seen in the game); the add-on does not switch them"},
+    {"hero suits", Evidence::candidate, State::stub,
+     "the launcher adds each hero as a NEW SM1 suit next to Spider-Man's (purely additive, through the game's toc; CANDIDATE, "
+     "not yet seen in the game); nothing of the game's own suits is replaced"},
+    {"holo suit switch", Evidence::candidate, State::stub,
+     "no confirmed suit-equip call in 4.630.0.0, so picking a hero on the wrist does not change the suit live: the holo "
+     "tells the player to pick that hero's suit in the game's Suits menu (or to install the suits in the launcher)"},
 };
 inline constexpr int featureCount = static_cast<int>(sizeof(features) / sizeof(features[0]));
 const char* evidenceText(Evidence e);
@@ -233,6 +238,21 @@ struct Canvas {
 };
 uint32_t rgba(uint32_t rgb, uint32_t alpha = 255);
 // What the menu shows (the layer fills it each time something changes).
+// --- Hero suits (the launcher's SM1 suits, tools/sm1_suits) --------------------------------------------------------
+// The suit id the launcher installs for a hero ("herovr_thor"); nullptr for SPIDER-MAN (the game's own suits).
+// The same table as tools/sm1_suits/heroes.py (a test keeps them equal).
+const char* suitIdOf(uint32_t hero);
+// The display name the game's Suits menu shows for it ("Thor"); "" for SPIDER-MAN.
+const char* suitNameOf(uint32_t hero);
+// The launcher's asset_archive\HeroVR\state.json (read only, our own file): true when a finished install lists the
+// hero's suit.
+bool suitInstalled(std::string_view stateJson, uint32_t hero);
+// The holo's line after a hero pick. A live suit switch needs a confirmed suit-equip call, which 4.630.0.0 does not
+// have yet, so the line tells the player where to pick the suit.
+std::string suitHint(uint32_t hero, bool installed);
+// The game folder of an exe path ("C:\g\Spider-Man.exe" -> "C:\g\").
+std::string_view folderOf(std::string_view path);
+
 struct MenuView {
     Page page = Page::heroes;
     int row = 0;
@@ -242,6 +262,7 @@ struct MenuView {
     bool flying = false;
     std::string powerState; // "READY", "NO TARGET", "HIT"...
     std::string status[6];  // the ADD-ON page's lines
+    std::string notice;     // a short line on the holo card after a pick (the suit hint), "" when none
 };
 inline constexpr int menuWidth = 512, menuHeight = 640;
 void paintMenu(Canvas& c, const MenuView& v);

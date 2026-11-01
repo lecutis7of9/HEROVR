@@ -1,6 +1,7 @@
 // HERO VR 0.0.76 SM1: tests for Mulder's Heroes add-on core (iilyn's Spider-Man VR mod is Spidy by Ilya
 // Mezerowsky, GPL-3.0, https://github.com/IlyaMez/SpidyVR). Made by Agent Mulder.
 #include "spidy/sm1_addon.hpp"
+#include "spidy/sm1_combat.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
@@ -485,6 +486,49 @@ void suitTests() {
     Canvas c(menuWidth, menuHeight);
     paintMenu(c, b);
 }
+void combatTests() {
+    using namespace spidy::sm1::combat;
+    check(ruleBits(".?AVBotMoverManager@@") == bot, "BotMoverManager marks a bot");
+    check(ruleBits(".?AVCivilianBot@@") == civilian, "CivilianBot marks a civilian");
+    check(ruleBits(".?AVBotHealth@@") == botHealth && ruleBits(".?AVHealth@@") == health, "the health classes");
+    check(ruleBits(".?AVBotStateRagdoll@@") == down && ruleBits(".?AVBotStateCarried@@") == held, "down and held states");
+    check(ruleBits(".?AVSomethingElse@@") == 0 && ruleBits("") == 0, "an unknown class has no bits");
+    check(enemy(bot | botHealth | thug), "a thug with health is an enemy");
+    check(enemy(bot | health | hover), "a drone with health is an enemy (every type)");
+    check(!enemy(bot | botHealth | civilian), "a civilian is never an enemy");
+    check(!enemy(bot | botHealth | ally) && !enemy(bot | botHealth | neutral), "allies and neutrals are not enemies");
+    check(!enemy(bot), "a bot without health is not hit");
+    check(!enemy(botHealth), "health alone is not a bot");
+    Size sz;
+    check(std::fabs(sz.height(.4f) - sz.low) < 1e-5f && std::fabs(sz.height(1.6f) - sz.high) < 1e-5f,
+          "a thug's heights come back unchanged");
+    std::vector<Target> list(3);
+    list[0].record = 1;
+    list[0].feet = {0, 0, -10};
+    list[1].record = 2;
+    list[1].feet = {3, 0, -5};
+    list[2].record = 3;
+    list[2].feet = {0, 0, 10}; // behind
+    const Vec3 from{0, 1.2f, 0}, ahead{0, 0, -1};
+    check(aimed(list, from, ahead, 30, 15) == 0, "the enemy straight ahead is aimed at");
+    check(aimed(list, from, normalized(Vec3{3, 0, -5}), 30, 15) == 1, "the one to the right when aiming there");
+    check(aimed(list, from, ahead, 5, 15) == -1, "out of range: none");
+    check(aimed(list, from, Vec3{0, 0, 1}, 30, 15) == 2, "behind only when turned around");
+    list[0].hp = 0;
+    check(aimed(list, from, ahead, 30, 15) != 0, "a knocked out enemy is not aimed at");
+    list[0].hp = 50;
+    check(bodyDistance(list[0], {0, 1, -10}) == 0, "inside the body");
+    check(std::fabs(bodyDistance(list[0], {2, 1, -10}) - (2 - sz.radius)) < 1e-4f, "beside the body");
+    const auto n = nearby(list, {0, 1, -9}, 1.5f, 5);
+    check(n.size() == 1 && n[0] == 0, "nearby finds the close one only");
+    const auto a = along(list, {0, 1, 0}, {0, 1, -20}, .2f, 5);
+    check(a.size() == 1 && a[0] == 0, "a throw down the street passes through the first");
+    const auto a2 = along(list, {0, 1, 0}, {6, 1, -10}, .5f, 5);
+    check(a2.size() == 1 && a2[0] == 1, "an angled throw passes the second");
+    HitLimiter lim;
+    check(lim.allow(7, 0, .5) && !lim.allow(7, .2, .5) && lim.allow(7, .6, .5) && lim.allow(8, .2, .5),
+          "one enemy is hit at most once per period");
+}
 } // namespace
 
 int main() {
@@ -501,6 +545,7 @@ int main() {
     handoverTests();
     suitTests();
     scanTests();
+    combatTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

@@ -2,7 +2,7 @@
 // Mulder's Heroes add-on for iilyn's Spider-Man VR mod (SpidyVR by Ilya Mezerowsky, GPL-3.0,
 // https://github.com/IlyaMez/SpidyVR). See include/spidy/sm1_addon.hpp for what it does and does not touch.
 //
-// Addresses: none for any feature (only the read-only research scan below reads game memory). Everything here goes through OpenXR (the loader hands the layer his calls) and through his own
+// Addresses: only two parts read game memory, both READ ONLY (the research scan and the enemy list). Everything else here goes through OpenXR (the loader hands the layer his calls) and through his own
 // exported functions, found by name with GetProcAddress (CONFIRMED in his 0.7.0 sources):
 //   SpidyXrData (data)  spidy_stereo_probe.dll    XrData v43, 1312 bytes (seqlock `sequence`)
 //   SpidyStrikeSample   spidy_ray_bridge.dll      Strikes v3, 328 bytes (cueTarget, cuePoint)
@@ -12,8 +12,13 @@
 // The research scan (sm1_scan.cpp, live.txt sm1scan) is the one part that reads game addresses: CANDIDATE RVAs from
 // his 0.7.0 sources, READ ONLY (VirtualQuery + SEH copies, no writes, no game or Spidy calls), on its own
 // lowest-priority thread, into %APPDATA%\HERO VR SM1\scan. Nothing else in the layer uses what it finds.
+// The enemy list (sm1_targets.cpp) reads the same CANDIDATE registry/RTTI RVAs, READ ONLY, on its own lowest-priority
+// thread every 500 ms and only while a hero with powers is picked. It starts only on Spider-Man.exe 4.630.0.0 and only
+// after the two health vtable RVAs check out by their RTTI names at run time; otherwise powers keep using his cueTarget.
+// Its records go to SpidyPunchTest (his export) as victims: every Bot with health that is no CivilianBot, ally or neutral.
 // Every failure is logged to %APPDATA%\HERO VR SM1\layer.log and turns off only its own feature.
 #include "spidy/sm1_addon.hpp"
+#include "spidy/sm1_combat.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
@@ -465,36 +470,46 @@ bool sampleOurs(his::MotionData& d) {
     return sampleOriginal && sampleOriginal(&d) == 0 && d.magic == 0x534d5644 && d.bytes == sizeof(d);
 }
 
-// --- The power's blow: SpidyPunchTest waits for the game's next physics step, so it runs on its own thread --------
+// --- The blows: SpidyPunchTest waits for the game's next physics step, so they run on their own thread, in order ------
+// Up to 8 wait (a chain of lightning, a shield's ricochets, both claws); a ninth pushes out the oldest.
 SRWLOCK punchLock = SRWLOCK_INIT;
 CONDITION_VARIABLE punchWake = CONDITION_VARIABLE_INIT;
-his::Test punchQueued;
-bool punchPending = false;
+constexpr int punchSlots = 8;
+his::Test punchQueue[punchSlots];
+int punchHead = 0, punchCount = 0;
 std::atomic<DWORD> punchResult{0};
-std::atomic<uint64_t> punchHits{0};
+std::atomic<uint64_t> punchHits{0}, punchDropped{0};
 std::atomic<bool> punchRun{true}; // never cleared: the worker lives as long as the game
+DWORD callPunch(his::Test* t) {
+    DWORD r = 9999;
+    SM1_TRY {
+        r = punchTest(t);
+    }
+    SM1_EXCEPT {
+        r = 9999;
+    }
+    return r;
+}
 DWORD WINAPI punchWorker(void*) {
+    ULONGLONG lastSaid = 0;
     while (punchRun.load()) {
         AcquireSRWLockExclusive(&punchLock);
-        while (!punchPending)
+        while (!punchCount)
             SleepConditionVariableSRW(&punchWake, &punchLock, INFINITE, 0);
-        his::Test t = punchQueued;
-        punchPending = false;
+        his::Test t = punchQueue[punchHead];
+        punchHead = (punchHead + 1) % punchSlots;
+        --punchCount;
         ReleaseSRWLockExclusive(&punchLock);
-        DWORD r = 9999;
-        SM1_TRY {
-            r = punchTest(&t);
-        }
-        SM1_EXCEPT {
-            r = 9999;
-        }
+        const DWORD r = callPunch(&t);
         punchResult = r;
         if (r == 0)
             ++punchHits;
         else if (r == 9502 || r == 9999)
             fPowers.turnOff(r == 9502 ? "SpidyPunchTest refused the blow (9502)" : "SpidyPunchTest faulted");
-        else
+        else if (GetTickCount64() - lastSaid > 2000) { // 9504 no punch module, 9505 no ticket, 9506 paused, 9507 dropped
+            lastSaid = GetTickCount64();
             logLine("SpidyPunchTest %lu", static_cast<unsigned long>(r));
+        }
     }
     return 0; // MSVC C4716: a thread function with __try needs a return it can see
 }
@@ -509,10 +524,35 @@ void queuePunch(const his::Test& t) {
         CloseHandle(h);
     }
     AcquireSRWLockExclusive(&punchLock);
-    punchQueued = t;
-    punchPending = true;
+    if (punchCount == punchSlots) {
+        punchHead = (punchHead + 1) % punchSlots;
+        --punchCount;
+        ++punchDropped;
+    }
+    punchQueue[(punchHead + punchCount) % punchSlots] = t;
+    ++punchCount;
     ReleaseSRWLockExclusive(&punchLock);
     WakeConditionVariable(&punchWake);
+}
+// One blow on an actor (SpidyPunchTest's victim and damager are actor records).
+void blow(uint64_t victim, uint64_t player, Vec3 point, Vec3 from, float amount, int32_t knockback) {
+    his::Test t;
+    t.victim = victim;
+    t.damager = player;
+    t.point = point;
+    t.direction = normalized(point - from);
+    if (!(length(t.direction) > .5f))
+        t.direction = {0, 0, 1};
+    t.amount = amount;
+    t.knockback = knockback;
+    queuePunch(t);
+}
+// The game's enemies (sm1_targets.cpp): every bot type with health that is no civilian, ally or neutral.
+bool targetsUsable() {
+    static int ok = -1;
+    if (ok < 0)
+        ok = targets::start([](const char* line) { logLine("%s", line); }) ? 1 : 0;
+    return ok == 1;
 }
 
 // --- The next layer's (or the runtime's) functions ------------------------------------------------------------------
@@ -1134,20 +1174,43 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
     const Vec3 dir = eyes ? gv.headForward : gv.handForward[hand];
     Vec3 beamDir = dir;
     float beamLength = std::min(p.range, 12.f);
+    const float amount = p.damage * static_cast<float>(live.damage) / 100.f;
+    // His combat's ringed enemy first (his own pick); else the nearest enemy of any type in the aim (sm1_targets).
+    std::vector<combat::Target> foes;
+    if (targetsUsable())
+        targets::fighting(foes);
+    uint64_t first = 0;
+    Vec3 hitPoint{};
     if (s.cueTarget && aimedAt(from, dir, s.cuePoint, aimDegrees, p.range)) {
-        his::Test t;
-        t.victim = s.cueTarget;
-        t.damager = gv.player;
-        t.point = s.cuePoint;
-        t.direction = normalized(s.cuePoint - from);
-        t.amount = p.damage * static_cast<float>(live.damage) / 100.f;
-        t.knockback = p.knockback;
-        queuePunch(t);
-        play.powerState = "HIT";
-        beamDir = t.direction;
-        beamLength = length(s.cuePoint - from);
+        first = s.cueTarget;
+        hitPoint = s.cuePoint;
+    } else if (const int k = combat::aimed(foes, from, dir, p.range, aimDegrees); k >= 0) {
+        first = foes[static_cast<size_t>(k)].record;
+        hitPoint = foes[static_cast<size_t>(k)].chest();
+    }
+    int hits = 0;
+    if (first) {
+        blow(first, gv.player, hitPoint, from, amount, p.knockback);
+        ++hits;
+        beamDir = normalized(hitPoint - from);
+        beamLength = length(hitPoint - from);
+        // Area powers: HULK's clap hits everyone close in front, THOR's lightning jumps to two more.
+        if (hero == hero_modes::hulk || hero == hero_modes::thor) {
+            const Vec3 centre = hero == hero_modes::hulk ? from + normalized(dir) * 2.5f : hitPoint;
+            const float reach = hero == hero_modes::hulk ? 3.f : 5.f;
+            const size_t most = hero == hero_modes::hulk ? 6 : 3;
+            for (const int k : combat::nearby(foes, centre, reach, most)) {
+                const auto& t = foes[static_cast<size_t>(k)];
+                if (t.record == first)
+                    continue;
+                blow(t.record, gv.player, t.chest(), hero == hero_modes::hulk ? from : hitPoint, amount * .7f, p.knockback);
+                if (++hits >= static_cast<int>(most))
+                    break;
+            }
+        }
+        play.powerState = hits > 1 ? "HIT " + std::to_string(hits) : "HIT";
     } else {
-        play.powerState = s.cueTarget ? "MISSED" : "NO TARGET";
+        play.powerState = s.cueTarget || !foes.empty() ? "MISSED" : "NO TARGET";
     }
     if (live.beams && fDraw.on) {
         // game direction -> his head's axes -> the headset's view -> his projection space
@@ -1302,7 +1365,12 @@ void step() {
         endFlight("flight turned off");
     }
 
-    // powers
+    // powers (the enemy scan runs only while a hero with powers is picked)
+    const bool fighting = !nowSpiderMan && live.powers && fPowers.on;
+    if (fighting && targetsUsable())
+        targets::want(true);
+    else
+        targets::want(false);
     play.cooldown = std::max(0.f, play.cooldown - dt);
     if (!nowSpiderMan && live.powers && fPowers.on && !menu.open && rayReady()) {
         for (int i = 0; i < 2; ++i) {

@@ -24,6 +24,9 @@ struct PixelTextStyle {
     float xScale = 1;             // pixel width over pixel height
     float slant = 0;              // italic: across per unit up
 };
+// HERO VR 0.0.76 SM1: one glyph's bits for drawing into a picture (the SM1 add-on's wrist menu): 7 rows, each the
+// leftmost pixel the highest of `width` bits. False for a character the font does not have (drawn as a space).
+bool pixelGlyph(char c, int& width, const unsigned char*& rows);
 // Pixel columns `text` takes (each glyph its width plus one between, a space 4).
 int pixelTextColumns(std::string_view text);
 // How wide `text` is at `style.height` and `style.xScale`, metres (the outline not counted).

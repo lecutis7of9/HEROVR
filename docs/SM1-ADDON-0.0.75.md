@@ -1,5 +1,8 @@
 # HERO VR 0.0.75 SM1: Spider-Man 1 in the launcher
 
+**0.0.76 (hotfix 0.0.75.2):** the add-on now works inside the game through an OpenXR layer: see
+[SM1-ADDON-0.0.76.md](SM1-ADDON-0.0.76.md). The table below is 0.0.75's.
+
 Made by Agent Mulder. The launcher now has two games, side by side at the top:
 
 - **SPIDER-MAN 2**: HERO VR, exactly as before.
@@ -39,8 +42,8 @@ Separate files (`herovr_sm1_addon.dll`, built from `src/sm1`, shipped in `build\
 | Setting | Subtext |
 | --- | --- |
 | Load Mulder's Heroes add-on | Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play. |
-| Wrist menu | Turn your left palm up to open the hero menu; takes effect the next time you press Play. |
-| Flight | Lets flying heroes fly in Spider-Man 1; takes effect the next time you press Play. |
+| Wrist menu | Turn your left palm up to open the hero menu and pull the right trigger to pick; takes effect the next time you press Play. |
+| Flight | Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play. |
 | Tell me about his new releases | Looks at his GitHub once when the launcher starts (nothing installs by itself); takes effect the next time the launcher starts. |
 | The game picker | Pick a game: switches at once, no restart needed. |
 

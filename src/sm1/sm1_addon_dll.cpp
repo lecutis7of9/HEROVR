@@ -1,11 +1,11 @@
-// HERO VR 0.0.75 SM1: herovr_sm1_addon.dll - Mulder's Heroes add-on for iilyn's Spider-Man VR mod (Spidy by
+// HERO VR 0.0.76 SM1 (hotfix 0.0.75.2): herovr_sm1_addon.dll - Mulder's Heroes add-on for iilyn's Spider-Man VR mod (Spidy by
 // Ilya Mezerowsky, GPL-3.0, https://github.com/IlyaMez/SpidyVR). The HERO VR launcher loads it into Spider-Man.exe
 // after iilyn's VR module (spidy_stereo_probe.dll) is in. See include/spidy/sm1_addon.hpp.
 //
-// 0.0.75 is SAFE BY DESIGN: no hook, no game memory read or written, no D3D or OpenXR call. One thread checks the
-// host (exe, version, iilyn's modules, all read only), reads %APPDATA%\HERO VR SM1\addon.ini and writes what it found
-// and every feature's status to %APPDATA%\HERO VR SM1\addon.log, then ends. It never touches %APPDATA%\Spidy or his
-// files. Everything that would change the game is a CANDIDATE no-op (GameLink) until SM1 research.
+// This DLL is the add-on's REPORT only: no hook, no game memory, no D3D or OpenXR call. One thread checks the host
+// (exe, version, iilyn's modules, read only), reads %APPDATA%\HERO VR SM1\addon.ini, notes whether the add-on's
+// OpenXR layer (herovr_sm1_layer.dll, which does the wrist menu, heroes and flight) is in the game, and writes it all
+// to %APPDATA%\HERO VR SM1\addon.log, then ends. It never touches %APPDATA%\Spidy or his files.
 #include "spidy/sm1_addon.hpp"
 
 #include <windows.h>
@@ -113,18 +113,24 @@ DWORD WINAPI addonThread(void*) {
     log += "features:\n";
     for (const Feature& f : features)
         log += std::string("  ") + f.name + ": " + evidenceText(f.evidence) + ", " + stateText(f.state) + " - " + f.note + "\n";
-    // The game link: every call a CANDIDATE no-op in 0.0.75 (returns false, changes nothing).
-    GameLink link;
-    if (runs(verdict) && config.heroes && !link.applyHero(config.hero))
-        log += "heroes: not applied (no-op until SM1 research); iilyn's mod runs exactly as he made it\n";
-    log += "no hook installed, no game memory touched; this thread ends now\n";
+    // The layer is loaded by the OpenXR loader when his mod creates its OpenXR instance; give it a moment.
+    bool layer = false;
+    for (int i = 0; i < 120 && !layer; ++i) {
+        layer = GetModuleHandleW(widen(layerDll).c_str()) != nullptr;
+        if (!layer)
+            Sleep(500);
+    }
+    log += std::string("layer ") + layerDll + (layer ? ": loaded (wrist menu, heroes and flight run there; see layer.log)\n"
+                                                     : ": NOT loaded after 60 s (no wrist menu, heroes or flight this run; "
+                                                       "the launcher registers it while Spider-Man 1 plays)\n");
+    log += "this DLL installs no hook and touches no game memory; this thread ends now\n";
     writeLog(dir, log);
     return 0;
 }
 } // namespace
 
 extern "C" __declspec(dllexport) DWORD WINAPI HeroVrSm1AddonVersion(void*) {
-    return 75; // 0.0.75
+    return 76; // 0.0.76 (hotfix 0.0.75.2)
 }
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {

@@ -1,8 +1,10 @@
-// HERO VR 0.0.75 SM1 - Spider-Man 1 in the launcher: iilyn's Spider-Man VR mod (Spidy by Ilya Mezerowsky,
+// HERO VR 0.0.76 SM1 (hotfix 0.0.75.2) - Spider-Man 1 in the launcher: iilyn's Spider-Man VR mod (Spidy by Ilya Mezerowsky,
 // https://github.com/IlyaMez/SpidyVR, GPL-3.0), with Mulder's Heroes add-on. His mod is downloaded from HIS GitHub
 // releases (so every download counts for him) and is never changed: no file of his is edited, renamed or patched.
-// Mulder's Heroes add-on is our own separate DLL (herovr_sm1_addon.dll, src/sm1), loaded into the game only after his
-// VR is running; its settings live in %APPDATA%\HERO VR SM1, never in his %APPDATA%\Spidy.
+// Mulder's Heroes add-on is our own separate files (src/sm1): herovr_sm1_layer.dll, an OpenXR implicit API layer the
+// launcher registers for the current Windows user only while Spider-Man 1 plays (wrist menu, heroes, outfits, holo
+// card, powers, flight), and herovr_sm1_addon.dll, a report-only DLL loaded after his VR runs. Their settings live in
+// %APPDATA%\HERO VR SM1, never in his %APPDATA%\Spidy.
 // Addresses below are CONFIRMED (read from his repository / release v0.7.0 on 2026-10-31) unless marked CANDIDATE.
 // Made by Agent Mulder.
 using System;
@@ -53,6 +55,12 @@ namespace Sm2VrLauncher
         public const string ModCheckFile = @"tools\run_game_vr.py";                 // CONFIRMED (release zip 0.7.0)
         public const string VrModule = "spidy_stereo_probe.dll";                    // CONFIRMED: loaded when his VR runs
         public const string AddonDll = "herovr_sm1_addon.dll";                      // ours (src/sm1)
+        public const string LayerDll = "herovr_sm1_layer.dll";                      // ours (src/sm1/sm1_layer.cpp)
+        public const string LayerJson = "herovr_sm1_layer.json";                    // ours (src/sm1/herovr_sm1_layer.json)
+        public const string LayerName = "XR_APILAYER_HEROVR_sm1_heroes";
+        // CONFIRMED (OpenXR loader 1.1.49, src/loader/manifest_file.cpp): implicit layers are read from this key in
+        // HKLM and, when the game is not run as administrator, HKCU; value name = manifest path, DWORD 0 = enabled.
+        public const string LayerKey = @"SOFTWARE\Khronos\OpenXR\1\ApiLayers\Implicit";
         public const string KnownVersion = "0.7.0";                                 // CONFIRMED: latest on 2026-10-31
 
         // ---- Settings (settings.ini) ---------------------------------------------------------------------
@@ -64,6 +72,35 @@ namespace Sm2VrLauncher
         public const string KeyFlight = "Sm1.Flight";
         public const string KeyNews = "Sm1.ReleaseNews";
         public const string KeyDeclined = "Sm1.SetupDeclined";
+
+        /// <summary>What the add-on does in Spider-Man 1 and how far each part is (include/spidy/sm1_addon.hpp features[];
+        /// sm1_launcher_tests.py checks they match). "untested": built and wired, not yet tried in the game.</summary>
+        public static readonly string[][] Features = {
+            new[] { "wrist hero menu", "untested", "left palm up opens it; right stick moves, right trigger picks" },
+            new[] { "hero select", "untested", "11 heroes, saved in addon.ini" },
+            new[] { "outfits", "untested", "listed with their artists and saved; no hero models in Spider-Man 1 yet" },
+            new[] { "holo card", "untested", "the hero's card on the wrist (2D)" },
+            new[] { "hero powers", "untested", "trigger of an outstretched hand hits the ringed enemy, with a beam" },
+            new[] { "flight in game", "untested", "Iron Man, Superman, Thor, Green Lantern: hold a grip to take off" },
+            new[] { "hero models", "stub", "needs Spider-Man 1's character model slots (not done)" },
+        };
+
+        /// <summary>The feature list for the Spider-Man 1 page: what runs in the game and what does not yet.</summary>
+        public static string FeatureSummary()
+        {
+            var built = Features.Where(f => f[1] != "stub").Select(f => f[0]).ToArray();
+            var not = Features.Where(f => f[1] == "stub").Select(f => f[0]).ToArray();
+            return "WITH SPIDER-MAN 1 (built, not yet tried in the game): " + string.Join(", ", built) + ". " +
+                   "NOT YET: " + string.Join(", ", not) + ". Multiplayer: not for Spider-Man 1.";
+        }
+
+        public static string FeatureDetails()
+        {
+            var sb = new StringBuilder();
+            foreach (var f in Features)
+                sb.Append(f[0]).Append(": ").Append(f[1] == "stub" ? "NOT YET - " : "built, not yet tried in the game - ").Append(f[2]).Append('\n');
+            return sb.ToString().TrimEnd(new[] { '\r', '\n', ' ' });
+        }
 
         public static string DataFolder { get { return Path.Combine(Settings.Folder, "SM1"); } }
         public static string DefaultModFolder { get { return Path.Combine(DataFolder, "Spidy"); } }
@@ -398,13 +435,108 @@ namespace Sm2VrLauncher
             return dest;
         }
 
-        /// <summary>%APPDATA%\HERO VR SM1\addon.ini (the add-on reads it once at start). hero= is kept as it was.</summary>
+        /// <summary>The layer's two files in the HERO VR mod files (build\windows-ninja).</summary>
+        public static string LayerSource(string root, string file)
+        {
+            try { return root == null ? null : Path.Combine(Path.Combine(Path.Combine(root, "build"), "windows-ninja"), file); }
+            catch { return null; }
+        }
+
+        public static bool LayerPresent(string root)
+        {
+            try { return File.Exists(LayerSource(root, LayerDll)) && File.Exists(LayerSource(root, LayerJson)); } catch { return false; }
+        }
+
+        /// <summary>Copies the layer (DLL and manifest) to SM1\layer\&lt;sha&gt;\, so a HERO VR update can replace the
+        /// originals while the game runs. Returns the staged manifest's path, or null when the layer is not there.</summary>
+        public static string StageLayer(string root)
+        {
+            if (!LayerPresent(root)) return null;
+            string dll = LayerSource(root, LayerDll), json = LayerSource(root, LayerJson);
+            string sha = Sha256Of(dll).Substring(0, 12) + Sha256Of(json).Substring(0, 4);
+            string dir = Path.Combine(Path.Combine(DataFolder, "layer"), sha);
+            Directory.CreateDirectory(dir);
+            foreach (var src in new[] { dll, json })
+            {
+                string dest = Path.Combine(dir, Path.GetFileName(src));
+                if (File.Exists(dest)) continue;
+                File.Copy(src, dest + ".tmp", true);
+                File.Move(dest + ".tmp", dest);
+            }
+            return Path.Combine(dir, LayerJson);
+        }
+
+        static bool OurLayerValue(string name)
+        {
+            try { return !string.IsNullOrEmpty(name) && string.Equals(Path.GetFileName(name.Trim()), LayerJson, StringComparison.OrdinalIgnoreCase); }
+            catch { return false; }
+        }
+
+        /// <summary>Registers the staged manifest as an implicit OpenXR layer for this Windows user (HKCU, never HKLM).
+        /// Any older entry of ours (another path, a stale one) is removed first. Only our own value is touched.</summary>
+        public static void RegisterLayer(string manifest, string key = LayerKey)
+        {
+            RemoveLayers(key);
+            using (var k = Registry.CurrentUser.CreateSubKey(key))
+                k.SetValue(manifest, 0, RegistryValueKind.DWord);
+        }
+
+        /// <summary>Removes every entry of ours (a value named ...\herovr_sm1_layer.json) from HKCU; other layers stay.
+        /// Returns how many it removed; never throws.</summary>
+        public static int RemoveLayers(string key = LayerKey)
+        {
+            int n = 0;
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(key, true))
+                {
+                    if (k == null) return 0;
+                    foreach (var v in k.GetValueNames())
+                        if (OurLayerValue(v)) { try { k.DeleteValue(v, false); n++; } catch { } }
+                }
+            }
+            catch { }
+            return n;
+        }
+
+        public static string[] RegisteredLayers(string key = LayerKey)
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(key))
+                    return k == null ? new string[0] : k.GetValueNames().Where(OurLayerValue).ToArray();
+            }
+            catch { return new string[0]; }
+        }
+
+        /// <summary>Removes the layer entry once Spider-Man 1 has run and closed (or never started within the wait), so
+        /// no other OpenXR app on this PC ever sees it. A background thread; never throws.</summary>
+        public static void RemoveLayersAfterGame(Action<string> log, int startWaitSeconds = 900)
+        {
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    bool seen = false;
+                    for (int i = 0; i < startWaitSeconds && !seen; i++) { seen = GameRunning(); if (!seen) Thread.Sleep(1000); }
+                    while (seen && GameRunning()) Thread.Sleep(2000);
+                    int n = RemoveLayers();
+                    if (log != null && n > 0) log(seen ? "Spider-Man 1 closed: the add-on's OpenXR layer entry was removed." : "Spider-Man 1 did not start: the add-on's OpenXR layer entry was removed.");
+                }
+                catch { }
+            }) { IsBackground = true, Name = "SM1 layer cleanup" };
+            t.Start();
+        }
+
+        /// <summary>%APPDATA%\HERO VR SM1\addon.ini. The launcher writes the switches; the hero and the outfits the
+        /// wrist menu picked (hero=, outfit.N=) are kept as they were.</summary>
         public static void WriteAddonIni(bool heroes, bool wrist, bool flight)
         {
             string dir = AddonDataFolder;
             Directory.CreateDirectory(dir);
             string file = Path.Combine(dir, "addon.ini");
             string hero = "0";
+            var outfits = new List<string>();
             try
             {
                 if (File.Exists(file))
@@ -412,11 +544,13 @@ namespace Sm2VrLauncher
                     {
                         var t = l.Trim();
                         if (t.StartsWith("hero=", StringComparison.Ordinal) && Regex.IsMatch(t.Substring(5).Trim(), "^[0-9]{1,3}$")) hero = t.Substring(5).Trim();
+                        else if (Regex.IsMatch(t, "^outfit\\.[0-9]{1,2}=[0-9]{1,3}$")) outfits.Add(t);
                     }
             }
             catch { }
-            string text = "# Mulder's Heroes add-on (HERO VR) for iilyn's Spider-Man VR mod. The HERO VR launcher writes this file.\n" +
+            string text = "# Mulder's Heroes add-on (HERO VR) for iilyn's Spider-Man VR mod. The HERO VR launcher writes the switches; the wrist menu writes hero= and outfit.N=.\n" +
                 "heroes=" + (heroes ? "1" : "0") + "\nwrist_menu=" + (wrist ? "1" : "0") + "\nflight=" + (flight ? "1" : "0") + "\nhero=" + hero + "\n";
+            foreach (var o in outfits) text += o + "\n";
             File.WriteAllText(file + ".tmp", text, new UTF8Encoding(false));
             if (File.Exists(file)) File.Delete(file);
             File.Move(file + ".tmp", file);
@@ -440,7 +574,7 @@ namespace Sm2VrLauncher
         public static string GameMissingText(string where)
         {
             return "Spider-Man 1 is missing.\n\n" + GameName + " (Steam) was not found on this PC (" + where + "). " +
-                "iilyn's Spider-Man VR mod runs on that game only (Spider-Man.exe v" + SupportedVersion + "); Miles Morales is not supported.\n\n" +
+                "iilyn's Spider-Man VR mod runs on that game only (Spider-Man.exe v" + SupportedVersion + "); other Spider-Man games are not supported.\n\n" +
                 "Yes, Autosetup opens Steam's install page for it. Already installed somewhere else? Press No, then Browse game on the Spider-Man 1 page.";
         }
 

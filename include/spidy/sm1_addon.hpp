@@ -1,29 +1,39 @@
 #pragma once
-// HERO VR 0.0.75 SM1: Mulder's Heroes add-on for iilyn's Spider-Man VR mod.
+// HERO VR 0.0.76 SM1: Mulder's Heroes add-on for iilyn's Spider-Man VR mod. Made by Agent Mulder.
 //
-// iilyn's Spider-Man VR mod is Spidy by Ilya Mezerowsky (GPL-3.0, https://github.com/IlyaMez/SpidyVR). It runs
+// iilyn's Spider-Man VR mod is SpidyVR (Spidy) by Ilya Mezerowsky (GPL-3.0, https://github.com/IlyaMez/SpidyVR). It runs
 // Marvel's Spider-Man Remastered (Spider-Man.exe) in VR with its own graphics, performance and anti-aliasing work.
-// This add-on is separate files: it never changes his files, his settings (%APPDATA%\Spidy) or his rendering. The
-// HERO VR launcher starts his launcher unchanged, waits until his VR module (spidy_stereo_probe.dll) is in the game,
-// then loads herovr_sm1_addon.dll beside it. Our files are never named spidy_* (his launcher flags those).
+// This add-on is separate files: it never changes his files, his settings (%APPDATA%\Spidy) or his rendering.
 //
-// What is real in 0.0.75 and what is not (every game address here is CANDIDATE until a SM1 research pass finds it):
-//  - CONFIRMED: the host checks (exe name, version, his module names; from his 0.7.0 sources), the add-on's own
-//    settings file, the wrist menu's state machine and the flight motion below (pure code, tested on Linux).
-//  - CANDIDATE, a no-op in 0.0.75: drawing the wrist menu into his VR frame, moving the player for flight, the
-//    heroes' powers and models. GameLink's calls do nothing and say so; no hook is installed, no game memory is
-//    read or written. Nothing here can change his graphics, frame rate or anti-aliasing.
-#include "spidy/fly_lean.hpp"
+// 0.0.76: the add-on is an OpenXR API layer (herovr_sm1_layer.dll, src/sm1/sm1_layer.cpp). The HERO VR launcher
+// registers it for the current Windows user when PLAY starts Spider-Man 1 and removes it when the game closes. The
+// OpenXR loader inside his VR module then puts it between his VR code and the headset runtime:
+//  - it reads the controllers his own actions already read (no new actions, no new bindings);
+//  - it hides only the inputs the add-on uses at that moment (the right trigger and stick while the wrist menu is
+//    up; a hero's power trigger), so his webs never fire by mistake;
+//  - it adds its own quad layers (the wrist menu, the holo card, a power's beam) on top of his finished frame. His
+//    eye images, resolution, anti-aliasing and frame pacing are passed through untouched;
+//  - a hero's power lands through his own exported test call SpidyPunchTest (spidy_ray_bridge.dll) on the enemy
+//    his combat has ringed (SpidyStrikeSample's cueTarget). No game address of our own is used;
+//  - flight moves the player through his own export SpidyMotionSubmit (spidy_movement_bridge.dll). His movement
+//    module refuses any command whose serial is not above the last one, and his swing switches itself off on a
+//    refusal; so the layer puts a small hand-over on his two movement exports (SpidyMotionSubmit and
+//    SpidyMotionSample, MinHook on the exported functions, never on game code): his serials and ours go out in one
+//    rising order, his commands wait while a hero flies, and his telemetry gets his own serials back (Handover).
+// Any step that fails is logged to %APPDATA%\HERO VR SM1\layer.log and turns off only that feature; the layer then
+// passes his calls through unchanged. It never fails his xrCreateInstance or xrEndFrame.
 #include "spidy/hero_modes.hpp"
 #include "spidy/math.hpp"
 
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace spidy::sm1 {
 inline constexpr const char* addonName = "Mulder's Heroes add-on";
-inline constexpr const char* addonVersion = "0.0.75";
+inline constexpr const char* addonVersion = "0.0.76";
+inline constexpr uint32_t addonBuild = 76;
 inline constexpr const char* hostTitle = "Marvel's Spider-Man Remastered";
 // CONFIRMED (Spidy 0.7.0 tools/inspect_game.py): EXPECTED_VERSION and the Steam build's exe name.
 inline constexpr const char* hostExe = "Spider-Man.exe";
@@ -34,6 +44,19 @@ inline constexpr const char* spidyModules[] = {"spidy_render_memory.dll", "spidy
                                                "spidy_ray_bridge.dll", "spidy_movement_bridge.dll"};
 inline constexpr int spidyModuleCount = 5;
 inline constexpr const char* spidyVrModule = "spidy_stereo_probe.dll";
+inline constexpr const char* spidyRayModule = "spidy_ray_bridge.dll";
+inline constexpr const char* spidyMovementModule = "spidy_movement_bridge.dll";
+// His exports the layer uses, by name (CONFIRMED in his 0.7.0 sources; exports, not game addresses):
+//   SpidyXrData        spidy_stereo_probe.dll  src/game_xr.cpp     XrData v43, 1312 bytes, seqlock `sequence`
+//   SpidyStrikeSample  spidy_ray_bridge.dll    src/game_punch.cpp  copies game_punch::Strikes v3, 328 bytes
+//   SpidyPunchTest     spidy_ray_bridge.dll    src/game_punch.cpp  one blow to the game's DamageSystem (Test v1, 80 bytes)
+//   SpidyMotionSubmit  spidy_movement_bridge.dll src/native_movement.cpp  Command v1, 48 bytes (serial must rise)
+//   SpidyMotionSample  spidy_movement_bridge.dll src/native_movement.cpp  copies Data v4 (grounded, position)
+inline constexpr const char* layerName = "XR_APILAYER_HEROVR_sm1_heroes";
+inline constexpr const char* layerDll = "herovr_sm1_layer.dll";
+inline constexpr const char* layerManifest = "herovr_sm1_layer.json";
+inline constexpr const char* layerDisableEnv = "HEROVR_SM1_LAYER_DISABLE";
+
 // The heroes: HERO VR's roster (hero_modes), shared with Spider-Man 2.
 inline constexpr uint32_t heroCount = hero_modes::heroes;
 inline const char* heroName(uint32_t i) {
@@ -41,7 +64,9 @@ inline const char* heroName(uint32_t i) {
 }
 
 enum class Evidence { confirmed, candidate };
-enum class State { ready, stub };
+// ready: works, tested on Linux; untested: built and wired, not yet tried in the game (no game on the build box);
+// stub: not done (the note says why).
+enum class State { ready, untested, stub };
 struct Feature {
     const char* name;
     Evidence evidence;
@@ -50,13 +75,19 @@ struct Feature {
 };
 inline constexpr Feature features[] = {
     {"host check", Evidence::confirmed, State::ready, "exe, version and iilyn's modules, read only"},
-    {"add-on settings", Evidence::confirmed, State::ready, "%APPDATA%\\HERO VR SM1\\addon.ini, never his folder"},
-    {"wrist menu logic", Evidence::confirmed, State::ready, "pages and selection, pure code"},
-    {"wrist menu drawing", Evidence::candidate, State::stub, "needs his VR frame's overlay point (SM1 research)"},
-    {"flight motion", Evidence::confirmed, State::ready, "speed, steering and body lean, pure code"},
-    {"flight in game", Evidence::candidate, State::stub, "needs SM1's player position and velocity (SM1 research)"},
-    {"heroes' powers", Evidence::candidate, State::stub, "needs SM1's combat and damage paths (SM1 research)"},
-    {"heroes' models", Evidence::candidate, State::stub, "needs SM1's character model slots (SM1 research)"},
+    {"add-on settings", Evidence::confirmed, State::ready, "%APPDATA%\\HERO VR SM1\\addon.ini and live.txt, never his folder"},
+    {"wrist hero menu", Evidence::confirmed, State::untested,
+     "left palm up opens it over the wrist; right stick moves, right trigger picks (OpenXR quad layer)"},
+    {"hero select", Evidence::confirmed, State::untested, "picks one of the 11 heroes, saved in addon.ini"},
+    {"outfits", Evidence::confirmed, State::untested,
+     "each hero's outfits listed with their artists and saved; Spider-Man 1 shows no hero models yet"},
+    {"holo card", Evidence::confirmed, State::untested, "the hero's card on the wrist (2D, not the 3D hologram)"},
+    {"hero powers", Evidence::confirmed, State::untested,
+     "trigger of an outstretched hand: the hero's blast hits the ringed enemy through SpidyPunchTest, with a beam"},
+    {"flight in game", Evidence::confirmed, State::untested,
+     "IRON MAN, SUPERMAN, THOR, GREEN LANTERN: hold a grip to take off, stay up after letting go; his SpidyMotionSubmit "
+     "export moves the body, with the layer keeping his serial numbers in order so his swinging never shuts off"},
+    {"hero models", Evidence::candidate, State::stub, "needs SM1's character model slots and drawing into his frame"},
 };
 inline constexpr int featureCount = static_cast<int>(sizeof(features) / sizeof(features[0]));
 const char* evidenceText(Evidence e);
@@ -75,29 +106,102 @@ Verdict judge(const HostInfo& h);
 bool runs(Verdict v);
 const char* verdictText(Verdict v);
 bool sameFileName(std::string_view a, std::string_view b); // ASCII case-insensitive
+// The file name of a path ("C:\\x\\Spider-Man.exe" -> "Spider-Man.exe").
+std::string_view fileNameOf(std::string_view path);
 
-// --- The add-on's settings (addon.ini; written by the launcher) ------------------------------------------------
+// --- The add-on's settings (addon.ini; the launcher writes the switches, the wrist menu the picks) --------------
 struct Config {
-    bool heroes = true;   // heroes=1
+    bool heroes = true;    // heroes=1
     bool wristMenu = true; // wrist_menu=1
-    bool flight = true;   // flight=1
-    uint32_t hero = 0;    // hero=0..heroCount-1 (SPIDER-MAN by default)
+    bool flight = true;    // flight=1 (the flying heroes take off on a held grip)
+    uint32_t hero = 0;     // hero=0..heroCount-1 (SPIDER-MAN by default)
+    uint32_t outfit[heroCount]{}; // outfit.<hero>=<index> (0: his first)
 };
 // key=value lines, '#' or ';' comments, unknown keys and bad values ignored (the defaults stay).
 Config parseConfig(std::string_view text);
 std::string configText(const Config& c);
 
+// --- live.txt (%APPDATA%\HERO VR SM1\live.txt): the add-on's own switches, read again every 2 seconds ----------
+struct Live {
+    bool powers = true;    // powers=1
+    bool heroWebs = true;  // hero_webs=1
+    bool beams = true;     // beams=1
+    int damage = 100;      // power_damage=100 (25..200 %)
+    int menuSize = 100;    // menu_size=100 (60..160 %)
+};
+Live parseLive(std::string_view text);
+// The file the add-on writes when there is none: every switch with its one-sentence subtext.
+std::string liveText(const Live& l);
+struct LiveSwitch {
+    const char* key;
+    const char* subtext; // one sentence, says it applies live (no restart)
+};
+inline constexpr LiveSwitch liveSwitches[] = {
+    {"powers", "Hero powers: the trigger of an outstretched hand fires the hero's power at the ringed enemy; applies live, no restart."},
+    {"hero_webs", "Heroes who do not fly keep iilyn's web swinging on the grips (the flying heroes use the grips to fly); applies live, no restart."},
+    {"beams", "Draws each power's beam from the hand (or the eyes) to the enemy; applies live, no restart."},
+    {"power_damage", "How hard the powers hit, 25 to 200 percent; applies live, no restart."},
+    {"menu_size", "The wrist menu's size, 60 to 160 percent; applies live, no restart."},
+};
+
+// --- Outfits (each hero's suits from HERO VR's roster, with their artists) --------------------------------------
+uint32_t outfitCount(uint32_t hero);
+// The hero's i-th outfit (name, artist, licence); empty strings past the end.
+struct OutfitInfo {
+    std::string name, artist, licence;
+};
+OutfitInfo outfitOf(uint32_t hero, uint32_t i);
+
+// --- The heroes' powers in Spider-Man 1 ------------------------------------------------------------------------
+enum class Source { none, hand, eyes };
+struct Power {
+    const char* name;
+    Source source;
+    float damage;    // at power_damage=100 (his punches do 7..28)
+    int32_t knockback; // his punch.hpp Knockback: 2 Stagger, 3 Knockback, 4 Knockdown, 5 FlyBack, 9 SuperFlyBack
+    float range;     // metres
+    float cooldown;  // seconds between shots
+    uint32_t color;  // 0xRRGGBB, the beam
+};
+const Power& powerOf(uint32_t hero);
+// The aim cone: within maxDegrees of `dir` from `from`, and no further than range.
+bool aimedAt(Vec3 from, Vec3 dir, Vec3 target, float maxDegrees, float range);
+inline constexpr float aimDegrees = 15, outstretched = .42f; // a hand this far from the head fires (nearer: his scan/suit power)
+
+// --- Input: the bindings his actions suggested, and what the layer hides from him ------------------------------
+enum class Role { none, trigger, grip, stick, gripPose, aimPose };
+struct Binding {
+    Role role = Role::none;
+    int side = -1; // 0 left, 1 right
+};
+// "/user/hand/left/input/trigger/value" -> trigger, left. Clicks, values and touches: only value/click count.
+Binding classify(std::string_view path);
+struct MaskInput {
+    bool menuOpen = false, palmReady = false; // palmReady: the left palm is up (the menu opens soon)
+    bool spiderMan = true, powers = true, heroWebs = true;
+    bool flightArmed = false; // a flying hero with flight on: the grips are his take-off and boost
+    bool flying = false;      // in the air on our flight: the left stick and the right stick's up/down are ours
+    bool grip[2]{}, handOut[2]{};
+};
+struct Mask {
+    bool trigger[2]{}, grip[2]{}, stick[2]{}, stickY[2]{};
+};
+Mask maskFor(const MaskInput& in);
+
 // --- The wrist menu (pure state machine) ----------------------------------------------------------------------
 // Open: the left palm faces up (palmUp >= openDot) for openHold seconds. Close: palm down for closeHold seconds.
-// The stick moves the row (one step per flick: past 0.6, back under 0.3), the trigger picks (one per press).
+// The right stick moves the row up/down (one step per flick); the last row of a page goes to the next page; the
+// right trigger picks.
 struct WristInput {
-    float palmUp = 0;    // dot(left palm normal, world up)
-    float stickY = 0;    // right stick, -1..1 (up is +)
+    float palmUp = 0;     // dot(left palm normal, world up)
+    float stickX = 0, stickY = 0; // right stick, -1..1 (up and right are +)
     bool trigger = false; // right trigger past half
     float dt = 0;
 };
-enum class Page : uint32_t { heroes, flight, addon, count };
-enum class Pick { none, hero, flightToggle, closeMenu };
+enum class Page : uint32_t { heroes, outfits, powers, addon, count };
+// POWERS page rows: what a pick there toggles.
+enum class Toggle : int { powers = 0, flight, heroWebs, beams, count };
+enum class Pick { none, hero, outfit, toggle, closeMenu };
 struct WristMenu {
     static constexpr float openDot = .7f, closeDot = .3f, openHold = .35f, closeHold = .25f;
     bool open = false;
@@ -105,37 +209,113 @@ struct WristMenu {
     int row = 0;
     float held = 0;
     bool stickArmed = true, triggerArmed = true;
+    uint32_t outfits = 1; // rows on the OUTFITS page (the caller sets it for the hero)
     int rows() const;
     // One frame; returns what the trigger picked (the row is in row).
     Pick step(const WristInput& in);
 };
 const char* pageName(Page p);
+const char* toggleName(Toggle t);
 
-// --- Flight (pure; the in-game move is GameLink::applyFlight) ------------------------------------------------
+// --- Drawing: an RGBA8 picture (row 0 the top) the layer uploads to its quad --------------------------------------
+struct Canvas {
+    int width = 0, height = 0;
+    std::vector<uint32_t> pixels; // 0xAABBGGRR (R first in memory)
+    Canvas() = default;
+    Canvas(int w, int h);
+    void clear(uint32_t rgba);
+    void rect(int x, int y, int w, int h, uint32_t rgba);       // filled, alpha blended
+    void frame(int x, int y, int w, int h, int t, uint32_t rgba); // outline t pixels thick
+    // Text in the pixel font (capitals, digits, punctuation), each font pixel `scale` square; returns its width.
+    int text(int x, int y, std::string_view s, int scale, uint32_t rgba);
+    static int textWidth(std::string_view s, int scale);
+};
+uint32_t rgba(uint32_t rgb, uint32_t alpha = 255);
+// What the menu shows (the layer fills it each time something changes).
+struct MenuView {
+    Page page = Page::heroes;
+    int row = 0;
+    uint32_t hero = 0;
+    uint32_t outfit = 0;
+    bool toggles[static_cast<int>(Toggle::count)]{true, true, true, true};
+    bool flying = false;
+    std::string powerState; // "READY", "NO TARGET", "HIT"...
+    std::string status[6];  // the ADD-ON page's lines
+};
+inline constexpr int menuWidth = 512, menuHeight = 640;
+void paintMenu(Canvas& c, const MenuView& v);
+// The beam's texture: a soft core along its length (height), the hero's colour.
+void paintBeam(Canvas& c, uint32_t rgb);
+bool sameView(const MenuView& a, const MenuView& b);
+
+// --- Where the layer puts its quads (pure; the space is his projection layer's, Y up) -----------------------------
+Quat fromBasis(Vec3 x, Vec3 y, Vec3 z); // unit, orthogonal axes -> the turn that takes +X,+Y,+Z to them
+float palmUp(Quat leftGrip);            // dot(the left grip's +X, the palm's normal, world up)
+// The menu: centred `lift` metres over the left grip, turned to face the head, upright.
+Pose menuPose(Pose leftGrip, Vec3 head, float lift);
+// A beam `length` long from `from` along unit `dir`, its face turned to the head (the quad's +Y along the beam).
+Pose beamPose(Vec3 from, Vec3 dir, float length, Vec3 head);
+
+// --- Flight (the flying heroes; moved through his SpidyMotionSubmit by the layer) --------------------------------
+bool flies(uint32_t hero); // IRON MAN, SUPERMAN, THOR, GREEN LANTERN
 struct FlightTuning {
-    float accel = 18;       // m/s^2 at full trigger
-    float drag = 1.2f;      // 1/s
-    float maxSpeed = 40;    // FAST
+    float enterHold = .4f;  // seconds a grip is held to take off
+    float liftOff = 4;      // m/s up on take-off
+    float cruise = 12;      // m/s at full left stick
+    float climb = 8;        // m/s at full right stick up/down
+    float boost = 14;       // m/s along each held grip's hand aim
+    float response = 4;     // 1/s: how fast the velocity follows the sticks
+    float maxSpeed = 28;    // m/s (his movement module allows up to its own cap)
+    float landAfter = 1;    // seconds in the air before touching the ground lands
 };
 struct FlightInput {
-    bool on = false;
-    Vec3 leftAim{}, rightAim{}; // hand forward directions (world)
-    float leftThrust = 0, rightThrust = 0; // triggers 0..1
-    Vec3 facing{0, 0, 1};
+    bool allowed = false;     // a flying hero, heroes and flight on, the menu closed
+    bool stop = false;        // the menu's FLIGHT toggle turned off
+    bool grip[2]{};           // grips past half
+    Vec3 aim[2]{};            // hand forward, game world (Y up)
+    Vec3 headForward{0, 0, 1}, headRight{1, 0, 0}; // the head's axes, game world
+    float moveX = 0, moveY = 0; // left stick (body-relative: right, forward)
+    float climb = 0;          // right stick up/down
+    bool grounded = false;    // his movement telemetry: the body stands on something
     float dt = 0;
 };
+enum class FlightEvent { none, tookOff, landed, stopped };
 struct FlightState {
+    bool on = false;
+    float gripHeld = 0, airTime = 0;
+    bool gripArmed[2]{}; // a grip counts as boost only after it was let go once in the air
     Vec3 velocity{};
-    float lean = 0; // radians, + forward (fly_lean)
 };
-void stepFlight(FlightState& s, const FlightInput& in, const FlightTuning& t = {});
+// One frame. While on, `s.velocity` is what the layer submits (enabled, a short lease); off, nothing is submitted.
+FlightEvent stepFlight(FlightState& s, const FlightInput& in, const FlightTuning& t = {});
 
-// --- The game link: CANDIDATE, a no-op in 0.0.75 ---------------------------------------------------------------
-// Each call returns false (nothing done) until SM1 research CONFIRMS the address it needs; the add-on logs that
-// once per feature. Kept so the add-on's frame code is wired and tested now.
-struct GameLink {
-    bool drawWristMenu(const WristMenu&) { return false; }
-    bool applyFlight(const FlightState&) { return false; }
-    bool applyHero(uint32_t) { return false; }
+// --- The hand-over on his movement exports (pure; the layer's detours call it under one lock) -------------------
+// His movement module keeps the last accepted serial and refuses anything not above it (2003); his swing then shuts
+// itself off for the session. Both movers' commands go out through here in one rising order. While ours is on, his
+// are held back (he is told they went through: the body is ours for the moment). His telemetry gets his own serial
+// back (sampleSerial), or 0 for a step one of ours drove.
+class Handover {
+  public:
+    static constexpr uint64_t base = 1ull << 40; // our first serial: above anything his counter reaches in a session
+    // His command with his serial: the serial to pass on, or 0 to hold it back (return success to him).
+    uint64_t his(uint64_t serial);
+    // Ours: the serial to submit.
+    uint64_t ours();
+    // A refusal of ours (2003): jump further up and try again once.
+    void refused();
+    void take() { ours_ = true; }
+    void release() { ours_ = false; }
+    bool ourTurn() const { return ours_; }
+    // The serial his SpidyMotionSample shows -> the one his swing knows.
+    uint64_t sampleSerial(uint64_t shown) const;
+
+  private:
+    struct Pair {
+        uint64_t out, in;
+    };
+    Pair ring_[256]{};
+    uint32_t next_ = 0;
+    uint64_t last_ = 0, offset_ = 0;
+    bool ours_ = false, used_ = false;
 };
 } // namespace spidy::sm1

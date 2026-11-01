@@ -90,6 +90,42 @@ namespace Sm2VrLauncher
             Check(Sm1.GameVersion(null) == null && Sm1.GameVersion(f) == null, "GameVersion never throws");
             Check(!Sm1.AddonPresent(null) && Sm1.StageAddon(tmp) == null, "no add-on: nothing staged");
 
+            // 0.0.76: the OpenXR layer - staged in our folder, registered only under HKCU, our entries only removed.
+            Check(!Sm1.LayerPresent(null) && Sm1.StageLayer(tmp) == null, "no layer: nothing staged");
+            string bin = Path.Combine(Path.Combine(tmp, "build"), "windows-ninja");
+            Directory.CreateDirectory(bin);
+            File.WriteAllText(Path.Combine(bin, Sm1.LayerDll), "dll");
+            File.WriteAllText(Path.Combine(bin, Sm1.LayerJson), "{}");
+            string manifest = Sm1.StageLayer(tmp);
+            Check(manifest != null && manifest.StartsWith(Path.Combine(Sm1.DataFolder, "layer")) && File.Exists(manifest) &&
+                  File.Exists(Path.Combine(Path.GetDirectoryName(manifest), Sm1.LayerDll)), "layer staged in SM1\\layer\\<sha>");
+            Check(Sm1.StageLayer(tmp) == manifest, "staging again: the same copy");
+            const string key = @"Software\HEROVR-sm1-selftest\Implicit";
+            using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key))
+            {
+                k.SetValue(@"C:\other\some_layer.json", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                k.SetValue(@"C:\old\stale\" + Sm1.LayerJson, 0, Microsoft.Win32.RegistryValueKind.DWord);
+            }
+            Sm1.RegisterLayer(manifest, key);
+            var ours = Sm1.RegisteredLayers(key);
+            Check(ours.Length == 1 && ours[0] == manifest, "register: one entry of ours, the stale one gone");
+            using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key))
+                Check(k.GetValue(@"C:\other\some_layer.json") != null && (int)k.GetValue(manifest) == 0, "register: other layers kept, ours enabled (0)");
+            Check(Sm1.RemoveLayers(key) == 1 && Sm1.RegisteredLayers(key).Length == 0, "remove: ours gone");
+            using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key))
+                Check(k.GetValue(@"C:\other\some_layer.json") != null, "remove: other layers kept");
+            Check(Sm1.RemoveLayers(@"Software\HEROVR-sm1-selftest\none") == 0, "remove: no key, no throw");
+            try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\HEROVR-sm1-selftest"); } catch { }
+
+            // addon.ini: the switches written, the wrist menu's picks (hero=, outfit.N=) kept.
+            Directory.CreateDirectory(Sm1.AddonDataFolder);
+            File.WriteAllText(Path.Combine(Sm1.AddonDataFolder, "addon.ini"), "heroes=1\nhero=5\noutfit.5=2\noutfit.1=1\nflight=1\noutfit.x=9\n");
+            Sm1.WriteAddonIni(true, false, false);
+            string ini = File.ReadAllText(Path.Combine(Sm1.AddonDataFolder, "addon.ini"));
+            Check(ini.Contains("hero=5\n") && ini.Contains("outfit.5=2\n") && ini.Contains("outfit.1=1\n") && !ini.Contains("outfit.x"), "addon.ini keeps hero and outfits");
+            Check(ini.Contains("wrist_menu=0\n") && ini.Contains("flight=0\n") && ini.Contains("heroes=1\n"), "addon.ini switches");
+            Check(Sm1.Features.Length == 7 && Sm1.Features.Count(x => x[1] == "stub") == 1 && Sm1.FeatureSummary().Contains("NOT YET: hero models"), "feature list");
+
             try { Directory.Delete(tmp, true); } catch { }
             Console.WriteLine(fails == 0 ? "ALL PASS" : fails + " FAILED");
             return fails == 0 ? 0 : 1;

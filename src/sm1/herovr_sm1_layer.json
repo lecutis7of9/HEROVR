@@ -1,0 +1,11 @@
+{
+    "file_format_version": "1.0.0",
+    "api_layer": {
+        "name": "XR_APILAYER_HEROVR_sm1_heroes",
+        "library_path": ".\\herovr_sm1_layer.dll",
+        "api_version": "1.0",
+        "implementation_version": "76",
+        "description": "HERO VR SM1 add-on (Made by Agent Mulder) on top of iilyn's SpidyVR: wrist hero menu, heroes, flight. Passes everything through outside Spider-Man.exe.",
+        "disable_environment": "HEROVR_SM1_LAYER_DISABLE"
+    }
+}

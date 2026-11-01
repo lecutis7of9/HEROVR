@@ -1,4 +1,4 @@
-// HERO VR 0.0.75 SM1 - the launcher's two games, clearly apart: SPIDER-MAN 2 (HERO VR, unchanged) and SPIDER-MAN 1
+// HERO VR 0.0.75 SM1 (0.0.76 layer, hotfix 0.0.75.2) - the launcher's two games, clearly apart: SPIDER-MAN 2 (HERO VR, unchanged) and SPIDER-MAN 1
 // (iilyn's Spider-Man VR mod, with Mulder's Heroes add-on). His mod (Spidy by Ilya Mezerowsky, GPL-3.0,
 // https://github.com/IlyaMez/SpidyVR) is downloaded from his own GitHub releases and never changed; his launcher keeps
 // all of his graphics, performance and anti-aliasing settings. Our add-on is separate files. Made by Agent Mulder.
@@ -126,14 +126,15 @@ namespace Sm2VrLauncher
             Add(card, new TextLabel(GlassPanel.Spaced("Mulder's Heroes add-on"), Theme.UiBold(11), hs ? Theme.Neon : Theme.Red) { Wrap = false }, 670, 90, 418, 18);
             sm1Addon = Add(card, new ToggleRow("Load Mulder's Heroes add-on", "Adds heroes, the wrist menu and flight on top of his mod, never changing it; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyAddon, true)), 670, 112, 418, 58);
-            sm1Wrist = Add(card, new ToggleRow("Wrist menu", "Turn your left palm up to open the hero menu; takes effect the next time you press Play.",
+            sm1Wrist = Add(card, new ToggleRow("Wrist menu", "Turn your left palm up to open the hero menu and pull the right trigger to pick; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyWrist, true)), 670, 172, 418, 58);
-            sm1Flight = Add(card, new ToggleRow("Flight", "Lets flying heroes fly in Spider-Man 1; takes effect the next time you press Play.",
+            sm1Flight = Add(card, new ToggleRow("Flight", "Iron Man, Superman, Thor and Green Lantern take off on a held grip and stay up after letting go; takes effect the next time you press Play.",
                 settings.GetBool(Sm1.KeyFlight, true)), 670, 232, 418, 58);
             sm1News = Add(card, new ToggleRow("Tell me about his new releases", "Looks at his GitHub once when the launcher starts (nothing installs by itself); takes effect the next time the launcher starts.",
                 settings.GetBool(Sm1.KeyNews, true)), 670, 292, 418, 58);
-            Add(card, new TextLabel("This first add-on test checks the game and writes its report (Add-on log); the heroes, the wrist menu and flight inside Spider-Man 1 " +
-                "still need in-game testing. Multiplayer for Spider-Man 1 is not hooked up yet.", Theme.Ui(11f), Theme.Dim), 670, 354, 418, 70);
+            // 0.0.76: which hero features Spider-Man 1 has (Sm1.Features, the same list as the add-on's own).
+            var featureText = Add(card, new TextLabel(Sm1.FeatureSummary(), Theme.Ui(10f), Theme.Sub), 670, 352, 418, 76);
+            tip.SetToolTip(featureText, Sm1.FeatureDetails());
 
             sm1Addon.Changed += (s, e) => { settings.SetBool(Sm1.KeyAddon, sm1Addon.Checked); settings.Save(); sm1Wrist.Enabled = sm1Flight.Enabled = sm1Addon.Checked; Sm1Refresh(); UpdatePlayState(); };
             sm1Wrist.Changed += (s, e) => { settings.SetBool(Sm1.KeyWrist, sm1Wrist.Checked); settings.Save(); };
@@ -189,7 +190,8 @@ namespace Sm2VrLauncher
                 }
                 bool want = settings.GetBool(Sm1.KeyAddon, true);
                 if (!want) sm1RowAddon.Set(CheckState.Info, "Off: Spider-Man 1 starts with iilyn's mod alone.");
-                else if (Sm1.AddonPresent(root)) sm1RowAddon.Set(CheckState.Ok, "Ready: loads once his VR runs. " + Sm1LastAddonLine());
+                else if (Sm1.AddonPresent(root) && Sm1.LayerPresent(root)) sm1RowAddon.Set(CheckState.Ok, "Ready: heroes, wrist menu and flight join his VR. " + Sm1LastAddonLine());
+                else if (Sm1.AddonPresent(root)) sm1RowAddon.Set(CheckState.Warn, "Only the report part is here (no " + Sm1.LayerDll + "): no wrist menu, heroes or flight. Repair gets it.");
                 else sm1RowAddon.Set(CheckState.Warn, "Not here yet: PLAY offers to get it; his mod also runs alone.");
             }
             catch (Exception ex) { Program.LogError(ex); }
@@ -276,6 +278,7 @@ namespace Sm2VrLauncher
                 }
                 if (sm1GameVersion != Sm1.SupportedVersion) sessionLog.Line("Spider-Man 1: " + Sm1.VersionWarning(sm1GameVersion), Theme.Warn);
                 string staged = null;
+                if (!settings.GetBool(Sm1.KeyAddon, true) && Environment.OSVersion.Platform == PlatformID.Win32NT) Sm1.RemoveLayers();
                 if (settings.GetBool(Sm1.KeyAddon, true))
                 {
                     if (!Sm1.AddonPresent(root))
@@ -301,11 +304,38 @@ namespace Sm2VrLauncher
                             Sm1.WriteAddonIni(true, settings.GetBool(Sm1.KeyWrist, true), settings.GetBool(Sm1.KeyFlight, true));
                         }
                         catch (Exception ex) { staged = null; sessionLog.Line("Spider-Man 1: Mulder's Heroes add-on could not be prepared (" + ex.Message + "); starting iilyn's mod alone.", Theme.Warn); }
+                        Sm1RegisterLayer();
                     }
                 }
                 Sm1Start(staged);
             }
             catch (Exception ex) { Program.LogError(ex); sessionLog.Line("Spider-Man 1: " + ex.Message, Theme.Bad); }
+        }
+
+        /// <summary>Stages the add-on's OpenXR layer and registers it for this Windows user until Spider-Man 1 closes.
+        /// Any failure only leaves the layer out (his mod runs as he made it).</summary>
+        void Sm1RegisterLayer()
+        {
+            if (Environment.OSVersion.Platform != PlatformID.Win32NT) return;
+            try
+            {
+                string manifest = Sm1.StageLayer(root);
+                if (manifest == null)
+                {
+                    sessionLog.Line("Spider-Man 1: " + Sm1.LayerDll + " is not in the HERO VR mod files: no wrist menu, heroes or flight this time (Repair gets it).", Theme.Warn);
+                    return;
+                }
+                Sm1.RegisterLayer(manifest);
+                Sm1.RemoveLayersAfterGame(line => Ui(() => sessionLog.Line(line, Theme.Sub)));
+                sessionLog.Line("Spider-Man 1: the heroes' OpenXR layer is on for this game (removed when it closes). In VR: left palm up, right trigger picks.", Theme.Good);
+                foreach (var f in Sm1.Features)
+                    sessionLog.Line("  " + f[0] + ": " + (f[1] == "stub" ? "NOT YET - " : "built, not yet tried in the game - ") + f[2], f[1] == "stub" ? Theme.Warn : Theme.Sub);
+            }
+            catch (Exception ex)
+            {
+                Sm1.RemoveLayers();
+                sessionLog.Line("Spider-Man 1: the heroes' OpenXR layer could not be set up (" + ex.Message + "); his mod runs alone.", Theme.Warn);
+            }
         }
 
         void Sm1Start(string addon)
@@ -469,6 +499,9 @@ namespace Sm2VrLauncher
                 }) { IsBackground = true, Name = "SM1 release news" };
                 t.Start();
             }
+            // A layer entry left by a launcher that closed while Spider-Man 1 ran: removed now the game is not running.
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT && !Sm1.GameRunning() && Sm1.RemoveLayers() > 0)
+                sessionLog.Line("Spider-Man 1: removed a leftover entry of the heroes' OpenXR layer.", Theme.Sub);
             if (!Sm1Selected || settings.GetBool(Sm1.KeyDeclined, false)) return;
             Sm1Refresh();
             string text = sm1Game == null ? Sm1.GameMissingText(sm1GameWhere) : sm1Mod == null ? Sm1.ModMissingText() : null;
@@ -486,6 +519,8 @@ namespace Sm2VrLauncher
         void Sm1Closing()
         {
             try { if (sm1Watcher != null) sm1Watcher.Stop(); } catch { }
+            // The game not running: no one needs the layer entry. Running: the next launcher start removes it.
+            try { if (Environment.OSVersion.Platform == PlatformID.Win32NT && !Sm1.GameRunning()) Sm1.RemoveLayers(); } catch { }
         }
     }
 

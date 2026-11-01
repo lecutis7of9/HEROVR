@@ -79,6 +79,14 @@ const Glyph* glyph(char c) {
 }
 } // namespace
 
+bool pixelGlyph(char c, int& width, const unsigned char*& bits) {
+    const auto* g = glyph(c);
+    if (!g)
+        return false;
+    width = g->width;
+    bits = g->bits;
+    return true;
+}
 int pixelTextColumns(std::string_view text) {
     int n = 0;
     for (const char c : text) {

@@ -23,7 +23,7 @@ permissions:
 # hero-0.0.73 / hero-0.0.74 and mp-solo-test (private TEST builds, and hero-0.0.73-release before its tag exists): their own group,
 # no source check against a tag, never uploaded (a release zip is taken from the run's artifact and put on the draft by hand).
 concurrency:
-  group: prebuilt-${{ (startsWith(github.ref_name, 'hero-0.0.73') || startsWith(github.ref_name, 'hero-0.0.74') || startsWith(github.ref_name, 'hero-0.0.75') || startsWith(github.ref_name, 'mp-solo-test')) && github.ref_name || inputs.tag }}
+  group: prebuilt-${{ (startsWith(github.ref_name, 'hero-0.0.73') || startsWith(github.ref_name, 'hero-0.0.74') || startsWith(github.ref_name, 'hero-0.0.75') || startsWith(github.ref_name, 'hero-0.0.76') || startsWith(github.ref_name, 'mp-solo-test')) && github.ref_name || inputs.tag }}
 
 defaults:
   run:
@@ -47,7 +47,7 @@ jobs:
           python-version: '3.12'
 
       - name: Check the mod's sources are the release's
-        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'mp-solo-test') }}
+        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'hero-0.0.76') && !startsWith(github.ref_name, 'mp-solo-test') }}
         run: |
           $version = (Get-Content VERSION -TotalCount 1).Trim()
           if ("v$version" -ne $env:TAG) { throw "VERSION is $version, not $($env:TAG.TrimStart('v'))." }
@@ -129,6 +129,11 @@ jobs:
             if (-not $pv) { throw 'The zip has no PORT-VERSION.' }
             $r = New-Object IO.StreamReader($pv.Open()); $inner = $r.ReadLine().Trim(); $r.Close()
             if ($inner -ne $port) { throw "The zip says $inner, not $port." }
+            if ($env:GITHUB_REF_NAME -like 'hero-0.0.76*') {
+              foreach ($sm1 in @('herovr_sm1_addon.dll', 'herovr_sm1_layer.dll', 'herovr_sm1_layer.json')) {
+                if (-not ($entries -contains "$name/build/windows-ninja/$sm1")) { throw "The zip has no $sm1 (SM1 add-on)." }
+              }
+            }
             Write-Output "$($entries.Count) entries; modules: $($dlls -join ', ')"
           } finally { $z.Dispose() }
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -147,7 +152,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'The new mod zip has no runnable Python of its own.' }
 
       - name: Check the release's current mod zip has a runnable Python
-        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'mp-solo-test') }}
+        if: ${{ !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'hero-0.0.76') && !startsWith(github.ref_name, 'mp-solo-test') }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -170,7 +175,7 @@ jobs:
           retention-days: 30
 
       - name: Upload to the release
-        if: ${{ inputs.upload && !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'mp-solo-test') }}
+        if: ${{ inputs.upload && !startsWith(github.ref_name, 'hero-0.0.73') && !startsWith(github.ref_name, 'hero-0.0.74') && !startsWith(github.ref_name, 'hero-0.0.75') && !startsWith(github.ref_name, 'hero-0.0.76') && !startsWith(github.ref_name, 'mp-solo-test') }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

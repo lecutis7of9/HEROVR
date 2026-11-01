@@ -2,6 +2,23 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## v0.0.75.2 hotfix - Spider-Man 1 heroes (DRAFT, not released)
+
+Shows as v0.0.75 (VERSION unchanged). From hero-0.0.76-sm1 on the 0.0.76 freeze fix (e493028). **Built, not yet
+tried in the game.**
+
+- **Spider-Man 1 (iilyn's Spider-Man VR mod):** Mulder's Heroes add-on now runs inside the game as an OpenXR layer,
+  registered for your Windows user only while Spider-Man 1 plays. His graphics, performance and anti-aliasing are
+  untouched.
+- **Wrist hero menu:** left palm up, right stick and right trigger. Hero select, outfits (names and artists; no
+  hero models in Spider-Man 1 yet), the holo card.
+- **Flight:** Iron Man, Superman, Thor and Green Lantern hold a grip to take off and stay up; the left stick steers
+  where you look.
+- **Hero powers** hit the enemy his combat has ringed, with a beam.
+- The Spider-Man 1 page lists which hero features Spider-Man 1 has and which not yet.
+- Also in this build: the 0.0.76 freeze fix on load.
+- Credits: iilyn (Ilya Mezerowsky) for SpidyVR; the model artists; made by Agent Mulder.
+
 ## v0.0.75 - HERO VR 0.0.75 (October 31, 2026)
 
 **EXPERIMENTAL BUILD: 0.0.75 may crash or have issues. 0.0.63 is the most recent STABLE build** (Revert > USE 0.0.74

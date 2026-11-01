@@ -3,7 +3,7 @@
 performance stuff ... a Spider-Man 1 and Spider-Man 2 option clearly separated and easy to pick"): the game picker,
 the Spider-Man 1 page and play path, his release download (his GitHub, unchanged), the per-game server list, the
 setting subtexts, and the names rules."""
-import os, pathlib, re, shutil, subprocess, tempfile, unittest
+import json, os, pathlib, re, shutil, subprocess, tempfile, unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT/'tools/launcher/src'
 API = os.environ.get('NETFX_API', '/usr/lib/mono/4.8-api')
@@ -11,7 +11,7 @@ HAVE_MONO = shutil.which('mcs') and shutil.which('mono') and os.path.isfile(API 
 def src(n): return (SRC/n).read_text(encoding='utf-8')
 NEW = [SRC/'Sm1.cs', SRC/'MainForm.Sm1.cs', ROOT/'tests/sm1_launcher/Sm1SelfTest.cs', ROOT/'include/spidy/sm1_addon.hpp',
        ROOT/'src/sm1/sm1_core.cpp', ROOT/'src/sm1/sm1_addon_dll.cpp', ROOT/'src/sm1/CMakeLists.txt', ROOT/'tests/sm1_addon_tests.cpp',
-       ROOT/'docs/SM1-ADDON-0.0.75.md']
+       ROOT/'docs/SM1-ADDON-0.0.75.md', ROOT/'src/sm1/sm1_layer.cpp', ROOT/'src/sm1/herovr_sm1_layer.json']
 
 
 class Picker(unittest.TestCase):
@@ -81,6 +81,31 @@ class HisMod(unittest.TestCase):
             self.assertRegex(sub, r'takes effect the next time (you press Play|the launcher starts)\.$', title)
 
 
+class Layer(unittest.TestCase):
+    def test_features_match_the_addon(self):
+        hpp = (ROOT/'include/spidy/sm1_addon.hpp').read_text(encoding='utf-8')
+        native = re.findall(r'\{"([a-z -]+)", Evidence::\w+, State::(\w+)', hpp)
+        shown = re.findall(r'new\[\] \{ "([a-z -]+)", "(\w+)"', src('Sm1.cs'))
+        want = [(n, s) for n, s in native if n not in ('host check', 'add-on settings')]
+        self.assertEqual(shown, want)
+        self.assertIn('Sm1.FeatureSummary()', src('MainForm.Sm1.cs'))
+
+    def test_layer_registered_only_while_playing(self):
+        s, f = src('Sm1.cs'), src('MainForm.Sm1.cs')
+        self.assertIn(r'@"SOFTWARE\Khronos\OpenXR\1\ApiLayers\Implicit"', s)
+        self.assertIn('Registry.CurrentUser', s)
+        self.assertNotIn('Registry.LocalMachine', s)
+        self.assertIn('Sm1RegisterLayer();', f)
+        self.assertIn('Sm1.RemoveLayersAfterGame(', f)
+        self.assertGreaterEqual(f.count('Sm1.RemoveLayers()'), 3)   # failure, add-on off, closing / startup
+        m = json.loads((ROOT/'src/sm1/herovr_sm1_layer.json').read_text(encoding='utf-8'))
+        self.assertEqual(m['api_layer']['name'], 'XR_APILAYER_HEROVR_sm1_heroes')
+        self.assertEqual(m['api_layer']['library_path'], '.\\herovr_sm1_layer.dll')
+        self.assertEqual(m['api_layer']['disable_environment'], 'HEROVR_SM1_LAYER_DISABLE')
+        pkg = (ROOT/'tools/package.ps1').read_text(encoding='utf-8')
+        self.assertIn("'herovr_sm1_layer.dll', 'herovr_sm1_layer.json'", pkg)
+
+
 class Multiplayer(unittest.TestCase):
     def test_per_game_list(self):
         mp = src('MainForm.Multiplayer.cs')
@@ -116,7 +141,8 @@ class SelfTest(unittest.TestCase):
                '-main:Sm2VrLauncher.Sm1SelfTest', '-out:' + str(exe)] + res + [str(p) for p in sorted(SRC.glob('*.cs'))] + [str(ROOT/'tests/sm1_launcher/Sm1SelfTest.cs')]
         r = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        r = subprocess.run(['mono', str(exe)], capture_output=True, text=True, cwd=str(d), timeout=120)
+        env = dict(os.environ, XDG_CONFIG_HOME=str(d/'appdata'), MONO_REGISTRY_PATH=str(d/'registry'))
+        r = subprocess.run(['mono', str(exe)], capture_output=True, text=True, cwd=str(d), timeout=120, env=env)
         print(r.stdout[-2500:])
         self.assertEqual(r.returncode, 0, r.stdout[-3000:] + r.stderr[-2000:])
         self.assertIn('ALL PASS', r.stdout)

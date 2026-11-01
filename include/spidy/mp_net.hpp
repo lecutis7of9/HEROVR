@@ -24,6 +24,13 @@
 //   (no mod model) is drawn in that suit's colours, not the stick figure.
 //   0.0.74 MP PROPS: then, only when he holds, wears or throws something or a power draws, the 'P' PROPS tail
 //   (mp_props.hpp, up to 342 bytes; still version 1 - every older build ignores it).
+//   0.0.76 MP WORLD: then (after PROPS, or right after LOOK when there are no props) the 6-byte 'W' WORLD tail,
+//   only when the sender fills it (hasWorld): 'W', world version 1, flags (1 in the city: root is his real world
+//   feet), world yaw i16 (radians x 32767 / pi: his body's facing in the game world, not the tracking frame), 0.
+//   Still version 1: a 0.0.73-0.0.75 build reads the pose and LOOK, hands the rest to its PROPS reader (which
+//   reads only the bytes its own header counts, or drops a tail that is not 'P') and never sees it. The largest
+//   pose is 24 + 136 + 342 + 6 = 508 bytes, under maxPacket (512). A pose without it (an older build, the Test
+//   Buddy): hasWorld false - the receiver keeps the buddy placement (mp_world.hpp).
 // A packet of another version, a wrong magic, length or checksum, or a value that is not finite or out of
 // range, is refused (decode says why) - the caller hides the remote player and logs it; nothing throws.
 // A newer packet of the SAME version may carry more payload bytes than this build knows: they are ignored.
@@ -46,6 +53,9 @@ inline constexpr uint8_t version = 1;
 inline constexpr size_t headerBytes = 20, crcBytes = 4, overheadBytes = headerBytes + crcBytes;
 inline constexpr size_t poseBytes = 124, poseBytesV1 = 112, lookBytes = 12, poseSentBytes = poseBytes + lookBytes, helloBytes = 20, pingBytes = 4, pongBytes = 8;
 inline constexpr size_t maxPacket = 512;
+// 0.0.76 MP WORLD: the 'W' tail (see above).
+inline constexpr uint8_t worldTag = 'W', worldVersion = 1, worldInCity = 1;
+inline constexpr size_t worldBytes = 6;
 inline constexpr uint16_t defaultPort = 39470; // the game's UDP port (the buddy connects to it)
 inline constexpr uint8_t noSuit = 255;
 
@@ -72,6 +82,12 @@ struct PoseState {
     uint32_t lookPrimary{}, lookSecondary{}, lookEmblem{};
     // 0.0.74 MP PROPS: the 'P' tail after LOOK (mp_props.hpp) - only sent when it has something in it.
     Props props{};
+    // 0.0.76 MP WORLD: the 'W' tail - sent only when hasWorld (a pose of an older build: false). worldValid: the
+    // sender is in the city (his root is his real world feet, the game's player transform as the VR rig places
+    // it); worldYaw: his body's facing in the game world (radians about +y, forward -z turned by it).
+    bool hasWorld{};
+    bool worldValid{};
+    float worldYaw{};
 };
 struct Packet {
     uint8_t type = pose;
@@ -140,6 +156,8 @@ class Interpolator {
     double lastArrival_{};
     uint32_t accepted_{}, dropped_{};
 };
+// 0.0.76 MP WORLD: blend snaps the root (no sweep) when two states are farther apart than this (metres).
+inline constexpr float worldSnap = 50.f;
 // Linear between two states (positions, curls, yaw the short way; orientations normalised-lerp);
 // the discrete fields from b (the newer).
 PoseState blend(const PoseState& a, const PoseState& b, float t);
@@ -210,6 +228,11 @@ struct LocalPose {
     float standingEye = 1.65f;
     Vec3 worldFeet{};
     Vec3 leanUp{0, 1, 0}; // 0.0.74 FLIGHT POSE: the body's up in flight, the tracking frame (0 1 0 upright)
+    // 0.0.76 MP WORLD: the 'W' tail - sendWorld fills it; worldValid while in the city (gameplay), worldYaw the
+    // eye's level facing in the game world (game_xr: the rendered head pose, before the tracking turn is undone).
+    bool sendWorld{};
+    bool worldValid{};
+    float worldYaw{};
 };
 PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t suitHash, uint8_t actions);
 

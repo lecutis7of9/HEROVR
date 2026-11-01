@@ -14,6 +14,7 @@
 #include "spidy/mp_props.hpp"
 #include "spidy/mp_session.hpp"
 #include "spidy/mp_socket.hpp"
+#include "spidy/mp_world.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -1658,6 +1659,180 @@ void testSessionInternet() {
     server.join();
 }
 
+// 0.0.76 MP WORLD: the 'W' tail (his facing in the city, in the city or not) - round trip, old builds, sizes.
+void testWorldTail() {
+    Packet p;
+    p.type = pose;
+    p.role = roleGame;
+    p.state = sample();
+    const auto plain = encode(p);
+    check(plain.size() == overheadBytes + poseSentBytes, "no WORLD asked: the 0.0.74 bytes exactly (golden packets unchanged)");
+    Packet q;
+    check(decode(plain.data(), plain.size(), q) == Error::none && !q.state.hasWorld && !q.state.worldValid,
+          "a 0.0.74 pose (no WORLD tail): no world spot, the buddy spot is used");
+    Packet w = p;
+    w.state.hasWorld = true, w.state.worldValid = true, w.state.worldYaw = -2.5f;
+    w.state.root = {2250.4f, -14.2f, -1354.9f}; // a real city spot (the 0.0.75 world trace's scale)
+    const auto wb = encode(w);
+    check(wb.size() == plain.size() + worldBytes && wb[headerBytes + poseSentBytes] == worldTag, "the WORLD tail: 6 bytes after the pose");
+    check(decode(wb.data(), wb.size(), q) == Error::none && q.state.hasWorld && q.state.worldValid &&
+              near(q.state.worldYaw, -2.5f, 2e-4f) && near(q.state.root, w.state.root, 0),
+          "the WORLD tail round trips (yaw to 1e-4 rad, the city spot exact)");
+    // a 0.0.74 build reads 136 bytes and hands the rest to its props reader, which drops a tail without 'P'
+    {
+        Props old;
+        check(!decodeProps(wb.data() + headerBytes + poseSentBytes, worldBytes, old) && !old.any(),
+              "a 0.0.74 build: the WORLD tail is no props tail (ignored)");
+    }
+    // not in the city: sent, flagged, the friend falls back
+    Packet out = w;
+    out.state.worldValid = false;
+    const auto ob = encode(out);
+    check(decode(ob.data(), ob.size(), q) == Error::none && q.state.hasWorld && !q.state.worldValid, "not in the city: flagged");
+    // yaw at the wrap
+    for (float y : {3.14159f, -3.14159f, 0.f, 1.f, -1.f}) {
+        Packet a = w;
+        a.state.worldYaw = y;
+        const auto ab = encode(a);
+        check(decode(ab.data(), ab.size(), q) == Error::none && std::abs(wrapAngle(q.state.worldYaw - y)) < 2e-4f, "world yaw at any angle");
+    }
+    // with every prop: still under 512, and both tails come back
+    Props most;
+    PropItem it;
+    it.id = 1, it.kind = 1, it.at = {0, 1.2f, -.3f};
+    for (size_t i = 0; i < propItemsMost; ++i)
+        most.add(it);
+    PropLine ln;
+    ln.kind = lineHeat, ln.fade = 1, ln.from = {0, 1, 0}, ln.to = {0, 1, -20};
+    for (size_t i = 0; i < propLinesMost; ++i)
+        most.add(ln);
+    PropFx fx;
+    fx.kind = fxImpact, fx.at = {0, 1, -3}, fx.way = {0, 0, 1};
+    for (size_t i = 0; i < propFxMost; ++i)
+        most.add(fx);
+    Packet big = w;
+    big.state.props = most;
+    const auto bb = encode(big);
+    check(!bb.empty() && bb.size() == overheadBytes + poseSentBytes + propsMostBytes + worldBytes && bb.size() <= maxPacket,
+          "the fullest pose with the WORLD tail fits 512 bytes (508)");
+    check(decode(bb.data(), bb.size(), q) == Error::none && q.state.props.items == propItemsMost && q.state.props.fx == propFxMost &&
+              q.state.hasWorld && q.state.worldValid && near(q.state.worldYaw, -2.5f, 2e-4f),
+          "props and WORLD both round trip");
+    {   // a 0.0.74 reader of that packet: its props reader takes the props, the 6 bytes after are ignored
+        Props old;
+        check(decodeProps(bb.data() + headerBytes + poseSentBytes, bb.size() - 4 - headerBytes - poseSentBytes, old) &&
+                  old.items == propItemsMost,
+              "a 0.0.74 build still reads the props before the WORLD tail");
+    }
+    // broken tails: a later version, a wrong tag, a cut tail - the pose stands, no world spot
+    {
+        auto later = wb;
+        later[headerBytes + poseSentBytes + 1] = 9;
+        later = resealed(later);
+        check(decode(later.data(), later.size(), q) == Error::none && !q.state.hasWorld, "a WORLD tail from the future: ignored");
+        auto cut = wb;
+        cut.erase(cut.end() - 4 - 2, cut.end() - 4);
+        cut[18] = static_cast<uint8_t>(poseSentBytes + worldBytes - 2);
+        cut = resealed(cut);
+        check(decode(cut.data(), cut.size(), q) == Error::none && !q.state.hasWorld, "a cut WORLD tail: ignored");
+        Packet nanRoot = w;
+        nanRoot.state.root = {std::nanf(""), 0, 0};
+        const auto nb = encode(nanRoot);
+        if (!nb.empty())
+            check(decode(nb.data(), nb.size(), q) != Error::none || !q.state.worldValid, "a NaN root is never a world spot");
+    }
+    // fromLocal: only a finite city spot in the city is valid
+    LocalPose l;
+    l.eye.position = {0, 1.6f, 0};
+    l.worldFeet = {100, 5, -200};
+    l.sendWorld = true, l.worldValid = true, l.worldYaw = 7.f;
+    PoseState f = fromLocal(l, 0, 0, 0, 0);
+    check(f.hasWorld && f.worldValid && std::abs(f.worldYaw - wrapAngle(7.f)) < 1e-5f, "fromLocal: the WORLD facts, the yaw wrapped");
+    l.worldValid = false;
+    check(fromLocal(l, 0, 0, 0, 0).hasWorld && !fromLocal(l, 0, 0, 0, 0).worldValid, "fromLocal: not in the city");
+    l.worldValid = true, l.worldYaw = std::nanf("");
+    check(!fromLocal(l, 0, 0, 0, 0).worldValid, "fromLocal: a NaN facing is not valid");
+    l.sendWorld = false, l.worldYaw = 1;
+    check(!fromLocal(l, 0, 0, 0, 0).hasWorld, "fromLocal: not asked, not sent");
+}
+
+// 0.0.76 MP WORLD: smoothing, placement, the fallback, the far tag and the off-screen arrow.
+void testWorldPlace() {
+    PoseState a = sample(), b = sample();
+    a.hasWorld = b.hasWorld = a.worldValid = b.worldValid = true;
+    a.worldYaw = 3.0f, b.worldYaw = -3.0f;
+    a.root = {0, 0, 0}, b.root = {2, 0, 0};
+    PoseState m = blend(a, b, .5f);
+    check(near(m.root, {1, 0, 0}) && std::abs(std::abs(m.worldYaw) - 3.14159f) < .01f, "smoothing: the root lerps, the facing turns the short way");
+    b.root = {400, 0, 0}; // a fast travel
+    m = blend(a, b, .5f);
+    check(near(m.root, b.root), "a jump over 50 m snaps (no ghost sweeping across the city)");
+    // placement
+    PoseState s = a;
+    s.root = {2250, -14, -1354};
+    check(useWorld(placeWorld, true, true, s), "WORLD, a friend's game in the city: his real spot");
+    check(!useWorld(placeBuddy, true, true, s), "BUDDY: the buddy spot");
+    check(!useWorld(placeWorld, false, true, s), "the Test Buddy: the buddy spot");
+    check(!useWorld(placeWorld, false, false, s), "the loopback: the buddy spot");
+    PoseState old = s;
+    old.hasWorld = old.worldValid = false;
+    check(!useWorld(placeWorld, true, true, old), "a 0.0.74 friend (no WORLD tail): the buddy spot");
+    PoseState menu = s;
+    menu.worldValid = false;
+    check(!useWorld(placeWorld, true, true, menu), "a friend in a menu: the buddy spot");
+    PoseState bad = s;
+    bad.worldYaw = std::nanf("");
+    check(!useWorld(placeWorld, true, true, bad), "a NaN facing: the buddy spot");
+    {   // the ghost at his spot: partner with no origin, then the city spot (no local turn)
+        const Ghost g = partner(s, Vec3{}, s.worldYaw, false, false);
+        const suit_wear::Tracked t = toTracked(g, s.root, Quat{});
+        check(near(t.feet, s.root, 1e-3f), "the ghost's feet on his city spot");
+        const Vec3 eye = s.root + Quat::yaw(s.worldYaw).rotate(s.head.position);
+        check(near(t.eye, eye, 1e-3f), "his eyes at his spot, turned his real way");
+    }
+    // the far look
+    check(bodyAlpha(10) == 1 && bodyAlpha(150) == 1 && near(bodyAlpha(200), .5f) && bodyAlpha(250) == 0 && bodyAlpha(1e4f) == 0 &&
+              bodyAlpha(std::nanf("")) == 0,
+          "the body: full near, fading 150-250 m, gone beyond, NaN gone");
+    check(distanceText(3.4f) == "3 M" && distanceText(230.f) == "230 M" && distanceText(1234.f) == "1.2 KM" &&
+              distanceText(-1) == "--" && distanceText(std::nanf("")) == "--" && distanceText(1e9f) == "999.0 KM",
+          "distance text");
+    check(worldNameplate("PETER  PING 42 MS", 230.f) == "PETER  PING 42 MS  230 M", "the nameplate carries the distance");
+    const Vec3 viewer{0, 1.6f, 0};
+    check(near(tagSpot(viewer, {0, 2, -3}), {0, 2, -3}), "a near tag stays above his head");
+    const Vec3 far = tagSpot(viewer, {0, 1.6f, -500});
+    check(near(far, {0, 1.6f, -6}, 1e-3f), "a far tag is drawn 6 m along the line to him (readable)");
+    // the arrow
+    const Vec3 fwd{0, 0, -1}, up{0, 1, 0};
+    check(!offscreenArrow(viewer, fwd, up, {0, 1.6f, -50}).show, "in view: no arrow");
+    const Arrow right = offscreenArrow(viewer, fwd, up, {50, 1.6f, 0});
+    check(right.show && right.way.x > .9f && right.at.x > .2f && near(right.at.z, -1.4f, 1e-3f), "to the right: the arrow at the right, pointing right");
+    const Arrow left = offscreenArrow(viewer, fwd, up, {-30, 1.6f, 20});
+    check(left.show && left.way.x < -.5f, "behind on the left: points left");
+    const Arrow above = offscreenArrow(viewer, fwd, up, {0, 80, -5});
+    check(above.show && above.way.y > .9f, "high above: points up");
+    const Arrow behind = offscreenArrow(viewer, fwd, up, {0, 1.6f, 40});
+    check(behind.show && std::isfinite(behind.way.x) && near(length(behind.way), 1.f, 1e-3f), "straight behind: still a way");
+    check(!offscreenArrow(viewer, fwd, up, {std::nanf(""), 0, 0}).show && !offscreenArrow(viewer, fwd, up, viewer).show,
+          "NaN or on the viewer: no arrow");
+    std::vector<Vertex> out;
+    check(appendArrow(out, right, .09f, {1, 0, 0}, 1) > 0 && !out.empty(), "the arrow draws");
+    bool finiteAll = true;
+    for (const auto& v : out)
+        finiteAll = finiteAll && std::isfinite(v.position.x) && std::isfinite(v.position.y) && std::isfinite(v.position.z);
+    check(finiteAll, "the arrow's vertices are finite");
+    check(appendArrow(out, Arrow{}, .09f, {1, 0, 0}, 1) == 0, "no arrow: nothing drawn");
+    // the setting
+    namespace c38 = spidy::combat38;
+    const std::string help = c38::optionInfo[c38::mpPlace].help;
+    check(std::string(c38::optionInfo[c38::mpPlace].key) == "mp_place" && c38::optionInfo[c38::mpPlace].count == 2 &&
+              std::string(c38::valueName(c38::mpPlace, 0)) == "WORLD" && std::string(c38::valueName(c38::mpPlace, 1)) == "BUDDY" &&
+              c38::mpPlaceWorld(0) && !c38::mpPlaceWorld(1),
+          "PLAYER 2 PLACE: WORLD first (the default), BUDDY second");
+    check(help.size() <= 80 && std::count(help.begin(), help.end(), '.') == 1 && help.back() == '.' && help.find("no restart") != std::string::npos,
+          "PLAYER 2 PLACE help: one sentence, says no restart");
+}
+
 int main() {
     testCrcAndHash();
     testRoundTrip();
@@ -1682,6 +1857,8 @@ int main() {
     testSessionHost();
     testInet();
     testSessionInternet();
+    testWorldTail();
+    testWorldPlace();
     std::printf("mp tests: %d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;
 }

@@ -260,7 +260,27 @@ void testMalformed() {
     auto far = b;
     putF(far, headerBytes + 52, 400.f);
     far = resealed(far);
-    check(decode(far.data(), far.size(), q) == Error::badValue, "a hand 400 m away refused");
+    // 0.0.76 MP HANDS: a hand 400 m away (a 0.0.75 sender's untracked grip) no longer refuses the pose: that
+    // hand is read at rest by the hip, untracked; the head and the other hand stay as sent.
+    {
+        Packet ok0;
+        check(decode(b.data(), b.size(), ok0) == Error::none, "the clean pose decodes");
+        check(decode(far.data(), far.size(), q) == Error::none, "a hand 400 m away: the pose still read");
+        const Pose rest = restHand(q.state.head, 0);
+        check(near(q.state.hands[0].position, rest.position, 1e-5f) && !(q.state.actions & handLeft),
+              "that hand at rest, untracked");
+        check(near(q.state.head.position, ok0.state.head.position, 1e-5f) &&
+                  near(q.state.hands[1].position, ok0.state.hands[1].position, 1e-5f) &&
+                  (q.state.actions & handRight) == (ok0.state.actions & handRight),
+              "the head and the other hand as sent");
+        auto zeroHand = b;
+        for (int i = 0; i < 4; ++i)
+            putF(zeroHand, headerBytes + 64 + 4 * i, 0.f);
+        zeroHand = resealed(zeroHand);
+        check(decode(zeroHand.data(), zeroHand.size(), q) == Error::none && !(q.state.actions & handLeft) &&
+                  near(q.state.hands[0].position, rest.position, 1e-5f),
+              "a hand with a zero orientation: read, at rest");
+    }
     auto zeroQ = b;
     for (int i = 0; i < 4; ++i)
         putF(zeroQ, headerBytes + 36 + 4 * i, 0.f);
@@ -290,6 +310,107 @@ void testMalformed() {
             ++accepted;
     }
     check(accepted == 0, "20000 random datagrams: none accepted, none crashed");
+}
+
+// 0.0.76 MP HANDS: the sender never puts a raw untracked or broken grip on the wire.
+void testHandsSent() {
+    std::printf("hands sent\n");
+    LocalPose l;
+    l.eye = {{.1f, 1.7f, .05f}, Quat::yaw(.6f)};
+    l.hand[0] = false; // untracked: the grip is whatever the runtime left (0.0.75: the origin less the feet)
+    l.grip[0] = {{-320.f, -4.f, 510.f}, {0, 0, 0, 0}};
+    l.hand[1] = true; // tracked but broken (a zero orientation)
+    l.grip[1] = {{.3f, 1.2f, -.3f}, {0, 0, 0, 0}};
+    Packet p;
+    p.type = pose;
+    p.role = roleGame;
+    p.state = fromLocal(l, 0, noSuit, 0, swinging | handLeft | handRight);
+    check(!(p.state.actions & (handLeft | handRight)), "neither hand marked tracked");
+    for (int i = 0; i < 2; ++i)
+        check(near(p.state.hands[i].position, restHand(p.state.head, i).position, 1e-5f), "each hand sent at rest");
+    const std::vector<uint8_t> b = encode(p);
+    Packet q;
+    check(decode(b.data(), b.size(), q) == Error::none, "the friend's game reads it (0.0.75 refused: bad value)");
+    // a 0.0.75 reader: every hand within 50 m and a unit orientation
+    for (const Pose& h : q.state.hands)
+        check(std::abs(h.position.x) <= 50 && std::abs(h.position.y) <= 50 && std::abs(h.position.z) <= 50 &&
+                  std::abs(h.orientation.x * h.orientation.x + h.orientation.y * h.orientation.y +
+                           h.orientation.z * h.orientation.z + h.orientation.w * h.orientation.w - 1.f) < 1e-4f,
+              "within what an older build accepts");
+    const Pose r0 = restHand(p.state.head, 0), r1 = restHand(p.state.head, 1);
+    check(r0.position.x < p.state.head.position.x && r1.position.x > p.state.head.position.x &&
+              r0.position.y < p.state.head.position.y - .5f,
+          "the left hand left, the right right, both below the head");
+    const Pose wild = restHand({{NAN, 1, 0}, {}}, 0);
+    check(std::isfinite(wild.position.x) && std::isfinite(wild.position.y), "a broken head still gives a finite hand");
+    // a good tracked hand still goes as it is
+    l.hand[1] = true;
+    l.grip[1] = {{.3f, 1.2f, -.3f}, {}};
+    const PoseState s = fromLocal(l, 0, noSuit, 0, 0);
+    check((s.actions & handRight) && near(s.hands[1].position, Quat::yaw(-s.yaw).rotate(Vec3{.3f, 1.2f, -.3f}), 1e-5f),
+          "a tracked hand as sent before");
+}
+
+// 0.0.76 MP ARMS: Player 2 standing relaxed, the controllers low in front of his belly (the user's screenshot).
+// The elbows hang down and back by his sides - not pushed out (the old pole: a hand on the hip).
+void testRemoteArms() {
+    std::printf("remote arms\n");
+    LocalPose l;
+    l.eye = {{0, 1.65f, 0}, {}};
+    l.standingEye = 1.65f;
+    l.hand[0] = l.hand[1] = true;
+    const float c = std::cos(-.3f), sn = std::sin(-.3f);
+    l.grip[0] = {{-.07f, 1.05f, -.14f}, Quat{sn, 0, 0, c}};
+    l.grip[1] = {{.07f, 1.05f, -.14f}, Quat{sn, 0, 0, c}};
+    const PoseState s = fromLocal(l, 0, noSuit, 0, handLeft | handRight);
+    AnchorFollow f;
+    f.update(0, .016f);
+    const Ghost g = partner(s, f.spot({}), f.ghostYaw(), false, true);
+    suit_wear::Tracked t = toTracked(g, {}, {});
+    check(t.elbowsBack, "Player 2: elbows back");
+    suit_wear::Skeleton now, old;
+    check(suit_wear::estimate(bodyRig(), t, now), "posed");
+    t.elbowsBack = false;
+    check(suit_wear::estimate(bodyRig(), t, old), "posed the old way");
+    const Vec3 up = normalized(t.up), face = normalized(t.eyeForward - up * dot(t.eyeForward, up));
+    const Vec3 side = cross(up, face);
+    for (int i = 0; i < 2; ++i) {
+        const uint32_t sh = i ? suit_wear::shoulderR : suit_wear::shoulderL, el = i ? suit_wear::elbowR : suit_wear::elbowL;
+        const float sign = dot(now.at[sh] - now.at[suit_wear::chest], side) > 0 ? 1.f : -1.f;
+        const float outNow = sign * dot(now.at[el] - now.at[sh], side), outOld = sign * dot(old.at[el] - old.at[sh], side);
+        const uint32_t wr = i ? suit_wear::wristR : suit_wear::wristL;
+        const Vec3 mid = (now.at[sh] + now.at[wr]) * .5f;
+        const float backNow = -dot(now.at[el] - mid, face), backOld = -dot(old.at[el] - (old.at[sh] + old.at[wr]) * .5f, face);
+        std::printf("  %s elbow: out %.3f (was %.3f), behind the arm's line %.3f (was %.3f), below %.3f\n", i ? "right" : "left",
+                    outNow, outOld, backNow, backOld, -dot(now.at[el] - now.at[sh], up));
+        check(outNow < .08f && outNow < outOld - .02f, "the elbow by his side, not out (a hand on the hip)");
+        check(backNow > .04f && backNow > backOld, "the elbow folds back behind the arm's line");
+        check(dot(now.at[el] - now.at[sh], up) < -.15f, "the elbow below the shoulder");
+    }
+}
+
+// 0.0.76 MP SPIDER-MAN: which model Player 2 is drawn in.
+void testRemoteSpider() {
+    std::printf("remote spider-man\n");
+    namespace mm = mesh_model;
+    PoseState s;
+    s.hero = 0, s.suit = noSuit;
+    check(remoteSlotOf(s, true) == mm::slotRemoteSpider, "SPIDER-MAN in a game suit: the Spider-Man model");
+    check(remoteSlotOf(s, false) == 0, "the model missing: PLAYER 2 BODY as before");
+    s.hero = 1;
+    check(remoteSlotOf(s, true) == 0, "IRON MAN's own look: not Spider-Man");
+    s.hero = 9, s.suit = 18, s.suitHash = suitHashOf(18);
+    check(remoteSlotOf(s, true) == mm::slotSuitFirst + 18 && remoteSlotOf(s, true) == slotOfState(s), "a mod suit: that suit");
+    s.hero = 0, s.suit = 4, s.suitHash = suitHashOf(4);
+    check(remoteSlotOf(s, true) == mm::slotSuitFirst + 4, "a mod suit worn as SPIDER-MAN: still that suit");
+    s.suit = 200, s.suitHash = 0x1234;
+    check(remoteSlotOf(s, true) == mm::slotRemoteSpider, "a suit this build does not have, as SPIDER-MAN: the Spider-Man model");
+    check(mm::slotIsSkinnedBody(mm::slotRemoteSpider) && !mm::slotIsSuit(mm::slotRemoteSpider) && mm::slotRemoteSpider < mm::slots &&
+              std::string(mm::slotFolders[mm::slotRemoteSpider]) == std::string("Suits/") + mm::remoteSpiderFolder &&
+              mm::slotDrawCap[mm::slotRemoteSpider] == mm::drawTriangles && !mm::slotMayDecimate[mm::slotRemoteSpider],
+          "its slot: Models/Suits/Remote_spiderMan, a skinned body, never decimated, not in the roster");
+    check(suitIdOfSlot(mm::slotRemoteSpider) == noSuit && mm::suitSlot(mm::remoteSpiderFolder) == 0,
+          "never sent as a suit id (the wire and the roster unchanged)");
 }
 
 void testInterpolation() {
@@ -1839,6 +1960,9 @@ int main() {
     testVersioning();
     testFlightLean();
     testMalformed();
+    testHandsSent();
+    testRemoteArms();
+    testRemoteSpider();
     testInterpolation();
     testDelayAndEcho();
     testPartner();

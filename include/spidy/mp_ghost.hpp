@@ -29,6 +29,10 @@ uint32_t suitHashOf(uint8_t suit);
 // The mesh_model slot to draw for a received state (0: none - the figure): the folder its hash names
 // (a build with another suit order still finds it), else the id when its hash is 0 or matches.
 uint32_t slotOfState(const PoseState& s);
+// 0.0.76 MP SPIDER-MAN: the model PLAYER 2 is drawn in - his mod suit (slotOfState), else as SPIDER-MAN in one of
+// the game's own suits (no mod suit: its mesh cannot be read) the shipped Spider-Man model when it is ready
+// (mesh_model::slotRemoteSpider), else 0 (PLAYER 2 BODY / FIGURE as before).
+uint32_t remoteSlotOf(const PoseState& s, bool spiderReady);
 
 // A ghost (mp::partner's, in the player's level frame from his feet) placed in the overlay's space:
 // p -> origin + turn.rotate(p), its up turn.rotate(+Y) (game_xr: the feet + travel and trackingTurn).

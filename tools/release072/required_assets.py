@@ -59,6 +59,9 @@ RELEASE075_MODEL_FILES = ['Models/Vehicle/Motorcycle/model.glb', 'Models/Vehicle
 RELEASE076_SM1_PACKS = ['Models/SM1Suits/%s.hsm1' % i for i in (
     'herovr_ironman', 'herovr_daredevil', 'herovr_hulk', 'herovr_batman', 'herovr_wolverine', 'herovr_superman',
     'herovr_punisher', 'herovr_captainamerica', 'herovr_thor', 'herovr_greenlantern')] + ['Models/SM1Suits/license.txt']
+# 0.0.76 MP SPIDER-MAN: PLAYER 2's Spider-Man model (tools/suits/convert_suit.py Remote_spiderMan; not in git). Optional:
+# without it PLAYER 2 as Spider-Man in a game suit is drawn as the PLAYER 2 BODY, so no gate requires it.
+RELEASE076_MP_SPIDER_FILES = ['Models/Suits/Remote_spiderMan/scene.glb', 'Models/Suits/Remote_spiderMan/license.txt']
 DOC_FILES = ['READ-ME-FIRST.txt', 'SHA256SUMS.txt']
 # Test build 5: the zip's one top folder holds the installer and the notes; the mod files sit under payload/
 # (the installer copies them into the mod folder the player plays from; tools/run_game_vr.py reads the marker).

@@ -299,9 +299,13 @@ Error decode(const uint8_t* data, size_t size, Packet& out) {
         if (s.hero >= 32 || !within(s.root, 1e5f) || !std::isfinite(s.yaw) || std::abs(s.yaw) > 100.f ||
             !within(s.head.position, 50.f) || !unitish(s.head.orientation) || s.standingEye > 3.f)
             return Error::badValue;
-        for (Pose& h : s.hands)
-            if (!within(h.position, 50.f) || !unitish(h.orientation))
-                return Error::badValue;
+        // 0.0.76 MP HANDS: a hand that is not a pose (a 0.0.75 sender's untracked grip: the tracking origin, far
+        // from the feet, or a zero quaternion) no longer refuses the whole packet - that hand is untracked, at rest.
+        for (int i = 0; i < 2; ++i)
+            if (!within(s.hands[i].position, 50.f) || !unitish(s.hands[i].orientation)) {
+                s.hands[i] = restHand(s.head, i);
+                s.actions = static_cast<uint8_t>(s.actions & ~(i == 0 ? handLeft : handRight));
+            }
         s.yaw = wrapAngle(s.yaw);
         // 0.0.73 MPSUIT: the LOOK tail, only when it is there and marked (any other tail: ignored, no look)
         if (body >= poseSentBytes && r.u8() == 'L') {
@@ -539,6 +543,12 @@ float AnchorFollow::update(float headYaw, float dt) {
     return yaw;
 }
 
+Pose restHand(const Pose& head, int side) {
+    Vec3 h = within(head.position, 50.f) ? head.position : Vec3{0, 1.65f, 0};
+    // by the hip under the shoulder, a little ahead (the level frame faces -z, the left hand at -x)
+    return {{h.x + (side == 0 ? -.24f : .24f), std::max(h.y - .74f, .15f), h.z - .06f}, Quat{}};
+}
+
 PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t suitHash, uint8_t actions) {
     PoseState s;
     s.hero = hero;
@@ -551,9 +561,15 @@ PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t sui
     uint8_t a = static_cast<uint8_t>(actions & (flying | swinging | grapple | firing));
     for (int i = 0; i < 2; ++i) {
         s.hands[i] = {back.rotate(l.grip[i].position), back * l.grip[i].orientation};
-        s.curl[i] = l.curl[i];
-        if (l.hand[i])
-            a |= i == 0 ? handLeft : handRight;
+        s.curl[i] = std::isfinite(l.curl[i]) ? std::clamp(l.curl[i], 0.f, 1.f) : 0.f;
+        // 0.0.76 MP HANDS: an untracked or broken grip goes out as a rest hand by the hip, never raw (0.0.75 sent
+        // the tracking origin less the feet - hundreds of metres - and the friend's game refused the packet).
+        Quat q = s.hands[i].orientation;
+        const bool good = l.hand[i] && within(s.hands[i].position, 50.f) && unitish(q);
+        if (good)
+            s.hands[i].orientation = q, a |= i == 0 ? handLeft : handRight;
+        else
+            s.hands[i] = restHand(s.head, i);
     }
     s.actions = a;
     s.standingEye = l.standingEye;

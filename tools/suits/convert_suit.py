@@ -65,6 +65,14 @@ SUITS = [
          license='Model Information:\n* title:\tSuperman - DC\n* source:\thttps://sketchfab.com/3d-models/superman-dc-ccad133a5a684003a059a01c89216780\n'
                  '* author:\tChechorams16 (https://sketchfab.com/Chechorams16)\n\nModel License:\n* license type:\tCC-BY-4.0 '
                  '(http://creativecommons.org/licenses/by/4.0/)\n* requirements:\tAuthor must be credited. Commercial use is allowed.\n'),
+    # 0.0.76 MP SPIDER-MAN: PLAYER 2 as Spider-Man in one of the game's own suits (mesh_model::slotRemoteSpider; never
+    # worn, not in the roster). "Spider-Man No Way Home (Rigged) V2" by Visiion (CC BY 4.0), Sketchfab's own glTF zip
+    # (a Sketchfab login downloads it: ~/Downloads or a chat attachment).
+    dict(folder='Remote_spiderMan', zip='spider-man_no_way_home_rigged_v2', drop=INNER,
+         license='Model Information:\n* title:\tSpider-Man No Way Home (Rigged) V2\n* source:\thttps://sketchfab.com/3d-models/spider-man-no-way-home-rigged-v2-acae364526cf4811ab77978383fe929f\n'
+                 '* author:\tVisiion (https://sketchfab.com/Visiion)\n\nModel License:\n* license type:\tCC-BY-4.0 '
+                 '(http://creativecommons.org/licenses/by/4.0/)\n* requirements:\tAuthor must be credited. Commercial use is allowed.\n'
+                 '\nConverted for HERO VR (decimated, re-skinned to the suits\' 16-bone skeleton, textures atlased).\n'),
 ]
 ATTACHMENTS = os.environ.get('SUITS_ATTACHMENTS', '/home/box/agent-data/agents/95bbcd93-d825-48cb-8651-274d994f8774/attachments')
 GLASS = [.06, .08, .11, 1]  # an untextured "Glass" (eye lenses, a visor): dark, as glass looks indoors

@@ -833,7 +833,11 @@ bool estimate(const Rig& rig, const Tracked& t, Skeleton& out) {
                 w2 = way, b2 = normalized(square(back, way));
             out.at[wr] = wrist;
             out.at[tip] = wrist + w2 * hand;
-            out.at[el] = bend(out.at[sh], wrist, l1, l2, up * -.8f + out_ * .45f - fz * .3f);
+            // 0.0.76 MP ARMS (elbowsBack): the pole down, back and only a little out - a low hand by the belly
+            // (most of the arm's way down, so the down part of the pole drops out) folds the elbow behind him
+            // like a real arm, not out to the side (the user's screenshot: Player 2's hand on his hip).
+            const Vec3 pole = t.elbowsBack ? up * -.6f + out_ * .32f - fz * .75f : up * -.8f + out_ * .45f - fz * .3f;
+            out.at[el] = bend(out.at[sh], wrist, l1, l2, pole);
             out.handBack[side] = normalized(square(b2, w2));
         } else { // untracked: the rest arm, turned with the body
             out.at[el] = out.at[sh] + B(r.at[el] - r.at[sh]) * s;

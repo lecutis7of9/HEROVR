@@ -235,6 +235,9 @@ struct LocalPose {
     float worldYaw{};
 };
 PoseState fromLocal(const LocalPose& l, uint8_t hero, uint8_t suit, uint32_t suitHash, uint8_t actions);
+// 0.0.76 MP HANDS: the hand at rest by the hip (side 0 left), in the head's level frame - what an untracked or
+// broken grip is sent as and read as (that hand's Action bit cleared), so one bad hand never refuses a pose.
+Pose restHand(const Pose& head, int side);
 
 // ---- the buddy's handshake (the game's side, pure) ----
 // HELLO from a new address: WELCOME back and that address is the buddy; its POSE / PING / BYE then count.

@@ -814,6 +814,8 @@ std::string modelMissingNote(uint32_t mask) {
 // the render thread after) and the wear's cost (the render thread's mean, microseconds a frame).
 std::atomic<uint32_t> wornSuitSlot{0};
 suit_wear::Rig suitRigs[mesh_model::suitSlots];
+// 0.0.76 MP SPIDER-MAN: PLAYER 2's Spider-Man model (mesh_model::slotRemoteSpider) made ready at load like the suits.
+suit_wear::Rig remoteSpiderRig;
 std::atomic<uint32_t> suitWearMicros{0}, suitWearVertices{0};
 // 0.0.73 MP SOLO TEST: the player's action flags (mp::Action: flying, swinging, grapple, firing) for the packet,
 // set on the game thread, read on the render thread (mod-internal state - CONFIRMED, no game address).
@@ -1988,6 +1990,24 @@ DWORD WINAPI run(void*) {
                     rigged += ok;
                     if (m && !ok)
                         unrigged += (unrigged.empty() ? "" : ", ") + std::string(mesh_model::suitFolders[k]);
+                }
+                // 0.0.76 MP SPIDER-MAN: PLAYER 2's Spider-Man (a game suit on his side) - missing or not wearable:
+                // PLAYER 2 BODY as before.
+                remoteSpiderRig = {};
+                {
+                    const mesh_model::Mesh* m = models.model(mesh_model::slotRemoteSpider);
+                    bool ok = false;
+                    try {
+                        ok = m && suit_wear::makeRig(*m, remoteSpiderRig, mesh_model::remoteSpiderFolder);
+                    } catch (...) {
+                        remoteSpiderRig = {};
+                    }
+                    if (!ok)
+                        remoteSpiderRig = {};
+                    consoleLine(std::string("MP SPIDER-MAN: PLAYER 2's Spider-Man model ") +
+                                (ok ? "ready (a game suit on his side is drawn in it)"
+                                    : m ? "NOT WEARABLE - PLAYER 2 BODY drawn instead"
+                                        : "MODEL MISSING (Models\\Suits\\Remote_spiderMan) - PLAYER 2 BODY drawn instead"));
                 }
                 suitsRigged = true;
                 consoleLine("SUITS: " + std::to_string(rigged) + " of " + std::to_string(mesh_model::suitSlots) + " ready to wear" +
@@ -13187,10 +13207,16 @@ DWORD WINAPI run(void*) {
                                             mpWalk.feet(gt.up, 1.f, gt.step);
                                         }
                                         bool drawnSuit = false;
-                                        const uint32_t gs = spidy::mp::slotOfState(v.state);
-                                        if (gs && bodyFade > .99f && suitsRigged.load() && overlay.modelReady()) {
+                                        // 0.0.76 MP SPIDER-MAN: no mod suit and he is SPIDER-MAN (a game suit): the shipped
+                                        // Spider-Man model, posed from his head and hands like the mod suits.
+                                        const bool spiderReady = suitsRigged.load() && remoteSpiderRig.ok &&
+                                                                 mesh_model::library().model(mesh_model::slotRemoteSpider);
+                                        const uint32_t gs = spidy::mp::remoteSlotOf(v.state, spiderReady);
+                                        if (mesh_model::slotIsSkinnedBody(gs) && bodyFade > .99f && suitsRigged.load() && overlay.modelReady()) {
                                             const mesh_model::Mesh* gm = mesh_model::library().model(gs);
-                                            const suit_wear::Rig& gr = suitRigs[gs - mesh_model::slotSuitFirst];
+                                            const suit_wear::Rig& gr = gs == mesh_model::slotRemoteSpider
+                                                                           ? remoteSpiderRig
+                                                                           : suitRigs[gs - mesh_model::slotSuitFirst];
                                             suit_wear::Skeleton gl;
                                             suit_wear::BoneMove gmv[suit_wear::bones];
                                             if (gm && gr.ok && suit_wear::estimate(gr, gt, gl) && suit_wear::moves(gr, gl, gmv) &&

@@ -61,3 +61,20 @@ them without guessing. It takes about two minutes and changes nothing in the gam
 - `tools/sm1_suits/prepack.py` - build box only: `Models/Suits` -> `Models/SM1Suits/*.hsm1` + `license.txt`.
 - `tools/launcher/src/Sm1Suits.cs`, `MainForm.Sm1.cs` - the buttons.
 - `tests/hero076_sm1_suits_tests.py` - round trips on a synthetic game with thinned packs (`tests/data/sm1suits`).
+
+## Additive only, and the wrist holo (0.0.75.2)
+
+- **Purely additive (enforced):** every hero is a NEW suit next to Spider-Man's; no game suit, model, texture or
+  config is replaced. The only game assets the install re-points are the five shared lists (tech web, loadout
+  list, the two vanity lists, localization), each an edited copy. Before anything is written, `check_additive`
+  refuses the install unless each list keeps every entry and string the game had, in the same order, and no
+  other existing asset would change. A hero whose new path is somehow already a game asset is skipped. Tests:
+  `test_install_is_purely_additive` and `test_additive_check_refuses_a_replacement`.
+- **Holo hero pick:** picking a hero on the wrist holo shows `SUIT: PICK <HERO> IN THE GAME'S SUITS MENU` when the
+  launcher's install lists that hero (read-only check of `asset_archive\HeroVR\state.json`). If the suits aren't
+  installed, it shows `SUIT: INSTALL HERO SUITS IN THE LAUNCHER`. The ADD-ON page shows the same state.
+- **No live switch yet (stub):** there is no confirmed suit-equip call for 4.630.0.0. The public Script Hook /
+  Spidey Menu suit change only supports the old Steam 1.817.1.0 exe, and nothing in SpidyVR 0.7.0 exports one.
+  Without a confirmed call, the add-on doesn't guess an address; it uses the Suits-menu fallback above and logs
+  this on every pick. The Game info dump can't supply it either, because it reads the game's archive, not
+  its running code.

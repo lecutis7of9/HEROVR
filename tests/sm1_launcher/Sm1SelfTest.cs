@@ -124,7 +124,7 @@ namespace Sm2VrLauncher
             string ini = File.ReadAllText(Path.Combine(Sm1.AddonDataFolder, "addon.ini"));
             Check(ini.Contains("hero=5\n") && ini.Contains("outfit.5=2\n") && ini.Contains("outfit.1=1\n") && !ini.Contains("outfit.x"), "addon.ini keeps hero and outfits");
             Check(ini.Contains("wrist_menu=0\n") && ini.Contains("flight=0\n") && ini.Contains("heroes=1\n"), "addon.ini switches");
-            Check(Sm1.Features.Length == 7 && Sm1.Features.Count(x => x[1] == "stub") == 1 && Sm1.FeatureSummary().Contains("NOT YET: hero models"), "feature list");
+            Check(Sm1.Features.Length == 8 && Sm1.Features.Count(x => x[1] == "stub") == 2 && Sm1.FeatureSummary().Contains("holo suit switch"), "feature list");
 
             try { Directory.Delete(tmp, true); } catch { }
             Console.WriteLine(fails == 0 ? "ALL PASS" : fails + " FAILED");

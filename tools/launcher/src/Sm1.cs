@@ -82,7 +82,8 @@ namespace Sm2VrLauncher
             new[] { "holo card", "untested", "the hero's card on the wrist (2D)" },
             new[] { "hero powers", "untested", "trigger of an outstretched hand hits the ringed enemy, with a beam" },
             new[] { "flight in game", "untested", "Iron Man, Superman, Thor, Green Lantern: hold a grip to take off" },
-            new[] { "hero models", "stub", "Install hero suits adds them to the game's Suits menu (not yet seen in the game); the wrist menu does not switch them" },
+            new[] { "hero suits", "stub", "Install suits adds each hero as a new suit next to Spider-Man's in the game's Suits menu; nothing is replaced (not yet seen in the game)" },
+            new[] { "holo suit switch", "stub", "Picking a hero on the wrist holo tells you to pick that hero's suit in the game's Suits menu; a live switch is not in yet" },
         };
 
         /// <summary>The feature list for the Spider-Man 1 page: what runs in the game and what does not yet.</summary>

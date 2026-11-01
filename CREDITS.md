@@ -17,6 +17,10 @@ It is licensed under the GNU GPL version 3.
   Its original source is not known; if it turns out to come from a film or game it will be replaced.
 - **Agent Mulder**: the Marvel's Spider-Man 2 port, HERO VR and the HERO VR launcher.
   https://www.tiktok.com/@agentmulder · https://discord.gg/W2b9YjRXzf
+- **Tkachov**: ALERT and Overstrike (GPL-3.0), the Spider-Man Remastered modding tools. 0.0.76's SM1 suits
+  (`tools/sm1_suits`) vendor ALERT's `dat1lib` (commit bc90ed9b, with one marked HERO VR change) and install the
+  heroes as suits through the game's toc the way Overstrike suit mods do. https://github.com/Tkachov/ALERT ·
+  https://github.com/Tkachov/Overstrike
 - **3D models (0.0.7)**, from Sketchfab, used under their licences (links and changes in THIRD-PARTY-MODELS.md; the files
   are in `Models/` and `CapSuit/`):
   - **Digital Goblin**: "Captain America Shield" (CC BY 4.0), CAPTAIN AMERICA's shield. https://sketchfab.com/DigitalGoblin

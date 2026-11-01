@@ -73,3 +73,7 @@ the PSF License Agreement; its complete license is `python\LICENSE.txt`.
 The Blade & Sorcery mod is a mechanics reference. Its files are not bundled or
 linked. The ArkWeb research checkout is likewise not bundled or linked. See
 `docs/REFERENCE.md` for attribution and independently checked address facts.
+
+The SM1 suits tool (`tools/sm1_suits`, HERO VR 0.0.76) contains a copy of `dat1lib` from
+[ALERT by Tkachov](https://github.com/Tkachov/ALERT), commit `bc90ed9b`, GPL-3.0. The licence is retained in
+`tools/sm1_suits/vendor/LICENSE-ALERT.txt`; the one HERO VR change is listed in `tools/sm1_suits/vendor/README.md`.

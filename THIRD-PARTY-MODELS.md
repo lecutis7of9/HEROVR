@@ -254,3 +254,11 @@ Non-commercial (NC) licences: the mod is free and never sold.
 | `Models/Suits/Suit_greenLantern_2/` | [Injustice 2 - Green Lantern Hal Jordan](https://sketchfab.com/3d-models/injustice-2-green-lantern-hal-jordan-ed81b5682e7e455d9527023eaa36d209) | [Neut2000](https://sketchfab.com/Neut2000) | [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/) | 13447 of 14985 triangles kept (no decimation: hidden parts, props or doubled faces left out); rigged from its shape (no rig in the download). |
 | `Models/Suits/Suit_greenLantern_3/` | [Green Lantern (Renegade)](https://sketchfab.com/3d-models/green-lantern-renegade-8aa2691803f04468846f51c6e265bb92) | [CAPTAAINR](https://sketchfab.com/CAPTAAINR) | [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/) | 8552 triangles kept; the artist's rig; turned 30 degrees to face forward. |
 | `Models/Suits/Suit_superman_4/` | [Superman - DC](https://sketchfab.com/3d-models/superman-dc-ccad133a5a684003a059a01c89216780) | [Chechorams16](https://sketchfab.com/Chechorams16) | [CC-BY-4.0](http://creativecommons.org/licenses/by/4.0/) | 19926 triangles kept; the artist's rig. |
+
+## SM1 suit packs (0.0.76)
+
+`Models/SM1Suits/<hero>.hsm1` are made by `tools/sm1_suits/prepack.py` from ten of the suits above (the list is in
+`tools/sm1_suits/heroes.py`), with the same credits and licences as each source suit. Changes: the mesh is kept,
+its textures are resized to at most 1024 px and block-compressed (BC1); on the player's PC the launcher fits the
+mesh to Spider-Man Remastered's own suit skeleton and installs it as a suit. `tests/data/sm1suits` holds thinned
+copies of three of them (every 24th triangle, one-colour textures) for the tests.

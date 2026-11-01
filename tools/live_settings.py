@@ -424,6 +424,7 @@ SETTINGS = {
     'sure_grapple': ((0, 1), 'SpidySureGrapple', "SURE GRAPPLE {} (0 on: every hero's grapple press is held until the game takes it, at most 150 ms, so no press is lost; 1 off: test 9's one-frame ask; live)"),  # 0.0.74 test 10
     'dd_quick_grapple': ((0, 1), 'SpidyDdQuickGrapple', "DD QUICK GRAPPLE {} (0 on: Daredevil's grapple pulls faster with a smooth start, and pressing grapple again with either baton while pulled cancels the line, keeps your speed and fires along the new aim, and a jump at any point of the grapple ends it and launches you up; 1 off: test 9's grapple; live, no restart)"),  # 0.0.74 test 10 DD QUICK GRAPPLE
     'suit_probe': ((0, 1), 'SpidySuitProbe', "SUIT PROBE {} (0 off: nothing is read; 1 on: reads, never writes, the game's memory near your Spider-Man and logs the .model files of the suit he wears, and with your sm2scan.json beside the launcher which of your suits' ids it finds deeper, to the console each time you change suit, for the remote-suit test; live, no restart)"),
+    'game_webs': ((0, 1), 'SpidyGameWebs', "GAME WEBS ONLY {} (0 on: Spider-Man shows only the game's own web lines from your wrists, its web balls and its webbed-up enemies, none of HERO VR's drawn webs, web balls, nets or cocoons, and swinging, zips and aim work the same; 1 off: HERO VR's webs as before; live, though HERO VR's own swing lines come back only after a restart)"),  # 0.0.76 GAME WEBS ONLY
     'belt_zones': ((0, 1), 'SpidyBeltZones', "BELT ZONES {} (0 on: BATMAN draws the grapple gun only at the left hip, a batarang only at the belt's front centre, a smoke pellet only by grabbing the other forearm, the nearest zone by a margin; 1 off: test 9's buckle smoke, side pouches and any-grip gun; live)"),  # 0.0.74 test 10
     'coming_soon': ((0, 1), 'SpidyComingSoon', "COMING SOON {} (0 on: the hologram's hero tiles show a SOON tab with the heroes coming in 0.0.74, not playable; 1 off: no SOON tab; live)"),  # 0.0.73 COMING SOON
     'light_checks': ((0, 1), 'SpidyLightChecks', "LIGHT CHECKS {} (0 on: each eye's street-light glow checks get the game view's query room, at least 1024; 1 off: the game's 256; next VR start)"),  # 0.0.73 LIGHT CHECKS
@@ -565,6 +566,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'car_collision': ('on', 'off'),  # 0.0.74 test 10 CAR COLLISION
                 'dd_quick_grapple': ('on', 'off'),  # 0.0.74 test 10 DD QUICK GRAPPLE
                 'suit_probe': ('off', 'on'),  # 0.0.76 SUIT PROBE (read-only)
+                'game_webs': ('on', 'off'),  # 0.0.76 GAME WEBS ONLY
                 'fly_hold': ('on', 'off'),  # 0.0.74 test 10 FLY HOLD
                 'fly_steer': ('on', 'off'),  # 0.0.74 test 10 FLY STEER
                 'fly_flips': ('on', 'off'),  # 0.0.74 test 10 FLY FLIPS
@@ -795,6 +797,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'car_collision': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 CAR COLLISION
            'dd_quick_grapple': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 DD QUICK GRAPPLE
            'suit_probe': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SUIT PROBE (read-only)
+           'game_webs': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 GAME WEBS ONLY
            'fly_hold': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY HOLD
            'fly_steer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY STEER
            'fly_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY FLIPS
@@ -1125,6 +1128,7 @@ START_ONLY = START_ONLY + ('sm1style',)  # 0.0.74 test 10 SM1STYLE: an OFF kept 
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('suit_probe',)  # 0.0.76 SUIT PROBE: an ON kept between sessions (read-only)
+START_ONLY = START_ONLY + ('game_webs',)  # 0.0.76 GAME WEBS ONLY: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
 START_ONLY = START_ONLY + ('fly_classic',)  # HERO VR 0.0.76 FLIGHT: an ON kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
@@ -1343,7 +1347,7 @@ def write_back(text, updates):
 
 # 0.0.7 MIRROR PERSIST FIX: the settings only read when VR starts (the MIRROR VIEW TEST's view is made with
 # the eyes), so live.txt's value is sent before SpidyXrStart rather than with the other kept ones after it.
-VR_START_KEYS = ('mirror_view',)
+VR_START_KEYS = ('mirror_view', 'game_webs')  # 0.0.76 GAME WEBS ONLY: decides whether the game's web lines are hooked
 
 
 def vr_start_settings(path):

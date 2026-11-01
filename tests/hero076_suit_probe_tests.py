@@ -58,7 +58,7 @@ class SuitProbe(unittest.TestCase):
         # changes only, lists hidden, loaded models looked inside, the three suits watched in every place.
         h = src('include/spidy/suit_probe.hpp')
         self.assertIn('watchNames[3] = {"i30_Advanced_Suit", "SUIT_CLASSIC", "SUIT_NWH_HYBRID"}', h)
-        for s in ('const bool agree = havePrev && ids == prev;', 'uint8_t complete() const', 'if (list) // the unlocked suits',
+        for s in ('const bool agree = havePrev && sig == prev;', 'uint8_t complete() const', 'if (list) // the unlocked suits',
                   'std::vector<Found> settled() const', 'std::vector<Place> watchedPlaces() const'):
             self.assertIn(s, h)
         self.assertNotIn('if (++shown > 12)', h)  # no more 12-line cap hiding the rest
@@ -66,6 +66,21 @@ class SuitProbe(unittest.TestCase):
         self.assertIn('watch2.pass(scanTable, deep)', c)
         self.assertIn('watch2.watch(scanTable, deep)', c)
         self.assertIn('watch2.newPlayer();', c)  # a load: changes still told against the last set
+    def test_probe4_run5(self):
+        # run 5 (pt1611u): Classic and Hybrid at record+0x080 -> +0x028 -> an entry -> +0x0e8/+0x0f0/+0x128 +0x028,
+        # the entries moving. PROBE 4 reads that container directly about once a second, PROBE 3 diffs by place,
+        # every line has a time, and the probe's cost on the VR thread is told every 30 s. Still read-only.
+        h = src('include/spidy/suit_probe.hpp')
+        for s in ('static constexpr uint32_t headOff = 0x080, listOff = 0x028;', 'class Watch4',
+                  'std::vector<Found> settledPlaces() const', 'inline std::string stamped(', 'struct Cost {'):
+            self.assertIn(s, h)
+        c = src('src/suit_probe.cpp')
+        for s in ('containerFrame(record, now, log);', 'now - containerStarted < 1000', 'now - costTold >= 30000',
+                  'void (*log)(const char*) = stampedLog;', 'QueryPerformanceCounter(&t1);',
+                  'auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };'):
+            self.assertIn(s, c)
+        for bad in ('WriteProcessMemory', 'VirtualProtect', 'memcpy(reinterpret_cast<void*>'):
+            self.assertNotIn(bad, c)
     def test_probe2_reads_the_real_scan(self):
         # tools/sm2_suits/sm2scan.py's suits block, in the shape the C++ Table::fromScan reads (tests/suit_probe_tests.cpp)
         h = src('include/spidy/suit_probe.hpp')

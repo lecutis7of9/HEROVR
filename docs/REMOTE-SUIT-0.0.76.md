@@ -109,3 +109,37 @@ GPU, the suit's asset id in the MP WORLD packet, and drawing it on the receiver 
 - Test: load into the city, wait about 30 s (two passes for the baseline), swap to Advanced Suit 2.0, wait
   about 30 s, Classic, wait about 30 s, Hybrid, wait about 30 s, quit, Reports, send send-me.zip. A chain is
   CONFIRMED only when its WATCH or "+" lines follow those swaps in that order.
+
+## Run 5 (SUIT PROBE 3: Advanced Suit 2.0, then Classic, then Hybrid)
+- Classic's and Hybrid's model ids were tracked in one container: A = *(record+0x080), B = *(A+0x028); the
+  entries sit in B's words (seen at B+0x008 and B+0x188, and they move), and each entry E holds the model id
+  at *(*(E+0x0e8 | +0x0f0 | +0x128) + 0x28). Advanced 2.0's id never showed up. CANDIDATE: one run, two of
+  the three swaps.
+- The end of the log looked like a crash; the user says he closed the game badly. Not a crash, nothing changed.
+
+## SUIT PROBE 4 (same `suit_probe`, still read-only, guarded)
+- Reads that container directly about once a second: record+0x080 -> +0x028, 0x80 words of the list, each
+  entry 0x40 words wide, and one step into each pointer an entry holds (0x10 words). 8 entries a frame, 64
+  failed reads stop a step, never inside the game's exe, VirtualQuery then the one SEH peek, as before.
+- A set is told only when two passes agree: a baseline, then only changes, one "=", "+" or "-" line per place
+  ("... at record+0x080 -> +0x028 -> +0x188 -> +0x0e8 +0x028"), then "suits now: ...".
+- PROBE 3 now diffs by place, not by id: the same id moving to a new place is "+1 -1", not silence.
+- Every probe line carries "[t+12.3 s 16:57:16.123]" (seconds since the probe went on, and local time), so
+  lines can be matched to the swaps.
+- Cost: every 30 s and when the probe goes off, "SUIT PROBE cost: N frames, mean X us, peak Y us ..." - what
+  the probe costs the game thread.
+- Test: start in some other suit, load into the city, wait 30-40 s, swap to Advanced Suit 2.0, wait 30-40 s,
+  Classic, wait 30-40 s, Hybrid, wait 30-40 s, quit normally, send the log. The container is CONFIRMED only if
+  PROBE 4's lines follow all three swaps in that order.
+
+## Drawing a friend in his game suit (started; nothing draws yet)
+- Container formats (toc, DAT1, DSAR, LZ4 blocks): CONFIRMED by the user's sm2scan run.
+- Inside a .model (joints 15DF9D3B, meshes 78D9CBDE, built 283D0383, vertexes 2C2CA205 and u16 indexes
+  F4EA9E18): CANDIDATE, taken from ALERT's dat1lib for Rift Apart. include/spidy/sm2_model.hpp reads them
+  and checks each guess ("ok: ..." / "no: ..."); vertexes and indexes are handed out only when the size
+  checks hold. tools/sm2_suits/sm2model.py runs the same checks on the real game files:
+  `python tools/sm2_suits/sm2model.py "<game folder>" sm2model.json` (read-only; `--all` for every suit,
+  `--suits A,B` for some). Send sm2model.json back: the layouts become CONFIRMED only if every check says ok.
+- MP: the 12-byte 'S' GAME SUIT tail (mp_net.hpp): 'S', 1, flags (1 known), 0, the worn suit's loadout id
+  u64. Sent after WORLD only when the packet still fits 512 bytes; older builds ignore it. Nothing fills it
+  yet (the probe's place is CANDIDATE).

@@ -29,7 +29,9 @@ endif()
 # drives flight through his own exported SpidyMotionSubmit. Needs MinHook (configure with SPIDY_BUILD_OBSERVER, as CI).
 if(WIN32 AND TARGET minhook)
   # sm1_scan.cpp: the read-only research scan (live.txt sm1scan), on its own lowest-priority thread.
-  add_library(herovr_sm1_layer SHARED sm1_layer.cpp sm1_scan.cpp sm1_targets.cpp sm1_props_gpu.cpp)
+  # 0.0.76 PUNISHER GUNFIRE: the SM2 build's sound player (XAudio2 loaded at run time, its own thread; silent on any failure)
+  add_library(herovr_sm1_layer SHARED sm1_layer.cpp sm1_scan.cpp sm1_targets.cpp sm1_props_gpu.cpp
+              "${PROJECT_SOURCE_DIR}/src/sfx_win.cpp")
   target_include_directories(herovr_sm1_layer PRIVATE "${PROJECT_SOURCE_DIR}/include"
                              "${PROJECT_SOURCE_DIR}/third_party/OpenXR-SDK/include")
   target_compile_definitions(herovr_sm1_layer PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS XR_USE_PLATFORM_WIN32

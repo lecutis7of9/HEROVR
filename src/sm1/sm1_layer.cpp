@@ -23,6 +23,7 @@
 #include "spidy/sm1_holo.hpp"
 #include "spidy/sm1_props.hpp"
 #include "spidy/sm1_scan.hpp"
+#include "spidy/sfx.hpp"
 #include "spidy/wrist_hud.hpp"
 
 #include "sm1_props_gpu.hpp"
@@ -658,6 +659,9 @@ struct Session {
     bool spacesTried = false;
     // 0.0.76 SM1 HOLO: the SM2 build's hologram (holo::width x height), the PLAY AS note, the pointer's dot; the beam
     Quad holo, note, dot, beam;
+    // 0.0.76 PUNISHER GUNFIRE: a round's tracer and the muzzle flash (each painted once a session)
+    Quad tracer, flash;
+    bool tracerPainted = false, flashPainted = false;
     // the upload
     ID3D12CommandAllocator* allocator = nullptr;
     ID3D12GraphicsCommandList* list = nullptr;
@@ -738,6 +742,18 @@ struct Play {
     ControllerKind controllerKind = ControllerKind::touch; // the right hand's interaction profile (Index or Touch)
     ULONGLONG kindAsked = 0;
     bool scaleLogged = false;
+    // 0.0.76 PUNISHER GUNFIRE: the rounds in the air and the muzzle flash, in his projection space (drawn by addOns)
+    struct Round {
+        Vec3 muzzle{}, way{};
+        float stop = 0;
+        ULONGLONG fired = 0;
+    } rounds[6];
+    uint32_t nextRound = 0;
+    Vec3 flashAt{}, flashWay{};
+    ULONGLONG flashFired = 0;
+    bool soundAsked = false;
+    ULONGLONG steerLogged = 0;
+    uint32_t aimChecks = 0;
 } play;
 
 // --- Hero suits: the holo's hint (no live switch: see features[] "holo suit switch") ---------------------------------
@@ -1059,7 +1075,8 @@ bool drawReady() {
     static XrSession tried = XR_NULL_HANDLE;
     if (!fDraw.on)
         return false;
-    if (session.holo.swapchain && session.note.swapchain && session.dot.swapchain && session.beam.swapchain && session.upload)
+    if (session.holo.swapchain && session.note.swapchain && session.dot.swapchain && session.beam.swapchain &&
+        session.tracer.swapchain && session.flash.swapchain && session.upload)
         return true;
     if (tried == session.handle)
         return false;
@@ -1073,11 +1090,14 @@ bool drawReady() {
         return false;
     }
     if (!makeQuad(session.holo, holo::width, holo::height) || !makeQuad(session.note, holo::noteWidth, holo::noteHeight) ||
-        !makeQuad(session.dot, holo::dotSize, holo::dotSize) || !makeQuad(session.beam, 16, 64)) {
+        !makeQuad(session.dot, holo::dotSize, holo::dotSize) || !makeQuad(session.beam, 16, 64) ||
+        !makeQuad(session.tracer, 16, 64) || !makeQuad(session.flash, 32, 32)) {
         dropQuad(session.holo);
         dropQuad(session.note);
         dropQuad(session.dot);
         dropQuad(session.beam);
+        dropQuad(session.tracer);
+        dropQuad(session.flash);
         fDraw.turnOff("the quad swapchains could not be made");
         return false;
     }
@@ -1087,6 +1107,8 @@ bool drawReady() {
         dropQuad(session.note);
         dropQuad(session.dot);
         dropQuad(session.beam);
+        dropQuad(session.tracer);
+        dropQuad(session.flash);
         fDraw.turnOff("the upload buffer could not be made");
         return false;
     }
@@ -1326,7 +1348,30 @@ int areaHits(uint32_t hero, const std::vector<combat::Target>& foes, uint64_t fi
 const props::Tuning& tuningOf(props::Model m) {
     return m == props::hammer ? props::hammerThrow : m == props::shield ? props::shieldThrow : props::batarangThrow;
 }
-void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
+// 0.0.76 PUNISHER GUNFIRE: the SM2 build's own gunshot (sfx pistol_shot) on the add-on's XAudio2 player (sfx_win.cpp:
+// its own thread, loaded at run time, SEH-guarded; any failure leaves it silent and logged, never the game).
+void startSound() {
+    if (play.soundAsked)
+        return;
+    play.soundAsked = true;
+    bool ok = false;
+    SM1_TRY {
+        ok = sfx::start();
+    }
+    SM1_EXCEPT {
+        ok = false;
+    }
+    logLine("sound: %s", ok ? "the SM2 build's sound player is starting (gunshots and throws)"
+                            : "the sound player could not start (shots stay silent)");
+}
+void playSound(sfx::Id id) {
+    SM1_TRY {
+        sfx::play(id);
+    }
+    SM1_EXCEPT {
+    }
+}
+void firePower(int hand, uint32_t hero, const Live& live, const Pose* gripXr, const Pose* aimXr) {
     // 0.0.76 HERO PROPS: the thrown prop is still out: this press does nothing (it comes back to the hand by itself)
     if (live.props && props::thrownBy(hero, hand) != props::none && play.throwFlight.phase != props::Flight::held)
         return;
@@ -1345,8 +1390,41 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         return;
     }
     const bool eyes = p.source == Source::eyes;
-    const Vec3 from = eyes ? gv.headPos : gv.handPos[hand];
-    const Vec3 dir = eyes ? gv.headForward : gv.handForward[hand];
+    // 0.0.76 AIM (the test: "when they fire they veer off to the left"): a hand's power leaves where the controller
+    // points in the headset - its aim ray, the line the drawn gun's barrel lies on (props::aimedPistol) - taken into
+    // the game's world through the head (props::dirToGame), not his XrData hand row, so the shot, the throw and the
+    // drawn weapon share one line. The angle between the two is logged with each shot (the veer's size and side).
+    Vec3 from = eyes ? gv.headPos : gv.handPos[hand];
+    Vec3 dir = eyes ? gv.headForward : gv.handForward[hand];
+    const props::HeadMap headMap =
+        play.headKnown ? props::headMap(gv.headPos, gv.headRight, gv.headDown, gv.headForward, play.head) : props::HeadMap{};
+    const bool gun = hero == hero_modes::punisher;
+    Vec3 xrMuzzle{}, xrWay{};
+    bool xrAim = false;
+    if (!eyes && headMap.ok && aimXr) {
+        const gun_grip::Held g = gripXr ? props::aimedPistol(*gripXr, aimXr, static_cast<unsigned>(hand), play.controllerKind)
+                                        : gun_grip::Held{};
+        xrWay = normalized(aimXr->orientation.rotate({0, 0, -1}));
+        xrMuzzle = gun && g.ok ? props::pistolMuzzle(g) : aimXr->position;
+        if (finite(xrWay) && finite(xrMuzzle)) {
+            const Vec3 gameWay = props::dirToGame(headMap, xrWay);
+            const Vec3 gameFrom = props::toGame(headMap, xrMuzzle);
+            if (finite(gameWay) && length(gameWay) > .5f && finite(gameFrom)) {
+                const AimDelta d = aimDelta(dir, gameWay, gv.headRight, gv.headDown, gv.headForward);
+                if (d.ok && play.aimChecks < 40) {
+                    ++play.aimChecks;
+                    logLine("aim check: the controller's ray is %.1f deg %s and %.1f deg %s of his XrData hand forward; "
+                            "his hand is %.2f m from where the headset puts it (the shot uses the controller's ray)",
+                            static_cast<double>(std::fabs(d.yawRight)), d.yawRight >= 0 ? "right" : "left",
+                            static_cast<double>(std::fabs(d.pitchUp)), d.pitchUp >= 0 ? "up" : "down",
+                            static_cast<double>(length(props::toGame(headMap, aimXr->position) - gv.handPos[hand])));
+                }
+                dir = normalized(gameWay);
+                from = gameFrom;
+                xrAim = true;
+            }
+        }
+    }
     Vec3 beamDir = dir;
     float beamLength = std::min(p.range, 12.f);
     const float amount = p.damage * static_cast<float>(live.damage) / 100.f;
@@ -1356,7 +1434,8 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         targets::fighting(foes);
     uint64_t first = 0;
     Vec3 hitPoint{};
-    if (s.cueTarget && aimedAt(from, dir, s.cuePoint, aimDegrees, p.range)) {
+    // His ringed enemy is homed on within ringDegrees of the aim (wider than the free aim: the ring is his own pick).
+    if (s.cueTarget && aimedAt(from, dir, s.cuePoint, ringDegrees, p.range)) {
         first = s.cueTarget;
         hitPoint = s.cuePoint;
     } else if (const int k = combat::aimed(foes, from, dir, p.range, aimDegrees); k >= 0) {
@@ -1376,6 +1455,8 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
             play.throwAmount = amount;
             play.throwKnockback = p.knockback;
             play.powerState = "THROWN";
+            if (thrown == props::shield)
+                playSound(sfx::shieldThrow); // the SM2 build's own shield throw
             logLine("throw: %s from the right hand, %s", props::modelNames[thrown],
                     first ? "at an enemy (the hit lands when it gets there)" : "along the aim (no enemy aimed at)");
             return;
@@ -1400,16 +1481,36 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
     // 0.0.76: every shot in the log (the first test's log showed no shot at all: the menu stayed open)
     logLine("power: %s fired from the %s, %s (%.0f damage%s)", p.name, eyes ? "eyes" : hand ? "right hand" : "left hand",
             play.powerState.c_str(), static_cast<double>(amount), first ? "" : ", nothing hit");
+    if (gun) {
+        // 0.0.76 PUNISHER GUNFIRE: a round, not a beam: the SM2 build's gunshot, the muzzle flash and a tracer
+        // flying out of the drawn barrel to what it hit (or its range); the blow above is this round's damage.
+        playSound(sfx::pistolShot);
+        if (fDraw.on && xrAim) {
+            const Vec3 xrWayHit = first ? props::dirToXr(headMap, hitPoint - from) : xrWay;
+            Play::Round& r = play.rounds[play.nextRound++ % (sizeof play.rounds / sizeof play.rounds[0])];
+            r.muzzle = xrMuzzle;
+            r.way = length(xrWayHit) > 1e-3f ? normalized(xrWayHit) : xrWay;
+            r.stop = first ? std::max(.3f, length(hitPoint - from)) : p.range;
+            r.fired = GetTickCount64();
+            play.flashAt = xrMuzzle;
+            play.flashWay = xrWay;
+            play.flashFired = r.fired;
+        }
+        return;
+    }
     if (live.beams && fDraw.on) {
-        // game direction -> his head's axes -> the headset's view -> his projection space
-        const Vec3 local = gameToHeadLocal(beamDir, gv.headRight, gv.headDown, gv.headForward);
-        play.beamDirGame = play.headKnown ? normalized(play.head.orientation.rotate(local)) : Vec3{};
+        // the beam from the hand along the controller's ray (or to the enemy hit), in his projection space
+        Vec3 xrDir{};
+        if (xrAim)
+            xrDir = first ? props::dirToXr(headMap, beamDir) : xrWay;
+        else if (play.headKnown)
+            xrDir = play.head.orientation.rotate(gameToHeadLocal(beamDir, gv.headRight, gv.headDown, gv.headForward));
+        play.beamDirGame = length(xrDir) > 1e-3f ? normalized(xrDir) : Vec3{};
         play.beamLength = beamLength;
         play.beamHand = eyes ? -1 : hand;
         play.beamColor = p.color;
         play.beamWidth = .06f;
         play.beamUntil = GetTickCount64() + 180;
-        (void)xrFrom;
     }
 }
 // 0.0.76 HERO PROPS: the thrown prop's hit, when it reaches its enemy. The enemy is looked up again first (the enemy
@@ -1900,12 +2001,24 @@ void step() {
         const Vec3 up{0, 1, 0};
         const auto flat = [](Vec3 v) { return Vec3{v.x, 0, v.z}; };
         in.armsUp = fly076::armsUp(offset, tracked, up);
-        const Vec3 way = fly076::steerWay(offset, tracked, up);
+        // 0.0.76 test ("flying you just kinda keep going with no control"): fly076::steerWay counts an arm only
+        // .45 m out from his chest; his flight log's hands were .17-.45 m from it, so no steer reached the flight
+        // and it held its heading. fistSteer (sm1_core) steers from a fist .16 m out, the way the fists point.
+        Vec3 point[2]{};
+        for (int i = 0; i < 2; ++i)
+            point[i] = aimOk[i] ? aim[i].orientation.rotate({0, 0, -1}) : Vec3{};
+        const Vec3 way = fistSteer(offset, point, tracked, up);
         const Vec3 tf = fly076::unitOr(flat(play.head.orientation.rotate({0, 0, -1})), {0, 0, -1});
         const Vec3 tr{-tf.z, 0, tf.x};
         const Vec3 gf = fly076::unitOr(flat(gv.headForward), {0, 0, 1});
         const Vec3 gr = fly076::unitOr(flat(gv.headRight), {gf.z, 0, -gf.x});
-        in.steer = length(way) > .5f ? normalized(gf * dot(way, tf) + gr * dot(way, tr) + up * way.y) : Vec3{};
+        const props::HeadMap headMap =
+            play.headKnown ? props::headMap(gv.headPos, gv.headRight, gv.headDown, gv.headForward, play.head) : props::HeadMap{};
+        const Vec3 mapped = headMap.ok && length(way) > .5f ? props::dirToGame(headMap, way) : Vec3{};
+        in.steer = length(way) <= .5f ? Vec3{}
+                   : finite(mapped) && length(mapped) > .5f
+                       ? normalized(mapped)
+                       : normalized(gf * dot(way, tf) + gr * dot(way, tr) + up * way.y);
         in.a = play.faceLower[1] > .5f;
         in.b = play.faceUpper[1] > .5f;
         in.headForward = gv.headForward;
@@ -1923,6 +2036,13 @@ void step() {
             logLine("flight: took off as %s", heroName(nowHero));
         }
         if (play.flight.on && play.flying) {
+            const ULONGLONG nowMs = GetTickCount64();
+            if (nowMs - play.steerLogged > 2000) {
+                play.steerLogged = nowMs;
+                logLine("flight: %s, speed %.1f m/s, fists %s", in.steer.x || in.steer.y || in.steer.z ? "steering" : "holding its heading",
+                        static_cast<double>(length(play.flight.velocity)),
+                        length(way) > .5f ? "pointing the way" : "in (not steering)");
+            }
             const DWORD r = submitOurs(true, play.flight.velocity);
             if (r) {
                 logLine("flight: SpidyMotionSubmit %lu", static_cast<unsigned long>(r));
@@ -2009,12 +2129,14 @@ void step() {
     for (int i = 0; i < 2; ++i)
         if (holoClicked || menu.open || (play.holoHands >> i & 1u))
             play.triggerWas[i] = true;
+    if (!nowSpiderMan && live.powers)
+        startSound(); // once: the SM2 build's sound player (the Punisher's gunshots, the shield)
     if (!nowSpiderMan && live.powers && fPowers.on && !menu.open && rayReady()) {
         for (int i = 0; i < 2; ++i) {
             const bool down = play.trigger[i] > .5f;
             if (down && !play.triggerWas[i] && play.handOut[i] &&
                 (play.grip[i] < .5f || (!live.heroWebs && !grappleArmed)) && play.cooldown <= 0)
-                firePower(i, nowHero, live, aim[i].position);
+                firePower(i, nowHero, live, gripTracked[i] ? &grips[i] : nullptr, aimOk[i] ? &aim[i] : nullptr);
         }
     }
     for (int i = 0; i < 2; ++i)
@@ -2645,6 +2767,51 @@ void addOns(const XrFrameEndInfo* info, XrSpace space, std::vector<XrComposition
                                       play.beamWidth,
                                       play.beamLength));
     }
+    // 0.0.76 PUNISHER GUNFIRE: the rounds' tracers and the muzzle flash (two small quads, painted once a session)
+    const ULONGLONG now = GetTickCount64();
+    bool anyRound = now - play.flashFired < 400;
+    for (const Play::Round& r : play.rounds)
+        anyRound = anyRound || (r.fired && now - r.fired < 400);
+    if (!anyRound)
+        return;
+    if (!session.tracerPainted) {
+        Canvas c(16, 64);
+        paintBeam(c, 0xfff0c0);
+        if (!upload(session.tracer, c)) {
+            fDraw.turnOff("the tracer picture could not be uploaded");
+            return;
+        }
+        session.tracerPainted = true;
+    }
+    if (!session.flashPainted) {
+        Canvas c(32, 32);
+        paintFlash(c);
+        if (!upload(session.flash, c)) {
+            fDraw.turnOff("the muzzle flash picture could not be uploaded");
+            return;
+        }
+        session.flashPainted = true;
+    }
+    for (Play::Round& r : play.rounds) {
+        if (!r.fired)
+            continue;
+        float nearEnd = 0, farEnd = 0;
+        if (!tracerSegment(static_cast<float>(now - r.fired) / 1000.f, r.stop, nearEnd, farEnd)) {
+            if (now - r.fired > 1000)
+                r.fired = 0;
+            continue;
+        }
+        if (session.tracer.released)
+            quads.push_back(quadLayer(session.tracer, space,
+                                      beamPose(r.muzzle + r.way * nearEnd, r.way, farEnd - nearEnd, play.head.position), .02f,
+                                      farEnd - nearEnd));
+    }
+    if (play.flashFired && static_cast<float>(now - play.flashFired) / 1000.f < TracerLook::flashSeconds &&
+        session.flash.released) {
+        Pose at = play.head;
+        at.position = play.flashAt + play.flashWay * .03f;
+        quads.push_back(quadLayer(session.flash, space, at, .14f, .14f));
+    }
 }
 // No C++ objects to unwind here (MSVC's __try needs that): a fault drops this frame's quads and turns drawing off.
 void tryAddOns(const XrFrameEndInfo* info, XrSpace space, std::vector<XrCompositionLayerQuad>* quads) {
@@ -2696,6 +2863,8 @@ bool propsFrame(const XrFrameEndInfo* info, const XrCompositionLayerProjection& 
     hands.kind = play.controllerKind;
     for (int i = 0; i < 2; ++i)
         hands.tracked[i] = locate(session.gripSpace[i], his.space, info->displayTime, hands.grip[i]);
+    for (int i = 0; i < 2; ++i) // 0.0.76 AIM: the pistol's barrel along the controller's ray (where its shots go)
+        hands.aimTracked[i] = locate(session.aimSpace[i], his.space, info->displayTime, hands.aim[i]);
     props::Flying flying;
     if (play.throwFlight.phase != props::Flight::held && play.throwModel != props::none) {
         const GameView gv = gameView();
@@ -2807,6 +2976,8 @@ void dropSession() {
     dropQuad(session.note);
     dropQuad(session.dot);
     dropQuad(session.beam);
+    dropQuad(session.tracer);
+    dropQuad(session.flash);
     dropUploader();
     propsgpu::drop();
     dropColor();

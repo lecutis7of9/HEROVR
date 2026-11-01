@@ -231,6 +231,8 @@ struct Power {
 const Power& powerOf(uint32_t hero);
 // The aim cone: within maxDegrees of `dir` from `from`, and no further than range.
 bool aimedAt(Vec3 from, Vec3 dir, Vec3 target, float maxDegrees, float range);
+// 0.0.76 AIM: his ringed enemy (his own pick) is homed on this far off the aim.
+inline constexpr float ringDegrees = 25;
 inline constexpr float aimDegrees = 15, outstretched = .42f; // a hand this far from the head fires (nearer: his scan/suit power)
 
 // --- Input: the bindings his actions suggested, and what the layer hides from him ------------------------------
@@ -347,6 +349,21 @@ inline constexpr int menuWidth = 512, menuHeight = 640;
 void paintMenu(Canvas& c, const MenuView& v);
 // The beam's texture: a soft core along its length (height), the hero's colour.
 void paintBeam(Canvas& c, uint32_t rgb);
+// 0.0.76 PUNISHER GUNFIRE: the muzzle flash's picture (a round orange-white burst, premultiplied, `size` square).
+void paintFlash(Canvas& c);
+// A round's tracer: a short bright streak flying out from the muzzle at `speed` m/s, `streak` long, gone at `stop`
+// metres (what it hit, or its range) or after `life` seconds. near/far: the streak's ends from the muzzle (metres).
+struct TracerLook {
+    static constexpr float speed = 140.f, streak = 1.2f, life = .35f, flashSeconds = .06f;
+};
+bool tracerSegment(float ageSeconds, float stop, float& nearEnd, float& farEnd);
+// 0.0.76 AIM CHECK (the veer to the left): how far direction b is turned from a, on the game head's axes: yaw in
+// degrees (positive: b is to the right of a), pitch in degrees (positive: b is above a).
+struct AimDelta {
+    float yawRight = 0, pitchUp = 0;
+    bool ok = false;
+};
+AimDelta aimDelta(Vec3 a, Vec3 b, Vec3 headRight, Vec3 headDown, Vec3 headForward);
 bool sameView(const MenuView& a, const MenuView& b);
 
 // --- Where the layer puts its quads (pure; the space is his projection layer's, Y up) -----------------------------
@@ -365,6 +382,13 @@ Vec3 gameToHeadLocal(Vec3 dir, Vec3 headRight, Vec3 headDown, Vec3 headForward);
 
 // --- Flight (the flying heroes; moved through his SpidyMotionSubmit by the layer) --------------------------------
 bool flies(uint32_t hero); // IRON MAN, SUPERMAN, THOR, GREEN LANTERN
+// 0.0.76 SM1 FLIGHT STEER (the test: "flying you just kinda keep going with no control"). The shared fly076::steerWay
+// only counts an arm held .45 m out from a point .30 m under the head; in the test's flight the hands stayed .17 to .45 m
+// from it the whole time, so the heading never turned. Here each hand that is up (not hanging at the side) steers by
+// where its fist points (the controller's aim ray) and where the arm reaches, weighted by how far out it is; both hands
+// down at the sides say nothing (the heading holds). offset: each grip from the head; point: each aim ray's way;
+// all in one frame whose up is `up`. Unit, or zero.
+Vec3 fistSteer(const Vec3 (&offset)[2], const Vec3 (&point)[2], const bool (&tracked)[2], Vec3 up);
 // HERO VR 0.0.76 FLIGHT (the SM2 build's fly076.hpp, the same feel): both hands straight up over the head for a
 // quarter second, or the right A held .4 s, takes off; the arms steer (both out together: their average way,
 // smoothly, slower at speed); it flies on by itself; the left stick forward is faster (full forward SUPERSONIC:

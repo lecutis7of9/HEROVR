@@ -278,8 +278,8 @@ void inputTests() {
           "0.0.76: a flying hero on the ground: grips web, A jumps (its hold takes off)");
     mi.flying = true;
     m = maskFor(mi);
-    check(m.stick[0] && !m.stickY[1] && !m.stick[1] && m.faceLower[1] && m.faceUpper[1] && !m.faceLower[0],
-          "0.0.76 flying: the left stick, the right A and B are ours; the right stick stays his");
+    check(m.stick[0] && m.stick[1] && m.faceLower[1] && m.faceUpper[1] && !m.faceLower[0],
+          "0.0.76 flying: the sticks, the right A and B are ours (no zip, flip or heal mid-flight)");
     mi.flying = false;
     mi.aHeld = true;
     check(maskFor(mi).faceLower[1], "0.0.76: an A held from the flight is no jump on landing");
@@ -1134,6 +1134,27 @@ void propsTests() {
           "a metre ahead of the game head is a metre ahead of the headset");
     check(near3(pr::dirToXr(m, {0, 1, 0}), xrHead.orientation.rotate({0, 1, 0})), "the game's up is the head's up");
     check(!pr::headMap({0, 0, 0}, {0, 0, 0}, {0, -1, 0}, {0, 0, 1}, xrHead).ok, "no head axes: no map");
+    // 0.0.76 AIM: OpenXR -> game directions (the shots' and the flight's), dirToXr's inverse
+    for (const Vec3 d : {Vec3{0, 0, -1}, Vec3{1, 0, 0}, Vec3{.3f, .5f, -.8f}})
+        check(near3(pr::dirToXr(m, pr::dirToGame(m, d)), d), "OpenXR -> game -> OpenXR direction");
+    check(near3(pr::dirToGame(m, xrHead.orientation.rotate({0, 0, -1})), {-1, 0, 0}), "the headset's -z is his forward");
+    check(near3(pr::dirToGame(m, xrHead.orientation.rotate({1, 0, 0})), {0, 0, 1}), "the headset's right is his right");
+    // 0.0.76 AIMED PISTOL: the barrel lies along the controller's aim ray, the gun in the palm
+    {
+        const Pose grip{{.2f, 1.2f, -.3f}, Quat::around({1, 0, 0}, -.6f)};
+        const Pose aim{{.2f, 1.22f, -.35f}, Quat::yaw(-.3f)};
+        const gun_grip::Held g = pr::aimedPistol(grip, &aim, 1, ControllerKind::touch);
+        const Vec3 ray = aim.orientation.rotate({0, 0, -1});
+        check(g.ok && dot(g.forward, ray) > .999f, "the drawn pistol points along the aim ray");
+        check(g.ok && length(g.at - gun_grip::held(grip, 1, ControllerKind::touch).at) < 1e-4f, "...held where the palm is");
+        const Vec3 muzzle = pr::pistolMuzzle(g);
+        check(dot(muzzle - g.at, g.forward) > .05f, "the muzzle is ahead of the grip");
+        const gun_grip::Held plain = pr::aimedPistol(grip, nullptr, 1, ControllerKind::touch);
+        const gun_grip::Held held = gun_grip::held(grip, 1, ControllerKind::touch);
+        check(plain.ok && near3(plain.forward, held.forward), "no aim ray: the plain grip gun");
+        const Pose broken{{0, 0, 0}, Quat{0, 0, 0, 0}};
+        check(pr::aimedPistol(grip, &broken, 1, ControllerKind::touch).ok, "a broken aim ray: still the grip gun");
+    }
 
     // The GPU's vertices: one a corner, the texture layer (cutout flagged) and the tint.
     mesh_model::Mesh tri;
@@ -1216,6 +1237,54 @@ void propsTests() {
     check(pr::boundsOf(pr::shield, sm).ok && near3(pr::boundsOf(pr::shield, sm).pivot, captain::pivotLeft), "the shield turns about pivotLeft");
 }
 
+// 0.0.76 test 4 ("flying you just kinda keep going with no control"; "they veer off to the left"; the soundless beam)
+void aimAndGunfireTests() {
+    const Vec3 up{0, 1, 0};
+    const bool both[2]{true, true};
+    // his flight log: fists at his chest, .17-.45 m from the old steer's chest point - fly076::steerWay said nothing
+    {
+        const Vec3 offset[2]{{-.15f, -.25f, -.22f}, {.15f, -.25f, -.22f}}; // from the head: a fist each side, chest high
+        const Vec3 point[2]{{0, 0, -1}, {0, 0, -1}};
+        const Vec3 w = fistSteer(offset, point, both, up);
+        check(length(w) > .99f && w.z < -.9f, "fists out in front: fly forward");
+        const Vec3 left[2]{{-.7f, 0, -.7f}, {-.7f, 0, -.7f}};
+        const Vec3 l = fistSteer(offset, left, both, up);
+        check(l.x < -.3f, "fists turned left: fly left");
+        const Vec3 high[2]{{0, .7f, -.7f}, {0, .7f, -.7f}};
+        check(fistSteer(offset, high, both, up).y > .3f, "fists up: climb");
+    }
+    {
+        const Vec3 hang[2]{{-.2f, -.65f, 0}, {.2f, -.65f, 0}}; // arms down at his sides
+        const Vec3 down[2]{{0, -1, 0}, {0, -1, 0}};
+        check(length(fistSteer(hang, down, both, up)) < 1e-3f, "arms hanging: no steer (the heading holds)");
+        const Vec3 tucked[2]{{-.05f, -.3f, -.05f}, {.05f, -.3f, -.05f}};
+        const Vec3 fwd[2]{{0, 0, -1}, {0, 0, -1}};
+        check(length(fistSteer(tucked, fwd, both, up)) < 1e-3f, "fists tucked at the chest: no steer");
+        const bool none[2]{false, false};
+        const Vec3 out[2]{{-.2f, -.2f, -.5f}, {.2f, -.2f, -.5f}};
+        check(length(fistSteer(out, fwd, none, up)) < 1e-3f, "no tracked hand: no steer");
+        const Vec3 nan[2]{{std::numeric_limits<float>::quiet_NaN(), 0, 0}, {.2f, -.2f, -.5f}};
+        const Vec3 w = fistSteer(nan, fwd, both, up);
+        check(std::isfinite(w.x) && std::isfinite(w.y) && std::isfinite(w.z), "a broken hand never makes a broken steer");
+    }
+    // the tracer: out of the muzzle at speed, to what it hit, then gone
+    float n = 0, f = 0;
+    check(tracerSegment(.001f, 30, n, f) && n == 0 && f > 0 && f < .5f, "a round leaves the muzzle");
+    check(tracerSegment(.1f, 30, n, f) && f - n <= TracerLook::streak + 1e-4f && n > 0, "a short streak in flight");
+    check(tracerSegment(.04f, 5, n, f) && f <= 5 && f > 4.9f, "never past what it hit");
+    check(!tracerSegment(.1f, 5, n, f), "gone once its tail passes what it hit");
+    check(!tracerSegment(.5f, 30, n, f), "gone after its life");
+    check(!tracerSegment(.1f, 0, n, f), "no length: no tracer");
+    // the aim check's angle (the log's veer size and side)
+    const Vec3 right{1, 0, 0}, down{0, -1, 0}, fwd{0, 0, -1};
+    const AimDelta d = aimDelta({0, 0, -1}, {std::sin(.2f), 0, -std::cos(.2f)}, right, down, fwd);
+    check(d.ok && std::fabs(d.yawRight - .2f * 57.2958f) < .05f && std::fabs(d.pitchUp) < .05f, "11.5 deg right");
+    const AimDelta e = aimDelta({0, 0, -1}, {0, std::sin(.1f), -std::cos(.1f)}, right, down, fwd);
+    check(e.ok && e.pitchUp > 5.6f && e.pitchUp < 5.8f, "5.7 deg up");
+    check(!aimDelta({0, 0, 0}, fwd, right, down, fwd).ok, "no direction: no check");
+    check(ringDegrees > aimDegrees, "his ringed enemy is homed on wider than the free aim");
+}
+
 int main() {
     hostTests();
     featureTests();
@@ -1236,6 +1305,7 @@ int main() {
     colorTests();
     holoTests();
     propsTests();
+    aimAndGunfireTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

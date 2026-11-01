@@ -68,7 +68,12 @@ float clawReach(Vec3 low);
 Place batonPlace(const Pose& grip, unsigned hand, ControllerKind kind, Vec3 low, Vec3 high);
 // PUNISHER's pistol (mesh_model::slotPistol, gun_grip.hpp: its palm point on the grip point, the barrel along the
 // forearm, its top toward the thumb).
-Place pistolPlace(const Pose& grip, unsigned hand, ControllerKind kind);
+// 0.0.76 AIMED PISTOL (the SM2 build's 0.0.72 AIMED GUNS): the gun in the palm from the grip pose, its barrel along
+// the controller's aim ray when that ray is known (else gun_grip::held), so the drawn barrel is the shot's line.
+gun_grip::Held aimedPistol(const Pose& grip, const Pose* aim, unsigned hand, ControllerKind kind);
+// The pistol's muzzle (the shot's start) and the gun's way, from aimedPistol.
+Vec3 pistolMuzzle(const gun_grip::Held& g);
+Place pistolPlace(const Pose& grip, unsigned hand, ControllerKind kind, const Pose* aim = nullptr);
 // A flying batarang (mesh_model::fit: span metres across, flat, its nose along the flight), spinning flat.
 Place batarangFlying(Vec3 at, Vec3 way, float spin, Vec3 low, Vec3 high, float span = .16f);
 
@@ -83,6 +88,8 @@ Bounds boundsOf(Model m, const mesh_model::Mesh& mesh);
 struct Hands {
     Pose grip[2];         // his projection space (OpenXR, Y up)
     bool tracked[2]{};
+    Pose aim[2];          // the controllers' aim rays (same space)
+    bool aimTracked[2]{};
     ControllerKind kind = ControllerKind::touch;
 };
 // The thrown prop while it is out of the hand, already in his projection space (the layer maps the game's flight).
@@ -150,6 +157,8 @@ HeadMap headMap(Vec3 gameHead, Vec3 right, Vec3 down, Vec3 forward, const Pose& 
 Vec3 toXr(const HeadMap& m, Vec3 gamePoint);
 Vec3 toGame(const HeadMap& m, Vec3 xrPoint);
 Vec3 dirToXr(const HeadMap& m, Vec3 gameDir);
+// 0.0.76 AIM: a direction in his projection space into the game's world (dirToXr's inverse).
+Vec3 dirToGame(const HeadMap& m, Vec3 xrDir);
 
 // --- The GPU's side -----------------------------------------------------------------------------------------------
 // One model corner, as the props' shader reads it (48 bytes).

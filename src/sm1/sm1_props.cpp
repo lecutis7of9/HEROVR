@@ -2,6 +2,7 @@
 #include "spidy/sm1_props.hpp"
 
 #include "spidy/baton_grip.hpp"
+#include "spidy/grapple072.hpp"
 #include "spidy/hero_modes.hpp"
 #include "spidy/thor_grip.hpp"
 
@@ -178,8 +179,24 @@ Place batonPlace(const Pose& grip, unsigned hand, ControllerKind kind, Vec3 low,
     return p;
 }
 
-Place pistolPlace(const Pose& grip, unsigned hand, ControllerKind kind) {
+gun_grip::Held aimedPistol(const Pose& grip, const Pose* aim, unsigned hand, ControllerKind kind) {
     const gun_grip::Held g = gun_grip::held(grip, hand, kind);
+    if (!g.ok || !aim || !usable(*aim))
+        return g;
+    const Vec3 way = aim->orientation.rotate({0, 0, -1});
+    const auto a = grapple072::alongAim(g.at, way, g.up);
+    if (!a.ok)
+        return g;
+    gun_grip::Held h;
+    h.at = a.at, h.forward = a.forward, h.up = a.up, h.ok = true;
+    return h;
+}
+Vec3 pistolMuzzle(const gun_grip::Held& g) {
+    // The SM2 build's muzzle from the grip point (gun_grip::muzzleFromPalm, the shots' start there too).
+    return gun_grip::from(g, gun_grip::muzzleFromPalm(gun_grip::pistol));
+}
+Place pistolPlace(const Pose& grip, unsigned hand, ControllerKind kind, const Pose* aim) {
+    const gun_grip::Held g = aimedPistol(grip, aim, hand, kind);
     if (!g.ok)
         return {};
     const Vec3 o = gun_grip::originFor(g.at, g.forward, g.up, gun_grip::palmPoint(gun_grip::pistol, true));
@@ -283,7 +300,8 @@ std::vector<Item> scene(uint32_t hero, const Hands& hands, const Bounds (&bounds
         case pistol:
             for (unsigned hand = 0; hand < 2; ++hand)
                 if (held(hand))
-                    add(m, pistolPlace(hands.grip[hand], hand, hands.kind));
+                    add(m, pistolPlace(hands.grip[hand], hand, hands.kind,
+                                       hands.aimTracked[hand] && usable(hands.aim[hand]) ? &hands.aim[hand] : nullptr));
             break;
         case batarang:
             if (out_)
@@ -403,6 +421,10 @@ Vec3 dirToXr(const HeadMap& m, Vec3 d) {
     // sm1_addon.hpp gameToHeadLocal: the head's own axes (+x right, +y up, -z forward), then the headset's turn.
     const Vec3 local{dot(d, m.right), -dot(d, m.down), -dot(d, m.forward)};
     return m.xrHead.orientation.rotate(local);
+}
+Vec3 dirToGame(const HeadMap& m, Vec3 x) {
+    const Vec3 l = m.xrHead.orientation.conjugate().rotate(x);
+    return m.right * l.x - m.down * l.y - m.forward * l.z;
 }
 Vec3 toXr(const HeadMap& m, Vec3 g) { return m.xrHead.position + dirToXr(m, g - m.gameHead); }
 Vec3 toGame(const HeadMap& m, Vec3 x) {

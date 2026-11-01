@@ -442,6 +442,35 @@ bool flies(uint32_t hero) {
     return hero == hero_modes::ironMan || hero == hero_modes::superman || hero == hero_modes::thor ||
            hero == hero_modes::greenLantern;
 }
+Vec3 fistSteer(const Vec3 (&offset)[2], const Vec3 (&point)[2], const bool (&tracked)[2], Vec3 up) {
+    up = fly076::unitOr(up, {0, 1, 0});
+    constexpr float chestBelow = .30f, near = .16f, full = .38f, lowest = -.22f, reachOut = .28f;
+    Vec3 sum{};
+    float weight = 0;
+    for (int i = 0; i < 2; ++i) {
+        if (!tracked[i] || !finite(offset[i]) || !finite(point[i]) || length(point[i]) < .5f)
+            continue;
+        const Vec3 d = offset[i] + up * chestBelow; // from the chest
+        const float n = length(d);
+        if (!(n > near))
+            continue; // the hand at the chest says nothing
+        const float height = dot(d, up), out = length(d - up * height);
+        if (height < lowest && out < reachOut)
+            continue; // hanging at the side
+        const Vec3 fist = normalized(point[i]), arm = d / n;
+        if (dot(fist, up) < -.85f && out < reachOut)
+            continue; // the fist straight down by the leg
+        const float w = std::clamp((n - near) / (full - near), 0.f, 1.f);
+        const Vec3 way = fist * .65f + arm * .35f;
+        if (length(way) < .2f)
+            continue;
+        sum = sum + normalized(way) * w;
+        weight += w;
+    }
+    if (!(weight > .15f) || length(sum) < .1f)
+        return {};
+    return normalized(sum);
+}
 
 // --- Input ---------------------------------------------------------------------------------------------------------
 Binding classify(std::string_view path) {
@@ -502,6 +531,7 @@ Mask maskFor(const MaskInput& in) {
     if (in.flying) {
         m.stick[0] = true;                  // the speed
         m.faceLower[1] = m.faceUpper[1] = true; // A comes down, B brakes
+        m.stick[1] = true; // 0.0.76 test: no zip, heal or flip from the right stick mid-flight (one control, one job)
     }
     if (in.aHeld)
         m.faceLower[1] = true; // an A held in flight is never also his jump, even once landed
@@ -944,6 +974,53 @@ void paintBeam(Canvas& c, uint32_t rgb) {
         for (int j = 0; j < c.height; ++j)
             c.pixels[static_cast<size_t>(j) * c.width + i] = px;
     }
+}
+void paintFlash(Canvas& c) {
+    if (c.width <= 0 || c.height <= 0)
+        c = Canvas(32, 32);
+    const float hx = (c.width - 1) / 2.f, hy = (c.height - 1) / 2.f;
+    for (int j = 0; j < c.height; ++j)
+        for (int i = 0; i < c.width; ++i) {
+            const float dx = (i - hx) / std::max(hx, 1.f), dy = (j - hy) / std::max(hy, 1.f);
+            const float d = std::sqrt(dx * dx + dy * dy);
+            // a four-pointed burst over a round glow: white in the middle, orange out to the edge
+            const float star = std::max(0.f, 1 - std::min(std::fabs(dx), std::fabs(dy)) * 7) * std::max(0.f, 1 - d);
+            const float glow = std::max(0.f, 1 - d);
+            const float a = std::min(1.f, glow * glow * 1.4f + star);
+            const float hot = std::min(1.f, std::max(0.f, 1 - d * 1.8f) + star * .6f);
+            const uint32_t r = 255, g = static_cast<uint32_t>(150 + 105 * hot), b = static_cast<uint32_t>(40 + 200 * hot);
+            c.pixels[static_cast<size_t>(j) * c.width + i] = rgba(r << 16 | g << 8 | b, static_cast<uint32_t>(a * 255));
+        }
+}
+bool tracerSegment(float age, float stop, float& nearEnd, float& farEnd) {
+    nearEnd = farEnd = 0;
+    if (!std::isfinite(age) || !std::isfinite(stop) || age < 0 || age > TracerLook::life || !(stop > 0))
+        return false;
+    const float head = std::min(stop, age * TracerLook::speed);
+    const float tail = std::max(0.f, age * TracerLook::speed - TracerLook::streak);
+    if (tail >= stop)
+        return false; // all of it has reached what it hit
+    nearEnd = tail;
+    farEnd = std::max(head, std::min(stop, tail + .05f));
+    return farEnd > nearEnd;
+}
+AimDelta aimDelta(Vec3 a, Vec3 b, Vec3 right, Vec3 down, Vec3 forward) {
+    AimDelta o;
+    if (!finite(a) || !finite(b) || !finite(right) || !finite(down) || !finite(forward) || length(a) < .5f || length(b) < .5f)
+        return o;
+    a = normalized(a), b = normalized(b);
+    constexpr float deg = 180.f / 3.14159265f;
+    const auto yaw = [&](Vec3 v) { return std::atan2(dot(v, right), dot(v, forward)); };
+    const auto pitch = [&](Vec3 v) { return std::asin(std::clamp(-dot(v, down), -1.f, 1.f)); };
+    float y = yaw(b) - yaw(a);
+    if (y > 3.14159265f)
+        y -= 2 * 3.14159265f;
+    else if (y < -3.14159265f)
+        y += 2 * 3.14159265f;
+    o.yawRight = y * deg;
+    o.pitchUp = (pitch(b) - pitch(a)) * deg;
+    o.ok = std::isfinite(o.yawRight) && std::isfinite(o.pitchUp);
+    return o;
 }
 bool sameView(const MenuView& a, const MenuView& b) {
     for (int i = 0; i < static_cast<int>(Toggle::count); ++i)

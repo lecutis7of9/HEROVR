@@ -1224,6 +1224,17 @@ void showLine(const GameView& gv, int hand, Vec3 anchor) {
     play.beamColor = 0xffe8e8e8;
     play.beamUntil = GetTickCount64() + 60;
 }
+// His strike sample behind SEH, in a function of its own (MSVC C2712: no __try where C++ objects unwind).
+DWORD guardedStrikeSample(his::Strikes* s) {
+    DWORD r = 9999;
+    SM1_TRY {
+        r = strikeSample(s);
+    }
+    SM1_EXCEPT {
+        r = 9999;
+    }
+    return r;
+}
 void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
     const Power& p = powerOf(hero);
     play.cooldown = p.cooldown;
@@ -1233,13 +1244,7 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         return;
     }
     his::Strikes s{};
-    DWORD r = 9999;
-    SM1_TRY {
-        r = strikeSample(&s);
-    }
-    SM1_EXCEPT {
-        r = 9999;
-    }
+    const DWORD r = guardedStrikeSample(&s);
     if (r || s.magic != 0x53535452 || s.bytes != sizeof(s)) {
         logLine("SpidyStrikeSample %lu magic %08x bytes %u", static_cast<unsigned long>(r), s.magic, s.bytes);
         fPowers.turnOff("SpidyStrikeSample did not answer");
@@ -1931,17 +1936,20 @@ void gradeImage(EyeChain& c) {
         logLine("COLOR: first eye image graded (%ux%u, view format %d)", static_cast<unsigned>(desc.Width), desc.Height,
                 static_cast<int>(target));
 }
+void guardedGrade(EyeChain& c) { // SEH in a function of its own (MSVC C2712)
+    SM1_TRY {
+        gradeImage(c);
+    }
+    SM1_EXCEPT {
+        colorFail("a fault in the colour pass");
+    }
+}
 void tryGrade(XrSwapchain sc) {
     AcquireSRWLockExclusive(&colorLock);
     auto it = chains.find(sc);
     if (it != chains.end() && it->second.his && it->second.usable && it->second.acquired < it->second.images.size() &&
         fColor.on) {
-        SM1_TRY {
-            gradeImage(it->second);
-        }
-        SM1_EXCEPT {
-            colorFail("a fault in the colour pass");
-        }
+        guardedGrade(it->second);
     }
     ReleaseSRWLockExclusive(&colorLock);
 }

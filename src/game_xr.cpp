@@ -10151,8 +10151,9 @@ DWORD WINAPI run(void*) {
                                           "Spider-Sense on your vest - it connects by itself");
                         }
                     }
-                    // 0.0.76 SUIT PROBE (suit_probe.hpp): read-only, at most once a second while on; off reads nothing.
-                    suit_probe::frame(player.record, suitProbeNow.load() == 1,
+                    // 0.0.76 SUIT PROBE 1 + 2 (suit_probe.hpp): read-only, throttled (PROBE 1 once a second, PROBE 2
+                    // a few objects a frame); off reads nothing.
+                    suit_probe::frame(player.hero, player.record, suitProbeNow.load() == 1,
                                       [](const char* line) { consoleLine(line); });
                     {
                         std::lock_guard lock(telemetry);

@@ -19,6 +19,7 @@
 // Every failure is logged to %APPDATA%\HERO VR SM1\layer.log and turns off only its own feature.
 #include "spidy/sm1_addon.hpp"
 #include "spidy/sm1_combat.hpp"
+#include "spidy/sm1_grapple.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
@@ -122,6 +123,19 @@ static_assert(offsetof(Strikes, landed) == scan::strikeLandedAt && offsetof(Stri
 static_assert(offsetof(MotionData, position) == scan::motionPositionAt &&
               offsetof(MotionData, grounded) == scan::motionGroundedAt && sizeof(MotionData) == scan::motionDataBytes);
 static_assert(offsetof(XrData, head) == scan::xrHeadAt && offsetof(XrData, hands) == scan::xrHandsAt);
+struct Aim { // include/spidy/game_swing.hpp (AimKind: 0 none, 1 anchor, 2 air, 3 blocked, 4 prop, ...)
+    uint32_t kind;
+    float radius;
+    Vec3 point, normal;
+};
+struct AimData { // SpidyAimSample (spidy_ray_bridge.dll): version 2, 128 bytes; status 2 while previews come
+    uint32_t magic, version, bytes, status;
+    int64_t sequence;
+    uint64_t serial;
+    Aim hands[2];
+    Aim gaze;
+};
+static_assert(sizeof(Aim) == 32 && sizeof(AimData) == 128 && offsetof(AimData, hands) == 32);
 struct Test {
     uint32_t magic = 0x53505554, version = 1, bytes = sizeof(Test), type = 1;
     uint64_t victim{}, damager{};
@@ -357,6 +371,23 @@ bool rayReady() {
         punchTest = reinterpret_cast<his::Call>(GetProcAddress(m, "SpidyPunchTest"));
     }
     return strikeSample && punchTest;
+}
+// His per-hand web previews (SpidyAimSample: what a grip press would hit; sampling keeps them coming for 250 ms).
+his::Call aimSample = nullptr;
+bool sampleAims(his::AimData& d) {
+    if (!aimSample)
+        if (HMODULE m = GetModuleHandleA(spidyRayModule))
+            aimSample = reinterpret_cast<his::Call>(GetProcAddress(m, "SpidyAimSample"));
+    if (!aimSample)
+        return false;
+    DWORD r = 9999;
+    SM1_TRY {
+        r = aimSample(&d);
+    }
+    SM1_EXCEPT {
+        r = 9999;
+    }
+    return r == 0 && d.magic == 0x5357414d && d.version >= 1 && d.bytes >= 96 && d.status == 2;
 }
 
 // --- The hand-over on his two movement exports (MinHook on the exported functions) ---------------------------------
@@ -643,7 +674,13 @@ struct Play {
     int beamHand = 1;
     Vec3 beamDirGame{};
     float beamLength = 0;
+    float beamWidth = .06f;
     uint32_t beamColor = 0xffffffff;
+    // CAPTAIN AMERICA's and DAREDEVIL's grapple (sm1_grapple.hpp)
+    bool jump = false; // his "jump" action (A), read only
+    GrappleDriver grapple;
+    bool grappling = false; // our velocity goes to his movement module
+    std::string grappleState = "GRAPPLE: READY";
     std::string powerState = "READY";
     std::string suitNotice;    // the holo's suit line after a hero pick
     ULONGLONG suitNoticeUntil = 0;
@@ -770,8 +807,17 @@ void readInputs() {
         play.trigger[i] = play.grip[i] = 0;
         play.stick[i] = {};
     }
+    play.jump = false;
     auto list = knownActions();
     for (auto& [action, info] : list) {
+        if (info.role == Role::jump) { // his "jump" has no subaction paths (CONFIRMED in his 0.7.0 xr_session.cpp)
+            XrActionStateGetInfo g{XR_TYPE_ACTION_STATE_GET_INFO};
+            g.action = action;
+            XrActionStateBoolean b{XR_TYPE_ACTION_STATE_BOOLEAN};
+            if (next.getBoolean(session.handle, &g, &b) == XR_SUCCESS && b.isActive && b.currentState)
+                play.jump = true;
+            continue;
+        }
         for (int side = 0; side < 2; ++side) {
             if (!info.sides[side])
                 continue;
@@ -1148,6 +1194,36 @@ void endFlight(const char* why) {
     play.flight = {};
     logLine("flight ended: %s", why);
 }
+void endGrapple(const char* why) {
+    play.grapple.stop();
+    if (!play.grappling)
+        return;
+    if (motionReady) {
+        const DWORD r = submitOurs(false, {});
+        if (r && r != 2002)
+            logLine("grapple end: SpidyMotionSubmit %lu", static_cast<unsigned long>(r));
+    }
+    AcquireSRWLockExclusive(&motionLock);
+    handover.release();
+    ReleaseSRWLockExclusive(&motionLock);
+    play.grappling = false;
+    logLine("grapple ended: %s", why);
+}
+// The line from the hand to the anchor: drawn with the beam's quad (our own picture, never his web).
+void showLine(const GameView& gv, int hand, Vec3 anchor) {
+    const Vec3 d = anchor - gv.handPos[hand];
+    const float len = length(d);
+    if (!(len > .3f) || !play.headKnown)
+        return;
+    const Vec3 dir = d / len;
+    Vec3 local{dot(dir, gv.headRight), -dot(dir, gv.headDown), -dot(dir, gv.headForward)};
+    play.beamDirGame = normalized(play.head.orientation.rotate(local));
+    play.beamLength = len;
+    play.beamHand = hand;
+    play.beamWidth = .025f;
+    play.beamColor = 0xffe8e8e8;
+    play.beamUntil = GetTickCount64() + 60;
+}
 void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
     const Power& p = powerOf(hero);
     play.cooldown = p.cooldown;
@@ -1219,6 +1295,7 @@ void firePower(int hand, uint32_t hero, const Live& live, Vec3 xrFrom) {
         play.beamLength = beamLength;
         play.beamHand = eyes ? -1 : hand;
         play.beamColor = p.color;
+        play.beamWidth = .06f;
         play.beamUntil = GetTickCount64() + 180;
         (void)xrFrom;
     }
@@ -1365,6 +1442,66 @@ void step() {
         endFlight("flight turned off");
     }
 
+    // CAPTAIN AMERICA's and DAREDEVIL's grapple (never with the flight: those heroes do not fly)
+    const bool grappleHero = nowHero == hero_modes::captainAmerica || nowHero == hero_modes::daredevil;
+    const bool grappleArmed = config.heroes && !nowSpiderMan && grappleHero && live.grapple && fFlight.on && motionReady &&
+                              !play.flying;
+    if (grappleArmed) {
+        const GameView gv = gameView();
+        GrappleInput in;
+        in.allowed = gv.ok && !menu.open;
+        in.captain = nowHero == hero_modes::captainAmerica;
+        for (int i = 0; i < 2; ++i) {
+            in.grip[i] = play.holoHands >> i & 1u ? 0.f : play.grip[i];
+            in.trigger[i] = play.holoHands >> i & 1u ? 0.f : play.trigger[i];
+        }
+        his::AimData aims{};
+        if ((play.grip[0] > .3f || play.grip[1] > .3f) && sampleAims(aims))
+            for (int i = 0; i < 2; ++i) {
+                in.aimOk[i] = true;
+                in.aimKind[i] = aims.hands[i].kind;
+                in.aimPoint[i] = aims.hands[i].point;
+                in.aimNormal[i] = aims.hands[i].normal;
+            }
+        his::MotionData d{};
+        const bool moved = sampleOurs(d) && d.steps;
+        in.body = moved ? d.position : gv.headPos;
+        in.velocity = moved ? d.achievedVelocity : Vec3{};
+        in.grounded = moved && d.grounded;
+        in.jump = play.jump;
+        in.dt = dt;
+        if (!moved)
+            in.allowed = false;
+        const GrappleStep g = play.grapple.step(in);
+        if (g.started)
+            logLine("grapple: line from hand %d to (%.1f, %.1f, %.1f)", g.line, static_cast<double>(g.anchor.x),
+                    static_cast<double>(g.anchor.y), static_cast<double>(g.anchor.z));
+        play.grappleState = g.started ? "GRAPPLE: PULLING" : g.missed ? "GRAPPLE: NOTHING TO HOOK" : g.jumped ? "GRAPPLE: JUMP OUT"
+                            : g.cancelled ? "GRAPPLE: COAST" : play.grappleState;
+        if (g.drive) {
+            if (!play.grappling) {
+                AcquireSRWLockExclusive(&motionLock);
+                handover.take();
+                ReleaseSRWLockExclusive(&motionLock);
+                play.grappling = true;
+            }
+            const DWORD r = submitOurs(true, g.velocity);
+            if (r) {
+                logLine("grapple: SpidyMotionSubmit %lu", static_cast<unsigned long>(r));
+                endGrapple(r == 2002 ? "his movement module is not running (2002)" : "his movement module refused");
+                if (r == 2001)
+                    fFlight.turnOff("SpidyMotionSubmit refused the command (2001)");
+            }
+        } else if (play.grappling) {
+            endGrapple(g.jumped ? "jump out" : "arrived");
+            play.grappleState = "GRAPPLE: READY";
+        }
+        if (g.line >= 0 && gv.ok && fDraw.on)
+            showLine(gv, g.line, g.anchor);
+    } else if (play.grappling || play.grapple.driving()) {
+        endGrapple("grapple turned off");
+    }
+
     // powers (the enemy scan runs only while a hero with powers is picked)
     const bool fighting = !nowSpiderMan && live.powers && fPowers.on;
     if (fighting && targetsUsable())
@@ -1376,7 +1513,7 @@ void step() {
         for (int i = 0; i < 2; ++i) {
             const bool down = play.trigger[i] > .5f;
             if (down && !play.triggerWas[i] && play.handOut[i] &&
-                (play.grip[i] < .5f || !live.heroWebs || flightArmed) && play.cooldown <= 0)
+                (play.grip[i] < .5f || (!live.heroWebs && !grappleArmed) || flightArmed) && play.cooldown <= 0)
                 firePower(i, nowHero, live, aim[i].position);
         }
     }
@@ -1392,6 +1529,7 @@ void step() {
     mi.heroWebs = live.heroWebs;
     mi.flightArmed = flightArmed;
     mi.flying = play.flying;
+    mi.grappleArmed = grappleArmed;
     for (int i = 0; i < 2; ++i) {
         mi.grip[i] = play.grip[i] > .5f;
         mi.handOut[i] = play.handOut[i];
@@ -1436,6 +1574,9 @@ MenuView currentView(uint32_t hero, const Config& config, const Live& live) {
     v.status[0] = std::string("LAYER ON ") + addonVersion;
     v.status[1] = !fFlight.on ? "FLIGHT: OFF (SEE LOG)" : !motionReady ? "FLIGHT: WAITING FOR SPIDY" :
                   play.flying ? "FLIGHT: FLYING" : flies(hero) ? "FLIGHT: HOLD A GRIP" : "FLIGHT: NOT THIS HERO";
+    if ((hero == hero_modes::captainAmerica || hero == hero_modes::daredevil) && config.heroes && live.grapple && fFlight.on &&
+        motionReady)
+        v.status[1] = play.grappleState;
     v.status[2] = !fPowers.on ? "POWERS: OFF (SEE LOG)" : rayReady() ? "POWERS: " + play.powerState : "POWERS: WAITING FOR SPIDY";
     v.status[3] = fDraw.on ? "DRAWING: ON" : "DRAWING: OFF";
     v.status[4] = !suitIdOf(hero) ? "HERO SUITS: GAME'S OWN" :
@@ -1503,7 +1644,8 @@ void addOns(const XrFrameEndInfo* info, XrSpace space, std::vector<XrComposition
             locate(session.aimSpace[play.beamHand], space, info->displayTime, from);
         if (session.beam.released)
             quads.push_back(quadLayer(session.beam, space,
-                                      beamPose(from.position, play.beamDirGame, play.beamLength, play.head.position), .06f,
+                                      beamPose(from.position, play.beamDirGame, play.beamLength, play.head.position),
+                                      play.beamWidth,
                                       play.beamLength));
     }
 }

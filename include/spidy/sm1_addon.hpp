@@ -136,6 +136,7 @@ struct Live {
     int damage = 100;      // power_damage=100 (25..200 %)
     int menuSize = 100;    // menu_size=100 (60..160 %)
     bool scan = true;      // sm1scan=1 (the read-only research scan, sm1_scan.hpp)
+    bool grapple = true;   // grapple=1 (CAPTAIN AMERICA and DAREDEVIL, sm1_grapple.hpp)
 };
 Live parseLive(std::string_view text);
 // The file the add-on writes when there is none: every switch with its one-sentence subtext.
@@ -151,6 +152,7 @@ inline constexpr LiveSwitch liveSwitches[] = {
     {"power_damage", "How hard the powers hit, 25 to 200 percent; applies live, no restart."},
     {"menu_size", "The wrist menu's size, 60 to 160 percent; applies live, no restart."},
     {"sm1scan", "A read-only research scan that only reads game memory and writes logs to %APPDATA%\\HERO VR SM1\\scan for the Reports zip (it pauses at 0 and stops by itself after about 15 minutes); applies live, no restart."},
+    {"grapple", "CAPTAIN AMERICA and DAREDEVIL grapple instead of web swinging: hold a grip and pull its trigger to fire a line at a wall or roof, let go of the grip to coast, press A to jump out; applies live, no restart."},
 };
 // The live.txt lines missing from an older file (a switch added in a later build), with their subtexts; empty when
 // none is missing. The layer appends them so every switch is in the file the player edits.
@@ -181,7 +183,7 @@ bool aimedAt(Vec3 from, Vec3 dir, Vec3 target, float maxDegrees, float range);
 inline constexpr float aimDegrees = 15, outstretched = .42f; // a hand this far from the head fires (nearer: his scan/suit power)
 
 // --- Input: the bindings his actions suggested, and what the layer hides from him ------------------------------
-enum class Role { none, trigger, grip, stick, gripPose, aimPose };
+enum class Role { none, trigger, grip, stick, gripPose, aimPose, jump }; // jump: his "jump" action (A), read only
 struct Binding {
     Role role = Role::none;
     int side = -1; // 0 left, 1 right
@@ -194,6 +196,7 @@ struct MaskInput {
     bool spiderMan = true, powers = true, heroWebs = true;
     bool flightArmed = false; // a flying hero with flight on: the grips are his take-off and boost
     bool flying = false;      // in the air on our flight: the left stick and the right stick's up/down are ours
+    bool grappleArmed = false; // CAPTAIN AMERICA / DAREDEVIL with grapple on: the grips are ours, and a held grip's trigger
     bool grip[2]{}, handOut[2]{};
 };
 struct Mask {

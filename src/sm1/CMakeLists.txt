@@ -1,7 +1,7 @@
 # HERO VR 0.0.76 SM1: Mulder's Heroes add-on for iilyn's Spider-Man VR mod (Spidy by Ilya Mezerowsky, GPL-3.0,
 # https://github.com/IlyaMez/SpidyVR). Separate files: nothing here builds into or changes his mod.
 # sm1_scan_core.cpp: the research scan's pure part (anchors, joint hash, RTTI names), tested here.
-add_library(herovr_sm1_core STATIC sm1_core.cpp sm1_scan_core.cpp sm1_combat.cpp)
+add_library(herovr_sm1_core STATIC sm1_core.cpp sm1_scan_core.cpp sm1_combat.cpp sm1_grapple.cpp)
 # spidy_core: the SM2 build's own code reused as is (pixel_font, the outfits, and the wrist click: wrist_hud::Toggle).
 target_link_libraries(herovr_sm1_core PUBLIC spidy_core)
 target_include_directories(herovr_sm1_core PUBLIC "${PROJECT_SOURCE_DIR}/include")

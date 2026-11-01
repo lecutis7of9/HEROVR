@@ -162,6 +162,8 @@ Live parseLive(std::string_view text) {
             l.menuSize = std::clamp(static_cast<int>(n), 60, 160);
         else if (key == "sm1scan" && parseBool(value, b))
             l.scan = b;
+        else if (key == "grapple" && parseBool(value, b))
+            l.grapple = b;
     });
     return l;
 }
@@ -169,7 +171,8 @@ std::string liveText(const Live& l) {
     std::string s = "# Mulder's Heroes add-on (HERO VR) for iilyn's Spider-Man VR mod: the add-on's live switches.\n"
                     "# Read again every 2 seconds while the game runs.\n";
     const std::string values[] = {l.powers ? "1" : "0", l.heroWebs ? "1" : "0", l.beams ? "1" : "0",
-                                  std::to_string(l.damage), std::to_string(l.menuSize), l.scan ? "1" : "0"};
+                                  std::to_string(l.damage), std::to_string(l.menuSize), l.scan ? "1" : "0",
+                                  l.grapple ? "1" : "0"};
     static_assert(sizeof(values) / sizeof(values[0]) == sizeof(liveSwitches) / sizeof(liveSwitches[0]),
                   "one value per live switch");
     int i = 0;
@@ -328,6 +331,8 @@ Binding classify(std::string_view path) {
         b.role = Role::gripPose;
     else if (path == "input/aim/pose")
         b.role = Role::aimPose;
+    else if (path == "input/a/click" && b.side == 1)
+        b.role = Role::jump; // his "jump" action (CONFIRMED in his 0.7.0 controller_layout.hpp)
     else
         return {};
     return b;
@@ -347,6 +352,12 @@ Mask maskFor(const MaskInput& in) {
         m.stick[0] = true;
         m.stickY[1] = true;
     }
+    if (in.grappleArmed)
+        for (int i = 0; i < 2; ++i) {
+            m.grip[i] = true;
+            if (in.grip[i])
+                m.trigger[i] = true;
+        }
     if (!in.spiderMan) {
         if (!in.heroWebs)
             m.grip[0] = m.grip[1] = true;

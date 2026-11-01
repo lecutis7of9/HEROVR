@@ -2,6 +2,7 @@
 // Mezerowsky, GPL-3.0, https://github.com/IlyaMez/SpidyVR). Made by Agent Mulder.
 #include "spidy/sm1_addon.hpp"
 #include "spidy/sm1_combat.hpp"
+#include "spidy/sm1_grapple.hpp"
 #include "spidy/sm1_scan.hpp"
 #include "spidy/wrist_hud.hpp"
 
@@ -200,7 +201,7 @@ void inputTests() {
     check(classify("/user/hand/left/input/thumbstick").role == Role::stick, "stick");
     check(classify("/user/hand/left/input/grip/pose").role == Role::gripPose, "grip pose");
     check(classify("/user/hand/right/input/aim/pose").role == Role::aimPose, "aim pose");
-    check(classify("/user/hand/right/input/a/click").role == Role::none, "buttons are his");
+    check(classify("/user/hand/right/input/b/click").role == Role::none, "other buttons are his (A is read, never hidden)");
     check(classify("/user/head/input/trigger/value").role == Role::none, "only hands");
     MaskInput mi;
     Mask m = maskFor(mi);
@@ -529,6 +530,66 @@ void combatTests() {
     check(lim.allow(7, 0, .5) && !lim.allow(7, .2, .5) && lim.allow(7, .6, .5) && lim.allow(8, .2, .5),
           "one enemy is hit at most once per period");
 }
+void grappleTests() {
+    Binding j = classify("/user/hand/right/input/a/click");
+    check(j.role == Role::jump && j.side == 1, "right A is his jump");
+    check(classify("/user/hand/left/input/a/click").role == Role::none, "a left a/click (Index X) is not the jump");
+    check(parseLive("grapple=0").grapple == false && parseLive("").grapple, "the grapple switch, on by default");
+    check(missingLive("powers=1\n").find("grapple=1") != std::string::npos, "an older live.txt gets grapple=1");
+    MaskInput mi;
+    mi.spiderMan = false;
+    mi.grappleArmed = true;
+    mi.grip[1] = true;
+    Mask m = maskFor(mi);
+    check(m.grip[0] && m.grip[1] && m.trigger[1] && !m.trigger[0], "armed: grips hidden, a held grip's trigger hidden");
+    GrappleDriver g;
+    GrappleInput in;
+    in.allowed = true;
+    in.body = {0, 0, 0};
+    in.dt = .016f;
+    in.grip[1] = 1;
+    in.aimOk[1] = true;
+    in.aimKind[1] = aimAnchor;
+    in.aimPoint[1] = {0, 10, -20};
+    in.aimNormal[1] = {0, 0, 1};
+    GrappleStep s = g.step(in); // grip only
+    check(!s.started && !s.drive, "a grip alone fires nothing");
+    in.trigger[1] = 1;
+    s = g.step(in);
+    check(s.started && s.drive && s.line == 1 && s.velocity.z < 0 && s.velocity.y > 0, "grip + trigger pulls to the wall");
+    for (int i = 0; i < 10; ++i)
+        s = g.step(in);
+    check(s.drive && length(s.velocity) > 5, "the pull keeps going");
+    in.jump = true;
+    s = g.step(in);
+    check(s.jumped && s.drive && s.velocity.y >= 9, "A jumps out upward");
+    in.jump = false;
+    for (int i = 0; i < 60 && g.driving(); ++i)
+        s = g.step(in);
+    check(!g.driving(), "the coast ends");
+    GrappleDriver h;
+    GrappleInput miss = in;
+    miss.aimKind[1] = 2; // air
+    miss.trigger[1] = 0;
+    h.step(miss);
+    miss.trigger[1] = 1;
+    s = h.step(miss);
+    check(s.missed && !s.drive, "open air does not hook");
+    GrappleDriver k;
+    GrappleInput c = in;
+    c.trigger[1] = 0;
+    k.step(c);
+    c.trigger[1] = 1;
+    k.step(c);
+    for (int i = 0; i < 5; ++i)
+        k.step(c);
+    c.grip[1] = 0;
+    s = k.step(c);
+    check(s.cancelled && s.drive, "letting go of the grip coasts on");
+    c.allowed = false;
+    s = k.step(c);
+    check(!s.drive && !k.driving(), "not allowed: stops at once");
+}
 } // namespace
 
 int main() {
@@ -546,6 +607,7 @@ int main() {
     suitTests();
     scanTests();
     combatTests();
+    grappleTests();
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

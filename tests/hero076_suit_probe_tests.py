@@ -29,7 +29,7 @@ class SuitProbe(unittest.TestCase):
         self.assertIn('std::atomic<uint32_t> %s{0};' % ATOMIC, g)
     def test_wiring(self):
         g = src('src/game_xr.cpp')
-        call = g.index('suit_probe::frame(player.record, suitProbeNow.load() == 1,')
+        call = g.index('suit_probe::frame(player.hero, player.record, suitProbeNow.load() == 1,')
         self.assertLess(call, g.index('std::lock_guard lock(telemetry);', call))  # never under the lock
         self.assertIn('src/suit_probe.cpp) # 0.0.76 SUIT PROBE', src('CMakeLists.txt'))
         self.assertIn('add_test(NAME suit_probe COMMAND spidy_suit_probe_tests)', src('CMakeLists.txt'))
@@ -39,6 +39,25 @@ class SuitProbe(unittest.TestCase):
             self.assertNotIn(bad, c)
         self.assertEqual(c.count('std::memcpy('), 1)  # the one SEH-guarded read
         self.assertIn('__except (EXCEPTION_EXECUTE_HANDLER)', c)
+        for bad in ('ofstream', 'WriteFile', 'DeleteFile', 'CreateFile', 'std::filesystem::remove', 'fopen'):
+            self.assertNotIn(bad, c)  # sm2scan.json is only read (ifstream)
+        self.assertIn('std::ifstream in(place, std::ios::binary);', c)
+    def test_probe2_throttled(self):
+        h = src('include/spidy/suit_probe.hpp')
+        for line in ('uint32_t words = 0x40;', 'uint32_t depth = 5;', 'uint32_t objects = 6000;', 'uint32_t perStep = 16;'):
+            self.assertIn(line, h)
+        c = src('src/suit_probe.cpp')
+        self.assertIn('now - passEnded < 2000', c)  # a pause between passes
+        self.assertIn('now - lastLook >= 15000', c)  # a missing sm2scan.json is looked for every 15 s, no more
+        self.assertIn('size > (16u << 20)', c)  # never a huge file
+    def test_probe2_reads_the_real_scan(self):
+        # tools/sm2_suits/sm2scan.py's suits block, in the shape the C++ Table::fromScan reads (tests/suit_probe_tests.cpp)
+        h = src('include/spidy/suit_probe.hpp')
+        for key in ('s.str("name")', 's.str("item")', 's.str("id")', 's.get("models")', 's.get("mask")', 'm.str("path")'):
+            self.assertIn(key, h)
+        py = src('tools/sm2_suits/sm2scan.py')
+        for key in ("'item'", "'models'", "'mask'", "'path'"):
+            self.assertIn(key, py)
     def test_pure_header(self):
         h = src('include/spidy/suit_probe.hpp')
         self.assertNotIn('#include "', h)

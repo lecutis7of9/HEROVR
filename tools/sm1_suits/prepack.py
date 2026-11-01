@@ -157,6 +157,22 @@ def prepack(suits_dir, out_dir):
     return report
 
 
+def write_license(suits_dir, out_dir):
+    """Models/SM1Suits/license.txt: which suit each pack comes from, with that suit's own license.txt (same credits)."""
+    parts = ['HERO VR SM1 suit packs (made by Agent Mulder with tools/sm1_suits/prepack.py).',
+             'Each pack is made from one HERO VR suit model below and keeps its credit and licence. Changes: the mesh is',
+             'kept, the textures are resized to at most 1024 px and BC1-compressed; the launcher then fits it to',
+             "Spider-Man Remastered's own suit on the player's PC. See THIRD-PARTY-MODELS.md.", '']
+    for h in SM1_SUITS:
+        lic = os.path.join(suits_dir, h['suit'], 'license.txt')
+        text = open(lic, encoding='utf-8', errors='replace').read().strip() if os.path.isfile(lic) else '(license.txt missing)'
+        parts += ['== %s.hsm1 (%s) from Models/Suits/%s ==' % (h['id'], h['name'], h['suit']), text, '']
+    with open(os.path.join(out_dir, 'license.txt'), 'w', encoding='utf-8', newline='\r\n') as f:
+        f.write('\n'.join(parts))
+
+
 if __name__ == '__main__':
     for line in prepack(sys.argv[1], sys.argv[2]):
         print(line)
+    write_license(sys.argv[1], sys.argv[2])
+    print('license.txt written')

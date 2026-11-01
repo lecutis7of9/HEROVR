@@ -11,12 +11,17 @@ v0.0.75.1 (efac6a8). **Built, not yet tried in the game.**
   registered for your Windows user only while Spider-Man 1 plays. His graphics, performance and anti-aliasing are
   untouched.
 - **Wrist hero menu:** opens like SM2 (right hand on the left wrist, pull the right trigger; the same click closes
-  it), with the SM2 hologram look; right stick and right trigger pick. Hero select, outfits (names and artists; no
-  hero models in Spider-Man 1 yet), the holo card.
+  it), with the SM2 hologram look; right stick and right trigger pick. Hero select, outfits (names and artists), the holo card.
 - **Flight:** Iron Man, Superman, Thor and Green Lantern hold a grip to take off and stay up; the left stick steers
   where you look.
 - **Hero powers** hit the enemy his combat has ringed, with a beam.
 - The Spider-Man 1 page lists which hero features Spider-Man 1 has and which not yet.
+- **Hero suits in Spider-Man 1 (new, not yet seen in the game):** the Spider-Man 1 page's Install suits button fits
+  the ten heroes to the game's own suit on your PC and adds them to the game's Suits menu (the way Overstrike suit
+  mods work; Overstrike / ALERT by Tkachov). Pick them in the Suits menu; the wrist menu does not switch them yet.
+  Remove suits puts the game's files back exactly; Game info only reads the game and saves a report. Close the game
+  first; each takes effect the next time the game starts. iilyn's files are never touched.
+  See [docs/SM1-SUITS-0.0.76.md](docs/SM1-SUITS-0.0.76.md).
 - Everything in v0.0.75.1 (the freeze fix on load) is included.
 - Credits: iilyn (Ilya Mezerowsky) for SpidyVR; the model artists; made by Agent Mulder.
 

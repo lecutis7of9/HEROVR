@@ -54,6 +54,11 @@ SOUND_FILES = ['Sounds/' + k for k in USER_SOUNDS]
 RELEASE075_MODEL_FILES = ['Models/Vehicle/Motorcycle/model.glb', 'Models/Vehicle/Motorcycle/layout.json',
                           'Models/Vehicle/Motorcycle/license.txt', 'Models/Vehicle/Motorcycle/Handlebars/model.glb',
                           'Models/Vehicle/Motorcycle/Handlebars/license.txt']
+# 0.0.76 SM1 SUITS: the ten heroes pre-converted for Spider-Man 1 (tools/sm1_suits/prepack.py from Models/Suits, not in
+# git); the launcher's Install hero suits button fits them to the game's suit on the player's PC.
+RELEASE076_SM1_PACKS = ['Models/SM1Suits/%s.hsm1' % i for i in (
+    'herovr_ironman', 'herovr_daredevil', 'herovr_hulk', 'herovr_batman', 'herovr_wolverine', 'herovr_superman',
+    'herovr_punisher', 'herovr_captainamerica', 'herovr_thor', 'herovr_greenlantern')] + ['Models/SM1Suits/license.txt']
 DOC_FILES = ['READ-ME-FIRST.txt', 'SHA256SUMS.txt']
 # Test build 5: the zip's one top folder holds the installer and the notes; the mod files sit under payload/
 # (the installer copies them into the mod folder the player plays from; tools/run_game_vr.py reads the marker).

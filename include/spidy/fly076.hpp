@@ -19,6 +19,12 @@
 //   keeps rolling (a full turn and on); let go, the roll stays where it is (no snap back).
 // - While flying, A, B and Y never reach the game and the realistic / legacy flips take no A, left stick or arm swing
 //   from you: no control does two things.
+// - HOVER FLIGHT (0.0.76 test, pt1616u: "you just keep flying... you shouldn't move unless you use the joystick or your
+//   arm. you should still be able to hover and strafe, go up or down and rotate your body freely"): nothing held and no
+//   arm pointed, the velocity comes to exactly zero and the hero hangs in place (no drift, no cruise). The left stick
+//   moves him the way the head faces (forward / back) and strafes (left / right); the right stick's up / down climbs and
+//   sinks; an arm pointed flies him along it. The left stick full forward is still SUPERSONIC (never lower, never
+//   grounded). In.hover turns it on (both games send it); without it the 0.0.76 cruise above stays as it was.
 // live.txt fly_classic 1 puts the 0.0.75 flight back (grip to enter, the poses, the triggers' thrust).
 // Nothing here reads or writes game memory: the mod's own state and its existing movement command (CONFIRMED by
 // construction; no CANDIDATE address).
@@ -51,16 +57,21 @@ inline Vec3 unitOr(Vec3 v, Vec3 fallback) {
 
 // ---- The new flight's bits in the second flight word (game_swing::Command::reserved7[1], fly_feel's) ----
 // fly_feel uses bits 0-2; an older swing module ignores these (and flies the 0.0.75 way).
-enum : uint32_t { bitNew = 1u << 8, bitBrake = 1u << 9, bitHoldWay = 1u << 10, throttleShift = 16 };
-inline uint32_t pack(bool on, bool brake, bool holdWay, float throttle) {
+// HOVER FLIGHT: bit 11 the hover flight, bits 3-7 the climb stick (-15..15 around 16; 0 from an older VR module: no
+// climb). Bits 3-7, 11-15 and 24-31 were unused by fly_feel and by the 0.0.76 word.
+enum : uint32_t { bitNew = 1u << 8, bitBrake = 1u << 9, bitHoldWay = 1u << 10, bitHover = 1u << 11, riseShift = 3,
+                  throttleShift = 16 };
+inline uint32_t pack(bool on, bool brake, bool holdWay, float throttle, bool hover = false, float rise = 0) {
     if (!on)
         return 0u;
     const uint32_t t = static_cast<uint32_t>(std::lround(axis(throttle) * 127.f) + 128) & 255u;
-    return bitNew | (brake ? bitBrake : 0u) | (holdWay ? bitHoldWay : 0u) | (t << throttleShift);
+    const uint32_t r = static_cast<uint32_t>(std::lround(axis(rise) * 15.f) + 16) & 31u;
+    return bitNew | (brake ? bitBrake : 0u) | (holdWay ? bitHoldWay : 0u) | (t << throttleShift) |
+           (hover ? bitHover | (r << riseShift) : 0u);
 }
 struct Word {
-    bool on{}, brake{}, holdWay{};
-    float throttle{};
+    bool on{}, brake{}, holdWay{}, hover{};
+    float throttle{}, rise{};
 };
 inline Word unpack(uint32_t w) {
     Word o;
@@ -70,6 +81,9 @@ inline Word unpack(uint32_t w) {
     o.brake = (w & bitBrake) != 0;
     o.holdWay = (w & bitHoldWay) != 0;
     o.throttle = std::clamp((static_cast<float>((w >> throttleShift) & 255u) - 128.f) / 127.f, -1.f, 1.f);
+    o.hover = (w & bitHover) != 0;
+    const uint32_t r = (w >> riseShift) & 31u;
+    o.rise = o.hover && r ? std::clamp((static_cast<float>(r) - 16.f) / 15.f, -1.f, 1.f) : 0.f;
     return o;
 }
 
@@ -310,7 +324,24 @@ struct In {
     Vec3 want{};           // steerWay, world (zero: none)
     Vec3 velocity{};       // the body's now
     Vec3 wall{};           // a wall just ahead (its normal out of it; zero: none)
+    // HOVER FLIGHT (above): on, no cruise - only the sticks and a pointed arm move him; nothing held, he hangs still.
+    bool hover{};
+    Vec3 move{};           // the left stick, world, level, at most 1 long: forward / back the head's way, strafe across
+    float rise{};          // the climb stick, -1..1 (up +)
 };
+// The stick's share past its dead zone, 0..1 on each side (NaN: 0).
+inline float pastDead(float v) {
+    v = axis(v);
+    return std::fabs(v) > stickDead ? std::copysign((std::fabs(v) - stickDead) / (1 - stickDead), v) : 0.f;
+}
+inline Vec3 pastDead(Vec3 v) {
+    if (!finite(v))
+        return {};
+    const float n = length(v);
+    if (!(n > stickDead))
+        return {};
+    return v * (std::min(1.f, (n - stickDead) / (1 - stickDead)) / n);
+}
 struct Out {
     bool drive{}, flying{}, moving{}, supersonic{}, coasting{}, resumed{}, tookOff{}, landed{};
     Vec3 velocity{};
@@ -322,6 +353,7 @@ class Flight {
     static constexpr float accelPerSpeed = 1.6f, brakeFactor = 2.5f, coastDecel = 10.f;
     static constexpr float liftSpeed = 6.f, liftSeconds = .6f, landAfter = .5f, suspendMost = 10.f;
     static float dropSpeed(float top) { return std::max(4.f, top * .4f); }
+    static constexpr float climbShare = .6f, stillBelow = .05f;
     static float share(float throttle) {
         const float t = axis(throttle);
         if (std::fabs(t) < stickDead)
@@ -378,6 +410,8 @@ class Flight {
             descending_ = true;
         if (descending_ && finite(in.want) && dot(in.want, Vec3{0, 1, 0}) > .7f)
             descending_ = false; // an arm up climbs again
+        if (descending_ && in.hover && pastDead(in.rise) > .5f)
+            descending_ = false; // HOVER FLIGHT: the climb stick up climbs again
         const bool boosting = std::isfinite(in.boost) && in.boost > 1.f;
         const bool sonic = boosting && !descending_ && !in.brake && lift_ <= 0;
         const float sonicTop = std::min(top * (boosting ? in.boost : 1.f), std::max(top, in.sonicTop));
@@ -395,7 +429,8 @@ class Flight {
         float accel = top * accelPerSpeed;
         if (lift_ > 0) {
             lift_ = std::max(0.f, lift_ - dt);
-            const Vec3 target = Vec3{0, liftSpeed, 0} + way * (goal * .25f);
+            // HOVER FLIGHT: straight up (no drift ahead); it then comes to rest where it rose to.
+            const Vec3 target = Vec3{0, liftSpeed, 0} + (in.hover ? Vec3{} : way * (goal * .25f));
             v_ = v_ + limited(target - v_, std::max(accel, liftSpeed * 4) * dt);
             speed_ = std::max(0.f, dot(v_, way));
             o.how = "RISE";
@@ -408,6 +443,43 @@ class Flight {
             v_ = v_ + limited(Vec3{} - v_, accel * brakeFactor * dt);
             speed_ = std::max(0.f, dot(v_, way));
             o.how = "STOP";
+        } else if (in.hover) {
+            // HOVER FLIGHT: the sticks and a pointed arm say where; nothing held, he comes to rest and hangs still.
+            const Vec3 up{0, 1, 0};
+            const Vec3 move = pastDead(Vec3{in.move.x, 0, in.move.z});
+            const float rise = pastDead(in.rise);
+            const Vec3 arm = finite(in.want) && length(in.want) > .5f ? normalized(in.want) : Vec3{};
+            Vec3 target{};
+            if (sonic) {
+                // SUPERSONIC: along the pointed arm, else the stick's / head's level way; never lower (a way down
+                // is levelled), only the climb stick's up adds height.
+                Vec3 d = length(arm) > .5f ? arm : length(move) > .1f ? move : Vec3{in.look.x, 0, in.look.z};
+                d = unitOr(d, unitOr(Vec3{in.look.x, 0, in.look.z}, {0, 0, -1}));
+                if (d.y < 0)
+                    d = unitOr(Vec3{d.x, 0, d.z}, unitOr(Vec3{in.look.x, 0, in.look.z}, {0, 0, -1}));
+                target = d * sonicTop + up * (std::max(0.f, rise) * top * climbShare);
+            } else {
+                target = limited(move * top + arm * top + up * (rise * top * climbShare), top);
+            }
+            if (finite(in.wall) && length(in.wall) > .5f) {
+                const Vec3 n = normalized(in.wall);
+                if (dot(target, n) < 0)
+                    target = target - n * dot(target, n);
+            }
+            const bool still = length(target) < .01f;
+            const float rate = still ? accel * brakeFactor : sonic ? std::max(accel, top * accelPerSpeed * 2) : accel;
+            v_ = v_ + limited(target - v_, rate * dt);
+            if (still && length(v_) < stillBelow)
+                v_ = {}; // exactly still: no drift
+            if (sonic && v_.y < 0)
+                v_.y = 0; // SUPERSONIC never lowers you
+            if (length(v_) > 1.f)
+                heading_.set(v_);
+            speed_ = length(v_);
+            hoverStill_ = still;
+            hoverDown_ = rise < 0;
+            o.coasting = !sonic && speed_ > top + .01f;
+            o.how = sonic ? "SUPERSONIC" : still ? (length(v_) > .01f ? "STOP" : "HOVER") : "STICK";
         } else {
             // Speed along the heading; SUPERSONIC and its coast change only the speed, never the way.
             if (speed_ > goal + .01f && !sonic) {
@@ -430,8 +502,11 @@ class Flight {
         o.top = sonic ? sonicTop : std::max(top, goal);
         // Down onto the ground: a descent always lands; a cruise only when it heads down or has stopped. The dash
         // never lands you.
-        if (in.grounded && air_ >= landAfter && lift_ <= 0 && !sonic &&
-            (descending_ || way.y < .2f || speed_ < 2.f) && v_.y <= .5f) {
+        // HOVER FLIGHT: a descent, the climb stick down, or resting on the ground lands; skimming along it does not.
+        const bool downNow = in.hover && !descending_ && !in.brake && lift_ <= 0
+                                 ? hoverDown_ || hoverStill_
+                                 : descending_ || way.y < .2f || speed_ < 2.f;
+        if (in.grounded && air_ >= landAfter && lift_ <= 0 && !sonic && (descending_ || downNow) && v_.y <= .5f) {
             land();
             ++landings_;
             o = {};
@@ -457,11 +532,12 @@ class Flight {
         flying_ = descending_ = false;
         v_ = {};
         speed_ = lift_ = air_ = suspended_ = 0;
+        hoverStill_ = hoverDown_ = false;
         heading_ = {};
     }
 
   private:
-    bool flying_{}, descending_{};
+    bool flying_{}, descending_{}, hoverStill_{}, hoverDown_{};
     Vec3 v_{};
     float speed_{}, lift_{}, air_{}, suspended_{};
     Heading heading_;

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <string>
 
 using namespace spidy;
 using namespace spidy::fly076;
@@ -122,6 +123,74 @@ void flightTests() {
     check(finite(o.velocity), "NaN never spreads");
 }
 
+void hoverTests() {
+    // HOVER FLIGHT (pt1616u): no stick, no arm - exactly still; the sticks move, strafe, climb; SUPERSONIC never lowers
+    Flight f;
+    In in;
+    in.hover = true;
+    in.seconds = dt;
+    in.speed = 2;
+    in.top = 16;
+    in.grounded = true;
+    in.look = {0, 0, -1};
+    in.enter = true;
+    Out o = f.update(in);
+    check(o.tookOff && o.velocity.y > 0 && std::fabs(o.velocity.z) < .01f, "hover: takes off straight up");
+    in.enter = false;
+    in.grounded = false;
+    in.airborne = true;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(f.flying() && length(o.velocity) == 0 && std::string(o.how) == "HOVER", "hover: then hangs exactly still");
+    in.velocity = {3, -2, 5}; // the game nudged him: it still comes to rest
+    for (int i = 0; i < 90; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(length(o.velocity) == 0, "hover: any leftover speed dies out, no drift");
+    in.move = {.7f, 0, -.7f};
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.x > 9 && o.velocity.z < -9 && std::fabs(o.velocity.y) < .01f, "hover: the stick moves and strafes");
+    in.move = {};
+    in.rise = 1;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.y > 9 && std::fabs(o.velocity.x) < .5f, "hover: the climb stick climbs");
+    in.rise = -1;
+    in.wall = {0, 1, 0}; // the ground just under: it never pushes into it
+    for (int i = 0; i < 90; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.y > -.01f, "hover: never into a wall");
+    in.wall = {};
+    in.rise = 0;
+    in.want = {0, 0, -1};
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.z < -14, "hover: an arm pointed flies along it");
+    in.want = {0, -.6f, -.8f};
+    in.boost = 2.5f;
+    in.sonicTop = 40;
+    float lowest = 1e9f;
+    for (int i = 0; i < 90 * 2; ++i) {
+        o = f.update((in.velocity = o.velocity, in));
+        lowest = std::min(lowest, o.velocity.y);
+    }
+    check(o.supersonic && o.velocity.z < -38 && lowest > -.01f, "hover SUPERSONIC: fast, never lower");
+    in.grounded = true;
+    o = f.update((in.velocity = o.velocity, in));
+    check(f.flying() && !o.landed, "hover SUPERSONIC never grounds you");
+    in.boost = 1;
+    in.want = {};
+    for (int i = 0; i < 90 * 3 && f.flying(); ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(!f.flying() && o.landed, "hover: let go on the ground, he lands");
+    // the word: hover and the climb stick ride the free bits; an older word has neither
+    const Word w = unpack(pack(true, false, false, .5f, true, -1));
+    check(w.on && w.hover && std::fabs(w.rise + 1) < .01f && std::fabs(w.throttle - .5f) < .01f, "the word carries hover");
+    const Word old = unpack(pack(true, true, false, 0));
+    check(old.on && old.brake && !old.hover && old.rise == 0, "an older word: no hover, no climb");
+    check((pack(true, true, true, 1, true, 1) & 7u) == 0, "never fly_feel's bits 0-2");
+}
+
 void rollTests() {
     BodyRoll r;
     const float pi = 3.14159265f;
@@ -153,6 +222,7 @@ void pushOffTests() {
 int main() {
     startTests();
     flightTests();
+    hoverTests();
     rollTests();
     pushOffTests();
     if (failures) {

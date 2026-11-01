@@ -127,7 +127,7 @@ namespace Sm2VrLauncher
             string mode;
             file.TryGetValue("mode", out mode);
             mode = (mode ?? "").ToLowerInvariant();
-            if (mode == "host") { mpState.Text = "Hosting: start the game (PLAY VR) and your friend sees you in his list."; mpState.ForeColor = Theme.Good; }
+            if (mode == "host") { mpState.Text = "Hosting: start the game (PLAY VR) and everyone sees your server in their list."; mpState.ForeColor = Theme.Good; }
             else if (mode == "join")
             {
                 string h, at;
@@ -181,7 +181,7 @@ namespace Sm2VrLauncher
 
         internal static string MpHeadText(int lan, int internet, bool inetOn, string problem)
         {
-            string n = lan + internet == 0 ? "none yet (a friend presses HOST and starts his game)" : (lan + internet) + (lan + internet == 1 ? " game" : " games");
+            string n = lan + internet == 0 ? "none yet (anyone who presses HOST and starts the game shows up here)" : (lan + internet) + (lan + internet == 1 ? " game" : " games");
             string where = !inetOn ? " - this network only" : problem.Length > 0 ? " - this network only: " + problem : "";
             return "Servers: " + n + where;
         }

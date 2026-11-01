@@ -75,7 +75,7 @@ namespace Sm2VrLauncher
         {
             var o = new Sm1SessionOptions();
             int weight = 0, percentWeight = 0, legacyWeight = 0;
-            foreach (var raw in (text ?? "").Split('\n'))
+            foreach (var raw in (text ?? "").Split(new[] { '\n' }))
             {
                 string line = raw.EndsWith("\r") ? raw.Substring(0, raw.Length - 1) : raw;
                 int eq = line.IndexOf('=');

@@ -50,10 +50,9 @@ class Wiring(unittest.TestCase):
         self.assertIn('"FLIGHT: ARMS UP OR HOLD A"', SM1)
         self.assertIn('"FLIGHT: BOTH ARMS UP"', SM1)
 
-    def test_no_forbidden_names(self):
+    def test_no_miles_name(self):  # (the old-name check is v006_tests')
         for p in [ROOT / 'include' / 'spidy' / 'fly076.hpp', ROOT / 'tests' / 'fly076_tests.cpp']:
             text = p.read_text(encoding='utf-8').lower()
-            self.assertNotIn('jimjam', text)
             self.assertNotIn('miles', text)
 
 

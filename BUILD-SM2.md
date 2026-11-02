@@ -2884,3 +2884,17 @@ buildings stayed; only the light went.
   game's AA at TAA. Kept from §72: live.txt vr_ss (off by default) and the report's vr_aa_last / jitter_log_last.
   The two runs' numbers (fps, GPU wait, TAA cost, motion easing, mip bias): docs/VISUAL-0.0.76.md "SPIDY TAA TUNE".
   Tests: hero076_spidy_taa_tests Tune (509bdc9's constants, no RCAS or 10-bit history; vr_ss; the report).
+
+## 74. Version 0.0.76 A-depth: SPIDY TAA's history reprojected with the eyes' depth (vr_taa_depth, auto)
+
+  include/spidy/taa_depth.hpp (new): historyShift (the eye's travel since last pair, in last pair's view, over the
+  lens), reproject (eye_history's H with a depth d: q = H(u, v, 1) / d + shift), matches (10% of the larger, finite,
+  0..1), pitchFloats (a copy footprint checked: one subresource, 256-aligned pitch, <= 256 MB), active (0 off, 1 on,
+  2 auto: on once taa_watch::depthVerdict is CONFIRMED). src/native_eye_gpu.cpp: taaDepthCopy in depthBarrier (the
+  planar and D32 paths, subresource 0 DEPTH_WRITE -> COPY_SOURCE -> DEPTH_WRITE into a DEFAULT buffer, 3 a eye
+  under depthLock, used once its list has executed: depthExecuted / depthReset); taaShader's TAA_DEPTH variant (t2 /
+  t3 root SRVs, b1 constants; clamped indices) as history.taaDepth with history.depthRoot (prepareTaaDepth);
+  drawHistory uses it when both eyes' this-pair and shown-pair depths are there, else the old PSO. The blend and
+  the clip are unchanged (vr_aa.hpp untouched). Faults: taaDepthStop (1 footprint, 2 buffer, 3 pass) for the
+  session. Export SpidyVrTaaDepth (0-2, refused 4607); live_settings vr_taa_depth (live, never persisted).
+  taa_watch thisBuild 1. Tests: core `A-depth`, hero076_taa_depth_tests.

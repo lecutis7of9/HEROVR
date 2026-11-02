@@ -117,6 +117,7 @@
 #include "spidy/sm1style.hpp"
 #include "spidy/vr_aa.hpp"
 #include "spidy/taa_watch.hpp"
+#include "spidy/taa_depth.hpp"
 #include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
@@ -36847,6 +36848,74 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         log.bothEyes = 200;
         log.frames = 120;
         check(tw::depthVerdict(log) == tw::candidate, "under 200 pairs: CANDIDATE");
+    });
+    test("0.0.76 A-depth: a point moved into last pair's eye with its depth, the 10% check, the copy's footprint", [] {
+        namespace td = spidy::taa_depth;
+        namespace eh = spidy::eye_history;
+        // World: x right, y up, z forward; an eye's rows right, down, forward (as the game's), its place at 12..14.
+        auto make = [](float yaw, float px, float py, float pz) {
+            eh::EyeView e;
+            const float c = std::cos(yaw), s = std::sin(yaw);
+            const float r[3] = {c, 0, -s}, d[3] = {0, -1, 0}, f[3] = {s, 0, c};
+            for (int i = 0; i < 3; ++i) {
+                e.world[i] = r[i];
+                e.world[4 + i] = d[i];
+                e.world[8 + i] = f[i];
+            }
+            e.world[12] = px;
+            e.world[13] = py;
+            e.world[14] = pz;
+            e.world[15] = 1;
+            e.tangents = {-1.1f, .9f, -1.f, 1.05f};
+            return e;
+        };
+        auto project = [](const eh::EyeView& e, const float* w, float nearM, float& u, float& v, float& d) {
+            const float rel[3] = {w[0] - e.world[12], w[1] - e.world[13], w[2] - e.world[14]};
+            float x = 0, y = 0, z = 0;
+            for (int i = 0; i < 3; ++i) {
+                x += e.world[i] * rel[i];
+                y += e.world[4 + i] * rel[i];
+                z += e.world[8 + i] * rel[i];
+            }
+            const auto& t = e.tangents;
+            u = (x / z - t[0]) / (t[1] - t[0]);
+            v = (t[3] + y / z) / (t[3] - t[2]);
+            d = nearM / z;
+        };
+        const auto previous = make(.02f, 0, 1.6f, 0), current = make(.05f, .3f, 1.65f, .4f);
+        const float nearM = .02f;
+        std::array<float, 9> h{};
+        std::array<float, 3> k{};
+        check(eh::historyReprojection(previous, current, h) && td::historyShift(previous, current, k), "both sums");
+        for (auto& x : k)
+            x /= nearM;
+        const float world[3] = {1.5f, 2.f, 6.f};
+        float u, v, d, pu, pv, pd;
+        project(current, world, nearM, u, v, d);
+        project(previous, world, nearM, pu, pv, pd);
+        const auto place = td::reproject(h, k, u, v, d);
+        check(place.inFront && std::abs(place.u - pu) < 1e-4f && std::abs(place.v - pv) < 1e-4f &&
+                  std::abs(place.depth - pd) < 1e-6f,
+              "the point lands where last pair's eye saw it, at the depth it had there");
+        const auto sky = td::reproject(h, k, u, v, 0);
+        check(sky.inFront && sky.depth == 0 && std::abs(sky.u - pu) > 1e-3f, "sky (d 0): the turn only");
+        const auto near2 = td::reproject(h, k, u, v, d, 2.f);
+        check(std::abs(near2.depth - 2 * pd) < 1e-6f, "last pair's near plane scales its depth");
+        check(td::matches(pd, pd * 1.09f) && !td::matches(pd, pd * 1.2f) && !td::matches(pd, NAN) &&
+                  !td::matches(pd, -1) && !td::matches(pd, 2) && td::matches(0, 0) && !td::matches(0, .01f),
+              "within 10% of the larger, finite, 0..1; sky matches sky only");
+        const uint64_t pitch = 2688 * 4 + 256 - (2688 * 4) % 256;
+        check(td::pitchFloats(2688 * 4, 2688, 2880, 2688, 2880, 2688ull * 4 * 2880) == 2688,
+              "the eye's own size, aligned: its pitch in floats");
+        check(td::pitchFloats(2688 * 4, 2688, 2880, 2688, 2880, 2688ull * 4 * 2880 - 1) == 0 &&
+                  td::pitchFloats(2688 * 4 + 4, 2688, 2880, 2688, 2880, 1ull << 26) == 0 &&
+                  td::pitchFloats(2688 * 4, 1344, 2880, 2688, 2880, 2688ull * 4 * 2880) == 0 &&
+                  td::pitchFloats(pitch, 2688, 2880, 2688, 2880, td::largest + 1) == 0 &&
+                  td::pitchFloats(0, 0, 0, 0, 0, 0) == 0,
+              "short, unaligned, another size, too big or empty: refused");
+        check(!td::active(0, true) && td::active(1, false) && !td::active(2, false) && td::active(2, true) &&
+                  !td::active(3, true) && td::automatic == 2,
+              "0 off, 1 on, 2 auto: on only once the eye depth is CONFIRMED");
     });
     test("0.0.76 SPIDY TAA: the modes, the option bits, the eased history share and the clip", [] {
         namespace va = spidy::vr_aa;

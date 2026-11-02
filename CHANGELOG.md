@@ -6,6 +6,16 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **A-depth (TEST 0.0.76 A-depth): SPIDY TAA's history follows the eyes' depth.** Until now each eye's history was
+  turned with the head's turn only, so windows and fine building edges that shift against the far city as your head
+  moves were clipped away and started again (the aliasing and the swing smear). Now each pixel is put back in the
+  world with the eye's own depth (fmt 19 at the eye's size), moved into last pair's eye and looked up there; if last
+  pair's depth there disagrees, the pixel was hidden before and starts fresh. The blend (0.9 still / 0.6 moving) and
+  the colour clip are 509bdc9's, unchanged. Nothing to set: live.txt `vr_taa_depth` is `auto` by default - it turns
+  on by itself once the TAA WATCH depth log (200 pairs) has CONFIRMED the eye depth, and stays off otherwise; `on`
+  forces it, `off` is 509bdc9's history (live, no restart). A pair without both eyes' depth is turned as before, by
+  itself. Moving cars and people are still kept clean by the clip only (no motion vectors). About 190 MB of VRAM
+  while on.
 - **TAA WATCH (read-only, in every 0.0.76 A/B/C test build):** the console prints a line every 10 seconds with the
   eye fps, the GPU time a pair (the game's two eye jobs, timed at their own begin and end markers, and SPIDY TAA's own
   pass) and the still / moving split, including how many pairs with a still head were treated as moving (over 20%

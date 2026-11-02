@@ -52,6 +52,9 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
   0.0.76 JITTER FIX: the game's unseen head views no longer get their stored TAA jitter fed back in (which doubled it
   and flipped it upside down); they get none. live.txt, live, no restart: `vr_game_jitter = keep` (c71a59c's doubled
   jitter, to compare), `vr_jitter = off` (the eyes' jitter fixed). The console's "JITTER LOG" lists each view's jitter.
+  0.0.76 A-depth: the eyes' TAA history is moved with each eye's own depth, so windows and building edges keep their
+  history while your head moves; live.txt `vr_taa_depth` is `auto` (on once the eye depth is CONFIRMED), `on` or
+  `off` (509bdc9's), live, no restart.
   0.0.76 POSE CHECK: the console's "POSE CHECK render vs submit" says whether each eye was shown with the exact pose
   it was drawn with (degrees and mm per eye; read-only, no setting).
 - **Window-edge lights fixed:** lit windows no longer go dark at the outer edges of each eye.

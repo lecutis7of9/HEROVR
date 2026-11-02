@@ -47,6 +47,24 @@ Encodings (registry beside the game log's [Settings]): TextureQuality 0 Low (023
 - DLAA per eye: the eyes never pass through Streamline (SL WATCH), so not possible.
 - SMAA / other AA encodings, Level of Detail 4 (Very High): never seen beside a log; not offered.
 
+## A-depth (TEST 0.0.76 A-depth): SPIDY TAA's history moved with the eyes' depth
+
+| switch (live.txt, live, no restart) | default | what it does |
+| --- | --- | --- |
+| `vr_taa_depth` | `auto` | `auto` (2): on by itself once the TAA WATCH depth log has CONFIRMED the eye depth (200 pairs, both eyes' jobs, never the flat view), off until then; `on` (1): now; `off` (0): 509bdc9's history, the head's turn only |
+
+How: in depthBarrier, each eye's fmt 19 eye-sized depth (the one the TAA WATCH log follows, leaving DEPTH_WRITE in
+that eye's job) is copied to a buffer (3 a eye, its own ring; the SEE-THROUGH ring untouched). The history pass's
+TAA_DEPTH variant reads this pair's depth d (reversed-Z, infinite far: distance = near / d) at the pixel, rebuilds
+the point (eye_history's reprojection divided by d, plus the eye's travel since last pair in last pair's view,
+taa_depth::historyShift), projects it into last pair's eye and compares the depth it should have there with last
+pair's own depth (2 x 2 around the place): within 10% of the larger, the history is used as before (Catmull-Rom,
+YCoCg clip, 0.9 / 0.6 unchanged); none agree, the pixel was hidden last pair and starts again from this pair. Sky
+(d = 0) is turned as before. A pair missing either eye's depth (or the switch off, or the pass not built) uses the
+old pass, counted in TAA WATCH `depth N%` (depthPairs / depthMissed). A refused footprint or a failed buffer or
+pass turns A off for the session (the console's "A-depth off for the session"), never the TAA or VR.
+Not covered: things moving by themselves (cars, people) - no motion vectors; the clip still handles them.
+
 ## FAR SHAKE (the far background hopping while the head turns)
 
 | switch (live.txt, live, no restart) | default | what it does |

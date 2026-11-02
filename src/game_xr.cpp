@@ -13426,6 +13426,11 @@ DWORD WINAPI run(void*) {
                                     lp.worldYaw = spidy::mp::yawOf(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
                                     // 0.0.74 FLIGHT POSE (fix 27): Player 2 leans too (the lean in the level frame)
                                     lp.leanUp = back.rotate(fly_lean::upOf(saved->flyLean));
+                                    // 0.0.76 WORN SUIT (CANDIDATE): the GAME SUIT tail - the item id of the Peter suit the
+                                    // suit probe's WORN SUIT says he wears (0 until it knows: sent as not known). Drawing
+                                    // PLAYER 2 in it comes after a run confirms the tracker.
+                                    lp.sendGameSuit = true;
+                                    lp.gameSuitId = spidy::suit_probe::wornSuitId();
                                     const uint8_t suitId = spidy::mp::suitIdOfSlot(wornSuitSlot.load());
                                     const uint8_t hero = static_cast<uint8_t>(std::min<uint32_t>(heroNow(), 31));
                                     spidy::mp::PoseState mine = spidy::mp::fromLocal(lp, hero, suitId, spidy::mp::suitHashOf(suitId),
@@ -13482,6 +13487,26 @@ DWORD WINAPI run(void*) {
                                     mpSession->publish(mine);
                                     // Draw what came back.
                                     const spidy::mp::SessionView v = mpSession->view();
+                                    // 0.0.76 WORN SUIT (CANDIDATE): the suit PLAYER 2's packets say he wears, told when it
+                                    // changes (not drawn yet).
+                                    {
+                                        static uint64_t mpFriendSuit = 0;
+                                        static bool mpFriendSuitTold = false;
+                                        const uint64_t fs = v.visible && v.state.hasGameSuit && v.state.gameSuitKnown ? v.state.gameSuitId : 0;
+                                        if (fs != mpFriendSuit || (fs && !mpFriendSuitTold)) {
+                                            mpFriendSuit = fs;
+                                            mpFriendSuitTold = fs != 0;
+                                            if (fs) {
+                                                char t[96];
+                                                std::snprintf(t, sizeof t, "%016llx", static_cast<unsigned long long>(fs));
+                                                const std::string name = spidy::suit_probe::suitNameOfItem(fs);
+                                                const std::string line = std::string("MP: PLAYER 2's worn suit (received, CANDIDATE, not drawn yet): ") +
+                                                                         (name.empty() ? "an item not in this PC's sm2scan.json" : name) +
+                                                                         " item 0x" + t;
+                                                consoleLine(line);
+                                            }
+                                        }
+                                    }
                                     const Vec3 lookLocal = back.rotate(rendered.headPose.orientation.rotate(Vec3{0, 0, -1}));
                                     mpFollow.update(spidy::mp::yawOf(lookLocal), mpDt);
                                     if (v.visible && v.alpha > .01f) {

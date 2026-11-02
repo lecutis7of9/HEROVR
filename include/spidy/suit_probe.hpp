@@ -515,6 +515,19 @@ struct Table {
             return t;
         return find(id);
     }
+    // 0.0.76 WORN SUIT: per suit (as names): the suit's own item id (the "id" sm2scan gives its reward .config:
+    // the id the MP packet's GAME SUIT tail sends) and whether it is Peter's (its "characters" name kSpiderManPeter
+    // and no other hero) - the worn-suit tracker only takes a model id one Peter suit alone has.
+    std::vector<uint64_t> items;
+    std::vector<uint8_t> peter;
+    // The one Peter suit whose own model id this is (not shared, not the other hero's), or -1.
+    int peterSuitOfModel(uint64_t id) const {
+        const Target* t = find(id);
+        if (!t || t->kind != kindModel || t->suits.size() != 1)
+            return -1;
+        const uint16_t s = t->suits[0];
+        return s < peter.size() && peter[s] ? static_cast<int>(s) : -1;
+    }
     std::vector<uint16_t> watchSuits; // the watchNames found in the scan
     std::vector<uint64_t> watchIds;   // their model and mask ids (each path's own id too), sorted
     bool watched(uint64_t id) const { return std::binary_search(watchIds.begin(), watchIds.end(), id); }
@@ -558,6 +571,16 @@ struct Table {
                 t.names.push_back(name);
                 const std::string item = s.str("item");
                 add(hexId(s.str("id")), kindLoadout, item, index);
+                {
+                    const uint64_t given = hexId(s.str("id"));
+                    t.items.push_back(given ? given : (item.empty() ? 0 : assetId(item)));
+                    bool peter = false, other = false;
+                    if (const Json* c = s.get("characters"); c && c->type == Json::isArray)
+                        for (const auto& who : c->items)
+                            if (who.type == Json::isString)
+                                (who.text == "kSpiderManPeter" ? peter : other) = true;
+                    t.peter.push_back(peter && !other ? 1 : 0);
+                }
                 if (const Json* models = s.get("models"); models && models->type == Json::isArray)
                     for (const auto& m : models->items)
                         if (m.type == Json::isObject)
@@ -1556,6 +1579,117 @@ private:
     State state_{idle};
 };
 
+// 0.0.76 WORN SUIT (CANDIDATE; the suit run 7 lead): which Peter suit he wears, from PROBE 4's list at
+// record+0x080 -> +0x028. In run 7 that list took the suit picked in each menu (Advanced 2.0 a second after menu 2
+// closed; Classic while menu 3 was open, gone a second after it closed; Hybrid a second after menu 4 closed) and
+// was later rebuilt without it. So: a model id that ONE Peter suit alone has (sm2scan's "characters"
+// kSpiderManPeter; never one of the other hero's suits, never an id suits share) that was not in the list when the menu
+// opened and is not the suit already worn, seen on two passes in a row, is the new worn suit: one seen in the
+// menu (still there on its last pass) is taken as the menu closes; one seen after the close (within windowMs)
+// is taken then and wins. It is kept (sticky) until a later menu brings a different one - a rebuild that drops it
+// changes nothing. Before any menu, one Peter suit alone in the list (two passes) is taken as the start suit.
+// Pure: no reads; fed PROBE 4's passes and the menu flag.
+class WornSuit {
+public:
+    static constexpr uint64_t menuSettleMs = 500; // as PROBE 5: the menu counts as open / closed after this long
+    static constexpr uint64_t windowMs = 30000;   // a new suit this long after a menu close is that close's
+    // Every frame: is the game paused (its menu), the probe's clock (ms since on).
+    void menu(bool paused, uint64_t ms) {
+        if (paused != rawPaused)
+            rawPaused = paused, rawSince = ms;
+        if (paused == inMenu || ms - rawSince < menuSettleMs)
+            return;
+        inMenu = paused;
+        pending = 0;
+        if (inMenu) {
+            before = last; // what the list held when the menu opened
+            windowOpen = false;
+            menuPick = 0;
+            lastMenu.clear();
+        } else {
+            ++exits;
+            exitAt = ms;
+            windowOpen = true;
+            // the menu's pick, if its last pass still had it
+            atExit = menuPick && std::binary_search(lastMenu.begin(), lastMenu.end(), menuPick) ? menuPick : 0;
+        }
+    }
+    // Every PROBE 4 pass that is done: the ids it found (any order, repeats fine). A line when the worn suit changes.
+    std::vector<std::string> pass(const Table& suits, const std::vector<uint64_t>& found, uint64_t ms) {
+        std::vector<std::string> lines;
+        std::vector<uint64_t> ids;
+        for (uint64_t id : found)
+            if (suits.peterSuitOfModel(id) >= 0)
+                ids.push_back(id);
+        std::sort(ids.begin(), ids.end());
+        ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+        if (atExit) { // the menu's pick, taken as it closed
+            const uint64_t id = atExit;
+            atExit = 0;
+            if (id != model_ && suits.peterSuitOfModel(id) >= 0)
+                take(suits, id, "seen in the menu, taken as it closed", ms, lines);
+        }
+        if (windowOpen && ms - exitAt > windowMs)
+            windowOpen = false;
+        uint64_t pick = 0;
+        const char* how = nullptr;
+        if (inMenu || windowOpen) {
+            std::vector<uint64_t> fresh;
+            for (uint64_t id : ids)
+                if (id != model_ && !std::binary_search(before.begin(), before.end(), id))
+                    fresh.push_back(id);
+            if (fresh.size() == 1)
+                pick = fresh[0], how = inMenu ? nullptr : "after the menu closed";
+        } else if (!exits && !model_ && ids.size() == 1) {
+            pick = ids[0], how = "at the start, before any menu";
+        }
+        if (inMenu)
+            lastMenu = ids;
+        else
+            last = ids;
+        if (!pick || pick != pending) { // two passes in a row
+            pending = pick;
+            return lines;
+        }
+        pending = 0;
+        if (inMenu) {
+            menuPick = pick; // taken when the menu closes (if its last pass still has it)
+            return lines;
+        }
+        windowOpen = false;
+        take(suits, pick, how, ms, lines);
+        return lines;
+    }
+    int suit() const { return suit_; }
+    uint64_t model() const { return model_; }
+    uint64_t item() const { return item_; } // what the MP packet's GAME SUIT tail sends (0: not known yet)
+    unsigned changeCount() const { return changes; }
+    bool menuOpen() const { return inMenu; }
+    void reset() { *this = WornSuit{}; }
+
+private:
+    void take(const Table& suits, uint64_t id, const char* how, uint64_t ms, std::vector<std::string>& lines) {
+        const int s = suits.peterSuitOfModel(id);
+        if (s < 0)
+            return;
+        suit_ = s, model_ = id;
+        item_ = static_cast<size_t>(s) < suits.items.size() ? suits.items[s] : 0;
+        ++changes;
+        std::string line = "WORN SUIT: " + suits.names[s] + " " + Watch::hex(id) + " (model id; item " + Watch::hex(item_) +
+                           " sent to PLAYER 2; " + how;
+        if (exits)
+            line += ", menu exit " + std::to_string(exits) + (ms >= exitAt ? " + " + std::to_string((ms - exitAt) / 1000) + " s" : "");
+        line += "; CANDIDATE)";
+        lines.push_back(line);
+    }
+    bool rawPaused{}, inMenu{}, windowOpen{};
+    uint64_t rawSince{}, exitAt{};
+    unsigned exits{}, changes{};
+    std::vector<uint64_t> last, before, lastMenu;
+    uint64_t pending{}, menuPick{}, atExit{}, model_{}, item_{};
+    int suit_{-1};
+};
+
 // PROBE 5's console lines: the set of look ids (not places: those move) when two passes agree and it changed;
 // what was added and removed (one place each, at most maxLines), and the worn suit they name.
 class Watch5 {
@@ -1810,5 +1944,11 @@ struct Cost {
 // Each new console line goes to log. Never throws; off reads nothing.
 // menu: the game is paused (its menu; PROBE 5 ties the suit changes to the menu exits).
 void frame(uint64_t hero, uint64_t record, bool on, bool menu, void (*log)(const char*)) noexcept;
+
+// 0.0.76 WORN SUIT (CANDIDATE): the item id of the Peter suit WornSuit says he wears (0: not known yet, or the probe
+// is off) - what the MP packet's GAME SUIT tail sends. Any thread.
+uint64_t wornSuitId() noexcept;
+// The scan's name of a suit's item id ("" when the loaded sm2scan.json does not have it). Any thread.
+std::string suitNameOfItem(uint64_t item) noexcept;
 
 } // namespace spidy::suit_probe

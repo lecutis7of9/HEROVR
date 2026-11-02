@@ -75,7 +75,7 @@ class SuitProbe(unittest.TestCase):
                   'std::vector<Found> settledPlaces() const', 'inline std::string stamped(', 'struct Cost {'):
             self.assertIn(s, h)
         c = src('src/suit_probe.cpp')
-        for s in ('containerFrame(record, now, log);', 'now - containerStarted < 1000', 'now - costTold >= 30000',
+        for s in ('containerFrame(record, menu, now, log);', 'now - containerStarted < 1000', 'now - costTold >= 30000',
                   'void (*log)(const char*) = stampedLog;', 'QueryPerformanceCounter(&t1);',
                   'auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };'):
             self.assertIn(s, c)
@@ -142,3 +142,37 @@ class SuitProbe(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WornSuitAndAutoScan(unittest.TestCase):
+    """0.0.76 WORN SUIT (pt1639u/pt1640u): the user never runs sm2scan.py by hand - the launcher runs it in the
+    background; the probe's PROBE 4 list gives a sticky worn Peter suit (CANDIDATE) that rides in the MP packet."""
+    def test_tracker_in_header(self):
+        h = src('include/spidy/suit_probe.hpp')
+        for s in ('class WornSuit', 'int peterSuitOfModel(uint64_t id) const', 'std::vector<uint8_t> peter;',
+                  'std::vector<uint64_t> items;', '"WORN SUIT: " + suits.names[s]', 'uint64_t wornSuitId() noexcept;',
+                  'who.text == "kSpiderManPeter"', 't->suits.size() != 1'):
+            self.assertIn(s, h)
+    def test_wired_read_only(self):
+        c = src('src/suit_probe.cpp')
+        for s in ('worn.menu(menu, ms);', 'worn.pass(scanTable, ids, ms)', 'containerFrame(record, menu, now, log);',
+                  'wornItem.store(worn.item(), std::memory_order_relaxed);', 'lookForNewer(log);', 'worn.reset();'):
+            self.assertIn(s, c)
+        # a load (a new record) keeps the worn suit: no reset where the container starts again
+        cf = c[c.index('void containerFrame('):c.index('// PROBE 5 (the last suit run)')]
+        self.assertNotIn('worn.reset()', cf)
+    def test_mp_packet(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('lp.sendGameSuit = true;\n', g)
+        self.assertIn('lp.gameSuitId = spidy::suit_probe::wornSuitId();', g)
+        self.assertLess(g.index('lp.gameSuitId = spidy::suit_probe::wornSuitId();'), g.index('spidy::mp::fromLocal(lp,'))
+        self.assertIn("MP: PLAYER 2's worn suit (received, CANDIDATE, not drawn yet)", g)
+    def test_launcher_auto_scan(self):
+        cs = src('tools/launcher/src/SuitScan.cs')
+        for s in (r'tools\sm2_suits\sm2scan.py', 'ModFiles.BundledPython(root)', 'IsBackground = true',
+                  'p.WaitForExit(TimeoutMs)', 'p.Kill()', '"sm2scan.json"', '".tmp"', '"\\"sm2scan 2\\""',
+                  'Scanning your suits (first time only', 'CreateNoWindow = true', 'Suit scan failed: '):
+            self.assertIn(s, cs)
+        m = src('tools/launcher/src/MainForm.cs')
+        self.assertIn('SuitScan.StartIfNeeded(root, gamePath, t => sessionLog.Line(t));', m)
+        self.assertTrue(os.path.exists(os.path.join(ROOT, 'tools', 'sm2_suits', 'sm2scan.py')))

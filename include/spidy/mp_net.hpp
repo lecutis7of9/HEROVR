@@ -37,8 +37,9 @@
 //   'S', game suit version 1, flags (1 known: the suit probe knows the worn suit), 0, then the worn suit's
 //   loadout asset id u64 (the scan's id, e.g. Advanced 2.0 BC46538AB3E876D2; 0 when not known). The receiver
 //   will look the id up in his own game archives (include/spidy/sm2_model.hpp, tools/sm2_suits/sm2model.py) to
-//   draw the friend in the same suit; the .model layouts that needs are CANDIDATE, and nothing fills the id yet
-//   (the probe's place is CANDIDATE too). Still version 1: every older build ignores it (a 0.0.73-0.0.75 PROPS
+//   draw the friend in the same suit; the .model layouts that needs are CANDIDATE. game_xr fills it from the suit
+//   probe's WORN SUIT tracker (suit_probe::wornSuitId: the worn Peter suit's item id; CANDIDATE until a run
+//   confirms it) and logs the friend's when it changes; drawing him in it comes after that confirm. Still version 1: every older build ignores it (a 0.0.73-0.0.75 PROPS
 //   reader drops a tail that is not 'P'; a WORLD reader reads only its own 6 bytes, and a tail that is not 'W'
 //   is no world, so a pose with 'S' but no WORLD is still no world).
 // A packet of another version, a wrong magic, length or checksum, or a value that is not finite or out of
@@ -252,7 +253,7 @@ struct LocalPose {
     bool worldValid{};
     float worldYaw{};
     // 0.0.76 REMOTE SUIT: the 'S' tail - sendGameSuit fills it; gameSuitId the worn suit's loadout asset id when
-    // the suit probe knows it (0: not known). Nothing sets these yet (the probe's place is CANDIDATE).
+    // the suit probe knows it (0: not known). game_xr sets them from suit_probe::wornSuitId() (WORN SUIT, CANDIDATE).
     bool sendGameSuit{};
     uint64_t gameSuitId{};
 };

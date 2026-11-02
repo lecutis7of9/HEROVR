@@ -1,10 +1,12 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-// 0.0.76 SUIT PROBE 1 + 2/3 + 4 + 5 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
+// 0.0.76 SUIT PROBE 1 + 2/3 + 4 + 5 + WORN SUIT (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
 // (SEH); nothing here writes game memory, calls a game function, changes page protection or makes a hook.
 // The only file read is the user's own sm2scan.json (tools/sm2_suits/sm2scan.py), never written.
 #include <windows.h>
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <cstring>
 #include <iterator>
 #include <exception>
@@ -116,6 +118,20 @@ Watch5 watch5;
 LookLimits lookLimits;
 uint64_t lookRecord{};
 ULONGLONG lookStarted{};
+WornSuit worn; // 0.0.76 WORN SUIT (CANDIDATE): sticky across loads; cleared only when the probe is turned off
+std::filesystem::file_time_type newerStamp{}; // the HERO VR folder's sm2scan.json last read for a newer scan
+// read by other threads: the worn suit's item id (the MP packet) and the suits' item ids' names
+std::atomic<uint64_t> wornItem{0};
+std::mutex namesLock;
+std::vector<std::pair<uint64_t, std::string>> itemNames;
+void publishNames(const Table& t) {
+    std::vector<std::pair<uint64_t, std::string>> n;
+    for (size_t i = 0; i < t.names.size() && i < t.items.size(); ++i)
+        if (t.items[i])
+            n.emplace_back(t.items[i], t.names[i]);
+    std::lock_guard lock(namesLock);
+    itemNames = std::move(n);
+}
 void (*sink)(const char*) = nullptr; // the caller's log, for stampedLog
 
 // Every line with its time: since the probe was turned on, and the local clock.
@@ -169,6 +185,7 @@ void lookForScan(void (*log)(const char*)) {
         }
         scanTable = std::move(t);
         tableFrom = narrow(place.wstring());
+        publishNames(scanTable);
         const std::string line = "SUIT PROBE 2: " + std::to_string(scanTable.names.size()) + " suits, " +
                                  std::to_string(scanTable.ids.size()) + " ids from " + tableFrom;
         log(line.c_str());
@@ -189,6 +206,41 @@ void lookForScan(void (*log)(const char*)) {
     }
 }
 
+// 0.0.76 auto-scan: the launcher writes a new sm2scan.json (with the loadout / material ids) into the HERO VR folder
+// in the background, maybe after the game started. While the one loaded has no look ids, that file is read again
+// when it changes (every 15 s, its time only), and taken when it has them.
+void lookForNewer(void (*log)(const char*)) {
+    const std::wstring home = spidyHome();
+    if (home.empty())
+        return;
+    const auto place = std::filesystem::path(home) / L"sm2scan.json";
+    std::error_code ec;
+    const auto stamp = std::filesystem::last_write_time(place, ec);
+    if (ec || stamp == newerStamp)
+        return;
+    const auto size = std::filesystem::file_size(place, ec);
+    if (ec || size < 2 || size > (16u << 20))
+        return;
+    newerStamp = stamp;
+    std::ifstream in(place, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    Table t = Table::fromScan(text);
+    if (t.empty() || t.looks.empty())
+        return;
+    scanTable = std::move(t);
+    tableFrom = narrow(place.wstring());
+    publishNames(scanTable);
+    // every probe starts again on the new table (WORN SUIT keeps its suit: the ids are the same)
+    deep = Deep{}, deepRecord = 0, watch2.reset(), passEnded = 0;
+    container = Container{}, containerRecord = 0, watch4.reset(), containerStarted = 0;
+    look = Look{}, lookRecord = 0, watch5.reset(), lookStarted = 0;
+    const std::string line = "SUIT PROBE 2: the launcher's new sm2scan.json is here: " + std::to_string(scanTable.names.size()) +
+                             " suits, " + std::to_string(scanTable.ids.size()) + " ids, " +
+                             std::to_string(scanTable.looks.size()) + " look ids from " + tableFrom +
+                             " (PROBE 5 reads the looks now)";
+    log(line.c_str());
+}
+
 // The game's exe (vtables, code): matched but never walked into.
 void exeRange() {
     const auto base = reinterpret_cast<uint64_t>(GetModuleHandleW(nullptr));
@@ -202,9 +254,20 @@ void exeRange() {
 }
 
 // PROBE 4: record+0x080 -> +0x028 read directly, a pass about once a second (perStep entries a frame).
-void containerFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
+void containerFrame(uint64_t record, bool menu, ULONGLONG now, void (*log)(const char*)) {
     if (scanTable.empty())
         return;
+    const uint64_t ms = now >= onSince ? now - onSince : 0;
+    worn.menu(menu, ms);
+    // WORN SUIT: fed every finished pass (a load keeps the suit: sticky)
+    auto feedWorn = [&] {
+        std::vector<uint64_t> ids;
+        for (const auto& p : container.found())
+            ids.push_back(p.id);
+        for (const auto& line : worn.pass(scanTable, ids, ms))
+            log(line.c_str());
+        wornItem.store(worn.item(), std::memory_order_relaxed);
+    };
     if (!record) {
         containerRecord = 0;
         return;
@@ -224,13 +287,16 @@ void containerFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
         if (container.status() != Container::reading) {
             for (const auto& line : watch4.pass(scanTable, container))
                 log(line.c_str());
+            feedWorn();
             return;
         }
     }
     Budget b = budget();
-    if (container.step(reader, scanTable, containerLimits, &b))
+    if (container.step(reader, scanTable, containerLimits, &b)) {
         for (const auto& line : watch4.pass(scanTable, container))
             log(line.c_str());
+        feedWorn();
+    }
 }
 
 // PROBE 5 (the last suit run): the suit / look ids (equipped loadout, vanity items, materials / textures, the
@@ -285,6 +351,10 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
         }
         return;
     }
+    if (scanTable.looks.empty() && now - lastLook >= 15000) { // an older sm2scan.json: the launcher's new one?
+        lastLook = now;
+        lookForNewer(log);
+    }
     if (!record) {
         deepRecord = 0;
         return;
@@ -315,6 +385,19 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
 }
 } // namespace
 
+uint64_t wornSuitId() noexcept { return wornItem.load(std::memory_order_relaxed); }
+
+std::string suitNameOfItem(uint64_t item) noexcept {
+    try {
+        std::lock_guard lock(namesLock);
+        for (const auto& n : itemNames)
+            if (n.first == item)
+                return n.second;
+    } catch (...) {
+    }
+    return {};
+}
+
 void frame(uint64_t hero, uint64_t record, bool on, bool menu, void (*rawLog)(const char*)) noexcept {
     try {
         if (!rawLog)
@@ -339,7 +422,7 @@ void frame(uint64_t hero, uint64_t record, bool on, bool menu, void (*rawLog)(co
             exeRange();
         if (on) {
             deepFrame(hero, record, now, log);
-            containerFrame(record, now, log);
+            containerFrame(record, menu, now, log);
             lookFrame(hero, record, menu, now, log);
         } else if (wasOn) {
             look = Look{};
@@ -352,6 +435,8 @@ void frame(uint64_t hero, uint64_t record, bool on, bool menu, void (*rawLog)(co
             container = Container{};
             containerRecord = 0;
             watch4.reset();
+            worn.reset();
+            wornItem.store(0, std::memory_order_relaxed);
         }
         // PROBE 1, spread over frames (0.0.76: it read ~4,000 times in one frame a second, the periodic hitch):
         // a pass starts at most once a second, reads a few root words a frame, and is told when it is done.

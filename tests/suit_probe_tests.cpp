@@ -43,6 +43,141 @@ struct Memory {
         return true;
     }
 };
+
+// 0.0.76 WORN SUIT: suit run 7's PROBE 4 list replayed (passes about a second apart), with its real ids.
+void testWornSuit() {
+    const char* scan = R"({"tool": "sm2scan 2", "suits": [
+      {"name": "i30_Advanced_Suit", "id": "BC46538AB3E876D2", "characters": ["kSpiderManPeter"],
+       "item": "configs/inventory/inv_reward_loadout_i30_advanced_suit.config",
+       "models": [{"id": "A6D53AE572ACCADC", "path": "characters/hero/hero_spiderman_advanced/hero_spiderman_advanced.model"}]},
+      {"name": "SUIT_CLASSIC", "id": "9C49745C088D5006", "characters": ["kSpiderManPeter"],
+       "item": "configs/inventory/inv_reward_loadout_classic_suit.config",
+       "models": [{"id": "BF45D48B5314EC76", "path": "characters/hero/hero_spiderman_classic/hero_spiderman_classic.model"}]},
+      {"name": "SUIT_NWH_HYBRID", "id": "9A10AC36FE83105E", "characters": ["kSpiderManPeter"],
+       "item": "configs/inventory/inv_reward_loadout_i30_Peter_NWHHybrid_suit.config",
+       "models": [{"id": "8D8AFEEAD1484A57", "path": "characters/hero/hero_spiderman_nwh/hero_spiderman_nwh.model"}]},
+      {"name": "SUIT_HERO2_ADVANCED", "id": "BE9A2915338BE121", "characters": ["kSpiderManHero2"],
+       "item": "configs/inventory/inv_reward_loadout_i30_Hero2_Advanced_Suit.config",
+       "models": [{"id": "AAA39864B10885CA", "path": "characters/hero/hero_spiderman_hero2_advanced/hero_spiderman_hero2_advanced.model"},
+                  {"id": "B54C6C9209B4D626", "path": "characters/hero/hero_spiderman_hero2_venomxray/hero_spiderman_hero2_venomxray.model"}]},
+      {"name": "SUIT_SHARED_PETER", "id": "1111111111111111", "characters": ["kSpiderManPeter"],
+       "models": [{"id": "B54C6C9209B4D626", "path": "characters/hero/hero_spiderman_hero2_venomxray/hero_spiderman_hero2_venomxray.model"}]}
+    ]})";
+    const Table t = Table::fromScan(scan);
+    const uint64_t adv = 0xA6D53AE572ACCADCull, classic = 0xBF45D48B5314EC76ull, hybrid = 0x8D8AFEEAD1484A57ull,
+                   other = 0xAAA39864B10885CAull, shared = 0xB54C6C9209B4D626ull;
+    check(t.items.size() == 5 && t.items[0] == 0xBC46538AB3E876D2ull && t.items[2] == 0x9A10AC36FE83105Eull,
+          "WORN SUIT: each suit's item id (the scan's id)");
+    check(t.peter.size() == 5 && t.peter[0] && t.peter[1] && t.peter[2] && !t.peter[3], "Peter's suits, not the other hero's");
+    check(t.peterSuitOfModel(adv) == 0 && t.peterSuitOfModel(hybrid) == 2, "a Peter suit's own model names it");
+    check(t.peterSuitOfModel(other) < 0 && t.peterSuitOfModel(shared) < 0 && t.peterSuitOfModel(0x1234) < 0,
+          "the other hero's model, a shared model, an unknown id: none");
+
+    WornSuit w;
+    uint64_t ms = 0;
+    std::vector<std::string> told;
+    auto pass = [&](std::vector<uint64_t> ids) {
+        ms += 1000;
+        w.menu(false, ms); // the menu flag every frame; here once a pass
+        for (auto& l : w.pass(t, ids, ms))
+            told.push_back(l);
+    };
+    auto inMenu = [&](bool on) {
+        ms += 100;
+        w.menu(on, ms);
+        ms += 600;
+        w.menu(on, ms); // settled
+    };
+    auto menuPass = [&](std::vector<uint64_t> ids) {
+        ms += 1000;
+        w.menu(true, ms);
+        for (auto& l : w.pass(t, ids, ms))
+            told.push_back(l);
+    };
+    // the start: none, then a menu (menu 1, nothing), then menu 2: Advanced a second after it closed
+    pass({});
+    pass({});
+    inMenu(true);
+    menuPass({});
+    inMenu(false);
+    pass({other});
+    pass({other});
+    inMenu(true);
+    menuPass({});
+    inMenu(false);
+    pass({adv, adv, adv, other, other});
+    check(told.empty() && w.item() == 0, "one pass is not enough");
+    pass({adv, other});
+    check(told.size() == 1 && told[0].rfind("WORN SUIT: i30_Advanced_Suit 0xa6d53ae572accadc", 0) == 0 &&
+              told[0].find("item 0xbc46538ab3e876d2") != std::string::npos && told[0].find("CANDIDATE") != std::string::npos &&
+              w.item() == 0xBC46538AB3E876D2ull && w.suit() == 0,
+          "menu 2: Advanced 2.0 after the menu closed, two passes");
+    for (int i = 0; i < 40; ++i)
+        pass({adv, other});
+    check(told.size() == 1, "the same suit: quiet");
+    // menu 3: Classic while the menu is open (two passes), gone a second after it closed (the rebuild)
+    inMenu(true);
+    menuPass({adv, other});
+    menuPass({classic, other});
+    menuPass({classic, other});
+    check(told.size() == 1 && w.item() == 0xBC46538AB3E876D2ull, "a pick in the menu is not taken while it is open");
+    inMenu(false);
+    pass({other, shared, shared});
+    check(told.size() == 2 && told[1].rfind("WORN SUIT: SUIT_CLASSIC 0xbf45d48b5314ec76", 0) == 0 &&
+              told[1].find("taken as it closed") != std::string::npos && w.item() == 0x9C49745C088D5006ull,
+          "menu 3: Classic, seen in the menu, taken as it closed");
+    for (int i = 0; i < 60; ++i)
+        pass({other});
+    check(told.size() == 2 && w.item() == 0x9C49745C088D5006ull, "the list rebuilt without it: still Classic (sticky)");
+    // menu 4: Classic again in the menu (already worn: nothing), Hybrid a second after it closed
+    inMenu(true);
+    menuPass({other, classic});
+    menuPass({other, classic});
+    inMenu(false);
+    pass({hybrid, other});
+    pass({hybrid, other});
+    check(told.size() == 3 && told[2].rfind("WORN SUIT: SUIT_NWH_HYBRID 0x8d8afeead1484a57", 0) == 0 &&
+              told[2].find("after the menu closed") != std::string::npos && w.item() == 0x9A10AC36FE83105Eull,
+          "menu 4: Hybrid after the menu closed");
+    // a menu with no change, then the old suit reappearing long after: nothing
+    inMenu(true);
+    menuPass({hybrid});
+    inMenu(false);
+    pass({hybrid});
+    pass({hybrid});
+    for (int i = 0; i < 40; ++i)
+        pass({});
+    pass({adv});
+    pass({adv});
+    check(told.size() == 3 && w.item() == 0x9A10AC36FE83105Eull, "no menu, no change (a suit seen later is not taken)");
+    // a menu that lists two new Peter suits at once: not sure, nothing
+    pass({});
+    inMenu(true);
+    menuPass({});
+    inMenu(false);
+    pass({adv, classic});
+    pass({adv, classic});
+    check(told.size() == 3, "two new suits at once: not taken");
+    // the start suit: one Peter suit alone before any menu
+    WornSuit s;
+    told.clear();
+    ms = 0;
+    for (int i = 0; i < 2; ++i) {
+        ms += 1000;
+        s.menu(false, ms);
+        for (auto& l : s.pass(t, {classic, other}, ms))
+            told.push_back(l);
+    }
+    check(told.size() == 1 && told[0].find("at the start") != std::string::npos && s.item() == 0x9C49745C088D5006ull,
+          "the start suit: one Peter suit alone, two passes");
+    s.reset();
+    check(s.item() == 0 && s.suit() < 0, "reset: not known");
+    // an old scan without "characters": no Peter suits, nothing taken
+    const Table old = Table::fromScan(R"({"suits": [{"name": "A", "id": "BC46538AB3E876D2",
+        "models": [{"id": "A6D53AE572ACCADC", "path": "characters/hero/a/a.model"}]}]})");
+    check(old.peterSuitOfModel(adv) < 0 && old.items.size() == 1 && old.items[0] == 0xBC46538AB3E876D2ull,
+          "no characters: not Peter's (never guessed)");
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -763,7 +898,11 @@ int main(int argc, char** argv) {
             std::printf(" %s", real.names[s].c_str());
         std::printf(" (%zu model/mask ids)\n", real.watchIds.size());
         check(real.watchSuits.size() == 3 && real.watchIds.size() >= 6, "the three watched suits are in it");
+        check(real.peterSuitOfModel(0xA6D53AE572ACCADCull) >= 0 && real.peterSuitOfModel(0xBF45D48B5314EC76ull) >= 0 &&
+                  real.peterSuitOfModel(0x8D8AFEEAD1484A57ull) >= 0 && real.peterSuitOfModel(0xAAA39864B10885CAull) < 0,
+              "WORN SUIT: Advanced 2.0, Classic and Hybrid are Peter suits of their own models; the other hero's Advanced is not");
     }
+    testWornSuit();
     std::printf("%s\n", failures ? "FAILED" : "ALL PASSED");
     return failures ? 1 : 0;
 }

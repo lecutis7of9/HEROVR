@@ -527,6 +527,8 @@ namespace Sm2VrLauncher
                 rowGame.Set(CheckState.Bad, "Marvel's Spider-Man 2 was not found in Steam (" + where + "). Press Browse and pick Spider-Man2.exe.");
             else
                 rowGame.Set(CheckState.Ok, gamePath);
+            // 0.0.76 AUTO-SCAN: the suits' sm2scan.json, made in the background the first time (SuitScan.cs)
+            if (gamePath != null) SuitScan.StartIfNeeded(root, gamePath, t => sessionLog.Line(t));
             if (gamePath != null)
             {
                 string v = SystemInfo.FileVersion(gamePath);

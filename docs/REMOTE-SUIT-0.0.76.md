@@ -18,10 +18,9 @@ game files each PC already has installed. Nothing is drawn by hand, downloaded o
   (read-only, logs each change of the worn .model set to the console).
 
 ## Test steps
-1. `python tools/sm2_suits/sm2scan.py "<Marvel's Spider-Man 2 folder>" sm2scan.json`
-   (the launcher's bundled Python works). It only reads the game files.
-2. Put `suit_probe = on` in live.txt, start VR, load into the city, change suit three times in the
-   suit menu (note which ones), then send the launcher console log and sm2scan.json.
+1. The launcher makes sm2scan.json itself now (AUTO-SCAN below); nobody runs anything by hand.
+2. TEST builds have the probe on. Load into the city and change suits in the suit menu (note which ones), then
+   send the launcher's Reports.
 
 ## Still to build after that
 GDeflate (if used), the model mesh + skeleton reader, retarget to the PLAYER 2 rig, BCn textures to the
@@ -180,3 +179,29 @@ GPU, the suit's asset id in the MP WORLD packet, and drawing it on the receiver 
 - So the friend-suit drawing stays off: nothing reads these places in play. To confirm: swap Advanced 2.0 -> Classic
   -> Hybrid -> Advanced 2.0 again with this build (the probes are the same) and run
   `python tools/sm2_suits/sm2scan.py "<game folder>"` once, so the values can be matched to the suits' ids.
+
+## AUTO-SCAN (launcher, hero-0.0.76-sm1, pt1639u/pt1640u)
+`tools/launcher/src/SuitScan.cs`: when the launcher finds the game (it checks each refresh, once a session) and
+`<mod folder>\sm2scan.json` is missing, from an older sm2scan (no `"sm2scan 2"`, loadout or material ids), or older
+than the game's `toc` (a game update), it runs the bundled `python\python.exe tools\sm2_suits\sm2scan.py` hidden, at
+below-normal priority, on a background thread. The launcher log says "Scanning your suits (first time only; why)";
+PLAY VR never waits. It writes `sm2scan.json.tmp` and swaps it in only when sm2scan finished; it is stopped after
+4 minutes. On failure the log says "Suit scan failed: ..." and the probe just says it has no new scan. The probe looks
+in the mod folder first, and (while it has no looks) checks that file every 15 s, so a scan that finishes after the
+game started is picked up ("SUIT PROBE 2: the launcher's new sm2scan.json is here").
+
+## WORN SUIT (CANDIDATE until a run shows it on all three swaps)
+From run 7's console log (Advanced 2.0 -> Classic -> Hybrid): PROBE 4's model-id list holds the worn suit's own model
+id (Advanced A6D53AE572ACCADC, Classic BF45D48B5314EC76, Hybrid 8D8AFEEAD1484A57), next to ids every suit shares
+(venomxray B54C6C9209B4D626, 43 suits) and the other hero's. `WornSuit` (suit_probe.hpp) keeps only ids that are the
+model of exactly one suit, and that suit is Peter's (`characters` = kSpiderManPeter only). A Peter id that is new
+since the menu opened, seen on two passes in a row, is the new worn suit: if it shows while the menu is open and is
+still there on the last menu pass it is taken when the menu closes (run 7's Classic showed only in the menu), else
+the first one after the menu closed. At the start, with no menu yet, a single Peter id seen twice is the start suit.
+It is sticky: it changes only on a new pick, never on a load or an empty list. The console line:
+`WORN SUIT: <name> <model id> (model id; item <item id> sent to PLAYER 2; <how>, menu exit N + S s; CANDIDATE)`.
+PROBE 5's own compare lines stay as they were.
+
+The worn suit's item (loadout) id goes into the MP 'S' GAME SUIT tail (`lp.gameSuitId`, game_xr.cpp), so the
+friend receives it; his console logs "MP: PLAYER 2's worn suit (received, CANDIDATE, not drawn yet): <name> item
+0x...". Nothing draws it yet; older builds ignore the tail.

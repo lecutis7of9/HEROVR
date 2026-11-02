@@ -387,6 +387,9 @@ void sm1FallBack(uint32_t why) {
     OutputDebugStringA(line);
 }
 std::atomic<float> gameJitter[2]{}, eyeJitterSent[2]{};
+// 0.0.76 FAR SHAKE: live.txt vr_jitter (1 off: the eyes' fixed lens offset) and
+// vr_game_jitter (0 off, the default: the game's head view with no jitter; 1 keep).
+std::atomic<uint32_t> eyeJitterOff{0}, gameViewJitterKeep{0};
 // Update 34.2: ENGINE TAA's jitter mode and scale (engine_taa::JitterMode), live, never
 // kept; and what it did, for the report (SpidyEngineTaaData, tools/run_game_vr.py).
 // Update 37: NONE by default (the run36 closing setting).
@@ -2370,7 +2373,8 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
         // off hands held up before the face (NEAR CLIP).
         reinterpret_cast<Lens>(base + 0x2c75560)(&out, nearZ, stock.farZ(), lens.left,
                                                  lens.right, lens.top, lens.bottom, 0, 0,
-                                                 stock.values[0x428 / 4], stock.values[0x42c / 4], false,
+                                                 spidy::sm1style::gameViewJitter(gameViewJitterKeep.load() != 0, stock.values[0x428 / 4]),
+                                                 spidy::sm1style::gameViewJitter(gameViewJitterKeep.load() != 0, stock.values[0x42c / 4]), false,
                                                  false);
         reinterpret_cast<SetPose>(base + 0x2c76310)(&out, pose.data(), 0);
         placed = native_view::valid(out);
@@ -2381,7 +2385,8 @@ bool activeView(const Descriptor* incoming, Descriptor& out) {
             out = stock;
             reinterpret_cast<Lens>(base + 0x2c75560)(&out, near_clip::metres(), stock.farZ(), lens.left,
                                                      lens.right, lens.top, lens.bottom, 0, 0,
-                                                     stock.values[0x428 / 4], stock.values[0x42c / 4], false,
+                                                     spidy::sm1style::gameViewJitter(gameViewJitterKeep.load() != 0, stock.values[0x428 / 4]),
+                                                 spidy::sm1style::gameViewJitter(gameViewJitterKeep.load() != 0, stock.values[0x42c / 4]), false,
                                                      false);
             reinterpret_cast<SetPose>(base + 0x2c76310)(&out, pose.data(), 0);
             placed = native_view::valid(out);
@@ -2442,7 +2447,9 @@ std::array<float, 2> eyeJitter() {
     // (2, 3), both eyes, no scale, no mode, no guard), before anything of ours.
     if (sm1Steps()) {
         const auto render = eyeRenderSize();
-        const auto j = spidy::sm1style::jitter(frameIndex, config.width, render[0], render[1]);
+        const auto j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0,
+                                                     spidy::sm1style::jitter(frameIndex, config.width, render[0],
+                                                                             render[1]));
         eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
         eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
         return j;
@@ -2477,6 +2484,7 @@ std::array<float, 2> eyeJitter() {
                 engineTaaGameMax[i].store(g, std::memory_order_relaxed);
         }
     }
+    j = spidy::sm1style::eyeJitterFor(eyeJitterOff.load(std::memory_order_relaxed) != 0, j);
     eyeJitterSent[0].store(j[0], std::memory_order_relaxed);
     eyeJitterSent[1].store(j[1], std::memory_order_relaxed);
     return j;
@@ -2924,7 +2932,9 @@ void placeEyes() {
                 auto view = main;
                 reinterpret_cast<Lens>(base + 0x2c75560)(
                     &view, nearZ, main.farZ(), b.left, b.right, b.top, b.bottom, 0, 0,
-                    main.values[0x428 / 4], main.values[0x42c / 4], false, false);
+                    spidy::sm1style::gameViewJitter(gameViewJitterKeep.load() != 0, main.values[0x428 / 4]),
+                    spidy::sm1style::gameViewJitter(gameViewJitterKeep.load() != 0, main.values[0x42c / 4]), false,
+                    false);
                 reinterpret_cast<SetPose>(base + 0x2c76310)(&view, pose.data(), 0);
                 return view;
             };
@@ -4514,6 +4524,28 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaaJitter(void* mode) {
     std::snprintf(line, sizeof line, "ENGINE TAA: jitter %s\n", et::jitterName(next));
     OutputDebugStringA(line);
     return 0;
+}
+// 0.0.76 FAR SHAKE: live.txt vr_jitter (0 on, 1 off: one fixed tiny offset, so the
+// game's TAA still runs) and vr_game_jitter (0 off: the game's head view unjittered;
+// 1 keep: the flat game's jitter, as before). Refused (4605, 4606) above 1.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrJitter(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > 1)
+        return 4605;
+    eyeJitterOff = static_cast<uint32_t>(v);
+    OutputDebugStringA(v ? "VR JITTER: off (fixed)\n" : "VR JITTER: on\n");
+    return 0;
+}
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrGameJitter(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > 1)
+        return 4606;
+    gameViewJitterKeep = static_cast<uint32_t>(v);
+    OutputDebugStringA(v ? "VR GAME JITTER: keep\n" : "VR GAME JITTER: off\n");
+    return 0;
+}
+extern "C" uint32_t SpidyVrJitterNow() {
+    return eyeJitterOff.load() | gameViewJitterKeep.load() << 1;
 }
 extern "C" uint32_t SpidyEngineTaaJitterNow() {
     return engineTaaJitterMode.load();

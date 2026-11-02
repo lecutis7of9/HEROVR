@@ -2757,3 +2757,19 @@ buildings stayed; only the light went.
   vr_render = upscaled gives 67%). Without TAA the launcher's mip bias is kept. live.txt vr_aa, vr_textures,
   vr_render (RESTART). No new game address. Tests: hero076_visual_tests, core `SM1STYLE` (VISUAL: the wanted percent).
   docs/VISUAL-0.0.76.md.
+
+## 65. Version 0.0.76 FAR SHAKE: the game's head view without the flat game's jitter
+
+  Run 001842's video: only the farthest layer (skyline, bridge, water) hops between two places, sideways, while the
+  head turns; near and middle distance pan smoothly. Its report: each eye's previous camera is its own last pose
+  (eye_camera previous_own 9040/9040, miss 0.0 m, 63 mm apart), both eyes the same Halton (2, 3) jitter in their own
+  NDC (eye_jitter [-0.00009, -0.00019], under half an eye pixel), no depth layer handed to the runtime (only sm1_layer
+  asks XR_KHR_composition_layer_depth), EYE LOD off. But engine_taa game_jitter [0.00059, 0.00243] NDC: the game's
+  own view, on the head (activeView, placeEyes' second submit), kept the stock camera's TAA jitter (descriptor
+  +0x428/+0x42c, CONFIRMED) sized for the flat 1280x720 picture (game log ConvertScreenToRenderRes), on since 0.0.76
+  VISUAL set AA to TAA. That is up to ~3.5 eye pixels a frame. CANDIDATE: that the far layer's frame-wide work takes
+  that view's jitter. Fix: sm1style::gameViewJitter, zero while immersive (live.txt vr_game_jitter = off, default;
+  keep is the old way). The game's view is never shown (rested) and its TemporalAa then skips. Also live.txt
+  vr_jitter = off: the eyes' lens one fixed 1e-6 NDC (sm1style::steadyJitter; not zero, since TemporalAa 0x2c2dc60,
+  CONFIRMED, skips a job with zero jitter). Both live (SpidyVrJitter, SpidyVrGameJitter; refused 4605, 4606). No new
+  game address. Tests: hero076_far_shake_tests, core `FAR SHAKE`.

@@ -89,6 +89,21 @@ inline float halton(uint32_t index, uint32_t radix) {
     return value;
 }
 // The lens jitter (NDC) for frame `frame`, the same for both eyes.
+// 0.0.76 FAR SHAKE (live.txt vr_jitter / vr_game_jitter, both live).
+// vr_jitter off: the eyes keep one fixed lens offset instead of the Halton walk.
+// It is not zero because the game's TemporalAa 0x2c2dc60 (CONFIRMED, see
+// temporalAaCheckRva) skips a job whose jitter (+0x428/+0x42c) is zero: the eyes
+// would lose their TAA. 1e-6 NDC is about a thousandth of an eye pixel.
+inline constexpr float steadyJitter = 1e-6f;
+inline std::array<float, 2> eyeJitterFor(bool off, std::array<float, 2> walk) {
+    return off ? std::array<float, 2>{steadyJitter, steadyJitter} : walk;
+}
+// vr_game_jitter: the game's own view (on the head while the eyes show, never
+// shown itself) kept the flat game's TAA jitter, sized for the flat 1280x720
+// picture: run 001842 measured [0.00059, 0.00243] NDC against the eyes' 0.00019,
+// up to ~3.5 eye pixels a frame for whatever the frame takes from that view.
+// Default (keep false): zero while the eyes show. Its TAA then skips (it is not shown).
+inline float gameViewJitter(bool keep, float stock) { return keep ? stock : 0.f; }
 inline std::array<float, 2> jitter(uint64_t frame, uint32_t eyeWidth, uint32_t renderWidth, uint32_t renderHeight) {
     const uint32_t phase = static_cast<uint32_t>(frame % phases(eyeWidth, renderWidth)) + 1;
     return {2 * (halton(phase, 2) - .5f) / std::max(1u, renderWidth),

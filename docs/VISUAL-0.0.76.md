@@ -45,3 +45,16 @@ Encodings (registry beside the game log's [Settings]): TextureQuality 0 Low (023
 - SM2's eye distance scale (EYE LOD) and the texture-request raise: not ported (no CONFIRMED SM2 bytes).
 - DLAA per eye: the eyes never pass through Streamline (SL WATCH), so not possible.
 - SMAA / other AA encodings, Level of Detail 4 (Very High): never seen beside a log; not offered.
+
+## FAR SHAKE (the far background hopping while the head turns)
+
+| switch (live.txt, live, no restart) | default | what it does |
+| --- | --- | --- |
+| `vr_game_jitter` | `off` | the game's own head view (never shown; it feeds frame-wide work) gets no TAA jitter; `keep` gives it the flat game's 1280x720 jitter again (up to ~3.5 eye pixels a frame) |
+| `vr_jitter` | `on` | the eyes' Halton (2, 3) sample walk (the sharp bricks); `off` holds one fixed tiny offset (1e-6 NDC) so the game's TAA still runs - a test, edges a little rougher |
+
+What run 001842 ruled out: the eyes' previous cameras are their own (9040/9040, 0.0 m); both eyes' jitter is the
+same point in their own NDC, under half a pixel; no depth goes to the runtime (Virtual Desktop's reprojection is
+rotation-only); EYE LOD is off and the video shows no popping. Left: the game view's jitter (fixed by default) and,
+outside the game, Virtual Desktop's Synchronous Spacewarp at 47 pictures for a 90 Hz headset (try it Disabled).
+vr_jitter off does not move the mip level (the game's TAA keeps its own bias), so no mip-bias change goes with it.

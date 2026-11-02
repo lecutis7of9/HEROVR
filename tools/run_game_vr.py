@@ -44,6 +44,7 @@ import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
+import taa_frame_log_record  # 0.0.76 TAA FRAME LOG
 from probe_stereo import (frame_snapshot, render_memory_snapshot, snapshot as stereo_snapshot, encode_mip_bias,
                           mip_bias_snapshot, eye_camera_line)
 from probe_native_rays import snapshot as ray_snapshot
@@ -2995,7 +2996,8 @@ def session(a, startup, session_off=()):
                       pose_check_record.EXPORT,  # 0.0.76 POSE CHECK: absent from an older module
                       jitter_log_record.EXPORT,  # 0.0.76 JITTER FIX
                       vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
-                      taa_watch_record.EXPORT))  # 0.0.76 TAA WATCH
+                      taa_watch_record.EXPORT,  # 0.0.76 TAA WATCH
+                      taa_frame_log_record.EXPORT))  # 0.0.76 TAA FRAME LOG: absent from an older module
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3088,6 +3090,9 @@ def session(a, startup, session_off=()):
         vr_aa_last = jitter_log_last = None
         taa_watch_last = None  # 0.0.76 TAA WATCH: taa_watch_snapshot, kept from the samples
         taa_watch_said = 0  # 10 s windows already printed
+        # 0.0.76 TAA FRAME LOG: read with each closed 10 s window; the block with the most still-head pairs and the
+        # last one are kept for the report.
+        frame_log_best = frame_log_last = None
         engine_taa_last = engine_taa_said = None  # Update 34.2
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
@@ -3387,6 +3392,8 @@ def session(a, startup, session_off=()):
                         pose_check=pose_check_last,
                         vr_aa=vr_aa_last, jitter_log=jitter_log_last,
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
+                        taa_frame_log=dict(most_still=taa_frame_log_record.taa_frame_log_report(frame_log_best),
+                                           last=taa_frame_log_record.taa_frame_log_report(frame_log_last)),
                         eye_shadows=shadows_last,
                         stream_stalls=stream_stalls(list(samples)),
                         free_commit_mb=dict(start=start_commit, lowest=lowest_commit),
@@ -3453,6 +3460,11 @@ def session(a, startup, session_off=()):
                         print(said, flush=True)
                     for said in taa_watch_record.taa_watch_lines(result.get('taa_watch'))[:2]:
                         print(said, flush=True)  # 0.0.76 TAA WATCH: the depth log and the session's split
+                    frame_section = (result.get('taa_frame_log') or {}).get('most_still')
+                    if frame_section:  # 0.0.76 TAA FRAME LOG: D, then the stillest block's drift
+                        print(frame_section['static'], flush=True)
+                        if (said := taa_frame_log_record.taa_frame_log_line(frame_section)):
+                            print(said, flush=True)
                     if (shadows := eye_shadow_line(result.get('eye_shadows'))):
                         print(shadows, flush=True)
                 except Exception as error:  # noqa: BLE001 - the report matters more than the summary
@@ -3706,6 +3718,16 @@ def session(a, startup, session_off=()):
                         for said in windows[-(taa_watch_last['closed'] - taa_watch_said):]:
                             print(said, flush=True)
                         taa_watch_said = taa_watch_last['closed']
+                        frame_log = taa_frame_log_record.taa_frame_log_snapshot(
+                            game, xr.get(taa_frame_log_record.EXPORT))
+                        if frame_log:
+                            if frame_log_last is None and (said := taa_frame_log_record.static_line(frame_log)):
+                                print(said, flush=True)  # D: once, worked out from the code
+                            frame_log_last = frame_log
+                            frame_log_best = taa_frame_log_record.better_block(frame_log_best, frame_log)
+                            if (said := taa_frame_log_record.taa_frame_log_line(
+                                    taa_frame_log_record.taa_frame_log_summary(frame_log))):
+                                print(said, flush=True)
                     jitter_log_last = (jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
                                        or jitter_log_last)
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.

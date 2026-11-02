@@ -2908,3 +2908,10 @@ buildings stayed; only the light went.
   last, y last - now); jitterCounted the least. Window 120 bytes, Data 11008, version 3. Finding: the history views
   are the jittered ones on both sides, so the step is counted exactly once (core test with historyReprojection).
   Tests: core `0.0.76 TAA JITTER`, hero076_taa_jitter_tests, hero076_taa_watch_tests.
+  TAA FRAME LOG (read-only): include/spidy/taa_frame_log.hpp (Entry 232 bytes, Data 48 + 300 entries, magic TFLG,
+  version 1; matricesJittered 1, appliedTimes 1, appliedSign +1, the static answer), export SpidyTaaFrameLogData,
+  written under watchLock at drawHistory's end (eye 0, any viewed pair: both views' world and tangents, the steps,
+  the centre's history UV and shift, expected = jitterShift(now, last, 1), drift, delta). tools/taa_frame_log_record.py
+  (parse, summary, static line, console line, better_block); run_game_vr reads it with each closed TAA WATCH window
+  (optional export) and keeps most_still / last for the report. Tests: hero076_taa_frame_log_tests, core
+  `0.0.76 TAA FRAME LOG`.

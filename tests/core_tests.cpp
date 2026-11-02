@@ -119,6 +119,7 @@
 #include "spidy/taa_watch.hpp"
 #include "spidy/taa_jitter.hpp"
 #include "spidy/taa_still.hpp"
+#include "spidy/taa_frame_log.hpp"
 #include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
@@ -36849,6 +36850,32 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         log.bothEyes = 200;
         log.frames = 120;
         check(tw::depthVerdict(log) == tw::candidate, "under 200 pairs: CANDIDATE");
+    });
+    test("0.0.76 TAA FRAME LOG: the last 300 pairs, the drift with the step taken out, the delta, the static answer", [] {
+        namespace fl = spidy::taa_frame_log;
+        static fl::Data d;
+        check(fl::matricesJittered == 1 && fl::appliedTimes == 1 && fl::appliedSign == 1 && d.bytes == sizeof(fl::Data),
+              "jittered, once, +");
+        fl::Entry e;
+        e.flags = fl::history | fl::still;
+        e.shift[0] = .55f;
+        e.shift[1] = .37f;
+        e.expected[0] = .55f;
+        e.expected[1] = .30f;
+        fl::note(d, e);
+        check(d.written == 1 && std::abs(d.entries[0].drift[1] - .07f) < 1e-6f && d.entries[0].drift[0] == 0 &&
+                  d.entries[0].delta[0] == 0,
+              "drift: shift minus the step's change; no delta for the first");
+        e.shift[0] = .15f;
+        fl::note(d, e);
+        check(std::abs(d.entries[1].delta[0] + .4f) < 1e-6f, "delta from the pair before");
+        fl::Entry none;
+        none.shift[0] = 3;
+        fl::note(d, none);
+        check(d.entries[2].drift[0] == 0 && d.entries[2].delta[0] == 0, "no history: no drift, no delta");
+        for (uint32_t n = 0; n < fl::capacity; ++n)
+            fl::note(d, e);
+        check(d.written == fl::capacity + 3, "a ring of the last 300");
     });
     test("0.0.76 TAA JITTER / TAA STILL: our own step's modes, the still share only, the rejection counts", [] {
         namespace tj = spidy::taa_jitter;

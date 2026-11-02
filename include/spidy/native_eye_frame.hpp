@@ -296,6 +296,9 @@ class HeroTravel {
 // World offset the native views applied to the command rendered in a scene
 // generation. Overlays add it to their eye and hand poses for that image.
 bool renderOffset(uint64_t generation, Vec3& offset);
+// 0.0.76 POSE CHECK (pose_check.hpp): the camera an eye of a scene generation was rendered from (the view's
+// pose matrix as its job was copied, the travel above already in it); false when not recorded.
+bool renderedEye(uint64_t generation, unsigned eye, Mat4& pose);
 // First point of a hand's game rope in the frame a scene generation rendered.
 bool renderWebStart(uint64_t generation, unsigned hand, Vec3& start);
 // Largest distance, in one new image, from a tracked web shooter to the game

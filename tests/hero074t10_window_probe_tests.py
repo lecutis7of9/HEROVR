@@ -59,7 +59,8 @@ class Layout(unittest.TestCase):
         s = src('src/stereo_probe.cpp')
         self.assertIn('__declspec(dllexport) spidy::window_probe::Data SpidyWindowProbeData;', s)
         r = src('tools/run_game_vr.py')
-        self.assertIn('optional=(window_probe.EXPORT,))', r)
+        # 0.0.76 POSE CHECK added its own optional export after this one.
+        self.assertIn('optional=(window_probe.EXPORT,', r)
         self.assertNotIn('SpidyWindowProbeData', src('tools/update37_records.py'))  # never a required record
         b = src('tools/bridge_game.py')
         self.assertIn("for name in optional:", b)

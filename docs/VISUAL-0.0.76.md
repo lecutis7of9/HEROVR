@@ -81,3 +81,24 @@ submits a second, 39 of them a picture sent again), GPU-bound. Below the refresh
 Spacewarp (if Automatic/Always) synthesises frames, which warps and ghosts far buildings; set it Disabled in VD's
 Streaming tab, or lower the refresh rate / render size so the game holds full rate, as a test.
 vr_jitter off does not move the mip level (the game's TAA keeps its own bias), so no mip-bias change goes with it.
+
+### POSE CHECK (render vs. submitted pose)
+
+Checked in the code: each eye's picture and its headset layer come from one xrLocateViews call at the frame's
+predicted display time; the picture's own tracking eye (kept with its serial) is what the layer is given, never a
+newer one; both eyes of a pair carry the same serial and generation; a picture shown on two refreshes keeps its pose
+with the new display time (the runtime reprojects it, as OpenXR wants). No stale pose, wrong display time or
+late head update was found, so nothing was changed. Not checked before: the eyes' rotation (the old audit compared
+positions only).
+
+Each run now measures it (report `pose_check`, console "POSE CHECK render vs submit"):
+
+| field | meaning |
+| --- | --- |
+| `left` / `right` `max_degrees`, `mean_degrees`, `max_mm`, `mean_mm` | the camera the game really drew the eye from against the pose its layer was given (travel taken off); `over_degrees` / `over_mm` count submits past 0.05 deg / 2 mm |
+| `command_max_degrees` / `command_max_mm` | the drawn camera against the eye HERO VR asked for: a difference in both is the game moving its camera itself |
+| `world_turn` | how far the picture's world turned in the room between its command and its submit (the player's turns, flips and tilt; reprojection does not undo it) |
+| `image_age_ms` | display time of the submit minus the picture's own predicted display time (about 11 ms on a reused picture at 89 Hz) |
+
+MATCH with a small `world_turn`: the far shake is not a pose mismatch. DIFFERS: the numbers say which eye and
+whether the game (command) or the hand-off (submit) moved it.

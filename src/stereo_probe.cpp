@@ -292,6 +292,10 @@ struct RenderOffset {
     // Game rope starts of the same frame (bit per hand in `ropes`).
     Vec3 ropeStarts[2]{};
     uint32_t ropes{};
+    // 0.0.76 POSE CHECK (pose_check.hpp): each eye's camera as its job was copied (view +0x00, the pose
+    // matrix SetPose wrote and native_view::Descriptor::pose reads), bit per eye in `eyesRead`.
+    Mat4 eyePose[2]{};
+    uint32_t eyesRead{};
 };
 std::array<RenderOffset, 64> offsets{};
 SRWLOCK offsetLock = SRWLOCK_INIT;
@@ -2151,6 +2155,18 @@ void copyJob(void* view, void* settings, void* a, void* b, bool c) {
             // filled after about 10,000 frames, and every later eye frame went
             // unmarked until presentation stalled. Old copies are reclaimed.
             d.reclaimed += jobs.record({job, latchedSerial.load(), generation.load(), i});
+            // 0.0.76 POSE CHECK: the whole camera (turn and place) this eye's job renders, kept with the
+            // frame's travel for game_xr's submit (native_eyes::renderedEye).
+            if (Mat4 camera{}; read(reinterpret_cast<uintptr_t>(view), camera.data(), sizeof(camera))) {
+                const uint64_t frame = generation.load();
+                AcquireSRWLockExclusive(&offsetLock);
+                if (auto& entry = offsets[frame % offsets.size()];
+                    frame && entry.generation == frame && !(entry.eyesRead & (1u << i))) { // the frame's first job
+                    entry.eyePose[i] = camera;
+                    entry.eyesRead |= 1u << i;
+                }
+                ReleaseSRWLockExclusive(&offsetLock);
+            }
             float rendered[3]{}, previous[3]{};
             if (read(reinterpret_cast<uintptr_t>(view) + 0x30, rendered, sizeof(rendered)) &&
                 read(reinterpret_cast<uintptr_t>(view) + 0x560, previous, sizeof(previous)))
@@ -4611,6 +4627,17 @@ bool spidy::native_eyes::renderOffset(uint64_t frame, Vec3& offset) {
     ReleaseSRWLockShared(&offsetLock);
     offset = entry.generation == frame ? entry.offset : Vec3{};
     return frame && entry.generation == frame;
+}
+bool spidy::native_eyes::renderedEye(uint64_t frame, unsigned eye, Mat4& pose) {
+    if (!frame || eye > 1)
+        return false;
+    AcquireSRWLockShared(&offsetLock);
+    const auto& entry = offsets[frame % offsets.size()];
+    const bool found = entry.generation == frame && (entry.eyesRead & (1u << eye));
+    if (found)
+        pose = entry.eyePose[eye];
+    ReleaseSRWLockShared(&offsetLock);
+    return found;
 }
 bool spidy::native_eyes::renderWebStart(uint64_t frame, unsigned hand, Vec3& start) {
     AcquireSRWLockShared(&offsetLock);

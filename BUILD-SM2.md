@@ -2796,3 +2796,21 @@ buildings stayed; only the light went.
   touched (0.10) or within 0.45 s of its trigger, or within 0.3 s of the other's; each Y waits 0.08 s and a trigger
   then calls it off; the shooting hand's gesture X waits 0.25 s; contacts, the snap, the ball (RB on the press frame)
   unchanged. Log VERSION 0.0.76 TRIGGER GUARD. No game address. Tests: core `TRIGGER GUARD`, hero076_trigger_guard_tests.
+
+## 68. Version 0.0.76 POSE CHECK: each eye's rendered camera against its submitted pose
+
+  Traced (no change needed): xr_session frameOnce locates the views once, at xrWaitFrame's predictedDisplayTime
+  (eye_margin applied), and the same `frame.eyes` give both the command's world eyes (game_tracking: rig.toWorld,
+  rigid) and NativeEyeFrame::trackingEyes; placeEyes latches the command once per game frame (serial, generation),
+  adds the translation-only travel and calls SetPose; the eye jobs are stamped {serial, generation}; a pair is ready
+  only when both eyes end with one stamp; copyLatest and history.find(serial) give the submit that frame's
+  trackingEyes, which become projectionViews[i].pose; xrEndFrame's displayTime is the current frame's (a picture
+  shown again keeps its pose, as OpenXR wants). Rotation had never been audited (auditEyeCamera: position only).
+  New, read-only: copyJob keeps each eye's whole camera (view +0x00, CONFIRMED: native_view::Descriptor::pose) with its
+  generation's travel (RenderOffset::eyePose, eyesRead; native_eyes::renderedEye); at each immersive submit game_xr
+  compares it with compose(saved worldFromTracking, the submitted tracking eye) + travel (pose_check::between, the
+  Frobenius form, exact for small turns) and with the command's own eye (command max), and records the turn of the
+  image's world in the room up to the submit (worldFromTracking against the newest, pose_check::turnDegrees) and the
+  image's age (displayTime - its predicted time). SpidyPoseCheckData (PHCK, 256 bytes, extern "C"), read by
+  tools/pose_check_record.py into the report (`pose_check`, per sample too) and the console. Optional export (an
+  older module has none). Tests: hero076_pose_check_tests, core `POSE CHECK`.

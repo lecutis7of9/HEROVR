@@ -100,6 +100,19 @@ class FrameLog(unittest.TestCase):
         self.assertIn('taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG', run)
         self.assertIn('taa_frame_log=dict(most_still=', run)
 
+    def test_read_once_per_closed_window(self):
+        # 5881bac read and printed it with every sample (2701 console lines in the 16:35 session): it belongs
+        # inside the TAA WATCH closed-window branch, after taa_watch_said moves on, not under the depth check.
+        run = src('tools/run_game_vr.py')
+        said = run.index("                        taa_watch_said = taa_watch_last['closed']\n")
+        read = run.index('frame_log = taa_frame_log_record.taa_frame_log_snapshot(')
+        depth = run.index('depth_check_last = (taa_depth_check_record.taa_depth_check_snapshot(')
+        self.assertLess(said, read)
+        self.assertLess(read, depth)
+        self.assertEqual(run.count('frame_log = taa_frame_log_record.taa_frame_log_snapshot('), 1)
+        line = run[run.rindex('\n', 0, read) + 1:read]
+        self.assertEqual(line, ' ' * 24)
+
     def test_documented(self):
         doc = src('docs/VISUAL-0.0.76.md')
         self.assertIn('TAA FRAME LOG', doc)

@@ -6,6 +6,10 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **Fix (A-depth CHECKED v3): the TAA FRAME LOG is read and printed once per 10 s window again.** 5881bac had moved it
+  under the depth check, so the launcher read its 70 KB record from the game and printed a console line with every sample
+  (2701 lines in the 16:35 session instead of about 17). Launcher only; the DLL, SPIDY TAA and `vr_taa_depth` (off by
+  default) are unchanged.
 - **A-depth CHECKED (TEST 0.0.76 A-depth CHECKED): the depth is checked before it is trusted, and its effect is
   measured.** Still off by default (`vr_taa_depth`). (1) Convention check: about once a second (one pair in 30 until it
   passes), both eyes' centre band of depth is read back. The centre pixel is put back in the world through the inverse

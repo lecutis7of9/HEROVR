@@ -3726,6 +3726,19 @@ def session(a, startup, session_off=()):
                         for said in windows[-(taa_watch_last['closed'] - taa_watch_said):]:
                             print(said, flush=True)
                         taa_watch_said = taa_watch_last['closed']
+                        # 0.0.76 TAA FRAME LOG: read and printed once per closed 10 s window, as in 07c1675 (5881bac
+                        # had moved it under the depth check, so it was read and printed with every sample, about
+                        # 16 lines a second: 2701 of them in the 16:35 session).
+                        frame_log = taa_frame_log_record.taa_frame_log_snapshot(
+                            game, xr.get(taa_frame_log_record.EXPORT))
+                        if frame_log:
+                            if frame_log_last is None and (said := taa_frame_log_record.static_line(frame_log)):
+                                print(said, flush=True)  # D: once, worked out from the code
+                            frame_log_last = frame_log
+                            frame_log_best = taa_frame_log_record.better_block(frame_log_best, frame_log)
+                            if (said := taa_frame_log_record.taa_frame_log_line(
+                                    taa_frame_log_record.taa_frame_log_summary(frame_log))):
+                                print(said, flush=True)
                     # 0.0.76 A-depth CHECKED: the check's line when it changes, each 10 s window's line once it
                     # closes (only once vr_taa_depth was on: no pair wanted the depth, no line).
                     depth_check_last = (taa_depth_check_record.taa_depth_check_snapshot(
@@ -3745,16 +3758,6 @@ def session(a, startup, session_off=()):
                                         depth_section)[-shown:]:
                                     print(said, flush=True)
                             depth_check_said = depth_check_last['closed']
-                        frame_log = taa_frame_log_record.taa_frame_log_snapshot(
-                            game, xr.get(taa_frame_log_record.EXPORT))
-                        if frame_log:
-                            if frame_log_last is None and (said := taa_frame_log_record.static_line(frame_log)):
-                                print(said, flush=True)  # D: once, worked out from the code
-                            frame_log_last = frame_log
-                            frame_log_best = taa_frame_log_record.better_block(frame_log_best, frame_log)
-                            if (said := taa_frame_log_record.taa_frame_log_line(
-                                    taa_frame_log_record.taa_frame_log_summary(frame_log))):
-                                print(said, flush=True)
                     jitter_log_last = (jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
                                        or jitter_log_last)
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.

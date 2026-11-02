@@ -36832,18 +36832,6 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
                   std::abs(va::clipGamma(.2f, 0) - va::gammaMoving) < 1e-6f,
               "the clip tighter while moving");
         check(sizeof(va::Data) == 72 && va::Data{}.bytes == 72 && va::Data{}.magic == 0x41415653, "Data");
-        // 0.0.76 SPIDY TAA TUNE: a longer average, kept through small head motion; a looser clip while still.
-        check(va::keepStill >= .93f && va::keepStill <= .95f && va::keepMoving >= .75f && va::keepMoving < va::keepStill,
-              "tune: .05-.07 of the new frame still, no deep ease while moving");
-        check(std::abs(va::keep(true, .01f, .02f) - va::keepStill) < 1e-6f,
-              "tune: a slow look around (.01 rad, .02 m a pair) keeps the full average");
-        check(va::gammaStill == 1.5f && va::gammaMoving == 1.f, "tune: the clip's widths");
-        check(va::sharpenAmount >= .1f && va::sharpenAmount <= .2f, "tune: a mild sharpen");
-        check(va::rcasPixel(.5f, .5f, .5f, .5f, .5f, va::sharpenAmount) == .5f, "RCAS: flat stays flat");
-        const float edge = va::rcasPixel(.2f, .2f, .2f, .2f, .6f, va::sharpenAmount);
-        check(edge > .6f && edge < .65f, "RCAS: a bright dot a little brighter, not ringing");
-        check(va::rcasPixel(.2f, .2f, .2f, .2f, .6f, 0) == .6f, "RCAS: amount 0 is a copy");
-        check(va::rcasPixel(0, 1, 0, 1, 1, 1) >= 0 && va::rcasPixel(0, 1, 0, 1, 1, 1) <= 1, "RCAS: stays in 0..1");
         check(std::string(va::modeName(va::ours)) == "SPIDY TAA" && std::string(va::modeName(va::smaa)) == "SMAA",
               "names");
     });

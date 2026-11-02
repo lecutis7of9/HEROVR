@@ -2061,8 +2061,6 @@ unsigned nextNoted{};                    // viewLock
 struct HistoryPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, taa; // taa: 0.0.76 SPIDY TAA (taaShader), built in its mode only
-    ComPtr<ID3D12PipelineState> rcas;       // 0.0.76 SPIDY TAA TUNE: the sharpened output into the staged eye
-    bool deep{}; // TUNE: pictures are R10G10B10A2_UNORM (SPIDY TAA's own; vr_aa.hpp), drawn out by `rcas`
     ComPtr<ID3D12DescriptorHeap> views, targets;
     ComPtr<ID3D12QueryHeap> queries;
     ComPtr<ID3D12Resource> stamps;
@@ -2215,33 +2213,6 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     return float4(saturate(fromYCoCg(mixed)), here.a);
 }
 )";
-// 0.0.76 SPIDY TAA TUNE (vr_aa.hpp rcasPixel): the TAA's 10-bit picture (t0) out to the staged eye, with a mild RCAS
-// (AMD FidelityFX's robust contrast-adaptive sharpen, no noise removal): extra.x the amount of its full strength. The
-// target is written in colour only (the staged eye keeps its own alpha). The history is never sharpened.
-const char* rcasShader = R"(
-Texture2D picture : register(t0);
-cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; };
-float4 ps(float4 position : SV_POSITION) : SV_TARGET {
-    uint w, h;
-    picture.GetDimensions(w, h);
-    const int2 p = int2(position.xy);
-    const int2 last = int2(w, h) - 1;
-    const float3 e = picture.Load(int3(p, 0)).rgb;
-    const float amount = saturate(extra.x);
-    if (!(amount > 0))
-        return float4(e, 1);
-    const float3 b = picture.Load(int3(clamp(p + int2(0, -1), int2(0, 0), last), 0)).rgb;
-    const float3 d = picture.Load(int3(clamp(p + int2(-1, 0), int2(0, 0), last), 0)).rgb;
-    const float3 f = picture.Load(int3(clamp(p + int2(1, 0), int2(0, 0), last), 0)).rgb;
-    const float3 hh = picture.Load(int3(clamp(p + int2(0, 1), int2(0, 0), last), 0)).rgb;
-    const float3 mn4 = min(min(b, d), min(f, hh)), mx4 = max(max(b, d), max(f, hh));
-    const float3 hitMin = min(mn4, e) / (4.0 * mx4 + 1e-5);
-    const float3 hitMax = (1.0 - max(mx4, e)) / min(4.0 * min(mn4, e) - 4.0, -1e-5);
-    const float3 lobes = max(-hitMin, hitMax);
-    const float lobe = max(-0.1875, min(max(lobes.r, max(lobes.g, lobes.b)), 0)) * amount;
-    return float4(saturate((lobe * (b + d + f + hh) + e) / (4.0 * lobe + 1.0)), 1);
-}
-)";
 bool failHistory(uint32_t code) {
     historyFault = code;
     history.ready = false;
@@ -2301,35 +2272,20 @@ bool prepareHistory() {
         return failHistory(3);
     // 0.0.76 SPIDY TAA: its own pixel shader, the same root signature and target. Only in its mode, so another mode
     // never fails for it.
-    // TUNE: its pictures 10 bits a channel (vr_aa.hpp), drawn out to the staged eye by the RCAS pass.
-    const bool deep = spidyTaaNow();
-    const DXGI_FORMAT pictureFormat = deep ? DXGI_FORMAT_R10G10B10A2_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
-    if (deep) {
-        ComPtr<ID3DBlob> taaPs, rcasPs;
+    if (spidyTaaNow()) {
+        ComPtr<ID3DBlob> taaPs;
         if (FAILED(D3DCompile(taaShader, std::strlen(taaShader), "spidy_taa", nullptr, nullptr, "ps", "ps_5_0",
-                              D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &taaPs, &error)) ||
-            FAILED(D3DCompile(rcasShader, std::strlen(rcasShader), "spidy_taa_rcas", nullptr, nullptr, "ps", "ps_5_0",
-                              D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &rcasPs, &error)))
+                              D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &taaPs, &error)))
             return failHistory(2);
         d.PS = {taaPs->GetBufferPointer(), taaPs->GetBufferSize()};
-        d.RTVFormats[0] = pictureFormat;
         if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.taa))))
             return failHistory(3);
-        d.PS = {rcasPs->GetBufferPointer(), rcasPs->GetBufferSize()};
-        d.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-        blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
-                                      D3D12_COLOR_WRITE_ENABLE_BLUE; // the staged eye's own alpha kept
-        if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.rcas))))
-            return failHistory(3);
     }
-    history.deep = deep;
-    // Two pictures an eye, the headset's size, in the staged images' format (SPIDY TAA: 10 bits).
+    // Two pictures an eye, the headset's size, in the staged images' format.
     for (unsigned i = 0; i < 2; ++i)
         for (unsigned k = 0; k < 2; ++k) {
             auto desc = stagedEyes[i]->GetDesc();
             desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-            if (deep)
-                desc.Format = pictureFormat;
             D3D12_HEAP_PROPERTIES heap{};
             heap.Type = D3D12_HEAP_TYPE_DEFAULT;
             if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
@@ -2339,15 +2295,13 @@ bool prepareHistory() {
         }
     // Views: for eye i read from picture k, the table at (2i + k) * 2 holds
     // the staged image (t0) and that picture (t1). Targets: picture (i, k) at 2i + k.
-    // TUNE: the RCAS pass reads picture (i, k) as t0 from the table at (2i + k) * 2 + 1 (its t1, unread, the next
-    // table's staged image; the ninth view, picture (1, 1) again, ends the heap). Targets 4 + i: staged image i.
     D3D12_DESCRIPTOR_HEAP_DESC views{};
     views.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    views.NumDescriptors = 9;
+    views.NumDescriptors = 8;
     views.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     D3D12_DESCRIPTOR_HEAP_DESC targetViews{};
     targetViews.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    targetViews.NumDescriptors = 6;
+    targetViews.NumDescriptors = 4;
     if (FAILED(device->CreateDescriptorHeap(&views, IID_PPV_ARGS(&history.views))) ||
         FAILED(device->CreateDescriptorHeap(&targetViews, IID_PPV_ARGS(&history.targets))))
         return failHistory(4);
@@ -2361,30 +2315,17 @@ bool prepareHistory() {
     D3D12_RENDER_TARGET_VIEW_DESC rv{};
     rv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     rv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    D3D12_SHADER_RESOURCE_VIEW_DESC pictureView = sv;
-    D3D12_RENDER_TARGET_VIEW_DESC pictureTarget = rv;
-    pictureView.Format = pictureTarget.Format = pictureFormat;
     for (unsigned i = 0; i < 2; ++i)
         for (unsigned k = 0; k < 2; ++k) {
             auto view = history.views->GetCPUDescriptorHandleForHeapStart();
             view.ptr += static_cast<SIZE_T>(viewStep) * ((2 * i + k) * 2);
             device->CreateShaderResourceView(stagedEyes[i].Get(), &sv, view);
             view.ptr += viewStep;
-            device->CreateShaderResourceView(history.pictures[i][k].Get(), &pictureView, view);
+            device->CreateShaderResourceView(history.pictures[i][k].Get(), &sv, view);
             auto target = history.targets->GetCPUDescriptorHandleForHeapStart();
             target.ptr += static_cast<SIZE_T>(targetStep) * (2 * i + k);
-            device->CreateRenderTargetView(history.pictures[i][k].Get(), &pictureTarget, target);
+            device->CreateRenderTargetView(history.pictures[i][k].Get(), &rv, target);
         }
-    {
-        auto view = history.views->GetCPUDescriptorHandleForHeapStart();
-        view.ptr += static_cast<SIZE_T>(viewStep) * 8;
-        device->CreateShaderResourceView(history.pictures[1][1].Get(), &pictureView, view);
-        for (unsigned i = 0; i < 2; ++i) {
-            auto target = history.targets->GetCPUDescriptorHandleForHeapStart();
-            target.ptr += static_cast<SIZE_T>(targetStep) * (4 + i);
-            device->CreateRenderTargetView(stagedEyes[i].Get(), &rv, target);
-        }
-    }
     UINT64 frequency{};
     D3D12_QUERY_HEAP_DESC qd{};
     qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
@@ -2450,10 +2391,6 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
     float frame[2][16]{};
     const bool ours = spidyTaaNow() && history.taa;
-    if (history.deep && !ours) { // TUNE: 10-bit pictures only SPIDY TAA's passes draw (never: its mode is set at start)
-        history.valid = false;
-        return;
-    }
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
     for (unsigned i = 0; i < 2; ++i) {
@@ -2536,49 +2473,21 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
-    if (history.deep) {
-        // TUNE: the 10-bit picture out to the staged eye through the mild RCAS (vr_aa.hpp sharpenAmount).
-        for (unsigned i = 0; i < 2; ++i) {
-            transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                       D3D12_RESOURCE_STATE_RENDER_TARGET);
-            transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
-                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        }
-        originalBarrier(list, 4, b);
-        list->SetPipelineState(history.rcas.Get());
-        float sharpen[16]{};
-        sharpen[12] = vr_aa::sharpenAmount;
-        for (unsigned i = 0; i < 2; ++i) {
-            auto view = history.views->GetGPUDescriptorHandleForHeapStart();
-            view.ptr += static_cast<UINT64>(viewStep) * ((2 * i + write) * 2 + 1);
-            auto target = history.targets->GetCPUDescriptorHandleForHeapStart();
-            target.ptr += static_cast<SIZE_T>(targetStep) * (4 + i);
-            list->SetGraphicsRootDescriptorTable(0, view);
-            list->SetGraphicsRoot32BitConstants(1, 16, sharpen, 0);
-            list->OMSetRenderTargets(1, &target, FALSE, nullptr);
-            list->DrawInstanced(3, 1, 0, 0);
-        }
-        for (unsigned i = 0; i < 2; ++i) {
-            transition(i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
-        }
-        originalBarrier(list, 2, b);
-    } else {
-        for (unsigned i = 0; i < 2; ++i) {
-            transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                       D3D12_RESOURCE_STATE_COPY_DEST);
-            transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
-                       D3D12_RESOURCE_STATE_COPY_SOURCE);
-        }
-        originalBarrier(list, 4, b);
-        for (unsigned i = 0; i < 2; ++i)
-            list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
-        for (unsigned i = 0; i < 2; ++i) {
-            transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
-            transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
-                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        }
-        originalBarrier(list, 4, b);
+    for (unsigned i = 0; i < 2; ++i) {
+        transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_COPY_DEST);
+        transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
+                   D3D12_RESOURCE_STATE_COPY_SOURCE);
     }
+    originalBarrier(list, 4, b);
+    for (unsigned i = 0; i < 2; ++i)
+        list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
+    for (unsigned i = 0; i < 2; ++i) {
+        transition(2 * i, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        transition(2 * i + 1, history.pictures[i][write].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
+                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+    originalBarrier(list, 4, b);
     if (history.queries) {
         originalEndQuery(list, history.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first + 1);
         list->ResolveQueryData(history.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first, 2, history.stamps.Get(),

@@ -34,17 +34,12 @@ inline const char* modeName(uint32_t mode) {
 // What ran on the last pair (Data::running).
 enum Running : uint32_t { none = 0, taa = 1, smaaPass = 2, fxaaPass = 3 };
 
-// SPIDY TAA's blend. The history share kept per pair: still keepStill (0.0.76 SPIDY TAA TUNE: .94, a current-frame
-// weight of .06 - about 16 pairs, one full 16-step Halton walk, averaged - was .9), easing to keepMoving at full
-// motion - never cut for ordinary motion (0.0.73's cuts were "jagged when moving"); the clip, tighter while moving
-// (clipGamma), keeps it from ghosting. The 509bdc9 run (Nov 2): window frames and building detail still crawled -
-// 2567 of 6995 pairs eased toward .6 by the small turns a head always makes - so the ease now starts later and ends
-// higher.
-inline constexpr float keepStill = .94f, keepMoving = .8f;
-// Motion share: the eye's turn (radians) and travel (metres) between its two pairs, ramped. TUNE: from .012 rad (about
-// 30 deg/s at 45 pairs/s: a head held still, or looking around slowly, keeps the full average; was .004) to .08
-// (was .05); travel from .03 m (was .01: walking keeps it).
-inline constexpr float turnFrom = .012f, turnFull = .08f, travelFrom = .03f, travelFull = .3f;
+// SPIDY TAA's blend. The history share kept per pair: still keepStill (about 10 pairs averaged: 16 Halton steps
+// settle in well under a second), easing to keepMoving at full motion - never cut for ordinary motion (0.0.73's cuts
+// were "jagged when moving"); the clip, tighter while moving (clipGamma), keeps it from ghosting.
+inline constexpr float keepStill = .9f, keepMoving = .6f;
+// Motion share: the eye's turn (radians) and travel (metres) between its two pairs, ramped.
+inline constexpr float turnFrom = .004f, turnFull = .05f, travelFrom = .01f, travelFull = .3f;
 // Past these the old picture is not this place any more (a camera cut, a teleport): start again.
 inline constexpr float cutTurn = .26f, cutTravel = 3.f;
 inline float ramp(float v, float from, float full) {
@@ -63,33 +58,11 @@ inline float keep(bool both, float turn, float travel) {
         return 0;
     return keepStill - (keepStill - keepMoving) * motion(turn, travel);
 }
-// The variance clip's width in standard deviations, inside the 3 x 3 min / max: TUNE 1.5 still (was 1.25: looser on
-// still areas, so the Halton steps' sub-pixel window edges are averaged, not clipped back to this frame's alias),
-// 1.0 at full motion (was .85).
-inline constexpr float gammaStill = 1.5f, gammaMoving = 1.f;
+// The variance clip's width in standard deviations: 1.25 still (sub-pixel steps kept), 0.85 at full motion.
+inline constexpr float gammaStill = 1.25f, gammaMoving = .85f;
 inline float clipGamma(float turn, float travel) {
     return gammaStill - (gammaStill - gammaMoving) * motion(turn, travel);
 }
-// TUNE: a mild RCAS (AMD FidelityFX's robust contrast-adaptive sharpen, its 0.1875 lobe limit) after the TAA only,
-// never fed back into the history: sharpenAmount of its full strength, so the longer average is not soft.
-inline constexpr float sharpenAmount = .15f, rcasLimit = .1875f;
-// The RCAS lobe (negative: how much of the 4 neighbours is taken away) for one channel; the shader's sum, for tests.
-// b d f h the cross neighbours, e the centre, all 0..1.
-inline float rcasLobe(float b, float d, float f, float h, float e, float amount) {
-    const float mn4 = std::fmin(std::fmin(b, d), std::fmin(f, h)), mx4 = std::fmax(std::fmax(b, d), std::fmax(f, h));
-    const float hitMin = std::fmin(mn4, e) / (4.f * mx4 + 1e-5f);
-    const float hitMax = (1.f - std::fmax(mx4, e)) / std::fmin(4.f * std::fmin(mn4, e) - 4.f, -1e-5f);
-    const float lobe = std::fmax(-hitMin, hitMax);
-    return std::fmax(-rcasLimit, std::fmin(lobe, 0.f)) * amount;
-}
-inline float rcasPixel(float b, float d, float f, float h, float e, float amount) {
-    const float lobe = rcasLobe(b, d, f, h, e, amount);
-    const float v = (lobe * (b + d + f + h) + e) / (4.f * lobe + 1.f);
-    return v < 0 ? 0.f : v > 1 ? 1.f : v;
-}
-// TUNE: the history's own pictures are R10G10B10A2_UNORM (the staged eyes' 8 bits stall a .94 average: a step under
-// half a level, 1/255, times 1 / .06 is never made, ~3% stuck; 10 bits is a quarter of that, at the same size). The
-// TAA writes there; the RCAS pass writes the staged eye's colour (its alpha kept) from it.
 // SpidyVrAaData, for the launcher's report (tools/vr_aa_record.py).
 struct Data {
     uint32_t magic = 0x41415653; // SVAA

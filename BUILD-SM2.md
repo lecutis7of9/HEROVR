@@ -2875,3 +2875,12 @@ buildings stayed; only the light went.
   --size): the `down` filter then SPIDY TAA. Report: the last vr_aa / jitter_log records kept when the game closes
   before the final read (vr_aa_last, jitter_log_last). Tests: core `SPIDY TAA` tune checks, hero076_spidy_taa_tests
   Tune.
+
+## 73. Version 0.0.76 SPIDY TAA TUNE taken back: 509bdc9's TAA again (9aaedd5 brought the line crawl back)
+
+  include/spidy/vr_aa.hpp, src/native_eye_gpu.cpp and tests/core_tests.cpp are 061409c's (509bdc9's) again: keep 0.9
+  still / 0.6 moving (turnFrom 0.004, turnFull 0.05, travelFrom 0.01 m), gamma 1.25 / 0.85, an 8-bit history copied
+  to the staged eye; no RCAS pass, no R10G10B10A2 pictures. Launcher apply_vr_aa: mip 'game' again for ours with the
+  game's AA at TAA. Kept from §72: live.txt vr_ss (off by default) and the report's vr_aa_last / jitter_log_last.
+  The two runs' numbers (fps, GPU wait, TAA cost, motion easing, mip bias): docs/VISUAL-0.0.76.md "SPIDY TAA TUNE".
+  Tests: hero076_spidy_taa_tests Tune (509bdc9's constants, no RCAS or 10-bit history; vr_ss; the report).

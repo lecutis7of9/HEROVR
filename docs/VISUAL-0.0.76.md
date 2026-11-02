@@ -102,3 +102,14 @@ Each run now measures it (report `pose_check`, console "POSE CHECK render vs sub
 
 MATCH with a small `world_turn`: the far shake is not a pose mismatch. DIFFERS: the numbers say which eye and
 whether the game (command) or the hand-off (submit) moved it.
+
+### HITCH HOLD (run 060032, c71a59c: "completely unplayable from lag")
+
+The lag was not the game drawing slower. Virtual Desktop held the frame hand-off (xrEndFrame) for about a tenth of a
+second 108 times (10.8 s of a 109 s run; holds of 100, 200 and up to 410 ms), starting on the game screen 7 s in,
+before any VR eye was drawn; the two runs before (dd027d4, c8974f4) had none with the same settings. Each held frame
+was more than 0.1 s long, which HERO VR took as "tracking lost": VR play dropped to the game screen for 0.2-2 s and
+the webs let go, so one short hitch became a freeze of up to two seconds with black edges and a snap back. Now a
+held frame of up to half a second plays as one 0.1 s step and VR goes on (live.txt `hitch_hold = on`, the default;
+`off` is c71a59c's rule, live, no restart). The holds themselves come from the stream to the headset (CANDIDATE:
+Wi-Fi, bitrate or codec in Virtual Desktop; keep it at 90 Hz).

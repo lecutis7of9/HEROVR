@@ -6,6 +6,11 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **Freezes and lag fixed (HITCH HOLD):** in the last test Virtual Desktop held about one frame in ten for a tenth of a
+  second, and each held frame made VR drop to the game screen for up to two seconds (the freezes, black edges and
+  snaps). A held frame of up to half a second now plays as one short step and VR goes on. live.txt, live (no
+  restart): `hitch_hold = off` is the old rule. If it still stutters, check Virtual Desktop's Wi-Fi, bitrate and
+  codec (90 Hz). [docs/VISUAL-0.0.76.md](docs/VISUAL-0.0.76.md)
 - **City ghosting fixed (GHOST FIX):** the ghosting of the city and buildings that came with the last test is gone:
   the game's own (unseen) head view keeps its TAA jitter again, as in the sharp dd027d4 build. Taking it away (the
   last FAR SHAKE try) stopped that view's TAA and did not stop the far shake (run 005811). live.txt, live (no

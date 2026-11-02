@@ -339,6 +339,60 @@ def model_info(toc, path):
     return info
 
 
+LOOK_EXTS = ('.material', '.texture')
+
+
+def _asset_paths(node, exts, out, depth=0):
+    """Every asset path string (or {'AssetPath': ...}) under a config tree ending in one of exts, in order, once."""
+    if depth > 24:
+        return out
+    if isinstance(node, str):
+        p = normalize(node) if node else None
+        if p and p.endswith(exts) and p not in out:
+            out.append(p)
+    elif isinstance(node, dict):
+        for v in node.values():
+            _asset_paths(v, exts, out, depth + 1)
+    elif isinstance(node, (list, tuple)):
+        for v in node:
+            _asset_paths(v, exts, out, depth + 1)
+    return out
+
+
+def _ref(path):
+    return {'path': path, 'id': '%016X' % asset_id(path)}
+
+
+def suit_look(toc, reward_path, notes):
+    """0.0.76 SUIT PROBE 5: what tells two suits on the same model apart (the Hybrid case): the equipped loadout
+    .config (DefaultLoadoutConfig), its vanity item .configs, and every .material / .texture path named in the
+    reward, the loadout and those items. Each as {'path', 'id'}; a part that cannot be read is a note."""
+    look = {'loadout': None, 'vanity': [], 'materials': []}
+    reward = read_config(toc.read(asset_id(reward_path)))
+    mats = _asset_paths(reward, LOOK_EXTS, [])
+    loadout = _path(reward.get('DefaultLoadoutConfig'))
+    if loadout:
+        look['loadout'] = _ref(loadout)
+        try:
+            tree = read_config(toc.read(asset_id(loadout)))
+        except (KeyError, ValueError, NeedsDecoder, struct.error) as e:
+            notes.append('%s: %s' % (loadout, e))
+            tree = {}
+        _asset_paths(tree, LOOK_EXTS, mats)
+        for lst in (tree.get('Loadout') or {}).get('ItemLoadoutLists') or []:
+            for entry in (lst or {}).get('Items') or []:
+                item = (entry or {}).get('Item')
+                if not isinstance(item, str) or not item:
+                    continue
+                look['vanity'].append(_ref(normalize(item)))
+                try:
+                    _asset_paths(read_config(toc.read(asset_id(item))), LOOK_EXTS, mats)
+                except (KeyError, ValueError, NeedsDecoder, struct.error):
+                    pass  # suit_models already noted it
+    look['materials'] = [_ref(m) for m in mats]
+    return look
+
+
 def suit_models(toc, reward_path, notes):
     """Overstrike ResolveSuitModelPaths: the body .model files and the mask of one suit's reward loadout."""
     reward = read_config(toc.read(asset_id(reward_path)))
@@ -367,7 +421,7 @@ def suit_models(toc, reward_path, notes):
 
 def scan(game_dir):
     toc = Toc(game_dir)
-    report = {'tool': 'sm2scan 1', 'assets': len(toc.ids), 'archives': len(toc.archives), 'suits': [], 'notes': []}
+    report = {'tool': 'sm2scan 2', 'assets': len(toc.ids), 'archives': len(toc.archives), 'suits': [], 'notes': []}
     kinds = {}
     for k in range(len(toc.archives)):
         try:
@@ -397,6 +451,7 @@ def scan(game_dir):
                 entry['characters'] = chars
                 entry['models'] = [model_info(toc, p) for p in body]
                 entry['mask'] = model_info(toc, mask) if mask else None
+                entry.update(suit_look(toc, item, notes))
             except (KeyError, ValueError, NeedsDecoder, struct.error) as e:
                 notes.append(str(e))
             if notes:

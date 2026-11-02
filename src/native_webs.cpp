@@ -1,6 +1,14 @@
 // Draws tracked-hand webs with the game's own rope system. Rope slots are
 // created, aimed, and released only inside the hero rope manager's update,
 // the same phase in which the game's hero states use them.
+//
+// 0.0.76 SM2 NATIVE WEBS: Spider-Man 2 (2.810.0.0) values. Every one is SM2VR 0.0.27's own
+// (spidy_stereo_probe.dll: start 0x16640, update detour 0x16e40, hand points 0x15ba0, parts 0x16330),
+// each function's first 16 bytes checked against Spider-Man2.exe on this box, and the offsets seen in
+// the game's own code (aaac90: rope +854 lifetime, +8c0 type, +8cc flags; aab420: joint hashes
+// 1d8/204/230/25c + 4*hand, Start at (hand+0x36)*12 = 288; ab5180: ropes at +50, count +58, 0xa18 each).
+// CANDIDATE until a run shows web_state active with creates > 0. Remastered values are in the comments
+// as "SM1". Any byte mismatch refuses the start (6001) and the overlay keeps drawing the webs.
 #include "spidy/sm2_port.hpp"
 #include "spidy/native_appearance.hpp"
 #include "spidy/native_eye_frame.hpp"
@@ -24,8 +32,21 @@ using Get = uintptr_t (*)(void*, uint32_t);
 // not zero) as its first `*count` points and before the line from the last of
 // them to the anchor: the place a rope can be given more points of its own.
 using HandPoints = void (*)(void*, uint8_t*, float, int32_t*);
+namespace sm2w {
+constexpr uintptr_t update = 0xaaac90, ensure = 0xaac730, target = 0xab5180, release = 0xab2590, get = 0xab2740,
+                    handPoints = 0x10ebce0;           // SM1 676dd0 677d20 67d7c0 67b610 67b7b0 95f9c0
+constexpr uintptr_t managerVtable = 0x53a1940;        // SM1 38b3df8
+constexpr uintptr_t managerRecord = 0x10;             // SM1 +8
+constexpr uintptr_t ropeArray = 0x50, ropeCount = 0x58; // SM1: 16 slots inline from +50
+constexpr uintptr_t ropeStride = 0xa18;               // SM1 7c8
+constexpr uintptr_t ropeHandles = 0x10, ropePoints = 0x2c, ropeLease = 0x854, ropeType = 0x8c0, ropeFlags = 0x8cc,
+                    ropeCone = 0x8dc, ropeTypeData = 0x18; // SM1 0, 1c, 6c0, 700, 70c, 71c, 8
+constexpr uintptr_t hashes[4] = {0x1d8, 0x204, 0x230, 0x25c}; // two dwords (hands) each; SM1 7d40 (8 dwords)
+constexpr uintptr_t starts[4] = {0x288, 0x30c, 0x390, 0x414}; // Start/Grip/Grip2/End + 12*hand; SM1 7d60..7da8
+constexpr uintptr_t instanceTable = 0xc2d2d08, instanceCount = 0xc2d2d24; // SM1 7a436e8 / 7a43704
+} // namespace sm2w
 constexpr uint32_t swingRope = 2; // rope type table: 2 = Swing
-// Rope +6c0 is a lifetime the update counts down, then dissolves the rope
+// Rope +854 (SM1 +6c0) is a lifetime the update counts down, then dissolves the rope
 // (676dd0 -> 6795b0). EnsureRope sets it to -1. Refreshing it every update
 // lets the game remove Spidy's webs by itself if Spidy stops running.
 constexpr float leaseSeconds = .3f;
@@ -99,14 +120,14 @@ void handPoints(void* manager, uint8_t* rope, float dt, int32_t* count) {
     uint32_t flags{}, type{};
     // Only a rope Spidy lays, attached (not released: +70c bit 2), a swing
     // rope (type 2).
-    if (!h || !count || h->count < 2 || h->count > 8 || !read(h->rope + 0x70c, &flags, 4) || (flags & 4) ||
-        !read(h->rope + 0x700, &type, 4) || type != 2) {
+    if (!h || !count || h->count < 2 || h->count > 8 || !read(h->rope + sm2w::ropeFlags, &flags, 4) || (flags & 4) ||
+        !read(h->rope + sm2w::ropeType, &type, 4) || type != 2) {
         originalHandPoints(manager, rope, dt, count);
         return;
     }
     // The game goes on from the rope's Start, which the update made the last
     // of them.
-    std::memcpy(rope + 0x1c, h->points, sizeof(Vec3) * h->count);
+    std::memcpy(rope + sm2w::ropePoints, h->points, sizeof(Vec3) * h->count);
     *count = h->count;
 }
 bool entry(uintptr_t rva, const unsigned char* expected, size_t n) {
@@ -115,25 +136,29 @@ bool entry(uintptr_t rva, const unsigned char* expected, size_t n) {
 }
 // Instance handles resolve through the 16-byte table at 7a436e8 (191ba30).
 uintptr_t instance(uint32_t handle) {
-    const auto table = pointer(base + 0x7a436e8);
+    const auto table = pointer(base + sm2w::instanceTable);
     int32_t count{};
     uint8_t generation{};
     const uint64_t index = handle & 0xffffff;
-    if (!(handle >> 24) || !table || !read(base + 0x7a43704, &count, 4) || static_cast<int64_t>(index) >= count ||
+    if (!(handle >> 24) || !table || !read(base + sm2w::instanceCount, &count, 4) || static_cast<int64_t>(index) >= count ||
         !read(table + index * 16 + 8, &generation, 1) || generation != handle >> 24)
         return 0;
     return pointer(table + index * 16);
 }
 void publishParts(uintptr_t manager) {
     size_t next{};
-    for (unsigned slot = 0; slot < 16; ++slot) {
+    const auto ropes = pointer(manager + sm2w::ropeArray);
+    uint16_t slots{};
+    if (!ropes || !read(manager + sm2w::ropeCount, &slots, 2))
+        slots = 0;
+    for (unsigned slot = 0; slot < std::min<unsigned>(slots, 64); ++slot) {
         uint8_t active{};
-        const auto rope = manager + 0x50 + slot * 0x7c8;
-        if (!read(rope + 0x70c, &active, 1) || !(active & 1))
+        const auto rope = ropes + slot * sm2w::ropeStride;
+        if (!read(rope + sm2w::ropeFlags, &active, 1) || !(active & 1))
             continue;
         uint32_t handles[3]{};
-        read(rope, handles, 8);          // tube, camera-facing effect
-        read(rope + 0x71c, handles + 2, 4); // end cone
+        read(rope + sm2w::ropeHandles, handles, 8); // tube, camera-facing effect
+        read(rope + sm2w::ropeCone, handles + 2, 4); // end cone
         for (auto h : handles)
             if (const auto p = h ? instance(h) : 0; p && next < webParts.size())
                 webParts[next++].store(p, std::memory_order_relaxed);
@@ -144,7 +169,7 @@ void publishParts(uintptr_t manager) {
 void update(void* manager, float dt) {
     const auto mgr = reinterpret_cast<uintptr_t>(manager);
     const auto heroRecord = record.load();
-    if (!enabled || !heroRecord || pointer(mgr) != base + 0x38b3df8 || pointer(mgr + 8) != heroRecord) {
+    if (!enabled || !heroRecord || pointer(mgr) != base + sm2w::managerVtable || pointer(mgr + sm2w::managerRecord) != heroRecord) {
         originalUpdate(manager, dt);
         return;
     }
@@ -177,10 +202,10 @@ void update(void* manager, float dt) {
     }
     if (live && placed)
         native_eyes::reanchorOffset(wanted.feet, {hero[12], hero[13], hero[14]}, travel);
-    const auto ensure = reinterpret_cast<Ensure>(base + 0x677d20);
-    const auto target = reinterpret_cast<Target>(base + 0x67d7c0);
-    const auto release = reinterpret_cast<Release>(base + 0x67b610);
-    const auto get = reinterpret_cast<Get>(base + 0x67b7b0);
+    const auto ensure = reinterpret_cast<Ensure>(base + sm2w::ensure);
+    const auto target = reinterpret_cast<Target>(base + sm2w::target);
+    const auto release = reinterpret_cast<Release>(base + sm2w::release);
+    const auto get = reinterpret_cast<Get>(base + sm2w::get);
     uint64_t created{}, released{}, failures{};
     uint32_t failed{}, count{}, drawn{}, builtMask{};
     Vec3 built[2]{};
@@ -225,7 +250,7 @@ void update(void* manager, float dt) {
         if (rope.handle && !rope.trailing) {
             target(manager, rope.handle, &want.anchor.x);
             if (const auto slot = get(manager, rope.handle))
-                std::memcpy(reinterpret_cast<void*>(slot + 0x6c0), &leaseSeconds, sizeof(leaseSeconds));
+                std::memcpy(reinterpret_cast<void*>(slot + sm2w::ropeLease), &leaseSeconds, sizeof(leaseSeconds));
             ++count;
             drawn |= 1u << hand;
         }
@@ -235,9 +260,11 @@ void update(void* manager, float dt) {
         // 676dd0 rewrites Start/Grip/Grip2/End (7d60/7d78/7d90/7da8, +12 per
         // hand) from skeleton joints whose hashes (7d40..7d5f) are non-zero.
         // Supply tracked positions for this update only and restore the hashes.
-        uint32_t hashes[8]{};
-        std::memcpy(hashes, reinterpret_cast<void*>(mgr + 0x7d40), sizeof(hashes));
-        std::memset(reinterpret_cast<void*>(mgr + 0x7d40), 0, sizeof(hashes));
+        uint64_t hashes[4]{};
+        for (unsigned j = 0; j < 4; ++j) {
+            std::memcpy(&hashes[j], reinterpret_cast<void*>(mgr + sm2w::hashes[j]), 8);
+            std::memset(reinterpret_cast<void*>(mgr + sm2w::hashes[j]), 0, 8);
+        }
         Vec3 starts[2]{};
         bool wrote[2]{};
         for (unsigned hand = 0; hand < 2; ++hand) {
@@ -254,8 +281,8 @@ void update(void* manager, float dt) {
             // wrist as a second strand. Grip (0,0,0) keeps one hand point, so
             // the rope runs straight from Start to the anchor.
             const Vec3 none{};
-            for (const auto [offset, point] : {std::pair{0x7d60, start}, std::pair{0x7d78, none},
-                                               std::pair{0x7d90, start}, std::pair{0x7da8, start}})
+            for (const auto [offset, point] : {std::pair{sm2w::starts[0], start}, std::pair{sm2w::starts[1], none},
+                                               std::pair{sm2w::starts[2], start}, std::pair{sm2w::starts[3], start}})
                 std::memcpy(reinterpret_cast<void*>(mgr + offset + hand * 12), &point, sizeof(point));
             starts[hand] = start;
             wrote[hand] = true;
@@ -290,7 +317,7 @@ void update(void* manager, float dt) {
             int16_t most{};
             // With room for the hand's points: the most points the rope's
             // type takes.
-            if (!slot || !read(slot + 8, &typeData, 8) || !read(typeData + 0x28, &most, 2))
+            if (!slot || !read(slot + sm2w::ropeTypeData, &typeData, 8) || !read(typeData + 0x28, &most, 2))
                 continue;
             Laying lay{};
             lay.count = native_webs::ropePoints(starts[hand], both ? &lower : nullptr,
@@ -302,17 +329,18 @@ void update(void* manager, float dt) {
             lay.rope = slot;
             laying[hand] = lay;
             const Vec3 from = lay.points[lay.count - 1];
-            std::memcpy(reinterpret_cast<void*>(mgr + 0x7d60 + hand * 12), &from, sizeof(from));
+            std::memcpy(reinterpret_cast<void*>(mgr + sm2w::starts[0] + hand * 12), &from, sizeof(from));
         }
         originalUpdate(manager, dt);
         const auto laid = laying;
         laying = {};
-        std::memcpy(reinterpret_cast<void*>(mgr + 0x7d40), hashes, sizeof(hashes));
+        for (unsigned j = 0; j < 4; ++j)
+            std::memcpy(reinterpret_cast<void*>(mgr + sm2w::hashes[j]), &hashes[j], 8);
         // Start is the wrist again between updates: the hero's own update
         // (95f6c0) takes the hand's velocity from how it moves.
         for (unsigned hand = 0; hand < 2; ++hand)
             if (laid[hand].rope)
-                std::memcpy(reinterpret_cast<void*>(mgr + 0x7d60 + hand * 12), &starts[hand], sizeof(Vec3));
+                std::memcpy(reinterpret_cast<void*>(mgr + sm2w::starts[0] + hand * 12), &starts[hand], sizeof(Vec3));
         // 679dc0 starts each attached rope's points (rope +1c) at Start. A
         // released one (+70c bit 2) drifts from it, and the tail above moved
         // point 0 away, so a gap here means the rope does not leave the wrist.
@@ -322,7 +350,7 @@ void update(void* manager, float dt) {
             const auto slot = ours ? get(manager, owned[hand].handle) : 0;
             const auto& lay = laid[hand];
             const int first = slot && slot == lay.rope && lay.drawnAt > 0 ? lay.drawnAt : 0;
-            if (slot && read(slot + 0x1c + first * 12, &built[hand], sizeof(Vec3)) && finite(built[hand])) {
+            if (slot && read(slot + sm2w::ropePoints + first * 12, &built[hand], sizeof(Vec3)) && finite(built[hand])) {
                 startError = std::max(startError, length(built[hand] - starts[hand]));
                 builtMask |= 1u << hand;
             }
@@ -362,27 +390,23 @@ uint32_t native_webs::start(uintptr_t gameBase, uintptr_t heroRecord) {
     do {
         if (enabled)
             break;
-        // SM2TODO: the hero's webs in VR: Spider-Man 2 addresses unknown; not hooked.
-        if (spidy::sm2::notPorted) {
-            result = spidy::sm2::websNotPorted;
-            break;
-        }
+        // 0.0.76 SM2 NATIVE WEBS: ported (values above, CANDIDATE); the byte checks below refuse any other build.
         base = gameBase;
         record = heroRecord;
-        const unsigned char updateBytes[] = {0x48, 0x8b, 0xc4, 0x48, 0x89, 0x58, 0x10, 0x48,
-                                             0x89, 0x70, 0x20, 0x55, 0x57, 0x41, 0x54, 0x41};
-        const unsigned char ensureBytes[] = {0x48, 0x89, 0x5c, 0x24, 0x10, 0x57, 0x48, 0x83,
-                                             0xec, 0x20, 0x48, 0x8b, 0xf9, 0x45, 0x8b, 0xd8};
-        const unsigned char targetBytes[] = {0x0f, 0xb7, 0xc2, 0x83, 0xf8, 0x10, 0x73, 0x56,
-                                             0x4c, 0x69, 0xc8, 0xc8, 0x07, 0x00, 0x00, 0x41};
+        const unsigned char updateBytes[] = {0x48, 0x89, 0x5c, 0x24, 0x10, 0x55, 0x56, 0x57,
+                                             0x48, 0x83, 0xec, 0x50, 0x44, 0x8b, 0x81, 0xbc};
+        const unsigned char ensureBytes[] = {0x48, 0x89, 0x5c, 0x24, 0x10, 0x56, 0x48, 0x83,
+                                             0xec, 0x20, 0x48, 0x8b, 0xf1, 0x45, 0x8b, 0xd1};
+        const unsigned char targetBytes[] = {0x0f, 0xb7, 0xc2, 0x3b, 0x41, 0x58, 0x73, 0x55,
+                                             0x48, 0x8b, 0x49, 0x50, 0x4c, 0x69, 0xc8, 0x18};
         const unsigned char releaseBytes[] = {0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83,
                                               0xec, 0x20, 0x44, 0x8b, 0x1a, 0x41, 0x0f, 0xb6};
-        const unsigned char getBytes[] = {0x0f, 0xb7, 0xc2, 0x83, 0xf8, 0x10, 0x73, 0x30,
-                                          0x4c, 0x69, 0xc0, 0xc8, 0x07, 0x00, 0x00, 0x41};
-        if (!base || !record.load() || !entry(0x676dd0, updateBytes, sizeof(updateBytes)) ||
-            !entry(0x677d20, ensureBytes, sizeof(ensureBytes)) ||
-            !entry(0x67d7c0, targetBytes, sizeof(targetBytes)) ||
-            !entry(0x67b610, releaseBytes, sizeof(releaseBytes)) || !entry(0x67b7b0, getBytes, sizeof(getBytes))) {
+        const unsigned char getBytes[] = {0x0f, 0xb7, 0xc2, 0x3b, 0x41, 0x58, 0x73, 0x2f,
+                                          0x4c, 0x69, 0xc8, 0x18, 0x0a, 0x00, 0x00, 0x4c};
+        if (!base || !record.load() || !entry(sm2w::update, updateBytes, sizeof(updateBytes)) ||
+            !entry(sm2w::ensure, ensureBytes, sizeof(ensureBytes)) ||
+            !entry(sm2w::target, targetBytes, sizeof(targetBytes)) ||
+            !entry(sm2w::release, releaseBytes, sizeof(releaseBytes)) || !entry(sm2w::get, getBytes, sizeof(getBytes))) {
             result = 6001;
             break;
         }
@@ -392,7 +416,7 @@ uint32_t native_webs::start(uintptr_t gameBase, uintptr_t heroRecord) {
                 result = 6100 + s;
                 break;
             }
-            updateHook = reinterpret_cast<void*>(base + 0x676dd0);
+            updateHook = reinterpret_cast<void*>(base + sm2w::update);
             if (const auto c = MH_CreateHook(updateHook, reinterpret_cast<void*>(update),
                                              reinterpret_cast<void**>(&originalUpdate));
                 c != MH_OK) {
@@ -403,10 +427,10 @@ uint32_t native_webs::start(uintptr_t gameBase, uintptr_t heroRecord) {
         }
         // The hand points are optional: without them the overlay draws the
         // piece of a web held in both hands between them, as before.
-        const unsigned char handPointsBytes[] = {0x48, 0x8b, 0xc4, 0xf3, 0x0f, 0x11, 0x50, 0x18,
-                                                 0x55, 0x53, 0x56, 0x41, 0x56, 0x48, 0x8d, 0xa8};
-        if (!heldHooked && entry(0x95f9c0, handPointsBytes, sizeof(handPointsBytes))) {
-            handPointsHook = reinterpret_cast<void*>(base + 0x95f9c0);
+        const unsigned char handPointsBytes[] = {0x48, 0x8b, 0xc4, 0x4c, 0x89, 0x48, 0x20, 0xc5,
+                                                 0xfa, 0x11, 0x50, 0x18, 0x55, 0x53, 0x56, 0x48};
+        if (!heldHooked && entry(sm2w::handPoints, handPointsBytes, sizeof(handPointsBytes))) {
+            handPointsHook = reinterpret_cast<void*>(base + sm2w::handPoints);
             heldHooked = MH_CreateHook(handPointsHook, reinterpret_cast<void*>(handPoints),
                                        reinterpret_cast<void**>(&originalHandPoints)) == MH_OK;
         }

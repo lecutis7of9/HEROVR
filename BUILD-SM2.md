@@ -149,7 +149,7 @@ hooked with a Remastered address.
 | Hand rays and web swinging (`spidy_ray_bridge`, `spidy_movement_bridge`) | **On** (`SM2_PORT_GAMEPLAY 1`), SM2VR 0.0.27 values; switches itself off on a byte mismatch (section 15) | `src/native_rays.cpp`, `src/native_movement.cpp`, `src/game_xr.cpp` |
 | Web grab of props and thugs, punches (`native_bodies`) | Not hooked (code 8099) | `src/native_bodies.cpp`, `src/game_punch.cpp`, `src/game_swing.cpp` |
 | Web shooter gadgets, the game's wall crawl, wall interactions | Not hooked (code 9990) | `src/game_shooter.cpp`, `src/game_warp.cpp`, `src/game_offers.cpp` |
-| Hero webs drawn in VR | Not hooked (code 6099) | `src/native_webs.cpp` |
+| Hero webs drawn in VR | **On with GAME WEBS ONLY** (0.0.76, SM2VR 0.0.27 values, bytes checked; drawing CANDIDATE); refused on a byte mismatch (6001) | `src/native_webs.cpp` |
 | Full-body pose (arms follow your hands) | Not hooked (code 7099) | `src/native_body.cpp` |
 | VR HUD panel and its placement hook | Not hooked (code 9599), `SM2_STEREO_HUD 0` | `src/native_hud.cpp`, `src/stereo_probe.cpp` |
 | Resting view's drawn-list marks | `SM2_STEREO_RESTED_MARKS 0` | `src/stereo_probe.cpp` |
@@ -302,9 +302,10 @@ The codes are:
 - web grab of props and thugs, and punches (`native_bodies`, code 8099; the swing starts with grab kinds 0)
 - web shooter gadgets, the game's wall crawl and its wall interactions (code 9990)
 
-Game-drawn webs (`native_webs`, 6099) also stay off, so the overlay draws the webs. SM2VR 0.0.27's stereo
-probe does port them (rope functions at 0xaaac90, 0xaac730, 0xab5180, 0xab2590 and 0xab2740, hand points
-at 0x10ebce0, rope stride 0xa18). Their rope-slot offsets are not mapped yet.
+Game-drawn webs (`native_webs`): 0.0.76 ports them with SM2VR 0.0.27's values (rope functions at 0xaaac90,
+0xaac730, 0xab5180, 0xab2590 and 0xab2740, hand points at 0x10ebce0, rope stride 0xa18, lease +0x854, type +0x8c0,
+flags +0x8cc, end cone +0x8dc), started when GAME WEBS ONLY is on; see docs/GAME-WEBS-0.0.76.md. The line drawing
+is CANDIDATE until a run shows creates > 0; on a byte mismatch the overlay keeps drawing the webs.
 
 `SM2_PORT_GAMEPLAY 0` in `src/game_xr.cpp` turns rays and swinging back off.
 

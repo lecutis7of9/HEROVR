@@ -132,6 +132,20 @@ GPU, the suit's asset id in the MP WORLD packet, and drawing it on the receiver 
   Classic, wait 30-40 s, Hybrid, wait 30-40 s, quit normally, send the log. The container is CONFIRMED only if
   PROBE 4's lines follow all three swaps in that order.
 
+## SUIT PROBE 5 and the probe hitch (same `suit_probe`, still read-only, guarded)
+- PROBE 5: the Hybrid suit shares its model with its sibling and differs only in its materials / textures and its
+  equipped loadout config. `tools/sm2_suits/sm2scan.py` (sm2scan 2) now writes, per suit, "loadout" (the reward's
+  DefaultLoadoutConfig), "vanity" (its item configs) and "materials" (.material / .texture paths). PROBE 5 reads the
+  hero record and its instance and one step into each pointer there, about once a second, a few objects a frame,
+  and logs "SUIT PROBE 5: baseline / change N ..." with the worn look (the suit most of the found ids name) and up
+  to 6 +/- lines, when two passes agree. Every place is CANDIDATE. An older sm2scan.json says once to re-run the
+  new sm2scan.py.
+- Less noise: PROBE 3 shows at most 6 lines a change and 2 WATCH places a suit (then "... N more"); PROBE 4 at most
+  6; PROBE 1 shows only `characters/` paths (no fx quest-marker model).
+- The hitch (run TEST 3c47385: peaks of 38-78 ms): PROBE 1 read ~4,000 times in one frame each second; it now
+  reads 4 root words a frame. Every probe step stops between objects after 160 reads (PROBE 3: 600) or once the frame's 1.2 ms
+  (all probes) is spent, and always does one object, so none starves. The cost line shows whether the peaks went.
+
 ## Drawing a friend in his game suit (started; nothing draws yet)
 - Container formats (toc, DAT1, DSAR, LZ4 blocks): CONFIRMED by the user's sm2scan run.
 - Inside a .model (joints 15DF9D3B, meshes 78D9CBDE, built 283D0383, vertexes 2C2CA205 and u16 indexes

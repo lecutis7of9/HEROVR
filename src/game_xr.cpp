@@ -6528,7 +6528,9 @@ DWORD WINAPI run(void*) {
                             }
                         }
                         fightNear = input.focused && ((fighting && strikes.cueTarget != 0) || punch.bots != 0);
-                        if (websStarted && motion.active && !flatScreen) {
+                        // 0.0.76 SM2 NATIVE WEBS: only SPIDER-MAN's webs go to the game's ropes (GAME WEBS ONLY on);
+                        // every other hero keeps his own tether, and with no submit the lease (200 ms) dissolves them.
+                        if (websStarted && motion.active && !flatScreen && gameWebsOnly()) {
                             // The game draws these webs from the tracked web shooters.
                             native_webs::Request webs;
                             native_webs::Bent bent[2]{};
@@ -12028,7 +12030,8 @@ DWORD WINAPI run(void*) {
                             // rope that draws this hand's web, which may be the other
                             // side's (one web in both hands).
                             const int slot = saved->webSlots[hand];
-                            const bool gameWeb = native_webs::drawing(slot >= 0 ? static_cast<unsigned>(slot) : hand);
+                            const bool gameWeb = gameWebsDrawn &&
+                                                 native_webs::drawing(slot >= 0 ? static_cast<unsigned>(slot) : hand);
                             // One web in both hands: the strand comes to the other hand
                             // first, and this hand's part runs from wrist to wrist, as
                             // slack as the rope between the two holds is long.

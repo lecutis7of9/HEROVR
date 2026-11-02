@@ -2773,3 +2773,16 @@ buildings stayed; only the light went.
   vr_jitter = off: the eyes' lens one fixed 1e-6 NDC (sm1style::steadyJitter; not zero, since TemporalAa 0x2c2dc60,
   CONFIRMED, skips a job with zero jitter). Both live (SpidyVrJitter, SpidyVrGameJitter; refused 4605, 4606). No new
   game address. Tests: hero076_far_shake_tests, core `FAR SHAKE`.
+
+## 66. Version 0.0.76 GHOST FIX: the game view's jitter kept; each eye's TAA history measured
+
+  Run 005811 (c8974f4): far shake unchanged, new ghosting of the city; engine_taa game_jitter -0.0, so the game view's
+  TemporalAa skipped each frame. vr_game_jitter's default is keep again (0 keep, 1 off; SpidyVrGameJitter, refused
+  4606; sm1style::gameViewJitter(off, stock)). The outside advice checked in 2.810.0.0 (CONFIRMED by disassembly): eye
+  jobs' sets +0x18e0 (current) / +0x18e8 (history), set by 0x2c98440 to the given set (the main set [0xc15d7d8] when
+  none, flag +0x13f9), 0x2c96f80 copying current to history and only for the main set swapping [0xc15d7d8] /
+  [0xc15d7e0]; history target set +0x12660 (+0x12a30 with [0xc2c7d95]) filled by TemporalAa at 0x2c2e783. New
+  read-only check in the TemporalAa hook: sm1style::ownHistory(set, history, main set, other eye's set), counted in
+  SpidySm1StyleData version 2 (ownHistory, sharedHistory, jobChanged), read by tools/sm1style_record.py into the report
+  (`sm1style_eyes`) and the console. Motion vectors: eye_camera previous_own 19916/19916. No FXAA. Tests:
+  hero076_far_shake_tests, core `GHOST FIX`, `EYE HISTORY CHECK`.

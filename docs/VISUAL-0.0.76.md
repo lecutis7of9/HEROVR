@@ -50,11 +50,34 @@ Encodings (registry beside the game log's [Settings]): TextureQuality 0 Low (023
 
 | switch (live.txt, live, no restart) | default | what it does |
 | --- | --- | --- |
-| `vr_game_jitter` | `off` | the game's own head view (never shown; it feeds frame-wide work) gets no TAA jitter; `keep` gives it the flat game's 1280x720 jitter again (up to ~3.5 eye pixels a frame) |
+| `vr_game_jitter` | `keep` | the game's own head view (never shown) keeps the flat game's TAA jitter, as dd027d4 (GHOST FIX: the default again); `off` gives it none, so its TAA skips - c8974f4's try, which ghosted the city and did not stop the shake |
 | `vr_jitter` | `on` | the eyes' Halton (2, 3) sample walk (the sharp bricks); `off` holds one fixed tiny offset (1e-6 NDC) so the game's TAA still runs - a test, edges a little rougher |
 
 What run 001842 ruled out: the eyes' previous cameras are their own (9040/9040, 0.0 m); both eyes' jitter is the
 same point in their own NDC, under half a pixel; no depth goes to the runtime (Virtual Desktop's reprojection is
-rotation-only); EYE LOD is off and the video shows no popping. Left: the game view's jitter (fixed by default) and,
+rotation-only); EYE LOD is off and the video shows no popping. Left then: the game view's jitter and,
 outside the game, Virtual Desktop's Synchronous Spacewarp at 47 pictures for a 90 Hz headset (try it Disabled).
+
+### GHOST FIX (run 005811, c8974f4)
+
+The owner's run of c8974f4 (vr_game_jitter off by default): the far shake unchanged, and new "ghosting of the city and
+buildings". engine_taa game_jitter -0.0 (the zero reached the game), so the game view's TemporalAa skipped every frame
+(0x2c2dc60 skips a zero jitter, CONFIRMED). That is the one picture change from dd027d4 (no ghosting), so `keep` is the
+default again. How the skipped view reaches the eyes is CANDIDATE (frame-wide work taken from the main view's TAA
+output); the frame rate also fell, 47.6 to 44.2.
+
+Checked against the outside advice:
+- Each eye its own TAA history (CONFIRMED by disassembly, 2.810.0.0): an eye job's current and history buffer sets
+  are job +0x18e0 / +0x18e8, set by the job start (0x2c98440) to the eye's own set (eye +0x1e38); only a job given the
+  game's main set (+0x13f9) ping-pongs [0xc15d7d8] / [0xc15d7e0] (0x2c96f80). TemporalAa writes its output into that
+  set's history target (0x2c2e783). Nothing found wrong; measured each run now (SpidySm1StyleData version 2, report
+  `sm1style_eyes`, console "SM1STYLE eyes: ... shared N").
+- Each eye's own previous view-projection for motion vectors and reprojection: eye_camera previous_own 19916/19916.
+  Nothing found wrong.
+- No FXAA/SMAA added (the eyes' TAA stays; FXAA was the old soft look).
+
+Far shake: still open. Run 005811: 44.2 pictures a second on an 89.3 Hz headset (each shown ~2 refreshes, 87
+submits a second, 39 of them a picture sent again), GPU-bound. Below the refresh, Virtual Desktop's Synchronous
+Spacewarp (if Automatic/Always) synthesises frames, which warps and ghosts far buildings; set it Disabled in VD's
+Streaming tab, or lower the refresh rate / render size so the game holds full rate, as a test.
 vr_jitter off does not move the mip level (the game's TAA keeps its own bias), so no mip-bias change goes with it.

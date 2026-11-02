@@ -36441,15 +36441,21 @@ int main() {
         // The eyes upscaled only when every check passed.
         check(s1::madePercent(true, true, true, true) == 67, "67% when all checks pass");
         // 0.0.76 FAR SHAKE: vr_jitter off keeps one tiny non-zero offset (TemporalAa skips a zero one);
-        // vr_game_jitter off (the default) sends the game's head view no jitter.
+        // vr_game_jitter keep (0.0.76 GHOST FIX: the default again) passes the game's head view its stock jitter.
         {
             const auto steady = s1::eyeJitterFor(true, {.3f, -.2f});
             const auto walk = s1::eyeJitterFor(false, {.3f, -.2f});
             check(steady[0] == s1::steadyJitter && steady[1] == s1::steadyJitter && steady[0] != 0 &&
                       s1::steadyJitter < 1e-5f && walk[0] == .3f && walk[1] == -.2f,
                   "FAR SHAKE: vr_jitter off is fixed and non-zero");
-            check(s1::gameViewJitter(false, .0024f) == 0 && s1::gameViewJitter(true, .0024f) == .0024f,
-                  "FAR SHAKE: the game view's jitter off unless kept");
+            check(s1::gameViewJitter(true, .0024f) == 0 && s1::gameViewJitter(false, .0024f) == .0024f,
+                  "GHOST FIX: the game view keeps its jitter unless off");
+            // EYE HISTORY CHECK: own only when the history set is the current one, not the main set, not the other's.
+            check(s1::ownHistory(0x100, 0x100, 0x900, 0x200) && !s1::ownHistory(0x100, 0x100, 0x100, 0x200) &&
+                      !s1::ownHistory(0x100, 0x100, 0x900, 0x100) && !s1::ownHistory(0x100, 0x180, 0x900, 0x200) &&
+                      !s1::ownHistory(0, 0, 0x900, 0x200) && s1::ownHistory(0x100, 0x100, 0, 0) &&
+                      s1::mainSetGlobal == 0xc15d7d8 && s1::version == 2,
+                  "EYE HISTORY CHECK: ownHistory");
         }
         // 0.0.76 VISUAL: the start's percent (native 100 by default; 67 with vr_render = upscaled).
         check(s1::madePercent(true, true, true, true, 100) == 100 && s1::madePercent(true, true, true, true, 67) == 67 &&

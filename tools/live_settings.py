@@ -170,8 +170,8 @@ SETTINGS = {
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
     'vr_jitter': ((0, 1), 'SpidyVrJitter', "VR JITTER {} (0 on: the eyes' TAA sample walk, sharpest bricks; 1 off: "
                  "one fixed offset instead, a test for the far shake, a little softer) - live, no restart needed"),
-    'vr_game_jitter': ((0, 1), 'SpidyVrGameJitter', "VR GAME JITTER {} (0 off: the game's own unseen head view gets no "
-                      "TAA jitter, the far shake fix; 1 keep: the flat game's jitter on it, as 0.0.76 visual had) - "
+    'vr_game_jitter': ((0, 1), 'SpidyVrGameJitter', "VR GAME JITTER {} (0 keep: the game's own unseen head view keeps "
+                      "its TAA jitter, the default - off brought ghosting of the city; 1 off: no jitter on it, a test) - "
                       'live, no restart needed'),
     'history_cut': ((25, 400), 'SpidyEyeHistoryCut', 'HISTORY CUT {}% (lower drops old history sooner when you move: fewer trails; higher keeps it longer: smoother, more trail)'),
     'aa_quality': ((0, 1), 'SpidyEyeAAQuality', 'AA QUALITY {} (0 FXAA, 1 strong FXAA: smoother edges, a little softer)'),
@@ -666,7 +666,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'sm1style': ('on', 'off'),  # 0.0.74 test 10 SM1STYLE
                 'vr_aa': ('taa', 'keep'), 'vr_textures': ('high', 'keep'),  # 0.0.76 VISUAL
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
-                'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('off', 'keep'),  # 0.0.76 FAR SHAKE
+                'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (GHOST FIX: keep first)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
                 'batman': ('off', 'on'), 'wolverine': ('off', 'on'), 'superman': ('off', 'on'), 'punisher': ('off', 'on'),
@@ -761,7 +761,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_textures': {'high': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
-           'vr_game_jitter': {'off': 0, 'keep': 1, 'on': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
+           'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 GHOST FIX: 0 keep
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},

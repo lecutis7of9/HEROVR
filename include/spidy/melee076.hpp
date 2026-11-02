@@ -13,6 +13,13 @@
 // with a snap target is a punch at HIM: its forward and reach measured toward him (the usual PUNCH SENSITIVITY needs,
 // so an arm swing while walking is still no punch), never the lunge's, never the zip strike; the blow (PUNCH HITS' CONFIRMED path) and the
 // game's X go to him. `closeLunge`: any enemy in sight this near keeps the lunge (the game's Y) from opening at all.
+//
+// HERO VR 0.0.76 PUNCH DASH (test 32bd648: "hits land more but now you have to run to them, before if they were far
+// and you hit in their direction you would kinda dash right to them with the punch"). The snap's reach is now `reach`
+// (2 m): only an enemy that close is a plain punch. A punch thrown toward an enemy in sight past `reach` and within
+// `dashReach` (inside `dashDegrees` of the fist's way; the angle first, then the nearer) is the dash: the game's own
+// web strike (Y) at HIM - the enemy the fist points at, never the lock or one farther off. The swing is the dash's
+// (never thrown away as too slow); a close enemy the fist is thrown at is always the punch, never the dash.
 #include "spidy/math.hpp"
 
 #include <algorithm>
@@ -22,7 +29,8 @@
 
 namespace spidy::melee076 {
 
-inline constexpr float reach = 3.5f, pointBlank = 1.8f, coneDegrees = 70.f, closeLunge = reach;
+inline constexpr float reach = 2.0f, pointBlank = 1.8f, coneDegrees = 70.f, closeLunge = reach;
+inline constexpr float dashReach = 15.f, dashDegrees = 35.f; // 0.0.76 PUNCH DASH
 
 struct Foe {
     Vec3 middle{};
@@ -87,6 +95,40 @@ inline Snap pick(std::span<const Foe> foes, Vec3 head, Vec3 fistWay, Vec3 look, 
         best.way = to / d;
         best.metres = d;
         best.pointBlank = true;
+    }
+    return best;
+}
+
+// 0.0.76 PUNCH DASH: the enemy in sight past `reach` and within `dashReach` the fist is thrown toward (inside
+// `dashDegrees` of its way; the angle first, then the nearer). Flat from the head; 3D in the air. Unknown way: none.
+inline Snap dash(std::span<const Foe> foes, Vec3 head, Vec3 fistWay, bool airborne) {
+    Snap best;
+    if (!finite(head) || !finite(fistWay))
+        return best;
+    const auto shape = [&](Vec3 v) { return airborne ? v : flat(v); };
+    const Vec3 fist = shape(fistWay);
+    if (length(fist) <= .3f)
+        return best;
+    const Vec3 fw = normalized(fist);
+    const float cone = std::cos(dashDegrees * .0174533f);
+    float bestScore = 1e9f;
+    for (size_t e = 0; e < foes.size(); ++e) {
+        if (!foes[e].seen || !finite(foes[e].middle))
+            continue;
+        const Vec3 to = shape(foes[e].middle - head);
+        const float d = length(to);
+        if (!(d > reach && d <= dashReach))
+            continue;
+        const float c = dot(fw, to / d);
+        if (c < cone)
+            continue;
+        const float score = (1.f - c) * 20.f + d * .05f; // the angle first, then the nearer
+        if (score < bestScore) {
+            bestScore = score;
+            best.index = static_cast<int>(e);
+            best.way = to / d;
+            best.metres = d;
+        }
     }
     return best;
 }

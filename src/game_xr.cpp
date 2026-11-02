@@ -1077,6 +1077,13 @@ combat_input::Config combatConfig() {
     c.ballOnPress = c38(combat38::ballFire) == 0;
     // Version 0.0.2 BALL LOOK OURS: a web-shooter press fires our own ball, no RB to the game.
     c.ballOurs = ballLookNow() == combat38::lookOurs; // 0.0.76: GAME WEBS ONLY plays OURS as WRIST
+    // HERO VR 0.0.76 BALL NOW (ball_sure.hpp, test 32bd648: "webballs are still not super reactive and dont fire unless
+    // in combat"): SPIDER-MAN under GAME WEBS ONLY fires the mod's own ball from the pulled wrist on the press frame,
+    // in combat or not - no RB, so the game never fires a second one. GAME WEBS ONLY off: BALL LOOK as before.
+    if (spidy::ball_sure::oursEveryPress(heroNow() == hero_modes::spiderMan, gameWebsOnly())) {
+        c.ballOurs = true;
+        c.ballOnPress = true;
+    }
     // Version 0.0.4 IRON MAN ABILITIES (REPULSOR): the trigger makes the mod's own shot at the press only
     // (no RB, no game ball) and no trigger gadget, yank or Sonic Burst (repulsor.hpp planFor).
     // Version 0.0.6: DAREDEVIL (the trigger throws a baton) and HULK (no trigger power) the same: no web.
@@ -7594,10 +7601,13 @@ DWORD WINAPI run(void*) {
                             auto config37 = combatConfig();
                             // HERO VR 0.0.76 BALL SURE (ball_sure.hpp): SPIDER-MAN with no enemy near - the game fires no
                             // web ball out of combat, so the press is the mod's own ball from that wrist (no RB at all).
+                            // 0.0.76 BALL NOW: under GAME WEBS ONLY every press already is (combatConfig); this is
+                            // GAME WEBS ONLY off with a BALL LOOK that sends the RB.
                             const bool ballOutOfCombat = heroNow() == hero_modes::spiderMan && !config37.ballOurs &&
                                                          spidy::ball_sure::outOfCombat(cf.enemyCount, cf.enemyMetres);
                             if (ballOutOfCombat)
                                 config37.ballOurs = true;
+                            const bool ballNowPress = heroNow() == hero_modes::spiderMan && config37.ballOurs;
                             // The enemies for the next frame's grab press (the swing input runs first).
                             grabEnemies = cf.enemies;
                             grabEnemyIds = cf.enemyIds;
@@ -7761,8 +7771,8 @@ DWORD WINAPI run(void*) {
                                 bi.webCalls = ms.webCalls;
                                 const auto bo = ballSure.update(bi);
                                 for (unsigned i = 0; i < 2; ++i) {
-                                    if (ballOutOfCombat && fightOut.ballOurs[i])
-                                        ballSure.outOfCombatPress();
+                                    if (ballNowPress && fightOut.ballOurs[i])
+                                        ballSure.outOfCombatPress(); // 0.0.76 BALL NOW: the mod's ball at the press
                                     if (!bo.backup[i] || fightOut.ballOurs[i])
                                         continue;
                                     fightOut.ballOurs[i] = true;
@@ -7775,7 +7785,7 @@ DWORD WINAPI run(void*) {
                                     ballSureSaid = sureNow;
                                     char line[220];
                                     sprintf_s(line, "VERSION 0.0.76 BALL SURE: %u presses to the game, %u its own shots seen, "
-                                                    "%u backups, %u with no hook, %u out of combat (the mod's ball)",
+                                                    "%u backups, %u with no hook, %u the mod's ball at the press (BALL NOW)",
                                               ballSure.presses(), ballSure.gameShots(), ballSure.backups(),
                                               ballSure.unhookedBalls(), ballSure.outBalls());
                                     game_prompts::note(line);
@@ -7785,12 +7795,13 @@ DWORD WINAPI run(void*) {
                             {   // HERO VR 0.0.76 MELEE SNAP: a line now and then (punches sent to the enemy swung at)
                                 static uint32_t snapSaid = 0;
                                 const uint32_t snaps = combatMachine.snapPunches();
-                                if (snaps != snapSaid && (snaps <= 3 || snaps % 10 == 0)) {
-                                    snapSaid = snaps;
+                                const uint32_t meleeNow = snaps + combatMachine.dashes();
+                                if (meleeNow != snapSaid && (meleeNow <= 3 || meleeNow % 10 == 0)) {
+                                    snapSaid = meleeNow;
                                     char line[160];
                                     sprintf_s(line, "VERSION 0.0.76 MELEE SNAP: %u punches sent at the enemy swung at "
-                                                    "(%u frames the lunge stayed shut, an enemy within 3.5 m)",
-                                              snaps, combatMachine.snapShutFrames());
+                                                    "(within 2 m), %u PUNCH DASH web strikes at one 2 - 15 m away",
+                                              snaps, combatMachine.dashes());
                                     game_prompts::note(line);
                                 }
                             }
@@ -9313,8 +9324,10 @@ DWORD WINAPI run(void*) {
                                         oursSplashNext = (oursSplashNext + 1) % our_ball::Pool::balls;
                                         // Version 0.0.5 WEB BALL DAMAGE (DAMAGE TEST, OFF by default): the web ball's small blow,
                                         // only with that switch on (0.0.6: the heroes open the path for their own hits).
-                                        if (c38(combat38::heroDamage) == 1 && sm2_damage::enabled() && hit.index >= 0 &&
-                                            static_cast<uint32_t>(hit.index) < foes.count)
+                                        // 0.0.76 BALL NOW: SPIDER-MAN's ball under GAME WEBS ONLY is the only ball, so its small
+                                        // blow (no knockback) goes too.
+                                        if ((c38(combat38::heroDamage) == 1 || gameWebsOnly()) && sm2_damage::enabled() &&
+                                            hit.index >= 0 && static_cast<uint32_t>(hit.index) < foes.count)
                                             sm2_damage::queue(foes.list[static_cast<size_t>(hit.index)].id, sm2_damage::webBallTest());
                                         if (hit.hand == 0 || hit.hand == 1) {
                                             runtime.haptic(hit.hand, .7f);
@@ -12467,7 +12480,7 @@ DWORD WINAPI run(void*) {
                         }
                         // Version 0.0.3 WEB BALL HIT: the webbed-up look (the mod's strands round a struck enemy).
                         for (const auto& c0 : saved->cocoons) {
-                            if (!c0.on || gameWebsDrawn) // 0.0.76 GAME WEBS ONLY: the game's own webbed-up look
+                            if (!c0.on) // 0.0.76 BALL NOW: the mod's balls web them (drawn under GAME WEBS ONLY too)
                                 continue;
                             web_cocoon::Cocoon c = c0;
                             c.feet = c0.feet + travel;
@@ -12649,7 +12662,9 @@ DWORD WINAPI run(void*) {
                                 repulsor_mcu::appendImpact(vertices, saved->splashAt[b] + travel, viewer, viewer, pixelAngle,
                                                            saved->splashFade[b], .2f, static_cast<unsigned>(b) + 7u);
                         }
-                        for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook && !gameWebsDrawn; ++b) { // 0.0.76
+                        // 0.0.76 BALL NOW: drawn under GAME WEBS ONLY too - 32bd648 hid them there, so every out-of-combat
+                        // ball (the mod's own; the game draws only its own) flew unseen.
+                        for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook; ++b) {
                             if (saved->oursFade[b] > 0)
                                 appendWebBall(vertices, saved->oursAt[b] + travel, saved->oursTail[b] + travel, viewer,
                                               pixelAngle, saved->oursFade[b]);

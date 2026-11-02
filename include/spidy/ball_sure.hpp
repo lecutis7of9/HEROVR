@@ -21,6 +21,14 @@ namespace spidy::ball_sure {
 
 inline constexpr float combatMetres = 30.f, waitSeconds = .30f;
 
+// HERO VR 0.0.76 BALL NOW (test 32bd648: "webballs are still not super reactive and dont fire unless in combat"). Why
+// they did not fire out of combat: the press there WAS the mod's own ball (outOfCombat, above), but under GAME WEBS ONLY
+// the mod's balls were not drawn at all (the 0.0.76 draw left them to the game, which draws only its own), so every one
+// flew unseen; in combat the RB waited on the game (the burst's grace, the gadget wait, the RB queue and the game's own
+// gate), then up to waitSeconds more for a backup. Now SPIDER-MAN under GAME WEBS ONLY fires the mod's own ball from
+// the pulled wrist on the press frame, in combat or not, drawn; no RB, so the game never adds a second ball.
+inline bool oursEveryPress(bool spiderMan, bool gameWebsOnly) { return spiderMan && gameWebsOnly; }
+
 // The nearest enemy (metres, 1e9 / NaN unknown) and how many the enemy list has: out of combat (no RB).
 inline bool outOfCombat(uint32_t enemyCount, float nearestMetres) {
     return enemyCount == 0 || !std::isfinite(nearestMetres) || nearestMetres > combatMetres;

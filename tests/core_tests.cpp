@@ -19827,14 +19827,18 @@ int main() {
     test("HERO VR 0.0.76 MELEE SNAP: a punch goes to the thug it is thrown at, never the lunge", [lungeFrame] {
         using namespace combat_input;
         Config c;
+        uint64_t lungeAt{};
         const auto run = [&](Frame f, uint64_t& target, uint16_t& buttons, int& lunges, int& punches, bool& snapped) {
             Machine m;
+            lungeAt = 0;
             for (int i = 0; i < 90; ++i) {
                 if (i >= 54 && i < 66)
                     f.hands[1].position = f.hands[1].position + Vec3{0, 0, -3.f / 90};
                 const auto o = m.update(f, c);
                 buttons |= o.buttons;
                 lunges += o.lungeHand >= 0;
+                if (o.lungeHand >= 0)
+                    lungeAt = o.lungeTarget;
                 if (o.punch[1]) {
                     ++punches;
                     target = o.punchTarget[1];
@@ -19842,9 +19846,9 @@ int main() {
                 }
             }
         };
-        {   // the lock 5 m ahead (looked at), a thug 2.8 m ahead a little right: X at the thug, no Y
+        {   // 0.0.76 PUNCH DASH: the lock 5 m ahead (looked at), a thug 2.8 m ahead in the same line: the dash (Y) at the nearer
             Frame f = lungeFrame();
-            f.enemies[1] = {.6f, 0, -2.8f};
+            f.enemies[1] = {.1f, 0, -2.8f};
             f.enemyIds[1] = 7;
             f.enemyCount = 2;
             f.enemyMetres = 2.8f;
@@ -19853,8 +19857,46 @@ int main() {
             int lunges{}, punches{};
             bool snapped{};
             run(f, target, buttons, lunges, punches, snapped);
-            check(punches == 1 && snapped && target == 7, "MELEE SNAP: the punch did not go to the thug 2.8 m ahead");
-            check(lunges == 0 && !(buttons & padY) && (buttons & padX), "MELEE SNAP: a thug in reach still got the lunge's Y");
+            if (!(!snapped && lunges == 1 && lungeAt == 7 && (buttons & padY)))
+                std::printf("  dash debug: snapped %d lunges %d at %llu Y %d punches %d\n", snapped, lunges,
+                            static_cast<unsigned long long>(lungeAt), (buttons & padY) != 0, punches);
+            check(!snapped && lunges == 1 && lungeAt == 7 && (buttons & padY),
+                  "PUNCH DASH: a punch at the thug 2.8 m ahead did not dash at him");
+        }
+        {   // the lock 5 m ahead, a thug 1.6 m ahead a little right: X at the thug, never the Y
+            Frame f = lungeFrame();
+            f.enemies[1] = {.3f, 0, -1.6f};
+            f.enemyIds[1] = 7;
+            f.enemyCount = 2;
+            f.enemyMetres = 1.6f;
+            uint64_t target{};
+            uint16_t buttons{};
+            int lunges{}, punches{};
+            bool snapped{};
+            run(f, target, buttons, lunges, punches, snapped);
+            check(punches == 1 && snapped && target == 7, "MELEE SNAP: the punch did not go to the thug 1.6 m ahead");
+            check(lunges == 0 && !(buttons & padY) && (buttons & padX), "MELEE SNAP: a thug within 2 m got the lunge's Y");
+        }
+        {   // 0.0.76 PUNCH DASH: a far enemy off to the right (30 deg), the lock ahead: the dash goes to the one swung at
+            Frame f = lungeFrame();
+            f.enemies[0] = {0, 0, -12};
+            f.enemies[1] = {4.f, 0, -7.f};
+            f.enemyIds[1] = 9;
+            f.enemyCount = 2;
+            f.enemyMetres = 8;
+            Machine m;
+            int lunges{};
+            uint64_t at{};
+            for (int i = 0; i < 90; ++i) {
+                if (i >= 54 && i < 66)
+                    f.hands[1].position = f.hands[1].position + Vec3{1.5f / 90, 0, -2.6f / 90};
+                const auto o = m.update(f, c);
+                if (o.lungeHand >= 0) {
+                    ++lunges;
+                    at = o.lungeTarget;
+                }
+            }
+            check(lunges == 1 && at == 9, "PUNCH DASH: the dash did not go to the enemy the fist was thrown at");
         }
         {   // a thug 1.2 m away 50 degrees left, the fist straight ahead: he is in the cone, he gets it
             Frame f = lungeFrame();
@@ -19873,7 +19915,7 @@ int main() {
             int lunges{}, punches{};
             bool snapped{};
             run(lungeFrame(), target, buttons, lunges, punches, snapped);
-            check(!snapped && lunges == 1 && (buttons & padY), "MELEE SNAP changed the far lunge");
+            check(!snapped && lunges == 1 && lungeAt == 42 && (buttons & padY), "PUNCH DASH: no dash at the enemy 5 m ahead");
         }
         {   // a wall between the thug and him: no snap
             Frame f = lungeFrame();
@@ -19886,6 +19928,37 @@ int main() {
             bool snapped{};
             run(f, target, buttons, lunges, punches, snapped);
             check(!snapped, "MELEE SNAP snapped through a wall");
+        }
+    });
+    test("HERO VR 0.0.76 BALL NOW: a press fires the mod's ball from that wrist on the press frame, no enemy needed", [lungeFrame] {
+        using namespace combat_input;
+        Config c;
+        c.ballOurs = c.ballOnPress = true; // what combatConfig sets for SPIDER-MAN under GAME WEBS ONLY
+        for (const uint32_t enemies : {0u, 1u}) {
+            Machine m;
+            Frame f = lungeFrame();
+            f.enemyCount = enemies;
+            f.enemyMetres = enemies ? 5.f : 1e9f;
+            for (int i = 0; i < 30; ++i)
+                m.update(f, c);
+            int balls = 0, firstAt = -1;
+            uint16_t buttons{};
+            for (int i = 0; i < 60; ++i) {
+                f.hands[0].button = i < 6 ? 1.f : 0.f; // a quick tap
+                const auto o = m.update(f, c);
+                buttons |= o.buttons;
+                if (o.ballOurs[0]) {
+                    ++balls;
+                    if (firstAt < 0)
+                        firstAt = i;
+                }
+                check(!o.ballOurs[1], "BALL NOW: the other wrist fired");
+            }
+            if (!(balls == 1 && firstAt == 0))
+                std::printf("  ball debug: enemies %u balls %d first %d\n", enemies, balls, firstAt);
+            check(balls == 1 && firstAt == 0, enemies ? "BALL NOW: in combat the ball did not go at the press"
+                                                      : "BALL NOW: out of combat the ball did not go at the press");
+            check(!(buttons & padRb), "BALL NOW: the game's RB went too (a second ball)");
         }
     });
     test("Update 38 SpidyVR: ZIP MODE SPIDYVR lunges at the enemy looked at; LUNGE SPIDYVR MOVE leaves it to the bridge", [lungeFrame, lungeRun] {
@@ -19907,8 +19980,16 @@ int main() {
             int lunges{}, zips{};
             uint64_t target{};
             uint16_t buttons{};
-            lungeRun(m, f, c, lunges, zips, target, buttons);
+            Config lock = c;
+            lock.meleeSnap = false; // Update 38's lock lunge (0.0.76 PUNCH DASH follows the fist instead)
+            lungeRun(m, f, lock, lunges, zips, target, buttons);
             check(lunges == 0, "a lunge at an enemy not looked at");
+            Machine d;
+            int dl{}, dz{};
+            uint64_t dt{};
+            uint16_t db{};
+            lungeRun(d, f, c, dl, dz, dt, db);
+            check(dl == 1 && dt == 42 && (db & padY), "PUNCH DASH: a punch thrown at him (looking away) did not dash");
         }
         {   // A wall between (his sight ray blocked): none.
             Machine m;
@@ -20105,6 +20186,7 @@ int main() {
                   "LUNGE FROM 2.5 M did not leave a 2 m enemy to the punch");
             Machine c4;
             Config four;
+            four.meleeSnap = false; // LUNGE FROM is the lock lunge's (0.0.76 PUNCH DASH starts past 2 m)
             four.lungeFrom = combat38::lungeFromMetres(2);
             int l4{}, z4{};
             uint64_t t4{};
@@ -20123,6 +20205,7 @@ int main() {
                 return n;
             };
             Config old, now;
+            old.meleeSnap = now.meleeSnap = false; // LUNGE SPEED is the lock lunge's (0.0.76 PUNCH DASH rides the punch)
             now.lungeSpeed = combat38::lungeSpeedOf(0);
             Machine a, b;
             check(slowRun(a, lungeFrame(), old) == 0, "38's 2.6 m/s lunge took a 2.4 m/s swing");
@@ -20130,6 +20213,7 @@ int main() {
         }
         {   // STEADY: a wall between - no lunge, the swing is a punch (X) and counted held off.
             Config old, steady;
+            old.meleeSnap = false; // Update 38's lunge (0.0.76 MELEE SNAP never swallows a swing)
             steady.lungeSteady = true;
             Frame f = lungeFrame();
             f.enemies[0] = {0, 0, -3};

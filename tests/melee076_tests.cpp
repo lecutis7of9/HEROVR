@@ -21,10 +21,12 @@ void check(bool ok, const char* what) {
 const Vec3 head{0, 1.7f, 0}, ahead{0, 0, -1};
 
 void snapTests() {
-    std::vector<Foe> foes{{{0, 1, -2.5f}}, {{2.5f, 1, -.2f}}};
+    std::vector<Foe> foes{{{0, 1, -1.9f}}, {{1.9f, 1, -.2f}}};
     auto s = pick(foes, head, ahead, ahead, false);
     check(s && s.index == 0 && !s.pointBlank, "A fist thrown ahead snaps to the enemy ahead");
-    check(std::abs(s.metres - 2.5f) < .01f, "Its distance is flat from the head");
+    check(std::abs(s.metres - 1.9f) < .01f, "Its distance is flat from the head");
+    std::vector<Foe> twoHalf{{{0, 1, -2.5f}}};
+    check(!pick(twoHalf, head, ahead, ahead, false), "2.5 m is past the 2 m snap (the dash's)");
     s = pick(foes, head, Vec3{1, 0, -.1f}, ahead, false);
     check(s && s.index == 1, "A hook to the right snaps to the enemy on the right");
     s = pick(foes, head, Vec3{1, 0, -1}, ahead, false); // 45 deg: both inside 70; enemy 0 at 45, enemy 1 at ~40
@@ -40,7 +42,7 @@ void snapTests() {
     check(s && s.pointBlank, "Point blank with the fist's way unknown");
     std::vector<Foe> blocked{{{0, 1, -2}, false}};
     check(!pick(blocked, head, ahead, ahead, false), "A wall between: no snap");
-    std::vector<Foe> below{{{0, -1.f, -.8f}}};
+    std::vector<Foe> below{{{0, -.1f, -.6f}}}; // 1.9 m in 3D, 72 deg below the flat ahead
     check(static_cast<bool>(pick(below, head, ahead, ahead, false)), "On the ground the height does not count");
     check(!pick(below, head, ahead, ahead, true), "In the air the fist must go toward him in 3D");
     check(static_cast<bool>(pick(below, head, Vec3{0, -1, -.3f}, ahead, true)), "In the air a punch down at him snaps");
@@ -49,12 +51,38 @@ void snapTests() {
     check(!pick(foes, Vec3{NAN, 0, 0}, ahead, ahead, false), "A NaN head snaps nothing");
 }
 void lungeTests() {
-    std::vector<Foe> near{{{0, 1, -3.4f}}}, mid{{{0, 1, -3.7f}}}, hidden{{{0, 1, -1}, false}};
-    check(closeFoe(near, head, false), "An enemy within 3.5 m shuts the lunge");
-    check(!closeFoe(mid, head, false), "Past 3.5 m the lunge may open");
+    std::vector<Foe> near{{{0, 1, -1.9f}}}, mid{{{0, 1, -2.3f}}}, hidden{{{0, 1, -1}, false}};
+    check(closeFoe(near, head, false), "An enemy within 2 m shuts the lunge");
+    check(!closeFoe(mid, head, false), "Past 2 m the lunge may open");
     check(!closeFoe(hidden, head, false), "A hidden enemy does not shut it");
 }
+void dashTests() {
+    // 0.0.76 PUNCH DASH: past 2 m and within 15 m, inside 35 deg of the fist's way.
+    std::vector<Foe> foes{{{0, 1, -6}}, {{0, 1, -12}}, {{4, 1, -4}}};
+    auto d = dash(foes, head, ahead, false);
+    check(d && d.index == 0 && std::abs(d.metres - 6) < .01f, "Thrown ahead: the dash goes to the one ahead, the nearer");
+    d = dash(foes, head, Vec3{1, 0, -1}, false);
+    check(d && d.index == 2, "Thrown to the right front: the one there, not the lock ahead");
+    check(!dash(foes, head, Vec3{-1, 0, 0}, false), "Thrown where no one is: no dash");
+    std::vector<Foe> close{{{0, 1, -1.5f}}}, far{{{0, 1, -16}}}, hidden{{{0, 1, -5}, false}};
+    check(!dash(close, head, ahead, false), "Within 2 m: never the dash (the snap's punch)");
+    check(!dash(far, head, ahead, false), "Past 15 m: no dash");
+    check(!dash(hidden, head, ahead, false), "A wall between: no dash");
+    std::vector<Foe> both{{{0, 1, -1.5f}}, {{0, 1, -6}}};
+    check(pick(both, head, ahead, ahead, false).index == 0, "A close one in the fist's way is the punch's");
+    std::vector<Foe> offAxis{{{3, 1, -5}}}; // ~31 deg
+    check(static_cast<bool>(dash(offAxis, head, ahead, false)), "31 deg off: inside the 35 deg cone");
+    std::vector<Foe> wide{{{5, 1, -5}}}; // 45 deg
+    check(!dash(wide, head, ahead, false), "45 deg off: outside it");
+    check(!dash(foes, head, Vec3{}, false), "The fist's way unknown: no dash");
+    check(!dash(foes, head, Vec3{NAN, 0, 0}, false), "A NaN way: no dash");
+    std::vector<Foe> below{{{0, -4, -5}}};
+    check(!dash(below, head, ahead, true), "In the air the way counts in 3D");
+    check(static_cast<bool>(dash(below, head, Vec3{0, -5.7f, -5}, true)), "In the air a punch down at him dashes");
+}
 void ballTests() {
+    check(ball_sure::oursEveryPress(true, true), "BALL NOW: SPIDER-MAN under GAME WEBS ONLY fires the mod's ball each press");
+    check(!ball_sure::oursEveryPress(true, false) && !ball_sure::oursEveryPress(false, true), "Otherwise BALL LOOK decides");
     using namespace spidy::ball_sure;
     check(outOfCombat(0, 5.f), "No enemies: out of combat");
     check(outOfCombat(3, 1e9f), "Enemies unknown far: out of combat");
@@ -136,6 +164,7 @@ void ballTests() {
 int main() {
     snapTests();
     lungeTests();
+    dashTests();
     ballTests();
     if (failures)
         return 1;

@@ -170,9 +170,10 @@ struct Config {
     // is a punch (rep0030: 170 forward swings peaked 1.4-2.4 m/s, under 2.4; the replay at
     // 2.0 m/s: 132 -> 148+ blows). Never with no enemy in reach, so waving still sends nothing.
     bool closeJabs = false;
-    // HERO VR 0.0.76 MELEE SNAP (melee076.hpp): a swing toward an enemy in sight within 3.5 m (or one within 1.8 m in
-    // front) is a punch at him - aimed at him (the usual speed / reach needs), never the lunge's or the zip strike's; the lunge stays
-    // shut with an enemy within 3.5 m. Off: 0.0.76 801ce57's rules.
+    // HERO VR 0.0.76 MELEE SNAP (melee076.hpp): a swing toward an enemy in sight within 2 m (or one within 1.8 m in
+    // front) is a punch at him - aimed at him (the usual speed / reach needs), never the lunge's or the zip strike's.
+    // PUNCH DASH: a swing toward one 2 - 15 m away is the game's web strike (Y) at HIM (ZIP MODE SPIDYVR, the game's
+    // button); the lock's own lunge stays shut. Off: 0.0.76 801ce57's rules.
     bool meleeSnap = true;
     static constexpr float closeShare = .85f;
     static constexpr float pullBack = .8f; // m/s back toward the head: a jab's return
@@ -325,6 +326,7 @@ struct Out {
     // SpidyVR's minSpeed 2.2 m/s, 1 at its fullSpeed 7.5 m/s), for the instant DirectDamage blow.
     uint64_t punchTarget[2]{};
     bool snapped[2]{}; // HERO VR 0.0.76 MELEE SNAP: this punch went to the snap's enemy
+    bool dashed[2]{};  // HERO VR 0.0.76 PUNCH DASH: this punch is the web strike (Y) at the enemy swung at (lungeTarget)
     float punchStrength[2]{};
     bool assisted{};          // a web ball bent toward an enemy this frame
     float assistDegrees = 180.f;
@@ -528,6 +530,7 @@ class Machine {
             zipFrom_ = strikeUntil_ = 0;
             fists_.reset();
             snapAt_[0] = snapAt_[1] = -1;
+            dashAt_ = -1e3f;
             snapHeld_[0] = snapHeld_[1] = false;
             strike_.cancel();
             for (unsigned i = 0; i < 2; ++i) {
@@ -615,7 +618,9 @@ class Machine {
                 out.fired[i] = webShooter;
                 ++fired_[webShooter];
                 s.state = State::idle; // its RB queued below (one press, one pulse)
-            } else if (s.state == State::held && (!otherMayJoin || c.gadgetEasy)) {
+            } else if (s.state == State::held && (!otherMayJoin || c.gadgetEasy || c.ballOurs)) {
+                // 0.0.76 BALL NOW: OURS's ball goes on the press frame, the burst's grace or not
+                // (out of combat the tap waited the whole grace, then fired on the let-go).
                 // Update 38 BALL FIRE PRESS (SpidyVR's shooter): the ball at the press, once
                 // the burst's grace is past, at most every ballInterval.
                 // Update 38.2 EASY: the gesture is read during the burst's grace too (the
@@ -647,7 +652,7 @@ class Machine {
                 yanks_ += out.yanked[i];
                 if (age > gestureSeconds) {
                     s.state = State::spent; // a hold is unassigned: it does nothing
-                } else if (const auto g = !gadgetsOk || out.fired[i] == webShooter ? none
+                } else if (const auto g = !gadgetsOk || out.fired[i] == webShooter || (otherMayJoin && !c.gadgetEasy) ? none
                                           : c.gadgetEasy ? (s.paired ? none : easyGesture(h, s.velocity, f.head, c, yanked ? 1 : 0))
                                                          : gesture(h, s.velocity, f.head, s.aimedLow, !s.gripAtPress, c,
                                                                    yanked ? 1 : 0);
@@ -796,6 +801,9 @@ class Machine {
         }
         if (snapClose)
             ++snapLungeShut_;
+        // 0.0.76 PUNCH DASH: with MELEE SNAP the punch itself also picks a dash enemy 2 - 15 m along the fist (below);
+        // this lunge (32bd648's and before: the look and the fist together) still runs whenever no enemy is within 2 m.
+        const bool punchDash = c.meleeSnap && spidyZip && !bridgeFlies && c.webZip;
         if (spidyZip && !bridgeFlies && c.webZip && !snapClose) { // 0.0.76 MELEE SNAP: an enemy close - punches, X
             std::array<FightFist, 2> fists{};
             for (unsigned i = 0; i < 2; ++i) {
@@ -840,6 +848,7 @@ class Machine {
                 ++fired_[zipStrike];
                 ++lunges_;
                 ++punches_[i];
+                dashAt_ = now_; // one web strike at a time (the punch's dash waits too)
                 airPunches_ += f.airborne ? 1u : 0u;
                 sightUnknown_ += sightWorld.unknownAsked > unknownBefore;
                 s.punchedAt = now_;
@@ -953,8 +962,14 @@ class Machine {
                 const melee076::Snap snap = c.meleeSnap && !f.menuOpen
                                                 ? melee076::pick(snapList, f.head, s.velocity, f.forward, f.airborne)
                                                 : melee076::Snap{};
-                const Vec3 aheadHand = snap ? snap.way : ahead;
-                const bool lungeOwnsHand = lungeOwns && !snap;
+                // 0.0.76 PUNCH DASH: no enemy within 2 m swung at - one past it the fist is thrown toward is the dash's.
+                const melee076::Snap dash = punchDash && !snap && !f.menuOpen && out.lungeHand < 0 && now_ - dashAt_ >= dashGap
+                                                ? melee076::dash(snapList, f.head, s.velocity, f.airborne)
+                                                : melee076::Snap{};
+                const Vec3 aheadHand = snap ? snap.way : dash ? dash.way : ahead;
+                // A far swing with no dash enemy along the fist is still the lunge's (as before 32bd648); a snap or a dash
+                // takes it now.
+                const bool lungeOwnsHand = lungeOwns && !snap && !dash;
                 out.candidate[i] = true;
                 if (heldOff && !s.heldOffCounted) { // once a swing
                     s.heldOffCounted = true;
@@ -982,7 +997,7 @@ class Machine {
                     why = combat38::triggerHeld;
                 else if (s.state != State::idle)
                     why = combat38::busy;
-                else if (c.punchTargeted && ((targetedBlock && !snap) || h.zoned))
+                else if (c.punchTargeted && ((targetedBlock && !snap && !dash) || h.zoned))
                     why = combat38::gated;
                 else if (!contact && !s.armed)
                     why = combat38::cooldown;
@@ -1005,6 +1020,28 @@ class Machine {
                 noteSwing(s, why, speed);
                 if (why != combat38::sent)
                     continue;
+                if (dash && !contact) { // 0.0.76 PUNCH DASH: the game's web strike (Y) at the enemy swung at
+                    const uint64_t id = fightTargets[static_cast<size_t>(dash.index)].id;
+                    out.lungeHand = static_cast<int>(i);
+                    out.lungeTarget = id;
+                    out.lungeMetres = dash.metres;
+                    out.zip = true;
+                    out.punch[i] = true;
+                    out.dashed[i] = true;
+                    startZip(f, c, id, fightList);
+                    ++fired_[zipStrike];
+                    ++lunges_;
+                    ++dashes_;
+                    ++punches_[i];
+                    airPunches_ += f.airborne ? 1u : 0u;
+                    s.punchedAt = now_;
+                    s.armed = false;
+                    dashAt_ = now_;
+                    fists_.spend(static_cast<int>(i));
+                    strike_.spent(static_cast<int>(i));
+                    lock_.take(id);
+                    continue;
+                }
                 out.punch[i] = true;
                 out.contact[i] = contact;
                 ++(out.contact[i] ? contactHits_ : gestureHits_);
@@ -1235,6 +1272,7 @@ class Machine {
     uint64_t lunges() const { return lunges_; }
     uint32_t snapPunches() const { return snapPunches_; }     // 0.0.76 MELEE SNAP: punches sent to the snap's enemy
     uint32_t snapShutFrames() const { return snapLungeShut_; } // frames the lunge stayed shut (an enemy close)
+    uint32_t dashes() const { return dashes_; }                // 0.0.76 PUNCH DASH: web strikes at the enemy swung at
     uint64_t lungesLanded() const { return lungesLanded_; }
     uint64_t yanks() const { return yanks_; }
     uint64_t lockChanges() const { return lockChanges_; }
@@ -1409,6 +1447,9 @@ class Machine {
     Punches fists_{};
     Lock lock_{};
     uint32_t snapPunches_{}, snapLungeShut_{}; // HERO VR 0.0.76 MELEE SNAP
+    uint32_t dashes_{};                        // 0.0.76 PUNCH DASH
+    float dashAt_ = -1e3f;                     // the last dash (one at a time)
+    static constexpr float dashGap = .6f;
     double snapAt_[2]{-1, -1};                  // when each fist's last snap punch went
     bool snapHeld_[2]{};                        // that swing still going (the time re-arm waits)
     static constexpr double snapContact = .6;   // that swing's contact is the same blow

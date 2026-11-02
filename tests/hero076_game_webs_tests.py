@@ -55,8 +55,10 @@ class GameWebs(unittest.TestCase):
         self.assertNotIn('if (!gameWebsDrawn)\n                                appendWeb(', r)
         self.assertEqual(r.count('drawWeb(line);'), 5)     # the swing's, zip's, held and let-go lines
         self.assertEqual(r.count('drawOurWeb(line);'), 2)  # GRAB WEB's rope, WALL STICK's nets
-        self.assertIn('if (!c0.on || gameWebsDrawn)', r)   # the webbed-up cocoons
-        self.assertIn('!saved->repulsorLook && !gameWebsDrawn; ++b)', r)  # OURS balls and splashes
+        # 0.0.76 BALL NOW: the mod's balls (every SPIDER-MAN press) and their cocoons are drawn under GAME WEBS ONLY too.
+        self.assertIn('if (!c0.on)', r)   # the webbed-up cocoons
+        self.assertIn('!saved->repulsorLook; ++b)', r)  # OURS balls and splashes
+        self.assertNotIn('!saved->repulsorLook && !gameWebsDrawn; ++b)', r)
         self.assertIn('for (unsigned g = 0; g < 2 && !gameWebsDrawn; ++g)', r)  # GLOB
         self.assertEqual(r.count('appendWebThread('), 1)
         self.assertEqual(r.count('appendWebBall('), 2)

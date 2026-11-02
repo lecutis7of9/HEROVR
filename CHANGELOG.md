@@ -6,6 +6,12 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **Smoother windows and building detail (SPIDY TAA TUNE):** after 509bdc9 fixed the shake, our TAA now keeps a
+  longer average (6% of each new frame when still) and no longer shortens it for small head movements, in a finer
+  (10-bit) history; a mild sharpen runs after it on what you see only (never fed back, so no shake), and the game's
+  texture mip bias goes from -1.0 to -0.5 so window textures crawl less. Nothing to change in live.txt. Optional,
+  off by default: `vr_ss = 125` or `150` renders the eyes larger and filters them down first - smoother, but heavier
+  on the GPU (your last run was GPU-bound at 45 fps), next VR start.
 - **Our own eye anti-aliasing (SPIDY TAA), the default:** the game's TAA no longer runs in the eyes - its one history
   was made for the flat camera, which brought the far shake and the ghosting. Each eye now has its own history in
   the mod's own pass, moved with that eye's own pose (its own view, lens and position, this pair and the one before),

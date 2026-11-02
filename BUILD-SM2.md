@@ -2859,3 +2859,19 @@ buildings stayed; only the light went.
   EYE AA off -> SMAA -> FXAA -> plain copy. SpidyVrAaData (72 bytes, SVAA): tools/vr_aa_record.py, report
   `vr_aa`, console "VR AA (...)". Not feasible: depth / motion vectors (no CONFIRMED eye addresses).
   Tests: core `SPIDY TAA`, hero076_spidy_taa_tests.
+
+## 72. Version 0.0.76 SPIDY TAA TUNE: a longer average, 10-bit history, RCAS after it, mip bias -0.5, vr_ss
+
+  include/spidy/vr_aa.hpp: keepStill 0.94 / keepMoving 0.8, turnFrom 0.012 / turnFull 0.08 rad, travelFrom 0.03 /
+  travelFull 0.3 m (cutTurn 0.26, cutTravel 3 unchanged), gammaStill 1.5 / gammaMoving 1.0; sharpenAmount 0.15,
+  rcasLimit 0.1875, rcasLobe / rcasPixel (the shader's maths, tested in core). src/native_eye_gpu.cpp: with ours
+  (spidyTaaNow) the history pictures are R10G10B10A2_UNORM (history.deep), the TAA PSO writes that format, and a
+  second PSO history.rcas (rcasShader, RTV R8G8B8A8_UNORM, RGB write mask: the staged eye's alpha kept) reads this
+  pair's history picture (SRV descriptor 8 added: heap 9, RTV heap 6 with the staged eyes at 4/5) and writes the
+  staged eyes, replacing the CopyResource; a deep history in another mode is never used (valid false). Failures:
+  failHistory(2) compile, (3) PSO -> SMAA as before. Launcher apply_vr_aa: mip '-0.5' for ours with the game's AA at
+  TAA (was 'game', its own -1.0; mip_bias.hpp changes only negatively biased samplers), 0.5 as before for smaa or
+  keep with DLSS; supersample from live.txt vr_ss (off | 125 | 150, RESTART, live_settings.vr_supersample; 100 with
+  --size): the `down` filter then SPIDY TAA. Report: the last vr_aa / jitter_log records kept when the game closes
+  before the final read (vr_aa_last, jitter_log_last). Tests: core `SPIDY TAA` tune checks, hero076_spidy_taa_tests
+  Tune.

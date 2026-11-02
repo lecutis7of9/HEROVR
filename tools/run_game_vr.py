@@ -1757,7 +1757,7 @@ def apply_sm1style(a, live_text):
     a.vr_aa = live_settings.vr_aa_choice(live_text)
     if a.vr_aa != 'game':
         a.sm1style = False
-        return apply_vr_aa(a)
+        return apply_vr_aa(a, live_settings.vr_supersample(live_text))
     a.sm1style = live_settings.sm1style_on(live_text)
     percent = SM1STYLE_UPSCALE if live_settings.vr_render_upscaled(live_text) else SM1STYLE_NATIVE
     mip = a.mip_bias if getattr(a, 'game_aa_taa', None) is False else 'game'
@@ -1795,18 +1795,22 @@ def vr_aa_options(a):
     return 0
 
 
-def apply_vr_aa(a):
+def apply_vr_aa(a, supersample=100):
     """0.0.76 SPIDY TAA (live.txt vr_aa = ours, the default, keep or smaa): the eye settings our own anti-aliasing is
     made for, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale and supersample 100,
-    eyes at 100% (no upscaling), no anisotropy override, the game's sharpening at its lowest, no ENGINE TAA, the eyes'
-    jittered lens on (--no-eye-antialiasing is ignored). Mip bias: the game's where its AA is TAA and our TAA resolves
-    the eyes; +0.5 for SMAA (no history to settle sub-pixel texture detail) or where the game's AA is not TAA (keep
-    with DLSS: its -2.0 crawls). The game's own TAA never runs in the eyes (no eye TAA targets or jitter, stereo_probe).
-    Returns the console line."""
+    eyes at 100% (no upscaling), no anisotropy override (VR TEXTURES gives the game's 16x filtering), the game's
+    sharpening at its lowest, no ENGINE TAA, the eyes' jittered lens on (--no-eye-antialiasing is ignored). Mip bias:
+    0.0.76 SPIDY TAA TUNE -0.5 where the game's AA is TAA and our TAA resolves the eyes (the game's own is -1.0 on its
+    material samplers, the 509bdc9 run: more than one sub-pixel step can average, window texture crawled; only samplers
+    the game biased negatively are changed, spidy/mip_bias.hpp); +0.5 for SMAA (no history to settle sub-pixel texture
+    detail) or where the game's AA is not TAA (keep with DLSS: its -2.0 crawls). The game's own TAA never runs in the
+    eyes (no eye TAA targets or jitter, stereo_probe). `supersample`: live.txt vr_ss (live_settings.vr_supersample),
+    100 unless asked, never with --size. Returns the console line."""
     smaa = a.vr_aa == 'smaa'
-    mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
+    mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else '-0.5'
+    ss = supersample if supersample in (125, 150) and not a.size else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
-        ('render scale', a.render_scale, 100), ('supersample', a.supersample, 100),
+        ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
         ('upscale', a.upscale, 100), ('mip bias', a.mip_bias, mip),
         ('anisotropy', a.anisotropy, 0)) if old != new]
     if a.game_sharpening:
@@ -1816,17 +1820,18 @@ def apply_vr_aa(a):
     if getattr(a, 'no_eye_antialiasing', False):
         forced.append('eye lens jitter -> on')
     a.render_scale = 100 if not a.size else a.render_scale
-    a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, 100, mip, 0
+    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, 100, mip, 0
     a.game_sharpening = a.engine_taa = a.no_eye_antialiasing = False
     kept = ' (kept over: ' + ', '.join(forced) + ')' if forced else ''
+    ss_said = (f', eyes supersampled {ss}% (live.txt vr_ss)' if ss != 100 else '')
     if smaa:
         return ('VR AA: SMAA (live.txt vr_aa = smaa): SMAA in each eye, no history so nothing shakes or ghosts, '
-                'the game\'s TAA kept off the eyes, eyes at 100%, mip bias +0.5' + kept +
+                'the game\'s TAA kept off the eyes, eyes at 100%' + ss_said + ', mip bias +0.5' + kept +
                 '. vr_aa = ours (or no line) + restart VR for SpidyVR\'s own TAA.')
     return ("VR AA: SPIDY TAA (default" + (', vr_aa = keep: your game AA kept' if a.vr_aa == 'keep' else '') +
             "): SpidyVR's own TAA, one history per eye reprojected with that eye's own pose, Halton jitter per eye, "
-            'colour clipping against ghosts; the game\'s TAA kept off the eyes, eyes at 100%, ' +
-            ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip}') + kept +
+            'colour clipping against ghosts, a mild RCAS sharpen after it; the game\'s TAA kept off the eyes, eyes at '
+            '100%' + ss_said + ', ' + f'mip bias {mip}' + kept +
             '; if it cannot start the eyes get SMAA. live.txt vr_aa = smaa + restart VR for no history at all.')
 
 
@@ -3077,6 +3082,9 @@ def session(a, startup, session_off=()):
         history_last = None  # Update 21: history_snapshot, kept from the samples
         sm1style_last = None  # 0.0.76 EYE HISTORY CHECK: sm1style_snapshot, kept from the samples
         pose_check_last = None  # 0.0.76 POSE CHECK: pose_check_snapshot, kept from the samples
+        # 0.0.76 SPIDY TAA TUNE: the vr_aa and jitter records kept from the samples too (the 11:26 report, written
+        # after the game was closed, had neither: they were only read at a normal stop).
+        vr_aa_last = jitter_log_last = None
         engine_taa_last = engine_taa_said = None  # Update 34.2
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
@@ -3374,6 +3382,7 @@ def session(a, startup, session_off=()):
                         render_memory=render_memory, timing=timing, network=links, eye_history=history_last,
                         sm1style_eyes=sm1style_last,
                         pose_check=pose_check_last,
+                        vr_aa=vr_aa_last, jitter_log=jitter_log_last,
                         eye_shadows=shadows_last,
                         stream_stalls=stream_stalls(list(samples)),
                         free_commit_mb=dict(start=start_commit, lowest=lowest_commit),
@@ -3680,6 +3689,10 @@ def session(a, startup, session_off=()):
                                                     ('last_degrees', 'last_mm', 'max_degrees', 'max_mm')}
                                                 for e in ('left', 'right')}
                         sample['pose_check_world_turn'] = pose_check_last['world_turn']['last_degrees']
+                    # 0.0.76 SPIDY TAA TUNE: kept for a report written after the game was closed.
+                    vr_aa_last = vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last
+                    jitter_log_last = (jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
+                                       or jitter_log_last)
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
                     if (taa := engine_taa_snapshot(game, xr['SpidyEngineTaaData'])):
                         said = (taa['state'], taa['reason'], taa['jitter_mode'], taa['jitter_scale'])
@@ -3954,8 +3967,9 @@ def session(a, startup, session_off=()):
             sm1style_eyes=sm1style_snapshot(game, xr['SpidySm1StyleData']) or sm1style_last,
             pose_check=pose_check_record.pose_check_snapshot(game, xr.get(pose_check_record.EXPORT))
             or pose_check_last,
-            jitter_log=jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT)),
-            vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)))
+            jitter_log=jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
+            or jitter_log_last,
+            vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last)
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

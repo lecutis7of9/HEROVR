@@ -107,7 +107,9 @@ class SessionLaunchTests(unittest.TestCase):
         # migration's marker); GAME chosen after the marker stays.
         for live, off in (('lens_flares = off_in_vr\n', ('lens_flares',)),
                           ('lens_flares = game\n', ('lens_flares',)),
-                          (live_settings.MIGRATED_073T5 + '\nlens_flares = game\n', ()), ('', ('lens_flares',))):
+                          # 0.0.76 LIGHTS LOCK: GAME chosen after the marker is ignored in VR too.
+                          (live_settings.MIGRATED_073T5 + '\nlens_flares = game\n', ('lens_flares',)),
+                          ('lens_flares = 0\n', ('lens_flares',)), ('', ('lens_flares',))):
             with self.subTest(live=live), tempfile.TemporaryDirectory() as folder:
                 root = pathlib.Path(folder)
                 (root/'live.txt').write_text(live, encoding='utf-8')

@@ -442,7 +442,8 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'sm1style': 'RESTART NOTICE: sm1style takes effect the next time VR starts (off: the 0.0.72 eye '
                        'picture, our FXAA, history and sharpen; on: SpidyVR\'s per-eye TAA at 67%).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
-           'lens_flares': 'RESTART NOTICE: lens_flares takes effect the next time VR starts.',
+           # 0.0.76 LIGHTS LOCK: VR always turns them off; the value is only the flat game's
+           'lens_flares': 'NOTICE: lens_flares stays off in VR for every hero (0.0.76); GAME only keeps the flat game\'s own setting.',
            # 0.0.73 LIGHT CHECKS: the eyes' query pools are sized when the eyes are made
            'light_checks': 'RESTART NOTICE: light_checks takes effect the next time VR starts.'}
 # Update 37: the run36 closing settings, the defaults now (reach and monitor are the launcher's own
@@ -1942,17 +1943,23 @@ HEADER += MIGRATED_074T10_72 + '\n'
 
 
 def lens_flares_off(text):
-    """True when live.txt `text` (None: no live.txt) turns the game's lens flares off for this VR session:
-    lens_flares = off_in_vr, or no lens_flares line at all (0.0.73 lights: the default is OFF IN VR).
-    Never raises (an unreadable text gives the default)."""
-    default = UPDATE38_DEFAULTS['lens_flares'] == 'off_in_vr'
+    """True: the game's lens flares are turned off for this VR session. 0.0.76 LIGHTS LOCK: always True, for every
+    hero and every live.txt (lens_flares = game, 0 or an unreadable file too). The game's flares test the monitor's
+    depth, not each eye's, so headlights and street lights shine through buildings in the headset (the 0.0.62 fix);
+    the owner's Batman report (0.0.74 backup, lens_flares flipped to GAME on the hologram) showed a single hologram
+    press could bring them back at the next start. GAME is only the flat game's own setting now (it is put back
+    when VR closes). `text` is still taken so callers keep their shape. Never raises."""
+    return True
+
+
+def lens_flares_game_ignored(text):
+    """0.0.76 LIGHTS LOCK: True when live.txt `text` asks for the game's flares (lens_flares = game / 0), which VR
+    now ignores; the launcher prints one line saying so. Never raises."""
     try:
         values, _ = parse(text or '')
     except Exception:
-        return default
-    if 'lens_flares' not in values:
-        return default
-    return values['lens_flares'] in ('off_in_vr', 1)
+        return False
+    return values.get('lens_flares') in ('game', 0)
 
 
 def sm1style_on(text):

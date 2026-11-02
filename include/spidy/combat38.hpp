@@ -379,12 +379,14 @@ inline constexpr OptionInfo optionInfo[options] = {
     // your hands, live.
     {"hand_flips", "HAND FLIPS", "HANDFLIP", "OFF: swinging your arms never starts a flip, no restart.",
      2, {"ON", "OFF", nullptr, nullptr}},
+    // 0.0.76 LIGHTS LOCK: the launcher turns the flares off in VR whatever this row says (GAME only keeps
+    // the flat game's own setting; Batman report, docs/LIGHTS-0.0.76.md).
     // LENS FLARES: GAME (0) leaves the game's setting alone; OFF IN VR turns the game's lens flares
     // off while VR runs (they test the monitor's view, not each eye's, and shine through walls),
     // RESTART REQUIRED, put back when VR closes. 0.0.73 lights: the launcher starts it OFF IN VR (test 4's
     // video: flare streaks strobing, headlights ghosting); index 0 stays GAME so live.txt numbers and the
     // wrist readback bit keep their meaning (the launcher's default, not index 0, is the default here).
-    {"lens_flares", "LENS FLARES", "FLARES", "OFF IN VR turns the game's lens flares off in VR, restart VR to apply.",
+    {"lens_flares", "LENS FLARES", "FLARES", "Flares stay off in VR for every hero, GAME is for flat play only, no restart.",
      2, {"GAME", "OFF IN VR", nullptr, nullptr}},
     // Version 0.0.62 PUNCH HITS (SpidyVR's land(): the hit is sent the moment the fist touches):
     // GAME + INSTANT (0, the default) sends a small CONFIRMED DirectDamage blow with a knock on the

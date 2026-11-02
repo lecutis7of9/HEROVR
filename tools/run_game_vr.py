@@ -2471,12 +2471,11 @@ def main():
         live_text = None
     if live_settings.lens_flares_off(live_text):
         session_off = ('lens_flares',)
-        print('LENS FLARES: OFF IN VR this session (0.0.73 lights default: no flare strobing or headlight '
-              'ghosts; the game\'s own setting is put back when VR closes; LENS FLARES GAME + restart VR to '
-              'keep them).', flush=True)
-    else:
-        print('LENS FLARES: GAME this session (the game\'s own lens flares; LENS FLARES OFF IN VR + restart VR '
-              'if they strobe).', flush=True)
+        print('LENS FLARES: OFF IN VR this session, for every hero (0.0.76 LIGHTS LOCK: the game\'s flares shine '
+              'through buildings in the headset; the game\'s own setting is put back when VR closes).', flush=True)
+        if live_settings.lens_flares_game_ignored(live_text):
+            print('LENS FLARES: live.txt says lens_flares = game - ignored in VR since 0.0.76 (it only keeps the '
+                  'flat game\'s own setting).', flush=True)
     a.session_off = session_off   # session() reads it: it is not a local there (0.0.62 NameError at 'starting the game')
     # SM2 VR (from SM2VR 0.0.27): a Spider-Man 2 that renders no view of its own writes a swapchain back
     # buffer that is not the current one, and the graphics device is lost (DXGI_ERROR_ACCESS_DENIED). The

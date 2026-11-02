@@ -1131,7 +1131,8 @@ Place placeOf(Control c) {
     return {};
 }
 bool restartTag(Control c) {
-    return c == Control::supersample || c == Control::combatMirrorView || c == Control::combatLensFlares || // 0.0.62
+    // 0.0.76 LIGHTS LOCK: LENS FLARES no longer needs a restart (VR always turns the flares off).
+    return c == Control::supersample || c == Control::combatMirrorView ||
            c == Control::combatLightChecks; // 0.0.73 LIGHT CHECKS: the eyes' pools are sized when they are made
 }
 

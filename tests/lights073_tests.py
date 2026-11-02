@@ -24,8 +24,12 @@ class Defaults(unittest.TestCase):
         self.assertTrue(L.lens_flares_off(''))
         self.assertTrue(L.lens_flares_off('lens_flares = off_in_vr\n'))
         self.assertTrue(L.lens_flares_off('lens_flares = 1\n'))
-        self.assertFalse(L.lens_flares_off('lens_flares = game\n'))
-        self.assertFalse(L.lens_flares_off('lens_flares = 0\n'))
+        # 0.0.76 LIGHTS LOCK: GAME no longer brings the flares back in VR (Batman report).
+        self.assertTrue(L.lens_flares_off('lens_flares = game\n'))
+        self.assertTrue(L.lens_flares_off('lens_flares = 0\n'))
+        self.assertTrue(L.lens_flares_game_ignored('lens_flares = game\n'))
+        self.assertFalse(L.lens_flares_game_ignored('lens_flares = off_in_vr\n'))
+        self.assertFalse(L.lens_flares_game_ignored(None))
 
     def test_subtexts_one_sentence_with_restart(self):
         h = src('include/spidy/eye_bloom.hpp')
@@ -35,7 +39,7 @@ class Defaults(unittest.TestCase):
         i = c.index('{"lens_flares", "LENS FLARES", "FLARES", "') + 42
         lf = c[i:c.index('"', i)]
         self.assertTrue(eb.endswith('no restart.') and len(eb) <= 80 and eb.count('.') == 1, eb)
-        self.assertTrue(lf.endswith('restart VR to apply.') and len(lf) <= 80 and lf.count('.') == 1, lf)
+        self.assertTrue(lf.endswith('no restart.') and len(lf) <= 80 and lf.count('.') == 1, lf)
 
     def test_launcher_uses_the_effective_default(self):
         r = src('tools/run_game_vr.py')

@@ -13,6 +13,9 @@ From hero-0.0.76-sm1 (faecbe9). **Built and unit-tested, not yet tried in the ga
   **holding Y** the orientation brake (rights you), the **right stick** rolls your body round the flight axis (full
   360, holds where you leave it). The flips keep the old non-realistic sensitivity; Thor's hammer grip stays behind the
   back. While flying A is never the game's jump and B never its dodge. R3 still lands.
+- **Lights through buildings (Batman report):** the game's lens flares now stay off in VR for every hero, whatever
+  live.txt or the hologram's LENS FLARES row says (GAME only keeps the flat game's own setting). The report was from
+  the 0.0.74 backup with the row flipped to GAME; see [docs/LIGHTS-0.0.76.md](docs/LIGHTS-0.0.76.md).
 - **live.txt `fly_classic`** (off by default): on brings back the 0.0.75 flight (grip take-off, poses, trigger
   thrust); live, no restart.
 - **Walls:** only Spider-Man climbs or sticks to walls (also after flight and grapples); another hero touching a wall

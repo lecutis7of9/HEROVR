@@ -148,7 +148,8 @@ class Tune(unittest.TestCase):
 
     def test_509bdc9_taa_again(self):
         h, gpu = src('include/spidy/vr_aa.hpp'), src('src/native_eye_gpu.cpp')
-        for line in ('keepStill = .9f', 'keepMoving = .6f', 'gammaStill = 1.25f', 'gammaMoving = .85f'):
+        for line in ('keepStill = .94f',  # 0.0.76 C-still094
+                      'keepMoving = .6f', 'gammaStill = 1.25f', 'gammaMoving = .85f'):
             self.assertIn(line, h)
         self.assertNotIn('rcasShader', gpu)
         self.assertNotIn('history.rcas', gpu)

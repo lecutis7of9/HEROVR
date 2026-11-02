@@ -36865,6 +36865,28 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(va::keep(true, NAN, 0) == 0 && va::keep(true, 0, NAN) == 0, "NaN: starts again");
         const float half = va::keep(true, (va::turnFrom + va::turnFull) / 2, 0);
         check(half < va::keepStill && half > va::keepMoving, "in between");
+        // 0.0.76 C-still094: the still share .94 (moving .6), and a still head classed still.
+        check(va::keepStill == .94f && va::keepMoving == .6f, "C-still094: .94 still, .6 moving");
+        {
+            va::Settle s;
+            const float pair = va::pairSeconds;
+            check(va::classify(true, .0005f, .001f, pair, s) == 0, "a still head: still");
+            check(va::classify(true, .006f, 0, 4 * pair, s) == 0 && s.moved == 0,
+                  "a late pair's turn is a nominal pair's: still");
+            check(va::classify(true, .02f, 0, pair, s) == 0 && s.moved == 1, "one pair of motion alone: still");
+            check(va::classify(true, .0005f, 0, pair, s) == 0 && s.moved == 0, "and back to still");
+            va::classify(true, .02f, 0, pair, s);
+            const float m = va::classify(true, .02f, 0, pair, s);
+            check(m > 0 && std::abs(m - va::motion(.02f, 0)) < 1e-6f, "two in a row: moving, as before");
+            check(va::classify(false, .02f, 0, pair, s) == 0 && s.moved == 0, "no view: starts again");
+            check(va::classify(true, .02f, 0, 100.f, s) == 0, "a very late pair: scaled at most to a quarter");
+            check(va::perPair(.02f, 100.f) == .005f && va::perPair(.02f, 0) == .02f &&
+                      va::perPair(.02f, pair / 2) == .02f,
+                  "only ever scaled down");
+            check(std::abs(va::keepFor(true, 0, 0, 0) - va::keepStill) < 1e-6f &&
+                      std::abs(va::clipGammaFor(0) - va::gammaStill) < 1e-6f && va::keepFor(true, .3f, 0, 0) == 0,
+                  "classed still: the full share and the still clip; a cut still starts again");
+        }
         check(std::abs(va::clipGamma(0, 0) - va::gammaStill) < 1e-6f &&
                   std::abs(va::clipGamma(.2f, 0) - va::gammaMoving) < 1e-6f,
               "the clip tighter while moving");

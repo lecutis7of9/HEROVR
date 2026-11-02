@@ -2621,8 +2621,10 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         const uint32_t cutNow = cutPercent.load(std::memory_order_relaxed);
         const float travelCut = eye_history::cutMotion(travel, cutNow), turnCut = eye_history::cutMotion(turn, cutNow);
         float keep = eye_history::movedWeight(still, travelCut, turnCut, trail);
+        static vr_aa::Settle settle[2]; // 0.0.76 C-still094: the classification, per eye
+        const float classed = ours ? vr_aa::classify(both, turn, travel, watchSeconds, settle[i]) : 0.f;
         if (ours) // 0.0.76 SPIDY TAA (vr_aa.hpp): eased, not cut, while moving; the clip keeps it from ghosting
-            keep = vr_aa::keep(both, turn, travel);
+            keep = vr_aa::keepFor(both, turn, travel, classed);
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];
@@ -2638,14 +2640,13 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             travelCut, turnCut);
         if (ours) {
             frame[i][3] = 0;                                 // row0.w: no LIGHT HOLD (the luma weights do it)
-            frame[i][15] = vr_aa::clipGamma(turn, travel);   // extra.w: the variance clip's width
+            frame[i][15] = vr_aa::clipGammaFor(classed);     // extra.w: the variance clip's width
         }
         blended = blended || keep > 0;
         if (i == 0 && both) {
             maxTravel = travel;
             cut = still > 0 && !(keep > 0);
-            moving = keep > 0 && (ours ? vr_aa::motion(turn, travel)
-                                       : eye_history::motionShare(travelCut, turnCut)) > .5f;
+            moving = keep > 0 && (ours ? classed : eye_history::motionShare(travelCut, turnCut)) > .5f;
             leastKeep = keep;
             leastStill = ours ? keep : still; // SPIDY TAA: JITTER CALM keeps the full step while anything is kept
             watchStill = taa_watch::stillHead(turn, travel, watchSeconds);

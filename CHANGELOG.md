@@ -6,6 +6,10 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **C-still094 test build:** while your head is still, SPIDY TAA now keeps 94% of the averaged picture each frame
+  instead of 90% (moving stays 60%), so windows and fine building detail have longer to settle. A still head is now
+  also classed still: a late frame no longer counts as a fast turn, and a single-frame tracking blip does not count
+  as moving. TAA WATCH says how often a still head was still treated as moving. Nothing to set.
 - **TAA WATCH (read-only, in every 0.0.76 A/B/C test build):** the console prints a line every 10 seconds with the
   eye fps, the GPU time a pair (the game's two eye jobs, timed at their own begin and end markers, and SPIDY TAA's own
   pass) and the still / moving split, including how many pairs with a still head were treated as moving (over 20%

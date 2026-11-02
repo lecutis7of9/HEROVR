@@ -150,7 +150,7 @@ What runs (src/native_eye_gpu.cpp `taaShader`, PSO `history.taa`, include/spidy/
 - per-eye Halton (2,3) lens jitter (eye_taa.hpp, the same lens the layer is submitted with);
 - 3x3 YCoCg neighbourhood: variance box (mean +- gamma sigma, gamma 1.25 still -> 0.85 moving) intersected with the
   min/max box, the history clipped toward the box centre; Catmull-Rom history sample; 1/(1+luma) weighting;
-- history share 0.9 still easing to 0.6 while turning/moving, 0 on a camera cut (> 0.26 rad or 3 m in a pair).
+- history share 0.9 still (0.94 in the C-still094 test) easing to 0.6 while turning/moving, 0 on a camera cut (> 0.26 rad or 3 m in a pair).
 Not feasible: depth / motion-vector reprojection - no CONFIRMED eye depth or motion-vector addresses, so the history
 follows the head only; moving objects are handled by the clip. Cost: one full-screen pass per eye (as EYE AA's).
 
@@ -206,3 +206,13 @@ still head <n> (<%> classed moving)`, and the report's `taa_watch` keeps up to 9
   DEPTH_WRITE inside each eye job's G-buffer pass: which resource each eye used, whether both eyes' jobs had one,
   whether the same one served both, and whether it ever left DEPTH_WRITE with no eye job open (the flat view).
   CONFIRMED only with 200 pairs, at least 90% with both eyes and never the flat view; otherwise CANDIDATE.
+
+### C-still094 (0.0.76 test build): still share 0.94, a still head classed still
+
+`keepStill` .9 -> .94 (about 16 pairs averaged, one whole Halton cycle); `keepMoving` stays .6; per-eye history,
+Halton, Catmull-Rom, the YCoCg clip widths and the camera-cut reset unchanged. The classification (vr_aa::classify):
+the eye's turn and travel between its two pairs are scaled to one nominal pair (1/45 s) when the pair came late (a
+held or skipped frame read as a fast turn; only ever scaled down, at most to a quarter), and one moving pair alone
+(a tracking blip) does not leave still - two in a row do. The blend share and the clip width both follow that one
+classification (a pair classed still gets the still share and the still clip). TAA WATCH's "still head ... classed
+moving" says whether it worked: over 20% means the thresholds (turnFrom / travelFrom) are wrong, not the blend.

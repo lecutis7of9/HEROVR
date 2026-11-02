@@ -2839,7 +2839,7 @@ buildings stayed; only the light went.
   pose and fov against the command's eyes/fovs); first 10 mismatches to the prompts log. Tests: core `JITTER FIX`,
   hero076_jitter_fix_tests, hero076_far_shake_tests, hero076_pose_check_tests.
 
-## 70. Version 0.0.76 SPIDY TAA: our own per-eye TAA in the mod's pass; SMAA per eye; the game's TAA off the eyes
+## 71. Version 0.0.76 SPIDY TAA: our own per-eye TAA in the mod's pass; SMAA per eye; the game's TAA off the eyes
 
   live.txt vr_aa (RESTART): ours (alias taa; default) | keep | smaa | game. Launcher (tools/run_game_vr.py
   apply_sm1style -> apply_vr_aa, vr_aa_options): ours/keep/smaa force render scale, supersample and upscale 100,

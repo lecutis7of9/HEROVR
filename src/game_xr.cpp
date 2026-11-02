@@ -10367,7 +10367,9 @@ DWORD WINAPI run(void*) {
                     }
                     // 0.0.76 SUIT PROBE 1 + 2 (suit_probe.hpp): read-only, throttled (PROBE 1 once a second, PROBE 2
                     // a few objects a frame); off reads nothing.
-                    suit_probe::frame(player.hero, player.record, suitProbeNow.load() == 1,
+                    // 0.0.76 PROBE 5 (the last suit run): !gameplay - the menu (no gameplay camera) - ties each
+                    // suit change to a menu exit.
+                    suit_probe::frame(player.hero, player.record, suitProbeNow.load() == 1, !gameplay,
                                       [](const char* line) { consoleLine(line); });
                     {
                         std::lock_guard lock(telemetry);

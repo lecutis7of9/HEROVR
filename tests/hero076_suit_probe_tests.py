@@ -29,7 +29,7 @@ class SuitProbe(unittest.TestCase):
         self.assertIn('std::atomic<uint32_t> %s{0};' % ATOMIC, g)
     def test_wiring(self):
         g = src('src/game_xr.cpp')
-        call = g.index('suit_probe::frame(player.hero, player.record, suitProbeNow.load() == 1,')
+        call = g.index('suit_probe::frame(player.hero, player.record, suitProbeNow.load() == 1, !gameplay,')
         self.assertLess(call, g.index('std::lock_guard lock(telemetry);', call))  # never under the lock
         self.assertIn('src/suit_probe.cpp) # 0.0.76 SUIT PROBE', src('CMakeLists.txt'))
         self.assertIn('add_test(NAME suit_probe COMMAND spidy_suit_probe_tests)', src('CMakeLists.txt'))

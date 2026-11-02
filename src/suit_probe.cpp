@@ -233,15 +233,20 @@ void containerFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
             log(line.c_str());
 }
 
-// PROBE 5: the look ids (equipped loadout, vanity items, materials / textures) on the record and its instance,
-// and one step into each pointer there; a pass about once a second, a few objects a frame.
-void lookFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
+// PROBE 5 (the last suit run): the suit / look ids (equipped loadout, vanity items, materials / textures, the
+// suits' item, model and mask ids) on the record, its instance and the hero, two steps into what they point at
+// (the components' material overrides); the record's own fields compared across each menu; the menu's open and
+// exit told. A pass about once a second, a few objects a frame within the frame's budget.
+void lookFrame(uint64_t hero, uint64_t record, bool menu, ULONGLONG now, void (*log)(const char*)) {
     if (scanTable.empty())
         return;
     if (!record) {
         lookRecord = 0;
         return;
     }
+    const uint64_t ms = now >= onSince ? now - onSince : 0;
+    for (const auto& line : watch5.menu(menu, ms))
+        log(line.c_str());
     if (record != lookRecord) {
         lookRecord = record;
         look = Look{};
@@ -254,21 +259,21 @@ void lookFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
             return;
         lookStarted = now ? now : 1;
         if (scanTable.looks.empty()) { // an older sm2scan.json: told once, nothing read
-            for (const auto& line : watch5.pass(scanTable, look))
+            for (const auto& line : watch5.pass(scanTable, look, ms))
                 log(line.c_str());
             return;
         }
-        const uint64_t roots[2] = {record, peek64(record)};
+        const uint64_t roots[3] = {record, peek64(record), hero};
         look.start(reader, roots, scanTable, lookLimits);
         if (look.status() != Look::reading) {
-            for (const auto& line : watch5.pass(scanTable, look))
+            for (const auto& line : watch5.pass(scanTable, look, ms))
                 log(line.c_str());
             return;
         }
     }
     Budget b = budget();
     if (look.step(reader, scanTable, lookLimits, &b))
-        for (const auto& line : watch5.pass(scanTable, look))
+        for (const auto& line : watch5.pass(scanTable, look, ms))
             log(line.c_str());
 }
 
@@ -310,7 +315,7 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
 }
 } // namespace
 
-void frame(uint64_t hero, uint64_t record, bool on, void (*rawLog)(const char*)) noexcept {
+void frame(uint64_t hero, uint64_t record, bool on, bool menu, void (*rawLog)(const char*)) noexcept {
     try {
         if (!rawLog)
             return;
@@ -335,7 +340,7 @@ void frame(uint64_t hero, uint64_t record, bool on, void (*rawLog)(const char*))
         if (on) {
             deepFrame(hero, record, now, log);
             containerFrame(record, now, log);
-            lookFrame(record, now, log);
+            lookFrame(hero, record, menu, now, log);
         } else if (wasOn) {
             look = Look{};
             lookRecord = 0;

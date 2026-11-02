@@ -140,6 +140,20 @@ GPU, the suit's asset id in the MP WORLD packet, and drawing it on the receiver 
   and logs "SUIT PROBE 5: baseline / change N ..." with the worn look (the suit most of the found ids name) and up
   to 6 +/- lines, when two passes agree. Every place is CANDIDATE. An older sm2scan.json says once to re-run the
   new sm2scan.py.
+- PROBE 5, the last suit run (every candidate at once):
+  - Ids: the look ids (materials / textures, the equipped loadout config, vanity items) and each suit's own item
+    (the reward config id an equipped-suit setting would hold), model and mask ids.
+  - Where: the hero record, its instance and the hero entity, two steps into what they point at (the hero's
+    components and their material overrides), each object once a pass (loops read once), at most 3000 objects a
+    pass, 32 a frame and never past the frame's 160 reads / 1.2 ms.
+  - Save / profile: no address for the save's or profile's equipped-suit setting is known and none is made up; its
+    suit item id is looked for wherever these reads reach, and a hit is CANDIDATE like every other place.
+  - Record fields: the record's and the instance's own 0x80 words each. A word that changes in play outside the
+    menus is noise and left out; the rest is kept when the menu opens and compared once two passes after the exit
+    agree: "SUIT PROBE 5: menu exit N: K steady field(s) ... changed (CANDIDATE)" and up to 6 "record+0x... old ->
+    new" lines.
+  - The menu: "SUIT PROBE 5: menu N open" and "menu exit N after S s" (no gameplay camera for 0.5 s; a flicker is not
+    told). A change seen in the menu ends "- in menu N", within 20 s of an exit "- S s after menu exit N".
 - Less noise: PROBE 3 shows at most 6 lines a change and 2 WATCH places a suit (then "... N more"); PROBE 4 at most
   6; PROBE 1 shows only `characters/` paths (no fx quest-marker model).
 - The hitch (run TEST 3c47385: peaks of 38-78 ms): PROBE 1 read ~4,000 times in one frame each second; it now

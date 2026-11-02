@@ -5,6 +5,7 @@
 // complete depths, faults), two passes agreeing, the changes only (by place), the watched suits' every place;
 // PROBE 4: the container record+0x080 -> +0x028 read directly, the stamps, the cost. Given a
 // path (a real sm2scan.json) it also reads that and says how many suits and ids it holds.
+#include <cstdlib>
 #include "spidy/suit_probe.hpp"
 
 #include <cstdio>
@@ -579,9 +580,11 @@ int main(int argc, char** argv) {
         lm5.put64(linst + 0x18, obj);          // one step from the instance
         lm5.put64(obj + 0x30, assetId("configs/loadouts/nwh_loadout.config"));
         lm5.put64(obj + 0x38, eyes);
-        lm5.put64(linst + 0x20, 0x84000000);   // two steps: never read
+        lm5.put64(linst + 0x20, 0x84000000);   // three steps: never read
         lm5.put64(0x84000000 + 0x08, 0x85000000);
-        lm5.put64(0x85000000, hyMat);
+        lm5.put64(0x85000000, 0x86000000);
+        lm5.put64(0x86000000, hyMat);
+        lm5.put64(obj + 0x28, linst);          // a loop back: read once
         const uint64_t lr[2] = {lrec, linst};
         LookLimits ll;
         Look lk;
@@ -596,7 +599,7 @@ int main(int argc, char** argv) {
         check(pass5().empty(), "PROBE 5: one pass, nothing told yet");
         auto p5 = pass5();
         check(p5.size() == 4 && p5[0].find("SUIT PROBE 5: baseline (passes 1 and 2 agree,") == 0 &&
-                  p5[0].find("3 look id(s) on the hero record; worn look (CANDIDATE): SUIT_NWH (3 ids)") != std::string::npos,
+                  p5[0].find("3 suit / look id(s) on the hero; worn look (CANDIDATE): SUIT_NWH (3 ids)") != std::string::npos,
               "two passes agree: the baseline and the worn look");
         bool at = false;
         for (const auto& line : p5)
@@ -616,6 +619,124 @@ int main(int argc, char** argv) {
         check(pass5().empty(), "one pass different");
         lm5.put64(lrec + 0x40, hyMat);
         check(pass5().empty(), "back again: nothing told");
+        {   // the last suit run: every candidate at once
+            Memory m6 = lm5;
+            const uint64_t hero6 = 0x87000000, comp = 0x88000000, ovr = 0x89000000;
+            m6.put64(hero6 + 0x50, comp);               // the hero -> a component
+            m6.put64(comp + 0x10, ovr);                 // -> its material override
+            m6.put64(ovr + 0x08, hyMat);
+            m6.put64(lrec + 0x60, assetId("configs/inventory/inv_reward_loadout_hybrid.config")); // the suit item
+            const uint64_t r3[3] = {lrec, linst, hero6};
+            Look l6;
+            l6.start(m6, r3, lt, ll);
+            int guard = 0;
+            while (!l6.step(m6, lt, ll) && ++guard < 10000) {
+            }
+            bool viaHero = false, item = false;
+            for (const auto& p : l6.places()) {
+                viaHero = viaHero || (p.id == hyMat && p.chain == "hero+0x050 -> +0x010 -> +0x008");
+                item = item || (p.id == assetId("configs/inventory/inv_reward_loadout_hybrid.config") && p.chain == "record+0x060");
+            }
+            check(viaHero, "PROBE 5: the hero component's material override, two steps from the hero");
+            check(item && lt.findAny(assetId("configs/inventory/inv_reward_loadout_hybrid.config"))->kind == kindLoadout,
+                  "PROBE 5: the suit's item id (an equipped-suit setting) on the record");
+            check(l6.words().size() == 2 * ll.words && l6.words()[0x60 / 8] != 0 && l6.words()[ll.words] == 0,
+                  "PROBE 5: the record's and the instance's own words kept");
+            LookLimits few = ll;
+            few.objectsMost = 1;
+            Look l7;
+            l7.start(m6, r3, lt, few);
+            guard = 0;
+            while (!l7.step(m6, lt, few) && ++guard < 10000) {
+            }
+            check(l7.objects() <= 4, "PROBE 5: the objects of a pass are capped");
+            const uint64_t nr3[3] = {0, 0, hero6};
+            Look l8;
+            l8.start(m6, nr3, lt, ll);
+            check(l8.status() == Look::noRecord && l8.words().empty(), "PROBE 5: the hero alone, no record: nothing read");
+            Budget tight{};
+            tight.most = 3;
+            Look l9;
+            l9.start(m6, r3, lt, ll);
+            size_t most = 0, before = l9.objects();
+            int frames = 0;
+            for (;;) {
+                Budget b = tight;
+                const bool done = l9.step(m6, lt, ll, &b);
+                most = std::max(most, l9.objects() - before);
+                before = l9.objects();
+                ++frames;
+                if (done || frames > 10000)
+                    break;
+            }
+            check(frames > 1 && most <= 3, "PROBE 5: a frame's budget holds (a few objects a frame)");
+
+            // the menu: its open and exit told once each, the record's steady fields compared across it
+            Watch5 w;
+            Memory mm = lm5;
+            mm.put64(lrec + 0x40, nwhMat); // wearing NWH
+            mm.put64(obj + 0x30, assetId("configs/loadouts/nwh_loadout.config"));
+            const uint64_t r2[2] = {lrec, linst};
+            uint64_t ms = 0;
+            uint64_t tick = 0;
+            auto run = [&](bool menu) {
+                std::vector<std::string> out;
+                for (int f = 0; f < 10; ++f) { // a second of frames, then a pass
+                    ms += 100;
+                    for (auto& l : w.menu(menu, ms))
+                        out.push_back(l);
+                }
+                Look lk2;
+                lk2.start(mm, r2, lt, ll);
+                int g = 0;
+                while (!lk2.step(mm, lt, ll) && ++g < 10000) {
+                }
+                for (auto& l : w.pass(lt, lk2, ms))
+                    out.push_back(l);
+                return out;
+            };
+            auto has = [](const std::vector<std::string>& v, const char* t) {
+                for (const auto& l : v)
+                    if (l.find(t) != std::string::npos)
+                        return true;
+                return false;
+            };
+            run(false);
+            run(false);
+            mm.put64(lrec + 0x100, ++tick); // a timer: noisy in play
+            run(false);
+            mm.put64(lrec + 0x100, ++tick);
+            run(false);
+            auto o1 = run(true);
+            check(has(o1, "SUIT PROBE 5: menu 1 open (no gameplay camera"), "PROBE 5: the menu's open told");
+            check(!w.menu(false, ms + 100).size() && w.inMenuNow(), "PROBE 5: a flicker out of the menu: not told");
+            mm.put64(lrec + 0x40, hyMat);   // the swap
+            mm.put64(obj + 0x30, hyLoad);
+            mm.put64(lrec + 0x1a8, 7);      // a suit field
+            mm.put64(lrec + 0x100, ++tick); // the timer again
+            auto o2 = run(true);
+            auto o3 = run(true);
+            check(has(o3, "SUIT PROBE 5: change 1") && has(o3, " - in menu 1"), "PROBE 5: a change in the menu: told so");
+            auto o4 = run(false);
+            check(has(o4, "SUIT PROBE 5: menu exit 1 after "), "PROBE 5: the menu exit told");
+            auto o5 = run(false);
+            check(has(o4, "SUIT PROBE 5: menu exit 1: 2 steady field(s)") || has(o5, "SUIT PROBE 5: menu exit 1: 2 steady field(s)"),
+                  "PROBE 5: the record's steady fields compared after the exit (the timer left out)");
+            check(has(o4, "record+0x1a8 0x0000000000000000 -> 0x0000000000000007") ||
+                      has(o5, "record+0x1a8 0x0000000000000000 -> 0x0000000000000007"),
+                  "PROBE 5: the changed field and its values");
+            run(false);
+            check(run(false).empty(), "PROBE 5: then quiet");
+            // a change soon after a menu exit: tagged with it
+            run(true);
+            run(false);
+            mm.put64(lrec + 0x40, nwhMat);
+            mm.put64(obj + 0x30, assetId("configs/loadouts/nwh_loadout.config"));
+            run(false);
+            auto o6 = run(false);
+            check(has(o6, "SUIT PROBE 5: change 2") && has(o6, "s after menu exit 2"), "PROBE 5: a change after a menu exit: tied to it");
+            (void)o2;
+        }
         Watch5 old;
         Look none5;
         const Table oldTable = Table::fromScan(scanText);

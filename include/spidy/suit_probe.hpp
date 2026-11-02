@@ -508,6 +508,13 @@ struct Table {
                                    [](const std::pair<uint64_t, Target>& e, uint64_t v) { return e.first < v; });
         return it != looks.end() && it->first == id ? &it->second : nullptr;
     }
+    // 0.0.76 PROBE 5, the last suit run: every id PROBE 5 matches - the look ids and the suits' own item (the
+    // equipped-suit id a save / profile setting would hold), model and mask ids.
+    const Target* findAny(uint64_t id) const {
+        if (const Target* t = findLook(id))
+            return t;
+        return find(id);
+    }
     std::vector<uint16_t> watchSuits; // the watchNames found in the scan
     std::vector<uint64_t> watchIds;   // their model and mask ids (each path's own id too), sorted
     bool watched(uint64_t id) const { return std::binary_search(watchIds.begin(), watchIds.end(), id); }
@@ -840,6 +847,7 @@ private:
         uint8_t depth;
         std::string chain;
     };
+  public:
     static std::string hex3(uint32_t v) {
         static const char* d = "0123456789abcdef";
         std::string s = "0x";
@@ -847,6 +855,7 @@ private:
             s.push_back(d[(v >> (i * 4)) & 15]);
         return s;
     }
+  private:
     template <class Peek> static uint32_t read(Peek& peek, uint64_t addr, uint64_t* out, uint32_t want, uint32_t& faults) {
         if (peek(addr, out, want * 8))
             return want;
@@ -1408,6 +1417,12 @@ private:
     std::vector<Container::Place> last;
 };
 
+// 0.0.76 SUIT PROBE 5 - THE LAST SUIT RUN: every candidate at once. The look ids (materials / textures, the
+// equipped loadout config, vanity items) and the suits' own item, model and mask ids, on the hero record, its
+// instance and the hero entity and two steps into what they point at (the hero's components and their material
+// overrides); the record's and the instance's own words (a suit or loadout field) compared across each menu; and
+// a line when the menu opens and closes, so every change is tied to a menu exit. Read-only, a budget a frame.
+// (No save / profile address is known: the equipped-suit item id is looked for wherever these reads reach.)
 // 0.0.76 SUIT PROBE 5 (still the live.txt suit_probe; still READ-ONLY). The NWH Hybrid suit differs from its
 // sibling only in its materials / textures and its equipped loadout config, so model ids alone never told it
 // apart. PROBE 5 reads the hero record and its instance (words wide) and one step into every pointer there
@@ -1418,7 +1433,10 @@ private:
 struct LookLimits {
     uint32_t words = 0x80;      // words read of each root (0x400 bytes)
     uint32_t innerWords = 0x40; // words read of each object a root points at (0x200 bytes)
-    uint32_t perStep = 8;       // objects a frame
+    uint32_t depth = 2;         // steps from a root (2: the hero's components and what they point at - the
+                                // material overrides); each object once a pass
+    uint32_t objectsMost = 3000; // objects a pass at most
+    uint32_t perStep = 32;      // objects a frame (the frame's Budget stops it sooner)
     uint32_t faultsPerStep = 32;
     uint32_t placesMost = 128;
     uint64_t skipLo = 0, skipHi = 0; // never walked into (the game's exe)
@@ -1431,30 +1449,33 @@ public:
         uint64_t id{};
         std::string chain; // "record+0x080 -> +0x028" or "record+0x030"
     };
-    static constexpr const char* rootNames[2] = {"record", "instance"};
-    template <class Peek> void start(Peek& peek, const uint64_t roots[2], const Table& suits, const LookLimits& lim) {
+    static constexpr const char* rootNames[3] = {"record", "instance", "hero"};
+    // roots: the record, its instance and (optional) the hero entity.
+    template <class Peek, size_t N> void start(Peek& peek, const uint64_t (&roots)[N], const Table& suits, const LookLimits& lim) {
+        static_assert(N >= 2 && N <= 3, "record, instance[, hero]");
         places_.clear();
         kids_.clear();
+        seen_.clear();
+        words_.assign(2ull * lim.words, 0);
         next_ = objects_ = 0;
         state_ = noRecord;
         std::vector<uint64_t> w(lim.words);
-        for (uint8_t r = 0; r < 2; ++r) {
+        for (uint8_t r = 0; r < N; ++r) {
             if (!plausible(roots[r]) || (roots[r] & 7) || !peek(roots[r], w.data(), lim.words * 8ull))
                 continue;
-            state_ = reading;
+            if (r == 0)
+                state_ = reading;
+            else if (state_ != reading)
+                continue; // no record: nothing (the hero alone tells nothing of the suit)
             ++objects_;
-            for (uint32_t i = 0; i < lim.words; ++i) {
-                const uint64_t v = w[i];
-                const std::string at = std::string(rootNames[r]) + "+" + hex3(i * 8);
-                if (v && suits.findLook(v)) {
-                    add(v, at, lim);
-                    continue;
-                }
-                if (!plausible(v) || (v & 7) || (lim.skipHi > lim.skipLo && v >= lim.skipLo && v < lim.skipHi))
-                    continue;
-                kids_.push_back({v, at});
-            }
+            seen_.insert(roots[r]);
+            if (r < 2)
+                std::copy(w.begin(), w.end(), words_.begin() + r * lim.words);
+            for (uint32_t i = 0; i < lim.words; ++i)
+                visit(w[i], rootNames[r], "+", i * 8, 1, suits, lim);
         }
+        if (state_ != reading)
+            words_.clear();
         if (state_ == reading && kids_.empty())
             state_ = done;
     }
@@ -1468,15 +1489,15 @@ public:
         for (uint32_t k = 0; k < lim.perStep && next_ < kids_.size() && faults < lim.faultsPerStep &&
                              (k == 0 || !(budget && budget->spent()));
              ++k) {
-            const auto& kid = kids_[next_++];
-            if (!peek(kid.first, in.data(), lim.innerWords * 8ull)) {
+            const Kid kid = kids_[next_++];
+            if (!peek(kid.at, in.data(), lim.innerWords * 8ull)) {
                 ++faults;
                 continue;
             }
             ++objects_;
+            const Kid at = kid; // visit() may grow kids_
             for (uint32_t i = 0; i < lim.innerWords; ++i)
-                if (in[i] && suits.findLook(in[i]))
-                    add(in[i], kid.second + " -> +" + hex3(i * 8), lim);
+                visit(in[i], at.chain, " -> +", i * 8, at.level + 1, suits, lim);
         }
         if (next_ >= kids_.size())
             state_ = done;
@@ -1484,6 +1505,8 @@ public:
     }
     State status() const { return state_; }
     size_t objects() const { return objects_; }
+    // The record's and the instance's own words of this pass (lim.words each; empty: no record).
+    const std::vector<uint64_t>& words() const { return words_; }
     // The places of this pass, sorted by id, then place.
     std::vector<Place> places() const {
         std::vector<Place> out = places_;
@@ -1500,12 +1523,35 @@ public:
     }
 
 private:
+    struct Kid {
+        uint64_t at{};
+        std::string chain;
+        uint32_t level{};
+    };
     void add(uint64_t id, std::string chain, const LookLimits& lim) {
         if (places_.size() < lim.placesMost)
             places_.push_back(Place{id, std::move(chain)});
     }
+    // A word read `level` steps from a root: an id -> a place; a pointer within the depth -> read later (once).
+    // (The place's text is made only for an id or a pointer kept: most words are neither.)
+    void visit(uint64_t v, const std::string& parent, const char* sep, uint32_t off, uint32_t level, const Table& suits,
+               const LookLimits& lim) {
+        if (!v)
+            return;
+        if (suits.findAny(v)) {
+            add(v, parent + sep + hex3(off), lim);
+            return;
+        }
+        if (level > lim.depth || !plausible(v) || (v & 7) ||
+            (lim.skipHi > lim.skipLo && v >= lim.skipLo && v < lim.skipHi) || kids_.size() >= lim.objectsMost ||
+            !seen_.insert(v).second)
+            return;
+        kids_.push_back(Kid{v, parent + sep + hex3(off), level});
+    }
     std::vector<Place> places_;
-    std::vector<std::pair<uint64_t, std::string>> kids_;
+    std::vector<Kid> kids_;
+    std::unordered_set<uint64_t> seen_;
+    std::vector<uint64_t> words_;
     size_t next_{}, objects_{};
     State state_{idle};
 };
@@ -1516,8 +1562,35 @@ class Watch5 {
 public:
     static constexpr size_t maxLines = 6;
     static constexpr size_t sharedMost = 4; // an id more suits than this share names none of them
-    std::vector<std::string> pass(const Table& suits, const Look& look) {
+    static constexpr uint64_t afterExitMs = 20000; // a change this soon after a menu exit is told as that exit's
+    static constexpr uint64_t menuSettleMs = 500;  // the menu counts as open / closed after this long (no flicker)
+    static constexpr size_t fieldLines = 6;
+    // Every frame: is the game paused (its menu; no camera commit), and the probe's clock (ms since on). A line
+    // when the menu opens and when it closes (each after menuSettleMs); the record's fields are kept at the open
+    // and compared after the close.
+    std::vector<std::string> menu(bool paused, uint64_t ms) {
         std::vector<std::string> lines;
+        if (paused != rawPaused)
+            rawPaused = paused, rawSince = ms;
+        if (rawPaused == inMenu || ms - rawSince < menuSettleMs)
+            return lines;
+        inMenu = rawPaused;
+        if (inMenu) {
+            ++menuOpens;
+            menuAt = ms;
+            beforeMenu = stable;
+            lines.push_back("SUIT PROBE 5: menu " + std::to_string(menuOpens) + " open (no gameplay camera; the hero record's fields kept to compare)");
+        } else {
+            exitAt = ms;
+            ++exits;
+            fieldsDue = !beforeMenu.empty() ? 2 : 0; // compared once two passes after the exit agree
+            lines.push_back("SUIT PROBE 5: menu exit " + std::to_string(exits) + " after " +
+                            std::to_string((ms - menuAt) / 1000) + " s");
+        }
+        return lines;
+    }
+    std::vector<std::string> pass(const Table& suits, const Look& look, uint64_t ms = 0) {
+        std::vector<std::string> lines = fields(look.words());
         if (suits.looks.empty()) {
             if (!toldEmpty)
                 lines.push_back("SUIT PROBE 5: this sm2scan.json has no loadout / material ids (an older sm2scan); run "
@@ -1558,10 +1631,10 @@ public:
         std::string head = std::string("SUIT PROBE 5: ") + (first ? "baseline" : "change " + std::to_string(changes - 1)) +
                            " (passes " + std::to_string(passes - 1) + " and " + std::to_string(passes) + " agree, " +
                            std::to_string(look.objects()) + " objects): " + std::to_string(ids.size()) +
-                           " look id(s) on the hero record";
+                           " suit / look id(s) on the hero";
         if (!first)
             head += ", +" + std::to_string(added.size()) + " -" + std::to_string(removed.size());
-        lines.push_back(head + "; worn look (CANDIDATE): " + worn(suits, ids));
+        lines.push_back(head + "; worn look (CANDIDATE): " + worn(suits, ids) + when(ms));
         size_t shown = 0, hidden = 0;
         auto say = [&](const char* sign, uint64_t id, const std::string& at) {
             if (++shown > maxLines) {
@@ -1578,15 +1651,16 @@ public:
             lines.push_back("SUIT PROBE 5: ... " + std::to_string(hidden) + " more");
         return lines;
     }
-    void newPlayer() { havePrev = false, prev.clear(); }
+    void newPlayer() { havePrev = false, prev.clear(), prevWords.clear(), stable.clear(), noisy.clear(), beforeMenu.clear(), fieldsDue = 0; }
     void reset() { *this = Watch5{}; }
-    uint32_t changes{}, passes{};
+    uint32_t changes{}, passes{}, exits{}, menuOpens{};
+    bool inMenuNow() const { return inMenu; }
 
     // The suit most of these ids name (ids shared by more than sharedMost suits name none), with its count.
     static std::string worn(const Table& suits, const std::vector<uint64_t>& ids) {
         std::unordered_map<uint16_t, uint32_t> score;
         for (uint64_t id : ids)
-            if (const Target* t = suits.findLook(id); t && t->suits.size() <= sharedMost)
+            if (const Target* t = suits.findAny(id); t && t->suits.size() <= sharedMost)
                 for (uint16_t s : t->suits)
                     ++score[s];
         uint32_t best = 0;
@@ -1608,9 +1682,9 @@ public:
     }
 
 private:
-    static constexpr const char* kinds[6] = {"loadout", "model", "mask", "equipped loadout", "vanity item", "material"};
+    static constexpr const char* kinds[6] = {"suit item", "model", "mask", "equipped loadout", "vanity item", "material"};
     static std::string describe(const Table& suits, uint64_t id) {
-        const Target* t = suits.findLook(id);
+        const Target* t = suits.findAny(id);
         if (!t)
             return Watch::hex(id);
         const std::string who = t->suits.size() == 1 ? suits.names[t->suits[0]]
@@ -1623,8 +1697,67 @@ private:
                 return p.chain;
         return "?";
     }
+    // " - in menu 3" / " - 4 s after menu exit 2" / "" (no menu near it).
+    std::string when(uint64_t ms) const {
+        if (inMenu)
+            return " - in menu " + std::to_string(menuOpens);
+        if (exits && ms >= exitAt && ms - exitAt <= afterExitMs)
+            return " - " + std::to_string((ms - exitAt) / 1000) + " s after menu exit " + std::to_string(exits);
+        return "";
+    }
+    // The record's and the instance's own words: a word that changes in play outside the menus is noise (a timer,
+    // a position); the rest, kept at the menu's open, is compared once the passes after the exit agree.
+    std::vector<std::string> fields(const std::vector<uint64_t>& words) {
+        std::vector<std::string> lines;
+        if (words.empty())
+            return lines;
+        if (prevWords.size() != words.size()) {
+            prevWords = stable = words;
+            noisy.assign(words.size(), 0);
+            return lines;
+        }
+        bool agree = true;
+        for (size_t i = 0; i < words.size(); ++i) {
+            if (words[i] == prevWords[i]) {
+                stable[i] = words[i];
+                continue;
+            }
+            agree = false;
+            if (!inMenu && !fieldsDue)
+                noisy[i] = 1;
+        }
+        prevWords = words;
+        if (!fieldsDue || inMenu || beforeMenu.size() != words.size())
+            return lines;
+        if (!agree && --fieldsDue > 0)
+            return lines; // one more pass to settle (then compared anyway)
+        fieldsDue = 0;
+        std::vector<size_t> changed;
+        for (size_t i = 0; i < words.size(); ++i)
+            if (!noisy[i] && stable[i] != beforeMenu[i])
+                changed.push_back(i);
+        const size_t half = words.size() / 2;
+        lines.push_back("SUIT PROBE 5: menu exit " + std::to_string(exits) + ": " + std::to_string(changed.size()) +
+                        " steady field(s) of the hero record / instance changed (CANDIDATE; " +
+                        std::to_string(std::count(noisy.begin(), noisy.end(), 1)) + " noisy words left out)");
+        for (size_t k = 0; k < changed.size() && k < fieldLines; ++k) {
+            const size_t i = changed[k];
+            lines.push_back(std::string("SUIT PROBE 5:   ") + (i < half ? "record" : "instance") + "+" +
+                            Deep::hex3(static_cast<uint32_t>((i % half) * 8)) + " " + Watch::hex(beforeMenu[i]) + " -> " +
+                            Watch::hex(stable[i]));
+        }
+        if (changed.size() > fieldLines)
+            lines.push_back("SUIT PROBE 5:   ... " + std::to_string(changed.size() - fieldLines) + " more");
+        beforeMenu.clear();
+        return lines;
+    }
     bool havePrev{}, logged{}, toldEmpty{}, toldNoRecord{};
     std::vector<uint64_t> prev, last;
+    bool rawPaused{}, inMenu{};
+    uint64_t rawSince{}, menuAt{}, exitAt{};
+    uint32_t fieldsDue{};
+    std::vector<uint64_t> prevWords, stable, beforeMenu;
+    std::vector<uint8_t> noisy;
 };
 
 // Every probe line gets a time (run 5 had none): seconds since the probe was turned on and the local clock,
@@ -1675,6 +1808,7 @@ struct Cost {
 // two-second pause), PROBE 4 about once a second (perStep entries a frame), all through an SEH peek, each line
 // stamped, and the cost told every 30 s; sm2scan.json is read from the HERO VR folder or the Desktop.
 // Each new console line goes to log. Never throws; off reads nothing.
-void frame(uint64_t hero, uint64_t record, bool on, void (*log)(const char*)) noexcept;
+// menu: the game is paused (its menu; PROBE 5 ties the suit changes to the menu exits).
+void frame(uint64_t hero, uint64_t record, bool on, bool menu, void (*log)(const char*)) noexcept;
 
 } // namespace spidy::suit_probe

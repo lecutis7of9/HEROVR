@@ -13,6 +13,7 @@
 #include "spidy/scene_depth_match.hpp"
 #include "spidy/streamer_view.hpp"
 #include "spidy/vr_aa.hpp"
+#include "spidy/taa_watch.hpp"
 #include "spidy/smaa/area_tex.h"
 #include "spidy/smaa/search_tex.h"
 #include "spidy/smaa/smaa_shader.hpp"
@@ -41,6 +42,7 @@ __declspec(dllexport) native_gpu::Data SpidyGpuData;
 __declspec(dllexport) native_gpu::ScreenData SpidyScreenData;
 __declspec(dllexport) native_gpu::HistoryData SpidyEyeHistoryData;
 __declspec(dllexport) vr_aa::Data SpidyVrAaData; // 0.0.76 SPIDY TAA (copyTimingLock)
+__declspec(dllexport) taa_watch::Data SpidyTaaWatchData; // 0.0.76 TAA WATCH (watchLock)
 }
 namespace spidy::native_gpu {
 namespace {
@@ -443,6 +445,111 @@ void depthStop(uint32_t why) {
     uint32_t none = 0;
     depthOff.compare_exchange_strong(none, why);
 }
+// 0.0.76 TAA WATCH (taa_watch.hpp, read-only): SpidyTaaWatchData's lock, taken last (nothing is taken under it).
+std::mutex watchLock;
+// The eye depth log: the eye-sized fmt 19 / 20 depth leaving each eye job's G-buffer pass, for the first
+// taa_watch::depthFrames pairs (watchLock). The resources seen, for the flat view's check in the barrier hook.
+struct DepthWatch {
+    uint64_t serial{};
+    std::array<ID3D12Resource*, 2> seen{};
+    std::array<std::array<ID3D12Resource*, 4>, 2> kinds{};
+    std::array<std::array<uint32_t, 4>, 2> counts{};
+} depthWatch;
+std::array<std::atomic<ID3D12Resource*>, 8> depthWatched{};
+std::atomic<bool> depthWatchOpen{};
+bool planarDepth(DXGI_FORMAT f) {
+    return f == DXGI_FORMAT_R32G8X24_TYPELESS || f == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+}
+void depthWatchPairDone() { // watchLock held
+    auto& log = SpidyTaaWatchData.depth;
+    if (!depthWatch.serial)
+        return;
+    ++log.frames;
+    log.bothEyes += depthWatch.seen[0] && depthWatch.seen[1];
+    log.shared += depthWatch.seen[0] && depthWatch.seen[0] == depthWatch.seen[1];
+    log.verdict = taa_watch::depthVerdict(log);
+    depthWatch.serial = 0;
+    depthWatch.seen = {};
+    if (log.frames >= taa_watch::depthFrames)
+        depthWatchOpen = false;
+}
+void watchDepth(unsigned eye, uint64_t serial, ID3D12Resource* res, const D3D12_RESOURCE_DESC& d) {
+    if (eye > 1 || !serial)
+        return;
+    std::lock_guard lock(watchLock);
+    auto& log = SpidyTaaWatchData.depth;
+    ++log.exits;
+    if (log.frames >= taa_watch::depthFrames)
+        return;
+    if (serial != depthWatch.serial) {
+        depthWatchPairDone();
+        if (log.frames >= taa_watch::depthFrames)
+            return;
+        depthWatch.serial = serial;
+    }
+    log.format = static_cast<uint32_t>(d.Format);
+    log.width = static_cast<uint32_t>(d.Width);
+    log.height = d.Height;
+    depthWatch.seen[eye] = res;
+    auto& kinds = depthWatch.kinds[eye];
+    auto& counts = depthWatch.counts[eye];
+    unsigned best = 0;
+    for (unsigned k = 0; k < kinds.size(); ++k) {
+        if (kinds[k] == res || !kinds[k]) {
+            if (!kinds[k]) {
+                kinds[k] = res;
+                ++log.distinct[eye];
+            }
+            ++counts[k];
+            break;
+        }
+    }
+    for (unsigned k = 1; k < kinds.size(); ++k)
+        if (counts[k] > counts[best])
+            best = k;
+    log.resource[eye] = reinterpret_cast<uint64_t>(kinds[best]);
+    for (auto& w : depthWatched) {
+        auto* had = w.load();
+        if (had == res)
+            break;
+        if (!had) {
+            w = res;
+            break;
+        }
+    }
+    depthWatchOpen = log.frames < taa_watch::depthFrames;
+}
+// Any list: one of the logged depths leaving DEPTH_WRITE outside the eye jobs' own lists.
+void watchFlat(ID3D12GraphicsCommandList* list, UINT count, const D3D12_RESOURCE_BARRIER* bs) {
+    if (!bs)
+        return;
+    for (UINT n = 0; n < count; ++n) {
+        const auto& b = bs[n];
+        if (b.Type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION ||
+            !(b.Transition.StateBefore & D3D12_RESOURCE_STATE_DEPTH_WRITE) || !b.Transition.pResource)
+            continue;
+        bool ours = false;
+        for (auto& w : depthWatched)
+            ours |= w.load(std::memory_order_relaxed) == b.Transition.pResource;
+        if (!ours)
+            continue;
+        bool tagged = false;
+        {
+            std::lock_guard tagLock(depthTagLock);
+            tagged = depthTags.find(list) != depthTags.end();
+        }
+        if (tagged)
+            continue;
+        const bool eyeOpen = depthOpenMask.load(std::memory_order_relaxed) != 0;
+        std::lock_guard lock(watchLock);
+        if (SpidyTaaWatchData.depth.frames >= taa_watch::depthFrames)
+            return;
+        if (eyeOpen)
+            ++SpidyTaaWatchData.depth.otherList;
+        else
+            ++SpidyTaaWatchData.depth.flatSeen;
+    }
+}
 // The G-buffer pass's depth view on the tagged job: the clear seen on it says which way the
 // depth runs (0 far, reversed: as the eye lens is made; 1: standard, depth is not used).
 // Judged whichever comes first, the clear or the pass's binding; a later clear of it to the far
@@ -514,6 +621,8 @@ void depthBarrier(ID3D12GraphicsCommandList* list, DepthTag& t, UINT count, cons
         h = d.Height;
         if (!depthFormatOk(d.Format) || d.MipLevels != 1 || d.DepthOrArraySize != 1 || d.SampleDesc.Count != 1) {
             ++depthSkipFormat;
+            if (planarDepth(d.Format) && d.MipLevels == 1 && d.DepthOrArraySize == 1 && d.SampleDesc.Count == 1)
+                watchDepth(t.eye, t.stamp.serial, res, d); // 0.0.76 TAA WATCH: logged only
             return;
         }
         std::lock_guard lock(depthLock);
@@ -751,6 +860,8 @@ void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
                                const D3D12_RESOURCE_BARRIER* bs) {
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
     native_address_finder::onBarrier(list, count, bs);
+    if (depthWatchOpen.load(std::memory_order_relaxed))
+        watchFlat(list, count, bs); // 0.0.76 TAA WATCH: read-only
     // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
     // 0.0.76 FREEZE FIX: the tag is copied out and depthTagLock let go before depthBarrier, which
     // takes `recording` and depthLock. Holding depthTagLock across it was the reverse of execute()
@@ -828,6 +939,69 @@ HRESULT STDMETHODCALLTYPE reset(ID3D12GraphicsCommandList* list, ID3D12CommandAl
     }
     return result;
 }
+// 0.0.76 TAA WATCH (read-only): the game's own eye jobs' GPU time. A timestamp of ours beside the game's own at each
+// eye job's begin and end marker (16 pairs of slots, `recording`), read with the pair it timed (stagePair).
+struct EyeTimes {
+    ComPtr<ID3D12QueryHeap> queries;
+    ComPtr<ID3D12Resource> stamps;
+    const volatile uint64_t* data{};
+    double ticksPerMs{};
+    bool failed{};
+    std::array<uint64_t, 16> serial{};
+    std::array<uint8_t, 16> marks{}; // bit 2 * eye + ended
+    std::array<bool, 3> timed{};     // per capture slot
+} eyeTimes;
+bool makeEyeTimes() { // `recording` held
+    if (eyeTimes.queries || eyeTimes.failed)
+        return eyeTimes.queries != nullptr;
+    eyeTimes.failed = true;
+    if (!device || !queue)
+        return false;
+    UINT64 frequency{};
+    D3D12_QUERY_HEAP_DESC qd{};
+    qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    qd.Count = 64;
+    D3D12_HEAP_PROPERTIES readback{};
+    readback.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width = sizeof(uint64_t) * 4 * 3; // four a capture slot
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    void* mapped{};
+    if (FAILED(queue->GetTimestampFrequency(&frequency)) || !frequency ||
+        FAILED(device->CreateQueryHeap(&qd, IID_PPV_ARGS(&eyeTimes.queries))) ||
+        FAILED(device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
+                                               D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                               IID_PPV_ARGS(&eyeTimes.stamps))) ||
+        FAILED(eyeTimes.stamps->Map(0, nullptr, &mapped))) {
+        eyeTimes.queries.Reset();
+        eyeTimes.stamps.Reset();
+        return false;
+    }
+    eyeTimes.data = static_cast<const volatile uint64_t*>(mapped);
+    eyeTimes.ticksPerMs = static_cast<double>(frequency) / 1000.0;
+    eyeTimes.failed = false;
+    return true;
+}
+void markEyeTime(ID3D12GraphicsCommandList* list) { // `recording` held, at an eye job's marker
+    if (!currentMarker.valid || currentMarker.eye > 1 || !currentMarker.stamp.serial || !makeEyeTimes())
+        return;
+    const uint64_t serial = currentMarker.stamp.serial;
+    const unsigned ring = static_cast<unsigned>(serial % eyeTimes.serial.size());
+    if (eyeTimes.serial[ring] != serial) {
+        eyeTimes.serial[ring] = serial;
+        eyeTimes.marks[ring] = 0;
+    }
+    const unsigned bit = 2 * currentMarker.eye + (currentMarker.ended ? 1 : 0);
+    if (!currentMarker.ended && (eyeTimes.marks[ring] & (1u << bit)))
+        return; // the job's first begin
+    originalEndQuery(list, eyeTimes.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, ring * 4 + bit);
+    eyeTimes.marks[ring] = static_cast<uint8_t>(eyeTimes.marks[ring] | (1u << bit));
+}
 void STDMETHODCALLTYPE endQuery(ID3D12GraphicsCommandList* list, ID3D12QueryHeap* heap, D3D12_QUERY_TYPE type,
                                 UINT index) {
     originalEndQuery(list, heap, type, index);
@@ -846,6 +1020,7 @@ void STDMETHODCALLTYPE endQuery(ID3D12GraphicsCommandList* list, ID3D12QueryHeap
             e.ended = currentMarker.ended;
             e.stamp = currentMarker.stamp;
             add(list, e);
+            markEyeTime(list); // 0.0.76 TAA WATCH: read-only timing
         }
     }
 }
@@ -2367,11 +2542,45 @@ void noteHistoryTime(size_t slot) {
         SpidyEyeHistoryData.gpuMs += static_cast<double>(end - begin) / history.ticksPerMs;
         ++SpidyEyeHistoryData.timed;
     }
+    if (end > begin) { // 0.0.76 TAA WATCH
+        std::lock_guard lock(watchLock);
+        SpidyTaaWatchData.current.taaGpuMs += static_cast<float>(static_cast<double>(end - begin) / history.ticksPerMs);
+        ++SpidyTaaWatchData.current.taaTimed;
+    }
     if (end > begin) {
         historyClock.note(static_cast<double>(end - begin) / history.ticksPerMs);
         std::lock_guard lock(historyMedianLock);
         historyMedian.note(static_cast<float>(static_cast<double>(end - begin) / history.ticksPerMs));
     }
+}
+// 0.0.76 TAA WATCH: the game's eye jobs' GPU span for the pair this capture slot last carried (its list is done).
+void noteEyeTime(size_t slot) {
+    if (slot >= eyeTimes.timed.size() || !eyeTimes.timed[slot] || !eyeTimes.data)
+        return;
+    eyeTimes.timed[slot] = false;
+    uint64_t t[4]{};
+    for (unsigned k = 0; k < 4; ++k)
+        t[k] = eyeTimes.data[4 * slot + k];
+    if (!(t[1] > t[0]) || !(t[3] > t[2]))
+        return;
+    const uint64_t first = std::min(t[0], t[2]), last = std::max(t[1], t[3]);
+    const double ms = static_cast<double>(last - first) / eyeTimes.ticksPerMs;
+    if (!(ms > 0) || ms > 250)
+        return; // not one pair's work (a stale slot)
+    std::lock_guard lock(watchLock);
+    SpidyTaaWatchData.current.eyeGpuMs += static_cast<float>(ms);
+    ++SpidyTaaWatchData.current.eyeTimed;
+}
+void resolveEyeTime(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) { // `recording` held
+    if (!eyeTimes.queries || slot >= eyeTimes.timed.size() || !serial)
+        return;
+    const unsigned ring = static_cast<unsigned>(serial % eyeTimes.serial.size());
+    if (eyeTimes.serial[ring] != serial || eyeTimes.marks[ring] != 0xf)
+        return;
+    list->ResolveQueryData(eyeTimes.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, ring * 4, 4, eyeTimes.stamps.Get(),
+                           sizeof(uint64_t) * 4 * slot);
+    eyeTimes.marks[ring] = 0; // read once
+    eyeTimes.timed[slot] = true;
 }
 bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out) {
     std::lock_guard lock(viewLock);
@@ -2393,6 +2602,11 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const bool ours = spidyTaaNow() && history.taa;
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
+    bool watchStill = false, watchEased = false; // 0.0.76 TAA WATCH (eye 0, as `moving`)
+    static int64_t watchQpc{};
+    const int64_t watchNow = qpcNow();
+    const float watchSeconds = watchQpc ? static_cast<float>(qpcMs(watchQpc, watchNow) / 1000.0) : 0.f;
+    watchQpc = watchNow;
     for (unsigned i = 0; i < 2; ++i) {
         std::array<float, 9> h{};
         const bool both = viewed && history.valid &&
@@ -2434,6 +2648,8 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                                        : eye_history::motionShare(travelCut, turnCut)) > .5f;
             leastKeep = keep;
             leastStill = ours ? keep : still; // SPIDY TAA: JITTER CALM keeps the full step while anything is kept
+            watchStill = taa_watch::stillHead(turn, travel, watchSeconds);
+            watchEased = keep > 0 && keep < (ours ? vr_aa::keepStill : still) - 1e-4f;
         }
     }
     const unsigned read = history.parity, write = 1 - read;
@@ -2523,6 +2739,12 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         ++SpidyEyeHistoryData.unviewed;
     if (ours)
         ++SpidyVrAaData.taaPairs;
+    {
+        std::lock_guard watch(watchLock); // 0.0.76 TAA WATCH: the 10 s windows
+        static uint64_t windowStart{};
+        taa_watch::roll(SpidyTaaWatchData, windowStart, GetTickCount64());
+        taa_watch::notePair(SpidyTaaWatchData.current, !blended, moving, watchEased, watchStill);
+    }
 }
 // 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA 1x per eye (spidy/smaa: Jimenez et al.'s SMAA.hlsl, preset HIGH, luma edges),
 // live.txt vr_aa = smaa, and SPIDY TAA's own fallback when its pass cannot be built. No history: nothing temporal
@@ -2992,6 +3214,7 @@ void stagePair(EyePairState::Stamp stamp) {
     noteAaTime(index);
     noteHistoryTime(index);
     noteSmaaTime(index);
+    noteEyeTime(index); // 0.0.76 TAA WATCH
     // Supersampled eyes cannot be copied: they are always filtered down,
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
@@ -3024,6 +3247,7 @@ void stagePair(EyePairState::Stamp stamp) {
         keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
     }
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
+    resolveEyeTime(slot->list.Get(), index, stamp.serial); // 0.0.76 TAA WATCH: read-only
     if (!submitCommands(*slot)) {
         history.valid = false;
         if (smaaUploading)

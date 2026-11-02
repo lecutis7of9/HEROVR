@@ -6,6 +6,12 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **TAA WATCH (read-only, in every 0.0.76 A/B/C test build):** the console prints a line every 10 seconds with the
+  eye fps, the GPU time a pair (the game's two eye jobs, timed at their own begin and end markers, and SPIDY TAA's own
+  pass) and the still / moving split, including how many pairs with a still head were treated as moving (over 20%
+  means the thresholds are wrong, not the blend). It also logs the eye depth (fmt 19 at the eye's size) for the first
+  200 pairs and says CONFIRMED or CANDIDATE. All of it is in the report's `taa_watch`. Nothing to set; no picture
+  changes.
 - **SPIDY TAA back to 509bdc9's picture:** test 9aaedd5's tune (a longer average, a looser colour clip, a 10-bit
   history, a mild sharpen after the TAA and texture mip bias -0.5) brought the line crawl back, so all of it is taken
   back: the eyes get exactly 509bdc9's TAA again, which fixed the shake. Nothing to change in live.txt. Kept, off by

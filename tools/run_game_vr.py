@@ -43,6 +43,7 @@ from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTO
 import pose_check_record  # 0.0.76 POSE CHECK
 import jitter_log_record  # 0.0.76 JITTER FIX
 import vr_aa_record  # 0.0.76 SPIDY TAA
+import taa_watch_record  # 0.0.76 TAA WATCH
 from probe_stereo import (frame_snapshot, render_memory_snapshot, snapshot as stereo_snapshot, encode_mip_bias,
                           mip_bias_snapshot, eye_camera_line)
 from probe_native_rays import snapshot as ray_snapshot
@@ -2993,7 +2994,8 @@ def session(a, startup, session_off=()):
             optional=(window_probe.EXPORT,
                       pose_check_record.EXPORT,  # 0.0.76 POSE CHECK: absent from an older module
                       jitter_log_record.EXPORT,  # 0.0.76 JITTER FIX
-                      vr_aa_record.EXPORT))  # 0.0.76 SPIDY TAA
+                      vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
+                      taa_watch_record.EXPORT))  # 0.0.76 TAA WATCH
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3084,6 +3086,8 @@ def session(a, startup, session_off=()):
         # 0.0.76 SPIDY TAA TUNE: the vr_aa and jitter records kept from the samples too (the 11:26 report, written
         # after the game was closed, had neither: they were only read at a normal stop).
         vr_aa_last = jitter_log_last = None
+        taa_watch_last = None  # 0.0.76 TAA WATCH: taa_watch_snapshot, kept from the samples
+        taa_watch_said = 0  # 10 s windows already printed
         engine_taa_last = engine_taa_said = None  # Update 34.2
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
@@ -3382,6 +3386,7 @@ def session(a, startup, session_off=()):
                         sm1style_eyes=sm1style_last,
                         pose_check=pose_check_last,
                         vr_aa=vr_aa_last, jitter_log=jitter_log_last,
+                        taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
                         eye_shadows=shadows_last,
                         stream_stalls=stream_stalls(list(samples)),
                         free_commit_mb=dict(start=start_commit, lowest=lowest_commit),
@@ -3446,6 +3451,8 @@ def session(a, startup, session_off=()):
                         print(said, flush=True)
                     if (said := vr_aa_record.vr_aa_line(result.get('vr_aa'))):
                         print(said, flush=True)
+                    for said in taa_watch_record.taa_watch_lines(result.get('taa_watch'))[:2]:
+                        print(said, flush=True)  # 0.0.76 TAA WATCH: the depth log and the session's split
                     if (shadows := eye_shadow_line(result.get('eye_shadows'))):
                         print(shadows, flush=True)
                 except Exception as error:  # noqa: BLE001 - the report matters more than the summary
@@ -3690,6 +3697,15 @@ def session(a, startup, session_off=()):
                         sample['pose_check_world_turn'] = pose_check_last['world_turn']['last_degrees']
                     # 0.0.76 SPIDY TAA TUNE: kept for a report written after the game was closed.
                     vr_aa_last = vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last
+                    # 0.0.76 TAA WATCH: kept the same way; each 10 s window's line once it closes.
+                    taa_watch_last = (taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT))
+                                      or taa_watch_last)
+                    if taa_watch_last and taa_watch_last['closed'] > taa_watch_said:
+                        windows = taa_watch_record.taa_watch_window_lines(
+                            taa_watch_record.taa_watch_report(taa_watch_last))
+                        for said in windows[-(taa_watch_last['closed'] - taa_watch_said):]:
+                            print(said, flush=True)
+                        taa_watch_said = taa_watch_last['closed']
                     jitter_log_last = (jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
                                        or jitter_log_last)
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
@@ -3968,7 +3984,9 @@ def session(a, startup, session_off=()):
             or pose_check_last,
             jitter_log=jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
             or jitter_log_last,
-            vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last)
+            vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last,
+            taa_watch=taa_watch_record.taa_watch_report(
+                taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last))
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

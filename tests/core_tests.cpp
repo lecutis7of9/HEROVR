@@ -116,6 +116,7 @@
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp"
 #include "spidy/vr_aa.hpp"
+#include "spidy/taa_watch.hpp"
 #include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
@@ -36810,6 +36811,42 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(std::string(bk::creditLine).find("MERT TETIK") != std::string::npos &&
                   std::string(bk::creditLine).find("CC BY 4.0") != std::string::npos && std::string(bk::creditArtist) == "Mert Tetik",
               "the CC BY credit");
+    });
+    test("0.0.76 TAA WATCH: still head, the 10 s windows and the depth verdict", [] {
+        namespace tw = spidy::taa_watch;
+        check(tw::stillHead(.0005f, .0005f, 1.f / 45) && !tw::stillHead(.004f, 0, 1.f / 45) &&
+                  !tw::stillHead(0, .002f, 1.f / 45),
+              "a still head is under 2 degrees and 3 cm a second");
+        check(tw::stillHead(.001f, 0, .1f) && !tw::stillHead(.001f, 0, 0) && !tw::stillHead(NAN, 0, .02f),
+              "the rate is a second's (a slow pair is not motion), never with no time");
+        tw::Data d;
+        check(d.magic == 0x44575453 && d.bytes == sizeof(tw::Data) && d.build == tw::thisBuild, "the record's head");
+        uint64_t start = 0;
+        tw::roll(d, start, 1000);
+        tw::notePair(d.current, false, false, false, true);
+        tw::notePair(d.current, false, true, true, true);
+        tw::notePair(d.current, true, false, false, false);
+        tw::roll(d, start, 9000);
+        check(d.closed == 0 && d.current.pairs == 3, "a window runs 10 s");
+        tw::roll(d, start, 11500);
+        check(d.closed == 1 && d.windows[0].ms == 10500 && d.windows[0].pairs == 3 && d.windows[0].stillHead == 2 &&
+                  d.windows[0].stillEased == 1 && d.windows[0].stillMoving == 1 && d.windows[0].restarted == 1 &&
+                  d.current.pairs == 0,
+              "a closed window keeps its split");
+        tw::DepthLog log;
+        check(tw::depthVerdict(log) == tw::notSeen, "nothing logged: not seen");
+        log.frames = 200;
+        log.bothEyes = 200;
+        log.distinct[0] = log.distinct[1] = 1;
+        check(tw::depthVerdict(log) == tw::confirmed, "200 pairs, both eyes, never the flat view: CONFIRMED");
+        log.flatSeen = 1;
+        check(tw::depthVerdict(log) == tw::candidate, "the flat view wrote it: CANDIDATE");
+        log.flatSeen = 0;
+        log.bothEyes = 150;
+        check(tw::depthVerdict(log) == tw::candidate, "not in both eyes' jobs: CANDIDATE");
+        log.bothEyes = 200;
+        log.frames = 120;
+        check(tw::depthVerdict(log) == tw::candidate, "under 200 pairs: CANDIDATE");
     });
     test("0.0.76 SPIDY TAA: the modes, the option bits, the eased history share and the clip", [] {
         namespace va = spidy::vr_aa;

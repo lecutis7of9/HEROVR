@@ -186,3 +186,23 @@ holds a misplaced line longer then snaps it. The mip bias (less negative is soft
 Kept: live.txt `vr_ss` (off unless set, start-only) and the report's last vr_aa / jitter_log records.
 Next, one at a time, each as its own test: mip bias -0.5 alone; then the history share 0.94 still only (moving
 unchanged); never a sharpen in the history loop. SMAA before the TAA (T2x) only with headroom.
+
+### TAA WATCH (0.0.76 A/B/C tests): fps, GPU ms a pair, still / moving split, the eye depth log
+
+Read-only, in every A/B/C test build (include/spidy/taa_watch.hpp, `SpidyTaaWatchData`, tools/taa_watch_record.py).
+Every 10 s the console prints `TAA WATCH <s>s: <fps> fps, eye <ms> ms, taa <ms> ms, still <%> eased <%> moving <%>,
+still head <n> (<%> classed moving)`, and the report's `taa_watch` keeps up to 90 windows plus the session's totals.
+
+- **fps:** the eye pairs through SPIDY TAA's history pass a second.
+- **GPU ms a pair, eye:** the game's two eye jobs from the first begin to the last end, from a timestamp of ours beside
+  the game's own at each job's begin and end marker (the jobs themselves are not changed). For B-ss125 this is the
+  number for the 2 ms rule: compare it with a vr_ss 100 run.
+- **GPU ms a pair, taa:** our own TAA pass, both eyes.
+- **Still / moving split:** still = kept the full still share; eased = kept less (any motion); moving = the motion
+  share past half (the older report's "moving"). A still head is the eye's view turning under 2 degrees and moving
+  under 3 cm a second; "classed moving" is the share of those pairs kept less than the still share. Over 20%: the
+  thresholds are wrong, not the blend (`thresholds_wrong`).
+- **Eye depth log:** for the first 200 pairs, the fmt 19 (R32G8X24_TYPELESS) / 20 depth at the eye's size that leaves
+  DEPTH_WRITE inside each eye job's G-buffer pass: which resource each eye used, whether both eyes' jobs had one,
+  whether the same one served both, and whether it ever left DEPTH_WRITE with no eye job open (the flat view).
+  CONFIRMED only with 200 pairs, at least 90% with both eyes and never the flat view; otherwise CANDIDATE.

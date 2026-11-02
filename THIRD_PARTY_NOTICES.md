@@ -81,3 +81,9 @@ The SM1 suits tool (`tools/sm1_suits`, HERO VR 0.0.76) contains a copy of `dat1l
 The SM2 suit scanner (`tools/sm2_suits/sm2scan.py`, HERO VR 0.0.76) is independent code that follows the file
 formats documented by [Overstrike](https://github.com/Tkachov/Overstrike) (GPL-3.0) and ALERT's `dat1lib`; no
 code of either is copied into it. It only reads the user's own installed game files and copies nothing out.
+
+The eyes' SMAA (live.txt `vr_aa = smaa`, and the fallback when SpidyVR's own TAA cannot start) is
+SMAA 1x by Jorge Jimenez, Jose I. Echevarria, Belen Masia, Fernando Navarro and Diego Gutierrez, from the
+[authors' repository](https://github.com/iryoku/smaa): `SMAA.hlsl` preprocessed into
+`include/spidy/smaa/smaa_shader.hpp`, and its precomputed `AreaTex.h` / `SearchTex.h` lookup textures in
+`include/spidy/smaa/`. MIT license, retained in `docs/licenses/SMAA-LICENSE.txt` and in the headers.

@@ -90,6 +90,13 @@ uint32_t eyeAA();
 // settings asked for (eyeAA, eyeHistory, eyeSharpen) are kept and apply again once it is released.
 void setSm1StyleLock(bool on);
 bool sm1StyleLock();
+// 0.0.76 SPIDY TAA (vr_aa.hpp Mode; game_xr sets it at the start from SpidyXrStart's options): ours (our own
+// per-eye TAA, the default), smaa (SMAA per eye, no history) or legacy. Ours and smaa lock our FXAA, the HISTORY
+// slider and CAS sharpen off (the asked values are kept for legacy); SPIDY TAA falls back to SMAA, SMAA to FXAA.
+void setVrAa(uint32_t mode);
+uint32_t vrAa();
+bool vrAaLocks(); // ours or smaa
+uint32_t vrAaSmaaFault();
 uint32_t eyeHistory();
 uint32_t monitorRateNow();
 // The views the eyes of the pair with this serial were rendered from (the

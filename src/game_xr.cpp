@@ -129,6 +129,7 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
+#include "spidy/vr_aa.hpp"    // 0.0.76 SPIDY TAA
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
 #include "spidy/eye_queries.hpp"
@@ -1238,7 +1239,16 @@ bool sm1Holds() {
         return true;
     return (config.options & s1::startOption) && !(d && (d->flags & s1::flagFellBack));
 }
-void pressEyeAa() {
+// 0.0.76 SPIDY TAA (vr_aa.hpp): under live.txt vr_aa = ours / smaa EYE AA is not the player's to press: SPIDY TAA
+// keeps it on (its lens step and history), SMAA keeps it off. `forced`: that start's own turn (SpidyEyeAaStart,
+// the native GPU start).
+void pressEyeAa(bool forced = false) {
+    if (!forced && native_gpu::vrAaLocks()) {
+        consoleLine(native_gpu::vrAa() == spidy::vr_aa::ours
+                        ? "EYE AA: run by SPIDY TAA, our own per-eye TAA (live.txt vr_aa = smaa for no history)"
+                        : "EYE AA: kept off by SMAA (live.txt vr_aa = ours for SPIDY TAA)");
+        return;
+    }
     if (sm1Holds() && (eyeAaNow() & 0xff) != eye_taa::on) {
         consoleLine("EYE AA: locked off by SM1STYLE (SpidyVR's own eye anti-aliasing; live.txt sm1style = off and "
                     "restart for the 0.0.72 picture)");
@@ -1269,6 +1279,10 @@ void pressEyeAa() {
 // Update 34: ENGINE TAA on/off. On is refused (the reason shown) unless both eyes have
 // the TAA targets; on turns EYE AA off; the FPS guard watches the next 3 s.
 void pressEngineTaa() {
+    if (native_gpu::vrAaLocks() && engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on) {
+        consoleLine("ENGINE TAA: locked off, the eyes run SPIDY TAA or SMAA (live.txt vr_aa = game for the game's TAA)");
+        return;
+    }
     if (sm1Holds() && engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on) {
         consoleLine("ENGINE TAA: locked off by SM1STYLE (it already runs the game's TAA in each eye)");
         return;
@@ -4027,7 +4041,8 @@ DWORD WINAPI run(void*) {
                                                 ? 1u << static_cast<unsigned>(wrist_hud::Control::sharpen)
                                                 : 0u) |
                                            // 0.0.74 test 10 SM1STYLE: its locked rows (UNAVAILABLE, presses do nothing).
-                                           (sm1Holds() ? sm1LockedRows : 0u);
+                                           // 0.0.76 SPIDY TAA / SMAA: the same rows (vr_aa.hpp).
+                                           ((sm1Holds() || native_gpu::vrAaLocks()) ? sm1LockedRows : 0u);
                                 in.disabled = wristOff;
                                 // Update 17: the stick scrolls a page while the pointer
                                 // is on it; the applied text size and anything that
@@ -10690,6 +10705,10 @@ DWORD WINAPI run(void*) {
                         native_gpu::setEyeOutput(dimensions[0], dimensions[1]);
                         check(native_gpu::start(&gpu), "Start native GPU bridge");
                         gpuStarted = true;
+                        // 0.0.76 SPIDY TAA: on from the first pair, whatever the launcher sent (its lens step and
+                        // our own per-eye history; SMAA in its place if that cannot start).
+                        if (native_gpu::vrAa() == spidy::vr_aa::ours && (eyeAaNow() & 0xff) == eye_taa::off)
+                            pressEyeAa(true);
                         nativeDeadline =
                             config.durationMs ? GetTickCount64() + config.durationMs : UINT64_MAX;
                         message(3, 0, "Headset active");
@@ -15009,7 +15028,8 @@ DWORD WINAPI run(void*) {
 // Update 34.1: every option bit this build knows (the highest: 0x800000, -EngineTaa).
 // tests/launcher_options_tests.py checks run_game_vr.py sends none past it.
 // 0.0.74 test 10: 0x1000000, SM1STYLE (sm1style.hpp startOption).
-constexpr uint32_t knownOptions = 0x1ffffff;
+// 0.0.76 SPIDY TAA: 0x2000000 SMAA, 0x4000000 legacy (vr_aa.hpp).
+constexpr uint32_t knownOptions = 0x7ffffff;
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     std::lock_guard life(lifecycle);
     if (worker)
@@ -15034,6 +15054,18 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
         std::snprintf(line, sizeof line, "VR start: options 0x%x not known to this build, skipped\n", unknown);
         OutputDebugStringA(line);
         config.options &= knownOptions;
+    }
+    // 0.0.76 SPIDY TAA (vr_aa.hpp): how the eyes are anti-aliased this start. Ours and SMAA as SM1STYLE: no
+    // supersample (the launcher sends that already).
+    {
+        const uint32_t vrAa = spidy::vr_aa::modeFor(config.options);
+        native_gpu::setVrAa(vrAa);
+        char line[96];
+        std::snprintf(line, sizeof line, "VR AA: %s\n", spidy::vr_aa::modeName(vrAa));
+        OutputDebugStringA(line);
+        if (vrAa != spidy::vr_aa::legacy && native_gpu::supersample() != spidy::sm1style::supersample &&
+            native_gpu::setSupersample(spidy::sm1style::supersample))
+            OutputDebugStringA("VR AA: supersample 100%\n");
     }
     // 0.0.74 test 10 SM1STYLE: SpidyVR's render scale and no supersample, whatever was asked (the launcher sends
     // these already; an older or hand-made start still gets them).
@@ -15218,6 +15250,17 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeAaStart(void* on) {
     const auto v = reinterpret_cast<uintptr_t>(on);
     if (v > 1)
         return 5209;
+    if (native_gpu::vrAaLocks()) { // 0.0.76 SPIDY TAA on, SMAA off, whatever live.txt eye_temporal says
+        const bool want = native_gpu::vrAa() == spidy::vr_aa::ours;
+        const uint32_t state = eyeAaNow() & 0xff;
+        if ((want && state == eye_taa::off) || (!want && state == eye_taa::on))
+            pressEyeAa(true);
+        const bool on = (eyeAaNow() & 0xff) == eye_taa::on;
+        OutputDebugStringA(want ? (on ? "EYE AA AT START: on, SPIDY TAA\n"
+                                      : "EYE AA AT START: SPIDY TAA could not start, SMAA in its place\n")
+                                : "EYE AA AT START: kept off, SMAA\n");
+        return 0;
+    }
     if (sm1Holds()) { // 0.0.74 test 10: SM1STYLE keeps EYE AA off (the value stays in live.txt for sm1style = off)
         OutputDebugStringA("EYE AA AT START: kept off, SM1STYLE\n");
         return 0;

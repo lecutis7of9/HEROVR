@@ -115,6 +115,7 @@
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp"
+#include "spidy/vr_aa.hpp"
 #include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
@@ -36707,6 +36708,30 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(std::string(bk::creditLine).find("MERT TETIK") != std::string::npos &&
                   std::string(bk::creditLine).find("CC BY 4.0") != std::string::npos && std::string(bk::creditArtist) == "Mert Tetik",
               "the CC BY credit");
+    });
+    test("0.0.76 SPIDY TAA: the modes, the option bits, the eased history share and the clip", [] {
+        namespace va = spidy::vr_aa;
+        check(va::modeFor(0) == va::ours && va::modeFor(va::smaaOption) == va::smaa &&
+                  va::modeFor(va::legacyOption) == va::legacy && va::modeFor(va::sm1styleOption) == va::legacy &&
+                  va::modeFor(va::smaaOption | va::sm1styleOption) == va::legacy,
+              "no bit: ours; SMAA; legacy and SM1STYLE are legacy");
+        check(va::sm1styleOption == spidy::sm1style::startOption, "SM1STYLE's start bit");
+        check(((va::smaaOption | va::legacyOption) & 0x1ffffff) == 0 && (va::smaaOption | va::legacyOption) <= 0x7ffffff,
+              "new bits past the old ones, inside knownOptions");
+        check(va::keep(false, 0, 0) == 0, "no view: nothing kept");
+        check(std::abs(va::keep(true, 0, 0) - va::keepStill) < 1e-6f, "still: the full share");
+        check(std::abs(va::keep(true, .1f, 0) - va::keepMoving) < 1e-6f, "a fast turn: eased, not cut");
+        check(std::abs(va::keep(true, 0, 1.f) - va::keepMoving) < 1e-6f, "a swing: eased, not cut");
+        check(va::keep(true, .3f, 0) == 0 && va::keep(true, 0, 4.f) == 0, "a camera cut or a teleport starts again");
+        check(va::keep(true, NAN, 0) == 0 && va::keep(true, 0, NAN) == 0, "NaN: starts again");
+        const float half = va::keep(true, (va::turnFrom + va::turnFull) / 2, 0);
+        check(half < va::keepStill && half > va::keepMoving, "in between");
+        check(std::abs(va::clipGamma(0, 0) - va::gammaStill) < 1e-6f &&
+                  std::abs(va::clipGamma(.2f, 0) - va::gammaMoving) < 1e-6f,
+              "the clip tighter while moving");
+        check(sizeof(va::Data) == 72 && va::Data{}.bytes == 72 && va::Data{}.magic == 0x41415653, "Data");
+        check(std::string(va::modeName(va::ours)) == "SPIDY TAA" && std::string(va::modeName(va::smaa)) == "SMAA",
+              "names");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

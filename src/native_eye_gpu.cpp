@@ -12,6 +12,10 @@
 #include "spidy/presentation_gate.hpp"
 #include "spidy/scene_depth_match.hpp"
 #include "spidy/streamer_view.hpp"
+#include "spidy/vr_aa.hpp"
+#include "spidy/smaa/area_tex.h"
+#include "spidy/smaa/search_tex.h"
+#include "spidy/smaa/smaa_shader.hpp"
 #include <MinHook.h>
 #include <array>
 #include <atomic>
@@ -36,6 +40,7 @@ extern "C" {
 __declspec(dllexport) native_gpu::Data SpidyGpuData;
 __declspec(dllexport) native_gpu::ScreenData SpidyScreenData;
 __declspec(dllexport) native_gpu::HistoryData SpidyEyeHistoryData;
+__declspec(dllexport) vr_aa::Data SpidyVrAaData; // 0.0.76 SPIDY TAA (copyTimingLock)
 }
 namespace spidy::native_gpu {
 namespace {
@@ -1076,6 +1081,12 @@ std::atomic<uint32_t> aaMode{}, aaFault{};
 // EYE AA history and no CAS sharpen on the eyes, whatever the hologram, live.txt or the launcher asked for. The
 // asked values are kept (eyeAA / eyeHistory / eyeSharpen, live.txt) and come back when it is released.
 std::atomic<bool> sm1Lock{};
+// 0.0.76 SPIDY TAA (vr_aa.hpp; set at the start from SpidyXrStart's options, setVrAa): ours, smaa or legacy. Ours and
+// smaa lock our FXAA, the HISTORY slider and CAS sharpen off, as SM1STYLE does; legacy leaves them to their settings.
+std::atomic<uint32_t> vrAaMode{vr_aa::ours};
+bool vrAaLocked() {
+    return vrAaMode.load(std::memory_order_relaxed) != vr_aa::legacy;
+}
 struct AaPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, down; // FXAA; the downsample filter
@@ -2031,7 +2042,14 @@ std::atomic<uint32_t> keptMilli{};
 uint32_t historyNow() {
     if (sm1Lock.load(std::memory_order_relaxed))
         return 0; // 0.0.74 test 10 SM1STYLE
+    // 0.0.76 SPIDY TAA: its own pass while EYE AA (its lens step) is on; never under SMAA.
+    if (const uint32_t mode = vrAaMode.load(std::memory_order_relaxed); mode != vr_aa::legacy)
+        return mode == vr_aa::ours && temporalOn.load() && !historyFault.load() ? eye_taa::historyPercent : 0u;
     return eye_taa::historyInForce(historyPercent.load(), temporalOn.load());
+}
+// 0.0.76 SPIDY TAA: our own pass (taaShader) in place of the plain history blend.
+bool spidyTaaNow() {
+    return vrAaMode.load(std::memory_order_relaxed) == vr_aa::ours && !sm1Lock.load(std::memory_order_relaxed);
 }
 std::mutex viewLock;
 struct NotedViews {
@@ -2042,7 +2060,7 @@ std::array<NotedViews, 32> notedViews{}; // viewLock
 unsigned nextNoted{};                    // viewLock
 struct HistoryPipeline {
     ComPtr<ID3D12RootSignature> root;
-    ComPtr<ID3D12PipelineState> state;
+    ComPtr<ID3D12PipelineState> state, taa; // taa: 0.0.76 SPIDY TAA (taaShader), built in its mode only
     ComPtr<ID3D12DescriptorHeap> views, targets;
     ComPtr<ID3D12QueryHeap> queries;
     ComPtr<ID3D12Resource> stamps;
@@ -2112,6 +2130,89 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     return float4(lerp(plain, karis, bright), here.a);
 }
 )";
+
+// 0.0.76 SPIDY TAA (vr_aa.hpp): our own per-eye temporal AA, the history pass's root signature and pictures. Each
+// eye's last picture (t1) turned to this one (the homography rows, from that eye's own previous and current view and
+// lens), read with a 5-tap Catmull-Rom (no bilinear blur build-up), clipped to this pixel's 3 x 3 neighbourhood in
+// YCoCg - the variance box (mean +/- gamma * sigma) inside the min / max - and blended with luma-weighted (1 / (1 +
+// luma)) shares so bright sub-pixel steps do not flicker. extra: x the share kept, yz 1 / size, w gamma.
+const char* taaShader = R"(
+Texture2D current : register(t0);
+Texture2D previous : register(t1);
+SamplerState bilinear : register(s0);
+cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; };
+float4 vs(uint id : SV_VertexID) : SV_POSITION {
+    const float2 corner = float2((id << 1) & 2, id & 2);
+    return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
+}
+float3 toYCoCg(float3 c) {
+    return float3(dot(c, float3(0.25, 0.5, 0.25)), dot(c, float3(0.5, 0, -0.5)), dot(c, float3(-0.25, 0.5, -0.25)));
+}
+float3 fromYCoCg(float3 c) {
+    return float3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
+}
+float3 catmullRom(float2 uv, float2 size) {
+    const float2 at = uv * size;
+    const float2 c1 = floor(at - 0.5) + 0.5;
+    const float2 f = at - c1;
+    const float2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    const float2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    const float2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    const float2 w3 = f * f * (-0.5 + 0.5 * f);
+    const float2 w12 = w1 + w2;
+    const float2 t12 = (c1 + w2 / w12) / size;
+    const float2 t0 = (c1 - 1.0) / size;
+    const float2 t3 = (c1 + 2.0) / size;
+    float3 sum = previous.SampleLevel(bilinear, float2(t12.x, t0.y), 0).rgb * (w12.x * w0.y);
+    sum += previous.SampleLevel(bilinear, float2(t0.x, t12.y), 0).rgb * (w0.x * w12.y);
+    sum += previous.SampleLevel(bilinear, t12, 0).rgb * (w12.x * w12.y);
+    sum += previous.SampleLevel(bilinear, float2(t3.x, t12.y), 0).rgb * (w3.x * w12.y);
+    sum += previous.SampleLevel(bilinear, float2(t12.x, t3.y), 0).rgb * (w12.x * w3.y);
+    const float weight = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+    return saturate(sum / max(weight, 1e-4));
+}
+float4 ps(float4 position : SV_POSITION) : SV_TARGET {
+    uint w, h;
+    current.GetDimensions(w, h);
+    const int2 p = int2(position.xy);
+    const int2 last = int2(w, h) - 1;
+    const float4 here = current.Load(int3(p, 0));
+    const float3 uv = float3(position.xy * extra.yz, 1);
+    const float3 q = float3(dot(row0.xyz, uv), dot(row1.xyz, uv), dot(row2.xyz, uv));
+    float2 old = float2(-1, -1);
+    if (q.z > 1e-5)
+        old = q.xy / q.z;
+    if (!(extra.x > 0) || any(old < 0) || any(old > 1))
+        return here;
+    const float3 middle = toYCoCg(here.rgb);
+    float3 lo = middle, hi = middle, m1 = 0, m2 = 0;
+    [unroll] for (int y = -1; y <= 1; ++y)
+        [unroll] for (int x = -1; x <= 1; ++x) {
+            const float3 n = toYCoCg(current.Load(int3(clamp(p + int2(x, y), int2(0, 0), last), 0)).rgb);
+            lo = min(lo, n);
+            hi = max(hi, n);
+            m1 += n;
+            m2 += n * n;
+        }
+    const float3 mean = m1 / 9.0;
+    const float3 sigma = sqrt(max(m2 / 9.0 - mean * mean, 0));
+    const float3 boxLo = max(lo, mean - extra.w * sigma);
+    const float3 boxHi = min(hi, mean + extra.w * sigma);
+    float3 before = toYCoCg(catmullRom(old, float2(w, h)));
+    // Clip toward the box's centre (not a per-channel clamp): keeps the history's hue, no colour shift.
+    const float3 centre = 0.5 * (boxHi + boxLo);
+    const float3 extent = 0.5 * (boxHi - boxLo) + 1e-4;
+    const float3 offset = before - centre;
+    const float3 units = abs(offset / extent);
+    const float most = max(units.x, max(units.y, units.z));
+    if (most > 1)
+        before = centre + offset / most;
+    const float keep = saturate(extra.x);
+    const float a = (1 - keep) / (1 + middle.x), b = keep / (1 + before.x);
+    const float3 mixed = (middle * a + before * b) / max(a + b, 1e-6);
+    return float4(saturate(fromYCoCg(mixed)), here.a);
+}
+)";
 bool failHistory(uint32_t code) {
     historyFault = code;
     history.ready = false;
@@ -2169,6 +2270,17 @@ bool prepareHistory() {
     blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.state))))
         return failHistory(3);
+    // 0.0.76 SPIDY TAA: its own pixel shader, the same root signature and target. Only in its mode, so another mode
+    // never fails for it.
+    if (spidyTaaNow()) {
+        ComPtr<ID3DBlob> taaPs;
+        if (FAILED(D3DCompile(taaShader, std::strlen(taaShader), "spidy_taa", nullptr, nullptr, "ps", "ps_5_0",
+                              D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &taaPs, &error)))
+            return failHistory(2);
+        d.PS = {taaPs->GetBufferPointer(), taaPs->GetBufferSize()};
+        if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.taa))))
+            return failHistory(3);
+    }
     // Two pictures an eye, the headset's size, in the staged images' format.
     for (unsigned i = 0; i < 2; ++i)
         for (unsigned k = 0; k < 2; ++k) {
@@ -2278,6 +2390,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const bool viewed = findViews(serial, now);
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
     float frame[2][16]{};
+    const bool ours = spidyTaaNow() && history.taa;
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
     for (unsigned i = 0; i < 2; ++i) {
@@ -2293,7 +2406,9 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         // Update 37: HISTORY CUT scales the motion the fade-out sees (not the turned weight).
         const uint32_t cutNow = cutPercent.load(std::memory_order_relaxed);
         const float travelCut = eye_history::cutMotion(travel, cutNow), turnCut = eye_history::cutMotion(turn, cutNow);
-        const float keep = eye_history::movedWeight(still, travelCut, turnCut, trail);
+        float keep = eye_history::movedWeight(still, travelCut, turnCut, trail);
+        if (ours) // 0.0.76 SPIDY TAA (vr_aa.hpp): eased, not cut, while moving; the clip keeps it from ghosting
+            keep = vr_aa::keep(both, turn, travel);
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];
@@ -2307,13 +2422,18 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             eye_history::turnedLoosen(
                 eye_taa::loosenInForce(eye_history::historyLoosen(loosenPercent), temporalOn.load()), turn),
             travelCut, turnCut);
+        if (ours) {
+            frame[i][3] = 0;                                 // row0.w: no LIGHT HOLD (the luma weights do it)
+            frame[i][15] = vr_aa::clipGamma(turn, travel);   // extra.w: the variance clip's width
+        }
         blended = blended || keep > 0;
         if (i == 0 && both) {
             maxTravel = travel;
             cut = still > 0 && !(keep > 0);
-            moving = keep > 0 && eye_history::motionShare(travelCut, turnCut) > .5f;
+            moving = keep > 0 && (ours ? vr_aa::motion(turn, travel)
+                                       : eye_history::motionShare(travelCut, turnCut)) > .5f;
             leastKeep = keep;
-            leastStill = still;
+            leastStill = ours ? keep : still; // SPIDY TAA: JITTER CALM keeps the full step while anything is kept
         }
     }
     const unsigned read = history.parity, write = 1 - read;
@@ -2332,7 +2452,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                    D3D12_RESOURCE_STATE_RENDER_TARGET);
     }
     originalBarrier(list, 4, b);
-    list->SetPipelineState(history.state.Get());
+    list->SetPipelineState(ours ? history.taa.Get() : history.state.Get());
     list->SetGraphicsRootSignature(history.root.Get());
     ID3D12DescriptorHeap* heaps[] = {history.views.Get()};
     list->SetDescriptorHeaps(1, heaps);
@@ -2401,6 +2521,348 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         SpidyEyeHistoryData.keepMin = std::min(SpidyEyeHistoryData.keepMin, leastKeep);
     if (!viewed)
         ++SpidyEyeHistoryData.unviewed;
+    if (ours)
+        ++SpidyVrAaData.taaPairs;
+}
+// 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA 1x per eye (spidy/smaa: Jimenez et al.'s SMAA.hlsl, preset HIGH, luma edges),
+// live.txt vr_aa = smaa, and SPIDY TAA's own fallback when its pass cannot be built. No history: nothing temporal
+// to shake or ghost. Reads stagedEyes (after the plain copy) and writes it back; one edges / weights / output set,
+// used by each eye in turn. Built on the first pair that wants it, under the submission and recording locks.
+struct SmaaPipeline {
+    ComPtr<ID3D12RootSignature> root;
+    ComPtr<ID3D12PipelineState> edges, weights, blend;
+    ComPtr<ID3D12Resource> edgeTex, weightTex, output, area, search, upload;
+    ComPtr<ID3D12DescriptorHeap> views, targets;
+    ComPtr<ID3D12QueryHeap> queries;
+    ComPtr<ID3D12Resource> stamps;
+    const volatile uint64_t* stampData{};
+    double ticksPerMs{};
+    std::array<bool, 3> timed{};
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT areaAt{}, searchAt{};
+    bool uploaded{}, ready{};
+} smaaPass;
+std::atomic<uint32_t> smaaFault{};
+std::atomic<bool> smaaLast{}; // the last pair went through SMAA
+PassClock smaaClock;
+bool failSmaa(uint32_t code) {
+    smaaFault = code;
+    smaaPass.ready = false;
+    std::lock_guard lock(copyTimingLock);
+    SpidyVrAaData.smaaFault = code;
+    return false;
+}
+bool prepareSmaa() {
+    if (smaaFault)
+        return false;
+    if (smaaPass.ready)
+        return true;
+    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 0, 0, 0};
+    D3D12_ROOT_PARAMETER parameters[2]{};
+    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[0].DescriptorTable = {1, &range};
+    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[1].Constants.Num32BitValues = 4;
+    parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // SMAA_RT_METRICS, used by both stages
+    D3D12_STATIC_SAMPLER_DESC samplers[2]{};
+    for (unsigned k = 0; k < 2; ++k) {
+        samplers[k].Filter = k ? D3D12_FILTER_MIN_MAG_MIP_POINT : D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        samplers[k].AddressU = samplers[k].AddressV = samplers[k].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        samplers[k].MaxLOD = D3D12_FLOAT32_MAX;
+        samplers[k].ShaderRegister = k;
+        samplers[k].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    }
+    D3D12_ROOT_SIGNATURE_DESC rs{2, parameters, 2, samplers, D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    ComPtr<ID3DBlob> signature, error;
+    if (FAILED(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error)) ||
+        FAILED(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                           IID_PPV_ARGS(&smaaPass.root))))
+        return failSmaa(1);
+    struct Stage {
+        const char *vs, *ps;
+        DXGI_FORMAT format;
+        ComPtr<ID3D12PipelineState>* state;
+    } stages[3] = {{"edgeVs", "edgePs", DXGI_FORMAT_R8G8_UNORM, &smaaPass.edges},
+                   {"weightVs", "weightPs", DXGI_FORMAT_R8G8B8A8_UNORM, &smaaPass.weights},
+                   {"blendVs", "blendPs", DXGI_FORMAT_R8G8B8A8_UNORM, &smaaPass.blend}};
+    for (const auto& stage : stages) {
+        ComPtr<ID3DBlob> vs, ps;
+        if (FAILED(D3DCompile(smaa::shader, sizeof(smaa::shader) - 1, "spidy_smaa", nullptr, nullptr, stage.vs,
+                              "vs_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &vs, &error)) ||
+            FAILED(D3DCompile(smaa::shader, sizeof(smaa::shader) - 1, "spidy_smaa", nullptr, nullptr, stage.ps,
+                              "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &ps, &error)))
+            return failSmaa(2);
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC d{};
+        d.pRootSignature = smaaPass.root.Get();
+        d.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+        d.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+        d.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        d.NumRenderTargets = 1;
+        d.RTVFormats[0] = stage.format;
+        d.SampleDesc.Count = 1;
+        d.SampleMask = UINT_MAX;
+        d.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        d.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        d.RasterizerState.DepthClipEnable = TRUE;
+        auto& blend = d.BlendState.RenderTarget[0];
+        blend.SrcBlend = blend.SrcBlendAlpha = D3D12_BLEND_ONE;
+        blend.DestBlend = blend.DestBlendAlpha = D3D12_BLEND_ZERO;
+        blend.BlendOp = blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(stage.state->ReleaseAndGetAddressOf()))))
+            return failSmaa(3);
+    }
+    // Targets at the headset's size: edges (RG8), weights (RGBA8), the output (as stagedEyes, copied back).
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    auto texture = [&](DXGI_FORMAT format, UINT64 w, UINT h, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state,
+                       ComPtr<ID3D12Resource>& out) {
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = w;
+        desc.Height = h;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = format;
+        desc.SampleDesc.Count = 1;
+        desc.Flags = flags;
+        return SUCCEEDED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr,
+                                                         IID_PPV_ARGS(&out)));
+    };
+    auto outDesc = stagedEyes[0]->GetDesc();
+    outDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    if (!texture(DXGI_FORMAT_R8G8_UNORM, outWidth, outHeight, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, smaaPass.edgeTex) ||
+        !texture(DXGI_FORMAT_R8G8B8A8_UNORM, outWidth, outHeight, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, smaaPass.weightTex) ||
+        FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &outDesc,
+                                               D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr,
+                                               IID_PPV_ARGS(&smaaPass.output))) ||
+        !texture(DXGI_FORMAT_R8G8_UNORM, AREATEX_WIDTH, AREATEX_HEIGHT, D3D12_RESOURCE_FLAG_NONE,
+                 D3D12_RESOURCE_STATE_COPY_DEST, smaaPass.area) ||
+        !texture(DXGI_FORMAT_R8_UNORM, SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT, D3D12_RESOURCE_FLAG_NONE,
+                 D3D12_RESOURCE_STATE_COPY_DEST, smaaPass.search))
+        return failSmaa(5);
+    // The two look-up textures, staged in an upload buffer (copied on the first pass's list).
+    UINT64 areaBytes{}, searchBytes{};
+    const auto areaDesc = smaaPass.area->GetDesc(), searchDesc = smaaPass.search->GetDesc();
+    device->GetCopyableFootprints(&areaDesc, 0, 1, 0, &smaaPass.areaAt, nullptr, nullptr, &areaBytes);
+    device->GetCopyableFootprints(&searchDesc, 0, 1, 0, &smaaPass.searchAt, nullptr, nullptr, &searchBytes);
+    smaaPass.searchAt.Offset = (areaBytes + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1) &
+                               ~static_cast<UINT64>(D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1);
+    D3D12_HEAP_PROPERTIES uploadHeap{};
+    uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width = smaaPass.searchAt.Offset + searchBytes;
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    void* bytes{};
+    if (FAILED(device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &buffer,
+                                               D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                               IID_PPV_ARGS(&smaaPass.upload))) ||
+        FAILED(smaaPass.upload->Map(0, nullptr, &bytes)))
+        return failSmaa(5);
+    for (UINT y = 0; y < AREATEX_HEIGHT; ++y)
+        std::memcpy(static_cast<uint8_t*>(bytes) + smaaPass.areaAt.Offset + y * smaaPass.areaAt.Footprint.RowPitch,
+                    areaTexBytes + y * AREATEX_PITCH, AREATEX_PITCH);
+    for (UINT y = 0; y < SEARCHTEX_HEIGHT; ++y)
+        std::memcpy(static_cast<uint8_t*>(bytes) + smaaPass.searchAt.Offset +
+                        y * smaaPass.searchAt.Footprint.RowPitch,
+                    searchTexBytes + y * SEARCHTEX_PITCH, SEARCHTEX_PITCH);
+    smaaPass.upload->Unmap(0, nullptr);
+    // Views (every table full, 3 each): eye i's edges [staged i, area, search] at 3i; weights [edges, area, search]
+    // at 6; eye i's blend [staged i, weights, search] at 9 + 3i. Targets: edges 0, weights 1, output 2.
+    D3D12_DESCRIPTOR_HEAP_DESC views{};
+    views.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    views.NumDescriptors = 15;
+    views.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    D3D12_DESCRIPTOR_HEAP_DESC targetViews{};
+    targetViews.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    targetViews.NumDescriptors = 3;
+    if (FAILED(device->CreateDescriptorHeap(&views, IID_PPV_ARGS(&smaaPass.views))) ||
+        FAILED(device->CreateDescriptorHeap(&targetViews, IID_PPV_ARGS(&smaaPass.targets))))
+        return failSmaa(4);
+    const auto viewStep = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const auto targetStep = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    auto srv = [&](ID3D12Resource* r, DXGI_FORMAT format, unsigned at) {
+        D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+        sv.Format = format;
+        sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        sv.Texture2D.MipLevels = 1;
+        auto view = smaaPass.views->GetCPUDescriptorHandleForHeapStart();
+        view.ptr += static_cast<SIZE_T>(viewStep) * at;
+        device->CreateShaderResourceView(r, &sv, view);
+    };
+    auto rtv = [&](ID3D12Resource* r, DXGI_FORMAT format, unsigned at) {
+        D3D12_RENDER_TARGET_VIEW_DESC rv{};
+        rv.Format = format;
+        rv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        auto target = smaaPass.targets->GetCPUDescriptorHandleForHeapStart();
+        target.ptr += static_cast<SIZE_T>(targetStep) * at;
+        device->CreateRenderTargetView(r, &rv, target);
+    };
+    for (unsigned i = 0; i < 2; ++i) {
+        srv(stagedEyes[i].Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 3 * i);
+        srv(smaaPass.area.Get(), DXGI_FORMAT_R8G8_UNORM, 3 * i + 1);
+        srv(smaaPass.search.Get(), DXGI_FORMAT_R8_UNORM, 3 * i + 2);
+        srv(stagedEyes[i].Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 9 + 3 * i);
+        srv(smaaPass.weightTex.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 10 + 3 * i);
+        srv(smaaPass.search.Get(), DXGI_FORMAT_R8_UNORM, 11 + 3 * i);
+    }
+    srv(smaaPass.edgeTex.Get(), DXGI_FORMAT_R8G8_UNORM, 6);
+    srv(smaaPass.area.Get(), DXGI_FORMAT_R8G8_UNORM, 7);
+    srv(smaaPass.search.Get(), DXGI_FORMAT_R8_UNORM, 8);
+    rtv(smaaPass.edgeTex.Get(), DXGI_FORMAT_R8G8_UNORM, 0);
+    rtv(smaaPass.weightTex.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 1);
+    rtv(smaaPass.output.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 2);
+    // The GPU time is optional: without timestamps the pass still runs.
+    UINT64 frequency{};
+    D3D12_QUERY_HEAP_DESC qd{};
+    qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    qd.Count = 2 * static_cast<UINT>(captureCommands.size());
+    D3D12_HEAP_PROPERTIES readback{};
+    readback.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC stampBuffer = buffer;
+    stampBuffer.Width = sizeof(uint64_t) * qd.Count;
+    void* mapped{};
+    if (SUCCEEDED(queue->GetTimestampFrequency(&frequency)) && frequency &&
+        SUCCEEDED(device->CreateQueryHeap(&qd, IID_PPV_ARGS(&smaaPass.queries))) &&
+        SUCCEEDED(device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &stampBuffer,
+                                                  D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                  IID_PPV_ARGS(&smaaPass.stamps))) &&
+        SUCCEEDED(smaaPass.stamps->Map(0, nullptr, &mapped))) {
+        smaaPass.stampData = static_cast<const volatile uint64_t*>(mapped);
+        smaaPass.ticksPerMs = static_cast<double>(frequency) / 1000.0;
+    } else {
+        smaaPass.queries.Reset();
+        smaaPass.stamps.Reset();
+    }
+    smaaPass.ready = true;
+    return true;
+}
+void noteSmaaTime(size_t slot) {
+    if (!smaaPass.timed[slot] || !smaaPass.stampData)
+        return;
+    smaaPass.timed[slot] = false;
+    const uint64_t begin = smaaPass.stampData[2 * slot], end = smaaPass.stampData[2 * slot + 1];
+    if (end > begin) {
+        const double ms = static_cast<double>(end - begin) / smaaPass.ticksPerMs;
+        smaaClock.note(ms);
+        std::lock_guard lock(copyTimingLock);
+        SpidyVrAaData.smaaGpuMs += ms;
+        ++SpidyVrAaData.smaaTimed;
+    }
+}
+// Both stagedEyes (COPY_SOURCE in and out) through SMAA's three passes. True: the look-up textures' upload is on
+// this list (undone by smaaListLost if the list is not submitted).
+bool drawSmaa(ID3D12GraphicsCommandList* list, size_t slot) {
+    const auto first = static_cast<UINT>(2 * slot);
+    if (smaaPass.queries)
+        originalEndQuery(list, smaaPass.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first);
+    D3D12_RESOURCE_BARRIER b[3]{};
+    auto transition = [&](unsigned n, ID3D12Resource* r, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
+        b[n].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b[n].Transition = {r, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, from, to};
+    };
+    const bool uploading = !smaaPass.uploaded;
+    if (uploading) {
+        D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
+        src.pResource = smaaPass.upload.Get();
+        src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        src.PlacedFootprint = smaaPass.areaAt;
+        dst.pResource = smaaPass.area.Get();
+        list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        src.PlacedFootprint = smaaPass.searchAt;
+        dst.pResource = smaaPass.search.Get();
+        list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        transition(0, smaaPass.area.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        transition(1, smaaPass.search.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        originalBarrier(list, 2, b);
+        smaaPass.uploaded = true;
+    }
+    for (unsigned i = 0; i < 2; ++i) {
+        transition(0, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
+                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        originalBarrier(list, 1, b);
+    }
+    list->SetGraphicsRootSignature(smaaPass.root.Get());
+    ID3D12DescriptorHeap* heaps[] = {smaaPass.views.Get()};
+    list->SetDescriptorHeaps(1, heaps);
+    const D3D12_VIEWPORT viewport{0, 0, static_cast<float>(outWidth), static_cast<float>(outHeight), 0, 1};
+    const D3D12_RECT rect{0, 0, static_cast<LONG>(outWidth), static_cast<LONG>(outHeight)};
+    list->RSSetViewports(1, &viewport);
+    list->RSSetScissorRects(1, &rect);
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    const float metrics[4] = {1.f / static_cast<float>(outWidth), 1.f / static_cast<float>(outHeight),
+                              static_cast<float>(outWidth), static_cast<float>(outHeight)};
+    const auto viewStep = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const auto targetStep = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    auto table = [&](unsigned at) {
+        auto view = smaaPass.views->GetGPUDescriptorHandleForHeapStart();
+        view.ptr += static_cast<UINT64>(viewStep) * at;
+        return view;
+    };
+    auto target = [&](unsigned at) {
+        auto t = smaaPass.targets->GetCPUDescriptorHandleForHeapStart();
+        t.ptr += static_cast<SIZE_T>(targetStep) * at;
+        return t;
+    };
+    const float clear[4]{};
+    for (unsigned i = 0; i < 2; ++i) {
+        // Edges (cleared: the pass discards where there is none).
+        transition(0, smaaPass.edgeTex.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_RENDER_TARGET);
+        originalBarrier(list, 1, b);
+        auto t = target(0);
+        list->ClearRenderTargetView(t, clear, 0, nullptr);
+        list->OMSetRenderTargets(1, &t, FALSE, nullptr);
+        list->SetPipelineState(smaaPass.edges.Get());
+        list->SetGraphicsRootDescriptorTable(0, table(3 * i));
+        list->SetGraphicsRoot32BitConstants(1, 4, metrics, 0);
+        list->DrawInstanced(3, 1, 0, 0);
+        // Blending weights.
+        transition(0, smaaPass.edgeTex.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
+                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        transition(1, smaaPass.weightTex.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_RENDER_TARGET);
+        originalBarrier(list, 2, b);
+        t = target(1);
+        list->OMSetRenderTargets(1, &t, FALSE, nullptr);
+        list->SetPipelineState(smaaPass.weights.Get());
+        list->SetGraphicsRootDescriptorTable(0, table(6));
+        list->DrawInstanced(3, 1, 0, 0);
+        // Neighbourhood blending into the output, copied back to the eye.
+        transition(0, smaaPass.weightTex.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
+                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        transition(1, smaaPass.output.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        originalBarrier(list, 2, b);
+        t = target(2);
+        list->OMSetRenderTargets(1, &t, FALSE, nullptr);
+        list->SetPipelineState(smaaPass.blend.Get());
+        list->SetGraphicsRootDescriptorTable(0, table(9 + 3 * i));
+        list->DrawInstanced(3, 1, 0, 0);
+        transition(0, smaaPass.output.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        transition(1, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                   D3D12_RESOURCE_STATE_COPY_DEST);
+        originalBarrier(list, 2, b);
+        list->CopyResource(stagedEyes[i].Get(), smaaPass.output.Get());
+        transition(0, stagedEyes[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        originalBarrier(list, 1, b);
+    }
+    if (smaaPass.queries) {
+        originalEndQuery(list, smaaPass.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first + 1);
+        list->ResolveQueryData(smaaPass.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first, 2, smaaPass.stamps.Get(),
+                               sizeof(uint64_t) * first);
+        smaaPass.timed[slot] = true;
+    }
+    return uploading;
 }
 // Update 32.1: replaced eye images let go once the GPU is past them, and the
 // AA pass's views of the eyes rewritten once no submitted pass reads them.
@@ -2529,10 +2991,20 @@ void stagePair(EyePairState::Stamp stamp) {
     const auto index = static_cast<size_t>(slot - captureCommands.data());
     noteAaTime(index);
     noteHistoryTime(index);
+    noteSmaaTime(index);
     // Supersampled eyes cannot be copied: they are always filtered down,
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
-    const bool smooth = (down || (aaMode.load() == 1 && !sm1Lock.load())) && prepareAa(); // SM1STYLE: no FXAA
+    // 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA when asked, or when SPIDY TAA's own pass cannot run (it failed to build,
+    // or EYE AA's lens step is off); FXAA if SMAA cannot be built either; a plain copy past that. Never nothing.
+    const uint32_t vrMode = vrAaMode.load(std::memory_order_relaxed);
+    const bool sm1 = sm1Lock.load();
+    const bool taaFailed = vrMode == vr_aa::ours && historyFault.load() != 0;
+    const bool wantSmaa = !down && !sm1 &&
+                          (vrMode == vr_aa::smaa || (vrMode == vr_aa::ours && (taaFailed || !temporalOn.load())));
+    const bool useSmaa = wantSmaa && prepareSmaa();
+    const bool smooth = (down || (aaMode.load() == 1 && !sm1 && !vrAaLocked()) || (wantSmaa && !useSmaa)) &&
+                        prepareAa(); // SM1STYLE, SPIDY TAA, SMAA: no FXAA (but SMAA's own fallback)
     if (down && !smooth) {
         fault = 3806; // the headset would get nothing: say why (aaFault)
         return;
@@ -2543,6 +3015,7 @@ void stagePair(EyePairState::Stamp stamp) {
         for (unsigned i = 0; i < 2; ++i)
             copyEyeTexture(slot->list.Get(), resources[i].Get(), states[i], stagedEyes[i].Get(), originalBarrier,
                            D3D12_RESOURCE_STATE_COPY_SOURCE);
+    const bool smaaUploading = useSmaa && drawSmaa(slot->list.Get(), index);
     // The history after AA: it blends what the headset is shown.
     if (historyNow() && prepareHistory()) {
         drawHistory(slot->list.Get(), index, stamp.serial);
@@ -2553,9 +3026,23 @@ void stagePair(EyePairState::Stamp stamp) {
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
     if (!submitCommands(*slot)) {
         history.valid = false;
+        if (smaaUploading)
+            smaaPass.uploaded = false; // the look-up textures are still to copy
         return;
     }
     aaPairs += smooth;
+    smaaLast.store(useSmaa, std::memory_order_relaxed);
+    {
+        std::lock_guard lock(copyTimingLock);
+        const bool taaRan = spidyTaaNow() && history.taa && historyNow() && !historyFault.load();
+        SpidyVrAaData.running = taaRan ? vr_aa::taa : useSmaa ? vr_aa::smaaPass : smooth && !down && wantSmaa
+                                                                                       ? vr_aa::fxaaPass
+                                                                                       : vr_aa::none;
+        SpidyVrAaData.historyFault = historyFault.load();
+        SpidyVrAaData.fellBack = SpidyVrAaData.fellBack || taaFailed;
+        SpidyVrAaData.smaaPairs += useSmaa;
+        SpidyVrAaData.fxaaPairs += smooth && !down && wantSmaa;
+    }
     capturedStamp = stamp;
     capturedMs = GetTickCount64();
     capturedQpc = qpcNow();
@@ -3443,6 +3930,22 @@ void setSm1StyleLock(bool on) {
 bool sm1StyleLock() {
     return sm1Lock.load();
 }
+void setVrAa(uint32_t mode) {
+    if (mode > vr_aa::legacy)
+        mode = vr_aa::ours;
+    vrAaMode = mode;
+    std::lock_guard lock(copyTimingLock);
+    SpidyVrAaData.asked = mode;
+}
+uint32_t vrAa() {
+    return vrAaMode.load();
+}
+bool vrAaLocks() {
+    return vrAaLocked();
+}
+uint32_t vrAaSmaaFault() {
+    return smaaFault.load();
+}
 uint32_t eyeAA() {
     return aaMode.load();
 }
@@ -3657,7 +4160,7 @@ void eyeSharpenTiming(TimingMetric& gpu, uint32_t& percent, uint32_t& code, uint
         std::lock_guard lock(copyTimingLock);
         gpu = sharpenGpu;
     }
-    percent = sm1Lock.load() ? 0u : sharpenPercent.load();
+    percent = (sm1Lock.load() || vrAaLocked()) ? 0u : sharpenPercent.load();
     code = sharpenFault.load();
     sharpened = sharpenPairs.load();
 }
@@ -3675,8 +4178,10 @@ float eyePassesGpuMs() {
         else
             total += clock.ms.load();
     };
-    add(staged && !aaFault.load() && (downsampling() || (aaMode.load() == 1 && !sm1Lock.load())), aaClock);
+    add(staged && !aaFault.load() && (downsampling() || (aaMode.load() == 1 && !sm1Lock.load() && !vrAaLocked())),
+        aaClock);
     add(staged && !historyFault.load() && historyNow(), historyClock);
+    add(staged && smaaLast.load(std::memory_order_relaxed), smaaClock); // 0.0.76 SPIDY TAA
     add(sharpening.load(), sharpenClock);
     return !any ? 0.f : allKnown ? total : std::numeric_limits<float>::quiet_NaN();
 }
@@ -3752,7 +4257,7 @@ void eyeAATiming(TimingMetric& gpu, uint32_t& mode, uint32_t& code, uint64_t& sm
         gpu = aaGpu;
     }
     // 2: the supersampled eyes' downsample filter, whatever FXAA is set to.
-    mode = width && downsampling() ? 2 : sm1Lock.load() ? 0u : aaMode.load();
+    mode = width && downsampling() ? 2 : (sm1Lock.load() || vrAaLocked()) ? 0u : aaMode.load();
     code = aaFault.load();
     smoothed = aaPairs.load();
 }
@@ -3900,7 +4405,8 @@ bool copyLatest(ID3D12Resource* left, ID3D12Resource* right, uint64_t& serial, u
     // Update 16: the headset's images sharpened (in place of the copy), or
     // copied as before when sharpening is off or cannot run.
     // 0.0.74 test 10 SM1STYLE: no CAS while it runs (the pass still grades COLOR / the fovea test, strength 0).
-    const uint32_t percent = sm1Lock.load() ? 0u : sharpenPercent.load();
+    // 0.0.76 SPIDY TAA / SMAA: no CAS either (vr_aa.hpp).
+    const uint32_t percent = (sm1Lock.load() || vrAaLocked()) ? 0u : sharpenPercent.load();
     // Update 24: read once, so both images of this pair follow the same mode.
     const uint32_t debug = eyeDebugMode.load();
     // Update 37.2: the pass also runs for COLOR alone (sharpening 0).

@@ -4529,7 +4529,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaa(void* on) {
     if (value > 3)
         return 4601;
     if (value == 3) { // Update 37: auto
-        engineTaaAuto = true;
+        // 0.0.76 SPIDY TAA / SMAA (vr_aa.hpp): the game's TAA never runs on the eyes; no auto to arm.
+        engineTaaAuto = !spidy::native_gpu::vrAaLocks();
         return 0;
     }
     if (value != 1) {
@@ -4538,6 +4539,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyEngineTaa(void* on) {
         if (value == 0)
             engineTaaWhy = 0;
         return 0;
+    }
+    if (spidy::native_gpu::vrAaLocks()) { // 0.0.76 SPIDY TAA / SMAA: our own per-eye AA, never the game's
+        ++engineTaaRefusals;
+        OutputDebugStringA("ENGINE TAA: refused, the eyes run SPIDY TAA or SMAA (live.txt vr_aa = game for the "
+                           "game's TAA)\n");
+        return 4602;
     }
     if (sm1Steps()) { // 0.0.74 test 10: SM1STYLE runs the game's TAA in each eye; nothing of ours over it
         ++engineTaaRefusals;

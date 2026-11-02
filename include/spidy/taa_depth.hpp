@@ -1,7 +1,7 @@
 #pragma once
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 //
-// 0.0.76 A-depth (live.txt vr_taa_depth, auto by default: off until the eye depth is CONFIRMED): SPIDY TAA's history turned with the eyes' own depth.
+// 0.0.76 A-depth (live.txt vr_taa_depth, off by default while the eye depth is CANDIDATE): SPIDY TAA's history turned with the eyes' own depth.
 // The history pass (native_eye_gpu.cpp taaShader, its TAA_DEPTH variant) otherwise turns the last picture with
 // the head's turn only (eye_history::historyReprojection), so whatever is near and shifts against the far city
 // as the head travels (parallax) is clipped away. With the eye's depth each pixel is put back in the world
@@ -22,8 +22,9 @@ inline constexpr float tolerance = .1f;
 // Only depths of the eyes' render size, one plane of 32-bit floats, rows on 256-byte steps.
 inline constexpr uint32_t rowAlign = 256;
 inline constexpr uint64_t largest = 256ull << 20; // bytes a copy may take (a 4K x 4K eye is 64 MB)
-// live.txt vr_taa_depth: 0 off, 1 on, 2 auto (the default): on only once the TAA WATCH depth log
+// live.txt vr_taa_depth: 0 off (the default), 1 on, 2 auto: on only once the TAA WATCH depth log
 // (taa_watch::depthVerdict) has CONFIRMED the eye depth - eye-sized, out of both eyes' jobs, never the flat view's.
+inline constexpr uint32_t off = 0;
 inline constexpr uint32_t automatic = 2;
 inline bool active(uint32_t mode, bool confirmed) {
     return mode == 1 || (mode == automatic && confirmed);

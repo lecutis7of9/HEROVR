@@ -51,7 +51,7 @@ Encodings (registry beside the game log's [Settings]): TextureQuality 0 Low (023
 
 | switch (live.txt, live, no restart) | default | what it does |
 | --- | --- | --- |
-| `vr_taa_depth` | `auto` | `auto` (2): on by itself once the TAA WATCH depth log has CONFIRMED the eye depth (200 pairs, both eyes' jobs, never the flat view), off until then; `on` (1): now; `off` (0): 509bdc9's history, the head's turn only |
+| `vr_taa_depth` | `off` | `off` (0, the default while the eye depth is CANDIDATE - test 07c1675's log saw both eyes' depth in 82 of its first 200 pairs): 509bdc9's history, the head's turn only; `on` (1): the history moved with each eye's depth now; `auto` (2): on by itself once the TAA WATCH depth log has CONFIRMED the eye depth (200 pairs, 90% with both eyes' jobs, never the flat view) |
 
 How: in depthBarrier, each eye's fmt 19 eye-sized depth (the one the TAA WATCH log follows, leaving DEPTH_WRITE in
 that eye's job) is copied to a buffer (3 a eye, its own ring; the SEE-THROUGH ring untouched). The history pass's
@@ -267,3 +267,22 @@ takes it away and `half` halves it, so those two runs tell. Logged every 10 s (h
 shift the pass actually used, and the mean distance from each count (head motion under the still limit adds the same
 to all three, so the least says how it was counted). Report: `jitter_now_px`, `jitter_before_px`, `shift_px`,
 `jitter_counted`, `jitter_off_px`, `jitter_check_pairs`.
+
+**TAA FRAME LOG (jitter diagnostic build, read-only).** include/spidy/taa_frame_log.hpp, `SpidyTaaFrameLogData`,
+tools/taa_frame_log_record.py. Eye 0, one entry for each pair through the history pass, the last 300 kept: the view
+the pair was rendered with and the view the history was fetched from (each the camera-to-world matrix and the lens
+tangents l, r, d, u, which together are the view-projection; our step is already in the lens), our step on each
+(eye pixels, x right, y up), the history UV of the eye's centre pixel and its shift (eye pixels, x right, y down), the
+shift with the step's change taken out (the drift: shift minus (now - last, last - now)), the shift's change from the
+pair before, the head's turn and travel, and a still flag (taa_watch::stillHead). Console, every 10 s with the TAA
+WATCH window: `TAA FRAME LOG (eye 0, last 300 pairs, jitter <modes>): <n> head still - drift with the step taken out
+mean <a> / max <b> px still (all <c> / <d> px), history UV step still mean / max, measured step gain <g> (once)`, the
+gain the share of the step's change the history shift carries (+1 once, +2 twice, 0 none, -1 the wrong sign). Once at
+the start, and again at the end, the one line worked out from the code (the JITTER CHECK above):
+
+    matrices: jittered, jitter applied: once, sign: +
+
+The report's `taa_frame_log` has `most_still` (the 300-pair block with the most still-head pairs seen in the run) and
+`last`, each with every frame and the summary (`drift_still_mean_px`, `drift_still_max_px`, `measured_gain`, ...).
+A still-head drift near 0 with the step removed means the history follows the step exactly; a drift that stays while
+`vr_taa_jitter = fixed` or `half` is set points away from the step.

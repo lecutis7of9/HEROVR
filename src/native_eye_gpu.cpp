@@ -16,6 +16,7 @@
 #include "spidy/taa_watch.hpp"
 #include "spidy/taa_depth.hpp"
 #include "spidy/near_clip.hpp"
+#include "spidy/taa_frame_log.hpp"
 #include "spidy/taa_jitter.hpp"
 #include "spidy/taa_still.hpp"
 #include "spidy/smaa/area_tex.h"
@@ -48,6 +49,7 @@ __declspec(dllexport) native_gpu::ScreenData SpidyScreenData;
 __declspec(dllexport) native_gpu::HistoryData SpidyEyeHistoryData;
 __declspec(dllexport) vr_aa::Data SpidyVrAaData; // 0.0.76 SPIDY TAA (copyTimingLock)
 __declspec(dllexport) taa_watch::Data SpidyTaaWatchData; // 0.0.76 TAA WATCH (watchLock)
+__declspec(dllexport) taa_frame_log::Data SpidyTaaFrameLogData; // 0.0.76 TAA FRAME LOG (watchLock)
 }
 namespace spidy::native_gpu {
 namespace {
@@ -563,9 +565,10 @@ void watchFlat(ID3D12GraphicsCommandList* list, UINT count, const D3D12_RESOURCE
 // The buffers start in COMMON and are only promoted (the copy, the history's read), so no state is tracked.
 // Anything amiss (a footprint not the eye's, an allocation) turns only this off for the session: the history
 // is then turned as before (taaDepthFault, counted as depth missed), never `fault`, never the eyes.
-// SpidyVrTaaDepth: 0 off, 1 on, 2 auto (the default): off until the depth log above has CONFIRMED the eye depth
-// (taa_depth::active), then on by itself, so nothing needs a live.txt line.
-std::atomic<uint32_t> taaDepthOn{taa_depth::automatic};
+// SpidyVrTaaDepth: 0 off (the default, while the eye depth is CANDIDATE: test 07c1675's depth log saw both eyes'
+// depth in 82 of its 200 pairs), 1 on, 2 auto: off until the depth log above has CONFIRMED the eye depth
+// (taa_depth::active), then on by itself.
+std::atomic<uint32_t> taaDepthOn{taa_depth::off}; // off by default: the eye depth is still CANDIDATE
 bool taaDepthActive() {
     return taa_depth::active(taaDepthOn.load(std::memory_order_relaxed), taaDepthConfirmed.load(std::memory_order_relaxed));
 }
@@ -3031,6 +3034,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     const std::array<float, 2> jitterBefore = history.shownJitter;
     bool jitterChecked = false;
     float jitterShift[2]{};
+    taa_frame_log::Entry frameEntry{}; // 0.0.76 TAA FRAME LOG: eye 0's pair (logged once the pass is recorded)
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
     float frame[2][16]{};
     const bool ours = spidyTaaNow() && history.taa;
@@ -3118,6 +3122,34 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                 jitterChecked = true;
             }
             watchEased = keep > 0 && keep < (ours ? taa_still::share(stillMilli) : still) - 1e-4f;
+        }
+        if (i == 0 && viewed) { // 0.0.76 TAA FRAME LOG (read-only)
+            frameEntry.serial = static_cast<uint32_t>(serial);
+            frameEntry.flags = (ours ? taa_frame_log::ours : 0u) |
+                               (taaJitterModeNow.load(std::memory_order_relaxed) & 0xffu) << 8;
+            frameEntry.turn = turn;
+            frameEntry.travel = travel;
+            for (int k = 0; k < 2; ++k) {
+                frameEntry.jitterNow[k] = noted.jitter[k];
+                frameEntry.jitterBefore[k] = jitterBefore[k];
+            }
+            for (int k = 0; k < 16; ++k) {
+                frameEntry.world[k] = now[0].world[k];
+                frameEntry.worldBefore[k] = history.shown[0].world[k];
+            }
+            for (int k = 0; k < 4; ++k) {
+                frameEntry.tangents[k] = now[0].tangents[k];
+                frameEntry.tangentsBefore[k] = history.shown[0].tangents[k];
+            }
+            const float qz = h[6] * .5f + h[7] * .5f + h[8];
+            if (both && noted.size[0] && noted.size[1] && qz > 1e-5f) {
+                frameEntry.flags |= taa_frame_log::history | (watchStill ? taa_frame_log::still : 0u);
+                frameEntry.uv[0] = (h[0] * .5f + h[1] * .5f + h[2]) / qz;
+                frameEntry.uv[1] = (h[3] * .5f + h[4] * .5f + h[5]) / qz;
+                frameEntry.shift[0] = (frameEntry.uv[0] - .5f) * static_cast<float>(noted.size[0]);
+                frameEntry.shift[1] = (frameEntry.uv[1] - .5f) * static_cast<float>(noted.size[1]);
+                taa_watch::jitterShift(frameEntry.jitterNow, frameEntry.jitterBefore, 1.f, frameEntry.expected);
+            }
         }
     }
     const unsigned read = history.parity, write = 1 - read;
@@ -3261,6 +3293,11 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         if (jitterChecked) // 0.0.76 JITTER CHECK
             taa_watch::noteJitterCheck(SpidyTaaWatchData.current, noted.jitter.data(), jitterBefore.data(),
                                        jitterShift);
+        if (viewed) { // 0.0.76 TAA FRAME LOG
+            SpidyTaaFrameLogData.width = noted.size[0];
+            SpidyTaaFrameLogData.height = noted.size[1];
+            taa_frame_log::note(SpidyTaaFrameLogData, frameEntry);
+        }
     }
 }
 // 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA 1x per eye (spidy/smaa: Jimenez et al.'s SMAA.hlsl, preset HIGH, luma edges),
@@ -5475,7 +5512,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyMonitorRate(void* rate) {
     native_gpu::monitorRate(static_cast<uint32_t>(value));
     return 0;
 }
-// 0.0.76 A-depth (live.txt vr_taa_depth): 0 off, 1 on, 2 auto (the default: on once the eye depth is CONFIRMED),
+// 0.0.76 A-depth (live.txt vr_taa_depth): 0 off (the default), 1 on, 2 auto (on once the eye depth is CONFIRMED),
 // SPIDY TAA's history turned with the eyes' depth. Live; refused (4607) above 2.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrTaaDepth(void* value) {
     const auto v = reinterpret_cast<uintptr_t>(value);

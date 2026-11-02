@@ -11,11 +11,18 @@ From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not ye
   moves were clipped away and started again (the aliasing and the swing smear). Now each pixel is put back in the
   world with the eye's own depth (fmt 19 at the eye's size), moved into last pair's eye and looked up there; if last
   pair's depth there disagrees, the pixel was hidden before and starts fresh. The blend (0.9 still / 0.6 moving) and
-  the colour clip are 509bdc9's, unchanged. Nothing to set: live.txt `vr_taa_depth` is `auto` by default - it turns
-  on by itself once the TAA WATCH depth log (200 pairs) has CONFIRMED the eye depth, and stays off otherwise; `on`
-  forces it, `off` is 509bdc9's history (live, no restart). A pair without both eyes' depth is turned as before, by
+  the colour clip are 509bdc9's, unchanged. live.txt `vr_taa_depth` is `off` by default (509bdc9's history) because
+  the eye depth is still CANDIDATE (test 07c1675's log: both eyes' depth in 82 of the first 200 pairs); `vr_taa_depth
+  = on` tries it, `auto` turns it on by itself once the TAA WATCH depth log (200 pairs) has CONFIRMED the eye depth
+  (live, no restart). A pair without both eyes' depth is turned as before, by
   itself. Moving cars and people are still kept clean by the clip only (no motion vectors). About 190 MB of VRAM
   while on.
+- **TAA FRAME LOG (read-only, jitter diagnostic build):** SPIDY TAA's history pass, eye 0, the last 300 pairs: the
+  view each pair was rendered with and the one its history was fetched from (matrix and lens), our sub-pixel step on
+  each, the centre pixel's history UV and shift, that shift with the step's change taken out (the drift), its change
+  from the pair before, and a still-head flag. Every 10 s the console prints the mean / max drift with a still head
+  and the measured step gain; at the start the line worked out from the code: `matrices: jittered, jitter applied:
+  once, sign: +`. The report's `taa_frame_log` keeps the stillest 300-pair block and the last one. No picture changes.
 - **TAA WATCH (read-only, in every 0.0.76 A/B/C test build):** the console prints a line every 10 seconds with the
   eye fps, the GPU time a pair (the game's two eye jobs, timed at their own begin and end markers, and SPIDY TAA's own
   pass) and the still / moving split, including how many pairs with a still head were treated as moving (over 20%

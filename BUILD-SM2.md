@@ -2885,7 +2885,7 @@ buildings stayed; only the light went.
   The two runs' numbers (fps, GPU wait, TAA cost, motion easing, mip bias): docs/VISUAL-0.0.76.md "SPIDY TAA TUNE".
   Tests: hero076_spidy_taa_tests Tune (509bdc9's constants, no RCAS or 10-bit history; vr_ss; the report).
 
-## 74. Version 0.0.76 A-depth: SPIDY TAA's history reprojected with the eyes' depth (vr_taa_depth, auto)
+## 74. Version 0.0.76 A-depth: SPIDY TAA's history reprojected with the eyes' depth (vr_taa_depth, off by default)
 
   include/spidy/taa_depth.hpp (new): historyShift (the eye's travel since last pair, in last pair's view, over the
   lens), reproject (eye_history's H with a depth d: q = H(u, v, 1) / d + shift), matches (10% of the larger, finite,
@@ -2926,3 +2926,14 @@ buildings stayed; only the light went.
   depth root parameters + a root UAV u1 at 5; a failure leaves them null, A-depth as before, uncounted); the depth
   shader's disocclusion refusal adds 1 / 1 (sampled, clipped) at the counted pixels; drawHistory counts a depth pair
   only with that variant (counting && depthUsed -> taaDepthCount, UAV at 5, else at 2).
+  TAA FRAME LOG (read-only): include/spidy/taa_frame_log.hpp (Entry 232 bytes, Data 48 + 300 entries, magic TFLG,
+  version 1; matricesJittered 1, appliedTimes 1, appliedSign +1, the static answer), export SpidyTaaFrameLogData,
+  written under watchLock at drawHistory's end (eye 0, any viewed pair: both views' world and tangents, the steps,
+  the centre's history UV and shift, expected = jitterShift(now, last, 1), drift, delta). tools/taa_frame_log_record.py
+  (parse, summary, static line, console line, better_block); run_game_vr reads it with each closed TAA WATCH window
+  (optional export) and keeps most_still / last for the report. Tests: hero076_taa_frame_log_tests, core
+  `0.0.76 TAA FRAME LOG`.
+  A-depth on 07c1675: merged with the TAA FRAME LOG (both kept; the frame log's history UV is the turn's homography
+  alone, so with depth on it is the far city's, not a near pixel's). vr_taa_depth's default is now 0 off
+  (taa_depth::off): test 07c1675's depth log stayed CANDIDATE (both eyes in 82 of 200 pairs, one resource an eye,
+  never shared, never the flat view), so the depth stays a live.txt try (`on`) or `auto` until it is CONFIRMED.

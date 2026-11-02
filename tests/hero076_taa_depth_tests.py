@@ -2,7 +2,7 @@
 """0.0.76 A-depth: SPIDY TAA's history moved with the eyes' depth (include/spidy/taa_depth.hpp).
 
 live.txt, live (no restart):
-  vr_taa_depth = auto (default) | on | off   auto: on once the TAA WATCH depth log has CONFIRMED the eye depth;
+  vr_taa_depth = off (default) | on | auto   auto: on once the TAA WATCH depth log has CONFIRMED the eye depth;
                                              off: 509bdc9's history (the head's turn only)
 The blend shares and the colour clip are 509bdc9's, unchanged.
 """
@@ -39,7 +39,7 @@ class TaaDepth(unittest.TestCase):
         n = src('src/native_eye_gpu.cpp')
         self.assertIn('DWORD WINAPI SpidyVrTaaDepth(void* value)', n)
         self.assertIn('return 4607;', n)
-        self.assertIn('std::atomic<uint32_t> taaDepthOn{taa_depth::automatic};', n)  # auto by default
+        self.assertIn('std::atomic<uint32_t> taaDepthOn{taa_depth::off};', n)  # off by default (CANDIDATE)
         self.assertIn('taaDepthConfirmed = log.verdict == taa_watch::confirmed;', n)
         self.assertIn('#ifdef TAA_DEPTH', n)
         self.assertIn('abs(had - want) <= 0.1 * max(had, want) + 1e-7', n)

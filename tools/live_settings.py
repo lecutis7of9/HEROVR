@@ -184,10 +184,10 @@ SETTINGS = {
                       "jitter back in, which doubled it and flipped it upside down; 0 keep: c71a59c's doubled jitter, "
                       "to compare) - live, no restart needed"),
     # 0.0.76 A-depth (include/spidy/taa_depth.hpp, native_eye_gpu.cpp drawHistory): live, never persisted.
-    'vr_taa_depth': ((0, 1, 2), 'SpidyVrTaaDepth', "VR TAA DEPTH {} (2 auto, the default: SpidyVR's TAA history is "
-                     "turned with the eyes' depth once the TAA WATCH depth log has CONFIRMED it, so windows and "
-                     "building edges keep their history as your head moves; 1 on now; 0 off: the head turn only, as "
-                     "509bdc9) - live, no restart needed"),
+    'vr_taa_depth': ((0, 1, 2), 'SpidyVrTaaDepth', "VR TAA DEPTH {} (1 on: SpidyVR's TAA history is turned with the "
+                     "eyes' depth, so windows and building edges keep their history as your head moves; 0 off, the "
+                     "default: the head turn only, as 509bdc9; 2 auto: on once the TAA WATCH depth log has CONFIRMED "
+                     "the eye depth) - live, no restart needed"),
     # 0.0.76 TAA JITTER (native_eye_gpu SpidyVrTaaJitter, game_xr's eye_taa::step): a diagnostic, never persisted.
     'vr_taa_jitter': ((0, 3), 'SpidyVrTaaJitter', "VR TAA JITTER {} (a test of SpidyVR's own Halton sub-pixel step "
                      "only - on the 16-step walk, the default; off no step; fixed one constant offset; half the same "
@@ -701,7 +701,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
                 'vr_ss': ('off', '125', '150'),  # 0.0.76 SPIDY TAA TUNE
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
-                'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (auto, 2, the default)
+                'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
@@ -800,7 +800,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
            'vr_taa_jitter': {'on': 0, 'off': 1, 'fixed': 2, 'half': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TAA JITTER
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
-           'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 2 auto default
+           'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 0 off default
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},

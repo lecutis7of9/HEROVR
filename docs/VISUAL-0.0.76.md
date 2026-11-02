@@ -99,6 +99,36 @@ dominating and depth-only near 0 = geometric / specular sub-pixel aliasing the v
 depth); a large depth-only share on edges = the disocclusion test refusing history at the corner; high spike % with
 a high clip-moved share = bright single samples (specular) flipping the history.
 
+### SEAM / EDGE TRACE (`vr_taa_seam`): why the frame edges do not settle
+
+The user's visual-9 test (SpidyVR's TAA, `vr_taa_depth` off, `vr_ss` 100, a still head looking down an avenue):
+"doesnt settle". The close-up shows thick extruded window-frame slabs standing proud of a deep dark recess, so the
+flash is at depth steps and creases with a large bright / dark contrast (CONFIRMED from the frames). The prime
+suspect is the history being rejected at those pixels (the variance clip clamping hard on a large 3x3 YCoCg spread,
+or a depth disocclusion), CANDIDATE until the trace below reads it.
+
+`vr_taa_seam` (live.txt, 0 off the default, live, no restart) is read-only: with `vr_taa_depth` off it uses a
+TAA_COUNT + TAA_AGE variant that reads the eyes' depth for the bins only (the history moves with the head motion as
+without it); with `vr_taa_depth` on the A-depth trace variant also fills the seam cells. Lines every 10 s:
+
+- `TAA SEAM <still|moving|fast>`: per angle (frontal / mid / grazing / silhouette) x distance (near < 8 m, mid, far >
+  30 m) x edge / flat: pixels, the luma change before the TAA (this frame against the history's place) and after
+  (what is shown against last frame's shown), and the flicker share over 1/16 of each.
+- `TAA HOT EDGES <category>`: the bright frame edges (edge pixels with a 3x3 luma span over 0.25), per angle: history
+  age mean / max, the history's weight in what is shown, rejection clip-only / depth-only / both / neither, 3x3
+  YCoCg spread, variance box, 3x3 depth spread (relative), bright share, and in / out luma change.
+- `TAA HOT EDGE SAMPLES`: 8 of those pixels from the fastest category's pass (the first 8 the GPU claimed, so
+  CANDIDATE-representative; the aggregate counts every one of them on the 1-in-256 grid).
+- `TAA SEAM VERDICT`: the fastest category with 20 or more hot readings, grazing / silhouette first. **settles**
+  (shown / in at most 0.3 and flicker under 5%); **F1** (age under 4 and the clip rejects most): next would be a
+  wider or replaced clip for high-spread pixels only, watching for smear; **F2** (age under 4 and the depth rejects
+  most): a depth tolerance scaled by the depth gradient, not combined with F1; **F3** (the age climbs and it still
+  flashes): coverage, `vr_ss 110` (110 per side, 1.21x the pixels; RESTART) with fps, GPU ms and repeated frames
+  read. Neither F1 nor F2 is built; each would be one variable in its own test.
+
+`vr_mip` (texture LOD bias) was not done: it only changes texture sampling inside surfaces and would not fix
+silhouettes.
+
 ### A-depth CHECKED: the depth's convention checked first, rejections split, per-eye gating
 
 - Convention check (taa_depth_check.hpp, native_eye_gpu noteDepthCheck): one pair in 30 until it passes, then about

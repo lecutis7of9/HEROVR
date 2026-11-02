@@ -6,6 +6,25 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **SEAM / EDGE TRACE (diagnostics only, read-only; new live.txt `vr_taa_seam`, 0 off the default, live, no
+  restart).** The visual-9 test ("doesnt settle", SpidyVR's TAA, `vr_taa_depth` off) had no depth-on logs and the
+  earlier trace only ran with `vr_taa_depth` on. With `vr_taa_seam` on the trace also runs on the head-motion path:
+  a separate TAA_COUNT + TAA_AGE pipeline variant reads the eyes' depth for its bins only (the history is still moved
+  by the head motion, exactly as with it off). Every 10 s, by movement (still / moving / fast), angle (frontal / mid /
+  grazing / silhouette) and distance (near under 8 m / mid / far over 30 m), edge vs flat: the picture before the TAA
+  against what it shows (luma change in vs out, flicker share over 1/16); and for the bright frame edges (edge pixels
+  whose 3x3 luma span is over 0.25): history age mean / max, the history's weight in what is shown, rejection
+  clip-only / depth-only / both / neither, the 3x3 YCoCg spread and variance-box size, the 3x3 depth spread, bright vs
+  dark share, and 8 of those pixels' own readings (position, age, weight, rejection, luma, spread, depth). A TAA SEAM
+  VERDICT line names which of three readings matches (CANDIDATE): F1 age resets and the clip rejects (the clip too
+  hard on high-spread pixels), F2 age resets and the depth rejects (the depth tolerance), F3 the age climbs and it
+  still flashes (coverage: `vr_ss 110`). Nothing in the picture changes: no TAA, weight, clip, jitter, Halton or depth
+  reprojection change; with it on and `vr_taa_depth` off it allocates the trace's age buffers (about 124 MB of VRAM at
+  2688x2880). `vr_mip` was not done (it only changes texture sampling inside surfaces, not silhouettes).
+- **Fix: send-me.zip has every recent session's logs.** collect-reports.ps1 took only the newest report's logs, so a
+  test of several sessions in a row sent the last session's alone (visual-9: two earlier sessions with only their
+  window-probe files). It now adds the console / game / prompts logs of every session of the last 12 hours (up to 8),
+  including one still running (its console log is written as it goes); the report json stays the newest only.
 - **A-depth TRACE (diagnostics only, nothing new on by default; `vr_taa_depth` stays off by default).** Every 10 s,
   for whatever `vr_aa` / `vr_taa_depth` / `vr_ss` is in force (each window is tagged with them and the eye render /
   headset size): fps and the pair-to-pair frame-time spread, render hitches (pairs 50 ms or more apart) on their own

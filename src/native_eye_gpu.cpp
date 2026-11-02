@@ -579,6 +579,11 @@ bool taaDepthActive() {
     return taa_depth::active(taaDepthOn.load(std::memory_order_relaxed), taaDepthConfirmed.load(std::memory_order_relaxed));
 }
 std::atomic<uint32_t> taaDepthFault{}; // 1 footprint, 2 allocation, 3 the pass could not be built
+// 0.0.76 SEAM TRACE (live.txt vr_taa_seam, read-only; taa_depth_trace.hpp seam cells, hot edges, samples): 0 off (the
+// default), 1 on - with vr_taa_depth off the eyes' depth is copied and read for the trace's bins alone (the history
+// still read where the head motion puts it, the same picture as without it); with vr_taa_depth on it changes nothing
+// (that path is traced already).
+std::atomic<uint32_t> taaSeamOn{};
 struct TaaDepthSlot {
     ComPtr<ID3D12Resource> buffer;
     EyePairState::Stamp stamp{};
@@ -664,7 +669,8 @@ void taaDepthStop(uint32_t why) {
 }
 void taaDepthCopy(ID3D12GraphicsCommandList* list, const DepthTag& t, ID3D12Resource* res,
                   const D3D12_RESOURCE_DESC& d) {
-    if (!taaDepthActive() || taaDepthFault.load(std::memory_order_relaxed) || t.eye > 1 ||
+    if (!(taaDepthActive() || taaSeamOn.load(std::memory_order_relaxed)) ||
+        taaDepthFault.load(std::memory_order_relaxed) || t.eye > 1 ||
         !t.stamp.serial)
         return;
     std::lock_guard lock(depthLock);
@@ -2494,6 +2500,9 @@ struct HistoryPipeline {
     // which eyes of a slot were traced and that slot's movement category.
     ComPtr<ID3D12RootSignature> depthAgeRoot;
     ComPtr<ID3D12PipelineState> taaDepthAge;
+    // 0.0.76 SEAM TRACE: TAA_COUNT + TAA_AGE without TAA_DEPTH on depthAgeRoot - SPIDY TAA's counted picture (the
+    // history read where the head motion puts it), the eye's depth read for the bins only.
+    ComPtr<ID3D12PipelineState> taaSeam;
     std::array<std::array<ComPtr<ID3D12Resource>, 2>, 2> ages;
     uint32_t agesW{}, agesH{};
     std::array<bool, 2> aged{};
@@ -2582,7 +2591,7 @@ Texture2D current : register(t0);
 Texture2D previous : register(t1);
 SamplerState bilinear : register(s0);
 cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; };
-#ifdef TAA_DEPTH
+#if defined(TAA_DEPTH) || defined(TAA_AGE)
 // 0.0.76 A-depth (taa_depth.hpp): each eye's depth, this pair's and the last one's (one plane of floats, reversed-Z).
 // shift.xyz the previous eye's shift for the travel over the near plane, shift.w the last near over this one;
 // sizes: the depth's width, height and row pitch (floats); lin (taa_depth_check.hpp linearOf, from the checked
@@ -2820,6 +2829,80 @@ void noteShown(uint bin, bool edge, float shown, float2 old, float2 size) {
     if (edge)
         graze.InterlockedAdd(bin * 92 + 80, (uint)(abs(shown - toYCoCg(catmullRom(old, size)).x) * 1000 + 0.5));
 }
+)"
+R"(// 0.0.76 SEAM / EDGE TRACE (taa_depth_trace.hpp SeamWord, HotWord, SampleWord; read-only): a counted pixel with a
+// history and a depth into its seam cell (angle x distance x flat / seam) - the pre-TAA change (this pair's eye image
+// against the history read) and the shown change (the TAA's output against the same read); a seam pixel whose 3 x 3
+// luma spans over hotSpread (a lit frame face against the dark recess) also into its HOT EDGE cell (age, weight,
+// rejection, spreads, bright / dark) and, while there is room, the pass's samples. kind 1: refused by the depth.
+void noteSeam(int2 p, int2 last, int2 dp, int2 depthLast, uint pitch, uint bin, float z, bool edge, uint kind,
+              float most, uint age, float weight, float luma, float shown, float2 old, float2 size) {
+    if (bin >= 5 || !(z > 0))
+        return;
+    const float hist = toYCoCg(catmullRom(old, size)).x;
+    const float inC = abs(luma - hist), outC = abs(shown - hist);
+    const uint angle = bin == 0 ? 0 : bin == 1 ? 1 : bin == 4 ? 3 : 2;
+    const uint at = 552 + ((angle * 3 + (z < 8 ? 0 : z < 30 ? 1 : 2)) * 2 + (edge ? 1 : 0)) * 20;
+    graze.InterlockedAdd(at, 1);
+    graze.InterlockedAdd(at + 4, (uint)(inC * 1000 + 0.5));
+    graze.InterlockedAdd(at + 8, (uint)(outC * 1000 + 0.5));
+    if (inC > 0.0625)
+        graze.InterlockedAdd(at + 12, 1);
+    if (outC > 0.0625)
+        graze.InterlockedAdd(at + 16, 1);
+    if (!edge)
+        return;
+    float lo = 1e30, hi = -1e30, m1 = 0, m2 = 0, dlo = 1e30, dhi = 0;
+    [unroll] for (int j = -1; j <= 1; ++j)
+        [unroll] for (int i = -1; i <= 1; ++i) {
+            const float n = toYCoCg(current.Load(int3(clamp(p + int2(i, j), int2(0, 0), last), 0)).rgb).x;
+            lo = min(lo, n);
+            hi = max(hi, n);
+            m1 += n;
+            m2 += n * n;
+            const int2 c = clamp(dp + int2(i, j), int2(0, 0), depthLast);
+            const float nd = depthNow[c.y * pitch + c.x];
+            if (nd > 0 && nd < 1) {
+                const float nz = viewZ(nd);
+                dlo = min(dlo, nz);
+                dhi = max(dhi, nz);
+            }
+        }
+    if (!(hi - lo > 0.25))
+        return;
+    const float mean = m1 / 9.0;
+    const float sigma = sqrt(max(m2 / 9.0 - mean * mean, 0));
+    const float spreadZ = dhi > dlo ? min((dhi - dlo) / z, 1000.0) : 0;
+    const bool clipped = most > 1, refused = kind == 1, bright = luma > mean;
+    const uint h = 1032 + angle * 60;
+    graze.InterlockedAdd(h, 1);
+    graze.InterlockedAdd(h + 4, age);
+    graze.InterlockedMax(h + 8, age);
+    graze.InterlockedAdd(h + 12, (uint)(weight * 1000 + 0.5));
+    graze.InterlockedAdd(h + (refused ? (clipped ? 24 : 20) : (clipped ? 16 : 28)), 1);
+    graze.InterlockedAdd(h + 32, (uint)((hi - lo) * 1000 + 0.5));
+    graze.InterlockedAdd(h + 36, (uint)(sigma * 1000 + 0.5));
+    graze.InterlockedAdd(h + 40, (uint)(spreadZ * 1000 + 0.5));
+    if (bright)
+        graze.InterlockedAdd(h + 44, 1);
+    graze.InterlockedAdd(h + 48, (uint)(inC * 1000 + 0.5));
+    graze.InterlockedAdd(h + 52, (uint)(outC * 1000 + 0.5));
+    if (outC > 0.0625)
+        graze.InterlockedAdd(h + 56, 1);
+    uint slot;
+    graze.InterlockedAdd(1272, 1, slot);
+    if (slot < 8) {
+        const uint s = 1276 + slot * 32;
+        graze.Store(s, (uint)p.x | ((uint)p.y << 16));
+        graze.Store(s + 4, age);
+        graze.Store(s + 8, (clipped ? 1u : 0u) | (refused ? 2u : 0u) | (bright ? 4u : 0u) | 128u | (bin << 8));
+        graze.Store(s + 12, (uint)(weight * 1000 + 0.5));
+        graze.Store(s + 16, min((uint)(luma * 1000 + 0.5), 65535u) | (min((uint)((hi - lo) * 1000 + 0.5), 65535u) << 16));
+        graze.Store(s + 20, asuint(depthNow[dp.y * pitch + dp.x]));
+        graze.Store(s + 24, (uint)(spreadZ * 1000 + 0.5));
+        graze.Store(s + 28, min((uint)(inC * 1000 + 0.5), 65535u) | (min((uint)(outC * 1000 + 0.5), 65535u) << 16));
+    }
+}
 #endif
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
@@ -2856,13 +2939,27 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
             }
         }
     }
+#endif
 #ifdef TAA_AGE
-    const float distance = deep ? probe.y / max(d * lin.x + lin.y, 1e-12) : 0;
-    const uint surface = deep && distance >= probe.z && distance <= probe.w ? 4 : 0;
+#ifndef TAA_DEPTH
+    // 0.0.76 SEAM TRACE (vr_taa_depth off, vr_taa_seam on): the eye's depth read for the trace only; the history is
+    // read where the head motion puts it, exactly as without the trace (q is not touched).
+    const int2 depthLast = int2(sizes.xy) - 1;
+    const uint pitch = (uint)sizes.z;
+    const int2 dp = clamp(int2(uv.xy * sizes.xy), int2(0, 0), depthLast);
+    const float d = depthNow[dp.y * pitch + dp.x];
+    const bool deep = false;
+    const bool sited = d > 0 && d < 1;
+#else
+    const bool sited = deep;
+#endif
+    const float distance = sited ? probe.y / max(d * lin.x + lin.y, 1e-12) : 0;
+    const uint surface = sited && distance >= probe.z && distance <= probe.w ? 4 : 0;
     float residual = -1;
     bool edge = false;
     const uint bin = counted ? grazeBin(dp, depthLast, pitch, edge) : 5;
-#endif
+    const float seamZ = d > 0 && d < 1 ? viewZ(d) : 0;
+    uint keptAge = 0;
 #endif
     float2 old = float2(-1, -1);
     if (q.z > 1e-5)
@@ -2934,6 +3031,8 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
 #ifdef TAA_AGE
             noteGraze(bin, 1, most, false, 0, residual, old, float2(w, h), middle.x, edge,
                       lumaSpike(p, last, middle.x));
+            noteSeam(p, last, dp, depthLast, pitch, bin, seamZ, edge, 1, most, 0, 0, middle.x, middle.x, old,
+                     float2(w, h));
 #endif
         }
 #endif
@@ -2949,8 +3048,8 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     {
         const uint had = agePrevious(old, w, h);
         const uint match = deep ? (had >> 16) + 1 : 0;
-        noteAge(p, w, h, match, most > 1 ? 0 : (had & 65535u) + 1,
-                (deep ? 2 : 64) | surface | (most > 1 ? 16 : 0), residual, distance);
+        keptAge = most > 1 ? 0 : (had & 65535u) + 1;
+        noteAge(p, w, h, match, keptAge, (deep ? 2 : 64) | surface | (most > 1 ? 16 : 0), residual, distance);
         if (counted)
             noteGraze(bin, 2, most, !deep, match, residual, old, float2(w, h), middle.x, edge,
                       lumaSpike(p, last, middle.x));
@@ -2969,8 +3068,12 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     const float a = (1 - keep) / (1 + middle.x), b = keep / (1 + before.x);
     const float3 mixed = (middle * a + before * b) / max(a + b, 1e-6);
 #ifdef TAA_AGE
-    if (counted)
-        noteShown(bin, edge, toYCoCg(saturate(fromYCoCg(mixed))).x, old, float2(w, h));
+    if (counted) {
+        const float shown = toYCoCg(saturate(fromYCoCg(mixed))).x;
+        noteShown(bin, edge, shown, old, float2(w, h));
+        noteSeam(p, last, dp, depthLast, pitch, bin, seamZ, edge, 2, most, keptAge, b / max(a + b, 1e-6), middle.x,
+                 shown, old, float2(w, h));
+    }
 #endif
     return float4(saturate(fromYCoCg(mixed)), here.a);
 }
@@ -3254,7 +3357,20 @@ bool prepareTaaDepth() {
         history.depthAgeRoot.Reset();
         history.taaDepthAge.Reset();
         traceFault(2);
+        return true;
     }
+    // 0.0.76 SEAM TRACE: the same root, no TAA_DEPTH (t3 bound but unread). If it cannot be built vr_taa_seam only
+    // leaves the head-motion path untraced.
+    const D3D_SHADER_MACRO seamDefines[] = {{"TAA_COUNT", "1"}, {"TAA_AGE", "1"}, {nullptr, nullptr}};
+    ComPtr<ID3DBlob> seamPs;
+    if (SUCCEEDED(D3DCompile(taaShader, length, "spidy_taa_seam_trace", seamDefines, nullptr, "ps", "ps_5_0",
+                             D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &seamPs, &error))) {
+        d.PS = {seamPs->GetBufferPointer(), seamPs->GetBufferSize()};
+        if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.taaSeam))))
+            history.taaSeam.Reset();
+    }
+    if (!history.taaSeam)
+        OutputDebugStringA("SpidyVR: 0.0.76 SEAM TRACE variant could not be built (vr_taa_seam traces nothing)\n");
     return true;
 }
 // 0.0.76 A-depth TRACE: the ages (per eye, this pair's and the last one's: w * h words and the probes' after them),
@@ -3423,7 +3539,7 @@ bool prepareTaaCount() {
 // 0.0.76 A-depth TRACE (read-only): what drawHistory saw of the depth this pair (each eye's on its own, and the
 // path it took), noted with the pair's time and mode once the pair is staged (notePairTrace).
 struct PairTrace {
-    bool drawn{}, wanted{}, used{};
+    bool drawn{}, wanted{}, used{}, seam{};
     std::array<bool, 2> nowValid{}, beforeValid{};
 } pairTrace;
 // 0.0.76 TAA JITTER: the slot's counts (its list is done) into the running TAA WATCH window.
@@ -3462,6 +3578,10 @@ void noteHistoryCount(size_t slot) {
                 probe[k] = base[2 * grazeWordsPerEye + probeWordsPerEye * i + k];
             taa_depth_trace::noteGraze(SpidyTaaDepthTraceData.current, history.countCategory[slot], graze);
             taa_depth_trace::noteProbes(SpidyTaaDepthTraceData.current, history.countCategory[slot], probe);
+            // 0.0.76 SEAM / EDGE TRACE: the seam cells and hot edges (both eyes), eye 0's samples
+            taa_depth_trace::noteSeam(SpidyTaaDepthTraceData.current, history.countCategory[slot], graze);
+            if (i == 0)
+                taa_depth_trace::noteSamples(SpidyTaaDepthTraceData.current, history.countCategory[slot], graze);
         }
     }
 }
@@ -3482,6 +3602,7 @@ void notePairTrace(uint64_t serial) {
     ++w.pairs;
     w.aaMode = vrAaMode.load(std::memory_order_relaxed);
     w.depthSetting = taaDepthOn.load(std::memory_order_relaxed);
+    w.seamSetting = taaSeamOn.load(std::memory_order_relaxed);
     w.eyeW = width;
     w.eyeH = height;
     w.outW = outWidth;
@@ -3493,6 +3614,7 @@ void notePairTrace(uint64_t serial) {
         return;
     w.wanted += seen.wanted;
     w.used += seen.used;
+    w.seamPairs += seen.seam;
     if (!seen.wanted)
         return;
     bool eye[2]{};
@@ -3819,12 +3941,15 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     // no eye ever uses the depth while the other does not; the pictures kept are the same either way (the depth only
     // moves where the history is read), so neither path's history is spoilt for the other.
     const bool depthWanted = ours && taaDepthActive();
+    // 0.0.76 SEAM TRACE: with vr_taa_depth off, vr_taa_seam reads the same depth (the same gates and check) for the
+    // trace alone; seamUsed never moves the history.
+    const bool seamWanted = ours && !depthWanted && taaSeamOn.load(std::memory_order_relaxed);
     bool depthUsed = false;
     bool depthFound[2]{};
     uint32_t depthGate = 0; // 0 used, 1 an eye's depth missing, 2 check not passed yet, 3 check failed
     std::array<TaaDepthView, 2> depthNowView{}, depthBeforeView{};
     float depthFrame[2][12]{};
-    if (depthWanted && viewed && prepareTaaDepth()) {
+    if ((depthWanted || seamWanted) && viewed && prepareTaaDepth()) {
         std::lock_guard lock(depthLock);
         const bool sized = taaDepthW && taaDepthH && taaDepthPitch;
         for (unsigned i = 0; i < 2; ++i)
@@ -4003,10 +4128,18 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     originalBarrier(list, 4, b);
     // 0.0.76 TAA JITTER: the same TAA with the rejection counts when its variant is built (else as before).
     // A-depth: its own counted variant (TAA_DEPTH + TAA_COUNT), or no counts that pair.
+    // 0.0.76 SEAM TRACE: the depth read above was for the trace only (vr_taa_depth off): the history is turned by
+    // head motion as without it.
+    const bool seamReady = seamWanted && depthUsed && history.taaSeam;
+    if (!depthWanted)
+        depthUsed = false;
     const bool counting = ours && slot < history.counted.size() && prepareTaaCount() &&
                           (!depthUsed || history.taaDepthCount);
     // 0.0.76 A-depth TRACE (read-only): the counted depth pass with the ages and graze bins when they are there.
-    const bool tracing = counting && depthUsed && prepareTaaAge(outWidth, outHeight);
+    // SEAM TRACE: or the counted head-motion pass, its depth read for the bins alone (seamTraced).
+    const bool seamTraced = counting && seamReady && prepareTaaAge(outWidth, outHeight);
+    const bool tracing = seamTraced || (counting && depthUsed && prepareTaaAge(outWidth, outHeight));
+    pairTrace.seam = seamTraced;
     pairTrace.wanted = depthWanted;
     pairTrace.used = depthUsed;
     const uint64_t grazeSlot = 2ull * taa_depth_trace::grazeBytesPerEye;
@@ -4036,7 +4169,10 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                                    D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
         originalBarrier(list, 1, &countBarrier);
     }
-    if (depthUsed) {
+    if (seamTraced) {
+        list->SetPipelineState(history.taaSeam.Get());
+        list->SetGraphicsRootSignature(history.depthAgeRoot.Get());
+    } else if (depthUsed) {
         list->SetPipelineState(tracing    ? history.taaDepthAge.Get()
                                : counting ? history.taaDepthCount.Get()
                                           : history.taaDepth.Get());
@@ -4063,7 +4199,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         target.ptr += static_cast<SIZE_T>(targetStep) * (2 * i + write);
         list->SetGraphicsRootDescriptorTable(0, view);
         list->SetGraphicsRoot32BitConstants(1, 16, frame[i], 0);
-        if (depthUsed) { // 0.0.76 A-depth
+        if (depthUsed || seamTraced) { // 0.0.76 A-depth (SEAM TRACE: the same root and constants, the depth unmoving)
             list->SetGraphicsRootShaderResourceView(2, depthNowView[i].at);
             list->SetGraphicsRootShaderResourceView(3, depthBeforeView[i].at);
             if (tracing) { // 0.0.76 A-depth TRACE: the same 12, then probe and lens
@@ -4081,7 +4217,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                 list->SetGraphicsRoot32BitConstants(4, 12, depthFrame[i], 0);
         }
         if (counting) // 0.0.76 TAA JITTER: the counts (u1), after the root's own parameters
-            list->SetGraphicsRootUnorderedAccessView(depthUsed ? 5 : 2,
+            list->SetGraphicsRootUnorderedAccessView(depthUsed || seamTraced ? 5 : 2,
                                                      history.counts->GetGPUVirtualAddress() + 64 * slot + 32 * i);
         if (tracing) {
             list->SetGraphicsRootUnorderedAccessView(6, history.ages[i][write]->GetGPUVirtualAddress());
@@ -6456,6 +6592,16 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrTaaDepth(void* value) {
     OutputDebugStringA(v == 1   ? "SpidyVR: 0.0.76 A-depth on (vr_taa_depth 1)\n"
                        : v == 2 ? "SpidyVR: 0.0.76 A-depth auto (vr_taa_depth 2: on once the eye depth is CONFIRMED)\n"
                                 : "SpidyVR: 0.0.76 A-depth off (vr_taa_depth 0)\n");
+    return 0;
+}
+// 0.0.76 SEAM TRACE (live.txt vr_taa_seam, read-only): 0 off (the default), 1 on - SPIDY TAA's seam / edge trace on
+// the head-motion path too (the eyes' depth read for its bins only). Live; refused (4615) above 1.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrTaaSeam(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > 1)
+        return 4615;
+    native_gpu::taaSeamOn = static_cast<uint32_t>(v);
+    OutputDebugStringA(v ? "SpidyVR: 0.0.76 SEAM TRACE on (vr_taa_seam 1)\n" : "SpidyVR: 0.0.76 SEAM TRACE off (vr_taa_seam 0)\n");
     return 0;
 }
 // Eye anti-aliasing now (live.txt "aa"): 0 off, 1 FXAA. Takes effect with the

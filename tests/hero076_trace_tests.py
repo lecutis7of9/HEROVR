@@ -38,12 +38,17 @@ def trace_window(**kw):
                        w['trip'][2], *w['frames'], w['frame_sum'], w['frame_max'], w['hitches'], 16, 2, 16)
     ages = struct.pack(T.AGES, 10, 300, 60, 200, 40, 1, 10, 0.01, 0.05) * 3
     g = struct.pack(T.GRAZE, 100, 90, 30, 0, 2, 5, 900, 4.5, 0.2, 0.05, 20, 18, 9, 0, 1, 2.0, 6, 5, 8, 6, 1.8, 36, 9)
-    return head + ages + g * 18
+    seam = struct.pack(T.SEAM_PAIR, w.get('seam_reads', 0), w.get('seam_pairs', 0))
+    cell = struct.pack(T.SEAM, *w.get('cell', (0, 0.0, 0.0, 0, 0)))
+    hot = struct.pack(T.HOT, *w.get('hot', (0,) * 9 + (0.0,) * 6))
+    sample = w.get('sample', (0,) * 8)
+    samples = struct.pack(T.SAMPLES, w.get('sample_count', 0), 2, *(list(sample) * 8))
+    return head + ages + g * 18 + seam + cell * (3 * T.SEAM_CELLS) + hot * 12 + samples
 
 
-def trace_raw(closed=2, hitches=1):
-    head = struct.pack(T.HEAD, T.MAGIC, 1, T.SIZE, 10000, closed, hitches, 0, 0)
-    ring = [trace_window() for _ in range(T.WINDOWS)]
+def trace_raw(closed=2, hitches=1, **kw):
+    head = struct.pack(T.HEAD, T.MAGIC, 2, T.SIZE, 10000, closed, hitches, 0, 0)
+    ring = [trace_window(**kw) for _ in range(T.WINDOWS)]
     hitch = struct.pack(T.HITCH, 123456789, 80.0, 77) * T.HITCHES
     return head + trace_window() + b''.join(ring) + hitch
 
@@ -51,11 +56,13 @@ def trace_raw(closed=2, hitches=1):
 class Trace(unittest.TestCase):
     def test_sizes_match_the_header(self):
         h = src('include/spidy/taa_depth_trace.hpp')
-        self.assertIn('static_assert(sizeof(Window) == 4 * 35 + 3 * 36 + 18 * 92); // 1904', h)
+        self.assertIn('static_assert(sizeof(Window) == 4 * 35 + 3 * 36 + 18 * 92 + 8 + 72 * 20 + 12 * 60 + 8 + 256); '
+                      '// 4336', h)
         self.assertIn('static_assert(sizeof(Graze) == 92);', h)
-        self.assertIn('grazeBytesPerEye = 1024', h)
-        self.assertEqual(T.WINDOW_SIZE, 1904)
-        self.assertEqual(T.SIZE, 32 + 1904 * 91 + 16 * 64)
+        self.assertIn('grazeBytesPerEye = 2048', h)
+        self.assertIn('version = 2', h)
+        self.assertEqual(T.WINDOW_SIZE, 4336)
+        self.assertEqual(T.SIZE, 32 + 4336 * 91 + 16 * 64)
         self.assertEqual(len(T.GRAZE_KEYS), 23)
         self.assertIn('gEdgeAgeMax = 22,\n    grazeWords = 23', h)
 
@@ -96,9 +103,9 @@ class Trace(unittest.TestCase):
         c = src('src/native_eye_gpu.cpp')
         self.assertIn('{"TAA_DEPTH", "1"}, {"TAA_COUNT", "1"}, {"TAA_AGE", "1"}', c)
         self.assertIn('bool lumaSpike(int2 p, int2 last, float y)', c)
-        self.assertIn('const bool tracing = counting && depthUsed && prepareTaaAge(', c)
+        self.assertIn('const bool tracing = seamTraced || (counting && depthUsed && prepareTaaAge(', c)
         shader = c.split('const char* taaShader = R"(')[1].split(')";')[0]
-        for name in ('lumaSpike(', 'grazeBin(', 'noteGraze(', 'noteShown('):
+        for name in ('lumaSpike(', 'grazeBin(', 'noteGraze(', 'noteShown(', 'noteSeam('):
             for m in re.finditer(re.escape(name), shader):
                 before = shader[:m.start()]
                 self.assertGreater(before.count('#ifdef TAA_AGE'), 0, name)
@@ -117,6 +124,99 @@ def sfx_raw(closed=1, noted=2):
     win = struct.pack(S.WINDOW, 10000, 40, 40, 2, 3, 1, 0, 0, 1000, 10000000, 20000, 100, 50000, 3000, 1, 2)
     moment = struct.pack(S.MOMENT, 5000000, 1, 7)
     return head + fmt + win * (S.WINDOWS + 1) + moment * S.MOMENTS
+
+
+class Seam(unittest.TestCase):
+    """0.0.76 SEAM / EDGE TRACE: read-only, live, on the head-motion path too, the existing variants unchanged."""
+    HOT = (40, 40, 6, 30, 0, 0, 10, 12, 18, 30.0, 16.0, 6.0, 8.0, 8.0, 7.2)
+
+    def test_switch(self):
+        values, text = L.SETTINGS['vr_taa_seam'][:2], L.SETTINGS['vr_taa_seam'][2]
+        self.assertEqual(values, ((0, 1), 'SpidyVrTaaSeam'))
+        self.assertTrue(text.endswith('- live, no restart needed'))
+        self.assertIn('0 off, the default', text)
+        self.assertNotIn('vr_taa_seam', L.START_ONLY + L.PERSISTED)
+        self.assertNotIn('vr_taa_seam', L.RESTART)
+        v, _ = L.parse('vr_taa_seam = on\n')
+        self.assertEqual(L.export_value('vr_taa_seam', v['vr_taa_seam']), 1)
+        c = src('src/native_eye_gpu.cpp')
+        self.assertIn('DWORD WINAPI SpidyVrTaaSeam(void* value)', c)
+        self.assertIn('std::atomic<uint32_t> taaSeamOn{};', c)
+
+    def test_seam_never_moves_the_history(self):
+        """With vr_taa_depth off the depth is read for the trace only: depthUsed is dropped before anything draws."""
+        c = src('src/native_eye_gpu.cpp')
+        self.assertIn('const bool seamWanted = ours && !depthWanted && taaSeamOn', c)
+        at = c.index('const bool seamReady = seamWanted && depthUsed && history.taaSeam;')
+        self.assertLess(at, c.index('if (!depthWanted)\n        depthUsed = false;', at))
+        self.assertIn('{"TAA_COUNT", "1"}, {"TAA_AGE", "1"}, {nullptr, nullptr}', c)
+
+    def test_trace_blocks_only_write_uavs(self):
+        """No TAA_AGE line in ps assigns the picture's variables (q, old, here, middle, before, keep, mixed, the
+        return): the seam variant draws what TAA_COUNT draws."""
+        c = src('src/native_eye_gpu.cpp')
+        shader = c.split('const char* taaShader = R"(')[1].split('\n)";')[0].replace(')"\nR"(', '')
+        ps = shader[shader.index('float4 ps('):]
+        depth = 0
+        stack = []
+        for line in ps.splitlines():
+            t = line.strip()
+            if t.startswith('#if'):
+                stack.append('TAA_AGE' in t and 'TAA_DEPTH' not in t)
+            elif t.startswith('#endif'):
+                stack.pop()
+            elif any(stack):
+                self.assertIsNone(re.match(r'(q|old|here|middle|before|keep|mixed|a|b)\s*[-+*/]?=', t), t)
+                self.assertFalse(t.startswith('return'), t)
+        self.assertEqual(depth, 0)
+
+    def test_parse_seam_hot_samples_verdict(self):
+        sample = (12 | (34 << 16), 2, 1 | 4 | 128 | (2 << 8), 900, 700 | (400 << 16), 0x3F000000, 50, 200 | (180 << 16))
+        raw = trace_raw(seam_reads=4, seam_pairs=300, cell=(100, 4.0, 3.0, 20, 15), hot=self.HOT, sample=sample,
+                        sample_count=3)
+        rec = T.taa_depth_trace_parse(raw)
+        r = T.taa_depth_trace_report(rec)['windows'][0]
+        self.assertEqual(r['vr_taa_seam'], 'off')
+        self.assertEqual(r['seam']['all']['frontal/near/flat']['shown_vs_in'], 0.75)
+        h = r['hot_edges']['fast']['grazing']
+        self.assertEqual((h['age_mean'], h['age_max'], h['clip_only_pct'], h['neither_pct']), (1.0, 6, 75.0, 25.0))
+        self.assertEqual(h['bright_pct'], 30.0)
+        self.assertEqual(h['weight_mean'], 0.75)
+        s0 = r['hot_samples']['samples'][0]
+        self.assertEqual((s0['x'], s0['y'], s0['bin'], s0['clipped'], s0['bright'], s0['depth']),
+                         (12, 34, 'grazing', True, True, 0.5))
+        self.assertEqual(len(r['hot_samples']['samples']), 3)
+        self.assertEqual(r['verdict']['match'], 'F1')
+        lines = T.window_lines(r)
+        self.assertTrue(any(x.startswith('TAA HOT EDGES fast') for x in lines))
+        self.assertTrue(any(x.startswith('TAA HOT EDGE SAMPLES') for x in lines))
+        self.assertTrue(lines[-1].startswith('TAA SEAM VERDICT: F1 CANDIDATE'))
+
+    def test_verdicts(self):
+        def hot(age, clip, depth, both, ratio, flick, n=100):
+            row = dict(pixels=n, age_mean=age, clip_only_pct=clip, depth_only_pct=depth, both_pct=both,
+                       shown_vs_in=ratio, shown_flicker_pct=flick)
+            return {'fast': {'grazing': row, 'any': row}}
+        self.assertEqual(T.seam_verdict(hot(1, 80, 0, 0, 0.9, 40), {})['match'], 'F1')
+        self.assertEqual(T.seam_verdict(hot(1, 5, 60, 10, 0.9, 40), {})['match'], 'F2')
+        self.assertEqual(T.seam_verdict(hot(12, 5, 0, 0, 0.9, 40), {})['match'], 'F3')
+        self.assertEqual(T.seam_verdict(hot(12, 5, 0, 0, 0.1, 1), {})['match'], 'settles')
+        self.assertIsNone(T.seam_verdict(hot(1, 80, 0, 0, 0.9, 40, n=3), {})['match'])
+
+    def test_shader_offsets_match_the_header(self):
+        c = src('src/native_eye_gpu.cpp')
+        h = src('include/spidy/taa_depth_trace.hpp')
+        self.assertIn('hotAt == 258 && sampleCountAt == 318', h)
+        for text in ('const uint h = 1032 + angle * 60;', 'graze.InterlockedAdd(1272, 1, slot);',
+                     'const uint s = 1276 + slot * 32;', 'const uint at = 552 + '):
+            self.assertIn(text, c)
+
+    def test_collect_reports_recent_sessions(self):
+        ps = src('tools/collect-reports.ps1')
+        self.assertIn("-Filter 'game-vr-*-console.log'", ps)
+        self.assertIn('AddHours(-12)', ps)
+        self.assertIn('Select-Object -First 8', ps)
+        self.assertIn('($files | Select-Object -Unique)', ps)
 
 
 class Sfx(unittest.TestCase):

@@ -14,6 +14,7 @@
 # 0.0.76 SM1 test 2: the SM1 session's own report and log (%APPDATA%\HERO VR SM1\reports, game-vr-*.json and the
 # HERO launcher's sm1-session-*.log), and every file is copied first with shared read (the game keeps layer.log
 # and the scan open for writing while it runs; zipping them directly failed with a sharing violation).
+# 0.0.76 SEAM TRACE: and the console / game / prompts logs of every session of the last 12 hours (up to 8).
 param([switch]$NoCrashDump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -45,6 +46,17 @@ if ($report) {
 } else {
     Write-Host 'No game-vr report yet (game-vr-*.json); collecting what there is.'
 }
+# 0.0.76 SEAM TRACE: every session of the last 12 hours (up to 8) adds its console, game and prompts logs, not only
+# the newest report's (a test of several sessions in a row sent only the last one's logs; a session still running
+# has no report json yet, but its console log is streamed while it runs). The report json stays the newest only.
+$recent = @(Get-ChildItem -LiteralPath $reports -Filter 'game-vr-*-console.log' -File |
+    Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-12) } |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 8)
+foreach ($c in $recent) {
+    $base = $c.Name.Substring(0, $c.Name.Length - '-console.log'.Length)
+    $files += Get-ChildItem -LiteralPath $reports -Filter ($base + '-*.log') -File | ForEach-Object { $_.FullName }
+}
+if ($recent) { Write-Host ('Session logs: ' + $recent.Count + ' session(s) in the last 12 hours') }
 $files += Get-ChildItem -LiteralPath $reports -Filter 'address-finder-latest*' -File | ForEach-Object { $_.FullName }
 # Update 37: the newest WORLD LOG journal (NPC talk, spawns, missions; read-only notes).
 $files += Get-ChildItem -LiteralPath $reports -Filter 'world-trace-*.jsonl' -File |

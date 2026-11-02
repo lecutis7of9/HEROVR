@@ -194,6 +194,12 @@ SETTINGS = {
                      "default: the head turn only, as 509bdc9; 2 auto: on once the TAA WATCH depth log has CONFIRMED "
                      "the eye depth; either way the depth is only used once its convention check has passed, and an eye pair "
                      "missing either eye's depth is turned by the head alone) - live, no restart needed"),
+    # 0.0.76 SEAM TRACE (native_eye_gpu SpidyVrTaaSeam, taa_depth_trace.hpp): a read-only diagnostic, never persisted.
+    'vr_taa_seam': ((0, 1), 'SpidyVrTaaSeam', "VR TAA SEAM {} (1 on: a read-only trace of SpidyVR's TAA at sharp "
+                    "edges - the eye picture before the TAA against what it shows, by angle and distance, and the "
+                    "bright frame edges' history age, weight and rejection - with vr_taa_depth off too, where it "
+                    "reads the eyes' depth for the trace alone; 0 off, the default; the picture is the same either "
+                    "way) - live, no restart needed"),
     # 0.0.76 TAA JITTER (native_eye_gpu SpidyVrTaaJitter, game_xr's eye_taa::step): a diagnostic, never persisted.
     'vr_taa_jitter': ((0, 3), 'SpidyVrTaaJitter', "VR TAA JITTER {} (a test of SpidyVR's own Halton sub-pixel step "
                      "only - on the 16-step walk, the default; off no step; fixed one constant offset; half the same "
@@ -709,6 +715,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_sfx_layer': ('on', 'off'),  # 0.0.76 SFX DIAG (0 on, the default)
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
+                'vr_taa_seam': ('off', 'on'),  # 0.0.76 SEAM TRACE (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
@@ -809,6 +816,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_taa_jitter': {'on': 0, 'off': 1, 'fixed': 2, 'half': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TAA JITTER
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
            'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 0 off default
+           'vr_taa_seam': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SEAM TRACE: 0 off default
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},

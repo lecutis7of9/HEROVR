@@ -9,8 +9,15 @@ head-motion fallback), what a per-eye choice would pick (both / left only / righ
 eyes split), the convention check's round trip (mean and max px), the history age of 8 static-surface pixels per eye
 (mean and max, still / moving / fast), and the grazing-angle bins (frontal |n.v| >= .5, mid .25-.5, grazing
 1/16-.25, beyond 16x anisotropy < 1/16, depth edge, no depth) with their clip-only / depth-only / both rejection,
-per-pixel fallback, history age, frame-to-frame luma change and depth residual. No Windows imports: `game` is
-anything with read(address, size) -> bytes."""
+per-pixel fallback, history age, frame-to-frame luma change and depth residual. 0.0.76 SEAM / EDGE TRACE (data
+version 2; with live.txt vr_taa_seam on, vr_taa_depth off as well): the pre-TAA change (this pair's eye image
+against the history read) and the shown change (the TAA output against the same read) by angle (frontal / mid /
+grazing / silhouette) x distance (near < 8 m, mid, far >= 30 m) x flat / seam (depth step or crease), per movement;
+the HOT EDGES (seam pixels whose own 3x3 luma spans over 0.25: a lit frame face against a dark recess) with their
+history age, the history weight applied, clip-only / depth-only / both / neither rejection, 3x3 YCoCg luma span and
+sigma, 3x3 depth spread, bright / dark state and the in / shown change; 8 raw hot-edge samples of the fastest pass;
+and a verdict (F1 clip / F2 depth / F3 coverage / settles). No Windows imports: `game` is anything with
+read(address, size) -> bytes."""
 import math
 import struct
 import time
@@ -22,6 +29,18 @@ WINDOW_HEAD = '<20II2f6I2f4I'
 AGES = '<7I2f'
 GRAZE = '<7I3f5If4If2I'
 HITCH = '<QfI'
+SEAM_PAIR = '<2I'
+SEAM = '<I2f2I'
+HOT = '<9I6f'
+SAMPLES = '<2I64I'
+ANGLES = ('frontal', 'mid', 'grazing', 'silhouette')
+DISTANCES = ('near', 'mid', 'far')
+SEAM_KINDS = ('flat', 'seam')
+SEAM_CELLS = len(ANGLES) * len(DISTANCES) * len(SEAM_KINDS)  # 24
+HOT_KEYS = ('pixels', 'age_sum', 'age_max', 'clip_only', 'depth_only', 'both', 'neither', 'bright', 'out_flicker',
+            'weight_sum', 'span_sum', 'sigma_sum', 'depth_spread_sum', 'in_sum', 'out_sum')
+SEAM_FLICKER = 1 / 16
+HOT_SPAN = 0.25
 CATEGORIES = ('still', 'moving', 'fast')
 BINS = ('frontal', 'mid', 'grazing', 'beyond_aniso', 'depth_edge', 'no_depth')
 BIN_WORDS = {'frontal': '|n.v|>=.5', 'mid': '.25-.5', 'grazing': '1/16-.25', 'beyond_aniso': '<1/16 (past 16x AF)',
@@ -35,7 +54,9 @@ FLIP_LUMA = 0.25
 WINDOWS = 90
 HITCHES = 64
 WINDOW_SIZE = (struct.calcsize(WINDOW_HEAD) + 3 * struct.calcsize(AGES) +
-               3 * len(BINS) * struct.calcsize(GRAZE))  # 968
+               3 * len(BINS) * struct.calcsize(GRAZE) + struct.calcsize(SEAM_PAIR) +
+               3 * SEAM_CELLS * struct.calcsize(SEAM) + 3 * len(ANGLES) * struct.calcsize(HOT) +
+               struct.calcsize(SAMPLES))  # 4336
 SIZE = struct.calcsize(HEAD) + WINDOW_SIZE * (WINDOWS + 1) + struct.calcsize(HITCH) * HITCHES
 AA_MODES = ('ours', 'smaa', 'legacy')
 DEPTH_SETTINGS = ('off', 'on', 'auto')
@@ -56,9 +77,19 @@ def _mean(total, n, digits=2):
     return round(total / n, digits) if n else None
 
 
+def _sample(words):
+    xy, age, flags, weight, luma_span, depth_bits, depth_spread, in_out = words
+    return dict(x=xy & 0xFFFF, y=xy >> 16, age=age, clipped=bool(flags & 1), refused=bool(flags & 2),
+                bright=bool(flags & 4), bin=_name(BINS, (flags >> 8) & 0xFF), weight=weight / 1000.0,
+                luma=(luma_span & 0xFFFF) / 1000.0, span=(luma_span >> 16) / 1000.0,
+                depth=_fin(struct.unpack('<f', struct.pack('<I', depth_bits))[0], 6),
+                depth_spread=depth_spread / 1000.0, in_change=(in_out & 0xFFFF) / 1000.0,
+                shown_change=(in_out >> 16) / 1000.0)
+
+
 def _window(raw, at):
     h = struct.unpack_from(WINDOW_HEAD, raw, at)
-    (ms, pairs, wanted, used, aa, depth, eye_w, eye_h, out_w, out_h, ss, _, now0, now1, before0, before1,
+    (ms, pairs, wanted, used, aa, depth, eye_w, eye_h, out_w, out_h, ss, spare, now0, now1, before0, before1,
      m0, m1, m2, m3, trip_n, trip_sum, trip_max, f0, f1, f2, f3, f4, f5, frame_sum, frame_max, hitches,
      probe_reads, probe_skipped, graze_reads) = h
     at += struct.calcsize(WINDOW_HEAD)
@@ -76,7 +107,27 @@ def _window(raw, at):
             at += struct.calcsize(GRAZE)
             row.append(dict(zip(GRAZE_KEYS, g)))
         graze.append(row)
-    return dict(ms=ms, pairs=pairs, wanted=wanted, used=used, aa=aa, depth=depth, eye=[eye_w, eye_h],
+    seam_reads, seam_pairs = struct.unpack_from(SEAM_PAIR, raw, at)
+    at += struct.calcsize(SEAM_PAIR)
+    seam = []
+    for _c in CATEGORIES:
+        row = []
+        for _k in range(SEAM_CELLS):
+            row.append(dict(zip(('pixels', 'in_sum', 'out_sum', 'in_flicker', 'out_flicker'),
+                                struct.unpack_from(SEAM, raw, at))))
+            at += struct.calcsize(SEAM)
+        seam.append(row)
+    hot = []
+    for _c in CATEGORIES:
+        row = []
+        for _a in ANGLES:
+            row.append(dict(zip(HOT_KEYS, struct.unpack_from(HOT, raw, at))))
+            at += struct.calcsize(HOT)
+        hot.append(row)
+    sm = struct.unpack_from(SAMPLES, raw, at)
+    samples = [_sample(sm[2 + 8 * k:10 + 8 * k]) for k in range(min(sm[0], 8))]
+    return dict(seam_setting=spare, seam_reads=seam_reads, seam_pairs=seam_pairs, seam=seam, hot=hot,
+                samples=samples, sample_category=sm[1], ms=ms, pairs=pairs, wanted=wanted, used=used, aa=aa, depth=depth, eye=[eye_w, eye_h],
                 out=[out_w, out_h], ss=ss, now_valid=[now0, now1], before_valid=[before0, before1],
                 masks=[m0, m1, m2, m3], trip_n=trip_n, trip_sum=trip_sum, trip_max=trip_max,
                 frames=[f0, f1, f2, f3, f4, f5], frame_ms_sum=frame_sum, frame_ms_max=frame_max, hitches=hitches,
@@ -89,7 +140,7 @@ def taa_depth_trace_parse(raw):
     if raw is None or len(raw) != SIZE:
         return None
     magic, version, size, window_ms, closed, hitches_noted, age_fault, _ = struct.unpack_from(HEAD, raw, 0)
-    if magic != MAGIC or version != 1 or size != SIZE:
+    if magic != MAGIC or version != 2 or size != SIZE:
         return None
     at = struct.calcsize(HEAD)
     current = _window(raw, at)
@@ -194,9 +245,119 @@ def window_summary(w, end_seconds=None):
     out['graze']['all'] = {b: _graze_row(g) for b, g in zip(BINS, every) if g['pixels']}
     if not out['graze']['all']:
         del out['graze']['all']
+    out['vr_taa_seam'] = 'on' if w.get('seam_setting') else 'off'
+    out['seam_pairs'] = w.get('seam_pairs', 0)
+    out['seam_reads'] = w.get('seam_reads', 0)
+    if w.get('seam_reads'):
+        out['seam'] = seam_summary(w['seam'])
+        out['hot_edges'] = hot_summary(w['hot'])
+        out['hot_samples'] = dict(category=_name(CATEGORIES, w['sample_category']), samples=w['samples'])
+        out['verdict'] = seam_verdict(out['hot_edges'], out['seam'])
     if end_seconds is not None:
         out['ends_s'] = round(end_seconds, 1)
     return out
+
+
+def _cell(angle, distance, kind):
+    return (angle * len(DISTANCES) + distance) * len(SEAM_KINDS) + kind
+
+
+def _seam_row(cells):
+    n = sum(c['pixels'] for c in cells)
+    i = sum(c['in_sum'] for c in cells)
+    o = sum(c['out_sum'] for c in cells)
+    return dict(pixels=n, in_change_mean=_mean(i, n, 4), shown_change_mean=_mean(o, n, 4),
+                shown_vs_in=_mean(o, i, 3), in_flicker_pct=_pct(sum(c['in_flicker'] for c in cells), n),
+                shown_flicker_pct=_pct(sum(c['out_flicker'] for c in cells), n))
+
+
+def seam_summary(seam):
+    """Per movement (and all): angle x distance x flat / seam, the pre-TAA and shown change."""
+    out = {}
+    for name, cats in list(zip(CATEGORIES, ([0], [1], [2]))) + [('all', [0, 1, 2])]:
+        rows = {}
+        for a, an in enumerate(ANGLES):
+            for d, dn in enumerate(DISTANCES):
+                for k, kn in enumerate(SEAM_KINDS):
+                    r = _seam_row([seam[c][_cell(a, d, k)] for c in cats])
+                    if r['pixels']:
+                        rows[f'{an}/{dn}/{kn}'] = r
+        for k, kn in enumerate(SEAM_KINDS):
+            r = _seam_row([seam[c][_cell(a, d, k)] for c in cats for a in range(len(ANGLES))
+                           for d in range(len(DISTANCES))])
+            if r['pixels']:
+                rows[f'any/{kn}'] = r
+        if rows:
+            out[name] = rows
+    return out
+
+
+def _hot_row(h):
+    n = h['pixels']
+    return dict(pixels=n, age_mean=_mean(h['age_sum'], n, 1), age_max=h['age_max'],
+                weight_mean=_mean(h['weight_sum'], n, 3), clip_only_pct=_pct(h['clip_only'], n),
+                depth_only_pct=_pct(h['depth_only'], n), both_pct=_pct(h['both'], n),
+                neither_pct=_pct(h['neither'], n), span_mean=_mean(h['span_sum'], n, 3),
+                sigma_mean=_mean(h['sigma_sum'], n, 3), depth_spread_mean=_mean(h['depth_spread_sum'], n, 3),
+                bright_pct=_pct(h['bright'], n), in_change_mean=_mean(h['in_sum'], n, 4),
+                shown_change_mean=_mean(h['out_sum'], n, 4), shown_vs_in=_mean(h['out_sum'], h['in_sum'], 3),
+                shown_flicker_pct=_pct(h['out_flicker'], n))
+
+
+def _sum_hot(rows):
+    out = {k: sum(r[k] for r in rows) for k in HOT_KEYS if k != 'age_max'}
+    out['age_max'] = max(r['age_max'] for r in rows)
+    return out
+
+
+def hot_summary(hot):
+    """Per movement (and all): the hot edges by angle and over every angle."""
+    out = {}
+    for name, cats in list(zip(CATEGORIES, ([0], [1], [2]))) + [('all', [0, 1, 2])]:
+        rows = {}
+        for a, an in enumerate(ANGLES):
+            h = _sum_hot([hot[c][a] for c in cats])
+            if h['pixels']:
+                rows[an] = _hot_row(h)
+        h = _sum_hot([hot[c][a] for c in cats for a in range(len(ANGLES))])
+        if h['pixels']:
+            rows['any'] = _hot_row(h)
+            out[name] = rows
+    return out
+
+
+HOT_ENOUGH = 20
+SETTLED_RATIO = 0.3
+YOUNG_AGE = 4.0
+
+
+def seam_verdict(hot, seam):
+    """Which explanation the hot edges match: settles, F1 (clip rejects their history), F2 (the depth refuses it)
+    or F3 (coverage: the history lives, the shown edge still changes). The fastest movement with enough readings,
+    grazing and silhouette first. CANDIDATE, from this window's readings only."""
+    for cat in ('fast', 'moving', 'still'):
+        rows = hot.get(cat) or {}
+        pick = [rows[a] for a in ('grazing', 'silhouette') if a in rows]
+        n = sum(r['pixels'] for r in pick)
+        where = 'grazing/silhouette'
+        if n < HOT_ENOUGH:
+            pick, n, where = ([rows['any']] if 'any' in rows else []), (rows.get('any') or {}).get('pixels', 0), 'any angle'
+        if n < HOT_ENOUGH:
+            continue
+        def w(key):
+            return sum((r[key] or 0) * r['pixels'] for r in pick) / n
+        age, ratio, clip, depth, both = w('age_mean'), w('shown_vs_in'), w('clip_only_pct'), w('depth_only_pct'), w('both_pct')
+        flick = w('shown_flicker_pct')
+        base = (f'{cat}, {where}, {n} hot-edge readings: age {age:.1f} pairs, shown/in change x{ratio:.2f}, '
+                f'shown flicker {flick:.1f}%, clip-only {clip:.1f}% depth-only {depth:.1f}% both {both:.1f}%')
+        if ratio <= SETTLED_RATIO and flick < 5:
+            return dict(match='settles', text=f'SETTLES (the TAA damps the hot edges) - {base}')
+        if age < YOUNG_AGE and clip + both >= depth + both and clip + both > 0:
+            return dict(match='F1', text=f'F1 CANDIDATE: history rejected, the variance clip dominates - {base}')
+        if age < YOUNG_AGE and depth + both > 0:
+            return dict(match='F2', text=f'F2 CANDIDATE: history refused, the depth test dominates - {base}')
+        return dict(match='F3', text=f'F3 CANDIDATE: coverage - the history lives but the shown edge still changes - {base}')
+    return dict(match=None, text='no verdict: fewer than %d hot-edge readings in any movement' % HOT_ENOUGH)
 
 
 def hitch_wall(qpc_us, perf_now=None, wall_now=None):
@@ -230,7 +391,8 @@ def _s(v):
 
 
 def mode_tag(r):
-    return (f"[vr_aa {r['vr_aa']}, vr_taa_depth {r['vr_taa_depth']}, vr_ss {r['vr_ss_percent']}%, eye "
+    seam = f", vr_taa_seam {r['vr_taa_seam']}" if r.get('vr_taa_seam') == 'on' else ''
+    return (f"[vr_aa {r['vr_aa']}, vr_taa_depth {r['vr_taa_depth']}{seam}, vr_ss {r['vr_ss_percent']}%, eye "
             f"{r['eye_render'][0]}x{r['eye_render'][1]} -> {r['eye_out'][0]}x{r['eye_out'][1]}]")
 
 
@@ -270,6 +432,50 @@ def window_lines(r):
         if edges:
             lines.append(f"TAA TRACE EDGES (depth step, no-depth neighbour or crease; flips: luma change over "
                          f"{FLIP_LUMA}; spikes: a pixel above its own 3x3 box): {edges}")
+    lines += seam_lines(r)
+    return lines
+
+
+def seam_lines(r):
+    """0.0.76 SEAM / EDGE TRACE: pre-TAA vs shown per movement, the hot edges, the samples and the verdict."""
+    if not r.get('seam'):
+        return []
+    lines = []
+    path = 'depth path' if r['vr_taa_depth'] == 'on' else 'head-motion path, depth read for the trace only'
+    for cat in CATEGORIES + ('all',):
+        rows = r['seam'].get(cat)
+        if not rows:
+            continue
+        cells = '; '.join(f"{k} {x['pixels']}: in {_n(x['in_change_mean'], '.4f')} shown "
+                          f"{_n(x['shown_change_mean'], '.4f')} (x{_n(x['shown_vs_in'], '.2f')}), flicker in "
+                          f"{_s(x['in_flicker_pct'])} shown {_s(x['shown_flicker_pct'])}" for k, x in rows.items())
+        lines.append(f"TAA SEAM {cat} ({path}; pre-TAA eye image vs TAA output against the history read; flicker: "
+                     f"over {SEAM_FLICKER:.4f}): {cells}")
+    for cat in CATEGORIES + ('all',):
+        rows = (r.get('hot_edges') or {}).get(cat)
+        if not rows:
+            continue
+        cells = '; '.join(f"{a} {x['pixels']}: age {_n(x['age_mean'], '.1f')} mean / {x['age_max']} max, weight "
+                          f"{_n(x['weight_mean'], '.3f')}, clip-only {_s(x['clip_only_pct'])} depth-only "
+                          f"{_s(x['depth_only_pct'])} both {_s(x['both_pct'])} neither {_s(x['neither_pct'])}, "
+                          f"YCoCg luma span {_n(x['span_mean'], '.3f')} sigma {_n(x['sigma_mean'], '.3f')}, depth "
+                          f"spread {_n(x['depth_spread_mean'], '.3f')}, bright {_s(x['bright_pct'])}, change in "
+                          f"{_n(x['in_change_mean'], '.4f')} shown {_n(x['shown_change_mean'], '.4f')} (x"
+                          f"{_n(x['shown_vs_in'], '.2f')}), shown flicker {_s(x['shown_flicker_pct'])}"
+                          for a, x in rows.items())
+        lines.append(f"TAA HOT EDGES {cat} (seam pixels with a 3x3 luma span over {HOT_SPAN}: a lit frame face "
+                     f"against the dark recess): {cells}")
+    hs = r.get('hot_samples') or {}
+    if hs.get('samples'):
+        one = '; '.join(f"({x['x']},{x['y']}) {x['bin']} age {x['age']} weight {x['weight']:.3f} "
+                        f"{'clip' if x['clipped'] else ''}{'+' if x['clipped'] and x['refused'] else ''}"
+                        f"{'depth' if x['refused'] else ''}{'neither' if not (x['clipped'] or x['refused']) else ''} "
+                        f"luma {x['luma']:.3f} {'bright' if x['bright'] else 'dark'} span {x['span']:.3f} depth "
+                        f"{_n(x['depth'], '.6f')} spread {x['depth_spread']:.3f} in {x['in_change']:.3f} shown "
+                        f"{x['shown_change']:.3f}" for x in hs['samples'])
+        lines.append(f"TAA HOT EDGE SAMPLES ({hs['category']} pass, left eye, raw): {one}")
+    if r.get('verdict'):
+        lines.append(f"TAA SEAM VERDICT: {r['verdict']['text']}")
     return lines
 
 

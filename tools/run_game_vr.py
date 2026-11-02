@@ -1800,14 +1800,13 @@ def apply_vr_aa(a, supersample=100):
     made for, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale and supersample 100,
     eyes at 100% (no upscaling), no anisotropy override (VR TEXTURES gives the game's 16x filtering), the game's
     sharpening at its lowest, no ENGINE TAA, the eyes' jittered lens on (--no-eye-antialiasing is ignored). Mip bias:
-    0.0.76 SPIDY TAA TUNE -0.5 where the game's AA is TAA and our TAA resolves the eyes (the game's own is -1.0 on its
-    material samplers, the 509bdc9 run: more than one sub-pixel step can average, window texture crawled; only samplers
-    the game biased negatively are changed, spidy/mip_bias.hpp); +0.5 for SMAA (no history to settle sub-pixel texture
+    the game's where its AA is TAA and our TAA resolves the eyes (0.0.76 SPIDY TAA TUNE's -0.5 was taken back with the
+    rest of that tune: 9aaedd5's run brought the line crawl back, docs/VISUAL-0.0.76.md); +0.5 for SMAA (no history to settle sub-pixel texture
     detail) or where the game's AA is not TAA (keep with DLSS: its -2.0 crawls). The game's own TAA never runs in the
     eyes (no eye TAA targets or jitter, stereo_probe). `supersample`: live.txt vr_ss (live_settings.vr_supersample),
     100 unless asked, never with --size. Returns the console line."""
     smaa = a.vr_aa == 'smaa'
-    mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else '-0.5'
+    mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
     ss = supersample if supersample in (125, 150) and not a.size else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
@@ -1830,8 +1829,8 @@ def apply_vr_aa(a, supersample=100):
                 '. vr_aa = ours (or no line) + restart VR for SpidyVR\'s own TAA.')
     return ("VR AA: SPIDY TAA (default" + (', vr_aa = keep: your game AA kept' if a.vr_aa == 'keep' else '') +
             "): SpidyVR's own TAA, one history per eye reprojected with that eye's own pose, Halton jitter per eye, "
-            'colour clipping against ghosts, a mild RCAS sharpen after it; the game\'s TAA kept off the eyes, eyes at '
-            '100%' + ss_said + ', ' + f'mip bias {mip}' + kept +
+            'colour clipping against ghosts; the game\'s TAA kept off the eyes, eyes at 100%' + ss_said + ', ' +
+            ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip}') + kept +
             '; if it cannot start the eyes get SMAA. live.txt vr_aa = smaa + restart VR for no history at all.')
 
 

@@ -12215,6 +12215,36 @@ DWORD WINAPI run(void*) {
                                 pose_check::noteCommand(
                                     check, eye, pose_check::betweenMatrices(camera, rendered.eyes[made(eye)], travel));
                             }
+                            // 0.0.76 JITTER FIX (read-only): the pose and fov each layer is given against the eye
+                            // pose and lens its view and projection were built from (the command's), and whether
+                            // those eyes were located at the predicted display time of the frame they were made
+                            // for. The first 10 mismatches go to the prompts log. A few multiplies per submit.
+                            static uint32_t poseNotes = 0;
+                            for (unsigned eye = 0; eye < 2; ++eye) {
+                                const auto& given = saved->trackingEyes[made(eye)];
+                                const auto layer = pose_check::betweenMatrices(
+                                    pose_check::cameraOf(compose(saved->worldFromTracking, given.pose)),
+                                    rendered.eyes[made(eye)], {});
+                                const float fovOff = pose_check::fovDegrees(given.fov, rendered.fovs[made(eye)]);
+                                if (pose_check::noteLayer(check, layer, fovOff) && poseNotes < 10) {
+                                    ++poseNotes;
+                                    char line[96];
+                                    sprintf_s(line, "POSE CHECK layer %s: %.3f deg %.1f mm fov %.3f deg",
+                                              eye ? "right" : "left", layer.degrees, layer.mm, fovOff);
+                                    game_prompts::note(line);
+                                }
+                            }
+                            if (rendered.locatedTime != rendered.predictedDisplayTime) {
+                                ++check.locatedOff;
+                                if (poseNotes < 10) {
+                                    ++poseNotes;
+                                    char line[96];
+                                    sprintf_s(line, "POSE CHECK located %.2f ms off display time",
+                                              static_cast<double>(rendered.locatedTime - rendered.predictedDisplayTime) *
+                                                  1e-6);
+                                    game_prompts::note(line);
+                                }
+                            }
                             const bool reusedImage = imageGeneration == poseCheckGeneration;
                             poseCheckGeneration = imageGeneration;
                             pose_check::noteSubmit(

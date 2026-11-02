@@ -41,6 +41,14 @@ def pose_check_parse(raw):
                image_age_ms=dict(last=round(age_last, 2), max=round(age_max, 2),
                                  mean=round(age_sum / submits, 2) if submits else None),
                travel_max_mm=round(travel_max, 1))
+    # 0.0.76 JITTER FIX (read-only, zero from an older module): layer pose/fov against the eye the view and
+    # projection were built from, and eyes located away from their frame's predicted display time.
+    located_off, = struct.unpack_from('<Q', raw, 232)
+    layer_deg, layer_mm, layer_fov = struct.unpack_from('<3f', raw, 240)
+    layer_over, = struct.unpack_from('<I', raw, 252)
+    out.update(located_off=located_off,
+               layer=dict(max_degrees=round(layer_deg, 4), max_mm=round(layer_mm, 3),
+                          max_fov_degrees=round(layer_fov, 4), over=layer_over))
     for i, eye in enumerate(('left', 'right')):
         out[eye]['command_max_degrees'] = round(command[i], 4)
         out[eye]['command_max_mm'] = round(command[2 + i], 3)
@@ -82,4 +90,17 @@ def pose_check_line(record):
     return (f"POSE CHECK render vs submit: {word}. {eyes}. World turned in the room before submit: max "
             f"{turn['max_degrees']:.3f} deg, mean {turn['mean_degrees'] or 0:.3f} deg, {turn['over']} of "
             f"{record['submits']} submits over {OVER_DEGREES} deg; image age mean "
-            f"{record['image_age_ms']['mean'] or 0:.1f} ms, max {record['image_age_ms']['max']:.1f} ms.")
+            f"{record['image_age_ms']['mean'] or 0:.1f} ms, max {record['image_age_ms']['max']:.1f} ms."
+            + layer_line(record))
+
+
+def layer_line(record):
+    """0.0.76 JITTER FIX: ' Layer vs build: ...' - whether each eye's layer got the pose and fov its view and
+    projection were built from, and whether its eyes were located at its frame's predicted display time."""
+    layer = record.get('layer')
+    if not layer:
+        return ''
+    same = not layer['over'] and not record.get('located_off')
+    return (f" Layer vs build: {'SAME' if same else 'MISMATCH'} (max {layer['max_degrees']:.3f} deg / "
+            f"{layer['max_mm']:.1f} mm / fov {layer['max_fov_degrees']:.3f} deg, {layer['over']} eye submits over); "
+            f"located off the predicted display time: {record.get('located_off', 0)} of {record['submits']} submits.")

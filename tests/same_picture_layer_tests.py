@@ -21,8 +21,9 @@ class SamePictureLayer(unittest.TestCase):
         self.assertIn('eye_debug::eyeDebugSource(native_gpu::pairEyeDebug(), 1) == 0', self.xr)
         self.assertIn('saved->trackingEyes[made(eye)].pose', self.xr)
         self.assertIn('saved->trackingEyes[made(eye)].fov', self.xr)
-        # Spidy's drawings and the slow-motion grade follow the same view.
-        self.assertEqual(len(re.findall(r'rendered\.fovs\[made\(eye\)\]', self.xr)), 2)
+        # Spidy's drawings and the slow-motion grade follow the same view; the third is POSE CHECK's
+        # read-only layer-vs-build fov compare (0.0.76 JITTER FIX).
+        self.assertEqual(len(re.findall(r'rendered\.fovs\[made\(eye\)\]', self.xr)), 3)
         self.assertIn('rendered.eyes[made(eye)]', self.xr)
         self.assertNotRegex(self.xr, r'trackingEyes\[eye\]')
 

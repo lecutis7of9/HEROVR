@@ -788,6 +788,7 @@ bool XrRuntime::frameOnce(const std::function<bool(const XrFrame&)>& prepare,
             XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT;
         tracked.valid = tracked.valid && count == 2 && (validity.viewStateFlags & required) == required;
         tracked.predictedDisplayTime = state.predictedDisplayTime;
+        tracked.locatedTime = locateInfo.displayTime; // 0.0.76 JITTER FIX: POSE CHECK reads it back
         if (tracked.valid)
             for (unsigned i = 0; i < 2; ++i) {
                 // Test build 11 EYE MARGIN (eye_margin.hpp): the picture and its layer both get the

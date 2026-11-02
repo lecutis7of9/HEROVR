@@ -106,6 +106,9 @@ inline std::array<float, 2> eyeJitterFor(bool off, std::array<float, 2> walk) {
 // next run (005811) brought "ghosting of the city and buildings" while the far
 // shake stayed: the zero bought nothing and cost a picture the eyes had in 001842.
 // `off` stays a live test switch only.
+// 0.0.76 JITTER FIX (owner): `stock` is the stock camera's STORED +0x428/+0x42c, which the lens 0x2c75560
+// (CONFIRMED) wrote as 2 * x and -2 * y; passed back in, the head views carried twice the game's jitter with y
+// flipped. OFF (pass 0) is the default now; KEEP is c71a59c's doubled value, to compare.
 inline float gameViewJitter(bool off, float stock) { return off ? 0.f : stock; }
 // 0.0.76 EYE HISTORY CHECK (the outside advice: each eye its own TAA history).
 // Disassembly of 2.810.0.0 (CONFIRMED): the job's history set is job +0x18e8, its current one +0x18e0

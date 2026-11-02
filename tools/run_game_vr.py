@@ -41,6 +41,7 @@ from observe_game import call_remote, call_with_payload, modules
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
 from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
 import pose_check_record  # 0.0.76 POSE CHECK
+import jitter_log_record  # 0.0.76 JITTER FIX
 from probe_stereo import (frame_snapshot, render_memory_snapshot, snapshot as stereo_snapshot, encode_mip_bias,
                           mip_bias_snapshot, eye_camera_line)
 from probe_native_rays import snapshot as ray_snapshot
@@ -2928,7 +2929,8 @@ def session(a, startup, session_off=()):
                                            *sorted({export for export, *_ in update37_records.RECORDS.values()})),
             # 0.0.74 test 10: the WINDOW PROBE (read-only log); skipped when the module has no such export.
             optional=(window_probe.EXPORT,
-                      pose_check_record.EXPORT))  # 0.0.76 POSE CHECK: absent from an older module
+                      pose_check_record.EXPORT,  # 0.0.76 POSE CHECK: absent from an older module
+                      jitter_log_record.EXPORT))  # 0.0.76 JITTER FIX
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3371,6 +3373,8 @@ def session(a, startup, session_off=()):
                     if (said := sm1style_line(result.get('sm1style_eyes'))):
                         print(said, flush=True)
                     if (said := pose_check_record.pose_check_line(result.get('pose_check'))):
+                        print(said, flush=True)
+                    if (said := jitter_log_record.jitter_log_line(result.get('jitter_log'))):
                         print(said, flush=True)
                     if (shadows := eye_shadow_line(result.get('eye_shadows'))):
                         print(shadows, flush=True)
@@ -3887,7 +3891,8 @@ def session(a, startup, session_off=()):
             engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last,
             sm1style_eyes=sm1style_snapshot(game, xr['SpidySm1StyleData']) or sm1style_last,
             pose_check=pose_check_record.pose_check_snapshot(game, xr.get(pose_check_record.EXPORT))
-            or pose_check_last)
+            or pose_check_last,
+            jitter_log=jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT)))
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

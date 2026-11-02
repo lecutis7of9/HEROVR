@@ -2816,3 +2816,15 @@ buildings stayed; only the light went.
   it; > 0.5 s keeps the old rules. live.txt `hitch_hold` (0 on default, 1 off = c71a59c), live, SpidyHitchHold
   id 5558. Prompts log "VERSION 0.0.76 HITCH HOLD: N runtime hitches ...". Tests: core `HITCH HOLD`,
   hero076_hitch_hold_tests.
+## 69. Version 0.0.76 JITTER FIX: the head views no longer feed the stored jitter back into the lens
+
+  Lens 0x2c75560 (CONFIRMED) stores +0x428 = 2 * jx and +0x42c = -2 * jy. activeView (both calls) and placeEyes
+  onHead passed stock/main +0x428/+0x42c (already 2x, y flipped) as jx/jy: 4x x, +4x y. gameViewJitterOff now
+  defaults to 1 (pass 0); live.txt `vr_game_jitter = keep` (0) is c71a59c's. Eyes (eyeJitter) unchanged; the 3D game
+  screen path (desired.enabled 3, no eye TAA) still passes main's stored pair (not the headset path).
+  JITTER LOG: SpidyJitterLogData (include/spidy/jitter_log.hpp, JLOG, 48 + 32 * 2048 bytes), each view's first 200
+  frames: stored, passed, made; tools/jitter_log_record.py, report `jitter_log`, console "JITTER LOG".
+  POSE CHECK: Data's reserved 24 bytes are now locatedOff (XrFrame/GameMotionFrame locatedTime, the time
+  xrLocateViews used, against predictedDisplayTime), layerMaxDegrees/Mm, layerFovMaxDegrees and layerOver (the layer
+  pose and fov against the command's eyes/fovs); first 10 mismatches to the prompts log. Tests: core `JITTER FIX`,
+  hero076_jitter_fix_tests, hero076_far_shake_tests, hero076_pose_check_tests.

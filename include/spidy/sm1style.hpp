@@ -99,11 +99,26 @@ inline std::array<float, 2> eyeJitterFor(bool off, std::array<float, 2> walk) {
     return off ? std::array<float, 2>{steadyJitter, steadyJitter} : walk;
 }
 // vr_game_jitter: the game's own view (on the head while the eyes show, never
-// shown itself) kept the flat game's TAA jitter, sized for the flat 1280x720
-// picture: run 001842 measured [0.00059, 0.00243] NDC against the eyes' 0.00019,
-// up to ~3.5 eye pixels a frame for whatever the frame takes from that view.
-// Default (keep false): zero while the eyes show. Its TAA then skips (it is not shown).
-inline float gameViewJitter(bool keep, float stock) { return keep ? stock : 0.f; }
+// shown itself) and its flat-game TAA jitter, sized for the flat 1280x720
+// picture (run 001842: [0.00059, 0.00243] NDC against the eyes' 0.00019).
+// 0.0.76 GHOST FIX: KEEP is the default again (0 keep, 1 off). Zeroing it (c8974f4)
+// made TemporalAa skip that view's job every frame (0x2c2dd09) and the owner's
+// next run (005811) brought "ghosting of the city and buildings" while the far
+// shake stayed: the zero bought nothing and cost a picture the eyes had in 001842.
+// `off` stays a live test switch only.
+inline float gameViewJitter(bool off, float stock) { return off ? 0.f : stock; }
+// 0.0.76 EYE HISTORY CHECK (the outside advice: each eye its own TAA history).
+// Disassembly of 2.810.0.0 (CONFIRMED): the job's history set is job +0x18e8, its current one +0x18e0
+// (0x2c98290 / 0x2c98240); the job start 0x2c98440 sets both to the set it is given (the game's main set
+// [0xc15d7d8] when none) and +0x13f9 = (set == main set); each frame 0x2c96f80 copies +0x18e0 to +0x18e8 and,
+// only with +0x13f9, swaps to the main ping-pong pair [0xc15d7d8] / [0xc15d7e0]. TemporalAa copies its output
+// into the set's history target (0x2c2e783: set +0x12660, or +0x12a30 with [0xc2c7d95]).
+// So an eye reads only its own history when its job's sets are one set that is neither the main set nor the
+// other eye's: counted per TemporalAa run (Data::ownHistory / sharedHistory).
+inline constexpr uint32_t mainSetGlobal = 0xc15d7d8;
+inline bool ownHistory(uintptr_t set, uintptr_t history, uintptr_t mainSet, uintptr_t otherEyeSet) {
+    return set && history == set && set != mainSet && set != otherEyeSet;
+}
 inline std::array<float, 2> jitter(uint64_t frame, uint32_t eyeWidth, uint32_t renderWidth, uint32_t renderHeight) {
     const uint32_t phase = static_cast<uint32_t>(frame % phases(eyeWidth, renderWidth)) + 1;
     return {2 * (halton(phase, 2) - .5f) / std::max(1u, renderWidth),
@@ -204,7 +219,7 @@ inline const char* windowEdgesLine(uint32_t state) {
 }
 
 inline constexpr uint32_t magic = 0x53314d53; // SM1S
-inline constexpr uint32_t version = 1;
+inline constexpr uint32_t version = 2;
 // SpidySm1StyleData (stereo_probe.cpp): the per-eye proof that TemporalAa ran, and the history gate.
 struct Data {
     uint32_t magic = sm1style::magic, version = sm1style::version, bytes = 256, flags{}; // flags: Flag bits
@@ -219,7 +234,11 @@ struct Data {
     uint32_t inputWidth[2]{}, outputWidth[2]{};
     uint64_t leftJobs{};      // left eye jobs (the safety's count)
     uint64_t sequence{};
-    uint64_t reserved[7]{};
+    // Version 2 (0.0.76 EYE HISTORY CHECK, ownHistory above): runs whose history was the eye's own set, runs whose
+    // set was shared (the main set, the other eye's, or a history set not the current one), and runs whose job was
+    // not the eye's job of its run before.
+    uint64_t ownHistory[2]{}, sharedHistory[2]{}, jobChanged[2]{};
+    uint64_t reserved[1]{};
 };
 // flagSteps: the jitter and the job AA run (live, or eyes made smaller than their image after a fall back).
 enum Flag : uint32_t {

@@ -6,12 +6,14 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
-- **Far background shake fix (FAR SHAKE):** the skyline, bridge and water no longer hop sideways while you turn your
-  head. The game's own (unseen) head view kept the flat game's TAA jitter, sized for its 1280x720 picture - up to
-  about 3.5 eye pixels a frame, ten to twenty times the eyes' own - and frame-wide far work taken from that view hopped
-  with it. That view now gets no jitter while the eyes show. live.txt, both live (no restart): `vr_game_jitter = keep`
-  puts the old jitter back; `vr_jitter = off` gives the eyes one fixed offset instead of their sample walk (a test).
-  [docs/VISUAL-0.0.76.md](docs/VISUAL-0.0.76.md)
+- **City ghosting fixed (GHOST FIX):** the ghosting of the city and buildings that came with the last test is gone:
+  the game's own (unseen) head view keeps its TAA jitter again, as in the sharp dd027d4 build. Taking it away (the
+  last FAR SHAKE try) stopped that view's TAA and did not stop the far shake (run 005811). live.txt, live (no
+  restart): `vr_game_jitter = off` is that try again, as a test; `vr_jitter = off` gives the eyes one fixed offset
+  instead of their sample walk (a test). The report now says whether each eye read only its own TAA history
+  ("SM1STYLE eyes: ..." at the end of the console). Far shake: still open - see
+  [docs/VISUAL-0.0.76.md](docs/VISUAL-0.0.76.md); with Virtual Desktop, try Synchronous Spacewarp Disabled
+  (Streaming tab) as a test.
 - **Clearer picture (VISUAL):** VR now starts the game with its Anti-Aliasing at TAA and no upscaler, so each eye
   gets the game's own TAA (SM1STYLE) at native 100% - no DLSS, FSR, FXAA or CAS on the eyes. Texture Quality goes to
   at least High and filtering to 16x while VR runs. Your own settings come back when the game closes. live.txt:

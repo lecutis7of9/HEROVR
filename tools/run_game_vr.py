@@ -39,6 +39,7 @@ import start_errors
 from session_comfort import comfort_advice, game_settings, play_rate
 from observe_game import call_remote, call_with_payload, modules
 from probe_stereo_gpu import MAX_EYE_SIZE, discover_queue, snapshot as gpu_snapshot, save_eye_images
+from sm1style_record import sm1style_snapshot, sm1style_line  # 0.0.76 EYE HISTORY CHECK
 from probe_stereo import (frame_snapshot, render_memory_snapshot, snapshot as stereo_snapshot, encode_mip_bias,
                           mip_bias_snapshot, eye_camera_line)
 from probe_native_rays import snapshot as ray_snapshot
@@ -2916,7 +2917,7 @@ def session(a, startup, session_off=()):
                                            'SpidyEyeLodData', 'SpidyShadowCamera',
                                            'SpidyShadowCameraData', 'SpidyShadowDistanceData',
                                            'SpidyEyeTrail', 'SpidyEngineTaaJitter', 'SpidyEngineTaaJitterScale',
-                                           'SpidyEngineTaaData', 'SpidyFarShadowsData',
+                                           'SpidyEngineTaaData', 'SpidyFarShadowsData', 'SpidySm1StyleData',
                                            # Update 37: every live.txt export (so none can be missing
                                            # at the first edit) and the new telemetry.
                                            *sorted({e for _, e, _ in live_settings.SETTINGS.values() if e}),
@@ -3010,6 +3011,7 @@ def session(a, startup, session_off=()):
                                                               'music_track': 0})
         live_changes = []
         history_last = None  # Update 21: history_snapshot, kept from the samples
+        sm1style_last = None  # 0.0.76 EYE HISTORY CHECK: sm1style_snapshot, kept from the samples
         engine_taa_last = engine_taa_said = None  # Update 34.2
         shadows_last = None  # Update 26: shadow_snapshot, kept the same way (the exit path's report lacked it)
         finder_last = None  # Update 27: address_finder.snapshot
@@ -3305,6 +3307,7 @@ def session(a, startup, session_off=()):
                         haptics=haptics_last, wrist_hud=wrist_hud_last, prompts=prompt_section(list(samples)),
                         ray_samples=list(ray_samples), appearance=appearance, eye_jobs=eye_jobs,
                         render_memory=render_memory, timing=timing, network=links, eye_history=history_last,
+                        sm1style_eyes=sm1style_last,
                         eye_shadows=shadows_last,
                         stream_stalls=stream_stalls(list(samples)),
                         free_commit_mb=dict(start=start_commit, lowest=lowest_commit),
@@ -3361,6 +3364,8 @@ def session(a, startup, session_off=()):
                         print(history_line(kept), flush=True)
                     if (taa := result.get('engine_taa')):
                         print(engine_taa_line(taa), flush=True)
+                    if (said := sm1style_line(result.get('sm1style_eyes'))):
+                        print(said, flush=True)
                     if (shadows := eye_shadow_line(result.get('eye_shadows'))):
                         print(shadows, flush=True)
                 except Exception as error:  # noqa: BLE001 - the report matters more than the summary
@@ -3591,6 +3596,10 @@ def session(a, startup, session_off=()):
                     # written after the game was closed, had no eye_history at all: it was only read at a
                     # normal stop). eye_camera: the per-eye camera audit (probe_stereo.frame_snapshot).
                     history_last = history_snapshot(game, xr['SpidyEyeHistoryData']) or history_last
+                    # 0.0.76 EYE HISTORY CHECK: each eye's TAA history its own (probe_stereo.sm1style_snapshot).
+                    sm1style_last = sm1style_snapshot(game, xr['SpidySm1StyleData']) or sm1style_last
+                    if sm1style_last:
+                        sample['sm1style_eyes'] = {e: sm1style_last[e] for e in ('left', 'right')}
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
                     if (taa := engine_taa_snapshot(game, xr['SpidyEngineTaaData'])):
                         said = (taa['state'], taa['reason'], taa['jitter_mode'], taa['jitter_scale'])
@@ -3861,7 +3870,8 @@ def session(a, startup, session_off=()):
             eye_snapshots=list(eye_shots), eye_snapshot_folder=str(eye_folder) if eye_shots else None,
             bridge=bridge_snapshot(game, bridge['SpidyBridgeData']), xr_stop=xr_stop, bridge_stop=bridge_stop,
             eye_history=history_snapshot(game, xr['SpidyEyeHistoryData']) or history_last,
-            engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last)
+            engine_taa=engine_taa_snapshot(game, xr['SpidyEngineTaaData']) or engine_taa_last,
+            sm1style_eyes=sm1style_snapshot(game, xr['SpidySm1StyleData']) or sm1style_last)
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

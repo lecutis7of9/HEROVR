@@ -134,6 +134,10 @@ struct Config {
     // Version 0.0.2 BALL LOOK OURS: a web-shooter press is the mod's own ball only (our_ball.hpp,
     // Out::ballOurs) - no RB, no stick: the game fires no web ball for it.
     bool ballOurs = false;
+    // HERO VR 0.0.76 BALL GAME (SPIDER-MAN): the game's own ball, its RB on the press frame - no wait for the Sonic
+    // Burst's grace or a gadget forming and no RB lead after the stick; only a pulse still in flight holds the next
+    // (it starts ballGap after that one ends, so the game sees each press).
+    bool ballInstant = false;
     // Version 0.0.4 IRON MAN ABILITIES (REPULSOR) (repulsor.hpp): the trigger makes the shot only - no
     // Grabber, Upshot, Ricochet, yank or Sonic Burst from it (all web or the game's).
     bool noTriggerGadgets = false;
@@ -618,8 +622,8 @@ class Machine {
                 out.fired[i] = webShooter;
                 ++fired_[webShooter];
                 s.state = State::idle; // its RB queued below (one press, one pulse)
-            } else if (s.state == State::held && (!otherMayJoin || c.gadgetEasy || c.ballOurs)) {
-                // 0.0.76 BALL NOW: OURS's ball goes on the press frame, the burst's grace or not
+            } else if (s.state == State::held && (!otherMayJoin || c.gadgetEasy || c.ballOurs || c.ballInstant)) {
+                // 0.0.76 OURS and BALL GAME: the ball goes on the press frame, the burst's grace or not
                 // (out of combat the tap waited the whole grace, then fired on the let-go).
                 // Update 38 BALL FIRE PRESS (SpidyVR's shooter): the ball at the press, once
                 // the burst's grace is past, at most every ballInterval.
@@ -638,7 +642,7 @@ class Machine {
                                                             (s.formed && age < Config::easyFormedWait));
                 // Version 0.0.4: OURS sends no RB, so its ball goes at the press as SpidyVR's
                 // does (the gadget can still follow on the same pull); rep0030's waits lost balls.
-                if ((c.ballOurs || (!otherMayJoin && !gadgetForming)) && c.ballOnPress && !s.ballFired &&
+                if ((c.ballOurs || c.ballInstant || (!otherMayJoin && !gadgetForming)) && c.ballOnPress && !s.ballFired &&
                     now_ - s.ballAt >= Config::ballInterval) {
                     s.ballFired = true;
                     s.ballAt = now_;
@@ -1097,7 +1101,7 @@ class Machine {
                 continue;
             }
             // Update 38.5: this press's own RB pulse, after its lead (the stick first).
-            float lead = c.ballLeadAlways ? Config::assistLead : 0.f;
+            float lead = c.ballLeadAlways && !c.ballInstant ? Config::assistLead : 0.f; // BALL GAME: none
             bool steered = false;
             struct Queue { // queued on every way out of this iteration
                 Machine& m;
@@ -1158,7 +1162,7 @@ class Machine {
                 const Vec3 right{-ahead.z, 0, ahead.x};
                 assistRadians_ = std::atan2(dot(flat, right), dot(flat, ahead));
                 assistUntil_ = now_ + Config::assistHold;
-                lead = Config::assistLead; // the RB after the stick
+                lead = c.ballInstant ? 0.f : Config::assistLead; // the RB after the stick (BALL GAME: with it)
                 steered = true;
             }
         }

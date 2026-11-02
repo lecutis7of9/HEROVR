@@ -9,14 +9,17 @@ From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not ye
 - **Punch dash is back (PUNCH DASH):** punch toward an enemy 2 - 15 m away and Spider-Man web-strikes (the game's Y)
   right to **that** enemy; with no enemy along the fist the old lunge still takes far swings. Enemies within 2 m get
   the punch (X) as before - never a dash at a close one.
-- **Web balls on every press (BALL NOW):** in and out of combat each press fires the mod's ball from that wrist at
-  once (no game ball, so no double). 32bd648's out-of-combat balls were firing but not drawn - now they show, and a hit
-  does a small blow.
+- **Web balls are the game's own (BALL GAME):** HERO VR never draws or fires its own balls or cocoons for
+  Spider-Man. Each press sends the game's web shooter (RB) on the press frame, from the wrist. Out of combat the game
+  still refuses it (its own move selector) - not yet fixable; there nothing visible happens.
+- **Steady picture:** every VR session turns the game's dynamic resolution off (it was already off for the tester).
+  The blocky picture while swinging is most likely Virtual Desktop's stream; see "PICTURE AT SPEED" in
+  [docs/COMBAT-0.0.76.md](docs/COMBAT-0.0.76.md).
 - **Spider-Man punches land (MELEE SNAP):** each punch goes to the enemy you swing at (within 2 m, inside 70 degrees
   of the fist, or the nearest within 1.8 m in front) - the game's X combo plus the blow on him. With an enemy that
   close the web lunge (Y) never steals the punch. Arm swings while walking still do nothing.
   See [docs/COMBAT-0.0.76.md](docs/COMBAT-0.0.76.md).
-- **Web balls every press (BALL SURE, 32bd648):** replaced for Spider-Man by BALL NOW above.
+- **Web balls every press (BALL SURE, 32bd648; BALL NOW, 8046cd4):** both replaced by BALL GAME above.
 - **Flight dives and climbs where you look:** the left stick's forward follows your look up and down (no need to
   hover to go down); the right-stick climb stays.
 - **Roll camera:** FLY ROLL COMFORT (the default) now keeps the view level and rolls only the body; FULL is the old

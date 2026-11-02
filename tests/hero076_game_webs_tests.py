@@ -55,17 +55,20 @@ class GameWebs(unittest.TestCase):
         self.assertNotIn('if (!gameWebsDrawn)\n                                appendWeb(', r)
         self.assertEqual(r.count('drawWeb(line);'), 5)     # the swing's, zip's, held and let-go lines
         self.assertEqual(r.count('drawOurWeb(line);'), 2)  # GRAB WEB's rope, WALL STICK's nets
-        # 0.0.76 BALL NOW: the mod's balls (every SPIDER-MAN press) and their cocoons are drawn under GAME WEBS ONLY too.
-        self.assertIn('if (!c0.on)', r)   # the webbed-up cocoons
-        self.assertIn('!saved->repulsorLook; ++b)', r)  # OURS balls and splashes
-        self.assertNotIn('!saved->repulsorLook && !gameWebsDrawn; ++b)', r)
+        self.assertIn('if (!c0.on || gameWebsDrawn)', r)   # the webbed-up cocoons
+        self.assertIn('!saved->repulsorLook && !gameWebsDrawn; ++b)', r)  # OURS balls and splashes
         self.assertIn('for (unsigned g = 0; g < 2 && !gameWebsDrawn; ++g)', r)  # GLOB
         self.assertEqual(r.count('appendWebThread('), 1)
         self.assertEqual(r.count('appendWebBall('), 2)
     def test_balls_are_the_games_from_the_wrist(self):
         g = src('src/game_xr.cpp')
-        self.assertIn('return gameWebsOnly() && (look == combat38::lookOurs || look == combat38::lookGlob) ? '
-                      'combat38::lookWrist : look;', g)
+        # 0.0.76 BALL GAME: for SPIDER-MAN always (never the mod's ball), not only under GAME WEBS ONLY.
+        self.assertIn('return heroNow() == hero_modes::spiderMan && (look == combat38::lookOurs || '
+                      'look == combat38::lookGlob)', g)
+        self.assertIn('? combat38::lookWrist', g)
+        self.assertIn('c.ballInstant = true;', g)
+        self.assertIn('fightOut.ballOurs[i] = false; // never the mod\'s ball for SPIDER-MAN', g)
+        self.assertNotIn('oursEveryPress', g)
         self.assertIn('c.ballOurs = ballLookNow() == combat38::lookOurs;', g)
         self.assertIn('combat38::wristMuzzle(ballLookNow())', g)
         self.assertIn('ballLookNow() == combat38::lookGlob', g)

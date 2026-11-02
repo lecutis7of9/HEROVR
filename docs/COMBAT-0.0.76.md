@@ -40,29 +40,45 @@ Log: `VERSION 0.0.76 MELEE SNAP: <n> punches sent at the enemy swung at (within 
 "Update 38 SpidyVR: ZIP MODE" (a punch thrown at him while looking away dashes). The old lock-lunge tests run with
 `meleeSnap = false` (Update 38's rule).
 
-## BALL SURE (include/spidy/ball_sure.hpp, game_xr)
+## BALL GAME (test 8046cd4 feedback; combat_input.hpp `ballInstant`, ball_sure.hpp watch, game_xr)
 
-The game fires its R1 web ball only in combat, and not on every tap. No CONFIRMED SM2 function fires the game's ball,
-so none is called. Per press, for Spider-Man:
-- **out of combat** (no enemy within 30 m): no RB is sent; the mod's own ball leaves that wrist at once;
-- **in combat**: the RB goes to the game (its ball, look and auto-aim). The wrist muzzle hook (CANDIDATE) counts the
-  web shooter's muzzle asks; hooked and no ask within 0.3 s, the mod's own ball leaves that wrist instead. Unhooked
-  (nothing to tell), the mod's ball goes with every press, so a press is never lost (at worst two balls).
-Log: `VERSION 0.0.76 BALL SURE: <presses> presses to the game, <n> its own shots seen, <n> backups, ...`.
-Tests: tests/melee076_tests.cpp `ballTests`.
+The owner on 8046cd4's mod balls: "Do not revert back to ours they are awful". So for Spider-Man **HERO VR never
+draws or fires its own web balls or cocoons**, in or out of combat (`ballOurs` off, and cleared again each frame).
+Every press is the **game's** web ball: the RB goes to the game **on the press frame** (`ballInstant`: no wait for the
+Sonic Burst's two-hand grace or the gadget forming, no lead), from the wrist (`ballLookNow` maps OURS/GLOB to WRIST
+for Spider-Man). The RB queue still keeps its small gap after a pulse already in flight, so taps are not merged.
 
-## BALL NOW (test 32bd648 feedback; ball_sure::oursEveryPress, combat_input.hpp, game_xr)
+**Out of combat - not yet possible.** In 801ce57's run all 98 presses reached the game as RB, and the game fired its
+ball only in combat. So the press arrives; the game's own state-based move selector refuses the web shooter when no
+fight is on (the same finding the Nexus "Slingshot (Ungrounded)" mod reports about the game's transition selector).
+No CONFIRMED SM2 function fires the ball or opens that gate, and inventing one is not allowed, so out of combat a
+press still sends the RB and **nothing visible happens** unless the game itself fires.
 
-The owner on 32bd648: "webballs are still not super reactive and dont fire unless in combat". Why (from the code):
-- out of combat 32bd648 already fired the mod's own ball, but its draw loop skipped every mod ball under GAME WEBS ONLY
-  (the Spider-Man default), so those balls flew **invisible** (and so did the in-combat BALL SURE backups);
-- out of combat the ball also waited out the Sonic Burst's two-hand grace (about 0.17 s) and then fired at the let-go;
-- in combat the press waited on the burst grace, the gadget waits, the RB queue and the game's own gate, plus up to
-  0.3 s for the BALL SURE backup.
+BALL SURE's backup is gone; ball_sure.hpp is now a read-only watch (nothing fired, nothing written). Per press it
+counts, in and out of combat, whether the wrist muzzle hook (CANDIDATE) saw the web shooter's muzzle ask within
+0.3 s. Log: `VERSION 0.0.76 BALL GAME: in combat <n> presses (RB), <n> game shots seen, <n> none; out of combat ...;
+<n> with no hook`. A run's out-of-combat "shots seen" is the evidence a later fix needs. Tests: tests/melee076_tests.cpp
+`ballTests` (the watch), tests/core_tests.cpp "HERO VR 0.0.76 BALL GAME" (RB on the press frame in and out of
+combat, never the mod's ball, 6 quick taps = 6 RB starts).
 
-Now, for Spider-Man under GAME WEBS ONLY, **every press is the mod's ball, from that wrist, on the press frame**, in
-and out of combat: no RB goes to the game, so the game never adds a second ball. The balls and their webbed-up cocoons
-are drawn under GAME WEBS ONLY. A hit sends the small web-ball blow (10, no knockback) through the CONFIRMED damage
-path. The +GAME WEB on hit stays on its BALL HIT setting (OURS ONLY by default). Gestures (gadgets, Sonic Burst) still
-read the press as before. Tests: tests/melee076_tests.cpp `ballTests` (oursEveryPress), tests/core_tests.cpp
-"HERO VR 0.0.76 BALL NOW" (in and out of combat: one ball on the press frame, no RB).
+## PICTURE AT SPEED ("PS2 pixel level" while swinging)
+
+From the November 1 report (game-vr-20261101-181930) and run7:
+- **Not the game's dynamic resolution.** Its log has "Dynamic resolution FPS target: 0" and its registry
+  `DynamicResolutionTargetFPS = 0` (off). The eyes rendered at a steady 2688 x 2880, 100% scale; foveation and the
+  eye LOD writer were off. The game's DLSS Quality applies only to the 1280 x 720 desktop window, not the eyes.
+  Since 0.0.76 every VR session sets `DynamicResolutionTargetFPS = 0` anyway (tools/vr_display.py SESSION; the
+  name and its encoding are CONFIRMED by that report) and puts the player's value back after.
+- **Nothing of HERO VR's lowers the resolution with speed** (no adaptive scale anywhere in src/ or include/).
+- **The headset stream is the likely cause.** The runtime was Virtual Desktop (a compressed video stream over
+  Wi-Fi). The game made 45.7 pictures a second for a headset at 88.5 Hz, so every other headset frame is made up by
+  the runtime's reprojection/spacewarp, and a fast swing changes the whole picture every frame, which a video encoder
+  at a fixed bitrate turns into blocks. The log also has the stream stalling (13 frames held, 1.3 s; run7 82).
+  In Virtual Desktop: a higher bitrate, HEVC 10-bit or AV1, the headset at 72 Hz (closer to the game's rate), and a
+  6 GHz or wired router help; a lower render scale raises the game's frame rate.
+- **Ours, at speed: no anti-aliasing.** The game's AA is DLAA, which the eyes cannot use, so the eyes are drawn
+  without it; HERO VR's eye history smooths a still or slow picture but is cut when the view moves fast (8027 of
+  11332 pairs cut), so while swinging the raw picture shows - sharper edges and shimmer, not a lower resolution.
+  Unchanged (keeping history at speed smears, which the owner did not want).
+- **Game streaming:** Texture Quality is Medium; the game streams textures as you travel, so a blurry patch that
+  sharpens a moment later is the game's own streaming. Nothing in the logs proves it happened.

@@ -94,6 +94,12 @@ SMALLER_HEIGHT = 720
 #   AmbientOcclusionQuality, RTShadows and VSync there). Grain is new noise in every eye image, blur smears
 #   a turning head's view, and both, with the colour fringes and the darkened lens edge, are the game's
 #   own camera effects, which a headset's lenses do not need. `keep` leaves them ('comfort').
+# - Dynamic resolution off (DynamicResolutionTargetFPS 0), since 0.0.76: with a target the game lowers
+#   its render size whenever a frame runs late, and in VR every frame is late (the eyes are far more
+#   pixels than its window), so the picture could drop and climb with the load. The name and its
+#   encoding are the player's own: the November 1 report (game-vr-20261101-181930) has
+#   DynamicResolutionTargetFPS = 0 in the game's registry beside its log's "Dynamic resolution FPS
+#   target: 0" (CONFIRMED). That player already had it off; this only makes sure. Backed up and put back.
 PICTURE = dict(depth_of_field=('DOFQuality',), sharpening=('Sharpness',),
                comfort=('MotionBlurScale', 'FilmGrainStrength', 'ChromaticAberration', 'Vignette'))
 # - SM2 VR (from SM2VR 0.0.27): Spider-Man 2's other ray tracing off too (RTShadows, RTAmbientOcclusion,
@@ -102,7 +108,7 @@ PICTURE = dict(depth_of_field=('DOFQuality',), sharpening=('Sharpness',),
 SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, RTReflections=0,
                       RTShadows=0, RTAmbientOcclusion=0, RTInteriors=0, RayReconstruction=0,
                       ForcedAspectRatio=0, ReflexMode=0, MotionBlurScale=0, FilmGrainStrength=0,
-                      ChromaticAberration=0, Vignette=0), False),
+                      ChromaticAberration=0, Vignette=0, DynamicResolutionTargetFPS=0), False),
            (INPUT_KEY, dict(EnableWindowsGamingInput=0), True))
 # - Version 0.0.62 (the player chooses, live.txt lens_flares = off_in_vr; the default leaves it): the game's
 #   lens flares off for the session. Car and bridge headlights' flares showed through walls in the headset at

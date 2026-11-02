@@ -19930,10 +19930,13 @@ int main() {
             check(!snapped, "MELEE SNAP snapped through a wall");
         }
     });
-    test("HERO VR 0.0.76 BALL NOW: a press fires the mod's ball from that wrist on the press frame, no enemy needed", [lungeFrame] {
+    test("HERO VR 0.0.76 BALL GAME: a press is the game's RB on the press frame, in combat or not, never the mod's ball", [lungeFrame] {
         using namespace combat_input;
-        Config c;
-        c.ballOurs = c.ballOnPress = true; // what combatConfig sets for SPIDER-MAN under GAME WEBS ONLY
+        Config c; // what combatConfig sets for SPIDER-MAN
+        c.ballOurs = false;
+        c.ballOnPress = true;
+        c.ballInstant = true;
+        c.ballLeadAlways = true; // BALL LEAD ALWAYS: no lead under BALL GAME
         for (const uint32_t enemies : {0u, 1u}) {
             Machine m;
             Frame f = lungeFrame();
@@ -19941,24 +19944,38 @@ int main() {
             f.enemyMetres = enemies ? 5.f : 1e9f;
             for (int i = 0; i < 30; ++i)
                 m.update(f, c);
-            int balls = 0, firstAt = -1;
-            uint16_t buttons{};
+            int starts = 0, firstRb = -1, firstStart = -1;
+            bool ours = false;
             for (int i = 0; i < 60; ++i) {
                 f.hands[0].button = i < 6 ? 1.f : 0.f; // a quick tap
                 const auto o = m.update(f, c);
-                buttons |= o.buttons;
-                if (o.ballOurs[0]) {
-                    ++balls;
-                    if (firstAt < 0)
-                        firstAt = i;
+                if ((o.buttons & padRb) && firstRb < 0)
+                    firstRb = i;
+                if (o.ballStart[0]) {
+                    ++starts;
+                    if (firstStart < 0)
+                        firstStart = i;
                 }
-                check(!o.ballOurs[1], "BALL NOW: the other wrist fired");
+                ours = ours || o.ballOurs[0] || o.ballOurs[1];
             }
-            if (!(balls == 1 && firstAt == 0))
-                std::printf("  ball debug: enemies %u balls %d first %d\n", enemies, balls, firstAt);
-            check(balls == 1 && firstAt == 0, enemies ? "BALL NOW: in combat the ball did not go at the press"
-                                                      : "BALL NOW: out of combat the ball did not go at the press");
-            check(!(buttons & padRb), "BALL NOW: the game's RB went too (a second ball)");
+            if (!(starts == 1 && firstStart == 0 && firstRb == 0))
+                std::printf("  ball debug: enemies %u starts %d first %d rb %d\n", enemies, starts, firstStart, firstRb);
+            check(starts == 1 && firstStart == 0 && firstRb == 0,
+                  enemies ? "BALL GAME: in combat the RB did not go on the press frame"
+                          : "BALL GAME: out of combat the RB did not go on the press frame");
+            check(!ours, "BALL GAME: the mod's ball fired");
+        }
+        {   // quick presses: one RB pulse each, the game sees every one
+            Machine m;
+            Frame f = lungeFrame();
+            for (int i = 0; i < 30; ++i)
+                m.update(f, c);
+            int starts = 0;
+            for (int i = 0; i < 120; ++i) {
+                f.hands[0].button = (i % 20) < 3 ? 1.f : 0.f; // six taps, 0.28 s apart at 72 Hz
+                starts += m.update(f, c).ballStart[0];
+            }
+            check(starts == 6, "BALL GAME: a quick press was lost");
         }
     });
     test("Update 38 SpidyVR: ZIP MODE SPIDYVR lunges at the enemy looked at; LUNGE SPIDYVR MOVE leaves it to the bridge", [lungeFrame, lungeRun] {

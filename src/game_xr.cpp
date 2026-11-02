@@ -904,11 +904,14 @@ uint32_t heroNow() {
 }
 // 0.0.76 GAME WEBS ONLY: on, and the hero is SPIDER-MAN (every other hero keeps his own look and tethers).
 bool gameWebsOnly() { return gameWebsNow.load() == 0 && heroNow() == hero_modes::spiderMan; }
-// BALL LOOK as it plays: under GAME WEBS ONLY, OURS and GLOB are WRIST - the game's own web ball, fired from the
-// pulled hand's wrist along the same aim (the player's own value is unchanged and comes back when it is off).
+// BALL LOOK as it plays: for SPIDER-MAN, OURS and GLOB are WRIST - the game's own web ball, fired from the pulled
+// hand's wrist along the same aim (0.0.76 BALL GAME: never the mod's ball or glob for him, GAME WEBS ONLY or not; the
+// player's own value is unchanged and still plays for the other heroes, who fire their own shots anyway).
 uint32_t ballLookNow() {
     const uint32_t look = c38(combat38::ballLook);
-    return gameWebsOnly() && (look == combat38::lookOurs || look == combat38::lookGlob) ? combat38::lookWrist : look;
+    return heroNow() == hero_modes::spiderMan && (look == combat38::lookOurs || look == combat38::lookGlob)
+               ? combat38::lookWrist
+               : look;
 }
 // Version 0.0.72 (TEST): every 0.0.72 option (hero072_play.hpp PlayOptions) from combat38, live.
 hero072::PlayOptions hero072Options() {
@@ -1077,12 +1080,13 @@ combat_input::Config combatConfig() {
     c.ballOnPress = c38(combat38::ballFire) == 0;
     // Version 0.0.2 BALL LOOK OURS: a web-shooter press fires our own ball, no RB to the game.
     c.ballOurs = ballLookNow() == combat38::lookOurs; // 0.0.76: GAME WEBS ONLY plays OURS as WRIST
-    // HERO VR 0.0.76 BALL NOW (ball_sure.hpp, test 32bd648: "webballs are still not super reactive and dont fire unless
-    // in combat"): SPIDER-MAN under GAME WEBS ONLY fires the mod's own ball from the pulled wrist on the press frame,
-    // in combat or not - no RB, so the game never fires a second one. GAME WEBS ONLY off: BALL LOOK as before.
-    if (spidy::ball_sure::oursEveryPress(heroNow() == hero_modes::spiderMan, gameWebsOnly())) {
-        c.ballOurs = true;
+    // HERO VR 0.0.76 BALL GAME (ball_sure.hpp; the owner: "Do not revert back to ours they are awful"): SPIDER-MAN's
+    // web ball is only ever the game's - never the mod's ball - and every press is the game's RB on the press frame,
+    // in combat or not (Config::ballInstant: no Sonic Burst / gadget wait, no lead, no queue wait).
+    if (heroNow() == hero_modes::spiderMan) {
+        c.ballOurs = false;
         c.ballOnPress = true;
+        c.ballInstant = true;
     }
     // Version 0.0.4 IRON MAN ABILITIES (REPULSOR): the trigger makes the mod's own shot at the press only
     // (no RB, no game ball) and no trigger gadget, yank or Sonic Burst (repulsor.hpp planFor).
@@ -7599,15 +7603,9 @@ DWORD WINAPI run(void*) {
                             cf.webAttached = swingState.webs[0].attached || swingState.webs[1].attached;
                             cf.enemyMetres = world_trace::nearestEnemyMetres();
                             auto config37 = combatConfig();
-                            // HERO VR 0.0.76 BALL SURE (ball_sure.hpp): SPIDER-MAN with no enemy near - the game fires no
-                            // web ball out of combat, so the press is the mod's own ball from that wrist (no RB at all).
-                            // 0.0.76 BALL NOW: under GAME WEBS ONLY every press already is (combatConfig); this is
-                            // GAME WEBS ONLY off with a BALL LOOK that sends the RB.
-                            const bool ballOutOfCombat = heroNow() == hero_modes::spiderMan && !config37.ballOurs &&
-                                                         spidy::ball_sure::outOfCombat(cf.enemyCount, cf.enemyMetres);
-                            if (ballOutOfCombat)
-                                config37.ballOurs = true;
-                            const bool ballNowPress = heroNow() == hero_modes::spiderMan && config37.ballOurs;
+                            // HERO VR 0.0.76 BALL GAME (ball_sure.hpp): out of combat too the press is the game's RB
+                            // (no mod ball); the watch below only counts whether the game started a shot.
+                            const bool ballOutOfCombat = spidy::ball_sure::outOfCombat(cf.enemyCount, cf.enemyMetres);
                             // The enemies for the next frame's grab press (the swing input runs first).
                             grabEnemies = cf.enemies;
                             grabEnemyIds = cf.enemyIds;
@@ -7757,37 +7755,35 @@ DWORD WINAPI run(void*) {
                                 }
                             }
                             auto fightOut = combatMachine.update(cf, config37);
-                            // HERO VR 0.0.76 BALL SURE: in combat the RB went to the game; when the wrist muzzle hook
-                            // (CANDIDATE) sees no web-shooter ask within 0.3 s, or cannot tell (unhooked), the mod's own
-                            // ball leaves that wrist too - a press is never lost.
+                            // HERO VR 0.0.76 BALL GAME watch (READ-ONLY): each SPIDER-MAN press went to the game as an RB;
+                            // the wrist muzzle hook's count (CANDIDATE, already hooked) says whether its web shooter then
+                            // started a shot, in combat and out. Nothing is fired, read or written in the game here.
                             try {
                                 spidy::ball_sure::In bi;
                                 bi.seconds = frame.seconds;
+                                bi.outOfCombat = ballOutOfCombat;
                                 const bool spider = heroNow() == hero_modes::spiderMan;
-                                for (unsigned i = 0; i < 2; ++i)
-                                    bi.start[i] = spider && fightOut.ballStart[i] && !fightOut.ballOurs[i];
+                                for (unsigned i = 0; i < 2; ++i) {
+                                    bi.start[i] = spider && fightOut.ballStart[i];
+                                    if (spider)
+                                        fightOut.ballOurs[i] = false; // never the mod's ball for SPIDER-MAN
+                                }
                                 const auto ms = wrist_muzzle::status();
                                 bi.hooked = ms.hooked != 0;
                                 bi.webCalls = ms.webCalls;
-                                const auto bo = ballSure.update(bi);
-                                for (unsigned i = 0; i < 2; ++i) {
-                                    if (ballNowPress && fightOut.ballOurs[i])
-                                        ballSure.outOfCombatPress(); // 0.0.76 BALL NOW: the mod's ball at the press
-                                    if (!bo.backup[i] || fightOut.ballOurs[i])
-                                        continue;
-                                    fightOut.ballOurs[i] = true;
-                                    if (finite(cf.hands[i].aim) && length(cf.hands[i].aim) > .5f)
-                                        fightOut.ballDirection[i] = cf.hands[i].aim;
-                                }
+                                ballSure.update(bi);
                                 static uint32_t ballSureSaid = 0;
-                                const uint32_t sureNow = ballSure.backups() + ballSure.unhookedBalls() + ballSure.outBalls();
+                                const uint32_t sureNow = ballSure.presses();
                                 if (sureNow != ballSureSaid && (sureNow <= 3 || sureNow % 10 == 0)) {
                                     ballSureSaid = sureNow;
-                                    char line[220];
-                                    sprintf_s(line, "VERSION 0.0.76 BALL SURE: %u presses to the game, %u its own shots seen, "
-                                                    "%u backups, %u with no hook, %u the mod's ball at the press (BALL NOW)",
-                                              ballSure.presses(), ballSure.gameShots(), ballSure.backups(),
-                                              ballSure.unhookedBalls(), ballSure.outBalls());
+                                    const auto& inC = ballSure.inCombat();
+                                    const auto& outC = ballSure.outCombat();
+                                    char line[260];
+                                    sprintf_s(line, "VERSION 0.0.76 BALL GAME: in combat %u presses (RB), %u game shots seen, "
+                                                    "%u none; out of combat %u presses (RB), %u game shots seen, %u none; "
+                                                    "%u with no hook",
+                                              inC.presses, inC.shots, inC.unseen, outC.presses, outC.shots, outC.unseen,
+                                              inC.unhooked + outC.unhooked);
                                     game_prompts::note(line);
                                 }
                             } catch (...) {
@@ -9243,6 +9239,7 @@ DWORD WINAPI run(void*) {
                                             }
                                         }
                                     }
+                                    // 0.0.76 BALL GAME: never the mod's ball for SPIDER-MAN (ballOurs is cleared above).
                                     for (unsigned i = 0; i < 2 && heroWas == hero_modes::spiderMan; ++i) {
                                         if (!fightOut.ballOurs[i])
                                             continue;
@@ -9324,10 +9321,8 @@ DWORD WINAPI run(void*) {
                                         oursSplashNext = (oursSplashNext + 1) % our_ball::Pool::balls;
                                         // Version 0.0.5 WEB BALL DAMAGE (DAMAGE TEST, OFF by default): the web ball's small blow,
                                         // only with that switch on (0.0.6: the heroes open the path for their own hits).
-                                        // 0.0.76 BALL NOW: SPIDER-MAN's ball under GAME WEBS ONLY is the only ball, so its small
-                                        // blow (no knockback) goes too.
-                                        if ((c38(combat38::heroDamage) == 1 || gameWebsOnly()) && sm2_damage::enabled() &&
-                                            hit.index >= 0 && static_cast<uint32_t>(hit.index) < foes.count)
+                                        if (c38(combat38::heroDamage) == 1 && sm2_damage::enabled() && hit.index >= 0 &&
+                                            static_cast<uint32_t>(hit.index) < foes.count)
                                             sm2_damage::queue(foes.list[static_cast<size_t>(hit.index)].id, sm2_damage::webBallTest());
                                         if (hit.hand == 0 || hit.hand == 1) {
                                             runtime.haptic(hit.hand, .7f);
@@ -12480,7 +12475,7 @@ DWORD WINAPI run(void*) {
                         }
                         // Version 0.0.3 WEB BALL HIT: the webbed-up look (the mod's strands round a struck enemy).
                         for (const auto& c0 : saved->cocoons) {
-                            if (!c0.on) // 0.0.76 BALL NOW: the mod's balls web them (drawn under GAME WEBS ONLY too)
+                            if (!c0.on || gameWebsDrawn) // 0.0.76 GAME WEBS ONLY: the game's own webbed-up look
                                 continue;
                             web_cocoon::Cocoon c = c0;
                             c.feet = c0.feet + travel;
@@ -12662,9 +12657,7 @@ DWORD WINAPI run(void*) {
                                 repulsor_mcu::appendImpact(vertices, saved->splashAt[b] + travel, viewer, viewer, pixelAngle,
                                                            saved->splashFade[b], .2f, static_cast<unsigned>(b) + 7u);
                         }
-                        // 0.0.76 BALL NOW: drawn under GAME WEBS ONLY too - 32bd648 hid them there, so every out-of-combat
-                        // ball (the mod's own; the game draws only its own) flew unseen.
-                        for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook; ++b) {
+                        for (size_t b = 0; b < saved->oursAt.size() && !saved->repulsorLook && !gameWebsDrawn; ++b) { // 0.0.76
                             if (saved->oursFade[b] > 0)
                                 appendWebBall(vertices, saved->oursAt[b] + travel, saved->oursTail[b] + travel, viewer,
                                               pixelAngle, saved->oursFade[b]);

@@ -1,4 +1,4 @@
-// HERO VR 0.0.76 MELEE SNAP (include/spidy/melee076.hpp) and BALL SURE (include/spidy/ball_sure.hpp), pure.
+// HERO VR 0.0.76 MELEE SNAP (include/spidy/melee076.hpp) and the BALL GAME watch (include/spidy/ball_sure.hpp), pure.
 // Made by Agent Mulder.
 #include "spidy/ball_sure.hpp"
 #include "spidy/melee076.hpp"
@@ -81,8 +81,6 @@ void dashTests() {
     check(static_cast<bool>(dash(below, head, Vec3{0, -5.7f, -5}, true)), "In the air a punch down at him dashes");
 }
 void ballTests() {
-    check(ball_sure::oursEveryPress(true, true), "BALL NOW: SPIDER-MAN under GAME WEBS ONLY fires the mod's ball each press");
-    check(!ball_sure::oursEveryPress(true, false) && !ball_sure::oursEveryPress(false, true), "Otherwise BALL LOOK decides");
     using namespace spidy::ball_sure;
     check(outOfCombat(0, 5.f), "No enemies: out of combat");
     check(outOfCombat(3, 1e9f), "Enemies unknown far: out of combat");
@@ -90,7 +88,7 @@ void ballTests() {
     check(!outOfCombat(2, 12.f), "One at 12 m: in combat");
     check(outOfCombat(1, NAN), "NaN distance: out of combat");
     const float dt = 1.f / 72;
-    {   // the game fires: no backup
+    {   // BALL GAME watch: in combat the game's shot is seen
         Sure s;
         In in;
         in.seconds = dt;
@@ -98,50 +96,47 @@ void ballTests() {
         in.webCalls = 40;
         s.update(in);
         in.start[0] = true;
-        check(!s.update(in).backup[0], "Hooked: no ball at once");
+        s.update(in);
         in.start[0] = false;
         in.webCalls = 41;
-        bool any = false;
         for (int f = 0; f < 60; ++f)
-            any |= s.update(in).backup[0];
-        check(!any && s.gameShots() == 1 && s.backups() == 0, "The game's shot seen: no backup");
+            s.update(in);
+        check(s.inCombat().presses == 1 && s.inCombat().shots == 1 && s.inCombat().unseen == 0, "In combat: its shot seen");
+        check(s.outCombat().presses == 0, "Nothing counted out of combat");
     }
-    {   // the game drops it: one backup after 0.3 s
+    {   // out of combat the game starts nothing: counted unseen after 0.3 s, once
         Sure s;
         In in;
         in.seconds = dt;
         in.hooked = true;
+        in.outOfCombat = true;
         in.webCalls = 7;
         s.update(in);
         in.start[1] = true;
         s.update(in);
         in.start[1] = false;
-        int frame = -1, count = 0;
-        for (int f = 0; f < 90; ++f)
-            if (s.update(in).backup[1]) {
-                ++count;
-                if (frame < 0)
-                    frame = f;
-            }
-        check(count == 1 && frame >= 19 && frame <= 22, "No game shot: one backup at 0.3 s");
-        check(s.backups() == 1 && s.presses() == 1, "Counted");
+        int frame = -1;
+        for (int f = 0; f < 90; ++f) {
+            s.update(in);
+            if (frame < 0 && s.outCombat().unseen == 1)
+                frame = f;
+        }
+        check(s.outCombat().presses == 1 && s.outCombat().unseen == 1 && frame >= 19 && frame <= 22,
+              "Out of combat, no muzzle ask: unseen at 0.3 s");
+        check(s.outCombat().shots == 0 && s.inCombat().presses == 0, "Counted on the right side");
     }
-    {   // unhooked: the backup goes at once
+    {   // unhooked: counted, never waited on
         Sure s;
         In in;
         in.seconds = dt;
         in.start[0] = in.start[1] = true;
-        const auto o = s.update(in);
-        check(o.backup[0] && o.backup[1] && s.unhookedBalls() == 2, "Unhooked: ours at once from each wrist");
+        s.update(in);
         in.start[0] = in.start[1] = false;
-        bool any = false;
-        for (int f = 0; f < 60; ++f) {
-            const auto p = s.update(in);
-            any |= p.backup[0] || p.backup[1];
-        }
-        check(!any, "Never twice");
+        for (int f = 0; f < 60; ++f)
+            s.update(in);
+        check(s.inCombat().unhooked == 2 && s.inCombat().unseen == 0 && s.presses() == 2, "Unhooked: counted only");
     }
-    {   // a NaN frame time never fires early or hangs
+    {   // a NaN frame time never counts early or hangs
         Sure s;
         In in;
         in.hooked = true;
@@ -149,14 +144,13 @@ void ballTests() {
         in.start[0] = true;
         s.update(in);
         in.start[0] = false;
-        bool any = false;
         for (int f = 0; f < 10; ++f)
-            any |= s.update(in).backup[0];
-        check(!any, "NaN time: no early backup");
+            s.update(in);
+        check(s.inCombat().unseen == 0, "NaN time: not unseen early");
         in.seconds = dt;
         for (int f = 0; f < 30; ++f)
-            any |= s.update(in).backup[0];
-        check(any, "Then the backup still comes");
+            s.update(in);
+        check(s.inCombat().unseen == 1, "Then it is");
     }
 }
 } // namespace

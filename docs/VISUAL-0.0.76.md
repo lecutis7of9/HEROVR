@@ -33,6 +33,7 @@ crawls when nothing moves; a sharp/blurry pulse every few frames; ghosting on bi
 | `vr_aa` | `ours` | 0.0.76 SPIDY TAA: our own per-eye TAA (below), the game's AA at TAA with no upscaler (AA 2, UpscaleMethod 0, CONFIRMED in 31 reports, docs/AA-0.0.73.md) only so DLAA/DLSS/FSR stay off the eyes; `keep` our TAA with the player's AA; `smaa` SMAA per eye; `game` the SM1STYLE picture (or 0.0.72 with sm1style = off) |
 | `vr_textures` | `high` | Texture Quality at least High (2) and Texture Filtering 16x (4), only raised; `keep` leaves them |
 | `vr_render` | `native` | SM1STYLE's eyes at 100%, the game's TAA with no upscaling; `upscaled` is SpidyVR's 67% |
+| `vr_ss` | `off` | 0.0.76 SPIDY TAA TUNE: `125` / `150` render the eyes that much larger per side, filtered down (Mitchell-Netravali, linear light) before SPIDY TAA; about 1.5x / 2.25x the GPU work, so off by default (509bdc9's run was GPU-bound at 45 new pictures/s) |
 
 And: where the game's AA will not be TAA (vr_aa = keep with DLSS), SM1STYLE keeps the launcher's mip bias (+0.5)
 instead of DLSS's -2.0.
@@ -156,3 +157,26 @@ follows the head only; moving objects are handled by the clip. Cost: one full-sc
 `vr_aa = smaa`: SMAA 1x (preset HIGH, luma edges; iryoku/smaa, MIT) per eye, 3 passes, no history. Also the
 automatic fallback when SPIDY TAA's pass cannot be built; FXAA if SMAA cannot either; the plain copy after that.
 The report's `vr_aa` and the console's "VR AA: ..." line say what ran (SpidyVrAaData).
+
+### SPIDY TAA TUNE (0.0.76, after 509bdc9: the shake fixed, windows and building detail still crawled)
+
+From the 509bdc9 run (Quest 3 / Virtual Desktop, 2688x2880 per eye): 45.0 new pictures/s (slowest tenth 38.5) on an
+89.3 Hz headset, GPU-bound (the headset copy waited 5.7 ms on average); SPIDY TAA 0.46 ms per pair; 6995 pairs
+blended, 4 restarts, 2567 pairs (37%) eased to 0.6 by small head motion; the game's mip bias -1.0 on 112 of 526
+samplers; 16x anisotropy already on.
+- History share 0.94 still (0.06 of the new frame), easing only from 0.012 rad / 0.03 m a pair (was 0.004 / 0.01) to
+  0.8 at 0.08 rad / 0.3 m (was 0.6 at 0.05): a slow look around keeps the full average. Cuts unchanged.
+- Clip gamma 1.5 still -> 1.0 moving (was 1.25 -> 0.85): less sub-pixel detail clipped back to the raw frame (the
+  crawl), still tight while moving (no ghosts).
+- The history pictures are R10G10B10A2_UNORM (same size as 8 bits): at 0.94 an 8-bit history cannot make a step under
+  1/(255 x 0.06) and sticks; 10 bits is a quarter of that.
+- RCAS (AMD FidelityFX CAS's robust form, 4-neighbour cross, lobe limit 0.1875) at 0.15 after the TAA, written to the
+  shown eye only (its alpha kept): the history never sees the sharpen. (vr_aa::rcasPixel, `rcasShader`, PSO
+  `history.rcas`.) It replaces the history -> eye CopyResource, so no extra copy.
+- Mip bias -0.5 (was the game's -1.0) on the samplers the game biased negatively only (spidy/mip_bias.hpp).
+- Kept: Halton (2,3) 16 steps scaled per eye by its own lens tangents, Catmull-Rom history, 1/(1+luma) weighting,
+  YCoCg variance clip, 16x anisotropy (vr_textures high).
+- Not done: SMAA before the TAA (T2x style) - 3 more full-screen passes and a copy per eye, about 1-1.5 ms a pair on a
+  GPU-bound run (2-3 fps); SMAA alone (`vr_aa = smaa`) has no history so it cannot shake or ghost, but it only
+  smooths geometric edges, not the temporal crawl of sub-pixel window detail. `vr_ss` is off by default for the same
+  reason (no headroom).

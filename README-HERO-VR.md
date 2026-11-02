@@ -47,6 +47,9 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
   after, with the eyes at native 100%; `vr_aa = keep` / `vr_render = upscaled` in live.txt change that.
   0.0.76 SPIDY TAA: the eyes now use our own per-eye TAA by default, not the game's; `vr_aa = smaa` in live.txt gives
   SMAA in each eye (no shake), `vr_aa = game` the SM1STYLE picture above.
+  0.0.76 SPIDY TAA TUNE: a longer, steadier average for windows and building detail (10-bit history, a mild
+  sharpen after it, texture mip bias -0.5). Optional, off by default: `vr_ss = 125` or `150` in live.txt renders the
+  eyes larger and filters them down before the TAA - smoother, but heavier on the GPU (next VR start).
   0.0.76 JITTER FIX: the game's unseen head views no longer get their stored TAA jitter fed back in (which doubled it
   and flipped it upside down); they get none. live.txt, live, no restart: `vr_game_jitter = keep` (c71a59c's doubled
   jitter, to compare), `vr_jitter = off` (the eyes' jitter fixed). The console's "JITTER LOG" lists each view's jitter.

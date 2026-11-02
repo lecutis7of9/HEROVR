@@ -69,9 +69,12 @@ class Launcher(unittest.TestCase):
         line = r.apply_sm1style(a, None)
         self.assertEqual((a.vr_aa, a.sm1style), ('ours', False))
         self.assertEqual((a.render_scale, a.supersample, a.upscale, a.mip_bias, a.anisotropy),
-                         (100, 100, 100, 'game', 0))
+                         (100, 100, 100, '-0.5', 0))  # 0.0.76 SPIDY TAA TUNE: the game's -1.0 eased to -0.5
         self.assertFalse(a.game_sharpening or a.engine_taa or a.no_eye_antialiasing)
         self.assertIn('SPIDY TAA', line)
+        self.assertIn('mip bias -0.5', line)
+        self.assertIn('RCAS', line)
+        self.assertNotIn('supersampled', line)
         self.assertIn('vr_aa = smaa', line)
         self.assertEqual(r.vr_aa_options(a), 0)
 
@@ -108,6 +111,51 @@ class Launcher(unittest.TestCase):
         r = run_game_vr()
         names, lines, taa = r.vr_picture_plan(True, True, False, {'AA': 2, 'UpscaleMethod': 2})
         self.assertEqual((names, taa), (('game_aa',), True))
+
+
+class Tune(unittest.TestCase):
+    """0.0.76 SPIDY TAA TUNE: a longer average, a 10-bit history, a mild RCAS after it, mip bias -0.5, live.txt vr_ss
+    (off by default)."""
+    def test_vr_ss_choices(self):
+        for text in (None, '', 'vr_ss = junk\n', 'vr_ss = off\n', 'vr_ss = 100\n', 'vr_ss = 0\n'):
+            self.assertEqual(L.vr_supersample(text), 100)
+        self.assertEqual(L.vr_supersample('vr_ss = 125\n'), 125)
+        self.assertEqual(L.vr_supersample('vr_ss = 1\n'), 125)
+        self.assertEqual(L.vr_supersample('vr_ss = 150\n'), 150)
+        self.assertEqual(L.vr_supersample('vr_ss = 2\n'), 150)
+
+    def test_vr_ss_subtext(self):
+        self.assertIsNone(L.SETTINGS['vr_ss'][1])
+        for word in ('off', '125', '150', 'RESTART NOTICE'):
+            self.assertIn(word, L.SETTINGS['vr_ss'][2])
+        self.assertIn('vr_ss', L.RESTART)
+        self.assertIn('vr_ss', L.START_ONLY)
+        self.assertEqual(L.parse('vr_ss = 125\n')[1], [])
+
+    def test_vr_ss_reaches_the_eyes(self):
+        r = run_game_vr()
+        a = args(game_aa_taa=True)
+        line = r.apply_sm1style(a, 'vr_ss = 125\n')
+        self.assertEqual((a.supersample, a.upscale, a.mip_bias), (125, 100, '-0.5'))
+        self.assertIn('supersampled 125%', line)
+        a = args(game_aa_taa=True, size=2000)  # a fixed eye size: no supersample
+        r.apply_sm1style(a, 'vr_ss = 150\n')
+        self.assertEqual(a.supersample, 100)
+        a = args(game_aa_taa=False)
+        r.apply_sm1style(a, None)
+        self.assertEqual(a.mip_bias, '0.5')  # the game's AA not TAA: as before
+
+    def test_shader_and_history(self):
+        gpu = src('src/native_eye_gpu.cpp')
+        self.assertIn('rcasShader', gpu)
+        self.assertIn('DXGI_FORMAT_R10G10B10A2_UNORM', gpu)
+        self.assertIn('history.rcas', gpu)
+        self.assertIn('vr_aa::sharpenAmount', gpu)
+
+    def test_report_keeps_the_last_record(self):
+        text = src('tools/run_game_vr.py')
+        self.assertIn('or vr_aa_last', text)
+        self.assertIn('or jitter_log_last', text)
 
 
 class Record(unittest.TestCase):

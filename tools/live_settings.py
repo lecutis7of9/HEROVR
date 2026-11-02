@@ -170,6 +170,12 @@ SETTINGS = {
     'vr_render': ((0, 1), None, "VR RENDER {} (0 native: SM1STYLE's eyes at their full size, the game's TAA with no "
                  "upscaling; 1 upscaled: SpidyVR's 67%, faster but softer) - RESTART NOTICE: takes effect the next "
                  'time VR starts'),
+    # 0.0.76 SPIDY TAA TUNE (tools/run_game_vr.py apply_vr_aa): the eyes rendered larger and filtered down before our
+    # TAA; off by default (the 509bdc9 run was GPU-bound at 45 new pictures/s on a 90 Hz headset: no headroom).
+    'vr_ss': ((0, 1, 2), None, "VR SS {} (0 off: the eyes at the headset's size, the default; 1 125: the eyes "
+             "rendered at 125% per side and filtered down before SpidyVR's TAA, smoother windows but about a third "
+             "more GPU work; 2 150: 150% per side, about twice the GPU work, only with frame rate to spare) - RESTART "
+             'NOTICE: takes effect the next time VR starts'),
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
     'vr_jitter': ((0, 1), 'SpidyVrJitter', "VR JITTER {} (0 on: the eyes' TAA sample walk, sharpest bricks; 1 off: "
                  "one fixed offset instead, a test for the far shake, a little softer) - live, no restart needed"),
@@ -475,6 +481,9 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
                           'least High and 16x filtering in VR; keep: your own).',
            'vr_render': 'RESTART NOTICE: vr_render takes effect the next time VR starts (native: the eyes at 100%, '
                         "no upscaling; upscaled: SpidyVR's 67%).",
+           # 0.0.76 SPIDY TAA TUNE: the eye supersample is set when VR starts
+           'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 125 or '
+                    '150: the eyes rendered larger and filtered down, smoother but heavier on the GPU).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
            # 0.0.76 LIGHTS LOCK: VR always turns them off; the value is only the flat game's
            'lens_flares': 'NOTICE: lens_flares stays off in VR for every hero (0.0.76); GAME only keeps the flat game\'s own setting.',
@@ -670,6 +679,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'sm1style': ('on', 'off'),  # 0.0.74 test 10 SM1STYLE
                 'vr_aa': ('ours', 'keep', 'smaa', 'game'), 'vr_textures': ('high', 'keep'),  # 0.0.76 VISUAL
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
+                'vr_ss': ('off', '125', '150'),  # 0.0.76 SPIDY TAA TUNE
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
@@ -764,6 +774,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_aa': {'ours': 0, 'taa': 0, 'keep': 1, 'smaa': 2, 'game': 3, 'sm1style': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 SPIDY TAA
            'vr_textures': {'high': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
+           'vr_ss': {'off': 0, '100': 0, '125': 1, '150': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 SPIDY TAA TUNE
            'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
@@ -1170,7 +1181,7 @@ START_ONLY = START_ONLY + UPDATE38_KEYS
 # 0.0.74 test 10 VAN NO FLIPS: an OFF in live.txt is kept from session to session (ON is the DLL's own default).
 START_ONLY = START_ONLY + ('van_no_flips',)
 START_ONLY = START_ONLY + ('sm1style',)  # 0.0.74 test 10 SM1STYLE: an OFF kept between sessions (RESTART)
-START_ONLY = START_ONLY + ('vr_aa', 'vr_textures', 'vr_render')  # 0.0.76 VISUAL: a KEEP kept between sessions (RESTART)
+START_ONLY = START_ONLY + ('vr_aa', 'vr_textures', 'vr_render', 'vr_ss')  # 0.0.76 VISUAL: a KEEP kept between sessions (RESTART)
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('suit_probe',)  # 0.0.76 SUIT PROBE: an ON kept between sessions (read-only)
@@ -2051,6 +2062,12 @@ def vr_textures_high(text):
     Quality at least High and Texture Filtering 16x (vr_display.SESSION_OFF 'textures', 'filtering'). Only
     `vr_textures = keep` (or 1) keeps the player's own."""
     return _start_choice(text, 'vr_textures', 'high') == 'high'
+
+
+def vr_supersample(text):
+    """0.0.76 SPIDY TAA TUNE: the eye supersample percent live.txt `text` asks for with vr_ss (None: no live.txt):
+    100 (off, the default), 125 or 150. Never raises."""
+    return {'125': 125, '150': 150}.get(_start_choice(text, 'vr_ss', 'off'), 100)
 
 
 def vr_render_upscaled(text):

@@ -158,9 +158,12 @@ SETTINGS = {
     # 0.0.76 VISUAL: the game's picture settings VR starts the game with (vr_display.SESSION_OFF, put back when the
     # game closes). live.txt only (no hologram row); RESTART: the game reads them at launch (run_game_vr reads
     # vr_aa_taa() and vr_textures_high()).
-    'vr_aa': ((0, 1), None, "VR AA {} (0 taa: the game's Anti-Aliasing at TAA with no upscaler while VR runs, so "
-             "SM1STYLE's per-eye TAA can run, your own put back after; 1 keep: your own, and with DLAA/DLSS the eyes get "
-             'the 0.0.72 FXAA picture) - RESTART NOTICE: takes effect the next time VR starts'),
+    # 0.0.76 SPIDY TAA: the eyes' anti-aliasing (include/spidy/vr_aa.hpp): our own per-eye TAA in the mod's pass, the
+    # default; SMAA per eye, the no-shake fallback; game: the SM1STYLE / 0.0.72 picture as before.
+    'vr_aa': ((0, 1, 2, 3), None, "VR AA {} (0 ours: SpidyVR's own TAA, one history per eye moved by that eye's own "
+             "pose, the game's TAA kept off the eyes; 1 keep: the same with your own game Anti-Aliasing left as set; "
+             '2 smaa: SMAA in each eye, no history so nothing can shake or ghost, a little more shimmer; 3 game: the '
+             'old SM1STYLE picture, the game\'s TAA in each eye) - RESTART NOTICE: takes effect the next time VR starts'),
     'vr_textures': ((0, 1), None, "VR TEXTURES {} (0 high: Texture Quality at least High and Texture Filtering 16x "
                    'while VR runs, your own put back after; 1 keep: your own) - RESTART NOTICE: takes effect the next '
                    'time VR starts'),
@@ -471,8 +474,8 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'sm1style': 'RESTART NOTICE: sm1style takes effect the next time VR starts (off: the 0.0.72 eye '
                        'picture, our FXAA, history and sharpen; on: SpidyVR\'s per-eye TAA, 100% eyes by default).',
            # 0.0.76 VISUAL: the game reads its graphics settings when it starts
-           'vr_aa': "RESTART NOTICE: vr_aa takes effect the next time VR starts (taa: the game's TAA with no upscaler "
-                    "in VR, SM1STYLE's per-eye TAA; keep: your own Anti-Aliasing).",
+           'vr_aa': "RESTART NOTICE: vr_aa takes effect the next time VR starts (ours: SpidyVR's own per-eye TAA; smaa: "
+                    "SMAA in each eye, no shake; keep: our TAA with your own game AA; game: the old SM1STYLE picture).",
            'vr_textures': 'RESTART NOTICE: vr_textures takes effect the next time VR starts (high: Texture Quality at '
                           'least High and 16x filtering in VR; keep: your own).',
            'vr_render': 'RESTART NOTICE: vr_render takes effect the next time VR starts (native: the eyes at 100%, '
@@ -671,7 +674,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'daredevil': ('off', 'on'), 'hulk': ('off', 'on'), 'daredevil_punch': ('3x', '1x', '2x', '4x', '5x'),
                 'hit_indicator': ('off', 'on'), 'hand_flips': ('on', 'off'), 'lens_flares': ('game', 'off_in_vr'),
                 'sm1style': ('on', 'off'),  # 0.0.74 test 10 SM1STYLE
-                'vr_aa': ('taa', 'keep'), 'vr_textures': ('high', 'keep'),  # 0.0.76 VISUAL
+                'vr_aa': ('ours', 'keep', 'smaa', 'game'), 'vr_textures': ('high', 'keep'),  # 0.0.76 VISUAL
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
@@ -764,7 +767,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'hand_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'lens_flares': {'game': 0, 'off_in_vr': 1, 'off': 1, '0': 0, '1': 1},
            'sm1style': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 SM1STYLE
-           'vr_aa': {'taa': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
+           'vr_aa': {'ours': 0, 'taa': 0, 'keep': 1, 'smaa': 2, 'game': 3, 'sm1style': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 SPIDY TAA
            'vr_textures': {'high': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
@@ -2037,11 +2040,18 @@ def _start_choice(text, name, default):
     return value if value in CHOICE_NAMES[name] else default
 
 
+def vr_aa_choice(text):
+    """0.0.76 SPIDY TAA: live.txt `text`'s vr_aa word (None: no live.txt): 'ours' (the default: SpidyVR's own per-eye
+    TAA), 'keep' (the same, the player's own game Anti-Aliasing kept), 'smaa' (SMAA in each eye) or 'game' (the old
+    SM1STYLE / 0.0.72 picture). Never raises."""
+    return _start_choice(text, 'vr_aa', 'ours')
+
+
 def vr_aa_taa(text):
-    """0.0.76 VISUAL: True when live.txt `text` (None: no live.txt) leaves vr_aa at taa, the default: VR starts the game
-    with its Anti-Aliasing at TAA and no upscaler (vr_display.SESSION_OFF['game_aa']). Only `vr_aa = keep` (or 1)
-    keeps the player's own."""
-    return _start_choice(text, 'vr_aa', 'taa') == 'taa'
+    """0.0.76 VISUAL: True when live.txt `text` (None: no live.txt) has VR start the game with its Anti-Aliasing at TAA
+    and no upscaler (vr_display.SESSION_OFF['game_aa']): every vr_aa but keep. 0.0.76 SPIDY TAA: the game's TAA then
+    cannot reach the eyes (no eye TAA targets, no eye jitter) but DLAA / DLSS / FSR stay off them too."""
+    return vr_aa_choice(text) != 'keep'
 
 
 def vr_textures_high(text):

@@ -2838,3 +2838,24 @@ buildings stayed; only the light went.
   xrLocateViews used, against predictedDisplayTime), layerMaxDegrees/Mm, layerFovMaxDegrees and layerOver (the layer
   pose and fov against the command's eyes/fovs); first 10 mismatches to the prompts log. Tests: core `JITTER FIX`,
   hero076_jitter_fix_tests, hero076_far_shake_tests, hero076_pose_check_tests.
+
+## 70. Version 0.0.76 SPIDY TAA: our own per-eye TAA in the mod's pass; SMAA per eye; the game's TAA off the eyes
+
+  live.txt vr_aa (RESTART): ours (alias taa; default) | keep | smaa | game. Launcher (tools/run_game_vr.py
+  apply_sm1style -> apply_vr_aa, vr_aa_options): ours/keep/smaa force render scale, supersample and upscale 100,
+  anisotropy 0, game sharpening lowest, no ENGINE TAA, the eyes' jittered lens; mip 'game' (ours with the game's AA
+  at TAA) or 0.5 (smaa, or keep with DLSS). Option bits (include/spidy/vr_aa.hpp): 0x2000000 SMAA, 0x4000000 LEGACY;
+  SM1STYLE 0x1000000 is legacy too; none = ours. knownOptions 0x7ffffff. game = SM1STYLE as before (legacy bit
+  with sm1style = off). The game's AA goes to TAA (no upscaler) for every choice but keep.
+  DLL: native_gpu::setVrAa at SpidyXrStart; vrAaLocks() (ours/smaa) locks EYE AA on (ours) / off (smaa), the CAS
+  sharpen and FXAA off, ENGINE TAA refused (4602) and never auto-armed, the wrist rows UNAVAILABLE. The game's
+  TemporalAa (0xb1 / 0x2c2dc60, CONFIRMED) needs eye TAA targets (eyeTemporal 0x10 / 0x20) and eye jitter
+  (sm1Steps / engineTaaLive): neither exists in ours/smaa, so it cannot run on the eyes.
+  SPIDY TAA: HistoryPipeline PSO history.taa (taaShader): per-eye history, homography reprojection from each eye's
+  own shown/now EyeView, YCoCg variance clip intersected with min/max (gamma vr_aa::clipGamma), Catmull-Rom history,
+  1/(1+luma) blend, share vr_aa::keep (0.9 still -> 0.6 moving, 0 on a cut). SMAA: SmaaPipeline (SMAA 1x HIGH, luma
+  edges, include/spidy/smaa, MIT, docs/licenses/SMAA-LICENSE.txt) on stagedEyes after the copy, 3 passes per eye,
+  output copied back; LUTs uploaded once (GetCopyableFootprints); timestamp queries. Fallbacks: SPIDY TAA fault or
+  EYE AA off -> SMAA -> FXAA -> plain copy. SpidyVrAaData (72 bytes, SVAA): tools/vr_aa_record.py, report
+  `vr_aa`, console "VR AA (...)". Not feasible: depth / motion vectors (no CONFIRMED eye addresses).
+  Tests: core `SPIDY TAA`, hero076_spidy_taa_tests.

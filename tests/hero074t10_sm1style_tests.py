@@ -69,7 +69,8 @@ class Launcher(unittest.TestCase):
                                       game_depth_of_field=False, size=0)
             for k, v in kw.items():
                 setattr(a, k, v)
-            line = r.apply_sm1style(a, live)
+            # 0.0.76 SPIDY TAA: SM1STYLE runs only with live.txt vr_aa = game (our own TAA is the default).
+            line = r.apply_sm1style(a, 'vr_aa = game\n' + (live or ''))
             return r, a, line
         finally:
             sys.meta_path.remove(finder)
@@ -121,13 +122,13 @@ class Native(unittest.TestCase):
         self.assertIn('startOption = 0x1000000', h)
         self.assertIn('upscalePercent = 67', h)
         xr = src('src/game_xr.cpp')
-        self.assertIn('constexpr uint32_t knownOptions = 0x1ffffff;', xr)
+        self.assertIn('constexpr uint32_t knownOptions = 0x7ffffff;', xr)
         self.assertIn('spidy::sm1style::eyeTemporalBit << 8', xr)
 
     def test_nothing_of_ours_overrides(self):
         xr, gpu, probe = src('src/game_xr.cpp'), src('src/native_eye_gpu.cpp'), src('src/stereo_probe.cpp')
         self.assertIn('native_gpu::setSm1StyleLock(live);', xr)
-        self.assertIn('(sm1Holds() ? sm1LockedRows : 0u)', xr)        # wrist rows UNAVAILABLE
+        self.assertIn('((sm1Holds() || native_gpu::vrAaLocks()) ? sm1LockedRows : 0u)', xr)  # wrist rows UNAVAILABLE
         self.assertIn('EYE AA AT START: kept off, SM1STYLE', xr)     # live.txt eye_temporal
         self.assertIn('EYE AA: locked off by SM1STYLE', xr)          # the wrist press
         self.assertIn('ENGINE TAA: locked off by SM1STYLE', xr)

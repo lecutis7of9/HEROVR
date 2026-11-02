@@ -6,6 +6,15 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **Our own eye anti-aliasing (SPIDY TAA), the default:** the game's TAA no longer runs in the eyes - its one history
+  was made for the flat camera, which brought the far shake and the ghosting. Each eye now has its own history in
+  the mod's own pass, moved with that eye's own pose (its own view, lens and position, this pair and the one before),
+  its own sub-pixel jitter, and colour clipping so moving things leave no trail. Eyes at native 100%, no upscaler,
+  supersample off, so it costs little. live.txt (applies the next time VR starts): `vr_aa = smaa` gives SMAA in each
+  eye instead - no history at all, so nothing can shake or ghost (a little more shimmer); `vr_aa = game` is the old
+  SM1STYLE picture. If our TAA cannot start, SMAA takes over by itself. The console's "VR AA: ..." says what ran.
+  Not done: the game's depth and motion vectors for the eyes are not known (no CONFIRMED addresses), so the history
+  follows your head only; moving cars and people are kept clean by the clipping instead.
 - **Freezes and lag fixed (HITCH HOLD):** in the last test Virtual Desktop held about one frame in ten for a tenth of a
   second, and each held frame made VR drop to the game screen for up to two seconds (the freezes, black edges and
   snaps). A held frame of up to half a second now plays as one short step and VR goes on. live.txt, live (no

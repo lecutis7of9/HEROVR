@@ -88,8 +88,9 @@ class RealLaunchPath(unittest.TestCase):
         self.assertIn('LENS FLARES: OFF IN VR this session', text)
 
     def test_vr_aa_keep_leaves_the_game_aa(self):
-        # 0.0.76 VISUAL: live.txt vr_aa = keep (or sm1style = off) starts the game with the player's own AA.
-        for live in ('vr_aa = keep\n', 'sm1style = off\n'):
+        # 0.0.76 VISUAL: live.txt vr_aa = keep (or vr_aa = game with sm1style = off, the 0.0.72 picture) starts the
+        # game with the player's own AA. 0.0.76 SPIDY TAA: sm1style = off alone no longer does (our TAA is the default).
+        for live in ('vr_aa = keep\n', 'vr_aa = game\nsm1style = off\n'):
             calls, text = run_session(live)
             self.assertEqual(tuple(calls[0]['off']), ('lens_flares',))
         calls, text = run_session('')

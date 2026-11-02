@@ -30,7 +30,7 @@ crawls when nothing moves; a sharp/blurry pulse every few frames; ghosting on bi
 
 | switch | default | what it does |
 | --- | --- | --- |
-| `vr_aa` | `taa` | the game's AA at TAA with no upscaler (AA 2, UpscaleMethod 0, CONFIRMED in 31 reports, docs/AA-0.0.73.md) so SM1STYLE's per-eye TAA runs; `keep` leaves the player's |
+| `vr_aa` | `ours` | 0.0.76 SPIDY TAA: our own per-eye TAA (below), the game's AA at TAA with no upscaler (AA 2, UpscaleMethod 0, CONFIRMED in 31 reports, docs/AA-0.0.73.md) only so DLAA/DLSS/FSR stay off the eyes; `keep` our TAA with the player's AA; `smaa` SMAA per eye; `game` the SM1STYLE picture (or 0.0.72 with sm1style = off) |
 | `vr_textures` | `high` | Texture Quality at least High (2) and Texture Filtering 16x (4), only raised; `keep` leaves them |
 | `vr_render` | `native` | SM1STYLE's eyes at 100%, the game's TAA with no upscaling; `upscaled` is SpidyVR's 67% |
 
@@ -134,3 +134,25 @@ located (xrLocateViews) at a time other than the frame's predicted display time 
 "Layer vs build: SAME / MISMATCH"; the first 10 mismatches go to the prompts log). Its cost per submit is a few
 matrix compares and two interlocked increments, microseconds: not the freezes (those started on the game screen,
 before any eye or POSE CHECK ran - see HITCH HOLD).
+
+## SPIDY TAA (0.0.76): our own per-eye TAA, the default
+
+Why: the game's TemporalAa (command 0xb1, handler 0x2c2dc60, CONFIRMED, include/spidy/engine_taa.hpp) keeps one
+history and reprojects with the flat camera's matrices; run once per eye it ghosts (wrong matrices) and shakes far
+away (the two eyes' samples ping-pong). It now cannot run on the eyes: it needs job +0x570 == 1, a non-zero jitter at
++0x428/+0x42c and TAA targets, and the eyes get TAA targets only with eyeTemporal 0x10 (ENGINE TAA) or 0x20
+(SM1STYLE) and jitter only under those - both locked off (stereo_probe SpidyEngineTaa refuses, auto never arms).
+
+What runs (src/native_eye_gpu.cpp `taaShader`, PSO `history.taa`, include/spidy/vr_aa.hpp):
+- one history picture per eye; each reprojected by a homography from that eye's own shown and current view (its
+  pose and its jittered lens tangents from the submitted XrView), never the flat camera;
+- per-eye Halton (2,3) lens jitter (eye_taa.hpp, the same lens the layer is submitted with);
+- 3x3 YCoCg neighbourhood: variance box (mean +- gamma sigma, gamma 1.25 still -> 0.85 moving) intersected with the
+  min/max box, the history clipped toward the box centre; Catmull-Rom history sample; 1/(1+luma) weighting;
+- history share 0.9 still easing to 0.6 while turning/moving, 0 on a camera cut (> 0.26 rad or 3 m in a pair).
+Not feasible: depth / motion-vector reprojection - no CONFIRMED eye depth or motion-vector addresses, so the history
+follows the head only; moving objects are handled by the clip. Cost: one full-screen pass per eye (as EYE AA's).
+
+`vr_aa = smaa`: SMAA 1x (preset HIGH, luma edges; iryoku/smaa, MIT) per eye, 3 passes, no history. Also the
+automatic fallback when SPIDY TAA's pass cannot be built; FXAA if SMAA cannot either; the plain copy after that.
+The report's `vr_aa` and the console's "VR AA: ..." line say what ran (SpidyVrAaData).

@@ -258,8 +258,9 @@ int main(int argc, char** argv) {
     check(wl.size() == 4 && wl[0].find("SUIT PROBE 3: WATCH 1 (passes") == 0 &&
               wl[1].find("SUIT_CLASSIC model characters/hero/hero_c/hero_c.model id 0xa000000000000005 at record+0x008 +0x020") !=
                   std::string::npos &&
-              wl[3].find("mask") != std::string::npos,
-          "two passes agree: every place told");
+              wl[2].find("record+0x010 +0x028") != std::string::npos &&
+              wl[3] == "SUIT PROBE 3: WATCH SUIT_CLASSIC: ... 1 more",
+          "two passes agree: a few places told, then a count (0.0.76 noise cut)");
     check(ww.watch(table, wd).empty(), "the same places: quiet");
     wm.put64(0x52000000 + 0x20, 0);
     wm.put64(0x53000000 + 0x28, 0);
@@ -479,6 +480,156 @@ int main(int argc, char** argv) {
     const uint64_t nroots[3] = {0, 0x1234, 0xffff800000000000ull};
     empty.start(nroots);
     check(!empty.busy() && !empty.step(wide, table, small), "no roots: nothing read");
+
+
+    // 0.0.76 the probe hitch: a read budget a frame (at least one object), and PROBE 1 spread over frames.
+    {
+        Memory big;
+        const uint64_t broot = 0x61000000;
+        for (uint32_t i = 0; i < 0x80; ++i) { // 128 objects, each 128 words of pointers to readable pages
+            const uint64_t o = 0x62000000 + i * 0x1000ull;
+            big.put64(broot + i * 8, o);
+            for (uint32_t j = 0; j < 0x80; ++j)
+                big.put64(o + j * 8, 0x70000000 + ((i * 0x80 + j) % 64) * 0x1000ull);
+        }
+        for (uint32_t k = 0; k < 64; ++k)
+            big.put64(0x70000000 + k * 0x1000ull + 0x800, 0);
+        const uint64_t br[3] = {broot, 0, 0};
+        DeepLimits bl;
+        Deep free, capped2;
+        free.start(br);
+        capped2.start(br);
+        free.step(big, table, bl); // the root
+        capped2.step(big, table, bl);
+        big.reads = 0;
+        free.step(big, table, bl);
+        const uint32_t unbudgeted = big.reads;
+        big.reads = 0;
+        Budget b;
+        b.most = 160;
+        capped2.step(big, table, bl, &b);
+        check(b.reads == big.reads && big.reads < unbudgeted && big.reads <= 160 + 0x80 + 2,
+              "a budget stops a deep step between objects (every read counted)");
+        Budget none;
+        none.most = 0;
+        big.reads = 0;
+        capped2.step(big, table, bl, &none);
+        check(big.reads > 0, "a spent budget still reads one object (no probe starves)");
+        int late = 0;
+        Budget clock;
+        clock.late = [&] { return ++late > 1; };
+        big.reads = 0;
+        capped2.step(big, table, bl, &clock);
+        check(big.reads > 0 && big.reads < unbudgeted, "a frame's time spent stops it too");
+
+        Scan1 s1;
+        s1.start(roots);
+        int frames = 0;
+        uint32_t most = 0;
+        m.reads = 0;
+        for (;; ++frames) {
+            const uint32_t before = m.reads;
+            Budget fb;
+            fb.most = 16;
+            const bool done = s1.step(m, Limits{}, &fb);
+            most = std::max(most, m.reads - before);
+            if (done || frames > 1000)
+                break;
+        }
+        std::printf("  (PROBE 1: %d frames, at most %u reads a frame)\n", frames, most);
+        check(frames > 1 && most <= 16 + Scan1::wordsPerStep * 34, "PROBE 1 spread over frames, a few reads each");
+        check(s1.hits().size() == 2 && s1.hits()[0].path == hits[0].path && s1.hits()[1].path == hits[1].path,
+              "and it finds what the one-frame scan found");
+        Memory fx = m;
+        fx.put64(record + 0x70, 0x40000a00);
+        fx.putText(0x40000a00, "fx/poi/fx_poi_quest_marker_pillar.model");
+        s1.start(roots);
+        while (!s1.step(fx, Limits{})) {
+        }
+        check(s1.hits().size() == 2, "PROBE 1 shows the hero's own paths only (no fx marker)");
+    }
+
+    // 0.0.76 PROBE 5: the look ids (equipped loadout, vanity items, materials) on the hero record.
+    {
+        const char* lookText = R"({"tool": "sm2scan 2", "suits": [
+          {"name": "SUIT_NWH", "item": "configs/inventory/inv_reward_loadout_nwh.config", "models": [{"path": "characters/hero/nwh/nwh.model"}],
+           "loadout": {"path": "configs/loadouts/nwh_loadout.config"},
+           "vanity": [{"path": "configs/vanity/nwh_body.config"}],
+           "materials": [{"path": "characters/hero/nwh/nwh_suit.material"}, {"path": "characters/hero/shared/eyes.material"}]},
+          {"name": "SUIT_NWH_HYBRID", "item": "configs/inventory/inv_reward_loadout_hybrid.config", "models": [{"path": "characters/hero/nwh/nwh.model"}],
+           "loadout": {"path": "configs/loadouts/hybrid_loadout.config", "id": "9A10AC36FE83105E"},
+           "vanity": [{"path": "configs/vanity/hybrid_body.config"}],
+           "materials": [{"path": "characters/hero/nwh/hybrid_suit.material"}, {"path": "characters/hero/shared/eyes.material"}]}]})";
+        const Table lt = Table::fromScan(lookText);
+        const uint64_t nwhMat = assetId("characters/hero/nwh/nwh_suit.material"),
+                       hyMat = assetId("characters/hero/nwh/hybrid_suit.material"),
+                       hyLoad = assetId("configs/loadouts/hybrid_loadout.config"),
+                       eyes = assetId("characters/hero/shared/eyes.material");
+        check(lt.looks.size() == 8 && lt.findLook(hyLoad) && lt.findLook(hyLoad)->kind == kindEquipped &&
+                  lt.findLook(0x9A10AC36FE83105Eull) && lt.findLook(eyes)->suits.size() == 2 &&
+                  lt.findLook(hyMat)->kind == kindMaterial,
+              "the look ids read (the given id and the path's own, a shared material names both)");
+        check(!lt.find(hyMat) && !lt.find(hyLoad), "look ids never reach probes 2-4");
+        check(Table::fromScan(scanText).looks.empty(), "an older sm2scan: no look ids");
+
+        Memory lm5;
+        const uint64_t lrec = 0x81000000, linst = 0x82000000, obj = 0x83000000;
+        lm5.put64(lrec, linst);
+        lm5.put64(lrec + 0x40, nwhMat);        // straight on the record
+        lm5.put64(linst + 0x18, obj);          // one step from the instance
+        lm5.put64(obj + 0x30, assetId("configs/loadouts/nwh_loadout.config"));
+        lm5.put64(obj + 0x38, eyes);
+        lm5.put64(linst + 0x20, 0x84000000);   // two steps: never read
+        lm5.put64(0x84000000 + 0x08, 0x85000000);
+        lm5.put64(0x85000000, hyMat);
+        const uint64_t lr[2] = {lrec, linst};
+        LookLimits ll;
+        Look lk;
+        Watch5 w5;
+        auto pass5 = [&] {
+            lk.start(lm5, lr, lt, ll);
+            int guard = 0;
+            while (!lk.step(lm5, lt, ll) && ++guard < 10000) {
+            }
+            return w5.pass(lt, lk);
+        };
+        check(pass5().empty(), "PROBE 5: one pass, nothing told yet");
+        auto p5 = pass5();
+        check(p5.size() == 4 && p5[0].find("SUIT PROBE 5: baseline (passes 1 and 2 agree,") == 0 &&
+                  p5[0].find("3 look id(s) on the hero record; worn look (CANDIDATE): SUIT_NWH (3 ids)") != std::string::npos,
+              "two passes agree: the baseline and the worn look");
+        bool at = false;
+        for (const auto& line : p5)
+            at = at || line.find("SUIT_NWH material characters/hero/nwh/nwh_suit.material id") != std::string::npos &&
+                           line.find("at record+0x040") != std::string::npos;
+        check(at, "each id with its suit, kind, path and place");
+        check(pass5().empty(), "the same ids: quiet");
+        lm5.put64(lrec + 0x40, hyMat); // the swap to Hybrid: only the look changes
+        lm5.put64(obj + 0x30, hyLoad);
+        check(pass5().empty(), "a change: quiet until the next pass agrees");
+        p5 = pass5();
+        check(p5.size() == 5 && p5[0].find("SUIT PROBE 5: change 1") == 0 && p5[0].find("+2 -2") != std::string::npos &&
+                  p5[0].find("worn look (CANDIDATE): SUIT_NWH_HYBRID (3 ids)") != std::string::npos &&
+                  p5[1].find("SUIT PROBE 5: + SUIT_NWH_HYBRID") == 0 && p5[3].find("SUIT PROBE 5: - SUIT_NWH") == 0,
+              "the Hybrid swap: told by its look ids");
+        lm5.put64(lrec + 0x40, nwhMat); // a flicker
+        check(pass5().empty(), "one pass different");
+        lm5.put64(lrec + 0x40, hyMat);
+        check(pass5().empty(), "back again: nothing told");
+        Watch5 old;
+        Look none5;
+        const Table oldTable = Table::fromScan(scanText);
+        auto o = old.pass(oldTable, none5);
+        check(o.size() == 1 && o[0].find("run tools/sm2_suits/sm2scan.py from this build again") != std::string::npos &&
+                  old.pass(oldTable, none5).empty(),
+              "an older sm2scan.json: told once");
+        Look gone;
+        const uint64_t nr[2] = {0, 0};
+        gone.start(lm5, nr, lt, ll);
+        Watch5 g5;
+        check(gone.status() == Look::noRecord && g5.pass(lt, gone).size() == 1 && g5.pass(lt, gone).empty(),
+              "no record: told once, nothing read");
+    }
 
     if (argc > 1) { // a real sm2scan.json (never in the repo)
         std::ifstream in(argv[1], std::ios::binary);

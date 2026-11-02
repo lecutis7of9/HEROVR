@@ -22,10 +22,23 @@ Kept: swing input, the swing state, web zips, the attach points, the wrist ancho
 (native webs), and web-ball aim and firing.
 
 The game's web lines are asked to start at session start when `game_webs` is on, even with the launcher's SPIDY WEB
-STRANDS (--overlay-webs) choice. In Spider-Man 2 that start always fails for now: the web hook has no Spider-Man 2
-addresses (`sm2::notPorted`, websNotPorted 6099), and the TEST 0.0.76 3c47385 report shows it (web_state failed,
-0 creates). So in Spider-Man 2 the switch hides only the cocoons and the OURS ball and GLOB (the game's wrist ball
-plays instead); HERO VR's swing, zip, grab and net lines still show. `game_webs = off` brings back HERO VR's own webs; the swing lines need a restart for that.
+STRANDS (--overlay-webs) choice.
+
+**Why Spider-Man 2 showed no game web line (TEST 0.0.76 3c47385).** HERO VR does not hide the game's swing visuals by
+camera or near-plane culling. It drives the swing itself (the tracked swing in game_xr.cpp, from the 0.0.5 import
+db4d0ff, which also brought our overlay strand and native_webs.cpp), so the game's hero states never ask for a swing
+rope, and the hook that lays one from the wrist (`native_webs`) had only Spider-Man Remastered addresses and was
+refused in Spider-Man 2 (`sm2::notPorted`, websNotPorted 6099: web_state failed, 0 creates). Zips and web balls were
+already the game's own.
+
+**Now (this test).** `native_webs` carries Spider-Man 2 values, every one SM2VR 0.0.27's and each function's first
+bytes checked against Spider-Man2.exe: rope update 0xaaac90, ensure 0xaac730, target 0xab5180, release 0xab2590, get
+0xab2740, hand points 0x10ebce0; manager vtable 0x53a1940; ropes at manager+0x50 (count +0x58, 0xa18 each); rope
+lease +0x854, type +0x8c0, flags +0x8cc, end cone +0x8dc; joint hashes 0x1d8/0x204/0x230/0x25c and Start/Grip/Grip2/
+End 0x288/0x30c/0x390/0x414. The values are CONFIRMED against the exe bytes; the game drawing a line from them stays
+CANDIDATE until a run shows `web_state active` with creates > 0. Only Spider-Man's swings go to the game's ropes;
+every other hero keeps his own tether. Any byte mismatch refuses the start (6001) and HERO VR's swing, grab and net
+lines still show (the fallback). `game_webs = off` brings back HERO VR's own webs; the swing lines need a restart.
 
 Other heroes are not affected. Their tethers (the hero chain and hook lines, the batarang, the shield, the THOR and GL
 chains, the DD and PUNISHER grapples) are separate draw code, not the game's web system. A multiplayer friend's web

@@ -230,6 +230,16 @@ class Scan(unittest.TestCase):
             self.assertIn('notes', gone)  # a reward not in the toc is a note, never a crash
             json.dumps(r)
 
+    def test_look_ids_for_probe5(self):
+        # 0.0.76 SUIT PROBE 5: the equipped loadout, its vanity items and every .material/.texture they name
+        with tempfile.TemporaryDirectory() as d:
+            game(d)
+            adv = S.scan(d)['suits'][0]
+            self.assertEqual(adv['loadout'], {'path': LOADOUT, 'id': '%016X' % S.asset_id(LOADOUT)})
+            self.assertEqual([v['path'] for v in adv['vanity']], [VANITY, 'configs/none.config'])
+            self.assertEqual([m['path'] for m in adv['materials']], ['textures/not_a_model.texture'])
+            self.assertEqual(adv['materials'][0]['id'], '%016X' % S.asset_id('textures/not_a_model.texture'))
+
     def test_gdeflate_is_reported_not_guessed(self):
         with tempfile.TemporaryDirectory() as d:
             game(d)

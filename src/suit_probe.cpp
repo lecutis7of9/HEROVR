@@ -1,5 +1,5 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
-// 0.0.76 SUIT PROBE 1 + 2/3 + 4 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
+// 0.0.76 SUIT PROBE 1 + 2/3 + 4 + 5 (include/spidy/suit_probe.hpp). READ-ONLY: every read of the game goes through peek()
 // (SEH); nothing here writes game memory, calls a game function, changes page protection or makes a hook.
 // The only file read is the user's own sm2scan.json (tools/sm2_suits/sm2scan.py), never written.
 #include <windows.h>
@@ -91,6 +91,31 @@ ULONGLONG containerStarted{};
 Cost cost; // what frame() costs the VR thread while on
 ULONGLONG onSince{}, costTold{};
 LARGE_INTEGER qpf{};
+// 0.0.76 (the probe hitch): each probe's reads this frame, and the frame's deadline (QPC ticks; 0: none)
+LARGE_INTEGER frameDeadline{};
+constexpr uint32_t readsPerFrame = 160;   // per probe (PROBE 3's deep pass: deepReadsPerFrame, so a 10,000-object
+constexpr uint32_t deepReadsPerFrame = 600; // pass still ends in about half a minute; the clock bounds it anyway)
+constexpr uint64_t microsPerFrame = 1200; // all probes together (~10% of an 88 Hz frame)
+bool late() {
+    if (!frameDeadline.QuadPart)
+        return false;
+    LARGE_INTEGER t{};
+    QueryPerformanceCounter(&t);
+    return t.QuadPart >= frameDeadline.QuadPart;
+}
+Budget budget(uint32_t most = readsPerFrame) {
+    Budget b;
+    b.most = most;
+    b.late = late;
+    return b;
+}
+Scan1 scan1;
+ULONGLONG scan1Started{};
+Look look;
+Watch5 watch5;
+LookLimits lookLimits;
+uint64_t lookRecord{};
+ULONGLONG lookStarted{};
 void (*sink)(const char*) = nullptr; // the caller's log, for stampedLog
 
 // Every line with its time: since the probe was turned on, and the local clock.
@@ -172,8 +197,8 @@ void exeRange() {
     if (!base || !peek(base, &dos, sizeof dos) || dos.e_magic != IMAGE_DOS_SIGNATURE ||
         !peek(base + static_cast<uint32_t>(dos.e_lfanew), &nt, sizeof nt) || nt.Signature != IMAGE_NT_SIGNATURE)
         return;
-    limits.skipLo = containerLimits.skipLo = base;
-    limits.skipHi = containerLimits.skipHi = base + nt.OptionalHeader.SizeOfImage;
+    limits.skipLo = containerLimits.skipLo = lookLimits.skipLo = base;
+    limits.skipHi = containerLimits.skipHi = lookLimits.skipHi = base + nt.OptionalHeader.SizeOfImage;
 }
 
 // PROBE 4: record+0x080 -> +0x028 read directly, a pass about once a second (perStep entries a frame).
@@ -202,8 +227,48 @@ void containerFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
             return;
         }
     }
-    if (container.step(reader, scanTable, containerLimits))
+    Budget b = budget();
+    if (container.step(reader, scanTable, containerLimits, &b))
         for (const auto& line : watch4.pass(scanTable, container))
+            log(line.c_str());
+}
+
+// PROBE 5: the look ids (equipped loadout, vanity items, materials / textures) on the record and its instance,
+// and one step into each pointer there; a pass about once a second, a few objects a frame.
+void lookFrame(uint64_t record, ULONGLONG now, void (*log)(const char*)) {
+    if (scanTable.empty())
+        return;
+    if (!record) {
+        lookRecord = 0;
+        return;
+    }
+    if (record != lookRecord) {
+        lookRecord = record;
+        look = Look{};
+        watch5.newPlayer();
+        lookStarted = 0;
+    }
+    auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
+    if (look.status() != Look::reading) {
+        if (lookStarted && now - lookStarted < 1000)
+            return;
+        lookStarted = now ? now : 1;
+        if (scanTable.looks.empty()) { // an older sm2scan.json: told once, nothing read
+            for (const auto& line : watch5.pass(scanTable, look))
+                log(line.c_str());
+            return;
+        }
+        const uint64_t roots[2] = {record, peek64(record)};
+        look.start(reader, roots, scanTable, lookLimits);
+        if (look.status() != Look::reading) {
+            for (const auto& line : watch5.pass(scanTable, look))
+                log(line.c_str());
+            return;
+        }
+    }
+    Budget b = budget();
+    if (look.step(reader, scanTable, lookLimits, &b))
+        for (const auto& line : watch5.pass(scanTable, look))
             log(line.c_str());
 }
 
@@ -234,7 +299,8 @@ void deepFrame(uint64_t hero, uint64_t record, ULONGLONG now, void (*log)(const 
             return;
     }
     auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
-    if (deep.step(reader, scanTable, limits)) {
+    Budget b = budget(deepReadsPerFrame);
+    if (deep.step(reader, scanTable, limits, &b)) {
         passEnded = now ? now : 1;
         for (const auto& line : watch2.pass(scanTable, deep))
             log(line.c_str());
@@ -256,6 +322,7 @@ void frame(uint64_t hero, uint64_t record, bool on, void (*rawLog)(const char*))
             if (!qpf.QuadPart)
                 QueryPerformanceFrequency(&qpf);
             QueryPerformanceCounter(&t0);
+            frameDeadline.QuadPart = t0.QuadPart + static_cast<long long>(qpf.QuadPart * microsPerFrame / 1000000ull);
             if (!onSince)
                 onSince = costTold = now ? now : 1;
         }
@@ -268,7 +335,12 @@ void frame(uint64_t hero, uint64_t record, bool on, void (*rawLog)(const char*))
         if (on) {
             deepFrame(hero, record, now, log);
             containerFrame(record, now, log);
+            lookFrame(record, now, log);
         } else if (wasOn) {
+            look = Look{};
+            lookRecord = 0;
+            watch5.reset();
+            scan1 = Scan1{};
             deep = Deep{};
             deepRecord = 0;
             watch2.reset();
@@ -276,17 +348,29 @@ void frame(uint64_t hero, uint64_t record, bool on, void (*rawLog)(const char*))
             containerRecord = 0;
             watch4.reset();
         }
-        const bool scanNow = !(on == wasOn && (!on || now - lastScan < 1000));
+        // PROBE 1, spread over frames (0.0.76: it read ~4,000 times in one frame a second, the periodic hitch):
+        // a pass starts at most once a second, reads a few root words a frame, and is told when it is done.
+        bool scanNow = on != wasOn;
+        std::vector<Hit> hits;
+        if (on && record) {
+            auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
+            if (!scan1.busy() && (!scan1Started || now - scan1Started >= 1000)) {
+                scan1Started = now ? now : 1;
+                const uint64_t roots[2] = {record, peek64(record)};
+                scan1.start(roots);
+            }
+            Budget b = budget();
+            if (scan1.busy() && scan1.step(reader, Limits{}, &b)) {
+                hits = scan1.hits();
+                scanNow = true;
+            } else if (scanNow)
+                scanNow = false; // turned on: told when the first pass is done
+        } else if (on && now - lastScan >= 1000)
+            scanNow = true, scan1 = Scan1{};
         if (scanNow) {
             const bool turnedOff = wasOn && !on;
             wasOn = on;
             lastScan = now;
-            std::vector<Hit> hits;
-            if (on && record) {
-                const uint64_t roots[2] = {record, peek64(record)};
-                auto reader = [](uint64_t p, void* out, size_t n) { return safeRead(p, out, n); };
-                hits = scan(roots, reader);
-            }
             for (const auto& line : watch.update(on, record, hits))
                 log(line.c_str());
             if (turnedOff) {

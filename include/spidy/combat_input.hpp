@@ -179,6 +179,17 @@ struct Config {
     // PUNCH DASH: a swing toward one 2 - 15 m away is the game's web strike (Y) at HIM (ZIP MODE SPIDYVR, the game's
     // button); the lock's own lunge stays shut. Off: 0.0.76 801ce57's rules.
     bool meleeSnap = true;
+    // HERO VR 0.0.76 TRIGGER GUARD (live.txt trigger_guard, on; the user on c8974f4: "often ill hit trigger and that
+    // will trigger like a webzip to punch"). run 005811: 15 of the 17 web strikes (Y) were PUNCH DASHes, 2 the lock's
+    // lunge, several within 0.3 s of a web-shooter press - the shooting arm's own thrust (before the press, or its
+    // follow-through once the trigger let go: only a trigger held past `release` held a punch back) passed the punch
+    // test toward an enemy 2 - 15 m along it. With the guard a hand whose trigger is touched (guardTouch) or was within
+    // guardQuiet, or the other hand's within guardVolley, never sends the web strike (the dash, the lunge, the zip),
+    // and each web strike waits guardConfirm for a trigger first; a gesture punch from a hand within guardQuietX of its
+    // trigger is no blow either. Contact hits, the close snap from a free hand and every web ball are as before.
+    bool triggerGuard = false;
+    static constexpr float guardTouch = .10f, guardQuiet = .45f, guardVolley = .30f, guardQuietX = .25f,
+                           guardConfirm = .08f;
     static constexpr float closeShare = .85f;
     static constexpr float pullBack = .8f; // m/s back toward the head: a jab's return
     // Version 0.0.5 PUNCH SENSITIVITY (combat38::punchFeelOf, applyPunchFeel): the forward share's
@@ -535,6 +546,7 @@ class Machine {
             fists_.reset();
             snapAt_[0] = snapAt_[1] = -1;
             dashAt_ = -1e3f;
+            pendingY_ = {}; // 0.0.76 TRIGGER GUARD: no waiting web strike survives a pause
             snapHeld_[0] = snapHeld_[1] = false;
             strike_.cancel();
             for (unsigned i = 0; i < 2; ++i) {
@@ -558,6 +570,8 @@ class Machine {
             const auto& h = f.hands[i];
             auto& s = hands_[i];
             const bool usable = h.tracked && h.free;
+            if (h.button >= Config::guardTouch) // 0.0.76 TRIGGER GUARD: the finger on the trigger (FLY MODE's are 0)
+                s.webAt = now_;
             // Update 38.5 ONE BALL PER PULL: a new pull while the last tap still waits out the
             // burst's grace (pulls 0.12 s apart) fires that tap's ball now, then takes the pull:
             // the same hand twice is never the burst, and no pull is dropped.
@@ -808,13 +822,27 @@ class Machine {
         // 0.0.76 PUNCH DASH: with MELEE SNAP the punch itself also picks a dash enemy 2 - 15 m along the fist (below);
         // this lunge (32bd648's and before: the look and the fist together) still runs whenever no enemy is within 2 m.
         const bool punchDash = c.meleeSnap && spidyZip && !bridgeFlies && c.webZip;
-        if (spidyZip && !bridgeFlies && c.webZip && !snapClose) { // 0.0.76 MELEE SNAP: an enemy close - punches, X
+        // 0.0.76 TRIGGER GUARD: a web strike decided guardConfirm ago goes now, unless a trigger came first (a shot).
+        if (pendingY_.hand >= 0) {
+            const unsigned i = static_cast<unsigned>(pendingY_.hand);
+            const auto& h = f.hands[i];
+            if (c.triggerGuard && (yGuarded(f, c, i) || f.menuOpen || h.busy || !h.tracked)) {
+                ++yCalledOff_;
+                pendingY_ = {};
+            } else if (!c.triggerGuard || now_ - pendingY_.at >= Config::guardConfirm) {
+                ++yWaited_;
+                sendY(f, c, out, i, pendingY_.target, pendingY_.metres, pendingY_.dash, fightList);
+                pendingY_ = {};
+            }
+        }
+        if (spidyZip && !bridgeFlies && c.webZip && !snapClose && out.lungeHand < 0 &&
+            pendingY_.hand < 0) { // 0.0.76 MELEE SNAP: an enemy close - punches, X
             std::array<FightFist, 2> fists{};
             for (unsigned i = 0; i < 2; ++i) {
                 const auto& h = f.hands[i];
                 const auto& s = hands_[i];
                 fists[i] = {fistIn[i].tracked, fistIn[i].fist, s.velocity,
-                            !h.busy && h.button < release && s.state == State::idle, 0, 0};
+                            !h.busy && h.button < release && s.state == State::idle && !yGuarded(f, c, i), 0, 0};
             }
             StrikeWish wish;
             wish.target = locked;
@@ -839,26 +867,19 @@ class Machine {
                 strike_.cancel(); // the game's move (or the bridge's), never this one's
                 const unsigned i = static_cast<unsigned>(opened->hand);
                 auto& s = hands_[i];
-                out.lungeHand = opened->hand;
-                out.lungeTarget = opened->target;
-                out.lungeMetres = opened->distance;
-                out.zip = true;
-                out.punch[i] = true;
                 out.candidate[i] = true;
                 out.reject[i] = combat38::sent;
                 ++rejects_[combat38::sent];
                 noteSwing(s, combat38::sent, out.speed[i]);
-                startZip(f, c, opened->target, fightList);
-                ++fired_[zipStrike];
-                ++lunges_;
-                ++punches_[i];
                 dashAt_ = now_; // one web strike at a time (the punch's dash waits too)
-                airPunches_ += f.airborne ? 1u : 0u;
                 sightUnknown_ += sightWorld.unknownAsked > unknownBefore;
                 s.punchedAt = now_;
                 s.armed = false;
                 fists_.spend(opened->hand);
-                lock_.take(opened->target);
+                if (c.triggerGuard) // 0.0.76 TRIGGER GUARD: the Y after guardConfirm with no trigger (above)
+                    pendingY_ = {opened->hand, opened->target, opened->distance, now_, false};
+                else
+                    sendY(f, c, out, i, opened->target, opened->distance, false, fightList);
             }
         }
         // SPIDYVR MOVE: the bridge's lunge landed - the game's X now (its own blow).
@@ -948,7 +969,7 @@ class Machine {
                 lungeOwns = nearest >= sc.minDistance && nearest <= sc.maxDistance && !nearTarget;
             }
             for (unsigned i = 0; i < 2; ++i) {
-                if (out.lungeHand == static_cast<int>(i))
+                if (out.lungeHand == static_cast<int>(i) || pendingY_.hand == static_cast<int>(i))
                     continue;
                 const auto& h = f.hands[i];
                 auto& s = hands_[i];
@@ -967,7 +988,8 @@ class Machine {
                                                 ? melee076::pick(snapList, f.head, s.velocity, f.forward, f.airborne)
                                                 : melee076::Snap{};
                 // 0.0.76 PUNCH DASH: no enemy within 2 m swung at - one past it the fist is thrown toward is the dash's.
-                const melee076::Snap dash = punchDash && !snap && !f.menuOpen && out.lungeHand < 0 && now_ - dashAt_ >= dashGap
+                const melee076::Snap dash = punchDash && !snap && !f.menuOpen && out.lungeHand < 0 && pendingY_.hand < 0 &&
+                                                    now_ - dashAt_ >= dashGap
                                                 ? melee076::dash(snapList, f.head, s.velocity, f.airborne)
                                                 : melee076::Snap{};
                 const Vec3 aheadHand = snap ? snap.way : dash ? dash.way : ahead;
@@ -992,6 +1014,10 @@ class Machine {
                 const bool extended = dot(h.position - f.head, aheadHand) >= needReach;
                 const bool gesture = fast && speed >= needSpeed && forward && extended && !lungeOwnsHand;
                 const bool contact = enters; // SpidyVR's own test: 2.2 m/s and inward, armed
+                // 0.0.76 TRIGGER GUARD: the web-shooting arm's swing is no web strike, and no gesture blow just after
+                // its trigger (a hand touching an enemy still hits).
+                const bool guarded = c.triggerGuard && !contact &&
+                                     (dash ? yGuarded(f, c, i) : now_ - s.webAt < Config::guardQuietX);
                 uint32_t why = combat38::sent;
                 if (!h.tracked)
                     why = combat38::untracked;
@@ -1005,6 +1031,13 @@ class Machine {
                     why = combat38::gated;
                 else if (!contact && !s.armed)
                     why = combat38::cooldown;
+                else if (guarded && gesture) {
+                    why = combat38::triggerHeld; // the trigger's: counted there, and once a swing here
+                    if (!s.guardCounted) {
+                        s.guardCounted = true;
+                        ++(dash ? guardDashes_ : guardPunches_);
+                    }
+                }
                 else if (!gesture && !contact)
                     why = !fast || speed < needSpeed || lungeOwnsHand ? combat38::tooSlow
                           : !forward                         ? combat38::notForward
@@ -1026,24 +1059,15 @@ class Machine {
                     continue;
                 if (dash && !contact) { // 0.0.76 PUNCH DASH: the game's web strike (Y) at the enemy swung at
                     const uint64_t id = fightTargets[static_cast<size_t>(dash.index)].id;
-                    out.lungeHand = static_cast<int>(i);
-                    out.lungeTarget = id;
-                    out.lungeMetres = dash.metres;
-                    out.zip = true;
-                    out.punch[i] = true;
-                    out.dashed[i] = true;
-                    startZip(f, c, id, fightList);
-                    ++fired_[zipStrike];
-                    ++lunges_;
-                    ++dashes_;
-                    ++punches_[i];
-                    airPunches_ += f.airborne ? 1u : 0u;
                     s.punchedAt = now_;
                     s.armed = false;
                     dashAt_ = now_;
                     fists_.spend(static_cast<int>(i));
                     strike_.spent(static_cast<int>(i));
-                    lock_.take(id);
+                    if (c.triggerGuard) // 0.0.76 TRIGGER GUARD: the Y after guardConfirm with no trigger (above)
+                        pendingY_ = {static_cast<int>(i), id, dash.metres, now_, true};
+                    else
+                        sendY(f, c, out, i, id, dash.metres, true, fightList);
                     continue;
                 }
                 out.punch[i] = true;
@@ -1074,7 +1098,7 @@ class Machine {
                     snapHeld_[i] = true; // one long sweep at him is one blow (no re-arm by time alone)
                     ++snapPunches_;
                 }
-                if (c.webZip && !snap && zipsNow(f, c, i)) {
+                if (c.webZip && !snap && !yGuarded(f, c, i) && zipsNow(f, c, i)) {
                     out.zip = true;
                     startZip(f, c, locked, fightList);
                     ++fired_[zipStrike];
@@ -1277,6 +1301,12 @@ class Machine {
     uint32_t snapPunches() const { return snapPunches_; }     // 0.0.76 MELEE SNAP: punches sent to the snap's enemy
     uint32_t snapShutFrames() const { return snapLungeShut_; } // frames the lunge stayed shut (an enemy close)
     uint32_t dashes() const { return dashes_; }                // 0.0.76 PUNCH DASH: web strikes at the enemy swung at
+    // 0.0.76 TRIGGER GUARD: swings of a web-shooting hand held back (a dash's, a gesture blow's), web strikes called off
+    // by a trigger in their guardConfirm wait, and those that waited and went.
+    uint32_t guardDashes() const { return guardDashes_; }
+    uint32_t guardPunches() const { return guardPunches_; }
+    uint32_t yCalledOff() const { return yCalledOff_; }
+    uint32_t yWaited() const { return yWaited_; }
     uint64_t lungesLanded() const { return lungesLanded_; }
     uint64_t yanks() const { return yanks_; }
     uint64_t lockChanges() const { return lockChanges_; }
@@ -1357,7 +1387,8 @@ class Machine {
     struct HandState {
         State state = State::idle;
         float since{}, punchedAt = -1e3f, age{}, ballAt = -1e3f;
-        bool paired{}, targetedCounted{};
+        float webAt = -1e3f; // 0.0.76 TRIGGER GUARD: the last frame its trigger was touched
+        bool paired{}, targetedCounted{}, guardCounted{};
         bool seen{}, aimedLow{}, gripAtPress{}, touching{}, jumped{}, armed = true, ballFired{}, heldOffCounted{}, swingOpen{}, swingSent{}, formed{};
         float swingPeak{};
         uint32_t swingWhy{};
@@ -1378,9 +1409,37 @@ class Machine {
             ++swingRejects_;
             ++swingRejectsBy_[s.swingWhy];
         }
-        s.swingOpen = s.swingSent = s.heldOffCounted = false;
+        s.swingOpen = s.swingSent = s.heldOffCounted = s.guardCounted = false;
         s.swingPeak = 0;
         s.swingWhy = 0;
+    }
+    // 0.0.76 TRIGGER GUARD: this hand's trigger touched within guardQuiet, or the other's within guardVolley.
+    bool yGuarded(const Frame& f, const Config& c, unsigned i) const {
+        if (!c.triggerGuard || i > 1)
+            return false;
+        const auto web = [&](unsigned j, float window) {
+            return f.hands[j].button >= Config::guardTouch || now_ - hands_[j].webAt < window;
+        };
+        return web(i, Config::guardQuiet) || web(1 - i, Config::guardVolley);
+    }
+    // A web strike (Y) at an enemy: the lock's lunge or the PUNCH DASH (dash), counted and sent.
+    void sendY(const Frame& f, const Config& c, Out& out, unsigned i, uint64_t id, float metres, bool dash,
+               std::span<const FightTarget> enemies) {
+        out.lungeHand = static_cast<int>(i);
+        out.lungeTarget = id;
+        out.lungeMetres = metres;
+        out.zip = true;
+        out.punch[i] = true;
+        out.dashed[i] = dash;
+        out.candidate[i] = true;
+        out.reject[i] = combat38::sent;
+        startZip(f, c, id, enemies);
+        ++fired_[zipStrike];
+        ++lunges_;
+        dashes_ += dash ? 1u : 0u;
+        ++punches_[i];
+        airPunches_ += f.airborne ? 1u : 0u;
+        lock_.take(id);
     }
     // The zip strike's Y (zipPulse). Update 38.3 STRIKE STEER: with an enemy to strike (the
     // lunge's or the lock), the stick points at him first and the Y waits assistLead.
@@ -1454,6 +1513,14 @@ class Machine {
     uint32_t dashes_{};                        // 0.0.76 PUNCH DASH
     float dashAt_ = -1e3f;                     // the last dash (one at a time)
     static constexpr float dashGap = .6f;
+    struct PendingY { // 0.0.76 TRIGGER GUARD: a web strike decided, waiting guardConfirm for a trigger
+        int hand = -1;
+        uint64_t target{};
+        float metres{}, at{};
+        bool dash{};
+    };
+    PendingY pendingY_{};
+    uint32_t guardDashes_{}, guardPunches_{}, yCalledOff_{}, yWaited_{};
     double snapAt_[2]{-1, -1};                  // when each fist's last snap punch went
     bool snapHeld_[2]{};                        // that swing still going (the time re-arm waits)
     static constexpr double snapContact = .6;   // that swing's contact is the same blow

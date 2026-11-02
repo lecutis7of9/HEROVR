@@ -19930,6 +19930,108 @@ int main() {
             check(!snapped, "MELEE SNAP snapped through a wall");
         }
     });
+    test("HERO VR 0.0.76 TRIGGER GUARD: a web-shooter press never becomes a web strike at an enemy", [lungeFrame] {
+        using namespace combat_input;
+        Config c; // what combatConfig sets for SPIDER-MAN (BALL GAME, the guard on)
+        c.ballOnPress = c.ballInstant = true;
+        c.triggerGuard = true;
+        struct Run {
+            int ys{}, lunges{}, balls{}, punches{}, firstY = -1;
+            bool snapped{};
+            uint16_t buttons{};
+        };
+        // Rest, then a 3 m/s thrust of hand `hand` over frames 54-66; trigger `who` down over [down, up).
+        const auto run = [&](Machine& m, Frame f, const Config& cfg, int who, int down, int up, int frames = 90,
+                             int from = 54) {
+            Run r;
+            for (int i = 0; i < frames; ++i) {
+                if (i >= from && i < from + 12)
+                    f.hands[1].position = f.hands[1].position + Vec3{0, 0, -3.f / 90};
+                for (unsigned h = 0; h < 2; ++h)
+                    f.hands[h].button = int(h) == who && i >= down && i < up ? 1.f : 0.f;
+                const auto o = m.update(f, cfg);
+                r.buttons |= o.buttons;
+                r.lunges += o.lungeHand >= 0;
+                if (o.buttons & padY) {
+                    ++r.ys;
+                    if (r.firstY < 0)
+                        r.firstY = i;
+                }
+                r.balls += (o.fired[0] == combat_input::webShooter) + (o.fired[1] == combat_input::webShooter);
+                r.punches += o.punch[1];
+                r.snapped |= o.snapped[1];
+            }
+            return r;
+        };
+        {   // no trigger: the punch at the enemy 5 m ahead is still the web strike (Y), guardConfirm later at most
+            Machine m;
+            const Run r = run(m, lungeFrame(), c, -1, 0, 0);
+            check(r.lunges == 1 && r.ys > 0, "TRIGGER GUARD: a punch with no trigger lost its web strike");
+            check(r.firstY >= 54 && r.firstY <= 54 + 12 + 10, "TRIGGER GUARD: the web strike waited more than its 0.08 s");
+            check(m.yWaited() == 1 && m.yCalledOff() == 0, "TRIGGER GUARD: the web strike's wait was not counted");
+        }
+        {   // the root cause (c8974f4's rules): a web-shooter tap, then the arm's thrust - a web strike at the enemy
+            Config old = c;
+            old.triggerGuard = false;
+            Machine m;
+            const Run r = run(m, lungeFrame(), old, 1, 50, 53);
+            check(r.balls == 1 && r.lunges == 1 && (r.buttons & padY),
+                  "TRIGGER GUARD off: a tap and its thrust did not reproduce the web-zip punch (c8974f4)");
+        }
+        {   // the guard: the same tap and thrust shoots its ball and nothing else
+            Machine m;
+            const Run r = run(m, lungeFrame(), c, 1, 50, 53);
+            check(r.balls == 1, "TRIGGER GUARD: the web ball did not go on the press");
+            check(r.lunges == 0 && !(r.buttons & padY) && r.punches == 0,
+                  "TRIGGER GUARD: a web-shooter tap's thrust still sent the web strike");
+            check(m.guardDashes() + m.yCalledOff() >= 1, "TRIGGER GUARD: the held-back swing was not counted");
+        }
+        {   // the trigger pulled at the end of the thrust (the web strike decided first): called off, the ball goes
+            Machine m;
+            const Run r = run(m, lungeFrame(), c, 1, 58, 62);
+            check(r.balls == 1 && r.lunges == 0 && !(r.buttons & padY),
+                  "TRIGGER GUARD: a trigger at the thrust's end still sent the web strike");
+            check(m.yCalledOff() == 1, "TRIGGER GUARD: the called-off web strike was not counted");
+        }
+        {   // the other hand shooting while this one thrusts: no web strike either
+            Machine m;
+            const Run r = run(m, lungeFrame(), c, 0, 50, 53);
+            check(r.balls == 1 && r.lunges == 0 && !(r.buttons & padY),
+                  "TRIGGER GUARD: the other hand's shot let the thrust send a web strike");
+        }
+        {   // a shot, then a deliberate punch 0.6 s later: the web strike again (the guard is short)
+            Machine m;
+            const Run r = run(m, lungeFrame(), c, 1, 10, 13, 120, 80);
+            check(r.balls == 1 && r.lunges == 1 && (r.buttons & padY),
+                  "TRIGGER GUARD: a punch 0.7 s after a shot lost its web strike");
+        }
+        {   // the close snap stays: a thug 1.6 m ahead, the punch is the X at him
+            Frame f = lungeFrame();
+            f.enemies[1] = {.3f, 0, -1.6f};
+            f.enemyIds[1] = 7;
+            f.enemyCount = 2;
+            f.enemyMetres = 1.6f;
+            Machine m;
+            const Run r = run(m, f, c, -1, 0, 0);
+            check(r.punches == 1 && r.snapped && (r.buttons & padX) && !(r.buttons & padY),
+                  "TRIGGER GUARD: the close snap's punch changed");
+        }
+        {   // every press is still the game's ball on its press frame, the guard or not
+            Machine m;
+            Frame f = lungeFrame();
+            int balls{}, at = -1;
+            for (int i = 0; i < 60; ++i) {
+                f.hands[0].button = i % 12 < 3 ? 1.f : 0.f;
+                const auto o = m.update(f, c);
+                if (o.fired[0] == combat_input::webShooter) {
+                    ++balls;
+                    if (at < 0)
+                        at = i;
+                }
+            }
+            check(balls == 5 && at == 0, "TRIGGER GUARD: a web ball was late or lost");
+        }
+    });
     test("HERO VR 0.0.76 BALL GAME: a press is the game's RB on the press frame, in combat or not, never the mod's ball", [lungeFrame] {
         using namespace combat_input;
         Config c; // what combatConfig sets for SPIDER-MAN

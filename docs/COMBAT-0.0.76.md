@@ -61,6 +61,28 @@ counts, in and out of combat, whether the wrist muzzle hook (CANDIDATE) saw the 
 `ballTests` (the watch), tests/core_tests.cpp "HERO VR 0.0.76 BALL GAME" (RB on the press frame in and out of
 combat, never the mod's ball, 6 quick taps = 6 RB starts).
 
+## TRIGGER GUARD (test c8974f4 feedback; combat_input.hpp `triggerGuard`, live.txt `trigger_guard`)
+
+The owner on c8974f4: "webshooters are still finnicky, often ill hit trigger and that will trigger like a webzip to
+punch". Why: the trigger held back punches only while it was down (0.25 or more). The ball fires on the press frame
+and the hand is free again on release, so the shooting arm's thrust (just before the press, or its follow-through
+after the release) passed the punch test, and with an enemy 2 - 15 m along the arm that was a PUNCH DASH, or the
+lock lunge: the game's web strike (Y), which zips to him and punches. Run 005811: 17 web strikes = 15 PUNCH DASHES +
+2 lock lunges; several within 0.2 s of a shot from the same hand or the other one.
+
+Now (Spider-Man, `trigger_guard = on`, the default):
+- a hand whose trigger is touched (0.10 or more), or was in the last 0.45 s, never sends the web strike (lock lunge,
+  PUNCH DASH or zip), nor does any hand within 0.3 s of the **other** hand's trigger (two-hand volleys);
+- every web strike waits 0.08 s before the Y goes; a trigger in that time calls it off (the thrust came first);
+- a gesture punch (X) from the shooting hand is held back for 0.25 s after its trigger; a hand that actually
+  touches an enemy still hits, and a free hand's punches, the close snap (within 2 m) and the PUNCH DASH from a free
+  hand are unchanged;
+- the web ball is untouched: still the game's own RB on the press frame.
+`trigger_guard = off` is c8974f4's rules (live, no restart). Log: `VERSION 0.0.76 TRIGGER GUARD: <n> dashes and <n>
+punches of a web-shooting hand held back, <n> web strikes called off by a trigger, <n> sent`. Tests:
+tests/core_tests.cpp "HERO VR 0.0.76 TRIGGER GUARD" (with the guard off a tap and its thrust still web-strike: the
+fault reproduced), tests/hero076_trigger_guard_tests.py. No game address.
+
 ## PICTURE AT SPEED ("PS2 pixel level" while swinging)
 
 From the November 1 report (game-vr-20261101-181930) and run7:

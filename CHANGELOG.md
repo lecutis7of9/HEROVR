@@ -22,6 +22,11 @@ From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not ye
 - **WORN SUIT (CANDIDATE):** the suit probe names the Peter suit you wear ("WORN SUIT: ..." in the console) after
   each suit change, and sends it to your friend in the MP packet (he logs it; nothing draws it yet).
   See [docs/REMOTE-SUIT-0.0.76.md](docs/REMOTE-SUIT-0.0.76.md).
+- **Web shooters never web-zip punch (TRIGGER GUARD):** a trigger press only shoots the web ball. The shooting arm's
+  thrust no longer becomes a web strike (zip to the enemy and punch) - not while the trigger is touched, for 0.45 s
+  after it, nor while the other hand shoots. Punches from a free hand, the punch dash and the close snap are as
+  before. live.txt `trigger_guard = off` brings back c8974f4's rules (live, no restart).
+  [docs/COMBAT-0.0.76.md](docs/COMBAT-0.0.76.md)
 - **Punch dash is back (PUNCH DASH):** punch toward an enemy 2 - 15 m away and Spider-Man web-strikes (the game's Y)
   right to **that** enemy; with no enemy along the fist the old lunge still takes far swings. Enemies within 2 m get
   the punch (X) as before - never a dash at a close one.

@@ -875,6 +875,9 @@ std::atomic<float> heroHeightNow{1.f}; // Version 0.0.5 HERO HEIGHT in force (th
 // the game's webbed-up enemies; none of HERO VR's drawn webs, web balls, nets or cocoons. 1 OFF: as before.
 // Only the drawing and the ball's look change: swing input, zips, attach points and hits are the same.
 std::atomic<uint32_t> gameWebsNow{0};
+// 0.0.76 TRIGGER GUARD (live.txt trigger_guard): 0 ON (the default: a web-shooting hand never sends the web
+// strike, combat_input::Config::triggerGuard), 1 OFF (c8974f4's rules).
+std::atomic<uint32_t> triggerGuardNow{0};
 uint32_t c38(uint32_t option) {
     // Version 0.0.2 hotfix: a getter that reaches itself again answers the default (0) rather than recursing.
     static thread_local int depth = 0;
@@ -1088,6 +1091,9 @@ combat_input::Config combatConfig() {
         c.ballOnPress = true;
         c.ballInstant = true;
     }
+    // HERO VR 0.0.76 TRIGGER GUARD (the user: "often ill hit trigger and that will trigger like a webzip to punch"):
+    // SPIDER-MAN's web-shooting hand never sends the web strike (Y), and no gesture blow right after its trigger.
+    c.triggerGuard = triggerGuardNow.load() == 0 && heroNow() == hero_modes::spiderMan;
     // Version 0.0.4 IRON MAN ABILITIES (REPULSOR): the trigger makes the mod's own shot at the press only
     // (no RB, no game ball) and no trigger gadget, yank or Sonic Burst (repulsor.hpp planFor).
     // Version 0.0.6: DAREDEVIL (the trigger throws a baton) and HULK (no trigger power) the same: no web.
@@ -7798,6 +7804,20 @@ DWORD WINAPI run(void*) {
                                     sprintf_s(line, "VERSION 0.0.76 MELEE SNAP: %u punches sent at the enemy swung at "
                                                     "(within 2 m), %u PUNCH DASH web strikes at one 2 - 15 m away",
                                               snaps, combatMachine.dashes());
+                                    game_prompts::note(line);
+                                }
+                            }
+                            {   // HERO VR 0.0.76 TRIGGER GUARD: a line now and then (a web-shooting hand's swings held back)
+                                static uint32_t guardSaid = 0;
+                                const uint32_t guardNow = combatMachine.guardDashes() + combatMachine.guardPunches() +
+                                                          combatMachine.yCalledOff();
+                                if (guardNow != guardSaid && (guardNow <= 3 || guardNow % 10 == 0)) {
+                                    guardSaid = guardNow;
+                                    char line[220];
+                                    sprintf_s(line, "VERSION 0.0.76 TRIGGER GUARD: %u dashes and %u punches of a web-shooting "
+                                                    "hand held back, %u web strikes called off by a trigger, %u sent",
+                                              combatMachine.guardDashes(), combatMachine.guardPunches(),
+                                              combatMachine.yCalledOff(), combatMachine.yWaited());
                                     game_prompts::note(line);
                                 }
                             }
@@ -15330,6 +15350,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidySuitProbe(void* v) {
 // SPIDER-MAN), 1 OFF (HERO VR's drawn webs as before).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGameWebs(void* v) {
     return setLive(v, 0, 1, 5556, gameWebsNow, asU32);
+}
+// 0.0.76 TRIGGER GUARD, live: 0 ON (the default: a trigger press never becomes a web strike at an enemy),
+// 1 OFF (c8974f4's rules).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyTriggerGuard(void* v) {
+    return setLive(v, 0, 1, 5557, triggerGuardNow, asU32);
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySymbioteLook(void* on) {
     return setLive(on, 0, 1, 5347, symbioteOn, asBool);

@@ -2773,3 +2773,14 @@ buildings stayed; only the light went.
   vr_jitter = off: the eyes' lens one fixed 1e-6 NDC (sm1style::steadyJitter; not zero, since TemporalAa 0x2c2dc60,
   CONFIRMED, skips a job with zero jitter). Both live (SpidyVrJitter, SpidyVrGameJitter; refused 4605, 4606). No new
   game address. Tests: hero076_far_shake_tests, core `FAR SHAKE`.
+
+
+## 66. Version 0.0.76 TRIGGER GUARD: a web-shooter press never web-strikes
+
+  Run 005811 (c8974f4): 17 web strikes (Y) = 15 PUNCH DASHES + 2 lock lunges, several within 0.2 s of a web-shooter
+  shot by the same or the other hand. The trigger blocked a punch only while down (0.25+); the ball fires on the press
+  and the hand idles on release, so the shooting arm's thrust passed the punch test. combat_input::Config::triggerGuard
+  (game_xr: Spider-Man, live.txt trigger_guard = on, default; SpidyTriggerGuard, refused 5557): no Y from a hand
+  touched (0.10) or within 0.45 s of its trigger, or within 0.3 s of the other's; each Y waits 0.08 s and a trigger
+  then calls it off; the shooting hand's gesture X waits 0.25 s; contacts, the snap, the ball (RB on the press frame)
+  unchanged. Log VERSION 0.0.76 TRIGGER GUARD. No game address. Tests: core `TRIGGER GUARD`, hero076_trigger_guard_tests.

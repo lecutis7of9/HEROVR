@@ -116,6 +116,7 @@
 #include "spidy/impact_sound.hpp"
 #include "spidy/native_eye_frame.hpp"
 #include "spidy/pose_check.hpp"
+#include "spidy/hitch_hold.hpp"
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
@@ -1303,6 +1304,9 @@ std::atomic<uint32_t> sessionFpsAvg{}, sessionFpsHigh{}, sessionFpsLow{}, sessio
 // SpidyWebColor). Only the picture: the swing is the same in every style.
 // Update 20: MESSY by default (was 90s).
 std::atomic<uint32_t> webStyleNow{1};
+// 0.0.76 HITCH HOLD (live.txt hitch_hold, hitch_hold.hpp): 0 ON (the default: a runtime hitch of 0.1-0.5 s is
+// played as a 0.1 s frame, VR play goes on), 1 OFF (c71a59c: such a frame leaves VR play for the game screen).
+std::atomic<uint32_t> hitchHoldNow{0};
 std::atomic<uint32_t> webShades[web_style::count]{};
 // The wrist hologram (Update 14, wrist_hud.hpp): live.txt hud (on), hud_hand
 // (0 the left wrist, 1 the right) and hud_scale (percent). wristHudFault: it
@@ -3374,6 +3378,20 @@ DWORD WINAPI run(void*) {
                     perf37::Guard perfGuard{perfSections,
                                             std::chrono::duration<double>(std::chrono::steady_clock::now() - perfStart).count()};
                     XrFrame frame = trackedFrame;
+                    {   // 0.0.76 HITCH HOLD (hitch_hold.hpp): a runtime hitch is played as one 0.1 s frame
+                        static hitch_hold::Counts hitches;
+                        static uint64_t hitchesSaid = 0;
+                        frame.seconds = hitch_hold::step(frame.seconds, hitchHoldNow.load(std::memory_order_relaxed) == 0,
+                                                         &hitches);
+                        if (hitches.held != hitchesSaid && (hitches.held <= 3 || hitches.held % 25 == 0)) {
+                            hitchesSaid = hitches.held;
+                            char line[200];
+                            sprintf_s(line, "VERSION 0.0.76 HITCH HOLD: %llu runtime hitches of 0.1-0.5 s played as a "
+                                            "0.1 s frame (longest %.0f ms); VR play went on",
+                                      static_cast<unsigned long long>(hitches.held), hitches.longestMs);
+                            game_prompts::note(line);
+                        }
+                    }
                     // Build 6: the TEST BUILD NOTICE closes on A (either controller: the left
                     // one's A is its X). Its raw A is kept for it, and while the notice shows,
                     // or the A that closed it is still held, A / X reach nothing else: the
@@ -15130,6 +15148,9 @@ auto asU32 = [](uintptr_t v) { return static_cast<uint32_t>(v); };
 } // namespace
 // Strand physics (web_physics 0/1, web_wiggle and web_bend percent 0-300).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebPhysics(void* on) { return setLive(on, 0, 1, 5101, webPhysicsOn, asBool); }
+// 0.0.76 HITCH HOLD, live: 0 ON (the default: a 0.1-0.5 s runtime hitch keeps VR play, its webs and eyes),
+// 1 OFF (c71a59c: such a frame leaves VR play).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHitchHold(void* v) { return setLive(v, 0, 1, 5558, hitchHoldNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);
 }

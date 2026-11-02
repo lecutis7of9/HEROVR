@@ -445,6 +445,11 @@ SETTINGS = {
     'game_webs': ((0, 1), 'SpidyGameWebs', "GAME WEBS ONLY {} (0 on: Spider-Man shows only the game's own web lines from your wrists, its web balls and its webbed-up enemies, none of HERO VR's drawn webs, web balls, nets or cocoons, and swinging, zips and aim work the same, and the game's own swing rope comes from your wrist through Spider-Man 2's rope hook (new in this test), and if that hook is refused or not running HERO VR's swing, grab and net lines still show; 1 off: HERO VR's webs as before; live, though the game's swing rope starts only if this was on when VR started, so turning it on later needs a restart)"),  # 0.0.76 GAME WEBS ONLY
     'belt_zones': ((0, 1), 'SpidyBeltZones', "BELT ZONES {} (0 on: BATMAN draws the grapple gun only at the left hip, a batarang only at the belt's front centre, a smoke pellet only by grabbing the other forearm, the nearest zone by a margin; 1 off: test 9's buckle smoke, side pouches and any-grip gun; live)"),  # 0.0.74 test 10
     'coming_soon': ((0, 1), 'SpidyComingSoon', "COMING SOON {} (0 on: the hologram's hero tiles show a SOON tab with the heroes coming in 0.0.74, not playable; 1 off: no SOON tab; live)"),  # 0.0.73 COMING SOON
+    # 0.0.76 HITCH HOLD (include/spidy/hitch_hold.hpp): live, every hero.
+    'hitch_hold': ((0, 1), 'SpidyHitchHold', "HITCH HOLD {} (0 on: when Virtual Desktop holds a frame for up to half a "
+                   "second, VR play, your webs and the eye view carry on as one short step instead of dropping to the "
+                   "game screen for up to two seconds; 1 off: c71a59c's rule, any frame over 0.1 s leaves VR play) - live, "
+                   'no restart needed'),
     'light_checks': ((0, 1), 'SpidyLightChecks', "LIGHT CHECKS {} (0 on: each eye's street-light glow checks get the game view's query room, at least 1024; 1 off: the game's 256; next VR start)"),  # 0.0.73 LIGHT CHECKS
     'mp_solo_test': ((0, 1), 'SpidyMpSoloTest', "MP SOLO TEST {} (0 off, the 0.0.74 test 1 default; 1 on: your pose goes through the UDP multiplayer code to a 127.0.0.1 echo and back, drawn 3 m ahead as PLAYER 2, or the MP Test Buddy when it connects; live)"),  # Version 0.0.73 MP SOLO TEST
     'thor_flight': ((0, 1), 'SpidyThorFlight', "THOR FLIGHT {} (0 on: Thor takes off with both arms up and flies; 1 off: no flight for Thor, a crash bisect key, live)"),
@@ -596,6 +601,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'fly_hold': ('on', 'off'),  # 0.0.74 test 10 FLY HOLD
                 'fly_steer': ('on', 'off'),  # 0.0.74 test 10 FLY STEER
                 'fly_flips': ('on', 'off'),  # 0.0.74 test 10 FLY FLIPS
+                'hitch_hold': ('on', 'off'),  # 0.0.76 HITCH HOLD
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
@@ -835,6 +841,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'fly_hold': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY HOLD
            'fly_steer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY STEER
            'fly_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY FLIPS
+           'hitch_hold': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 HITCH HOLD
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
@@ -1166,6 +1173,7 @@ START_ONLY = START_ONLY + ('suit_probe',)  # 0.0.76 SUIT PROBE: an ON kept betwe
 START_ONLY = START_ONLY + ('game_webs',)  # 0.0.76 GAME WEBS ONLY: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
 START_ONLY = START_ONLY + ('fly_classic',)  # HERO VR 0.0.76 FLIGHT: an ON kept between sessions
+START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

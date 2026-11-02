@@ -187,6 +187,7 @@
 #include "spidy/hit_marks.hpp"
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
+#include "spidy/hitch_hold.hpp"
 // Stand-ins for the game's classes, by the names the target scan's rules look
 // for: MSVC lays out their type information as it did the game's.
 class Component {
@@ -2884,6 +2885,29 @@ int main() {
         near(native_view::requestScale(2016,2240,1.171f,1.1106f)/native_view::requestScale(1352,1504,1.171f,1.1106f),
              2240.f/1504);
         near(native_view::requestScale(2000,1000,1,1),1000); // the side with more pixels per tangent
+    });
+    test("HERO VR 0.0.76 HITCH HOLD: a runtime hitch of 0.1-0.5 s keeps VR play (run 060032)", [] {
+        using namespace hitch_hold;
+        Counts n;
+        near(step(1.f / 90, true, &n), 1.f / 90);  // a normal frame is untouched
+        near(step(.1f, true, &n), .1f);
+        check(n.held == 0, "HITCH HOLD counted a normal frame");
+        near(step(.1001f, true, &n), .1f);           // Virtual Desktop's 100 ms hold
+        near(step(.4098f, true, &n), .1f);           // run 060032's longest end_frame
+        check(n.held == 2 && n.longestMs > 409 && n.longestMs < 410.5f, "HITCH HOLD counts");
+        near(step(.6f, true, &n), .6f);              // longer than a hitch: the old rules
+        near(step(.2f, false, &n), .2f);             // off: c71a59c
+        check(!std::isfinite(step(NAN, true, &n)), "HITCH HOLD made a time from nothing");
+        check(n.held == 2, "HITCH HOLD counted what it left alone");
+        // The rig: c71a59c's 0.2 s frame turned VR play off; held, it stays on.
+        GameTrackingRig rig; auto f = trackedFrame();
+        rig.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        f.predictedDisplayTime = 2; f.seconds = 1.f / 90;
+        check(rig.update(f, {10, 20, 30}, {0, 0, -1}, true).active, "HITCH HOLD: the rig is not active");
+        f.predictedDisplayTime = 3; f.seconds = .2f;
+        check(!rig.update(f, {10, 20, 30}, {0, 0, -1}, true).active, "HITCH HOLD: off is not c71a59c's rule");
+        f.predictedDisplayTime = 4; f.seconds = step(.2f, true);
+        check(rig.update(f, {10, 20, 30}, {0, 0, -1}, true).active, "HITCH HOLD: a held hitch left VR play");
     });
     test("game rig uses one tracking sample for head hands and both eyes", [] {
         GameTrackingRig rig;auto f=trackedFrame();

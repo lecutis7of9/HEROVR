@@ -2804,3 +2804,15 @@ buildings stayed; only the light went.
   image's age (displayTime - its predicted time). SpidyPoseCheckData (PHCK, 256 bytes, extern "C"), read by
   tools/pose_check_record.py into the report (`pose_check`, per sample too) and the console. Optional export (an
   older module has none). Tests: hero076_pose_check_tests, core `POSE CHECK`.
+
+## 68. Version 0.0.76 HITCH HOLD: a runtime hitch of 0.1-0.5 s keeps VR play
+
+  Run 060032 (c71a59c, "unplayable from lag"): Virtual Desktop held xrEndFrame 108 times for ~100 ms (end_frame
+  max 409.8 ms, 435 samples >= 90 ms; 0 in 001842/005811), from t = 7 s on the game screen, before any eye job. Each
+  hold made the next frame's display-time delta > 0.1 s; GameTrackingRig::update flagged badFrameTime, the tracking
+  gate dropped VR play to game_screen (48 presentation changes against 12-18) for 0.2-2 s, and Swing::update
+  released the webs. hitch_hold::step (include/spidy/hitch_hold.hpp) plays such a frame as a 0.1 s step (the
+  rig's, swing's and body's longest) right after frameStereo hands it over, before the rig, swing or anything reads
+  it; > 0.5 s keeps the old rules. live.txt `hitch_hold` (0 on default, 1 off = c71a59c), live, SpidyHitchHold
+  id 5558. Prompts log "VERSION 0.0.76 HITCH HOLD: N runtime hitches ...". Tests: core `HITCH HOLD`,
+  hero076_hitch_hold_tests.

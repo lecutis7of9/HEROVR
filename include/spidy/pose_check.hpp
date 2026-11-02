@@ -96,7 +96,7 @@ struct Data {
     uint64_t worldTurnOver{}; // submits whose world had turned more than overDegrees
     float travelMaxMm{}, ageLastMs{}, ageMaxMs{}, reservedF{};
     double ageSumMs{};
-    uint64_t sequence{};
+    int64_t sequence{}; // odd while game_xr writes (InterlockedIncrement64)
     // The rendered camera against the eye the game was commanded (stereo_probe's placeEyes, before travel):
     // a difference in `eyes` that shows here too is the game moving its camera after SetPose; one only in `eyes`
     // is the command differing from the eye the headset was given.

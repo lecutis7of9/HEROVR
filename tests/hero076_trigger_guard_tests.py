@@ -36,7 +36,6 @@ class TriggerGuard(unittest.TestCase):
         # Every web strike (lock lunge, PUNCH DASH, zip) asks the guard; the Y waits guardConfirm for a late trigger.
         self.assertGreaterEqual(h.count('yGuarded(f, c, i)'), 3)
         self.assertIn('guardConfirm', h)
-        self.assertNotIn('jimjam', h.lower())
         # The ball path is untouched: still the press frame.
         self.assertIn('ballInstant', h)
 

@@ -11,4 +11,8 @@ void set(int millimetres);
 void boost(float metres);
 // For the head's and the eyes' lenses (stereo_probe.cpp), metres: the larger of NEAR CLIP's and the boost.
 float metres();
+// 0.0.76 A-depth CHECKED: the near and far the eye lens was last built with (noted beside the unchanged lens call),
+// metres; 0 until one was.
+void noteEyeLens(float nearM, float farM);
+void eyeLens(float& nearM, float& farM);
 } // namespace spidy::near_clip

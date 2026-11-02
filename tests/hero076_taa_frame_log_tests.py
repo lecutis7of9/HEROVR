@@ -97,7 +97,7 @@ class FrameLog(unittest.TestCase):
         self.assertIn('taa_watch::jitterShift(frameEntry.jitterNow, frameEntry.jitterBefore, 1.f, frameEntry.expected);', s)
         self.assertIn('taa_frame_log::note(SpidyTaaFrameLogData, frameEntry);', s)
         run = src('tools/run_game_vr.py')
-        self.assertIn('taa_frame_log_record.EXPORT))  # 0.0.76 TAA FRAME LOG', run)
+        self.assertIn('taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG', run)
         self.assertIn('taa_frame_log=dict(most_still=', run)
 
     def test_documented(self):

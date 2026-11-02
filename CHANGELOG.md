@@ -6,6 +6,26 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **A-depth CHECKED (TEST 0.0.76 A-depth CHECKED): the depth is checked before it is trusted, and its effect is
+  measured.** Still off by default (`vr_taa_depth`). (1) Convention check: about once a second (one pair in 30 until it
+  passes), both eyes' centre band of depth is read back. The centre pixel is put back in the world through the inverse
+  of the JITTERED eye view-projection - rebuilt from the same CONFIRMED lens inputs (0x2c75560: the eye's tangents, the
+  near and far the lens was given, this pair's jitter) - and projected back through the same matrix; the error in
+  pixels is logged and over 0.05 px refuses the depth. That round trip only proves the matrix and its inverse, so a
+  stereo test at depth edges (each left-eye point, read in each convention, must land on the same depth in the right
+  eye) tells reversed-Z / 0..1 vs -1..1 / linear vs reciprocal apart. The log line states the convention
+  (reversed-Z, D3D 0..1, reciprocal, finite far); any other fitting better is FAILED with "likely convention error"
+  and the depth path stays off for the session. Until a check has PASSED the history is turned by the head alone.
+  (2) Rejections reported apart, never combined: clip alone, depth test alone, both, per still / moving / fast swing
+  (head travelling 6 m/s or more, or turning 120 degrees a second or more), for the depth path and the head path.
+  (3) Per-eye gating: if either eye's depth (this pair's or last's) is missing, both eyes are turned by the head for
+  that pair; the kept pictures are the same either way, so neither history is spoilt. (4) A pixel whose depth is
+  0, 1, NaN or lands outside the last eye's frustum falls back to the head-motion place (history kept, counted as
+  fallback), not rejected. (5) No motion vectors, no object motion: static geometry only. (6) Every 10 s the console's
+  `TAA DEPTH` line: depth found per eye %, round trip px, clip / depth / both %, fallback %, fps and the depth pass's
+  own GPU ms a pair (its two depth copies plus what the TAA pass costs more with the depth). In the report's
+  `taa_depth_check`. TAA core (per-eye history, Halton 16, Catmull-Rom, YCoCg clip, 0.9 / 0.6, cut reset), the lens
+  call, sharpening and the game's TAA unchanged.
 - **A-depth (TEST 0.0.76 A-depth): SPIDY TAA's history follows the eyes' depth.** Until now each eye's history was
   turned with the head's turn only, so windows and fine building edges that shift against the far city as your head
   moves were clipped away and started again (the aliasing and the swing smear). Now each pixel is put back in the

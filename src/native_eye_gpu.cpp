@@ -15,6 +15,7 @@
 #include "spidy/vr_aa.hpp"
 #include "spidy/taa_watch.hpp"
 #include "spidy/taa_depth.hpp"
+#include "spidy/taa_depth_check.hpp"
 #include "spidy/near_clip.hpp"
 #include "spidy/taa_frame_log.hpp"
 #include "spidy/taa_jitter.hpp"
@@ -50,6 +51,8 @@ __declspec(dllexport) native_gpu::HistoryData SpidyEyeHistoryData;
 __declspec(dllexport) vr_aa::Data SpidyVrAaData; // 0.0.76 SPIDY TAA (copyTimingLock)
 __declspec(dllexport) taa_watch::Data SpidyTaaWatchData; // 0.0.76 TAA WATCH (watchLock)
 __declspec(dllexport) taa_frame_log::Data SpidyTaaFrameLogData; // 0.0.76 TAA FRAME LOG (watchLock)
+// 0.0.76 A-depth CHECKED (taa_depth_check.hpp): the depth convention check and the depth path's 10 s log (watchLock).
+__declspec(dllexport) taa_depth_check::Data SpidyTaaDepthCheckData;
 }
 namespace spidy::native_gpu {
 namespace {
@@ -578,9 +581,72 @@ struct TaaDepthSlot {
     EyePairState::Stamp stamp{};
     ID3D12CommandList* list{};
     float nearM{};
+    float farM{}; // 0.0.76 A-depth CHECKED: the far the eye lens was last given (near_clip::eyeLens), 0 if none yet
     bool pending{}, executed{};
 };
 std::array<std::array<TaaDepthSlot, depthRingSize>, 2> taaDepthRing; // depthLock
+// 0.0.76 A-depth CHECKED (read-only): the GPU time of the two depth copies (a timestamp of ours each side of each
+// copy, on the game's list; 16 pairs of 4), resolved on the history's list with the pair that used them and read
+// when that capture slot is done.
+struct DepthCopyTimes {
+    ComPtr<ID3D12QueryHeap> queries;
+    ComPtr<ID3D12Resource> stamps;
+    const volatile uint64_t* data{};
+    double ticksPerMs{};
+    bool failed{};
+    std::array<uint64_t, 16> serial{};
+    std::array<uint8_t, 16> marks{}; // bit 2 * eye + after
+    std::array<bool, 3> timed{};     // per capture slot
+} depthCopyTimes; // depthLock
+bool makeDepthCopyTimes() { // depthLock held
+    auto& t = depthCopyTimes;
+    if (t.queries || t.failed)
+        return t.queries != nullptr;
+    t.failed = true;
+    if (!device || !queue)
+        return false;
+    UINT64 frequency{};
+    D3D12_QUERY_HEAP_DESC qd{};
+    qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    qd.Count = 64;
+    D3D12_HEAP_PROPERTIES readback{};
+    readback.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width = sizeof(uint64_t) * 4 * 3; // four a capture slot
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    void* mapped{};
+    if (FAILED(queue->GetTimestampFrequency(&frequency)) || !frequency ||
+        FAILED(device->CreateQueryHeap(&qd, IID_PPV_ARGS(&t.queries))) ||
+        FAILED(device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
+                                               D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&t.stamps))) ||
+        FAILED(t.stamps->Map(0, nullptr, &mapped))) {
+        t.queries.Reset();
+        t.stamps.Reset();
+        return false;
+    }
+    t.data = static_cast<const volatile uint64_t*>(mapped);
+    t.ticksPerMs = static_cast<double>(frequency) / 1000.0;
+    t.failed = false;
+    return true;
+}
+void markDepthCopy(ID3D12GraphicsCommandList* list, uint64_t serial, unsigned eye, bool after) { // depthLock held
+    if (!serial || eye > 1 || !originalEndQuery || !makeDepthCopyTimes())
+        return;
+    auto& t = depthCopyTimes;
+    const unsigned ring = static_cast<unsigned>(serial % t.serial.size());
+    if (t.serial[ring] != serial) {
+        t.serial[ring] = serial;
+        t.marks[ring] = 0;
+    }
+    const unsigned bit = 2 * eye + (after ? 1 : 0);
+    originalEndQuery(list, t.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, ring * 4 + bit);
+    t.marks[ring] = static_cast<uint8_t>(t.marks[ring] | (1u << bit));
+}
 std::array<unsigned, 2> taaDepthNext{};
 UINT64 taaDepthW{};
 UINT taaDepthH{}, taaDepthPitch{}; // pitch in floats
@@ -646,6 +712,7 @@ void taaDepthCopy(ID3D12GraphicsCommandList* list, const DepthTag& t, ID3D12Reso
         }
     }
     taaDepthNext[t.eye] = (taaDepthNext[t.eye] + 1) % depthRingSize;
+    markDepthCopy(list, t.stamp.serial, t.eye, false); // 0.0.76 A-depth CHECKED (read-only)
     D3D12_RESOURCE_BARRIER to{};
     to.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     to.Transition = {res, 0, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE}; // the depth plane
@@ -661,9 +728,15 @@ void taaDepthCopy(ID3D12GraphicsCommandList* list, const DepthTag& t, ID3D12Reso
     list->CopyTextureRegion(&into, 0, 0, 0, &from, nullptr);
     std::swap(to.Transition.StateBefore, to.Transition.StateAfter);
     originalBarrier(list, 1, &to); // back to DEPTH_WRITE: the game's own barrier follows, as it expects
+    markDepthCopy(list, t.stamp.serial, t.eye, true); // 0.0.76 A-depth CHECKED (read-only)
     slot.stamp = t.stamp;
     slot.list = list;
     slot.nearM = near_clip::metres();
+    {
+        float lensNear{}, lensFar{};
+        near_clip::eyeLens(lensNear, lensFar);
+        slot.farM = std::isfinite(lensFar) && lensFar > slot.nearM ? lensFar : 0.f;
+    }
     slot.pending = true;
     slot.executed = false;
     ++taaDepthCaptured;
@@ -672,13 +745,15 @@ void taaDepthCopy(ID3D12GraphicsCommandList* list, const DepthTag& t, ID3D12Reso
 struct TaaDepthView {
     D3D12_GPU_VIRTUAL_ADDRESS at{};
     float nearM{};
+    float farM{};
+    ID3D12Resource* buffer{};
 };
 bool taaDepthFor(uint64_t serial, unsigned eye, TaaDepthView& out) {
     if (!serial || eye > 1)
         return false;
     for (const auto& slot : taaDepthRing[eye])
         if (slot.buffer && slot.executed && !slot.pending && slot.stamp.serial == serial) {
-            out = {slot.buffer->GetGPUVirtualAddress(), slot.nearM};
+            out = {slot.buffer->GetGPUVirtualAddress(), slot.nearM, slot.farM, slot.buffer.Get()};
             return out.at != 0 && std::isfinite(out.nearM) && out.nearM > 0;
         }
     return false;
@@ -2399,13 +2474,18 @@ struct HistoryPipeline {
     ComPtr<ID3D12PipelineState> taaDepthCount;
     uint64_t shownSerial{};                  // the pair `shown` is (A-depth: its depth)
     // 0.0.76 TAA JITTER: taaShader with TAA_COUNT (the rejection counts), its root signature (the history's, then a
-    // root UAV), the counts (16 bytes a capture slot: eye 0 then eye 1, [sampled, clipped]) and their readback.
+    // root UAV), the counts (64 bytes a capture slot: eye 0 then eye 1, 8 counters each, taa_depth_check::Counter)
+    // and their readback.
     ComPtr<ID3D12RootSignature> countRoot;
     ComPtr<ID3D12PipelineState> taaCount;
     ComPtr<ID3D12Resource> counts, countRead;
     const volatile uint32_t* countData{};
-    std::array<std::array<uint32_t, 4>, 3> countLast{}; // the totals last read per slot (the counts only grow)
+    std::array<std::array<uint32_t, 16>, 3> countLast{}; // the totals last read per slot (the counts only grow)
     std::array<bool, 3> counted{}, countStill{};
+    // 0.0.76 A-depth CHECKED: per capture slot, the path (taa_depth_check::Path) and movement (Category) of the pair
+    // counted there, and whether the pair timed there was SPIDY TAA's, turned with the depth.
+    std::array<uint32_t, 3> countPath{}, countCategory{};
+    std::array<bool, 3> timedOurs{}, timedDepth{};
     ComPtr<ID3D12DescriptorHeap> views, targets;
     ComPtr<ID3D12QueryHeap> queries;
     ComPtr<ID3D12Resource> stamps;
@@ -2490,14 +2570,17 @@ cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 ext
 #ifdef TAA_DEPTH
 // 0.0.76 A-depth (taa_depth.hpp): each eye's depth, this pair's and the last one's (one plane of floats, reversed-Z).
 // shift.xyz the previous eye's shift for the travel over the near plane, shift.w the last near over this one;
-// sizes: the depth's width, height and row pitch (floats).
+// sizes: the depth's width, height and row pitch (floats); lin (taa_depth_check.hpp linearOf, from the checked
+// convention): xy turn this pair's depth into near / distance, zw the last pair's.
 StructuredBuffer<float> depthNow : register(t2);
 StructuredBuffer<float> depthBefore : register(t3);
-cbuffer Depth : register(b1) { float4 shift; float4 sizes; };
+cbuffer Depth : register(b1) { float4 shift; float4 sizes; float4 lin; };
 #endif
 #ifdef TAA_COUNT
-// 0.0.76 TAA JITTER (read-only): this eye's counts, [0] the pixels with a history to blend, [1] those the clip moved
-// (one pixel in 16 x 16). The picture is the same with or without it.
+// 0.0.76 TAA JITTER (read-only): this eye's counts (one pixel in 16 x 16; taa_depth_check.hpp Counter), bytes 0 the
+// pixels with a history to blend, 4 those rejected (clip moved it or depth refused it), 8 the clip alone, 12 the
+// depth test alone, 16 both, 20 depth-path pixels on head motion instead (no usable depth), 24 those the depth test
+// ran on, 28 all pixels. The picture is the same with or without it.
 RWByteAddressBuffer counts : register(u1); // u0 shares its slot with SV_Target0 in ps_5_0
 #endif
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
@@ -2530,53 +2613,9 @@ float3 catmullRom(float2 uv, float2 size) {
     const float weight = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
     return saturate(sum / max(weight, 1e-4));
 }
-float4 ps(float4 position : SV_POSITION) : SV_TARGET {
-    uint w, h;
-    current.GetDimensions(w, h);
-    const int2 p = int2(position.xy);
-    const int2 last = int2(w, h) - 1;
-    const float4 here = current.Load(int3(p, 0));
-    const float3 uv = float3(position.xy * extra.yz, 1);
-    float3 q = float3(dot(row0.xyz, uv), dot(row1.xyz, uv), dot(row2.xyz, uv));
-#ifdef TAA_DEPTH
-    // The pixel put back in the world with its depth and moved into the previous eye (sky, d 0: turned only).
-    const int2 depthLast = int2(sizes.xy) - 1;
-    const uint pitch = (uint)sizes.z;
-    const int2 dp = clamp(int2(uv.xy * sizes.xy), int2(0, 0), depthLast);
-    const float d = depthNow[dp.y * pitch + dp.x];
-    const bool solid = d > 0 && d <= 1;
-    if (solid)
-        q = q / d + shift.xyz;
-#endif
-    float2 old = float2(-1, -1);
-    if (q.z > 1e-5)
-        old = q.xy / q.z;
-    if (!(extra.x > 0) || any(old < 0) || any(old > 1))
-        return here;
-#ifdef TAA_DEPTH
-    {
-        // Disocclusion: the previous eye's depth there must be the one this pixel should have, at one of the
-        // 2 x 2 around the place, or this pixel was hidden last pair and starts again.
-        const float want = solid ? shift.w / q.z : 0;
-        const int2 base = int2(floor(old * sizes.xy - 0.5));
-        bool agrees = false;
-        [unroll] for (int k = 0; k < 4; ++k) {
-            const int2 c = clamp(base + int2(k & 1, k >> 1), int2(0, 0), depthLast);
-            const float had = depthBefore[c.y * pitch + c.x];
-            agrees = agrees || (had >= 0 && had <= 1 && abs(had - want) <= 0.1 * max(had, want) + 1e-7);
-        }
-        if (!agrees) {
-#ifdef TAA_COUNT
-            if (((p.x | p.y) & 15) == 0) { // 0.0.76 TAA JITTER: a history refused by the depth counts as rejected
-                counts.InterlockedAdd(0, 1);
-                counts.InterlockedAdd(4, 1);
-            }
-#endif
-            return here;
-        }
-    }
-#endif
-    const float3 middle = toYCoCg(here.rgb);
+// The history at `old` read with Catmull-Rom and clipped to this pixel's 3 x 3 variance box in YCoCg; most > 1: the
+// clip moved it.
+float3 clipHistory(int2 p, int2 last, float2 old, float2 size, float3 middle, out float most) {
     float3 lo = middle, hi = middle, m1 = 0, m2 = 0;
     [unroll] for (int y = -1; y <= 1; ++y)
         [unroll] for (int x = -1; x <= 1; ++x) {
@@ -2590,20 +2629,118 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     const float3 sigma = sqrt(max(m2 / 9.0 - mean * mean, 0));
     const float3 boxLo = max(lo, mean - extra.w * sigma);
     const float3 boxHi = min(hi, mean + extra.w * sigma);
-    float3 before = toYCoCg(catmullRom(old, float2(w, h)));
+    float3 before = toYCoCg(catmullRom(old, size));
     // Clip toward the box's centre (not a per-channel clamp): keeps the history's hue, no colour shift.
     const float3 centre = 0.5 * (boxHi + boxLo);
     const float3 extent = 0.5 * (boxHi - boxLo) + 1e-4;
     const float3 offset = before - centre;
     const float3 units = abs(offset / extent);
-    const float most = max(units.x, max(units.y, units.z));
+    most = max(units.x, max(units.y, units.z));
     if (most > 1)
         before = centre + offset / most;
+    return before;
+}
+float4 ps(float4 position : SV_POSITION) : SV_TARGET {
+    uint w, h;
+    current.GetDimensions(w, h);
+    const int2 p = int2(position.xy);
+    const int2 last = int2(w, h) - 1;
+    const float4 here = current.Load(int3(p, 0));
+    const float3 uv = float3(position.xy * extra.yz, 1);
+    float3 q = float3(dot(row0.xyz, uv), dot(row1.xyz, uv), dot(row2.xyz, uv));
 #ifdef TAA_COUNT
-    if (((p.x | p.y) & 15) == 0) {
-        counts.InterlockedAdd(0, 1);
-        if (most > 1)
+    const bool counted = ((p.x | p.y) & 15) == 0;
+    if (counted)
+        counts.InterlockedAdd(28, 1);
+#endif
+#ifdef TAA_DEPTH
+    // The pixel put back in the world with its depth and moved into the previous eye. Static geometry only: the
+    // depth only places the pixel, no motion vectors, nothing moves on its own. No usable depth (0, 1, NaN, or the
+    // place outside the previous eye): this pixel keeps the head-motion place (`turned`) - fallback, not rejection.
+    const float3 turned = q;
+    const int2 depthLast = int2(sizes.xy) - 1;
+    const uint pitch = (uint)sizes.z;
+    const int2 dp = clamp(int2(uv.xy * sizes.xy), int2(0, 0), depthLast);
+    const float d = depthNow[dp.y * pitch + dp.x];
+    bool deep = false;
+    float want = 0;
+    if (d > 0 && d < 1) { // false for NaN
+        const float3 moved = q / (d * lin.x + lin.y) + shift.xyz;
+        if (moved.z > 1e-5) {
+            const float2 at = moved.xy / moved.z;
+            if (all(at >= 0) && all(at <= 1)) {
+                q = moved;
+                deep = true;
+                want = shift.w / moved.z;
+            }
+        }
+    }
+#endif
+    float2 old = float2(-1, -1);
+    if (q.z > 1e-5)
+        old = q.xy / q.z;
+    if (!(extra.x > 0) || any(old < 0) || any(old > 1))
+        return here;
+#ifdef TAA_DEPTH
+    bool refused = false;
+    if (deep) {
+        // Disocclusion: the previous eye's depth there must be the one this pixel should have, at one of the
+        // 2 x 2 around the place, or this pixel was hidden last pair and starts again. None of the 2 x 2 usable:
+        // the head-motion place instead (fallback).
+        const int2 base = int2(floor(old * sizes.xy - 0.5));
+        bool agrees = false, seen = false;
+        [unroll] for (int k = 0; k < 4; ++k) {
+            const int2 c = clamp(base + int2(k & 1, k >> 1), int2(0, 0), depthLast);
+            const float had = depthBefore[c.y * pitch + c.x];
+            if (had > 0 && had < 1) {
+                seen = true;
+                const float was = had * lin.z + lin.w;
+                agrees = agrees || abs(was - want) <= 0.1 * max(was, want) + 1e-7;
+            }
+        }
+        if (seen) {
+            refused = !agrees;
+        } else {
+            deep = false;
+            q = turned;
+            old = float2(-1, -1);
+            if (q.z > 1e-5)
+                old = q.xy / q.z;
+            if (any(old < 0) || any(old > 1))
+                return here;
+        }
+    }
+#ifdef TAA_COUNT
+    if (counted && !deep)
+        counts.InterlockedAdd(20, 1);
+    if (counted && deep)
+        counts.InterlockedAdd(24, 1);
+#endif
+#endif
+    const float3 middle = toYCoCg(here.rgb);
+#ifdef TAA_DEPTH
+    if (refused) {
+#ifdef TAA_COUNT
+        if (counted) { // a history refused by the depth: rejected, and was the clip going to move it too?
+            float most;
+            clipHistory(p, last, old, float2(w, h), middle, most);
+            counts.InterlockedAdd(0, 1);
             counts.InterlockedAdd(4, 1);
+            counts.InterlockedAdd(most > 1 ? 16 : 12, 1);
+        }
+#endif
+        return here;
+    }
+#endif
+    float most;
+    const float3 before = clipHistory(p, last, old, float2(w, h), middle, most);
+#ifdef TAA_COUNT
+    if (counted) {
+        counts.InterlockedAdd(0, 1);
+        if (most > 1) {
+            counts.InterlockedAdd(4, 1);
+            counts.InterlockedAdd(8, 1);
+        }
     }
 #endif
     const float keep = saturate(extra.x);
@@ -2775,7 +2912,7 @@ bool prepareTaaDepth() {
     parameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     parameters[3].Descriptor = {3, 0};
     parameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    parameters[4].Constants = {1, 0, 8};
+    parameters[4].Constants = {1, 0, 12}; // shift, sizes, lin (A-depth CHECKED)
     for (auto& parameter : parameters)
         parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_STATIC_SAMPLER_DESC sampler{};
@@ -2920,7 +3057,7 @@ bool prepareTaaCount() {
         return fail(3);
     D3D12_RESOURCE_DESC buffer{};
     buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    buffer.Width = 16 * history.countLast.size();
+    buffer.Width = 64 * history.countLast.size();
     buffer.Height = 1;
     buffer.DepthOrArraySize = 1;
     buffer.MipLevels = 1;
@@ -2951,15 +3088,23 @@ void noteHistoryCount(size_t slot) {
     if (slot >= history.counted.size() || !history.counted[slot] || !history.countData)
         return;
     history.counted[slot] = false;
-    uint32_t now[4]{};
-    for (unsigned k = 0; k < 4; ++k)
-        now[k] = history.countData[4 * slot + k];
+    uint32_t now[16]{};
+    for (unsigned k = 0; k < 16; ++k)
+        now[k] = history.countData[16 * slot + k];
     auto& last = history.countLast[slot];
-    const uint32_t sampled = (now[0] - last[0]) + (now[2] - last[2]), clipped = (now[1] - last[1]) + (now[3] - last[3]);
-    for (unsigned k = 0; k < 4; ++k)
+    uint32_t eyes[2][taa_depth_check::counters]{};
+    for (unsigned i = 0; i < 2; ++i)
+        for (unsigned k = 0; k < taa_depth_check::counters; ++k)
+            eyes[i][k] = now[taa_depth_check::counters * i + k] - last[taa_depth_check::counters * i + k];
+    using taa_depth_check::rejectedAt, taa_depth_check::sampledAt;
+    const uint32_t sampled = eyes[0][sampledAt] + eyes[1][sampledAt], clipped = eyes[0][rejectedAt] + eyes[1][rejectedAt];
+    for (unsigned k = 0; k < 16; ++k)
         last[k] = now[k];
     std::lock_guard lock(watchLock);
     taa_watch::noteRejection(SpidyTaaWatchData.current, history.countStill[slot], sampled, clipped);
+    // 0.0.76 A-depth CHECKED: clip / depth / both apart, per path and movement
+    taa_depth_check::noteCounts(SpidyTaaDepthCheckData.current, history.countPath[slot], history.countCategory[slot],
+                                eyes);
 }
 void noteHistoryTime(size_t slot) {
     if (!history.timed[slot] || !history.stampData)
@@ -2973,8 +3118,19 @@ void noteHistoryTime(size_t slot) {
     }
     if (end > begin) { // 0.0.76 TAA WATCH
         std::lock_guard lock(watchLock);
-        SpidyTaaWatchData.current.taaGpuMs += static_cast<float>(static_cast<double>(end - begin) / history.ticksPerMs);
+        const auto ms = static_cast<float>(static_cast<double>(end - begin) / history.ticksPerMs);
+        SpidyTaaWatchData.current.taaGpuMs += ms;
         ++SpidyTaaWatchData.current.taaTimed;
+        if (history.timedOurs[slot] && ms < 250) { // 0.0.76 A-depth CHECKED: the pass with and without the depth
+            auto& w = SpidyTaaDepthCheckData.current;
+            if (history.timedDepth[slot]) {
+                w.depthDrawMs += ms;
+                ++w.depthDrawTimed;
+            } else {
+                w.plainDrawMs += ms;
+                ++w.plainDrawTimed;
+            }
+        }
     }
     if (end > begin) {
         historyClock.note(static_cast<double>(end - begin) / history.ticksPerMs);
@@ -3011,6 +3167,219 @@ void resolveEyeTime(ID3D12GraphicsCommandList* list, size_t slot, uint64_t seria
     eyeTimes.marks[ring] = 0; // read once
     eyeTimes.timed[slot] = true;
 }
+// 0.0.76 A-depth CHECKED (taa_depth_check.hpp): the depth copies' GPU time for the pair this slot carried.
+void resolveDepthCopyTime(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) { // depthLock held
+    auto& t = depthCopyTimes;
+    if (!t.queries || slot >= t.timed.size() || !serial)
+        return;
+    const unsigned ring = static_cast<unsigned>(serial % t.serial.size());
+    if (t.serial[ring] != serial || t.marks[ring] != 0xf)
+        return;
+    list->ResolveQueryData(t.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, ring * 4, 4, t.stamps.Get(),
+                           sizeof(uint64_t) * 4 * slot);
+    t.marks[ring] = 0; // read once
+    t.timed[slot] = true;
+}
+void noteDepthCopyTime(size_t slot) {
+    double ms = 0;
+    {
+        std::lock_guard lock(depthLock);
+        auto& t = depthCopyTimes;
+        if (slot >= t.timed.size() || !t.timed[slot] || !t.data)
+            return;
+        t.timed[slot] = false;
+        uint64_t v[4]{};
+        for (unsigned k = 0; k < 4; ++k)
+            v[k] = t.data[4 * slot + k];
+        if (!(v[1] > v[0]) || !(v[3] > v[2]))
+            return;
+        ms = static_cast<double>((v[1] - v[0]) + (v[3] - v[2])) / t.ticksPerMs;
+    }
+    if (!(ms > 0) || ms > 50)
+        return; // not one pair's copies (a stale slot)
+    std::lock_guard lock(watchLock);
+    SpidyTaaDepthCheckData.current.copyMs += static_cast<float>(ms);
+    ++SpidyTaaDepthCheckData.current.copyTimed;
+}
+// The convention check's state for the session (taa_depth_check::State; failed stays failed) and the convention the
+// shader is given once it passed.
+std::atomic<uint32_t> depthCheckState{taa_depth_check::waiting};
+std::atomic<uint32_t> depthCheckInForce{taa_depth_check::conventions};
+// The check's probe: a band of rows about each eye's centre row of one pair's depth (both eyes), copied on the
+// history's list into a readback buffer and checked when that capture slot is done. One at a time (depthLock).
+struct DepthProbe {
+    ComPtr<ID3D12Resource> read;
+    const volatile float* data{};
+    UINT64 bytes{};
+    bool pending{}, failed{};
+    size_t slot{};
+    uint64_t serial{};
+    uint32_t pitch{}, firstRow{};
+    std::array<taa_depth_check::Lens, 2> lens{};
+    uint32_t pairsSince{};
+} depthProbe;
+inline constexpr uint32_t probeWaiting = 30, probePassed = 45; // pairs between probes: until it passed, after
+bool recordDepthProbe(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial,
+                      const std::array<TaaDepthView, 2>& at, const std::array<taa_depth_check::Lens, 2>& lens) {
+    auto& p = depthProbe; // depthLock held
+    using taa_depth_check::bandRows;
+    if (p.failed || p.pending || !device || taaDepthH < bandRows || !taaDepthPitch || !at[0].buffer || !at[1].buffer)
+        return false;
+    const UINT64 rowBytes = static_cast<UINT64>(taaDepthPitch) * sizeof(float), eyeBytes = rowBytes * bandRows;
+    if (!p.read || p.bytes < 2 * eyeBytes) {
+        if (p.read)
+            retiredDepth.push_back({std::move(p.read), GetTickCount64()});
+        p.data = nullptr;
+        p.bytes = 0;
+        D3D12_HEAP_PROPERTIES readback{};
+        readback.Type = D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC buffer{};
+        buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        buffer.Width = 2 * eyeBytes;
+        buffer.Height = 1;
+        buffer.DepthOrArraySize = 1;
+        buffer.MipLevels = 1;
+        buffer.SampleDesc.Count = 1;
+        buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        void* mapped{};
+        if (FAILED(device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
+                                                   D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&p.read))) ||
+            FAILED(p.read->Map(0, nullptr, &mapped)) || !mapped) {
+            p.read.Reset();
+            p.failed = true; // no check, so the depth path stays off (never on unchecked)
+            OutputDebugStringA("SpidyVR: 0.0.76 A-depth CHECK could not make its readback: depth path stays off\n");
+            return false;
+        }
+        p.data = static_cast<const volatile float*>(mapped);
+        p.bytes = 2 * eyeBytes;
+    }
+    const uint32_t firstRow = taaDepthH / 2 - bandRows / 2;
+    // The depth buffers stay in COMMON: a buffer is promoted to COPY_SOURCE (and the history's read) by itself.
+    for (unsigned i = 0; i < 2; ++i)
+        list->CopyBufferRegion(p.read.Get(), eyeBytes * i, at[i].buffer, rowBytes * firstRow, eyeBytes);
+    p.pending = true;
+    p.slot = slot;
+    p.serial = serial;
+    p.pitch = taaDepthPitch;
+    p.firstRow = firstRow;
+    p.lens = lens;
+    return true;
+}
+void cancelDepthProbe(size_t slot) { // the slot's list was not submitted
+    std::lock_guard lock(depthLock);
+    if (depthProbe.pending && depthProbe.slot == slot)
+        depthProbe.pending = false;
+}
+// The probe's check (its slot is done): the round trip and the stereo test, the verdict, the log line.
+void noteDepthCheck(size_t slot) {
+    namespace tdc = taa_depth_check;
+    std::array<tdc::Lens, 2> lens{};
+    std::vector<float> band;
+    uint32_t pitch{}, firstRow{};
+    uint64_t serial{};
+    {
+        std::lock_guard lock(depthLock);
+        auto& p = depthProbe;
+        if (!p.pending || p.slot != slot || !p.data)
+            return;
+        p.pending = false;
+        pitch = p.pitch;
+        firstRow = p.firstRow;
+        serial = p.serial;
+        lens = p.lens;
+        band.resize(static_cast<size_t>(2) * tdc::bandRows * pitch);
+        for (size_t k = 0; k < band.size(); ++k)
+            band[k] = p.data[k];
+    }
+    const size_t eyeFloats = static_cast<size_t>(tdc::bandRows) * pitch;
+    const tdc::Band bands[2] = {{band.data(), firstRow, tdc::bandRows, pitch},
+                                {band.data() + eyeFloats, firstRow, tdc::bandRows, pitch}};
+    double trip[2] = {NAN, NAN};
+    bool inFrustum[2]{};
+    float centreDepth[2] = {NAN, NAN}, centreDistance[2] = {NAN, NAN};
+    int32_t centreOffset[2]{};
+    const bool lensOk = lens[0].nearM > 0 && lens[0].farM > lens[0].nearM && lens[1].nearM > 0 &&
+                        lens[1].farM > lens[1].nearM && lens[0].width && lens[0].height;
+    const uint32_t row = firstRow + tdc::bandRows / 2;
+    for (unsigned i = 0; i < 2 && lensOk; ++i) {
+        // The centre pixel, or the nearest pixel on the centre row with a usable depth.
+        const int64_t cx = lens[i].width / 2;
+        for (int64_t off = 0; off < static_cast<int64_t>(lens[i].width / 2); off = off > 0 ? -off : 1 - off) {
+            const int64_t x = cx + off;
+            if (x < 0 || x >= static_cast<int64_t>(lens[i].width))
+                continue;
+            const float d = bands[i].at(static_cast<uint32_t>(x), row);
+            if (!tdc::usable(d))
+                continue;
+            const auto t = tdc::roundTrip(lens[i], false, static_cast<double>(x) + .5, static_cast<double>(row) + .5, d);
+            trip[i] = t.errorPx;
+            inFrustum[i] = t.inFrustum;
+            centreDepth[i] = d;
+            centreDistance[i] = static_cast<float>(t.distance);
+            centreOffset[i] = static_cast<int32_t>(off);
+            break;
+        }
+    }
+    const tdc::Stereo st = lensOk ? tdc::stereo(lens[0], lens[1], bands[0], bands[1]) : tdc::Stereo{};
+    tdc::Verdict v = lensOk ? tdc::decide(trip, inFrustum, st) : tdc::Verdict{tdc::waiting, tdc::noLens, tdc::conventions};
+    const uint32_t before = depthCheckState.load();
+    const uint32_t after = tdc::nextState(before, v);
+    depthCheckState = after;
+    if (after == tdc::passed && v.outcome == tdc::passed)
+        depthCheckInForce = v.convention;
+    const uint32_t inForce = depthCheckInForce.load();
+    const char* stateName = after == tdc::passed ? "PASSED" : after == tdc::failed ? "FAILED" : "WAITING";
+    char line[640];
+    std::snprintf(line, sizeof line,
+                  "SpidyVR: 0.0.76 A-depth CHECK pair %llu: lens convention D3D 0..1, reversed-Z, reciprocal, finite far "
+                  "(near %.4g m, far %.6g m, jittered %.3g,%.3g px); round trip L %.4g px R %.4g px (limit 0.05; "
+                  "centre depth L %.6g R %.6g, offset L %d R %d); stereo %u edge points: rev-finite %.0f%% "
+                  "rev-infinite %.0f%% standard %.0f%% gl %.0f%% linear %.0f%%; best %s; %s (%s)%s%s\n",
+                  static_cast<unsigned long long>(serial), lens[0].nearM, lens[0].farM, lens[0].jitter[0],
+                  lens[0].jitter[1], trip[0], trip[1], centreDepth[0], centreDepth[1], centreOffset[0], centreOffset[1],
+                  st.tested, 100 * st.share(0), 100 * st.share(1), 100 * st.share(2), 100 * st.share(3),
+                  100 * st.share(4), tdc::conventionName(v.convention), stateName, tdc::reasonText(v.reason),
+                  v.outcome == tdc::failed && v.reason == tdc::otherConvention ? "; likely convention error: the depth is "
+                                                                                 : "",
+                  v.outcome == tdc::failed && v.reason == tdc::otherConvention ? tdc::conventionName(v.convention) : "");
+    OutputDebugStringA(line);
+    std::lock_guard lock(watchLock);
+    auto& c = SpidyTaaDepthCheckData.check;
+    ++c.probes;
+    if (v.outcome == tdc::passed)
+        ++c.passed;
+    else if (v.outcome == tdc::failed)
+        ++c.failed;
+    else
+        ++c.inconclusive;
+    c.state = after;
+    c.convention = v.convention;
+    c.reason = v.reason;
+    c.tested = st.tested;
+    for (uint32_t k = 0; k < tdc::conventions; ++k)
+        c.agree[k] = static_cast<float>(st.share(k));
+    for (unsigned i = 0; i < 2; ++i) {
+        c.roundTrip[i] = static_cast<float>(trip[i]);
+        c.centreDepth[i] = centreDepth[i];
+        c.centreDistance[i] = centreDistance[i];
+        c.centreOffset[i] = centreOffset[i];
+    }
+    c.nearM = static_cast<float>(lens[0].nearM);
+    c.farM = static_cast<float>(lens[0].farM);
+    c.clearReversed = static_cast<uint32_t>(std::min<uint64_t>(depthClearReversed.load(), 0xffffffffu));
+    c.clearStandard = static_cast<uint32_t>(std::min<uint64_t>(depthClearStandard.load(), 0xffffffffu));
+    c.inForce = inForce;
+    c.serial = static_cast<uint32_t>(serial);
+    auto& w = SpidyTaaDepthCheckData.current;
+    ++w.checks;
+    if (v.outcome == tdc::passed)
+        ++w.checksPassed;
+    const float worst = static_cast<float>(std::fmax(std::isfinite(trip[0]) ? trip[0] : 0, std::isfinite(trip[1]) ? trip[1] : 0));
+    if (std::isfinite(trip[0]) || std::isfinite(trip[1])) {
+        w.roundTripMax = std::max(w.roundTripMax, worst);
+        w.roundTripLast = worst;
+    }
+}
 bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out, NotedViews* noted = nullptr) {
     std::lock_guard lock(viewLock);
     for (const auto& n : notedViews)
@@ -3041,17 +3410,36 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
     bool watchStill = false, watchEased = false; // 0.0.76 TAA WATCH (eye 0, as `moving`)
+    float watchTurn = 0, watchTravel = 0;        // 0.0.76 A-depth CHECKED: eye 0's, for the movement category
     // 0.0.76 A-depth (live.txt vr_taa_depth): both eyes' depth of this pair and of the one shown, or the history
     // is turned as before (counted as depth missed). The blend shares and the clip are the same either way.
+    // A-depth CHECKED (taa_depth_check.hpp): and only once the depth's convention check has passed. Per-eye gating:
+    // one eye's depth (this pair's or the shown one's) missing and BOTH eyes are turned by head motion this pair, so
+    // no eye ever uses the depth while the other does not; the pictures kept are the same either way (the depth only
+    // moves where the history is read), so neither path's history is spoilt for the other.
     const bool depthWanted = ours && taaDepthActive();
     bool depthUsed = false;
+    bool depthFound[2]{};
+    uint32_t depthGate = 0; // 0 used, 1 an eye's depth missing, 2 check not passed yet, 3 check failed
     std::array<TaaDepthView, 2> depthNowView{}, depthBeforeView{};
-    float depthFrame[2][8]{};
-    if (depthWanted && viewed && history.valid && history.shownSerial && prepareTaaDepth()) {
+    float depthFrame[2][12]{};
+    if (depthWanted && viewed && prepareTaaDepth()) {
         std::lock_guard lock(depthLock);
-        depthUsed = taaDepthW && taaDepthH && taaDepthPitch;
-        for (unsigned i = 0; i < 2 && depthUsed; ++i)
-            depthUsed = taaDepthFor(serial, i, depthNowView[i]) && taaDepthFor(history.shownSerial, i, depthBeforeView[i]);
+        const bool sized = taaDepthW && taaDepthH && taaDepthPitch;
+        for (unsigned i = 0; i < 2; ++i)
+            depthFound[i] = sized && taaDepthFor(serial, i, depthNowView[i]);
+        bool ready = history.valid && history.shownSerial && depthFound[0] && depthFound[1];
+        for (unsigned i = 0; i < 2 && ready; ++i)
+            ready = taaDepthFor(history.shownSerial, i, depthBeforeView[i]);
+        const uint32_t checkState = depthCheckState.load();
+        const uint32_t inForce = depthCheckInForce.load();
+        if (!ready)
+            depthGate = 1;
+        else if (checkState == taa_depth_check::failed)
+            depthGate = 3;
+        else if (checkState != taa_depth_check::passed || inForce >= taa_depth_check::conventions)
+            depthGate = 2;
+        depthUsed = depthGate == 0;
         for (unsigned i = 0; i < 2 && depthUsed; ++i) {
             std::array<float, 3> shift{};
             depthUsed = taa_depth::historyShift(history.shown[i], now[i], shift);
@@ -3062,9 +3450,43 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             depthFrame[i][4] = static_cast<float>(taaDepthW);
             depthFrame[i][5] = static_cast<float>(taaDepthH);
             depthFrame[i][6] = static_cast<float>(taaDepthPitch);
+            // lin: each pair's stored depth to near / distance in the checked convention (its own near and far)
+            taa_depth_check::linearOf(inForce, depthNowView[i].nearM, depthNowView[i].farM, depthFrame[i][8],
+                                      depthFrame[i][9]);
+            taa_depth_check::linearOf(inForce, depthBeforeView[i].nearM, depthBeforeView[i].farM, depthFrame[i][10],
+                                      depthFrame[i][11]);
+            if (inForce == taa_depth_check::reversedFinite &&
+                !(depthNowView[i].farM > depthNowView[i].nearM && depthBeforeView[i].farM > depthBeforeView[i].nearM))
+                depthUsed = false; // no far to read the finite convention with
             for (float v : depthFrame[i])
                 depthUsed = depthUsed && std::isfinite(v);
         }
+        if (depthGate == 0 && !depthUsed)
+            depthGate = 1;
+        // The convention check's probe of this pair's depth (both eyes there), until it passed one pair in 30, then
+        // about one a second; none once it failed.
+        if (sized && depthFound[0] && depthFound[1] && checkState != taa_depth_check::failed) {
+            ++depthProbe.pairsSince;
+            if (depthProbe.pairsSince >= (checkState == taa_depth_check::passed ? probePassed : probeWaiting)) {
+                std::array<taa_depth_check::Lens, 2> lens{};
+                for (unsigned i = 0; i < 2; ++i) {
+                    lens[i].view = now[i];
+                    lens[i].nearM = depthNowView[i].nearM;
+                    lens[i].farM = depthNowView[i].farM;
+                    lens[i].width = static_cast<uint32_t>(taaDepthW);
+                    lens[i].height = taaDepthH;
+                    for (unsigned k = 0; k < 2; ++k) // this pair's step, in the depth's pixels
+                        lens[i].jitter[k] = noted.size[k] ? static_cast<double>(noted.jitter[k]) *
+                                                                (k ? static_cast<double>(taaDepthH) : static_cast<double>(taaDepthW)) /
+                                                                noted.size[k]
+                                                          : 0.0;
+                }
+                if (recordDepthProbe(list, slot, serial, depthNowView, lens))
+                    depthProbe.pairsSince = 0;
+            }
+        }
+        if (depthFound[0] && depthFound[1])
+            resolveDepthCopyTime(list, slot, serial);
     }
     const uint32_t stillMilli = taaStillMilli.load(std::memory_order_relaxed); // 0.0.76 TAA STILL (0: the build's)
     static int64_t watchQpc{};
@@ -3115,6 +3537,8 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             leastKeep = keep;
             leastStill = ours ? keep : still; // SPIDY TAA: JITTER CALM keeps the full step while anything is kept
             watchStill = taa_watch::stillHead(turn, travel, watchSeconds);
+            watchTurn = turn;
+            watchTravel = travel;
             const float qz = h[6] * .5f + h[7] * .5f + h[8];
             if (watchStill && noted.size[0] && noted.size[1] && qz > 1e-5f) {
                 jitterShift[0] = ((h[0] * .5f + h[1] * .5f + h[2]) / qz - .5f) * static_cast<float>(noted.size[0]);
@@ -3205,11 +3629,11 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         if (depthUsed) { // 0.0.76 A-depth
             list->SetGraphicsRootShaderResourceView(2, depthNowView[i].at);
             list->SetGraphicsRootShaderResourceView(3, depthBeforeView[i].at);
-            list->SetGraphicsRoot32BitConstants(4, 8, depthFrame[i], 0);
+            list->SetGraphicsRoot32BitConstants(4, 12, depthFrame[i], 0);
         }
         if (counting) // 0.0.76 TAA JITTER: the counts (u1), after the root's own parameters
             list->SetGraphicsRootUnorderedAccessView(depthUsed ? 5 : 2,
-                                                     history.counts->GetGPUVirtualAddress() + 16 * slot + 8 * i);
+                                                     history.counts->GetGPUVirtualAddress() + 64 * slot + 32 * i);
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
@@ -3224,12 +3648,14 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         countBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         countBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         originalBarrier(list, 1, &countBarrier);
-        list->CopyBufferRegion(history.countRead.Get(), 16 * slot, history.counts.Get(), 16 * slot, 16);
+        list->CopyBufferRegion(history.countRead.Get(), 64 * slot, history.counts.Get(), 64 * slot, 64);
         countBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
         countBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
         originalBarrier(list, 1, &countBarrier);
         history.counted[slot] = true;
         history.countStill[slot] = watchStill;
+        history.countPath[slot] = depthUsed ? taa_depth_check::depthPath : taa_depth_check::headPath;
+        history.countCategory[slot] = taa_depth_check::category(watchStill, watchTurn, watchTravel, watchSeconds);
     }
     for (unsigned i = 0; i < 2; ++i)
         list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
@@ -3244,6 +3670,8 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         list->ResolveQueryData(history.queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first, 2, history.stamps.Get(),
                                sizeof(uint64_t) * first);
         history.timed[slot] = true;
+        history.timedOurs[slot] = ours;
+        history.timedDepth[slot] = depthUsed;
     }
     history.parity = write;
     // 0.0.73 test 3 JITTER CALM: the share of its still-head history this pass kept (1 still, 0 when a
@@ -3286,6 +3714,25 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                 ++SpidyTaaWatchData.current.depthPairs;
             else
                 ++SpidyTaaWatchData.current.depthMissed;
+        }
+        static uint64_t depthWindowStart{}; // 0.0.76 A-depth CHECKED: its own 10 s windows
+        taa_depth_check::roll(SpidyTaaDepthCheckData, depthWindowStart, GetTickCount64());
+        if (ours) {
+            auto& w = SpidyTaaDepthCheckData.current;
+            ++w.pairs;
+            if (depthWanted) {
+                ++w.wanted;
+                w.found[0] += depthFound[0] ? 1 : 0;
+                w.found[1] += depthFound[1] ? 1 : 0;
+                if (depthUsed)
+                    ++w.used;
+                else if (depthGate == 3)
+                    ++w.refused;
+                else if (depthGate == 2)
+                    ++w.unchecked;
+                else
+                    ++w.gated;
+            }
         }
         SpidyTaaWatchData.current.setup =
             taa_watch::setupWith(SpidyTaaWatchData.current.setup, taaJitterModeNow.load(std::memory_order_relaxed),
@@ -3770,6 +4217,8 @@ void stagePair(EyePairState::Stamp stamp) {
     noteHistoryCount(index); // 0.0.76 TAA JITTER
     noteSmaaTime(index);
     noteEyeTime(index); // 0.0.76 TAA WATCH
+    noteDepthCopyTime(index); // 0.0.76 A-depth CHECKED
+    noteDepthCheck(index);
     // Supersampled eyes cannot be copied: they are always filtered down,
     // without FXAA (the extra samples already smooth the edges).
     const bool down = downsampling();
@@ -3805,6 +4254,7 @@ void stagePair(EyePairState::Stamp stamp) {
     resolveEyeTime(slot->list.Get(), index, stamp.serial); // 0.0.76 TAA WATCH: read-only
     if (!submitCommands(*slot)) {
         history.valid = false;
+        cancelDepthProbe(index); // 0.0.76 A-depth CHECKED: that probe's copy never ran
         if (smaaUploading)
             smaaPass.uploaded = false; // the look-up textures are still to copy
         return;

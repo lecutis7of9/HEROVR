@@ -75,6 +75,17 @@ void spidy::near_clip::boost(float metres) {
 float spidy::near_clip::metres() {
     return std::max(nearClip.load(std::memory_order_relaxed), nearClipBoost.load(std::memory_order_relaxed));
 }
+namespace {
+std::atomic<float> eyeLensNear{0}, eyeLensFar{0}; // 0.0.76 A-depth CHECKED (near_clip.hpp)
+}
+void spidy::near_clip::noteEyeLens(float nearM, float farM) {
+    eyeLensNear = nearM;
+    eyeLensFar = farM;
+}
+void spidy::near_clip::eyeLens(float& nearM, float& farM) {
+    nearM = eyeLensNear.load();
+    farM = eyeLensFar.load();
+}
 // RECORDING FOV's angle (recording_fov.hpp), degrees, 0 for off: the XR
 // worker sets it, each frame's rest and the game's view's lens read it.
 std::atomic<int> recordingFov{};
@@ -3081,6 +3092,7 @@ void placeEyes() {
                 &descriptor, nearZ, main.farZ(), controlled ? std::tan(fov[0]) : -aspect,
                 controlled ? std::tan(fov[1]) : aspect, controlled ? -std::tan(fov[3]) : -1,
                 controlled ? -std::tan(fov[2]) : 1, 0, 0, jitter[0], jitter[1], false, false);
+            near_clip::noteEyeLens(nearZ, main.farZ()); // 0.0.76 A-depth CHECKED: the depth check's near and far
             logJitter(index ? spidy::jitter_log::eyeRight : spidy::jitter_log::eyeLeft, main.values, jitter[0],
                       jitter[1], descriptor.values);
             if (controlled && desired.enabled == 1)

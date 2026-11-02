@@ -121,6 +121,7 @@
 #include "spidy/taa_jitter.hpp"
 #include "spidy/taa_still.hpp"
 #include "spidy/taa_frame_log.hpp"
+#include "spidy/taa_depth_check.hpp"
 #include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
@@ -797,6 +798,93 @@ bool onPageAny(int page, spidy::wrist_hud::Control c) {
     setOpenSection(page, was);
     return found;
 }
+// 0.0.76 A-depth CHECKED: a synthetic eye pair (25 boxes and a slanted wall, both eyes 64 mm apart, jittered) and
+// its centre band of depth stored in a given convention, for the convention check.
+namespace depth_scene {
+struct Box {
+    double x0, x1, z0, z1;
+};
+inline double cast(const std::vector<Box>& boxes, const std::array<double, 3>& o, const std::array<double, 3>& dir) {
+    double best = 1e9;
+    for (const auto& b : boxes) {
+        double lo = -1e18, hi = 1e18;
+        bool ok = true;
+        for (int a : {0, 2}) {
+            const double from = a ? b.z0 : b.x0, to = a ? b.z1 : b.x1;
+            if (std::fabs(dir[a]) < 1e-12) {
+                ok = ok && o[a] >= from && o[a] <= to;
+                continue;
+            }
+            double t1 = (from - o[a]) / dir[a], t2 = (to - o[a]) / dir[a];
+            if (t1 > t2)
+                std::swap(t1, t2);
+            lo = std::max(lo, t1);
+            hi = std::min(hi, t2);
+        }
+        if (ok && hi >= lo && lo > 0)
+            best = std::min(best, lo);
+    }
+    const double t = (60 + .5 * o[0] - o[2]) / (dir[2] - .5 * dir[0]); // the wall z = 60 + x / 2
+    if (t > 0)
+        best = std::min(best, t);
+    return best;
+}
+struct Pair {
+    spidy::taa_depth_check::Lens left{}, right{};
+    std::vector<float> bandLeft, bandRight;
+};
+inline Pair make(uint32_t convention) {
+    namespace tdc = spidy::taa_depth_check;
+    std::mt19937 rng(7);
+    std::uniform_real_distribution<double> u(0, 1);
+    std::vector<Box> boxes;
+    for (int i = 0; i < 25; ++i) {
+        const double z = 2 + u(rng) * 35, x = (u(rng) - .5) * z * 1.6, w = .2 + u(rng) * 2;
+        boxes.push_back({x, x + w, z, z + .5 + u(rng) * 2});
+    }
+    Pair p;
+    auto& l = p.left;
+    l.view.world = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    l.view.tangents = {-1.1f, .9f, -1.f, 1.f};
+    l.nearM = .02;
+    l.farM = 2000;
+    l.jitter[0] = .3;
+    l.jitter[1] = -.2;
+    l.width = 2688;
+    l.height = 2880;
+    p.right = l;
+    p.right.view.world[12] += .064f;
+    p.right.view.tangents = {-.9f, 1.1f, -1.f, 1.f};
+    auto render = [&](const tdc::Lens& e, std::vector<float>& band) {
+        band.assign(static_cast<size_t>(tdc::bandRows) * e.width, 0.f);
+        tdc::Matrix vp, inv;
+        tdc::viewProjection(e, false, vp);
+        tdc::invert(vp, inv);
+        const double n = e.nearM, f = e.farM;
+        const std::array<double, 3> o = {e.view.world[12], e.view.world[13], e.view.world[14]};
+        for (uint32_t r = 0; r < tdc::bandRows; ++r)
+            for (uint32_t x = 0; x < e.width; ++x) {
+                const uint32_t y = e.height / 2 - tdc::bandRows / 2 + r;
+                std::array<double, 3> w;
+                tdc::unproject(inv, x + .5, y + .5, (n * f / 10 - n) / (f - n), e.width, e.height, w);
+                const std::array<double, 3> dir = {w[0] - o[0], w[1] - o[1], w[2] - o[2]};
+                const double z = cast(boxes, o, dir) * dir[2];
+                double d;
+                switch (convention) {
+                case 0: d = (n * f / z - n) / (f - n); break;
+                case 1: d = n / z; break;
+                case 2: d = f * (z - n) / (z * (f - n)); break;
+                case 3: d = (f + n - 2 * f * n / z) / (f - n) * .5 + .5; break;
+                default: d = z / f;
+                }
+                band[static_cast<size_t>(r) * e.width + x] = static_cast<float>(d);
+            }
+    };
+    render(p.left, p.bandLeft);
+    render(p.right, p.bandRight);
+    return p;
+}
+} // namespace depth_scene
 int main() {
     int total = 0, failed = 0;
     std::vector<std::string> failedLines;
@@ -37029,6 +37117,55 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(sizeof(va::Data) == 72 && va::Data{}.bytes == 72 && va::Data{}.magic == 0x41415653, "Data");
         check(std::string(va::modeName(va::ours)) == "SPIDY TAA" && std::string(va::modeName(va::smaa)) == "SMAA",
               "names");
+    });
+    test("0.0.76 A-depth CHECKED: the round trip, the stereo convention test, the verdict, the split counts", [] {
+        namespace tdc = spidy::taa_depth_check;
+        check(sizeof(tdc::Counts) == 32 && sizeof(tdc::Window) == 272 && sizeof(tdc::Check) == 112 &&
+                  sizeof(tdc::Data) == 24888 && tdc::Data{}.magic == 0x4b434454 && tdc::Data{}.bytes == 24888,
+              "the record's layout (tools/taa_depth_check_record.py)");
+        const uint32_t row = 2880 / 2 - tdc::bandRows / 2;
+        for (uint32_t truth = 0; truth < tdc::conventions; ++truth) {
+            const auto p = depth_scene::make(truth);
+            const tdc::Band a{p.bandLeft.data(), row, tdc::bandRows, 2688}, b{p.bandRight.data(), row, tdc::bandRows, 2688};
+            const auto st = tdc::stereo(p.left, p.right, a, b);
+            const auto t = tdc::roundTrip(p.left, false, 1344.5, 1440.5, p.bandLeft[16 * 2688 + 1344]);
+            const double trip[2] = {t.errorPx, t.errorPx};
+            const bool in[2] = {t.inFrustum, t.inFrustum};
+            const auto v = tdc::decide(trip, in, st);
+            check(t.errorPx < tdc::roundTripLimit, "the same matrix round trip lands back on the pixel");
+            check(st.tested >= tdc::stereoLeast, "enough depth-edge points");
+            if (truth == tdc::reversedFinite)
+                check(v.outcome == tdc::passed && v.convention == tdc::reversedFinite,
+                      "the lens's own convention passes");
+            else if (truth != tdc::reversedInfinite)
+                check(v.outcome == tdc::failed && v.reason == tdc::otherConvention,
+                      "another convention is refused, not enabled");
+        }
+        const double over[2] = {.2, 0};
+        const bool in[2] = {true, true};
+        tdc::Stereo clear{};
+        check(tdc::decide(over, in, clear).reason == tdc::roundTripOver, "a round trip over 0.05 px refuses");
+        check(tdc::nextState(tdc::failed, {tdc::passed, tdc::fine, tdc::reversedFinite}) == tdc::failed,
+              "failed stays failed");
+        check(tdc::category(true, 5, 50, 1) == tdc::stillCategory &&
+                  tdc::category(false, .5f, .5f, 1) == tdc::movingCategory &&
+                  tdc::category(false, 0, 7, 1) == tdc::fastCategory &&
+                  tdc::category(false, 2.2f, 0, 1) == tdc::fastCategory,
+              "still, moving, fast swing (6 m/s or 120 degrees a second)");
+        tdc::Window w;
+        const uint32_t good[2][tdc::counters] = {{100, 40, 10, 20, 10, 5, 90, 110}, {100, 30, 30, 0, 0, 0, 0, 110}};
+        tdc::noteCounts(w, tdc::depthPath, tdc::fastCategory, good);
+        const auto& c = w.counts[tdc::depthPath][tdc::fastCategory];
+        check(c.pairs == 1 && c.sampled == 200 && c.clipOnly == 40 && c.depthOnly == 20 && c.both == 10 &&
+                  c.fallback == 5 && c.pixels == 220,
+              "clip, depth and both apart");
+        const uint32_t bad[2][tdc::counters] = {{100, 40, 1, 1, 1, 0, 0, 110}, {10, 30, 30, 0, 0, 0, 0, 110}};
+        tdc::noteCounts(w, tdc::headPath, tdc::stillCategory, bad);
+        check(w.counts[tdc::headPath][tdc::stillCategory].sampled == 0, "not one pair's counts: not added");
+        float scale{}, offset{};
+        tdc::linearOf(tdc::reversedFinite, .02f, 2000.f, scale, offset);
+        check(std::abs(scale - (1 - .02f / 2000)) < 1e-7f && std::abs(offset - .02f / 2000) < 1e-9f,
+              "the finite far's near / distance");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

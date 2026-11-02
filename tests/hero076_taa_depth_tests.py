@@ -42,7 +42,8 @@ class TaaDepth(unittest.TestCase):
         self.assertIn('std::atomic<uint32_t> taaDepthOn{taa_depth::off};', n)  # off by default (CANDIDATE)
         self.assertIn('taaDepthConfirmed = log.verdict == taa_watch::confirmed;', n)
         self.assertIn('#ifdef TAA_DEPTH', n)
-        self.assertIn('abs(had - want) <= 0.1 * max(had, want) + 1e-7', n)
+        # A-depth CHECKED: the stored depth read in the checked convention first (lin), the same 10% test.
+        self.assertIn('abs(was - want) <= 0.1 * max(was, want) + 1e-7', n)
         self.assertIn('taaDepthStop(3);', n)
         h = src('include/spidy/taa_depth.hpp')
         self.assertIn('inline constexpr float tolerance = .1f;', h)

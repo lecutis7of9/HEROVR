@@ -187,7 +187,8 @@ SETTINGS = {
     'vr_taa_depth': ((0, 1, 2), 'SpidyVrTaaDepth', "VR TAA DEPTH {} (1 on: SpidyVR's TAA history is turned with the "
                      "eyes' depth, so windows and building edges keep their history as your head moves; 0 off, the "
                      "default: the head turn only, as 509bdc9; 2 auto: on once the TAA WATCH depth log has CONFIRMED "
-                     "the eye depth) - live, no restart needed"),
+                     "the eye depth; either way the depth is only used once its convention check has passed, and an eye pair "
+                     "missing either eye's depth is turned by the head alone) - live, no restart needed"),
     # 0.0.76 TAA JITTER (native_eye_gpu SpidyVrTaaJitter, game_xr's eye_taa::step): a diagnostic, never persisted.
     'vr_taa_jitter': ((0, 3), 'SpidyVrTaaJitter', "VR TAA JITTER {} (a test of SpidyVR's own Halton sub-pixel step "
                      "only - on the 16-step walk, the default; off no step; fixed one constant offset; half the same "

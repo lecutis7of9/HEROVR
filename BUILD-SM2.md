@@ -2937,3 +2937,18 @@ buildings stayed; only the light went.
   alone, so with depth on it is the far city's, not a near pixel's). vr_taa_depth's default is now 0 off
   (taa_depth::off): test 07c1675's depth log stayed CANDIDATE (both eyes in 82 of 200 pairs, one resource an eye,
   never shared, never the flat view), so the depth stays a live.txt try (`on`) or `auto` until it is CONFIRMED.
+
+## 76. Version 0.0.76 A-depth CHECKED: the eye depth's convention checked before use, rejections split
+
+- include/spidy/taa_depth_check.hpp: the lens's view-projection (reversed-Z, finite far, jittered) rebuilt from the
+  eye view and the lens's near/far (near_clip::noteEyeLens, beside the unchanged 0x2c75560 call), its inverse, the
+  centre-pixel round trip (limit 0.05 px), the stereo convention test at depth edges, the verdict (failed sticky),
+  the movement category (fast swing 6 m/s / 120 deg/s), the export SpidyTaaDepthCheckData (Data 24888 bytes, 90
+  10 s windows).
+- native_eye_gpu: the depth copies timed (their own 64 timestamps); a probe band copied on the history's list;
+  noteDepthCheck / noteDepthCopyTime at slot completion; drawHistory gates the depth on both eyes' depth and the
+  check PASSED; the TAA_DEPTH shader reads the depth through `lin` (12 root constants), falls back per pixel, and
+  TAA_COUNT keeps 8 counters an eye (64 bytes a slot).
+- tools/taa_depth_check_record.py, wired into run_game_vr.py (console lines, report `taa_depth_check`).
+- Tests: tests/hero076_taa_depth_check_tests.py; core_tests's synthetic eye pair (the lens's convention passes, the
+  others are refused).

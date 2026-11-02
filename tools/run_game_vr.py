@@ -45,6 +45,7 @@ import jitter_log_record  # 0.0.76 JITTER FIX
 import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
 import taa_frame_log_record  # 0.0.76 TAA FRAME LOG
+import taa_depth_check_record  # 0.0.76 A-depth CHECKED
 from probe_stereo import (frame_snapshot, render_memory_snapshot, snapshot as stereo_snapshot, encode_mip_bias,
                           mip_bias_snapshot, eye_camera_line)
 from probe_native_rays import snapshot as ray_snapshot
@@ -2997,7 +2998,8 @@ def session(a, startup, session_off=()):
                       jitter_log_record.EXPORT,  # 0.0.76 JITTER FIX
                       vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
                       taa_watch_record.EXPORT,  # 0.0.76 TAA WATCH
-                      taa_frame_log_record.EXPORT))  # 0.0.76 TAA FRAME LOG: absent from an older module
+                      taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG: absent from an older module
+                      taa_depth_check_record.EXPORT))  # 0.0.76 A-depth CHECKED: absent from an older module
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3090,6 +3092,9 @@ def session(a, startup, session_off=()):
         vr_aa_last = jitter_log_last = None
         taa_watch_last = None  # 0.0.76 TAA WATCH: taa_watch_snapshot, kept from the samples
         taa_watch_said = 0  # 10 s windows already printed
+        depth_check_last = None  # 0.0.76 A-depth CHECKED: taa_depth_check_snapshot, kept from the samples
+        depth_check_said = 0  # its 10 s windows already printed
+        depth_check_check_said = None  # its check's state, reason and best fit last printed
         # 0.0.76 TAA FRAME LOG: read with each closed 10 s window; the block with the most still-head pairs and the
         # last one are kept for the report.
         frame_log_best = frame_log_last = None
@@ -3394,6 +3399,7 @@ def session(a, startup, session_off=()):
                         taa_watch=taa_watch_record.taa_watch_report(taa_watch_last),
                         taa_frame_log=dict(most_still=taa_frame_log_record.taa_frame_log_report(frame_log_best),
                                            last=taa_frame_log_record.taa_frame_log_report(frame_log_last)),
+                        taa_depth_check=taa_depth_check_record.taa_depth_check_report(depth_check_last),
                         eye_shadows=shadows_last,
                         stream_stalls=stream_stalls(list(samples)),
                         free_commit_mb=dict(start=start_commit, lowest=lowest_commit),
@@ -3460,6 +3466,8 @@ def session(a, startup, session_off=()):
                         print(said, flush=True)
                     for said in taa_watch_record.taa_watch_lines(result.get('taa_watch'))[:2]:
                         print(said, flush=True)  # 0.0.76 TAA WATCH: the depth log and the session's split
+                    for said in taa_depth_check_record.taa_depth_check_lines(result.get('taa_depth_check'))[:2]:
+                        print(said, flush=True)  # 0.0.76 A-depth CHECKED: the check and the session's split
                     frame_section = (result.get('taa_frame_log') or {}).get('most_still')
                     if frame_section:  # 0.0.76 TAA FRAME LOG: D, then the stillest block's drift
                         print(frame_section['static'], flush=True)
@@ -3718,6 +3726,25 @@ def session(a, startup, session_off=()):
                         for said in windows[-(taa_watch_last['closed'] - taa_watch_said):]:
                             print(said, flush=True)
                         taa_watch_said = taa_watch_last['closed']
+                    # 0.0.76 A-depth CHECKED: the check's line when it changes, each 10 s window's line once it
+                    # closes (only once vr_taa_depth was on: no pair wanted the depth, no line).
+                    depth_check_last = (taa_depth_check_record.taa_depth_check_snapshot(
+                        game, xr.get(taa_depth_check_record.EXPORT)) or depth_check_last)
+                    if depth_check_last:
+                        depth_section = taa_depth_check_record.taa_depth_check_report(depth_check_last)
+                        check_said = (depth_check_last['check']['state'], depth_check_last['check']['reason'],
+                                      depth_check_last['check']['best'])
+                        if depth_check_last['check']['probes'] and check_said != depth_check_check_said:
+                            depth_check_check_said = check_said
+                            print(taa_depth_check_record.check_line(depth_section), flush=True)
+                        if depth_check_last['closed'] > depth_check_said:
+                            fresh = depth_check_last['windows'][-(depth_check_last['closed'] - depth_check_said):]
+                            shown = len([w for w in fresh if w['pairs']])
+                            if shown and any(w['wanted'] for w in fresh):
+                                for said in taa_depth_check_record.taa_depth_check_window_lines(
+                                        depth_section)[-shown:]:
+                                    print(said, flush=True)
+                            depth_check_said = depth_check_last['closed']
                         frame_log = taa_frame_log_record.taa_frame_log_snapshot(
                             game, xr.get(taa_frame_log_record.EXPORT))
                         if frame_log:
@@ -4008,7 +4035,10 @@ def session(a, startup, session_off=()):
             or jitter_log_last,
             vr_aa=vr_aa_record.vr_aa_snapshot(game, xr.get(vr_aa_record.EXPORT)) or vr_aa_last,
             taa_watch=taa_watch_record.taa_watch_report(
-                taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last))
+                taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last),
+            taa_depth_check=taa_depth_check_record.taa_depth_check_report(
+                taa_depth_check_record.taa_depth_check_snapshot(game, xr.get(taa_depth_check_record.EXPORT))
+                or depth_check_last))
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

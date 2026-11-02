@@ -65,6 +65,30 @@ old pass, counted in TAA WATCH `depth N%` (depthPairs / depthMissed). A refused 
 pass turns A off for the session (the console's "A-depth off for the session"), never the TAA or VR.
 Not covered: things moving by themselves (cars, people) - no motion vectors; the clip still handles them.
 
+### A-depth CHECKED: the depth's convention checked first, rejections split, per-eye gating
+
+- Convention check (taa_depth_check.hpp, native_eye_gpu noteDepthCheck): one pair in 30 until it passes, then about
+  one a second, a 33-row band about each eye's centre row is copied to a readback on the history's list. The centre
+  pixel (or the nearest on that row with a usable depth) is unprojected through the inverse of the jittered eye
+  view-projection rebuilt from the lens's CONFIRMED inputs (0x2c75560: tangents, near, far - noted beside the
+  unchanged lens call - and this pair's jitter) and projected back through the same matrix: the error in px is
+  logged, over 0.05 px refuses. Because a same-matrix round trip is ~0 for any convention, the stereo test decides
+  the convention: at depth edges in the band, each left-eye point read in each convention is projected into the right
+  eye and must meet that eye's depth (3%). The log states "lens convention D3D 0..1, reversed-Z, reciprocal, finite
+  far"; another convention fitting best is FAILED ("likely convention error: the depth is ...") and the depth path
+  stays off for the session. Until PASSED: head motion only (`unchecked` in the line).
+- Rejections apart: one pixel in 16 x 16 of both eyes is counted by the shader as clip alone, depth test alone or
+  both (the clip is still evaluated on a depth-refused pixel, only to count it), per path (depth / head) and movement
+  (still as TAA WATCH; fast swing: 6 m/s travel or 120 degrees a second turn; moving: the rest).
+- Per-eye gating: both eyes' depth this pair and last pair, or both eyes use head motion that pair (`gated`).
+- Invalid depth (0, 1, NaN, outside last pair's eye): that pixel uses the head-motion place, history kept
+  (`fallback`), never rejected.
+- The depth is read in the checked convention (finite far: n/z = d (1 - n/f) + n/f), each pair with its own near and far.
+- Console every 10 s: `TAA DEPTH ...s: fps, depth found L/R %, used % (gated, unchecked, refused), round trip px,
+  depth pass ms GPU a pair (copies + draw with depth - draw without) | DEPTH PATH still/moving/fast clip/depth/both/
+  fallback | HEAD PATH ...`. Success: fast-swing rejection (clip + depth + both) on the depth path below the head
+  path's 87-88%.
+
 ## FAR SHAKE (the far background hopping while the head turns)
 
 | switch (live.txt, live, no restart) | default | what it does |

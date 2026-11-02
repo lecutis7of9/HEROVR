@@ -36338,6 +36338,10 @@ int main() {
         check(std::abs(j[0]) < 1e-7f && std::abs(j[1] - 2 * (1.f / 3 - .5f) / 1000) < 1e-7f, "jitter phase 1");
         // The eyes upscaled only when every check passed.
         check(s1::madePercent(true, true, true, true) == 67, "67% when all checks pass");
+        // 0.0.76 VISUAL: the start's percent (native 100 by default; 67 with vr_render = upscaled).
+        check(s1::madePercent(true, true, true, true, 100) == 100 && s1::madePercent(true, true, true, true, 67) == 67 &&
+                  s1::madePercent(true, true, true, true, 0) == 67 && s1::madePercent(true, true, true, false, 100) == 100,
+              "VISUAL: the wanted percent");
         check(s1::madePercent(false, true, true, true) == 100 && s1::madePercent(true, false, true, true) == 100 &&
                   s1::madePercent(true, true, false, true) == 100 && s1::madePercent(true, true, true, false) == 100,
               "a failed check keeps the eyes at 100%");

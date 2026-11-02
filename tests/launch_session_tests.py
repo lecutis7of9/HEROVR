@@ -78,13 +78,22 @@ class RealLaunchPath(unittest.TestCase):
     def test_reaches_prepare_launch_default(self):
         calls, _ = run_session()
         self.assertEqual(len(calls), 1, 'prepare_display never reached vr_display.prepare_launch')
-        self.assertEqual(tuple(calls[0]['off']), ('lens_flares',))  # 0.0.73 lights: OFF IN VR by default
+        # 0.0.73 lights: OFF IN VR by default; 0.0.76 VISUAL: the game's AA at TAA too (SM1STYLE on, vr_aa = taa)
+        self.assertEqual(tuple(calls[0]['off']), ('lens_flares', 'game_aa'))
 
     def test_lens_flares_off_in_vr_reaches_prepare_launch(self):
         calls, text = run_session('lens_flares = off_in_vr\n')
         self.assertEqual(len(calls), 1)
-        self.assertEqual(tuple(calls[0]['off']), ('lens_flares',))
+        self.assertEqual(tuple(calls[0]['off']), ('lens_flares', 'game_aa'))
         self.assertIn('LENS FLARES: OFF IN VR this session', text)
+
+    def test_vr_aa_keep_leaves_the_game_aa(self):
+        # 0.0.76 VISUAL: live.txt vr_aa = keep (or sm1style = off) starts the game with the player's own AA.
+        for live in ('vr_aa = keep\n', 'sm1style = off\n'):
+            calls, text = run_session(live)
+            self.assertEqual(tuple(calls[0]['off']), ('lens_flares',))
+        calls, text = run_session('')
+        self.assertIn('GAME AA: TAA with no upscaler while VR runs', text)
 
     def test_smaller_and_full_desktop_paths(self):
         for extra in (['--smaller-desktop-view'], ['--full-desktop-view'], []):

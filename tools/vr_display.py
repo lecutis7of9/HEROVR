@@ -116,7 +116,23 @@ SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, R
 #   proven without the headset). LensFlares is the name in the game's registry (the October 25 report,
 #   game-vr-20261025-130446: LensFlares = 1 beside its log's "Lens Flares: On", CONFIRMED); 0 for Off is by
 #   the other toggles' encoding (CANDIDATE). Backed up and put back after the session as SESSION's are.
-SESSION_OFF = dict(lens_flares=dict(LensFlares=0))
+# - 0.0.76 VISUAL (live.txt vr_aa = taa, the default with SM1STYLE on; vr_aa = keep leaves the player's): the game's
+#   Anti-Aliasing at TAA with no upscaler for the session (AA 2, UpscaleMethod 0), the one setting with which the
+#   game makes the TAA targets SM1STYLE's per-eye TAA needs (engine_taa.hpp aaMakesTargets). With DLAA/DLSS chosen
+#   (AA 2, UpscaleMethod 2: the owner's registry beside his log's "Anti aliasing: DLAA / Upscale method: DLSS" in
+#   game-vr-20261101-232025) every one of his 23 SM1STYLE sessions fell back to the 0.0.72 picture (our FXAA, a
+#   colour history and CAS sharpen at 100% eyes) and DLSS's -2.0 texture bias. Encoding CONFIRMED beside the game's
+#   log in 31 reports (docs/AA-0.0.73.md): AA 2 + UpscaleMethod 0 is "TAA / None". Read by the game at launch
+#   (restart); put back after.
+# - 0.0.76 VISUAL (live.txt vr_textures = high, the default; keep leaves them): Texture Quality raised to High
+#   (TextureQuality 2) and Texture Filtering to Anisotropic 16x (TextureFiltering 4) for the session, only where the
+#   player's is lower (run_game_vr.vr_picture_plan). Encodings CONFIRMED beside the game's [Settings] lines:
+#   TextureQuality 0 Low (game-vr-20261101-023723), 1 Medium (game-vr-20261101-232025), 2 High
+#   (game-vr-20261101-121329 and -141958), 3 Very High (reports-075-grundy); TextureFiltering 0 Trilinear (023723),
+#   3 Anisotropic8x (121329), 4 Anisotropic16x (232025, grundy).
+#   Read at launch (restart); put back after.
+SESSION_OFF = dict(lens_flares=dict(LensFlares=0), game_aa=dict(AA=2, UpscaleMethod=0),
+                   textures=dict(TextureQuality=2), filtering=dict(TextureFiltering=4))
 
 
 def session_list(off=()):
@@ -344,7 +360,7 @@ def shrink(registry=None, backup=BACKUP, screen=None, height=HEIGHT):
 def prepare_session(registry=None, backup=BACKUP, keep=(), off=()):
     """Turn off what SESSION lists, adding the user's values to the backup (made here if the window
     keeps the user's settings). keep: PICTURE names ('depth_of_field', 'sharpening', 'comfort') to leave as the
-    player has them; off: SESSION_OFF names ('lens_flares') turned off too. Returns the values written."""
+    player has them; off: SESSION_OFF names ('lens_flares', 'game_aa', 'textures', 'filtering') turned off (or set) too. Returns the values written."""
     registry = registry or Registry()
     session = session_list(off)
     kept = {value for name in keep for value in PICTURE[name]}

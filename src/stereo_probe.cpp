@@ -1565,7 +1565,8 @@ bool initBuffers(void* buffers, const void* description, const char* name) {
                 else if (sm1 && sm1ExeKnown.load() && !aaOk)
                     sm1FallBack(mt::gameAa);
                 sm1TargetsOk = maskStock && aaOk;
-                const uint32_t percent = mt::madePercent(sm1, sm1ExeKnown.load(), maskStock, aaOk);
+                const uint32_t percent = mt::madePercent(sm1, sm1ExeKnown.load(), maskStock, aaOk,
+                                                                eyeRenderPercent.load());  // 0.0.76 VISUAL
                 sm1Percent = percent;
                 SpidySm1StyleData.percent = percent;
                 char line[128];

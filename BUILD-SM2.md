@@ -2746,3 +2746,14 @@ buildings stayed; only the light went.
   Addresses: the component registry 0xc2d3d20/0xc2d3d40 and the actor transform are CONFIRMED (as before). That a
   group of ThugBot/foe records is a crime, and how far out the game keeps them, are CANDIDATE. No new address.
   `crime_gps074`, `world_trace`. Tests: core `0.0.76 CRIME GPS FIX`.
+
+## 64. Version 0.0.76 VISUAL: the game's TAA in each eye at native 100%
+
+  SM1STYLE never ran for the owner: his game was at DLAA/DLSS (AA 2, UpscaleMethod 2), which makes no TAA targets, so
+  the eyes got the 0.0.72 fallback (FXAA, colour history, CAS 140) and DLSS's -2.0 mip bias. Now, for the session
+  only (vr_display.SESSION_OFF, backed up and put back): `game_aa` AA 2 + UpscaleMethod 0 (TAA, no upscaler;
+  CONFIRMED, 0.0.73), `textures` TextureQuality 2 and `filtering` TextureFiltering 4 (only raised; CONFIRMED beside
+  the game's logs). SM1STYLE's eyes at 100% (sm1style::madePercent takes SpidyEyeTemporal's percent; live.txt
+  vr_render = upscaled gives 67%). Without TAA the launcher's mip bias is kept. live.txt vr_aa, vr_textures,
+  vr_render (RESTART). No new game address. Tests: hero076_visual_tests, core `SM1STYLE` (VISUAL: the wanted percent).
+  docs/VISUAL-0.0.76.md.

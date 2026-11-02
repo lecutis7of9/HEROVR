@@ -82,11 +82,23 @@ class Launcher(unittest.TestCase):
         r, a, line = self.apply(None)
         self.assertTrue(a.sm1style)
         self.assertEqual((a.render_scale, a.supersample, a.upscale, a.mip_bias, a.anisotropy),
-                         (100, 100, 67, 'game', 0))
+                         (100, 100, 100, 'game', 0))  # 0.0.76 VISUAL: native 100% eyes by default
         self.assertFalse(a.game_sharpening or a.engine_taa)
         self.assertNotIn('sharpening', r.picture_kept(a))  # keep-settings cannot keep the game's sharpening
         self.assertIn('SM1STYLE ON', line)
         self.assertIn('sm1style = off', line)
+
+    def test_visual_upscaled_and_mip_bias(self):
+        # 0.0.76 VISUAL: vr_render = upscaled gives SpidyVR's 67%; the launcher's mip bias stays where the game's AA
+        # will not be TAA (DLSS's -2.0 at full-size eyes with no TAA).
+        r, a, line = self.apply('vr_render = upscaled\n')
+        self.assertEqual(a.upscale, 67)
+        self.assertIn('67%', line)
+        r, a, line = self.apply(None, game_aa_taa=False)
+        self.assertEqual((a.upscale, a.mip_bias), (100, '0.5'))
+        self.assertIn('100% (native', line)
+        r, a, line = self.apply(None, game_aa_taa=True)
+        self.assertEqual(a.mip_bias, 'game')
 
     def test_off_is_untouched(self):
         r, a, line = self.apply('sm1style = off\n')

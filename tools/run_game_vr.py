@@ -1679,30 +1679,93 @@ ENGINE_TAA_OPTION = 0x800000
 # 0.0.74 test 10 SM1STYLE (include/spidy/sm1style.hpp startOption): SpidyVR's eye anti-aliasing at this start.
 SM1STYLE_OPTION = 0x1000000
 SM1STYLE_UPSCALE = 67   # SpidyVR's DEFAULT_UPSCALE (its tools/run_game_vr.py:52, eye_resolution.hpp:25)
+# 0.0.76 VISUAL (live.txt vr_render = native, the default; upscaled = SpidyVR's 67%): the eyes at their full size,
+# the game's TAA resolving them without upscaling (the owner: "turn off upscaling in VR and run native 100%").
+SM1STYLE_NATIVE = 100
+# 0.0.76 VISUAL: the game's graphics values (vr_display KEY) vr_picture_plan reads; encodings in vr_display.SESSION_OFF.
+PICTURE_NAMES = ('AA', 'UpscaleMethod', 'TextureQuality', 'TextureFiltering')
+
+
+def own_picture():
+    """0.0.76 VISUAL: the player's own PICTURE_NAMES values: the registry, under any a session left there (its backup
+    holds the player's). {} where neither can be read (no Windows registry, no game). Never raises."""
+    own = {}
+    try:
+        own.update(vr_display.Registry().read(PICTURE_NAMES, vr_display.KEY))
+    except Exception:
+        pass
+    try:
+        own.update({name: value for name, value in vr_display.session_changes().items()
+                    if name in PICTURE_NAMES and value is not None})
+    except Exception:
+        pass
+    return own
+
+
+def vr_picture_plan(sm1, aa_taa, textures_high, own):
+    """0.0.76 VISUAL: (vr_display.SESSION_OFF names to add, console lines, whether the game's AA will be TAA with no
+    upscaler: True, False, or None unknown). `sm1`: SM1STYLE on at this start; `aa_taa` / `textures_high`: live.txt
+    vr_aa / vr_textures at their defaults; `own`: own_picture(). The game's AA goes to TAA only with SM1STYLE on (off,
+    the 0.0.72 picture keeps the player's); textures and filtering only rise, never fall."""
+    names, lines = [], []
+    aa, upscaler = own.get('AA'), own.get('UpscaleMethod')
+    taa_own = None if aa is None or upscaler is None else (aa == 2 and upscaler == 0)
+    if sm1 and aa_taa:
+        names.append('game_aa')
+        taa = True
+        lines.append("GAME AA: TAA with no upscaler while VR runs (SM1STYLE's per-eye TAA needs the game's TAA "
+                     'targets; DLAA / DLSS / FSR are never used for the eyes)' +
+                     ('' if taa_own else ', your own (%s) put back when the game closes'
+                      % ('not read' if taa_own is None else f'AA {aa}, upscale method {upscaler}')) +
+                     '. live.txt vr_aa = keep + restart VR keeps yours.')
+    else:
+        taa = taa_own
+        if sm1 and taa_own is False:
+            lines.append('GAME AA: yours kept (live.txt vr_aa = keep): not TAA with no upscaler, so SM1STYLE falls '
+                         'back to the 0.0.72 picture. vr_aa = taa + restart VR for the per-eye TAA.')
+    if textures_high:
+        quality, filtering = own.get('TextureQuality'), own.get('TextureFiltering')
+        if isinstance(quality, int) and quality < 2:
+            names.append('textures')
+            lines.append(f'TEXTURES: Texture Quality High while VR runs (yours, {quality}, put back when the game '
+                         'closes). live.txt vr_textures = keep + restart VR keeps yours.')
+        if isinstance(filtering, int) and filtering < 4:
+            names.append('filtering')
+            lines.append(f'TEXTURES: Texture Filtering Anisotropic 16x while VR runs (yours, {filtering}, put back when '
+                         'the game closes). live.txt vr_textures = keep + restart VR keeps yours.')
+    return tuple(names), lines, taa
 
 
 def apply_sm1style(a, live_text):
     """0.0.74 test 10 SM1STYLE, the default (live.txt `sm1style = off` turns it off for the next start): SpidyVR's
     eye settings for this start, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale
-    and supersample 100, eyes at 67%, the game's own mip bias and filtering (SpidyVR changes neither), the game's
-    sharpening at its lowest, no ENGINE TAA. Sets a.sm1style; returns the console line."""
+    and supersample 100, eyes at 100% (0.0.76 VISUAL, live.txt vr_render = native, the default; upscaled: SpidyVR's
+    67%), the game's own mip bias and filtering (SpidyVR changes neither), the game's sharpening at its lowest, no
+    ENGINE TAA. 0.0.76 VISUAL: where the game's AA will not be TAA with no upscaler (a.game_aa_taa False, set by
+    vr_picture_plan; SM1STYLE then falls back to the 0.0.72 picture) the launcher's mip bias is kept: the game's own
+    is DLSS's -2.0, which crawls on brick at full-size eyes with no TAA. Sets a.sm1style; returns the console line."""
     a.sm1style = live_settings.sm1style_on(live_text)
+    percent = SM1STYLE_UPSCALE if live_settings.vr_render_upscaled(live_text) else SM1STYLE_NATIVE
+    mip = a.mip_bias if getattr(a, 'game_aa_taa', None) is False else 'game'
     if not a.sm1style:
         return ('SM1STYLE: OFF (live.txt sm1style = off): the 0.0.72 eye picture, our FXAA / EYE AA history / '
                 'sharpen as set. sm1style = on (or no line) + restart VR for SpidyVR\'s per-eye TAA.')
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, 100),
-        ('upscale', a.upscale, SM1STYLE_UPSCALE), ('mip bias', a.mip_bias, 'game'),
+        ('upscale', a.upscale, percent), ('mip bias', a.mip_bias, mip),
         ('anisotropy', a.anisotropy, 0)) if old != new]
     if a.game_sharpening:
         forced.append('game sharpening -> lowest')
     if a.engine_taa:
         forced.append('ENGINE TAA -> off')
     a.render_scale = 100 if not a.size else a.render_scale
-    a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, SM1STYLE_UPSCALE, 'game', 0
+    a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, percent, mip, 0
     a.game_sharpening = a.engine_taa = False
-    return ("SM1STYLE ON (default): SpidyVR's eye anti-aliasing - the game's TAA in each eye, eyes at 67%, "
-            'Halton(2,3) jitter, render scale 100%, supersample 100%, the game\'s mip bias; our FXAA, EYE AA history '
+    return ("SM1STYLE ON (default): SpidyVR's eye anti-aliasing - the game's TAA in each eye, eyes at "
+            + ('67% (vr_render = upscaled)' if percent != SM1STYLE_NATIVE else '100% (native, no upscaling)') +
+            ', Halton(2,3) jitter, render scale 100%, supersample 100%, ' +
+            ('the game\'s mip bias' if mip == 'game' else f'mip bias {mip} (the game\'s AA is not TAA)') +
+            ', the game\'s sharpening at its lowest; our FXAA, EYE AA history '
             'and CAS sharpen locked off' + (' (kept over: ' + ', '.join(forced) + ')' if forced else '') +
             '. live.txt sm1style = off + restart VR for the 0.0.72 picture.')
 
@@ -2473,6 +2536,14 @@ def main():
         session_off = ('lens_flares',)
         print('LENS FLARES: OFF IN VR this session, for every hero (0.0.76 LIGHTS LOCK: the game\'s flares shine '
               'through buildings in the headset; the game\'s own setting is put back when VR closes).', flush=True)
+    # 0.0.76 VISUAL: the game's AA at TAA with no upscaler (SM1STYLE's per-eye TAA), Texture Quality at least High
+    # and 16x filtering, for this session only (vr_display.SESSION_OFF; the player's put back when the game closes).
+    picture_names, picture_lines, a.game_aa_taa = vr_picture_plan(
+        live_settings.sm1style_on(live_text), live_settings.vr_aa_taa(live_text),
+        live_settings.vr_textures_high(live_text), own_picture())
+    session_off = tuple(session_off) + picture_names
+    for line in picture_lines:
+        print(line, flush=True)
         if live_settings.lens_flares_game_ignored(live_text):
             print('LENS FLARES: live.txt says lens_flares = game - ignored in VR since 0.0.76 (it only keeps the '
                   'flat game\'s own setting).', flush=True)

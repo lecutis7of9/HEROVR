@@ -43,6 +43,8 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
 ## In 0.0.74
 - **SM1STYLE eye anti-aliasing (on by default):** each eye uses the game's own TAA the way SpidyVR does, so edges
   shimmer much less. To go back to the old look, put `sm1style = off` in live.txt (it applies the next time VR starts).
+  From 0.0.76 VR sets the game's Anti-Aliasing to TAA (no upscaler) for you while it runs and puts yours back
+  after, with the eyes at native 100%; `vr_aa = keep` / `vr_render = upscaled` in live.txt change that.
 - **Window-edge lights fixed:** lit windows no longer go dark at the outer edges of each eye.
 - **The picture is back to 0.0.72's baseline**, keeping 0.0.73's flicker fixes (no lens flares or eye bloom in VR,
   steadier street lights and shadows, fewer popping far windows). 0.0.73's extra picture switches are gone.

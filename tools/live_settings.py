@@ -155,6 +155,18 @@ SETTINGS = {
     'sm1style': ((0, 1), None, 'SM1STYLE {} (0 on: SpidyVR\'s eye anti-aliasing, the game\'s TAA in each eye at '
                  '67%, our FXAA, history and sharpen locked off; 1 off: the 0.0.72 eye picture) - RESTART NOTICE: '
                  'takes effect the next time VR starts'),
+    # 0.0.76 VISUAL: the game's picture settings VR starts the game with (vr_display.SESSION_OFF, put back when the
+    # game closes). live.txt only (no hologram row); RESTART: the game reads them at launch (run_game_vr reads
+    # vr_aa_taa() and vr_textures_high()).
+    'vr_aa': ((0, 1), None, "VR AA {} (0 taa: the game's Anti-Aliasing at TAA with no upscaler while VR runs, so "
+             "SM1STYLE's per-eye TAA can run, your own put back after; 1 keep: your own, and with DLAA/DLSS the eyes get "
+             'the 0.0.72 FXAA picture) - RESTART NOTICE: takes effect the next time VR starts'),
+    'vr_textures': ((0, 1), None, "VR TEXTURES {} (0 high: Texture Quality at least High and Texture Filtering 16x "
+                   'while VR runs, your own put back after; 1 keep: your own) - RESTART NOTICE: takes effect the next '
+                   'time VR starts'),
+    'vr_render': ((0, 1), None, "VR RENDER {} (0 native: SM1STYLE's eyes at their full size, the game's TAA with no "
+                 "upscaling; 1 upscaled: SpidyVR's 67%, faster but softer) - RESTART NOTICE: takes effect the next "
+                 'time VR starts'),
     'history_cut': ((25, 400), 'SpidyEyeHistoryCut', 'HISTORY CUT {}% (lower drops old history sooner when you move: fewer trails; higher keeps it longer: smoother, more trail)'),
     'aa_quality': ((0, 1), 'SpidyEyeAAQuality', 'AA QUALITY {} (0 FXAA, 1 strong FXAA: smoother edges, a little softer)'),
     # The ring on the wrist (health_ring::Place).
@@ -440,7 +452,14 @@ WORLD_LOG_KINDS = {'npc_log': 0, 'spawn_log': 1, 'mission_log': 2}
 RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next time VR starts.',
            # 0.0.74 test 10 SM1STYLE: the eyes' targets are made when VR starts
            'sm1style': 'RESTART NOTICE: sm1style takes effect the next time VR starts (off: the 0.0.72 eye '
-                       'picture, our FXAA, history and sharpen; on: SpidyVR\'s per-eye TAA at 67%).',
+                       'picture, our FXAA, history and sharpen; on: SpidyVR\'s per-eye TAA, 100% eyes by default).',
+           # 0.0.76 VISUAL: the game reads its graphics settings when it starts
+           'vr_aa': "RESTART NOTICE: vr_aa takes effect the next time VR starts (taa: the game's TAA with no upscaler "
+                    "in VR, SM1STYLE's per-eye TAA; keep: your own Anti-Aliasing).",
+           'vr_textures': 'RESTART NOTICE: vr_textures takes effect the next time VR starts (high: Texture Quality at '
+                          'least High and 16x filtering in VR; keep: your own).',
+           'vr_render': 'RESTART NOTICE: vr_render takes effect the next time VR starts (native: the eyes at 100%, '
+                        "no upscaling; upscaled: SpidyVR's 67%).",
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
            # 0.0.76 LIGHTS LOCK: VR always turns them off; the value is only the flat game's
            'lens_flares': 'NOTICE: lens_flares stays off in VR for every hero (0.0.76); GAME only keeps the flat game\'s own setting.',
@@ -633,6 +652,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'daredevil': ('off', 'on'), 'hulk': ('off', 'on'), 'daredevil_punch': ('3x', '1x', '2x', '4x', '5x'),
                 'hit_indicator': ('off', 'on'), 'hand_flips': ('on', 'off'), 'lens_flares': ('game', 'off_in_vr'),
                 'sm1style': ('on', 'off'),  # 0.0.74 test 10 SM1STYLE
+                'vr_aa': ('taa', 'keep'), 'vr_textures': ('high', 'keep'),  # 0.0.76 VISUAL
+                'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
                 'batman': ('off', 'on'), 'wolverine': ('off', 'on'), 'superman': ('off', 'on'), 'punisher': ('off', 'on'),
@@ -723,6 +744,9 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'hand_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},
            'lens_flares': {'game': 0, 'off_in_vr': 1, 'off': 1, '0': 0, '1': 1},
            'sm1style': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 SM1STYLE
+           'vr_aa': {'taa': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
+           'vr_textures': {'high': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
+           'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},
@@ -1126,6 +1150,7 @@ START_ONLY = START_ONLY + UPDATE38_KEYS
 # 0.0.74 test 10 VAN NO FLIPS: an OFF in live.txt is kept from session to session (ON is the DLL's own default).
 START_ONLY = START_ONLY + ('van_no_flips',)
 START_ONLY = START_ONLY + ('sm1style',)  # 0.0.74 test 10 SM1STYLE: an OFF kept between sessions (RESTART)
+START_ONLY = START_ONLY + ('vr_aa', 'vr_textures', 'vr_render')  # 0.0.76 VISUAL: a KEEP kept between sessions (RESTART)
 START_ONLY = START_ONLY + ('car_collision',)  # 0.0.74 test 10 CAR COLLISION: an OFF kept between sessions
 START_ONLY = START_ONLY + ('dd_quick_grapple',)  # 0.0.74 test 10 DD QUICK GRAPPLE: an OFF kept between sessions
 START_ONLY = START_ONLY + ('suit_probe',)  # 0.0.76 SUIT PROBE: an ON kept between sessions (read-only)
@@ -1971,6 +1996,39 @@ def sm1style_on(text):
     except Exception:
         return True
     return values.get('sm1style') not in ('off', 1)
+
+
+def _start_choice(text, name, default):
+    """0.0.76 VISUAL: live.txt `text`'s choice word for the RESTART setting `name`, or `default` (no line, a bad value,
+    an unreadable text). Never raises."""
+    try:
+        values, _ = parse(text or '')
+    except Exception:
+        return default
+    value = values.get(name, default)
+    if isinstance(value, int):
+        value = CHOICE_NAMES[name][value] if 0 <= value < len(CHOICE_NAMES[name]) else default
+    return value if value in CHOICE_NAMES[name] else default
+
+
+def vr_aa_taa(text):
+    """0.0.76 VISUAL: True when live.txt `text` (None: no live.txt) leaves vr_aa at taa, the default: VR starts the game
+    with its Anti-Aliasing at TAA and no upscaler (vr_display.SESSION_OFF['game_aa']). Only `vr_aa = keep` (or 1)
+    keeps the player's own."""
+    return _start_choice(text, 'vr_aa', 'taa') == 'taa'
+
+
+def vr_textures_high(text):
+    """0.0.76 VISUAL: True when live.txt `text` leaves vr_textures at high, the default: VR starts the game with Texture
+    Quality at least High and Texture Filtering 16x (vr_display.SESSION_OFF 'textures', 'filtering'). Only
+    `vr_textures = keep` (or 1) keeps the player's own."""
+    return _start_choice(text, 'vr_textures', 'high') == 'high'
+
+
+def vr_render_upscaled(text):
+    """0.0.76 VISUAL: True when live.txt `text` has `vr_render = upscaled` (or 1): SM1STYLE's eyes at SpidyVR's 67%.
+    The default (no line) is native, the eyes at 100% with no upscaling."""
+    return _start_choice(text, 'vr_render', 'native') == 'upscaled'
 
 
 def next_launch_supersample(path):

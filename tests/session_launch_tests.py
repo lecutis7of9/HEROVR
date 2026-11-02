@@ -105,11 +105,12 @@ class SessionLaunchTests(unittest.TestCase):
         # The path a player takes: main() reads live.txt, then session() starts the game.
         # 0.0.73 lights: OFF IN VR is the default (no line, or test 4's 'game' at the old default before the
         # migration's marker); GAME chosen after the marker stays.
-        for live, off in (('lens_flares = off_in_vr\n', ('lens_flares',)),
-                          ('lens_flares = game\n', ('lens_flares',)),
+        # 0.0.76 VISUAL: the game's AA at TAA as well (SM1STYLE on and vr_aa = taa by default).
+        for live, off in (('lens_flares = off_in_vr\n', ('lens_flares', 'game_aa')),
+                          ('lens_flares = game\n', ('lens_flares', 'game_aa')),
                           # 0.0.76 LIGHTS LOCK: GAME chosen after the marker is ignored in VR too.
-                          (live_settings.MIGRATED_073T5 + '\nlens_flares = game\n', ('lens_flares',)),
-                          ('lens_flares = 0\n', ('lens_flares',)), ('', ('lens_flares',))):
+                          (live_settings.MIGRATED_073T5 + '\nlens_flares = game\n', ('lens_flares', 'game_aa')),
+                          ('lens_flares = 0\n', ('lens_flares', 'game_aa')), ('', ('lens_flares', 'game_aa'))):
             with self.subTest(live=live), tempfile.TemporaryDirectory() as folder:
                 root = pathlib.Path(folder)
                 (root/'live.txt').write_text(live, encoding='utf-8')

@@ -95,9 +95,14 @@ inline std::array<float, 2> jitter(uint64_t frame, uint32_t eyeWidth, uint32_t r
             2 * (halton(phase, 3) - .5f) / std::max(1u, renderHeight)};
 }
 // The percent the eyes are made at: the upscale only when SM1STYLE was on at the start, every exe check passed, the
-// mask table is the exe's (the TAA targets will be made) and the game's AA makes them.
-inline uint32_t madePercent(bool onAtStart, bool exeKnown, bool maskStock, bool aaMakesTargets) {
-    return onAtStart && exeKnown && maskStock && aaMakesTargets ? upscalePercent : 100u;
+// mask table is the exe's (the TAA targets will be made) and the game's AA makes them. 0.0.76 VISUAL: `wanted`, the
+// start's percent (SpidyEyeTemporal's low byte: tools/run_game_vr.py sends 100, native, by default, or 67 with
+// live.txt vr_render = upscaled); one outside 50..100 gives SpidyVR's upscalePercent.
+inline uint32_t madePercent(bool onAtStart, bool exeKnown, bool maskStock, bool aaMakesTargets,
+                            uint32_t wanted = upscalePercent) {
+    if (wanted < 50 || wanted > 100)
+        wanted = upscalePercent;
+    return onAtStart && exeKnown && maskStock && aaMakesTargets ? wanted : 100u;
 }
 // What TemporalAa read for one eye: its input (set +0x3800) and output (the target's +0x1d0) widths. At 100% both
 // are the eye's (input 0 = the target's); upscaled, the input is the render width and the output the eye's (to 8).

@@ -6,6 +6,11 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **Clearer picture (VISUAL):** VR now starts the game with its Anti-Aliasing at TAA and no upscaler, so each eye
+  gets the game's own TAA (SM1STYLE) at native 100% - no DLSS, FSR, FXAA or CAS on the eyes. Texture Quality goes to
+  at least High and filtering to 16x while VR runs. Your own settings come back when the game closes. live.txt:
+  `vr_aa = keep`, `vr_textures = keep`, `vr_render = upscaled` (each applies the next time VR starts).
+  [docs/VISUAL-0.0.76.md](docs/VISUAL-0.0.76.md)
 - **Suits scanned for you (AUTO-SCAN):** the launcher makes sm2scan.json by itself the first time (or after a game
   update), in the background - "Scanning your suits (first time only)" in its log. PLAY VR never waits for it.
 - **WORN SUIT (CANDIDATE):** the suit probe names the Peter suit you wear ("WORN SUIT: ..." in the console) after

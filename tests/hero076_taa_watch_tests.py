@@ -16,14 +16,17 @@ def src(p):
 
 
 def window(ms=10000, pairs=450, moving=40, eased=90, still=200, still_eased=10, still_moving=2, taa=450,
-           taa_ms=200.0, eye=450, eye_ms=9000.0, depth=0, missed=0, restarted=3):
+           taa_ms=200.0, eye=450, eye_ms=9000.0, depth=0, missed=0, restarted=3, counted=450, still_sampled=40000,
+           still_clipped=2000, moving_sampled=50000, moving_clipped=10000, setup=1 | 900 << 16, jitter_pairs=0,
+           jitter_now=(0, 0), jitter_before=(0, 0), shift=(0, 0), jitter_off=(0, 0, 0)):
     return struct.pack(W.WINDOW, ms, pairs, moving, eased, still, still_eased, still_moving, taa, taa_ms, eye, eye_ms,
-                       depth, missed, restarted)
+                       depth, missed, restarted, counted, still_sampled, still_clipped, moving_sampled, moving_clipped,
+                       setup, jitter_pairs, *jitter_now, *jitter_before, *shift, *jitter_off)
 
 
 def record(closed=2, build=0, depth=(200, 199, 19, 2688, 2880, 1, 1, 0, 0, 3, 2, 6952, 0x1000, 0x2000),
            windows=None):
-    raw = struct.pack(W.HEAD, W.MAGIC, 1, W.SIZE, 10000, closed, build) + struct.pack(W.DEPTH, *depth)
+    raw = struct.pack(W.HEAD, W.MAGIC, 3, W.SIZE, 10000, closed, build) + struct.pack(W.DEPTH, *depth)
     raw += window(ms=0, pairs=10)
     ring = windows or [window() for _ in range(closed)]
     ring = ring + [bytes(struct.calcsize(W.WINDOW))] * (W.WINDOWS - len(ring))
@@ -32,10 +35,11 @@ def record(closed=2, build=0, depth=(200, 199, 19, 2688, 2880, 1, 1, 0, 0, 3, 2,
 
 class Record(unittest.TestCase):
     def test_size_matches_the_header(self):
-        self.assertEqual(W.SIZE, 5184)
+        self.assertEqual(W.SIZE, 11008)
         h = src('include/spidy/taa_watch.hpp')
-        self.assertIn('static_assert(sizeof(Data) == 5184)', h)
-        self.assertIn('uint32_t bytes = 5184', h)
+        self.assertIn('static_assert(sizeof(Data) == 11008)', h)
+        self.assertIn('uint32_t bytes = 11008', h)
+        self.assertIn('uint32_t version = 3', h)
 
     def test_parse_and_report(self):
         r = W.taa_watch_parse(record())

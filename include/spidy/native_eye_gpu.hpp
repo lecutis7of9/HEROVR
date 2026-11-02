@@ -95,13 +95,18 @@ bool sm1StyleLock();
 // slider and CAS sharpen off (the asked values are kept for legacy); SPIDY TAA falls back to SMAA, SMAA to FXAA.
 void setVrAa(uint32_t mode);
 uint32_t vrAa();
+// 0.0.76 TAA JITTER (live.txt vr_taa_jitter, SpidyVrTaaJitter, a diagnostic): taa_jitter::Mode for our own Halton
+// lens step (game_xr's eye_taa::step) - on (the default), off, fixed or half. SPIDY TAA and each eye's history go on.
+uint32_t taaJitterMode();
 bool vrAaLocks(); // ours or smaa
 uint32_t vrAaSmaaFault();
 uint32_t eyeHistory();
 uint32_t monitorRateNow();
 // The views the eyes of the pair with this serial were rendered from (the
 // eyes command's serial), for the history pass to turn the old pair to the new.
-void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views);
+// 0.0.76 JITTER CHECK: and eye 0's own sub-pixel step that pair (eye pixels, x right, y up; 0 none) at the eye's size.
+void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views, float jitterX = 0,
+                  float jitterY = 0, uint32_t width = 0, uint32_t height = 0);
 // SpidyEyeHistoryData, for the launcher's report.
 struct HistoryData {
     uint32_t magic = 0x53454844; // SEHD

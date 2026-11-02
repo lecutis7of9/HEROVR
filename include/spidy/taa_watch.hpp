@@ -40,8 +40,22 @@ struct Window {
     uint32_t depthPairs{};  // pairs the history was turned with the eyes' depth (A-depth builds)
     uint32_t depthMissed{}; // depth asked for but not there: the turn alone
     uint32_t restarted{};   // pairs the history started again
+    // 0.0.76 TAA JITTER: SPIDY TAA's history rejection - of the pixels that had a history to blend (one in 16 x 16
+    // counted, both eyes), how many the YCoCg clip moved (clipped), split by a still head or not. And what the
+    // window ran with (setupWith): live.txt vr_taa_jitter and vr_taa_still.
+    uint32_t countedPairs{};  // pairs whose counts came back
+    uint32_t stillSampled{}, stillClipped{};
+    uint32_t movingSampled{}, movingClipped{};
+    uint32_t setup{};         // bits 0-7: each taa_jitter::Mode seen (1 << mode); bits 16-31: the still share, 1/1000
+    // 0.0.76 JITTER CHECK (noteJitterCheck): with a still head (eye 0, a history to turn), our own sub-pixel step
+    // this pair and last (eye pixels, as the lens was moved: x right, y up) and how far the history pass turned the
+    // eye's centre (the previous image minus current, x right, y down). The sums: how far that turn was from the step
+    // counted none / once / twice (jitterOff[n]); the least is how the history counts it.
+    uint32_t jitterPairs{};
+    float jitterNow[2]{}, jitterBefore[2]{}, shift[2]{}; // the window's last still pair's
+    float jitterOff[3]{};
 };
-static_assert(sizeof(Window) == 56);
+static_assert(sizeof(Window) == 120);
 // The eye depth log (the first depthFrames pairs).
 inline constexpr uint32_t depthFrames = 200;
 enum Verdict : uint32_t { notSeen = 0, candidate = 1, confirmed = 2 };
@@ -70,8 +84,8 @@ inline uint32_t depthVerdict(const DepthLog& d) {
 inline constexpr uint32_t thisBuild = 0;
 struct Data {
     uint32_t magic = 0x44575453; // STWD
-    uint32_t version = 1;
-    uint32_t bytes = 5184;
+    uint32_t version = 3;
+    uint32_t bytes = 11008;
     uint32_t windowMs = taa_watch::windowMs;
     uint32_t closed{}; // windows finished (windows[closed % windowCount] the next)
     uint32_t build = thisBuild;
@@ -79,7 +93,7 @@ struct Data {
     Window current;
     Window windows[windowCount];
 };
-static_assert(sizeof(Data) == 5184);
+static_assert(sizeof(Data) == 11008);
 // Closes the running window once it has run windowMs (a long pause closes one longer window).
 inline void roll(Data& d, uint64_t& startMs, uint64_t nowMs) {
     if (!startMs) {
@@ -107,5 +121,53 @@ inline void notePair(Window& w, bool restarted, bool moving, bool eased, bool st
     w.stillHead += still;
     w.stillEased += still && eased;
     w.stillMoving += still && moving;
+}
+// The window's setup with one more pair: its jitter mode and the still share in force (thousandths; 0 not SPIDY TAA).
+inline uint32_t setupWith(uint32_t setup, uint32_t jitterMode, uint32_t stillMilli) {
+    const uint32_t seen = (setup & 0xff) | (jitterMode < 8 ? 1u << jitterMode : 0u);
+    return seen | (stillMilli ? (stillMilli & 0xffff) << 16 : setup & 0xffff0000u);
+}
+// One pair's rejection counts into the running window (still: the head was still for that pair).
+inline void noteRejection(Window& w, bool still, uint32_t sampled, uint32_t clipped) {
+    if (clipped > sampled)
+        return; // not one pair's counts
+    ++w.countedPairs;
+    (still ? w.stillSampled : w.movingSampled) += sampled;
+    (still ? w.stillClipped : w.movingClipped) += clipped;
+}
+// The history turn's shift (eye pixels: the previous image's place minus the current one's, x right, y down) a
+// still lens moved by `before` last pair and `now` this one (eye pixels, x right, y up: eye_taa::lensShift's) makes,
+// with the step counted `times` times: a lens moved right shows everything further left, one moved up lower.
+inline void jitterShift(const float now[2], const float before[2], float times, float out[2]) {
+    out[0] = times * (now[0] - before[0]);
+    out[1] = times * (before[1] - now[1]);
+}
+// One still-head pair's check into the running window: the step now and last pair, and the turn's shift measured.
+inline void noteJitterCheck(Window& w, const float now[2], const float before[2], const float shift[2]) {
+    if (!std::isfinite(now[0] + now[1] + before[0] + before[1] + shift[0] + shift[1]) || std::abs(shift[0]) > 64 ||
+        std::abs(shift[1]) > 64)
+        return; // not a still head's
+    ++w.jitterPairs;
+    for (int n = 0; n < 3; ++n) {
+        float e[2];
+        jitterShift(now, before, static_cast<float>(n), e);
+        w.jitterOff[n] += std::hypot(shift[0] - e[0], shift[1] - e[1]);
+    }
+    for (int k = 0; k < 2; ++k) {
+        w.jitterNow[k] = now[k];
+        w.jitterBefore[k] = before[k];
+        w.shift[k] = shift[k];
+    }
+}
+// How the history turn counts our step (the least of jitterOff): 0 none, 1 once, 2 twice; -1 not known (no
+// pairs, or no step moved: all three the same).
+inline int jitterCounted(const Window& w) {
+    if (!w.jitterPairs || (w.jitterOff[0] == w.jitterOff[1] && w.jitterOff[1] == w.jitterOff[2]))
+        return -1;
+    int best = 0;
+    for (int n = 1; n < 3; ++n)
+        if (w.jitterOff[n] < w.jitterOff[best])
+            best = n;
+    return best;
 }
 } // namespace spidy::taa_watch

@@ -4,29 +4,40 @@
 a timestamp at each job's begin and end marker), and the still / moving split - the pairs the history classed as
 moving, and the pairs with a still head (the eye's view moved under 2 degrees and 3 cm a second) it classed as
 moving anyway (over 20%: the thresholds are wrong, not the blend). And the eye depth log: the fmt 19 depth leaving
-each eye job's G-buffer pass for the first 200 pairs, CONFIRMED or CANDIDATE. No Windows imports: `game` is
-anything with read(address, size) -> bytes."""
+each eye job's G-buffer pass for the first 200 pairs, CONFIRMED or CANDIDATE. 0.0.76 TAA JITTER: every 10 s, SPIDY
+TAA's history rejection (the share of counted pixels the clip moved) with a still head and moving, and what the
+window ran with: live.txt vr_taa_jitter (on / off / fixed / half) and vr_taa_still (the still share in force).
+0.0.76 JITTER CHECK: with a still head, our own sub-pixel step this pair and last and the history turn's shift of the
+eye's centre (eye pixels), and whether that shift counts the step none, once or twice (the nearest). No
+Windows imports: `game` is anything with read(address, size) -> bytes."""
 import struct
 
 EXPORT = 'SpidyTaaWatchData'
 MAGIC = 0x44575453  # STWD
 HEAD = '<6I'
 DEPTH = '<12I2Q'
-WINDOW = '<8IfIf3I'
+WINDOW = '<8IfIf3I6II9f'
 WINDOWS = 90
-SIZE = struct.calcsize(HEAD) + struct.calcsize(DEPTH) + struct.calcsize(WINDOW) * (WINDOWS + 1)  # 5184
+SIZE = struct.calcsize(HEAD) + struct.calcsize(DEPTH) + struct.calcsize(WINDOW) * (WINDOWS + 1)  # 11008
 WRONG_SHARE = 20  # percent of still-head pairs classed moving past which the thresholds are wrong
 BUILDS = {0: 'shared', 1: 'A-depth', 2: 'B-ss125', 3: 'C-still094'}
 VERDICTS = ('not seen', 'CANDIDATE', 'CONFIRMED')
+JITTERS = ('on', 'off', 'fixed', 'half')  # taa_jitter::Mode (live.txt vr_taa_jitter)
+COUNTED = ('none', 'once', 'twice')  # taa_watch::jitterCounted
 FORMATS = {19: 'R32G8X24_TYPELESS', 20: 'D32_FLOAT_S8X24_UINT'}
 
 
 def _window(values):
     (ms, pairs, moving, eased, still, still_eased, still_moving, taa_timed, taa_ms, eye_timed, eye_ms,
-     depth_pairs, depth_missed, restarted) = values
+     depth_pairs, depth_missed, restarted, counted, still_sampled, still_clipped, moving_sampled, moving_clipped,
+     setup, jitter_pairs, now_x, now_y, before_x, before_y, shift_x, shift_y, off0, off1, off2) = values
     return dict(ms=ms, pairs=pairs, moving=moving, eased=eased, still_head=still, still_eased=still_eased,
                 still_moving=still_moving, taa_timed=taa_timed, taa_gpu_ms=taa_ms, eye_timed=eye_timed,
-                eye_gpu_ms=eye_ms, depth_pairs=depth_pairs, depth_missed=depth_missed, restarted=restarted)
+                eye_gpu_ms=eye_ms, depth_pairs=depth_pairs, depth_missed=depth_missed, restarted=restarted,
+                counted_pairs=counted, still_sampled=still_sampled, still_clipped=still_clipped,
+                moving_sampled=moving_sampled, moving_clipped=moving_clipped, setup=setup,
+                jitter_pairs=jitter_pairs, jitter_now=(now_x, now_y), jitter_before=(before_x, before_y),
+                shift=(shift_x, shift_y), jitter_off=(off0, off1, off2))
 
 
 def _pct(part, whole):
@@ -35,6 +46,17 @@ def _pct(part, whole):
 
 def _mean(total, count):
     return round(total / count, 3) if count else None
+
+
+def _counted(w):
+    off = w['jitter_off']
+    if not w['jitter_pairs'] or off[0] == off[1] == off[2]:
+        return None
+    return COUNTED[min(range(3), key=lambda n: (off[n], n))]
+
+
+def _px(pair, pairs):
+    return [round(v, 3) for v in pair] if pairs else None
 
 
 def window_summary(w, end_seconds=None):
@@ -50,7 +72,16 @@ def window_summary(w, end_seconds=None):
                still_head_pairs=w['still_head'],
                still_head_classed_moving_pct=_pct(w['still_eased'], w['still_head']),
                still_head_past_half_pct=_pct(w['still_moving'], w['still_head']),
-               depth_pct=_pct(w['depth_pairs'], w['pairs']), depth_missed=w['depth_missed'])
+               depth_pct=_pct(w['depth_pairs'], w['pairs']), depth_missed=w['depth_missed'],
+               counted_pairs=w['counted_pairs'],
+               rejected_still_pct=_pct(w['still_clipped'], w['still_sampled']),
+               rejected_moving_pct=_pct(w['moving_clipped'], w['moving_sampled']),
+               jitter='/'.join(JITTERS[m] for m in range(len(JITTERS)) if w['setup'] >> m & 1) or None,
+               still_share=round((w['setup'] >> 16) / 1000.0, 3) if w['setup'] >> 16 else None,
+               jitter_check_pairs=w['jitter_pairs'], jitter_now_px=_px(w['jitter_now'], w['jitter_pairs']),
+               jitter_before_px=_px(w['jitter_before'], w['jitter_pairs']),
+               shift_px=_px(w['shift'], w['jitter_pairs']), jitter_counted=_counted(w),
+               jitter_off_px=[_mean(v, w['jitter_pairs']) for v in w['jitter_off']] if w['jitter_pairs'] else None)
     if end_seconds is not None:
         out['ends_s'] = round(end_seconds, 1)
     return out
@@ -62,7 +93,7 @@ def taa_watch_parse(raw):
         return None
     head = struct.unpack_from(HEAD, raw, 0)
     magic, version, size, window_ms, closed, build = head
-    if magic != MAGIC or version != 1 or size != SIZE:
+    if magic != MAGIC or version != 3 or size != SIZE:
         return None
     at = struct.calcsize(HEAD)
     d = struct.unpack_from(DEPTH, raw, at)
@@ -107,9 +138,20 @@ def taa_watch_report(record):
         if w['pairs']:
             rows.append(window_summary(w, ends))
     keys = ('ms', 'pairs', 'moving', 'eased', 'still_head', 'still_eased', 'still_moving', 'taa_timed', 'taa_gpu_ms',
-            'eye_timed', 'eye_gpu_ms', 'depth_pairs', 'depth_missed', 'restarted')
+            'eye_timed', 'eye_gpu_ms', 'depth_pairs', 'depth_missed', 'restarted', 'counted_pairs', 'still_sampled',
+            'still_clipped', 'moving_sampled', 'moving_clipped')
     counted = record['windows'] or [record['current']]  # the closed windows (the running one before any closed)
     total = {k: sum(w[k] for w in counted) for k in keys}
+    seen, share = 0, 0
+    for w in counted:  # every jitter mode seen; the last still share
+        seen |= w['setup'] & 0xff
+        share = w['setup'] >> 16 or share
+    total['setup'] = seen | share << 16
+    total['jitter_pairs'] = sum(w['jitter_pairs'] for w in counted)
+    total['jitter_off'] = tuple(sum(w['jitter_off'][n] for w in counted) for n in range(3))
+    last = ([w for w in counted if w['jitter_pairs']] or [counted[-1]])[-1]  # the last still pair's values
+    for k in ('jitter_now', 'jitter_before', 'shift'):
+        total[k] = last[k]
     totals = window_summary(total) if total['pairs'] else None
     wrong = [r for r in rows if (r['still_head_classed_moving_pct'] or 0) > WRONG_SHARE and r['still_head_pairs'] >= 20]
     still_share = totals['still_head_classed_moving_pct'] if totals else None
@@ -120,6 +162,23 @@ def taa_watch_report(record):
 
 def _num(v, fmt):
     return format(v, fmt) if v is not None else '-'
+
+
+def _share(pct):
+    return f'{pct:.1f}%' if pct is not None else '-'
+
+
+def _xy(pair):
+    return f"({pair[0]:+.2f}, {pair[1]:+.2f})" if pair else '-'
+
+
+def _jitter_words(r):
+    if not r['jitter_check_pairs']:
+        return 'jitter check - (no still-head pairs)'
+    off = r['jitter_off_px']
+    return (f"still step now {_xy(r['jitter_now_px'])} last {_xy(r['jitter_before_px'])} px, history shift "
+            f"{_xy(r['shift_px'])} px, step counted {r['jitter_counted'] or '- (no step)'} (off by none/once/twice "
+            f"{off[0]:.2f}/{off[1]:.2f}/{off[2]:.2f} px, {r['jitter_check_pairs']} pairs)")
 
 
 def taa_watch_lines(section):
@@ -142,7 +201,10 @@ def taa_watch_lines(section):
                      f"{_num(t['taa_gpu_ms_per_pair'], '.2f')} ms; still {_num(t['still_pct'], '.0f')}% / eased "
                      f"{_num(t['eased_pct'], '.0f')}% (moving past half {_num(t['moving_pct'], '.0f')}%); still head "
                      f"{t['still_head_pairs']} pairs, {_num(t['still_head_classed_moving_pct'], '.0f')}% classed moving"
-                     + (' - OVER 20%: the thresholds are wrong' if section['thresholds_wrong'] else '') + '.')
+                     + (' - OVER 20%: the thresholds are wrong' if section['thresholds_wrong'] else '')
+                     + f"; history rejected still {_share(t['rejected_still_pct'])} / moving "
+                     f"{_share(t['rejected_moving_pct'])}; vr_taa_jitter {t['jitter'] or '-'}, still share "
+                     f"{_num(t['still_share'], '.2f')}; " + _jitter_words(t) + '.')
     return lines + taa_watch_window_lines(section)
 
 
@@ -155,5 +217,10 @@ def taa_watch_window_lines(section):
                      f"still {_num(r['still_pct'], '.0f')}% eased {_num(r['eased_pct'], '.0f')}% moving "
                      f"{_num(r['moving_pct'], '.0f')}%, still head {r['still_head_pairs']} "
                      f"({_num(r['still_head_classed_moving_pct'], '.0f')}% classed moving)"
-                     + (f", depth {_num(r['depth_pct'], '.0f')}%" if r['depth_pct'] or r['depth_missed'] else ''))
+                     + (f", depth {_num(r['depth_pct'], '.0f')}%" if r['depth_pct'] or r['depth_missed'] else '')
+                     + f", rejected still {_share(r['rejected_still_pct'])} / moving "
+                     f"{_share(r['rejected_moving_pct'])}"
+                     + (f", jitter {r['jitter']}" if r['jitter'] and r['jitter'] != 'on' else '')
+                     + (f", still share {r['still_share']:.2f}" if r['still_share'] else '')
+                     + (', ' + _jitter_words(r) if r['jitter_check_pairs'] else ''))
     return lines

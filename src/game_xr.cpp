@@ -127,6 +127,7 @@
 #include "spidy/native_address_finder.hpp"
 #include "spidy/native_shadow_distance.hpp"
 #include "spidy/eye_taa.hpp"
+#include "spidy/taa_jitter.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/vr_aa.hpp"    // 0.0.76 SPIDY TAA
@@ -11033,10 +11034,13 @@ DWORD WINAPI run(void*) {
                     std::array<std::array<float, 2>, 2> aaShift{}; // tangents, per eye
                     bool aaShifted = false;
                     // 0.0.74 test 10 SM1STYLE: never while it runs (SpidyVR's jitter only; no JITTER CALM shrink).
+                    // 0.0.76 TAA JITTER (live.txt vr_taa_jitter, a diagnostic; taa_jitter.hpp): on the walk, off no
+                    // step (the lens, the history's views - noteEyeViews below - and the headset layer unjittered),
+                    // fixed one constant step, half the walk at half size. Whatever it is, all three get the same.
+                    float jx{}, jy{};
                     if (!flatScreen && (eyeAaNow() & 0xff) == eye_taa::on && !sm1StyleActive.load() &&
-                        engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on) {
-                        float jx{}, jy{};
-                        eye_taa::step(eyes.serial, jx, jy);
+                        engine_taa::stateOf(SpidyEngineTaaNow()) != engine_taa::on &&
+                        taa_jitter::step(native_gpu::taaJitterMode(), eyes.serial, jx, jy)) {
                         // 0.0.73 test 3 JITTER CALM (LIGHT HOLD): no more of the step than the history
                         // kept last pair to average it (street lights blinked unaveraged while moving).
                         const float calm = eye_history::jitterScale(
@@ -11074,7 +11078,10 @@ DWORD WINAPI run(void*) {
                             views[i].tangents = {std::tan(f.left), std::tan(f.right), std::tan(f.down),
                                                  std::tan(f.up)};
                         }
-                        native_gpu::noteEyeViews(eyes.serial, views);
+                        // 0.0.76 JITTER CHECK (read-only): eye 0's step as its lens was moved, for TAA WATCH.
+                        const bool shifted = aaShift[0][0] != 0 || aaShift[0][1] != 0;
+                        native_gpu::noteEyeViews(eyes.serial, views, shifted ? jx : 0.f, shifted ? jy : 0.f,
+                                                 dimensions[0], dimensions[1]);
                     }
                     // The HUD panel for this command's frame, as the head sees it:
                     // fixed in the room, so a reused image the headset turns to a

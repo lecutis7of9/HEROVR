@@ -2884,3 +2884,27 @@ buildings stayed; only the light went.
   game's AA at TAA. Kept from §72: live.txt vr_ss (off by default) and the report's vr_aa_last / jitter_log_last.
   The two runs' numbers (fps, GPU wait, TAA cost, motion easing, mip bias): docs/VISUAL-0.0.76.md "SPIDY TAA TUNE".
   Tests: hero076_spidy_taa_tests Tune (509bdc9's constants, no RCAS or 10-bit history; vr_ss; the report).
+
+## 75. Version 0.0.76 TAA JITTER / TAA STILL: live.txt diagnostics and the history rejection rate (all A/B/C tests)
+
+  Shared (hero-0.0.76-taa-watch), merged into A-depth, B-ss125 and C-still094. live.txt vr_taa_jitter (SpidyVrTaaJitter,
+  native_gpu::taaJitterMode, taa_jitter::Mode 0 on / 1 off / 2 fixed / 3 half, refused 4611 above 3): game_xr's
+  EYE AA block takes taa_jitter::step instead of eye_taa::step - off skips the lens shift (aaShifted false), so
+  motion.fovs, noteEyeViews (the history's reprojection) and saved.trackingEyes (the headset layer) are all
+  unjittered; fixed uses eye_taa::step(1); half halves the step before JITTER CALM. stereo_probe eyeJitter and the
+  headset eye path are untouched. live.txt vr_taa_still (SpidyVrTaaStill, thousandths 600-990 or 0 the build's,
+  refused 4612; live_settings SCALE 1000): taa_still::withStill after vr_aa::keep. Neither is persisted, start-only
+  or RESTART. History rejection: taaShader under TAA_COUNT (root UAV u1, RWByteAddressBuffer) adds 1 / 1 at
+  (p & 15) == 0 for a pixel reaching the clip / clipped (most > 1); prepareTaaCount builds the variant once (root
+  signature = the history's + a root UAV), a 48-byte committed DEFAULT buffer (zeroed; running totals per capture
+  slot and eye) and its READBACK copy; drawHistory transitions COMMON -> UAV -> COPY_SOURCE -> COMMON around the
+  draws and copies the slot's 16 bytes; noteHistoryCount(slot) diffs them when the slot's list is done into
+  taa_watch Window (countedPairs, still/moving sampled/clipped, setup: jitter modes seen | still share << 16).
+  tools/taa_watch_record.py reads it. Fault: taaCountFault, the counts "-", the
+  uncounted PSO as before. JITTER CHECK (read-only): noteEyeViews also takes eye 0's applied step (jx, jy after JITTER
+  CALM, 0 when its lens was not moved) and the eye's size; NotedViews keeps them, history.shownJitter the last pair's.
+  With a still head drawHistory maps the eye's centre (0.5, 0.5) through the history homography, times the size, and
+  taa_watch::noteJitterCheck sums its distance from the step change counted 0 / 1 / 2 times (jitterShift: x now -
+  last, y last - now); jitterCounted the least. Window 120 bytes, Data 11008, version 3. Finding: the history views
+  are the jittered ones on both sides, so the step is counted exactly once (core test with historyReprojection).
+  Tests: core `0.0.76 TAA JITTER`, hero076_taa_jitter_tests, hero076_taa_watch_tests.

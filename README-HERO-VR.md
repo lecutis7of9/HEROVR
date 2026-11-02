@@ -54,6 +54,10 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
   jitter, to compare), `vr_jitter = off` (the eyes' jitter fixed). The console's "JITTER LOG" lists each view's jitter.
   0.0.76 POSE CHECK: the console's "POSE CHECK render vs submit" says whether each eye was shown with the exact pose
   it was drawn with (degrees and mm per eye; read-only, no setting).
+  0.0.76 A/B/C tests, live.txt, live, no restart, nothing changes without them: `vr_taa_jitter = off`, `fixed` or
+  `half` (our own sub-pixel step only; `on` is the default) and `vr_taa_still = 0.97` (the still share only; unset is
+  the build's own). The console's "TAA WATCH" lines give the history rejection, head still vs moving, and the
+  JITTER CHECK (the step now and last, the history's shift in pixels, counted once / twice / none) every 10 s.
 - **Window-edge lights fixed:** lit windows no longer go dark at the outer edges of each eye.
 - **The picture is back to 0.0.72's baseline**, keeping 0.0.73's flicker fixes (no lens flares or eye bloom in VR,
   steadier street lights and shadows, fewer popping far windows). 0.0.73's extra picture switches are gone.

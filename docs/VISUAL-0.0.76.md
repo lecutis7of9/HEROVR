@@ -206,3 +206,42 @@ still head <n> (<%> classed moving)`, and the report's `taa_watch` keeps up to 9
   DEPTH_WRITE inside each eye job's G-buffer pass: which resource each eye used, whether both eyes' jobs had one,
   whether the same one served both, and whether it ever left DEPTH_WRITE with no eye job open (the flat view).
   CONFIRMED only with 200 pairs, at least 90% with both eyes and never the flat view; otherwise CANDIDATE.
+
+### TAA JITTER / TAA STILL (0.0.76 A/B/C tests): far windows that swim with a still head
+
+The owner: with the head completely still, medium-to-far windows and thin lines swim or shift slightly (they do not
+vanish); close edges are usually fine; while swinging, closer windows swim too (the motion case: A-depth's item).
+Sub-pixel detail at a distance, so two live.txt diagnostics, one line each, live, never kept, nothing changes without
+them:
+
+| live.txt | Default | What it does |
+| --- | --- | --- |
+| `vr_taa_jitter` | `on` | Our own Halton (2, 3) lens step only (include/spidy/taa_jitter.hpp; game_xr's eye_taa::step): `on` the 16-step walk; `off` no step (the lens, the history's reprojection views and the headset layer all unjittered); `fixed` one constant offset (the walk's second step, -0.25 / +0.17 pixel); `half` the same 16-step walk at half size. SPIDY TAA, each eye's history and the game's own jitter (`vr_jitter`, `vr_game_jitter`) are untouched |
+| `vr_taa_still` | unset (the build's: 0.9; C-still094 0.94) | SPIDY TAA's still share only, 0.60-0.99 (include/spidy/taa_still.hpp): each pair's motion share is read from the build's own keep and eased from the new still share to the unchanged moving 0.6. The clip, the camera-cut reset and the classification are unchanged |
+
+TAA WATCH, every 10 s, adds the **history rejection**: SPIDY TAA's shader counts, at one pixel in 16 x 16 per eye,
+the pixels with a history to blend and those the YCoCg variance clip had to move (a read-only TAA_COUNT variant of
+the same shader, its counts copied back per capture slot; if the variant cannot be built the counts read "-" and the
+TAA is the one before). Split by a still head (taa_watch::stillHead) vs moving: `rejected still <%> / moving <%>`,
+plus `jitter <modes>` and `still share <x>` when not the defaults; the report's `taa_watch` windows have
+`rejected_still_pct`, `rejected_moving_pct`, `jitter`, `still_share`. A high still-head rejection that drops with
+`vr_taa_jitter = off` or `half` points at the step against far sub-pixel detail; one that stays points elsewhere.
+
+**JITTER CHECK (read in code, then logged).** The question: does the reprojection use jittered or unjittered views,
+and is our step counted exactly once in the history's UV? In code: game_xr moves both eyes' lenses by the step
+(eye_taa::lensShift / shiftLens on motion.fovs) before noteEyeViews, so each pair's noted view - and the game's
+render, and the headset layer's fov - carries that pair's own jittered lens. drawHistory turns the history with
+eye_history::historyReprojection(history.shown, now): the current pixel's direction from this pair's jittered lens,
+looked up in the last pair's jittered lens, the one the history picture was written in (the history is kept on the
+jittered grid it was drawn on; `shown` is the last pair's `now`). So it is counted **exactly once**: with a still
+head the history moves by this step minus last (x: now - last, y: last - now, eye pixels), not twice, not zero.
+core_tests proves it with the real functions (0.0.76 TAA JITTER / TAA STILL). Not a double count - but one thing the
+check does point at: the TAA's output stays on the jittered grid (the headset is handed the moved lens to undo it),
+so with a still head the history is re-read with Catmull-Rom at a different sub-pixel offset every pair and the
+compositor resamples a picture that moves by the step - two resamples a pair that standard TAA (an unjittered
+output) does not have. Far sub-pixel detail is where that shows; `vr_taa_jitter = fixed` (no change pair to pair)
+takes it away and `half` halves it, so those two runs tell. Logged every 10 s (head still, eye 0): `still step now
+(x, y) last (x, y) px, history shift (x, y) px, step counted once (off by none/once/twice a/b/c px, n pairs)` - the
+shift the pass actually used, and the mean distance from each count (head motion under the still limit adds the same
+to all three, so the least says how it was counted). Report: `jitter_now_px`, `jitter_before_px`, `shift_px`,
+`jitter_counted`, `jitter_off_px`, `jitter_check_pairs`.

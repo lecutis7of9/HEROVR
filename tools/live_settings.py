@@ -183,6 +183,15 @@ SETTINGS = {
                       "FIX: the game's own unseen head views give the lens no jitter instead of feeding its stored "
                       "jitter back in, which doubled it and flipped it upside down; 0 keep: c71a59c's doubled jitter, "
                       "to compare) - live, no restart needed"),
+    # 0.0.76 TAA JITTER (native_eye_gpu SpidyVrTaaJitter, game_xr's eye_taa::step): a diagnostic, never persisted.
+    'vr_taa_jitter': ((0, 3), 'SpidyVrTaaJitter', "VR TAA JITTER {} (a test of SpidyVR's own Halton sub-pixel step "
+                     "only - on the 16-step walk, the default; off no step; fixed one constant offset; half the same "
+                     "walk at half size - while SPIDY TAA, each eye's history and the game's jitter stay as they "
+                     "are) - live, no restart needed"),
+    # 0.0.76 TAA STILL (taa_still.hpp, SpidyVrTaaStill, thousandths): never persisted; unset is the build's own.
+    'vr_taa_still': ((0.6, 0.99), 'SpidyVrTaaStill', "VR TAA STILL {} (SPIDY TAA's history share with a still head "
+                    "only, in place of this build's own 0.9 - C-still094 0.94 - with the moving share 0.6 and "
+                    "everything else unchanged) - live, no restart needed"),
     'history_cut': ((25, 400), 'SpidyEyeHistoryCut', 'HISTORY CUT {}% (lower drops old history sooner when you move: fewer trails; higher keeps it longer: smoother, more trail)'),
     'aa_quality': ((0, 1), 'SpidyEyeAAQuality', 'AA QUALITY {} (0 FXAA, 1 strong FXAA: smoother edges, a little softer)'),
     # The ring on the wrist (health_ring::Place).
@@ -606,7 +615,7 @@ for _style in WEB_STYLES:
 SHADE_STYLE = {word: style for style in WEB_STYLES for word in WEB_SHADES[style]}
 # Settings that take decimals, and what the export is given per unit (web_width: tenths of a millimetre,
 # hud_scale: percent).
-SCALE = {'web_width': 100, 'hud_scale': 100, 'exposure': 10}  # Update 37.2: exposure in tenths of EV
+SCALE = {'web_width': 100, 'hud_scale': 100, 'exposure': 10, 'vr_taa_still': 1000}  # Update 37.2: exposure in tenths of EV
 # Settings that take a word: the words, and the number the export is given for each.
 # Update 17: the themes and text colours in wrist_hud::themeKey/textColorKey's order.
 CHOICE_NAMES = {'hud_hand': ('left', 'right'),
@@ -687,6 +696,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
                 'vr_ss': ('off', '125', '150'),  # 0.0.76 SPIDY TAA TUNE
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
+                'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
                 'batman': ('off', 'on'), 'wolverine': ('off', 'on'), 'superman': ('off', 'on'), 'punisher': ('off', 'on'),
@@ -782,6 +792,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_ss': {'off': 0, '100': 0, '125': 1, '150': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 SPIDY TAA TUNE
            'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
+           'vr_taa_jitter': {'on': 0, 'off': 1, 'fixed': 2, 'half': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TAA JITTER
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},

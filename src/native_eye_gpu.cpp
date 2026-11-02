@@ -14,6 +14,8 @@
 #include "spidy/streamer_view.hpp"
 #include "spidy/vr_aa.hpp"
 #include "spidy/taa_watch.hpp"
+#include "spidy/taa_jitter.hpp"
+#include "spidy/taa_still.hpp"
 #include "spidy/smaa/area_tex.h"
 #include "spidy/smaa/search_tex.h"
 #include "spidy/smaa/smaa_shader.hpp"
@@ -2230,12 +2232,22 @@ std::mutex viewLock;
 struct NotedViews {
     uint64_t serial{};
     std::array<eye_history::EyeView, 2> eyes{};
+    std::array<float, 2> jitter{};  // 0.0.76 JITTER CHECK: eye 0's own step (eye pixels, x right, y up)
+    std::array<uint32_t, 2> size{}; // the eye's size those pixels are of
 };
 std::array<NotedViews, 32> notedViews{}; // viewLock
 unsigned nextNoted{};                    // viewLock
 struct HistoryPipeline {
     ComPtr<ID3D12RootSignature> root;
     ComPtr<ID3D12PipelineState> state, taa; // taa: 0.0.76 SPIDY TAA (taaShader), built in its mode only
+    // 0.0.76 TAA JITTER: taaShader with TAA_COUNT (the rejection counts), its root signature (the history's, then a
+    // root UAV), the counts (16 bytes a capture slot: eye 0 then eye 1, [sampled, clipped]) and their readback.
+    ComPtr<ID3D12RootSignature> countRoot;
+    ComPtr<ID3D12PipelineState> taaCount;
+    ComPtr<ID3D12Resource> counts, countRead;
+    const volatile uint32_t* countData{};
+    std::array<std::array<uint32_t, 4>, 3> countLast{}; // the totals last read per slot (the counts only grow)
+    std::array<bool, 3> counted{}, countStill{};
     ComPtr<ID3D12DescriptorHeap> views, targets;
     ComPtr<ID3D12QueryHeap> queries;
     ComPtr<ID3D12Resource> stamps;
@@ -2247,6 +2259,7 @@ struct HistoryPipeline {
     unsigned parity{};
     bool ready{}, valid{}; // valid: pictures[*][parity] hold `shown`
     std::array<eye_history::EyeView, 2> shown{};
+    std::array<float, 2> shownJitter{}; // 0.0.76 JITTER CHECK: eye 0's step in `shown`
 } history;
 const char* historyShader = R"(
 Texture2D current : register(t0);
@@ -2316,6 +2329,11 @@ Texture2D current : register(t0);
 Texture2D previous : register(t1);
 SamplerState bilinear : register(s0);
 cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 extra; };
+#ifdef TAA_COUNT
+// 0.0.76 TAA JITTER (read-only): this eye's counts, [0] the pixels with a history to blend, [1] those the clip moved
+// (one pixel in 16 x 16). The picture is the same with or without it.
+RWByteAddressBuffer counts : register(u1); // u0 shares its slot with SV_Target0 in ps_5_0
+#endif
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
@@ -2382,6 +2400,13 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     const float most = max(units.x, max(units.y, units.z));
     if (most > 1)
         before = centre + offset / most;
+#ifdef TAA_COUNT
+    if (((p.x | p.y) & 15) == 0) {
+        counts.InterlockedAdd(0, 1);
+        if (most > 1)
+            counts.InterlockedAdd(4, 1);
+    }
+#endif
     const float keep = saturate(extra.x);
     const float a = (1 - keep) / (1 + middle.x), b = keep / (1 + before.x);
     const float3 mixed = (middle * a + before * b) / max(a + b, 1e-6);
@@ -2532,6 +2557,119 @@ bool prepareHistory() {
     history.valid = false;
     return true;
 }
+// 0.0.76 TAA JITTER: SPIDY TAA's TAA_COUNT variant (the same picture, plus the rejection counts). Built once in its
+// mode; a failure only leaves the counts out (taaCountFault), the TAA goes on through history.taa.
+std::atomic<uint32_t> taaCountFault{};
+std::atomic<uint32_t> taaJitterModeNow{}; // SpidyVrTaaJitter: taa_jitter::Mode, on (the default)
+std::atomic<uint32_t> taaStillMilli{};    // SpidyVrTaaStill: 0 the build's still share, else 600-990 thousandths
+bool prepareTaaCount() {
+    if (taaCountFault.load())
+        return false;
+    if (history.taaCount)
+        return true;
+    const auto fail = [](uint32_t code) {
+        history.countRoot.Reset();
+        history.taaCount.Reset();
+        history.counts.Reset();
+        history.countRead.Reset();
+        history.countData = nullptr;
+        taaCountFault = code;
+        char line[96];
+        std::snprintf(line, sizeof line, "SpidyVR: 0.0.76 TAA JITTER counts off (%u), SPIDY TAA as before\n", code);
+        OutputDebugStringA(line);
+        return false;
+    };
+    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, 0};
+    D3D12_ROOT_PARAMETER parameters[3]{};
+    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    parameters[0].DescriptorTable = {1, &range};
+    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[1].Constants.Num32BitValues = 16;
+    parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    parameters[2].Descriptor = {1, 0}; // u1: the counts
+    parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    D3D12_ROOT_SIGNATURE_DESC rs{3, parameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    ComPtr<ID3DBlob> signature, error, vs, ps;
+    if (FAILED(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error)) ||
+        FAILED(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
+                                           IID_PPV_ARGS(&history.countRoot))))
+        return fail(1);
+    const D3D_SHADER_MACRO defines[] = {{"TAA_COUNT", "1"}, {nullptr, nullptr}};
+    const auto length = std::strlen(taaShader);
+    if (FAILED(D3DCompile(taaShader, length, "spidy_taa_count", defines, nullptr, "vs", "vs_5_0",
+                          D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &vs, &error)) ||
+        FAILED(D3DCompile(taaShader, length, "spidy_taa_count", defines, nullptr, "ps", "ps_5_0",
+                          D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &ps, &error)))
+        return fail(2);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC d{};
+    d.pRootSignature = history.countRoot.Get();
+    d.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    d.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    d.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    d.NumRenderTargets = 1;
+    d.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    d.SampleDesc.Count = 1;
+    d.SampleMask = UINT_MAX;
+    d.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    d.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    d.RasterizerState.DepthClipEnable = TRUE;
+    auto& blend = d.BlendState.RenderTarget[0];
+    blend.SrcBlend = blend.SrcBlendAlpha = D3D12_BLEND_ONE;
+    blend.DestBlend = blend.DestBlendAlpha = D3D12_BLEND_ZERO;
+    blend.BlendOp = blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.taaCount))))
+        return fail(3);
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width = 16 * history.countLast.size();
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    auto uav = buffer;
+    uav.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    D3D12_HEAP_PROPERTIES readback{};
+    readback.Type = D3D12_HEAP_TYPE_READBACK;
+    void* mapped{};
+    // A committed DEFAULT buffer starts zeroed: the counts are running totals, read as differences.
+    if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &uav, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                               IID_PPV_ARGS(&history.counts))) ||
+        FAILED(device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
+                                               D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                               IID_PPV_ARGS(&history.countRead))) ||
+        FAILED(history.countRead->Map(0, nullptr, &mapped)))
+        return fail(4);
+    history.countData = static_cast<const volatile uint32_t*>(mapped);
+    history.countLast = {};
+    history.counted = {};
+    return true;
+}
+// 0.0.76 TAA JITTER: the slot's counts (its list is done) into the running TAA WATCH window.
+void noteHistoryCount(size_t slot) {
+    if (slot >= history.counted.size() || !history.counted[slot] || !history.countData)
+        return;
+    history.counted[slot] = false;
+    uint32_t now[4]{};
+    for (unsigned k = 0; k < 4; ++k)
+        now[k] = history.countData[4 * slot + k];
+    auto& last = history.countLast[slot];
+    const uint32_t sampled = (now[0] - last[0]) + (now[2] - last[2]), clipped = (now[1] - last[1]) + (now[3] - last[3]);
+    for (unsigned k = 0; k < 4; ++k)
+        last[k] = now[k];
+    std::lock_guard lock(watchLock);
+    taa_watch::noteRejection(SpidyTaaWatchData.current, history.countStill[slot], sampled, clipped);
+}
 void noteHistoryTime(size_t slot) {
     if (!history.timed[slot] || !history.stampData)
         return;
@@ -2582,11 +2720,13 @@ void resolveEyeTime(ID3D12GraphicsCommandList* list, size_t slot, uint64_t seria
     eyeTimes.marks[ring] = 0; // read once
     eyeTimes.timed[slot] = true;
 }
-bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out) {
+bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out, NotedViews* noted = nullptr) {
     std::lock_guard lock(viewLock);
-    for (const auto& noted : notedViews)
-        if (noted.serial == serial && serial) {
-            out = noted.eyes;
+    for (const auto& n : notedViews)
+        if (n.serial == serial && serial) {
+            out = n.eyes;
+            if (noted)
+                *noted = n;
             return true;
         }
     return false;
@@ -2596,13 +2736,20 @@ bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out) {
 // image and kept for the next pair.
 void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) {
     std::array<eye_history::EyeView, 2> now{};
-    const bool viewed = findViews(serial, now);
+    NotedViews noted{};
+    const bool viewed = findViews(serial, now, &noted);
+    // 0.0.76 JITTER CHECK (read-only): with a still head, eye 0's step now and last pair and the turn's shift of
+    // the eye's centre, both in eye pixels (taa_watch::noteJitterCheck).
+    const std::array<float, 2> jitterBefore = history.shownJitter;
+    bool jitterChecked = false;
+    float jitterShift[2]{};
     const uint32_t percent = historyNow(), loosenPercent = historyPercent.load(), trail = trailPercent.load();
     float frame[2][16]{};
     const bool ours = spidyTaaNow() && history.taa;
     bool blended = false, cut = false, moving = false;
     float maxTravel = 0, leastKeep = 1, leastStill = 0;
     bool watchStill = false, watchEased = false; // 0.0.76 TAA WATCH (eye 0, as `moving`)
+    const uint32_t stillMilli = taaStillMilli.load(std::memory_order_relaxed); // 0.0.76 TAA STILL (0: the build's)
     static int64_t watchQpc{};
     const int64_t watchNow = qpcNow();
     const float watchSeconds = watchQpc ? static_cast<float>(qpcMs(watchQpc, watchNow) / 1000.0) : 0.f;
@@ -2623,6 +2770,8 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         float keep = eye_history::movedWeight(still, travelCut, turnCut, trail);
         if (ours) // 0.0.76 SPIDY TAA (vr_aa.hpp): eased, not cut, while moving; the clip keeps it from ghosting
             keep = vr_aa::keep(both, turn, travel);
+        if (ours) // 0.0.76 TAA STILL (live.txt vr_taa_still): the still share only, unset the build's own
+            keep = taa_still::withStill(keep, stillMilli);
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 frame[i][r * 4 + c] = h[r * 3 + c];
@@ -2649,7 +2798,13 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
             leastKeep = keep;
             leastStill = ours ? keep : still; // SPIDY TAA: JITTER CALM keeps the full step while anything is kept
             watchStill = taa_watch::stillHead(turn, travel, watchSeconds);
-            watchEased = keep > 0 && keep < (ours ? vr_aa::keepStill : still) - 1e-4f;
+            const float qz = h[6] * .5f + h[7] * .5f + h[8];
+            if (watchStill && noted.size[0] && noted.size[1] && qz > 1e-5f) {
+                jitterShift[0] = ((h[0] * .5f + h[1] * .5f + h[2]) / qz - .5f) * static_cast<float>(noted.size[0]);
+                jitterShift[1] = ((h[3] * .5f + h[4] * .5f + h[5]) / qz - .5f) * static_cast<float>(noted.size[1]);
+                jitterChecked = true;
+            }
+            watchEased = keep > 0 && keep < (ours ? taa_still::share(stillMilli) : still) - 1e-4f;
         }
     }
     const unsigned read = history.parity, write = 1 - read;
@@ -2668,8 +2823,17 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                    D3D12_RESOURCE_STATE_RENDER_TARGET);
     }
     originalBarrier(list, 4, b);
-    list->SetPipelineState(ours ? history.taa.Get() : history.state.Get());
-    list->SetGraphicsRootSignature(history.root.Get());
+    // 0.0.76 TAA JITTER: the same TAA with the rejection counts when its variant is built (else as before).
+    const bool counting = ours && slot < history.counted.size() && prepareTaaCount();
+    D3D12_RESOURCE_BARRIER countBarrier{};
+    countBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    if (counting) {
+        countBarrier.Transition = {history.counts.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                   D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
+        originalBarrier(list, 1, &countBarrier);
+    }
+    list->SetPipelineState(counting ? history.taaCount.Get() : ours ? history.taa.Get() : history.state.Get());
+    list->SetGraphicsRootSignature(counting ? history.countRoot.Get() : history.root.Get());
     ID3D12DescriptorHeap* heaps[] = {history.views.Get()};
     list->SetDescriptorHeaps(1, heaps);
     const D3D12_VIEWPORT viewport{0, 0, static_cast<float>(outWidth), static_cast<float>(outHeight), 0, 1};
@@ -2686,6 +2850,8 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         target.ptr += static_cast<SIZE_T>(targetStep) * (2 * i + write);
         list->SetGraphicsRootDescriptorTable(0, view);
         list->SetGraphicsRoot32BitConstants(1, 16, frame[i], 0);
+        if (counting)
+            list->SetGraphicsRootUnorderedAccessView(2, history.counts->GetGPUVirtualAddress() + 16 * slot + 8 * i);
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
@@ -2696,6 +2862,17 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
                    D3D12_RESOURCE_STATE_COPY_SOURCE);
     }
     originalBarrier(list, 4, b);
+    if (counting) { // 0.0.76 TAA JITTER: this slot's counts to its readback, back to COMMON
+        countBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        countBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        originalBarrier(list, 1, &countBarrier);
+        list->CopyBufferRegion(history.countRead.Get(), 16 * slot, history.counts.Get(), 16 * slot, 16);
+        countBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        countBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+        originalBarrier(list, 1, &countBarrier);
+        history.counted[slot] = true;
+        history.countStill[slot] = watchStill;
+    }
     for (unsigned i = 0; i < 2; ++i)
         list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
     for (unsigned i = 0; i < 2; ++i) {
@@ -2721,6 +2898,7 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     // the next pair's: that one starts again.
     history.valid = viewed;
     history.shown = now;
+    history.shownJitter = noted.jitter;
     std::lock_guard lock(copyTimingLock);
     if (blended)
         ++SpidyEyeHistoryData.blended;
@@ -2744,6 +2922,12 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         static uint64_t windowStart{};
         taa_watch::roll(SpidyTaaWatchData, windowStart, GetTickCount64());
         taa_watch::notePair(SpidyTaaWatchData.current, !blended, moving, watchEased, watchStill);
+        SpidyTaaWatchData.current.setup =
+            taa_watch::setupWith(SpidyTaaWatchData.current.setup, taaJitterModeNow.load(std::memory_order_relaxed),
+                                 ours ? static_cast<uint32_t>(taa_still::share(stillMilli) * 1000.f + .5f) : 0u);
+        if (jitterChecked) // 0.0.76 JITTER CHECK
+            taa_watch::noteJitterCheck(SpidyTaaWatchData.current, noted.jitter.data(), jitterBefore.data(),
+                                       jitterShift);
     }
 }
 // 0.0.76 SPIDY TAA (vr_aa.hpp): SMAA 1x per eye (spidy/smaa: Jimenez et al.'s SMAA.hlsl, preset HIGH, luma edges),
@@ -3213,6 +3397,7 @@ void stagePair(EyePairState::Stamp stamp) {
     const auto index = static_cast<size_t>(slot - captureCommands.data());
     noteAaTime(index);
     noteHistoryTime(index);
+    noteHistoryCount(index); // 0.0.76 TAA JITTER
     noteSmaaTime(index);
     noteEyeTime(index); // 0.0.76 TAA WATCH
     // Supersampled eyes cannot be copied: they are always filtered down,
@@ -4164,6 +4349,9 @@ void setVrAa(uint32_t mode) {
 uint32_t vrAa() {
     return vrAaMode.load();
 }
+uint32_t taaJitterMode() {
+    return taaJitterModeNow.load(std::memory_order_relaxed);
+}
 bool vrAaLocks() {
     return vrAaLocked();
 }
@@ -4463,9 +4651,10 @@ float eyeHistoryMs() { // Update 35: the median of the last 31 passes (was the n
     std::lock_guard lock(historyMedianLock);
     return historyMedian.median();
 }
-void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views) {
+void noteEyeViews(uint64_t serial, const std::array<eye_history::EyeView, 2>& views, float jitterX, float jitterY,
+                  uint32_t width, uint32_t height) {
     std::lock_guard lock(viewLock);
-    notedViews[nextNoted] = {serial, views};
+    notedViews[nextNoted] = {serial, views, {jitterX, jitterY}, {width, height}};
     nextNoted = (nextNoted + 1) % notedViews.size();
     // Update 37.2: each lens's centre for FOVEATED (its straight-ahead point in the eye image).
     for (unsigned i = 0; i < 2; ++i) {
@@ -4955,6 +5144,33 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyMonitorRate(void* rate) {
 }
 // Eye anti-aliasing now (live.txt "aa"): 0 off, 1 FXAA. Takes effect with the
 // next eye pair; refused (3960) for another value.
+// 0.0.76 TAA JITTER (live.txt vr_taa_jitter, a diagnostic; taa_jitter.hpp): 0 on (the default), 1 off, 2 fixed,
+// 3 half - our own Halton lens step (game_xr's eye_taa::step) only; SPIDY TAA and each eye's history go on with
+// whatever lens results. Live; refused (4611) above 3. Never touches the game's jitter (vr_jitter / vr_game_jitter).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrTaaJitter(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v >= taa_jitter::modes)
+        return 4611;
+    native_gpu::taaJitterModeNow = static_cast<uint32_t>(v);
+    char line[96];
+    std::snprintf(line, sizeof line, "SpidyVR: 0.0.76 TAA JITTER %s (vr_taa_jitter)\n",
+                  taa_jitter::name(static_cast<uint32_t>(v)));
+    OutputDebugStringA(line);
+    return 0;
+}
+// 0.0.76 TAA STILL (live.txt vr_taa_still, taa_still.hpp): SPIDY TAA's still share in thousandths, 600-990 (0.60-0.99),
+// or 0 for this build's own (0.9; C-still094 0.94). Live; refused (4612) otherwise. The moving share is unchanged.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyVrTaaStill(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > taa_still::highest || !taa_still::valid(static_cast<uint32_t>(v)))
+        return 4612;
+    native_gpu::taaStillMilli = static_cast<uint32_t>(v);
+    char line[96];
+    std::snprintf(line, sizeof line, "SpidyVR: 0.0.76 TAA STILL %.2f (vr_taa_still%s)\n",
+                  taa_still::share(static_cast<uint32_t>(v)), v ? "" : " unset: the build's own");
+    OutputDebugStringA(line);
+    return 0;
+}
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyEyeAA(void* mode) {
     return native_gpu::setEyeAA(static_cast<uint32_t>(std::min<uintptr_t>(reinterpret_cast<uintptr_t>(mode), 2)))
                ? 0

@@ -33,7 +33,7 @@ crawls when nothing moves; a sharp/blurry pulse every few frames; ghosting on bi
 | `vr_aa` | `ours` | 0.0.76 SPIDY TAA: our own per-eye TAA (below), the game's AA at TAA with no upscaler (AA 2, UpscaleMethod 0, CONFIRMED in 31 reports, docs/AA-0.0.73.md) only so DLAA/DLSS/FSR stay off the eyes; `keep` our TAA with the player's AA; `smaa` SMAA per eye; `game` the SM1STYLE picture (or 0.0.72 with sm1style = off) |
 | `vr_textures` | `high` | Texture Quality at least High (2) and Texture Filtering 16x (4), only raised; `keep` leaves them |
 | `vr_render` | `native` | SM1STYLE's eyes at 100%, the game's TAA with no upscaling; `upscaled` is SpidyVR's 67% |
-| `vr_ss` | `off` | 0.0.76: `125` / `150` render the eyes that much larger per side, filtered down (Mitchell-Netravali, linear light) before SPIDY TAA; about 1.5x / 2.25x the GPU work, so off by default (509bdc9's run was GPU-bound at 45 new pictures/s) |
+| `vr_ss` | `125` in the B-ss125 test (`off` otherwise) | 0.0.76: `125` / `150` render the eyes that much larger per side, filtered down (Mitchell-Netravali, linear light) before SPIDY TAA; about 1.5x / 2.25x the GPU work, so off by default (509bdc9's run was GPU-bound at 45 new pictures/s) |
 
 And: where the game's AA will not be TAA (vr_aa = keep with DLSS), SM1STYLE keeps the launcher's mip bias (+0.5)
 instead of DLSS's -2.0.
@@ -206,3 +206,9 @@ still head <n> (<%> classed moving)`, and the report's `taa_watch` keeps up to 9
   DEPTH_WRITE inside each eye job's G-buffer pass: which resource each eye used, whether both eyes' jobs had one,
   whether the same one served both, and whether it ever left DEPTH_WRITE with no eye job open (the flat view).
   CONFIRMED only with 200 pairs, at least 90% with both eyes and never the flat view; otherwise CANDIDATE.
+
+### B-ss125 (0.0.76 test build): vr_ss 125 by default, SPIDY TAA unchanged
+
+The only change from the TAA WATCH build: no vr_ss line now means 125 (`vr_ss = 100` or `off` in live.txt is the
+headset's size again, next VR start). Rule: compare TAA WATCH's "eye ms" (GPU ms a pair) with a run of the A or C
+build (vr_ss 100); if 125 costs more than 2 ms a pair, the default goes back to 100.

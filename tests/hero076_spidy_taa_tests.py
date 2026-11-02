@@ -69,12 +69,12 @@ class Launcher(unittest.TestCase):
         line = r.apply_sm1style(a, None)
         self.assertEqual((a.vr_aa, a.sm1style), ('ours', False))
         self.assertEqual((a.render_scale, a.supersample, a.upscale, a.mip_bias, a.anisotropy),
-                         (100, 100, 100, 'game', 0))  # 9aaedd5's -0.5 taken back: 509bdc9's picture
+                         (100, 125, 100, 'game', 0))  # 509bdc9's picture; 0.0.76 B-ss125: 125 by default
         self.assertFalse(a.game_sharpening or a.engine_taa or a.no_eye_antialiasing)
         self.assertIn('SPIDY TAA', line)
         self.assertIn("the game's mip bias", line)
         self.assertNotIn('RCAS', line)
-        self.assertNotIn('supersampled', line)
+        self.assertIn('supersampled 125%', line)  # 0.0.76 B-ss125
         self.assertIn('vr_aa = smaa', line)
         self.assertEqual(r.vr_aa_options(a), 0)
 
@@ -118,8 +118,10 @@ class Tune(unittest.TestCase):
     looser clip, 10-bit history, RCAS and mip -0.5 taken back); kept: live.txt vr_ss (off by default) and the report's
     last vr_aa / jitter_log records."""
     def test_vr_ss_choices(self):
-        for text in (None, '', 'vr_ss = junk\n', 'vr_ss = off\n', 'vr_ss = 100\n', 'vr_ss = 0\n'):
+        for text in ('vr_ss = off\n', 'vr_ss = 100\n', 'vr_ss = 0\n'):
             self.assertEqual(L.vr_supersample(text), 100)
+        for text in (None, '', 'vr_ss = junk\n'):  # 0.0.76 B-ss125: 125 by default
+            self.assertEqual(L.vr_supersample(text), 125)
         self.assertEqual(L.vr_supersample('vr_ss = 125\n'), 125)
         self.assertEqual(L.vr_supersample('vr_ss = 1\n'), 125)
         self.assertEqual(L.vr_supersample('vr_ss = 150\n'), 150)

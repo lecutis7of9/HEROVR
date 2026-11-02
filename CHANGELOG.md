@@ -6,6 +6,10 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **B-ss125 test build:** the eyes render at 125% per side by default (filtered down before SPIDY TAA, which is
+  unchanged) - to see whether windows and fine building detail alias less, and what it costs. TAA WATCH's "eye ms"
+  is the cost; over 2 ms a pair more than the 100% builds means it goes back to 100. `vr_ss = 100` in live.txt is the
+  old size (next VR start); nothing else to set.
 - **TAA WATCH (read-only, in every 0.0.76 A/B/C test build):** the console prints a line every 10 seconds with the
   eye fps, the GPU time a pair (the game's two eye jobs, timed at their own begin and end markers, and SPIDY TAA's own
   pass) and the still / moving split, including how many pairs with a still head were treated as moving (over 20%

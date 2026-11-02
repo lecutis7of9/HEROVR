@@ -172,8 +172,9 @@ SETTINGS = {
                  'time VR starts'),
     # 0.0.76 SPIDY TAA TUNE (tools/run_game_vr.py apply_vr_aa): the eyes rendered larger and filtered down before our
     # TAA; off by default (the 509bdc9 run was GPU-bound at 45 new pictures/s on a 90 Hz headset: no headroom).
-    'vr_ss': ((0, 1, 2), None, "VR SS {} (0 off: the eyes at the headset's size, the default; 1 125: the eyes "
-             "rendered at 125% per side and filtered down before SpidyVR's TAA, smoother windows but about a third "
+    # 0.0.76 B-ss125 (test build): 125 the default, to measure its GPU ms a pair against 100 (over 2 ms: back to 100).
+    'vr_ss': ((0, 1, 2), None, "VR SS {} (0 off: the eyes at the headset's size; 1 125: the default in this test, the "
+             "eyes rendered at 125% per side and filtered down before SpidyVR's TAA, smoother windows but about a third "
              "more GPU work; 2 150: 150% per side, about twice the GPU work, only with frame rate to spare) - RESTART "
              'NOTICE: takes effect the next time VR starts'),
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
@@ -487,8 +488,9 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'vr_render': 'RESTART NOTICE: vr_render takes effect the next time VR starts (native: the eyes at 100%, '
                         "no upscaling; upscaled: SpidyVR's 67%).",
            # 0.0.76 SPIDY TAA TUNE: the eye supersample is set when VR starts
-           'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 125 or '
-                    '150: the eyes rendered larger and filtered down, smoother but heavier on the GPU).',
+           'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off or 100: the headset\'s size; 125, '
+                    'the default in this test, or 150: the eyes rendered larger and filtered down, smoother but '
+                    'heavier on the GPU).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
            # 0.0.76 LIGHTS LOCK: VR always turns them off; the value is only the flat game's
            'lens_flares': 'NOTICE: lens_flares stays off in VR for every hero (0.0.76); GAME only keeps the flat game\'s own setting.',
@@ -2074,8 +2076,8 @@ def vr_textures_high(text):
 
 def vr_supersample(text):
     """0.0.76 SPIDY TAA TUNE: the eye supersample percent live.txt `text` asks for with vr_ss (None: no live.txt):
-    100 (off, the default), 125 or 150. Never raises."""
-    return {'125': 125, '150': 150}.get(_start_choice(text, 'vr_ss', 'off'), 100)
+    100 (off or 100), 125 (the default in the 0.0.76 B-ss125 test build) or 150. Never raises."""
+    return {'125': 125, '150': 150}.get(_start_choice(text, 'vr_ss', '125'), 100)  # 0.0.76 B-ss125: 125 by default
 
 
 def vr_render_upscaled(text):

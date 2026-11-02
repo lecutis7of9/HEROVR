@@ -67,7 +67,7 @@ inline uint32_t depthVerdict(const DepthLog& d) {
     return candidate;
 }
 // Which build this is (Data.build): 0 the shared logger only, 1 A-depth, 2 B-ss125, 3 C-still094.
-inline constexpr uint32_t thisBuild = 0;
+inline constexpr uint32_t thisBuild = 2; // B-ss125
 struct Data {
     uint32_t magic = 0x44575453; // STWD
     uint32_t version = 1;

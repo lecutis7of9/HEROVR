@@ -118,6 +118,8 @@
 #include "spidy/vr_aa.hpp"
 #include "spidy/taa_watch.hpp"
 #include "spidy/taa_depth.hpp"
+#include "spidy/taa_jitter.hpp"
+#include "spidy/taa_still.hpp"
 #include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
@@ -36916,6 +36918,66 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(!td::active(0, true) && td::active(1, false) && !td::active(2, false) && td::active(2, true) &&
                   !td::active(3, true) && td::automatic == 2,
               "0 off, 1 on, 2 auto: on only once the eye depth is CONFIRMED");
+    });
+    test("0.0.76 TAA JITTER / TAA STILL: our own step's modes, the still share only, the rejection counts", [] {
+        namespace tj = spidy::taa_jitter;
+        namespace ts = spidy::taa_still;
+        namespace tw = spidy::taa_watch;
+        float x = 1, y = 1, ex{}, ey{};
+        check(!tj::step(tj::off, 5, x, y) && x == 0 && y == 0, "off: no step");
+        spidy::eye_taa::step(5, ex, ey);
+        check(tj::step(tj::on, 5, x, y) && x == ex && y == ey, "on: the walk as before");
+        check(tj::step(tj::half, 5, x, y) && x == ex * .5f && y == ey * .5f, "half: the same walk at half size");
+        spidy::eye_taa::step(1, ex, ey);
+        float fx{}, fy{};
+        check(tj::step(tj::fixed, 5, x, y) && tj::step(tj::fixed, 9, fx, fy) && x == ex && y == ey && fx == x &&
+                  fy == y && (x != 0 || y != 0),
+              "fixed: one constant offset");
+        check(ts::withStill(.9f, 0) == .9f && ts::withStill(0, 970) == 0 && ts::share(0) == spidy::vr_aa::keepStill,
+              "unset: the build's own; a cut stays a cut");
+        const float still = ts::withStill(spidy::vr_aa::keepStill, 970), moving = ts::withStill(spidy::vr_aa::keepMoving, 970);
+        check(std::abs(still - .97f) < 1e-5f && std::abs(moving - spidy::vr_aa::keepMoving) < 1e-5f,
+              "the still share only: the moving share unchanged");
+        check(!ts::valid(599) && !ts::valid(991) && ts::valid(600) && ts::valid(990), "0.60-0.99");
+        tw::Window w;
+        tw::noteRejection(w, true, 100, 5);
+        tw::noteRejection(w, false, 100, 30);
+        tw::noteRejection(w, true, 10, 20); // not one pair's counts
+        check(w.countedPairs == 2 && w.stillSampled == 100 && w.stillClipped == 5 && w.movingClipped == 30,
+              "rejection split by a still head");
+        uint32_t setup = tw::setupWith(0, tj::half, 970);
+        setup = tw::setupWith(setup, tj::on, 0);
+        check(setup == (1u << tj::half | 1u << tj::on | 970u << 16), "the window's jitter modes and still share");
+        // 0.0.76 JITTER CHECK: a still head, the lens moved by last pair's step and this one's - the history turn
+        // (both views' own moved lenses) shifts the eye's centre by the step's change exactly once.
+        const uint32_t width = 2016, height = 2240;
+        auto view = [&](float x, float y) {
+            spidy::eye_history::EyeView v;
+            v.world = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+            float l = -.9f, r = .8f, d = -.95f, u = .85f, dx{}, dy{};
+            spidy::eye_taa::lensShift(l, r, d, u, width, height, x, y, dx, dy);
+            spidy::eye_taa::shiftLens(l, r, d, u, dx, dy);
+            v.tangents = {std::tan(l), std::tan(r), std::tan(d), std::tan(u)};
+            return v;
+        };
+        const float now[2] = {.3f, -.2f}, before[2] = {-.25f, .17f};
+        std::array<float, 9> h{};
+        check(spidy::eye_history::historyReprojection(view(before[0], before[1]), view(now[0], now[1]), h),
+              "the turn");
+        const float qz = h[6] * .5f + h[7] * .5f + h[8];
+        const float shift[2] = {((h[0] * .5f + h[1] * .5f + h[2]) / qz - .5f) * width,
+                                ((h[3] * .5f + h[4] * .5f + h[5]) / qz - .5f) * height};
+        float once[2];
+        tw::jitterShift(now, before, 1, once);
+        check(std::abs(shift[0] - once[0]) < .01f && std::abs(shift[1] - once[1]) < .01f,
+              "the history turn counts the step once");
+        tw::Window j;
+        tw::noteJitterCheck(j, now, before, shift);
+        check(j.jitterPairs == 1 && tw::jitterCounted(j) == 1 && j.shift[0] == shift[0], "the check says once");
+        const float none[2] = {0, 0};
+        tw::Window k;
+        tw::noteJitterCheck(k, none, none, none);
+        check(tw::jitterCounted(k) == -1 && tw::jitterCounted(tw::Window{}) == -1, "no step: not known");
     });
     test("0.0.76 SPIDY TAA: the modes, the option bits, the eased history share and the clip", [] {
         namespace va = spidy::vr_aa;

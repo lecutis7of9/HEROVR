@@ -22,6 +22,16 @@ From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not ye
   means the thresholds are wrong, not the blend). It also logs the eye depth (fmt 19 at the eye's size) for the first
   200 pairs and says CONFIRMED or CANDIDATE. All of it is in the report's `taa_watch`. Nothing to set; no picture
   changes.
+- **Tests for the far windows that swim with a still head (in every 0.0.76 A/B/C test build):** each line goes in
+  live.txt, takes effect at once, and can be changed between runs; without them nothing changes. `vr_taa_jitter =
+  on` (the default) / `off` / `fixed` / `half` changes only our own sub-pixel step (off: none; fixed: one constant
+  offset; half: the same 16 steps at half size) - our TAA and each eye's history keep running, the game's jitter is
+  untouched. `vr_taa_still = 0.97` changes only how much of the old picture is kept while the head is still (this
+  build's own when unset: 0.9, C-still094 0.94; the moving share stays 0.6). TAA WATCH's 10-second lines now also
+  give the history rejection - the share of pixels the TAA's colour clip had to correct - with the head still and
+  moving, and which vr_taa_jitter / vr_taa_still the window ran with. And a JITTER CHECK with the head still: our
+  step this pair and last, how far the TAA moved its history to line it up (in pixels), and whether that counts the
+  step none, once or twice (once is right; the code does it once).
 - **SPIDY TAA back to 509bdc9's picture:** test 9aaedd5's tune (a longer average, a looser colour clip, a 10-bit
   history, a mild sharpen after the TAA and texture mip bias -0.5) brought the line crawl back, so all of it is taken
   back: the eyes get exactly 509bdc9's TAA again, which fixed the shake. Nothing to change in live.txt. Kept, off by

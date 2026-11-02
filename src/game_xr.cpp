@@ -2213,6 +2213,7 @@ DWORD WINAPI run(void*) {
         fly076::YHold fly076Y;
         fly076::Sonic fly076Sonic;
         fly076::BodyRoll fly076Roll;
+        fly076::RollFrame fly076Frame; // 0.0.76 roll fix: the roll's locked axis, turn and near plane
         uint32_t fly076Asks = 0, fly076Descends = 0;
         bool fly076Flying{}, fly076Flyer{};
         // HERO VR 0.0.76 WALLS: after a kick off the game's crawl the walk stick points away from the wall.
@@ -4838,17 +4839,49 @@ DWORD WINAPI run(void*) {
                                 const bool flying076 = flyModeNow.load() != 0 && flyNow.flying && gameplay;
                                 const bool upright = fly076Y.update(frame.seconds, flying076 && !calibrationInput,
                                                                     (frame.buttons & buttonY) != 0);
+                                // 0.0.76 roll fix: the right stick rolls only while it leans more left / right
+                                // than up / down (fly076::rollStick; the climb takes the other).
                                 const float a = fly076Roll.update(frame.seconds, flying076 && !calibrationInput,
-                                                                  frame.hands[1].stickX,
+                                                                  fly076::rollStick(frame.hands[1].stickX,
+                                                                                    frame.hands[1].stickY),
                                                                   static_cast<float>(flyRollSpeedNow.load()), upright);
-                                Vec3 axis{};
-                                if (flying076 && finite(swingState.velocity) && length(swingState.velocity) > 2.f)
-                                    axis = normalized(swingState.velocity);
-                                rig.flyRollAxis(axis);
-                                rig.flyRoll(std::isfinite(a) ? a : 0.f, flying076);
+                                // 0.0.76 roll fix (run flight-roll-1): the axis locked at the roll's start (the
+                                // flight's way when fast, else the level look then), no longer the head's look or
+                                // the 42 Hz velocity frame to frame; 0 or landed clears it (and the near plane).
+                                const Vec3 lookNow = validTrackedPose(motion.headPose)
+                                                         ? motion.headPose.orientation.rotate(Vec3{0, 0, -1})
+                                                         : Vec3{0, 0, -1};
+                                fly076Frame.update(flying076 && std::isfinite(a) ? a : 0.f,
+                                                   flying076 ? swingState.velocity : Vec3{}, lookNow);
+                                near_clip::boost(fly076Frame.nearClip());
+                                rig.flyRollAxis(fly076Frame.axis());
+                                rig.flyRoll(flying076 && std::isfinite(a) ? a : 0.f, flying076);
                                 rig.flyControls(flying076, upright);
+                                {   // a line a second while rolled: the angle, the axis, the near plane
+                                    static double rollSaid = -10; // seconds on the steady clock; -10: not said
+                                    const double rollClock = std::chrono::duration<double>(
+                                                                 std::chrono::steady_clock::now().time_since_epoch())
+                                                                 .count();
+                                    if (fly076Frame.active() && rollClock - rollSaid >= 1) {
+                                        rollSaid = rollClock;
+                                        const Vec3 ax = fly076Frame.axis();
+                                        char line[160];
+                                        sprintf_s(line, "VERSION 0.0.76 FLY ROLL: %.0f deg about (%.2f %.2f %.2f), near %.2f m%s",
+                                                  static_cast<double>(a * 57.29578f), static_cast<double>(ax.x),
+                                                  static_cast<double>(ax.y), static_cast<double>(ax.z),
+                                                  static_cast<double>(near_clip::metres()),
+                                                  fly076Roll.rolling() ? ", stick" : "");
+                                        game_prompts::note(line);
+                                    } else if (!fly076Frame.active() && rollSaid >= 0) {
+                                        rollSaid = -10;
+                                        game_prompts::note(flying076 ? "VERSION 0.0.76 FLY ROLL: level (exactly 0, axis cleared, near plane back)"
+                                                                     : "VERSION 0.0.76 FLY ROLL: landed - level at once (axis cleared, near plane back)");
+                                    }
+                                }
                             } catch (...) {
                                 fly076Roll.reset();
+                                fly076Frame.reset();
+                                near_clip::boost(0.f);
                                 fly076Y.reset();
                                 rig.flyRollAxis({});
                                 rig.flyRoll(0.f, false);
@@ -4859,6 +4892,8 @@ DWORD WINAPI run(void*) {
                             rig.flyRollAxis({});
                             rig.flyControls(false, false);
                             fly076Roll.reset();
+                            fly076Frame.reset();
+                            near_clip::boost(0.f);
                             fly076Y.reset();
                         }
                         if (!new076) try {
@@ -5936,7 +5971,8 @@ DWORD WINAPI run(void*) {
                                         fly_feel::pack(true, enter076, false) |
                                         fly076::pack(true, fly076Flying && (frame.buttons & buttonB) != 0,
                                                      fly076Roll.rolling() || fly076Y.braking(), frame.hands[0].stickY,
-                                                     true, frame.hands[1].stickY);
+                                                     true, fly076::climbStick(frame.hands[1].stickX,
+                                                                              frame.hands[1].stickY));
                             }
                             // Version 0.0.5 SUPERSONIC: both hands out (FORWARD) and the left stick forward
                             // dash at SUPERSONIC SPEED x FAST; its first frame booms (sound + shockwave).
@@ -12971,6 +13007,9 @@ DWORD WINAPI run(void*) {
                                     t.up = normalized(turn.rotate(Vec3{0, 1, 0}));
                                     t.feet = rendered.anchor + travel;
                                     t.eye = rendered.headPose.position + travel;
+                                    // 0.0.76 roll fix: rolled, the body turns with the view about the head (its up
+                                    // already did): the chest stays under the head, not across the view.
+                                    t.feet = fly076::RollFrame::aboutHead(t.eye, t.feet, rendered.flyRollTurn);
                                     // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the suit leans with the flight about
                                     // the eyes, as the game's body does (fly_lean::leanSuit); upright: unchanged.
                                     fly_lean::leanSuit(saved->flyLean, t.eye, t.up, t.feet);
@@ -13287,7 +13326,10 @@ DWORD WINAPI run(void*) {
                                 if (mpOn && !saved->flatScreen && validTrackedPose(rendered.headPose)) {
                                     const Quat turn = trackingTurn(rendered.swing);
                                     const Quat back = turn.conjugate();
-                                    const Vec3 feet = rendered.anchor + travel;
+                                    // 0.0.76 roll fix: the feet turned with the roll about the head, as the suit body's
+                                    const Vec3 feet = fly076::RollFrame::aboutHead(rendered.headPose.position + travel,
+                                                                                   rendered.anchor + travel,
+                                                                                   rendered.flyRollTurn);
                                     // Publish: the eyes and grips in the player's level frame from his feet.
                                     spidy::mp::LocalPose lp;
                                     lp.eye.position = back.rotate(rendered.headPose.position + travel - feet);

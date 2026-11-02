@@ -205,6 +205,88 @@ void rollTests() {
     for (int i = 0; i < 90 * 3; ++i)
         a = r.update(dt, true, 0, 180, true);
     check(std::fabs(a) < 1e-3f, "Y held: rights you");
+    // 0.0.76 roll fix: let go away from level it holds (above); let go near level it IS level, exactly
+    r.reset();
+    for (int i = 0; i < 9; ++i) // 90 Hz, 180 deg/s: 18 deg
+        a = r.update(dt, true, 1, 180, false);
+    check(a > 15 * pi / 180 && a < 20 * pi / 180, "a little roll");
+    const float little = a;
+    for (int i = 0; i < 90; ++i)
+        a = r.update(dt, true, 0, 180, false);
+    check(a == little, "let go at 18 deg: it holds (only within snapDegrees does it level)");
+    for (int i = 0; i < 90 && r.angle() > 4 * pi / 180; ++i)
+        a = r.update(dt, true, -.3f, 180, false); // back toward level, slowly
+    a = r.update(dt, true, 0, 180, false);
+    check(a == 0.f, "let go within snapDegrees of level: exactly 0");
+    // landing: level at once, not at 180 deg/s
+    for (int i = 0; i < 60; ++i)
+        r.update(dt, true, 1, 180, false);
+    check(std::fabs(r.angle()) > 1, "rolled well over");
+    check(r.update(dt, false, 0, 180, false) == 0.f && !r.rolling(), "landed: exactly level the same frame");
+}
+
+bool near(Vec3 a, Vec3 b, float e = 1e-4f) {
+    return std::fabs(a.x - b.x) < e && std::fabs(a.y - b.y) < e && std::fabs(a.z - b.z) < e;
+}
+
+void rollFrameTests() {
+    const float pi = 3.14159265f;
+    const Vec3 head{1, 2, 3}, chest{1, 1.7f, 3}; // the chest 30 cm under the head
+    const Vec3 ahead{0, 0, -1};
+    RollFrame f;
+    // 90 deg: the chest swings out to the side, level with the head; the head never moves
+    Quat q = f.update(pi / 2, {}, ahead);
+    Vec3 c = RollFrame::aboutHead(head, chest, q);
+    check(near(c - head, {.3f, 0, 0}) || near(c - head, {-.3f, 0, 0}), "90 deg: the chest beside the head");
+    check(near(RollFrame::aboutHead(head, head, q), head), "90 deg: the head stays where it is");
+    check(f.nearClip() > 0, "90 deg: the near plane steps out");
+    // 180 deg: upside down (facing the clouds), the chest ABOVE the head - out of the view looking up
+    q = f.update(pi, {}, {0, .9f, -.1f}); // the look moved: the axis stays locked
+    c = RollFrame::aboutHead(head, chest, q);
+    check(near(c - head, {0, .3f, 0}), "180 deg: the chest above the head");
+    check(near(f.axis(), ahead), "the axis is locked from the roll's start (no swimming with the head)");
+    check(f.nearClip() == RollFrame::clipMetres, "180 deg: the near plane out");
+    // quaternions: past 90 deg nothing flips - a smooth sweep keeps every step small
+    Vec3 last = chest;
+    float most = 0;
+    for (int i = 0; i <= 360; ++i) {
+        const Vec3 now = RollFrame::aboutHead(head, chest, f.update(i * pi / 180, {}, ahead));
+        most = std::max(most, length(now - last));
+        last = now;
+    }
+    check(most < .3f * pi / 180 * 1.01f, "0-360 deg: one smooth circle, no gimbal jump");
+    // 360 deg: home again exactly as at 0
+    q = f.update(2 * pi, {}, ahead);
+    check(near(RollFrame::aboutHead(head, chest, q), chest), "360 deg: the chest back under the head");
+    check(near(q.rotate({0, 1, 0}), {0, 1, 0}), "360 deg: up is up");
+    // hysteresis: the near plane comes back only under clipOffDegrees
+    f.update(pi, {}, ahead);
+    f.update(70 * pi / 180, {}, ahead);
+    check(f.nearClip() > 0, "70 deg on the way back: still out");
+    f.update(50 * pi / 180, {}, ahead);
+    check(f.nearClip() == 0, "50 deg: NEAR CLIP's own again");
+    // the return to 0: a clean identity, the axis cleared, nothing left over
+    q = f.update(0, {}, ahead);
+    check(q.x == 0 && q.y == 0 && q.z == 0 && q.w == 1, "0: the identity, exactly");
+    check(!f.active() && f.nearClip() == 0 && near(RollFrame::aboutHead(head, chest, f.turn()), chest),
+          "0: axis cleared, near plane back, the body under the head");
+    // a new roll after 0 takes the look then; fast flight takes the flight's way
+    f.update(.5f, {}, {1, 0, 0});
+    check(near(f.axis(), {1, 0, 0}), "a new roll: the look at its start");
+    f.update(.5f, {0, 0, 20}, {1, 0, 0});
+    check(near(f.axis(), {0, 0, 1}), "fast: about the flight's way");
+    f.update(.5f, {0, 0, 2}, {1, 0, 0});
+    check(near(f.axis(), {0, 0, 1}), "slowing: the last way kept");
+    // BodyRoll + RollFrame: landing clears both the same frame
+    BodyRoll r;
+    for (int i = 0; i < 90; ++i)
+        f.update(r.update(dt, true, 1, 180, false), {}, ahead);
+    check(f.active(), "rolled");
+    q = f.update(r.update(dt, false, 0, 180, false), {}, ahead);
+    check(q.w == 1 && !f.active() && f.nearClip() == 0, "landed: identity the same frame");
+    // the right stick: roll or climb, not both
+    check(climbStick(.5f, .32f) == 0 && rollStick(.5f, .32f) == .5f, "rolling: no climb");
+    check(climbStick(.1f, .8f) == .8f && rollStick(.1f, .8f) == 0, "climbing: no roll");
 }
 
 void pushOffTests() {
@@ -224,6 +306,7 @@ int main() {
     flightTests();
     hoverTests();
     rollTests();
+    rollFrameTests();
     pushOffTests();
     if (failures) {
         std::printf("%d fly076 checks failed\n", failures);

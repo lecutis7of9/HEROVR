@@ -66,8 +66,13 @@ std::atomic<float> nearClip{.02f};
 void spidy::near_clip::set(int millimetres) {
     nearClip.store(static_cast<float>(std::clamp(millimetres, 10, 100)) / 1000, std::memory_order_relaxed);
 }
+std::atomic<float> nearClipBoost{0.f};
+void spidy::near_clip::boost(float metres) {
+    // Only 0 or a fixed step (RollFrame::clipMetres, hysteresis there): the lens changes on a crossing, not each frame.
+    nearClipBoost.store(std::isfinite(metres) ? std::clamp(metres, 0.f, .3f) : 0.f, std::memory_order_relaxed);
+}
 float spidy::near_clip::metres() {
-    return nearClip.load(std::memory_order_relaxed);
+    return std::max(nearClip.load(std::memory_order_relaxed), nearClipBoost.load(std::memory_order_relaxed));
 }
 // RECORDING FOV's angle (recording_fov.hpp), degrees, 0 for off: the XR
 // worker sets it, each frame's rest and the game's view's lens read it.

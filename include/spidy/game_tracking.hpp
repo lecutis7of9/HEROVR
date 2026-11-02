@@ -57,6 +57,9 @@ struct GameMotionFrame {
     float wallRoll{};
     bool wallRotate{};
     float flyRoll{}; // Update 38.5: FLY ROLL's angle applied this frame (radians)
+    // 0.0.76 roll fix: that roll as the world turn about the head (identity: none). The body drawn from `anchor`
+    // turns with it about the head (fly076::RollFrame::aboutHead), so it stays under the head as the view rolls.
+    Quat flyRollTurn{};
     float flyLookUp{}; // 0.0.74 test 10: FLY LOOK UP's pan applied this frame (0 none .. 1 the full pitch up)
     float viewTilt{};
     // For the player's body: the up the view stands him along (the world's

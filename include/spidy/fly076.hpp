@@ -16,7 +16,15 @@
 // - B held: the air brake (slow to a hover in place). Y held past `yHoldSeconds`: the orientation brake (the flips'
 //   spin stops, the view and the body roll come back upright); a Y tap is still FLY LOOK UP.
 // - Right stick left / right: rolls the BODY about the flight's own axis (the heading), never turning it. Held, it
-//   keeps rolling (a full turn and on); let go, the roll stays where it is (no snap back).
+//   keeps rolling (a full turn and on); let go, the roll stays where it is (no snap back) - unless it is within
+//   `BodyRoll::snapDegrees` of level, which is exactly level (0.0.76 roll fix). Landed: level at once.
+// - 0.0.76 ROLL FIX (run flight-roll-1: "past about 90 degrees the camera gets weird, at 180 the chest fills the view,
+//   laggy while rolling, and wrong until he lands"): RollFrame locks the roll's world axis when the roll starts (the
+//   flight's way when fast, else the head's level look) instead of following the head or the 42 Hz velocity each
+//   frame; the roll is one quaternion about it, applied the same frame (no smoothing); the body turns about the HEAD
+//   with the view (RollFrame::aboutHead: the feet too, not only its up), and past `clipOnDegrees` the near plane
+//   steps out to `clipMetres` so the chest never fills the view; at 0 and on landing everything is cleared.
+// - The right stick is the roll OR the climb, whichever way it leans most (climbStick): a roll no longer climbs.
 // - While flying, A, B and Y never reach the game and the realistic / legacy flips take no A, left stick or arm swing
 //   from you: no control does two things.
 // - HOVER FLIGHT (0.0.76 test, pt1616u: "you just keep flying... you shouldn't move unless you use the joystick or your
@@ -275,7 +283,8 @@ class Heading {
 class BodyRoll {
   public:
     static constexpr float levelDegrees = 180.f;
-    // flying: the flight has him (off: it levels at levelDegrees a second); stick: the right stick's x;
+    static constexpr float snapDegrees = 8.f; // 0.0.76 roll fix: let go this near level, it IS level (exactly 0)
+    // flying: the flight has him (off: level at once, 0.0.76 roll fix); stick: the right stick's x;
     // upright: the orientation brake (Y held) brings it back to 0.
     float update(float dt, bool flying, float stick, float degreesPerSecond, bool upright) {
         constexpr float toRad = 3.14159265f / 180.f, pi = 3.14159265f;
@@ -284,7 +293,11 @@ class BodyRoll {
         const float x = std::fabs(s) > stickDead ? (s - std::copysign(stickDead, s)) / (1 - stickDead) : 0.f;
         const float rate = std::clamp(std::isfinite(degreesPerSecond) ? degreesPerSecond : 90.f, 30.f, 360.f) * toRad;
         rolling_ = flying && x != 0 && !upright;
-        if (!flying || upright) {
+        if (!flying) { // 0.0.76 roll fix: landed (or the flight ended): level at once, nothing left over
+            angle_ = 0;
+            return angle_;
+        }
+        if (upright) {
             const float step = levelDegrees * toRad * dt;
             angle_ = std::fabs(angle_) <= step ? 0.f : angle_ - std::copysign(step, angle_);
         } else if (x != 0) {
@@ -296,6 +309,8 @@ class BodyRoll {
             angle_ += 2 * pi;
         if (!std::isfinite(angle_))
             angle_ = 0;
+        if (!rolling_ && std::fabs(angle_) < snapDegrees * toRad)
+            angle_ = 0; // let go near level: exactly level (the view and the body clean, no leftover tilt)
         return angle_;
     }
     float angle() const { return angle_; }
@@ -306,6 +321,57 @@ class BodyRoll {
     float angle_{};
     bool rolling_{};
 };
+
+// ---- 0.0.76 ROLL FIX: the roll's frame (pure) ----
+// The world axis the roll turns about, locked when it starts, and that turn as one quaternion. The head stays put and
+// everything of the body turns about it (aboutHead). Angle 0 clears it all (axis, turn, near plane): a clean upright.
+class RollFrame {
+  public:
+    static constexpr float fastAxis = 4.f;                           // m/s: faster, the flight's way is the axis
+    static constexpr float clipOnDegrees = 75.f, clipOffDegrees = 60.f; // past this the near plane steps out
+    static constexpr float clipMetres = .25f;
+    // angle: BodyRoll's (radians); velocity: the flight's (world, m/s); look: the head's look (world).
+    Quat update(float angle, Vec3 velocity, Vec3 look) {
+        if (!std::isfinite(angle) || angle == 0) {
+            reset();
+            return turn_;
+        }
+        if (finite(velocity) && length(velocity) > fastAxis)
+            axis_ = normalized(velocity);
+        else if (!(length(axis_) > .5f)) { // slow (a hover): the level look when the roll started, then kept
+            const Vec3 level{finite(look) ? look.x : 0.f, 0, finite(look) ? look.z : -1.f};
+            axis_ = length(level) > .1f ? normalized(level) : Vec3{0, 0, -1};
+        }
+        constexpr float toDeg = 180.f / 3.14159265f;
+        const float deg = std::fabs(angle) * toDeg;
+        clip_ = clip_ ? deg > clipOffDegrees : deg > clipOnDegrees;
+        turn_ = Quat::around(axis_, angle);
+        return turn_;
+    }
+    Vec3 axis() const { return axis_; }
+    Quat turn() const { return turn_; }
+    bool active() const { return length(axis_) > .5f; }
+    float nearClip() const { return clip_ ? clipMetres : 0.f; } // 0: NEAR CLIP's own
+    void reset() { axis_ = {}, turn_ = Quat{}, clip_ = false; }
+    // A point of the body turned with the view about the head (the head itself stays where it is).
+    static Vec3 aboutHead(Vec3 head, Vec3 point, Quat turn) { return head + turn.rotate(point - head); }
+
+  private:
+    Vec3 axis_{};
+    Quat turn_{};
+    bool clip_{};
+};
+
+// The right stick (x rolls, y climbs): only the way it leans most counts, so a roll never climbs (run flight-roll-1:
+// "STICK 0.6 m/s (climb +0.6)" with the left stick at rest while he rolled) and a climb never rolls.
+inline float climbStick(float x, float y) {
+    x = axis(x), y = axis(y);
+    return std::fabs(y) > std::fabs(x) ? y : 0.f;
+}
+inline float rollStick(float x, float y) {
+    x = axis(x), y = axis(y);
+    return std::fabs(x) >= std::fabs(y) ? x : 0.f;
+}
 
 // ---- The flight (the swing module flies it through its movement command; pure) ----
 struct In {

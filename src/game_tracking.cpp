@@ -695,6 +695,7 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             placed.tilt = unit(yaw.conjugate() * roll * yaw * placed.tilt);
             placed.origin += before.position - placed.toWorld(f.head).position;
             out.flyRoll = flyRoll_;
+            out.flyRollTurn = roll; // 0.0.76 roll fix: the body's turn about the head, the same frame
         }
     }
     // The eyes out of what the world is built of (HeadClearance), and the

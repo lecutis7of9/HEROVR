@@ -50,7 +50,7 @@ Encodings (registry beside the game log's [Settings]): TextureQuality 0 Low (023
 
 | switch (live.txt, live, no restart) | default | what it does |
 | --- | --- | --- |
-| `vr_game_jitter` | `keep` | the game's own head view (never shown) keeps the flat game's TAA jitter, as dd027d4 (GHOST FIX: the default again); `off` gives it none, so its TAA skips - c8974f4's try, which ghosted the city and did not stop the shake |
+| `vr_game_jitter` | `off` | 0.0.76 JITTER FIX: the game's own head views (never shown) give the lens 0; `keep` is c71a59c's: the stock camera's stored jitter passed back in, which the lens doubled and flipped (see JITTER FIX below). Zero means that view's own TemporalAa skips (as c8974f4, which coincided with ghosting) |
 | `vr_jitter` | `on` | the eyes' Halton (2, 3) sample walk (the sharp bricks); `off` holds one fixed tiny offset (1e-6 NDC) so the game's TAA still runs - a test, edges a little rougher |
 
 What run 001842 ruled out: the eyes' previous cameras are their own (9040/9040, 0.0 m); both eyes' jitter is the
@@ -113,3 +113,24 @@ the webs let go, so one short hitch became a freeze of up to two seconds with bl
 held frame of up to half a second plays as one 0.1 s step and VR goes on (live.txt `hitch_hold = on`, the default;
 `off` is c71a59c's rule, live, no restart). The holds themselves come from the stream to the headset (CANDIDATE:
 Wi-Fi, bitrate or codec in Virtual Desktop; keep it at 90 Hz).
+
+### JITTER FIX (owner: "double jitter")
+
+CONFIRMED in the code: the lens 0x2c75560 stores +0x428 = 2 * its jitter x and +0x42c = -2 * its jitter y (constant
+-2.0 at RVA 0x53197c8, docs/AA-0.0.73.md). The game's head view (stereo_probe activeView, both lens calls) and the
+aligned head view (placeEyes onHead) passed the stock camera's stored +0x428/+0x42c back in, so they stored 4x the
+game's x jitter and +4x its y jitter (2x the game's stored values, y flipped). They now pass 0 (`vr_game_jitter = off`,
+the default; `keep` is c71a59c's, live). The headset eyes' lens keeps eyeJitter's raw values. Not changed: the game
+screen in 3D (desired.enabled 3) without eye TAA still passes main's stored pair to the eyes (not the headset path).
+
+Each run logs it (report `jitter_log`, console "JITTER LOG"): per view (head_view, aligned_head, eye_left, eye_right;
+`_stereo_screen` for the 3D game screen) and per lens call in a frame (`pass`), the source camera's stored pair, the
+pair passed and the pair the new view stored, for each view's first 200 frames (SpidyJitterLogData, at most 2048
+entries; read-only). `fed the source's stored pair back Nx` is c71a59c's doubling; 0 with `off`.
+
+POSE CHECK (read-only) now also compares each eye's layer (the pose and fov given to xrEndFrame) with the eye pose and
+lens its view and projection were built from (the command's `eyes` and `fovs`), and counts submits whose eyes were
+located (xrLocateViews) at a time other than the frame's predicted display time (`layer`, `located_off`; console
+"Layer vs build: SAME / MISMATCH"; the first 10 mismatches go to the prompts log). Its cost per submit is a few
+matrix compares and two interlocked increments, microseconds: not the freezes (those started on the game screen,
+before any eye or POSE CHECK ran - see HITCH HOLD).

@@ -188,6 +188,7 @@
 #ifdef _WIN32
 #include "spidy/game_targets.hpp"
 #include "spidy/hitch_hold.hpp"
+#include "spidy/jitter_log.hpp"
 // Stand-ins for the game's classes, by the names the target scan's rules look
 // for: MSVC lays out their type information as it did the game's.
 class Component {
@@ -2885,6 +2886,31 @@ int main() {
         near(native_view::requestScale(2016,2240,1.171f,1.1106f)/native_view::requestScale(1352,1504,1.171f,1.1106f),
              2240.f/1504);
         near(native_view::requestScale(2000,1000,1,1),1000); // the side with more pixels per tangent
+    });
+    test("HERO VR 0.0.76 JITTER FIX: JITTER LOG keeps 200 frames per view; POSE CHECK layer and locate", [] {
+        static jitter_log::Data d;
+        std::atomic<uint32_t> reserved{0};
+        const float stored[2]{.004f, -.002f}, made[2]{0, 0};
+        for (uint64_t f = 1000; f < 1300; ++f)
+            jitter_log::record(d, reserved, jitter_log::headView, f, stored, 0, 0, made);
+        check(d.count == 200 && d.entries[0].frame == 1000 && d.entries[199].frame == 1199, "JITTER LOG 200 frames");
+        jitter_log::record(d, reserved, jitter_log::eyeLeft | 0x100u, 5000, stored, .1f, .2f, made);
+        check(d.count == 201 && d.entries[200].view == 0x102 && d.firstFrame[2] == 5000, "JITTER LOG eye entry");
+        jitter_log::record(d, reserved, 7, 5000, stored, 0, 0, made);
+        check(d.count == 201, "JITTER LOG took an unknown view");
+        // The rig carries the locate time with the eyes; the layer check counts a mismatch.
+        GameTrackingRig rig; auto f = trackedFrame();
+        rig.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        f.predictedDisplayTime = f.locatedTime = 2;
+        const auto m = rig.update(f, {10, 20, 30}, {0, 0, -1}, true);
+        check(m.active && m.locatedTime == 2, "POSE CHECK: the rig lost the locate time");
+        pose_check::Data p;
+        check(!pose_check::noteLayer(p, {0, .1f, true}, 0) && p.layerOver == 0, "POSE CHECK: same layer counted");
+        check(pose_check::noteLayer(p, {.2f, 0, true}, 0) && p.layerOver == 1 && p.layerMaxDegrees == .2f,
+              "POSE CHECK: turned layer not counted");
+        check(pose_check::noteLayer(p, {0, 0, true}, .5f) && p.layerOver == 2, "POSE CHECK: fov mismatch");
+        EyeFov a{-1, 1, -1, 1}, b{-1, 1.01f, -1, 1};
+        check(std::abs(pose_check::fovDegrees(a, b) - .573f) < .01f, "POSE CHECK fov degrees");
     });
     test("HERO VR 0.0.76 HITCH HOLD: a runtime hitch of 0.1-0.5 s keeps VR play (run 060032)", [] {
         using namespace hitch_hold;
@@ -36466,7 +36492,8 @@ int main() {
         // The eyes upscaled only when every check passed.
         check(s1::madePercent(true, true, true, true) == 67, "67% when all checks pass");
         // 0.0.76 FAR SHAKE: vr_jitter off keeps one tiny non-zero offset (TemporalAa skips a zero one);
-        // vr_game_jitter keep (0.0.76 GHOST FIX: the default again) passes the game's head view its stock jitter.
+        // vr_game_jitter keep passes the game's head views the stock camera's stored jitter (c71a59c, which the lens
+        // doubled); 0.0.76 JITTER FIX: off, the default, passes 0.
         {
             const auto steady = s1::eyeJitterFor(true, {.3f, -.2f});
             const auto walk = s1::eyeJitterFor(false, {.3f, -.2f});

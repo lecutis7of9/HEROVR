@@ -45,8 +45,9 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
   shimmer much less. To go back to the old look, put `sm1style = off` in live.txt (it applies the next time VR starts).
   From 0.0.76 VR sets the game's Anti-Aliasing to TAA (no upscaler) for you while it runs and puts yours back
   after, with the eyes at native 100%; `vr_aa = keep` / `vr_render = upscaled` in live.txt change that.
-  0.0.76 GHOST FIX: the game's unseen head view keeps its TAA jitter (the default; taking it away ghosted the city).
-  live.txt, live, no restart: `vr_game_jitter = off` (the ghosting test), `vr_jitter = off` (the eyes' jitter fixed).
+  0.0.76 JITTER FIX: the game's unseen head views no longer get their stored TAA jitter fed back in (which doubled it
+  and flipped it upside down); they get none. live.txt, live, no restart: `vr_game_jitter = keep` (c71a59c's doubled
+  jitter, to compare), `vr_jitter = off` (the eyes' jitter fixed). The console's "JITTER LOG" lists each view's jitter.
   0.0.76 POSE CHECK: the console's "POSE CHECK render vs submit" says whether each eye was shown with the exact pose
   it was drawn with (degrees and mm per eye; read-only, no setting).
 - **Window-edge lights fixed:** lit windows no longer go dark at the outer edges of each eye.

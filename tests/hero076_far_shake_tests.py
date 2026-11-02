@@ -2,9 +2,9 @@
 """0.0.76 FAR SHAKE: the far background shaking while the head turns (run 001842's video).
 
 live.txt, both live (no restart):
-  vr_game_jitter = keep (default) | off   the game's own head view (never shown) keeps the flat game's TAA jitter
-                                          (0.0.76 GHOST FIX: as dd027d4); off: none, so its TemporalAa skips - the
-                                          c8974f4 test that brought ghosting of the city (run 005811)
+  vr_game_jitter = off (default) | keep   0.0.76 JITTER FIX: the game's own head views (never shown) give the lens
+                                          0, not the stock camera's stored jitter, which the lens doubled and
+                                          flipped; keep: c71a59c's doubled values (hero076_jitter_fix_tests.py)
   vr_jitter = on (default) | off          the eyes' Halton walk, or one fixed tiny offset (TemporalAa still runs)
 """
 import pathlib
@@ -39,22 +39,22 @@ class FarShake(unittest.TestCase):
         self.assertEqual((L.export_value('vr_jitter', values['vr_jitter']),
                           L.export_value('vr_game_jitter', values['vr_game_jitter'])), (0, 1))
         self.assertEqual(L.CHOICE_NAMES['vr_jitter'][0], 'on')
-        # 0.0.76 GHOST FIX: keep (0) is the default, so a live.txt without the line gets dd027d4's picture.
-        self.assertEqual(L.CHOICE_NAMES['vr_game_jitter'][0], 'keep')
-        self.assertIn('ghosting', L.SETTINGS['vr_game_jitter'][2])
+        # 0.0.76 JITTER FIX: off (1) is the default (the DLL's atomic; the line is never persisted).
+        self.assertEqual(L.CHOICE_NAMES['vr_game_jitter'], ('keep', 'off'))
+        self.assertIn('1 off, the default', L.SETTINGS['vr_game_jitter'][2])
 
     def test_native(self):
         s = src('src/stereo_probe.cpp')
         for export in ('SpidyVrJitter', 'SpidyVrGameJitter'):
             self.assertIn(f'DWORD WINAPI {export}(void* value)', s)
-        # The stock jitter reaches the head view only through gameViewJitter (activeView twice, placeEyes once).
-        self.assertEqual(len(re.findall(r'gameViewJitter\(gameViewJitterOff\.load\(\) != 0, (?:stock|main)'
-                                        r'\.values\[0x42[8c] / 4\]\)', s)), 6)
+        # The stock jitter reaches the head views only through gameViewJitter (activeView, placeEyes onHead).
+        self.assertEqual(len(re.findall(r'gameViewJitter\(noGameJitter, (?:stock|main)'
+                                        r'\.values\[0x42[8c] / 4\]\)', s)), 4)
         self.assertNotIn('stock.values[0x428 / 4], stock.values[0x42c / 4]', s)
         # (The game-screen 3D mode's eyes still take the stock jitter; that mode is not the headset's.)
         self.assertNotIn('main.values[0x428 / 4], main.values[0x42c / 4], false', s)
         self.assertEqual(s.count('eyeJitterFor(eyeJitterOff.load'), 2)
-        self.assertIn('std::atomic<uint32_t> eyeJitterOff{0}, gameViewJitterOff{0};', s)
+        self.assertIn('std::atomic<uint32_t> eyeJitterOff{0}, gameViewJitterOff{1};', s)
         h = src('include/spidy/sm1style.hpp')
         self.assertIn('inline constexpr float steadyJitter = 1e-6f;', h)
         self.assertIn('return off ? 0.f : stock;', h)

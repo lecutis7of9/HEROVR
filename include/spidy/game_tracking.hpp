@@ -78,6 +78,7 @@ struct GameMotionFrame {
     Quat bodyTilt() const {
         return standing ? flipTilt : swing.tilt;
     }
+    std::int64_t locatedTime{}; // 0.0.76 JITTER FIX: when XrFrame::eyes were located (POSE CHECK reads it)
 };
 // The wall or ceiling that holds the player, as the swing module reports it
 // (game_swing::Data's wall): the swing's own wall, or the game's wall crawl.

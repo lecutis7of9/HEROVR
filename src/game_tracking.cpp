@@ -719,6 +719,7 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
     out.releaseWebs = longBreak || pendingRecenter_ || buttonsChanged_;
     pendingRecenter_ = buttonsChanged_ = false;
     out.predictedDisplayTime = f.predictedDisplayTime;
+    out.locatedTime = f.locatedTime; // 0.0.76 JITTER FIX: POSE CHECK
     out.anchor = feet;
     out.swing = trackedSwingInput(f, placed, triggerWebs_);
     // The left stick turns the flip: the player does not walk or drift.

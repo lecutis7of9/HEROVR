@@ -41,6 +41,7 @@ struct XrFrame {
     float seconds = 1.f / 90;
     bool focused{}, valid{}, jump{}, reset{}, recentered{};
     uint32_t buttons{};
+    std::int64_t locatedTime{}; // 0.0.76 JITTER FIX: the time xrLocateViews located `eyes` at (POSE CHECK)
 };
 inline bool validTrackedPose(Pose p) {
     const auto q = p.orientation;

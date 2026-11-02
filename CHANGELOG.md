@@ -11,6 +11,15 @@ From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not ye
   snaps). A held frame of up to half a second now plays as one short step and VR goes on. live.txt, live (no
   restart): `hitch_hold = off` is the old rule. If it still stutters, check Virtual Desktop's Wi-Fi, bitrate and
   codec (90 Hz). [docs/VISUAL-0.0.76.md](docs/VISUAL-0.0.76.md)
+- **Double jitter fixed (JITTER FIX):** the game's own (unseen) head view and the head view the eyes' shadows are
+  fitted to took the game camera's already-stored TAA jitter and gave it to the lens again, which stores twice what it
+  is given and flips the up-down part, so those views jittered twice as far, upside down. They now get none. The eyes'
+  own jitter is unchanged and the game's TAA stays on in each eye. live.txt, live (no restart): `vr_game_jitter =
+  keep` is c71a59c's doubled jitter, to compare. The console's "JITTER LOG" lists each view's jitter for its first 200
+  frames, and "POSE CHECK" now also says whether each eye's layer got the exact pose and field of view its picture was
+  built from, and whether those eyes were located at the frame's predicted display time (read-only). Note: the last
+  time the head view had no jitter (c8974f4), the city ghosted; if it does again, say so - `vr_game_jitter = keep`
+  puts it back live.
 - **City ghosting fixed (GHOST FIX):** the ghosting of the city and buildings that came with the last test is gone:
   the game's own (unseen) head view keeps its TAA jitter again, as in the sharp dd027d4 build. Taking it away (the
   last FAR SHAKE try) stopped that view's TAA and did not stop the far shake (run 005811). live.txt, live (no

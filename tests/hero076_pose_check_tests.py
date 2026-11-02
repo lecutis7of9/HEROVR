@@ -50,7 +50,8 @@ class PoseCheck(unittest.TestCase):
         # Fields in the parser's order.
         data = h[h.index('struct Data {'):h.index('static_assert(sizeof(Data)')]
         order = ['magic', 'eyes[2]', 'submits', 'worldTurnLast', 'worldTurnSum', 'worldTurnOver', 'travelMaxMm',
-                 'ageSumMs', 'sequence', 'commandMaxDegrees[2]', 'reserved[3]']
+                 'ageSumMs', 'sequence', 'commandMaxDegrees[2]', 'locatedOff', 'layerMaxDegrees',
+                 'layerOver']
         self.assertEqual(sorted(order, key=data.index), order)
 
     def test_exported_with_c_linkage(self):

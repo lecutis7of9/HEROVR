@@ -101,7 +101,13 @@ struct Data {
     // a difference in `eyes` that shows here too is the game moving its camera after SetPose; one only in `eyes`
     // is the command differing from the eye the headset was given.
     float commandMaxDegrees[2]{}, commandMaxMm[2]{};
-    uint64_t reserved[3]{};
+    // 0.0.76 JITTER FIX (read-only): submits whose image's eyes were located (xrLocateViews) at a time other than
+    // the predicted display time of the frame the image was rendered for (0 expected).
+    uint64_t locatedOff{};
+    // The pose and fov each eye's layer is given against the eye pose and lens its view and projection were built
+    // from (the command's eyes and fovs): both eyes' maxima, and how many eye submits went over.
+    float layerMaxDegrees{}, layerMaxMm{}, layerFovMaxDegrees{};
+    uint32_t layerOver{};
 };
 static_assert(sizeof(Data) == 256, "SpidyPoseCheckData is 256 bytes");
 
@@ -143,5 +149,24 @@ inline void noteSubmit(Data& data, bool reused, float worldTurn, float ageMs, fl
     }
     if (std::isfinite(travelMm))
         data.travelMaxMm = std::max(data.travelMaxMm, travelMm);
+}
+// One eye's layer (pose and fov given to xrEndFrame) against the eye its view and projection were built from.
+// Returns whether it went over (a mismatch worth printing).
+inline bool noteLayer(Data& data, Delta pose, float fovDegrees) {
+    if (!pose.valid || !std::isfinite(fovDegrees))
+        return false;
+    data.layerMaxDegrees = std::max(data.layerMaxDegrees, pose.degrees);
+    data.layerMaxMm = std::max(data.layerMaxMm, pose.mm);
+    data.layerFovMaxDegrees = std::max(data.layerFovMaxDegrees, fovDegrees);
+    const bool over = pose.degrees > pose_check::overDegrees || pose.mm > pose_check::overMm || fovDegrees > .01f;
+    data.layerOver += over;
+    return over;
+}
+// The largest of the four tangent-angle differences between two fovs, in degrees.
+template <class Fov> // EyeFov (tracking.hpp): left, right, down, up in radians
+inline float fovDegrees(const Fov& a, const Fov& b) {
+    const float d = std::max(std::max(std::abs(a.left - b.left), std::abs(a.right - b.right)),
+                             std::max(std::abs(a.up - b.up), std::abs(a.down - b.down)));
+    return d * 57.2957795f;
 }
 } // namespace spidy::pose_check

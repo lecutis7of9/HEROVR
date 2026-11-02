@@ -33,6 +33,16 @@
 //   moves him the way the head faces (forward / back) and strafes (left / right); the right stick's up / down climbs and
 //   sinks; an arm pointed flies him along it. The left stick full forward is still SUPERSONIC (never lower, never
 //   grounded). In.hover turns it on (both games send it); without it the 0.0.76 cruise above stays as it was.
+// - 0.0.76 AIM FLIGHT (test 801ce57: "you can't fly forward and down; you have to be hovering to go down. I can't fly
+//   through and aim lower and fly up and down however I want"): In.aimPitch on (both games' hover flight sends it), the
+//   left stick's forward / back flies along the head's own look, pitch and all (look down and push forward: a dive
+//   forward and down; look up: a climb), its left / right still strafes level, and the right stick's climb / sink adds
+//   on top. SUPERSONIC follows the aim down too (never into the ground: grounded, a way down is levelled). A steep dive
+//   onto the ground lands as the climb stick down does.
+// - 0.0.76 LEVEL VIEW (the same test: "rotational flying is pretty screwed up still, the camera just gets really bad"):
+//   FLY ROLL COMFORT (the default, live.txt fly_roll) keeps the headset's view level with the horizon while the body
+//   rolls about the head (levelView; GameTrackingRig::flyRollLevel, rollBody); FULL rolls the view as before; OFF does
+//   not roll.
 // live.txt fly_classic 1 puts the 0.0.75 flight back (grip to enter, the poses, the triggers' thrust).
 // Nothing here reads or writes game memory: the mod's own state and its existing movement command (CONFIRMED by
 // construction; no CANDIDATE address).
@@ -364,6 +374,34 @@ class RollFrame {
 
 // The right stick (x rolls, y climbs): only the way it leans most counts, so a roll never climbs (run flight-roll-1:
 // "STICK 0.6 m/s (climb +0.6)" with the left stick at rest while he rolled) and a climb never rolls.
+// 0.0.76 LEVEL VIEW: FLY ROLL's mode (extras385::fly::RollMode: 0 OFF, 1 COMFORT, 2 FULL) -> the view stays level
+// (only the body rolls) for COMFORT, and anything unknown; FULL rolls the view; OFF rolls nothing (rolls()).
+inline bool levelView(uint32_t rollMode) { return rollMode != 2u; }
+inline bool rolls(uint32_t rollMode) { return rollMode != 0u; }
+// The drawn body under a level view: its up and its feet turned by the roll about the eye (the view itself is not).
+inline void rollBody(Quat turn, Vec3 eye, Vec3& up, Vec3& feet) {
+    const Vec3 u = turn.rotate(up);
+    const Vec3 f = RollFrame::aboutHead(eye, feet, turn);
+    if (finite(u) && length(u) > .5f && finite(f)) {
+        up = normalized(u);
+        feet = f;
+    }
+}
+// 0.0.76 AIM FLIGHT: the level stick (world, the head's level way forward) turned so its forward share flies along the
+// head's own look, pitch and all; its strafe share stays level. A look straight up or down still has its level way
+// (from the stick) - the share along it is the look.
+inline Vec3 aimedMove(Vec3 move, Vec3 look) {
+    if (!finite(move) || !finite(look) || length(look) < .5f)
+        return finite(move) ? move : Vec3{};
+    const Vec3 l = normalized(look);
+    const Vec3 flat{l.x, 0, l.z};
+    if (length(flat) < 1e-3f)
+        return move; // straight up / down: no level way to share; the stick stays level
+    const Vec3 ahead = normalized(flat);
+    const float forward = dot(move, ahead);
+    const Vec3 side = move - ahead * forward;
+    return l * forward + side;
+}
 inline float climbStick(float x, float y) {
     x = axis(x), y = axis(y);
     return std::fabs(y) > std::fabs(x) ? y : 0.f;
@@ -395,6 +433,7 @@ struct In {
     bool hover{};
     Vec3 move{};           // the left stick, world, level, at most 1 long: forward / back the head's way, strafe across
     float rise{};          // the climb stick, -1..1 (up +)
+    bool aimPitch{};       // 0.0.76 AIM FLIGHT: the stick's forward flies along the head's look (pitch too)
 };
 // The stick's share past its dead zone, 0..1 on each side (NaN: 0).
 inline float pastDead(float v) {
@@ -513,7 +552,8 @@ class Flight {
         } else if (in.hover) {
             // HOVER FLIGHT: the sticks and a pointed arm say where; nothing held, he comes to rest and hangs still.
             const Vec3 up{0, 1, 0};
-            const Vec3 move = pastDead(Vec3{in.move.x, 0, in.move.z});
+            const Vec3 levelMove = pastDead(Vec3{in.move.x, 0, in.move.z});
+            const Vec3 move = in.aimPitch ? aimedMove(levelMove, in.look) : levelMove;
             const float rise = pastDead(in.rise);
             const Vec3 arm = finite(in.want) && length(in.want) > .5f ? normalized(in.want) : Vec3{};
             Vec3 target{};
@@ -522,7 +562,7 @@ class Flight {
                 // is levelled), only the climb stick's up adds height.
                 Vec3 d = length(arm) > .5f ? arm : length(move) > .1f ? move : Vec3{in.look.x, 0, in.look.z};
                 d = unitOr(d, unitOr(Vec3{in.look.x, 0, in.look.z}, {0, 0, -1}));
-                if (d.y < 0)
+                if (d.y < 0 && (!in.aimPitch || in.grounded))
                     d = unitOr(Vec3{d.x, 0, d.z}, unitOr(Vec3{in.look.x, 0, in.look.z}, {0, 0, -1}));
                 target = d * sonicTop + up * (std::max(0.f, rise) * top * climbShare);
             } else {
@@ -538,13 +578,14 @@ class Flight {
             v_ = v_ + limited(target - v_, rate * dt);
             if (still && length(v_) < stillBelow)
                 v_ = {}; // exactly still: no drift
-            if (sonic && v_.y < 0)
-                v_.y = 0; // SUPERSONIC never lowers you
+            if (sonic && v_.y < 0 && (!in.aimPitch || in.grounded))
+                v_.y = 0; // SUPERSONIC never lowers you (AIM FLIGHT: only never into the ground)
             if (length(v_) > 1.f)
                 heading_.set(v_);
             speed_ = length(v_);
             hoverStill_ = still;
-            hoverDown_ = rise < 0;
+            // AIM FLIGHT: a steep dive (more down than along) onto the ground lands too; skimming does not.
+            hoverDown_ = rise < 0 || (in.aimPitch && length(target) > .5f && target.y < -.7f * length(target));
             o.coasting = !sonic && speed_ > top + .01f;
             o.how = sonic ? "SUPERSONIC" : still ? (length(v_) > .01f ? "STOP" : "HOVER") : "STICK";
         } else {

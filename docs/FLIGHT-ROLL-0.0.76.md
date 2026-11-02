@@ -34,3 +34,18 @@ felt wrong until he landed.
 Tests: tests/fly076_tests.cpp `rollFrameTests` (90, 180, 360 degrees, a 0-360 sweep with no jump, the return to 0,
 the snap, landing, the stick split) and tests/hero076_roll_fix_tests.py (the wiring). Hover, strafe and climb are
 unchanged apart from the stick split (the strafe moves by the yaw only, never the roll).
+
+## Test 801ce57 follow-up: the view stays level (FLY ROLL COMFORT, the default)
+
+The owner: "rotational flying is pretty screwed up still, the camera just gets really bad". Now, with live.txt
+`fly_roll = 1` (COMFORT, the default) the headset view is **never rolled**: the right stick rolls only Spider-Man's /
+the hero's body about the head (`fly076::rollBody`), and the near plane stays as it was. `fly_roll = 2` (FULL) is the
+rolled view above, unchanged; `fly_roll = 0` turns the roll off. Each needs a restart (as before).
+Tests: tests/fly076_tests.cpp `levelViewTests`.
+
+## Aim flight (dive and climb where you look)
+
+"You can't fly forward and down; you have to be hovering to go down." Now the left stick's forward share follows the
+head's look in 3D in the new flight: look down while flying forward and you dive, look up and you climb; the strafe
+stays level, and the right-stick climb / sink is kept. SUPERSONIC follows the look down too, but never into the ground
+(on the ground a downward way is still levelled). Tests: tests/fly076_tests.cpp `aimTests`.

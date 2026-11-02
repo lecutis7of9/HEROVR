@@ -21,11 +21,14 @@ class RollFix(unittest.TestCase):
     def test_the_turn_reaches_the_body_the_same_frame(self):
         self.assertIn('Quat flyRollTurn{};', TRACK_H)
         self.assertIn('out.flyRollTurn = roll;', TRACK)
-        self.assertEqual(XR.count('rendered.flyRollTurn'), 2)  # the suit body and the multiplayer pose
+        # the suit body (COMFORT's level view: only the body turns; FULL: the feet about the head) and the mp pose
+        self.assertEqual(XR.count('rendered.flyRollTurn'), 3)
+        self.assertIn('fly076::rollBody(rendered.flyRollTurn, t.eye, t.up, t.feet);', XR)
         self.assertIn('t.feet = fly076::RollFrame::aboutHead(t.eye, t.feet, rendered.flyRollTurn);', XR)
 
     def test_near_plane(self):
-        self.assertIn('near_clip::boost(fly076Frame.nearClip());', XR)
+        # 0.0.76 LEVEL VIEW: FLY ROLL COMFORT never rolls the view, so no near-plane step there
+        self.assertIn('near_clip::boost(fly076::levelView(rollMode) ? 0.f : fly076Frame.nearClip());', XR)
         self.assertGreaterEqual(XR.count('near_clip::boost(0.f);'), 2)  # failure and not new flight
         self.assertIn('std::max(nearClip.load(std::memory_order_relaxed), nearClipBoost.load', STEREO)
 

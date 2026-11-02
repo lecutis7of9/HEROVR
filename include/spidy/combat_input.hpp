@@ -73,6 +73,7 @@
 #include "combat38.hpp"
 #include "combat_spidy.hpp"
 #include "math.hpp"
+#include "melee076.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -169,6 +170,10 @@ struct Config {
     // is a punch (rep0030: 170 forward swings peaked 1.4-2.4 m/s, under 2.4; the replay at
     // 2.0 m/s: 132 -> 148+ blows). Never with no enemy in reach, so waving still sends nothing.
     bool closeJabs = false;
+    // HERO VR 0.0.76 MELEE SNAP (melee076.hpp): a swing toward an enemy in sight within 3.5 m (or one within 1.8 m in
+    // front) is a punch at him - aimed at him (the usual speed / reach needs), never the lunge's or the zip strike's; the lunge stays
+    // shut with an enemy within 3.5 m. Off: 0.0.76 801ce57's rules.
+    bool meleeSnap = true;
     static constexpr float closeShare = .85f;
     static constexpr float pullBack = .8f; // m/s back toward the head: a jab's return
     // Version 0.0.5 PUNCH SENSITIVITY (combat38::punchFeelOf, applyPunchFeel): the forward share's
@@ -319,6 +324,7 @@ struct Out {
     // for a gesture blow, the game_xr picks the nearest chest) and the blow's strength (0 at
     // SpidyVR's minSpeed 2.2 m/s, 1 at its fullSpeed 7.5 m/s), for the instant DirectDamage blow.
     uint64_t punchTarget[2]{};
+    bool snapped[2]{}; // HERO VR 0.0.76 MELEE SNAP: this punch went to the snap's enemy
     float punchStrength[2]{};
     bool assisted{};          // a web ball bent toward an enemy this frame
     float assistDegrees = 180.f;
@@ -521,6 +527,8 @@ class Machine {
             ballLast_ = -1e3f;
             zipFrom_ = strikeUntil_ = 0;
             fists_.reset();
+            snapAt_[0] = snapAt_[1] = -1;
+            snapHeld_[0] = snapHeld_[1] = false;
             strike_.cancel();
             for (unsigned i = 0; i < 2; ++i) {
                 hands_[i].touching = false;
@@ -675,6 +683,12 @@ class Machine {
         const std::span<const PunchTarget> punchList{punchTargets.data(), count};
         const std::span<const FightTarget> fightList{fightTargets.data(), count};
         const combat_spidy::SightWorld sightWorld{std::span<const combat_spidy::SightWorld::Entry>{sights.data(), count}};
+        // HERO VR 0.0.76 MELEE SNAP: the enemies as the snap takes them (in sight unless his ray is blocked).
+        std::array<melee076::Foe, combat38::maxEnemies> snapFoes{};
+        for (uint32_t e = 0; e < count; ++e)
+            snapFoes[e] = {fightTargets[e].middle(), f.enemySight[e] != combat_spidy::sightBlocked};
+        const std::span<const melee076::Foe> snapList{snapFoes.data(), count};
+        const bool snapClose = c.meleeSnap && c.punch && melee076::closeFoe(snapList, f.head, f.airborne);
         // Update 38.3 LOOK LOCK: QUICK's or 38.2's rule (the lock and its mark stay).
         {
             LockConfig lc{};
@@ -741,7 +755,9 @@ class Machine {
             // Version 0.0.5: never above the candidate speed, so one slow swing (PUNCH SENSITIVITY
             // MAX, needing under 1.2 m/s) cannot re-arm and land again on every frame.
             const float rearmUnder = std::min(Config::rearmSpeed, .6f * c.punchSpeed / looseness(c));
-            if (!s.armed && (out.speed[i] < rearmUnder || now_ - s.punchedAt > Config::rearmSeconds))
+            if (out.speed[i] < rearmUnder)
+                snapHeld_[i] = false; // 0.0.76 MELEE SNAP: the swing ended
+            if (!s.armed && (out.speed[i] < rearmUnder || (now_ - s.punchedAt > Config::rearmSeconds && !snapHeld_[i])))
                 s.armed = true;
             // Version 0.0.4 quickRearm: the swing is over, or the fist comes back.
             if (!s.armed && c.quickRearm && now_ > s.punchedAt) {
@@ -778,7 +794,9 @@ class Machine {
                 farApplied_ = c.farLunge;
             }
         }
-        if (spidyZip && !bridgeFlies && c.webZip) {
+        if (snapClose)
+            ++snapLungeShut_;
+        if (spidyZip && !bridgeFlies && c.webZip && !snapClose) { // 0.0.76 MELEE SNAP: an enemy close - punches, X
             std::array<FightFist, 2> fists{};
             for (unsigned i = 0; i < 2; ++i) {
                 const auto& h = f.hands[i];
@@ -924,11 +942,19 @@ class Machine {
                 const float speed = out.speed[i];
                 if (speed < .6f * c.punchSpeed / l)
                     s.targetedCounted = false;
-                const bool enters = contacts && struck[i];
+                // 0.0.76 MELEE SNAP: a fist the snap already sent counts no contact in the same swing (not re-armed).
+                const bool enters = contacts && struck[i] &&
+                                    !(snapAt_[i] >= 0 && now_ - snapAt_[i] < snapContact && !s.armed);
                 s.touching = enters;
                 const bool fast = gestures && speed >= .6f * c.punchSpeed / l;
                 if (!fast && !enters)
                     continue;
+                // HERO VR 0.0.76 MELEE SNAP: the enemy this fist is thrown at (or the one right in front).
+                const melee076::Snap snap = c.meleeSnap && !f.menuOpen
+                                                ? melee076::pick(snapList, f.head, s.velocity, f.forward, f.airborne)
+                                                : melee076::Snap{};
+                const Vec3 aheadHand = snap ? snap.way : ahead;
+                const bool lungeOwnsHand = lungeOwns && !snap;
                 out.candidate[i] = true;
                 if (heldOff && !s.heldOffCounted) { // once a swing
                     s.heldOffCounted = true;
@@ -940,11 +966,12 @@ class Machine {
                 const float share = std::isfinite(c.punchForward) ? std::clamp(c.punchForward, 0.f, .9f) : .35f;
                 const float need = (c.punchTargeted ? std::max(share, Config::targetForward) : share) *
                                    (std::isfinite(c.forwardK) ? std::clamp(c.forwardK, .3f, 1.5f) : 1.f);
-                const bool forward = length(ahead) > .5f && dot(s.velocity, ahead) >= need * speed;
-                const bool extended = dot(h.position - f.head, ahead) >= c.punchReach / l;
                 const float needSpeed =
                     (c.closeJabs && c.punchTargeted && target ? Config::closeShare : 1.f) * c.punchSpeed / l;
-                const bool gesture = fast && speed >= needSpeed && forward && extended && !lungeOwns;
+                const float needForward = need, needReach = c.punchReach / l; // 0.0.76: the snap keeps them (no arm-swing X)
+                const bool forward = length(aheadHand) > .5f && dot(s.velocity, aheadHand) >= needForward * speed;
+                const bool extended = dot(h.position - f.head, aheadHand) >= needReach;
+                const bool gesture = fast && speed >= needSpeed && forward && extended && !lungeOwnsHand;
                 const bool contact = enters; // SpidyVR's own test: 2.2 m/s and inward, armed
                 uint32_t why = combat38::sent;
                 if (!h.tracked)
@@ -955,12 +982,12 @@ class Machine {
                     why = combat38::triggerHeld;
                 else if (s.state != State::idle)
                     why = combat38::busy;
-                else if (c.punchTargeted && (targetedBlock || h.zoned))
+                else if (c.punchTargeted && ((targetedBlock && !snap) || h.zoned))
                     why = combat38::gated;
                 else if (!contact && !s.armed)
                     why = combat38::cooldown;
                 else if (!gesture && !contact)
-                    why = !fast || speed < needSpeed || lungeOwns ? combat38::tooSlow
+                    why = !fast || speed < needSpeed || lungeOwnsHand ? combat38::tooSlow
                           : !forward                         ? combat38::notForward
                                                              : combat38::notExtended;
                 out.reject[i] = why;
@@ -995,7 +1022,18 @@ class Machine {
                         if (std::isfinite(e.strength))
                             out.punchStrength[i] = std::clamp(e.strength, 0.f, 1.f);
                     }
-                if (c.webZip && zipsNow(f, c, i)) {
+                if (snap && !out.punchTarget[i]) { // 0.0.76 MELEE SNAP: the blow and the lock go to him
+                    const uint64_t id = fightTargets[static_cast<size_t>(snap.index)].id;
+                    lock_.take(id);
+                    out.punchTarget[i] = id;
+                }
+                if (snap) {
+                    out.snapped[i] = true;
+                    snapAt_[i] = now_;
+                    snapHeld_[i] = true; // one long sweep at him is one blow (no re-arm by time alone)
+                    ++snapPunches_;
+                }
+                if (c.webZip && !snap && zipsNow(f, c, i)) {
                     out.zip = true;
                     startZip(f, c, locked, fightList);
                     ++fired_[zipStrike];
@@ -1195,6 +1233,8 @@ class Machine {
     uint64_t zipsAimed() const { return zipsAimed_; }
     // SpidyVR fold-in counts.
     uint64_t lunges() const { return lunges_; }
+    uint32_t snapPunches() const { return snapPunches_; }     // 0.0.76 MELEE SNAP: punches sent to the snap's enemy
+    uint32_t snapShutFrames() const { return snapLungeShut_; } // frames the lunge stayed shut (an enemy close)
     uint64_t lungesLanded() const { return lungesLanded_; }
     uint64_t yanks() const { return yanks_; }
     uint64_t lockChanges() const { return lockChanges_; }
@@ -1368,6 +1408,10 @@ class Machine {
     // SpidyVR fold-in
     Punches fists_{};
     Lock lock_{};
+    uint32_t snapPunches_{}, snapLungeShut_{}; // HERO VR 0.0.76 MELEE SNAP
+    double snapAt_[2]{-1, -1};                  // when each fist's last snap punch went
+    bool snapHeld_[2]{};                        // that swing still going (the time re-arm waits)
+    static constexpr double snapContact = .6;   // that swing's contact is the same blow
     WebStrike strike_{};
     std::vector<PunchEvent> events_;
     uint64_t lockedLast_{}, lunges_{}, lungesLanded_{}, yanks_{}, lockChanges_{}, sightUnknown_{};

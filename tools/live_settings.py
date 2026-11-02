@@ -212,7 +212,7 @@ SETTINGS = {
     'double_health': ((0, 1), 'SpidyDoubleHealth', 'DOUBLE HEALTH {} (1 every hit takes half the health it would, for every hero, a blow past your health still downs you; 0 off, the default; live, no restart)'),  # 0.0.76 DOUBLE HEALTH
     'fly_mode': ((0, 3), 'SpidyFlyMode', 'FLY MODE {} (0 off, 1 slow, 2 normal, 3 fast: free flight in the air, jump to take off)'),
     'fly_vignette': ((0, 1), 'SpidyFlyVignette', 'FLY VIGNETTE {} (1 darkens the edges of your view while you fly fast, for comfort)'),
-    'fly_roll': ((0, 2), 'SpidyFlyRoll', 'FLY ROLL {} (0 off, 1 comfort: tilts up to 45 degrees with a dark edge and a horizon line, 2 full roll)'),
+    'fly_roll': ((0, 2), 'SpidyFlyRoll', 'FLY ROLL {} (0 off, 1 comfort: the view stays level and only the body rolls - fly_classic tilts up to 45 degrees with a dark edge - 2 full roll; needs a restart)'),
     'fly_roll_speed': ((30, 180), 'SpidyFlyRollSpeed', 'FLY ROLL SPEED {} (degrees a second the right stick rolls you while flying)'),
     'fly_auto_level': ((0, 1), 'SpidyFlyAutoLevel', 'FLY AUTO LEVEL {} (1 levels the roll back when you let go of the stick)'),
     'van_no_flips': ((0, 1), 'SpidyVanNoFlips', "VAN NO FLIPS {} (0 on: realistic flips turn off by themselves while you drive the van or a Batmobile so sharp turns don't roll you; 1 off: keeps your REALISTIC FLIPS choice; live, no restart)"),  # 0.0.74 test 10

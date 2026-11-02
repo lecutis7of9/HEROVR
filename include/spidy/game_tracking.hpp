@@ -60,6 +60,9 @@ struct GameMotionFrame {
     // 0.0.76 roll fix: that roll as the world turn about the head (identity: none). The body drawn from `anchor`
     // turns with it about the head (fly076::RollFrame::aboutHead), so it stays under the head as the view rolls.
     Quat flyRollTurn{};
+    // 0.0.76 LEVEL VIEW (fly076::levelView, FLY ROLL COMFORT): the view stayed level and only the body takes
+    // flyRollTurn (its up and its feet about the head); false: the view rolled with it (FULL).
+    bool flyRollBodyOnly{};
     float flyLookUp{}; // 0.0.74 test 10: FLY LOOK UP's pan applied this frame (0 none .. 1 the full pitch up)
     float viewTilt{};
     // For the player's body: the up the view stands him along (the world's
@@ -324,6 +327,9 @@ class GameTrackingRig {
     // every frame; reset() keeps it.
     // HERO VR 0.0.76 FLIGHT (fly076::BodyRoll): FLY ROLL's angle about this world axis (the flight's own way)
     // instead of the head's level look; zero: the level look as before. Set every frame; reset() keeps it.
+    // 0.0.76 LEVEL VIEW (fly076::levelView): true, the roll turns only the body (Output::flyRollBodyOnly) and the
+    // view, the hands and the tracking space stay level with the horizon. Set every frame; reset() keeps it.
+    void flyRollLevel(bool level) { flyLevel_ = level; }
     void flyRollAxis(Vec3 worldAxis) {
         flyAxis_ = finite(worldAxis) && length(worldAxis) > .5f ? normalized(worldAxis) : Vec3{};
     }
@@ -469,6 +475,7 @@ class GameTrackingRig {
     float flyRoll_{}, flyLookUp_{};
     bool flyStick_{};
     Vec3 flyAxis_{};
+    bool flyLevel_{};
     bool flyOwns_{}, flyUpright_{};
     Vec3 climbNormal_{}, runNormal_{}, runAhead_{};
     Quat climbView_{};

@@ -853,6 +853,7 @@ void visit(const native_rays::QueryContext& world) {
             ni.hover = w076.hover;
             ni.move = live && w076.hover && finite(in.move) ? in.move : Vec3{};
             ni.rise = live && w076.hover ? w076.rise : 0.f;
+            ni.aimPitch = w076.hover; // 0.0.76 AIM FLIGHT: the stick flies where the head looks (dive / climb)
             // Never into a wall (walls are SPIDER-MAN's): a steep fixed surface just ahead of the flight takes
             // the part of it into the wall away, so the body slides along and the game never grasps it.
             if (flight076.flying() && !suspend) {

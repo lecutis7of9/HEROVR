@@ -2,6 +2,23 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.76-sm1 - melee, web balls, flight (TEST build, not released)
+
+From test 801ce57. **Built and unit-tested, not yet tried in the game.**
+
+- **Spider-Man punches land (MELEE SNAP):** each punch goes to the enemy you swing at (within 3.5 m, inside 70 degrees
+  of the fist, or the nearest within 1.8 m in front) - the game's X combo plus the blow on him. With an enemy that
+  close the web lunge (Y) never steals the punch. Arm swings while walking still do nothing.
+  See [docs/COMBAT-0.0.76.md](docs/COMBAT-0.0.76.md).
+- **Web balls every press (BALL SURE):** out of combat the ball leaves your wrist at once; in combat the game's own
+  ball fires, and when the game drops the press the mod's ball goes from that wrist instead.
+- **Flight dives and climbs where you look:** the left stick's forward follows your look up and down (no need to
+  hover to go down); the right-stick climb stays.
+- **Roll camera:** FLY ROLL COMFORT (the default) now keeps the view level and rolls only the body; FULL is the old
+  rolled view. See [docs/FLIGHT-ROLL-0.0.76.md](docs/FLIGHT-ROLL-0.0.76.md).
+- **Suits on the other player (probe 5):** still CANDIDATE, no remote-suit change yet. See
+  [docs/REMOTE-SUIT-0.0.76.md](docs/REMOTE-SUIT-0.0.76.md).
+
 ## hero-0.0.76-flight - the flight rework (DRAFT branch, not released)
 
 From hero-0.0.76-sm1 (faecbe9). **Built and unit-tested, not yet tried in the game.**

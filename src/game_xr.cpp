@@ -45,6 +45,8 @@
 #include "spidy/vehicle_flips.hpp" // 0.0.74 test 10 VAN NO FLIPS
 #include "spidy/fly_feel074.hpp"  // 0.0.74 test 10 FLY HOLD / STEER / FLIPS / LOOK UP
 #include "spidy/fly076.hpp"       // HERO VR 0.0.76 FLIGHT (the rework)
+#include "spidy/ball_sure.hpp"    // HERO VR 0.0.76 BALL SURE (every web-ball press fires)
+#include "spidy/melee076.hpp"     // HERO VR 0.0.76 MELEE SNAP
 #include "spidy/car_collision074.hpp" // 0.0.74 test 10 CAR COLLISION
 #include "spidy/roster_page.hpp"
 #include "spidy/holo_roster.hpp" // 0.0.73 test 3 HOLO ROSTER
@@ -1164,6 +1166,7 @@ struct Update37Frame {
 };
 Update37Frame u37;
 combat_input::Machine combatMachine;
+spidy::ball_sure::Sure ballSure; // HERO VR 0.0.76 BALL SURE
 hand_crawl::Climber climber;
 health_log::Log healthLog;
 template <class D, class F> void publish(D& d, F fill) {
@@ -4841,7 +4844,12 @@ DWORD WINAPI run(void*) {
                                                                     (frame.buttons & buttonY) != 0);
                                 // 0.0.76 roll fix: the right stick rolls only while it leans more left / right
                                 // than up / down (fly076::rollStick; the climb takes the other).
-                                const float a = fly076Roll.update(frame.seconds, flying076 && !calibrationInput,
+                                // 0.0.76 LEVEL VIEW: FLY ROLL COMFORT (the default) rolls the body, never the view;
+                                // FULL rolls the view as before; OFF rolls nothing.
+                                const uint32_t rollMode = flyRollNow.load();
+                                rig.flyRollLevel(fly076::levelView(rollMode));
+                                const float a = fly076Roll.update(frame.seconds,
+                                                                  flying076 && !calibrationInput && fly076::rolls(rollMode),
                                                                   fly076::rollStick(frame.hands[1].stickX,
                                                                                     frame.hands[1].stickY),
                                                                   static_cast<float>(flyRollSpeedNow.load()), upright);
@@ -4853,7 +4861,7 @@ DWORD WINAPI run(void*) {
                                                          : Vec3{0, 0, -1};
                                 fly076Frame.update(flying076 && std::isfinite(a) ? a : 0.f,
                                                    flying076 ? swingState.velocity : Vec3{}, lookNow);
-                                near_clip::boost(fly076Frame.nearClip());
+                                near_clip::boost(fly076::levelView(rollMode) ? 0.f : fly076Frame.nearClip());
                                 rig.flyRollAxis(fly076Frame.axis());
                                 rig.flyRoll(flying076 && std::isfinite(a) ? a : 0.f, flying076);
                                 rig.flyControls(flying076, upright);
@@ -4890,6 +4898,7 @@ DWORD WINAPI run(void*) {
                             flyRollState.reset();
                         } else {
                             rig.flyRollAxis({});
+                            rig.flyRollLevel(false); // the 0.0.75 flight's FLY ROLL rolls the view as it did
                             rig.flyControls(false, false);
                             fly076Roll.reset();
                             fly076Frame.reset();
@@ -7582,7 +7591,13 @@ DWORD WINAPI run(void*) {
                             // Update 37.2: no gadget with a web attached; the zip strike's distance.
                             cf.webAttached = swingState.webs[0].attached || swingState.webs[1].attached;
                             cf.enemyMetres = world_trace::nearestEnemyMetres();
-                            const auto config37 = combatConfig();
+                            auto config37 = combatConfig();
+                            // HERO VR 0.0.76 BALL SURE (ball_sure.hpp): SPIDER-MAN with no enemy near - the game fires no
+                            // web ball out of combat, so the press is the mod's own ball from that wrist (no RB at all).
+                            const bool ballOutOfCombat = heroNow() == hero_modes::spiderMan && !config37.ballOurs &&
+                                                         spidy::ball_sure::outOfCombat(cf.enemyCount, cf.enemyMetres);
+                            if (ballOutOfCombat)
+                                config37.ballOurs = true;
                             // The enemies for the next frame's grab press (the swing input runs first).
                             grabEnemies = cf.enemies;
                             grabEnemyIds = cf.enemyIds;
@@ -7731,7 +7746,54 @@ DWORD WINAPI run(void*) {
                                     ropeWatched = watch;
                                 }
                             }
-                            const auto fightOut = combatMachine.update(cf, config37);
+                            auto fightOut = combatMachine.update(cf, config37);
+                            // HERO VR 0.0.76 BALL SURE: in combat the RB went to the game; when the wrist muzzle hook
+                            // (CANDIDATE) sees no web-shooter ask within 0.3 s, or cannot tell (unhooked), the mod's own
+                            // ball leaves that wrist too - a press is never lost.
+                            try {
+                                spidy::ball_sure::In bi;
+                                bi.seconds = frame.seconds;
+                                const bool spider = heroNow() == hero_modes::spiderMan;
+                                for (unsigned i = 0; i < 2; ++i)
+                                    bi.start[i] = spider && fightOut.ballStart[i] && !fightOut.ballOurs[i];
+                                const auto ms = wrist_muzzle::status();
+                                bi.hooked = ms.hooked != 0;
+                                bi.webCalls = ms.webCalls;
+                                const auto bo = ballSure.update(bi);
+                                for (unsigned i = 0; i < 2; ++i) {
+                                    if (ballOutOfCombat && fightOut.ballOurs[i])
+                                        ballSure.outOfCombatPress();
+                                    if (!bo.backup[i] || fightOut.ballOurs[i])
+                                        continue;
+                                    fightOut.ballOurs[i] = true;
+                                    if (finite(cf.hands[i].aim) && length(cf.hands[i].aim) > .5f)
+                                        fightOut.ballDirection[i] = cf.hands[i].aim;
+                                }
+                                static uint32_t ballSureSaid = 0;
+                                const uint32_t sureNow = ballSure.backups() + ballSure.unhookedBalls() + ballSure.outBalls();
+                                if (sureNow != ballSureSaid && (sureNow <= 3 || sureNow % 10 == 0)) {
+                                    ballSureSaid = sureNow;
+                                    char line[220];
+                                    sprintf_s(line, "VERSION 0.0.76 BALL SURE: %u presses to the game, %u its own shots seen, "
+                                                    "%u backups, %u with no hook, %u out of combat (the mod's ball)",
+                                              ballSure.presses(), ballSure.gameShots(), ballSure.backups(),
+                                              ballSure.unhookedBalls(), ballSure.outBalls());
+                                    game_prompts::note(line);
+                                }
+                            } catch (...) {
+                            }
+                            {   // HERO VR 0.0.76 MELEE SNAP: a line now and then (punches sent to the enemy swung at)
+                                static uint32_t snapSaid = 0;
+                                const uint32_t snaps = combatMachine.snapPunches();
+                                if (snaps != snapSaid && (snaps <= 3 || snaps % 10 == 0)) {
+                                    snapSaid = snaps;
+                                    char line[160];
+                                    sprintf_s(line, "VERSION 0.0.76 MELEE SNAP: %u punches sent at the enemy swung at "
+                                                    "(%u frames the lunge stayed shut, an enemy within 3.5 m)",
+                                              snaps, combatMachine.snapShutFrames());
+                                    game_prompts::note(line);
+                                }
+                            }
                             if (const auto& eh = combatMachine.everyHit();
                                 eh.taps() != everyHitNoted && combatClock - everyHitNotedAt >= 5) {
                                 everyHitNoted = eh.taps();
@@ -13011,7 +13073,10 @@ DWORD WINAPI run(void*) {
                                     t.eye = rendered.headPose.position + travel;
                                     // 0.0.76 roll fix: rolled, the body turns with the view about the head (its up
                                     // already did): the chest stays under the head, not across the view.
-                                    t.feet = fly076::RollFrame::aboutHead(t.eye, t.feet, rendered.flyRollTurn);
+                                    if (rendered.flyRollBodyOnly) // 0.0.76 LEVEL VIEW: the body alone rolls
+                                        fly076::rollBody(rendered.flyRollTurn, t.eye, t.up, t.feet);
+                                    else
+                                        t.feet = fly076::RollFrame::aboutHead(t.eye, t.feet, rendered.flyRollTurn);
                                     // Version 0.0.73 test 3 FLIGHT POSE (fix 27): the suit leans with the flight about
                                     // the eyes, as the game's body does (fly_lean::leanSuit); upright: unchanged.
                                     fly_lean::leanSuit(saved->flyLean, t.eye, t.up, t.feet);

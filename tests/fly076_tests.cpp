@@ -299,6 +299,88 @@ void pushOffTests() {
         p.update(dt, {0, 0, -1}, right, forward);
     check(!p.pushing(), "only a moment");
 }
+
+void aimTests() {
+    // 0.0.76 AIM FLIGHT (test 801ce57): look down and push forward - a dive; look up - a climb; strafe stays level
+    const Vec3 down45 = normalized(Vec3{0, -1, -1}), up45 = normalized(Vec3{0, 1, -1});
+    const Vec3 dive = aimedMove({0, 0, -1}, down45);
+    check(dive.y < -.6f && dive.z < -.6f, "aim: forward while looking down dives forward and down");
+    const Vec3 climb = aimedMove({0, 0, -1}, up45);
+    check(climb.y > .6f && climb.z < -.6f, "aim: forward while looking up climbs");
+    const Vec3 strafe = aimedMove({1, 0, 0}, down45);
+    check(std::fabs(strafe.y) < 1e-4f && strafe.x > .99f, "aim: the strafe stays level");
+    const Vec3 back = aimedMove({0, 0, 1}, down45);
+    check(back.y > .6f && back.z > .6f, "aim: back while looking down backs up and away");
+    check(length(aimedMove({0, 0, -1}, {0, -1, 0})) > .99f, "aim: a look straight down keeps the stick's way");
+    check(length(aimedMove({0, 0, -1}, {NAN, 0, 0})) > .99f, "aim: a NaN look keeps the level stick");
+    Flight f;
+    In in;
+    in.hover = true;
+    in.aimPitch = true;
+    in.seconds = dt;
+    in.speed = 2;
+    in.top = 16;
+    in.grounded = true;
+    in.look = {0, 0, -1};
+    in.enter = true;
+    Out o = f.update(in);
+    in.enter = false;
+    in.grounded = false;
+    in.airborne = true;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(length(o.velocity) == 0, "aim: nothing held, still");
+    in.look = down45;
+    in.move = {0, 0, -1};
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.y < -8 && o.velocity.z < -8, "aim: moving and looking down dives - no hover needed");
+    in.look = up45;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.y > 8 && o.velocity.z < -8, "aim: looking up climbs");
+    in.look = {0, 0, -1};
+    in.rise = -1;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.y < -3 && o.velocity.z < -3, "aim: the climb stick still sinks while moving");
+    in.rise = 0;
+    in.look = down45;
+    in.boost = 3;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = f.update((in.velocity = o.velocity, in));
+    check(o.supersonic && o.velocity.y < -10, "aim: SUPERSONIC follows the aim down in the air");
+    in.grounded = true;
+    o = f.update((in.velocity = o.velocity, in));
+    check(o.velocity.y >= 0, "aim: SUPERSONIC never into the ground");
+    in.boost = 0;
+    in.grounded = false;
+    // the old way without aimPitch: the stick stays level
+    Flight g;
+    In lv = in;
+    lv.aimPitch = false;
+    lv.enter = true;
+    lv.grounded = false;
+    lv.velocity = {};
+    o = g.update(lv);
+    lv.enter = false;
+    for (int i = 0; i < 90 * 2; ++i)
+        o = g.update((lv.velocity = o.velocity, lv));
+    check(std::fabs(o.velocity.y) < .5f, "no aimPitch: the stick stays level (as before)");
+}
+
+void levelViewTests() {
+    // 0.0.76 LEVEL VIEW: COMFORT keeps the view level, FULL rolls it, OFF rolls nothing
+    check(levelView(1) && !levelView(2) && levelView(0) && levelView(7), "level view: COMFORT and unknown, not FULL");
+    check(!rolls(0) && rolls(1) && rolls(2), "OFF never rolls");
+    Vec3 up{0, 1, 0}, feet{0, 0, 0};
+    const Vec3 eye{0, 1.7f, 0};
+    rollBody(Quat::around({0, 0, -1}, 3.14159265f), eye, up, feet);
+    check(up.y < -.99f && std::fabs(feet.y - 3.4f) < 1e-3f, "rollBody: half a turn - the body over the head, up down");
+    Vec3 up2{0, 1, 0}, feet2{0, 0, 0};
+    rollBody(Quat{}, eye, up2, feet2);
+    check(up2.y > .99f && length(feet2) < 1e-5f, "rollBody: no roll changes nothing");
+}
 } // namespace
 
 int main() {
@@ -307,6 +389,8 @@ int main() {
     hoverTests();
     rollTests();
     rollFrameTests();
+    aimTests();
+    levelViewTests();
     pushOffTests();
     if (failures) {
         std::printf("%d fly076 checks failed\n", failures);

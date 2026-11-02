@@ -171,3 +171,12 @@ GPU, the suit's asset id in the MP WORLD packet, and drawing it on the receiver 
 - MP: the 12-byte 'S' GAME SUIT tail (mp_net.hpp): 'S', 1, flags (1 known), 0, the worn suit's loadout id
   u64. Sent after WORLD only when the packet still fits 512 bytes; older builds ignore it. Nothing fills it
   yet (the probe's place is CANDIDATE).
+
+## Probe 5 result (test 801ce57: Advanced 2.0, Classic, Hybrid) - CANDIDATE, not CONFIRMED
+- One word changed with each of the three suit swaps outside the menus: record+0x080 -> +0x028 -> +0x0c8 ->
+  +0x1e8, word +0x008. It is a candidate for the worn suit, not proven (one run, and its values were not yet matched
+  to the suits' own item ids).
+- The Classic suit's item id was found once at record+0x030 -> +0x0b0 -> +0x150 -> +0x098, word +0x030 (CANDIDATE).
+- So the friend-suit drawing stays off: nothing reads these places in play. To confirm: swap Advanced 2.0 -> Classic
+  -> Hybrid -> Advanced 2.0 again with this build (the probes are the same) and run
+  `python tools/sm2_suits/sm2scan.py "<game folder>"` once, so the values can be matched to the suits' ids.

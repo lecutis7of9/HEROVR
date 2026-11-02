@@ -19230,6 +19230,13 @@ int main() {
             }
             return std::pair{hits, contact};
         };
+        {   // HERO VR 0.0.76 MELEE SNAP (on by default): the hook is thrown at him - one blow, never two
+            Machine snapped;
+            auto [hs, ks] = shove(snapped);
+            check(hs == 1 && snapped.snapPunches() == 1, "MELEE SNAP: a 2.5 m/s hook at an enemy was not one blow");
+            (void)ks;
+        }
+        c.meleeSnap = false; // the contact rule itself (801ce57's)
         Machine both;
         auto [h, k] = shove(both);
         check(h == 1 && k == 1 && both.contactHits() == 1, "a 2.5 m/s hook into an enemy was not one contact hit");
@@ -19817,6 +19824,70 @@ int main() {
                 target = o.lungeTarget;
         }
     };
+    test("HERO VR 0.0.76 MELEE SNAP: a punch goes to the thug it is thrown at, never the lunge", [lungeFrame] {
+        using namespace combat_input;
+        Config c;
+        const auto run = [&](Frame f, uint64_t& target, uint16_t& buttons, int& lunges, int& punches, bool& snapped) {
+            Machine m;
+            for (int i = 0; i < 90; ++i) {
+                if (i >= 54 && i < 66)
+                    f.hands[1].position = f.hands[1].position + Vec3{0, 0, -3.f / 90};
+                const auto o = m.update(f, c);
+                buttons |= o.buttons;
+                lunges += o.lungeHand >= 0;
+                if (o.punch[1]) {
+                    ++punches;
+                    target = o.punchTarget[1];
+                    snapped |= o.snapped[1];
+                }
+            }
+        };
+        {   // the lock 5 m ahead (looked at), a thug 2.8 m ahead a little right: X at the thug, no Y
+            Frame f = lungeFrame();
+            f.enemies[1] = {.6f, 0, -2.8f};
+            f.enemyIds[1] = 7;
+            f.enemyCount = 2;
+            f.enemyMetres = 2.8f;
+            uint64_t target{};
+            uint16_t buttons{};
+            int lunges{}, punches{};
+            bool snapped{};
+            run(f, target, buttons, lunges, punches, snapped);
+            check(punches == 1 && snapped && target == 7, "MELEE SNAP: the punch did not go to the thug 2.8 m ahead");
+            check(lunges == 0 && !(buttons & padY) && (buttons & padX), "MELEE SNAP: a thug in reach still got the lunge's Y");
+        }
+        {   // a thug 1.2 m away 50 degrees left, the fist straight ahead: he is in the cone, he gets it
+            Frame f = lungeFrame();
+            f.enemies[0] = {-.92f, 0, -.77f};
+            f.enemyMetres = 1.2f;
+            uint64_t target{};
+            uint16_t buttons{};
+            int lunges{}, punches{};
+            bool snapped{};
+            run(f, target, buttons, lunges, punches, snapped);
+            check(punches == 1 && snapped && target == 42, "MELEE SNAP: a thug 50 degrees off was whiffed");
+        }
+        {   // only the enemy 5 m ahead: no snap, the lunge as before
+            uint64_t target{};
+            uint16_t buttons{};
+            int lunges{}, punches{};
+            bool snapped{};
+            run(lungeFrame(), target, buttons, lunges, punches, snapped);
+            check(!snapped && lunges == 1 && (buttons & padY), "MELEE SNAP changed the far lunge");
+        }
+        {   // a wall between the thug and him: no snap
+            Frame f = lungeFrame();
+            f.enemies[0] = {0, 0, -2};
+            f.enemyMetres = 2;
+            f.enemySight[0] = combat_spidy::sightBlocked;
+            uint64_t target{};
+            uint16_t buttons{};
+            int lunges{}, punches{};
+            bool snapped{};
+            run(f, target, buttons, lunges, punches, snapped);
+            check(!snapped, "MELEE SNAP snapped through a wall");
+        }
+    });
     test("Update 38 SpidyVR: ZIP MODE SPIDYVR lunges at the enemy looked at; LUNGE SPIDYVR MOVE leaves it to the bridge", [lungeFrame, lungeRun] {
         using namespace combat_input;
         Config c;
@@ -20020,6 +20091,7 @@ int main() {
         };
         {   // An enemy 2 m off: 38 (1.3 m) lunges; 38.1 (2.5 m) punches him (X), no Y.
             Config old;
+            old.meleeSnap = false; // Update 38's rule (0.0.76 MELEE SNAP shuts the lunge with an enemy this close)
             Config now;
             now.lungeFrom = combat38::lungeFromMetres(0);
             Machine a, b;

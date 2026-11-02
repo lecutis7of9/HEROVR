@@ -691,9 +691,13 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             ahead = flyAxis_;
         if (finite(ahead) && length(ahead) > .1f) {
             const Quat roll = Quat::around(normalized(ahead), flyRoll_);
-            const Quat yaw = Quat::yaw(placed.yaw);
-            placed.tilt = unit(yaw.conjugate() * roll * yaw * placed.tilt);
-            placed.origin += before.position - placed.toWorld(f.head).position;
+            if (flyLevel_) { // 0.0.76 LEVEL VIEW: the horizon stays put; only the body turns (out.flyRollTurn)
+                out.flyRollBodyOnly = true;
+            } else {
+                const Quat yaw = Quat::yaw(placed.yaw);
+                placed.tilt = unit(yaw.conjugate() * roll * yaw * placed.tilt);
+                placed.origin += before.position - placed.toWorld(f.head).position;
+            }
             out.flyRoll = flyRoll_;
             out.flyRollTurn = roll; // 0.0.76 roll fix: the body's turn about the head, the same frame
         }

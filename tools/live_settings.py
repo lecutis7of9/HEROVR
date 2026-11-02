@@ -172,10 +172,11 @@ SETTINGS = {
                  'time VR starts'),
     # 0.0.76 SPIDY TAA TUNE (tools/run_game_vr.py apply_vr_aa): the eyes rendered larger and filtered down before our
     # TAA; off by default (the 509bdc9 run was GPU-bound at 45 new pictures/s on a 90 Hz headset: no headroom).
-    'vr_ss': ((0, 1, 2), None, "VR SS {} (0 off: the eyes at the headset's size, the default; 1 125: the eyes "
+    # 0.0.76 A-depth TRACE D: 3 110, a test only (1.21x the pixels; never the default).
+    'vr_ss': ((0, 1, 2, 3), None, "VR SS {} (0 off: the eyes at the headset's size, the default; 1 125: the eyes "
              "rendered at 125% per side and filtered down before SpidyVR's TAA, smoother windows but about a third "
-             "more GPU work; 2 150: 150% per side, about twice the GPU work, only with frame rate to spare) - RESTART "
-             'NOTICE: takes effect the next time VR starts'),
+             "more GPU work; 2 150: 150% per side, about twice the GPU work, only with frame rate to spare; 3 110: "
+             "110% per side, 1.21x the pixels, a test) - RESTART NOTICE: takes effect the next time VR starts"),
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
     'vr_jitter': ((0, 1), 'SpidyVrJitter', "VR JITTER {} (0 on: the eyes' TAA sample walk, sharpest bricks; 1 off: "
                  "one fixed offset instead, a test for the far shake, a little softer) - live, no restart needed"),
@@ -183,6 +184,10 @@ SETTINGS = {
                       "FIX: the game's own unseen head views give the lens no jitter instead of feeding its stored "
                       "jitter back in, which doubled it and flipped it upside down; 0 keep: c71a59c's doubled jitter, "
                       "to compare) - live, no restart needed"),
+    # 0.0.76 SFX DIAG (src/sfx_win.cpp, game_xr SpidySfxLayer): a diagnostic, live, never persisted.
+    'vr_sfx_layer': ((0, 1), 'SpidySfxLayer', "VR SFX LAYER {} (0 on, the default; 1 off: only the mod's own XAudio2 "
+                     "sound effects are stopped, the game's audio and music untouched, to tell whether a strange "
+                     "sound is ours) - live, no restart needed"),
     # 0.0.76 A-depth (include/spidy/taa_depth.hpp, native_eye_gpu.cpp drawHistory): live, never persisted.
     'vr_taa_depth': ((0, 1, 2), 'SpidyVrTaaDepth', "VR TAA DEPTH {} (1 on: SpidyVR's TAA history is turned with the "
                      "eyes' depth, so windows and building edges keep their history as your head moves; 0 off, the "
@@ -502,8 +507,8 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'vr_render': 'RESTART NOTICE: vr_render takes effect the next time VR starts (native: the eyes at 100%, '
                         "no upscaling; upscaled: SpidyVR's 67%).",
            # 0.0.76 SPIDY TAA TUNE: the eye supersample is set when VR starts
-           'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 125 or '
-                    '150: the eyes rendered larger and filtered down, smoother but heavier on the GPU).',
+           'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 110, 125 or '
+                    '150: the eyes rendered larger per side and filtered down, smoother but heavier on the GPU).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
            # 0.0.76 LIGHTS LOCK: VR always turns them off; the value is only the flat game's
            'lens_flares': 'NOTICE: lens_flares stays off in VR for every hero (0.0.76); GAME only keeps the flat game\'s own setting.',
@@ -700,7 +705,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'sm1style': ('on', 'off'),  # 0.0.74 test 10 SM1STYLE
                 'vr_aa': ('ours', 'keep', 'smaa', 'game'), 'vr_textures': ('high', 'keep'),  # 0.0.76 VISUAL
                 'vr_render': ('native', 'upscaled'),  # 0.0.76 VISUAL
-                'vr_ss': ('off', '125', '150'),  # 0.0.76 SPIDY TAA TUNE
+                'vr_ss': ('off', '125', '150', '110'),  # 0.0.76 SPIDY TAA TUNE (110: A-depth TRACE D, a test)
+                'vr_sfx_layer': ('on', 'off'),  # 0.0.76 SFX DIAG (0 on, the default)
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
@@ -797,7 +803,8 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_aa': {'ours': 0, 'taa': 0, 'keep': 1, 'smaa': 2, 'game': 3, 'sm1style': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 SPIDY TAA
            'vr_textures': {'high': 0, 'keep': 1, 'game': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
            'vr_render': {'native': 0, 'upscaled': 1, '100': 0, '67': 1, '0': 0, '1': 1},  # 0.0.76 VISUAL
-           'vr_ss': {'off': 0, '100': 0, '125': 1, '150': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 SPIDY TAA TUNE
+           'vr_ss': {'off': 0, '100': 0, '125': 1, '150': 2, '110': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 SPIDY TAA TUNE
+           'vr_sfx_layer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 SFX DIAG: 0 on default
            'vr_jitter': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 FAR SHAKE
            'vr_taa_jitter': {'on': 0, 'off': 1, 'fixed': 2, 'half': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TAA JITTER
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
@@ -2093,8 +2100,8 @@ def vr_textures_high(text):
 
 def vr_supersample(text):
     """0.0.76 SPIDY TAA TUNE: the eye supersample percent live.txt `text` asks for with vr_ss (None: no live.txt):
-    100 (off, the default), 125 or 150. Never raises."""
-    return {'125': 125, '150': 150}.get(_start_choice(text, 'vr_ss', 'off'), 100)
+    100 (off, the default), 110 (a test), 125 or 150, per side. Never raises."""
+    return {'110': 110, '125': 125, '150': 150}.get(_start_choice(text, 'vr_ss', 'off'), 100)
 
 
 def vr_render_upscaled(text):

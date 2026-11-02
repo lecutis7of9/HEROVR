@@ -46,6 +46,8 @@ import vr_aa_record  # 0.0.76 SPIDY TAA
 import taa_watch_record  # 0.0.76 TAA WATCH
 import taa_frame_log_record  # 0.0.76 TAA FRAME LOG
 import taa_depth_check_record  # 0.0.76 A-depth CHECKED
+import taa_depth_trace_record  # 0.0.76 A-depth TRACE
+import sfx_diag_record  # 0.0.76 SFX DIAG
 from probe_stereo import (frame_snapshot, render_memory_snapshot, snapshot as stereo_snapshot, encode_mip_bias,
                           mip_bias_snapshot, eye_camera_line)
 from probe_native_rays import snapshot as ray_snapshot
@@ -1810,7 +1812,8 @@ def apply_vr_aa(a, supersample=100):
     100 unless asked, never with --size. Returns the console line."""
     smaa = a.vr_aa == 'smaa'
     mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
-    ss = supersample if supersample in (125, 150) and not a.size else 100
+    # 0.0.76 A-depth TRACE D: SpidyXrStart keeps 110 / 125 / 150 with ours only (vr_aa.hpp supersampleKept)
+    ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
         ('upscale', a.upscale, 100), ('mip bias', a.mip_bias, mip),
@@ -2999,7 +3002,9 @@ def session(a, startup, session_off=()):
                       vr_aa_record.EXPORT,  # 0.0.76 SPIDY TAA
                       taa_watch_record.EXPORT,  # 0.0.76 TAA WATCH
                       taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG: absent from an older module
-                      taa_depth_check_record.EXPORT))  # 0.0.76 A-depth CHECKED: absent from an older module
+                      taa_depth_check_record.EXPORT,  # 0.0.76 A-depth CHECKED: absent from an older module
+                      taa_depth_trace_record.EXPORT,  # 0.0.76 A-depth TRACE: absent from an older module
+                      sfx_diag_record.EXPORT))  # 0.0.76 SFX DIAG: absent from an older module
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3094,6 +3099,12 @@ def session(a, startup, session_off=()):
         taa_watch_said = 0  # 10 s windows already printed
         depth_check_last = None  # 0.0.76 A-depth CHECKED: taa_depth_check_snapshot, kept from the samples
         depth_check_said = 0  # its 10 s windows already printed
+        trace_last = None  # 0.0.76 A-depth TRACE: taa_depth_trace_snapshot, kept from the samples
+        trace_said = trace_hitches_said = 0  # its windows and hitches already printed
+        trace_fault_said = False
+        sfx_last = None  # 0.0.76 SFX DIAG: sfx_diag_snapshot, kept from the samples
+        sfx_said = sfx_moments_said = 0
+        sfx_format_said = False
         depth_check_check_said = None  # its check's state, reason and best fit last printed
         # 0.0.76 TAA FRAME LOG: read with each closed 10 s window; the block with the most still-head pairs and the
         # last one are kept for the report.
@@ -3400,6 +3411,8 @@ def session(a, startup, session_off=()):
                         taa_frame_log=dict(most_still=taa_frame_log_record.taa_frame_log_report(frame_log_best),
                                            last=taa_frame_log_record.taa_frame_log_report(frame_log_last)),
                         taa_depth_check=taa_depth_check_record.taa_depth_check_report(depth_check_last),
+                        taa_depth_trace=taa_depth_trace_record.taa_depth_trace_report(trace_last),
+                        sfx_diag=sfx_diag_record.sfx_diag_report(sfx_last),
                         eye_shadows=shadows_last,
                         stream_stalls=stream_stalls(list(samples)),
                         free_commit_mb=dict(start=start_commit, lowest=lowest_commit),
@@ -3758,6 +3771,48 @@ def session(a, startup, session_off=()):
                                         depth_section)[-shown:]:
                                     print(said, flush=True)
                             depth_check_said = depth_check_last['closed']
+                    # 0.0.76 A-depth TRACE: each closed 10 s window (tagged with vr_aa / vr_taa_depth / vr_ss) and
+                    # each render hitch once; nothing while the window is still open.
+                    trace_last = (taa_depth_trace_record.taa_depth_trace_snapshot(
+                        game, xr.get(taa_depth_trace_record.EXPORT)) or trace_last)
+                    if trace_last:
+                        if not trace_fault_said and (said := taa_depth_trace_record.fault_line(trace_last)):
+                            trace_fault_said = True
+                            print(said, flush=True)
+                        if trace_last['closed'] > trace_said:
+                            fresh = trace_last['windows'][-min(trace_last['closed'] - trace_said,
+                                                               len(trace_last['windows'])):]
+                            ends = sum(w['ms'] for w in trace_last['windows']) / 1000.0
+                            ends -= sum(w['ms'] for w in fresh) / 1000.0
+                            for w in fresh:
+                                ends += w['ms'] / 1000.0
+                                if w['pairs']:
+                                    for said in taa_depth_trace_record.window_lines(
+                                            taa_depth_trace_record.window_summary(w, ends)):
+                                        print(said, flush=True)
+                            trace_said = trace_last['closed']
+                        if trace_last['hitches_noted'] > trace_hitches_said:
+                            new = trace_last['hitches_noted'] - trace_hitches_said
+                            for h in trace_last['hitches'][-min(new, len(trace_last['hitches'])):]:
+                                print(taa_depth_trace_record.hitch_line(h), flush=True)
+                            trace_hitches_said = trace_last['hitches_noted']
+                    # 0.0.76 SFX DIAG: the format once, each closed 10 s window and each moment once.
+                    sfx_last = sfx_diag_record.sfx_diag_snapshot(game, xr.get(sfx_diag_record.EXPORT)) or sfx_last
+                    if sfx_last:
+                        if not sfx_format_said and (said := sfx_diag_record.format_line(sfx_last)):
+                            sfx_format_said = True
+                            print(said, flush=True)
+                        if sfx_last['closed'] > sfx_said:
+                            fresh = sfx_last['windows'][-min(sfx_last['closed'] - sfx_said,
+                                                             len(sfx_last['windows'])):]
+                            for w in fresh:
+                                print(sfx_diag_record.window_line(sfx_diag_record.window_summary(w)), flush=True)
+                            sfx_said = sfx_last['closed']
+                        if sfx_last['moments_noted'] > sfx_moments_said:
+                            new = sfx_last['moments_noted'] - sfx_moments_said
+                            for m in sfx_last['moments'][-min(new, len(sfx_last['moments'])):]:
+                                print(sfx_diag_record.moment_line(m), flush=True)
+                            sfx_moments_said = sfx_last['moments_noted']
                     jitter_log_last = (jitter_log_record.jitter_log_snapshot(game, xr.get(jitter_log_record.EXPORT))
                                        or jitter_log_last)
                     # Update 34.2: ENGINE TAA's record each sample, a console line when its state or mode changes.
@@ -4041,7 +4096,12 @@ def session(a, startup, session_off=()):
                 taa_watch_record.taa_watch_snapshot(game, xr.get(taa_watch_record.EXPORT)) or taa_watch_last),
             taa_depth_check=taa_depth_check_record.taa_depth_check_report(
                 taa_depth_check_record.taa_depth_check_snapshot(game, xr.get(taa_depth_check_record.EXPORT))
-                or depth_check_last))
+                or depth_check_last),
+            taa_depth_trace=taa_depth_trace_record.taa_depth_trace_report(
+                taa_depth_trace_record.taa_depth_trace_snapshot(game, xr.get(taa_depth_trace_record.EXPORT))
+                or trace_last),
+            sfx_diag=sfx_diag_record.sfx_diag_report(
+                sfx_diag_record.sfx_diag_snapshot(game, xr.get(sfx_diag_record.EXPORT)) or sfx_last))
         result['game_entries_restored'] = all(game.read(game.base+rva,16) == code
                                               for rva,code in original_entries.items())
         result['frame_rates'] = frame_rates(list(samples))

@@ -6,6 +6,29 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **A-depth TRACE (diagnostics only, nothing new on by default; `vr_taa_depth` stays off by default).** Every 10 s,
+  for whatever `vr_aa` / `vr_taa_depth` / `vr_ss` is in force (each window is tagged with them and the eye render /
+  headset size): fps and the pair-to-pair frame-time spread, render hitches (pairs 50 ms or more apart) on their own
+  lines with a QPC time; with `vr_taa_depth` on: each eye's depth (this pair's and the shown one's), the depth path
+  vs head-motion fallback share, the per-eye choice a per-eye gate would make (logged only: rendering stays
+  both-eyes-or-neither), the convention round trip mean / max, the history age of 8 static-surface pixels per eye,
+  and the counted pixels binned by the surface's angle to the view (frontal / mid / grazing / past 16x anisotropy /
+  depth edge / no depth) with clip-only / depth-only / both rejection, per-pixel fallback, history age, luma change
+  and depth residual, and inside each bin the EDGE pixels apart (a depth step, a no-depth neighbour or a crease: the
+  corner where a wall turns into a recessed window), bright SPIKES (a pixel above its own 3x3 variance box) and
+  FLIPS (luma change over 0.25 against the history), the edge luma change in vs shown (pre / post TAA) and the edge
+  history age mean / max. The TAA, its weights, clip, jitter and depth reprojection are
+  unchanged: the trace is a separate pipeline variant used only with `vr_taa_depth` on, which only adds counters;
+  if it cannot be made the counted depth path runs exactly as before.
+- **SFX DIAG (diagnostics only).** The mod's own XAudio2 sound-effects layer: a format line (mastering voice, device
+  mix format and name, our voices), 10 s lines (buffers, queue, glitches, errors, audio pass gaps, late wake-ups)
+  and moment lines (glitch, critical error, late pass, layer switch) on the same QPC clock as the render hitches; no
+  per-callback disk logging. New live.txt `vr_sfx_layer` (0 on, the default; 1 off: only the mod's own sound effects
+  stop, live, no restart).
+- **vr_ss now reaches the eyes with `vr_aa = ours`.** SpidyXrStart had put every `vr_ss` back to 100% under ours and
+  SMAA; with ours it now keeps 110 / 125 / 150 (per side; 110 is new, 1.21x the pixels, a test). Default (off) is
+  100% as before; with SMAA it stays 100% (SMAA is skipped on supersampled eyes).
+
 - **Fix (A-depth CHECKED v3): the TAA FRAME LOG is read and printed once per 10 s window again.** 5881bac had moved it
   under the depth check, so the launcher read its 70 KB record from the game and printed a console line with every sample
   (2701 lines in the 16:35 session instead of about 17). Launcher only; the DLL, SPIDY TAA and `vr_taa_depth` (off by

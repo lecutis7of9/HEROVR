@@ -16,6 +16,7 @@
 #include "spidy/taa_watch.hpp"
 #include "spidy/taa_depth.hpp"
 #include "spidy/taa_depth_check.hpp"
+#include "spidy/taa_depth_trace.hpp"
 #include "spidy/near_clip.hpp"
 #include "spidy/taa_frame_log.hpp"
 #include "spidy/taa_jitter.hpp"
@@ -53,6 +54,8 @@ __declspec(dllexport) taa_watch::Data SpidyTaaWatchData; // 0.0.76 TAA WATCH (wa
 __declspec(dllexport) taa_frame_log::Data SpidyTaaFrameLogData; // 0.0.76 TAA FRAME LOG (watchLock)
 // 0.0.76 A-depth CHECKED (taa_depth_check.hpp): the depth convention check and the depth path's 10 s log (watchLock).
 __declspec(dllexport) taa_depth_check::Data SpidyTaaDepthCheckData;
+// 0.0.76 A-depth TRACE (taa_depth_trace.hpp, read-only): per-eye depth, history age, graze bins, hitches (watchLock).
+__declspec(dllexport) taa_depth_trace::Data SpidyTaaDepthTraceData;
 }
 namespace spidy::native_gpu {
 namespace {
@@ -2485,6 +2488,18 @@ struct HistoryPipeline {
     // 0.0.76 A-depth CHECKED: per capture slot, the path (taa_depth_check::Path) and movement (Category) of the pair
     // counted there, and whether the pair timed there was SPIDY TAA's, turned with the depth.
     std::array<uint32_t, 3> countPath{}, countCategory{};
+    // 0.0.76 A-depth TRACE (taa_depth_trace.hpp, read-only): its variant, per eye the history ages (this pair's and
+    // the last one's, by the pictures' parity), whether an eye's ages of the last pair are there, the graze bins
+    // and their zeros, and the readback (per capture slot: its graze bins, then its 2 eyes' probe words) with
+    // which eyes of a slot were traced and that slot's movement category.
+    ComPtr<ID3D12RootSignature> depthAgeRoot;
+    ComPtr<ID3D12PipelineState> taaDepthAge;
+    std::array<std::array<ComPtr<ID3D12Resource>, 2>, 2> ages;
+    uint32_t agesW{}, agesH{};
+    std::array<bool, 2> aged{};
+    ComPtr<ID3D12Resource> graze, zeros, traceRead;
+    const volatile uint32_t* traceData{};
+    std::array<bool, 3> traced{};
     std::array<bool, 3> timedOurs{}, timedDepth{};
     ComPtr<ID3D12DescriptorHeap> views, targets;
     ComPtr<ID3D12QueryHeap> queries;
@@ -2574,7 +2589,18 @@ cbuffer Frame : register(b0) { float4 row0; float4 row1; float4 row2; float4 ext
 // convention): xy turn this pair's depth into near / distance, zw the last pair's.
 StructuredBuffer<float> depthNow : register(t2);
 StructuredBuffer<float> depthBefore : register(t3);
-cbuffer Depth : register(b1) { float4 shift; float4 sizes; float4 lin; };
+cbuffer Depth : register(b1) {
+    float4 shift;
+    float4 sizes;
+    float4 lin;
+#ifdef TAA_AGE
+    // 0.0.76 A-depth TRACE (taa_depth_trace.hpp, read-only): x 1 when this eye's ages of the last pair are there (it
+    // was turned with the depth then), y this pair's near (metres), zw the static-surface distances for the probes;
+    // lens: this eye's tangents (left, right, down, up) for the normals of the graze bins.
+    float4 probe;
+    float4 lens;
+#endif
+};
 #endif
 #ifdef TAA_COUNT
 // 0.0.76 TAA JITTER (read-only): this eye's counts (one pixel in 16 x 16; taa_depth_check.hpp Counter), bytes 0 the
@@ -2582,6 +2608,95 @@ cbuffer Depth : register(b1) { float4 shift; float4 sizes; float4 lin; };
 // depth test alone, 16 both, 20 depth-path pixels on head motion instead (no usable depth), 24 those the depth test
 // ran on, 28 all pixels. The picture is the same with or without it.
 RWByteAddressBuffer counts : register(u1); // u0 shares its slot with SV_Target0 in ps_5_0
+#endif
+#ifdef TAA_AGE
+// 0.0.76 A-depth TRACE (read-only; the picture is the same with or without it): each pixel's history age (match << 16
+// | kept, taa_depth_trace.hpp) written to ageOut, the last pair's read from ageIn at the place the history came from;
+// after the eye's w * h ages, its 8 probe pixels' words (age, flags, residual, distance).
+RWStructuredBuffer<uint> ageOut : register(u2);
+RWStructuredBuffer<uint> ageIn : register(u3);
+// The graze bins (taa_depth_trace.hpp Bin / GrazeWord): this eye's 6 x 10 words, zeroed before the pass; counted
+// pixels only.
+RWByteAddressBuffer graze : register(u4);
+float viewZ(float dd) { return probe.y / max(dd * lin.x + lin.y, 1e-12); }
+float3 viewAt(float2 u, float z) { return float3(lerp(lens.x, lens.y, u.x), lerp(lens.w, lens.z, u.y), 1) * z; }
+// The surface's bin at depth pixel dp: its normal from the nearer neighbour on each axis (a jump over 10 % on both
+// sides of an axis: a depth edge), |n.v| against the view ray. edge: any of the 4 neighbours more than 10 % away or
+// with no depth (a silhouette), or a crease on either axis (a recessed window's corner).
+uint grazeBin(int2 dp, int2 depthLast, uint pitch, out bool edge) {
+    edge = false;
+    const float d = depthNow[dp.y * pitch + dp.x];
+    if (!(d > 0 && d < 1))
+        return 5;
+    const float z = viewZ(d);
+    int2 pick[2];
+    float pz[2];
+    [unroll] for (int axis = 0; axis < 2; ++axis) {
+        const int2 step = axis == 0 ? int2(1, 0) : int2(0, 1);
+        float best = 1e30, bz = 0;
+        int2 bp = dp;
+        // A crease: the depth's slope (linear across a plane in screen space) changes by more than a quarter between
+        // the two sides of this pixel (a corner: the wall turning into the window's reveal, even with no 10 % step).
+        const int2 c0 = clamp(dp - step, int2(0, 0), depthLast), c1 = clamp(dp + step, int2(0, 0), depthLast);
+        const float d0 = depthNow[c0.y * pitch + c0.x], d1 = depthNow[c1.y * pitch + c1.x];
+        if (any(c0 != dp) && any(c1 != dp) && d0 > 0 && d0 < 1 && d1 > 0 && d1 < 1 &&
+            abs((d1 - d) - (d - d0)) > 0.25 * max(abs(d1 - d), abs(d - d0)) + 1e-5 * d)
+            edge = true;
+        [unroll] for (int side = -1; side <= 1; side += 2) {
+            const int2 c = clamp(dp + step * side, int2(0, 0), depthLast);
+            const float nd = depthNow[c.y * pitch + c.x];
+            if (any(c != dp) && !(nd > 0 && nd < 1))
+                edge = true;
+            if (any(c != dp) && nd > 0 && nd < 1) {
+                const float nz = viewZ(nd);
+                if (abs(nz - z) > 0.1 * z)
+                    edge = true;
+                if (abs(nz - z) < best) {
+                    best = abs(nz - z);
+                    bz = nz;
+                    bp = c;
+                }
+            }
+        }
+        if (!(best <= 0.1 * z)) {
+            edge = true;
+            return 4;
+        }
+        pick[axis] = bp;
+        pz[axis] = bz;
+    }
+    const float3 here = viewAt((float2(dp) + 0.5) / sizes.xy, z);
+    const float3 n = cross(viewAt((float2(pick[0]) + 0.5) / sizes.xy, pz[0]) - here,
+                           viewAt((float2(pick[1]) + 0.5) / sizes.xy, pz[1]) - here);
+    const float len = length(n);
+    if (!(len > 1e-20)) {
+        edge = true;
+        return 4;
+    }
+    const float a = abs(dot(n / len, normalize(here)));
+    return a >= 0.5 ? 0 : a >= 0.25 ? 1 : a >= 0.0625 ? 2 : 3;
+}
+uint agePrevious(float2 old, uint w, uint h) {
+    if (!(probe.x > 0) || any(old < 0) || any(old > 1))
+        return 0;
+    const uint2 o = min(uint2(old * float2(w, h)), uint2(w - 1, h - 1));
+    return ageIn[o.y * w + o.x];
+}
+void noteAge(int2 p, uint w, uint h, uint match, uint kept, uint flags, float residual, float distance) {
+    ageOut[p.y * w + p.x] = (min(match, 65535u) << 16) | min(kept, 65535u);
+    const uint row0 = (uint)(h * 0.42), row1 = (uint)(h * 0.58);
+    if ((uint)p.y != row0 && (uint)p.y != row1)
+        return;
+    const float columns[4] = {0.35, 0.45, 0.55, 0.65};
+    [unroll] for (uint k = 0; k < 4; ++k)
+        if ((uint)p.x == (uint)(w * columns[k])) {
+            const uint at = w * h + 4 * (k + ((uint)p.y == row1 ? 4 : 0));
+            ageOut[at] = (min(match, 65535u) << 16) | min(kept, 65535u);
+            ageOut[at + 1] = flags | 1 | (probe.x > 0 ? 128 : 0);
+            ageOut[at + 2] = asuint(residual);
+            ageOut[at + 3] = asuint(distance);
+        }
+}
 #endif
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
@@ -2640,6 +2755,71 @@ float3 clipHistory(int2 p, int2 last, float2 old, float2 size, float3 middle, ou
         before = centre + offset / most;
     return before;
 }
+#ifdef TAA_AGE
+// A SPIKE: this pixel's luma above its own 3 x 3 box (mean + gamma sigma, clipHistory's upper bound; luma only).
+bool lumaSpike(int2 p, int2 last, float y) {
+    float m1 = 0, m2 = 0;
+    [unroll] for (int j = -1; j <= 1; ++j)
+        [unroll] for (int i = -1; i <= 1; ++i) {
+            const float n = toYCoCg(current.Load(int3(clamp(p + int2(i, j), int2(0, 0), last), 0)).rgb).x;
+            m1 += n;
+            m2 += n * n;
+        }
+    const float mean = m1 / 9.0;
+    return y > mean + extra.w * sqrt(max(m2 / 9.0 - mean * mean, 0)) + 1e-4;
+}
+// A counted pixel into its graze bin: kind 0 no history (outside the image), 1 refused by the depth, 2 kept (most:
+// the clip's); the luma change is this pixel against the history read there, before any clip; edge: grazeBin's;
+// spike: lumaSpike's. Words: taa_depth_trace.hpp GrazeWord (23 a bin). A refused history shows this pixel as it
+// is, so its output change is the input's (word 20 gets the same change); a kept one adds noteShown's.
+void noteGraze(uint bin, uint kind, float most, bool fallback, uint age, float residual, float2 old, float2 size,
+               float luma, bool edge, bool spike) {
+    const uint at = bin * 92;
+    graze.InterlockedAdd(at, 1);
+    if (edge)
+        graze.InterlockedAdd(at + 40, 1);
+    if (fallback)
+        graze.InterlockedAdd(at + 20, 1);
+    if (residual >= 0) {
+        const uint micro = (uint)min(residual * 1e6, 4e9);
+        graze.InterlockedAdd(at + 32, micro);
+        graze.InterlockedMax(at + 36, micro);
+    }
+    if (kind == 0)
+        return;
+    graze.InterlockedAdd(at + 4, 1);
+    graze.InterlockedAdd(at + (kind == 1 ? (most > 1 ? 16 : 12) : 8), kind == 1 || most > 1 ? 1 : 0);
+    graze.InterlockedAdd(at + 24, age);
+    const float change = abs(luma - toYCoCg(catmullRom(old, size)).x);
+    graze.InterlockedAdd(at + 28, (uint)(change * 1000 + 0.5));
+    const bool moved = kind == 1 || most > 1;
+    if (edge) {
+        graze.InterlockedAdd(at + 44, 1);
+        if (moved)
+            graze.InterlockedAdd(at + (kind == 1 ? (most > 1 ? 56 : 52) : 48), 1);
+        graze.InterlockedAdd(at + 60, (uint)(change * 1000 + 0.5));
+        graze.InterlockedAdd(at + 84, age);
+        graze.InterlockedMax(at + 88, age);
+    }
+    if (spike) {
+        graze.InterlockedAdd(at + 64, 1);
+        if (most > 1)
+            graze.InterlockedAdd(at + 68, 1);
+    }
+    if (change > 0.25) {
+        graze.InterlockedAdd(at + 72, 1);
+        if (edge)
+            graze.InterlockedAdd(at + 76, 1);
+    }
+    if (edge && kind == 1)
+        graze.InterlockedAdd(at + 80, (uint)(change * 1000 + 0.5));
+}
+// The edge pixel's TAA output against the same history read: before (noteGraze's change, the input) vs after.
+void noteShown(uint bin, bool edge, float shown, float2 old, float2 size) {
+    if (edge)
+        graze.InterlockedAdd(bin * 92 + 80, (uint)(abs(shown - toYCoCg(catmullRom(old, size)).x) * 1000 + 0.5));
+}
+#endif
 float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     uint w, h;
     current.GetDimensions(w, h);
@@ -2675,12 +2855,25 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
             }
         }
     }
+#ifdef TAA_AGE
+    const float distance = deep ? probe.y / max(d * lin.x + lin.y, 1e-12) : 0;
+    const uint surface = deep && distance >= probe.z && distance <= probe.w ? 4 : 0;
+    float residual = -1;
+    bool edge = false;
+    const uint bin = counted ? grazeBin(dp, depthLast, pitch, edge) : 5;
+#endif
 #endif
     float2 old = float2(-1, -1);
     if (q.z > 1e-5)
         old = q.xy / q.z;
-    if (!(extra.x > 0) || any(old < 0) || any(old > 1))
+    if (!(extra.x > 0) || any(old < 0) || any(old > 1)) {
+#ifdef TAA_AGE
+        noteAge(p, w, h, 0, 0, 32 | (deep ? 2 : 0) | surface, residual, distance);
+        if (counted)
+            noteGraze(bin, 0, 0, !deep, 0, residual, old, float2(w, h), 0, edge, false);
+#endif
         return here;
+    }
 #ifdef TAA_DEPTH
     bool refused = false;
     if (deep) {
@@ -2696,6 +2889,10 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
                 seen = true;
                 const float was = had * lin.z + lin.w;
                 agrees = agrees || abs(was - want) <= 0.1 * max(was, want) + 1e-7;
+#ifdef TAA_AGE
+                const float off = abs(was - want) / max(max(was, want), 1e-12);
+                residual = residual < 0 ? off : min(residual, off);
+#endif
             }
         }
         if (seen) {
@@ -2706,8 +2903,14 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
             old = float2(-1, -1);
             if (q.z > 1e-5)
                 old = q.xy / q.z;
-            if (any(old < 0) || any(old > 1))
+            if (any(old < 0) || any(old > 1)) {
+#ifdef TAA_AGE
+                noteAge(p, w, h, 0, 0, 32 | 64 | surface, residual, distance);
+                if (counted)
+                    noteGraze(bin, 0, 0, true, 0, residual, old, float2(w, h), 0, edge, false);
+#endif
                 return here;
+            }
         }
     }
 #ifdef TAA_COUNT
@@ -2727,13 +2930,31 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
             counts.InterlockedAdd(0, 1);
             counts.InterlockedAdd(4, 1);
             counts.InterlockedAdd(most > 1 ? 16 : 12, 1);
+#ifdef TAA_AGE
+            noteGraze(bin, 1, most, false, 0, residual, old, float2(w, h), middle.x, edge,
+                      lumaSpike(p, last, middle.x));
+#endif
         }
+#endif
+#ifdef TAA_AGE
+        noteAge(p, w, h, 0, 0, 8 | 2 | surface, residual, distance);
 #endif
         return here;
     }
 #endif
     float most;
     const float3 before = clipHistory(p, last, old, float2(w, h), middle, most);
+#ifdef TAA_AGE
+    {
+        const uint had = agePrevious(old, w, h);
+        const uint match = deep ? (had >> 16) + 1 : 0;
+        noteAge(p, w, h, match, most > 1 ? 0 : (had & 65535u) + 1,
+                (deep ? 2 : 64) | surface | (most > 1 ? 16 : 0), residual, distance);
+        if (counted)
+            noteGraze(bin, 2, most, !deep, match, residual, old, float2(w, h), middle.x, edge,
+                      lumaSpike(p, last, middle.x));
+    }
+#endif
 #ifdef TAA_COUNT
     if (counted) {
         counts.InterlockedAdd(0, 1);
@@ -2746,6 +2967,10 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     const float keep = saturate(extra.x);
     const float a = (1 - keep) / (1 + middle.x), b = keep / (1 + before.x);
     const float3 mixed = (middle * a + before * b) / max(a + b, 1e-6);
+#ifdef TAA_AGE
+    if (counted)
+        noteShown(bin, edge, toYCoCg(saturate(fromYCoCg(mixed))).x, old, float2(w, h));
+#endif
     return float4(saturate(fromYCoCg(mixed)), here.a);
 }
 )";
@@ -2896,6 +3121,17 @@ bool prepareHistory() {
 // 0.0.76 A-depth: taaShader's TAA_DEPTH variant, its own root signature (the history's two pictures and frame, then
 // the two depths as root views and their constants). Built the first time the switch is on; a failure turns only
 // A-depth off (taaDepthStop 3), the history goes on as before.
+// 0.0.76 A-depth TRACE: its variant or buffers could not be made (1 root / shader, 2 pipeline, 3 eye size, 4
+// buffers): the depth path goes on counted as before, untraced, for the session.
+void traceFault(uint32_t code) {
+    {
+        std::lock_guard lock(watchLock);
+        SpidyTaaDepthTraceData.ageFault = code;
+    }
+    char line[112];
+    std::snprintf(line, sizeof line, "SpidyVR: 0.0.76 A-depth TRACE off (%u); the depth path counted as before\n", code);
+    OutputDebugStringA(line);
+}
 bool prepareTaaDepth() {
     if (taaDepthFault.load())
         return false;
@@ -2982,7 +3218,107 @@ bool prepareTaaDepth() {
     if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.taaDepthCount)))) {
         history.depthCountRoot.Reset();
         history.taaDepthCount.Reset();
+        return true;
     }
+    // 0.0.76 A-depth TRACE (taa_depth_trace.hpp, read-only): the counted variant once more with the history ages and
+    // the graze bins (TAA_AGE: u2 this pair's ages, u3 the last pair's, u4 the bins; b1 20 constants, its probe and
+    // lens after the 12). The same picture as taaDepthCount (only its UAVs differ); if it cannot be built the depth
+    // path is counted as before, untraced (SpidyTaaDepthTraceData.ageFault).
+    D3D12_ROOT_PARAMETER aged[9]{};
+    for (unsigned k = 0; k < 6; ++k)
+        aged[k] = counted[k];
+    aged[4].Constants = {1, 0, 20};
+    for (unsigned k = 6; k < 9; ++k) {
+        aged[k].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        aged[k].Descriptor = {k - 4, 0}; // u2 ageOut, u3 ageIn, u4 graze
+        aged[k].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    }
+    const D3D12_ROOT_SIGNATURE_DESC ageRs{9, aged, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    const D3D_SHADER_MACRO ageDefines[] = {
+        {"TAA_DEPTH", "1"}, {"TAA_COUNT", "1"}, {"TAA_AGE", "1"}, {nullptr, nullptr}};
+    ComPtr<ID3DBlob> ageSignature, agePs;
+    d.pRootSignature = nullptr;
+    if (FAILED(D3D12SerializeRootSignature(&ageRs, D3D_ROOT_SIGNATURE_VERSION_1, &ageSignature, &error)) ||
+        FAILED(device->CreateRootSignature(0, ageSignature->GetBufferPointer(), ageSignature->GetBufferSize(),
+                                           IID_PPV_ARGS(&history.depthAgeRoot))) ||
+        FAILED(D3DCompile(taaShader, length, "spidy_taa_depth_trace", ageDefines, nullptr, "ps", "ps_5_0",
+                          D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &agePs, &error))) {
+        history.depthAgeRoot.Reset();
+        traceFault(1);
+        return true;
+    }
+    d.pRootSignature = history.depthAgeRoot.Get();
+    d.PS = {agePs->GetBufferPointer(), agePs->GetBufferSize()};
+    if (FAILED(device->CreateGraphicsPipelineState(&d, IID_PPV_ARGS(&history.taaDepthAge)))) {
+        history.depthAgeRoot.Reset();
+        history.taaDepthAge.Reset();
+        traceFault(2);
+    }
+    return true;
+}
+// 0.0.76 A-depth TRACE: the ages (per eye, this pair's and the last one's: w * h words and the probes' after them),
+// the graze bins (a capture slot's 2 eyes, zeroed from `zeros` before each pass) and both readbacks. Made once for
+// the eye size; any failure leaves the trace off for the session (the depth path counted as before).
+bool prepareTaaAge(uint32_t w, uint32_t h) {
+    if (!history.taaDepthAge || SpidyTaaDepthTraceData.ageFault)
+        return false;
+    if (history.ages[0][0] && history.agesW == w && history.agesH == h)
+        return true;
+    if (history.ages[0][0])
+        return false; // the eyes changed size mid-session: untraced rather than reallocated under the GPU
+    if (!w || !h || static_cast<uint64_t>(w) * h > 64ull * 1024 * 1024) {
+        traceFault(3);
+        return false;
+    }
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_HEAP_PROPERTIES readback{};
+    readback.Type = D3D12_HEAP_TYPE_READBACK;
+    auto uav = buffer;
+    uav.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    uav.Width = (static_cast<uint64_t>(w) * h + taa_depth_trace::probes * taa_depth_trace::probeWords) * 4;
+    bool ok = true;
+    for (auto& eye : history.ages)
+        for (auto& r : eye)
+            ok = ok && SUCCEEDED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &uav,
+                                                                 D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                                                 IID_PPV_ARGS(&r)));
+    const uint64_t grazeSlot = 2ull * taa_depth_trace::grazeBytesPerEye;
+    uav.Width = grazeSlot * history.countLast.size();
+    ok = ok && SUCCEEDED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &uav, D3D12_RESOURCE_STATE_COMMON,
+                                                         nullptr, IID_PPV_ARGS(&history.graze)));
+    buffer.Width = grazeSlot; // committed DEFAULT: zeroed, never written
+    ok = ok && SUCCEEDED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
+                                                         D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                                         IID_PPV_ARGS(&history.zeros)));
+    buffer.Width = (grazeSlot + 2ull * taa_depth_trace::probes * taa_depth_trace::probeWords * 4) *
+                   history.countLast.size();
+    void* mapped{};
+    ok = ok && SUCCEEDED(device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
+                                                         D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                         IID_PPV_ARGS(&history.traceRead))) &&
+         SUCCEEDED(history.traceRead->Map(0, nullptr, &mapped));
+    if (!ok) {
+        for (auto& eye : history.ages)
+            for (auto& r : eye)
+                r.Reset();
+        history.graze.Reset();
+        history.zeros.Reset();
+        history.traceRead.Reset();
+        traceFault(4);
+        return false;
+    }
+    history.traceData = static_cast<const volatile uint32_t*>(mapped);
+    history.agesW = w;
+    history.agesH = h;
+    history.aged = {};
     return true;
 }
 // 0.0.76 TAA JITTER: SPIDY TAA's TAA_COUNT variant (the same picture, plus the rejection counts). Built once in its
@@ -3083,6 +3419,12 @@ bool prepareTaaCount() {
     history.counted = {};
     return true;
 }
+// 0.0.76 A-depth TRACE (read-only): what drawHistory saw of the depth this pair (each eye's on its own, and the
+// path it took), noted with the pair's time and mode once the pair is staged (notePairTrace).
+struct PairTrace {
+    bool drawn{}, wanted{}, used{};
+    std::array<bool, 2> nowValid{}, beforeValid{};
+} pairTrace;
 // 0.0.76 TAA JITTER: the slot's counts (its list is done) into the running TAA WATCH window.
 void noteHistoryCount(size_t slot) {
     if (slot >= history.counted.size() || !history.counted[slot] || !history.countData)
@@ -3105,6 +3447,60 @@ void noteHistoryCount(size_t slot) {
     // 0.0.76 A-depth CHECKED: clip / depth / both apart, per path and movement
     taa_depth_check::noteCounts(SpidyTaaDepthCheckData.current, history.countPath[slot], history.countCategory[slot],
                                 eyes);
+    // 0.0.76 A-depth TRACE: the slot's graze bins (this pass's alone) and probe words, per eye
+    if (slot < history.traced.size() && history.traced[slot] && history.traceData) {
+        history.traced[slot] = false;
+        constexpr uint32_t grazeWordsPerEye = taa_depth_trace::grazeBytesPerEye / 4;
+        constexpr uint32_t probeWordsPerEye = taa_depth_trace::probes * taa_depth_trace::probeWords;
+        const volatile uint32_t* base = history.traceData + (2 * grazeWordsPerEye + 2 * probeWordsPerEye) * slot;
+        for (unsigned i = 0; i < 2; ++i) {
+            uint32_t graze[grazeWordsPerEye]{}, probe[probeWordsPerEye]{};
+            for (uint32_t k = 0; k < grazeWordsPerEye; ++k)
+                graze[k] = base[grazeWordsPerEye * i + k];
+            for (uint32_t k = 0; k < probeWordsPerEye; ++k)
+                probe[k] = base[2 * grazeWordsPerEye + probeWordsPerEye * i + k];
+            taa_depth_trace::noteGraze(SpidyTaaDepthTraceData.current, history.countCategory[slot], graze);
+            taa_depth_trace::noteProbes(SpidyTaaDepthTraceData.current, history.countCategory[slot], probe);
+        }
+    }
+}
+// 0.0.76 A-depth TRACE (read-only): one staged pair into the trace's 10 s window: its time since the last (a hitch
+// line past hitchMs), the mode it ran in and, when drawHistory ran, each eye's depth.
+void notePairTrace(uint64_t serial) {
+    static int64_t lastQpc{};
+    static uint64_t startMs{};
+    const int64_t nowQpc = qpcNow();
+    const float ms = lastQpc ? static_cast<float>(qpcMs(lastQpc, nowQpc)) : 0.f;
+    lastQpc = nowQpc;
+    const PairTrace seen = pairTrace;
+    pairTrace = {};
+    std::lock_guard lock(watchLock);
+    auto& d = SpidyTaaDepthTraceData;
+    taa_depth_trace::roll(d, startMs, GetTickCount64());
+    auto& w = d.current;
+    ++w.pairs;
+    w.aaMode = vrAaMode.load(std::memory_order_relaxed);
+    w.depthSetting = taaDepthOn.load(std::memory_order_relaxed);
+    w.eyeW = width;
+    w.eyeH = height;
+    w.outW = outWidth;
+    w.outH = outHeight;
+    w.ssPercent = supersample();
+    taa_depth_trace::noteFrame(d, static_cast<uint64_t>(qpcMs(0, nowQpc) * 1000.0), ms,
+                               static_cast<uint32_t>(serial));
+    if (!seen.drawn)
+        return;
+    w.wanted += seen.wanted;
+    w.used += seen.used;
+    if (!seen.wanted)
+        return;
+    bool eye[2]{};
+    for (unsigned i = 0; i < 2; ++i) {
+        w.nowValid[i] += seen.nowValid[i];
+        w.beforeValid[i] += seen.beforeValid[i];
+        eye[i] = seen.nowValid[i] && seen.beforeValid[i];
+    }
+    ++w.masks[taa_depth_trace::eyeMask(eye[0], eye[1])];
 }
 void noteHistoryTime(size_t slot) {
     if (!history.timed[slot] || !history.stampData)
@@ -3379,6 +3775,8 @@ void noteDepthCheck(size_t slot) {
         w.roundTripMax = std::max(w.roundTripMax, worst);
         w.roundTripLast = worst;
     }
+    for (unsigned i = 0; i < 2; ++i) // 0.0.76 A-depth TRACE: each eye's round trip, mean and max per 10 s
+        taa_depth_trace::noteTrip(SpidyTaaDepthTraceData.current, trip[i]);
 }
 bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out, NotedViews* noted = nullptr) {
     std::lock_guard lock(viewLock);
@@ -3395,6 +3793,8 @@ bool findViews(uint64_t serial, std::array<eye_history::EyeView, 2>& out, NotedV
 // view: drawn into the other picture, which is copied back into the staged
 // image and kept for the next pair.
 void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) {
+    pairTrace = {};
+    pairTrace.drawn = true;
     std::array<eye_history::EyeView, 2> now{};
     NotedViews noted{};
     const bool viewed = findViews(serial, now, &noted);
@@ -3463,6 +3863,14 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         }
         if (depthGate == 0 && !depthUsed)
             depthGate = 1;
+        // 0.0.76 A-depth TRACE (read-only): each eye's depth on its own (this pair's, the shown one's), what a
+        // per-eye choice would see; the path above stays both eyes or neither.
+        for (unsigned i = 0; i < 2; ++i) {
+            TaaDepthView before{};
+            pairTrace.nowValid[i] = depthFound[i];
+            pairTrace.beforeValid[i] = sized && history.valid && history.shownSerial &&
+                                       taaDepthFor(history.shownSerial, i, before);
+        }
         // The convention check's probe of this pair's depth (both eyes there), until it passed one pair in 30, then
         // about one a second; none once it failed.
         if (sized && depthFound[0] && depthFound[1] && checkState != taa_depth_check::failed) {
@@ -3596,6 +4004,30 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
     // A-depth: its own counted variant (TAA_DEPTH + TAA_COUNT), or no counts that pair.
     const bool counting = ours && slot < history.counted.size() && prepareTaaCount() &&
                           (!depthUsed || history.taaDepthCount);
+    // 0.0.76 A-depth TRACE (read-only): the counted depth pass with the ages and graze bins when they are there.
+    const bool tracing = counting && depthUsed && prepareTaaAge(outWidth, outHeight);
+    pairTrace.wanted = depthWanted;
+    pairTrace.used = depthUsed;
+    const uint64_t grazeSlot = 2ull * taa_depth_trace::grazeBytesPerEye;
+    const uint64_t probeBytes = taa_depth_trace::probes * taa_depth_trace::probeWords * 4;
+    const uint64_t traceSlot = grazeSlot + 2 * probeBytes;
+    const uint64_t agesBytes = static_cast<uint64_t>(history.agesW) * history.agesH * 4;
+    if (tracing) {
+        D3D12_RESOURCE_BARRIER t[5]{};
+        for (unsigned n = 0; n < 5; ++n)
+            t[n].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        for (unsigned i = 0; i < 2; ++i)
+            for (unsigned k = 0; k < 2; ++k)
+                t[2 * i + k].Transition = {history.ages[i][k].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                           D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
+        t[4].Transition = {history.graze.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_COMMON,
+                           D3D12_RESOURCE_STATE_COPY_DEST};
+        originalBarrier(list, 5, t);
+        list->CopyBufferRegion(history.graze.Get(), grazeSlot * slot, history.zeros.Get(), 0, grazeSlot);
+        t[0].Transition = {history.graze.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                           D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
+        originalBarrier(list, 1, t);
+    }
     D3D12_RESOURCE_BARRIER countBarrier{};
     countBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     if (counting) {
@@ -3604,8 +4036,12 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         originalBarrier(list, 1, &countBarrier);
     }
     if (depthUsed) {
-        list->SetPipelineState(counting ? history.taaDepthCount.Get() : history.taaDepth.Get());
-        list->SetGraphicsRootSignature(counting ? history.depthCountRoot.Get() : history.depthRoot.Get());
+        list->SetPipelineState(tracing    ? history.taaDepthAge.Get()
+                               : counting ? history.taaDepthCount.Get()
+                                          : history.taaDepth.Get());
+        list->SetGraphicsRootSignature(tracing    ? history.depthAgeRoot.Get()
+                                       : counting ? history.depthCountRoot.Get()
+                                                  : history.depthRoot.Get());
     } else {
         list->SetPipelineState(counting ? history.taaCount.Get() : ours ? history.taa.Get() : history.state.Get());
         list->SetGraphicsRootSignature(counting ? history.countRoot.Get() : history.root.Get());
@@ -3629,11 +4065,29 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         if (depthUsed) { // 0.0.76 A-depth
             list->SetGraphicsRootShaderResourceView(2, depthNowView[i].at);
             list->SetGraphicsRootShaderResourceView(3, depthBeforeView[i].at);
-            list->SetGraphicsRoot32BitConstants(4, 12, depthFrame[i], 0);
+            if (tracing) { // 0.0.76 A-depth TRACE: the same 12, then probe and lens
+                float traced[20]{};
+                for (unsigned k = 0; k < 12; ++k)
+                    traced[k] = depthFrame[i][k];
+                traced[12] = history.aged[i] ? 1.f : 0.f;
+                traced[13] = depthNowView[i].nearM;
+                traced[14] = taa_depth_trace::probeNearM;
+                traced[15] = taa_depth_trace::probeFarM;
+                for (unsigned k = 0; k < 4; ++k)
+                    traced[16 + k] = now[i].tangents[k];
+                list->SetGraphicsRoot32BitConstants(4, 20, traced, 0);
+            } else
+                list->SetGraphicsRoot32BitConstants(4, 12, depthFrame[i], 0);
         }
         if (counting) // 0.0.76 TAA JITTER: the counts (u1), after the root's own parameters
             list->SetGraphicsRootUnorderedAccessView(depthUsed ? 5 : 2,
                                                      history.counts->GetGPUVirtualAddress() + 64 * slot + 32 * i);
+        if (tracing) {
+            list->SetGraphicsRootUnorderedAccessView(6, history.ages[i][write]->GetGPUVirtualAddress());
+            list->SetGraphicsRootUnorderedAccessView(7, history.ages[i][read]->GetGPUVirtualAddress());
+            list->SetGraphicsRootUnorderedAccessView(8, history.graze->GetGPUVirtualAddress() + grazeSlot * slot +
+                                                            taa_depth_trace::grazeBytesPerEye * i);
+        }
         list->OMSetRenderTargets(1, &target, FALSE, nullptr);
         list->DrawInstanced(3, 1, 0, 0);
     }
@@ -3657,6 +4111,33 @@ void drawHistory(ID3D12GraphicsCommandList* list, size_t slot, uint64_t serial) 
         history.countPath[slot] = depthUsed ? taa_depth_check::depthPath : taa_depth_check::headPath;
         history.countCategory[slot] = taa_depth_check::category(watchStill, watchTurn, watchTravel, watchSeconds);
     }
+    if (tracing) { // 0.0.76 A-depth TRACE: this slot's graze bins and probe words to the readback, all back to COMMON
+        D3D12_RESOURCE_BARRIER t[5]{};
+        for (unsigned n = 0; n < 5; ++n)
+            t[n].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        for (unsigned i = 0; i < 2; ++i) {
+            t[2 * i].Transition = {history.ages[i][write].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                   D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE};
+            t[2 * i + 1].Transition = {history.ages[i][read].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON};
+        }
+        t[4].Transition = {history.graze.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                           D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE};
+        originalBarrier(list, 5, t);
+        list->CopyBufferRegion(history.traceRead.Get(), traceSlot * slot, history.graze.Get(), grazeSlot * slot,
+                               grazeSlot);
+        for (unsigned i = 0; i < 2; ++i)
+            list->CopyBufferRegion(history.traceRead.Get(), traceSlot * slot + grazeSlot + probeBytes * i,
+                                   history.ages[i][write].Get(), agesBytes, probeBytes);
+        for (unsigned i = 0; i < 2; ++i)
+            t[i].Transition = {history.ages[i][write].Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                               D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON};
+        t[2].Transition = {history.graze.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                           D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON};
+        originalBarrier(list, 3, t);
+        history.traced[slot] = true;
+    }
+    history.aged = {tracing, tracing}; // the next pair's ageIn: these, or none
     for (unsigned i = 0; i < 2; ++i)
         list->CopyResource(stagedEyes[i].Get(), history.pictures[i][write].Get());
     for (unsigned i = 0; i < 2; ++i) {
@@ -4248,6 +4729,7 @@ void stagePair(EyePairState::Stamp stamp) {
         drawHistory(slot->list.Get(), index, stamp.serial);
     } else {
         history.valid = false;
+        history.aged = {}; // 0.0.76 A-depth TRACE: no ages for the next pass to read
         keptMilli.store(0, std::memory_order_relaxed); // JITTER CALM: no history, no step to average
     }
     copyMirrorView(slot->list.Get()); // 0.0.71: after the AA and history, so neither smears it
@@ -4261,6 +4743,7 @@ void stagePair(EyePairState::Stamp stamp) {
     }
     aaPairs += smooth;
     smaaLast.store(useSmaa, std::memory_order_relaxed);
+    notePairTrace(stamp.serial); // 0.0.76 A-depth TRACE: read-only
     {
         std::lock_guard lock(copyTimingLock);
         const bool taaRan = spidyTaaNow() && history.taa && historyNow() && !historyFault.load();

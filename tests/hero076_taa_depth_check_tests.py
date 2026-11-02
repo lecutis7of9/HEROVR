@@ -107,7 +107,7 @@ class DepthCheck(unittest.TestCase):
     def test_report_wired(self):
         run = src('tools/run_game_vr.py')
         self.assertIn('import taa_depth_check_record', run)
-        self.assertIn('taa_depth_check_record.EXPORT))  # 0.0.76 A-depth CHECKED', run)
+        self.assertIn('taa_depth_check_record.EXPORT,  # 0.0.76 A-depth CHECKED', run)
         self.assertIn('taa_depth_check=taa_depth_check_record.taa_depth_check_report(depth_check_last),', run)
 
     def test_docs(self):

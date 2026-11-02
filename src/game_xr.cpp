@@ -15090,9 +15090,16 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
         char line[96];
         std::snprintf(line, sizeof line, "VR AA: %s\n", spidy::vr_aa::modeName(vrAa));
         OutputDebugStringA(line);
-        if (vrAa != spidy::vr_aa::legacy && native_gpu::supersample() != spidy::sm1style::supersample &&
-            native_gpu::setSupersample(spidy::sm1style::supersample))
+        // 0.0.76 A-depth TRACE D: live.txt vr_ss's 110 / 125 / 150 kept with ours (vr_aa::supersampleKept); the
+        // launcher sends 100 unless vr_ss asks, so the default is as before.
+        const uint32_t ss = native_gpu::supersample();
+        if (vrAa != spidy::vr_aa::legacy && ss != spidy::sm1style::supersample &&
+            !spidy::vr_aa::supersampleKept(vrAa, ss) && native_gpu::setSupersample(spidy::sm1style::supersample))
             OutputDebugStringA("VR AA: supersample 100%\n");
+        else if (spidy::vr_aa::supersampleKept(vrAa, ss)) {
+            std::snprintf(line, sizeof line, "VR AA: supersample %u%% per side kept (live.txt vr_ss)\n", ss);
+            OutputDebugStringA(line);
+        }
     }
     // 0.0.74 test 10 SM1STYLE: SpidyVR's render scale and no supersample, whatever was asked (the launcher sends
     // these already; an older or hand-made start still gets them).
@@ -15678,6 +15685,18 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunchSense(void* v) {
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySfxVolume(void* v) {
     return setLive(v, 0, combat38::optionInfo[combat38::sfxVolume].count - 1, 5364, combat38Values[combat38::sfxVolume], asU32);
+}
+// 0.0.76 SFX DIAG (live.txt vr_sfx_layer; a diagnostic, never persisted): 0 on (the default), 1 off: the mod's own
+// XAudio2 sound layer stopped (its engine and every voice of ours; the game's audio untouched). Refused (4610) for
+// another value.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidySfxLayer(void* value) {
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > 1)
+        return 4610;
+    sfx::setLayer(v == 0);
+    OutputDebugStringA(v ? "SpidyVR: 0.0.76 SFX DIAG vr_sfx_layer 1: the mod's sound layer off\n"
+                         : "SpidyVR: 0.0.76 SFX DIAG vr_sfx_layer 0: the mod's sound layer on\n");
+    return 0;
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidySupersonic(void* v) {
     return setLive(v, 0, combat38::optionInfo[combat38::supersonic].count - 1, 5365, combat38Values[combat38::supersonic], asU32);

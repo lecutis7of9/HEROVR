@@ -144,6 +144,7 @@ void loop(Id id, bool on);  // never blocks (SOUND LOOPS; only loopable ids)
 void engineRpm(float rpm);  // never blocks (0.0.73 PUNISHER VAN ENGINE: the throttle, 0..1)
 uint64_t nowMs();           // the loops' clock (milliseconds, monotonic)
 void setGain(float gain);   // 0..1 (SFX VOLUME)
+void setLayer(bool on);     // 0.0.76 SFX DIAG vr_sfx_layer: false stops the mod's own XAudio2 engine (never blocks)
 Stats stats();
 Requests& requests();        // the shared queue (tests)
 

@@ -26,6 +26,7 @@ uint64_t nowMs() {
 void loop(Id id, bool on) { requests().loop(id, nowMs(), on); } // Version 0.0.72 SOUND LOOPS (counted only)
 void engineRpm(float rpm) { requests().engineRpm(rpm); }     // Version 0.0.73 PUNISHER VAN ENGINE (kept only)
 void setGain(float gain) { quietGain.store(gain >= 0.f && gain <= 1.f ? gain : (gain > 1.f ? 1.f : 0.f), std::memory_order_relaxed); }
+void setLayer(bool) {} // 0.0.76 SFX DIAG: no audio here
 Stats stats() {
     Stats s;
     s.asked = quietAsked.load();

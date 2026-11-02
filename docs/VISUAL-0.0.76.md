@@ -65,6 +65,40 @@ old pass, counted in TAA WATCH `depth N%` (depthPairs / depthMissed). A refused 
 pass turns A off for the session (the console's "A-depth off for the session"), never the TAA or VR.
 Not covered: things moving by themselves (cars, people) - no motion vectors; the clip still handles them.
 
+### A-depth TRACE: per-eye depth, history age, grazing-angle and edge bins, hitches; SFX DIAG
+
+Diagnostics only (include/spidy/taa_depth_trace.hpp, include/spidy/sfx_diag.hpp; tools/taa_depth_trace_record.py,
+tools/sfx_diag_record.py). The console prints, per closed 10 s window:
+
+- `TAA TRACE ... [vr_aa, vr_taa_depth, vr_ss, eye render -> headset size]`: fps, frame ms mean / max and spread;
+  with the depth on, depth now / before per eye, depth path vs head fallback, the per-eye pick (logged only; the
+  depth path stays both eyes or neither, as 5881bac: a per-eye gate would be a depth reprojection change), split %,
+  round trip mean / max (limit 0.05 px).
+- `TAA TRACE AGE`: 8 static-surface pixels per eye (3 m to 300 m): `match` pairs in a row through the depth, `kept`
+  pairs in a row the clip also left alone, per still / moving / fast.
+- `TAA TRACE GRAZE`: the counted pixels (1 in 16 x 16) by |n.v| (frontal >= .5, mid .25-.5, grazing 1/16-.25,
+  beyond_aniso < 1/16, depth_edge, no_depth): clip-only / depth-only / both / neither, fallback, age, luma change,
+  depth residual (the reprojection's own error; the round trip is a centre-pixel check, so it has no per-bin value).
+- `TAA TRACE EDGES`: inside each bin, the edge pixels (10 % depth step, a no-depth neighbour, or a crease: the depth
+  slope changes by over 25 % across the pixel - a recessed window's corner) with their own rejection split and flip
+  rate against the pixels off edges; SPIKES (a pixel's luma above its own 3 x 3 mean + gamma sigma: one bright
+  specular / sub-pixel sample the variance box cannot hold) and how often the clip moved the history there. Also,
+  for the edge pixels: the luma change going IN (this pair's input vs the history read) and SHOWN (the TAA output vs
+  the same history read) with their ratio (D3: pre- vs post-TAA), and the match age mean / max at edges (D2: age
+  climbing = the history is kept across the corner; staying near 0 = discarded).
+- `RENDER HITCH` / `SFX MOMENT` lines with their QPC time and box-local wall time.
+- `SFX DIAG format` once, `SFX DIAG` every 10 s.
+
+Reading the recessed-window sparkle (D1: a depth seam is there when the grazing bins' edge share is well above 0
+and the crease test fires; no edge share at a flickering frame = normal-map / parallax detail, not geometry): shown /
+in near the history weight's 0.1-0.4 = the TAA damps an input flicker (source is pre-TAA: geometry or shading);
+near 1 = the history is discarded there (rejection passes it through); above 1 = the clip itself moves the
+history further than the input did (rejection amplifying).
+ high flip % on edges in the grazing / beyond_aniso bins with clip-only
+dominating and depth-only near 0 = geometric / specular sub-pixel aliasing the variance box cannot settle (not the
+depth); a large depth-only share on edges = the disocclusion test refusing history at the corner; high spike % with
+a high clip-moved share = bright single samples (specular) flipping the history.
+
 ### A-depth CHECKED: the depth's convention checked first, rejections split, per-eye gating
 
 - Convention check (taa_depth_check.hpp, native_eye_gpu noteDepthCheck): one pair in 30 until it passes, then about

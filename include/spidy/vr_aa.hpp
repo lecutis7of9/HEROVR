@@ -28,6 +28,12 @@ inline constexpr uint32_t smaaOption = 0x2000000, legacyOption = 0x4000000, sm1s
 inline constexpr Mode modeFor(uint32_t options) {
     return (options & (legacyOption | sm1styleOption)) ? legacy : (options & smaaOption) ? smaa : ours;
 }
+// 0.0.76 A-depth TRACE D: the eye supersample (per side) live.txt vr_ss asks for that SpidyXrStart keeps: 110, 125 or
+// 150, with ours only (SMAA is skipped on supersampled eyes: they get the Mitchell downsample instead). Anything else
+// is put back to 100 as before. Before this, every vr_ss was put back to 100 under ours and SMAA.
+inline constexpr bool supersampleKept(uint32_t mode, uint32_t percent) {
+    return mode == ours && (percent == 110 || percent == 125 || percent == 150);
+}
 inline const char* modeName(uint32_t mode) {
     return mode == ours ? "SPIDY TAA" : mode == smaa ? "SMAA" : mode == legacy ? "LEGACY" : "?";
 }

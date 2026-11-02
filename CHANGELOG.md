@@ -14,6 +14,12 @@ From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not ye
   ("SM1STYLE eyes: ..." at the end of the console). Far shake: still open - see
   [docs/VISUAL-0.0.76.md](docs/VISUAL-0.0.76.md); with Virtual Desktop, try Synchronous Spacewarp Disabled
   (Streaming tab) as a test.
+- **Far shake: render vs. headset pose checked (POSE CHECK):** the eye-to-headset path was traced end to end: each eye
+  is drawn from the same OpenXR eye pose (one xrLocateViews at the frame's predicted display time) that its layer is
+  submitted with, and a picture shown twice keeps its own pose, as OpenXR wants. No mismatch was found in the code,
+  so no pose was changed. Each run now measures it: "POSE CHECK render vs submit: MATCH / DIFFERS" at the end of the
+  console, with each eye's difference in degrees and millimetres, how far the game world turned in your room before
+  the picture was shown, and the picture's age (`pose_check` in the report). Read-only: no setting.
 - **Clearer picture (VISUAL):** VR now starts the game with its Anti-Aliasing at TAA and no upscaler, so each eye
   gets the game's own TAA (SM1STYLE) at native 100% - no DLSS, FSR, FXAA or CAS on the eyes. Texture Quality goes to
   at least High and filtering to 16x while VR runs. Your own settings come back when the game closes. live.txt:

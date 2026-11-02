@@ -115,6 +115,7 @@
 #include "spidy/fly_boost.hpp"
 #include "spidy/engine_taa.hpp"
 #include "spidy/sm1style.hpp"
+#include "spidy/pose_check.hpp"
 #include "spidy/eye_cover.hpp"
 #include "spidy/far_shadows.hpp"
 #include "spidy/eye_bloom.hpp"
@@ -36354,6 +36355,47 @@ int main() {
                       !s1::ownHistory(0, 0, 0x900, 0x200) && s1::ownHistory(0x100, 0x100, 0, 0) &&
                       s1::mainSetGlobal == 0xc15d7d8 && s1::version == 2,
                   "EYE HISTORY CHECK: ownHistory");
+        }
+        // 0.0.76 POSE CHECK: an eye's rendered camera against its submitted pose, in degrees and millimetres.
+        {
+            namespace pc = spidy::pose_check;
+            const Pose eye{{1830.25f, 64.5f, -1207.75f}, Quat::around({.2f, 1, -.1f}, .7f)};
+            const Vec3 travel{.31f, -.02f, 1.4f};
+            Mat4 drawn = pc::cameraOf(eye);
+            drawn[12] += travel.x;
+            drawn[13] += travel.y;
+            drawn[14] += travel.z;
+            const auto same = pc::between(drawn, eye, travel);
+            check(same.valid && same.degrees < .001f && same.mm < .5f, "POSE CHECK: the same pose is zero");
+            const Pose turned{eye.position, Quat::around({1, 0, 0}, .5f * 3.14159265f / 180) * eye.orientation};
+            const auto half = pc::between(pc::cameraOf(turned), eye, {});
+            check(half.valid && std::abs(half.degrees - .5f) < .005f && half.mm < .5f, "POSE CHECK: half a degree");
+            const auto tiny = pc::between(pc::cameraOf({eye.position, Quat::around({0, 1, 0}, .0005f) * eye.orientation}),
+                                          eye, {});
+            check(tiny.valid && std::abs(tiny.degrees - .0286f) < .003f, "POSE CHECK: small turns are not rounded away");
+            Mat4 moved = pc::cameraOf(eye);
+            moved[13] += .005f;
+            const auto five = pc::between(moved, eye, {});
+            check(five.valid && std::abs(five.mm - 5) < .5f && five.degrees < .001f, "POSE CHECK: five millimetres");
+            Mat4 broken = pc::cameraOf(eye);
+            broken[0] = broken[1] = broken[2] = 0;
+            check(!pc::between(broken, eye, {}).valid, "POSE CHECK: a degenerate camera is not counted");
+            check(std::abs(pc::turnDegrees(Quat::yaw(0), Quat::yaw(10 * 3.14159265f / 180)) - 10) < .01f &&
+                      pc::turnDegrees(eye.orientation, eye.orientation) < .001f &&
+                      std::abs(pc::turnDegrees(Quat::yaw(.3f), Quat{-Quat::yaw(.3f).x, -Quat::yaw(.3f).y, 0,
+                                                                    -Quat::yaw(.3f).w})) < .001f,
+                  "POSE CHECK: turnDegrees (q and -q the same)");
+            pc::Data d;
+            pc::note(d.eyes[0], half);
+            pc::note(d.eyes[0], same);
+            pc::note(d.eyes[1], {});
+            pc::noteSubmit(d, false, .2f, 11.f, 1420.f);
+            pc::noteSubmit(d, true, 0.f, 22.5f, 10.f);
+            check(d.eyes[0].checked == 2 && d.eyes[0].overDegrees == 1 && d.eyes[0].overMm == 0 &&
+                      d.eyes[1].unread == 1 && d.eyes[1].checked == 0 && d.submits == 2 && d.reused == 1 &&
+                      d.worldTurnOver == 1 && d.ageMaxMs == 22.5f && d.travelMaxMm == 1420.f &&
+                      d.magic == 0x4b434850 && d.version == 1 && d.bytes == 256 && sizeof(pc::Data) == 256,
+                  "POSE CHECK: the record");
         }
         // 0.0.76 VISUAL: the start's percent (native 100 by default; 67 with vr_render = upscaled).
         check(s1::madePercent(true, true, true, true, 100) == 100 && s1::madePercent(true, true, true, true, 67) == 67 &&

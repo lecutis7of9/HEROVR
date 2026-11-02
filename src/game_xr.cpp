@@ -115,6 +115,7 @@
 #include "spidy/hand_pose.hpp"
 #include "spidy/impact_sound.hpp"
 #include "spidy/native_eye_frame.hpp"
+#include "spidy/pose_check.hpp"
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/eye_swap.hpp"
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
@@ -617,6 +618,7 @@ __declspec(dllexport) spidy::air_watch::Data SpidyAirWatchData;     // Update 38
 __declspec(dllexport) spidy::v003::Data SpidyV003Data;               // Version 0.0.3 (V003)
 __declspec(dllexport) spidy::v005::Data SpidyV005Data;               // Version 0.0.5 (V005)
 __declspec(dllexport) spidy::v006::Data SpidyV006Data;               // Version 0.0.6 (V006)
+__declspec(dllexport) spidy::pose_check::Data SpidyPoseCheckData;   // 0.0.76 POSE CHECK (PHCK)
 extern world_trace::Data SpidyWorldTraceData;       // Update 37: the WORLD LOG (world_trace.cpp)
 __declspec(dllexport) PromptData SpidyPromptData;
 __declspec(dllexport) SlowMotionData SpidySlowMotionData;
@@ -2727,6 +2729,7 @@ DWORD WINAPI run(void*) {
         uint64_t perfRestores{};
         char perfStatusText[64]{};
         uint64_t wristFpsSerial{}, wristFpsGeneration{};
+        uint64_t poseCheckGeneration{}; // 0.0.76 POSE CHECK: the last image checked (reused submits)
         wrist_hud::Pointer wristPointer;
         std::string wristNote;
         bool mirrorTooLate{}; // Version 0.0.4 MIRROR VIEW TEST asked after the eyes were made: restart
@@ -12174,6 +12177,38 @@ DWORD WINAPI run(void*) {
                         // world-space web anchors line up with the rendered city.
                         Vec3 travel{};
                         native_eyes::renderOffset(imageGeneration, travel);
+                        // 0.0.76 POSE CHECK (pose_check.hpp): each eye's rendered camera against the eye the
+                        // layer is given above, carried into the image's world, plus how far that world turned
+                        // in the room before this submit. Measures only; nothing here changes a pose.
+                        if (!saved->flatScreen && !saved->stereoScreen) {
+                            auto& check = SpidyPoseCheckData;
+                            InterlockedIncrement64(&check.sequence);
+                            for (unsigned eye = 0; eye < 2; ++eye) {
+                                Mat4 camera{};
+                                if (!native_eyes::renderedEye(imageGeneration, made(eye), camera)) {
+                                    pose_check::note(check.eyes[eye], {});
+                                    continue;
+                                }
+                                pose_check::note(check.eyes[eye],
+                                                 pose_check::between(camera,
+                                                                     compose(saved->worldFromTracking,
+                                                                             saved->trackingEyes[made(eye)].pose),
+                                                                     travel));
+                                pose_check::noteCommand(
+                                    check, eye, pose_check::betweenMatrices(camera, rendered.eyes[made(eye)], travel));
+                            }
+                            const bool reusedImage = imageGeneration == poseCheckGeneration;
+                            poseCheckGeneration = imageGeneration;
+                            pose_check::noteSubmit(
+                                check, reusedImage,
+                                pose_check::turnDegrees(saved->worldFromTracking.orientation, latestToWorld.orientation),
+                                rendered.predictedDisplayTime && displayTime
+                                    ? static_cast<float>(static_cast<double>(displayTime - rendered.predictedDisplayTime) *
+                                                         1e-6)
+                                    : -1.f,
+                                length(travel) * 1000);
+                            InterlockedIncrement64(&check.sequence);
+                        }
                         const Vec3 viewer =
                             Vec3{(rendered.eyes[0][12] + rendered.eyes[1][12]) / 2,
                                  (rendered.eyes[0][13] + rendered.eyes[1][13]) / 2,

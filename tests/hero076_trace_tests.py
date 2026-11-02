@@ -103,6 +103,12 @@ class Trace(unittest.TestCase):
                 before = shader[:m.start()]
                 self.assertGreater(before.count('#ifdef TAA_AGE'), 0, name)
 
+    def test_msvc_string_pieces(self):
+        """MSVC (C2026) takes at most 16380 bytes in one string piece: the TAA shader is two adjacent raw strings."""
+        for path in sorted((ROOT / 'src').glob('*.cpp')):
+            for m in re.finditer(r'R"\((.*?)\)"', path.read_text(encoding='utf-8'), re.S):
+                self.assertLess(len(m.group(1).encode()), 16380, path.name)
+
 
 def sfx_raw(closed=1, noted=2):
     head = struct.pack(S.HEAD, S.MAGIC, 1, S.SIZE, 10000, closed, noted, 1, 0)

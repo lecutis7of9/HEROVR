@@ -2708,7 +2708,8 @@ float3 toYCoCg(float3 c) {
 float3 fromYCoCg(float3 c) {
     return float3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
 }
-float3 catmullRom(float2 uv, float2 size) {
+)"
+R"(float3 catmullRom(float2 uv, float2 size) {
     const float2 at = uv * size;
     const float2 c1 = floor(at - 0.5) + 0.5;
     const float2 f = at - c1;

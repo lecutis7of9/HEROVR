@@ -37,7 +37,8 @@ DECLARED = re.compile(r'\b(?:' + TYPE + r')(?:\s*<[^>]*>)?\s+(\w+)')
 def shaders():
     """Every HLSL source built into the port: raw strings that hold an SV_ semantic."""
     for path in SHADER_FILES:
-        text = path.read_text(encoding='utf-8')
+        # adjacent raw strings are one literal to C++ (MSVC caps one piece at 16380 bytes); the gap's newlines kept
+        text = re.sub(r'\)"(\s*)R"\(', lambda m: m.group(1), path.read_text(encoding='utf-8'))
         for match in re.finditer(r'R"\((.*?)\)"', text, re.S):
             if 'SV_' in match.group(1):
                 yield path.name, text.count('\n', 0, match.start()) + 1, match.group(1)

@@ -6,6 +6,19 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **SHADOW STABLE (test; new live.txt `vr_shadow_stable`, off by default, live, no restart).** Run 3's picture
+  (`vr_aa` ours, `vr_taa_depth` off, `vr_ss` off) with flickering far building shadows. Found (CONFIRMED in the
+  game's code): the game's far shadow cache is one object shared by every view, remade each frame by any view the
+  game is told is "active"; the left eye is told so, and so is the head's own view. The visual reports REFUTE the
+  first idea (an eye getting no far shadows): every eye fit had them. CANDIDATE: the two remakes race each frame and
+  the right eye takes whichever came last, so the far shadows jump. With it on the left eye no longer remakes them:
+  they are made once a frame from your head's view and shared by both eyes (the same as `far_shadows` 1 for the far
+  shadows; the near ones are still fitted for each eye). The game already snaps its shadows to their texels.
+- **TEXTURE DETAIL (test; new live.txt `vr_texture_detail`, off by default, next VR start).** More surface detail
+  without sharpening: `aniso` gives the game's material textures it left trilinear 16x anisotropic filtering (most
+  were already 16x, so a small change at a small cost), `quality` sets Texture Quality Very High while VR runs (your
+  setting put back after; more video memory and possibly some streaming hitches), `on` both.
+
 - **SEAM / EDGE TRACE (diagnostics only, read-only; new live.txt `vr_taa_seam`, 0 off the default, live, no
   restart).** The visual-9 test ("doesnt settle", SpidyVR's TAA, `vr_taa_depth` off) had no depth-on logs and the
   earlier trace only ran with `vr_taa_depth` on. With `vr_taa_seam` on the trace also runs on the head-motion path:

@@ -131,8 +131,11 @@ SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, R
 #   (game-vr-20261101-121329 and -141958), 3 Very High (reports-075-grundy); TextureFiltering 0 Trilinear (023723),
 #   3 Anisotropic8x (121329), 4 Anisotropic16x (232025, grundy).
 #   Read at launch (restart); put back after.
+# - 0.0.76 TEXTURE DETAIL (live.txt vr_texture_detail on / quality): Texture Quality Very High (TextureQuality 3,
+#   CONFIRMED in reports-075-grundy) for the session, only where the player's is lower; put back after.
 SESSION_OFF = dict(lens_flares=dict(LensFlares=0), game_aa=dict(AA=2, UpscaleMethod=0),
-                   textures=dict(TextureQuality=2), filtering=dict(TextureFiltering=4))
+                   textures=dict(TextureQuality=2), filtering=dict(TextureFiltering=4),
+                   textures_very_high=dict(TextureQuality=3))
 
 
 def session_list(off=()):

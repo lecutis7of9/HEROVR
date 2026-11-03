@@ -374,3 +374,12 @@ The report's `taa_frame_log` has `most_still` (the 300-pair block with the most 
 `last`, each with every frame and the summary (`drift_still_mean_px`, `drift_still_max_px`, `measured_gain`, ...).
 A still-head drift near 0 with the step removed means the history follows the step exactly; a drift that stays while
 `vr_taa_jitter = fixed` or `half` is set points away from the step.
+
+## SHADOW STABLE + TEXTURE DETAIL (TEST 0.0.76): steadier far building shadows, more surface detail
+
+| switch (live.txt) | default | what it does |
+| --- | --- | --- |
+| `vr_shadow_stable` (live, no restart) | `off` | `on` (1): the far building shadows are made once a frame from your head's view and shared by both eyes, instead of the left eye making them again (CANDIDATE cause of the flicker: the two remakes race and the right eye takes whichever came last); the far cache then behaves as `far_shadows` 1 (EYES); only changes anything with `far_shadows` at eyes+cache (2, the default) |
+| `vr_texture_detail` (RESTART, next VR start) | `off` | `aniso` (2): 16x anisotropic filtering on the game's material textures it left trilinear (about 15 of 519 samplers in the visual reports; the rest already 16x), the game's mip bias kept; `quality` (3): Texture Quality Very High while VR runs (yours put back when the game closes; more video memory - about 10 of 15 GB were in use at High); `on` (1): both |
+
+No sharpening, no SMAA, no TAA change. `vr_ss = 125` stays an optional extra.

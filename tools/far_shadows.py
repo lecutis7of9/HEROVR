@@ -80,10 +80,44 @@ def snapshot(game, address):
     return None
 
 
+# 0.0.76 SHADOW STABLE (include/spidy/shadow_stable.hpp Data, stereo_probe.cpp SpidyShadowStableData): live.txt
+# vr_shadow_stable on leaves the left eye's far-cache ask to the game, so the head view makes the far cache once a
+# frame for both eyes; held counts those asks, answered the ones still answered "active" (EYES+CACHE, off).
+STABLE_EXPORT = 'SpidyShadowStableData'
+STABLE_MAGIC, STABLE_VERSION, STABLE_SIZE = 0x42545353, 1, 72
+
+
+def parse_stable(raw):
+    """SHADOW STABLE Data bytes -> dict, None while it is being written. Raises on a protocol mismatch."""
+    if len(raw) != STABLE_SIZE:
+        return None
+    magic, version, size, on = struct.unpack_from('<4I', raw, 0)
+    if (magic, version, size) != (STABLE_MAGIC, STABLE_VERSION, STABLE_SIZE):
+        raise RuntimeError('Native SHADOW STABLE protocol mismatch')
+    held, answered, match_fits, match_skipped, changes, _, sequence = struct.unpack_from('<7Q', raw, 16)
+    if sequence & 1:
+        return None
+    return dict(on=bool(on), held=held, answered_active=answered, changes=changes,
+                shadow_match=dict(fits=match_fits, skipped=match_skipped))
+
+
+def snapshot_stable(game, address):
+    for _ in range(8):
+        raw = game.read(address, STABLE_SIZE)
+        if len(raw) != STABLE_SIZE:
+            return None
+        data = parse_stable(raw)
+        if data is not None and raw[64:72] == game.read(address + 64, 8):
+            return data
+    return None
+
+
 def said_key(data):
     if not data:
         return None
-    return (data['mode'], data['reverted'], data['eyes_have_far'], data['game_view']['far_cascades'] > 0)
+    stable = data.get('stable')
+    return (data['mode'], data['reverted'], data['eyes_have_far'], data['game_view']['far_cascades'] > 0,
+            stable['on'] if stable else None)
 
 
 def console_line(data):
@@ -97,6 +131,13 @@ def console_line(data):
             f" (base {l['base_cascades']}/{r['base_cascades']}), game view far {data['game_view']['far_cascades']}")
     if data['reverted']:
         line += f" - back on its own: {data['reverted']}"
+    stable = data.get('stable')
+    if stable and stable['on']:
+        line += (f"; SHADOW STABLE on (the head view's far cache shared by both eyes, {stable['held']} left-eye asks "
+                 f"left to the game)")
+    if stable and stable['shadow_match']['skipped']:
+        m = stable['shadow_match']
+        line += f"; SHADOW MATCH {m['fits']} head-lens fits, {m['skipped']} on the eye's own lens"
     return line + '.'
 
 

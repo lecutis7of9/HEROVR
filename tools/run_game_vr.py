@@ -1398,9 +1398,15 @@ def shadow_distance_sample(game, xr):
 def far_shadows_sample(game, xr):
     """Update 35: SpidyFarShadowsData, None if it cannot be read (a failure here only loses its record)."""
     try:
-        return far_shadows.snapshot(game, xr['SpidyFarShadowsData']) if 'SpidyFarShadowsData' in xr else None
+        data = far_shadows.snapshot(game, xr['SpidyFarShadowsData']) if 'SpidyFarShadowsData' in xr else None
     except Exception:
         return None
+    if data is not None and far_shadows.STABLE_EXPORT in xr:  # 0.0.76 SHADOW STABLE: absent from an older module
+        try:
+            data['stable'] = far_shadows.snapshot_stable(game, xr[far_shadows.STABLE_EXPORT])
+        except Exception:
+            data['stable'] = None
+    return data
 
 
 def shadow_camera_sample(game, xr):
@@ -1715,13 +1721,15 @@ def own_picture():
     return own
 
 
-def vr_picture_plan(sm1, aa_taa, textures_high, own):
+def vr_picture_plan(sm1, aa_taa, textures_high, own, very_high=False):
     """0.0.76 VISUAL: (vr_display.SESSION_OFF names to add, console lines, whether the game's AA will be TAA with no
     upscaler: True, False, or None unknown). `sm1`: SM1STYLE or SpidyVR's own eye AA (vr_aa ours / smaa) at this start;
     `aa_taa` / `textures_high`: live.txt vr_aa not keep / vr_textures at high; `own`: own_picture(). The game's AA goes
     to TAA only with `sm1` (vr_aa = game with sm1style off, the 0.0.72 picture, keeps the player's); textures and
     filtering only rise, never fall. 0.0.76 SPIDY TAA: with our own TAA the game's TAA never reaches the eyes (no eye
-    TAA targets, no eye jitter); TAA with no upscaler keeps DLAA / DLSS / FSR off them."""
+    TAA targets, no eye jitter); TAA with no upscaler keeps DLAA / DLSS / FSR off them. 0.0.76 TEXTURE DETAIL:
+    `very_high` (live.txt vr_texture_detail on / quality) raises Texture Quality to Very High (3) instead, whatever
+    vr_textures says; only where the player's is lower, put back when the game closes."""
     names, lines = [], []
     aa, upscaler = own.get('AA'), own.get('UpscaleMethod')
     taa_own = None if aa is None or upscaler is None else (aa == 2 and upscaler == 0)
@@ -1737,9 +1745,18 @@ def vr_picture_plan(sm1, aa_taa, textures_high, own):
         if sm1 and taa_own is False:
             lines.append('GAME AA: yours kept (live.txt vr_aa = keep): not TAA with no upscaler. vr_aa = ours + '
                          'restart VR puts it at TAA while VR runs.')
+    if very_high:
+        quality = own.get('TextureQuality')
+        if isinstance(quality, int) and quality < 3:
+            names.append('textures_very_high')
+            lines.append(f'TEXTURE DETAIL: Texture Quality Very High while VR runs (yours, {quality}, put back when '
+                         'the game closes; a little more video memory). live.txt vr_texture_detail = off + restart VR '
+                         'keeps yours.')
+        elif quality is None:
+            lines.append('TEXTURE DETAIL: Texture Quality not read, so it is left as you set it.')
     if textures_high:
         quality, filtering = own.get('TextureQuality'), own.get('TextureFiltering')
-        if isinstance(quality, int) and quality < 2:
+        if isinstance(quality, int) and quality < 2 and 'textures_very_high' not in names:
             names.append('textures')
             lines.append(f'TEXTURES: Texture Quality High while VR runs (yours, {quality}, put back when the game '
                          'closes). live.txt vr_textures = keep + restart VR keeps yours.')
@@ -1762,7 +1779,8 @@ def apply_sm1style(a, live_text):
     a.vr_aa = live_settings.vr_aa_choice(live_text)
     if a.vr_aa != 'game':
         a.sm1style = False
-        return apply_vr_aa(a, live_settings.vr_supersample(live_text))
+        return apply_vr_aa(a, live_settings.vr_supersample(live_text),
+                           live_settings.vr_texture_detail(live_text)[0])
     a.sm1style = live_settings.sm1style_on(live_text)
     percent = SM1STYLE_UPSCALE if live_settings.vr_render_upscaled(live_text) else SM1STYLE_NATIVE
     mip = a.mip_bias if getattr(a, 'game_aa_taa', None) is False else 'game'
@@ -1800,7 +1818,12 @@ def vr_aa_options(a):
     return 0
 
 
-def apply_vr_aa(a, supersample=100):
+# 0.0.76 TEXTURE DETAIL (live.txt vr_texture_detail on / aniso): the game's material samplers it biases negatively and
+# leaves trilinear get this anisotropic filtering (SpidyMipBiasStart; the game's own 16x ones are already there).
+TEXTURE_DETAIL_ANISOTROPY = 16
+
+
+def apply_vr_aa(a, supersample=100, aniso=False):
     """0.0.76 SPIDY TAA (live.txt vr_aa = ours, the default, keep or smaa): the eye settings our own anti-aliasing is
     made for, whatever a launcher argument, next-launch.txt or keep-settings asked: render scale and supersample 100,
     eyes at 100% (no upscaling), no anisotropy override (VR TEXTURES gives the game's 16x filtering), the game's
@@ -1809,15 +1832,18 @@ def apply_vr_aa(a, supersample=100):
     rest of that tune: 9aaedd5's run brought the line crawl back, docs/VISUAL-0.0.76.md); +0.5 for SMAA (no history to settle sub-pixel texture
     detail) or where the game's AA is not TAA (keep with DLSS: its -2.0 crawls). The game's own TAA never runs in the
     eyes (no eye TAA targets or jitter, stereo_probe). `supersample`: live.txt vr_ss (live_settings.vr_supersample),
-    100 unless asked, never with --size. Returns the console line."""
+    100 unless asked, never with --size. `aniso`: live.txt vr_texture_detail on / aniso (0.0.76 TEXTURE DETAIL): the
+    anisotropy TEXTURE_DETAIL_ANISOTROPY instead of none, the mip bias as above (no sharpening). Returns the console
+    line."""
     smaa = a.vr_aa == 'smaa'
     mip = '0.5' if smaa or getattr(a, 'game_aa_taa', None) is False else 'game'
+    anisotropy = TEXTURE_DETAIL_ANISOTROPY if aniso else 0
     # 0.0.76 A-depth TRACE D: SpidyXrStart keeps 110 / 125 / 150 with ours only (vr_aa.hpp supersampleKept)
     ss = supersample if supersample in (110, 125, 150) and not a.size and not smaa else 100
     forced = [f'{name} {old} -> {new}' for name, old, new in (
         ('render scale', a.render_scale, 100), ('supersample', a.supersample, ss),
         ('upscale', a.upscale, 100), ('mip bias', a.mip_bias, mip),
-        ('anisotropy', a.anisotropy, 0)) if old != new]
+        ('anisotropy', a.anisotropy, anisotropy)) if old != new]
     if a.game_sharpening:
         forced.append('game sharpening -> lowest')
     if a.engine_taa:
@@ -1825,10 +1851,13 @@ def apply_vr_aa(a, supersample=100):
     if getattr(a, 'no_eye_antialiasing', False):
         forced.append('eye lens jitter -> on')
     a.render_scale = 100 if not a.size else a.render_scale
-    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, 100, mip, 0
+    a.supersample, a.upscale, a.mip_bias, a.anisotropy = ss, 100, mip, anisotropy
     a.game_sharpening = a.engine_taa = a.no_eye_antialiasing = False
     kept = ' (kept over: ' + ', '.join(forced) + ')' if forced else ''
     ss_said = (f', eyes supersampled {ss}% (live.txt vr_ss)' if ss != 100 else '')
+    if anisotropy:
+        ss_said += (f', {anisotropy}x anisotropic filtering on the game\'s trilinear material textures (live.txt '
+                    'vr_texture_detail)')
     if smaa:
         return ('VR AA: SMAA (live.txt vr_aa = smaa): SMAA in each eye, no history so nothing shakes or ghosts, '
                 'the game\'s TAA kept off the eyes, eyes at 100%' + ss_said + ', mip bias +0.5' + kept +
@@ -2611,7 +2640,8 @@ def main():
     picture_names, picture_lines, a.game_aa_taa = vr_picture_plan(
         live_settings.sm1style_on(live_text) or live_settings.vr_aa_choice(live_text) != 'game',
         live_settings.vr_aa_taa(live_text),
-        live_settings.vr_textures_high(live_text), own_picture())
+        live_settings.vr_textures_high(live_text), own_picture(),
+        very_high=live_settings.vr_texture_detail(live_text)[1])
     session_off = tuple(session_off) + picture_names
     for line in picture_lines:
         print(line, flush=True)
@@ -3004,7 +3034,8 @@ def session(a, startup, session_off=()):
                       taa_frame_log_record.EXPORT,  # 0.0.76 TAA FRAME LOG: absent from an older module
                       taa_depth_check_record.EXPORT,  # 0.0.76 A-depth CHECKED: absent from an older module
                       taa_depth_trace_record.EXPORT,  # 0.0.76 A-depth TRACE: absent from an older module
-                      sfx_diag_record.EXPORT))  # 0.0.76 SFX DIAG: absent from an older module
+                      sfx_diag_record.EXPORT,  # 0.0.76 SFX DIAG: absent from an older module
+                      far_shadows.STABLE_EXPORT))  # 0.0.76 SHADOW STABLE: absent from an older module
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,

@@ -2952,3 +2952,33 @@ buildings stayed; only the light went.
 - tools/taa_depth_check_record.py, wired into run_game_vr.py (console lines, report `taa_depth_check`).
 - Tests: tests/hero076_taa_depth_check_tests.py; core_tests's synthetic eye pair (the lens's convention passes, the
   others are refused).
+
+## 77. Version 0.0.76 SHADOW STABLE + TEXTURE DETAIL: steadier far building shadows, more surface detail
+
+Both off by default and independent; nothing in the TAA core, the lens jitter, the headset eye path, the per-eye
+history or the depth reprojection changes, and there is no sharpening. Spider-Man2.exe 2.810.0.0.
+
+- Shadow findings. CONFIRMED (disassembly): 0x2a938b0 calls the cascade fit 0x2a8dc80; its active-view ask is at
+  0x2a8e145 (IsActiveView 0x2c991a0); the far cache 0x2ad11b0 (static object 0xbf57ce0, called at 0x2a8e241, ask at
+  0x2ad1238) stamps [cache+0x2454] with the frame [0xc323788] for an active view and [cache+0x2458] for a kind 1/2
+  view (the eyes are kind 2) at 0x2ad5380; an active view always recomputes the one shared far cache (0x2ad13b8)
+  unless it moved over 1 cm with a recent stamp (then it gets none); a non-active view reuses it (0x2ad1bbf) when the
+  active stamp is under 2 frames old. With cache far cascades the base cascades are trimmed to 2 and blended over 32
+  frames ([view+0x1de8]). The game already snaps the cascades to their texels, so no snapping is added. CONFIRMED
+  (telemetry, every visual 1..9 report): the eyes' fits_with_far equal their fits - the "eye gets no far cache"
+  idea is REFUTED. CANDIDATE cause of the flicker: with far_shadows eyes+cache the left eye (answered active) and the
+  game's head view both recompute the shared far cache every frame in no fixed order, and the right eye takes
+  whichever was last.
+- include/spidy/shadow_stable.hpp (Data 72 bytes, magic SSTB, version 1), stereo_probe.cpp: export
+  SpidyShadowStable (0 off / 1 on, others refused 4711, live) and SpidyShadowStableData (on, held, answered,
+  matchFits, matchSkipped, changes, sequence). On: the left eye's active-view ask is left to the game (held), so the
+  far cache is made once a frame from the head's view and shared by both eyes; the far cache then behaves as
+  far_shadows 1 (EYES), the base cascades still fitted per eye. Off: as before. Only with far_shadows 2.
+- tools/far_shadows.py reads SpidyShadowStableData; the FAR SHADOWS console line says SHADOW STABLE and the SHADOW
+  MATCH counts. live.txt `vr_shadow_stable` (START_ONLY: a launcher line before the start applies at the start).
+- TEXTURE DETAIL, live.txt `vr_texture_detail` (RESTART, START_ONLY): `aniso` sets apply_vr_aa's anisotropy to 16
+  (SpidyMipBiasStart: the samplers the game biases negatively that are trilinear become 16x anisotropic; the game's
+  mip bias is kept, encode 16 << 16); `quality` raises Texture Quality to Very High (vr_display SESSION_OFF
+  textures_very_high, TextureQuality 3 CONFIRMED in reports-075-grundy) only where the player's is lower, put back
+  when the game closes; `on` both. Level of Detail Very High is not written (its encoding was never seen beside a
+  log). Tests: tests/hero076_shadow_texture_tests.py.

@@ -55,6 +55,10 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
   0.0.76 A-depth: the eyes' TAA history is moved with each eye's own depth, so windows and building edges keep their
   history while your head moves; live.txt `vr_taa_depth` is `off` by default (509bdc9's, while the eye depth is CANDIDATE),
   `on` or `auto` (on once the eye depth is CONFIRMED), live, no restart.
+  0.0.76 SHADOW STABLE (test): live.txt `vr_shadow_stable = on` makes the far building shadows once a frame from your
+  head's view for both eyes, to stop them flickering (off by default, live, no restart). 0.0.76 TEXTURE DETAIL (test):
+  `vr_texture_detail = on` gives the world's textures 16x filtering and Very High Texture Quality in VR, no
+  sharpening (`aniso` or `quality` for one of the two; off by default; next VR start).
   0.0.76 A-depth CHECKED: even when on, the depth is used only after its convention check passes (the console's
   "TAA DEPTH CHECK" line); every 10 s "TAA DEPTH" gives clip / depth / both rejection per still / moving / fast swing.
   0.0.76 POSE CHECK: the console's "POSE CHECK render vs submit" says whether each eye was shown with the exact pose

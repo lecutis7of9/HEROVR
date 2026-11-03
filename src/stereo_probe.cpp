@@ -9,6 +9,7 @@
 #include "spidy/eye_cover.hpp" // 0.0.74 test 10 WINDOW EDGES
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
+#include "spidy/shadow_stable.hpp"
 #include "spidy/mirror_probe.hpp"
 #include "spidy/mirror_view.hpp"
 #include "spidy/native_appearance.hpp"
@@ -165,6 +166,8 @@ __declspec(dllexport) native_view::EyeLodData SpidyEyeLodData;
 __declspec(dllexport) spidy::shadow_camera::Data SpidyShadowCameraData;
 // Update 35: FAR SHADOWS' mode and what the cascade fits made (tools/run_game_vr.py).
 __declspec(dllexport) spidy::far_shadows::Data SpidyFarShadowsData;
+// 0.0.76 SHADOW STABLE (shadow_stable.hpp): the switch and what it held (tools/far_shadows.py).
+__declspec(dllexport) spidy::shadow_stable::Data SpidyShadowStableData;
 // Update 36: EYE BLOOM's and SHARED LOD's modes and what they saw (eye_bloom.hpp, shared_lod.hpp).
 __declspec(dllexport) spidy::eye_bloom::Data SpidyEyeBloomData;
 __declspec(dllexport) spidy::shared_lod::Data SpidySharedLodData;
@@ -889,6 +892,10 @@ void* csmFitHook{};
 bool farShadowsReady{}; // the fit hooked and both IsActiveView calls as known
 std::atomic<uint32_t> farShadowsMode{spidy::far_shadows::defaultMode}, farShadowsWhy{};
 std::atomic<uint64_t> farAnsweredFit{}, farAnsweredCache{};
+// 0.0.76 SHADOW STABLE (shadow_stable.hpp, live.txt vr_shadow_stable): off by default; on, the left eye is
+// not answered "active" inside the far cache, so the head view makes it once a frame for both eyes.
+std::atomic<uint32_t> shadowStableOn{spidy::shadow_stable::off};
+std::atomic<uint64_t> shadowStableHeld{};
 SRWLOCK farLock = SRWLOCK_INIT;
 uint64_t farJudgedGame{}, farJudgedGameFar{}; // farLock: the game view's fits since the change
 bool farJudging{};                              // farLock
@@ -990,6 +997,16 @@ uint64_t csmFit(void* csm, void* view, void* lights, void* settings) {
     InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&d.sequence));
     d.answeredFit = farAnsweredFit.load(std::memory_order_relaxed);
     d.answeredCache = farAnsweredCache.load(std::memory_order_relaxed);
+    {   // 0.0.76 SHADOW STABLE's record (read-only numbers; farLock keeps one writer)
+        auto& s = SpidyShadowStableData;
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&s.sequence));
+        s.on = shadowStableOn.load(std::memory_order_relaxed);
+        s.held = shadowStableHeld.load(std::memory_order_relaxed);
+        s.answered = d.answeredCache;
+        s.matchFits = shadowMatchFits.load(std::memory_order_relaxed);
+        s.matchSkipped = shadowMatchSkipped.load(std::memory_order_relaxed);
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&s.sequence));
+    }
     if (eye >= 0) {
         auto& e = d.eye[eye];
         ++e.fits;
@@ -1074,6 +1091,12 @@ bool isActiveView(void* view) {
                 }
                 if (mode == spidy::far_shadows::eyesCache && view == l &&
                     caller == spidy::far_shadows::cacheAskReturn) {
+                    // 0.0.76 SHADOW STABLE: the game's own answer (not active), so the head view's far cache
+                    // is the one both eyes take; the fit's ask above still says "active" for the eyes.
+                    if (shadowStableOn.load(std::memory_order_relaxed)) {
+                        shadowStableHeld.fetch_add(1, std::memory_order_relaxed);
+                        return originalIsActiveView(view);
+                    }
                     farAnsweredCache.fetch_add(1, std::memory_order_relaxed);
                     return true;
                 }
@@ -4413,6 +4436,31 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyFarShadows(void* mode) {
         return 4702;
     farShadowsSet(value == fs::nextMode ? fs::next(farShadowsMode.load()) : static_cast<uint32_t>(value), fs::none,
                   false);
+    return 0;
+}
+// 0.0.76 SHADOW STABLE (shadow_stable.hpp, live.txt vr_shadow_stable): 0 off (the default), 1 on - the left
+// eye is not answered "active" inside the far cache, so the head view makes the far building shadows once a
+// frame and both eyes share them. Refused (4711) above. The FAR SHADOWS mode is judged again from the next eye
+// fits (its auto-revert as for a mode change). Live, never kept by the DLL.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyShadowStable(void* value) {
+    namespace ss = spidy::shadow_stable;
+    const auto v = reinterpret_cast<uintptr_t>(value);
+    if (v > ss::on)
+        return ss::refused;
+    const uint32_t old = shadowStableOn.exchange(static_cast<uint32_t>(v));
+    if (old != v) {
+        AcquireSRWLockExclusive(&farLock);
+        auto& s = SpidyShadowStableData;
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&s.sequence));
+        s.on = static_cast<uint32_t>(v);
+        ++s.changes;
+        InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&s.sequence));
+        ReleaseSRWLockExclusive(&farLock);
+        if (farShadowsReady && farShadowsMode.load())
+            farShadowsSet(farShadowsMode.load(), spidy::far_shadows::none, false);
+    }
+    OutputDebugStringA(v ? "SpidyVR: 0.0.76 SHADOW STABLE on (the head view's far cache shared by both eyes)\n"
+                         : "SpidyVR: 0.0.76 SHADOW STABLE off\n");
     return 0;
 }
 // far_shadows::pack(mode, why it last changed on its own).

@@ -177,6 +177,20 @@ SETTINGS = {
              "rendered at 125% per side and filtered down before SpidyVR's TAA, smoother windows but about a third "
              "more GPU work; 2 150: 150% per side, about twice the GPU work, only with frame rate to spare; 3 110: "
              "110% per side, 1.21x the pixels, a test) - RESTART NOTICE: takes effect the next time VR starts"),
+    # 0.0.76 TEXTURE DETAIL (tools/run_game_vr.py apply_vr_aa, vr_picture_plan): surface detail in the eyes, no
+    # sharpening; off by default, kept between sessions (RESTART). aniso: 16x anisotropic filtering on the material
+    # samplers the game biases negatively and leaves trilinear (SpidyMipBiasStart, the game's mip bias kept); quality:
+    # Texture Quality Very High (TextureQuality 3) while VR runs, yours put back after; on: both.
+    'vr_texture_detail': ((0, 1, 2, 3), None, "VR TEXTURE DETAIL {} (1 on: more surface detail in the headset with "
+                          "no sharpening - 16x anisotropic filtering on the game's material textures it leaves "
+                          "trilinear and Texture Quality Very High while VR runs, a little more video memory; 2 "
+                          "aniso: the filtering only; 3 quality: Very High textures only; 0 off, the default) - "
+                          "RESTART NOTICE: takes effect the next time VR starts"),
+    # 0.0.76 SHADOW STABLE (include/spidy/shadow_stable.hpp, stereo_probe SpidyShadowStable): live, off by default.
+    'vr_shadow_stable': ((0, 1), 'SpidyShadowStable', "VR SHADOW STABLE {} (1 on: the far building shadows are made "
+                         "once a frame from your head's view and shared by both eyes, instead of the left eye "
+                         "making them again, to stop them flickering; only changes anything with far_shadows at "
+                         "eyes+cache, the default; 0 off, the default) - live, no restart needed"),
     # 0.0.76 FAR SHAKE (include/spidy/sm1style.hpp eyeJitterFor, gameViewJitter): live, never persisted.
     'vr_jitter': ((0, 1), 'SpidyVrJitter', "VR JITTER {} (0 on: the eyes' TAA sample walk, sharpest bricks; 1 off: "
                  "one fixed offset instead, a test for the far shake, a little softer) - live, no restart needed"),
@@ -513,6 +527,10 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'vr_render': 'RESTART NOTICE: vr_render takes effect the next time VR starts (native: the eyes at 100%, '
                         "no upscaling; upscaled: SpidyVR's 67%).",
            # 0.0.76 SPIDY TAA TUNE: the eye supersample is set when VR starts
+           # 0.0.76 TEXTURE DETAIL: the sampler filtering and the game's Texture Quality are set when VR starts
+           'vr_texture_detail': 'RESTART NOTICE: vr_texture_detail takes effect the next time VR starts (on: 16x '
+                                'filtering on the game\'s trilinear material textures and Very High textures; aniso '
+                                'or quality: one of the two; off: as before).',
            'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 110, 125 or '
                     '150: the eyes rendered larger per side and filtered down, smoother but heavier on the GPU).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
@@ -716,6 +734,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_jitter': ('on', 'off'), 'vr_game_jitter': ('keep', 'off'),  # 0.0.76 FAR SHAKE (JITTER FIX: off, 1, the default)
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_seam': ('off', 'on'),  # 0.0.76 SEAM TRACE (off, 0, the default)
+                'vr_shadow_stable': ('off', 'on'),  # 0.0.76 SHADOW STABLE (off, 0, the default)
+                'vr_texture_detail': ('off', 'on', 'aniso', 'quality'),  # 0.0.76 TEXTURE DETAIL (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
                 'beacons_vision': ('on', 'off'),
@@ -817,6 +837,8 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_game_jitter': {'keep': 0, 'on': 0, 'game': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 JITTER FIX: 1 off default
            'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 0 off default
            'vr_taa_seam': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SEAM TRACE: 0 off default
+           'vr_shadow_stable': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SHADOW STABLE: 0 off default
+           'vr_texture_detail': {'off': 0, 'on': 1, 'aniso': 2, 'quality': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TEXTURE DETAIL
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
            'beacons_vision': {'on': 0, 'off': 1, '0': 0, '1': 1},
@@ -1230,6 +1252,9 @@ START_ONLY = START_ONLY + ('game_webs',)  # 0.0.76 GAME WEBS ONLY: an OFF kept b
 START_ONLY = START_ONLY + ('trigger_guard',)  # 0.0.76 TRIGGER GUARD: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
 START_ONLY = START_ONLY + ('fly_classic',)  # HERO VR 0.0.76 FLIGHT: an ON kept between sessions
+START_ONLY = START_ONLY + ('vr_texture_detail',)  # 0.0.76 TEXTURE DETAIL: kept between sessions (RESTART)
+# 0.0.76 SHADOW STABLE: live, and a line the launcher wrote before the start applies at the start too
+START_ONLY = START_ONLY + ('vr_shadow_stable',)
 START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
@@ -2110,6 +2135,13 @@ def vr_supersample(text):
     """0.0.76 SPIDY TAA TUNE: the eye supersample percent live.txt `text` asks for with vr_ss (None: no live.txt):
     100 (off, the default), 110 (a test), 125 or 150, per side. Never raises."""
     return {'110': 110, '125': 125, '150': 150}.get(_start_choice(text, 'vr_ss', 'off'), 100)
+
+
+def vr_texture_detail(text):
+    """0.0.76 TEXTURE DETAIL: (aniso, quality) live.txt `text` asks for with vr_texture_detail (None: no live.txt):
+    on both, aniso the 16x filtering only, quality Very High textures only, off (the default) neither. Never raises."""
+    choice = _start_choice(text, 'vr_texture_detail', 'off')
+    return choice in ('on', 'aniso'), choice in ('on', 'quality')
 
 
 def vr_render_upscaled(text):

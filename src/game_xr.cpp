@@ -61,6 +61,7 @@
 #include "spidy/wrist_muzzle.hpp"
 #include "spidy/hero_switch.hpp"
 #include "spidy/story077.hpp" // HERO VR 0.0.77 STORY INPUTS
+#include "spidy/story077b.hpp" // HERO VR 0.0.77 STORY MOVES
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/blood_splatter.hpp"
@@ -622,6 +623,7 @@ __declspec(dllexport) spidy::combat38::Data SpidyCombat38Data; // Update 38: the
 __declspec(dllexport) spidy::hero_switch::Data SpidyHeroSwitchData; // Update 38.5: HERO SWITCH PROBE (HSWP)
 __declspec(dllexport) spidy::air_watch::Data SpidyAirWatchData;     // Update 38.5: Y IN THE AIR (AIRW)
 __declspec(dllexport) spidy::story077::Data SpidyStoryData;         // HERO VR 0.0.77 STORY INPUTS (STRY)
+__declspec(dllexport) spidy::story077b::Data SpidyStoryMovesData;   // HERO VR 0.0.77 STORY MOVES (STRB)
 __declspec(dllexport) spidy::v003::Data SpidyV003Data;               // Version 0.0.3 (V003)
 __declspec(dllexport) spidy::v005::Data SpidyV005Data;               // Version 0.0.5 (V005)
 __declspec(dllexport) spidy::v006::Data SpidyV006Data;               // Version 0.0.6 (V006)
@@ -1349,6 +1351,19 @@ std::atomic<uint32_t> storyThrowNow{0};
 static_assert(story077::pad::dpadLeft == game_pad::dpadLeft && story077::pad::dpadRight == game_pad::dpadRight &&
               story077::pad::back == game_pad::back && story077::pad::lb == game_pad::leftShoulder &&
               story077::pad::rb == game_pad::rightShoulder && story077::pad::b == game_pad::b && story077::pad::x == game_pad::x);
+// HERO VR 0.0.77 STORY MOVES (story077b.hpp): live.txt story_abilities (0 ON, 1 OFF: VR X held is the game's
+// LB ability modifier for the spiders), story_throw_aim (0 LOOK, 1 POINT, 2 OFF: the left stick aims the LB + RB
+// throw), story_dodge (0 ON, 1 OFF: B dodges in the air and on walls too, at least 0.12 s, the spider-sense NOW
+// buzz) and head_dodge (0 FIGHT, 1 ALWAYS, 2 OFF: a quick sideways step of the head dodges that way).
+std::atomic<uint32_t> storyAbilitiesNow{0};
+std::atomic<uint32_t> storyAimNow{story077b::aimLook};
+std::atomic<uint32_t> storyDodgeNow{0};
+std::atomic<uint32_t> headDodgeNow{story077b::headFight};
+static_assert(story077b::pad::dpadUp == game_pad::dpadUp && story077b::pad::dpadDown == game_pad::dpadDown &&
+              story077b::pad::back == game_pad::back && story077b::pad::l3 == game_pad::leftThumb &&
+              story077b::pad::r3 == game_pad::rightThumb && story077b::pad::lb == game_pad::leftShoulder &&
+              story077b::pad::rb == game_pad::rightShoulder && story077b::pad::a == game_pad::a &&
+              story077b::pad::b == game_pad::b && story077b::pad::x == game_pad::x && story077b::pad::y == game_pad::y);
 std::atomic<uint32_t> webShades[web_style::count]{};
 // The wrist hologram (Update 14, wrist_hud.hpp): live.txt hud (on), hud_hand
 // (0 the left wrist, 1 the right) and hud_scale (percent). wristHudFault: it
@@ -2251,6 +2266,15 @@ DWORD WINAPI run(void*) {
         story077::SwapMacro::Phase storyPhaseSeen = story077::SwapMacro::idle;
         uint32_t storySwapAsk{};
         bool storyPulling{};
+        // HERO VR 0.0.77 STORY MOVES (story077b.hpp): the ability button (VR X held), the throw's aim, the
+        // dodge everywhere and the head sidestep; the STRB counts.
+        story077b::AbilityButton storyAbility;
+        story077b::ThrowAim storyAim;
+        story077b::HeadSidestep storyStep;
+        story077b::DodgeAssist storyDodge;
+        story077b::Data movesCounts{};
+        bool abilityGiveBack{}, abilityAirAsk{}, abilityToldOnce{}, abilityOn{};
+        float dodgeStick{};
         // Update 38.5 Y IN THE AIR (air_watch.hpp): Y presses sent, in the swing's flight, GRAB WEB
         // yanks on the WEB YANK input, in the air; the swing module's AirYield counts last seen.
         uint64_t ySent{}, yInAir{}, grabYankInputs{}, yanksInAir{}, yieldsNoted{}, outlivedNoted{};
@@ -3099,6 +3123,7 @@ DWORD WINAPI run(void*) {
             SenseAnswer answer = SenseAnswer::Counter;
             float left = 1;
             bool timed{}, live{};
+            bool nowCued{}; // HERO VR 0.0.77 STORY MOVES: spider-sense's NOW buzzed for it
             SenseSight sight{};
         };
         std::array<SenseMark, 6> senseMarks{};
@@ -6878,6 +6903,18 @@ DWORD WINAPI run(void*) {
                                 mark->answer = static_cast<SenseAnswer>(t.answer);
                                 mark->left = std::isfinite(t.left) ? std::clamp(t.left, 0.f, 1.f) : 1.f;
                                 mark->timed = t.timed != 0;
+                                // HERO VR 0.0.77 STORY MOVES: spider-sense's NOW, the moment to press B (a timed
+                                // warning under story077b::senseNow game seconds from its blow, CANDIDATE), once.
+                                if (storyDodgeNow.load() == 0 && t.timed && !mark->nowCued && std::isfinite(t.toImpact) &&
+                                    t.toImpact > 0 && t.toImpact < story077b::senseNow && !t.countered) {
+                                    mark->nowCued = true;
+                                    ++movesCounts.senseNowCues;
+                                    const int64_t nowUntil = frame.predictedDisplayTime + 80'000'000;
+                                    for (unsigned h = 0; h < 2; ++h) {
+                                        runtime.haptic(h, 1.f, .06f);
+                                        pulseUntil[h] = std::max(pulseUntil[h], nowUntil);
+                                    }
+                                }
                                 if (t.countered && !mark->brokenAt) {
                                     mark->brokenAt = frame.predictedDisplayTime;
                                     ++senseBroken;
@@ -7242,6 +7279,55 @@ DWORD WINAPI run(void*) {
                             if (fly076Flying) // HERO VR 0.0.76 FLIGHT: B is the air brake while flying
                                 walk.dodge = false;
                         }
+                        // HERO VR 0.0.77 STORY MOVES (story077b.hpp): X held as the spiders' ability button (the
+                        // last frame's word on it: X given back after 0.8 s alone is the old X again).
+                        abilityOn = storyAbilitiesNow.load() == 0 && heroNow() == hero_modes::spiderMan &&
+                                    mapping == game_pad::Mapping::gameplay && steering && !calibrationInput && !layerOn &&
+                                    !phone.live() && !storySwap.running() && !flyNow.flying &&
+                                    gestureMovesNow.load() != gestures385::modeOn;
+                        const bool abilityX = abilityOn && (frame.buttons & buttonX) && !abilityGiveBack;
+                        // HERO VR 0.0.77 STORY MOVES: B is the game's dodge wherever he plays - in the air and on
+                        // walls too (the swing owned him there and B never went out: `playing` above), each press
+                        // at least 0.12 s; a quick sideways step of the head dodges that way (head_dodge).
+                        dodgeStick = 0;
+                        if (storyDodgeNow.load() == 0) {
+                            const bool canDodge = steering && !calibrationInput && !fly076Flying && !layerOn &&
+                                                  !phone.live() && !storySwap.running() && !abilityX;
+                            const uint32_t headMode = headDodgeNow.load();
+                            const bool warned = std::any_of(senseMarks.begin(), senseMarks.end(),
+                                                            [](const SenseMark& m) { return m.live && !m.brokenAt; });
+                            const bool recentBlow =
+                                blowSeen && frame.predictedDisplayTime - blowSeen < 3'000'000'000LL;
+                            const bool stepOn = canDodge && headMode != story077b::headOff &&
+                                                (headMode == story077b::headAlways || fightNear || warned || recentBlow);
+                            const int side = storyStep.update(frame.seconds, stepOn, frame.head.position,
+                                                              frame.head.orientation.rotate({1, 0, 0}));
+                            const auto dodged =
+                                storyDodge.update(frame.seconds, canDodge, (origins.play() & buttonB) != 0, side);
+                            walk.dodge = dodged.dodge;
+                            if (dodged.started) {
+                                if (inFlight)
+                                    ++movesCounts.dodgesInAir;
+                                else if (onWall)
+                                    ++movesCounts.dodgesOnWall;
+                                else
+                                    ++movesCounts.dodges;
+                            }
+                            if (side) {
+                                runtime.haptic(side > 0 ? 1 : 0, .4f);
+                                game_prompts::note(side > 0 ? "HERO VR 0.0.77 DODGE: head step right -> the game's B, stick right"
+                                                            : "HERO VR 0.0.77 DODGE: head step left -> the game's B, stick left");
+                            }
+                            const bool theirStick = std::hypot(std::isfinite(frame.hands[0].stickX) ? frame.hands[0].stickX : 0.f,
+                                                               std::isfinite(frame.hands[0].stickY) ? frame.hands[0].stickY : 0.f) > .25f;
+                            if (dodged.right != 0 && !theirStick) {
+                                dodgeStick = dodged.right;
+                                walk.right = dodged.right;
+                                walk.forward = 0;
+                            }
+                        } else if (abilityX) {
+                            walk.dodge = false;
+                        }
                         // What each hand points at among the game's interactions near
                         // the player, on Spidy's wall only: off it the game offers its
                         // own, and its interact uses them. Read every frame all the
@@ -7394,7 +7480,8 @@ DWORD WINAPI run(void*) {
                         }
                         const bool pullClick =
                             frame.hands[1].stickClick && !(named & game_pad::NamedPress::rightClick) &&
-                            !flyNow.flying && !flyChord.claims(); // Update 38.5: while flying R3 is FLY's
+                            !flyNow.flying && !flyChord.claims() && // Update 38.5: while flying R3 is FLY's
+                            !abilityX; // 0.0.77 STORY MOVES: with X held the click is the ultimate
                         // HERO VR 0.0.77 STORY INPUTS: the game's web throw ("LB + RB (Hold) Throw", the
                         // Sandman opener's debris) wherever the game offers it, in the air too: the click
                         // while a web carries him, and both hands held out then yanked back together
@@ -7458,7 +7545,7 @@ DWORD WINAPI run(void*) {
                         // Not a push the game names a D-pad way for (NamedPress).
                         // HOVER FLIGHT: mid-flight the right stick's up / down is the climb - no heal or zip from it.
                         const bool sticking =
-                            steering && !calibrationInput && !layerOn && !fly076Flying &&
+                            steering && !calibrationInput && !layerOn && !fly076Flying && !abilityX &&
                             !(named & (game_pad::NamedPress::stickUp | game_pad::NamedPress::stickLeft |
                                        game_pad::NamedPress::stickRight));
                         // Update 37: heal_hold_ms, how long a push is held before it counts.
@@ -7491,7 +7578,9 @@ DWORD WINAPI run(void*) {
                         askingGame = steering && swingState.owned && !calibrationInput &&
                                      (walk.zip ||
                                       (inFlight && (walk.interact || walk.demand.any() || named != 0)) ||
-                                      (storyThrow && inFlight && walk.pull)); // 0.0.77: the web throw in the air
+                                      (storyThrow && inFlight && walk.pull) || // 0.0.77: the web throw in the air
+                                      (storyDodgeNow.load() == 0 && walk.dodge && (inFlight || onWall)) || // 0.0.77: B
+                                      (inFlight && abilityAirAsk)); // 0.0.77 STORY MOVES: an ability in the air
                         if (walk.pull) {
                             ++storyCounts.pullFrames;
                             storyCounts.pullFramesInAir += inFlight;
@@ -7588,6 +7677,12 @@ DWORD WINAPI run(void*) {
                         auto buttons = origins.filtered(frame, mapping);
                         // An X the game names is its X: no wheel, no menu (NamedPress).
                         if (named & game_pad::NamedPress::controlX)
+                            buttons.buttons &= ~static_cast<uint32_t>(buttonX);
+                        // HERO VR 0.0.77 STORY MOVES: X held is the ability button: no View, no wheel from it
+                        // (a tap is still the 0.1 s View, from the button's own release; held 0.8 s alone it is
+                        // given back to them).
+                        const bool abilityXRaw = (buttons.buttons & buttonX) != 0;
+                        if (abilityX && !(named & game_pad::NamedPress::controlX))
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
                         // Version 0.0.72 PUNISHER VAN (EXPERIMENTAL, van072.hpp): the PUNISHER's X tap summons it
                         // (his X is free: no gadget wheel; an X the game names stays the game's, above). The van
@@ -10547,6 +10642,78 @@ DWORD WINAPI run(void*) {
                         } else {
                             comboSender.clear();
                         }
+                        // HERO VR 0.0.77 STORY MOVES (story077b.hpp): the spiders' abilities from VR X held -
+                        // a punch LB + X (the Venom Punch / Spider Barrage slot), Y or the right stick up LB + Y,
+                        // B LB + B, A LB + A, the right stick's click L3 + R3 (ultimate), the stick down D-pad up
+                        // (camouflage). While X holds them the face buttons, heal, zip and pull are not sent.
+                        {
+                            namespace sb = story077b;
+                            sb::AbilityButton::In ai;
+                            ai.seconds = frame.seconds;
+                            ai.on = abilityOn && !(named & game_pad::NamedPress::controlX);
+                            ai.xHeld = abilityXRaw;
+                            ai.punch = (pad.buttons & game_pad::x) != 0;
+                            ai.y = (frame.buttons & buttonY) != 0;
+                            ai.b = (frame.buttons & buttonB) != 0;
+                            ai.a = (frame.buttons & buttonA) != 0;
+                            const float ry = std::isfinite(frame.hands[1].stickY) ? frame.hands[1].stickY : 0.f;
+                            ai.stickUp = ry > .6f;
+                            ai.stickDown = ry < -.6f;
+                            ai.stickClick = frame.hands[1].stickClick;
+                            const auto ab = storyAbility.update(ai);
+                            if (ab.owned || storyAbility.sending()) {
+                                pad.buttons = static_cast<uint16_t>(
+                                    pad.buttons & ~(sb::pad::a | sb::pad::b | sb::pad::x | sb::pad::y | sb::pad::back |
+                                                    sb::pad::dpadUp | sb::pad::dpadDown | sb::pad::l3 | sb::pad::r3 |
+                                                    sb::pad::lb | sb::pad::rb));
+                                pad.leftTrigger = pad.rightTrigger = 0;
+                                pad.buttons = static_cast<uint16_t>(pad.buttons | ab.buttons);
+                            }
+                            if (ab.menuTap)
+                                menuTap = .1f; // X tapped alone: the View it always was
+                            abilityGiveBack = ab.giveBack;
+                            abilityAirAsk = storyAbility.sending();
+                            if (ab.owned && !abilityToldOnce) {
+                                abilityToldOnce = true;
+                                message(3, 0, "ABILITIES: hold X + punch / Y / B / A (stick up = Y, click = ultimate, "
+                                              "stick down = camo) - the phone's STORY MOVES card has them all");
+                            }
+                            if (ab.fired >= 0) {
+                                runtime.haptic(0, .35f);
+                                runtime.haptic(1, .35f);
+                                movesCounts.lastSlot = static_cast<uint32_t>(ab.fired) + 1;
+                                char line[128];
+                                sprintf_s(line, "HERO VR 0.0.77 ABILITY: X held -> the game's %s (#%u)",
+                                          sb::slotName(static_cast<uint32_t>(ab.fired)),
+                                          storyAbility.fired[ab.fired]);
+                                game_prompts::note(line);
+                                consoleLine(line);
+                            }
+                            // The throw's aim: while the game's LB + RB goes out (and 0.4 s after), the left stick
+                            // points where the player looks or the right hand points, in the game camera's frame.
+                            const bool throwing = mapping == game_pad::Mapping::gameplay && !storyAbility.sending() &&
+                                                  (pad.buttons & (sb::pad::lb | sb::pad::rb)) == (sb::pad::lb | sb::pad::rb);
+                            const Vec3 look = motion.headPose.orientation.rotate({0, 0, -1});
+                            const Vec3 point = motion.swing.hands[1].aim.orientation.rotate({0, 0, -1});
+                            const uint32_t throwsBefore = storyAim.throws;
+                            const auto aim = storyAim.update(frame.seconds, storyAimNow.load(), throwing, look, point,
+                                                             Vec3{camera[8], 0, camera[10]}, frame.hands[0].stickX,
+                                                             frame.hands[0].stickY);
+                            if (aim.active) {
+                                pad.thumbLX = static_cast<int16_t>(std::clamp(aim.right, -1.f, 1.f) * 32767);
+                                pad.thumbLY = static_cast<int16_t>(std::clamp(aim.forward, -1.f, 1.f) * 32767);
+                            } else if (dodgeStick != 0 && mapping == game_pad::Mapping::gameplay) {
+                                pad.thumbLX = static_cast<int16_t>(std::clamp(dodgeStick, -1.f, 1.f) * 32767);
+                                pad.thumbLY = 0;
+                            }
+                            if (storyAim.throws != throwsBefore) {
+                                char line[128];
+                                sprintf_s(line, "HERO VR 0.0.77 THROW AIM (%s): throw #%u aimed %.0f degrees off the camera",
+                                          sb::aimName(storyAimNow.load()), storyAim.throws,
+                                          static_cast<double>(aim.degrees));
+                                game_prompts::note(line);
+                            }
+                        }
                         // Version 0.0.4 HERO ABILITIES: no swing, zip, charged swing leap, web shooter,
                         // gadget or yank reaches the game for a hero with no webs (a story prompt's ask kept).
                         if (mapping == game_pad::Mapping::gameplay) {
@@ -10631,6 +10798,26 @@ DWORD WINAPI run(void*) {
                             const uint64_t sequence = SpidyStoryData.sequence;
                             SpidyStoryData = storyCounts;
                             SpidyStoryData.sequence = sequence + 1;
+                            // HERO VR 0.0.77 STORY MOVES (STRB).
+                            movesCounts.abilitiesOn = storyAbilitiesNow.load() == 0;
+                            movesCounts.aimMode = storyAimNow.load();
+                            movesCounts.dodgeOn = storyDodgeNow.load() == 0;
+                            movesCounts.headMode = headDodgeNow.load();
+                            for (uint32_t i = 0; i < story077b::slots; ++i)
+                                movesCounts.fired[i] = storyAbility.fired[i];
+                            movesCounts.taps = storyAbility.taps;
+                            movesCounts.givenBack = storyAbility.givenBack;
+                            movesCounts.ownedFrames = storyAbility.ownedFrames;
+                            movesCounts.throws = storyAim.throws;
+                            movesCounts.aimFrames = storyAim.frames;
+                            movesCounts.aimOverridden = storyAim.overridden;
+                            movesCounts.lastAimDegrees = storyAim.lastDegrees;
+                            movesCounts.headDodges = storyDodge.headDodges;
+                            movesCounts.senseDodges = senseDodges;
+                            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyStoryMovesData.sequence));
+                            const uint64_t movesSequence = SpidyStoryMovesData.sequence;
+                            SpidyStoryMovesData = movesCounts;
+                            SpidyStoryMovesData.sequence = movesSequence + 1;
                         }
                         game_pad::submit(pad, 200);
                         // Update 38.5 Y IN THE AIR: read-only counts (no glide state is read; air_watch.hpp).
@@ -15667,6 +15854,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHitchHold(void* v) { return s
 // HERO VR 0.0.77 STORY INPUTS (story077.hpp): live.txt story_swap and story_throw.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySwap(void* v) { return setLive(v, 0, 3, 5559, storySwapNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryThrow(void* v) { return setLive(v, 0, 1, 5560, storyThrowNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryAbilities(void* v) { return setLive(v, 0, 1, 5561, storyAbilitiesNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryThrowAim(void* v) { return setLive(v, 0, 2, 5562, storyAimNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryDodge(void* v) { return setLive(v, 0, 1, 5563, storyDodgeNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return setLive(v, 0, 2, 5564, headDodgeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);
 }

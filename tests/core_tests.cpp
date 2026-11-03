@@ -7025,7 +7025,12 @@ int main() {
         step(E{0,-1});
         check(ui.app()==1,"down did not pick MAP");
         step(E{0,1});step(E{0,1});
-        check(ui.app()==3,"up from MAP did not wrap to SWITCH HERO");
+        check(ui.app()==phoneMovesItem,"up from MAP did not wrap to STORY MOVES");
+        check(step(E{0,0,true})==PhoneAction::none&&ui.screen()==PhoneScreen::moves,"A on STORY MOVES did not open it");
+        check(step(E{0,0,false,true})==PhoneAction::none&&ui.screen()==PhoneScreen::home&&ui.app()==phoneMovesItem,
+              "B on STORY MOVES did not go home");
+        step(E{0,1});
+        check(ui.app()==3,"up from STORY MOVES did not pick SWITCH HERO");
         check(step(E{0,0,true})==PhoneAction::switchHero&&ui.screen()==PhoneScreen::home,"A on SWITCH HERO did not ask the switch");
         step(E{0,1});
         check(ui.app()==2,"up from SWITCH HERO did not pick GEAR");
@@ -7089,7 +7094,8 @@ int main() {
               }),
               "GEAR showed no gadgets");
         // MAP shows the same whatever else the phone has: more than a phone with no screen at all.
-        check(drawn(PhoneScreen::map,nothing)>drawn(static_cast<PhoneScreen>(phoneApps+1),nothing),"MAP showed nothing");
+        check(drawn(PhoneScreen::map,nothing)>drawn(static_cast<PhoneScreen>(phoneApps+2),nothing),"MAP showed nothing");
+        check(drawn(PhoneScreen::moves,nothing)>drawn(static_cast<PhoneScreen>(phoneApps+2),nothing),"STORY MOVES showed nothing");
     });
     test("sky anchors respect body occlusion and later world obstruction", [] {
         struct Occluded : TestWorld {

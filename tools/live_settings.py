@@ -517,6 +517,18 @@ SETTINGS = {
     'story_throw': ((0, 1), 'SpidyStoryThrow', "STORY THROW {} (0 on: both hands held out then yanked back together, "
                     "or the right stick's click, sends the game's LB + RB web throw on the ground, on walls and in the "
                     "air, for the debris Sandman throws; 1 off: 0.0.76's ground-only pull) - live, no restart needed"),
+    # HERO VR 0.0.77 STORY MOVES (include/spidy/story077b.hpp): live, Peter and the second spider.
+    'story_abilities': ((0, 1), 'SpidyStoryAbilities', "STORY ABILITIES {} (0 on: hold X and punch / Y / B / A for the "
+                        "game's LB abilities, the right stick's click for the ultimate and the stick down for camo; "
+                        "1 off: X is the gadget wheel and View again) - live, no restart needed"),
+    'story_throw_aim': ((0, 2), 'SpidyStoryThrowAim', "STORY THROW AIM {} (where the LB + RB web throw sends the "
+                        "debris - 0 look: where your head looks; 1 point: where your right hand points; 2 off: the "
+                        "game's own aim) - live, no restart needed"),
+    'story_dodge': ((0, 1), 'SpidyStoryDodge', "STORY DODGE {} (0 on: B dodges at once anywhere, in the air and on "
+                    "walls too, and both controllers buzz hard at spider-sense's moment to press it; 1 off: 0.0.76's "
+                    "ground-only B) - live, no restart needed"),
+    'head_dodge': ((0, 2), 'SpidyHeadDodge', "HEAD DODGE {} (a quick sideways step of your head dodges that way - "
+                   "0 fight: only near enemies or a spider-sense warning; 1 always; 2 off) - live, no restart needed"),
     # 0.0.76 HITCH HOLD (include/spidy/hitch_hold.hpp): live, every hero.
     'hitch_hold': ((0, 1), 'SpidyHitchHold', "HITCH HOLD {} (0 on: when Virtual Desktop holds a frame for up to half a "
                    "second, VR play, your webs and the eye view carry on as one short step instead of dropping to the "
@@ -687,6 +699,10 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'hitch_hold': ('on', 'off'),  # 0.0.76 HITCH HOLD
                 'story_swap': ('view', 'dpad_left', 'dpad_right', 'off'),  # HERO VR 0.0.77 STORY INPUTS
                 'story_throw': ('on', 'off'),  # HERO VR 0.0.77 STORY INPUTS
+                'story_abilities': ('on', 'off'),  # HERO VR 0.0.77 STORY MOVES
+                'story_throw_aim': ('look', 'point', 'off'),  # HERO VR 0.0.77 STORY MOVES
+                'story_dodge': ('on', 'off'),  # HERO VR 0.0.77 STORY MOVES
+                'head_dodge': ('fight', 'always', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
@@ -947,6 +963,10 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'story_swap': {'view': 0, 'dpad_left': 1, 'dpad_right': 2, 'off': 3, 'on': 0,
                           '0': 0, '1': 1, '2': 2, '3': 3},  # HERO VR 0.0.77 STORY INPUTS
            'story_throw': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY INPUTS
+           'story_abilities': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY MOVES
+           'story_throw_aim': {'look': 0, 'point': 1, 'off': 2, 'on': 0, '0': 0, '1': 1, '2': 2},
+           'story_dodge': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY MOVES
+           'head_dodge': {'fight': 0, 'always': 1, 'off': 2, 'on': 0, '0': 0, '1': 1, '2': 2},
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
@@ -1284,6 +1304,7 @@ START_ONLY = START_ONLY + ('vr_texture_detail', 'vr_ao')  # 0.0.76 TEXTURE DETAI
 START_ONLY = START_ONLY + ('vr_shadow_stable',)
 START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
 START_ONLY = START_ONLY + ('story_swap', 'story_throw')  # HERO VR 0.0.77 STORY INPUTS: kept between sessions
+START_ONLY = START_ONLY + ('story_abilities', 'story_throw_aim', 'story_dodge', 'head_dodge')  # 0.0.77 STORY MOVES
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

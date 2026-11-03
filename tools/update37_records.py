@@ -18,6 +18,7 @@ WMUZ  SpidyWristMuzzleData include/spidy/wrist_muzzle.hpp  Update 38.5 BALL LOOK
 HSWP  SpidyHeroSwitchData  include/spidy/hero_switch.hpp   Update 38.5 HERO SWITCH PROBE: a real Peter / Miles switch, re-attached
 BLOM  SpidyEyeBloomData    include/spidy/eye_bloom.hpp     0.0.73 lights: EYE BLOOM in force (OFF/COPY/GATE), reverts, eye jobs
 STRY  SpidyStoryData       include/spidy/story077.hpp      HERO VR 0.0.77 STORY INPUTS: the hero switch's presses, the web throw
+STRB  SpidyStoryMovesData  include/spidy/story077b.hpp     HERO VR 0.0.77 STORY MOVES: abilities from X held, the throw's aim, dodges
 AIRW  SpidyAirWatchData    include/spidy/air_watch.hpp     Update 38.5 Y IN THE AIR: Y presses, the game's moves out of the swing's flight (a glide's sign), read-only
 
 Each is a seqlock record (an odd sequence: being written; read again).
@@ -61,6 +62,7 @@ RECORDS = {
     'air_watch': ('SpidyAirWatchData', 0x57524941, 1, 104),
     # HERO VR 0.0.77
     'story': ('SpidyStoryData', 0x59525453, 1, 96),
+    'story_moves': ('SpidyStoryMovesData', 0x42525453, 1, 128),
     # Version 0.0.3
     'v003': ('SpidyV003Data', 0x33303056, 1, 5200),
     # Version 0.0.5
@@ -537,6 +539,30 @@ def parse_story(raw):
                 lb_rb_frames_in_air=pull_frames_air, head_cues=cues, refused_busy=busy, refused_off=off)
 
 
+STORY_SLOTS = ('LB+X', 'LB+Y', 'LB+B', 'LB+A', 'ULTIMATE L3+R3', 'CAMO D-PAD UP')
+STORY_AIMS = ('LOOK', 'POINT', 'OFF')
+STORY_HEADS = ('FIGHT', 'ALWAYS', 'OFF')
+
+
+def parse_story_moves(raw):
+    """HERO VR 0.0.77 STORY MOVES (story077b.hpp Data; the game's own presses only)."""
+    if not _header(raw, 'story_moves'):
+        return None
+    v = struct.unpack_from('<4I6I4I3If6I', raw, 12)
+    abilities_on, aim, dodge_on, head = v[0:4]
+    fired = v[4:10]
+    taps, given_back, owned_frames, last_slot = v[10:14]
+    throws, aim_frames, overridden, degrees = v[14:18]
+    dodges, in_air, on_wall, head_dodges, now_cues, sense_dodges = v[18:24]
+    return dict(abilities_on=bool(abilities_on), aim=_name(STORY_AIMS, aim), dodge_on=bool(dodge_on),
+                head=_name(STORY_HEADS, head), fired=dict(zip(STORY_SLOTS, fired)), x_taps=taps,
+                x_given_back=given_back, owned_frames=owned_frames,
+                last_ability=_name(STORY_SLOTS, last_slot - 1) if last_slot else 'none yet', aimed_throws=throws,
+                aim_frames=aim_frames, aim_overridden=overridden, last_aim_degrees=round(degrees, 1),
+                dodges_ground=dodges, dodges_in_air=in_air, dodges_on_wall=on_wall, head_dodges=head_dodges,
+                sense_now_cues=now_cues, sense_dodges=sense_dodges)
+
+
 def parse_air_watch(raw):
     """Update 38.5: Y IN THE AIR (air_watch.hpp Data; read-only)."""
     if not _header(raw, 'air_watch'):
@@ -878,7 +904,7 @@ def parse_v006(raw):
                 supersonic_reached=round(sonic_last, 1), supersonic_best=round(sonic_best, 1))
 
 
-PARSERS = dict(story=parse_story, air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
+PARSERS = dict(story=parse_story, story_moves=parse_story_moves, air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
                health=parse_health, mirror=parse_mirror, world_trace=parse_world_trace, blood=parse_blood,
                perf=parse_perf, color=parse_color, fovea=parse_fovea, npc_fade=parse_npc_fade,
                combat38=parse_combat38, mirror_probe=parse_mirror_probe, wrist_muzzle=parse_wrist_muzzle,
@@ -1062,6 +1088,16 @@ def console_lines(records):
                      f"{st['throw_yanks']} two-hand yanks ({st['throw_yanks_in_air']} in the air), {st['throw_clicks']} "
                      f"stick clicks ({st['throw_clicks_in_air']} in the air); LB + RB sent {st['lb_rb_frames']} frames "
                      f"({st['lb_rb_frames_in_air']} in the air).")
+    sm = (records or {}).get('story_moves')
+    if sm and 'fired' in sm:
+        fired = ', '.join(f"{k} {n}" for k, n in sm['fired'].items())
+        lines.append(f"HERO VR 0.0.77 STORY MOVES: abilities ({'on' if sm['abilities_on'] else 'off'}) from X held: "
+                     f"{fired}; last {sm['last_ability']}; X taps {sm['x_taps']}, given back {sm['x_given_back']}. "
+                     f"THROW AIM ({sm['aim']}): {sm['aimed_throws']} throws aimed, last {sm['last_aim_degrees']} deg "
+                     f"off the camera, their own stick {sm['aim_overridden']} frames. DODGE "
+                     f"({'on' if sm['dodge_on'] else 'off'}, head {sm['head']}): {sm['dodges_ground']} on the ground, "
+                     f"{sm['dodges_in_air']} in the air, {sm['dodges_on_wall']} on walls, {sm['head_dodges']} by the "
+                     f"head; spider-sense NOW buzzes {sm['sense_now_cues']}, timed dodges {sm['sense_dodges']}.")
     aw = (records or {}).get('air_watch')
     if aw and 'y_sent' in aw:
         lines.append(f"Update 38.5 Y IN THE AIR: {aw['y_sent']} Y presses sent ({aw['y_in_air']} in the swing's flight); "

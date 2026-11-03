@@ -158,12 +158,13 @@ const char* musicState(const PhoneView& view) {
 }
 // The home screen: a card for each app, the picked one red; under them what plays.
 void homeScreen(std::vector<Vertex>& v, const Plane& p, const PhoneView& view) {
-    const char* const names[phoneHomeItems] = {"MUSIC", "MAP", "GEAR", "SWITCH HERO"};
-    const char* const notes[phoneHomeItems] = {"YOUR SONGS", "HIDEOUTS", "GADGETS AND XP", "VIA THE FNSM APP"};
+    const char* const names[phoneHomeItems] = {"MUSIC", "MAP", "GEAR", "SWITCH HERO", "STORY MOVES"};
+    const char* const notes[phoneHomeItems] = {"YOUR SONGS", "HIDEOUTS", "GADGETS AND XP", "VIA THE FNSM APP",
+                                               "VR ABILITIES DODGE THROW"};
     for (int i = 0; i < phoneHomeItems; ++i) {
-        const float y = .045f - i * .022f;
+        const float y = .048f - i * .0185f;
         const bool lit = view.app == i;
-        p.rounded(v, 0, y, .068f, .019f, .004f, .002f, lit ? red : dim);
+        p.rounded(v, 0, y, .068f, .0165f, .004f, .002f, lit ? red : dim);
         const Vec3 ink = white, back = lit ? red : dim;
         p.rounded(v, -.0235f, y, .014f, .014f, .003f, .0025f, lit ? deepRed : Vec3{.1f, .1f, .12f});
         if (i == 0)
@@ -178,9 +179,36 @@ void homeScreen(std::vector<Vertex>& v, const Plane& p, const PhoneView& view) {
         p.text(v, notes[i], -.012f, y - .0058f, .0025f, .04f, lit ? white : soft, 0);
     }
     if (view.tracks > 0) {
-        p.rounded(v, 0, -.05f, .068f, .016f, .004f, .002f, dim);
-        p.text(v, view.playing ? "NOW PLAYING" : musicState(view), -.03f, -.0465f, .0024f, .04f, red, 0);
-        p.text(v, view.song, -.03f, -.0545f, .0038f, .06f, white, 0);
+        p.rounded(v, 0, -.056f, .068f, .012f, .004f, .002f, dim);
+        p.text(v, view.playing ? "NOW PLAYING" : musicState(view), -.03f, -.0532f, .0022f, .04f, red, 0);
+        p.text(v, view.song, -.03f, -.0592f, .0032f, .06f, white, 0);
+    }
+}
+// HERO VR 0.0.77 STORY MOVES: the cheat sheet - the story's moves as the VR controllers make them.
+void movesScreen(std::vector<Vertex>& v, const Plane& p) {
+    const char* const lines[][2] = {
+        {"HOLD X THEN", "ABILITIES"},
+        {"PUNCH", "LB+X VENOM PUNCH"},
+        {"Y OR STICK UP", "LB+Y"},
+        {"B", "LB+B"},
+        {"A", "LB+A"},
+        {"R STICK CLICK", "ULTIMATE L3+R3"},
+        {"R STICK DOWN", "CAMO DPAD UP"},
+        {"X TAP", "VIEW AS BEFORE"},
+        {"R STICK DOWN", "HEAL"},
+        {"TWO HAND YANK", "THROW LB+RB"},
+        {"LOOK OR POINT", "AIMS THE THROW"},
+        {"B ANYWHERE", "DODGE"},
+        {"HEAD STEP", "DODGE THAT WAY"},
+        {"BUZZ", "SPIDER SENSE NOW"},
+    };
+    int i = 0;
+    for (const auto& line : lines) {
+        const float y = .053f - i * .0088f;
+        const bool head = i == 0 || i == 8;
+        p.text(v, line[0], -.031f, y, .0026f, .03f, head ? red : white, 0);
+        p.text(v, line[1], .001f, y, .0026f, .033f, head ? red : soft, 0);
+        ++i;
     }
 }
 // MUSIC: the cover, the song and where it is, the volume, the buttons, AUTOPLAY.
@@ -391,7 +419,9 @@ PhoneAction PhoneUi::update(const PhoneControls::Event& e, int gearRows) {
             app_ = (app_ + step + phoneHomeItems) % phoneHomeItems;
         if (e.pressed && app_ == phoneSwitchItem)
             return PhoneAction::switchHero;
-        if (e.pressed)
+        if (e.pressed && app_ == phoneMovesItem)
+            screen_ = PhoneScreen::moves;
+        else if (e.pressed)
             screen_ = static_cast<PhoneScreen>(app_ + 1);
         return PhoneAction::none;
     case PhoneScreen::music:
@@ -422,6 +452,7 @@ PhoneAction PhoneUi::update(const PhoneControls::Event& e, int gearRows) {
         gearTop_ = std::clamp(gearTop_ - e.y, 0, std::max(0, gearRows - gearShown));
         [[fallthrough]];
     case PhoneScreen::map:
+    case PhoneScreen::moves:
         if (e.closed)
             screen_ = PhoneScreen::home;
         return PhoneAction::none;
@@ -627,9 +658,9 @@ void appendPhone(std::vector<Vertex>& out, const PhoneView& view) {
     p.rounded(out, 0, 0, width - 2 * bezel, height - 2 * bezel, corner - bezel / 2, .001f, screen);
     // The red bar along the top, the screen's name in it; the controls' hint
     // along the bottom.
-    const char* const titles[] = {"FNSM", "MUSIC", "MAP", "GEAR"};
+    const char* const titles[] = {"FNSM", "MUSIC", "MAP", "GEAR", "MOVES"};
     p.rounded(out, 0, .0695f, width - 2 * bezel, .019f, corner - bezel / 2, .0015f, red);
-    p.text(out, titles[static_cast<int>(view.screen) & 3], -.031f, .0655f, .0065f, .05f, white, 0);
+    p.text(out, titles[std::clamp(static_cast<int>(view.screen), 0, 4)], -.031f, .0655f, .0065f, .05f, white, 0);
     spider(out, p, .027f, .0695f, .006f, white);
     const char* hint = view.screen == PhoneScreen::home    ? "A OPEN   B PUT AWAY"
                        : view.screen == PhoneScreen::music ? "A PRESS   B HOME   TRIGGERS VOL"
@@ -647,6 +678,9 @@ void appendPhone(std::vector<Vertex>& out, const PhoneView& view) {
         break;
     case PhoneScreen::gear:
         gearScreen(out, p, view);
+        break;
+    case PhoneScreen::moves:
+        movesScreen(out, p);
         break;
     }
 }

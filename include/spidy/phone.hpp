@@ -20,11 +20,12 @@ constexpr int phoneButtons = 4;
 // The phone's screens: its home with an app for each of the others (the
 // player, October 17: "a home screen with apps on it ... look more like the
 // fnsm app from the 2nd game").
-enum class PhoneScreen : int { home, music, map, gear };
+enum class PhoneScreen : int { home, music, map, gear, moves };
 constexpr int phoneApps = 3; // music, map, gear, in that order on the home screen
 // HERO VR 0.0.77: the home screen's last card, SWITCH HERO, opens no screen: A on it puts the phone away and
 // asks the game's own hero switch (story077::SwapMacro).
-constexpr int phoneHomeItems = phoneApps + 1, phoneSwitchItem = phoneApps;
+// HERO VR 0.0.77 STORY MOVES: the card after it, STORY MOVES, opens the VR cheat sheet for the story's moves.
+constexpr int phoneHomeItems = phoneApps + 2, phoneSwitchItem = phoneApps, phoneMovesItem = phoneApps + 1;
 // The controllers while the phone is out, as steps: the stick pushed one way
 // (x: -1 left, 1 right; y: -1 down, 1 up), A, B, and the volume from the
 // triggers, a pull of the left one a step down and of the right one a step up

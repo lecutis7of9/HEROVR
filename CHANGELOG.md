@@ -2,6 +2,30 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (2) - STORY MOVES: abilities, aimed throws, dodges anywhere (TEST build, not released)
+
+On top of 081c102 (STORY INPUTS). SM2 only. **Built and unit-tested, not yet tried in the game.** Every press is the
+game's own pad button; every timing below is CANDIDATE until a headset run.
+
+- **ABILITIES (Peter, the second spider, symbiote forms).** The game's abilities are LB held + X / Y / B / A, the
+  ultimate L3 + R3, camouflage D-pad Up. VR had no way to hold the game's LB with a face button (CONFIRMED in code:
+  VR X is View / the gadget wheel). Now **hold VR X**, then: **punch** = LB + X (Venom Punch / Spider Barrage),
+  **Y or right stick up** = LB + Y, **B** = LB + B, **A** = LB + A, **right stick click** = ultimate, **right stick
+  down** = camo. LB goes out first, the face button 50 ms later, held at least 0.2 s. While X is held nothing else
+  of the face buttons, heal, zip or pull goes out, so the punch logic cannot eat it. X tapped alone is still View;
+  held 0.8 s alone it is the gadget wheel again. The phone's new **STORY MOVES** card is the cheat sheet.
+  live.txt `story_abilities` (on default / off); live.
+- **THROW AIM.** While the game's LB + RB throw goes out (and 0.4 s after) the left stick points the throw where you
+  **look** (default) or where your **right hand points** (latched at the throw's start), in the game camera's frame;
+  your own stick wins. live.txt `story_throw_aim` (look / point / off); live.
+- **DODGE.** B never reached the game in the air, on swings or on walls (CONFIRMED in code: the dodge was only read
+  while the swing did not own the hero). Now **B dodges at once everywhere** (each press held at least 0.12 s, never
+  delayed by the fight logic), a **quick sideways step of your head** dodges that way (near enemies or on a
+  spider-sense warning), and **both controllers buzz hard at spider-sense's NOW** (under 0.3 s to the blow) - press B
+  then for the perfect dodge. live.txt `story_dodge` (on / off), `head_dodge` (fight / always / off); live.
+- **DIAGNOSTICS.** The timeline and console say each ability, each aimed throw and each head dodge. The new STRB record
+  (SpidyStoryMovesData) puts the counts in update37.json and one line in the report.
+
 ## hero-0.0.77-story - STORY INPUTS: the hero switch and the Sandman web throw (TEST build, not released)
 
 On top of v0.0.76 (792386b). SM2 only. **Built and unit-tested, not yet tried in the game.** Every press below is the

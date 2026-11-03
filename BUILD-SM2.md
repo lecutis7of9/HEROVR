@@ -3015,3 +3015,9 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   SWITCH HERO (phone card / a hand on the head) presses the game's own FNSM switch (story_swap: view, dpad_left,
   dpad_right, off; SpidyStorySwap 5559); the web throw's LB + RB in the air and by a two-hand yank (story_throw: on,
   off; SpidyStoryThrow 5560); the STRY record SpidyStoryData (update37_records.py parse_story).
+
+- HERO VR 0.0.77 STORY MOVES (include/spidy/story077b.hpp, tests/story077b_tests.cpp, tests/hero077_moves_tests.py):
+  abilities from VR X held (story_abilities: on, off; SpidyStoryAbilities 5561), the LB + RB throw's aim
+  (story_throw_aim: look, point, off; SpidyStoryThrowAim 5562), B dodging in the air and on walls plus the
+  spider-sense NOW buzz (story_dodge: on, off; SpidyStoryDodge 5563), the head sidestep (head_dodge: fight, always,
+  off; SpidyHeadDodge 5564); the phone's STORY MOVES card; the STRB record SpidyStoryMovesData (parse_story_moves).

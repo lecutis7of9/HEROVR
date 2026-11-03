@@ -2474,7 +2474,7 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                 "fight, while you swing too (a car in a chase). Hold it and you step up to the thing, until "
                 "the game takes it"},
           {"Click the right stick", "The game's LB + RB: pull a door or a grate where the game shows the two"},
-          {"Right stick down", "Heal: the game's D-pad down. Push it right down and hold it a moment"},
+          {"Right stick down", "Heal: the game's D-pad down. Push it down and hold it a moment; on a game card too while hurt (close the card with A)"},
           {"Right stick up", "The game's LT + RT: zip to a point, enter a vent, where the game shows the "
                              "two; while you swing too. No point? Keep holding (time slows as the game "
                              "aims), look at a point and let go to zip there"},
@@ -2491,6 +2491,7 @@ void App::controls(ImVec2 origin, ImVec2 size) {
          {{"Left stick", "Move through menus (they show on a screen in the headset)"},
           {"A  /  B", "Select  /  Back"},
           {"Grips", "Switch menu tabs"},
+          {"Right stick held down", "Hurt: the game's heal (D-pad down), on its Focus Bar card too. live.txt screen_heal = off: the game's own right stick"},
           {"Menu button  /  both sticks held in", "Start"}}},
         {"STEAM FRAME CONTROLLERS",
          {{"A, B, X, Y", "All four are on the right controller, each the button of that name above: jump, dodge, "

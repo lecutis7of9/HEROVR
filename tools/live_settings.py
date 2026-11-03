@@ -526,6 +526,10 @@ SETTINGS = {
                  "game's X for its prompts, and the game menu X used to open is the menu button held half a second; "
                  "1 view: X tap opens that menu again and the menu button pauses as you press it) - live, no restart "
                  "needed"),
+    # HERO VR 0.0.77 HEAL ANYWHERE (include/spidy/story077f.hpp): live.
+    'screen_heal': ((0, 1), 'SpidyScreenHeal', "SCREEN HEAL {} (0 on: hurt, the right stick held down is the game's "
+                    "heal on the game screen too, as on its Focus Bar card; 1 off: there the right stick stays the "
+                    "game's own) - live, no restart needed"),
     'story_throw_aim': ((0, 2), 'SpidyStoryThrowAim', "STORY THROW AIM {} (where the LB + RB web throw sends the "
                         "debris - 0 look: where your head looks; 1 point: where your right hand points; 2 off: the "
                         "game's own aim) - live, no restart needed"),
@@ -723,6 +727,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'story_throw': ('on', 'off'),  # HERO VR 0.0.77 STORY INPUTS
                 'story_abilities': ('on', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'x_button': ('game', 'view'),  # HERO VR 0.0.77 X IS THE GAME'S X
+                'screen_heal': ('on', 'off'),  # HERO VR 0.0.77 HEAL ANYWHERE
                 'story_throw_aim': ('look', 'point', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'story_dodge': ('on', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'head_dodge': ('fight', 'always', 'off'),  # HERO VR 0.0.77 STORY MOVES
@@ -992,6 +997,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'story_throw': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY INPUTS
            'story_abilities': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY MOVES
            'x_button': {'game': 0, 'view': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 X IS THE GAME'S X
+           'screen_heal': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 HEAL ANYWHERE
            'story_throw_aim': {'look': 0, 'point': 1, 'off': 2, 'on': 0, '0': 0, '1': 1, '2': 2},
            'story_dodge': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY MOVES
            'head_dodge': {'fight': 0, 'always': 1, 'off': 2, 'on': 0, '0': 0, '1': 1, '2': 2},
@@ -1340,6 +1346,7 @@ START_ONLY = START_ONLY + ('story_swap', 'story_throw')  # HERO VR 0.0.77 STORY 
 START_ONLY = START_ONLY + ('story_abilities', 'story_throw_aim', 'story_dodge', 'head_dodge', 'story_sprint')  # 0.0.77 STORY MOVES
 START_ONLY = START_ONLY + ('prompt_window', 'boss_damage', 'prompt_cards')  # HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE, CARDS
 START_ONLY = START_ONLY + ('x_button',)  # HERO VR 0.0.77 X IS THE GAME'S X: kept between sessions
+START_ONLY = START_ONLY + ('screen_heal',)  # HERO VR 0.0.77 HEAL ANYWHERE: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

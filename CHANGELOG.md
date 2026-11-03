@@ -2,6 +2,29 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (9) - HEAL ANYWHERE: the right stick heals on the game's card too; the crawl's stick (TEST build, not released)
+
+From the player's story7 run at the walkthrough's 13:40 (the ceiling falls, the second spider crawls out hurt and the
+game wants its heal, the D-pad down). In his log the left stick did crawl him (418 crawl samples at 0.6 m/s and up,
+368.8-374.3 s); then the game's Focus Bar card ("PRESS A TO CONTINUE") put the mod on the game screen for 41 s, and
+there the right stick was only ever the game's right stick, never its D-pad down (CONFIRMED in code: Mapping::menus).
+Now (include/spidy/story077f.hpp, live.txt `screen_heal`, SpidyScreenHeal 5570, on by default):
+- **Right stick held down heals on the game screen too while the hero is hurt** (CONFIRMED in code and tests; that it
+  is what the card wants is CANDIDATE): the game's D-pad down for as long as it is held, at least 0.3 s. At full
+  health a menu's right stick is left alone. A card still closes with A.
+- **In VR play a second heal (HealStick)** beside StickPush: a diagonal more down than aside counts, a push that
+  wandered aside first is not spent, a push the game names a D-pad way for heals when held down. Not while X holds
+  the stick's down for camo, or mid hover flight (CONFIRMED in code and tests).
+- **The fallback hint**: hurt below 30% for 2 s with no heal, the headset says "Heal: push the right stick down and
+  hold it ... A game card on screen? Press A to close it, then heal", at most every 30 s.
+- **The floor crawl gets the left stick** where the swing still owned the player and the walk was left at rest
+  (CANDIDATE: his log shows it fed in play; this covers the case it was not).
+- Diagnostics: "HERO VR 0.0.77 HEAL: D-pad down out #n (VR play / game screen), health, right stick" and its held
+  ms, "HEAL ANYWHERE" when the second way healed, "HEAL HINT shown", and a once-a-second "CRAWL FEED" line on the
+  floor crawl (left stick, the game's stick sent, swing owned, surface, body speed, forced frames).
+- The VR console line shows story7's X / menu controls (it still said "X: game menu").
+- `screen_heal = off` keeps the game screen's right stick the game's own.
+
 ## hero-0.0.77-story (8) - X IS THE GAME'S X: the game menu moved to the menu button held (TEST build, not released)
 
 From the player's test of 05e70a2: in the Sandman fight as the second spider, "tap X" to hit him with debris also

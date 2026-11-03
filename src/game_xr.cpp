@@ -65,6 +65,7 @@
 #include "spidy/story077c.hpp" // HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE
 #include "spidy/story077d.hpp" // HERO VR 0.0.77 PROMPT CARDS
 #include "spidy/story077e.hpp" // HERO VR 0.0.77 X IS THE GAME'S X
+#include "spidy/story077f.hpp" // HERO VR 0.0.77 HEAL ANYWHERE
 #include "spidy/prompt_cards.hpp" // HERO VR 0.0.77 PROMPT CARDS (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1372,6 +1373,9 @@ std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
 // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
 // game's X, the menu button held 0.5 s is the View X sent), 1 view (05e70a2: X tap View, menu pauses on press).
 std::atomic<uint32_t> xButtonNow{story077e::xGame};
+// HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal - 0 on (the default: the right stick held
+// down is the game's heal on the game screen too, while hurt), 1 off (the game screen's right stick is its own).
+std::atomic<uint32_t> screenHealNow{story077f::screenHealOn};
 std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 on (default), 1 off, 2 strong
 uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
 uint64_t bossClapBlows{};  // and the claps sent at a boss
@@ -2489,6 +2493,12 @@ DWORD WINAPI run(void*) {
         // HERO VR 0.0.77 X IS THE GAME'S X: the game's X per VR X tap, the menu button's tap / hold, the counts.
         story077e::XPulse xPulse;
         story077e::MenuHold menuHold;
+        story077f::HealStick healStick;    // HERO VR 0.0.77 HEAL ANYWHERE: VR play's second way
+        story077f::HealStick screenHeal;   // HERO VR 0.0.77 HEAL ANYWHERE: the game screen (a tutorial card)
+        story077f::HealHint healHint;
+        bool dpadDownWas77{};
+        float dpadDownFor77{}, crawlFeedAt77{};
+        uint32_t dpadDownSends77{}, crawlFeedForced77{};
         bool xPulseDown{}, xHeldWas{};
         uint64_t xHeldGameX{}, xTapsAsView{}, xDiagSeen{}, xNotedSent{};
         double xDiagLogAt{};
@@ -7592,6 +7602,18 @@ DWORD WINAPI run(void*) {
                             stickPush.update(frame.seconds, sticking, turning.stickX, turning.stickY);
                         // Update 37: heal 0 leaves the push down unused.
                         walk.heal = healOn.load() && push == game_pad::StickPush::Way::down;
+                        // HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): the same push held down, a diagonal or a
+                        // push StickPush spent included, heals too, at least 0.3 s a push. Not while X holds the
+                        // stick's down for camo (abilityX), nor a hover flight's climb; a push the game names a
+                        // D-pad way for (NamedPress) heals too when it is held down.
+                        const bool healLive = steering && !calibrationInput && !layerOn && !fly076Flying && !abilityX;
+                        if (healStick.update(frame.seconds, healLive && healOn.load(), turning.stickX, turning.stickY,
+                                             static_cast<float>(healHoldMs.load()) / 1000.f)) {
+                            if (!walk.heal && healStick.sends && !healing)
+                                game_prompts::note("HERO VR 0.0.77 HEAL ANYWHERE: right stick held down -> the game's "
+                                                   "D-pad down (the second way: StickPush had not counted it)");
+                            walk.heal = true;
+                        }
                         // Held on into the game's aim mode (its own time slowed), LT stays down alone,
                         // and letting go zips to the point its aim holds (ZipPress).
                         const bool zipUp = (reaching || inFlight) && push == game_pad::StickPush::Way::up;
@@ -7893,7 +7915,76 @@ DWORD WINAPI run(void*) {
                         // (Square), not its View; the View moved to the menu button held (MenuHold, below).
                         const bool xGameMode = xButtonNow.load() == story077e::xGame;
                         walk.xIsGameX = xGameMode && heroNow() == hero_modes::spiderMan;
+                        // HERO VR 0.0.77 HEAL ANYWHERE: the game's own floor crawl (the second spider under the
+                        // fallen ceiling) takes the left stick even where the swing still owned the player
+                        // (`playing` false left the walk at rest there).
+                        if (crawlsFloor && steering && !playing && !mounting && !calibrationInput &&
+                            mapping == game_pad::Mapping::gameplay &&
+                            std::hypot(walk.right, walk.forward) < .05f &&
+                            std::hypot(motion.walkRight, motion.walkForward) > .1f) {
+                            walk.right = motion.walkRight;
+                            walk.forward = motion.walkForward;
+                            ++crawlFeedForced77;
+                        }
                         auto pad = game_pad::fromControllers(buttons, mapping, walk);
+                        {
+                            // HERO VR 0.0.77 HEAL ANYWHERE: on the game screen (the game's Focus Bar card, its
+                            // menus) the right stick held down is the game's D-pad down while the hero is hurt.
+                            const float hurt = heroHealth.fraction();
+                            const bool screenLive = mapping == game_pad::Mapping::menus && healOn.load() &&
+                                                    screenHealNow.load() == story077f::screenHealOn &&
+                                                    std::isfinite(hurt) && hurt < .999f;
+                            if (screenHeal.update(frame.seconds, screenLive, buttons.hands[1].stickX,
+                                                  buttons.hands[1].stickY,
+                                                  static_cast<float>(healHoldMs.load()) / 1000.f)) {
+                                pad.buttons |= game_pad::dpadDown;
+                                pad.thumbRY = 0;
+                            }
+                            const bool downNow = (pad.buttons & game_pad::dpadDown) != 0;
+                            const float dt77 =
+                                std::isfinite(frame.seconds) ? std::clamp(frame.seconds, 0.f, .1f) : 0.f;
+                            const char* mapName = mapping == game_pad::Mapping::gameplay ? "VR play"
+                                                  : mapping == game_pad::Mapping::menus ? "game screen"
+                                                  : mapping == game_pad::Mapping::pad   ? "pad layer"
+                                                                                        : "none";
+                            if (downNow && !dpadDownWas77) {
+                                ++dpadDownSends77;
+                                dpadDownFor77 = 0;
+                                char line[200];
+                                sprintf_s(line, "HERO VR 0.0.77 HEAL: D-pad down out #%u (%s%s), health %.0f%%, right "
+                                          "stick %.2f %.2f",
+                                          dpadDownSends77, mapName, screenHeal.sending() ? ", the game screen's heal" : "",
+                                          hurt * 100.f, buttons.hands[1].stickX, buttons.hands[1].stickY);
+                                game_prompts::note(line);
+                                consoleLine(line);
+                            }
+                            if (downNow)
+                                dpadDownFor77 += dt77;
+                            if (!downNow && dpadDownWas77) {
+                                char line[160];
+                                sprintf_s(line, "HERO VR 0.0.77 HEAL: D-pad down #%u held %.0f ms (%s), health %.0f%%",
+                                          dpadDownSends77, dpadDownFor77 * 1000.f, mapName, hurt * 100.f);
+                                game_prompts::note(line);
+                            }
+                            dpadDownWas77 = downNow;
+                            if (healHint.update(frame.seconds, healOn.load() && steering, hurt, downNow)) {
+                                message(3, 0, story077f::hint);
+                                game_prompts::note("HERO VR 0.0.77 HEAL HINT shown (hurt below 30% for 2 s, no heal)");
+                            }
+                            // The left stick's feed on the game's floor crawl, once a second.
+                            crawlFeedAt77 += dt77;
+                            if (crawlsFloor && crawlFeedAt77 >= 1.f) {
+                                crawlFeedAt77 = 0;
+                                char line[240];
+                                sprintf_s(line, "HERO VR 0.0.77 CRAWL FEED: left stick %.2f %.2f -> game %d %d (%s), "
+                                          "swing owned %u, surface %u, body %.2f m/s, forced %u",
+                                          buttons.hands[0].stickX, buttons.hands[0].stickY, pad.thumbLX, pad.thumbLY,
+                                          mapName, static_cast<unsigned>(swingState.owned != 0),
+                                          static_cast<unsigned>(swingState.wall), length(swingState.velocity),
+                                          crawlFeedForced77);
+                                game_prompts::note(line);
+                            }
+                        }
                         {
                             const bool xNow = walk.xIsGameX && mapping == game_pad::Mapping::gameplay &&
                                               (buttons.buttons & buttonX) != 0;
@@ -15951,8 +16042,9 @@ DWORD WINAPI run(void*) {
                                   "menu button for its Back (the map), hold the left stick's click and push the "
                                   "right stick for its D-pad - pause, SWITCH TO VR goes back to VR"
                             : drawn == Presentation::gameScreen
-                                ? "Game screen (menus, loading, cutscenes): the controllers work as an Xbox "
-                                  "controller, VR settings are in Settings > SPIDY VR - VR resumes with gameplay"
+                                ? "Game screen (menus, cards, cutscenes): the controllers work as an Xbox "
+                                  "controller (A closes a card; hurt, the right stick held down heals), VR "
+                                  "settings are in Settings > SPIDY VR - VR resumes with gameplay"
                             : drawn == Presentation::stereoScreen
                                 ? "Game screen in 3D (a cutscene or another scene the game plays): the "
                                   "controllers work as an Xbox controller - Settings > SPIDY VR > GAME SCREEN 3D "
@@ -15960,10 +16052,10 @@ DWORD WINAPI run(void*) {
                             : drawn == Presentation::flat
                                 ? "Flat screen - pause, SWITCH TO VR goes back to VR"
                                 // 255 characters, all the message holds.
-                                : "VR active - A jumps (hold: Charge Jump), B dodges, Y interacts, X: game "
-                                  "menu (hold: gadget wheel), menu or both sticks held: pause, left stick "
-                                  "click: slow time, trigger at temple: scan; right stick click: LB + RB, "
-                                  "down: heal, up: zip (hold to aim, let go)");
+                                : "VR active - A jumps, B dodges, Y interacts, X: the game's X (hold: "
+                                  "gadget wheel), menu: pause (hold: game menu), left stick click: slow "
+                                  "time, temple trigger: scan; right stick click: LB + RB, down held: heal, "
+                                  "up: zip");
                 }
             }
             {
@@ -16291,6 +16383,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { retur
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return setLive(v, 0, 1, 5568, promptCardsNow, asU32); }
 // HERO VR 0.0.77 X IS THE GAME'S X: x_button 0 game (the default), 1 view (05e70a2's X = View).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXButton(void* v) { return setLive(v, 0, 1, 5569, xButtonNow, asU32); }
+// HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyScreenHeal(void* v) { return setLive(v, 0, 1, 5570, screenHealNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossDamage(void* v) { return setLive(v, 0, 2, 5567, bossDamageNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);

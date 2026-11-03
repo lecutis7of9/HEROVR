@@ -3036,3 +3036,7 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
   menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),
   view; SpidyXButton 5569).
+- HERO VR 0.0.77 HEAL ANYWHERE (include/spidy/story077f.hpp, tests/story077f_tests.cpp, tests/hero077_heal_tests.py):
+  HealStick (the right stick held down: the game's D-pad down in VR play beside StickPush, and on the game screen
+  while hurt), HealHint (a headset line below 30% health), the floor crawl's left stick feed; screen_heal (on
+  (default), off; SpidyScreenHeal 5570).

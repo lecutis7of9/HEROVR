@@ -17,6 +17,9 @@ std::atomic<uint64_t> nQueued{}, nSent{}, nNotSlot{}, nFull{}, nFaults{}, nRefus
     sentAt{}, lastRecord{};
 std::atomic<uint32_t> lastHandle{};
 std::atomic<uint64_t> hero{};
+// HERO VR 0.0.77 BOSS DAMAGE: the watched boss, its scale, its counts.
+std::atomic<uint64_t> bossRecord{}, bossQueued{}, bossSent{}, bossNotSlot{};
+std::atomic<float> bossScale{1.f}, bossHp{};
 struct Pending {
     uint64_t record;
     Blow blow;
@@ -107,14 +110,24 @@ bool queue(uint64_t record, const Blow& b) {
     }
     AcquireSRWLockExclusive(&lock);
     const bool room = pendingCount < most;
+    const bool boss = record && record == bossRecord.load();
     if (room) {
         Pending& p = pending[pendingCount++];
         p.record = record;
         p.blow = b;
+        if (boss) { // HERO VR 0.0.77 BOSS DAMAGE: no knockback, scaled
+            p.blow.knockback = 0;
+            p.blow.knockAmount = 0.f;
+            p.blow.toward = false;
+            p.blow.amount = b.amount * bossScale.load();
+        }
     }
     ReleaseSRWLockExclusive(&lock);
-    if (room)
+    if (room) {
         ++nQueued;
+        if (boss)
+            ++bossQueued;
+    }
     return room;
 }
 void service() {
@@ -133,8 +146,11 @@ void service() {
         if (!enabled())
             return;
         const uint32_t handle = slotHandle(now[i].record);
+        const bool boss = now[i].record && now[i].record == bossRecord.load();
         if (!handle) {
             ++nNotSlot;
+            if (boss)
+                ++bossNotSlot;
             continue;
         }
         // The point: the victim's transform position (+0x30), as the melee site; the hero's too.
@@ -172,6 +188,10 @@ void service() {
             continue;
         }
         ++nSent;
+        if (boss) {
+            ++bossSent;
+            bossHp.store(bossHp.load() + now[i].blow.amount);
+        }
         sentAt = GetTickCount64();
         lastRecord = now[i].record;
         lastHandle = handle;
@@ -179,6 +199,19 @@ void service() {
         if (s == ready)
             statusNow.compare_exchange_strong(s, sent);
     }
+}
+void watchBoss(uint64_t record, float scale) {
+    bossRecord = record;
+    bossScale = std::isfinite(scale) ? (scale < 1.f ? 1.f : scale > 8.f ? 8.f : scale) : 1.f;
+}
+BossStats bossStats() {
+    BossStats s;
+    s.record = bossRecord.load();
+    s.queued = bossQueued.load();
+    s.sent = bossSent.load();
+    s.notSlot = bossNotSlot.load();
+    s.hpSent = bossHp.load();
+    return s;
 }
 void noteMelee() {
     ++nMelee;

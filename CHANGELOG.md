@@ -2,6 +2,28 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (5) - PROMPT WINDOW + BOSS DAMAGE (TEST build, not released)
+
+From the player's Sandman test of 718d933 (report game-vr-20261103-150713): no debris highlight and no button
+prompts in the headset. His inputs did go out (B 14, RB 10, X 5, RT run 18), but LB + RB 0 and throw yanks 0.
+- Why (CONFIRMED in code and in the report): the game's Scaleform HUD draws its prompts, QTE cues and throw
+  highlights only into the frame it presents to the monitor, never into the eye images. SM2's HUD and prompt
+  hooks are not ported (prompts invokes 0, hud frames 0).
+- **PROMPT WINDOW** (CANDIDATE, live.txt `prompt_window`: on / large / off, SpidyPromptWindow 5566, on by
+  default). A copy of the game's presented frame, with its own prompts and markers, is shown in a window low in
+  both eyes, at infinity (story077c.hpp). The copy is made at Present before the mirror. The mirror, the
+  monitor's rate hold and the game view's lens are unchanged (screenForInset). A fault in the window turns only
+  the window off ("PROMPT WINDOW off: ..."). A "HERO VR 0.0.77 PROMPT WINDOW" console line is written every 10 s.
+- **BOSS DAMAGE** (CANDIDATE, live.txt `boss_damage`: off / on / strong, SpidyBossDamage 5567, off by default).
+  Sandman (.?AVSandmanBot@@) was 269 m away in the trace, outside the 30 m enemy list, so no hero's weapon could
+  pick him. While a non-Spider-Man hero faces the nearest boss (within 35 degrees, up to 600 m), a point 6 m along
+  the look stands in for him in the weapon lists only (after the lock / lunge). THOR's lightning and hammer,
+  IRON MAN's blasts and chest beam and the other heroes' blows that hit it go to the boss's own record on the
+  sm2_damage path, with no knockback (strong: x4). HULK's thunder clap while facing him is a 60 HP blow.
+  Diagnostics: a note when a boss is first seen, and a "HERO VR 0.0.77 BOSS DAMAGE" console line every 10 s (the
+  boss, its distance and HP, frames facing, blows queued / sent / not-slot, claps). Whether boss damage moves a
+  scripted phase on is not known until a run.
+
 ## hero-0.0.77-story (4) - LAUNCH AUDIT: SWITCH HERO is gameplay-only (TEST build, not released)
 
 - Launch/main-menu audit of every 0.0.77 addition. One risk found and fixed (CANDIDATE, not a crash): the

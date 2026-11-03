@@ -249,7 +249,7 @@ class Monitor(unittest.TestCase):
         n = src('src/native_eye_gpu.cpp')
         self.assertIn('(sharpening && !streaming)', n)
         self.assertIn('(!sharpening || shownView.streamer)', n)
-        self.assertIn('else if (mirrorWanted || monitorStreaming())', n)
+        self.assertIn('if ((!screenWanted || insetOnly) && (mirrorWanted || monitorStreaming()))', n)  # 0.0.77 PROMPT WINDOW
 
     def test_fail_safe_falls_back_for_the_session(self):
         n = src('src/native_eye_gpu.cpp')

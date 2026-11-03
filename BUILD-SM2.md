@@ -3023,3 +3023,8 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   (story_throw_aim: look, point, off; SpidyStoryThrowAim 5562), B dodging in the air and on walls plus the
   spider-sense NOW buzz (story_dodge: on, off; SpidyStoryDodge 5563), the head sidestep (head_dodge: fight, always,
   off; SpidyHeadDodge 5564); the phone's STORY MOVES card; the STRB record SpidyStoryMovesData (parse_story_moves).
+- HERO VR 0.0.77 PROMPT WINDOW and BOSS DAMAGE (include/spidy/story077c.hpp, tests/story077c_tests.cpp,
+  tests/hero077_prompt_boss_tests.py): the game's presented frame as a D3D12Renderer inset in both eyes
+  (prompt_window: on, large, off; SpidyPromptWindow 5566; native_gpu::screenForInset); the nearest boss
+  (world_trace::nearestBoss, isBossClass) as a weapon-only stand-in for the non-Spider-Man heroes, and
+  sm2_damage::watchBoss (boss_damage: off, on, strong; SpidyBossDamage 5567).

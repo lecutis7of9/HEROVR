@@ -5,6 +5,7 @@
 #include "spidy/world_trace.hpp"
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <cmath>
 #include <algorithm>
 #include <exception>
@@ -63,6 +64,7 @@ uint32_t farCount{};
 constexpr uintptr_t botHealthTable = 0x531b0a0, healthHp = 0xd0, healthMost = 0xa0;
 std::array<Vital, enemySlots> enemyVital{};
 std::array<std::array<char, nameChars>, enemySlots> enemyClassName{}; // 0.0.75 EVERY ENEMY (enemyLock)
+Boss bossNow{}; // HERO VR 0.0.77 BOSS DAMAGE: the nearest boss in farReach (enemyLock; id 0 none)
 std::atomic<uint64_t> healthFound{}, heroNowRecord{};
 // Version 0.0.3 BOT STATE PROBE (read-only; include/spidy/bot_probe.hpp).
 std::atomic<bool> botOn{};
@@ -321,9 +323,11 @@ void run() {
         };
         std::array<Far, 96> farList{};
         uint32_t farN{};
+        Boss boss{};
+        float bossMetres = farReach;
         if (heroRecord && position(heroRecord, heroAt))
             for (const uintptr_t record : enemyRecords) {
-                if (n >= found.size() && farN >= farList.size())
+                if (n >= found.size() && farN >= farList.size() && boss.id)
                     break;
                 if (!position(record, at))
                     continue;
@@ -331,6 +335,22 @@ void run() {
                 const float metres = length(rel);
                 if (!finite(rel))
                     continue;
+                // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): the nearest boss class within farReach.
+                if (metres <= bossMetres)
+                    if (const auto c = enemyNames.find(record); c != enemyNames.end() && isBossClass(c->second.data())) {
+                        bossMetres = metres;
+                        boss = {};
+                        boss.id = static_cast<uint64_t>(record);
+                        boss.world = at;
+                        boss.metres = metres;
+                        std::memcpy(boss.name, c->second.data(), nameChars);
+                        boss.name[nameChars - 1] = 0;
+                        Vital v{boss.id};
+                        if (const auto h = healthOf.find(record); h != healthOf.end() &&
+                            read(h->second + healthHp, &v.hp, 4) && read(h->second + healthMost, &v.most, 4))
+                            v.have = std::isfinite(v.hp) && std::isfinite(v.most) && v.most > 0 && v.most < 1e7f;
+                        boss.vital = v;
+                    }
                 if (n < found.size() && metres <= enemyReach)
                     found[n++] = {metres, rel, record, at};
                 if (farN < farList.size() && metres <= farReach)
@@ -360,6 +380,7 @@ void run() {
             farCount = std::min<uint32_t>(farN, farSlots);
             for (uint32_t i = 0; i < farCount; ++i)
                 farWorld[i] = farList[i].world;
+            bossNow = boss;
         }
         enemyNear.store(n > 0, std::memory_order_relaxed);
         if (n)
@@ -763,6 +784,16 @@ bool enemyClass(uint64_t id, char (&out)[nameChars]) {
             return true;
         }
     return false;
+}
+bool nearestBoss(Boss& out) {
+    out = {};
+    if (!running.load())
+        return false;
+    std::lock_guard<std::mutex> lock(enemyLock);
+    if (std::chrono::steady_clock::now() - enemyWhen > std::chrono::seconds(1) || !bossNow.id)
+        return false;
+    out = bossNow;
+    return true;
 }
 uint64_t healthComponents() { return healthFound.load(std::memory_order_relaxed); }
 uint64_t heroRecordNow() { return heroNowRecord.load(std::memory_order_relaxed); }

@@ -222,6 +222,9 @@ struct Screen {
     uint64_t frame{};
 };
 void wantScreen(bool wanted);
+// HERO VR 0.0.77 PROMPT WINDOW: while true the copies serve only the window over the eyes (the mirror, the
+// monitor's rate hold and the shown eye's copy as without them; screenRequested false).
+void screenForInset(bool only);
 // Whether the screen's copies are wanted now (wantScreen).
 bool screenRequested();
 // Presents of any swapchain in the process since start() (diagnostic).

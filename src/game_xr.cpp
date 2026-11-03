@@ -62,6 +62,7 @@
 #include "spidy/hero_switch.hpp"
 #include "spidy/story077.hpp" // HERO VR 0.0.77 STORY INPUTS
 #include "spidy/story077b.hpp" // HERO VR 0.0.77 STORY MOVES
+#include "spidy/story077c.hpp" // HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/blood_splatter.hpp"
@@ -1361,6 +1362,10 @@ std::atomic<uint32_t> storyAimNow{story077b::aimLook};
 std::atomic<uint32_t> storyDodgeNow{0};
 std::atomic<uint32_t> headDodgeNow{story077b::headFight};
 std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off
+std::atomic<uint32_t> promptWindowNow{0}; // HERO VR 0.0.77 prompt_window: 0 on, 1 large, 2 off
+std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 off, 1 on, 2 strong
+uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
+uint64_t bossClapBlows{};  // and the claps sent at a boss
 static_assert(story077b::pad::dpadUp == game_pad::dpadUp && story077b::pad::dpadDown == game_pad::dpadDown &&
               story077b::pad::back == game_pad::back && story077b::pad::l3 == game_pad::leftThumb &&
               story077b::pad::r3 == game_pad::rightThumb && story077b::pad::lb == game_pad::leftShoulder &&
@@ -8325,6 +8330,76 @@ DWORD WINAPI run(void*) {
                                         foes.list[foes.count++].id = cf.enemyIds[e];
                                     }
                                     oursMotion.update(static_cast<float>(combatClock), foes);
+                                    // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE, live.txt boss_damage): Sandman (SandmanBot,
+                                    // CONFIRMED in the user's world trace: 269 m away, outside the 30 m enemy list) and
+                                    // other bosses take the other heroes' own blows. While a non-Spider-Man hero faces the
+                                    // nearest boss within 600 m (35 deg, level), the point bossProxyMetres along the look
+                                    // stands in for him in the WEAPON lists only (after the lock / lunge update above, so
+                                    // nothing steers to it): every hero weapon that hits that point (THOR's lightning and
+                                    // hammer, IRON MAN's blasts and chest beam, the others' blows) queues its blow at the
+                                    // boss's own record (sm2_damage, the CONFIRMED path) without knockback.
+                                    bool bossFacing = false;
+                                    uint64_t bossId = 0;
+                                    {
+                                        static uint64_t bossLogMs{}, bossSeenId{}, bossFrames{}, bossFacingFrames{};
+                                        static float bossLastMetres{}, bossLastHp{-1.f}, bossLastMost{};
+                                        static char bossLastName[world_trace::nameChars]{};
+                                        const uint32_t bossMode = bossDamageNow.load();
+                                        world_trace::Boss boss;
+                                        if (bossMode != 0 && heroNow() != hero_modes::spiderMan) {
+                                            world_trace::setEnemiesWanted(true); // the scan keeps its lists (2 s a call)
+                                            if (world_trace::nearestBoss(boss) && !(boss.vital.have && boss.vital.hp <= 0.f)) {
+                                                ++bossFrames;
+                                                bossId = boss.id;
+                                                bossLastMetres = boss.metres;
+                                                bossLastHp = boss.vital.have ? boss.vital.hp : -1.f;
+                                                bossLastMost = boss.vital.have ? boss.vital.most : 0.f;
+                                                std::memcpy(bossLastName, boss.name, sizeof(bossLastName));
+                                                const Pose bossFromWorld = inverse(compose(motion.headPose, inverse(frame.head)));
+                                                const Vec3 bossAt = compose(bossFromWorld, Pose{boss.world, {}}).position;
+                                                if (finite(bossAt) && finite(cf.head) && finite(cf.forward) && length(cf.forward) > .5f &&
+                                                    story077c::facing(bossAt - cf.head, cf.forward)) {
+                                                    bossFacing = true;
+                                                    ++bossFacingFrames;
+                                                    if (foes.count < static_cast<uint32_t>(our_ball::maxEnemies)) {
+                                                        const float reach = std::min(story077c::bossProxyMetres, length(bossAt - cf.head));
+                                                        foes.list[foes.count].feet =
+                                                            cf.head + normalized(cf.forward) * reach - Vec3{0, 1.2f, 0};
+                                                        foes.list[foes.count++].id = boss.id;
+                                                    }
+                                                }
+                                                if (boss.id != bossSeenId) {
+                                                    bossSeenId = boss.id;
+                                                    char line[200];
+                                                    sprintf_s(line, "HERO VR 0.0.77 BOSS DAMAGE: boss %s 0x%llx at %.0f m (hp %.0f / %.0f) - face him "
+                                                                    "and use your hero's attacks (CANDIDATE)",
+                                                              boss.name, static_cast<unsigned long long>(boss.id),
+                                                              static_cast<double>(boss.metres), static_cast<double>(bossLastHp),
+                                                              static_cast<double>(bossLastMost));
+                                                    game_prompts::note(line);
+                                                }
+                                            }
+                                        }
+                                        sm2_damage::watchBoss(bossId, bossMode == 2 ? story077c::bossStrongScale : 1.f);
+                                        const uint64_t bossNowMs = GetTickCount64();
+                                        if (bossMode != 0 && (!bossLogMs || bossNowMs - bossLogMs >= 10000)) {
+                                            bossLogMs = bossNowMs;
+                                            const auto bs = sm2_damage::bossStats();
+                                            char line[320];
+                                            sprintf_s(line, "HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE) %s: hero %s, boss %s %.0f m hp %.0f/%.0f, "
+                                                            "frames %llu facing %llu, blows queued %llu sent %llu not-slot %llu (%.0f HP), "
+                                                            "claps %llu",
+                                                      bossMode == 2 ? "STRONG" : "ON", hero_modes::heroNames[heroNow() < hero_modes::heroes ? heroNow() : 0],
+                                                      bossLastName[0] ? bossLastName : "none", static_cast<double>(bossLastMetres),
+                                                      static_cast<double>(bossLastHp), static_cast<double>(bossLastMost),
+                                                      static_cast<unsigned long long>(bossFrames),
+                                                      static_cast<unsigned long long>(bossFacingFrames),
+                                                      static_cast<unsigned long long>(bs.queued), static_cast<unsigned long long>(bs.sent),
+                                                      static_cast<unsigned long long>(bs.notSlot), static_cast<double>(bs.hpSent),
+                                                      static_cast<unsigned long long>(bossClapBlows));
+                                            consoleLine(line);
+                                        }
+                                    }
                                     const uint32_t strength = c38(combat38::aimStrength);
                                     // Version 0.0.4 IRON MAN ABILITIES: REPULSOR's plan has no web part at all.
                                     const bool repMode = c38(combat38::shooterType) == repulsor::repulsor;
@@ -9680,6 +9755,18 @@ DWORD WINAPI run(void*) {
                                         for (unsigned i = 0; i < 2; ++i) { // Version 0.0.72 GRAPPLE
                                             hero072Grapple[i] = hero072Grapple[i] || out72.grapple[i];
                                             hero072HookOut[i] = out72.hookOut[i];
+                                        }
+                                        // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): HULK's thunder clap facing the boss.
+                                        if (hero072Play.claps != bossClapsSeen) {
+                                            const bool clapNow = hero072Play.claps > bossClapsSeen;
+                                            bossClapsSeen = hero072Play.claps;
+                                            if (clapNow && bossFacing && bossId && heroNow() == hero_modes::hulk) {
+                                                const bool sent = sm2_damage::queue(bossId, sm2_damage::Blow{story077c::bossClapHp, 0, 0.f});
+                                                bossClapBlows += sent ? 1u : 0u;
+                                                noteFoeClass(bossId, sent);
+                                                game_prompts::note(sent ? "HERO VR 0.0.77 BOSS DAMAGE: HULK THUNDER CLAP hit the boss (sent)"
+                                                                        : "HERO VR 0.0.77 BOSS DAMAGE: HULK THUNDER CLAP not sent (damage path off)");
+                                            }
                                         }
                                         for (uint32_t k = 0; k < out72.blowCount; ++k) {
                                             const auto& b72 = out72.blows[k];
@@ -11347,8 +11434,11 @@ DWORD WINAPI run(void*) {
                     }
                     perfSections.mark(perf37::haptics); // Update 37: where the CPU time goes
                     // Copies of the game's presented frame, for the screen.
-                    if (gpuStarted)
-                        native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost()));
+                    if (gpuStarted) {
+                        native_gpu::screenForInset(viewing && vrPlay && !native_gpu::eyesLost()); // 0.0.77
+                        native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||
+                                                           promptWindowNow.load() != 2)); // 0.0.77 PROMPT WINDOW
+                    }
                     showScreen = screen;
                     if (!viewing)
                         return false;
@@ -15308,6 +15398,58 @@ DWORD WINAPI run(void*) {
                         }
                         const auto drawStart = std::chrono::steady_clock::now(); // Update 37 perf
                         extrasPart.add(std::chrono::duration<double, std::milli>(drawStart - extrasStart).count());
+                        // HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE, live.txt prompt_window; story077c.hpp): the game's
+                        // own presented frame - where its Scaleform HUD draws the button prompts, QTE cues and throw
+                        // highlights (none reach the eye images, CONFIRMED in the player's report) - in a window low
+                        // in both eyes, at infinity. The renderer draws it under the overlay (its own blit and heap);
+                        // any fault there turns only the window off.
+                        try {
+                            static uint64_t promptLogMs{}, promptFrames{}, promptImages{};
+                            const uint32_t promptMode = promptWindowNow.load();
+                            bool promptSet = false;
+                            if (promptMode != story077c::promptOff && !saved->flatScreen && !saved->stereoScreen &&
+                                !showScreen && !overlayFault) {
+                                ++promptFrames;
+                                native_gpu::Screen promptImage;
+                                if (native_gpu::latestScreen(promptImage, 250) && promptImage.texture && promptImage.width && promptImage.height) {
+                                    ++promptImages;
+                                    D3D12Renderer::Inset inset;
+                                    inset.source = promptImage.texture;
+                                    inset.view = promptImage.view;
+                                    inset.linear = promptImage.linear;
+                                    bool both = true;
+                                    for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                        both = story077c::promptRect(promptMode, grade.tangents[eye][0], grade.tangents[eye][1],
+                                                                     grade.tangents[eye][2], grade.tangents[eye][3],
+                                                                     targets[eye].width, targets[eye].height,
+                                                                     static_cast<float>(promptImage.width) /
+                                                                         static_cast<float>(promptImage.height),
+                                                                     inset.rect[eye]);
+                                    if (both) {
+                                        overlay.setInset(std::move(inset));
+                                        promptSet = true;
+                                    }
+                                }
+                            }
+                            if (!promptSet)
+                                overlay.clearInset();
+                            const uint64_t promptNowMs = GetTickCount64();
+                            if (!promptLogMs || promptNowMs - promptLogMs >= 10000) {
+                                promptLogMs = promptNowMs;
+                                char line[300];
+                                sprintf_s(line, "HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE) %s: frames %llu, game images %llu, "
+                                                "drawn %llu, screen copies for the window only %d%s%s",
+                                          story077c::promptModeName(promptMode), static_cast<unsigned long long>(promptFrames),
+                                          static_cast<unsigned long long>(promptImages),
+                                          static_cast<unsigned long long>(overlay.insetsDrawn()),
+                                          promptMode != story077c::promptOff && !native_gpu::screenRequested() ? 1 : 0,
+                                          overlay.insetFault().empty() ? "" : ", ",
+                                          overlay.insetFault().c_str());
+                                consoleLine(line);
+                            }
+                        } catch (...) {
+                            overlay.clearInset();
+                        }
                         if (!saved->flatScreen && !overlayFault) {
                             // 0.0.74 test 10 SEE-THROUGH: this pair's scene depth for the car's models, only in
                             // immersive play with the eyes as made (else, and on anything amiss, as before).
@@ -15914,6 +16056,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryThrowAim(void* v) { retu
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryDodge(void* v) { return setLive(v, 0, 1, 5563, storyDodgeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return setLive(v, 0, 2, 5564, headDodgeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 2, 5566, promptWindowNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossDamage(void* v) { return setLive(v, 0, 2, 5567, bossDamageNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);
 }

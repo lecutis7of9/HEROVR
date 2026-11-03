@@ -272,6 +272,7 @@ class Play {
     PalmSpray palm;
     HoseGesture hose;
     ClapGesture clap;
+    uint32_t claps{}; // HERO VR 0.0.77 BOSS DAMAGE: HULK's thunder claps so far (game_xr reads the change)
     holster::BodyYaw body;
     float upperRearm[2]{};
     float beamTick{}, chainShow{}, fistShow{}, shockShow{}, hookShow{}, stormLeft{}, stormNext{};
@@ -714,6 +715,7 @@ class Play {
             break;
         case Douse::thunderClap:
             if (tracked[0] && tracked[1] && clap.step(dt, p[0], p[1])) {
+                ++claps;
                 shock((p[0] + p[1]) * .5f, douseShape(d).reach);
                 doused += fires.douse(d, (p[0] + p[1]) * .5f, look, dt);
                 out.buzz(0, .8f);

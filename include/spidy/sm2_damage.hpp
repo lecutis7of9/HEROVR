@@ -144,6 +144,14 @@ bool enabled();
 // (setHero) the damager.
 bool queue(uint64_t record, const Blow& b);
 void setHero(uint64_t heroRecord);
+// HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): blows queued at `record` (the boss; 0 none) go without
+// knockback (no throw of a scripted boss), their amount times `scale` (1-8); counted apart.
+void watchBoss(uint64_t record, float scale);
+struct BossStats {
+    uint64_t record{}, queued{}, sent{}, notSlot{};
+    float hpSent{};
+};
+BossStats bossStats();
 void service();                            // game_pad's serve: sends at most 4 a call
 void noteMelee();                          // the player pressed X (the game's own punch)
 void markConfirmed();                      // the DAMAGE PROBE saw our blow land (write CONFIRMED)

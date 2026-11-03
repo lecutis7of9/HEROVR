@@ -117,6 +117,25 @@ class D3D12Renderer {
     // unchanged; `linearSource` holds light values and is encoded. Asynchronous
     // like renderViews.
     void blit(ID3D12Resource* source, DXGI_FORMAT sourceView, bool linearSource, const ViewTarget& target);
+    // HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE): an image drawn by the next renderViews into a
+    // rectangle of each view (after the grade, under the overlay's drawings), with blit's shader.
+    // `rect[eye]` = {x0, y0, x1, y1} in the view's pixels; a rectangle under 8 pixels is skipped.
+    // The source must be in PIXEL_SHADER_RESOURCE state; the renderer keeps it until the next
+    // renderViews. A failure turns the inset off for the session (insetFault), never the overlay.
+    struct Inset {
+        ComPtr<ID3D12Resource> source;
+        DXGI_FORMAT view = DXGI_FORMAT_UNKNOWN;
+        bool linear{};
+        float rect[2][4]{};
+    };
+    void setInset(Inset inset) noexcept;
+    void clearInset() noexcept;
+    const std::string& insetFault() const {
+        return insetFault_;
+    }
+    std::uint64_t insetsDrawn() const {
+        return insetsDrawn_;
+    }
     void waitIdle();
     // Diagnostic RGBA8 readback; target enters and exits in RENDER_TARGET state.
     std::vector<unsigned char> readback(ID3D12Resource* target);
@@ -152,6 +171,8 @@ class D3D12Renderer {
     // into list_ (open, after any copy the draw reads).
     void prepareBlit(DXGI_FORMAT targetFormat);
     void recordBlit(ID3D12Resource* source, DXGI_FORMAT sourceView, bool linearSource, const ViewTarget& target);
+    // HERO VR 0.0.77 PROMPT WINDOW: the inset's draw into one view through `rtv` (list_ open).
+    bool recordInset(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_HANDLE rtv, unsigned eye);
     // The grade's pipeline for a target format, and its pass over one view
     // into list_ (open): the image copied aside, then drawn back recoloured
     // through the render target view at `rtv`.
@@ -192,6 +213,12 @@ class D3D12Renderer {
     ComPtr<ID3D12RootSignature> blitRoot_;
     ComPtr<ID3D12PipelineState> blitPipeline_;
     DXGI_FORMAT blitFormat_ = DXGI_FORMAT_UNKNOWN;
+    // HERO VR 0.0.77 PROMPT WINDOW: the inset, the one it drew last (kept until the GPU is done), its
+    // own shader-visible descriptor and whether it failed.
+    Inset inset_{}, insetDrawn_{};
+    ComPtr<ID3D12DescriptorHeap> insetHeap_;
+    std::string insetFault_;
+    std::uint64_t insetsDrawn_{};
     // The grade: its own descriptor, root signature and pipeline, and the
     // copy of a view's image it reads (made like the targets, reused).
     ComPtr<ID3D12DescriptorHeap> gradeHeap_;

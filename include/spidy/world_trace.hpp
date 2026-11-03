@@ -243,6 +243,38 @@ uint32_t enemyVitals(std::array<Vital, enemySlots>& out);
 // 0.0.75 EVERY ENEMY: the class an enemy in the last refresh was marked by (its decorated RTTI name,
 // e.g. ".?AVSymbioteBot@@"); false when that record is not in it.
 bool enemyClass(uint64_t id, char (&out)[nameChars]);
+// HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): a boss's class. ".?AVSandmanBot@@" is CONFIRMED (the user's
+// world trace 20261103: two spawns, 269 m from the hero - outside enemyReach, never in enemies()); the
+// others are CANDIDATE names (no log of them yet).
+inline bool isBossClass(const char* name) {
+    if (!name || !*name)
+        return false;
+    constexpr const char* bosses[] = {"SandmanBot", "Boss", "LizardBot", "KravenBot", "VenomBot", "MysterioBot",
+                                      "ScreamBot"};
+    for (const char* b : bosses) {
+        for (const char* s = name; *s; ++s) {
+            const char* x = s;
+            const char* y = b;
+            while (*x && *y && *x == *y) {
+                ++x;
+                ++y;
+            }
+            if (!*y)
+                return true;
+        }
+    }
+    return false;
+}
+// The nearest boss record the last refresh saw within farReach (its world feet, metres from the hero,
+// its BotHealth when read, its class); false when none, or the list is older than 1 s.
+struct Boss {
+    uint64_t id{};
+    Vec3 world{};
+    float metres{};
+    Vital vital{};
+    char name[nameChars]{};
+};
+bool nearestBoss(Boss& out);
 uint64_t healthComponents(); // BotHealth components the last scan found
 uint64_t heroRecordNow();    // the hero's record the last scan found (0: none)
 // Version 0.0.3 BOT STATE PROBE (include/spidy/bot_probe.hpp): on or off, and the enemy to watch

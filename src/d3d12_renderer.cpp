@@ -1024,6 +1024,11 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
             throw std::runtime_error("Overlay view dimensions or formats differ");
     waitForSubmission();
     pipeline(format);
+    // HERO VR 0.0.77 PROMPT WINDOW: the GPU is done with the last inset; this frame's (if any) taken.
+    insetDrawn_ = std::move(inset_);
+    inset_ = {};
+    if (!insetFault_.empty() || views.size() != 2 || !preserveColor)
+        insetDrawn_ = {};
     // Only an image that stays can be recoloured.
     const bool grading = grade && preserveColor && grade->visible();
     if (grading)
@@ -1160,6 +1165,18 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
             device_->CreateRenderTargetView(views[eye].texture, &rv, rtv);
             if (grading)
                 recordGrade(views[eye], rtv, *grade, static_cast<unsigned>(eye));
+            // HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE): over the game's image, under the drawings. A
+            // failure only turns the inset off (the list stays usable: every state is set again below).
+            if (insetDrawn_.source) {
+                try {
+                    if (recordInset(views[eye], rtv, static_cast<unsigned>(eye)) && eye + 1 == views.size())
+                        ++insetsDrawn_;
+                } catch (const std::exception& e) {
+                    insetFault_ = std::string("PROMPT WINDOW off: ") + e.what();
+                } catch (...) {
+                    insetFault_ = "PROMPT WINDOW off: unknown fault";
+                }
+            }
             list_->SetGraphicsRootSignature(root_.Get());
             list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             if (bytes) {
@@ -1262,7 +1279,7 @@ void D3D12Renderer::prepareBlit(DXGI_FORMAT targetFormat) {
         parameters[0].DescriptorTable = {1, &range};
         parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[1].Constants.Num32BitValues = 4;
+        parameters[1].Constants.Num32BitValues = 6; // HERO VR 0.0.77: + targetOrigin (the PROMPT WINDOW inset)
         parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_STATIC_SAMPLER_DESC sampler{};
         sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1288,7 +1305,7 @@ void D3D12Renderer::prepareBlit(DXGI_FORMAT targetFormat) {
         const char* shader = R"(
 Texture2D source : register(t0);
 SamplerState scaled : register(s0);
-cbuffer Mode : register(b0) { uint linearSource; uint srgbTarget; float2 targetPixel; };
+cbuffer Mode : register(b0) { uint linearSource; uint srgbTarget; float2 targetPixel; float2 targetOrigin; };
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
@@ -1299,7 +1316,8 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     // From the pixel's own centre: a coordinate interpolated across the
     // screen-covering triangle drifts off the source's texel centres on
     // large targets (4608 x 4896 eyes changed copied values by 2 levels).
-    float3 c = source.SampleLevel(scaled, position.xy * targetPixel, 0).rgb;
+    // HERO VR 0.0.77: from the drawn rectangle's corner (0 for a whole-target blit).
+    float3 c = source.SampleLevel(scaled, (position.xy - targetOrigin) * targetPixel, 0).rgb;
     if (linearSource)
         c = srgbTarget ? max(c, 0) : encode(saturate(c));
     else if (srgbTarget)
@@ -1363,8 +1381,8 @@ void D3D12Renderer::recordBlit(ID3D12Resource* source, DXGI_FORMAT sourceView, b
     list_->SetGraphicsRootDescriptorTable(0, srv_->GetGPUDescriptorHandleForHeapStart());
     const UINT mode[] = {linearSource ? 1u : 0u, srgb(target.format) ? 1u : 0u,
                          std::bit_cast<UINT>(1.f / static_cast<float>(target.width)),
-                         std::bit_cast<UINT>(1.f / static_cast<float>(target.height))};
-    list_->SetGraphicsRoot32BitConstants(1, 4, mode, 0);
+                         std::bit_cast<UINT>(1.f / static_cast<float>(target.height)), 0u, 0u};
+    list_->SetGraphicsRoot32BitConstants(1, 6, mode, 0);
     list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
     D3D12_VIEWPORT viewport{0, 0, static_cast<float>(target.width), static_cast<float>(target.height), 0, 1};
     D3D12_RECT rect{0, 0, static_cast<LONG>(target.width), static_cast<LONG>(target.height)};
@@ -1385,6 +1403,56 @@ void D3D12Renderer::blit(ID3D12Resource* source, DXGI_FORMAT sourceView, bool li
     ID3D12CommandList* lists[] = {list_.Get()};
     queue_->ExecuteCommandLists(1, lists);
     hr(queue_->Signal(fence_.Get(), ++fenceValue_), "Signal blit completion");
+}
+void D3D12Renderer::setInset(Inset inset) noexcept {
+    inset_ = std::move(inset);
+}
+void D3D12Renderer::clearInset() noexcept {
+    inset_ = {};
+}
+// HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE): the game's presented frame (its prompts and markers)
+// scaled into a rectangle of one view. Blit's pipeline with the rectangle's corner as targetOrigin;
+// its own descriptor (renderViews waited for the GPU before recording, so rewriting it is safe).
+bool D3D12Renderer::recordInset(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_HANDLE rtv, unsigned eye) {
+    if (eye > 1 || !insetDrawn_.source)
+        return false;
+    const float* r = insetDrawn_.rect[eye];
+    const float w = static_cast<float>(target.width), h = static_cast<float>(target.height);
+    const float x0 = std::clamp(r[0], 0.f, w), y0 = std::clamp(r[1], 0.f, h);
+    const float x1 = std::clamp(r[2], 0.f, w), y1 = std::clamp(r[3], 0.f, h);
+    if (!(x1 - x0 >= 8.f) || !(y1 - y0 >= 8.f)) // also NaN
+        return false;
+    prepareBlit(target.format);
+    if (!insetHeap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC heap{};
+        heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        heap.NumDescriptors = 1;
+        heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        hr(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&insetHeap_)), "Create inset descriptor heap");
+    }
+    D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
+    sv.Format = insetDrawn_.view;
+    sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    sv.Texture2D.MipLevels = 1;
+    device_->CreateShaderResourceView(insetDrawn_.source.Get(), &sv, insetHeap_->GetCPUDescriptorHandleForHeapStart());
+    list_->SetPipelineState(blitPipeline_.Get());
+    list_->SetGraphicsRootSignature(blitRoot_.Get());
+    ID3D12DescriptorHeap* heaps[] = {insetHeap_.Get()};
+    list_->SetDescriptorHeaps(1, heaps);
+    list_->SetGraphicsRootDescriptorTable(0, insetHeap_->GetGPUDescriptorHandleForHeapStart());
+    const UINT mode[] = {insetDrawn_.linear ? 1u : 0u, srgb(target.format) ? 1u : 0u,
+                         std::bit_cast<UINT>(1.f / (x1 - x0)), std::bit_cast<UINT>(1.f / (y1 - y0)),
+                         std::bit_cast<UINT>(x0), std::bit_cast<UINT>(y0)};
+    list_->SetGraphicsRoot32BitConstants(1, 6, mode, 0);
+    list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    D3D12_VIEWPORT viewport{x0, y0, x1 - x0, y1 - y0, 0, 1};
+    D3D12_RECT rect{static_cast<LONG>(x0), static_cast<LONG>(y0), static_cast<LONG>(x1), static_cast<LONG>(y1)};
+    list_->RSSetViewports(1, &viewport);
+    list_->RSSetScissorRects(1, &rect);
+    list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list_->DrawInstanced(3, 1, 0, 0);
+    return true;
 }
 namespace {
 bool typeless(DXGI_FORMAT format) {

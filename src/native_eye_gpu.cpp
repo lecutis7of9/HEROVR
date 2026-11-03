@@ -203,8 +203,12 @@ void noteCopies(uint64_t completed) { // submission lock held by caller
 // The game's presented frame (submission lock). A texture replaced by a new
 // size stays alive for a few seconds, for draws still reading it.
 std::atomic<bool> screenWanted{};
+// HERO VR 0.0.77 PROMPT WINDOW: the copies are wanted only for the window over the eyes (VR play): the
+// mirror, the monitor's rate hold and the shown eye's copy go on as without them, and the game's own view
+// keeps its lens (screenRequested stays false).
+std::atomic<bool> screenInsetOnly{};
 bool screenWantedFlag() {
-    return screenWanted.load();
+    return screenWanted.load() && !screenInsetOnly.load();
 }
 Screen screen;
 uint64_t screenMs{};
@@ -5480,9 +5484,10 @@ thread_local bool presenting{};
 void presentFrame(IDXGISwapChain* swapchain, UINT flags) {
     if (!enabled || (flags & DXGI_PRESENT_TEST))
         return;
+    const bool insetOnly = screenInsetOnly.load();
     if (screenWanted)
-        captureScreen(swapchain);
-    else if (mirrorWanted || monitorStreaming()) // 0.0.74 test 10 MONITOR: over the game's own view too
+        captureScreen(swapchain); // before the mirror: the game's own frame, its prompts (0.0.77)
+    if ((!screenWanted || insetOnly) && (mirrorWanted || monitorStreaming())) // 0.0.74 test 10 MONITOR
         mirrorEye(swapchain);
 }
 // The game presents once a frame whether or not it rendered a view of its
@@ -5492,7 +5497,7 @@ void presentFrame(IDXGISwapChain* swapchain, UINT flags) {
 // held present draws no mirror either.
 bool holdPresent(UINT flags) {
     const auto rate = mirrorRate.load();
-    if (!rate || !enabled || !mirrorWanted || screenWanted || (flags & DXGI_PRESENT_TEST))
+    if (!rate || !enabled || !mirrorWanted || screenWantedFlag() || (flags & DXGI_PRESENT_TEST))
         return false;
     LARGE_INTEGER now{}, frequency{};
     QueryPerformanceCounter(&now);
@@ -5638,6 +5643,9 @@ bool deviceRemovedSeen() {
 }
 void wantScreen(bool wanted) {
     screenWanted = wanted;
+}
+void screenForInset(bool only) {
+    screenInsetOnly = only;
 }
 bool screenRequested() {
     return screenWantedFlag();
@@ -6304,7 +6312,7 @@ void keepShownEye(ID3D12Resource* left, const float orientation[4], const float 
     // 0.0.74 test 10 MONITOR: the copy is made anyway (the headset's own image), and
     // also while the game renders its own view (the copy goes over it).
     const bool streaming = monitorStreaming();
-    if (!left || !(mirrorWanted || streaming) || screenWanted || !shownWanted || (sharpening && !streaming))
+    if (!left || !(mirrorWanted || streaming) || screenWantedFlag() || !shownWanted || (sharpening && !streaming))
         return;
     std::lock_guard submitLock(submission);
     std::lock_guard recordLock(recording);
@@ -6515,6 +6523,7 @@ DWORD stop() {
     std::lock_guard life(lifecycle);
     enabled = false;
     screenWanted = false;
+    screenInsetOnly = false;
     copyReady.notify_all();
     foveaOn = false;
     if (hooked) {

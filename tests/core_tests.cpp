@@ -798,6 +798,26 @@ bool onPageAny(int page, spidy::wrist_hud::Control c) {
     setOpenSection(page, was);
     return found;
 }
+// HERO VR 0.0.76 ONE PAGE: the rows taken off the hologram (each still set by live.txt or a test press).
+bool takenOff076(spidy::wrist_hud::Control c) {
+    using C = spidy::wrist_hud::Control;
+    for (const C t : {C::aa, C::sharpen, C::history, C::supersample, C::eyeAa, C::eyeTrail, C::engineTaa, C::taaJitter,
+                      C::eyeTest, C::addressFinder, C::webBallTest, C::foveaDebug, C::foveaStats, C::eyeLod,
+                      C::sharedLod, C::combatLensFlares, C::worldLog, C::slotTest})
+        if (c == t)
+            return true;
+    return false;
+}
+// HERO VR 0.0.76 ONE PAGE: a row taken off the hologram (still set by live.txt) is on no page at all.
+bool offHolo(spidy::wrist_hud::Control c) {
+    using namespace spidy::wrist_hud;
+    if (placeOf(c).page != -1)
+        return false;
+    for (int page = 0; page < pages; ++page)
+        if (onPageAny(page, c))
+            return false;
+    return true;
+}
 // 0.0.76 A-depth CHECKED: a synthetic eye pair (25 boxes and a slanted wall, both eyes 64 mm apart, jittered) and
 // its centre band of depth stored in a given convention, for the convention check.
 namespace depth_scene {
@@ -1706,10 +1726,10 @@ int main() {
         check(s.windows() >= 1 && std::abs(s.high() - 30) < 2.5f && std::abs(s.low() - 30) < 2.5f, "RESET kept the old");
         s.frame(t - 50, true); // the clock back: nothing breaks
         check(std::isfinite(s.average()), "the clock going back broke it");
-        // Its row on the GRAPHICS page (Update 39.0.2): RESET answers there and only there, not a setting.
-        check(controlSpot(graphicsPage, Control::fpsReset).found, "no RESET on GRAPHICS");
+        // Its row on VR SETTINGS (Update 39.0.2 GRAPHICS; 0.0.76 ONE PAGE): RESET answers there and only there.
+        check(controlSpot(vrPage, Control::fpsReset).found, "no RESET on VR SETTINGS");
         for (int page = 0; page < pages; ++page)
-            check(page == graphicsPage || !controlSpot(page, Control::fpsReset).found, "RESET on another page");
+            check(page == vrPage || !controlSpot(page, Control::fpsReset).found, "RESET on another page");
         check(std::string(helpText(Control::fpsReset)).size() <= 80, "the RESET sentence is too long");
         Applier a;
         a.start(Settings{});
@@ -1718,7 +1738,7 @@ int main() {
         // Pressed: Result::fpsReset, nothing changed.
         Menu m;
         Settings set;
-        m.setPage(graphicsPage);
+        m.setPage(vrPage);
         auto step = [&](float u, float v, float trigger) {
             Menu::Input in;
             in.active = true;
@@ -1728,7 +1748,7 @@ int main() {
             in.trigger = trigger;
             return m.update(in, set);
         };
-        const Spot spot = controlSpot(graphicsPage, Control::fpsReset);
+        const Spot spot = controlSpot(vrPage, Control::fpsReset);
         step(spot.u, spot.v, 0);
         step(spot.u, spot.v, .3f);
         const auto r = step(spot.u, spot.v, .8f);
@@ -1744,10 +1764,10 @@ int main() {
             for (unsigned eye = 0; eye < 2; ++eye)
                 check(eyeDebugSource(mode, eye) < 2, "a source past the staged eyes");
         check(defaultEyeUpscale == 100 && validEyeUpscale(defaultEyeUpscale), "the SM2 eyes' upscale default");
-        // The hologram's EYE TEST: a live ON/OFF button on GRAPHICS, off by default.
+        // The hologram's EYE TEST: a live ON/OFF button, off by default (0.0.76 ONE PAGE: off the hologram,
+        // live.txt eye_debug).
         using namespace wrist_hud;
-        check(onPageAny(graphicsPage, Control::eyeTest) && !controlSpot(1, Control::eyeTest).found,
-              "EYE TEST is not on the GRAPHICS page");
+        check(offHolo(Control::eyeTest), "EYE TEST is still on the hologram");
         check(gpuSide(Control::eyeTest) && !onRelease(Control::eyeTest) && !cycles(Control::eyeTest),
               "EYE TEST is not a live button");
         Settings s;
@@ -1762,8 +1782,7 @@ int main() {
         // Update 27: ADDRESS FINDER — press control on GRAPHICS (past the 32-bit mask).
         check(static_cast<int>(Control::addressFinder) >= maskedControls, "ADDRESS FINDER must be a press");
         check(controls == 248, "controls count drifted"); // 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + LIGHT HOLD, WEAPON COLLISION, VAN SCREEN, PALM BLAST, HERO MENU, REP LOG, VAN PEDALS; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; Build 9: + SUIT BODY; Build 8: + ROSTER; Build 6: + THOR HAMMER MODEL, THOR FLIGHT; Version 0.0.72: + 40 COMBAT (GAME BODY, PUNISHER VAN, THOR HAMMER, PERCH TAKEDOWN, TAKEDOWN LIGHT, THOR, GREEN LANTERN, the 0.0.72 list, PUNISHER SUIT, NATURAL INVINCIBLE, HULK RAGE, RAGE BLOOD, RAGE TINT, FIRE DOUSE, SHIELD SLAM, GRAPPLE HOOK, CLAW CLIMB, SHOVE, ENEMY FACTION, HERO SUIT, TEST UNLOCKS, ULTIMATES, HERO PERKS), + 2 SECTION headers; Version 0.0.7: + 6 CAPTAIN AMERICA rows, + 1 SECTION header; + GUN MODELS; + 10 HERO PROFILE rows (BATARANG STYLE), + 3 SECTION headers; Version 0.0.62: + BEACONS IN VISION; + HIT INDICATOR, HAND FLIPS, LENS FLARES, PUNCH HITS, ENEMY TRACKING; Update 39.0.2: + 6 SECTION headers; Update 39.0.1: + 4 HERO TABS, PLAY AS SPIDER-MAN; Version 0.0.6: + DAREDEVIL ABILITIES, HULK ABILITIES, DAREDEVIL PUNCH; 0.0.5: + HERO HEIGHT, DAMAGE TEST, PUNCH SENSITIVITY, SFX VOLUME, SUPERSONIC, SUPERSONIC SPEED; 0.0.4: + IRON MAN ABILITIES, MIRROR VIEW; 0.0.3: + 7 COMBAT (ROPE GRAB ... SHOW STATUS); 0.0.2: + AIM STRENGTH, BALL HIT, TRAIN MOVE; Update 37.2: + COLOR page, FOVEATED; Update 38: + 11 COMBAT; 38.1: + 8; 38.2: + 5; 38.3: + 4; 38.5: + 3 (90s ANIMATED) + VISOR DROPS + 7 EXTRAS + GESTURE MOVES + 3 FLY ROLL
-        check(onPageAny(graphicsPage, Control::addressFinder) && !controlSpot(1, Control::addressFinder).found,
-              "ADDRESS FINDER is not on the GRAPHICS page");
+        check(offHolo(Control::addressFinder), "ADDRESS FINDER is still on the hologram"); // 0.0.76 ONE PAGE
         check(!gpuSide(Control::addressFinder), "ADDRESS FINDER must not be gpuSide");
         check(std::string(helpText(Control::addressFinder)).size() <= 80, "ADDRESS FINDER help is past two lines");
         check(std::string(helpText(Control::addressFinder)) == addressFinderHelp, "ADDRESS FINDER help drifted");
@@ -1773,8 +1792,7 @@ int main() {
         check(pressOnly.due(0, Control::none) == 0, "ADDRESS FINDER was due as a setting");
         // Update 28: EYE LOD, a live press past the mask on GRAPHICS, default OFF, never kept.
         check(static_cast<int>(Control::eyeLod) >= maskedControls, "EYE LOD must be a press");
-        check(onPageAny(graphicsPage, Control::eyeLod) && !controlSpot(1, Control::eyeLod).found,
-              "EYE LOD is not on the GRAPHICS page");
+        check(offHolo(Control::eyeLod), "EYE LOD is still on the hologram"); // 0.0.76 ONE PAGE: live.txt eye_lod
         check(!gpuSide(Control::eyeLod), "EYE LOD must not be gpuSide");
         check(std::string(helpText(Control::eyeLod)) == eyeLodHelp, "EYE LOD help drifted");
         // Update 28.1: a failed EYE LOD's subtext says why, one sentence, <= 80, no more lines.
@@ -1827,8 +1845,7 @@ int main() {
         for (uint32_t aa = 0; aa < 9; ++aa)
             check(et::aaMakesTargets(aa) == (aa == 1 || (aa >= 5 && aa <= 7)), "aaMakesTargets " + std::to_string(aa));
         const Control c = Control::engineTaa;
-        check(static_cast<int>(c) >= maskedControls && onPageAny(graphicsPage, c) && !controlSpot(1, c).found,
-              "ENGINE TAA not a press on GRAPHICS");
+        check(static_cast<int>(c) >= maskedControls && offHolo(c), "ENGINE TAA not a press off the hologram");
         check(!gpuSide(c), "ENGINE TAA must not be gpuSide");
         const std::string h = helpText(c);
         check(h == et::help && h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.back() == '.',
@@ -1887,10 +1904,12 @@ int main() {
         using namespace wrist_hud;
         namespace eb = spidy::eye_bloom;
         namespace sl = spidy::shared_lod;
-        for (const Control c : {Control::eyeBloom, Control::sharedLod}) {
+        for (const Control c : {Control::eyeBloom, Control::sharedLod})
             check(static_cast<int>(c) >= maskedControls, "must be past the mask");
-            check(onPageAny(graphicsPage, c) && !controlSpot(1, c).found, "not on the GRAPHICS page");
-        }
+        // 0.0.76 ONE PAGE: EYE BLOOM on VR SETTINGS' GRAPHICS section; SHARED LOD off the hologram (live.txt shared_lod).
+        check(onPageAny(vrPage, Control::eyeBloom) && !controlSpot(1, Control::eyeBloom).found,
+              "EYE BLOOM not on VR SETTINGS");
+        check(offHolo(Control::sharedLod), "SHARED LOD still on the hologram");
         check(std::string(shortName(Control::eyeBloom)) == "EYE BLOOM" &&
                   std::string(shortName(Control::sharedLod)) == "SHARED LOD",
               "short names");
@@ -1955,10 +1974,16 @@ int main() {
         using namespace spidy::eye_history;
         // FAR SHADOWS: a press past the mask, near the top of GRAPHICS, default EYES.
         check(static_cast<int>(Control::farShadows) >= maskedControls, "must be past the mask");
-        const auto spot = (resetSections(), controlSpot(graphicsPage, Control::farShadows));
-        check(spot.found && !controlSpot(1, Control::farShadows).found, "FAR SHADOWS not on the GRAPHICS page");
-        check(spot.found && controlSpot(graphicsPage, Control::aa).found && spot.v < controlSpot(graphicsPage, Control::aa).v,
-              "FAR SHADOWS not under ANTI-ALIASING in QUALITY");
+        // 0.0.76 ONE PAGE: the first row of VR SETTINGS' GRAPHICS section (ANTI-ALIASING off the hologram).
+        resetSections();
+        setOpenSection(vrPage, placeOf(Control::farShadows).section);
+        const auto spot = controlSpot(vrPage, Control::farShadows);
+        check(spot.found && !controlSpot(1, Control::farShadows).found, "FAR SHADOWS not on VR SETTINGS");
+        check(placeOf(Control::farShadows).page == vrPage &&
+                  std::string(sectionName(vrPage, placeOf(Control::farShadows).section)) == "GRAPHICS" &&
+                  offHolo(Control::aa),
+              "FAR SHADOWS not in GRAPHICS, or ANTI-ALIASING still shown");
+        resetSections();
         check(std::string(shortName(Control::farShadows)) == "FAR SHADOWS", "short name");
         check(fs::defaultMode == fs::eyesCache && fs::next(fs::off) == fs::eyes && fs::next(fs::eyes) == fs::eyesCache &&
                   fs::next(fs::eyesCache) == fs::off,
@@ -2026,7 +2051,7 @@ int main() {
         // EYE AA TRAIL and TAA JITTER: past the mask, on GRAPHICS, one-sentence help, never settings.
         for (const Control c : {Control::eyeTrail, Control::taaJitter}) {
             check(static_cast<int>(c) >= maskedControls, "must be past the mask");
-            check(onPageAny(graphicsPage, c) && !controlSpot(1, c).found, "not on the GRAPHICS page");
+            check(offHolo(c), "still on the hologram"); // 0.0.76 ONE PAGE: live.txt trail / taa_jitter
             const std::string h = helpText(c);
             check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.back() == '.', "help " + h);
         }
@@ -2090,8 +2115,7 @@ int main() {
         check(!controlSpot(2, Control::shadowDistance).found, "SHADOW DISTANCE still on the GRAPHICS page");
         for (const Control c : {Control::shadowDistance, Control::eyeAa}) {
             check(static_cast<int>(c) >= maskedControls, "must be past the mask");
-            check(c == Control::shadowDistance || (onPageAny(graphicsPage, c) && !controlSpot(1, c).found),
-                  "not on the GRAPHICS page");
+            check(offHolo(c), "still on the hologram"); // 0.0.76 ONE PAGE: EYE AA by live.txt eye_temporal
             check(!gpuSide(c), "must not be gpuSide");
             const std::string h = helpText(c);
             check(h.size() <= 80 && std::count(h.begin(), h.end(), '.') == 1 && h.back() == '.', "help " + h);
@@ -2443,9 +2467,10 @@ int main() {
         check(on(vrPage, Control::recalibrate) && on(vrPage, Control::thickness) && on(vrPage, Control::speed) &&
                   !on(vrPage, Control::aa) && !on(0, Control::recalibrate),
               "VR SETTINGS has the wrong controls");
-        check(on(graphicsPage, Control::aa) && on(graphicsPage, Control::history) && on(graphicsPage, Control::reach) &&
-                  on(graphicsPage, Control::monitor) && on(graphicsPage, Control::supersample) &&
-                  !on(graphicsPage, Control::thickness),
+        // HERO VR 0.0.76 ONE PAGE: GRAPHICS merged into VR SETTINGS; its unused rows off the hologram.
+        check(sectionCount(graphicsPage) == 0 && on(vrPage, Control::reach) && on(vrPage, Control::monitor) &&
+                  on(vrPage, Control::fpsReset) && offHolo(Control::aa) && offHolo(Control::history) &&
+                  offHolo(Control::supersample),
               "GRAPHICS has the wrong controls");
         {   // Scrolled into view first, its section open.
             const int vp = openAt(Control::speed);
@@ -2530,8 +2555,10 @@ int main() {
             appendWristHud(out, v, eye, .001f);
             check(!out.empty() && sane(out, 0, v.emitter, 1.f), "a page is not sane");
         }
-        v.page = graphicsPage;
-        v.scroll = maxScroll(graphicsPage); // Update 17: the notice is at the page's foot
+        // HERO VR 0.0.76 ONE PAGE: EYE SUPERSAMPLE and its NEXT LAUNCH notice are off the hologram (live.txt vr_ss,
+        // the launcher's RESTART NOTICE), so a different next-launch value draws nothing more on VR SETTINGS.
+        v.page = vrPage;
+        v.scroll = maxScroll(vrPage);
         for (int differs = 0; differs < 2; ++differs) {
             v.settings.supersample = differs ? 150.f : 100.f;
             v.supersampleNow = 100;
@@ -2539,7 +2566,7 @@ int main() {
             appendWristHud(out, v, eye, .001f);
             counts[differs] = out.size();
         }
-        check(counts[1] > counts[0], "no RESTART THE GAME TO APPLY once the next launch's value differs");
+        check(counts[1] == counts[0], "the hologram still shows EYE SUPERSAMPLE's NEXT LAUNCH notice");
         v.settings.history = std::nanf("");
         v.settings.reach = 1e9f;
         v.hover = Control::reach;
@@ -2633,7 +2660,8 @@ int main() {
                           std::string(x.what) + " overlaps " + y.what);
                 }
             }
-            check(helpLines >= (page == 1 ? 4 : 5), "explanations are missing from a page");
+            check(helpLines >= (page == 1 ? 4 : 5) || page == graphicsPage, // 0.0.76 ONE PAGE: GRAPHICS merged
+                  "explanations are missing from a page");
         }
         const auto mirror = wrapText(mirrorHelp, helpHeight, helpWidth);
         check(mirror.size() <= helpLinesMost, "the mirror's explanation runs long");
@@ -2656,9 +2684,10 @@ int main() {
             return m.update(in, s);
         };
         resetSections();
-        const Spot recal = controlSpot(vrPage, Control::recalibrate), aa = controlSpot(graphicsPage, Control::aa);
+        // HERO VR 0.0.76 ONE PAGE: the GRAPHICS page (and ANTI-ALIASING) gone from the hologram.
+        const Spot recal = controlSpot(vrPage, Control::recalibrate);
         const Spot webs = controlSpot(vrPage, sectionControl(1));
-        check(recal.found && aa.found && webs.found && !controlSpot(vrPage, Control::thickness).found,
+        check(recal.found && offHolo(Control::aa) && webs.found && !controlSpot(vrPage, Control::thickness).found,
               "VR SETTINGS' rows are not where they belong");
         auto r = step(.06f, strip, 0);
         check(r.hovered && m.hover() == Control::next && !m.claims(), "no hover on the next arrow");
@@ -2713,8 +2742,9 @@ int main() {
         r = step(.066f, width.v, .9f, true, 1u << static_cast<unsigned>(Control::thickness));
         check(m.claims() && !r.changed && s.widthCm == before && m.page() == vrPage, "a disabled slider changed");
         step(0, 0, 0);
-        // Flip back past the first page: it wraps to the last (MUSIC), then CONTROLS ... down to GRAPHICS.
-        // Update 39.0.2: eight pages (STATUS, POWERS, VR SETTINGS, COMBAT, GRAPHICS, COLOR, CONTROLS, MUSIC).
+        // Flip back past the first page: it wraps to the last (MUSIC), then CONTROLS ... down to COMBAT.
+        // Update 39.0.2: eight pages (STATUS, POWERS, VR SETTINGS, COMBAT, GRAPHICS, COLOR, CONTROLS, MUSIC);
+        // HERO VR 0.0.76 ONE PAGE: GRAPHICS passed by (merged into VR SETTINGS).
         for (int i = 0; i < 6; ++i) {
             step(-.06f, strip, .3f);
             step(-.06f, strip, .8f);
@@ -2726,20 +2756,12 @@ int main() {
             if (i == 4)
                 check(m.page() == wrist_hud::colorPage, "the previous arrow did not reach COLOR");
         }
-        check(m.page() == graphicsPage, "the previous arrow did not wrap to GRAPHICS");
-        s.aa = 0;
-        step(aa.u, aa.v, .3f);
-        r = step(aa.u, aa.v, .8f);
-        check(s.aa == 1 && r.changed == 1u << static_cast<unsigned>(Control::aa), "AA did not switch on");
-        step(aa.u, aa.v, 0);
-        step(aa.u, aa.v, .3f);
-        step(aa.u, aa.v, .8f);
-        check(s.aa == 0, "AA did not switch off");
+        check(m.page() == combatPage, "the previous arrow did not pass GRAPHICS to COMBAT");
         step(0, 0, 0);
         // Not active (the panel not shown whole, the toggle's pull): nothing.
         r = step(.06f, strip, .3f, false);
         r = step(.06f, strip, .9f, false);
-        check(!r.pressed && !m.claims() && m.hover() == Control::none && m.page() == graphicsPage, "an inactive panel acted");
+        check(!r.pressed && !m.claims() && m.hover() == Control::none && m.page() == combatPage, "an inactive panel acted");
         step(0, 0, 0);
         // A NaN trigger is a let-go one.
         step(.06f, strip, .3f);
@@ -16947,18 +16969,19 @@ int main() {
     });
     test("the hologram's graphics page has SHARPNESS and the VR page the FPS readout", [] {
         using namespace wrist_hud;
-        check(onPageAny(graphicsPage, Control::sharpen) && gpuSide(Control::sharpen) &&
-                  !restartRequired(Control::sharpen),
-              "SHARPNESS is not a live graphics slider");
+        // HERO VR 0.0.76 ONE PAGE: SHARPNESS off the hologram (live.txt sharpen), still a live setting.
+        check(offHolo(Control::sharpen) && gpuSide(Control::sharpen) && !restartRequired(Control::sharpen),
+              "SHARPNESS is not a live graphics setting off the hologram");
         check(clampTo(Control::sharpen, 400) == 200 && clampTo(Control::sharpen, -3) == 0, "SHARPNESS is not clamped");
         check(std::string(helpText(Control::sharpen)) ==
                   "Up to 100% is normal CAS; 110-200% is extra strong, with halos and more shimmer.",
               "SHARPNESS's explanation changed");
         int fps = 0;
-        for (const Area& a : pageAreas(graphicsPage)) // Update 39.0.2: the FPS block heads GRAPHICS
+        // Update 39.0.2: the FPS block heads GRAPHICS; HERO VR 0.0.76 ONE PAGE: under VR SETTINGS' RECALIBRATE.
+        for (const Area& a : pageAreas(vrPage))
             fps += std::string(a.what) == "the FPS readout" || std::string(a.what) == "the FPS sparkline" ||
                    std::string(a.what) == "the eye GPU line";
-        check(fps == 3, "the FPS readout is missing from GRAPHICS");
+        check(fps == 3, "the FPS readout is missing from VR SETTINGS: " + std::to_string(fps));
     });
     test("Update 17: every text size reflows the settings pages, nothing overflows or overlaps", [] {
         using namespace wrist_hud;
@@ -16966,6 +16989,8 @@ int main() {
         near(textFactor(9), 1.75f);
         near(textFactor(std::nanf("")), 1);
         for (int page = 1; page < pages; ++page) {
+            if (page == graphicsPage) // HERO VR 0.0.76 ONE PAGE: merged into VR SETTINGS, never shown
+                continue;
             float lastHeight = 0, lastTitle = 0;
             for (float k : {.75f, 1.f, 1.25f, 1.5f, 1.75f}) {
                 const auto areas = pageAreas(page, k);
@@ -17022,7 +17047,8 @@ int main() {
         for (int page = 1; page < pages; ++page) {
             const float most = maxScroll(page);
             if (most <= 0) { // Update 39.0.2: a page with its sections closed (COLOR) may fit at 100%.
-                check(maxScroll(page, 1.75f) > 0, "a settings page fits at the biggest text: no scroll to test");
+                check(maxScroll(page, 1.75f) > 0 || page == graphicsPage, // 0.0.76 ONE PAGE: GRAPHICS merged
+                      "a settings page fits at the biggest text: no scroll to test");
                 continue;
             }
             near(clampScroll(page, -1), 0);
@@ -17242,8 +17268,12 @@ int main() {
         const auto bit = [](Control c) { return 1u << static_cast<unsigned>(c); };
         Menu m;
         Settings s;
+        // HERO VR 0.0.76 ONE PAGE: VR SETTINGS (GRAPHICS merged), its GRAPHICS section open; BUILDING REACH the
+        // slider held (HISTORY BLEND off the hologram).
         resetSections();
+        setOpenSection(vrPage, placeOf(Control::reach).section);
         m.setPage(graphicsPage);
+        check(m.page() == vrPage, "GRAPHICS did not open VR SETTINGS");
         auto step = [&](float u, float v, float trigger, float stick = 0, uint32_t layout = 0, float seconds = .05f) {
             Menu::Input in;
             in.active = true;
@@ -17256,7 +17286,7 @@ int main() {
             in.layout = layout;
             return m.update(in, s);
         };
-        const float most = maxScroll(graphicsPage);
+        const float most = maxScroll(vrPage);
         // Stick down on the panel shows further down; off the panel the stick is the game's.
         auto r = step(0, 0, 0, -1);
         check(r.stick && r.scrolled && m.scroll() > 0, "stick down did not scroll");
@@ -17279,8 +17309,8 @@ int main() {
         bool found = false;
         for (float v = viewTop - .005f; v > viewBottom + .02f && !found; v -= .002f)
             for (float u = -.075f; u < .07f && !found; u += .005f)
-                if (controlAt(graphicsPage, u, v, 0) == Control::none &&
-                    controlAt(graphicsPage, u, v + .02f, .02f) == Control::none) {
+                if (controlAt(vrPage, u, v, 0) == Control::none &&
+                    controlAt(vrPage, u, v + .02f, .02f) == Control::none) {
                     emptyU = u;
                     emptyV = v;
                     found = true;
@@ -17296,26 +17326,26 @@ int main() {
         step(emptyU, emptyV, 0);
         // The scrollbar: dragged down, the page scrolls to its end.
         const float bar = (scrollbarU0 + scrollbarU1) / 2;
-        const Thumb th = scrollThumb(graphicsPage, m.scroll());
+        const Thumb th = scrollThumb(vrPage, m.scroll());
         step(bar, (th.v0 + th.v1) / 2, .3f);
         step(bar, (th.v0 + th.v1) / 2, .8f);
         step(bar, -.5f, .8f);
         near(m.scroll(), most);
         step(bar, 0, 0);
         // A slider held: the stick does not scroll.
-        const float histScroll = clampScroll(graphicsPage, (viewTop + viewBottom) / 2 - controlSpot(graphicsPage, Control::history).v);
-        m.setScroll(graphicsPage, histScroll);
-        const Spot hist = controlSpot(graphicsPage, Control::history, m.scroll());
+        const float histScroll = clampScroll(vrPage, (viewTop + viewBottom) / 2 - controlSpot(vrPage, Control::reach).v);
+        m.setScroll(vrPage, histScroll);
+        const Spot hist = controlSpot(vrPage, Control::reach, m.scroll());
         step(hist.u, hist.v, .3f);
         step(hist.u, hist.v, .8f);
-        check(m.held() == Control::history, "the history slider was not held");
+        check(m.held() == Control::reach, "the reach slider was not held");
         r = step(hist.u, hist.v, .8f, -1);
         check(!r.scrolled && m.scroll() == histScroll, "the stick scrolled while a slider was held");
         step(hist.u, hist.v, 0);
         // Relaid (resized or moved) as the trigger is pulled: no hover, no press,
         // and holding on after presses nothing.
         step(hist.u, hist.v, 0, 0, 0);
-        check(m.hover() == Control::history, "no hover");
+        check(m.hover() == Control::reach, "no hover");
         step(hist.u, hist.v, .3f, 0, 0);
         r = step(hist.u, hist.v, .8f, 0, 7);
         check(!r.pressed && !r.changed && m.hover() == Control::none && m.held() == Control::none,
@@ -17326,7 +17356,7 @@ int main() {
         // Relaid while a slider is held: it is let go.
         step(hist.u, hist.v, .3f, 0, 7);
         step(hist.u, hist.v, .8f, 0, 7);
-        check(m.held() == Control::history, "the slider was not held again");
+        check(m.held() == Control::reach, "the slider was not held again");
         step(hist.u, hist.v, .8f, 0, 8);
         check(m.held() == Control::none, "a held slider survived a relayout");
         r = step(-.07f, hist.v, .8f, 0, 8);
@@ -19504,7 +19534,7 @@ int main() {
         resetSections();
         // The defaults: each page's first section open, COLOR none, POWERS the hero being played.
         setActiveHero(0);
-        check(openSection(vrPage) == 0 && openSection(combatPage) == 0 && openSection(graphicsPage) == 0 &&
+        check(openSection(vrPage) == 0 && openSection(combatPage) == 0 && sectionCount(graphicsPage) == 0 &&
                   openSection(controlsPage) == 0 && openSection(colorPage) == -1 && openSection(powersPage) == 1 &&
                   openSection(statusPage) == -1 && openSection(musicPage) == -1,
               "a page's default section is wrong");
@@ -19514,20 +19544,22 @@ int main() {
         }
         setActiveHero(99);
         check(activeHero() == 0 && openSection(powersPage) == 1, "an odd hero is not SPIDER-MAN");
-        check(sectionCount(powersPage) == 12 && sectionCount(vrPage) == 6 && sectionCount(combatPage) == 7 &&
-                  sectionCount(graphicsPage) == 4 && sectionCount(colorPage) == 2 && sectionCount(controlsPage) == 4 &&
+        // HERO VR 0.0.76 ONE PAGE: VR SETTINGS - ADVANCED + GRAPHICS + PERFORMANCE; GRAPHICS none (merged).
+        check(sectionCount(powersPage) == 12 && sectionCount(vrPage) == 7 && sectionCount(combatPage) == 7 &&
+                  sectionCount(graphicsPage) == 0 && sectionCount(colorPage) == 2 && sectionCount(controlsPage) == 4 &&
                   sectionCount(statusPage) == 0 && sectionCount(musicPage) == 0 && sectionCount(pages) == 0,
               "a page's section count");
         check(std::string(sectionName(powersPage, 0)) == "FLYING" && std::string(sectionName(powersPage, 2)) == "IRON MAN" &&
-                  std::string(sectionName(graphicsPage, 0)) == "QUALITY" && *sectionName(vrPage, 6) == 0 &&
+                  std::string(sectionName(vrPage, 5)) == "GRAPHICS" && std::string(sectionName(vrPage, 6)) == "PERFORMANCE" &&
+                  *sectionName(vrPage, 7) == 0 && *sectionName(graphicsPage, 0) == 0 &&
                   *sectionName(vrPage, -1) == 0,
               "a section's name");
         // Opened, closed, odd values: none open; one page's choice leaves the others alone.
         setOpenSection(vrPage, 3);
         setOpenSection(combatPage, -1);
-        check(openSection(vrPage) == 3 && openSection(combatPage) == -1 && openSection(graphicsPage) == 0,
+        check(openSection(vrPage) == 3 && openSection(combatPage) == -1 && openSection(controlsPage) == 0,
               "a page's open section leaked");
-        setOpenSection(vrPage, 6);
+        setOpenSection(vrPage, 7); // HERO VR 0.0.76 ONE PAGE: seven sections now
         check(openSection(vrPage) == -1, "a section past the page's opened");
         setOpenSection(-1, 0);
         setOpenSection(pages, 0);
@@ -19539,7 +19571,8 @@ int main() {
             const auto c = static_cast<Control>(i);
             const Place pl = placeOf(c);
             const bool retired = c == Control::shadowCamera || c == Control::shadowDistance ||
-                                 (c >= Control::heroTabSpider && c <= Control::heroTabHulk) || sectionIndex(c) >= 0;
+                                 (c >= Control::heroTabSpider && c <= Control::heroTabHulk) || sectionIndex(c) >= 0 ||
+                                 takenOff076(c); // HERO VR 0.0.76 ONE PAGE
             if (retired) {
                 check(pl.page < 0, "a retired control is on a page");
                 continue;
@@ -19566,7 +19599,7 @@ int main() {
                 }
             }
         }
-        check(placed == 216 /* 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
+        check(placed == 198 /* 0.0.76 ONE PAGE: - 18 off the hologram (takenOff076); 0.0.76: + DOUBLE HEALTH; 0.0.74 test 10 (72's picture): - IMAGE, GAME TAA, STREAMER MODE/SMOOTH/EYE, GLOW CHECK, SL WATCH, SHARPEN MATCH, WINDOW POP FIX; 0.0.74 test 1: + HIDEOUTS, CAR MUSIC, SEATED DRIVING; 0.0.73: + COMING SOON; 0.0.73 MPSUIT: + PLAYER 2 BODY; 0.0.73 test 6: + CLAW LEVEL, WINDOW POP FIX; 0.0.73 AA: + SHARPEN MATCH; 0.0.73 test 6: + MP SOLO TEST; 0.0.73 test 5: + HERO HANDS, GRAPPLE AIM, CLAW LOOK, LIGHT CHECKS, GLOW CHECK, SL WATCH; 0.0.73 test 4: + IMAGE STYLE (GAME TAA), BATON TIP (DAREDEVIL), STREAMER MODE, STREAMER SMOOTH, STREAMER EYE; 0.0.73: + IMAGE; 0.0.73 test 3: + HERO MENU, REP LOG, VAN PEDALS, WEAPON COLLISION, LIGHT HOLD, VAN SCREEN, PALM BLAST; 0.0.73 test 2: + CULL MARGIN, SHADOW MATCH, CALIBRATION LOOK, FLIGHT POSE; 0.0.73: + CAP SPRINT; build 9: + SUIT BODY; build 8: + ROSTER; build 6: + THOR HAMMER MODEL, THOR FLIGHT; 0.0.72: + 41 (+ GAME BODY, PERCH TAKEDOWN, TAKEDOWN LIGHT, PUNISHER VAN, THOR HAMMER); CAPTAIN AMERICA: + 6; 0.0.7: + 11 HERO PROFILE rows; 0.0.62: + 6 (+ BEACONS IN VISION) */, "the number of settings placed drifted: " + std::to_string(placed));
         resetSections();
         // Where the owner asked: POWERS has INVINCIBLE, FLYING and the four hero profiles.
         check(placeOf(Control::invincible).page == powersPage && placeOf(Control::invincible).section == -1 &&
@@ -19575,8 +19608,10 @@ int main() {
                   placeOf(combat(combat38::daredevil)).section == 3 && placeOf(combat(combat38::hulk)).section == 4 &&
                   placeOf(combat(combat38::heroHeight)).section == 4,
               "POWERS is not as approved");
-        check(placeOf(Control::aa).page == graphicsPage && placeOf(Control::supersample).section == -1 &&
-                  placeOf(Control::recalibrate).page == vrPage && placeOf(Control::fpsReset).page == graphicsPage &&
+        // HERO VR 0.0.76 ONE PAGE: ANTI-ALIASING and EYE SUPERSAMPLE off the hologram; RESET on VR SETTINGS.
+        check(placeOf(Control::aa).page == -1 && placeOf(Control::supersample).page == -1 &&
+                  placeOf(Control::farShadows).page == vrPage && placeOf(Control::combatAutoPerf).page == vrPage &&
+                  placeOf(Control::recalibrate).page == vrPage && placeOf(Control::fpsReset).page == vrPage &&
                   placeOf(Control::gestureRecord).page == controlsPage && placeOf(Control::colorFx).section == -1,
               "a row moved from the approved layout");
         // The section headers: navigation (past the mask, never kept), one-sentence subtexts.
@@ -19623,7 +19658,9 @@ int main() {
                         check(pressable, "a section header cannot be pressed");
                     }
                 }
-        check(tags >= 4, "the RESTART tags are not drawn");
+        // HERO VR 0.0.76 ONE PAGE: EYE SUPERSAMPLE's (one at each size) off the hologram; MIRROR VIEW's and LIGHT
+        // CHECKS' where they fit.
+        check(tags >= 2, "the RESTART tags are not drawn: " + std::to_string(tags));
         resetSections();
         // The menu: a header press opens it (closing the other), the header stays under the pointer,
         // a second press closes it; nothing kept changes.
@@ -19753,8 +19790,13 @@ int main() {
             const auto c = static_cast<Control>(static_cast<int>(Control::combatCrawlCap) + static_cast<int>(o));
             check(combatOption(c) == static_cast<int>(o), "a COMBAT row's option drifted");
             // Update 39.0.2: each on its one page (COMBAT, POWERS, VR SETTINGS or GRAPHICS), in its section.
+            // HERO VR 0.0.76 ONE PAGE: LENS FLARES off the hologram (live.txt lens_flares; off in VR regardless).
+            if (takenOff076(c)) {
+                check(offHolo(c) && std::string(helpText(c)) == combat38::optionInfo[o].help, "LENS FLARES shown");
+                continue;
+            }
             const int home = openAt(c);
-            check(home == combatPage || home == powersPage || home == vrPage || home == graphicsPage,
+            check(home == combatPage || home == powersPage || home == vrPage,
                   "a COMBAT row is not on its one page");
             for (int p = 0; p < pages; ++p)
                 if (p != home)
@@ -35527,7 +35569,7 @@ int main() {
         for (int tiles = 0; tiles < 2; ++tiles) {
             Menu pm;
             Settings ps;
-            pm.setPage(graphicsPage);
+            pm.setPage(combatPage); // HERO VR 0.0.76 ONE PAGE: GRAPHICS passed by, COMBAT before it
             auto pstep = [&](float trigger, float u, float vv) {
                 Menu::Input in;
                 in.active = true;
@@ -35547,9 +35589,9 @@ int main() {
                 pstep(0, at.u, at.v);
             };
             ppress(Control::next);
-            check(pm.page() == (tiles ? controlsPage : colorPage), "NEXT from GRAPHICS");
+            check(pm.page() == (tiles ? controlsPage : colorPage), "NEXT from COMBAT (passing GRAPHICS)");
             ppress(Control::previous);
-            check(pm.page() == graphicsPage, "PREVIOUS back to GRAPHICS");
+            check(pm.page() == combatPage, "PREVIOUS back to COMBAT");
         }
     });
     test("0.0.74 test 10 MONITOR: the crop fits the window's shape about the eye's axis, inside the eye", [] {

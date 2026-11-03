@@ -57,7 +57,7 @@ Send back the two newest files from the **reports** folder in the extracted fold
 - `game-vr-<date-time>.json`
 - `game-vr-<date-time>-console.log`
 
-If you ran **ADDRESS FINDER** (GRAPHICS page; play normally about a minute), also send the
+If you ran **ADDRESS FINDER** (live.txt `address_finder = on`; play normally about a minute), also send the
 newest `address-finder-<date-time>.json` and `.txt` from the same folder. Those are
 candidates only — they do not change the game by themselves.
 

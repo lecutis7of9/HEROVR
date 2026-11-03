@@ -2982,3 +2982,31 @@ history or the depth reprojection changes, and there is no sharpening. Spider-Ma
   textures_very_high, TextureQuality 3 CONFIRMED in reports-075-grundy) only where the player's is lower, put back
   when the game closes; `on` both. Level of Detail Very High is not written (its encoding was never seen beside a
   log). Tests: tests/hero076_shadow_texture_tests.py.
+
+## 78. Version 0.0.76 AO ON + ONE PAGE: Ambient Occlusion on by default, one VR SETTINGS page on the wrist
+
+Nothing in the TAA core (the custom TAA, the Halton step and its size, the 0.9/0.6 weights, the variance clip), the
+lens jitter, the headset eye path, the per-eye history or the depth reprojection changes; the game's TemporalAa stays
+off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours, `vr_taa_depth` off, `vr_ss` off,
+`vr_shadow_stable` and `vr_texture_detail` off).
+
+- AMBIENT OCCLUSION, live.txt `vr_ao` (RESTART, START_ONLY; `on` 1 the default, `off` 0). On: vr_display SESSION_OFF
+  `ambient_occlusion` writes HKCU Software\Insomniac Games\Marvel's Spider-Man 2\Graphics AmbientOcclusionQuality = 3
+  (XeGTAO; CONFIRMED in reports-075-grundy game-vr-20261031-190029, VR ran with it) before the game starts, only when
+  the player's own is 0 (Off, CONFIRMED); the player's value is put back when the game closes, like every SESSION_OFF
+  value. Values 1 and 2 (SSAO and the step between) are not confirmed and are never written; a player's non-zero
+  value is left alone. Set at launch only, so no mid-session rebuild. Not read: left as set. Off: as before.
+  run_game_vr.vr_picture_plan(ao=...) prints the AMBIENT OCCLUSION line; session_comfort now advises XeGTAO instead of
+  Off. Cost CANDIDATE (no A/B measured): about 1-2 ms per stereo frame on an RTX 4080 at 2688x2880 per eye.
+- ONE PAGE (src/wrist_hud.cpp): the GRAPHICS page is merged into VR SETTINGS, which now reads RECALIBRATE, the FPS
+  monitor, FPS HIGH/LOW/AVG + RESET, then the sections BODY AND VIEW, WEBS, HOLOGRAM, MIRROR, SOUND, GRAPHICS
+  (FAR SHADOWS, BUILDING REACH, FAR WINDOWS, CULL MARGIN, SHADOW MATCH, LIGHT HOLD, LIGHT CHECKS, EYE BLOOM, WINDOW
+  FPS) and PERFORMANCE (AUTO PERFORMANCE, TARGET FPS, QUALITY FLOOR, SHOW STATUS, FOVEATED, INNER SIZE). The page
+  scrolls. ADVANCED - TESTS AND LOGS is gone. Off the hologram (each still set by live.txt): ANTI-ALIASING `aa`,
+  SHARPNESS `sharpen`, HISTORY BLEND `history`, EYE SUPERSAMPLE + its NEXT LAUNCH notice `vr_ss`, EYE AA
+  `eye_temporal`, EYE AA TRAIL `trail`, TAA JITTER `taa_jitter`, EYE TEST `eye_debug`, ADDRESS FINDER
+  `address_finder`, FOVEATED DEBUG `fovea_debug`, EYE LOD `eye_lod`, SHARED LOD `shared_lod`, LENS FLARES
+  `lens_flares`, WORLD LOG `world_log`; ENGINE TAA (launcher -EngineTaa, refused under ours) and the WEB BALL TEST,
+  FOVEATED FPS and SLOT TEST presses have no live.txt key. graphicsPage stays a constant (pages 8) with no sections;
+  setPage(graphicsPage) opens vrPage and the page arrows pass it (pagePassed). SM1's hologram is unchanged (it has
+  no VR SETTINGS or GRAPHICS page). Tests: tests/hero076_ao_holo_tests.py, tests/core_tests.cpp (placed 198).

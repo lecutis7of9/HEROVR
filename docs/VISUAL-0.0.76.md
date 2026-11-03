@@ -383,3 +383,15 @@ A still-head drift near 0 with the step removed means the history follows the st
 | `vr_texture_detail` (RESTART, next VR start) | `off` | `aniso` (2): 16x anisotropic filtering on the game's material textures it left trilinear (about 15 of 519 samplers in the visual reports; the rest already 16x), the game's mip bias kept; `quality` (3): Texture Quality Very High while VR runs (yours put back when the game closes; more video memory - about 10 of 15 GB were in use at High); `on` (1): both |
 
 No sharpening, no SMAA, no TAA change. `vr_ss = 125` stays an optional extra.
+
+## AO ON + ONE PAGE (0.0.76): Ambient Occlusion on by default, one wrist settings page
+
+| switch (live.txt) | default | what it does |
+| --- | --- | --- |
+| `vr_ao` (RESTART, next VR start) | `on` | `on` (1): the game's Ambient Occlusion at XeGTAO (AmbientOcclusionQuality 3, CONFIRMED) while VR runs if yours is Off, put back when the game closes; soft contact shading that gives buildings and streets depth, about 1-2 ms a frame (CANDIDATE, not measured); `off` (0): yours as set |
+
+The wrist hologram's VR SETTINGS and GRAPHICS pages are one page, VR SETTINGS (it scrolls): RECALIBRATE, FPS, FPS
+HIGH/LOW/AVG + RESET, then BODY AND VIEW, WEBS, HOLOGRAM, MIRROR, SOUND, GRAPHICS and PERFORMANCE. The test and
+diagnostic rows (anti-aliasing, sharpness, history, supersample, eye AA, trail, TAA jitter, eye test, address
+finder, foveated debug, eye LOD, shared LOD, lens flares, world log) are off the hologram; each is still set by
+live.txt. No TAA change, no sharpening.

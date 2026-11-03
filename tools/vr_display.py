@@ -133,9 +133,16 @@ SESSION = ((KEY, dict(DLSSG=0, FrameGen=0, VSync=0, DOFQuality=0, Sharpness=1, R
 #   Read at launch (restart); put back after.
 # - 0.0.76 TEXTURE DETAIL (live.txt vr_texture_detail on / quality): Texture Quality Very High (TextureQuality 3,
 #   CONFIRMED in reports-075-grundy) for the session, only where the player's is lower; put back after.
+# - 0.0.76 AO (live.txt vr_ao = on, the default; off leaves yours): Ambient Occlusion XeGTAO
+#   (AmbientOcclusionQuality 3) for the session, only where the player's is Off (0); put back after. Encodings
+#   CONFIRMED beside the game's [Settings] lines: 0 Off (every visual-1..9 report), 3 XeGTAO (reports-075-grundy
+#   game-vr-20261031-190029, rep0060 game-vr-20261025-203156). SSAO's number was never seen in a report (run32b
+#   turned it on in the game's menu mid-session), so only XeGTAO is written. Read at launch (restart), so the eye
+#   images are never rebuilt mid-session (run32b's fault 3501).
 SESSION_OFF = dict(lens_flares=dict(LensFlares=0), game_aa=dict(AA=2, UpscaleMethod=0),
                    textures=dict(TextureQuality=2), filtering=dict(TextureFiltering=4),
-                   textures_very_high=dict(TextureQuality=3))
+                   textures_very_high=dict(TextureQuality=3),
+                   ambient_occlusion=dict(AmbientOcclusionQuality=3))
 
 
 def session_list(off=()):

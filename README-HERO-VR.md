@@ -59,6 +59,9 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
   head's view for both eyes, to stop them flickering (off by default, live, no restart). 0.0.76 TEXTURE DETAIL (test):
   `vr_texture_detail = on` gives the world's textures 16x filtering and Very High Texture Quality in VR, no
   sharpening (`aniso` or `quality` for one of the two; off by default; next VR start).
+  0.0.76 AO ON: if your Ambient Occlusion is Off, VR sets it to XeGTAO while it runs and puts yours back after
+  (live.txt `vr_ao`, on by default, `off` keeps yours; next VR start). 0.0.76 ONE PAGE: the wrist's VR SETTINGS and
+  GRAPHICS pages are one scrolling page; test rows are off the hologram and still set by live.txt.
   0.0.76 A-depth CHECKED: even when on, the depth is used only after its convention check passes (the console's
   "TAA DEPTH CHECK" line); every 10 s "TAA DEPTH" gives clip / depth / both rejection per still / moving / fast swing.
   0.0.76 POSE CHECK: the console's "POSE CHECK render vs submit" says whether each eye was shown with the exact pose

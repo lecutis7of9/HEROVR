@@ -1702,7 +1702,7 @@ SM1STYLE_UPSCALE = 67   # SpidyVR's DEFAULT_UPSCALE (its tools/run_game_vr.py:52
 # the game's TAA resolving them without upscaling (the owner: "turn off upscaling in VR and run native 100%").
 SM1STYLE_NATIVE = 100
 # 0.0.76 VISUAL: the game's graphics values (vr_display KEY) vr_picture_plan reads; encodings in vr_display.SESSION_OFF.
-PICTURE_NAMES = ('AA', 'UpscaleMethod', 'TextureQuality', 'TextureFiltering')
+PICTURE_NAMES = ('AA', 'UpscaleMethod', 'TextureQuality', 'TextureFiltering', 'AmbientOcclusionQuality')
 
 
 def own_picture():
@@ -1721,7 +1721,7 @@ def own_picture():
     return own
 
 
-def vr_picture_plan(sm1, aa_taa, textures_high, own, very_high=False):
+def vr_picture_plan(sm1, aa_taa, textures_high, own, very_high=False, ao=False):
     """0.0.76 VISUAL: (vr_display.SESSION_OFF names to add, console lines, whether the game's AA will be TAA with no
     upscaler: True, False, or None unknown). `sm1`: SM1STYLE or SpidyVR's own eye AA (vr_aa ours / smaa) at this start;
     `aa_taa` / `textures_high`: live.txt vr_aa not keep / vr_textures at high; `own`: own_picture(). The game's AA goes
@@ -1729,7 +1729,9 @@ def vr_picture_plan(sm1, aa_taa, textures_high, own, very_high=False):
     filtering only rise, never fall. 0.0.76 SPIDY TAA: with our own TAA the game's TAA never reaches the eyes (no eye
     TAA targets, no eye jitter); TAA with no upscaler keeps DLAA / DLSS / FSR off them. 0.0.76 TEXTURE DETAIL:
     `very_high` (live.txt vr_texture_detail on / quality) raises Texture Quality to Very High (3) instead, whatever
-    vr_textures says; only where the player's is lower, put back when the game closes."""
+    vr_textures says; only where the player's is lower, put back when the game closes. 0.0.76 AO: `ao` (live.txt vr_ao
+    on, the default) sets Ambient Occlusion to XeGTAO (3) only where the player's is Off (0); any AO of their own is
+    kept; put back when the game closes."""
     names, lines = [], []
     aa, upscaler = own.get('AA'), own.get('UpscaleMethod')
     taa_own = None if aa is None or upscaler is None else (aa == 2 and upscaler == 0)
@@ -1764,6 +1766,14 @@ def vr_picture_plan(sm1, aa_taa, textures_high, own, very_high=False):
             names.append('filtering')
             lines.append(f'TEXTURES: Texture Filtering Anisotropic 16x while VR runs (yours, {filtering}, put back when '
                          'the game closes). live.txt vr_textures = keep + restart VR keeps yours.')
+    if ao:
+        occlusion = own.get('AmbientOcclusionQuality')
+        if occlusion == 0:
+            names.append('ambient_occlusion')
+            lines.append('AMBIENT OCCLUSION: XeGTAO while VR runs (yours, Off, put back when the game closes; soft '
+                         'contact shading, a little GPU time). live.txt vr_ao = off + restart VR keeps yours.')
+        elif occlusion is None:
+            lines.append('AMBIENT OCCLUSION: not read, so it is left as you set it.')
     return tuple(names), lines, taa
 
 
@@ -2380,7 +2390,8 @@ def exit_code(error):
 
 # Motion blur, film grain, chromatic aberration and vignette left this list in Update 11: their registry names
 # are confirmed (vr_display.PICTURE 'comfort') and every session turns them off.
-UNCONFIRMED_COMFORT = ('Screen Shake Off', 'Lens Flares Off', 'Ambient Occlusion Off',
+# 0.0.76 AO: 'Ambient Occlusion Off' left this list: AO is now recommended on and set by live.txt vr_ao (the default).
+UNCONFIRMED_COMFORT = ('Screen Shake Off', 'Lens Flares Off',
                        'Screen Space Reflections Low/Off', 'Shadow Quality High', 'Level of Detail High',
                        'Crowd Detail Medium/High', 'Hair Quality High')
 
@@ -2641,7 +2652,7 @@ def main():
         live_settings.sm1style_on(live_text) or live_settings.vr_aa_choice(live_text) != 'game',
         live_settings.vr_aa_taa(live_text),
         live_settings.vr_textures_high(live_text), own_picture(),
-        very_high=live_settings.vr_texture_detail(live_text)[1])
+        very_high=live_settings.vr_texture_detail(live_text)[1], ao=live_settings.vr_ao(live_text))
     session_off = tuple(session_off) + picture_names
     for line in picture_lines:
         print(line, flush=True)
@@ -3070,9 +3081,9 @@ def session(a, startup, session_off=()):
                                                  a.body_haptics)
         # Before the start: the eyes' size is chosen when their views are made.
         if a.engine_taa:
-            print("ENGINE TAA (-EngineTaa): the eyes get the game's TAA targets; turn ENGINE TAA on from the "
-                  "wrist's GRAPHICS page (the game's Anti-Aliasing must be TAA; it turns itself off, and "
-                  'EYE AA on, if it fails).', flush=True)
+            print("ENGINE TAA (-EngineTaa): the eyes get the game's TAA targets; ENGINE TAA is a test and is no "
+                  "longer on the wrist hologram (0.0.76 ONE PAGE), and it is refused with live.txt vr_aa = ours "
+                  '(the default).', flush=True)
         if call_remote(process, xr['SpidyEyeSupersample'], a.supersample):
             raise RuntimeError(f'Eye supersample {a.supersample}% refused')
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.

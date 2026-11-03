@@ -6,6 +6,16 @@ HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**
 
+- **AMBIENT OCCLUSION ON BY DEFAULT (new live.txt `vr_ao`, on by default, next VR start).** If your Ambient
+  Occlusion is Off, VR sets it to XeGTAO while it runs (soft contact shading that gives buildings and streets depth;
+  about 1-2 ms a frame, CANDIDATE) and puts yours back when the game closes; `vr_ao = off` leaves yours as set. The
+  comfort advice now suggests XeGTAO instead of Off.
+- **ONE SETTINGS PAGE on the wrist.** VR SETTINGS and GRAPHICS are one page (it scrolls): RECALIBRATE, FPS, then
+  BODY AND VIEW, WEBS, HOLOGRAM, MIRROR, SOUND, GRAPHICS and PERFORMANCE. The test and diagnostic rows (anti-aliasing,
+  sharpness, history, supersample, eye AA, trail, TAA jitter, eye test, address finder, foveated debug, eye LOD,
+  shared LOD, lens flares, world log, and the web ball / foveated fps / slot test presses) are gone from the
+  hologram; the ones with a live.txt key still work from there. Defaults unchanged.
+
 - **SHADOW STABLE (test; new live.txt `vr_shadow_stable`, off by default, live, no restart).** Run 3's picture
   (`vr_aa` ours, `vr_taa_depth` off, `vr_ss` off) with flickering far building shadows. Found (CONFIRMED in the
   game's code): the game's far shadow cache is one object shared by every view, remade each frame by any view the

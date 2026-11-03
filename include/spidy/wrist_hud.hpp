@@ -663,7 +663,7 @@ constexpr int statusPage = 0;
 constexpr int powersPage = 1;   // INVINCIBLE, FLYING and the HERO PROFILES (one section a hero)
 constexpr int vrPage = 2;       // VR SETTINGS: RECALIBRATE, body, webs, hologram, mirror, sound, tests
 constexpr int combatPage = 3;   // COMBAT (combat38.hpp's rows, grouped)
-constexpr int graphicsPage = 4; // GRAPHICS: the FPS rows, quality, performance, display, tests, NEXT LAUNCH
+constexpr int graphicsPage = 4; // GRAPHICS: 0.0.76 ONE PAGE - merged into VR SETTINGS, never shown (PREV / NEXT pass it)
 constexpr int colorPage = 5;    // COLOR / ATMOSPHERE (eye_color.hpp)
 constexpr int controlsPage = 6; // CONTROLS: how to play, gestures, remap, gamepad
 constexpr int musicPage = 7;
@@ -1200,8 +1200,9 @@ class Menu {
     // 0.0.74 test 10: the page whose rows show and work now - hostedPage while the roster lays one out, else page().
     int shownPage() const;
     // Update 39.0.2: a page past the eight (an older layout's) is STATUS.
+    // HERO VR 0.0.76 ONE PAGE: GRAPHICS (merged) opens VR SETTINGS.
     void setPage(int page) {
-        page_ = page >= 0 && page < pages ? page : 0;
+        page_ = page == graphicsPage ? vrPage : page >= 0 && page < pages ? page : 0;
     }
     Control hover() const {
         return hover_;

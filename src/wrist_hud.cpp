@@ -562,9 +562,13 @@ float trackTopOf(int page) {
 }
 // PREV / NEXT from `page`: they wrap (MUSIC <-> STATUS); with the holo tiles they pass COLOR by (its rows are
 // the roster's COLOR tab now). Off COLOR itself (an older session's page) they go on as ever.
+// HERO VR 0.0.76 ONE PAGE: and always pass GRAPHICS by (its rows are on VR SETTINGS now).
+bool pagePassed(int p, bool tiles) {
+    return p == graphicsPage || (tiles && p == colorPage);
+}
 int stepPage(int page, int dir, bool tiles) {
     int p = (page + dir + pages) % pages;
-    if (tiles && p == colorPage)
+    for (int n = 0; n < pages && pagePassed(p, tiles); ++n)
         p = (p + dir + pages) % pages;
     return p;
 }
@@ -966,7 +970,19 @@ constexpr SectionDef vrSections[] = {
     {"MIRROR", C::mirror, C::none, "MIRROR ", "", nullptr, -1,
      {C::mirror, C::mirrorRecentre, C::mirrorAnchor, C::combatMirrorLook, C::combatMirrorView}},
     {"SOUND", C::combatSfxVolume, C::none, "SFX ", "", nullptr, -1, {C::combatSfxVolume}},
-    {"ADVANCED - TESTS AND LOGS", C::none, C::none, "", "", "SETTINGS", -1, {C::worldLog, C::slotTest}},
+    // HERO VR 0.0.76 ONE PAGE (the user, November 2: "merge the VR settings page and whatever remains of the graphics
+    // page into ONE single holo page"): the GRAPHICS page's rows a player uses now, in two sections here. Gone from the
+    // hologram (each still set by live.txt, nothing else changed): ADVANCED - TESTS AND LOGS (WORLD LOG world_log,
+    // SLOT TEST a test press); ANTI-ALIASING aa, SHARPNESS sharpen, HISTORY BLEND history, EYE AA eye_temporal, EYE
+    // AA TRAIL trail and EYE SUPERSAMPLE (vr_ss) - all locked or overridden under vr_aa = ours / smaa (SPIDY TAA);
+    // LENS FLARES lens_flares (always off in VR since LIGHTS LOCK); SHARED LOD shared_lod and EYE LOD eye_lod (tests);
+    // ENGINE TAA (-EngineTaa, refused under ours) and TAA JITTER taa_jitter; EYE TEST eye_debug; ADDRESS FINDER
+    // address_finder; WEB BALL TEST and FOVEATED FPS (test presses); FOVEATED DEBUG fovea_debug.
+    {"GRAPHICS", C::farShadows, C::none, "SHADOWS ", "", nullptr, -1,
+     {C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::combatLightHold,
+      C::combatLightChecks, C::eyeBloom, C::monitor}},
+    {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
+     {C::combatAutoPerf, C::combatPerfTarget, C::combatPerfFloor, C::combatPerfStatus, C::foveated, C::foveaInner}},
 };
 constexpr SectionDef combatSections[] = {
     {"PUNCHES", C::combatPunchMode, C::none, "", "", nullptr, -1,
@@ -987,7 +1003,9 @@ constexpr SectionDef combatSections[] = {
       C::combatUltimates}},
     {"FIRES, SHOVES AND FACTIONS", C::none, C::none, "", "", nullptr, -1, {C::combatFireDouse, C::combatNpcShove, C::combatFaction}},
 };
-constexpr SectionDef graphicsSections[] = {
+// HERO VR 0.0.76 ONE PAGE: no longer shown (PREV / NEXT pass it; its kept rows are on VR SETTINGS). Kept for
+// reference only: pageSections(graphicsPage) is empty.
+[[maybe_unused]] constexpr SectionDef graphicsSections[] = {
     {"QUALITY", C::aa, C::sharpen, "", "", nullptr, -1,
      {C::aa, C::sharpen, C::farShadows, C::reach, C::combatFarWindows, C::combatCullMargin, C::combatShadowMatch, C::eyeAa, C::eyeTrail, C::history}},
     {"PERFORMANCE", C::combatAutoPerf, C::none, "AUTO ", "", nullptr, -1,
@@ -1025,8 +1043,8 @@ PageSections pageSections(int page) {
         return of(vrSections);
     case combatPage:
         return of(combatSections);
-    case graphicsPage:
-        return of(graphicsSections);
+    case graphicsPage: // HERO VR 0.0.76 ONE PAGE: merged into VR SETTINGS
+        return {nullptr, 0};
     case colorPage: // HERO VR 0.0.76 SM1: ADJUST only (90s ANIMATED is SM2's own shader)
         return sm1On.load(std::memory_order_relaxed) ? PageSections{colorSections, 1} : of(colorSections);
     case controlsPage:
@@ -1043,10 +1061,11 @@ int rowsIn(const SectionDef& d) {
     return n;
 }
 // The rows outside every section, per page (STATUS and the arrows: none).
-constexpr Control alwaysShown[] = {C::invincible, C::doubleHealth, C::heroRoster, C::recalibrate, C::fpsReset, C::supersample,
+// HERO VR 0.0.76 ONE PAGE: the FPS rows (RESET) on VR SETTINGS; EYE SUPERSAMPLE off the hologram (live.txt vr_ss).
+constexpr Control alwaysShown[] = {C::invincible, C::doubleHealth, C::heroRoster, C::recalibrate, C::fpsReset,
                                    C::colorFx,    C::colorFilter,  C::colorStrength};
-constexpr int alwaysShownPage[] = {powersPage, powersPage,   powersPage, vrPage,   graphicsPage,
-                                   graphicsPage, colorPage, colorPage,   colorPage};
+constexpr int alwaysShownPage[] = {powersPage, powersPage, powersPage, vrPage, vrPage,
+                                   colorPage,  colorPage,  colorPage};
 static_assert(std::size(alwaysShown) == std::size(alwaysShownPage));
 bool isSliderRow(Control c) {
     switch (c) {
@@ -1332,13 +1351,8 @@ Layout build(int page, float k, int open) {
         c = r.box.v0;
         helpUnder(helpText(Control::recalibrate), r.help);
         l.items.push_back(std::move(r));
-        sections(0, 6);
-        break;
-    }
-    case combatPage:
-        sections(0, sectionCount(combatPage)); // Version 0.0.72: + SURVIVAL AND REPUTATION
-        break;
-    case graphicsPage: {
+        // HERO VR 0.0.76 ONE PAGE: the FPS rows (once the GRAPHICS page's) under RECALIBRATE, then the sections -
+        // one open at a time, the page scrolling past the panel as before.
         // Update 16: the FPS monitor. Update 17: its sparkline beside the
         // readout while the readout fits there near its size, else under it.
         Item f = itemOf(Kind::fps);
@@ -1367,18 +1381,14 @@ Layout build(int page, float k, int open) {
         c = st.box.v0;
         helpUnder(helpText(Control::fpsReset), st.help);
         l.items.push_back(std::move(st));
-        sections(0, 4);
-        // The launch-only part, set apart and labelled, always shown.
-        heading(nextLaunchHeading);
-        sliderItem(Control::supersample);
-        Item n = itemOf(Kind::notice);
-        n.text = restartNotice;
-        n.h = fittedHeight(n.text, noticeHeight * k, .12f);
-        n.v = c - .004f * k - n.h;
-        c = n.v;
-        l.items.push_back(std::move(n));
+        sections(0, sectionCount(vrPage));
         break;
     }
+    case combatPage:
+        sections(0, sectionCount(combatPage)); // Version 0.0.72: + SURVIVAL AND REPUTATION
+        break;
+    case graphicsPage: // HERO VR 0.0.76 ONE PAGE: merged into VR SETTINGS, never shown (PREV / NEXT pass it)
+        break;
     case colorPage:
         // Update 37.2: COLOR / ATMOSPHERE (eye_color.hpp): live, both eyes alike, default OFF.
         row(Control::colorFx);
@@ -2845,8 +2855,16 @@ void strip(const Painter& p, const View& view, int page) {
     }
     char label[48];
     // 0.0.74 test 10: with the tiles COLOR is the roster's tab, not a page of its own: seven pages.
+    // HERO VR 0.0.76 ONE PAGE: and never GRAPHICS (merged into VR SETTINGS).
     const bool noColor = view.heroTiles && page != colorPage;
-    std::snprintf(label, sizeof label, "%d/%d %s", noColor && page > colorPage ? page : page + 1, noColor ? pages - 1 : pages,
+    int shownAt = 1, shownCount = 0;
+    for (int p = 0; p < pages; ++p) {
+        if (pagePassed(p, noColor) && p != page)
+            continue;
+        ++shownCount;
+        shownAt += p < page;
+    }
+    std::snprintf(label, sizeof label, "%d/%d %s", shownAt, shownCount,
                   view.heroTiles && page == powersPage ? "HEROES" : pageName(page)); // 0.0.73 test 4: the tiles
     // A refused setting's note takes the page's place for a while, in red.
     const std::string t = view.note.empty() ? std::string(label) : view.note;

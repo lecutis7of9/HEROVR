@@ -186,6 +186,12 @@ SETTINGS = {
                           "trilinear and Texture Quality Very High while VR runs, a little more video memory; 2 "
                           "aniso: the filtering only; 3 quality: Very High textures only; 0 off, the default) - "
                           "RESTART NOTICE: takes effect the next time VR starts"),
+    # 0.0.76 AO (tools/run_game_vr.py vr_picture_plan, vr_display.SESSION_OFF ambient_occlusion): the game's Ambient
+    # Occlusion at XeGTAO (AmbientOcclusionQuality 3, CONFIRMED) while VR runs where the player's is Off; ON by
+    # default (the user asked, November 2), kept between sessions (RESTART).
+    'vr_ao': ((0, 1), None, "VR AMBIENT OCCLUSION {} (1 on, the default: the game's Ambient Occlusion at XeGTAO "
+             "while VR runs if yours is Off, soft contact shading that gives the world depth, a little GPU time, "
+             "yours put back after; 0 off: yours as set) - RESTART NOTICE: takes effect the next time VR starts"),
     # 0.0.76 SHADOW STABLE (include/spidy/shadow_stable.hpp, stereo_probe SpidyShadowStable): live, off by default.
     'vr_shadow_stable': ((0, 1), 'SpidyShadowStable', "VR SHADOW STABLE {} (1 on: the far building shadows are made "
                          "once a frame from your head's view and shared by both eyes, instead of the left eye "
@@ -531,6 +537,9 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
            'vr_texture_detail': 'RESTART NOTICE: vr_texture_detail takes effect the next time VR starts (on: 16x '
                                 'filtering on the game\'s trilinear material textures and Very High textures; aniso '
                                 'or quality: one of the two; off: as before).',
+           # 0.0.76 AO: the game reads Ambient Occlusion when it starts
+           'vr_ao': 'RESTART NOTICE: vr_ao takes effect the next time VR starts (on, the default: Ambient Occlusion '
+                    'XeGTAO while VR runs if yours is Off, put back after; off: yours as set).',
            'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 110, 125 or '
                     '150: the eyes rendered larger per side and filtered down, smoother but heavier on the GPU).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
@@ -735,6 +744,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_seam': ('off', 'on'),  # 0.0.76 SEAM TRACE (off, 0, the default)
                 'vr_shadow_stable': ('off', 'on'),  # 0.0.76 SHADOW STABLE (off, 0, the default)
+                'vr_ao': ('off', 'on'),  # 0.0.76 AO (on, 1, the default)
                 'vr_texture_detail': ('off', 'on', 'aniso', 'quality'),  # 0.0.76 TEXTURE DETAIL (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
@@ -838,6 +848,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'vr_taa_depth': {'off': 0, 'on': 1, 'auto': 2, '0': 0, '1': 1, '2': 2},  # 0.0.76 A-depth: 0 off default
            'vr_taa_seam': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SEAM TRACE: 0 off default
            'vr_shadow_stable': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 SHADOW STABLE: 0 off default
+           'vr_ao': {'off': 0, 'on': 1, '0': 0, '1': 1},  # 0.0.76 AO
            'vr_texture_detail': {'off': 0, 'on': 1, 'aniso': 2, 'quality': 3, '0': 0, '1': 1, '2': 2, '3': 3},  # 0.0.76 TEXTURE DETAIL
            'punch_hits': {'game_instant': 0, 'game_move': 1, 'instant_only': 2, 'instant': 2, '0': 0, '1': 1, '2': 2},
            'foe_track': {'live': 0, '0.0.6': 1, 'old': 1, '0': 0, '1': 1},
@@ -1252,7 +1263,7 @@ START_ONLY = START_ONLY + ('game_webs',)  # 0.0.76 GAME WEBS ONLY: an OFF kept b
 START_ONLY = START_ONLY + ('trigger_guard',)  # 0.0.76 TRIGGER GUARD: an OFF kept between sessions
 START_ONLY = START_ONLY + ('fly_hold', 'fly_steer', 'fly_flips', 'fly_look_up')  # 0.0.74 test 10 FLY FEEL: kept between sessions
 START_ONLY = START_ONLY + ('fly_classic',)  # HERO VR 0.0.76 FLIGHT: an ON kept between sessions
-START_ONLY = START_ONLY + ('vr_texture_detail',)  # 0.0.76 TEXTURE DETAIL: kept between sessions (RESTART)
+START_ONLY = START_ONLY + ('vr_texture_detail', 'vr_ao')  # 0.0.76 TEXTURE DETAIL: kept between sessions (RESTART)
 # 0.0.76 SHADOW STABLE: live, and a line the launcher wrote before the start applies at the start too
 START_ONLY = START_ONLY + ('vr_shadow_stable',)
 START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
@@ -1277,7 +1288,7 @@ SUPERSAMPLES = (100, 200)
 # Update 23: the marker every next-launch.txt written from now on carries, so the one-time reset below
 # (migrate_next_launch) leaves a supersample chosen after it alone.
 SUPERSAMPLE_MIGRATED = '# Update 23: supersample default is OFF (100); a higher value here was chosen after that'
-NEXT_LAUNCH_HEADER = ('# Next launch (wrist hologram, GRAPHICS page): RESTART REQUIRED. Read when the game is\n'
+NEXT_LAUNCH_HEADER = ('# Next launch (eye supersample): RESTART REQUIRED. Read when the game is\n'
                       '# started again without -Supersample; delete this file to go back to the default.\n'
                       + SUPERSAMPLE_MIGRATED + '\n')
 
@@ -2144,6 +2155,12 @@ def vr_texture_detail(text):
     return choice in ('on', 'aniso'), choice in ('on', 'quality')
 
 
+def vr_ao(text):
+    """0.0.76 AO: True unless live.txt `text` has `vr_ao = off` (or 0): the game's Ambient Occlusion at XeGTAO while VR
+    runs where the player's is Off. On is the default (no line, no live.txt, a bad value). Never raises."""
+    return _start_choice(text, 'vr_ao', 'on') == 'on'
+
+
 def vr_render_upscaled(text):
     """0.0.76 VISUAL: True when live.txt `text` has `vr_render = upscaled` (or 1): SM1STYLE's eyes at SpidyVR's 67%.
     The default (no line) is native, the eyes at 100% with no upscaling."""
@@ -2190,8 +2207,8 @@ def migrate_next_launch(path):
     if not old or old <= 100:
         return None
     return (f'next-launch.txt: eye supersample {old}% set back once to OFF (100%), the new default (Update 23): '
-            'it costs a lot of frame rate. Choose it again on the hologram\'s GRAPHICS page (needs a game '
-            'restart) and it stays.')
+            'it costs a lot of frame rate. Choose it again with live.txt vr_ss (takes effect the next time VR '
+            'starts).')
 
 
 def write_next_launch(path, supersample):

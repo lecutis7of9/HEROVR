@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
         } else if (sheet == "scroll") {
             madeUpRun(view);
             const float k[4] = {1, 1.5f, 1.5f, 1.5f};
-            const int page[4] = {wrist_hud::vrPage, wrist_hud::vrPage, wrist_hud::vrPage, wrist_hud::graphicsPage};
+            const int page[4] = {wrist_hud::vrPage, wrist_hud::vrPage, wrist_hud::vrPage, wrist_hud::vrPage}; // 0.0.76 ONE PAGE
             view.page = page[cell];
             view.textScale = k[cell];
             view.settings.hudText = k[cell] * 100;

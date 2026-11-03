@@ -45,10 +45,16 @@ class Rate(unittest.TestCase):
         slow = comfort.comfort_advice(comfort.play_rate(samples(34)), settings, 125)
         text = '\n'.join(slow)
         self.assertIn('-RenderScale 125', text)
-        for name in ('Motion Blur', 'Vignette', 'Ambient Occlusion', 'Shadow Quality'):
+        for name in ('Motion Blur', 'Vignette', 'Shadow Quality'):
             self.assertIn(name, text)
-        for name in ('Film Grain', 'Screen Shake'):  # already off
+        for name in ('Film Grain', 'Screen Shake', 'Ambient Occlusion'):  # already off; 0.0.76 AO: SSAO is kept
             self.assertNotIn(name, text)
+        # 0.0.76 AO: Ambient Occlusion recommended on - Off is the one advised (XeGTAO, live.txt vr_ao).
+        off = comfort.game_settings(LOG.replace('Ambient Occlusion: SSAO', 'Ambient Occlusion: Off'))
+        ao = '\n'.join(comfort.comfort_advice(comfort.play_rate(samples(34)), off, 125))
+        self.assertIn('Ambient Occlusion', ao)
+        self.assertIn('XeGTAO', ao)
+        self.assertIn('vr_ao', ao)
         even = '\n'.join(comfort.comfort_advice(comfort.play_rate(samples(45)), settings, 100))
         self.assertNotIn('RenderScale', even)
         self.assertNotIn('Hz:', even)

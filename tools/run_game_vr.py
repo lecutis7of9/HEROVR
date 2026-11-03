@@ -1804,7 +1804,7 @@ def apply_sm1style(a, live_text):
     if a.game_sharpening:
         forced.append('game sharpening -> lowest')
     if a.engine_taa:
-        forced.append('ENGINE TAA -> off')
+        forced.append('ENGINE TAA -> off (-EngineTaa, a saved launcher option, ignored)')
     a.render_scale = 100 if not a.size else a.render_scale
     a.supersample, a.upscale, a.mip_bias, a.anisotropy = 100, percent, mip, 0
     a.game_sharpening = a.engine_taa = False
@@ -1815,6 +1815,35 @@ def apply_sm1style(a, live_text):
             ', the game\'s sharpening at its lowest; our FXAA, EYE AA history '
             'and CAS sharpen locked off' + (' (kept over: ' + ', '.join(forced) + ')' if forced else '') +
             '. live.txt sm1style = off + restart VR for the 0.0.72 picture.')
+
+
+# 0.0.76 LAUNCHER WATCH (include/spidy/launcher_watch.hpp): the launcher's process id, so a keep-alive held up while
+# the game loads (2026-11-03 at the menu: 5.2 s) no longer ends VR; VR ends on a late keep-alive only once this
+# process has exited.
+LAUNCHER_EXPORT = 'SpidyXrLauncher'
+KEEP_ALIVE_MS = 5000
+
+
+def name_launcher(process, xr, pid):
+    """Gives the VR module the launcher's process id (after SpidyXrStart). Returns the console line."""
+    if LAUNCHER_EXPORT not in xr:
+        return ('LAUNCHER WATCH: this VR module is older (no SpidyXrLauncher); a keep-alive more than 5 s late '
+                'ends VR.')
+    code = call_remote(process, xr[LAUNCHER_EXPORT], pid)
+    if code:
+        return (f'LAUNCHER WATCH: the VR module could not open the launcher\'s process ({code}); VR ends only after '
+                'a minute with no keep-alive.')
+    return ('LAUNCHER WATCH: on: a late keep-alive (Windows holding the launcher up) no longer ends VR; '
+            'VR ends when the launcher closes.')
+
+
+def keep_alive_late(renewed, now, limit=KEEP_ALIVE_MS / 1000 - 1):
+    """The console line when the keep-alive renewed at `renewed` (time.monotonic, 0 before the first) came at `now`
+    after more than `limit` s, else None."""
+    if not renewed or now - renewed <= limit:
+        return None
+    return (f'LAUNCHER WATCH: the keep-alive came {now - renewed:.1f} s apart (Windows held the launcher up); '
+            'VR kept running.')
 
 
 def vr_aa_options(a):
@@ -1857,7 +1886,7 @@ def apply_vr_aa(a, supersample=100, aniso=False):
     if a.game_sharpening:
         forced.append('game sharpening -> lowest')
     if a.engine_taa:
-        forced.append('ENGINE TAA -> off')
+        forced.append('ENGINE TAA -> off (-EngineTaa, a saved launcher option, ignored)')
     if getattr(a, 'no_eye_antialiasing', False):
         forced.append('eye lens jitter -> on')
     a.render_scale = 100 if not a.size else a.render_scale
@@ -3047,7 +3076,8 @@ def session(a, startup, session_off=()):
                       taa_depth_check_record.EXPORT,  # 0.0.76 A-depth CHECKED: absent from an older module
                       taa_depth_trace_record.EXPORT,  # 0.0.76 A-depth TRACE: absent from an older module
                       sfx_diag_record.EXPORT,  # 0.0.76 SFX DIAG: absent from an older module
-                      far_shadows.STABLE_EXPORT))  # 0.0.76 SHADOW STABLE: absent from an older module
+                      far_shadows.STABLE_EXPORT,  # 0.0.76 SHADOW STABLE: absent from an older module
+                      LAUNCHER_EXPORT))  # 0.0.76 LAUNCHER WATCH: absent from an older module
         stage_haptics(xr_hash)
         saved = vr_display.Registry().read(('ScreenSpaceReflections', 'RTReflections'))
         reflections, reflections_line = eye_reflections(saved.get('ScreenSpaceReflections'), a.no_eye_reflections,
@@ -3083,8 +3113,8 @@ def session(a, startup, session_off=()):
         # Before the start: the eyes' size is chosen when their views are made.
         if a.engine_taa:
             print("ENGINE TAA (-EngineTaa): the eyes get the game's TAA targets; ENGINE TAA is a test and is no "
-                  "longer on the wrist hologram (0.0.76 ONE PAGE), and it is refused with live.txt vr_aa = ours "
-                  '(the default).', flush=True)
+                  "longer on the wrist hologram (0.0.76 ONE PAGE); with live.txt vr_aa = ours (the default) it is "
+                  'ignored.', flush=True)
         if call_remote(process, xr['SpidyEyeSupersample'], a.supersample):
             raise RuntimeError(f'Eye supersample {a.supersample}% refused')
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
@@ -3109,6 +3139,7 @@ def session(a, startup, session_off=()):
                 f'Game XR start: {code}' + (' (the VR module refused the launcher\'s settings: the DLL and the '
                                             'launcher are from different builds; run build.ps1)' if code == 1001 else ''))
         xr_active = True
+        print(name_launcher(process, xr, os.getpid()), flush=True)
         # The far buildings' full models, while the left eye chooses them for the game's resting view.
         if call_remote(process, xr['SpidyImpostorReach'], a.building_reach):
             print(f'WARNING: the building reach {a.building_reach}% was refused; the eyes keep 150%.', flush=True)
@@ -3579,6 +3610,8 @@ def session(a, startup, session_off=()):
                 if a.stop_after and time.monotonic()-started>=a.stop_after: break
                 if not a.seconds and time.monotonic()-renewed>=1:
                     if call_remote(process,xr['SpidyXrKeepAlive']): break
+                    if (late := keep_alive_late(renewed, time.monotonic())):
+                        print(late, flush=True)
                     renewed=time.monotonic()
                     changes, problems = live_file.poll()
                     for problem in problems:

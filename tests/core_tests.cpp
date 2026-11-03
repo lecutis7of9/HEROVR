@@ -5,6 +5,7 @@
 #include <chrono>
 #include <thread>
 #include <memory>
+#include "spidy/launcher_watch.hpp"
 #include "spidy/holo_guard076.hpp"
 #include "spidy/punisher_rig.hpp"
 #include "spidy/reentry_guard.hpp"
@@ -37454,6 +37455,24 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         tdc::linearOf(tdc::reversedFinite, .02f, 2000.f, scale, offset);
         check(std::abs(scale - (1 - .02f / 2000)) < 1e-7f && std::abs(offset - .02f / 2000) < 1e-9f,
               "the finite far's near / distance");
+    });
+    test("0.0.76 LAUNCHER WATCH: a late keep-alive ends VR only once the launcher has closed", [] {
+        namespace lw = spidy::launcher_watch;
+        const uint64_t deadline = 100000;
+        check(lw::decide(deadline - 1, deadline, true, false) == lw::keepRunning, "on time: VR runs");
+        // 2026-11-03 01:55, at the menu: the launcher held up 5.2 s, still open.
+        check(lw::decide(deadline + 240, deadline, true, false) == lw::keepRunning, "0.24 s late, launcher open: VR runs");
+        check(lw::decide(deadline + 3600000, deadline, true, false) == lw::keepRunning,
+              "an hour late, launcher open: VR runs");
+        check(lw::decide(deadline - 4000, deadline, true, true) == lw::launcherClosed, "the launcher closed: VR ends at once");
+        check(lw::decide(deadline + lw::noAnswerMs - 1, deadline, false, false) == lw::keepRunning,
+              "no process id: under a minute late, VR runs");
+        check(lw::decide(deadline + lw::noAnswerMs, deadline, false, false) == lw::launcherSilent,
+              "no process id: a minute with no keep-alive ends VR");
+        check(lw::decide(deadline + 5240, deadline, false, false) == lw::keepRunning,
+              "no process id: the 5.2 s hold-up no longer ends VR");
+        check(lw::lateMs(deadline + 5, deadline) == 5 && lw::lateMs(deadline - 5, deadline) == 0, "how late");
+        check(lw::keepAliveMs == 5000 && lw::firstKeepAliveMs == 10000, "the keep-alive's lengths unchanged");
     });
     std::cout << total - failed << '/' << total << " tests passed\n";
     // Reprint FAIL lines at the end so a scrolled build window still shows which test broke.

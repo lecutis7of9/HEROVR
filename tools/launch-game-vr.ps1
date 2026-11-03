@@ -385,7 +385,7 @@ if($NoGpuCheck) { $captureArgs+=@('--no-gpu-check') }
 if($NoClearErrors) { $captureArgs+=@('--no-clear-errors') }
 if($EngineTaa) {
     $captureArgs+=@('--engine-taa')
-    Write-Host "ENGINE TAA: prepared (-EngineTaa); set the game's Anti-Aliasing to TAA, ENGINE TAA is a test, no longer on the wrist hologram (0.0.76 ONE PAGE), and refused with live.txt vr_aa = ours (the default)."
+    Write-Host "ENGINE TAA: -EngineTaa passed on (a test, not on the wrist hologram since 0.0.76 ONE PAGE); it is used only with live.txt vr_aa = game and ignored with vr_aa = ours (the default). VR starts either way."
 }
 if(-not $AttachOnly) { $captureArgs+=@('--auto-launch') }
 if($XrRuntime) { $captureArgs+=@('--xr-runtime',$XrRuntime) }

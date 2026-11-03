@@ -173,6 +173,20 @@ namespace Sm2VrLauncher
                 catch (Exception ex) { Check(false, "session start: " + ex.Message); }
             }
 
+            // 0.0.76 LAUNCHER WATCH: the stop window names the real reason, not the ENGINE TAA note's "refused".
+            {
+                var menuStop = new List<string> {
+                    "ENGINE TAA: -EngineTaa passed on; it is used only with live.txt vr_aa = game and refused (old wording)",
+                    "ENGINE TAA: OFF; jitter OURS at 100%; on 0x, refused 0x, off 0x; 0 frames on",
+                    "VR session finished" };
+                Check(MainForm.StopReason(menuStop) == "VR session finished", "stop reason skips the ENGINE TAA notes");
+                var error = new List<string>(menuStop) { "ERROR: Game XR start: 1001", "ENGINE TAA: OFF; refused 0x" };
+                Check(MainForm.StopReason(error) == "ERROR: Game XR start: 1001", "an ERROR line is the stop reason");
+                var refused = new List<string> { "WARNING: the building reach 150% was refused; the eyes keep 150%.", "ENGINE TAA: OFF; refused 0x" };
+                Check(MainForm.StopReason(refused).StartsWith("WARNING: the building reach"), "a real refusal is still named");
+                Check(MainForm.StopReason(new List<string>()) == null, "no lines: none");
+            }
+
             try { Directory.Delete(tmp, true); } catch { }
             Console.WriteLine(fails == 0 ? "ALL PASS" : fails + " FAILED");
             return fails == 0 ? 0 : 1;

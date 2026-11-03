@@ -780,7 +780,7 @@ namespace Sm2VrLauncher
                 else
                 {
                     string last;
-                    lock (lines) last = lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase) || l.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0 || l.IndexOf("refus", StringComparison.OrdinalIgnoreCase) >= 0) ?? lines.LastOrDefault();
+                    lock (lines) last = StopReason(lines);
                     lastError = (last ?? "It stopped with exit code " + code + ".").Replace("ERROR: ", "") + " Collect reports to send it.";
                     sessionLog.Line("VR stopped (exit code " + code + "). The game's settings are put back by the session itself when it ends.", Theme.Bad);
                     if (last != null && last.IndexOf("Build first", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -856,6 +856,19 @@ namespace Sm2VrLauncher
         const int NeedsAdministratorExit = 5;
 
         /// <summary>0.0.62.2: what a window says when a VR session stopped with an error (a gate checks every PLAY failure says something).</summary>
+        // 0.0.76 LAUNCHER WATCH: the line that says why VR stopped. An ERROR line first, then a "failed" or "refus"
+        // line that is not a status note (the 01:55 menu stop showed the ENGINE TAA note, whose "refused" was only
+        // the setting's description), then the session's own last line.
+        internal static string StopReason(IList<string> lines)
+        {
+            string[] notes = { "ENGINE TAA", "LAUNCHER WATCH", "VR AA", "GAME AA", "SM1STYLE", "live.txt" };
+            Func<string, bool> note = l => notes.Any(n => l.TrimStart().StartsWith(n, StringComparison.OrdinalIgnoreCase));
+            return lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+                ?? lines.LastOrDefault(l => !note(l) && (l.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0 || l.IndexOf("refus", StringComparison.OrdinalIgnoreCase) >= 0))
+                ?? lines.LastOrDefault(l => l.StartsWith("VR session finished", StringComparison.OrdinalIgnoreCase))
+                ?? lines.LastOrDefault();
+        }
+
         internal static string StartFailureText(int code, string last)
         {
             string what = code == CloseGameExit ? "Spider-Man 2 was running before VR started (or VR was lost in it). Quit the game from its own menu, then press PLAY VR again."

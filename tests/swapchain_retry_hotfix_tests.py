@@ -73,8 +73,10 @@ class StartRetry(unittest.TestCase):
         self.assertIn('runtime.swapchainNote()', loop)
 
     def test_a_dead_launcher_ends_the_wait(self):
-        self.assertIn('const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline;',
-                      init_loop())
+        # 0.0.76 LAUNCHER WATCH: a late keep-alive ends the wait only once the launcher has closed.
+        self.assertIn('const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline &&\n'
+                      '                                              (launcherVerdict = launcherCheck()) != '
+                      'launcher_watch::keepRunning;', init_loop())
 
     def test_no_new_game_address(self):
         # The hotfix touches OpenXR calls only: no hex constant in the new code.

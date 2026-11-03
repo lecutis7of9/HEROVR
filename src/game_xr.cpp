@@ -130,6 +130,7 @@
 #include "spidy/eye_taa.hpp"
 #include "spidy/taa_jitter.hpp"
 #include "spidy/engine_taa.hpp"
+#include "spidy/launcher_watch.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/vr_aa.hpp"    // 0.0.76 SPIDY TAA
 #include "spidy/far_shadows.hpp"
@@ -739,6 +740,15 @@ std::mutex lifecycle, telemetry;
 HANDLE worker{};
 std::atomic<bool> stopRequested{};
 std::atomic<uint64_t> keepAliveDeadline{};
+// 0.0.76 LAUNCHER WATCH (launcher_watch.hpp): the launcher's process (SpidyXrLauncher), so a late
+// keep-alive ends VR only once the launcher has closed; why the session ended, for its last line.
+std::atomic<HANDLE> launcherProcess{};
+std::atomic<uint32_t> launcherVerdict{};
+launcher_watch::Verdict launcherCheck() {
+    const HANDLE process = launcherProcess.load();
+    const bool exited = process && WaitForSingleObject(process, 0) == WAIT_OBJECT_0;
+    return launcher_watch::decide(GetTickCount64(), keepAliveDeadline, process != nullptr, exited);
+}
 // The webs' half width, in tenths of a millimetre (live.txt web_width; WebLook's default).
 std::atomic<uint32_t> webRadiusTenthsMm{static_cast<uint32_t>(WebLook{}.radius * 1e4f + .5f)};
 // Update 15: the shot's flight as drawn (live.txt web_travel, web_speed m/s).
@@ -1944,7 +1954,9 @@ DWORD WINAPI run(void*) {
                     }
                     break;
                 } catch (const XrError& e) {
-                    const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline;
+                    // 0.0.76 LAUNCHER WATCH: a late keep-alive with the launcher still open waits on.
+                    const bool launcherGone = !config.durationMs && GetTickCount64() >= keepAliveDeadline &&
+                                              (launcherVerdict = launcherCheck()) != launcher_watch::keepRunning;
                     if (stopRequested || launcherGone)
                         throw;
                     const uint64_t waited = GetTickCount64() - startedAt;
@@ -3438,8 +3450,18 @@ DWORD WINAPI run(void*) {
         unsigned recoveriesSeen{};
         uint64_t stallToldFor = ~0ull;
         while (!stopRequested && (!nativeDeadline || GetTickCount64() < nativeDeadline)) {
-            if (!config.durationMs && GetTickCount64() >= keepAliveDeadline)
+            // 0.0.76 LAUNCHER WATCH: a late keep-alive alone (the launcher's remote calls held up
+            // while the game loads, 2026-11-03 at the menu) no longer ends VR; only a closed launcher
+            // (or, from an older launcher with no process id, a minute with no keep-alive) does.
+            if (!config.durationMs && GetTickCount64() >= keepAliveDeadline) {
+                if (const auto verdict = launcherCheck(); verdict != launcher_watch::keepRunning) {
+                    launcherVerdict = verdict;
+                    break;
+                }
+            } else if (!config.durationMs && launcherCheck() == launcher_watch::launcherClosed) {
+                launcherVerdict = launcher_watch::launcherClosed;
                 break;
+            }
             double copyMs{}, overlayMs{};
             Presentation drawn{};
             // This frame shows the game's presented frame on the screen, or
@@ -15280,7 +15302,11 @@ DWORD WINAPI run(void*) {
     message(error ? 5 : 4, error,
             error          ? failure.c_str()
             : runtimeEnded ? "VR session finished: the VR runtime closed it (headset, Virtual Desktop or SteamVR)"
-                           : "VR session finished");
+            : launcherVerdict == launcher_watch::launcherClosed
+                ? "VR session finished: the launcher closed"
+            : launcherVerdict == launcher_watch::launcherSilent
+                ? "VR session finished: the launcher did not answer for a minute"
+                : "VR session finished");
     return error;
 }
 } // namespace
@@ -15400,7 +15426,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStart(void* input) {
     stopRequested = false;
     // The worker attaches each player it finds; none yet.
     native_appearance::setPlayerRecord(0);
-    keepAliveDeadline = GetTickCount64() + 10000;
+    keepAliveDeadline = GetTickCount64() + launcher_watch::firstKeepAliveMs;
+    // 0.0.76 LAUNCHER WATCH: each start forgets the last launcher; this one names itself next.
+    launcherVerdict = 0;
+    if (const HANDLE old = launcherProcess.exchange(nullptr))
+        CloseHandle(old);
     // Version 0.0.6: the start banner names the version and its maker.
 #if defined(SPIDY_TEST_BUILD) && SPIDY_TEST_BUILD
     // Build 5: the first line names the code that runs (build 4's console said only 0.0.70).
@@ -16341,7 +16371,18 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHudSettings(void* selector) {
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrKeepAlive(void*) {
     if (stopRequested)
         return 1102;
-    keepAliveDeadline = GetTickCount64() + 5000;
+    keepAliveDeadline = GetTickCount64() + launcher_watch::keepAliveMs;
+    return 0;
+}
+// 0.0.76 LAUNCHER WATCH: the launcher's process id (after SpidyXrStart): VR then ends on a late
+// keep-alive only once that process has exited. 3990: it could not be opened (the minute rule stays).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrLauncher(void* pid) {
+    const DWORD id = static_cast<DWORD>(reinterpret_cast<uintptr_t>(pid));
+    const HANDLE process = id ? OpenProcess(SYNCHRONIZE, FALSE, id) : nullptr;
+    if (!process)
+        return 3990;
+    if (const HANDLE old = launcherProcess.exchange(process))
+        CloseHandle(old);
     return 0;
 }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXrStop(void*) {

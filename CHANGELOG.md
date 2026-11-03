@@ -18,7 +18,8 @@ Now (include/spidy/story077f.hpp, live.txt `screen_heal`, SpidyScreenHeal 5570, 
 - **The fallback hint**: hurt below 30% for 2 s with no heal, the headset says "Heal: push the right stick down and
   hold it ... A game card on screen? Press A to close it, then heal", at most every 30 s.
 - **The floor crawl gets the left stick** where the swing still owned the player and the walk was left at rest
-  (CANDIDATE: his log shows it fed in play; this covers the case it was not).
+  (CANDIDATE: his log shows it fed in play; this covers the case it was not). The ceiling crawl is the game's
+  scripted state, not the mod's locomotion: with nothing from the walk there, the raw left stick goes to the game.
 - Diagnostics: "HERO VR 0.0.77 HEAL: D-pad down out #n (VR play / game screen), health, right stick" and its held
   ms, "HEAL ANYWHERE" when the second way healed, "HEAL HINT shown", and a once-a-second "CRAWL FEED" line on the
   floor crawl (left stick, the game's stick sent, swing owned, surface, body speed, forced frames).

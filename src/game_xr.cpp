@@ -7925,6 +7925,16 @@ DWORD WINAPI run(void*) {
                             walk.right = motion.walkRight;
                             walk.forward = motion.walkForward;
                             ++crawlFeedForced77;
+                        } else if (crawlsFloor && steering && !calibrationInput &&
+                                   mapping == game_pad::Mapping::gameplay &&
+                                   std::hypot(walk.right, walk.forward) < .05f &&
+                                   std::hypot(frame.hands[0].stickX, frame.hands[0].stickY) > .15f &&
+                                   std::isfinite(frame.hands[0].stickX) && std::isfinite(frame.hands[0].stickY)) {
+                            // The ceiling crawl is the game's scripted state, not the mod's locomotion: with
+                            // nothing from the walk, the raw left stick goes to the game as it is.
+                            walk.right = std::clamp(frame.hands[0].stickX, -1.f, 1.f);
+                            walk.forward = std::clamp(frame.hands[0].stickY, -1.f, 1.f);
+                            ++crawlFeedForced77;
                         }
                         auto pad = game_pad::fromControllers(buttons, mapping, walk);
                         {

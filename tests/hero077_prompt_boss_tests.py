@@ -16,7 +16,7 @@ import live_settings as L  # noqa: E402
 
 NEW = ('include/spidy/story077c.hpp', 'tests/story077c_tests.cpp', 'tests/hero077_prompt_boss_tests.py')
 KEYS = {'prompt_window': ('SpidyPromptWindow', 5566, ('on', 'large', 'off')),
-        'boss_damage': ('SpidyBossDamage', 5567, ('off', 'on', 'strong'))}
+        'boss_damage': ('SpidyBossDamage', 5567, ('on', 'off', 'strong'))}
 
 
 def src(p):
@@ -45,7 +45,8 @@ class Wiring(unittest.TestCase):
                              ', ' + str(code) + r', \w+, asU32\); \}')
             self.assertEqual(len(re.findall(r'\b%d\b' % code, self.game)), 1, code)
         self.assertIn('std::atomic<uint32_t> promptWindowNow{0};', self.game)
-        self.assertIn('std::atomic<uint32_t> bossDamageNow{0};', self.game)  # off unless asked
+        self.assertIn('std::atomic<uint32_t> bossDamageNow{0};', self.game)  # 0 = on by default
+        self.assertIn('if (bossMode != 1 && heroNow() != hero_modes::spiderMan) {', self.game)  # 1 = off
 
     def test_prompt_window(self):
         g = self.game

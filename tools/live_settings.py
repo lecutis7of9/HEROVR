@@ -536,7 +536,7 @@ SETTINGS = {
                       "restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
-                    "you face them; 0 off; 1 on; 2 strong: each hit x4) - live, no restart needed"),
+                    "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
     'head_dodge': ((0, 2), 'SpidyHeadDodge', "HEAD DODGE {} (a quick sideways step of your head dodges that way - "
                    "0 fight: only near enemies or a spider-sense warning; 1 always; 2 off) - live, no restart needed"),
     # 0.0.76 HITCH HOLD (include/spidy/hitch_hold.hpp): live, every hero.
@@ -715,7 +715,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'head_dodge': ('fight', 'always', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'story_sprint': ('on', 'off'),  # HERO VR 0.0.77 STORY INPUTS (sprint)
                 'prompt_window': ('on', 'large', 'off'),  # HERO VR 0.0.77 PROMPT WINDOW
-                'boss_damage': ('off', 'on', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
+                'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
@@ -982,7 +982,7 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'head_dodge': {'fight': 0, 'always': 1, 'off': 2, 'on': 0, '0': 0, '1': 1, '2': 2},
            'story_sprint': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY INPUTS (sprint)
            'prompt_window': {'on': 0, 'large': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 PROMPT WINDOW
-           'boss_damage': {'off': 0, 'on': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
+           'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},

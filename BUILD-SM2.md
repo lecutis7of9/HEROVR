@@ -3027,4 +3027,4 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   tests/hero077_prompt_boss_tests.py): the game's presented frame as a D3D12Renderer inset in both eyes
   (prompt_window: on, large, off; SpidyPromptWindow 5566; native_gpu::screenForInset); the nearest boss
   (world_trace::nearestBoss, isBossClass) as a weapon-only stand-in for the non-Spider-Man heroes, and
-  sm2_damage::watchBoss (boss_damage: off, on, strong; SpidyBossDamage 5567).
+  sm2_damage::watchBoss (boss_damage: on (default), off, strong; SpidyBossDamage 5567).

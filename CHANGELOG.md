@@ -14,7 +14,7 @@ prompts in the headset. His inputs did go out (B 14, RB 10, X 5, RT run 18), but
   both eyes, at infinity (story077c.hpp). The copy is made at Present before the mirror. The mirror, the
   monitor's rate hold and the game view's lens are unchanged (screenForInset). A fault in the window turns only
   the window off ("PROMPT WINDOW off: ..."). A "HERO VR 0.0.77 PROMPT WINDOW" console line is written every 10 s.
-- **BOSS DAMAGE** (CANDIDATE, live.txt `boss_damage`: off / on / strong, SpidyBossDamage 5567, off by default).
+- **BOSS DAMAGE** (CANDIDATE, live.txt `boss_damage`: on / off / strong, SpidyBossDamage 5567, on by default).
   Sandman (.?AVSandmanBot@@) was 269 m away in the trace, outside the 30 m enemy list, so no hero's weapon could
   pick him. While a non-Spider-Man hero faces the nearest boss (within 35 degrees, up to 600 m), a point 6 m along
   the look stands in for him in the weapon lists only (after the lock / lunge). THOR's lightning and hammer,

@@ -1363,7 +1363,7 @@ std::atomic<uint32_t> storyDodgeNow{0};
 std::atomic<uint32_t> headDodgeNow{story077b::headFight};
 std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off
 std::atomic<uint32_t> promptWindowNow{0}; // HERO VR 0.0.77 prompt_window: 0 on, 1 large, 2 off
-std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 off, 1 on, 2 strong
+std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 on (default), 1 off, 2 strong
 uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
 uint64_t bossClapBlows{};  // and the claps sent at a boss
 static_assert(story077b::pad::dpadUp == game_pad::dpadUp && story077b::pad::dpadDown == game_pad::dpadDown &&
@@ -8346,7 +8346,7 @@ DWORD WINAPI run(void*) {
                                         static char bossLastName[world_trace::nameChars]{};
                                         const uint32_t bossMode = bossDamageNow.load();
                                         world_trace::Boss boss;
-                                        if (bossMode != 0 && heroNow() != hero_modes::spiderMan) {
+                                        if (bossMode != 1 && heroNow() != hero_modes::spiderMan) {
                                             world_trace::setEnemiesWanted(true); // the scan keeps its lists (2 s a call)
                                             if (world_trace::nearestBoss(boss) && !(boss.vital.have && boss.vital.hp <= 0.f)) {
                                                 ++bossFrames;
@@ -8382,7 +8382,7 @@ DWORD WINAPI run(void*) {
                                         }
                                         sm2_damage::watchBoss(bossId, bossMode == 2 ? story077c::bossStrongScale : 1.f);
                                         const uint64_t bossNowMs = GetTickCount64();
-                                        if (bossMode != 0 && (!bossLogMs || bossNowMs - bossLogMs >= 10000)) {
+                                        if (bossMode != 1 && (!bossLogMs || bossNowMs - bossLogMs >= 10000)) {
                                             bossLogMs = bossNowMs;
                                             const auto bs = sm2_damage::bossStats();
                                             char line[320];

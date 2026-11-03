@@ -4761,9 +4761,9 @@ DWORD WINAPI run(void*) {
                                     capGripWas[i] = grip;
                                     if (hero007Play.capGunDraws[i] != capDrawsSaid[i]) {
                                         capDrawsSaid[i] = hero007Play.capGunDraws[i];
-                                        game_prompts::note(std::string("0.0.76 CAP GRAPPLE: drawn at the chest (") + side +
+                                        game_prompts::note((std::string("0.0.76 CAP GRAPPLE: drawn at the chest (") + side +
                                                            " hand, draw " + std::to_string(capDrawsSaid[i]) +
-                                                           "): point and pull the trigger");
+                                                           "): point and pull the trigger").c_str());
                                         continue;
                                     }
                                     if (!edge || hero007Play.gunDrawn[i] || capMissNotes >= 40)
@@ -4789,8 +4789,8 @@ DWORD WINAPI run(void*) {
                                         why = "outside the chest rig (reach " + std::to_string(reach) + " > 1)";
                                     else
                                         why = "the shield is on / coming to this hand";
-                                    game_prompts::note(std::string("0.0.76 CAP GRAPPLE: ") + side + " grip near the chest drew nothing - " +
-                                                       why + " (reach " + std::to_string(reach) + ")");
+                                    game_prompts::note((std::string("0.0.76 CAP GRAPPLE: ") + side + " grip near the chest drew nothing - " +
+                                                       why + " (reach " + std::to_string(reach) + ")").c_str());
                                 }
                             }
                             for (unsigned i = 0; i < 2; ++i) {
@@ -7492,12 +7492,12 @@ DWORD WINAPI run(void*) {
                                 ++bikeXNotes;
                                 const bool kept = (buttons.buttons & buttonX) != 0;
                                 const uint32_t which = bikeOf(heroNow());
-                                game_prompts::note(std::string("0.0.76 BIKE X: down as ") +
+                                game_prompts::note((std::string("0.0.76 BIKE X: down as ") +
                                                    (heroNow() == hero_modes::wolverine ? "WOLVERINE" : "CAPTAIN AMERICA") +
                                                    " - controls " + (mapping == game_pad::Mapping::gameplay ? "in play" : "NOT in play (menu / game screen / pad)") +
                                                    ", X " + (kept ? "kept for the bike" : (named & game_pad::NamedPress::controlX) ? "the game's (it names X)" : "held from a menu press") +
                                                    ", " + bike075::folders[which] + (bikeReady(heroNow()) ? " ready" : " NOT ready") +
-                                                   (van.state == van072::driving ? ", riding (dash page)" : van.state == van072::parked ? ", parked (a tap brings it here)" : ""));
+                                                   (van.state == van072::driving ? ", riding (dash page)" : van.state == van072::parked ? ", parked (a tap brings it here)" : "")).c_str());
                                 if (mapping != game_pad::Mapping::gameplay)
                                     message(2, 0, "MOTORCYCLE: X is the game's here (menu / game screen) - tap X again in play");
                             }
@@ -7570,7 +7570,7 @@ DWORD WINAPI run(void*) {
                                 char line[160];
                                 sprintf_s(line, "MOTORCYCLE: X held %.1f s - a tap (under %.0f s) summons the bike", bikeTap.lastHeld, bike075::tapMost);
                                 message(2, 0, line);
-                                game_prompts::note(std::string("0.0.76 BIKE X: ") + line + " (no bike: a hold is the abilities' X)");
+                                game_prompts::note((std::string("0.0.76 BIKE X: ") + line + " (no bike: a hold is the abilities' X)").c_str());
                             }
                             if (tapped && van.state != van072::driving) {
                                 if (bikeReady(heroNow())) {
@@ -8950,9 +8950,9 @@ DWORD WINAPI run(void*) {
                                                 vanProbe = {};
                                                 vanSpotReady = false;
                                                 message(2, 0, "MOTORCYCLE: the street check gave no answer - tap X again");
-                                                game_prompts::note(std::string("0.0.76 BIKE X: no answer in 2 s (rays ") + (raysStarted ? "on" : "OFF") +
+                                                game_prompts::note((std::string("0.0.76 BIKE X: no answer in 2 s (rays ") + (raysStarted ? "on" : "OFF") +
                                                                    ", motion " + (motion.active ? "on" : "OFF") + ", play " + (vin.play ? "on" : "OFF") +
-                                                                   ", bike " + (bikeNow ? "this hero's" : "NOT this hero's") + ")");
+                                                                   ", bike " + (bikeNow ? "this hero's" : "NOT this hero's") + ")").c_str());
                                             }
                                         }
                                         if (vout.summoned && bikeNow) { // 0.0.75 MOTORCYCLE

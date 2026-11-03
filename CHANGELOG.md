@@ -2,6 +2,33 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (7) - PROMPT CARDS: no full frame in VR, the prompts as VR cards (TEST build, not released)
+
+From the player's test of b8b33ce: the PROMPT WINDOW put a flat copy of the WHOLE game screen in VR. That is gone.
+- **No full frame** (CONFIRMED in code and tests). live.txt `prompt_window` is a debug view now: off (the default)
+  or debug_full. In VR play the game's frame is copied only for debug_full (wantScreen), and the window is drawn only
+  then. His `prompt_window = off` line, and the old on / large / 0 / 2 lines, are all off. None of them turns the
+  cards off. Junk values get a note and are skipped (the default stays: off).
+- Correction to (5): the SM2 HUD is cohtml (Coherent GUI2), not Scaleform. Its prompt texts and icons are not read.
+- **PROMPT CARDS** (CANDIDATE, live.txt `prompt_cards`: on / off, SpidyPromptCards 5568, on by default;
+  include/spidy/story077d.hpp, src/prompt_cards.cpp). Small cards drawn by the mod, never a picture of the game. Each
+  names the game's button and the VR control that sends it, e.g. "GAME: LB+RB / VR: BOTH TRIGGERS / YANK",
+  "GAME: MASH X / VR: PUNCH FAST", "GAME: Y / VR: Y (WEB STRIKE)".
+  - Source: world_trace's scan (read-only, the same guarded reads) keeps the objects of the game's prompt classes
+    (RTTI names CONFIRMED in Spider-Man2.exe; that each stands for a prompt on screen is CANDIDATE): WebStrikePrompt,
+    GrabAndThrowable, ThrowablePickupPoint, WebSnatchSpecialThrowable, LiftableInteract (object cards);
+    ButtonMashInteract and the CineQTEShotController actions, CombatQTEOverlayTrigger, JobEntryCombatQTE,
+    QTEPromptAction (screen cards); SimplePrompt, TutorialContextualPrompt and others watched only.
+  - Object cards: over the nearest two throwables / web strike targets within reach (12-30 m), world-anchored and
+    facing you. Screen card: a QTE / mash object that appeared since VR play began, a small card a bit below the
+    centre, for its kind's few seconds. Nothing when none qualifies.
+  - Only in VR gameplay (the gameplay mapping, not flat, not the menus); the scan is asked for only then.
+  - Diagnostics: a note when each prompt class is first seen, and a "HERO VR 0.0.77 PROMPT CARDS" console line
+    every 10 s (frames, scans, object / screen card frames and how many shown, cards drawn, full frame "never",
+    each class live / appeared / gone).
+  - Not known until a run: whether these objects exist only while the prompt shows (the scan is 1 s, so a card can
+    be up to about 1 s late).
+
 ## hero-0.0.77-story (5) - PROMPT WINDOW + BOSS DAMAGE (TEST build, not released)
 
 From the player's Sandman test of 718d933 (report game-vr-20261103-150713): no debris highlight and no button

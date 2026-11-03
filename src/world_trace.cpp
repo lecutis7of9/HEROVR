@@ -41,6 +41,21 @@ bool enemiesWanted() {
     const int64_t at = enemiesWantedMs.load(std::memory_order_relaxed);
     return at != 0 && steadyMs() - at < 2000;
 }
+// HERO VR 0.0.77 PROMPT CARDS: as enemiesWanted, for the prompt objects.
+std::atomic<int64_t> promptsWantedMs{};
+bool promptsWanted() {
+    const int64_t at = promptsWantedMs.load(std::memory_order_relaxed);
+    return at != 0 && steadyMs() - at < 2000;
+}
+std::mutex promptLock;
+std::array<story077d::Seen, promptSlots> promptPub{};
+std::array<uintptr_t, promptSlots> promptPubRecord{};
+uint32_t promptPubCount{};
+Vec3 promptHero{};
+bool promptHeroKnown{};
+uintptr_t promptHeroRecord{};
+std::chrono::steady_clock::time_point promptWhen{}, promptMoved{};
+PromptStats promptCounts{};
 std::atomic<float> lookX{}, lookY{}, lookZ{-1};
 std::atomic<float> nearestEnemy{1e9f}; // metres at the last scan (BLOOD SPLATTER's plan B)
 std::atomic<float> nearestPerson{1e9f}; // Update 37.2: any civilian / pedestrian (NPC NEAR FADE's log)
@@ -99,6 +114,7 @@ bool typeName(uintptr_t descriptor, char (&out)[nameChars]) {
 struct Class {
     uint32_t bits{};
     char name[nameChars]{};
+    int prompt = -1; // HERO VR 0.0.77 PROMPT CARDS: story077d kind of it or a class it derives from
 };
 // A vtable's own class name and the bits of it and every class it derives from (MSVC x64 RTTI).
 Class classify(uintptr_t vtable) {
@@ -119,8 +135,12 @@ Class classify(uintptr_t vtable) {
         uint32_t descriptor{}, type{};
         char name[nameChars]{};
         if (read(imageBase + hierarchy.bases + 4ull * i, &descriptor, 4) && read(imageBase + descriptor, &type, 4) &&
-            typeName(imageBase + type, name))
+            typeName(imageBase + type, name)) {
             c.bits |= bitsOf(name);
+            if (c.prompt < 0) // the most derived first
+                if ((c.prompt = story077d::kindOf(name)) >= 0)
+                    c.bits |= promptBit;
+        }
     }
     return c;
 }
@@ -178,6 +198,16 @@ void run() {
     RateLimit limits[kinds];
     bool baseline = true;
     float interval = 1.f, clock = 0;
+    // HERO VR 0.0.77 PROMPT CARDS: the prompt objects (component address -> record, kind) this scan and live.
+    struct PromptLive {
+        uintptr_t record{};
+        uint32_t kind{};
+        std::chrono::steady_clock::time_point since{};
+        bool before{};
+    };
+    std::unordered_map<uintptr_t, std::pair<uintptr_t, uint32_t>> nowPrompts;
+    std::unordered_map<uintptr_t, PromptLive> promptsLive;
+    bool promptFirstScan = true;
     unsigned registryMisses = 0, slowScans = 0;
     // Update 38: the 10 Hz enemy list (see enemyAt).
     std::vector<uintptr_t> enemyRecords;
@@ -419,7 +449,15 @@ void run() {
             const float dt = std::chrono::duration<float>(now - lastTick).count();
             lastTick = now;
             clock += dt;
-            if (!any && !enemiesWanted()) {
+            // HERO VR 0.0.77 PROMPT CARDS: no longer asked for: the list goes, the next ask starts afresh.
+            const bool promptsOn = promptsWanted();
+            if (!promptsOn && promptFirstScan == false) {
+                promptsLive.clear();
+                promptFirstScan = true;
+                std::lock_guard<std::mutex> lock(promptLock);
+                promptPubCount = 0;
+            }
+            if (!any && !enemiesWanted() && !promptsOn) {
                 work.status = 0;
                 nearestEnemy.store(1e9f, std::memory_order_relaxed);
                 nearestPerson.store(1e9f, std::memory_order_relaxed);
@@ -446,6 +484,7 @@ void run() {
             registryMisses = 0;
             work.status = 1;
             nowWatched.clear();
+            nowPrompts.clear();
             nowHealthOf.clear();
             nowActors.clear();
             nowArchetype.clear();
@@ -481,6 +520,8 @@ void run() {
                     continue;
                 if (bits & heroBit)
                     hero = head.record;
+                if ((bits & promptBit) && found->second.prompt >= 0 && nowPrompts.size() < 2048)
+                    nowPrompts[entry.address] = {head.record, static_cast<uint32_t>(found->second.prompt)};
                 if (bits & (civilianBit | enemyBit | allyBit | companionBit | pedestrianBit | botBit) &&
                     nowActors.size() < mostActors) {
                     nowActors[head.record] |= bits;
@@ -652,6 +693,78 @@ void run() {
                 copyName(c.name, name.c_str());
                 c.bits = s.first; c.live = s.second;
             }
+            // HERO VR 0.0.77 PROMPT CARDS (CANDIDATE): which prompt objects came and went, and the list published.
+            if (promptsOn) {
+                const auto pnow = std::chrono::steady_clock::now();
+                PromptStats counts;
+                {
+                    std::lock_guard<std::mutex> lock(promptLock);
+                    counts = promptCounts;
+                }
+                ++counts.scans;
+                for (auto& l : counts.live)
+                    l = 0;
+                for (const auto& [address, rk] : nowPrompts) {
+                    if (rk.second < story077d::kindCount)
+                        ++counts.live[rk.second];
+                    if (!promptsLive.count(address)) {
+                        promptsLive[address] = PromptLive{rk.first, rk.second, pnow, promptFirstScan};
+                        if (!promptFirstScan && rk.second < story077d::kindCount)
+                            ++counts.appeared[rk.second];
+                    }
+                }
+                for (auto it = promptsLive.begin(); it != promptsLive.end();) {
+                    if (!nowPrompts.count(it->first)) {
+                        if (it->second.kind < story077d::kindCount)
+                            ++counts.gone[it->second.kind];
+                        it = promptsLive.erase(it);
+                    } else
+                        ++it;
+                }
+                promptFirstScan = false;
+                // The newest new screen-kind ones, then the nearest object-kind ones.
+                std::vector<std::pair<float, std::pair<story077d::Seen, uintptr_t>>> pick;
+                for (const auto& [address, l] : promptsLive) {
+                    const story077d::Kind* k = story077d::kind(l.kind);
+                    if (!k || k->where == story077d::watchOnly)
+                        continue;
+                    story077d::Seen seenNow;
+                    seenNow.id = static_cast<uint64_t>(address);
+                    seenNow.kind = l.kind;
+                    seenNow.before = l.before;
+                    seenNow.age = std::chrono::duration<float>(pnow - l.since).count();
+                    Vec3 at{};
+                    seenNow.placed = l.record && position(l.record, at) && finite(at);
+                    seenNow.world = seenNow.placed ? at : Vec3{};
+                    float score;
+                    if (k->where == story077d::screen) {
+                        if (l.before || seenNow.age > 15.f)
+                            continue;
+                        score = seenNow.age - 1000.f; // ahead of every object
+                    } else {
+                        if (!seenNow.placed || !heroKnown)
+                            continue;
+                        score = length(at - heroAt);
+                        if (!std::isfinite(score) || score > 60.f)
+                            continue;
+                    }
+                    pick.push_back({score, {seenNow, l.record}});
+                }
+                const size_t keep = std::min<size_t>(pick.size(), promptSlots);
+                std::partial_sort(pick.begin(), pick.begin() + static_cast<std::ptrdiff_t>(keep), pick.end(),
+                                  [](const auto& a, const auto& b) { return a.first < b.first; });
+                std::lock_guard<std::mutex> lock(promptLock);
+                promptPubCount = static_cast<uint32_t>(keep);
+                for (size_t q = 0; q < keep; ++q) {
+                    promptPub[q] = pick[q].second.first;
+                    promptPubRecord[q] = pick[q].second.second;
+                }
+                promptHero = heroAt;
+                promptHeroKnown = heroKnown;
+                promptHeroRecord = heroKnown ? hero : 0;
+                promptWhen = promptMoved = pnow;
+                promptCounts = counts;
+            }
             ++work.scans;
             const float ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count();
             work.lastScanMs = ms;
@@ -676,6 +789,20 @@ void run() {
                 Sleep(fast ? 33 : 100);
                 slept += fast ? .033f : .1f;
                 refreshEnemies(); // Update 38: 10 Hz
+                if (promptsOn) { // HERO VR 0.0.77 PROMPT CARDS: the published ones' positions, the hero's
+                    std::lock_guard<std::mutex> lock(promptLock);
+                    for (uint32_t q = 0; q < promptPubCount; ++q) {
+                        Vec3 at{};
+                        if (promptPubRecord[q] && position(promptPubRecord[q], at) && finite(at)) {
+                            promptPub[q].world = at;
+                            promptPub[q].placed = true;
+                        }
+                    }
+                    Vec3 h{};
+                    if (promptHeroRecord && position(promptHeroRecord, h) && finite(h))
+                        promptHero = h;
+                    promptMoved = std::chrono::steady_clock::now();
+                }
             }
         }
     } catch (...) {
@@ -710,6 +837,29 @@ void look(Vec3 forward) {
     lookZ.store(forward.z, std::memory_order_relaxed);
 }
 void setOn(bool on) { master = on; }
+void setPromptsWanted(bool on) { promptsWantedMs.store(on ? steadyMs() : 0, std::memory_order_relaxed); }
+uint32_t prompts(std::array<story077d::Seen, promptSlots>& out, Vec3& heroWorld, bool& heroKnownOut, float& ageSeconds) {
+    ageSeconds = 1e9f;
+    heroKnownOut = false;
+    if (!running.load())
+        return 0;
+    std::lock_guard<std::mutex> lock(promptLock);
+    ageSeconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - promptMoved).count();
+    if (ageSeconds > 1.5f || std::chrono::steady_clock::now() - promptWhen > std::chrono::seconds(4))
+        return 0;
+    heroWorld = promptHero;
+    heroKnownOut = promptHeroKnown;
+    const float sinceScan = std::chrono::duration<float>(std::chrono::steady_clock::now() - promptWhen).count();
+    for (uint32_t i = 0; i < promptPubCount; ++i) {
+        out[i] = promptPub[i];
+        out[i].age += sinceScan;
+    }
+    return promptPubCount;
+}
+PromptStats promptStats() {
+    std::lock_guard<std::mutex> lock(promptLock);
+    return promptCounts;
+}
 void setEnemiesWanted(bool on) { enemiesWantedMs.store(on ? steadyMs() : 0, std::memory_order_relaxed); }
 float nearestEnemyMetres() { return running.load() ? nearestEnemy.load(std::memory_order_relaxed) : 1e9f; }
 bool isOn() { return master.load(); }

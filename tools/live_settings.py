@@ -531,9 +531,16 @@ SETTINGS = {
                      "ground holds the game's RT, its run, for the story's run-for-your-life parts; 1 off) - live, "
                      "no restart needed"),
     # HERO VR 0.0.77 PROMPT WINDOW and BOSS DAMAGE (include/spidy/story077c.hpp, both CANDIDATE): live.
-    'prompt_window': ((0, 2), 'SpidyPromptWindow', "PROMPT WINDOW {} (the game's own button prompts, QTE cues and "
-                      "throw highlights in a small window low in your view - 0 on; 1 large; 2 off) - live, no "
-                      "restart needed"),
+    # HERO VR 0.0.77 PROMPT CARDS (include/spidy/story077d.hpp, CANDIDATE): the PROMPT WINDOW of b8b33ce copied the
+    # whole game screen into VR; it is a debug view now, off by default, and the old on / large / 0 / 2 lines are off.
+    'prompt_window': ((0, 1), 'SpidyPromptWindow', "PROMPT WINDOW {} (debug only: 1 debug_full shows the WHOLE flat "
+                      "game screen in a window low in your view, b8b33ce's view; 0 off, the default - the old on, "
+                      "large and 2 lines are off too; the button prompts are prompt_cards now) - live, no restart "
+                      "needed"),
+    'prompt_cards': ((0, 1), 'SpidyPromptCards', "PROMPT CARDS {} (small VR cards for the game's button prompts and "
+                     "QTEs - over debris you can throw and a web strike target, or a small card a bit below the "
+                     "centre for a QTE - each naming the game's button and the VR control that sends it, never a "
+                     "picture of the game; 0 on; 1 off) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -714,7 +721,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'story_dodge': ('on', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'head_dodge': ('fight', 'always', 'off'),  # HERO VR 0.0.77 STORY MOVES
                 'story_sprint': ('on', 'off'),  # HERO VR 0.0.77 STORY INPUTS (sprint)
-                'prompt_window': ('on', 'large', 'off'),  # HERO VR 0.0.77 PROMPT WINDOW
+                'prompt_window': ('off', 'debug_full'),  # HERO VR 0.0.77 PROMPT WINDOW (debug only now)
+                'prompt_cards': ('on', 'off'),  # HERO VR 0.0.77 PROMPT CARDS
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -981,7 +989,9 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'story_dodge': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY MOVES
            'head_dodge': {'fight': 0, 'always': 1, 'off': 2, 'on': 0, '0': 0, '1': 1, '2': 2},
            'story_sprint': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY INPUTS (sprint)
-           'prompt_window': {'on': 0, 'large': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 PROMPT WINDOW
+           # HERO VR 0.0.77 PROMPT CARDS: the old prompt_window on / large / 2 (b8b33ce) are off now (0)
+           'prompt_window': {'off': 0, 'debug_full': 1, 'on': 0, 'large': 0, '0': 0, '1': 1, '2': 0},
+           'prompt_cards': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 PROMPT CARDS
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1321,7 +1331,7 @@ START_ONLY = START_ONLY + ('vr_shadow_stable',)
 START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
 START_ONLY = START_ONLY + ('story_swap', 'story_throw')  # HERO VR 0.0.77 STORY INPUTS: kept between sessions
 START_ONLY = START_ONLY + ('story_abilities', 'story_throw_aim', 'story_dodge', 'head_dodge', 'story_sprint')  # 0.0.77 STORY MOVES
-START_ONLY = START_ONLY + ('prompt_window', 'boss_damage')  # HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE
+START_ONLY = START_ONLY + ('prompt_window', 'boss_damage', 'prompt_cards')  # HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE, CARDS
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

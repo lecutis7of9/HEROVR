@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include "story077d.hpp"
 namespace spidy::world_trace {
 enum Kind : uint32_t { npc = 0, spawn = 1, mission = 2, kinds = 3 };
 inline constexpr const char* kindNames[kinds] = {"NPC", "SPAWN", "MISSION"};
@@ -49,7 +50,9 @@ enum Bits : uint32_t {
     dialogueBit = 1, civilianBit = 2, enemyBit = 4, allyBit = 8, companionBit = 16, pedestrianBit = 32,
     botBit = 64, spawnerBit = 128, missionBit = 256, objectiveBit = 512, activityBit = 1024, heroBit = 2048,
     // Update 38.5 (SKIP MISSION research, read-only): a class named for a checkpoint (CANDIDATE).
-    checkpointBit = 4096
+    checkpointBit = 4096,
+    // HERO VR 0.0.77 PROMPT CARDS (story077d.hpp, CANDIDATE): a class named for a prompt / QTE / throwable.
+    promptBit = 8192
 };
 inline bool has(const char* name, const char* part) { return name && std::strstr(name, part) != nullptr; }
 inline bool exact(const char* name, const char* full) { return name && !std::strcmp(name, full); }
@@ -243,6 +246,20 @@ uint32_t enemyVitals(std::array<Vital, enemySlots>& out);
 // 0.0.75 EVERY ENEMY: the class an enemy in the last refresh was marked by (its decorated RTTI name,
 // e.g. ".?AVSymbioteBot@@"); false when that record is not in it.
 bool enemyClass(uint64_t id, char (&out)[nameChars]);
+// HERO VR 0.0.77 PROMPT CARDS (story077d.hpp, CANDIDATE, read-only): while asked for (a call counts 2 s) the scan
+// runs (also with every log off) and keeps the objects of story077d's prompt classes: when each appeared, whether
+// it was there at the cards' first scan, its record's position (re-read at 10 Hz for the ones published).
+void setPromptsWanted(bool on);
+inline constexpr uint32_t promptSlots = 12;
+// The newest screen-kind objects and the nearest object-kind ones (the hero's world position too; false none);
+// ageSeconds: since the list was made (stale over 1.5 s: 0 returned).
+uint32_t prompts(std::array<story077d::Seen, promptSlots>& out, Vec3& heroWorld, bool& heroKnown, float& ageSeconds);
+struct PromptStats {
+    uint64_t scans{};                      // scans that looked for them
+    uint32_t live[story077d::kindCount]{}; // in the last scan
+    uint64_t appeared[story077d::kindCount]{}, gone[story077d::kindCount]{};
+};
+PromptStats promptStats();
 // HERO VR 0.0.77 BOSS DAMAGE (CANDIDATE): a boss's class. ".?AVSandmanBot@@" is CONFIRMED (the user's
 // world trace 20261103: two spawns, 269 m from the hero - outside enemyReach, never in enemies()); the
 // others are CANDIDATE names (no log of them yet).

@@ -3028,3 +3028,7 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   (prompt_window: on, large, off; SpidyPromptWindow 5566; native_gpu::screenForInset); the nearest boss
   (world_trace::nearestBoss, isBossClass) as a weapon-only stand-in for the non-Spider-Man heroes, and
   sm2_damage::watchBoss (boss_damage: on (default), off, strong; SpidyBossDamage 5567).
+- HERO VR 0.0.77 PROMPT CARDS (include/spidy/story077d.hpp, include/spidy/prompt_cards.hpp, src/prompt_cards.cpp,
+  tests/story077d_tests.cpp, tests/hero077_prompt_boss_tests.py): prompt_window is debug only (off (default),
+  debug_full; the full frame only at debug_full); prompt_cards (on (default), off; SpidyPromptCards 5568) draws the
+  mod's own cards from world_trace's prompt objects (promptBit, setPromptsWanted, prompts, promptStats).

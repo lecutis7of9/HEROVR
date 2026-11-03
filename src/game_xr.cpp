@@ -63,6 +63,8 @@
 #include "spidy/story077.hpp" // HERO VR 0.0.77 STORY INPUTS
 #include "spidy/story077b.hpp" // HERO VR 0.0.77 STORY MOVES
 #include "spidy/story077c.hpp" // HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE
+#include "spidy/story077d.hpp" // HERO VR 0.0.77 PROMPT CARDS
+#include "spidy/prompt_cards.hpp" // HERO VR 0.0.77 PROMPT CARDS (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/blood_splatter.hpp"
@@ -1362,7 +1364,10 @@ std::atomic<uint32_t> storyAimNow{story077b::aimLook};
 std::atomic<uint32_t> storyDodgeNow{0};
 std::atomic<uint32_t> headDodgeNow{story077b::headFight};
 std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off
-std::atomic<uint32_t> promptWindowNow{0}; // HERO VR 0.0.77 prompt_window: 0 on, 1 large, 2 off
+// HERO VR 0.0.77 PROMPT CARDS: prompt_window is a debug view now - 0 off (the default), 1 debug_full (the whole
+// game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
+std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
+std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
 std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 on (default), 1 off, 2 strong
 uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
 uint64_t bossClapBlows{};  // and the claps sent at a boss
@@ -3137,6 +3142,19 @@ DWORD WINAPI run(void*) {
             SenseSight sight{};
         };
         std::array<SenseMark, 6> senseMarks{};
+        // HERO VR 0.0.77 PROMPT CARDS (story077d.hpp): this frame's cards, tracking space (made in the update,
+        // drawn with the overlay), and what the report counts.
+        struct PromptCardNow {
+            uint32_t kind{};
+            bool onObject{};
+            Vec3 at{}; // tracking space: the object's card (onObject)
+        };
+        std::array<PromptCardNow, story077d::maxCards> promptCardsHere{};
+        uint32_t promptCardCount{};
+        uint64_t promptCardFrames{}, promptCardObjectFrames{}, promptCardScreenFrames{}, promptCardsDrawn{};
+        uint64_t promptCardLogMs{}, promptKindsNoted{};
+        uint64_t promptCardScreenIds{}, promptCardScreenShown{}, promptCardObjectShown{};
+        uint64_t promptCardScreenLast{}, promptCardObjectLast{};
         uint64_t countersBefore{};
         uint32_t senseShown{}, senseFrames{}, senseSightFrames{}, senseTingles{};
         uint32_t senseBroken{}, senseDodges{};
@@ -7908,6 +7926,98 @@ DWORD WINAPI run(void*) {
                             runtime.haptic(0, .4f);
                             runtime.haptic(1, .4f);
                         }
+                        // HERO VR 0.0.77 PROMPT CARDS (CANDIDATE, story077d.hpp, live.txt prompt_cards): the cards for
+                        // the prompt objects the scan sees, only in VR gameplay (never at the menus, never flat).
+                        // Read-only; any fault turns only the cards off for the frame.
+                        promptCardCount = 0;
+                        try {
+                            const bool cardsWanted = promptCardsNow.load() == story077d::cardsOn && vrPlay &&
+                                                     mapping == game_pad::Mapping::gameplay && !flatScreen;
+                            world_trace::setPromptsWanted(cardsWanted);
+                            if (cardsWanted) {
+                                ++promptCardFrames;
+                                std::array<story077d::Seen, world_trace::promptSlots> seenNow{};
+                                Vec3 heroScan{};
+                                bool heroScanKnown{};
+                                float seenAge{};
+                                const uint32_t seenCount = std::min<uint32_t>(
+                                    world_trace::prompts(seenNow, heroScan, heroScanKnown, seenAge), world_trace::promptSlots);
+                                const bool anchorOk = finite(motion.anchor);
+                                const Vec3 heroHere = anchorOk ? motion.anchor : heroScan;
+                                story077d::Card cards[story077d::maxCards];
+                                const uint32_t chosen = story077d::choose(seenNow.data(), seenCount, heroHere,
+                                                                          anchorOk || heroScanKnown, cards);
+                                const Pose fromWorld = inverse(compose(motion.headPose, inverse(frame.head)));
+                                bool objectShown{}, screenShown{};
+                                for (uint32_t c = 0; c < chosen && promptCardCount < story077d::maxCards; ++c) {
+                                    PromptCardNow card{cards[c].kind, cards[c].onObject, {}};
+                                    if (card.onObject) {
+                                        card.at = compose(fromWorld, Pose{cards[c].world, {}}).position;
+                                        if (!finite(card.at) || !validTrackedPose(motion.headPose))
+                                            continue;
+                                        objectShown = true;
+                                        if (cards[c].id != promptCardObjectLast) {
+                                            promptCardObjectLast = cards[c].id;
+                                            ++promptCardObjectShown;
+                                        }
+                                    } else {
+                                        screenShown = true;
+                                        if (cards[c].id != promptCardScreenLast) {
+                                            promptCardScreenLast = cards[c].id;
+                                            ++promptCardScreenShown;
+                                        }
+                                    }
+                                    promptCardsHere[promptCardCount++] = card;
+                                }
+                                promptCardObjectFrames += objectShown;
+                                promptCardScreenFrames += screenShown;
+                            }
+                            const uint64_t cardNowMs = GetTickCount64();
+                            if (cardsWanted || promptCardFrames) {
+                                const auto stats = world_trace::promptStats();
+                                for (uint32_t k = 0; k < story077d::kindCount; ++k)
+                                    if ((stats.appeared[k] || stats.live[k]) && !(promptKindsNoted & (1ull << k))) {
+                                        promptKindsNoted |= 1ull << k;
+                                        const story077d::Kind* kd = story077d::kind(k);
+                                        char note[260];
+                                        sprintf_s(note, "HERO VR 0.0.77 PROMPT CARDS: first seen %s (%s: %s = %s), live %u",
+                                                  kd->cls, kd->where == story077d::object ? "object card"
+                                                           : kd->where == story077d::screen ? "screen card" : "watched only",
+                                                  kd->game, kd->vr, stats.live[k]);
+                                        game_prompts::note(note);
+                                    }
+                                if (!promptCardLogMs || cardNowMs - promptCardLogMs >= 10000) {
+                                    promptCardLogMs = cardNowMs;
+                                    std::string kindsLine;
+                                    for (uint32_t k = 0; k < story077d::kindCount; ++k)
+                                        if (stats.live[k] || stats.appeared[k] || stats.gone[k]) {
+                                            char part[160];
+                                            const char* cls = story077d::kind(k)->cls;
+                                            sprintf_s(part, " %s live %u +%llu -%llu;", cls + (std::strlen(cls) > 4 ? 4 : 0),
+                                                      stats.live[k], static_cast<unsigned long long>(stats.appeared[k]),
+                                                      static_cast<unsigned long long>(stats.gone[k]));
+                                            kindsLine += part;
+                                        }
+                                    char line[2200];
+                                    sprintf_s(line, "HERO VR 0.0.77 PROMPT CARDS (CANDIDATE) %s: frames %llu, scans %llu, object "
+                                                    "cards %llu frames / %llu shown, screen cards %llu frames / %llu shown, drawn "
+                                                    "%llu, full frame %s;%s",
+                                              promptCardsNow.load() == story077d::cardsOn ? "ON" : "OFF",
+                                              static_cast<unsigned long long>(promptCardFrames),
+                                              static_cast<unsigned long long>(stats.scans),
+                                              static_cast<unsigned long long>(promptCardObjectFrames),
+                                              static_cast<unsigned long long>(promptCardObjectShown),
+                                              static_cast<unsigned long long>(promptCardScreenFrames),
+                                              static_cast<unsigned long long>(promptCardScreenShown),
+                                              static_cast<unsigned long long>(promptCardsDrawn),
+                                              promptWindowNow.load() == story077d::windowDebugFull ? "DEBUG_FULL" : "never",
+                                              kindsLine.empty() ? " no prompt objects seen" : kindsLine.substr(0, 1900).c_str());
+                                    consoleLine(line);
+                                }
+                            }
+                        } catch (...) {
+                            promptCardCount = 0;
+                        }
                         // Update 37: the web shooter and the gadgets by gesture, and hand
                         // hits, as the game's own pad buttons (combat_input.hpp).
                         {
@@ -11436,8 +11546,9 @@ DWORD WINAPI run(void*) {
                     // Copies of the game's presented frame, for the screen.
                     if (gpuStarted) {
                         native_gpu::screenForInset(viewing && vrPlay && !native_gpu::eyesLost()); // 0.0.77
+                        // HERO VR 0.0.77 PROMPT CARDS: in VR play the game's frame is copied only for debug_full.
                         native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||
-                                                           promptWindowNow.load() != 2)); // 0.0.77 PROMPT WINDOW
+                                                           promptWindowNow.load() == story077d::windowDebugFull));
                     }
                     showScreen = screen;
                     if (!viewing)
@@ -15010,6 +15121,41 @@ DWORD WINAPI run(void*) {
                             senseFrames += marked;
                             senseSightFrames += sighted;
                         }
+                        // HERO VR 0.0.77 PROMPT CARDS (story077d.hpp): the object cards over their objects, facing the
+                        // eyes; the screen card a bit below the look. The mod's own cards, never the game's picture.
+                        // Should one fail, only the cards go off.
+                        if (!saved->flatScreen && promptCardCount && validTrackedPose(rendered.headPose)) {
+                            const size_t from = translucent.size();
+                            try {
+                                Pose eyes = rendered.headPose;
+                                eyes.position += travel;
+                                const Vec3 right = eyes.orientation.rotate({1, 0, 0}), up = eyes.orientation.rotate({0, 1, 0}),
+                                           ahead = eyes.orientation.rotate({0, 0, -1});
+                                bool drew{};
+                                for (uint32_t c = 0; c < promptCardCount && c < story077d::maxCards; ++c) {
+                                    const auto& card = promptCardsHere[c];
+                                    char game[48];
+                                    sprintf_s(game, "GAME: %s", story077d::gameLine(card.kind));
+                                    char vr[64];
+                                    sprintf_s(vr, "VR: %s", story077d::vrLine(card.kind));
+                                    if (card.onObject) {
+                                        const Vec3 to = card.at - eyes.position;
+                                        const float metres = length(to);
+                                        if (!std::isfinite(metres) || metres < .3f || dot(to, ahead) <= 0)
+                                            continue; // behind the eyes: none
+                                        drew |= prompt_cards::append(translucent, game, vr, card.at, right, up,
+                                                                     story077d::objectHeight(metres), .95f) > 0;
+                                    } else {
+                                        const Vec3 at = eyes.position + ahead * story077d::screenAhead - up * story077d::screenDown;
+                                        drew |= prompt_cards::append(translucent, game, vr, at, right, up,
+                                                                     story077d::screenHeight, .95f) > 0;
+                                    }
+                                }
+                                promptCardsDrawn += drew;
+                            } catch (...) {
+                                translucent.resize(from);
+                            }
+                        }
                         // The T-pose calibration's panel and controller rings, moved with
                         // the player to this image as the hands are. The tech style's
                         // panel is translucent, as the game's menus are.
@@ -15398,16 +15544,16 @@ DWORD WINAPI run(void*) {
                         }
                         const auto drawStart = std::chrono::steady_clock::now(); // Update 37 perf
                         extrasPart.add(std::chrono::duration<double, std::milli>(drawStart - extrasStart).count());
-                        // HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE, live.txt prompt_window; story077c.hpp): the game's
-                        // own presented frame - where its Scaleform HUD draws the button prompts, QTE cues and throw
-                        // highlights (none reach the eye images, CONFIRMED in the player's report) - in a window low
-                        // in both eyes, at infinity. The renderer draws it under the overlay (its own blit and heap);
-                        // any fault there turns only the window off.
+                        // HERO VR 0.0.77 PROMPT WINDOW (live.txt prompt_window; story077c.hpp), now DEBUG ONLY: the
+                        // game's whole presented frame (its cohtml HUD's prompts are on it, not on the eye images) in a
+                        // window low in both eyes - only with prompt_window = debug_full; off by default since the
+                        // player's test of b8b33ce (a flat copy of the whole game in VR). The prompts are the PROMPT
+                        // CARDS now. Any fault turns only the window off.
                         try {
                             static uint64_t promptLogMs{}, promptFrames{}, promptImages{};
                             const uint32_t promptMode = promptWindowNow.load();
                             bool promptSet = false;
-                            if (promptMode != story077c::promptOff && !saved->flatScreen && !saved->stereoScreen &&
+                            if (promptMode == story077d::windowDebugFull && !saved->flatScreen && !saved->stereoScreen &&
                                 !showScreen && !overlayFault) {
                                 ++promptFrames;
                                 native_gpu::Screen promptImage;
@@ -15419,7 +15565,7 @@ DWORD WINAPI run(void*) {
                                     inset.linear = promptImage.linear;
                                     bool both = true;
                                     for (unsigned eye = 0; eye < 2 && both; ++eye)
-                                        both = story077c::promptRect(promptMode, grade.tangents[eye][0], grade.tangents[eye][1],
+                                        both = story077c::promptRect(story077c::promptOn, grade.tangents[eye][0], grade.tangents[eye][1],
                                                                      grade.tangents[eye][2], grade.tangents[eye][3],
                                                                      targets[eye].width, targets[eye].height,
                                                                      static_cast<float>(promptImage.width) /
@@ -15434,15 +15580,16 @@ DWORD WINAPI run(void*) {
                             if (!promptSet)
                                 overlay.clearInset();
                             const uint64_t promptNowMs = GetTickCount64();
-                            if (!promptLogMs || promptNowMs - promptLogMs >= 10000) {
+                            if (promptMode == story077d::windowDebugFull &&
+                                (!promptLogMs || promptNowMs - promptLogMs >= 10000)) {
                                 promptLogMs = promptNowMs;
                                 char line[300];
-                                sprintf_s(line, "HERO VR 0.0.77 PROMPT WINDOW (CANDIDATE) %s: frames %llu, game images %llu, "
+                                sprintf_s(line, "HERO VR 0.0.77 PROMPT WINDOW (DEBUG) %s: frames %llu, game images %llu, "
                                                 "drawn %llu, screen copies for the window only %d%s%s",
-                                          story077c::promptModeName(promptMode), static_cast<unsigned long long>(promptFrames),
+                                          "DEBUG_FULL", static_cast<unsigned long long>(promptFrames),
                                           static_cast<unsigned long long>(promptImages),
                                           static_cast<unsigned long long>(overlay.insetsDrawn()),
-                                          promptMode != story077c::promptOff && !native_gpu::screenRequested() ? 1 : 0,
+                                          !native_gpu::screenRequested() ? 1 : 0,
                                           overlay.insetFault().empty() ? "" : ", ",
                                           overlay.insetFault().c_str());
                                 consoleLine(line);
@@ -16056,7 +16203,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryThrowAim(void* v) { retu
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryDodge(void* v) { return setLive(v, 0, 1, 5563, storyDodgeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return setLive(v, 0, 2, 5564, headDodgeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
-extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 2, 5566, promptWindowNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 1, 5566, promptWindowNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return setLive(v, 0, 1, 5568, promptCardsNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossDamage(void* v) { return setLive(v, 0, 2, 5567, bossDamageNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);

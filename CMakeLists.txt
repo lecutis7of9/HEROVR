@@ -63,6 +63,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/mesh_model.cpp
             src/suit_wear.cpp
             src/test_notice.cpp
+            src/prompt_cards.cpp
             src/van_screen.cpp
             src/hideout074.cpp
             src/batcave074.cpp
@@ -186,6 +187,10 @@ add_test(NAME story077b COMMAND spidy_story077b_tests)
 add_executable(spidy_story077c_tests tests/story077c_tests.cpp)
 target_include_directories(spidy_story077c_tests PRIVATE include)
 add_test(NAME story077c COMMAND spidy_story077c_tests)
+# HERO VR 0.0.77 PROMPT CARDS (include/spidy/story077d.hpp, src/prompt_cards.cpp).
+add_executable(spidy_story077d_tests tests/story077d_tests.cpp src/prompt_cards.cpp src/overlay_text.cpp)
+target_include_directories(spidy_story077d_tests PRIVATE include)
+add_test(NAME story077d COMMAND spidy_story077d_tests)
 add_executable(spidy_tests tests/core_tests.cpp)
 if(WIN32)
   target_compile_definitions(spidy_tests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)

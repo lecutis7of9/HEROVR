@@ -7598,8 +7598,10 @@ DWORD WINAPI run(void*) {
                             const float grips[2]{frame.hands[0].squeeze, frame.hands[1].squeeze};
                             const auto touch = storyHead.update(
                                 frame.seconds,
-                                steering && !calibrationInput && !layerOn && !phone.live() && !storySwap.running() &&
-                                    storySwapNow.load() != story077::routeOff,
+                                // Gameplay only (0.0.77 launch audit): a hand resting on the headset at the main
+                                // menu or on a game screen must never start the switch's presses.
+                                mapping == game_pad::Mapping::gameplay && steering && !calibrationInput && !layerOn &&
+                                    !phone.live() && !storySwap.running() && storySwapNow.load() != story077::routeOff,
                                 frame.head.position, hands, tracked, triggers, grips);
                             if (touch.cue) {
                                 ++storyCounts.headCues;
@@ -10758,6 +10760,13 @@ DWORD WINAPI run(void*) {
                                 if (route >= story077::routeOff) {
                                     ++storyCounts.refusedOff;
                                     game_prompts::note("HERO VR 0.0.77 SWITCH HERO: refused, live.txt story_swap is off");
+                                } else if (mapping != game_pad::Mapping::gameplay) {
+                                    // 0.0.77 launch audit: never at the main menu, a loading screen or a game
+                                    // screen - the macro's View/X/B would land in the game's menus.
+                                    ++storyCounts.refusedBusy;
+                                    game_prompts::note("HERO VR 0.0.77 SWITCH HERO: refused, not in gameplay "
+                                                       "(main menu, loading or a game screen)");
+                                    consoleLine("HERO VR 0.0.77 SWITCH HERO: refused, not in gameplay");
                                 } else if (!storySwap.start(route, marker)) {
                                     ++storyCounts.refusedBusy;
                                 } else {

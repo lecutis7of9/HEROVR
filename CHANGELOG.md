@@ -2,6 +2,14 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (4) - LAUNCH AUDIT: SWITCH HERO is gameplay-only (TEST build, not released)
+
+- Launch/main-menu audit of every 0.0.77 addition. One risk found and fixed (CANDIDATE, not a crash): the
+  SWITCH HERO head gesture (a hand still on the head for 1.2 s) and the phone's SWITCH HERO could start the
+  switch's View / X / B presses at the main menu, on a loading screen or on a game screen. Both now start only
+  in gameplay. A refused start writes "SWITCH HERO: refused, not in gameplay" and counts in STRY refused_busy.
+  Nothing else changed.
+
 ## hero-0.0.77-story (3) - STORY INPUTS: mashing, sprint, every press counted (TEST build, not released)
 
 - MASH X (CONFIRMED in code): a punch that came while the last punch's X (0.18 s) was still held merged into

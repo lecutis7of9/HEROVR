@@ -69,6 +69,13 @@ class StoryWiring(unittest.TestCase):
         self.assertIn('case PhoneAction::switchHero:', self.game)
         self.assertIn('"SWITCH HERO"', src('src/phone.cpp'))
 
+    def test_swap_gameplay_only(self):
+        # 0.0.77 launch audit: the head gesture and the switch's presses never start at the main menu.
+        at = self.game.index('const auto touch = storyHead.update(')
+        self.assertIn('mapping == game_pad::Mapping::gameplay && steering', self.game[at:at + 600])
+        start = self.game.index('storySwap.start(route, marker)')
+        self.assertIn('} else if (mapping != game_pad::Mapping::gameplay) {', self.game[start - 900:start])
+
     def test_no_forbidden_words(self):
         for p in NEW:
             text = src(p).lower()

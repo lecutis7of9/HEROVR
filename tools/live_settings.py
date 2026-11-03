@@ -509,6 +509,14 @@ SETTINGS = {
                       'no restart needed'),
     'belt_zones': ((0, 1), 'SpidyBeltZones', "BELT ZONES {} (0 on: BATMAN draws the grapple gun only at the left hip, a batarang only at the belt's front centre, a smoke pellet only by grabbing the other forearm, the nearest zone by a margin; 1 off: test 9's buckle smoke, side pouches and any-grip gun; live)"),  # 0.0.74 test 10
     'coming_soon': ((0, 1), 'SpidyComingSoon', "COMING SOON {} (0 on: the hologram's hero tiles show a SOON tab with the heroes coming in 0.0.74, not playable; 1 off: no SOON tab; live)"),  # 0.0.73 COMING SOON
+    # HERO VR 0.0.77 STORY INPUTS (include/spidy/story077.hpp): live, Peter and the second spider.
+    'story_swap': ((0, 3), 'SpidyStorySwap', "STORY SWAP {} (how the phone's SWITCH HERO card and a hand held flat on "
+                   "top of your head for a second switch heroes with the game's own FNSM app - 0 view: hold View, then "
+                   "X; 1 dpad_left / 2 dpad_right: that D-pad shortcut set to Open FNSM App in the game's controls, "
+                   "then X; 3 off) - live, no restart needed"),
+    'story_throw': ((0, 1), 'SpidyStoryThrow', "STORY THROW {} (0 on: both hands held out then yanked back together, "
+                    "or the right stick's click, sends the game's LB + RB web throw on the ground, on walls and in the "
+                    "air, for the debris Sandman throws; 1 off: 0.0.76's ground-only pull) - live, no restart needed"),
     # 0.0.76 HITCH HOLD (include/spidy/hitch_hold.hpp): live, every hero.
     'hitch_hold': ((0, 1), 'SpidyHitchHold', "HITCH HOLD {} (0 on: when Virtual Desktop holds a frame for up to half a "
                    "second, VR play, your webs and the eye view carry on as one short step instead of dropping to the "
@@ -677,6 +685,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'fly_steer': ('on', 'off'),  # 0.0.74 test 10 FLY STEER
                 'fly_flips': ('on', 'off'),  # 0.0.74 test 10 FLY FLIPS
                 'hitch_hold': ('on', 'off'),  # 0.0.76 HITCH HOLD
+                'story_swap': ('view', 'dpad_left', 'dpad_right', 'off'),  # HERO VR 0.0.77 STORY INPUTS
+                'story_throw': ('on', 'off'),  # HERO VR 0.0.77 STORY INPUTS
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
                 'hud_theme': ('spiderman', 'contrast', 'deutan', 'tritan', 'mono', 'raimi'),
@@ -934,6 +944,9 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'fly_steer': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY STEER
            'fly_flips': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY FLIPS
            'hitch_hold': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.76 HITCH HOLD
+           'story_swap': {'view': 0, 'dpad_left': 1, 'dpad_right': 2, 'off': 3, 'on': 0,
+                          '0': 0, '1': 1, '2': 2, '3': 3},  # HERO VR 0.0.77 STORY INPUTS
+           'story_throw': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 STORY INPUTS
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
            'cull_margin': {'10deg': 0, '6deg': 1, '15deg': 2, '20deg': 3, '10_deg': 0, '6_deg': 1, '15_deg': 2, '20_deg': 3, '10': 0, '6': 1, '15': 2, '20': 3, '0': 0, '1': 1, '2': 2, '3': 3},
@@ -1270,6 +1283,7 @@ START_ONLY = START_ONLY + ('vr_texture_detail', 'vr_ao')  # 0.0.76 TEXTURE DETAI
 # 0.0.76 SHADOW STABLE: live, and a line the launcher wrote before the start applies at the start too
 START_ONLY = START_ONLY + ('vr_shadow_stable',)
 START_ONLY = START_ONLY + ('hitch_hold',)  # 0.0.76 HITCH HOLD: an OFF kept between sessions
+START_ONLY = START_ONLY + ('story_swap', 'story_throw')  # HERO VR 0.0.77 STORY INPUTS: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

@@ -2,6 +2,27 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story - STORY INPUTS: the hero switch and the Sandman web throw (TEST build, not released)
+
+On top of v0.0.76 (792386b). SM2 only. **Built and unit-tested, not yet tried in the game.** Every press below is the
+game's own pad button; timings and the PC FNSM button are CANDIDATE until a headset run.
+
+- **SWITCH HERO (Peter / the second spider).** VR never reached the game's own switch: its FNSM app needs View held
+  (VR X tapped is a 0.1 s View, held it is the gadget wheel) and then the game's X held, which VR play never sent.
+  Now the phone's home screen has a **SWITCH HERO** card, and **one hand laid flat on top of your head, still, for
+  1.2 s** (a buzz at 0.5 s, triggers and grips let go) does the same: View held 1 s, then X held 2.2 s, then the
+  hero probe (HSWP) watches 3 s for the new hero; none closes the app with B. Your pause (both sticks in) cancels it.
+  live.txt `story_swap`: `view` (default), `dpad_left` / `dpad_right` (that shortcut set to Open FNSM App in the
+  game's controls), `off`; live.
+- **WEB THROW IN THE AIR (Sandman's debris, "LB + RB (Hold) Throw").** The right stick's click (the game's LB + RB)
+  now goes out while a web carries you too, and the swing lets the game have you for it; and **both hands held out in
+  front (0.3 s) then yanked back to your chest together** holds the game's LB + RB for 1 s, on the ground, on walls
+  or in the air, with no web of yours on. The game picks the highlighted object; nothing of the mod's own grab is
+  used. live.txt `story_throw` (on default, off = 0.0.76's ground-only pull); live.
+- **DIAGNOSTICS.** The timeline and console say each step: SWITCH HERO asked (phone / head), each phase, the result
+  (switched / no new hero / cancelled), each throw (yank or click, ground or air). The new STRY record
+  (SpidyStoryData) puts the counts in update37.json and one line in the report.
+
 ## hero-0.0.76-bikes - a Harley for each hero, Cap's chest-draw grapple, Punisher holo guard (TEST build, not released)
 
 On top of test 27041ea (AO ON + ONE PAGE). SM2 only. **Built and unit-tested, not yet tried in the game.**

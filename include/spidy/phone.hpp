@@ -22,6 +22,9 @@ constexpr int phoneButtons = 4;
 // fnsm app from the 2nd game").
 enum class PhoneScreen : int { home, music, map, gear };
 constexpr int phoneApps = 3; // music, map, gear, in that order on the home screen
+// HERO VR 0.0.77: the home screen's last card, SWITCH HERO, opens no screen: A on it puts the phone away and
+// asks the game's own hero switch (story077::SwapMacro).
+constexpr int phoneHomeItems = phoneApps + 1, phoneSwitchItem = phoneApps;
 // The controllers while the phone is out, as steps: the stick pushed one way
 // (x: -1 left, 1 right; y: -1 down, 1 up), A, B, and the volume from the
 // triggers, a pull of the left one a step down and of the right one a step up
@@ -50,7 +53,7 @@ class PhoneControls {
 // picks an app and A opens it, B puts the phone away; in an app B goes home.
 // In MUSIC left and right pick a button and A presses it; in GEAR up and down
 // scroll the list.
-enum class PhoneAction : int { none, close, previous, play, next, autoplay };
+enum class PhoneAction : int { none, close, previous, play, next, autoplay, switchHero };
 class PhoneUi {
   public:
     // Rows GEAR shows at once.

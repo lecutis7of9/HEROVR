@@ -7025,7 +7025,10 @@ int main() {
         step(E{0,-1});
         check(ui.app()==1,"down did not pick MAP");
         step(E{0,1});step(E{0,1});
-        check(ui.app()==2,"up from MUSIC did not wrap to GEAR");
+        check(ui.app()==3,"up from MAP did not wrap to SWITCH HERO");
+        check(step(E{0,0,true})==PhoneAction::switchHero&&ui.screen()==PhoneScreen::home,"A on SWITCH HERO did not ask the switch");
+        step(E{0,1});
+        check(ui.app()==2,"up from SWITCH HERO did not pick GEAR");
         step(E{0,0,true});
         check(ui.screen()==PhoneScreen::gear,"A did not open GEAR");
         step(E{0,-1},9);step(E{0,-1},9);step(E{0,-1},9);step(E{0,-1},9);

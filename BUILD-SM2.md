@@ -3010,3 +3010,8 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   FOVEATED FPS and SLOT TEST presses have no live.txt key. graphicsPage stays a constant (pages 8) with no sections;
   setPage(graphicsPage) opens vrPage and the page arrows pass it (pagePassed). SM1's hologram is unchanged (it has
   no VR SETTINGS or GRAPHICS page). Tests: tests/hero076_ao_holo_tests.py, tests/core_tests.cpp (placed 198).
+
+- HERO VR 0.0.77 STORY INPUTS (include/spidy/story077.hpp, tests/story077_tests.cpp, tests/hero077_story_tests.py):
+  SWITCH HERO (phone card / a hand on the head) presses the game's own FNSM switch (story_swap: view, dpad_left,
+  dpad_right, off; SpidyStorySwap 5559); the web throw's LB + RB in the air and by a two-hand yank (story_throw: on,
+  off; SpidyStoryThrow 5560); the STRY record SpidyStoryData (update37_records.py parse_story).

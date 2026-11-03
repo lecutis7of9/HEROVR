@@ -17,6 +17,7 @@ MPRB  SpidyMirrorProbeData include/spidy/mirror_probe.hpp  Update 38.4 MIRROR PR
 WMUZ  SpidyWristMuzzleData include/spidy/wrist_muzzle.hpp  Update 38.5 BALL LOOK WRIST: web-shooter muzzle moves (CANDIDATE)
 HSWP  SpidyHeroSwitchData  include/spidy/hero_switch.hpp   Update 38.5 HERO SWITCH PROBE: a real Peter / Miles switch, re-attached
 BLOM  SpidyEyeBloomData    include/spidy/eye_bloom.hpp     0.0.73 lights: EYE BLOOM in force (OFF/COPY/GATE), reverts, eye jobs
+STRY  SpidyStoryData       include/spidy/story077.hpp      HERO VR 0.0.77 STORY INPUTS: the hero switch's presses, the web throw
 AIRW  SpidyAirWatchData    include/spidy/air_watch.hpp     Update 38.5 Y IN THE AIR: Y presses, the game's moves out of the swing's flight (a glide's sign), read-only
 
 Each is a seqlock record (an odd sequence: being written; read again).
@@ -58,6 +59,8 @@ RECORDS = {
     'wrist_muzzle': ('SpidyWristMuzzleData', 0x5a554d57, 1, 144),
     'hero_switch': ('SpidyHeroSwitchData', 0x50575348, 1, 112),
     'air_watch': ('SpidyAirWatchData', 0x57524941, 1, 104),
+    # HERO VR 0.0.77
+    'story': ('SpidyStoryData', 0x59525453, 1, 96),
     # Version 0.0.3
     'v003': ('SpidyV003Data', 0x33303056, 1, 5200),
     # Version 0.0.5
@@ -514,6 +517,26 @@ def parse_hero_switch(raw):
                 gaps_without_hero=gaps)
 
 
+STORY_ROUTES = ('HOLD VIEW', 'D-PAD LEFT', 'D-PAD RIGHT', 'OFF')
+STORY_PHASES = ('done', 'opening the FNSM app', 'waiting for the app', 'holding X', 'watching for the new hero',
+                'closing the app (B)')
+STORY_RESULTS = ('none yet', 'switched', 'no new hero, closed with B', 'cancelled')
+
+
+def parse_story(raw):
+    """HERO VR 0.0.77 STORY INPUTS (story077.hpp Data; the game's own presses only)."""
+    if not _header(raw, 'story'):
+        return None
+    (route, throw_on, starts, from_phone, from_gesture, switched, closed, cancelled, phase, last, yanks,
+     yanks_air, clicks, clicks_air, pull_frames, pull_frames_air, cues, busy, off) = struct.unpack_from('<19I', raw, 12)
+    return dict(route=_name(STORY_ROUTES, route), throw_on=bool(throw_on), swap_starts=starts,
+                swap_from_phone=from_phone, swap_from_gesture=from_gesture, swap_switched=switched,
+                swap_closed_no_change=closed, swap_cancelled=cancelled, swap_phase=_name(STORY_PHASES, phase),
+                swap_last=_name(STORY_RESULTS, last), throw_yanks=yanks, throw_yanks_in_air=yanks_air,
+                throw_clicks=clicks, throw_clicks_in_air=clicks_air, lb_rb_frames=pull_frames,
+                lb_rb_frames_in_air=pull_frames_air, head_cues=cues, refused_busy=busy, refused_off=off)
+
+
 def parse_air_watch(raw):
     """Update 38.5: Y IN THE AIR (air_watch.hpp Data; read-only)."""
     if not _header(raw, 'air_watch'):
@@ -855,7 +878,7 @@ def parse_v006(raw):
                 supersonic_reached=round(sonic_last, 1), supersonic_best=round(sonic_best, 1))
 
 
-PARSERS = dict(air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
+PARSERS = dict(story=parse_story, air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
                health=parse_health, mirror=parse_mirror, world_trace=parse_world_trace, blood=parse_blood,
                perf=parse_perf, color=parse_color, fovea=parse_fovea, npc_fade=parse_npc_fade,
                combat38=parse_combat38, mirror_probe=parse_mirror_probe, wrist_muzzle=parse_wrist_muzzle,
@@ -1030,6 +1053,15 @@ def console_lines(records):
                          f"back after {hs['view_back']}, body back after {hs['body_back']}, game screen after "
                          f"{hs['screen_after']}; latest: no hero {hs['last_gap_ms']} ms, view {hs['last_view_ms']} ms, "
                          f"body {hs['last_body_ms']} ms (worst {hs['worst_view_ms']} / {hs['worst_body_ms']} ms).")
+    st = (records or {}).get('story')
+    if st and 'swap_starts' in st:
+        lines.append(f"HERO VR 0.0.77 STORY INPUTS: SWITCH HERO ({st['route']}) asked {st['swap_starts']} times "
+                     f"({st['swap_from_phone']} phone, {st['swap_from_gesture']} head gesture): {st['swap_switched']} "
+                     f"switched, {st['swap_closed_no_change']} no new hero (closed with B), {st['swap_cancelled']} "
+                     f"cancelled; last {st['swap_last']}. WEB THROW ({'on' if st['throw_on'] else 'off'}): "
+                     f"{st['throw_yanks']} two-hand yanks ({st['throw_yanks_in_air']} in the air), {st['throw_clicks']} "
+                     f"stick clicks ({st['throw_clicks_in_air']} in the air); LB + RB sent {st['lb_rb_frames']} frames "
+                     f"({st['lb_rb_frames_in_air']} in the air).")
     aw = (records or {}).get('air_watch')
     if aw and 'y_sent' in aw:
         lines.append(f"Update 38.5 Y IN THE AIR: {aw['y_sent']} Y presses sent ({aw['y_in_air']} in the swing's flight); "

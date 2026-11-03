@@ -60,6 +60,7 @@
 #include "spidy/world_trace.hpp"
 #include "spidy/wrist_muzzle.hpp"
 #include "spidy/hero_switch.hpp"
+#include "spidy/story077.hpp" // HERO VR 0.0.77 STORY INPUTS
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
 #include "spidy/blood_splatter.hpp"
@@ -620,6 +621,7 @@ __declspec(dllexport) foveation::Data SpidyFoveaData;  // Update 37.2: FOVEATED 
 __declspec(dllexport) spidy::combat38::Data SpidyCombat38Data; // Update 38: the COMBAT page (CMB8)
 __declspec(dllexport) spidy::hero_switch::Data SpidyHeroSwitchData; // Update 38.5: HERO SWITCH PROBE (HSWP)
 __declspec(dllexport) spidy::air_watch::Data SpidyAirWatchData;     // Update 38.5: Y IN THE AIR (AIRW)
+__declspec(dllexport) spidy::story077::Data SpidyStoryData;         // HERO VR 0.0.77 STORY INPUTS (STRY)
 __declspec(dllexport) spidy::v003::Data SpidyV003Data;               // Version 0.0.3 (V003)
 __declspec(dllexport) spidy::v005::Data SpidyV005Data;               // Version 0.0.5 (V005)
 __declspec(dllexport) spidy::v006::Data SpidyV006Data;               // Version 0.0.6 (V006)
@@ -1339,6 +1341,14 @@ std::atomic<uint32_t> webStyleNow{1};
 // 0.0.76 HITCH HOLD (live.txt hitch_hold, hitch_hold.hpp): 0 ON (the default: a runtime hitch of 0.1-0.5 s is
 // played as a 0.1 s frame, VR play goes on), 1 OFF (c71a59c: such a frame leaves VR play for the game screen).
 std::atomic<uint32_t> hitchHoldNow{0};
+// HERO VR 0.0.77 STORY INPUTS (story077.hpp): live.txt story_swap (0 HOLD VIEW, 1 D-PAD LEFT, 2 D-PAD RIGHT, 3 OFF:
+// how the hero switch opens the game's FNSM app) and story_throw (0 ON, 1 OFF: the two-hand yank and the right
+// stick's click send the game's LB + RB in the air too).
+std::atomic<uint32_t> storySwapNow{story077::viewHold};
+std::atomic<uint32_t> storyThrowNow{0};
+static_assert(story077::pad::dpadLeft == game_pad::dpadLeft && story077::pad::dpadRight == game_pad::dpadRight &&
+              story077::pad::back == game_pad::back && story077::pad::lb == game_pad::leftShoulder &&
+              story077::pad::rb == game_pad::rightShoulder && story077::pad::b == game_pad::b && story077::pad::x == game_pad::x);
 std::atomic<uint32_t> webShades[web_style::count]{};
 // The wrist hologram (Update 14, wrist_hud.hpp): live.txt hud (on), hud_hand
 // (0 the left wrist, 1 the right) and hud_scale (percent). wristHudFault: it
@@ -2232,6 +2242,15 @@ DWORD WINAPI run(void*) {
         // Update 38.5 HERO SWITCH PROBE (hero_switch.hpp): a real Peter / Miles switch, re-attached.
         hero_switch::Watch heroSwitch;
         uint32_t heroSwitchSeen{}, heroSwitchPending{};
+        // HERO VR 0.0.77 STORY INPUTS (story077.hpp): the hero switch's presses (asked by the phone's SWITCH HERO
+        // or a hand on the head: storySwapAsk 1 / 2), the two-hand web throw, and the STRY counts.
+        story077::SwapMacro storySwap;
+        story077::HeadTouch storyHead;
+        story077::TwoHandYank storyYank;
+        story077::Data storyCounts{};
+        story077::SwapMacro::Phase storyPhaseSeen = story077::SwapMacro::idle;
+        uint32_t storySwapAsk{};
+        bool storyPulling{};
         // Update 38.5 Y IN THE AIR (air_watch.hpp): Y presses sent, in the swing's flight, GRAB WEB
         // yanks on the WEB YANK input, in the air; the swing module's AirYield counts last seen.
         uint64_t ySent{}, yInAir{}, grabYankInputs{}, yanksInAir{}, yieldsNoted{}, outlivedNoted{};
@@ -3625,6 +3644,9 @@ DWORD WINAPI run(void*) {
                         case PhoneAction::autoplay:
                             phoneMusic.setAutoplay(!phoneMusic.status().autoplay);
                             break;
+                        case PhoneAction::switchHero: // HERO VR 0.0.77: the game's own switch, pressed for you
+                            storySwapAsk = 1;
+                            break;
                         case PhoneAction::none:
                         case PhoneAction::close:
                             break;
@@ -3634,6 +3656,10 @@ DWORD WINAPI run(void*) {
                         if (use.action == PhoneAction::close) {
                             runtime.haptic(1, .15f);
                             message(3, 0, "Phone away - each control is the game's again once let go of");
+                        }
+                        if (use.action == PhoneAction::switchHero) {
+                            runtime.haptic(1, .3f);
+                            message(3, 0, "SWITCH HERO - opening the game's FNSM app and holding X (let go of the controls)");
                         }
                     }
                     uint64_t changes{};
@@ -7369,9 +7395,46 @@ DWORD WINAPI run(void*) {
                         const bool pullClick =
                             frame.hands[1].stickClick && !(named & game_pad::NamedPress::rightClick) &&
                             !flyNow.flying && !flyChord.claims(); // Update 38.5: while flying R3 is FLY's
-                        const bool pulled =
-                            pullPress.update(frame.seconds, reaching, pullClick, frame.hands[0].stickClick) ||
-                            (yanked && playing);
+                        // HERO VR 0.0.77 STORY INPUTS: the game's web throw ("LB + RB (Hold) Throw", the
+                        // Sandman opener's debris) wherever the game offers it, in the air too: the click
+                        // while a web carries him, and both hands held out then yanked back together
+                        // (story077::TwoHandYank) - never a web of ours, never while one is on.
+                        const bool storyThrow = storyThrowNow.load() == 0;
+                        bool storyYanked{};
+                        {
+                            Vec3 hands[2]{frame.hands[0].grip.position, frame.hands[1].grip.position};
+                            const bool tracked[2]{frame.hands[0].valid, frame.hands[1].valid};
+                            const float triggers[2]{frame.hands[0].trigger, frame.hands[1].trigger};
+                            const bool webOn = swingState.webs[0].attached || swingState.webs[1].attached ||
+                                               grabPhases[0] || grabPhases[1];
+                            const uint32_t yanksWere = storyYank.yanks;
+                            storyYanked = storyYank.update(
+                                frame.seconds,
+                                storyThrow && (reaching || inFlight) && !layerOn && !phone.live() && !fly076Flying,
+                                frame.head.position, frame.head.orientation.rotate({0, 0, -1}), hands, tracked,
+                                triggers, webOn);
+                            if (storyYank.yanks != yanksWere) {
+                                ++storyCounts.yanks;
+                                storyCounts.yanksInAir += inFlight;
+                                runtime.haptic(0, .6f);
+                                runtime.haptic(1, .6f);
+                                char line[128];
+                                sprintf_s(line, "HERO VR 0.0.77 THROW: two-hand yank #%u -> the game's LB + RB held 1 s (%s)",
+                                          storyYank.yanks, inFlight ? "in the air" : "on the ground or a wall");
+                                game_prompts::note(line);
+                                consoleLine(line);
+                            }
+                        }
+                        const bool clickPulled = pullPress.update(frame.seconds, reaching || (storyThrow && inFlight),
+                                                                  pullClick, frame.hands[0].stickClick);
+                        const bool pulled = clickPulled || (yanked && playing) || storyYanked;
+                        if (clickPulled && !storyPulling) {
+                            ++storyCounts.clickPulls;
+                            storyCounts.clickPullsInAir += inFlight;
+                            if (inFlight)
+                                game_prompts::note("HERO VR 0.0.77 THROW: right stick click in the air -> the game's LB + RB");
+                        }
+                        storyPulling = clickPulled;
                         // A yank at a thing the game is prompting both triggers for
                         // sends those (its LT + RT for a vent as readily as its
                         // LB + RB for a door): the gesture is the player's first way
@@ -7427,7 +7490,33 @@ DWORD WINAPI run(void*) {
                         // dive it asks for, its web swing, its Ground Strike.
                         askingGame = steering && swingState.owned && !calibrationInput &&
                                      (walk.zip ||
-                                      (inFlight && (walk.interact || walk.demand.any() || named != 0)));
+                                      (inFlight && (walk.interact || walk.demand.any() || named != 0)) ||
+                                      (storyThrow && inFlight && walk.pull)); // 0.0.77: the web throw in the air
+                        if (walk.pull) {
+                            ++storyCounts.pullFrames;
+                            storyCounts.pullFramesInAir += inFlight;
+                        }
+                        // HERO VR 0.0.77 SWITCH HERO gesture: one hand flat on top of the head, still, 1.2 s.
+                        {
+                            Vec3 hands[2]{frame.hands[0].grip.position, frame.hands[1].grip.position};
+                            const bool tracked[2]{frame.hands[0].valid, frame.hands[1].valid};
+                            const float triggers[2]{frame.hands[0].trigger, frame.hands[1].trigger};
+                            const float grips[2]{frame.hands[0].squeeze, frame.hands[1].squeeze};
+                            const auto touch = storyHead.update(
+                                frame.seconds,
+                                steering && !calibrationInput && !layerOn && !phone.live() && !storySwap.running() &&
+                                    storySwapNow.load() != story077::routeOff,
+                                frame.head.position, hands, tracked, triggers, grips);
+                            if (touch.cue) {
+                                ++storyCounts.headCues;
+                                runtime.haptic(touch.hand < 0 ? 0 : touch.hand, .15f);
+                            }
+                            if (touch.fired) {
+                                storySwapAsk = 2;
+                                runtime.haptic(touch.hand, .5f);
+                                message(3, 0, "SWITCH HERO - hand on your head: the game's FNSM app, X held (let go of the controls)");
+                            }
+                        }
                         walk.jump = (keys & swingJumpKey) != 0;
                         // A jump on the game's own crawl - the player's, a web's
                         // takeoff, or the mount's that walks him on from it onto
@@ -10476,6 +10565,72 @@ DWORD WINAPI run(void*) {
                                           static_cast<unsigned long long>(heroWebsTaken));
                                 game_prompts::note(line);
                             }
+                        }
+                        // HERO VR 0.0.77 SWITCH HERO (story077::SwapMacro): the game's own switch, pressed in order -
+                        // its FNSM app opened (story_swap's way), X held, then the hero probe watched; no new hero
+                        // within 3 s closes the app with B. While it runs its presses are the pad's only ones.
+                        {
+                            const auto& hs = heroSwitch.data();
+                            const uint64_t marker = static_cast<uint64_t>(hs.swaps) + hs.gapsWithoutHero;
+                            if (const uint32_t ask = std::exchange(storySwapAsk, 0u)) {
+                                const uint32_t route = storySwapNow.load();
+                                if (route >= story077::routeOff) {
+                                    ++storyCounts.refusedOff;
+                                    game_prompts::note("HERO VR 0.0.77 SWITCH HERO: refused, live.txt story_swap is off");
+                                } else if (!storySwap.start(route, marker)) {
+                                    ++storyCounts.refusedBusy;
+                                } else {
+                                    storyCounts.swapFromPhone += ask == 1;
+                                    storyCounts.swapFromGesture += ask == 2;
+                                    char line[160];
+                                    sprintf_s(line, "HERO VR 0.0.77 SWITCH HERO #%u from the %s: %s, then X held",
+                                              storySwap.starts, ask == 1 ? "phone" : "head gesture",
+                                              story077::routeName(route));
+                                    game_prompts::note(line);
+                                    consoleLine(line);
+                                }
+                            }
+                            if (storySwap.running() && (pad.buttons & game_pad::start))
+                                storySwap.cancel(); // the player's pause wins
+                            const uint16_t swapKeys =
+                                storySwap.update(frame.seconds, mapping != game_pad::Mapping::none && !flatScreen, marker);
+                            if (storySwap.running()) {
+                                pad = {};
+                                pad.buttons = swapKeys;
+                            }
+                            if (storySwap.changed(storyPhaseSeen)) {
+                                char line[200];
+                                if (storyPhaseSeen != story077::SwapMacro::idle) {
+                                    sprintf_s(line, "HERO VR 0.0.77 SWITCH HERO: %s", story077::phaseName(storyPhaseSeen));
+                                } else {
+                                    const auto r = storySwap.last();
+                                    sprintf_s(line, "HERO VR 0.0.77 SWITCH HERO result: %s",
+                                              r == story077::SwapMacro::switched
+                                                  ? "the hero was replaced (the switch went through)"
+                                              : r == story077::SwapMacro::closedNoChange
+                                                  ? "no new hero in 3 s, the app closed with B (switch not allowed here, "
+                                                    "or the app did not open: try live.txt story_swap)"
+                                                  : "cancelled (no headset session)");
+                                    message(3, 0, r == story077::SwapMacro::switched ? "SWITCH HERO - switched"
+                                                  : r == story077::SwapMacro::closedNoChange
+                                                      ? "SWITCH HERO - no switch (not allowed here, or the app did not open)"
+                                                      : "SWITCH HERO - cancelled");
+                                }
+                                game_prompts::note(line);
+                                consoleLine(line);
+                            }
+                            storyCounts.route = storySwapNow.load();
+                            storyCounts.throwOn = storyThrowNow.load() == 0;
+                            storyCounts.swapStarts = storySwap.starts;
+                            storyCounts.swapSwitched = storySwap.switchedCount;
+                            storyCounts.swapClosed = storySwap.closedCount;
+                            storyCounts.swapCancelled = storySwap.cancelledCount;
+                            storyCounts.swapPhase = storySwap.phase();
+                            storyCounts.swapLast = storySwap.last();
+                            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyStoryData.sequence));
+                            const uint64_t sequence = SpidyStoryData.sequence;
+                            SpidyStoryData = storyCounts;
+                            SpidyStoryData.sequence = sequence + 1;
                         }
                         game_pad::submit(pad, 200);
                         // Update 38.5 Y IN THE AIR: read-only counts (no glide state is read; air_watch.hpp).
@@ -15509,6 +15664,9 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebPhysics(void* on) { return
 // 0.0.76 HITCH HOLD, live: 0 ON (the default: a 0.1-0.5 s runtime hitch keeps VR play, its webs and eyes),
 // 1 OFF (c71a59c: such a frame leaves VR play).
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHitchHold(void* v) { return setLive(v, 0, 1, 5558, hitchHoldNow, asU32); }
+// HERO VR 0.0.77 STORY INPUTS (story077.hpp): live.txt story_swap and story_throw.
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySwap(void* v) { return setLive(v, 0, 3, 5559, storySwapNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryThrow(void* v) { return setLive(v, 0, 1, 5560, storyThrowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);
 }

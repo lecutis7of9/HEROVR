@@ -20,7 +20,8 @@ NEW = ('include/spidy/story077b.hpp', 'tests/story077b_tests.cpp', 'tests/hero07
 KEYS = {'story_abilities': ('SpidyStoryAbilities', 5561, ('on', 'off')),
         'story_throw_aim': ('SpidyStoryThrowAim', 5562, ('look', 'point', 'off')),
         'story_dodge': ('SpidyStoryDodge', 5563, ('on', 'off')),
-        'head_dodge': ('SpidyHeadDodge', 5564, ('fight', 'always', 'off'))}
+        'head_dodge': ('SpidyHeadDodge', 5564, ('fight', 'always', 'off')),
+        'story_sprint': ('SpidyStorySprint', 5565, ('on', 'off'))}
 
 
 def src(p):
@@ -102,6 +103,42 @@ class MovesRecord(unittest.TestCase):
         lines = R.console_lines({'story_moves': d})
         if lines is not None:
             self.assertTrue(any('STORY MOVES' in l for l in lines))
+
+
+class StoryInputs(unittest.TestCase):
+    def test_inputs_record(self):
+        self.assertEqual(R.RECORDS['story_inputs'], ('SpidyStoryInputsData', 0x43525453, 1, 192))
+        n = len(R.STORY_INPUTS)
+        self.assertEqual(n, 13)
+        presses = list(range(1, n + 1))
+        air = [0] * n
+        air[0] = 4
+        raw = (struct.pack('<3I', 0x43525453, 1, 192) + struct.pack('<I', 1) + struct.pack(f'<{n}I', *presses) +
+               struct.pack(f'<{n}I', *air) + struct.pack('<3I', 9, 6, 3) + struct.pack('<3I', 5, 2, 300) +
+               struct.pack('<10I', *([0] * 10)) + struct.pack('<Q', 2))
+        self.assertEqual(len(raw), 192)
+        d = R.parse_story_inputs(raw)
+        self.assertTrue(d['sprint_on'])
+        self.assertEqual(d['presses']['B (dodge)'], 1)
+        self.assertEqual(d['in_air']['B (dodge)'], 4)
+        self.assertEqual(d['presses']['LB+Y (ability)'], 13)
+        self.assertEqual(d['best_x_per_s'], 9)
+        self.assertEqual(d['mash_splits'], 5)
+        self.assertEqual(d['sprint_frames'], 300)
+        lines = R.console_lines({'story_inputs': d})
+        if lines is not None:
+            self.assertTrue(any('STORY INPUTS (the game' in l for l in lines))
+        self.assertIn('static_assert(sizeof(InputsData) == 192);', src('include/spidy/story077b.hpp'))
+
+    def test_wired(self):
+        g = src('src/game_xr.cpp')
+        self.assertIn('SpidyStoryInputsData', g)
+        watch = g.index('inputWatch.update(')
+        self.assertLess(watch, g.index('game_pad::submit(pad, 200);', watch))
+        self.assertIn('storySprint.update(', g)
+        c = src('include/spidy/combat_input.hpp')
+        self.assertIn('void punchAgain()', c)
+        self.assertNotIn('punchUntil_ = now_ + Config::punchPulse;\n                    meleeWant_', c)
 
 
 if __name__ == '__main__':

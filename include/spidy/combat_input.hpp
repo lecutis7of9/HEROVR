@@ -539,6 +539,7 @@ class Machine {
                     s.state = f.hands[i].button < release ? State::idle : State::spent;
             }
             pulseUntil_ = comboUntil_ = punchUntil_ = zipUntil_ = assistUntil_ = pulseFrom_ = 0;
+            gapUntil_ = 0;
             queued_ = 0;
             everyHit_.clear(); // Version 0.0.4: no waiting blow survives a pause
             ballLast_ = -1e3f;
@@ -884,7 +885,7 @@ class Machine {
         }
         // SPIDYVR MOVE: the bridge's lunge landed - the game's X now (its own blow).
         if (c.punch && f.lungeLanded && bridgeFlies) {
-            punchUntil_ = now_ + Config::punchPulse;
+            punchAgain();
             meleeWant_ = true;
             ++lungesLanded_;
         }
@@ -1103,7 +1104,7 @@ class Machine {
                     startZip(f, c, locked, fightList);
                     ++fired_[zipStrike];
                 } else if (!c.noPunchX) {
-                    punchUntil_ = now_ + Config::punchPulse;
+                    punchAgain();
                     meleeWant_ = true;
                 }
                 ++punches_[i];
@@ -1253,7 +1254,7 @@ class Machine {
                 b |= padX;
                 out.stickNeutral = true;
             }
-        } else if (now_ < punchUntil_) {
+        } else if (now_ < punchUntil_ && now_ >= gapUntil_) {
             b |= padX;
         }
         meleeWant_ = false;
@@ -1308,6 +1309,10 @@ class Machine {
     uint32_t yCalledOff() const { return yCalledOff_; }
     uint32_t yWaited() const { return yWaited_; }
     uint64_t lungesLanded() const { return lungesLanded_; }
+    // HERO VR 0.0.77 STORY MOVES: punches that came while the last one's X was still held (a mash), each
+    // let go for mashGap first so the game reads a new press ("Rapidly Press Square").
+    uint64_t mashSplits() const { return mashSplits_; }
+    static constexpr float mashGap = .04f;
     uint64_t yanks() const { return yanks_; }
     uint64_t lockChanges() const { return lockChanges_; }
     uint64_t lookSwitches() const { return lookSwitches_; }   // Update 38.3
@@ -1526,6 +1531,18 @@ class Machine {
     static constexpr double snapContact = .6;   // that swing's contact is the same blow
     WebStrike strike_{};
     std::vector<PunchEvent> events_;
+    uint64_t mashSplits_{};
+    float gapUntil_{};
+    // A punch's X: held punchPulse; one while the last one's is still held lets go for mashGap first.
+    void punchAgain() {
+        if (now_ < punchUntil_ && now_ >= gapUntil_) {
+            gapUntil_ = now_ + mashGap;
+            punchUntil_ = gapUntil_ + Config::punchPulse;
+            ++mashSplits_;
+        } else if (now_ >= punchUntil_) {
+            punchUntil_ = now_ + Config::punchPulse;
+        }
+    }
     uint64_t lockedLast_{}, lunges_{}, lungesLanded_{}, yanks_{}, lockChanges_{}, sightUnknown_{};
     // Update 38.1
     WebStrikeConfig strikeConfig_{};

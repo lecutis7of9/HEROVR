@@ -1,5 +1,6 @@
 // HERO VR 0.0.77 STORY MOVES (include/spidy/story077b.hpp): the ability button, the throw's aim, the dodge,
 // pure and frame by frame. Made by Agent Mulder.
+#include <string>
 #include "spidy/story077b.hpp"
 
 #include <cstdio>
@@ -265,9 +266,55 @@ void dodgeTests() {
         check(k.update(dt, false, duck, right) == 0, "off");
     }
 }
+void inputTests() {
+    InputWatch w;
+    const float dt = 1.f / 90;
+    // X mashed 8 times in a second, each pressed 2 frames.
+    uint32_t xs{};
+    for (int i = 0; i < 90; ++i) {
+        const bool x = (i % 11) < 2;
+        xs += (w.update(dt, x ? pad::x : 0, 0, 0, i > 45) >> inX) & 1u;
+    }
+    check(xs == 9 && w.presses[inX] == 9, "the mashed X presses were not each counted");
+    check(w.best1s[0] >= 8, "the X rate was not kept");
+    check(w.inAir[inX] >= 3, "the presses in the air were not counted");
+    // LB + RB held is one throw; let go and again is two.
+    w.update(dt, pad::lb | pad::rb, 0, 0, false);
+    w.update(dt, pad::lb | pad::rb, 0, 0, false);
+    w.update(dt, 0, 0, 0, false);
+    w.update(dt, pad::lb | pad::rb, 0, 0, true);
+    check(w.presses[inLbRb] == 2 && w.inAir[inLbRb] == 1, "LB + RB repeats");
+    check(w.presses[inRb] == 2, "RB in the throw");
+    w.update(dt, pad::y | pad::b, 0, 0, false);
+    check(w.presses[inYB] == 1, "Y + B");
+    w.update(dt, 0, 255, 255, false);
+    check(w.presses[inLtRt] == 1 && w.presses[inRtHold] == 0, "LT + RT is not a sprint");
+    w.update(dt, 0, 0, 255, false);
+    check(w.presses[inRtHold] == 1, "RT held");
+    check(std::string(inputName(inDpadDown)).find("heal") != std::string::npos, "names");
+
+    StorySprint s;
+    bool run = false;
+    for (int i = 0; i < 9; ++i)
+        run = s.update(dt, true, true, 0, 1);
+    check(!run, "the sprint came before 0.15 s");
+    for (int i = 0; i < 9; ++i)
+        run = s.update(dt, true, true, 0, 1);
+    check(run && s.starts == 1, "a full push did not run");
+    check(s.update(dt, true, true, .7f, 0), "the run dropped above release");
+    check(!s.update(dt, true, true, .3f, 0), "the run kept on under release");
+    for (int i = 0; i < 30; ++i)
+        run = s.update(dt, true, false, 0, 1);
+    check(!run, "the sprint ran in the air");
+    for (int i = 0; i < 30; ++i)
+        run = s.update(dt, false, true, 0, 1);
+    check(!run, "the sprint ran while off");
+    static_assert(sizeof(InputsData) == 192);
+}
 } // namespace
 
 int main() {
+    inputTests();
     abilityTests();
     aimTests();
     dodgeTests();

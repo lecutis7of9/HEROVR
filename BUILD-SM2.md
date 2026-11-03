@@ -3016,6 +3016,8 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   dpad_right, off; SpidyStorySwap 5559); the web throw's LB + RB in the air and by a two-hand yank (story_throw: on,
   off; SpidyStoryThrow 5560); the STRY record SpidyStoryData (update37_records.py parse_story).
 
+- HERO VR 0.0.77 STORY INPUTS (3): mashed punches each a new X (combat_input.hpp punchAgain), story_sprint
+  (SpidyStorySprint 5565, the ground run's RT), and the STRC record SpidyStoryInputsData (parse_story_inputs).
 - HERO VR 0.0.77 STORY MOVES (include/spidy/story077b.hpp, tests/story077b_tests.cpp, tests/hero077_moves_tests.py):
   abilities from VR X held (story_abilities: on, off; SpidyStoryAbilities 5561), the LB + RB throw's aim
   (story_throw_aim: look, point, off; SpidyStoryThrowAim 5562), B dodging in the air and on walls plus the

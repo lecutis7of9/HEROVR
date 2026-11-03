@@ -2,6 +2,21 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (3) - STORY INPUTS: mashing, sprint, every press counted (TEST build, not released)
+
+- MASH X (CONFIRMED in code): a punch that came while the last punch's X (0.18 s) was still held merged into
+  one long press, so "Rapidly Press Square" got one press for many punches. Now each such punch lets X go
+  for 0.04 s first, so every punch is a new press (combat_input.hpp punchAgain; counted as mash splits).
+- STORY SPRINT (CANDIDATE, live.txt story_sprint, SpidyStorySprint 5565): the left stick pushed all the way on
+  the ground for 0.15 s holds the game's RT (its run) until the stick drops under 0.6. VR sent no RT on the
+  ground except while crawling. This is for the run-for-your-life and up-the-roof sections.
+- STORY INPUTS diagnostics (STRC SpidyStoryInputsData, parse_story_inputs): every press the game is sent is
+  counted, with how many were in the air, for B, LB+RB, Y, RB, X, LB+X, Y+B, D-pad down, LT+RT, A, RT held,
+  LB+B and LB+Y. The record also keeps the most presses in 1 s for X, RB and LB+RB. Each press writes a
+  "HERO VR 0.0.77 INPUT" note (at most one per input per 0.25 s), and the summary gets a line.
+- The phone's STORY MOVES card adds the Spider-Arms / symbiote note (the same LB slots), Surge (X held +
+  stick click), mashing and the sprint.
+
 ## hero-0.0.77-story (2) - STORY MOVES: abilities, aimed throws, dodges anywhere (TEST build, not released)
 
 On top of 081c102 (STORY INPUTS). SM2 only. **Built and unit-tested, not yet tried in the game.** Every press is the

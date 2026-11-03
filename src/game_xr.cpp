@@ -624,6 +624,7 @@ __declspec(dllexport) spidy::hero_switch::Data SpidyHeroSwitchData; // Update 38
 __declspec(dllexport) spidy::air_watch::Data SpidyAirWatchData;     // Update 38.5: Y IN THE AIR (AIRW)
 __declspec(dllexport) spidy::story077::Data SpidyStoryData;         // HERO VR 0.0.77 STORY INPUTS (STRY)
 __declspec(dllexport) spidy::story077b::Data SpidyStoryMovesData;   // HERO VR 0.0.77 STORY MOVES (STRB)
+__declspec(dllexport) spidy::story077b::InputsData SpidyStoryInputsData; // HERO VR 0.0.77 STORY INPUTS (STRC)
 __declspec(dllexport) spidy::v003::Data SpidyV003Data;               // Version 0.0.3 (V003)
 __declspec(dllexport) spidy::v005::Data SpidyV005Data;               // Version 0.0.5 (V005)
 __declspec(dllexport) spidy::v006::Data SpidyV006Data;               // Version 0.0.6 (V006)
@@ -1359,6 +1360,7 @@ std::atomic<uint32_t> storyAbilitiesNow{0};
 std::atomic<uint32_t> storyAimNow{story077b::aimLook};
 std::atomic<uint32_t> storyDodgeNow{0};
 std::atomic<uint32_t> headDodgeNow{story077b::headFight};
+std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1 off
 static_assert(story077b::pad::dpadUp == game_pad::dpadUp && story077b::pad::dpadDown == game_pad::dpadDown &&
               story077b::pad::back == game_pad::back && story077b::pad::l3 == game_pad::leftThumb &&
               story077b::pad::r3 == game_pad::rightThumb && story077b::pad::lb == game_pad::leftShoulder &&
@@ -2269,6 +2271,9 @@ DWORD WINAPI run(void*) {
         // HERO VR 0.0.77 STORY MOVES (story077b.hpp): the ability button (VR X held), the throw's aim, the
         // dodge everywhere and the head sidestep; the STRB counts.
         story077b::AbilityButton storyAbility;
+        story077b::InputWatch inputWatch;   // HERO VR 0.0.77 STORY INPUTS: every game press counted
+        story077b::StorySprint storySprint; // and the ground run's RT
+        float inputNoteAt[story077b::inputs]{};
         story077b::ThrowAim storyAim;
         story077b::HeadSidestep storyStep;
         story077b::DodgeAssist storyDodge;
@@ -10713,6 +10718,15 @@ DWORD WINAPI run(void*) {
                                           static_cast<double>(aim.degrees));
                                 game_prompts::note(line);
                             }
+                            // HERO VR 0.0.77 STORY SPRINT (story077b::StorySprint, CANDIDATE): the stick pushed all the
+                            // way on the ground holds the game's RT (its run, "Hold R2" in the story's chases).
+                            const bool grounded = mapping == game_pad::Mapping::gameplay && !swingState.owned &&
+                                                  swingState.wall == 0 && !storyAbility.sending() &&
+                                                  hero_modes::webPaths(heroNow()).ropeGrab;
+                            if (storySprint.update(frame.seconds, storySprintNow.load() == 0, grounded,
+                                                   frame.hands[0].stickX, frame.hands[0].stickY) &&
+                                pad.leftTrigger < 100)
+                                pad.rightTrigger = 255;
                         }
                         // Version 0.0.4 HERO ABILITIES: no swing, zip, charged swing leap, web shooter,
                         // gadget or yank reaches the game for a hero with no webs (a story prompt's ask kept).
@@ -10818,6 +10832,38 @@ DWORD WINAPI run(void*) {
                             const uint64_t movesSequence = SpidyStoryMovesData.sequence;
                             SpidyStoryMovesData = movesCounts;
                             SpidyStoryMovesData.sequence = movesSequence + 1;
+                        }
+                        // HERO VR 0.0.77 STORY INPUTS: each of the game's presses as it goes out, counted (in the air
+                        // too), a note per press (at most one per input per 0.25 s; the counts are all of them).
+                        if (mapping == game_pad::Mapping::gameplay) {
+                            namespace sb = story077b;
+                            const bool air = swingState.owned || swingState.wall != 0;
+                            const uint32_t started =
+                                inputWatch.update(frame.seconds, pad.buttons, pad.leftTrigger, pad.rightTrigger, air);
+                            for (uint32_t i = 0; i < sb::inputs; ++i) {
+                                if (!(started & (1u << i)) || inputWatch.now() - inputNoteAt[i] < .25f)
+                                    continue;
+                                inputNoteAt[i] = inputWatch.now();
+                                char line[160];
+                                sprintf_s(line, "HERO VR 0.0.77 INPUT: %s #%u%s (%u in the air)", sb::inputName(i),
+                                          inputWatch.presses[i], air ? " IN THE AIR" : "", inputWatch.inAir[i]);
+                                game_prompts::note(line);
+                            }
+                            sb::InputsData d;
+                            d.sprintOn = storySprintNow.load() == 0;
+                            for (uint32_t i = 0; i < sb::inputs; ++i) {
+                                d.presses[i] = inputWatch.presses[i];
+                                d.inAir[i] = inputWatch.inAir[i];
+                            }
+                            for (uint32_t i = 0; i < 3; ++i)
+                                d.best1s[i] = inputWatch.best1s[i];
+                            d.mashSplits = static_cast<uint32_t>(combatMachine.mashSplits());
+                            d.sprintStarts = storySprint.starts;
+                            d.sprintFrames = storySprint.frames;
+                            InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidyStoryInputsData.sequence));
+                            const uint64_t inputsSequence = SpidyStoryInputsData.sequence;
+                            d.sequence = inputsSequence + 1;
+                            SpidyStoryInputsData = d;
                         }
                         game_pad::submit(pad, 200);
                         // Update 38.5 Y IN THE AIR: read-only counts (no glide state is read; air_watch.hpp).
@@ -15858,6 +15904,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryAbilities(void* v) { ret
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryThrowAim(void* v) { return setLive(v, 0, 2, 5562, storyAimNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStoryDodge(void* v) { return setLive(v, 0, 1, 5563, storyDodgeNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return setLive(v, 0, 2, 5564, headDodgeNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);
 }

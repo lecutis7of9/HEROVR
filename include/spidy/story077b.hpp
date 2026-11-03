@@ -328,6 +328,115 @@ class DodgeAssist {
     bool bWas_ = true; // a B already down when play starts is no press
 };
 
+// HERO VR 0.0.77 STORY INPUTS (the parent's list, 2:07 PM): the game's presses as they go out, counted. Each
+// is a rising edge of the pad's own bits (a chord counts when its last button joins); RT HOLD is the right
+// trigger over 200 without the left; LT + RT both over 200. Per second for X, RB and LB + RB: the most in any
+// 1 s (a mash's or a repeat's rate).
+enum Input : uint32_t {
+    inB, inLbRb, inY, inRb, inX, inLbX, inYB, inDpadDown, inLtRt, inA, inRtHold, inLbB, inLbY, inputs
+};
+inline constexpr const char* inputNames[inputs] = {"B (dodge)",       "LB+RB (throw)", "Y (web strike / zip / save)",
+                                                   "RB (webball)",    "X (strike)",    "LB+X (barrage / venom punch)",
+                                                   "Y+B (finisher)",  "D-PAD DOWN (heal)", "LT+RT (point launch)",
+                                                   "A (jump)",        "RT HOLD (sprint)", "LB+B (ability)",
+                                                   "LB+Y (ability)"};
+inline const char* inputName(uint32_t i) { return i < inputs ? inputNames[i] : "?"; }
+
+class InputWatch {
+  public:
+    // Returns the inputs that started this frame (bit i = Input i).
+    uint32_t update(float seconds, uint16_t buttons, uint8_t lt, uint8_t rt, bool air) {
+        now_ += std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
+        const auto has = [&](uint16_t m) { return (buttons & m) == m; };
+        bool on[inputs]{};
+        on[inB] = has(pad::b);
+        on[inLbRb] = has(pad::lb | pad::rb);
+        on[inY] = has(pad::y);
+        on[inRb] = has(pad::rb);
+        on[inX] = has(pad::x);
+        on[inLbX] = has(pad::lb | pad::x);
+        on[inYB] = has(pad::y | pad::b);
+        on[inDpadDown] = has(pad::dpadDown);
+        on[inLtRt] = lt > 200 && rt > 200;
+        on[inA] = has(pad::a);
+        on[inRtHold] = rt > 200 && lt < 100;
+        on[inLbB] = has(pad::lb | pad::b);
+        on[inLbY] = has(pad::lb | pad::y);
+        uint32_t started{};
+        for (uint32_t i = 0; i < inputs; ++i) {
+            if (on[i] && !was_[i]) {
+                started |= 1u << i;
+                ++presses[i];
+                inAir[i] += air;
+                const int r = rateSlot(i);
+                if (r >= 0) {
+                    times_[r][head_[r]] = now_;
+                    head_[r] = (head_[r] + 1) % window;
+                    uint32_t n{};
+                    for (float t : times_[r])
+                        n += t > -1e5f && now_ - t <= 1.f;
+                    best1s[r] = std::max(best1s[r], n);
+                }
+            }
+            was_[i] = on[i];
+        }
+        return started;
+    }
+    float now() const { return now_; }
+    uint32_t presses[inputs]{}, inAir[inputs]{};
+    uint32_t best1s[3]{}; // X, RB, LB + RB
+
+  private:
+    static constexpr unsigned window = 32;
+    static int rateSlot(uint32_t i) { return i == inX ? 0 : i == inRb ? 1 : i == inLbRb ? 2 : -1; }
+    float now_{};
+    bool was_[inputs]{};
+    float times_[3][window]{};
+    unsigned head_[3]{};
+
+  public:
+    InputWatch() {
+        for (auto& row : times_)
+            for (float& t : row)
+                t = -1e6f;
+    }
+};
+
+// StorySprint (story_sprint, CANDIDATE): the game runs (its parkour sprint, "Hold R2" in the run-for-your-life
+// and up-the-roof sections) while RT is held; VR sent RT on the ground only crawling. With the left stick
+// pushed past `push` on the ground (not swung, not on a wall, no ability being sent) for `after` seconds, RT
+// goes out held until the stick drops under `release`.
+class StorySprint {
+  public:
+    static constexpr float push = .85f, release = .6f, after = .15f;
+    bool update(float seconds, bool on, bool grounded, float stickX, float stickY) {
+        const float dt = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .1f) : 0.f;
+        const float x = std::isfinite(stickX) ? stickX : 0.f, y = std::isfinite(stickY) ? stickY : 0.f;
+        const float m = std::sqrt(x * x + y * y);
+        if (!on || !grounded) {
+            pushed_ = 0;
+            running_ = false;
+            return false;
+        }
+        if (running_) {
+            running_ = m >= release;
+        } else {
+            pushed_ = m >= push ? pushed_ + dt : 0;
+            if (pushed_ >= after) {
+                running_ = true;
+                ++starts;
+            }
+        }
+        frames += running_;
+        return running_;
+    }
+    uint32_t starts{}, frames{};
+
+  private:
+    float pushed_{};
+    bool running_{};
+};
+
 // Spider-sense's NOW: a timed warning closer than `now` seconds to its blow (game seconds, CANDIDATE).
 constexpr float senseNow = .3f;
 
@@ -344,6 +453,18 @@ struct Data {
     uint64_t sequence{};
 };
 static_assert(sizeof(Data) == 128);
+
+// "STRC" (SpidyStoryInputsData): InputWatch's counts and the sprint's.
+struct InputsData {
+    uint32_t magic = 0x43525453, version = 1, bytes = 192; // "STRC"
+    uint32_t sprintOn{};
+    uint32_t presses[inputs]{}, inAir[inputs]{};
+    uint32_t best1s[3]{};
+    uint32_t mashSplits{}, sprintStarts{}, sprintFrames{};
+    uint32_t reserved[10]{};
+    uint64_t sequence{};
+};
+static_assert(sizeof(InputsData) == 192);
 #pragma pack(pop)
 
 } // namespace spidy::story077b

@@ -194,6 +194,8 @@ void movesScreen(std::vector<Vertex>& v, const Plane& p) {
         {"A", "LB+A"},
         {"R STICK CLICK", "ULTIMATE L3+R3"},
         {"R STICK DOWN", "CAMO DPAD UP"},
+        {"ARMS OR SYMBIOTE", "SAME LB SLOTS"},
+        {"SURGE", "X + STICK CLICK"},
         {"X TAP", "VIEW AS BEFORE"},
         {"R STICK DOWN", "HEAL"},
         {"TWO HAND YANK", "THROW LB+RB"},
@@ -201,11 +203,13 @@ void movesScreen(std::vector<Vertex>& v, const Plane& p) {
         {"B ANYWHERE", "DODGE"},
         {"HEAD STEP", "DODGE THAT WAY"},
         {"BUZZ", "SPIDER SENSE NOW"},
+        {"PUNCH FAST", "MASH X"},
+        {"STICK ALL THE WAY", "SPRINT RT"},
     };
     int i = 0;
     for (const auto& line : lines) {
-        const float y = .053f - i * .0088f;
-        const bool head = i == 0 || i == 8;
+        const float y = .053f - i * .0068f;
+        const bool head = i == 0 || i == 10;
         p.text(v, line[0], -.031f, y, .0026f, .03f, head ? red : white, 0);
         p.text(v, line[1], .001f, y, .0026f, .033f, head ? red : soft, 0);
         ++i;

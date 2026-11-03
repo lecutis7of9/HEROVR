@@ -19,6 +19,7 @@ HSWP  SpidyHeroSwitchData  include/spidy/hero_switch.hpp   Update 38.5 HERO SWIT
 BLOM  SpidyEyeBloomData    include/spidy/eye_bloom.hpp     0.0.73 lights: EYE BLOOM in force (OFF/COPY/GATE), reverts, eye jobs
 STRY  SpidyStoryData       include/spidy/story077.hpp      HERO VR 0.0.77 STORY INPUTS: the hero switch's presses, the web throw
 STRB  SpidyStoryMovesData  include/spidy/story077b.hpp     HERO VR 0.0.77 STORY MOVES: abilities from X held, the throw's aim, dodges
+STRC  SpidyStoryInputsData include/spidy/story077b.hpp     HERO VR 0.0.77 STORY INPUTS: each game press counted, the sprint
 AIRW  SpidyAirWatchData    include/spidy/air_watch.hpp     Update 38.5 Y IN THE AIR: Y presses, the game's moves out of the swing's flight (a glide's sign), read-only
 
 Each is a seqlock record (an odd sequence: being written; read again).
@@ -63,6 +64,7 @@ RECORDS = {
     # HERO VR 0.0.77
     'story': ('SpidyStoryData', 0x59525453, 1, 96),
     'story_moves': ('SpidyStoryMovesData', 0x42525453, 1, 128),
+    'story_inputs': ('SpidyStoryInputsData', 0x43525453, 1, 192),
     # Version 0.0.3
     'v003': ('SpidyV003Data', 0x33303056, 1, 5200),
     # Version 0.0.5
@@ -563,6 +565,28 @@ def parse_story_moves(raw):
                 sense_now_cues=now_cues, sense_dodges=sense_dodges)
 
 
+STORY_INPUTS = ('B (dodge)', 'LB+RB (throw)', 'Y (web strike / zip / save)', 'RB (webball)', 'X (strike)',
+                'LB+X (barrage / venom punch)', 'Y+B (finisher)', 'D-PAD DOWN (heal)', 'LT+RT (point launch)',
+                'A (jump)', 'RT HOLD (sprint)', 'LB+B (ability)', 'LB+Y (ability)')
+
+
+def parse_story_inputs(raw):
+    """HERO VR 0.0.77 STORY INPUTS (story077b.hpp InputsData; the game's own presses as they went out)."""
+    if not _header(raw, 'story_inputs'):
+        return None
+    n = len(STORY_INPUTS)
+    v = struct.unpack_from(f'<I{n}I{n}I3I3I', raw, 12)
+    sprint_on = v[0]
+    presses = v[1:1 + n]
+    in_air = v[1 + n:1 + 2 * n]
+    best = v[1 + 2 * n:4 + 2 * n]
+    mash_splits, sprint_starts, sprint_frames = v[4 + 2 * n:7 + 2 * n]
+    return dict(sprint_on=bool(sprint_on), presses=dict(zip(STORY_INPUTS, presses)),
+                in_air=dict(zip(STORY_INPUTS, in_air)), best_x_per_s=best[0], best_rb_per_s=best[1],
+                best_throws_per_s=best[2], mash_splits=mash_splits, sprint_starts=sprint_starts,
+                sprint_frames=sprint_frames)
+
+
 def parse_air_watch(raw):
     """Update 38.5: Y IN THE AIR (air_watch.hpp Data; read-only)."""
     if not _header(raw, 'air_watch'):
@@ -904,7 +928,7 @@ def parse_v006(raw):
                 supersonic_reached=round(sonic_last, 1), supersonic_best=round(sonic_best, 1))
 
 
-PARSERS = dict(story=parse_story, story_moves=parse_story_moves, air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
+PARSERS = dict(story=parse_story, story_moves=parse_story_moves, story_inputs=parse_story_inputs, air_watch=parse_air_watch, view_gates=parse_view_gates, combat=parse_combat, hand_crawl=parse_hand_crawl,
                health=parse_health, mirror=parse_mirror, world_trace=parse_world_trace, blood=parse_blood,
                perf=parse_perf, color=parse_color, fovea=parse_fovea, npc_fade=parse_npc_fade,
                combat38=parse_combat38, mirror_probe=parse_mirror_probe, wrist_muzzle=parse_wrist_muzzle,
@@ -1098,6 +1122,13 @@ def console_lines(records):
                      f"({'on' if sm['dodge_on'] else 'off'}, head {sm['head']}): {sm['dodges_ground']} on the ground, "
                      f"{sm['dodges_in_air']} in the air, {sm['dodges_on_wall']} on walls, {sm['head_dodges']} by the "
                      f"head; spider-sense NOW buzzes {sm['sense_now_cues']}, timed dodges {sm['sense_dodges']}.")
+    si = (records or {}).get('story_inputs')
+    if si and 'presses' in si:
+        each = '; '.join(f"{k} {n} ({si['in_air'][k]} in the air)" for k, n in si['presses'].items())
+        lines.append(f"HERO VR 0.0.77 STORY INPUTS (the game's presses sent): {each}. Most in 1 s: X "
+                     f"{si['best_x_per_s']}, RB {si['best_rb_per_s']}, LB+RB {si['best_throws_per_s']}; mashed punches "
+                     f"split into new X presses {si['mash_splits']}. SPRINT ({'on' if si['sprint_on'] else 'off'}): "
+                     f"{si['sprint_starts']} runs, {si['sprint_frames']} frames of RT.")
     aw = (records or {}).get('air_watch')
     if aw and 'y_sent' in aw:
         lines.append(f"Update 38.5 Y IN THE AIR: {aw['y_sent']} Y presses sent ({aw['y_in_air']} in the swing's flight); "

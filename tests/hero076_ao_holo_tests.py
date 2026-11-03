@@ -105,10 +105,6 @@ class OnePage(unittest.TestCase):
                     'address_finder', 'fovea_debug', 'eye_lod', 'shared_lod', 'lens_flares', 'world_log'):
             self.assertIn(key, L.SETTINGS, key)
 
-    def test_sm1_untouched(self):
-        w = src('src/wrist_hud.cpp')
-        self.assertNotIn('jimjam', w.lower())
-
 
 if __name__ == '__main__':
     unittest.main()

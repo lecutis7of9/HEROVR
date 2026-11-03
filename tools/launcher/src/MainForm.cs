@@ -862,7 +862,7 @@ namespace Sm2VrLauncher
         internal static string StopReason(IList<string> lines)
         {
             string[] notes = { "ENGINE TAA", "LAUNCHER WATCH", "VR AA", "GAME AA", "SM1STYLE", "live.txt" };
-            Func<string, bool> note = l => notes.Any(n => l.TrimStart().StartsWith(n, StringComparison.OrdinalIgnoreCase));
+            Func<string, bool> note = l => notes.Any(n => l.Trim().StartsWith(n, StringComparison.OrdinalIgnoreCase));
             return lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
                 ?? lines.LastOrDefault(l => !note(l) && (l.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0 || l.IndexOf("refus", StringComparison.OrdinalIgnoreCase) >= 0))
                 ?? lines.LastOrDefault(l => l.StartsWith("VR session finished", StringComparison.OrdinalIgnoreCase))

@@ -61,9 +61,9 @@ COMFORT_SETTINGS = (
     ('Vignette', lambda v: v == 'On', 'Off: darkened edges in the lenses'),
     ('Screen Shake', lambda v: v == 'On', 'Off: shakes your view without your head moving'),
     ('Lens Flares', lambda v: v == 'On', 'Off: flares drawn as on a camera lens'),
-    # 0.0.76 AO: recommended on (was Off): soft contact shading gives the world depth in the headset.
-    ('Ambient Occlusion', lambda v: v == 'Off', 'XeGTAO: soft contact shading that gives buildings and streets depth '
-     '(live.txt vr_ao = on, the default, sets it while VR runs; a little GPU time)'),
+    # 0.0.76 AO: optional (0.0.76 HARLEYS fix: off by default; XeGTAO's noise shimmers in the eyes without the game's TAA).
+    ('Ambient Occlusion', lambda v: v == 'Off', 'optional - XeGTAO: soft contact shading that gives buildings and '
+     'streets depth, but some shimmer in the eyes (live.txt vr_ao = on sets it while VR runs; a little GPU time)'),
 )
 SPEED_SETTINGS = (
     ('Shadow Quality', ('Ultra', 'Very High', 'VeryHigh'), 'High (each eye renders its own shadows)'),

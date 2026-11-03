@@ -62,5 +62,25 @@ class Hero076Harleys(unittest.TestCase):
         i = g.index('const bool gesturePlay = holoGuard.gesturePlay(hudPlay, wristToggle.on());')
         self.assertLess(i, g.index('if (wristToggle.update(frame.seconds, gesturePlay, hudHand,'))
 
+    def test_texture_array_takes_what_the_loader_makes(self):
+        # 0d48cf3's report: 167 layers made by the loader (cap 192), refused by the overlay's literal 128 - every model
+        # untextured, no suit worn, roster initials only. One number for both now, with room for the bikes.
+        import re
+        r = src('src/d3d12_renderer.cpp')
+        body = r[r.index('bool D3D12Renderer::setModelTextures'):]
+        body = body[:body.index('size_t layerBytes')]
+        self.assertIn('layers.size() > mesh_model::mostTextureLayers', body)
+        self.assertNotRegex(body, r'layers\.size\(\) > \d')
+        m = re.search(r'mostTextureLayers = (\d+);', src('include/spidy/mesh_model.hpp'))
+        self.assertGreaterEqual(int(m.group(1)), 167 + 16)  # 0d48cf3's 167 with margin
+        self.assertIn('out.layers.size() >= mostTextureLayers', src('src/mesh_model.cpp'))
+
+    def test_ambient_occlusion_off_by_default(self):
+        sys.path.insert(0, os.path.join(ROOT, 'tools'))
+        import live_settings as L
+        self.assertFalse(L.vr_ao(''))
+        self.assertFalse(L.vr_ao(None))
+        self.assertTrue(L.vr_ao('vr_ao = on\n'))
+
 if __name__ == '__main__':
     unittest.main()

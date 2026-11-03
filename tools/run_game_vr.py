@@ -1730,7 +1730,7 @@ def vr_picture_plan(sm1, aa_taa, textures_high, own, very_high=False, ao=False):
     TAA targets, no eye jitter); TAA with no upscaler keeps DLAA / DLSS / FSR off them. 0.0.76 TEXTURE DETAIL:
     `very_high` (live.txt vr_texture_detail on / quality) raises Texture Quality to Very High (3) instead, whatever
     vr_textures says; only where the player's is lower, put back when the game closes. 0.0.76 AO: `ao` (live.txt vr_ao
-    on, the default) sets Ambient Occlusion to XeGTAO (3) only where the player's is Off (0); any AO of their own is
+    on; off is the default) sets Ambient Occlusion to XeGTAO (3) only where the player's is Off (0); any AO of their own is
     kept; put back when the game closes."""
     names, lines = [], []
     aa, upscaler = own.get('AA'), own.get('UpscaleMethod')
@@ -2390,8 +2390,9 @@ def exit_code(error):
 
 # Motion blur, film grain, chromatic aberration and vignette left this list in Update 11: their registry names
 # are confirmed (vr_display.PICTURE 'comfort') and every session turns them off.
-# 0.0.76 AO: 'Ambient Occlusion Off' left this list: AO is now recommended on and set by live.txt vr_ao (the default).
-UNCONFIRMED_COMFORT = ('Screen Shake Off', 'Lens Flares Off',
+# 0.0.76 AO: 'Ambient Occlusion Off' is back on this list (0.0.76 HARLEYS fix: vr_ao is off by default; XeGTAO
+# shimmered in the eyes); live.txt vr_ao = on sets XeGTAO while VR runs.
+UNCONFIRMED_COMFORT = ('Screen Shake Off', 'Lens Flares Off', 'Ambient Occlusion Off',
                        'Screen Space Reflections Low/Off', 'Shadow Quality High', 'Level of Detail High',
                        'Crowd Detail Medium/High', 'Hair Quality High')
 

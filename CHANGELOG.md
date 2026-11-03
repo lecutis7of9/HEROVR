@@ -21,6 +21,16 @@ On top of test 27041ea (AO ON + ONE PAGE). SM2 only. **Built and unit-tested, no
 - **PUNISHER DUAL-WIELD:** while either hand holds a gun, or for 2 s after your last shot, bringing your hands
   together no longer opens the wrist hologram (the one-page settings). Otherwise it opens as before; an open
   hologram still closes the same way, and F8 is unchanged.
+- **FIX (0d48cf3's report game-vr-20261102-233712): suits, roster pictures and textures are back.** The two bikes'
+  images took the model textures to 167 layers; the loader allowed 192 but the overlay refused anything over a
+  literal 128, so the whole texture array was dropped ("MODELS: UNTEXTURED"). Suits are only worn, and the holo
+  roster's pictures only drawn, with that array ready, so heroes gave weapons but no suit and the roster showed
+  initials. The overlay now takes the loader's own limit (one number, 192; about 270 MB at most).
+- **FIX: Ambient Occlusion is OFF by default again** (`vr_ao = on` in live.txt turns XeGTAO on, next VR start). Every
+  eye anti-aliasing value in the report matched the good 47cd349 runs; the only picture change was Ambient Occlusion
+  Off -> XeGTAO, whose noise is meant for the game's TAA, which never runs on the eyes, so it shimmered as worse
+  aliasing (and cost about 2 ms of eye GPU time a frame).
+- The release zip's top folder is short (`HV076-<commit>`), so Windows extracts it without hitting the path limit.
 
 ## hero-0.0.76-sm1 - melee, web balls, flight (TEST build, not released)
 

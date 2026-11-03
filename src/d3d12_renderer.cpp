@@ -1,4 +1,5 @@
 #include "spidy/d3d12_renderer.hpp"
+#include "spidy/mesh_model.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -674,9 +675,13 @@ bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
     try {
         if (!device_ || !queue_ || !list_)
             throw std::runtime_error("Overlay not initialized");
-        if (layers.empty() || layers.size() > 128 || !size || size > 4096 || !levels || levels > 13 ||
-            (size >> (levels - 1)) < 1)
-            throw std::runtime_error("Model textures need 1 to 128 layers of 1 to 4096 texels, 1 to 13 levels");
+        // 0.0.76 HARLEYS fix: the cap is mesh_model::mostTextureLayers, the loader's own (prepareTextures never
+        // makes more). It was a literal 128 while the loader allowed 192, so the two bikes' images (167 layers in
+        // all) made the whole array refused: every model untextured, no suits worn, the roster's initials only.
+        if (layers.empty() || layers.size() > mesh_model::mostTextureLayers || !size || size > 4096 || !levels ||
+            levels > 13 || (size >> (levels - 1)) < 1)
+            throw std::runtime_error("Model textures need 1 to " + std::to_string(mesh_model::mostTextureLayers) +
+                                     " layers of 1 to 4096 texels, 1 to 13 levels");
         size_t layerBytes = 0;
         for (unsigned l = 0; l < levels; ++l)
             layerBytes += size_t{size >> l} * (size >> l) * 4;

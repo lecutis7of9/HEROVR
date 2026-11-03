@@ -2,7 +2,7 @@
 """0.0.76 AO and ONE PAGE (BUILD-SM2.md section 78).
 
 live.txt:
-  vr_ao = on (default) | off   RESTART: the game's Ambient Occlusion at XeGTAO (3) while VR runs if the player's is
+  vr_ao = on | off (default)   RESTART: the game's Ambient Occlusion at XeGTAO (3) while VR runs if the player's is
                                Off (0), put back when the game closes; off: the player's as set.
 The wrist hologram's VR SETTINGS and GRAPHICS pages are one page (VR SETTINGS); the rows a player does not use are off
 the hologram, each still set by live.txt. Neither touches the TAA core, the lens jitter, the headset eye path or
@@ -33,7 +33,9 @@ class AmbientOcclusion(unittest.TestCase):
         self.assertIn('RESTART NOTICE', sub)
         self.assertIn('vr_ao', L.RESTART)
         self.assertIn('vr_ao', L.START_ONLY)
-        self.assertTrue(L.vr_ao(''))  # on by default
+        self.assertFalse(L.vr_ao(''))  # 0.0.76 HARLEYS fix: off by default (XeGTAO shimmered in the eyes)
+        self.assertFalse(L.vr_ao('vr_ao = maybe\n'))
+        self.assertTrue(L.vr_ao('vr_ao = 1\n'))
         self.assertTrue(L.vr_ao('vr_ao = on\n'))
         self.assertFalse(L.vr_ao('vr_ao = off\n'))
         self.assertFalse(L.vr_ao('vr_ao = 0\n'))
@@ -52,7 +54,7 @@ class AmbientOcclusion(unittest.TestCase):
         names, lines, _ = r.vr_picture_plan(True, False, False, {'AmbientOcclusionQuality': 0}, ao=False)
         self.assertNotIn('ambient_occlusion', names)
         self.assertIn('AmbientOcclusionQuality', r.PICTURE_NAMES)
-        self.assertNotIn('Ambient Occlusion Off', ' '.join(r.UNCONFIRMED_COMFORT))
+        self.assertIn('Ambient Occlusion Off', ' '.join(r.UNCONFIRMED_COMFORT))
 
     def test_session_value(self):
         d = src('tools/vr_display.py')

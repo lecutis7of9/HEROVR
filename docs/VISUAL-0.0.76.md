@@ -388,7 +388,7 @@ No sharpening, no SMAA, no TAA change. `vr_ss = 125` stays an optional extra.
 
 | switch (live.txt) | default | what it does |
 | --- | --- | --- |
-| `vr_ao` (RESTART, next VR start) | `on` | `on` (1): the game's Ambient Occlusion at XeGTAO (AmbientOcclusionQuality 3, CONFIRMED) while VR runs if yours is Off, put back when the game closes; soft contact shading that gives buildings and streets depth, about 1-2 ms a frame (CANDIDATE, not measured); `off` (0): yours as set |
+| `vr_ao` (RESTART, next VR start) | `off` (since the 0.0.76 HARLEYS fix: XeGTAO shimmered in the eyes) | `on` (1): the game's Ambient Occlusion at XeGTAO (AmbientOcclusionQuality 3, CONFIRMED) while VR runs if yours is Off, put back when the game closes; soft contact shading that gives buildings and streets depth, about 1-2 ms a frame (CANDIDATE, not measured); `off` (0): yours as set |
 
 The wrist hologram's VR SETTINGS and GRAPHICS pages are one page, VR SETTINGS (it scrolls): RECALIBRATE, FPS, FPS
 HIGH/LOW/AVG + RESET, then BODY AND VIEW, WEBS, HOLOGRAM, MIRROR, SOUND, GRAPHICS and PERFORMANCE. The test and

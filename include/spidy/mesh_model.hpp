@@ -68,7 +68,11 @@ inline constexpr uint32_t liteTriangles = 2400;
 // Build 9 SUITS: 112 (the 23 suits take at most 3 layers each, 69 at most; the game's 512 px layers: about 160 MB).
 // 0.0.74 test 1 HIDEOUTS: 160 (the Batcave's 35 images and the safehouse's; loaded only when HIDEOUTS is ON).
 // 0.0.74 test 1 BATMOBILE: 192 (the four cars, the cockpit and the wheel bring 17 images; ON only).
+// 0.0.76 HARLEYS: the two hero bikes bring about 40 more (167 at 0d48cf3's test); the overlay's array
+// (D3D12Renderer::setModelTextures) takes exactly this many - one number, so the loader never makes more
+// than the renderer takes (at 512 px with mips about 1.4 MB a layer: 192 about 270 MB).
 inline constexpr uint32_t textureSize = 1024, textureLevels = 11, mostTextureLayers = 192;
+static_assert(mostTextureLayers <= 2048, "D3D12 texture arrays hold at most 2048 layers");
 inline constexpr size_t mostImageBytes = 48u << 20;
 
 struct Mesh {

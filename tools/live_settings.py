@@ -187,11 +187,14 @@ SETTINGS = {
                           "aniso: the filtering only; 3 quality: Very High textures only; 0 off, the default) - "
                           "RESTART NOTICE: takes effect the next time VR starts"),
     # 0.0.76 AO (tools/run_game_vr.py vr_picture_plan, vr_display.SESSION_OFF ambient_occlusion): the game's Ambient
-    # Occlusion at XeGTAO (AmbientOcclusionQuality 3, CONFIRMED) while VR runs where the player's is Off; ON by
-    # default (the user asked, November 2), kept between sessions (RESTART).
-    'vr_ao': ((0, 1), None, "VR AMBIENT OCCLUSION {} (1 on, the default: the game's Ambient Occlusion at XeGTAO "
-             "while VR runs if yours is Off, soft contact shading that gives the world depth, a little GPU time, "
-             "yours put back after; 0 off: yours as set) - RESTART NOTICE: takes effect the next time VR starts"),
+    # Occlusion at XeGTAO (AmbientOcclusionQuality 3, CONFIRMED) while VR runs where the player's is Off; kept between
+    # sessions (RESTART). 0.0.76 HARLEYS fix: OFF by default again - 0d48cf3's report (game-vr-20261102-233712) had
+    # every eye AA value as the good 47cd349 runs and only Ambient Occlusion Off -> XeGTAO changed: XeGTAO's noise is
+    # left for the game's TAA, which never runs on the eyes, so it shimmered as worse aliasing. vr_ao = on opts in.
+    'vr_ao': ((0, 1), None, "VR AMBIENT OCCLUSION {} (1 on: the game's Ambient Occlusion at XeGTAO while VR runs if "
+             "yours is Off, soft contact shading that gives the world depth but some shimmer in the eyes, a little GPU "
+             "time, yours put back after; 0 off, the default: yours as set) - RESTART NOTICE: takes effect the next "
+             "time VR starts"),
     # 0.0.76 SHADOW STABLE (include/spidy/shadow_stable.hpp, stereo_probe SpidyShadowStable): live, off by default.
     'vr_shadow_stable': ((0, 1), 'SpidyShadowStable', "VR SHADOW STABLE {} (1 on: the far building shadows are made "
                          "once a frame from your head's view and shared by both eyes, instead of the left eye "
@@ -538,8 +541,8 @@ RESTART = {'eye_occlusion': 'RESTART NOTICE: eye_occlusion takes effect the next
                                 'filtering on the game\'s trilinear material textures and Very High textures; aniso '
                                 'or quality: one of the two; off: as before).',
            # 0.0.76 AO: the game reads Ambient Occlusion when it starts
-           'vr_ao': 'RESTART NOTICE: vr_ao takes effect the next time VR starts (on, the default: Ambient Occlusion '
-                    'XeGTAO while VR runs if yours is Off, put back after; off: yours as set).',
+           'vr_ao': 'RESTART NOTICE: vr_ao takes effect the next time VR starts (on: Ambient Occlusion XeGTAO while '
+                    'VR runs if yours is Off, put back after; off, the default: yours as set).',
            'vr_ss': 'RESTART NOTICE: vr_ss takes effect the next time VR starts (off: the headset\'s size; 110, 125 or '
                     '150: the eyes rendered larger per side and filtered down, smoother but heavier on the GPU).',
            # Version 0.0.62: the game reads its Lens Flares setting when it starts
@@ -744,7 +747,7 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'vr_taa_depth': ('off', 'on', 'auto'),  # 0.0.76 A-depth (off, 0, the default)
                 'vr_taa_seam': ('off', 'on'),  # 0.0.76 SEAM TRACE (off, 0, the default)
                 'vr_shadow_stable': ('off', 'on'),  # 0.0.76 SHADOW STABLE (off, 0, the default)
-                'vr_ao': ('off', 'on'),  # 0.0.76 AO (on, 1, the default)
+                'vr_ao': ('off', 'on'),  # 0.0.76 AO (off, 0, the default since the 0.0.76 HARLEYS fix)
                 'vr_texture_detail': ('off', 'on', 'aniso', 'quality'),  # 0.0.76 TEXTURE DETAIL (off, 0, the default)
                 'vr_taa_jitter': ('on', 'off', 'fixed', 'half'),  # 0.0.76 TAA JITTER (0 on, the default)
                 'punch_hits': ('game_instant', 'game_move', 'instant_only'), 'foe_track': ('live', '0.0.6'),
@@ -2156,9 +2159,10 @@ def vr_texture_detail(text):
 
 
 def vr_ao(text):
-    """0.0.76 AO: True unless live.txt `text` has `vr_ao = off` (or 0): the game's Ambient Occlusion at XeGTAO while VR
-    runs where the player's is Off. On is the default (no line, no live.txt, a bad value). Never raises."""
-    return _start_choice(text, 'vr_ao', 'on') == 'on'
+    """0.0.76 AO: True when live.txt `text` has `vr_ao = on` (or 1): the game's Ambient Occlusion at XeGTAO while VR
+    runs where the player's is Off. Off is the default (no line, no live.txt, a bad value; 0.0.76 HARLEYS fix: XeGTAO
+    shimmered in the eyes, which never get the game's TAA). Never raises."""
+    return _start_choice(text, 'vr_ao', 'off') == 'on'
 
 
 def vr_render_upscaled(text):

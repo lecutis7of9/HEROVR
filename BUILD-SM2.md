@@ -2990,7 +2990,7 @@ lens jitter, the headset eye path, the per-eye history or the depth reprojection
 off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours, `vr_taa_depth` off, `vr_ss` off,
 `vr_shadow_stable` and `vr_texture_detail` off).
 
-- AMBIENT OCCLUSION, live.txt `vr_ao` (RESTART, START_ONLY; `on` 1 the default, `off` 0). On: vr_display SESSION_OFF
+- AMBIENT OCCLUSION, live.txt `vr_ao` (RESTART, START_ONLY; `on` 1, `off` 0 the default since the 0.0.76 HARLEYS fix: XeGTAO shimmered in the eyes, which never get the game's TAA). On: vr_display SESSION_OFF
   `ambient_occlusion` writes HKCU Software\Insomniac Games\Marvel's Spider-Man 2\Graphics AmbientOcclusionQuality = 3
   (XeGTAO; CONFIRMED in reports-075-grundy game-vr-20261031-190029, VR ran with it) before the game starts, only when
   the player's own is 0 (Off, CONFIRMED); the player's value is put back when the game closes, like every SESSION_OFF

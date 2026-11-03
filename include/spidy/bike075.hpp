@@ -91,18 +91,25 @@ van072::Tune tune(const Layout& l);
 // the layout's steer axis: `up` the model's +y, `toward` its +z. A vertical axis gives van072::wheelAxes' own.
 void steerAxes(float angle, const Layout& l, Vec3& up, Vec3& toward);
 // Short X taps summon (a hold is the abilities' X modifier): a press released within this many seconds.
-inline constexpr float tapMost = .4f;
+// 0.0.76 fix 2 (owner, e808401 test: "no cap bike no wolverine bike"): 1 s, was .4 s - a deliberate press of X
+// that lasted past .4 s summoned nothing and said nothing. A longer hold now says so (lastHeld, game_xr).
+inline constexpr float tapMost = 1.f;
 // The summon tap: true once when X goes up after a press no longer than tapMost (dt-stepped; NaN-safe).
 struct Tap {
     bool down{};
-    float held{};
+    float held{}, lastHeld{}; // lastHeld: the last press's length, set as it goes up
+    bool released{};          // this step: X went up (a tap or a too-long hold)
     bool step(bool x, float dt) {
         const float d = std::isfinite(dt) && dt > 0 && dt < 1.f ? dt : 0.f;
         bool tap = false;
+        released = false;
         if (x)
             held = down ? held + d : 0.f;
-        else if (down)
+        else if (down) {
             tap = held <= tapMost;
+            lastHeld = held;
+            released = true;
+        }
         down = x;
         return tap;
     }

@@ -2710,6 +2710,10 @@ DWORD WINAPI run(void*) {
         const auto bikeHero = [](uint32_t h) { return h == hero_modes::captainAmerica || h == hero_modes::wolverine; };
         uint32_t bikeWhich = bike075::cap;
         bike075::Tap bikeTap{};
+        // 0.0.76 fix 2: the bike's X, step by step in the prompts log (the e808401 test logged nothing for X)
+        uint32_t bikeXNotes{};
+        bool bikeRawXWas{}, bikeAskPending{};
+        float bikeAskFor{};
         uint32_t carMusicAskedSerial{}; // the player's status serial when last told to toggle (no double toggle)
         van072::Probe vanProbe;
         bool vanWanted{}, vanAsking{}, vanSpotReady{}, vanDriving{};
@@ -2816,6 +2820,9 @@ DWORD WINAPI run(void*) {
         wrist_hud::Toggle wristToggle;
         holo_guard076::Guard holoGuard; // 0.0.76: the PUNISHER's guns keep the hands-close gesture shut
         bool holoGuardSaid{};
+        // 0.0.76 fix 2: CAPTAIN AMERICA's chest grapple draws / misses, noted (the e808401 test logged none)
+        uint32_t capZoneKept[2]{}, capDrawsSaid[2]{}, capMissNotes{};
+        bool capGripWas[2]{};
         // Update 20: F8 on the PC's keyboard toggles it too (held: once).
         bool hudKeyHeld{};
         uint32_t hudKeyPresses{}, hudKeyToggles{}, hudKeyRefused{}, hudBlocked{}, hudNotPlaying{};
@@ -4019,7 +4026,8 @@ DWORD WINAPI run(void*) {
                         // hologram (its zone swallows nothing then: the triggers stay the guns'). Last frame's guns
                         // and shot count (hero007Play steps later in the frame); an open hologram closes as before.
                         holoGuard.step(frame.seconds, heroNow(), hero007Play.guns.heldIn(0) >= 0,
-                                       hero007Play.guns.heldIn(1) >= 0, hero007Play.shots);
+                                       hero007Play.guns.heldIn(1) >= 0, hero007Play.shots,
+                                       hero007Play.gunDrawn[0] || hero007Play.gunDrawn[1]);
                         const bool gesturePlay = holoGuard.gesturePlay(hudPlay, wristToggle.on());
                         if (gesturePlay != hudPlay && !holoGuardSaid) {
                             holoGuardSaid = true;
@@ -4684,9 +4692,18 @@ DWORD WINAPI run(void*) {
                     int phoneDrawnWith = -1;
                     {
                         float squeezes[2]{frame.hands[0].squeeze, frame.hands[1].squeeze};
-                        for (unsigned i = 0; i < 2; ++i)
-                            if (hudZone & (1u << i))
+                        for (unsigned i = 0; i < 2; ++i) {
+                            // 0.0.76 fix 2 (owner: "no cap grapple"): CAPTAIN AMERICA's grip AT THE CHEST RIG with
+                            // the hologram closed is the grapple's draw, not the holo zone's - the zone (the other
+                            // forearm) sits at the chest with the arms in, so it swallowed the draw.
+                            const bool capChest = heroNow() == hero_modes::captainAmerica && !wristToggle.on() &&
+                                                  gripsTracked[i] && hero007Play.shieldRack.body.valid &&
+                                                  punisher_rig::at(grips[i].position, frame.head, hero007Play.shieldRack.body);
+                            if (capChest && (hudZone & (1u << i)) && frame.hands[i].squeeze > .5f)
+                                ++capZoneKept[i];
+                            if ((hudZone & (1u << i)) && !capChest)
                                 squeezes[i] = 0; // Update 38.1: the holo zone's grip
+                        }
                         const bool drawPlay = gesturesPlay && !phone.open() && !padLayer.latched() && !seatedLock;
                         // Test build 12: the phone is SPIDER-MAN's only (the others' belts are their gadgets').
                         const bool phoneDrawPlay = drawPlay && heroNow() == hero_modes::spiderMan;
@@ -4735,6 +4752,47 @@ DWORD WINAPI run(void*) {
                             hero007::PlayOutput hout;
                             hero007Play.holsterStep(hin, hout);
                             hero007Claimed = hout.claimed;
+                            if (heroNow() == hero_modes::captainAmerica) {
+                                for (unsigned i = 0; i < 2; ++i) {
+                                    const char* side = i == 0 ? "left" : "right";
+                                    const bool grip = gripsTracked[i] && std::isfinite(frame.hands[i].squeeze) &&
+                                                      frame.hands[i].squeeze > .5f;
+                                    const bool edge = grip && !capGripWas[i];
+                                    capGripWas[i] = grip;
+                                    if (hero007Play.capGunDraws[i] != capDrawsSaid[i]) {
+                                        capDrawsSaid[i] = hero007Play.capGunDraws[i];
+                                        game_prompts::note(std::string("0.0.76 CAP GRAPPLE: drawn at the chest (") + side +
+                                                           " hand, draw " + std::to_string(capDrawsSaid[i]) +
+                                                           "): point and pull the trigger");
+                                        continue;
+                                    }
+                                    if (!edge || hero007Play.gunDrawn[i] || capMissNotes >= 40)
+                                        continue;
+                                    const float reach = hero007Play.shieldRack.body.valid
+                                                            ? punisher_rig::reach(grips[i].position, frame.head, hero007Play.shieldRack.body)
+                                                            : -1.f;
+                                    if (reach < 0 || reach > 1.6f)
+                                        continue; // a grip nowhere near the chest: not a draw attempt
+                                    ++capMissNotes;
+                                    std::string why;
+                                    if (!drawPlay)
+                                        why = "not playing (phone / pad layer / seat / menu)";
+                                    else if (wristToggle.on())
+                                        why = "the wrist hologram is open";
+                                    else if (hudZone & (1u << i) && squeezes[i] == 0 && !(hero007Claimed & (1u << i)))
+                                        why = "the holo zone swallowed the grip";
+                                    else if (hin.hands[i].busy)
+                                        why = "the hand is busy (web / climb / pocket)";
+                                    else if (hero007Claimed & (1u << i))
+                                        why = "the shield rack took the grip (back / shield)";
+                                    else if (reach > 1.f)
+                                        why = "outside the chest rig (reach " + std::to_string(reach) + " > 1)";
+                                    else
+                                        why = "the shield is on / coming to this hand";
+                                    game_prompts::note(std::string("0.0.76 CAP GRAPPLE: ") + side + " grip near the chest drew nothing - " +
+                                                       why + " (reach " + std::to_string(reach) + ")");
+                                }
+                            }
                             for (unsigned i = 0; i < 2; ++i) {
                                 if (hout.haptic[i] > 0)
                                     runtime.haptic(static_cast<int>(i), hout.haptic[i]);
@@ -7428,6 +7486,24 @@ DWORD WINAPI run(void*) {
                         // Version 0.0.73 test 3: PUNISHER VAN is ON by default (ON is value 0).
                         if (!bikeHero(heroNow()) || mapping != game_pad::Mapping::gameplay)
                             bikeTap = {}; // 0.0.75 MOTORCYCLE: a tap starts and ends as CAP / WOLVERINE in play
+                        if (bikeHero(heroNow())) { // 0.0.76 fix 2: where a CAP / WOLVERINE X went (each press, noted)
+                            const bool rawX = (frame.buttons & buttonX) != 0;
+                            if (rawX && !bikeRawXWas && bikeXNotes < 60) {
+                                ++bikeXNotes;
+                                const bool kept = (buttons.buttons & buttonX) != 0;
+                                const uint32_t which = bikeOf(heroNow());
+                                game_prompts::note(std::string("0.0.76 BIKE X: down as ") +
+                                                   (heroNow() == hero_modes::wolverine ? "WOLVERINE" : "CAPTAIN AMERICA") +
+                                                   " - controls " + (mapping == game_pad::Mapping::gameplay ? "in play" : "NOT in play (menu / game screen / pad)") +
+                                                   ", X " + (kept ? "kept for the bike" : (named & game_pad::NamedPress::controlX) ? "the game's (it names X)" : "held from a menu press") +
+                                                   ", " + bike075::folders[which] + (bikeReady(heroNow()) ? " ready" : " NOT ready") +
+                                                   (van.state == van072::driving ? ", riding (dash page)" : van.state == van072::parked ? ", parked (a tap brings it here)" : ""));
+                                if (mapping != game_pad::Mapping::gameplay)
+                                    message(2, 0, "MOTORCYCLE: X is the game's here (menu / game screen) - tap X again in play");
+                            }
+                            bikeRawXWas = rawX;
+                        } else
+                            bikeRawXWas = false;
                         if (c38(combat38::punisherVan) == 0 && heroNow() == hero_modes::punisher &&
                             mapping == game_pad::Mapping::gameplay) {
                             const bool vanX = (buttons.buttons & buttonX) != 0;
@@ -7490,12 +7566,23 @@ DWORD WINAPI run(void*) {
                             const bool tapped = bikeTap.step(bikeX, frame.seconds);
                             if (bikeX && !vanXWas && van.state == van072::driving)
                                 vanDashX = true; // the dash's next page
+                            if (bikeTap.released && !tapped && van.state != van072::driving) {
+                                char line[160];
+                                sprintf_s(line, "MOTORCYCLE: X held %.1f s - a tap (under %.0f s) summons the bike", bikeTap.lastHeld, bike075::tapMost);
+                                message(2, 0, line);
+                                game_prompts::note(std::string("0.0.76 BIKE X: ") + line + " (no bike: a hold is the abilities' X)");
+                            }
                             if (tapped && van.state != van072::driving) {
                                 if (bikeReady(heroNow())) {
                                     if (!vanProbe.active) {
                                         vanWanted = true;
+                                        bikeAskPending = true;
+                                        bikeAskFor = 0;
                                         runtime.haptic(0, .1f);
-                                    }
+                                        message(1, 0, "MOTORCYCLE: finding a spot ahead...");
+                                        game_prompts::note("0.0.76 BIKE X: tap - asking the street for a spot ahead");
+                                    } else
+                                        game_prompts::note("0.0.76 BIKE X: tap - a spot is already being found");
                                 } else { // 0.0.76 HARLEYS: the hero's own bike's folder (never another bike in its place)
                                     const uint32_t which = bikeOf(heroNow());
                                     runtime.haptic(0, .15f);
@@ -7627,8 +7714,13 @@ DWORD WINAPI run(void*) {
                                 const bool seatBlock =
                                     vanDriving && !van072::freeTrigger(true, combat38::vanWheelHandPedals(c38(combat38::vanPedals)),
                                                                        van.wheel.latched[i], vanRimGrip[i], vanDash.aimed(i));
+                                // 0.0.76 fix 2: CAPTAIN AMERICA's hand holding his drawn grapple gun (the hologram
+                                // closed): its trigger is the gun's even where the holo zone swallowed the draw's grip
+                                // (a right hand at the chest sits on the left forearm's zone).
+                                const bool capGunHand = heroNow() == hero_modes::captainAmerica && !wristToggle.on() &&
+                                                        hero007Play.gunDrawn[i];
                                 heroPress[i] = grapple073::heroPress(frame.hands[i].trigger, frame.hands[i].squeeze,
-                                                                     (hudZone & (1u << i)) != 0 || seatedLock, seatBlock);
+                                                                     ((hudZone & (1u << i)) != 0 && !capGunHand) || seatedLock, seatBlock);
                                 auto& h = cf.hands[i];
                                 const auto& grip = frame.hands[i].grip;
                                 h.tracked = gripsTracked[i];
@@ -8063,7 +8155,8 @@ DWORD WINAPI run(void*) {
                                                   : heroIs == hero_modes::hulk    ? "4x charged jump, one-punch knockouts, brutes 2-3, no webs"
                                                   : heroIs == hero_modes::ironMan ? "repulsors and the chest beam, no webs"
                                                   : heroIs == hero_modes::batman  ? "0.0.7: hold, let go to throw a batarang; grip at the belt for smoke; no webs"
-                                                  : heroIs == hero_modes::wolverine ? "0.0.7: claws on the trigger, healing, no webs"
+                                                  : heroIs == hero_modes::wolverine ? "0.0.7: claws on the trigger, healing, no webs; X tap: his motorcycle"
+                                                  : heroIs == hero_modes::captainAmerica ? "shield on the arm; a grip at the chest draws the grapple, its trigger fires; X tap: his motorcycle"
                                                   : heroIs == hero_modes::superman  ? "0.0.7: both triggers heat vision (hand at mouth: cold breath), super strength, FLY MODE superspeed"
                                                   : heroIs == hero_modes::punisher  ? "0.0.7: grip at a hip or behind the back to draw, trigger fires, EASY RELOAD"
                                                                                   : "webs");
@@ -8307,7 +8400,9 @@ DWORD WINAPI run(void*) {
                                         }
                                         vin.exitAsk = vanExitAsk; // 0.0.74 test 2b: the dash's GET OUT, once
                                         vanExitAsk = false;
-                                        if (vanSpotReady) {
+                                        // 0.0.76 fix 2: the spot is handed over only on a frame the driver acts on it (on, this
+                                        // kind, play) - until now a frame out of play took it and dropped the summon unsaid.
+                                        if (vanSpotReady && vin.enabled && vin.punisher && vin.play) {
                                             vanSpotReady = false;
                                             vin.summonSpot = true;
                                             vin.spot = vanSpot;
@@ -8845,6 +8940,21 @@ DWORD WINAPI run(void*) {
                                         } catch (...) {
                                             hideoutChairLift = 0;
                                         }
+                                        if (bikeAskPending) { // 0.0.76 fix 2: a bike tap's answer, or why there was none
+                                            bikeAskFor += vin.dt > 0 && vin.dt < .2f ? vin.dt : 0.f;
+                                            if (vout.summoned || vout.noSpot)
+                                                bikeAskPending = false;
+                                            else if (bikeAskFor > 2.f) {
+                                                bikeAskPending = false;
+                                                vanWanted = false;
+                                                vanProbe = {};
+                                                vanSpotReady = false;
+                                                message(2, 0, "MOTORCYCLE: the street check gave no answer - tap X again");
+                                                game_prompts::note(std::string("0.0.76 BIKE X: no answer in 2 s (rays ") + (raysStarted ? "on" : "OFF") +
+                                                                   ", motion " + (motion.active ? "on" : "OFF") + ", play " + (vin.play ? "on" : "OFF") +
+                                                                   ", bike " + (bikeNow ? "this hero's" : "NOT this hero's") + ")");
+                                            }
+                                        }
                                         if (vout.summoned && bikeNow) { // 0.0.75 MOTORCYCLE
                                             message(1, 0, "MOTORCYCLE: here - grip the left handlebar to get on");
                                             game_prompts::note("0.0.75 MOTORCYCLE: summoned (the probe's spot, CANDIDATE)");
@@ -8955,7 +9065,11 @@ DWORD WINAPI run(void*) {
                                             hin.hands[i].holdGun(gun_grip::held(frame.hands[i].grip, i, runtime.controllers()[i]));
                                             // Version 0.0.73 UNIVERSAL GRAPPLE: this trigger is the hologram's / a menu's /
                                             // the phone's / the pad layer's - never a grapple (fix 3).
-                                            hin.hands[i].holo = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched() || seatedLock;
+                                            // 0.0.76 fix 2: not the zone for CAPTAIN AMERICA's drawn-gun hand (hologram closed)
+                                            const bool capGunHand = heroNow() == hero_modes::captainAmerica && !wristToggle.on() &&
+                                                                    hero007Play.gunDrawn[i];
+                                            hin.hands[i].holo = (cf.hands[i].zoned && !capGunHand) || cf.menuOpen || phone.open() ||
+                                                                padLayer.latched() || seatedLock;
                                             if (seatedLock) // 0.0.74 test 2 SEATED TOOLS: no claws or gun grip from the wheel
                                                 hin.hands[i].squeeze = 0;
                                         }

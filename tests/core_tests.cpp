@@ -25975,6 +25975,82 @@ int main() {
         o = frame(0, 1, pointed);
         check(!p.gunDrawn[0], "a new grip away from the chest: nothing (draw again at the chest)");
     });
+    test("0.0.76 fix 2 CAPTAIN AMERICA grapple: the SHIELD ARM's hand draws it at the chest too (shield on the back)", [] {
+        using namespace spidy::hero007;
+        Play p;
+        PlayInput in;
+        in.dt = 1 / 90.f;
+        in.play = true;
+        in.hero = spidy::hero_modes::captainAmerica;
+        in.head = {{0, 1.7f, 0}, {}};
+        in.shieldArm = spidy::captain::armRight; // the default: the right hand is the shield's
+        p.setHero(in.hero);
+        const Vec3 aside{.25f, 1.3f, -.35f}, chest{.02f, 1.4f, -.12f}, pointed{.3f, 1.45f, -.55f};
+        const auto frame = [&](float trig, float grip, Vec3 at) {
+            in.hands[0] = {{-.25f, 1.3f, -.35f}, {0, 0, -1}, true, 0, 0, false};
+            in.hands[1] = {at, normalized(Vec3{0, .6f, -1}), true, trig, grip, false};
+            PlayOutput h, o;
+            p.holsterStep(in, h);
+            p.step(in, o);
+            o.claimed = h.claimed;
+            return o;
+        };
+        for (int f = 0; f < 3; ++f)
+            frame(0, 0, aside);
+        check(p.shieldRack.heldIn(1) < 0 && p.shield.inHandNow(), "the shield starts on the back");
+        PlayOutput o = frame(0, 1, chest);
+        check(p.gunDrawn[1] && (o.claimed & 2u) && !o.grapple[1], "e808401: the RIGHT (shield arm) grip at the chest drew nothing - now the grapple");
+        check(p.capGunDraws[1] == 1, "the draw is counted (game_xr notes it)");
+        o = frame(0, 1, pointed);
+        o = frame(1, 1, pointed);
+        check(o.grapple[1] && !o.grapple[0], "its trigger fires the grapple");
+        Draw d;
+        p.draw(d, Pose{}, in, 0);
+        check(d.held[1].look == lookGrappleGun, "the gun drawn in the right hand");
+        frame(0, 0, pointed);
+        check(!p.gunDrawn[1], "let go: put away");
+        // the left hand still draws as before
+        in.hands[1] = {aside, {0, 0, -1}, true, 0, 0, false};
+        in.hands[0] = {{-.02f, 1.4f, -.12f}, normalized(Vec3{0, .6f, -1}), true, 0, 1, false};
+        PlayOutput h2, o2;
+        p.holsterStep(in, h2);
+        p.step(in, o2);
+        check(p.gunDrawn[0], "the left hand at the chest: drawn too");
+    });
+    test("0.0.76 fix 2: CAPTAIN AMERICA's drawn grapple keeps the hands-close gesture from opening the hologram", [] {
+        using namespace spidy;
+        holo_guard076::Guard g;
+        const uint32_t cap = hero_modes::captainAmerica;
+        g.step(1 / 90.f, cap, false, false, 0, false);
+        check(!g.armed && g.gesturePlay(true, false), "no gun drawn: the gesture opens it");
+        g.step(1 / 90.f, cap, false, false, 0, true);
+        check(g.armed && !g.gesturePlay(true, false), "the grapple out: the trigger at the chest is the gun's");
+        check(g.gesturePlay(true, true), "an open hologram still closes");
+        g.step(1 / 90.f, cap, false, false, 0, false);
+        check(!g.armed, "put away: at once normal (no shot hold for CAP)");
+        holo_guard076::Guard o;
+        o.step(1 / 90.f, hero_modes::batman, false, false, 0, true);
+        check(!o.armed, "another hero: unchanged");
+    });
+    test("0.0.76 fix 2 MOTORCYCLE tap: a press up to 1 s summons, a longer hold says so", [] {
+        using namespace spidy;
+        bike075::Tap t;
+        bool tap = false;
+        for (int f = 0; f < 54; ++f) // 0.6 s: summoned nothing in e808401 (.4 s)
+            tap |= t.step(true, 1 / 90.f);
+        tap |= t.step(false, 1 / 90.f);
+        check(tap && t.released, "a 0.6 s press: the summon tap");
+        bike075::Tap l;
+        tap = false;
+        for (int f = 0; f < 135; ++f)
+            tap |= l.step(true, 1 / 90.f);
+        const bool up = l.step(false, 1 / 90.f);
+        check(!up && !tap && l.released && l.lastHeld > 1.4f, "a 1.5 s hold: no summon, but released with its length");
+        check(!l.step(false, 1 / 90.f) && !l.released, "the next frame: nothing");
+        bike075::Tap n;
+        n.step(true, NAN);
+        check(n.step(false, NAN), "NaN frames: a tap");
+    });
     test("0.0.76 PUNISHER DUAL-WIELD: guns out or firing keep the hands-close gesture from opening the hologram", [] {
         using namespace spidy;
         holo_guard076::Guard g;
@@ -37082,9 +37158,9 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         check(!tp.step(false, .016f), "once");
         tp = {};
         tp.step(true, .016f);
-        for (int k = 0; k < 30; ++k)
+        for (int k = 0; k < 60; ++k) // 0.0.76 fix 2: the tap reaches 1 s (was .4 s)
             tp.step(true, .02f);
-        check(!tp.step(false, .016f), "a hold over .4 s is not a tap");
+        check(!tp.step(false, .016f), "a hold over 1 s is not a tap");
         tp = {};
         check(!tp.step(true, NAN) && tp.step(false, NAN), "NaN dt: still a tap, no NaN");
         check(std::string(mm::slotFolders[mm::slotBikeBody]) == "Vehicle/Motorcycle" &&

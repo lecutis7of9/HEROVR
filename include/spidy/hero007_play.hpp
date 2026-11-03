@@ -303,6 +303,7 @@ class Play {
     // hand while a grip that did not take a batarang, a pellet or the shield is held; the trigger fires it
     // only then (FireGate: a press begun on the hologram or before the gun was out never fires).
     bool gunDrawn[2]{}, gunGripWas[2]{};
+    uint32_t capGunDraws[2]{}; // 0.0.76 fix 2: CAPTAIN AMERICA's chest draws by hand (game_xr notes each)
     grapple073::FireGate grappleGate;
     unsigned grappleHand{1};              // the hand that fired it last (its hip holsters the gun; right at first)
     uint32_t beltPick[2]{};               // 0.0.74 test 10 BELT ZONES: each hand's place this frame (BeltPick)
@@ -580,9 +581,14 @@ class Play {
         // CHEST RIG (punisher_rig::at, the same neck-anchored, body-scaled ellipsoid as his hook) draws it; then
         // point and pull the trigger to fire (grappleGate, unchanged); letting the grip go puts it away. A grip
         // anywhere else draws nothing (0.0.73-0.0.75: any free grip drew it).
+        // 0.0.76 fix 2 (owner, test of e808401: "no cap grapple"): EITHER hand draws it at the chest, as the
+        // PUNISHER's hook (punisher_rig: "either empty hand"). Until now the SHIELD ARM's hand never could, and
+        // with the default SHIELD ARM RIGHT that left the left hand only - a right hand at the chest drew
+        // nothing and its trigger there opened the hologram instead. The SHIELD ARM's hand is skipped only while
+        // it is the shield's: the shield on that arm, or out of it (thrown, coming home to that hand).
         if (captainAmerica()) {
             for (unsigned i = 0; i < 2; ++i) {
-                if (i == shieldHand) {
+                if (i == shieldHand && (shieldRack.heldIn(i) >= 0 || !shield.inHandNow())) {
                     gunDrawn[i] = false;
                     gunGripWas[i] = in.hands[i].squeeze >= holster::pressed;
                     continue;
@@ -596,7 +602,10 @@ class Play {
                              holster::inZone(holster::backRight, bp);
                 }
                 const bool atRig = punisher_rig::at(in.hands[i].position, in.head, shieldRack.body);
+                const bool before = gunDrawn[i];
                 gunGrip(in, i, !rackHas && !atBack && atRig, out);
+                if (gunDrawn[i] && !before)
+                    ++capGunDraws[i];
             }
         }
     }
@@ -823,18 +832,22 @@ class Play {
                     any = true;
                 }
             }
-            // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the grapple gun in the free hand while its grip
-            // holds it (barrel along the aim), else on that hand's hip.
-            const unsigned g = 1 - i;
-            if ((gunDrawn[g] || grappling[g] || in.grappleHeld[g]) && handOk(g)) {
+            // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the grapple gun in the hand while its grip holds
+            // it (barrel along the aim), else on the free hand's hip. 0.0.76 fix 2: either hand (the chest draw).
+            bool gunHeld = false;
+            for (unsigned g = 0; g < 2; ++g) {
+                if (!((gunDrawn[g] || grappling[g] || in.grappleHeld[g]) && handOk(g)) || d.held[g].look != lookNone)
+                    continue;
                 const auto gh = in.hands[g].gunOk && finite(in.hands[g].gunAt)
                                     ? grapple072::alongAim(in.hands[g].gunAt, in.hands[g].aim, in.hands[g].gunUp)
                                     : grapple072::Held{};
                 const Vec3 a = normalized(in.hands[g].aim);
                 d.held[g] = gh.ok ? item(lookGrappleGun, gh.at, gh.forward, gh.up) : item(lookGrappleGun, in.hands[g].position, a, gunUp(a));
                 d.held[g].palm = gh.ok;
-                any = true;
-            } else if (shieldRack.body.valid && finite(in.head.position)) {
+                gunHeld = any = true;
+            }
+            const unsigned g = 1 - i;
+            if (!gunHeld && shieldRack.body.valid && finite(in.head.position)) {
                 Vec3 at{}, fwd{}, up{};
                 wornPose(g == 0 ? holster::leftHip : holster::rightHip, in.head.position, shieldRack.body, at, fwd, up, hipBelt);
                 d.worn[1] = item(lookGrappleGun, at, fwd, up, 1);
@@ -929,7 +942,9 @@ class Play {
     void stepCaptain(const PlayInput& in, float dt, PlayOutput& out) {
         // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the free hand's drawn gun fires on its trigger.
         for (unsigned k = 0; k < 2; ++k) {
-            const bool fire = k != shieldHand && grappleGate.step(k, gunDrawn[k] && in.hands[k].tracked, in.hands[k].trigger, in.hands[k].holo);
+            // 0.0.76 fix 2: the hand holding the drawn gun fires it (the SHIELD ARM's too: it draws the gun only
+            // while the shield is on the back, where that trigger throws nothing)
+            const bool fire = grappleGate.step(k, gunDrawn[k] && in.hands[k].tracked, in.hands[k].trigger, in.hands[k].holo);
             grappling[k] = fire;
             if (fire) {
                 out.grapple[k] = true;

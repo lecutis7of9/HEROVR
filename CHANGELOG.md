@@ -30,7 +30,21 @@ On top of test 27041ea (AO ON + ONE PAGE). SM2 only. **Built and unit-tested, no
   eye anti-aliasing value in the report matched the good 47cd349 runs; the only picture change was Ambient Occlusion
   Off -> XeGTAO, whose noise is meant for the game's TAA, which never runs on the eyes, so it shimmered as worse
   aliasing (and cost about 2 ms of eye GPU time a frame).
-- The release zip's top folder is short (`HV076-<commit>`), so Windows extracts it without hitting the path limit.
+- The release zip's top folder is short (`HV076`), so Windows extracts it without hitting the path limit.
+- **FIX 2 (e808401's report game-vr-20261103-001914: "no cap grapple no cap bike no wolverine bike").**
+  - **CAP'S GRAPPLE, root cause found:** only the hand without the shield (the left, by default) could draw it, and
+    a right-hand grab at the chest lands in the left forearm's hologram zone, which swallowed the grip and made the
+    trigger toggle the wrist hologram (the report: hologram toggles at 5-9 cm right after PLAY AS CAPTAIN AMERICA,
+    no draw at all). Now either hand draws at the chest (the shield arm's too, while the shield is on the back),
+    a grip at the chest rig is the grapple's draw rather than the hologram zone's, the drawn gun's trigger is the
+    gun's, and the hands-close gesture cannot open the hologram while the grapple is drawn. Every draw, and every
+    near-chest grip that drew nothing (with the reason), goes to the prompts log.
+  - **BIKES:** the report has no trace of the X press reaching the summon, so the exact gate is not proven. Fixed
+    what the code allowed to fail silently: a press of X longer than 0.4 s summoned nothing and said nothing (now a
+    tap is up to 1 s, and a longer hold says so on the wrist); a found spot could be dropped on a frame out of play
+    (now it waits for a frame the bike can use it); a street check with no answer in 2 s now says so. Each X press
+    as CAP or WOLVERINE is logged with where it went (in play or not, the bike ready or not).
+  - CAP's hero note now describes him (it said "webs").
 
 ## hero-0.0.76-sm1 - melee, web balls, flight (TEST build, not released)
 

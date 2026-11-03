@@ -19,7 +19,9 @@ struct Guard {
     bool primed{}, armed{};
     uint64_t suppressedFrames{};
     // hero: heroNow(); gunInHand: each hand holds a gun; shots: the guns' running shot count (any hero's).
-    bool step(float seconds, uint32_t hero, bool gunLeft, bool gunRight, uint64_t shots) {
+    // 0.0.76 fix 2 capGrapple: CAPTAIN AMERICA holds his drawn grapple gun (the chest draw): its trigger at the
+    // chest is the gun's, never the hologram's open (the e808401 test's right-hand grabs opened it instead).
+    bool step(float seconds, uint32_t hero, bool gunLeft, bool gunRight, uint64_t shots, bool capGrapple = false) {
         const float dt = std::isfinite(seconds) && seconds > 0 ? (seconds < .1f ? seconds : .1f) : 0.f;
         sinceShot = sinceShot < 1e8f ? sinceShot + dt : sinceShot;
         if (!primed) { // the first frame: a count carried in from before is not a shot now
@@ -30,6 +32,7 @@ struct Guard {
             sinceShot = 0;
         }
         armed = hero == hero_modes::punisher && (gunLeft || gunRight || sinceShot < combatHold);
+        armed = armed || (hero == hero_modes::captainAmerica && capGrapple);
         return armed;
     }
     // The hologram's gesture plays (may open it) this frame: never while armed and closed.

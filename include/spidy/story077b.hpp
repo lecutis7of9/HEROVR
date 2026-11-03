@@ -16,7 +16,7 @@
 // AbilityButton: VR X held is the ability button. While it is held a punch is LB + X, Y (or the right stick
 // pushed up) LB + Y, B LB + B, A LB + A, the right stick's click L3 + R3, the right stick pushed down D-pad up
 // (camouflage). LB goes down 50 ms before the face button (the game's ComboSender lead, gestures385) and
-// stays down while X is; each face press lasts at least 0.2 s. X tapped alone is the 0.1 s View it always
+// stays down while X is; each face press lasts at least 0.2 s. X tapped alone (menuTap) is the game's X now (story077e.hpp; x_button view: the 0.1 s View it always
 // was; X held 0.8 s with nothing pressed goes back to the old X (the gadget wheel, or View held).
 // ThrowAim: while the game's LB + RB goes out and 0.4 s after it, the left stick points where the player
 // looks (or the right hand points), turned into the game camera's frame: the game throws at the enemy the

@@ -3032,3 +3032,7 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   tests/story077d_tests.cpp, tests/hero077_prompt_boss_tests.py): prompt_window is debug only (off (default),
   debug_full; the full frame only at debug_full); prompt_cards (on (default), off; SpidyPromptCards 5568) draws the
   mod's own cards from world_trace's prompt objects (promptBit, setPromptsWanted, prompts, promptStats).
+- HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp, tests/story077e_tests.cpp): XPulse (a VR X tap
+  is the game's X for the spiders; game_pad::Walk::xIsGameX makes X held the game's X, not Back) and MenuHold (the
+  menu button in VR play: a tap Start on release, held 0.5 s the 0.1 s Back with a buzz); x_button (game (default),
+  view; SpidyXButton 5569).

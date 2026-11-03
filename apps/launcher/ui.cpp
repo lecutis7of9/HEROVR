@@ -2479,10 +2479,10 @@ void App::controls(ImVec2 origin, ImVec2 size) {
                              "two; while you swing too. No point? Keep holding (time slows as the game "
                              "aims), look at a point and let go to zip there"},
           {"Hand to your temple, trigger", "Scan your surroundings: the game's R3"},
-          {"Menu button", "Pause; there SWITCH TO GAME SCREEN plays the game as it is, on a 3D screen, and VR "
+          {"Menu button", "Tap: pause (as you let go); hold half a second: the game menu (map, suits, skills). In the pause menu SWITCH TO GAME SCREEN plays the game as it is, on a 3D screen, and VR "
                           "settings are in Settings > SPIDY VR"},
           {"Both sticks held in", "Pause too: under SteamVR a Quest's menu button opens SteamVR's dashboard"},
-          {"X", "Game menu: map, suits, skills. While the game asks for its X, it is that X"},
+          {"X", "As Peter and the second spider the game's X (its \"tap X\" prompts); hold it for the gadget wheel. live.txt x_button = view: the game menu again"},
           {"A button the game shows", "Press the one of that name: A, B, X and Y as they are, your left "
                                       "trigger its LT or LB, your right trigger its RT or RB, the stick "
                                       "clicks its L3 and R3, the right stick pushed its D-pad. While it asks "
@@ -2495,7 +2495,7 @@ void App::controls(ImVec2 origin, ImVec2 size) {
         {"STEAM FRAME CONTROLLERS",
          {{"A, B, X, Y", "All four are on the right controller, each the button of that name above: jump, dodge, "
                          "game menu, interact"},
-          {"Menu  /  View", "Pause  /  Game menu, as X"},
+          {"Menu  /  View", "Pause (hold: game menu)  /  Game menu"},
           {"D-pad", "The game's own D-pad: down heals. The right stick's down and up work as above"},
           {"Bumpers", "Not used: the triggers and grips are your webs"}}},
     };

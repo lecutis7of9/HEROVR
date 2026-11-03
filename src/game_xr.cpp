@@ -64,6 +64,7 @@
 #include "spidy/story077b.hpp" // HERO VR 0.0.77 STORY MOVES
 #include "spidy/story077c.hpp" // HERO VR 0.0.77 PROMPT WINDOW, BOSS DAMAGE
 #include "spidy/story077d.hpp" // HERO VR 0.0.77 PROMPT CARDS
+#include "spidy/story077e.hpp" // HERO VR 0.0.77 X IS THE GAME'S X
 #include "spidy/prompt_cards.hpp" // HERO VR 0.0.77 PROMPT CARDS (drawing)
 #include "spidy/air_watch.hpp"
 #include "spidy/npc_fade.hpp"
@@ -1368,6 +1369,9 @@ std::atomic<uint32_t> storySprintNow{0}; // HERO VR 0.0.77 story_sprint: 0 on, 1
 // game frame in a window, b8b33ce's view); the button prompts are prompt_cards (0 on, the default; 1 off).
 std::atomic<uint32_t> promptWindowNow{story077d::windowOff};
 std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};
+// HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): live.txt x_button - 0 game (the default: VR X tap is the
+// game's X, the menu button held 0.5 s is the View X sent), 1 view (05e70a2: X tap View, menu pauses on press).
+std::atomic<uint32_t> xButtonNow{story077e::xGame};
 std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 on (default), 1 off, 2 strong
 uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
 uint64_t bossClapBlows{};  // and the claps sent at a boss
@@ -2482,6 +2486,12 @@ DWORD WINAPI run(void*) {
         PhoneView phoneShown;
         bool phoneBlows{};
         float menuTap{};
+        // HERO VR 0.0.77 X IS THE GAME'S X: the game's X per VR X tap, the menu button's tap / hold, the counts.
+        story077e::XPulse xPulse;
+        story077e::MenuHold menuHold;
+        bool xPulseDown{}, xHeldWas{};
+        uint64_t xHeldGameX{}, xTapsAsView{}, xDiagSeen{}, xNotedSent{};
+        double xDiagLogAt{};
         // The game played on its screen (VIEW: GAME SCREEN): Back and the
         // D-pad, which the VR controllers lack, besides the Xbox controller's.
         game_pad::ScreenControls screenControls;
@@ -7709,8 +7719,8 @@ DWORD WINAPI run(void*) {
                         if (named & game_pad::NamedPress::controlX)
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
                         // HERO VR 0.0.77 STORY MOVES: X held is the ability button: no View, no wheel from it
-                        // (a tap is still the 0.1 s View, from the button's own release; held 0.8 s alone it is
-                        // given back to them).
+                        // (a tap is the game's X now, story077e.hpp - x_button view: the 0.1 s View - from the
+                        // button's own release; held 0.8 s alone it is given back: the wheel, else the game's X held).
                         const bool abilityXRaw = (buttons.buttons & buttonX) != 0;
                         if (abilityX && !(named & game_pad::NamedPress::controlX))
                             buttons.buttons &= ~static_cast<uint32_t>(buttonX);
@@ -7853,8 +7863,12 @@ DWORD WINAPI run(void*) {
                             const auto chosen =
                                 gadgetWheel.update(frame.seconds, x, offered && steering && !calibrationInput,
                                                    frame.hands[hand].grip.position, frame.head.position, places);
-                            if (chosen.tap)
-                                menuTap = .1f;
+                            if (chosen.tap) {
+                                if (xButtonNow.load() == story077e::xGame && heroNow() == hero_modes::spiderMan)
+                                    xPulse.tap(); // HERO VR 0.0.77: the game's X
+                                else
+                                    menuTap = .1f, ++xTapsAsView;
+                            }
                             if (chosen.opened) {
                                 runtime.haptic(hand, .3f);
                                 feel(body_haptics::Kind::gadget, static_cast<int>(hand), .3f);
@@ -7875,7 +7889,39 @@ DWORD WINAPI run(void*) {
                                 wheelShooter(&command);
                             }
                         }
+                        // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): for the spiders VR X held is the game's X
+                        // (Square), not its View; the View moved to the menu button held (MenuHold, below).
+                        const bool xGameMode = xButtonNow.load() == story077e::xGame;
+                        walk.xIsGameX = xGameMode && heroNow() == hero_modes::spiderMan;
                         auto pad = game_pad::fromControllers(buttons, mapping, walk);
+                        {
+                            const bool xNow = walk.xIsGameX && mapping == game_pad::Mapping::gameplay &&
+                                              (buttons.buttons & buttonX) != 0;
+                            xHeldGameX += xNow && !xHeldWas;
+                            xHeldWas = xNow;
+                        }
+                        // HERO VR 0.0.77 MENU HOLD: in VR play the menu button tapped pauses (Start 0.1 s on its
+                        // release), held 0.5 s it is the 0.1 s View X used to send, with a buzz, and never pauses.
+                        {
+                            const bool holdOn = xGameMode && mapping == game_pad::Mapping::gameplay;
+                            const auto mh = menuHold.update(frame.seconds, holdOn, (buttons.buttons & buttonMenu) != 0);
+                            if (holdOn) {
+                                pad.buttons = static_cast<uint16_t>(pad.buttons & ~game_pad::start);
+                                if (mh.start)
+                                    pad.buttons |= game_pad::start;
+                                if (mh.view)
+                                    pad.buttons |= game_pad::back;
+                            }
+                            if (mh.buzz) {
+                                runtime.haptic(0, .25f);
+                                runtime.haptic(1, .25f);
+                                char line[128];
+                                sprintf_s(line, "HERO VR 0.0.77 MENU HOLD: menu button held 0.5 s -> View #%llu (no pause)",
+                                          static_cast<unsigned long long>(menuHold.views));
+                                game_prompts::note(line);
+                                consoleLine(line);
+                            }
+                        }
                         // What the controls of the names the game shows send it.
                         if (mapping == game_pad::Mapping::gameplay) {
                             pad.buttons |= namedPad.buttons;
@@ -7906,6 +7952,11 @@ DWORD WINAPI run(void*) {
                                       named & game_pad::NamedPress::fist ? ", a thrown fist" : "");
                             game_prompts::note(line);
                         }
+                        // HERO VR 0.0.77 X IS THE GAME'S X: the tap's press goes out after the ability button (below),
+                        // so a new X held for an ability cannot strip it.
+                        xPulseDown = xPulse.update(frame.seconds) && mapping == game_pad::Mapping::gameplay;
+                        if (mapping != game_pad::Mapping::gameplay)
+                            xPulse.reset();
                         if (menuTap > 0) {
                             pad.buttons |= game_pad::back;
                             menuTap -= std::isfinite(frame.seconds) ? std::clamp(frame.seconds, 0.f, .1f) : .1f;
@@ -10856,7 +10907,7 @@ DWORD WINAPI run(void*) {
                             ai.seconds = frame.seconds;
                             ai.on = abilityOn && !(named & game_pad::NamedPress::controlX);
                             ai.xHeld = abilityXRaw;
-                            ai.punch = (pad.buttons & game_pad::x) != 0;
+                            ai.punch = (pad.buttons & game_pad::x) != 0; // the tap's X is not in pad yet (below)
                             ai.y = (frame.buttons & buttonY) != 0;
                             ai.b = (frame.buttons & buttonB) != 0;
                             ai.a = (frame.buttons & buttonA) != 0;
@@ -10873,8 +10924,12 @@ DWORD WINAPI run(void*) {
                                 pad.leftTrigger = pad.rightTrigger = 0;
                                 pad.buttons = static_cast<uint16_t>(pad.buttons | ab.buttons);
                             }
-                            if (ab.menuTap)
-                                menuTap = .1f; // X tapped alone: the View it always was
+                            if (ab.menuTap) { // X tapped alone: the game's X (x_button view: the old 0.1 s View)
+                                if (xButtonNow.load() == story077e::xGame)
+                                    xPulse.tap();
+                                else
+                                    menuTap = .1f, ++xTapsAsView;
+                            }
                             abilityGiveBack = ab.giveBack;
                             abilityAirAsk = storyAbility.sending();
                             if (ab.owned && !abilityToldOnce) {
@@ -10926,6 +10981,35 @@ DWORD WINAPI run(void*) {
                                                    frame.hands[0].stickX, frame.hands[0].stickY) &&
                                 pad.leftTrigger < 100)
                                 pad.rightTrigger = 255;
+                        }
+                        // HERO VR 0.0.77 X IS THE GAME'S X: the X tap's press, and the counts (diagnostics).
+                        if (xPulseDown)
+                            pad.buttons |= game_pad::x;
+                        {
+                            const uint64_t seen = xPulse.sent + xHeldGameX + menuHold.pauses + menuHold.views + xTapsAsView;
+                            const double nowS = static_cast<double>(GetTickCount64()) / 1000.0;
+                            if (xPulse.sent != xNotedSent && xPulse.sent <= 20) {
+                                xNotedSent = xPulse.sent;
+                                char line[96];
+                                sprintf_s(line, "HERO VR 0.0.77 X BUTTON: X tap -> game X #%llu",
+                                          static_cast<unsigned long long>(xPulse.sent));
+                                game_prompts::note(line);
+                            }
+                            if (seen != xDiagSeen && nowS - xDiagLogAt >= 10) {
+                                xDiagSeen = seen;
+                                xDiagLogAt = nowS;
+                                char line[300];
+                                sprintf_s(line, "HERO VR 0.0.77 X BUTTON (%s): X taps -> game X %llu (of %llu taps), X held -> "
+                                                "game X %llu, X taps -> View %llu; MENU: taps -> pause %llu, holds -> View %llu",
+                                          xButtonNow.load() == story077e::xGame ? "game" : "view",
+                                          static_cast<unsigned long long>(xPulse.sent),
+                                          static_cast<unsigned long long>(xPulse.taps),
+                                          static_cast<unsigned long long>(xHeldGameX),
+                                          static_cast<unsigned long long>(xTapsAsView),
+                                          static_cast<unsigned long long>(menuHold.pauses),
+                                          static_cast<unsigned long long>(menuHold.views));
+                                consoleLine(line);
+                            }
                         }
                         // Version 0.0.4 HERO ABILITIES: no swing, zip, charged swing leap, web shooter,
                         // gadget or yank reaches the game for a hero with no webs (a story prompt's ask kept).
@@ -16205,6 +16289,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHeadDodge(void* v) { return s
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyStorySprint(void* v) { return setLive(v, 0, 1, 5565, storySprintNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptWindow(void* v) { return setLive(v, 0, 1, 5566, promptWindowNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return setLive(v, 0, 1, 5568, promptCardsNow, asU32); }
+// HERO VR 0.0.77 X IS THE GAME'S X: x_button 0 game (the default), 1 view (05e70a2's X = View).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyXButton(void* v) { return setLive(v, 0, 1, 5569, xButtonNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossDamage(void* v) { return setLive(v, 0, 2, 5567, bossDamageNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);

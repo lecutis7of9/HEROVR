@@ -2,6 +2,27 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-story (8) - X IS THE GAME'S X: the game menu moved to the menu button held (TEST build, not released)
+
+From the player's test of 05e70a2: in the Sandman fight as the second spider, "tap X" to hit him with debris also
+opened a game menu, because a VR X tap sent a 0.1 s View. Now (include/spidy/story077e.hpp, live.txt `x_button`,
+SpidyXButton 5569, game by default):
+- **VR X tap = the game's X (Square)**, as Peter and the second spider (CONFIRMED in code and tests): one short press
+  (0.07 s) per tap, sent as X is let go (the ability button has to tell a tap from a hold); fast taps queue (up to
+  4) and each is its own press, for "rapidly press X". Hold X + punch / Y / B / A (the LB abilities) are unchanged.
+  X held 0.8 s alone: the mod's gadget wheel where it is offered, as before; otherwise the game's X held (it was
+  View held). The other heroes keep X as it was.
+- **Menu button held about 0.5 s = the View X used to send** (the same 0.1 s View), with a short buzz; that hold
+  never pauses. A tap pauses as before, but as you let go (a hold has to be told from a tap). Both sticks held in
+  still pause at once; the phone's SWITCH HERO sends its own View hold as before; the phone and the wrist holo
+  are unchanged. Whether that View is the same game menu he saw is CANDIDATE (same button, same length).
+- `x_button = view` puts 05e70a2's controls back (X tap View, the menu button pauses on press).
+- Diagnostics: a note per X tap sent as the game's X (the first 20), a "HERO VR 0.0.77 MENU HOLD" note and console
+  line per hold, and a "HERO VR 0.0.77 X BUTTON" console line (at most every 10 s, when a count changed): X taps
+  sent as game X, X held as game X, X taps as View, menu taps as pause, menu holds as View.
+- The phone's STORY MOVES card reads "X TAP / MENU HOLD - GAME X / VIEW"; the prompt cards say "TAP X / PUNCH" and
+  "TAP X FAST / PUNCH FAST".
+
 ## hero-0.0.77-story (7) - PROMPT CARDS: no full frame in VR, the prompts as VR cards (TEST build, not released)
 
 From the player's test of b8b33ce: the PROMPT WINDOW put a flat copy of the WHOLE game screen in VR. That is gone.

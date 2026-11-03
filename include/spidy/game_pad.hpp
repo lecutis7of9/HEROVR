@@ -119,6 +119,8 @@ struct Walk {
     // pull is as it is. The buttons a prompt names otherwise go out from the
     // controls of their own names (NamedPress).
     prompt_buttons::Demand demand{};
+    // HERO VR 0.0.77 X IS THE GAME'S X (story077e.hpp): VR X held is the game's X, not its View.
+    bool xIsGameX{};
 };
 // A held on the ground: a charged leap, Spidy's own. The game has one, its
 // Charge Jump ("Hold RT + A while running or standing to build up charge,
@@ -1409,7 +1411,7 @@ inline State fromControllers(const XrFrame& frame, Mapping mapping, const Walk& 
             s.buttons |= button;
     if (mapping == Mapping::gameplay) {
         if (frame.buttons & buttonX)
-            s.buttons |= back;
+            s.buttons |= walk.xIsGameX ? x : back;
         if (walk.jump)
             s.buttons |= a;
         if (walk.dodge)

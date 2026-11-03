@@ -37,7 +37,7 @@ inline const char* vrControl(const char* gameButtons) {
     static constexpr Map maps[] = {
         {"LB+RB", "BOTH TRIGGERS / YANK"},     {"LB+X", "HOLD X + PUNCH"},        {"LB+Y", "HOLD X + Y"},
         {"LB+B", "HOLD X + B"},                {"LB+A", "HOLD X + A"},            {"L3+R3", "HOLD X + RIGHT STICK CLICK"},
-        {"X", "PUNCH"},                        {"MASH X", "PUNCH FAST"},          {"Y", "Y (WEB STRIKE)"},
+        {"X", "TAP X / PUNCH"},                {"MASH X", "TAP X FAST / PUNCH FAST"},          {"Y", "Y (WEB STRIKE)"},
         {"B", "B / STEP YOUR HEAD (DODGE)"},   {"A", "A (JUMP)"},                 {"Y+B", "Y + B"},
         {"LEFT STICK", "LEFT STICK"},          {"AIM", "LOOK AT IT"},             {"RT", "RIGHT TRIGGER"},
     };
@@ -56,9 +56,9 @@ inline constexpr Kind kinds[] = {
     {".?AVWebSnatchSpecialThrowable@@", "LB+RB", "BOTH TRIGGERS / YANK", object, 0, 15},
     {".?AVLiftableInteract@@", "LB+RB", "BOTH TRIGGERS / YANK", object, 0, 6},
     // Screen prompts (QTE / mash), below the centre.
-    {".?AVButtonMashInteract@@", "MASH X", "PUNCH FAST", screen, 8, 0},
-    {".?AVCineQTEShotControllerButtonMashAction@@", "MASH X", "PUNCH FAST", screen, 8, 0},
-    {".?AVCineQTEShotControllerPowerMeterAction@@", "MASH X", "PUNCH FAST", screen, 8, 0},
+    {".?AVButtonMashInteract@@", "MASH X", "TAP X FAST / PUNCH FAST", screen, 8, 0},
+    {".?AVCineQTEShotControllerButtonMashAction@@", "MASH X", "TAP X FAST / PUNCH FAST", screen, 8, 0},
+    {".?AVCineQTEShotControllerPowerMeterAction@@", "MASH X", "TAP X FAST / PUNCH FAST", screen, 8, 0},
     {".?AVCineQTEShotControllerButtonPressAction@@", "QTE", "PRESS IT NOW: X = PUNCH, Y, B, A", screen, 4, 0},
     {".?AVCineQTEShotControllerStickMotionAction@@", "LEFT STICK", "LEFT STICK", screen, 5, 0},
     {".?AVCineQTEShotControllerThrowArcAction@@", "AIM", "LOOK AT IT + BOTH TRIGGERS", screen, 6, 0},

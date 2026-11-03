@@ -196,7 +196,7 @@ void movesScreen(std::vector<Vertex>& v, const Plane& p) {
         {"R STICK DOWN", "CAMO DPAD UP"},
         {"ARMS OR SYMBIOTE", "SAME LB SLOTS"},
         {"SURGE", "X + STICK CLICK"},
-        {"X TAP", "VIEW AS BEFORE"},
+        {"X TAP / MENU HOLD", "GAME X / VIEW"},
         {"R STICK DOWN", "HEAL"},
         {"TWO HAND YANK", "THROW LB+RB"},
         {"LOOK OR POINT", "AIMS THE THROW"},

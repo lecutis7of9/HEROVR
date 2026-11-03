@@ -258,7 +258,7 @@ if($Seconds) { Write-Host "Timed test: $Seconds seconds." }
 else { Write-Host 'VR stays active until you close the game or press Ctrl+C here.' }
 Write-Host 'VR starts with the game: its intro, menus, loading and cutscenes show on a screen in the headset.'
 Write-Host 'There the controllers are an Xbox controller: thumbstick moves, A selects, B goes back, grips switch tabs.'
-Write-Host 'In VR the menu button pauses and X opens the game menu (map, suits, skills).'
+Write-Host 'In VR the menu button pauses; hold it half a second for the game menu (map, suits, skills). X is the game''s X.'
 Write-Host "In VR B and Y are the game's own: B dodges the way the left stick points, Y interacts (backpacks,"
 Write-Host 'doors, prompts; web strike in a fight). Look at the thing and press Y within about a metre of it;'
 Write-Host 'hold Y and you step up to what you look at until the game takes it.'

@@ -4,45 +4,92 @@
 //
 // Version 0.0.75 MOTORCYCLE (owner: "a summonable motorcycle for Captain America and Wolverine"): CAPTAIN AMERICA
 // and WOLVERINE (every suit) tap X to summon a motorcycle and ride it on the van's own system (van072: in by the
-// left handlebar grip, out by a grip beside the seat, the bars turned by the hands, bulletproof like the cars):
-//   "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme" by Mert Tetik (CC BY 4.0)
-// Models\Vehicle\Motorcycle\model.glb the bike without its handlebar yoke, Handlebars\model.glb the yoke (its
-// steering pivot at the origin, x right, y up, -z forward, the grips toward +z), both from
-// tools/bike075/convert.py. The numbers below are MEASURED by the converter (layout.json beside the model):
-// CONFIRMED on the model, CANDIDATE in game (the scale is set by a 64 cm tyre; the pivot's place along the yoke,
-// the seated eye, the get-off grip and the step-off point are choices). DRIVER ONLY: the mod has no passenger
-// seat for any vehicle (multiplayer riders are not carried). Pure: no game reads, no addresses. Fail-safe: the
-// body model missing and there is no bike (a note on the wrist); the bars missing and the bike is ridden with
+// left handlebar grip, out by a grip beside the seat, the bars turned by the hands, bulletproof like the cars).
+// 0.0.76 HARLEYS (owner pt1716u "1 for cap 3 for wolverine"; "like a Harley and not low poly"): each hero his own
+// real bike, both CC BY 4.0:
+//   CAPTAIN AMERICA  Models\Vehicle\Motorcycle\Cap        "EL OHV V-TWIN" by matias_romero
+//   WOLVERINE        Models\Vehicle\Motorcycle\Wolverine  "2016 Harley-Davidson FXDLS Dyna Low Rider S" by everhard
+//   either hero      Models\Vehicle\Motorcycle            the PLAYER'S OWN BIKE (read only with its override.txt)
+// Each folder: model.glb the bike without its steer part, Handlebars\model.glb the steer part (the bars, risers and
+// fork; its pivot at the origin, x right, y up, -z forward, the grips toward +z) and layout.json, all three from
+// tools/bike076/convert.py (MEASURED on the model: CONFIRMED on the model, CANDIDATE in game). The layout is read
+// at the start (parseLayout: every number checked); DRIVER ONLY (the mod has no passenger seat for any vehicle).
+// Pure: no game reads, no addresses. Fail-safe: the body or its layout missing or refused and that hero has no
+// bike (MODEL MISSING on the wrist, never another bike in its place); the bars missing and the bike is ridden with
 // its bars not drawn - never a crash, never the flat screen.
 #include "spidy/math.hpp"
 #include "spidy/van072.hpp"
 #include <cmath>
 #include <cstdint>
+#include <string>
+#include <string_view>
 namespace spidy::bike075 {
 inline constexpr const char* name = "MOTORCYCLE";
-inline constexpr const char* folder = "Vehicle/Motorcycle";
-// The dash's credit line (upper case for its font).
-inline constexpr const char* creditLine = "MODEL: LOW-POLY SCI-FI MOTORCYCLE BY MERT TETIK, CC BY 4.0";
-inline constexpr const char* creditTitle = "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme";
-inline constexpr const char* creditArtist = "Mert Tetik";
-inline constexpr const char* creditLicence = "CC BY 4.0";
-inline constexpr const char* creditUrl =
-    "https://sketchfab.com/3d-models/low-poly-sci-fi-motorcycle-cyberpunk-theme-50c38758e5134a0b8ffa49780e7fe228";
+// The bikes: each hero's own, then the player's override for both.
+enum Bike : uint32_t { cap, wolverine, own, bikes };
+inline constexpr const char* folders[bikes] = {"Vehicle/Motorcycle/Cap", "Vehicle/Motorcycle/Wolverine", "Vehicle/Motorcycle"};
+// The dash's name for each (upper case for its font).
+inline constexpr const char* names[bikes] = {"EL OHV V-TWIN", "DYNA LOW RIDER S", "MOTORCYCLE"};
+// The override is read only when this file is in Models\Vehicle\Motorcycle (the 0.0.75 bike's files left there by an
+// older install are never picked up).
+inline constexpr const char* overrideMarker = "override.txt";
+inline constexpr const char* layoutFile = "layout.json";
+// Which bike a summon brings: the player's own when it is ready, else the hero's (wolverine: WOLVERINE, else CAP).
+inline constexpr Bike bikeFor(bool wolverineHero, bool ownReady) { return ownReady ? own : wolverineHero ? wolverine : cap; }
+
+// The CC BY credits of the shipped bikes (the player's own bike: ownCreditLine; its credit is the player's).
+struct Credit {
+    const char* title;
+    const char* artist;
+    const char* artistUrl;
+    const char* licence;
+    const char* licenceUrl;
+    const char* url;
+    const char* line; // the dash's credit line (upper case for its font)
+};
+inline constexpr Credit credits[2] = {
+    {"Harley Davidson Motorcycle \"EL OHV V-TWIN\"", "matias_romero", "https://sketchfab.com/matias_romero", "CC BY 4.0",
+     "http://creativecommons.org/licenses/by/4.0/",
+     "https://sketchfab.com/3d-models/harley-davidson-motorcycle-el-ohv-v-twin-9923aaa519334f48b8dd44fd792475ed",
+     "MODEL: EL OHV V-TWIN BY MATIAS_ROMERO, CC BY 4.0"},
+    {"2016 Harley-Davidson FXDLS Dyna Low Rider S", "everhard", "https://sketchfab.com/everhard", "CC BY 4.0",
+     "http://creativecommons.org/licenses/by/4.0/",
+     "https://sketchfab.com/3d-models/2016-harley-davidson-fxdls-dyna-low-rider-s-ad65bcb9282a46459a9a42f787bb5cbd",
+     "MODEL: 2016 HARLEY-DAVIDSON FXDLS DYNA LOW RIDER S BY EVERHARD, CC BY 4.0"},
+};
+inline constexpr const char* ownCreditLine = "MODEL: THE PLAYER'S OWN BIKE (VEHICLE/MOTORCYCLE)";
+
 // The bike in its frame (van072's: x right, y up, -z forward, the ground under the axles' middle; metres).
 struct Layout {
-    float length, width, height, wheelBase;
-    Vec3 eye;              // the rider's eye on the seat
-    Vec3 hub;              // the steering pivot (the bars turn round +y through it)
-    Vec3 gripLeft, gripRight;
-    Vec3 handleIn, handleOut; // out: the left grip (get on); in: beside the seat's left (get off)
-    Vec3 exit;             // on the street, beside the bike's left
-    Vec3 screen;           // the small dash screen's face centre, over the bars
+    float length{}, width{}, height{}, wheelBase{};
+    Vec3 eye{};                // the rider's eye on the seat
+    Vec3 hub{};                // the steering pivot: on the steer axis at the grips' height (the steer part's origin)
+    Vec3 steerAxis{0, 1, 0};   // the head tube's axis, unit, up (and back by the rake): the steer part turns round it
+    float gripRadius{};        // the grips' distance from the hub seen from above
+    Vec3 gripLeft{}, gripRight{};
+    Vec3 handleIn{}, handleOut{}; // out: the left grip (get on); in: beside the seat's left (get off)
+    Vec3 exit{};               // on the street, beside the bike's left
+    Vec3 screen{};             // the dash screen's face centre: on the frame, centred between the bars, upright
+    Vec3 tracker{};            // the CRIME GPS tracker's centre: level, centred between the grips, over the screen
 };
-const Layout& layout();
-// The dash screen's metres a design unit (the Batmobile's .28 x .17 face at half size).
+// Limits parseLayout holds a layout to (a bike, not a bus or a toy).
+inline constexpr float leastLength = 1.6f, mostLength = 3.2f, mostWidth = 1.4f, mostHeight = 2.f;
+inline constexpr float mostRake = .8f; // radians from vertical (46 deg)
+inline constexpr size_t mostLayoutBytes = 64u << 10;
+// layout.json's text -> `out` (true), or false with `why` (and `out` untouched). Required: length, width, height,
+// wheelBase, eye, hub, gripLeft, gripRight, gripRadius, handleIn, handleOut, exit, screen; optional: steerAxis
+// (vertical), tracker (over the screen's top edge). Every number finite and in the bike's box; the grips on the
+// hub's height and its rear half; the screen and tracker between the grips. NaN-safe, never throws.
+bool parseLayout(std::string_view text, Layout& out, std::string& why);
+// The dash screen's metres a design unit (the Batmobile's .28 x .17 face at half size: .14 x .085 m).
 inline constexpr float screenScale = .5f;
+// The default tracker: this far over the screen's centre, in its plane's metres (the screen's top edge + 2 cm).
+inline constexpr float trackerOverScreen = .085f * .5f + .02f;
 // The bike's riding numbers: the van's pedals and summon with the bike's geometry and HANDLEBAR steering.
-van072::Tune tune();
+van072::Tune tune(const Layout& l);
+// The steer part's model axes in the bike's frame, turned `angle` (van072's handlebar sign: + a right turn) round
+// the layout's steer axis: `up` the model's +y, `toward` its +z. A vertical axis gives van072::wheelAxes' own.
+void steerAxes(float angle, const Layout& l, Vec3& up, Vec3& toward);
 // Short X taps summon (a hold is the abilities' X modifier): a press released within this many seconds.
 inline constexpr float tapMost = .4f;
 // The summon tap: true once when X goes up after a press no longer than tapMost (dt-stepped; NaN-safe).

@@ -137,23 +137,34 @@ driven car's credit on its HOME page.
   other three cars keep their own colours.
 - Body triangles after the cut: 1989 101353, ODAMI 3350, FOREVER 95664, FOREVER 2 91891.
 
-## 0.0.75 MOTORCYCLE (Models/Vehicle/Motorcycle/model.glb and Handlebars/model.glb)
+## 0.0.76 HARLEYS (Models/Vehicle/Motorcycle/Cap and Models/Vehicle/Motorcycle/Wolverine)
 
-CAPTAIN AMERICA's and WOLVERINE's summonable motorcycle (a short X tap; driver only). Converted by
-`tools/bike075/convert.py` in Blender: turned to x right, y up, -z forward with the ground under its axles,
-scaled so its tyres are 64 cm across (CANDIDATE), the handlebar yoke split out into `Handlebars/model.glb`
-(its steering pivot at the origin) so the rider's hands turn it, materials kept to their base colour
-(textures resized to 1024 or under), never decimated. Its size and grips are measured from the model
-(`layout.json` beside it). The model's `license.txt` ships beside both files.
+Each hero summons his own Harley-Davidson (a short X tap; driver only): CAPTAIN AMERICA a 1936-47 Knucklehead EL,
+WOLVERINE a 2016 Dyna Low Rider S. They replace 0.0.75's sci-fi motorcycle, which no longer ships. Converted by
+`tools/bike076/convert.py` in Blender 4.2 from the Sketchfab downloads (kept read-only): stood upright on its
+tyres, turned to x right, y up, -z forward with the ground under its axles, scaled to the real bike's length, the
+handlebars, fork, front wheel and what rides on them split out into `Handlebars/model.glb` (its origin on the steer
+axis at the grips' height) so the rider's hands turn it. Triangles no view of the bike can see are removed and the
+rest decimated to the game's budgets (110000 body, 40000 steer part), the rarely seen parts first. Each material
+keeps its own base-colour texture (resized to 1024 px or under) and its metallic and roughness values. The size, grips,
+steer axis, seat, dash screen and crime tracker are measured from the model (`layout.json` beside it). The model's
+`license.txt` ships beside both of its files.
 
 | Folder | Model | Author | Licence | Changes |
 |---|---|---|---|---|
-| `Vehicle/Motorcycle`, `Vehicle/Motorcycle/Handlebars` | [Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme](https://sketchfab.com/3d-models/low-poly-sci-fi-motorcycle-cyberpunk-theme-50c38758e5134a0b8ffa49780e7fe228) | [Mert Tetik](https://sketchfab.com/merttetik) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | 19860 + 688 triangles kept; the handlebar yoke split into its own file; base colours only; rescaled to 2.85 m long. |
+| `Vehicle/Motorcycle/Cap`, `Vehicle/Motorcycle/Cap/Handlebars` | [Harley Davidson Motorcycle "EL OHV V-TWIN"](https://sketchfab.com/3d-models/harley-davidson-motorcycle-el-ohv-v-twin-9923aaa519334f48b8dd44fd792475ed) (ID 9923aaa519334f48b8dd44fd792475ed) | [matias_romero](https://sketchfab.com/matias_romero) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Stood up off its side stand (14.6 degree lean), rescaled to 2.22 m long. 431558 source triangles: 82852 never seen removed, the rest decimated to 109493 (body) + 39700 (bars, springer fork, headlight, front wheel and fender; the tank dash, shifter and crash bars stay on the frame). Its base-colour textures kept, resized to 1024 px. |
+| `Vehicle/Motorcycle/Wolverine`, `Vehicle/Motorcycle/Wolverine/Handlebars` | [2016 Harley-Davidson FXDLS Dyna Low Rider S](https://sketchfab.com/3d-models/2016-harley-davidson-fxdls-dyna-low-rider-s-ad65bcb9282a46459a9a42f787bb5cbd) (ID ad65bcb9282a46459a9a42f787bb5cbd) | [everhard](https://sketchfab.com/everhard) | [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) | Rescaled to 2.335 m long (the spec sheet). 405975 source triangles: 67427 never seen removed, the rest decimated to 109492 (body) + 39697 (bars, risers, fork and front wheel; the tank console's gauges stay on the frame). Its base-colour textures kept, resized to 1024 px. |
 
-Credit line: This work is based on "Low-Poly Sci-Fi Motorcycle - Cyberpunk Theme"
-(https://sketchfab.com/3d-models/low-poly-sci-fi-motorcycle-cyberpunk-theme-50c38758e5134a0b8ffa49780e7fe228)
-by Mert Tetik (https://sketchfab.com/merttetik) licensed under CC-BY-4.0
-(http://creativecommons.org/licenses/by/4.0/), converted for VR. The bike's dash shows it on its HOME page.
+Credit lines:
+
+- This work is based on "Harley Davidson Motorcycle "EL OHV V-TWIN""
+  (https://sketchfab.com/3d-models/harley-davidson-motorcycle-el-ohv-v-twin-9923aaa519334f48b8dd44fd792475ed)
+  by matias_romero (https://sketchfab.com/matias_romero) licensed under CC-BY-4.0
+  (http://creativecommons.org/licenses/by/4.0/). Converted, rescaled, split and decimated for VR.
+- This work is based on "2016 Harley-Davidson FXDLS Dyna Low Rider S"
+  (https://sketchfab.com/3d-models/2016-harley-davidson-fxdls-dyna-low-rider-s-ad65bcb9282a46459a9a42f787bb5cbd)
+  by everhard (https://sketchfab.com/everhard) licensed under CC-BY-4.0
+  (http://creativecommons.org/licenses/by/4.0/). Converted, rescaled, split and decimated for VR.
 
 ## Reference only (no files used)
 

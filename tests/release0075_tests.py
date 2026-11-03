@@ -52,10 +52,9 @@ class ReleaseLabels0075(unittest.TestCase):
     def test_motorcycle_assets_checked(self):
         import sys; sys.path.insert(0, os.path.join(ROOT, 'tools', 'release072'))
         import required_assets as ra
-        for f in ('Models/Vehicle/Motorcycle/model.glb', 'Models/Vehicle/Motorcycle/Handlebars/model.glb',
-                  'Models/Vehicle/Motorcycle/layout.json', 'Models/Vehicle/Motorcycle/license.txt',
-                  'Models/Vehicle/Motorcycle/Handlebars/license.txt'):
-            self.assertIn(f, ra.RELEASE075_MODEL_FILES)
+        for h in ('Cap', 'Wolverine'):  # 0.0.76 HARLEYS: each hero's own bike
+            for f in ('model.glb', 'Handlebars/model.glb', 'layout.json', 'license.txt', 'Handlebars/license.txt'):
+                self.assertIn('Models/Vehicle/Motorcycle/%s/%s' % (h, f), ra.RELEASE076_BIKE_FILES)
 
     def test_sm1_addon_optional(self):
         self.assertIn("herovr_sm1_addon.dll is missing: Spider-Man 1 then starts iilyn''s mod without the add-on", src('tools/package.ps1'))

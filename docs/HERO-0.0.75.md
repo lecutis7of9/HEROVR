@@ -5,7 +5,8 @@ Released as tag v0.0.75 (Version 0.0.75, build Update 39.8, launcher 0.0.75.1, b
 EXPERIMENTAL: it may crash or have issues; 0.0.63 is the most recent STABLE build (version.json `stable_version`).
 Revert offers 0.0.74 first, then 0.0.73, 0.0.63, 0.0.62, 0.0.6 and 0.0.5.
 The release zip carries `Models/` (now with the motorcycle, `Models/Vehicle/Motorcycle` and its `Handlebars`; the
-files are not in git, tools/release072/required_assets.py RELEASE075_MODEL_FILES lists them), `Sounds/` and `Music/`.
+files are not in git; 0.0.76 replaced that bike with each hero's own Harley, see THIRD-PARTY-MODELS.md and
+tools/release072/required_assets.py RELEASE076_BIKE_FILES), `Sounds/` and `Music/`.
 Made by Agent Mulder. The model artists are credited in THIRD-PARTY-MODELS.md.
 
 ## Release build

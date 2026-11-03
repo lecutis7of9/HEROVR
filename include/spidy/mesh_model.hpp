@@ -49,6 +49,12 @@ inline constexpr uint32_t drawTriangles = 24000; // the VR cap per model (3 vert
 inline constexpr uint32_t hammerTriangles = 50000, vanTriangles = 150000;
 // Version 0.0.74 test 1 HIDEOUTS: a whole room (the Batcave ships 40,533).
 inline constexpr uint32_t hideoutTriangles = 60000;
+// 0.0.76 HARLEYS (owner: "like a Harley and not low poly"): each bike's body up to 110,000 and its steer part (bars,
+// risers, fork, front wheel) up to 40,000 - the van's 150,000 together. tools/bike076's converter removes what no
+// view sees and collapse-decimates the rest (the rarely seen first) from the sources (431,558 / 405,975 triangles)
+// to these; a file over them is refused (OVER BUDGET), never cut at load.
+inline constexpr uint32_t bikeTriangles = 110000, bikeBarsTriangles = 40000;
+static_assert(bikeTriangles <= vanTriangles && bikeBarsTriangles <= vanTriangles, "loadFolder keeps caps up to vanTriangles");
 // Untextured (the overlay could not make its texture array), each model is drawn sorted far to near
 // in the overlay's own vertices: then its light copy (Mesh::lite, vertex clustering to liteTriangles).
 inline constexpr uint32_t liteTriangles = 2400;
@@ -196,10 +202,16 @@ enum Slot : uint32_t { slotPistol = styles, slotSawedOffFrame, slotSawedOffBarre
                        // 0.0.74 test 2 INSIDE VIEW CULL: <car>\Roof (the canopy / roof / cabin glass the converter cut out of
                        // the body over the cockpit; drawn only from outside the car). Missing: the car without it.
                        slotBatmobileRoofFirst,
-                       // 0.0.75 MOTORCYCLE (bike075.hpp; Mert Tetik, CC BY 4.0): Models\Vehicle\Motorcycle the body (the van's
-                       // frame), Handlebars the yoke (its pivot at the origin, -z forward, the grips toward +z; turned round
-                       // +y). Loaded at the start (game_xr). Missing body: no bike; missing bars: the bike without them.
+                       // 0.0.75 MOTORCYCLE, 0.0.76 HARLEYS (bike075.hpp): Models\Vehicle\Motorcycle\<Cap|Wolverine> each hero's
+                       // own bike (CAP: "EL OHV V-TWIN" by matias_romero; WOLVERINE: "2016 Harley-Davidson FXDLS Dyna Low
+                       // Rider S" by everhard; both CC BY 4.0), the body in the van's frame, Handlebars the steer part (the
+                       // bars, risers and fork; its pivot at the origin, -z forward, the grips toward +z; turned round the
+                       // layout's steer axis), layout.json beside each body. Models\Vehicle\Motorcycle itself (slotBikeBody /
+                       // slotBikeBars) is the PLAYER'S OWN BIKE override for both heroes: read only when its override.txt is
+                       // there (so the 0.0.75 files left in an old install are never picked up). Loaded at the start
+                       // (game_xr). Missing body or layout: no bike (MODEL MISSING); missing bars: the bike without them.
                        slotBikeBody = slotBatmobileRoofFirst + 4, slotBikeBars,
+                       slotBikeCapBody, slotBikeCapBars, slotBikeWolverineBody, slotBikeWolverineBars,
                        slots };
 inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",     "Batarang/CLOONEY", "Batarang/JOKER",
                                                    "Pistol", "SawedOff/Frame",    "SawedOff/Barrels", "Baton/Left",
@@ -218,7 +230,9 @@ inline constexpr const char* slotFolders[slots] = {"",       "Batarang/EIRA",   
                                                    "Vehicle/Batmobile/SteeringWheel", "Vehicle/Batmobile/1989/Roof",
                                                    "Vehicle/Batmobile/ODAMI/Roof", "Vehicle/Batmobile/FOREVER/Roof",
                                                    "Vehicle/Batmobile/FOREVER2/Roof", "Vehicle/Motorcycle",
-                                                   "Vehicle/Motorcycle/Handlebars"};
+                                                   "Vehicle/Motorcycle/Handlebars", "Vehicle/Motorcycle/Cap",
+                                                   "Vehicle/Motorcycle/Cap/Handlebars", "Vehicle/Motorcycle/Wolverine",
+                                                   "Vehicle/Motorcycle/Wolverine/Handlebars"};
 inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, hammerTriangles,
                                                 vanTriangles, drawTriangles, drawTriangles, hammerTriangles, hammerTriangles, hammerTriangles, drawTriangles,
@@ -227,7 +241,8 @@ inline constexpr uint32_t slotDrawCap[slots] = {drawTriangles, drawTriangles, dr
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles,
                                                 drawTriangles, drawTriangles, drawTriangles, drawTriangles, hideoutTriangles, hideoutTriangles,
                                                 vanTriangles, vanTriangles, vanTriangles, vanTriangles, drawTriangles, drawTriangles,
-                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles, drawTriangles};
+                                                drawTriangles, drawTriangles, drawTriangles, drawTriangles, bikeTriangles, bikeBarsTriangles,
+                                                bikeTriangles, bikeBarsTriangles, bikeTriangles, bikeBarsTriangles};
 // THOR HAMMER's choice (combat38::thorHammer: 0 BOOOOP, 1 DEVILSEYE, 2 LOVE+THUNDER, 3 FCCOOPER) -> its slot.
 inline constexpr uint32_t hammers = 4;
 inline constexpr uint32_t hammerSlot(uint32_t choice) {
@@ -237,20 +252,24 @@ inline constexpr uint32_t hammerSlot(uint32_t choice) {
 inline constexpr bool slotIsBatmobile(uint32_t slot) { return slot >= slotBatmobileFirst && slot < slotBatmobileRoofFirst + 4; }
 // 0.0.74 test 2 CAR PAINT: the four Batmobile bodies and their roofs. 0.0.74 test 3 (owner: "satin black metallic
 // instead of the stretched zigzag texture"): the cockpit too (its trim is now untextured satin black).
+// 0.0.76 HARLEYS: the bikes too (their chrome, paint and steel keep the source's metallic / roughness; the
+// converter folds a metallic-roughness map's mean into its material's factors).
 inline constexpr bool slotIsPaintable(uint32_t slot) {
     return (slot >= slotBatmobileFirst && slot < slotBatmobileFirst + 4) || (slot >= slotBatmobileRoofFirst && slot < slotBatmobileRoofFirst + 4) ||
-           slot == slotBatmobileCockpit;
+           slot == slotBatmobileCockpit || (slot >= slotBikeBody && slot <= slotBikeWolverineBars);
 }
 // 0.0.75 TEXTURED PAINT (owner: the '89 and ODAMI flat grey): on these a textured triangle whose material says
 // metallic >= paintFrom is painted too, the satin colour multiplying its texture (the 1989 and ODAMI bodies and roofs).
 inline constexpr bool slotPaintsTextures(uint32_t slot) {
     return slot == slotBatmobileFirst || slot == slotBatmobileFirst + 1 || slot == slotBatmobileRoofFirst ||
-           slot == slotBatmobileRoofFirst + 1;
+           slot == slotBatmobileRoofFirst + 1 || (slot >= slotBikeBody && slot <= slotBikeWolverineBars); // 0.0.76 HARLEYS
 }
 // 0.0.74 test 3 COCKPIT GLOW: the models COCKPIT GLOW darkens and lights (the cockpit and its wheel).
 inline constexpr bool slotIsCabin(uint32_t slot) { return slot == slotBatmobileCockpit || slot == slotBatmobileWheel; }
 // 0.0.75 MOTORCYCLE: the bike's body and its bars.
-inline constexpr bool slotIsBike(uint32_t slot) { return slot == slotBikeBody || slot == slotBikeBars; }
+// 0.0.76 HARLEYS: and each hero's own pair.
+inline constexpr bool slotIsBike(uint32_t slot) { return slot >= slotBikeBody && slot <= slotBikeWolverineBars; }
+inline constexpr bool slotIsBikeBars(uint32_t slot) { return slot == slotBikeBars || slot == slotBikeCapBars || slot == slotBikeWolverineBars; }
 inline constexpr bool slotIsVehicle(uint32_t slot) {
     return slot == slotVan || slot == slotVanInterior || slot == slotVanWheel || slotIsBatmobile(slot) || slotIsBike(slot);
 }
@@ -273,7 +292,8 @@ inline uint32_t suitSlot(const char* folder) {
 }
 inline constexpr bool slotIsHideout(uint32_t slot) { return slot == slotHideoutBatcave || slot == slotHideoutSafehouse; }
 static_assert(slotSuitFirst == 19 && slotSuitEnd == 42 && slotHideoutBatcave == 44 && slotBatmobileFirst == 46 &&
-                  slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 && slots == 58, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
+                  slotBatmobileWheel == 51 && slotBatmobileRoofFirst == 52 && slotBikeBody == 56 && slotBikeBars == 57 &&
+                  slotBikeCapBody == 58 && slotBikeWolverineBars == 61 && slots == 62, "the slot list (slotFolders, slotDrawCap, slotMayDecimate) follows it");
 // The models loaded this session, kept for the whole session (never freed: frames in flight may
 // point at them). load() tries a slot's folder once; model() is null when it is DEFAULT, missing
 // or refused - the built-in look is then drawn instead.

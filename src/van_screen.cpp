@@ -571,6 +571,19 @@ Mount mountLocal(Vec3 at) {
 
 Vec3 onFace(Vec3 local) { return onFace(local, mountAt, faceScale); }
 
+bool mountTracker(View& v, Vec3 local, Vec3 at, float scale) {
+    v.trackerOwn = false;
+    v.trackerFace = {};
+    if (!van072::fine(local) || !van072::fine(at) || !ok(scale) || scale < .5f || scale > 2.f || length(local - at) > .6f)
+        return false;
+    const Vec3 f = onFace(local, at, scale);
+    if (!van072::fine(f))
+        return false;
+    v.trackerFace = f;
+    v.trackerOwn = true;
+    return true;
+}
+
 Vec3 onFace(Vec3 local, Vec3 at, float scale) {
     const Mount m = mountLocal(at);
     const Vec3 d = local - m.centre;
@@ -999,17 +1012,19 @@ bool append(std::vector<Vertex>& out, const View& v, Vec3 viewer) {
             if (rel < -180.f)
                 rel += 360.f;
             const float a = rel * tau / 360.f, sx = std::sin(a), sz = -std::cos(a); // x right, -z ahead (the face's normal is toward him)
-            const float y = H + .034f, L = .028f, w = .010f;
+            // 0.0.76 HARLEYS: at the bike's own tracker mount (level, centred between the grips), else over the top edge
+            const float cx = v.trackerOwn ? v.trackerFace.x : 0.f, y = v.trackerOwn ? v.trackerFace.y : H + .034f,
+                        cz = v.trackerOwn ? v.trackerFace.z : .02f, L = .028f, w = .010f;
             const Vec3 gold{1.f, .70f, .12f};
-            const Vec3 tip = p.P(sx * L, y, .02f + sz * L), tail = p.P(-sx * L * .6f, y, .02f - sz * L * .6f);
-            const Vec3 side = p.P(-sz * w, y, .02f + sx * w) - p.P(0, y, .02f);
-            const Vec3 mid = p.P(sx * L * .1f, y, .02f + sz * L * .1f);
+            const Vec3 tip = p.P(cx + sx * L, y, cz + sz * L), tail = p.P(cx - sx * L * .6f, y, cz - sz * L * .6f);
+            const Vec3 side = p.P(-sz * w, y, cz + sx * w) - p.P(0, y, cz);
+            const Vec3 mid = p.P(cx + sx * L * .1f, y, cz + sz * L * .1f);
             p.tri(tip, mid + side, mid - side, gold, .95f);
             p.tri(mid + side * .45f, tail + side * .45f, tail - side * .45f, gold, .8f);
             p.tri(mid + side * .45f, tail - side * .45f, mid - side * .45f, gold, .8f);
             char cl[40];
             std::snprintf(cl, sizeof cl, "CRIME %d M %s", static_cast<int>(v.crimeMetres + .5f), compassName(v.crimeBearing));
-            p.textCentre(cl, 0, H + .046f, .0075f, gold, .02f);
+            p.textCentre(cl, cx, y + .012f, .0075f, gold, cz);
         }
         // the footer
         p.quad(-W, -H, W, -H + .012f, .0005f, v.offer.batman ? Vec3{.004f, .014f, .03f} : Vec3{.02f, .022f, .013f});

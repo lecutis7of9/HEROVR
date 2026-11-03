@@ -258,7 +258,16 @@ struct View {
     float crimeMetres{}, crimeBearing{};
     bool crimePopup{};
     float crimePopupLeft{};
+    // 0.0.76 HARLEYS (owner: "the crime tracker level, not tilted, centred between the handlebars"): the tracker's
+    // own mount (mountTracker; a bike's layout), its centre in the face's design units (x right, y up, z out toward
+    // the rider). Its arrow lies level (in the face's x-z plane: the face is upright and the bike's frame turns
+    // only round +y), its distance line over it. Off: over the screen's top edge as in 0.0.74.
+    bool trackerOwn{};
+    Vec3 trackerFace{};
 };
+// 0.0.76 HARLEYS: the tracker at `local` (vehicle-local) for a screen mounted at `at`, `scale`; false (and the
+// tracker left over the screen's top edge) for anything non-finite or over .6 m from the screen.
+bool mountTracker(View& v, Vec3 local, Vec3 at, float scale);
 // The view for a van at `frame` (world).
 View view(const van072::Frame& frame, const Screen& s, float speed, float topSpeed, float rpm, bool driving);
 // 0.0.74 test 1 BATMOBILE: mounted at `at` (vehicle-local) at `scale`.

@@ -5,6 +5,8 @@
 #include <chrono>
 #include <thread>
 #include <memory>
+#include "spidy/holo_guard076.hpp"
+#include "spidy/punisher_rig.hpp"
 #include "spidy/reentry_guard.hpp"
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -905,6 +907,35 @@ inline Pair make(uint32_t convention) {
     return p;
 }
 } // namespace depth_scene
+// 0.0.76 HARLEYS: a converter-shaped layout.json (a 2.33 m bike, its head tube raked 30 degrees); `change` is one
+// "key": value, that replaces (or adds) that key.
+std::string testBikeLayout(const std::string& change) {
+    std::vector<std::pair<std::string, std::string>> keys = {
+        {"length", "2.33"},           {"width", "0.95"},
+        {"height", "1.15"},           {"wheelBase", "1.60"},
+        {"eye", "[0, 1.35, 0.25]"},   {"hub", "[0, 0.98, -0.42]"},
+        {"steerAxis", "[0, 0.8660254, 0.5]"}, {"gripRadius", "0.5"},
+        {"gripLeft", "[-0.40, 0.98, -0.12]"}, {"gripRight", "[0.40, 0.98, -0.12]"},
+        {"handleIn", "[-0.45, 0.75, 0.20]"},  {"handleOut", "[-0.40, 0.98, -0.12]"},
+        {"exit", "[-1.10, 0, 0.20]"},  {"screen", "[0, 1.06, -0.30]"}};
+    if (!change.empty()) {
+        const size_t q0 = change.find('"'), q1 = change.find('"', q0 + 1), colon = change.find(':', q1);
+        const std::string key = change.substr(q0 + 1, q1 - q0 - 1);
+        std::string value = change.substr(colon + 1);
+        while (!value.empty() && (value.back() == ',' || value.back() == ' '))
+            value.pop_back();
+        bool found = false;
+        for (auto& k : keys)
+            if (k.first == key)
+                k.second = value, found = true;
+        if (!found)
+            keys.emplace_back(key, value);
+    }
+    std::string text = "{\n";
+    for (size_t i = 0; i < keys.size(); ++i)
+        text += "  \"" + keys[i].first + "\": " + keys[i].second + (i + 1 < keys.size() ? ",\n" : "\n");
+    return text + "}\n";
+}
 int main() {
     int total = 0, failed = 0;
     std::vector<std::string> failedLines;
@@ -25893,7 +25924,7 @@ int main() {
                   std::string_view(valueName(sureGrapple, 0)) == "ON",
               "three option rows, each ON first");
     });
-    test("Version 0.0.73: CAPTAIN AMERICA grapple - the free hand's grip draws, the trigger fires, the shield arm stays the shield's", [] {
+    test("0.0.76 CAPTAIN AMERICA grapple - the PUNISHER's: the grip at the chest draws, point, the trigger fires", [] {
         using namespace spidy::hero007;
         Play p;
         PlayInput in;
@@ -25903,8 +25934,9 @@ int main() {
         in.head = {{0, 1.7f, 0}, {}};
         in.shieldArm = spidy::captain::armRight;
         p.setHero(in.hero);
-        const auto frame = [&](float trig, float grip, bool holo = false) {
-            in.hands[0] = {{-.25f, 1.3f, -.35f}, normalized(Vec3{0, .6f, -1}), true, trig, grip, false};
+        const Vec3 aside{-.25f, 1.3f, -.35f}, chest{-.02f, 1.4f, -.12f}, pointed{-.3f, 1.45f, -.55f};
+        const auto frame = [&](float trig, float grip, Vec3 at, bool holo = false) {
+            in.hands[0] = {at, normalized(Vec3{0, .6f, -1}), true, trig, grip, false};
             in.hands[0].holo = holo;
             in.hands[1] = {{.25f, 1.3f, -.35f}, {0, 0, -1}, true, 0, 0, false};
             PlayOutput h, o;
@@ -25914,23 +25946,76 @@ int main() {
             return o;
         };
         for (int f = 0; f < 3; ++f)
-            frame(0, 0);
-        PlayOutput o = frame(1, 0);
+            frame(0, 0, aside);
+        check(spidy::punisher_rig::at(chest, in.head, p.shieldRack.body) && !spidy::punisher_rig::at(aside, in.head, p.shieldRack.body),
+              "the PUNISHER's chest rig zone: the chest in, the old grab spot out");
+        PlayOutput o = frame(1, 0, aside);
         check(!o.grapple[0], "the trigger alone: nothing");
-        frame(0, 0);
-        o = frame(0, 1);
-        check(p.gunDrawn[0] && (o.claimed & 1u) && !o.grapple[0], "the left (free) hand's grip: the grapple gun drawn");
-        o = frame(1, 1);
+        frame(0, 0, aside);
+        o = frame(0, 1, aside);
+        check(!p.gunDrawn[0] && !o.grapple[0], "0.0.76: a grip away from the chest draws nothing (0.0.75 drew it anywhere)");
+        o = frame(1, 1, aside);
+        check(!o.grapple[0], "and its trigger fires nothing");
+        frame(0, 0, aside);
+        o = frame(0, 1, chest);
+        check(p.gunDrawn[0] && (o.claimed & 1u) && !o.grapple[0], "the grip AT THE CHEST: the grapple drawn out, not fired");
+        o = frame(0, 1, pointed);
+        check(p.gunDrawn[0] && !o.grapple[0], "held, pointed away from the chest: still out, still not fired");
+        o = frame(1, 1, pointed);
         check(o.grapple[0] && !o.grapple[1], "then the trigger: the grapple");
-        frame(0, 1);
-        o = frame(1, 1, true);
+        frame(0, 1, pointed);
+        o = frame(1, 1, pointed, true);
         check(!o.grapple[0], "a hologram press: never");
         Draw d;
         p.draw(d, Pose{}, in, 0);
         check(d.held[0].look == lookGrappleGun, "the gun in the left hand");
-        frame(0, 0);
+        frame(0, 0, pointed);
         p.draw(d, Pose{}, in, 0);
-        check(!p.gunDrawn[0] && d.held[0].look != lookGrappleGun, "let go: back on the hip");
+        check(!p.gunDrawn[0] && d.held[0].look != lookGrappleGun, "let go: put away");
+        o = frame(0, 1, pointed);
+        check(!p.gunDrawn[0], "a new grip away from the chest: nothing (draw again at the chest)");
+    });
+    test("0.0.76 PUNISHER DUAL-WIELD: guns out or firing keep the hands-close gesture from opening the hologram", [] {
+        using namespace spidy;
+        holo_guard076::Guard g;
+        const uint32_t pun = hero_modes::punisher;
+        g.step(1 / 90.f, pun, false, false, 40);
+        check(!g.armed && g.gesturePlay(true, false), "empty hands, no shot this session: the gesture opens it");
+        g.step(1 / 90.f, pun, true, true, 40);
+        check(g.armed && !g.gesturePlay(true, false), "both pistols: the hands-close gesture cannot open it");
+        g.step(1 / 90.f, pun, false, true, 40);
+        check(!g.gesturePlay(true, false), "either hand's gun: still shut");
+        check(g.gesturePlay(true, true), "an open hologram still answers (it closes the same way)");
+        check(!g.gesturePlay(false, false), "not playing: not playing");
+        g.step(1 / 90.f, pun, false, false, 41);
+        check(g.armed && !g.gesturePlay(true, false), "holstered right after a shot: still shut");
+        for (int f = 0; f < 90; ++f)
+            g.step(1 / 90.f, pun, false, false, 41);
+        check(g.armed, "one second after the shot: still combat");
+        for (int f = 0; f < 100; ++f)
+            g.step(1 / 90.f, pun, false, false, 41);
+        check(!g.armed && g.gesturePlay(true, false), "empty hands, 2 s since the last shot: it opens normally again");
+        g.step(NAN, pun, false, false, 41);
+        g.step(1e9f, pun, false, false, 41);
+        check(!g.armed, "NaN / huge frame times: safe");
+        holo_guard076::Guard o;
+        o.step(1 / 90.f, hero_modes::batman, false, false, 0);
+        o.step(1 / 90.f, hero_modes::batman, true, true, 5);
+        check(!o.armed && o.gesturePlay(true, false), "every other hero: unchanged");
+        holo_guard076::Guard late;
+        late.step(1 / 90.f, pun, false, false, 900);
+        check(!late.armed, "a shot count carried in from before: not a shot now");
+        // the one-page hologram's toggle itself: a pointing trigger on the forearm opens it only when the gesture plays
+        wrist_hud::Toggle t;
+        t.setMode(4);
+        const Pose grips[2]{{{-.2f, 1.2f, -.3f}, {}}, {{-.15f, 1.22f, -.3f}, {}}};
+        const bool tracked[2]{true, true};
+        const float idle[2]{0, 0}, pulled[2]{0, 1};
+        for (int f = 0; f < 40; ++f)
+            t.update(1 / 90.f, false, 0, grips, tracked, idle);
+        for (int f = 0; f < 10; ++f)
+            t.update(1 / 90.f, false, 0, grips, tracked, pulled);
+        check(!t.on() && t.hands() == 0 && t.zoneHands() == 0, "shut: the shot is the gun's, the hologram stays closed and swallows nothing");
     });
     test("Version 0.0.7: BATMAN grapple gun (aim, reach, pull, vault, timeout, stuck, asks)", [] {
         using namespace spidy::cape_glide;
@@ -27664,7 +27749,7 @@ int main() {
     test("Build 9 SUITS: 23 suit slots, never decimated, each found by its folder", [] {
         namespace mm = spidy::mesh_model;
         check(mm::slotSuitFirst == mm::slotRoster + 1 && mm::slotSuitEnd == mm::slotSuitFirst + mm::suitSlots && mm::suitSlots == 23 &&
-                  mm::slots == mm::slotSuitEnd + 14 + 2 /* 0.0.75 MOTORCYCLE body + bars */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
+                  mm::slots == mm::slotSuitEnd + 14 + 2 + 4 /* 0.0.75 MOTORCYCLE body + bars, 0.0.76 HARLEYS two pairs */ && mm::slotHideoutSafehouse == mm::slotBatmobileFirst - 1 && !mm::slotIsSuit(mm::slotClawsLeft) && mm::slotDrawCap[mm::slotClawsRight] == mm::drawTriangles,
               "the suits follow the roster");
         for (uint32_t k = 0; k < mm::suitSlots; ++k) {
             const uint32_t s = mm::slotSuitFirst + k;
@@ -36876,14 +36961,80 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
             if (!c.comingSoon(h, i))
                 check(c.isUnlocked(h, i, suitsOpen(0)), "every suit with a model is unlocked at REP 0");
 });
+    test("0.0.76 HARLEYS: layout.json read and held to a motorcycle's shape, NaN-safe, never a guess", [] {
+        namespace bk = spidy::bike075;
+        const std::string good = testBikeLayout("");
+        bk::Layout l;
+        std::string why;
+        check(bk::parseLayout(good, l, why) && why.empty(), "a converter's layout reads: " + why);
+        check(std::abs(l.length - 2.33f) < 1e-5f && std::abs(l.gripRadius - .5f) < 1e-5f && std::abs(l.steerAxis.y - .866f) < 1e-3f &&
+                  std::abs(spidy::length(l.steerAxis) - 1) < 1e-5f,
+              "its numbers, the steer axis made unit");
+        check(std::abs(l.tracker.y - (l.screen.y + bk::trackerOverScreen)) < 1e-6f && l.tracker.x == l.screen.x,
+              "no tracker: over the screen's top edge, centred");
+        const auto bad = [&](const std::string& text, const char* what) {
+            bk::Layout keep;
+            keep.length = 7;
+            std::string w;
+            check(!bk::parseLayout(text, keep, w) && !w.empty() && keep.length == 7, std::string("refused, untouched: ") + what);
+        };
+        bad("", "empty");
+        bad("not json", "garbage");
+        bad("[1,2,3]", "not an object");
+        bad(testBikeLayout("\"length\": 5.5,"), "a bus");
+        bad(testBikeLayout("\"length\": 1e999,"), "infinite");
+        bad(testBikeLayout("\"hub\": [0, 0.98],"), "a two-number point");
+        bad(testBikeLayout("\"steerAxis\": [0.3, 0.95, 0],"), "a sideways steer axis");
+        bad(testBikeLayout("\"steerAxis\": [0, 0.3, 0.95],"), "a steer axis lying down");
+        bad(testBikeLayout("\"gripRight\": [0.40, 1.20, -0.12],"), "a grip off the hub's height");
+        bad(testBikeLayout("\"gripRadius\": 0.8,"), "grips off the circle");
+        bad(testBikeLayout("\"screen\": [0.45, 1.06, -0.30],"), "a screen outside the bars");
+        bad(testBikeLayout("\"tracker\": [0, 1.12, 0.40],"), "a tracker behind the eye");
+        bad(std::string(bk::mostLayoutBytes + 1, ' '), "over 64 KB");
+        check(bk::parseLayout(testBikeLayout("\"tracker\": [0, 1.13, -0.29],"), l, why) && std::abs(l.tracker.y - 1.13f) < 1e-6f,
+              "the converter's own tracker point");
+        check(bk::bikeFor(false, false) == bk::cap && bk::bikeFor(true, false) == bk::wolverine && bk::bikeFor(true, true) == bk::own &&
+                  bk::bikeFor(false, true) == bk::own,
+              "CAP's bike, WOLVERINE's, the player's own over both");
+    });
+    test("0.0.76 HARLEYS: the steer part turns round its rake, level tracker on the screen", [] {
+        namespace bk = spidy::bike075;
+        namespace vk = spidy::van072;
+        bk::Layout l;
+        std::string why;
+        check(bk::parseLayout(testBikeLayout(""), l, why), "layout: " + why);
+        const vk::Tune t = bk::tune(l);
+        spidy::Vec3 up{}, toward{}, up2{}, toward2{};
+        bk::steerAxes(0, l, up, toward);
+        check(std::abs(up.y - 1) < 1e-5f && std::abs(toward.z - 1) < 1e-5f, "straight: as modelled");
+        bk::steerAxes(.3f, l, up, toward);
+        check(toward.x < 0 && std::abs(spidy::dot(up, l.steerAxis) - l.steerAxis.y) < 1e-5f &&
+                  std::abs(spidy::dot(toward, l.steerAxis) - l.steerAxis.z) < 1e-5f && std::abs(spidy::length(up) - 1) < 1e-5f,
+              "a right turn: round the head tube (its axis part kept), the bars' back to the left");
+        bk::Layout v = l;
+        v.steerAxis = {0, 1, 0};
+        bk::steerAxes(.3f, v, up, toward);
+        vk::wheelAxes(.3f, up2, toward2, t);
+        check(spidy::length(up - up2) < 1e-5f && spidy::length(toward - toward2) < 1e-5f, "a vertical axis: van072's own");
+        bk::steerAxes(NAN, l, up, toward);
+        check(std::abs(toward.z - 1) < 1e-5f, "NaN angle: straight");
+        spidy::van_screen::View view{};
+        check(spidy::van_screen::mountTracker(view, l.tracker, l.screen, bk::screenScale) && view.trackerOwn &&
+                  std::isfinite(view.trackerFace.y) && view.trackerFace.y > 0 && std::abs(view.trackerFace.x) < 1e-4f,
+              "the tracker mounted over the screen, centred");
+        check(!spidy::van_screen::mountTracker(view, {NAN, 0, 0}, l.screen, bk::screenScale) && !view.trackerOwn &&
+                  !spidy::van_screen::mountTracker(view, l.screen + spidy::Vec3{0, 2, 0}, l.screen, bk::screenScale),
+              "NaN or far: no own mount (the screen's default)");
+    });
     test("0.0.75 MOTORCYCLE: its layout and tune, HANDLEBAR steering round +y, the rear arc only, NaN-safe", [] {
         namespace bk = spidy::bike075;
         namespace vk = spidy::van072;
-        const vk::Tune t = bk::tune();
-        const bk::Layout& l = bk::layout();
+        bk::Layout l;
+        std::string why;
+        check(bk::parseLayout(testBikeLayout(""), l, why), "layout: " + why);
+        const vk::Tune t = bk::tune(l);
         check(t.handlebar && !vk::Tune{}.handlebar, "only the bike's tune steers by handlebar");
-        check(std::abs(l.length - 2.8531f) < 1e-4f && std::abs(l.wheelBase - 2.23f) < 1e-4f && l.height > 1 && l.width < .8f,
-              "the measured size");
+        check(t.wheelRadius == l.gripRadius && t.length == l.length && t.hub.z == l.hub.z, "the layout's size and bars");
         check(t.wheelLock > 0 && t.wheelLock < 1 && t.steerMost > 0 && t.steerMost < .6f && t.topSpeed > 10 && t.accel > 0,
               "its riding numbers");
         check(t.eye.y > l.height && t.exit.x < -l.width / 2 && t.exit.y == 0 && t.handleIn.x < 0 && t.handleOut.x < 0,
@@ -36937,14 +37088,33 @@ test("0.0.75 EVERY OUTFIT: every suit open now, the old rules one flag away", []
         tp = {};
         check(!tp.step(true, NAN) && tp.step(false, NAN), "NaN dt: still a tap, no NaN");
         check(std::string(mm::slotFolders[mm::slotBikeBody]) == "Vehicle/Motorcycle" &&
-                  std::string(mm::slotFolders[mm::slotBikeBars]) == "Vehicle/Motorcycle/Handlebars",
-              "the bike's two folders");
-        check(mm::slotIsBike(mm::slotBikeBody) && mm::slotIsBike(mm::slotBikeBars) && mm::slotIsVehicle(mm::slotBikeBody) &&
-                  !mm::slotIsBike(mm::slotVan) && !mm::slotIsSuit(mm::slotBikeBody),
-              "bike slots are vehicles, not suits");
-        check(std::string(bk::creditLine).find("MERT TETIK") != std::string::npos &&
-                  std::string(bk::creditLine).find("CC BY 4.0") != std::string::npos && std::string(bk::creditArtist) == "Mert Tetik",
-              "the CC BY credit");
+                  std::string(mm::slotFolders[mm::slotBikeBars]) == "Vehicle/Motorcycle/Handlebars" &&
+                  std::string(mm::slotFolders[mm::slotBikeCapBody]) == "Vehicle/Motorcycle/Cap" &&
+                  std::string(mm::slotFolders[mm::slotBikeCapBars]) == "Vehicle/Motorcycle/Cap/Handlebars" &&
+                  std::string(mm::slotFolders[mm::slotBikeWolverineBody]) == "Vehicle/Motorcycle/Wolverine" &&
+                  std::string(mm::slotFolders[mm::slotBikeWolverineBars]) == "Vehicle/Motorcycle/Wolverine/Handlebars",
+              "the player's own bike's two folders, each HARLEY's two");
+        for (uint32_t s = mm::slotBikeBody; s <= mm::slotBikeWolverineBars; ++s) {
+            check(mm::slotIsBike(s) && mm::slotIsVehicle(s) && !mm::slotIsSuit(s) && mm::slotIsPaintable(s) && mm::slotPaintsTextures(s),
+                  "bike slots are painted vehicles, not suits");
+            check(mm::slotIsBikeBars(s) == ((s - mm::slotBikeBody) % 2 == 1), "every second one the steer part");
+            check(mm::slotDrawCap[s] == (mm::slotIsBikeBars(s) ? mm::bikeBarsTriangles : mm::bikeTriangles), "the bike caps");
+        }
+        check(!mm::slotIsBike(mm::slotVan) && !mm::slotIsBike(mm::slots), "only those");
+        for (uint32_t b = bk::cap; b < bk::own; ++b) {
+            const std::string line = bk::credits[b].line;
+            check(line.find("CC BY 4.0") != std::string::npos && line.find(b ? "EVERHARD" : "MATIAS_ROMERO") != std::string::npos &&
+                      line.find("MERT") == std::string::npos && std::string(bk::credits[b].licence) == "CC BY 4.0" &&
+                      std::string(bk::credits[b].url).rfind("https://sketchfab.com/3d-models/", 0) == 0,
+                  "each HARLEY's CC BY credit");
+        }
+        check(std::string(bk::credits[bk::cap].url).find("9923aaa519334f48b8dd44fd792475ed") != std::string::npos &&
+                  std::string(bk::credits[bk::wolverine].url).find("ad65bcb9282a46459a9a42f787bb5cbd") != std::string::npos,
+              "the exact models picked");
+        check(std::string(bk::folders[bk::cap]) == mm::slotFolders[mm::slotBikeCapBody] &&
+                  std::string(bk::folders[bk::wolverine]) == mm::slotFolders[mm::slotBikeWolverineBody] &&
+                  std::string(bk::folders[bk::own]) == mm::slotFolders[mm::slotBikeBody],
+              "the bikes' folders are their slots'");
     });
     test("0.0.76 TAA WATCH: still head, the 10 s windows and the depth verdict", [] {
         namespace tw = spidy::taa_watch;

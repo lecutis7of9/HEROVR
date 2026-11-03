@@ -2,6 +2,26 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.76-bikes - a Harley for each hero, Cap's chest-draw grapple, Punisher holo guard (TEST build, not released)
+
+On top of test 27041ea (AO ON + ONE PAGE). SM2 only. **Built and unit-tested, not yet tried in the game.**
+
+- **A HARLEY FOR EACH HERO.** The 0.0.75 sci-fi motorcycle is gone. A short **X** tap summons the hero's own bike
+  (driver only): CAPTAIN AMERICA a 1936-47 Knucklehead "EL OHV V-TWIN" (matias_romero, CC BY 4.0, 2.22 m long),
+  WOLVERINE a 2016 FXDLS Dyna Low Rider S (everhard, CC BY 4.0, 2.335 m long). Both keep their own textures and
+  metallic/roughness. Each one's handlebars, fork and front wheel are a separate part that turns on the bike's own
+  steer axis when you turn the grips. Slots: `Models/Vehicle/Motorcycle/Cap` and `.../Wolverine` (each `model.glb`,
+  `Handlebars/model.glb`, `layout.json`, `license.txt`); replace a folder's files to swap that hero's bike, or put
+  your own bike's files plus an `override.txt` in `Models/Vehicle/Motorcycle` to use it for both heroes. A missing or
+  broken file shows MODEL MISSING (no stand-in bike). Converted by `tools/bike076/convert.py`; credits in THIRD-PARTY-MODELS.md and CREDITS.md.
+- **DASH SCREEN AND CRIME TRACKER** on each bike: the screen is centred between the bars, upright and facing you, on
+  the frame, clear of the bars through their whole turn; the crime tracker sits level just above it.
+- **CAPTAIN AMERICA'S GRAPPLE works like the PUNISHER's:** reach to your chest to draw it, then point and pull the
+  trigger.
+- **PUNISHER DUAL-WIELD:** while either hand holds a gun, or for 2 s after your last shot, bringing your hands
+  together no longer opens the wrist hologram (the one-page settings). Otherwise it opens as before; an open
+  hologram still closes the same way, and F8 is unchanged.
+
 ## hero-0.0.76-sm1 - melee, web balls, flight (TEST build, not released)
 
 From test 801ce57, then test 32bd648's feedback. **Built and unit-tested, not yet tried in the game.**

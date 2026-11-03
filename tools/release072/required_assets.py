@@ -49,11 +49,12 @@ USER_SOUNDS = {
     'user-lightning-2.mp3': ('b1e73c2f28d8c789437befea7ec0d0e6542f5f80b0e838cbded282bbbfe0f514', 'thor_lightning_2', 'thor_lightning_2'),
 }
 SOUND_FILES = ['Sounds/' + k for k in USER_SOUNDS]
-# Version 0.0.75 MOTORCYCLE (CAPTAIN AMERICA / WOLVERINE): Mert Tetik's "Low-Poly Sci-Fi Motorcycle" (CC BY 4.0), converted
-# by tools/bike075 (not in git: the release packaging copies it in, and checks these files are in the launcher zip).
-RELEASE075_MODEL_FILES = ['Models/Vehicle/Motorcycle/model.glb', 'Models/Vehicle/Motorcycle/layout.json',
-                          'Models/Vehicle/Motorcycle/license.txt', 'Models/Vehicle/Motorcycle/Handlebars/model.glb',
-                          'Models/Vehicle/Motorcycle/Handlebars/license.txt']
+# Version 0.0.76 HARLEYS (CAPTAIN AMERICA / WOLVERINE, each his own bike): matias_romero's "EL OHV V-TWIN" and everhard's
+# "2016 Harley-Davidson FXDLS Dyna Low Rider S" (both CC BY 4.0), converted by tools/bike076 (not in git: the release
+# packaging copies them in, and checks these files are in the launcher zip). Models/Vehicle/Motorcycle itself is the
+# player's own override (override.txt) and ships empty.
+RELEASE076_BIKE_FILES = ['Models/Vehicle/Motorcycle/%s/%s' % (h, f) for h in ('Cap', 'Wolverine')
+                         for f in ('model.glb', 'layout.json', 'license.txt', 'Handlebars/model.glb', 'Handlebars/license.txt')]
 # 0.0.76 SM1 SUITS: the ten heroes pre-converted for Spider-Man 1 (tools/sm1_suits/prepack.py from Models/Suits, not in
 # git); the launcher's Install hero suits button fits them to the game's suit on the player's PC.
 RELEASE076_SM1_PACKS = ['Models/SM1Suits/%s.hsm1' % i for i in (

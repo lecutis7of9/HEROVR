@@ -576,6 +576,10 @@ class Play {
         }
         // Version 0.0.73 CAPTAIN AMERICA GRAPPLE (fix 17): the hand that is not the SHIELD ARM's draws the
         // grapple gun with its grip (never a grip the shield rack took); the shield arm's grip stays the shield's.
+        // 0.0.76 CAP CHEST GRAPPLE (owner: "work exactly like Punisher's"): the PUNISHER's draw - only a grip AT THE
+        // CHEST RIG (punisher_rig::at, the same neck-anchored, body-scaled ellipsoid as his hook) draws it; then
+        // point and pull the trigger to fire (grappleGate, unchanged); letting the grip go puts it away. A grip
+        // anywhere else draws nothing (0.0.73-0.0.75: any free grip drew it).
         if (captainAmerica()) {
             for (unsigned i = 0; i < 2; ++i) {
                 if (i == shieldHand) {
@@ -591,7 +595,8 @@ class Play {
                     atBack = holster::inZone(holster::back, bp) || holster::inZone(holster::backLeft, bp) ||
                              holster::inZone(holster::backRight, bp);
                 }
-                gunGrip(in, i, !rackHas && !atBack, out);
+                const bool atRig = punisher_rig::at(in.hands[i].position, in.head, shieldRack.body);
+                gunGrip(in, i, !rackHas && !atBack && atRig, out);
             }
         }
     }

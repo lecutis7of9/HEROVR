@@ -22,6 +22,8 @@ or USE 0.0.63 goes back, settings kept). 0.0.75 includes everything in 0.0.74, 0
 - **Captain America** gets Daredevil's quick grapple.
 - **Motorcycle for Captain America and Wolverine:** tap **X** and it arrives where you look. Grip the left
   handlebar to get on, turn the bars to steer, ride with the triggers. It is driver only (no passenger seat).
+  (0.0.76 test: each hero now gets his own Harley-Davidson: Captain America a 1936-47 Knucklehead "EL OHV V-TWIN"
+  by matias_romero, Wolverine a 2016 FXDLS Dyna Low Rider S by everhard, both CC BY 4.0; see THIRD-PARTY-MODELS.md.)
 - **B** while seated recenters you in the seat.
 - **Models hide behind walls** properly (better depth detection).
 - **More enemy types** take damage from the heroes.

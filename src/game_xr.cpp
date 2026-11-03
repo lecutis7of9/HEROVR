@@ -121,6 +121,7 @@
 #include "spidy/eye_swap.hpp"
 #include "spidy/cave_quiet074.hpp" // 0.0.74 test 3 CAVE QUIET (on)
 #include "spidy/grapple074.hpp"      // 0.0.74 test 10 SURE GRAPPLE / GRAPPLE YANK
+#include "spidy/holo_guard076.hpp"   // 0.0.76 PUNISHER DUAL-WIELD HOLO GUARD
 #include "spidy/dd_grapple074.hpp"   // 0.0.74 test 10 DD QUICK GRAPPLE
 #include "spidy/cabin_look074.hpp"  // 0.0.74 test 3 COCKPIT GLOW / DASH INSIDE (on)
 #include "spidy/finger_ray074.hpp"  // 0.0.74 test 3 FINGER RAY (on)
@@ -1637,6 +1638,41 @@ void readHideoutRoom(uint32_t which) {
     hideoutRoomOk[which] = !text.empty() && hideout074::parseRoom(text, hideoutRooms[which], error) && hideoutRooms[which].ok();
     hideoutRoomError[which] = hideoutRoomOk[which] ? "" : (text.empty() ? "room.txt empty or unreadable" : "room.txt: " + error);
 }
+// 0.0.76 HARLEYS (bike075.hpp): each bike's layout.json (Models\Vehicle\Motorcycle\<Cap|Wolverine|.>), read once at
+// the models' load (before any summon); ok false: that bike is MODEL MISSING. ownMarked: the player's own bike's
+// override.txt is there (without it Models\Vehicle\Motorcycle itself is never read).
+bike075::Layout bikeLayouts[bike075::bikes];
+bool bikeLayoutOk[bike075::bikes]{};
+std::string bikeLayoutError[bike075::bikes];
+bool bikeOwnMarked = false;
+std::wstring bikePath(uint32_t which, const wchar_t* file) {
+    std::wstring path = spidyHome() + L"\\Models\\";
+    for (const char* c = bike075::folders[which]; *c; ++c)
+        path += *c == '/' ? L'\\' : static_cast<wchar_t>(*c);
+    return path + L"\\" + file;
+}
+void readBikeLayout(uint32_t which) {
+    bikeLayoutOk[which] = false;
+    bikeLayouts[which] = {};
+    const HANDLE file = CreateFileW(bikePath(which, L"layout.json").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        bikeLayoutError[which] = "no layout.json";
+        return;
+    }
+    std::string text;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart <= static_cast<LONGLONG>(bike075::mostLayoutBytes)) {
+        text.resize(static_cast<size_t>(size.QuadPart));
+        DWORD got = 0;
+        if (!ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &got, nullptr))
+            got = 0;
+        text.resize(got);
+    }
+    CloseHandle(file);
+    std::string error;
+    bikeLayoutOk[which] = !text.empty() && bike075::parseLayout(text, bikeLayouts[which], error);
+    bikeLayoutError[which] = bikeLayoutOk[which] ? "" : text.empty() ? "layout.json empty, over 64 KB or unreadable" : error;
+}
 std::string readTabOnly() {
     const auto path = tabOnlyPath();
     if (path.empty())
@@ -1969,8 +2005,17 @@ DWORD WINAPI run(void*) {
             consoleLine(std::string("MODELS: folder ") + root + (rootThere ? "" : " - NOT FOUND (MODEL MISSING: the built-in looks are drawn)"));
             uint32_t loadedCount = 0;
             std::string missingSlots;
+            // 0.0.76 HARLEYS: Models\Vehicle\Motorcycle (the player's own bike) only with its override.txt
+            bikeOwnMarked = GetFileAttributesW(bikePath(bike075::own, L"override.txt").c_str()) != INVALID_FILE_ATTRIBUTES;
             for (uint32_t slot = 1; slot < mesh_model::slots; ++slot) {
                 mesh_model::Status status = mesh_model::invalid;
+                if ((slot == mesh_model::slotBikeBody || slot == mesh_model::slotBikeBars) && !bikeOwnMarked) {
+                    models.meshes[slot] = {};
+                    models.status[slot] = mesh_model::missing; // never read later either (slotModel loads notTried only)
+                    models.error[slot] = "no override.txt: the player's own bike is not used";
+                    game_prompts::note((std::string("0.0.76 HARLEYS: ") + mesh_model::slotFolders[slot] + " not read (no override.txt)").c_str());
+                    continue;
+                }
                 if (mesh_model::slotIsHideout(slot) && c38(combat38::hideouts) != 0) { // 0.0.74 test 1 HIDEOUTS OFF: not loaded
                     models.meshes[slot] = {};
                     models.status[slot] = mesh_model::notTried;
@@ -2032,6 +2077,30 @@ DWORD WINAPI run(void*) {
                 }
                 consoleLine(std::string("HIDEOUTS: ") + hideout074::names[which] +
                             (hideoutRoomOk[which] ? " ready (CANDIDATE)" : " not offered - " + hideoutRoomError[which]));
+            }
+            // 0.0.76 HARLEYS: each bike's layout (its body model and layout, or that bike is MODEL MISSING)
+            for (uint32_t which = 0; which < bike075::bikes; ++which) {
+                const uint32_t body = which == bike075::cap ? mesh_model::slotBikeCapBody
+                                      : which == bike075::wolverine ? mesh_model::slotBikeWolverineBody
+                                                                    : mesh_model::slotBikeBody;
+                bikeLayoutOk[which] = false;
+                if (which == bike075::own && !bikeOwnMarked) {
+                    bikeLayoutError[which] = "no override.txt";
+                    continue;
+                }
+                if (!models.model(body)) {
+                    bikeLayoutError[which] = "no body model";
+                    consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] + " - MODEL MISSING (no body model)");
+                    continue;
+                }
+                try {
+                    readBikeLayout(which);
+                } catch (...) {
+                    bikeLayoutOk[which] = false;
+                    bikeLayoutError[which] = "layout.json could not be read";
+                }
+                consoleLine(std::string("MOTORCYCLE: ") + bike075::folders[which] +
+                            (bikeLayoutOk[which] ? " ready" : " - MODEL MISSING (" + bikeLayoutError[which] + ")"));
             }
             consoleLine("MODELS: " + std::to_string(loadedCount) + " of " + std::to_string(mesh_model::slots - 1) + " loaded" +
                         (missingSlots.empty() ? "" : " (MODEL MISSING: " + missingSlots + ")"));
@@ -2620,8 +2689,26 @@ DWORD WINAPI run(void*) {
                    lib.status[mesh_model::slotBatmobileCockpit] == mesh_model::loaded &&
                    lib.status[mesh_model::slotBatmobileWheel] == mesh_model::loaded;
         };
-        const auto bikeReady = [] { return mesh_model::library().status[mesh_model::slotBikeBody] == mesh_model::loaded; };
+        // 0.0.76 HARLEYS: CAP's bike or WOLVERINE's (the player's own over both when it is ready); bikeWhich: the one
+        // summoned (latched with the kind). Ready: its body loaded and its layout read.
+        const auto bikeBodySlot = [](uint32_t which) {
+            return which == bike075::cap ? mesh_model::slotBikeCapBody : which == bike075::wolverine ? mesh_model::slotBikeWolverineBody
+                                                                                                    : mesh_model::slotBikeBody;
+        };
+        const auto bikeBarsSlot = [](uint32_t which) {
+            return which == bike075::cap ? mesh_model::slotBikeCapBars : which == bike075::wolverine ? mesh_model::slotBikeWolverineBars
+                                                                                                    : mesh_model::slotBikeBars;
+        };
+        const auto bikeOk = [bikeBodySlot](uint32_t which) {
+            return which < bike075::bikes && bikeLayoutOk[which] &&
+                   mesh_model::library().status[bikeBodySlot(which)] == mesh_model::loaded;
+        };
+        const auto bikeOf = [bikeOk](uint32_t h) {
+            return bike075::bikeFor(h == hero_modes::wolverine, bikeOwnMarked && bikeOk(bike075::own));
+        };
+        const auto bikeReady = [bikeOk, bikeOf](uint32_t h) { return bikeOk(bikeOf(h)); };
         const auto bikeHero = [](uint32_t h) { return h == hero_modes::captainAmerica || h == hero_modes::wolverine; };
+        uint32_t bikeWhich = bike075::cap;
         bike075::Tap bikeTap{};
         uint32_t carMusicAskedSerial{}; // the player's status serial when last told to toggle (no double toggle)
         van072::Probe vanProbe;
@@ -2727,6 +2814,8 @@ DWORD WINAPI run(void*) {
         game_pad::TemplePress templePress;
         // The wrist hologram's toggle: the other wrist to it and that hand's trigger.
         wrist_hud::Toggle wristToggle;
+        holo_guard076::Guard holoGuard; // 0.0.76: the PUNISHER's guns keep the hands-close gesture shut
+        bool holoGuardSaid{};
         // Update 20: F8 on the PC's keyboard toggles it too (held: once).
         bool hudKeyHeld{};
         uint32_t hudKeyPresses{}, hudKeyToggles{}, hudKeyRefused{}, hudBlocked{}, hudNotPlaying{};
@@ -3925,7 +4014,19 @@ DWORD WINAPI run(void*) {
                         wristToggle.setMode(combat38::toggleMode(c38(combat38::holoOpen)));
                         wristToggle.look(frame.head, validTrackedPose(frame.head));
                         const float toggleSqueezes[2]{frame.hands[0].squeeze, frame.hands[1].squeeze};
-                        if (wristToggle.update(frame.seconds, hudPlay, hudHand, grips, gripsTracked, toggleTriggers,
+                        // 0.0.76 PUNISHER DUAL-WIELD HOLO GUARD (holo_guard076.hpp): as the PUNISHER, a gun in either
+                        // hand or a shot within combatHold s keeps the hands-close gesture from OPENING the one-page
+                        // hologram (its zone swallows nothing then: the triggers stay the guns'). Last frame's guns
+                        // and shot count (hero007Play steps later in the frame); an open hologram closes as before.
+                        holoGuard.step(frame.seconds, heroNow(), hero007Play.guns.heldIn(0) >= 0,
+                                       hero007Play.guns.heldIn(1) >= 0, hero007Play.shots);
+                        const bool gesturePlay = holoGuard.gesturePlay(hudPlay, wristToggle.on());
+                        if (gesturePlay != hudPlay && !holoGuardSaid) {
+                            holoGuardSaid = true;
+                            game_prompts::note("VERSION 0.0.76 PUNISHER: guns out / firing - the hands-close hologram "
+                                               "gesture is held off (empty hands 2 s after the last shot: it opens again; F8 still works)");
+                        }
+                        if (wristToggle.update(frame.seconds, gesturePlay, hudHand, grips, gripsTracked, toggleTriggers,
                                                toggleSqueezes)) {
                             runtime.haptic(static_cast<int>(1 - hudHand), .35f);
                             runtime.haptic(static_cast<int>(hudHand), .2f);
@@ -7390,15 +7491,18 @@ DWORD WINAPI run(void*) {
                             if (bikeX && !vanXWas && van.state == van072::driving)
                                 vanDashX = true; // the dash's next page
                             if (tapped && van.state != van072::driving) {
-                                if (bikeReady()) {
+                                if (bikeReady(heroNow())) {
                                     if (!vanProbe.active) {
                                         vanWanted = true;
                                         runtime.haptic(0, .1f);
                                     }
-                                } else {
+                                } else { // 0.0.76 HARLEYS: the hero's own bike's folder (never another bike in its place)
+                                    const uint32_t which = bikeOf(heroNow());
                                     runtime.haptic(0, .15f);
-                                    message(3, 0, "MOTORCYCLE: MODEL MISSING: Vehicle/Motorcycle, no bike");
-                                    game_prompts::note("0.0.75 MOTORCYCLE: X tap - MODEL MISSING (Models\\Vehicle\\Motorcycle), no bike spawned");
+                                    message(3, 0, (std::string("MOTORCYCLE: MODEL MISSING: ") + bike075::folders[which] + ", no bike").c_str());
+                                    game_prompts::note((std::string("0.0.76 HARLEYS: X tap - MODEL MISSING (Models\\") + bike075::folders[which] + ": " +
+                                                        bikeLayoutError[which] + "), no bike spawned")
+                                                           .c_str());
                                 }
                             }
                             vanXWas = bikeX;
@@ -8145,24 +8249,31 @@ DWORD WINAPI run(void*) {
                                                                        .c_str());
                                             }
                                         }
+                                        // 0.0.76 HARLEYS: CAP's or WOLVERINE's (or the player's own); another bike than last frame's
+                                        // (CAP switched to WOLVERINE) is a change: the old one goes this frame as for another kind.
+                                        bool bikeSwap = false;
                                         uint8_t kindNow = kindNone;
                                         if (heroWas == hero_modes::punisher && c38(combat38::punisherVan) == 0 &&
                                             mesh_model::library().status[mesh_model::slotVan] == mesh_model::loaded)
                                             kindNow = kindVan;
                                         else if (heroWas == hero_modes::batman && c38(combat38::batmobile) == 0 && batReady(batCar))
                                             kindNow = kindBatmobile;
-                                        else if (bikeHero(heroWas) && bikeReady()) // 0.0.75 MOTORCYCLE (ON, no switch)
+                                        else if (bikeHero(heroWas) && bikeReady(heroWas)) { // 0.0.75 MOTORCYCLE (ON, no switch)
                                             kindNow = kindBike;
+                                            const uint32_t which = bikeOf(heroWas);
+                                            bikeSwap = vehicleKind == kindBike && which != bikeWhich;
+                                            bikeWhich = which;
+                                        }
                                         vin.enabled = kindNow != kindNone;
-                                        vin.punisher = kindNow != kindNone && kindNow == vehicleKind;
+                                        vin.punisher = kindNow != kindNone && kindNow == vehicleKind && !bikeSwap;
                                         vehicleKind = kindNow;
                                         vehicleTune = kindNow == kindBatmobile ? batmobile074::tune(batCar)
-                                                      : kindNow == kindBike    ? bike075::tune()
+                                                      : kindNow == kindBike    ? bike075::tune(bikeLayouts[bikeWhich])
                                                                                : van072::Tune{};
                                         const bool batNow = kindNow == kindBatmobile;
                                         const bool bikeNow = kindNow == kindBike;
                                         const std::string vehName = batNow    ? std::string("BATMOBILE ") + batmobile074::names[batCar]
-                                                                    : bikeNow ? std::string(bike075::name)
+                                                                    : bikeNow ? std::string(bike075::names[bikeWhich])
                                                                               : std::string("PUNISHER VAN");
                                         // 0.0.74 test 1 BATMOBILE: the pick saved between sessions (after the saved one is read)
                                         if (batmobilePickRead) {
@@ -8325,7 +8436,7 @@ DWORD WINAPI run(void*) {
                                                     si.at = batmobile074::layout(batCar).screen;
                                                     si.scale = batmobile074::screenScale;
                                                 } else if (bikeNow) {
-                                                    si.at = bike075::layout().screen;
+                                                    si.at = bikeLayouts[bikeWhich].screen;
                                                     si.scale = bike075::screenScale;
                                                 }
                                                 si.dt = vin.dt;
@@ -11465,16 +11576,17 @@ DWORD WINAPI run(void*) {
                             const bool bikeDraw = vehicleKind == kindBike && bikeHero(hero007In.hero);
                             if ((c38(combat38::punisherVan) == 0 && hero007In.hero == hero_modes::punisher) || batDraw || bikeDraw) {
                                 const uint32_t carNow = batmobile074::clampCar(batCar);
-                                const mesh_model::Mesh* body = bikeDraw  ? slotModel(mesh_model::slotBikeBody, bike075::name)
+                                const uint32_t bikeNowWhich = bikeWhich < bike075::bikes ? bikeWhich : bike075::cap; // 0.0.76 HARLEYS
+                                const mesh_model::Mesh* body = bikeDraw  ? slotModel(bikeBodySlot(bikeNowWhich), bike075::name)
                                                                : batDraw ? slotModel(mesh_model::slotBatmobileFirst + carNow, "BATMOBILE")
                                                                          : slotModel(mesh_model::slotVan, "PUNISHER VAN");
                                 const mesh_model::Mesh* cab = bikeDraw  ? nullptr
                                                               : batDraw ? slotModel(mesh_model::slotBatmobileCockpit, "BATMOBILE")
                                                                         : slotModel(mesh_model::slotVanInterior, "PUNISHER VAN");
-                                const mesh_model::Mesh* wheel = bikeDraw  ? slotModel(mesh_model::slotBikeBars, bike075::name)
+                                const mesh_model::Mesh* wheel = bikeDraw  ? slotModel(bikeBarsSlot(bikeNowWhich), bike075::name)
                                                                 : batDraw ? slotModel(mesh_model::slotBatmobileWheel, "BATMOBILE")
                                                                           : slotModel(mesh_model::slotVanWheel, "PUNISHER VAN");
-                                const van072::Tune drawTune = bikeDraw ? bike075::tune() : batDraw ? batmobile074::tune(carNow) : van072::Tune{};
+                                const van072::Tune drawTune = bikeDraw ? bike075::tune(bikeLayouts[bikeNowWhich]) : batDraw ? batmobile074::tune(carNow) : van072::Tune{};
                                 // 0.0.74 test 1 HIDEOUTS: in a room the van is not drawn (nor its dash); the room is.
                                 if (hideoutVisit.active()) {
                                     const auto w = hideoutVisit.which();
@@ -11566,7 +11678,10 @@ DWORD WINAPI run(void*) {
                                     L.vanAt = van.frame.at;
                                     L.vanForward = van.frame.forward();
                                     Vec3 up{}, toward{};
-                                    van072::wheelAxes(van.wheel.angle, up, toward, drawTune);
+                                    if (bikeDraw) // 0.0.76 HARLEYS: the steer part turns round its head tube's rake
+                                        bike075::steerAxes(van.wheel.angle, bikeLayouts[bikeNowWhich], up, toward);
+                                    else
+                                        van072::wheelAxes(van.wheel.angle, up, toward, drawTune);
                                     L.wheelAt = van.frame.world(drawTune.hub);
                                     if (batDraw) {
                                         const auto& lay = batmobile074::layout(carNow);
@@ -11579,7 +11694,7 @@ DWORD WINAPI run(void*) {
                                     if (c38(combat38::vanScreen) == 0 || batDraw || bikeDraw)
                                     {
                                         saved.vanScreen = bikeDraw ? van_screen::view(van.frame, vanDash, van.speed, drawTune.topSpeed, vanCarry.rpm,
-                                                                                      van.state == van072::driving, bike075::layout().screen,
+                                                                                      van.state == van072::driving, bikeLayouts[bikeNowWhich].screen,
                                                                                       bike075::screenScale)
                                                           : batDraw ? van_screen::view(van.frame, vanDash, van.speed, drawTune.topSpeed, vanCarry.rpm,
                                                                                      van.state == van072::driving, batmobile074::layout(carNow).screen,
@@ -11633,8 +11748,11 @@ DWORD WINAPI run(void*) {
                                         } else if (bikeDraw) { // 0.0.75 MOTORCYCLE: its name and the CC BY credit on the dash
                                             V.offer.batman = false;
                                             V.offer.hideouts = false;
-                                            V.carName = bike075::name;
-                                            V.carCredit = bike075::creditLine;
+                                            V.carName = bike075::names[bikeNowWhich];
+                                            V.carCredit = bikeNowWhich < 2 ? bike075::credits[bikeNowWhich].line : bike075::ownCreditLine;
+                                            // 0.0.76 HARLEYS: the CRIME GPS tracker level, centred between the grips
+                                            van_screen::mountTracker(V, bikeLayouts[bikeNowWhich].tracker, bikeLayouts[bikeNowWhich].screen,
+                                                                     bike075::screenScale);
                                         }
                                     }
                                     // 0.0.74 test 3 COCKPIT GLOW (cabin_look074.hpp; ON by default, live): the cockpit and

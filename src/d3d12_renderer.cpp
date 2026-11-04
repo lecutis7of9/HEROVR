@@ -1,8 +1,10 @@
 #include "spidy/d3d12_renderer.hpp"
 #include "spidy/mesh_model.hpp"
+#include "spidy/model_pbr.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <d3dcompiler.h>
 #include <stdexcept>
@@ -420,7 +422,8 @@ float4 ps(Out i):SV_TARGET {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}};
-    static_assert(sizeof(Vertex) == 44, "the overlay's input layout reads position, colour, opacity and shape");
+    // HERO VR 0.0.78 PBR MATERIALS: 64 bytes (the models' Surface at 44); this layout reads the first 44 only.
+    static_assert(sizeof(Vertex) == 64, "the overlay's input layout reads position, colour, opacity and shape");
     D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};
     p.pRootSignature = root_.Get();
     p.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
@@ -576,14 +579,20 @@ bool D3D12Renderer::setArt(std::span<const ArtLevel> levels) noexcept {
 }
 void D3D12Renderer::prepareArt(DXGI_FORMAT targetFormat) {
     if (!artRoot_) {
-        D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
-        D3D12_ROOT_PARAMETER parameters[2]{};
+        // t0 the base colours (heap 0); HERO VR 0.0.78 PBR MATERIALS: t2..t4 the maps and the HQ copies (heap 3..5)
+        D3D12_DESCRIPTOR_RANGE ranges[2]{{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0},
+                                         {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 2, 0, 3}};
+        D3D12_ROOT_PARAMETER parameters[3]{};
         parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         parameters[0].Constants.Num32BitValues = 16;
         parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
         parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        parameters[1].DescriptorTable = {1, &range};
+        parameters[1].DescriptorTable = {2, ranges};
         parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        parameters[2].Constants.ShaderRegister = 2; // the light (model_pbr::LightConstants)
+        parameters[2].Constants.Num32BitValues = 24;
+        parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_STATIC_SAMPLER_DESC sampler{};
         sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
         sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -690,57 +699,101 @@ bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
                 throw std::runtime_error("Model texture layer " + std::to_string(i) + " has the wrong size");
         model_.Reset();
         modelFault_.clear();
-        D3D12_RESOURCE_DESC d{};
-        d.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        d.Width = size;
-        d.Height = size;
-        d.DepthOrArraySize = static_cast<UINT16>(layers.size());
-        d.MipLevels = static_cast<UINT16>(levels);
-        d.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        d.SampleDesc.Count = 1;
-        ComPtr<ID3D12Resource> texture, upload;
-        auto onGpu = heap(D3D12_HEAP_TYPE_DEFAULT);
-        hr(device_->CreateCommittedResource(&onGpu, D3D12_HEAP_FLAG_NONE, &d, D3D12_RESOURCE_STATE_COPY_DEST,
-                                            nullptr, IID_PPV_ARGS(&texture)),
-           "Create model texture array");
-        const UINT count = static_cast<UINT>(layers.size()) * levels;
-        std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footprints(count);
-        std::vector<UINT> rows(count);
-        std::vector<UINT64> rowBytes(count);
-        UINT64 total{};
-        device_->GetCopyableFootprints(&d, 0, count, 0, footprints.data(), rows.data(), rowBytes.data(), &total);
-        D3D12_RESOURCE_DESC b{};
-        b.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        b.Width = total;
-        b.Height = 1;
-        b.DepthOrArraySize = 1;
-        b.MipLevels = 1;
-        b.SampleDesc.Count = 1;
-        b.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        auto staging = heap(D3D12_HEAP_TYPE_UPLOAD);
-        hr(device_->CreateCommittedResource(&staging, D3D12_HEAP_FLAG_NONE, &b, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                            nullptr, IID_PPV_ARGS(&upload)),
-           "Create model texture upload buffer");
-        void* mapped{};
-        D3D12_RANGE none{0, 0};
-        hr(upload->Map(0, &none, &mapped), "Map model texture upload buffer");
-        // Subresource layer * levels + level: the order of each layer's mips.
-        for (size_t layer = 0; layer < layers.size(); ++layer) {
-            size_t offset = 0;
-            for (unsigned l = 0; l < levels; ++l) {
-                const unsigned w = size >> l;
-                const auto& f = footprints[layer * levels + l];
-                for (unsigned y = 0; y < w; ++y)
-                    std::memcpy(static_cast<char*>(mapped) + f.Offset + static_cast<UINT64>(y) * f.Footprint.RowPitch,
-                                layers[layer].data() + offset + size_t{y} * w * 4, size_t{w} * 4);
-                offset += size_t{w} * w * 4;
-            }
+        // HERO VR 0.0.78 PBR MATERIALS: new base colours, new maps (setModelMaps after this).
+        modelLinear_.Reset();
+        modelHq_.Reset();
+        modelHqLinear_.Reset();
+        modelMapsFault_.clear();
+        ComPtr<ID3D12Resource> texture =
+            uploadModelArray(size, levels, layers, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, "model texture array");
+        if (!modelHeap_) {
+            D3D12_DESCRIPTOR_HEAP_DESC h{};
+            h.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            // the skins; 0.0.74 test 10 SEE-THROUGH: each eye's scene depth; 0.0.78 PBR: the maps, the HQ copies
+            h.NumDescriptors = 6;
+            h.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            hr(device_->CreateDescriptorHeap(&h, IID_PPV_ARGS(&modelHeap_)), "Create model descriptor heap");
         }
-        upload->Unmap(0, nullptr);
-        waitForSubmission();
-        hr(allocator_->Reset(), "Reset allocator for model textures");
-        hr(list_->Reset(allocator_.Get(), nullptr), "Reset list for model textures");
-        recording = true;
+        model_ = texture;
+        writeModelViews();
+        return true;
+    } catch (const std::exception& error) {
+        modelFault_ = std::string("Model textures unusable (") + error.what() + ")";
+    } catch (...) {
+        modelFault_ = "Model textures unusable";
+    }
+    if (recording)
+        list_->Close();
+    model_.Reset();
+    return false;
+}
+// One texture array (each layer `levels` mips of size >> level squared RGBA8) on the GPU, in PIXEL_SHADER_RESOURCE
+// state, waiting for the copy. Throws on anything that does not fit; the list is closed again then.
+ComPtr<ID3D12Resource> D3D12Renderer::uploadModelArray(unsigned size, unsigned levels,
+                                                      std::span<const std::vector<unsigned char>> layers,
+                                                      DXGI_FORMAT format, const char* what) {
+    const std::string name(what);
+    if (layers.empty() || layers.size() > mesh_model::mostTextureLayers || !size || size > 4096 || !levels ||
+        levels > 13 || (size >> (levels - 1)) < 1)
+        throw std::runtime_error(name + ": 1 to " + std::to_string(mesh_model::mostTextureLayers) +
+                                 " layers of 1 to 4096 texels, 1 to 13 levels");
+    size_t bytes = 0;
+    for (unsigned l = 0; l < levels; ++l)
+        bytes += size_t{size >> l} * (size >> l) * 4;
+    for (size_t i = 0; i < layers.size(); ++i)
+        if (layers[i].size() != bytes)
+            throw std::runtime_error(name + " layer " + std::to_string(i) + " has the wrong size");
+    D3D12_RESOURCE_DESC d{};
+    d.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    d.Width = size;
+    d.Height = size;
+    d.DepthOrArraySize = static_cast<UINT16>(layers.size());
+    d.MipLevels = static_cast<UINT16>(levels);
+    d.Format = format;
+    d.SampleDesc.Count = 1;
+    ComPtr<ID3D12Resource> texture, upload;
+    auto onGpu = heap(D3D12_HEAP_TYPE_DEFAULT);
+    hr(device_->CreateCommittedResource(&onGpu, D3D12_HEAP_FLAG_NONE, &d, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                        IID_PPV_ARGS(&texture)),
+       ("Create " + name).c_str());
+    const UINT count = static_cast<UINT>(layers.size()) * levels;
+    std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footprints(count);
+    std::vector<UINT> rows(count);
+    std::vector<UINT64> rowBytes(count);
+    UINT64 total{};
+    device_->GetCopyableFootprints(&d, 0, count, 0, footprints.data(), rows.data(), rowBytes.data(), &total);
+    D3D12_RESOURCE_DESC b{};
+    b.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    b.Width = total;
+    b.Height = 1;
+    b.DepthOrArraySize = 1;
+    b.MipLevels = 1;
+    b.SampleDesc.Count = 1;
+    b.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    auto staging = heap(D3D12_HEAP_TYPE_UPLOAD);
+    hr(device_->CreateCommittedResource(&staging, D3D12_HEAP_FLAG_NONE, &b, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                        nullptr, IID_PPV_ARGS(&upload)),
+       ("Create " + name + " upload buffer").c_str());
+    void* mapped{};
+    D3D12_RANGE none{0, 0};
+    hr(upload->Map(0, &none, &mapped), ("Map " + name + " upload buffer").c_str());
+    // Subresource layer * levels + level: the order of each layer's mips.
+    for (size_t layer = 0; layer < layers.size(); ++layer) {
+        size_t offset = 0;
+        for (unsigned l = 0; l < levels; ++l) {
+            const unsigned w = size >> l;
+            const auto& f = footprints[layer * levels + l];
+            for (unsigned y = 0; y < w; ++y)
+                std::memcpy(static_cast<char*>(mapped) + f.Offset + static_cast<UINT64>(y) * f.Footprint.RowPitch,
+                            layers[layer].data() + offset + size_t{y} * w * 4, size_t{w} * 4);
+            offset += size_t{w} * w * 4;
+        }
+    }
+    upload->Unmap(0, nullptr);
+    waitForSubmission();
+    hr(allocator_->Reset(), ("Reset allocator for " + name).c_str());
+    hr(list_->Reset(allocator_.Get(), nullptr), ("Reset list for " + name).c_str());
+    try {
         for (UINT i = 0; i < count; ++i) {
             D3D12_TEXTURE_COPY_LOCATION to{texture.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, {}};
             to.SubresourceIndex = i;
@@ -755,38 +808,140 @@ bool D3D12Renderer::setModelTextures(unsigned size, unsigned levels,
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         list_->ResourceBarrier(1, &barrier);
-        recording = false;
-        hr(list_->Close(), "Close model texture upload list");
-        ID3D12CommandList* lists[] = {list_.Get()};
-        queue_->ExecuteCommandLists(1, lists);
-        hr(queue_->Signal(fence_.Get(), ++fenceValue_), "Signal model texture upload");
-        waitForSubmission(); // the upload buffer must outlive the copy
-        if (!modelHeap_) {
-            D3D12_DESCRIPTOR_HEAP_DESC h{};
-            h.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-            h.NumDescriptors = 3; // the skins; 0.0.74 test 10 SEE-THROUGH: each eye's scene depth
-            h.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-            hr(device_->CreateDescriptorHeap(&h, IID_PPV_ARGS(&modelHeap_)), "Create model descriptor heap");
-        }
+    } catch (...) {
+        list_->Close();
+        throw;
+    }
+    hr(list_->Close(), ("Close " + name + " upload list").c_str());
+    ID3D12CommandList* lists[] = {list_.Get()};
+    queue_->ExecuteCommandLists(1, lists);
+    hr(queue_->Signal(fence_.Get(), ++fenceValue_), ("Signal " + name + " upload").c_str());
+    waitForSubmission(); // the upload buffer must outlive the copy
+    return texture;
+}
+// The model heap's texture views: 0 the base colours, 3 the maps, 4 / 5 the HQ copies (a null view where absent:
+// sampled as 0, never read by a corner without that flag).
+void D3D12Renderer::writeModelViews() {
+    if (!modelHeap_)
+        return;
+    const auto stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT slots = modelHeap_->GetDesc().NumDescriptors;
+    const auto view = [&](ID3D12Resource* texture, DXGI_FORMAT format, UINT slot) {
+        if (slot >= slots)
+            return;
         D3D12_SHADER_RESOURCE_VIEW_DESC sv{};
-        sv.Format = d.Format;
+        sv.Format = format;
         sv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
         sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        sv.Texture2DArray.MipLevels = levels;
-        sv.Texture2DArray.ArraySize = static_cast<UINT>(layers.size());
-        device_->CreateShaderResourceView(texture.Get(), &sv, modelHeap_->GetCPUDescriptorHandleForHeapStart());
-        model_ = texture;
-        return true;
-    } catch (const std::exception& error) {
-        modelFault_ = std::string("Model textures unusable (") + error.what() + ")";
-    } catch (...) {
-        modelFault_ = "Model textures unusable";
-    }
-    if (recording)
-        list_->Close();
-    model_.Reset();
-    return false;
+        if (texture) {
+            const auto d = texture->GetDesc();
+            sv.Texture2DArray.MipLevels = d.MipLevels;
+            sv.Texture2DArray.ArraySize = d.DepthOrArraySize;
+        } else {
+            sv.Texture2DArray.MipLevels = 1;
+            sv.Texture2DArray.ArraySize = 1;
+        }
+        auto at = modelHeap_->GetCPUDescriptorHandleForHeapStart();
+        at.ptr += slot * stride;
+        device_->CreateShaderResourceView(texture, &sv, at);
+    };
+    view(model_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0);
+    view(modelLinear_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 3);
+    view(modelHq_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 4);
+    view(modelHqLinear_.Get(), DXGI_FORMAT_R8G8B8A8_UNORM, 5);
 }
+bool D3D12Renderer::setModelMaps(const ModelMaps& maps) noexcept {
+    modelMapsFault_.clear();
+    if (!model_ || !modelHeap_ || !device_) {
+        modelMapsFault_ = "Model maps need the model textures first";
+        return false;
+    }
+    const auto one = [&](ComPtr<ID3D12Resource>& into, unsigned size, unsigned levels,
+                         std::span<const std::vector<unsigned char>> layers, DXGI_FORMAT format, const char* what) {
+        into.Reset();
+        if (layers.empty())
+            return;
+        try {
+            into = uploadModelArray(size, levels, layers, format, what);
+        } catch (const std::exception& error) {
+            into.Reset();
+            modelMapsFault_ += std::string(modelMapsFault_.empty() ? "" : "; ") + error.what();
+        } catch (...) {
+            into.Reset();
+            modelMapsFault_ += std::string(modelMapsFault_.empty() ? "" : "; ") + what + " unusable";
+        }
+    };
+    one(modelLinear_, maps.size, maps.levels, maps.linear, DXGI_FORMAT_R8G8B8A8_UNORM, "model map array");
+    one(modelHq_, maps.hqSize, maps.hqLevels, maps.hq, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, "HQ model texture array");
+    one(modelHqLinear_, maps.hqSize, maps.hqLevels, maps.hqLinear, DXGI_FORMAT_R8G8B8A8_UNORM, "HQ model map array");
+    try {
+        writeModelViews();
+    } catch (...) {
+        modelMapsFault_ = "Model map views unusable";
+        modelLinear_.Reset();
+        modelHq_.Reset();
+        modelHqLinear_.Reset();
+        return false;
+    }
+    return modelLinear_ != nullptr;
+}
+void D3D12Renderer::setModelLight(const float (&constants)[24]) noexcept {
+    for (size_t k = 0; k < 24; ++k)
+        modelLight_[k] = std::isfinite(constants[k]) ? constants[k] : 0.f;
+}
+std::uint64_t D3D12Renderer::videoMemoryFree() const noexcept {
+    try {
+        if (!device_)
+            return 0;
+        ComPtr<IDXGIFactory4> factory;
+        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))
+            return 0;
+        ComPtr<IDXGIAdapter3> adapter;
+        if (FAILED(factory->EnumAdapterByLuid(device_->GetAdapterLuid(), IID_PPV_ARGS(&adapter))))
+            return 0;
+        DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+        if (FAILED(adapter->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)))
+            return 0;
+        return info.Budget > info.CurrentUsage ? info.Budget - info.CurrentUsage : 0;
+    } catch (...) {
+        return 0;
+    }
+}
+namespace {
+// HERO VR 0.0.78 PBR MATERIALS: a model shader pair (vs_5_0 / ps_5_0); false with `fault` saying why.
+bool compileModelShaders(const char* text, const char* name, ComPtr<ID3DBlob>& vs, ComPtr<ID3DBlob>& ps,
+                         std::string& fault) {
+    for (const char* stage : {"vs", "ps"}) {
+        ComPtr<ID3DBlob> error;
+        auto& out = stage[0] == 'v' ? vs : ps;
+        out.Reset();
+        if (const HRESULT result = D3DCompile(text, std::strlen(text), name, nullptr, nullptr, stage,
+                                              stage[0] == 'v' ? "vs_5_0" : "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
+                                              &out, &error);
+            FAILED(result) || !out) {
+            fault = std::string("Compile ") + name + " " + stage + " shader HRESULT=" +
+                    std::to_string(static_cast<unsigned long>(result)) + ": " + compilerText(error.Get());
+            return false;
+        }
+    }
+    return true;
+}
+// The models' vertex (vertex.hpp, 64 bytes): the 0.0.78 three, then the PBR Surface (the plain shaders read the first
+// three only).
+std::array<D3D12_INPUT_ELEMENT_DESC, 8> modelLayout() {
+    static_assert(sizeof(Vertex) == 64 && offsetof(Vertex, surface) == 44, "the model layout reads the Surface at 44");
+    return {{
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R16G16_SNORM, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TANGENT", 0, DXGI_FORMAT_R16G16_SNORM, 0, 48, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 1, DXGI_FORMAT_R32_UINT, 0, 52, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"COLOR", 1, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 56, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 2, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 60, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    }};
+}
+} // namespace
 void D3D12Renderer::prepareModel(DXGI_FORMAT targetFormat) {
     if (!modelRoot_) {
         D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
@@ -803,7 +958,7 @@ void D3D12Renderer::prepareModel(DXGI_FORMAT targetFormat) {
         sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
         sampler.MaxLOD = D3D12_FLOAT32_MAX;
         sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_ROOT_SIGNATURE_DESC rs{2, parameters, 1, &sampler,
+        D3D12_ROOT_SIGNATURE_DESC rs{3, parameters, 1, &sampler,
                                     D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
         ComPtr<ID3DBlob> signature, error;
         hr(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
@@ -816,7 +971,7 @@ void D3D12Renderer::prepareModel(DXGI_FORMAT targetFormat) {
         return;
     // The vertex colour (lit, linear like the rest of the overlay) times the decoded texel; the
     // glTF MASK cut-out at half alpha; layer < 0 is a triangle without an image.
-    const char* shader = R"(
+    const char* plain = R"(
 cbuffer Eye : register(b0) { row_major float4x4 vp; };
 Texture2DArray skins : register(t0);
 SamplerState fine : register(s0);
@@ -832,28 +987,149 @@ float4 ps(Out i):SV_TARGET {
     return float4(i.color.rgb * t.rgb, 1);
 }
 )";
-    ComPtr<ID3DBlob> vs, ps, error;
-    for (const char* stage : {"vs", "ps"}) {
-        error.Reset();
-        auto& out = stage[0] == 'v' ? vs : ps;
-        if (const HRESULT result = D3DCompile(shader, std::strlen(shader), "spidy_model", nullptr, nullptr, stage,
-                                              stage[0] == 'v' ? "vs_5_0" : "ps_5_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
-                                              &out, &error);
-            FAILED(result) || !out)
-            throw std::runtime_error(std::string("Compile model ") + stage + " shader HRESULT=" +
-                                     std::to_string(static_cast<unsigned long>(result)) + ": " +
-                                     compilerText(error.Get()));
+    // HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp: shade() is this pixel shader's math line for line, tested there):
+    // a PBR corner (maps flagOn, the light's toSun.w 1) lit per pixel - its normal map in its tangent frame (the
+    // pixel's own frame from the derivatives when it has no tangent), its ORM layer, GGX from the game's sun and the
+    // sky in its reflection; every other corner exactly the 0.0.78 colour above. Failing to compile: that one.
+    const char* pbr = R"(cbuffer Eye : register(b0) { row_major float4x4 vp; };
+Texture2DArray skins : register(t0);
+SamplerState fine : register(s0);
+cbuffer Light : register(b2) { float4 lsun; float4 lcolor; float4 lup; float4 ldown; float4 leye; float4 lmirror; };
+Texture2DArray maps : register(t2);
+Texture2DArray skinsHq : register(t3);
+Texture2DArray mapsHq : register(t4);
+struct In {
+    float3 position:POSITION; float4 color:COLOR; float4 shape:TEXCOORD0;
+    float2 nrm:NORMAL; float2 tng:TANGENT; uint surf:TEXCOORD1; float4 tint:COLOR1; float4 params:TEXCOORD2;
+};
+struct Out {
+    float4 position:SV_POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; float3 world:TEXCOORD1;
+    float3 nrm:NORMAL; float3 tng:TANGENT; nointerpolation uint surf:TEXCOORD2;
+    nointerpolation float4 tint:COLOR1; nointerpolation float4 params:TEXCOORD3;
+};
+// HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp, its shade() line for line): octahedral unit vectors.
+float3 octDecode(float2 e) {
+    float3 v = float3(e, 1 - abs(e.x) - abs(e.y));
+    if (v.z < 0) v.xy = (1 - abs(v.yx)) * float2(v.x >= 0 ? 1 : -1, v.y >= 0 ? 1 : -1);
+    const float q = dot(v, v);
+    return q > 1e-12 ? v * rsqrt(q) : float3(0, 0, 1);
+}
+Out vs(In i) {
+    Out o; o.position=mul(vp,float4(i.position,1)); o.color=i.color; o.shape=i.shape; o.world=i.position;
+    o.nrm = octDecode(i.nrm);
+    o.tng = (i.surf & 134217728u) != 0 ? octDecode(i.tng) : float3(0, 0, 0);
+    o.surf = i.surf; o.tint = i.tint; o.params = i.params;
+    return o;
+}
+float3 skyAt(float up) { return lerp(ldown.rgb, lup.rgb, saturate(.5 + .5 * up)); }
+float maxOf(float3 v) { return max(v.x, max(v.y, v.z)); }
+// The lit colour: albedo (tint x base texel, linear), the sun's visibility (1 - its shadow).
+float3 pbrShade(Out i, float3 albedo, float2 gx, float2 gy, float3 px, float3 py, float sunVis) {
+    const uint s = i.surf;
+    float3 L = lsun.xyz, upv = float3(0, 1, 0);
+    if ((s & 67108864u) != 0 && lmirror.w > .5) { // the mirror's copy: its light reflected too
+        L = reflect(L, lmirror.xyz); upv = reflect(upv, lmirror.xyz);
     }
-    D3D12_INPUT_ELEMENT_DESC layout[] = {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-    };
+    const float3 N = normalize(i.nrm);
+    float3 Nm = N;
+    if ((s & 8388608u) != 0) {
+        const float layer = (float)(s & 1023u);
+        float3 m;
+        if ((s & 4194304u) != 0 && ldown.w > .5)
+            m = mapsHq.SampleGrad(fine, float3(i.shape.xy, layer), gx, gy).xyz * 2 - 1;
+        else
+            m = maps.SampleGrad(fine, float3(i.shape.xy, layer), gx, gy).xyz * 2 - 1;
+        float3 T, B;
+        bool framed = false;
+        if ((s & 134217728u) != 0) {
+            T = i.tng - N * dot(N, i.tng);
+            if (dot(T, T) > 1e-12) {
+                T = normalize(T); B = cross(N, T) * ((s & 2097152u) != 0 ? -1.0 : 1.0); framed = true;
+            }
+        }
+        if (!framed) { // no tangent: the pixel's own frame from the uv and place derivatives (v down)
+            const float3 a = cross(py, N), b = cross(N, px);
+            const float3 tc = a * gx.x + b * gy.x, bc = a * gx.y + b * gy.y;
+            const float q = max(dot(tc, tc), dot(bc, bc));
+            if (q > 1e-24) { const float k = rsqrt(q); T = tc * k; B = -bc * k; framed = true; }
+        }
+        if (framed) {
+            m = normalize(float3(m.xy * (i.params.z * 2), max(m.z, 1e-3)));
+            Nm = normalize(T * m.x + B * m.y + N * m.z);
+        }
+    }
+    float3 orm = float3(1, 1, 1);
+    if ((s & 16777216u) != 0)
+        orm = maps.SampleGrad(fine, float3(i.shape.xy, (float)((s >> 10) & 1023u)), gx, gy).xyz;
+    const float occl = (s & 33554432u) != 0 ? 1 + (orm.x - 1) * saturate(i.params.w) : 1;
+    const float rough = clamp(i.params.x * orm.y, .045, 1), metal = saturate(i.params.y * orm.z);
+    const float geo = saturate(dot(N, L) * 4 + 1);
+    const float nl = max(dot(Nm, L), 0) * geo;
+    const float3 V = normalize(leye.xyz - i.world);
+    const float nv = max(dot(Nm, V), 1e-4);
+    const float3 f0 = lerp(float3(.04, .04, .04), albedo, metal);
+    const float3 diffuse = albedo * (1 - metal) * (skyAt(dot(Nm, upv)) * occl + lcolor.rgb * (nl * sunVis));
+    float3 spec = float3(0, 0, 0);
+    const float3 hv = L + V;
+    if (nl > 0 && dot(hv, hv) > 1e-12) {
+        const float3 H = normalize(hv);
+        const float nh = saturate(dot(Nm, H)), vh = saturate(dot(V, H));
+        const float a = rough * rough, a2 = a * a;
+        const float dd = nh * nh * (a2 - 1) + 1;
+        const float D = a2 / (3.14159265 * dd * dd);
+        const float vis = .5 / max(nl * sqrt(nv * nv * (1 - a2) + a2) + nv * sqrt(nl * nl * (1 - a2) + a2), 1e-6);
+        const float q = 1 - vh, q5 = q * q * q * q * q;
+        const float3 F = f0 + (1 - f0) * q5;
+        spec = F * lcolor.rgb * (3.14159265 * D * vis * nl * sunVis * lcolor.w);
+    }
+    const float3 R = Nm * (2 * dot(Nm, V)) - V;
+    const float3 Rb = normalize(R + (Nm - R) * (rough * rough));
+    const float4 r0 = float4(-1, -.0275, -.572, .022) * rough + float4(1, .0425, 1.04, -.04);
+    const float a004 = min(r0.x * r0.x, exp2(-9.28 * nv)) * r0.x + r0.y;
+    const float A = a004 * -1.04 + r0.z, Bf = a004 * 1.04 + r0.w;
+    const float spOcc = saturate(pow(nv + occl, exp2(-16 * rough - 1)) - 1 + occl);
+    const float3 env = skyAt(dot(Rb, upv)) * (f0 * A + Bf) * (spOcc * lup.w);
+    const float3 sp = spec + env, whole = diffuse + sp;
+    const float mx = maxOf(whole), md = maxOf(diffuse);
+    if (mx > .8 && mx > md + 1e-6) {
+        const float t = max(.8 + (mx - .8) / (1 + (mx - .8) / .8), md);
+        return diffuse + sp * ((t - md) / (mx - md));
+    }
+    return whole;
+}
+// The base texel: the HQ copy when bound and this corner has one, else the array (the 0.0.78 sample).
+float4 baseTexel(Out i, bool pbr, float2 gx, float2 gy) {
+    if (pbr && i.tint.a < .999 && ldown.w > .5)
+        return skinsHq.SampleGrad(fine, float3(i.shape.xy, floor(i.tint.a * 255 + .5)), gx, gy);
+    return skins.SampleGrad(fine, float3(i.shape.xy, floor(i.shape.z + .5)), gx, gy);
+}
+float4 ps(Out i):SV_TARGET {
+    const float2 gx = ddx(i.shape.xy), gy = ddy(i.shape.xy);
+    const float3 px = ddx(i.world), py = ddy(i.world);
+    const bool pbr = (i.surf & 1048576u) != 0 && lsun.w > .5;
+    float4 t = float4(1, 1, 1, 1);
+    if (i.shape.z >= 0) {
+        t = baseTexel(i, pbr, gx, gy);
+        clip(t.a - .5);
+    }
+    if (!pbr)
+        return float4(i.color.rgb * t.rgb, 1);
+    return float4(pbrShade(i, i.tint.rgb * i.tint.rgb * t.rgb, gx, gy, px, py, 1), 1);
+}
+)";
+    ComPtr<ID3DBlob> vs, ps;
+    modelPbr_ = compileModelShaders(pbr, "spidy_model_pbr", vs, ps, modelPbrFault_);
+    if (!modelPbr_) {
+        std::string plainFault;
+        if (!compileModelShaders(plain, "spidy_model", vs, ps, plainFault))
+            throw std::runtime_error("Compile model shader: " + plainFault);
+    }
+    const auto layout = modelLayout();
     D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};
     p.pRootSignature = modelRoot_.Get();
     p.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
     p.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-    p.InputLayout = {layout, 3};
+    p.InputLayout = {layout.data(), modelPbr_ ? static_cast<UINT>(layout.size()) : 3u};
     p.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     p.NumRenderTargets = 1;
     p.RTVFormats[0] = targetFormat;
@@ -907,14 +1183,16 @@ bool D3D12Renderer::sceneFits(const SceneDepth& scene, std::span<const ViewTarge
 }
 void D3D12Renderer::prepareOccluded(DXGI_FORMAT targetFormat) {
     if (!occludedRoot_) {
-        D3D12_DESCRIPTOR_RANGE skins{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0};
+        // t0 the base colours; HERO VR 0.0.78 PBR MATERIALS: t2..t4 the maps and the HQ copies (heap 3..5)
+        D3D12_DESCRIPTOR_RANGE skins[2]{{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0},
+                                        {D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3, 2, 0, 3}};
         D3D12_DESCRIPTOR_RANGE scene{D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, 0};
-        D3D12_ROOT_PARAMETER parameters[4]{};
+        D3D12_ROOT_PARAMETER parameters[5]{};
         parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         parameters[0].Constants.Num32BitValues = 16;
         parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
         parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        parameters[1].DescriptorTable = {1, &skins};
+        parameters[1].DescriptorTable = {2, skins};
         parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         parameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         parameters[2].DescriptorTable = {1, &scene};
@@ -923,13 +1201,18 @@ void D3D12Renderer::prepareOccluded(DXGI_FORMAT targetFormat) {
         parameters[3].Constants.ShaderRegister = 1;
         parameters[3].Constants.Num32BitValues = 20; // 0.0.78 WORLD SHADOW: + the sun and the march
         parameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        // 0.0.78 PBR: the light (16 + 1 + 1 + 20 + 24 = 62 of the 64 root DWORDs)
+        parameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        parameters[4].Constants.ShaderRegister = 2;
+        parameters[4].Constants.Num32BitValues = 24;
+        parameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_STATIC_SAMPLER_DESC sampler{};
         sampler.Filter = D3D12_FILTER_ANISOTROPIC;
         sampler.MaxAnisotropy = 8;
         sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
         sampler.MaxLOD = D3D12_FLOAT32_MAX;
         sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_ROOT_SIGNATURE_DESC rs{4, parameters, 1, &sampler,
+        D3D12_ROOT_SIGNATURE_DESC rs{5, parameters, 1, &sampler,
                                     D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT};
         ComPtr<ID3DBlob> signature, error;
         hr(D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
@@ -951,7 +1234,7 @@ void D3D12Renderer::prepareOccluded(DXGI_FORMAT targetFormat) {
     // front of the step (by more than a margin, by less than a thickness: a wall, a car, a lamp
     // post, not the far side of the street), the sun is blocked. Blocked takes sun.w of the share of
     // the light the sun gave (the vertex alpha keeps the rest: 1, nothing taken).
-    const char* shader = R"(
+    const char* plain = R"(
 cbuffer Eye : register(b0) { row_major float4x4 vp; };
 cbuffer Scene : register(b1) { float4 size; float4 lens; float4 bias; float4 sun; float4 march; };
 Texture2DArray skins : register(t0);
@@ -1002,28 +1285,183 @@ float4 ps(Out i):SV_TARGET {
     return float4(rgb, 1);
 }
 )";
-    ComPtr<ID3DBlob> vs, ps, error;
-    for (const char* stage : {"vs", "ps"}) {
-        error.Reset();
-        auto& out = stage[0] == 'v' ? vs : ps;
-        if (const HRESULT result = D3DCompile(shader, std::strlen(shader), "spidy_occluded_model", nullptr, nullptr,
-                                              stage, stage[0] == 'v' ? "vs_5_0" : "ps_5_0",
-                                              D3DCOMPILE_ENABLE_STRICTNESS, 0, &out, &error);
-            FAILED(result) || !out)
-            throw std::runtime_error(std::string("Compile occluded model ") + stage + " shader HRESULT=" +
-                                     std::to_string(static_cast<unsigned long>(result)) + ": " +
-                                     compilerText(error.Get()));
+    // HERO VR 0.0.78 PBR MATERIALS: the same with the PBR corners lit per pixel (prepareModel's shader), the march
+    // taking only the sun's own terms (its diffuse and highlight), never the sky's. Failing to compile: the above.
+    const char* pbr = R"(cbuffer Eye : register(b0) { row_major float4x4 vp; };
+cbuffer Scene : register(b1) { float4 size; float4 lens; float4 bias; float4 sun; float4 march; };
+Texture2DArray skins : register(t0);
+Texture2D<float> scene : register(t1);
+SamplerState fine : register(s0);
+cbuffer Light : register(b2) { float4 lsun; float4 lcolor; float4 lup; float4 ldown; float4 leye; float4 lmirror; };
+Texture2DArray maps : register(t2);
+Texture2DArray skinsHq : register(t3);
+Texture2DArray mapsHq : register(t4);
+struct In {
+    float3 position:POSITION; float4 color:COLOR; float4 shape:TEXCOORD0;
+    float2 nrm:NORMAL; float2 tng:TANGENT; uint surf:TEXCOORD1; float4 tint:COLOR1; float4 params:TEXCOORD2;
+};
+struct Out {
+    float4 position:SV_POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; float3 world:TEXCOORD1;
+    float3 nrm:NORMAL; float3 tng:TANGENT; nointerpolation uint surf:TEXCOORD2;
+    nointerpolation float4 tint:COLOR1; nointerpolation float4 params:TEXCOORD3;
+};
+// HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp, its shade() line for line): octahedral unit vectors.
+float3 octDecode(float2 e) {
+    float3 v = float3(e, 1 - abs(e.x) - abs(e.y));
+    if (v.z < 0) v.xy = (1 - abs(v.yx)) * float2(v.x >= 0 ? 1 : -1, v.y >= 0 ? 1 : -1);
+    const float q = dot(v, v);
+    return q > 1e-12 ? v * rsqrt(q) : float3(0, 0, 1);
+}
+Out vs(In i) {
+    Out o; o.position=mul(vp,float4(i.position,1)); o.color=i.color; o.shape=i.shape; o.world=i.position;
+    o.nrm = octDecode(i.nrm);
+    o.tng = (i.surf & 134217728u) != 0 ? octDecode(i.tng) : float3(0, 0, 0);
+    o.surf = i.surf; o.tint = i.tint; o.params = i.params;
+    return o;
+}
+float3 skyAt(float up) { return lerp(ldown.rgb, lup.rgb, saturate(.5 + .5 * up)); }
+float maxOf(float3 v) { return max(v.x, max(v.y, v.z)); }
+// The lit colour: albedo (tint x base texel, linear), the sun's visibility (1 - its shadow).
+float3 pbrShade(Out i, float3 albedo, float2 gx, float2 gy, float3 px, float3 py, float sunVis) {
+    const uint s = i.surf;
+    float3 L = lsun.xyz, upv = float3(0, 1, 0);
+    if ((s & 67108864u) != 0 && lmirror.w > .5) { // the mirror's copy: its light reflected too
+        L = reflect(L, lmirror.xyz); upv = reflect(upv, lmirror.xyz);
     }
-    D3D12_INPUT_ELEMENT_DESC layout[] = {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-    };
+    const float3 N = normalize(i.nrm);
+    float3 Nm = N;
+    if ((s & 8388608u) != 0) {
+        const float layer = (float)(s & 1023u);
+        float3 m;
+        if ((s & 4194304u) != 0 && ldown.w > .5)
+            m = mapsHq.SampleGrad(fine, float3(i.shape.xy, layer), gx, gy).xyz * 2 - 1;
+        else
+            m = maps.SampleGrad(fine, float3(i.shape.xy, layer), gx, gy).xyz * 2 - 1;
+        float3 T, B;
+        bool framed = false;
+        if ((s & 134217728u) != 0) {
+            T = i.tng - N * dot(N, i.tng);
+            if (dot(T, T) > 1e-12) {
+                T = normalize(T); B = cross(N, T) * ((s & 2097152u) != 0 ? -1.0 : 1.0); framed = true;
+            }
+        }
+        if (!framed) { // no tangent: the pixel's own frame from the uv and place derivatives (v down)
+            const float3 a = cross(py, N), b = cross(N, px);
+            const float3 tc = a * gx.x + b * gy.x, bc = a * gx.y + b * gy.y;
+            const float q = max(dot(tc, tc), dot(bc, bc));
+            if (q > 1e-24) { const float k = rsqrt(q); T = tc * k; B = -bc * k; framed = true; }
+        }
+        if (framed) {
+            m = normalize(float3(m.xy * (i.params.z * 2), max(m.z, 1e-3)));
+            Nm = normalize(T * m.x + B * m.y + N * m.z);
+        }
+    }
+    float3 orm = float3(1, 1, 1);
+    if ((s & 16777216u) != 0)
+        orm = maps.SampleGrad(fine, float3(i.shape.xy, (float)((s >> 10) & 1023u)), gx, gy).xyz;
+    const float occl = (s & 33554432u) != 0 ? 1 + (orm.x - 1) * saturate(i.params.w) : 1;
+    const float rough = clamp(i.params.x * orm.y, .045, 1), metal = saturate(i.params.y * orm.z);
+    const float geo = saturate(dot(N, L) * 4 + 1);
+    const float nl = max(dot(Nm, L), 0) * geo;
+    const float3 V = normalize(leye.xyz - i.world);
+    const float nv = max(dot(Nm, V), 1e-4);
+    const float3 f0 = lerp(float3(.04, .04, .04), albedo, metal);
+    const float3 diffuse = albedo * (1 - metal) * (skyAt(dot(Nm, upv)) * occl + lcolor.rgb * (nl * sunVis));
+    float3 spec = float3(0, 0, 0);
+    const float3 hv = L + V;
+    if (nl > 0 && dot(hv, hv) > 1e-12) {
+        const float3 H = normalize(hv);
+        const float nh = saturate(dot(Nm, H)), vh = saturate(dot(V, H));
+        const float a = rough * rough, a2 = a * a;
+        const float dd = nh * nh * (a2 - 1) + 1;
+        const float D = a2 / (3.14159265 * dd * dd);
+        const float vis = .5 / max(nl * sqrt(nv * nv * (1 - a2) + a2) + nv * sqrt(nl * nl * (1 - a2) + a2), 1e-6);
+        const float q = 1 - vh, q5 = q * q * q * q * q;
+        const float3 F = f0 + (1 - f0) * q5;
+        spec = F * lcolor.rgb * (3.14159265 * D * vis * nl * sunVis * lcolor.w);
+    }
+    const float3 R = Nm * (2 * dot(Nm, V)) - V;
+    const float3 Rb = normalize(R + (Nm - R) * (rough * rough));
+    const float4 r0 = float4(-1, -.0275, -.572, .022) * rough + float4(1, .0425, 1.04, -.04);
+    const float a004 = min(r0.x * r0.x, exp2(-9.28 * nv)) * r0.x + r0.y;
+    const float A = a004 * -1.04 + r0.z, Bf = a004 * 1.04 + r0.w;
+    const float spOcc = saturate(pow(nv + occl, exp2(-16 * rough - 1)) - 1 + occl);
+    const float3 env = skyAt(dot(Rb, upv)) * (f0 * A + Bf) * (spOcc * lup.w);
+    const float3 sp = spec + env, whole = diffuse + sp;
+    const float mx = maxOf(whole), md = maxOf(diffuse);
+    if (mx > .8 && mx > md + 1e-6) {
+        const float t = max(.8 + (mx - .8) / (1 + (mx - .8) / .8), md);
+        return diffuse + sp * ((t - md) / (mx - md));
+    }
+    return whole;
+}
+// The base texel: the HQ copy when bound and this corner has one, else the array (the 0.0.78 sample).
+float4 baseTexel(Out i, bool pbr, float2 gx, float2 gy) {
+    if (pbr && i.tint.a < .999 && ldown.w > .5)
+        return skinsHq.SampleGrad(fine, float3(i.shape.xy, floor(i.tint.a * 255 + .5)), gx, gy);
+    return skins.SampleGrad(fine, float3(i.shape.xy, floor(i.shape.z + .5)), gx, gy);
+}
+float gameMetres(float d) { return lens.y > 0 ? lens.x * lens.y / (lens.x + d * (lens.y - lens.x)) : lens.x / d; }
+float mineMetres(float z) { return lens.z * lens.w / max(lens.w - z * (lens.w - lens.z), 1e-6); }
+float blocked(float3 p) {
+    const int steps = (int)march.y;
+    [loop] for (int k = 0; k < steps; ++k) {
+        const float s = (k + 1.0) / steps, t = march.z + march.x * s * s;
+        const float4 c = mul(vp, float4(p + sun.xyz * t, 1));
+        if (c.w <= 1e-4) return 0;
+        const float3 ndc = c.xyz / c.w;
+        if (abs(ndc.x) > 1 || abs(ndc.y) > 1) return 0; // out of this eye's picture: not known, lit
+        const int2 at = int2(clamp(float2(ndc.x * .5 + .5, .5 - .5 * ndc.y) * size.zw, float2(0, 0), size.zw - 1));
+        const float d = scene.Load(int3(at, 0));
+        if (d <= 1e-7 || d > 1) continue; // the sky there
+        const float mine = mineMetres(saturate(ndc.z)), gap = mine - gameMetres(d);
+        if (gap > .04 + .01 * mine && gap < march.w + .3 * t) return 1;
+    }
+    return 0;
+}
+float4 ps(Out i):SV_TARGET {
+    const float2 gx = ddx(i.shape.xy), gy = ddy(i.shape.xy);
+    const float3 px = ddx(i.world), py = ddy(i.world);
+    float2 uv = i.position.xy / size.xy;
+    int2 at = int2(clamp(uv * size.zw, float2(0, 0), size.zw - 1));
+    float d = scene.Load(int3(at, 0));
+    if (bias.z > 0 && d > 1e-7 && d <= 1) {
+        float game = gameMetres(d);
+        float z = saturate(i.position.z);
+        float mine = mineMetres(z);
+        if (mine > game * bias.x + bias.y)
+            discard;
+    }
+    const bool pbr = (i.surf & 1048576u) != 0 && lsun.w > .5;
+    float4 t = float4(1, 1, 1, 1);
+    if (i.shape.z >= 0) {
+        t = baseTexel(i, pbr, gx, gy);
+        clip(t.a - .5);
+    }
+    // HERO VR 0.0.78 PBR: the march takes the sun's own terms (diffuse and highlight), never the sky.
+    float taken = 0;
+    if (sun.w > 0 && i.color.a < .999)
+        taken = sun.w * blocked(i.world);
+    if (pbr)
+        return float4(pbrShade(i, i.tint.rgb * i.tint.rgb * t.rgb, gx, gy, px, py, 1 - taken), 1);
+    float3 rgb = i.color.rgb * t.rgb;
+    rgb *= 1 - (1 - saturate(i.color.a)) * taken;
+    return float4(rgb, 1);
+}
+)";
+    ComPtr<ID3DBlob> vs, ps;
+    occludedPbr_ = compileModelShaders(pbr, "spidy_occluded_model_pbr", vs, ps, modelPbrFault_);
+    if (!occludedPbr_) {
+        std::string plainFault;
+        if (!compileModelShaders(plain, "spidy_occluded_model", vs, ps, plainFault))
+            throw std::runtime_error("Compile occluded model shader: " + plainFault);
+    }
+    const auto layout = modelLayout();
     D3D12_GRAPHICS_PIPELINE_STATE_DESC p{};
     p.pRootSignature = occludedRoot_.Get();
     p.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
     p.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-    p.InputLayout = {layout, 3};
+    p.InputLayout = {layout.data(), occludedPbr_ ? static_cast<UINT>(layout.size()) : 3u};
     p.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     p.NumRenderTargets = 1;
     p.RTVFormats[0] = targetFormat;
@@ -1242,6 +1680,16 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                 list_->SetGraphicsRootSignature(modelRoot_.Get());
                 list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
                 list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
+                // HERO VR 0.0.78 PBR MATERIALS: the frame's light, this eye's place (from its projection), whether the
+                // HQ copies are bound; toSun.w 0 (no light set, no eye, the plain shaders): the 0.0.78 look.
+                float light[24];
+                std::copy(modelLight_.begin(), modelLight_.end(), light);
+                float eyeAt[3]{};
+                if (!model_pbr::eyeFromViewProjection(views[eye].viewProjection.data(), eyeAt) || !modelPbr_)
+                    light[3] = 0;
+                light[15] = modelHqReady() ? 1.f : 0.f;
+                light[16] = eyeAt[0], light[17] = eyeAt[1], light[18] = eyeAt[2], light[19] = 1;
+                list_->SetGraphicsRoot32BitConstants(2, 24, light, 0);
                 list_->SetPipelineState(modelPipeline_.Get());
                 const auto base = static_cast<UINT>(vertices.size() + art.size() + translucent.size());
                 // HERO VR 0.0.78 WORLD SHADOW: with the sun's shadow, the ranges outside the see-through one drawn
@@ -1272,6 +1720,8 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                     list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
                     list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
                     list_->SetGraphicsRootDescriptorTable(2, depthAt);
+                    light[3] = occludedPbr_ && modelPbr_ ? light[3] : 0.f;
+                    list_->SetGraphicsRoot32BitConstants(4, 24, light, 0);
                     list_->SetPipelineState(occludedPipeline_.Get());
                     if (sunShadow) { // the rest: lit and shadowed, never hidden
                         list_->SetGraphicsRoot32BitConstants(3, 20, constants, 0);

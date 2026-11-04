@@ -1,6 +1,7 @@
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 // Build 9 SUITS: suit_wear.hpp.
 #include "spidy/suit_wear.hpp"
+#include "spidy/model_pbr_mesh.hpp"
 
 #include "spidy/fly_lean.hpp"
 #include "spidy/world_light.hpp"
@@ -1225,6 +1226,26 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
             lights[v] = lightAt(s.n[v], shares[v]);
         }
     }
+    // HERO VR 0.0.78 PBR MATERIALS (model_pbr.hpp): the suit lit per pixel by its own maps (normal, ORM). Each
+    // corner's rest tangent follows the skin by its triangle's turn (rest frame -> skinned frame, built from an
+    // edge and the face normal), then is squared to the corner's skinned normal; the mirror's reflection (place)
+    // flips the frame's hand and the sun the shader reflects (flagMirrored).
+    const bool pbr = model_pbr::drawsPbr(wl);
+    const bool tangents = pbr && mesh.hasTangents();
+    float handed = 1.f;
+    if (place)
+        handed = model_pbr::handedness(Vec3{place[0], place[4], place[8]}, Vec3{place[1], place[5], place[9]},
+                                       Vec3{place[2], place[6], place[10]});
+    const auto frame = [](Vec3 a, Vec3 b, Vec3 c, Vec3 (&f)[3]) {
+        const Vec3 e = b - a, nn = cross(b - a, c - a);
+        const float el = length(e), nl = length(nn);
+        if (!(el > 1e-9f) || !(nl > 1e-12f))
+            return false;
+        f[0] = e * (1.f / el);
+        f[2] = nn * (1.f / nl);
+        f[1] = cross(f[2], f[0]);
+        return true;
+    };
     sink.resize(from + size_t{count} * 3);
     Vertex* o = sink.data() + from;
     for (uint32_t t = 0; t < mesh.triangles(); ++t) {
@@ -1234,13 +1255,32 @@ bool draw(std::vector<Vertex>& sink, size_t budget, const mesh_model::Mesh& mesh
         const int32_t at = im >= 0 && static_cast<size_t>(im) < mesh.images.size() ? mesh.images[static_cast<size_t>(im)].layer : -1;
         const float layer = at >= 0 ? static_cast<float>(at) : -1.f;
         const Vec3 tint = at >= 0 && t < mesh.tints.size() ? mesh.tints[t] : mesh.colors[t];
+        const model_pbr::Material pm = pbr ? model_pbr::material(mesh, t) : model_pbr::Material{};
+        Vec3 fr[3], fs[3];
+        const uint32_t* cv = &rig.corner[t * 3];
+        const bool turn = tangents && frame(rig.rest[cv[0]], rig.rest[cv[1]], rig.rest[cv[2]], fr) &&
+                          frame(s.p[cv[0]], s.p[cv[1]], s.p[cv[2]], fs);
         for (uint32_t k = 0; k < 3; ++k) {
-            const uint32_t v = rig.corner[t * 3 + k];
+            const uint32_t v = cv[k];
             const float u = uvs ? mesh.uvs[t * 6 + k * 2] : 0.f, w = uvs ? mesh.uvs[t * 6 + k * 2 + 1] : 0.f;
             float share = 1.f;
             const Vec3 lit = once ? (share = shares[v], lights[v]) : lightAt(s.n[v], share);
-            *o++ = Vertex{once ? placed[v] : P(s.p[v]), world_light::mul(tint, lit), world_light::shadowAlpha(wl, share),
-                          {u, w, layer, 1.f}};
+            *o = Vertex{once ? placed[v] : P(s.p[v]), world_light::mul(tint, lit), world_light::shadowAlpha(wl, share),
+                        {u, w, layer, 1.f}};
+            if (pbr) {
+                const Vec3 nw = normalized(N(s.n[v]));
+                Vec3 tm{}, tw{};
+                float sign = 1.f;
+                if (turn && model_pbr::tangentOf(mesh, size_t{t} * 3 + k, tm, sign)) {
+                    const Vec3 sk = fs[0] * dot(tm, fr[0]) + fs[1] * dot(tm, fr[1]) + fs[2] * dot(tm, fr[2]);
+                    tw = N(sk);
+                    tw = tw - nw * dot(tw, nw);
+                }
+                o->surface = model_pbr::corner(pm, tint, nw, tw, sign * handed, false);
+                if (place)
+                    o->surface.maps |= model_pbr::flagMirrored;
+            }
+            ++o;
         }
     }
     for (size_t i = from; i < sink.size(); ++i)

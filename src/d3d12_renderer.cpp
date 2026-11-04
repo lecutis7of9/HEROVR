@@ -880,7 +880,12 @@ void D3D12Renderer::setSceneDepth(SceneDepth depth) noexcept {
     scene_ = std::move(depth);
 }
 bool D3D12Renderer::sceneFits(const SceneDepth& scene, std::span<const ViewTarget> views, std::size_t models) const {
-    if (views.size() != 2 || !scene.count || scene.first % 3 || scene.count % 3 || scene.first > models ||
+    const bool shadow = std::isfinite(scene.sunShadow) && scene.sunShadow > 0;
+    if (shadow && (!(scene.sunShadow <= 1) || !std::isfinite(scene.toSun[0] + scene.toSun[1] + scene.toSun[2]) ||
+                   !(std::isfinite(scene.marchMetres) && scene.marchMetres > 0 && scene.marchMetres <= 100) ||
+                   !(std::isfinite(scene.marchSteps) && scene.marchSteps >= 1 && scene.marchSteps <= 12)))
+        return false;
+    if (views.size() != 2 || (!scene.count && !shadow) || scene.first % 3 || scene.count % 3 || scene.first > models ||
         scene.count > models - scene.first || !scene.width || !scene.height || !modelHeap_ ||
         modelHeap_->GetDesc().NumDescriptors < 3)
         return false;
@@ -916,7 +921,7 @@ void D3D12Renderer::prepareOccluded(DXGI_FORMAT targetFormat) {
         parameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         parameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         parameters[3].Constants.ShaderRegister = 1;
-        parameters[3].Constants.Num32BitValues = 12;
+        parameters[3].Constants.Num32BitValues = 20; // 0.0.78 WORLD SHADOW: + the sun and the march
         parameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_STATIC_SAMPLER_DESC sampler{};
         sampler.Filter = D3D12_FILTER_ANISOTROPIC;
@@ -938,24 +943,51 @@ void D3D12Renderer::prepareOccluded(DXGI_FORMAT targetFormat) {
     // The model shader, and first: the game's scene depth under this pixel (the same place in the
     // eye's picture, whatever either image's size). Reversed Z: 0 is the sky (nothing to hide
     // behind), else the distance n f / (n + d (f - n)) (f = 0: n / d). The overlay's own depth is
-    // standard Z: n f / (f - z (f - n)). Hidden only when clearly behind the scene.
+    // standard Z: n f / (f - z (f - n)). Hidden only when clearly behind the scene (bias.z: the
+    // see-through range only).
+    // HERO VR 0.0.78 WORLD SHADOW: then the sun. From the pixel's world point toward the game's sun
+    // (sun.xyz), march.y steps out to march.x metres (closer together near the model: contact
+    // shadows), each one projected into this eye's picture: where the game's surface there is in
+    // front of the step (by more than a margin, by less than a thickness: a wall, a car, a lamp
+    // post, not the far side of the street), the sun is blocked. Blocked takes sun.w of the share of
+    // the light the sun gave (the vertex alpha keeps the rest: 1, nothing taken).
     const char* shader = R"(
 cbuffer Eye : register(b0) { row_major float4x4 vp; };
-cbuffer Scene : register(b1) { float4 size; float4 lens; float4 bias; };
+cbuffer Scene : register(b1) { float4 size; float4 lens; float4 bias; float4 sun; float4 march; };
 Texture2DArray skins : register(t0);
 Texture2D<float> scene : register(t1);
 SamplerState fine : register(s0);
 struct In { float3 position:POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
-struct Out { float4 position:SV_POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; };
-Out vs(In i) { Out o; o.position=mul(vp,float4(i.position,1)); o.color=i.color; o.shape=i.shape; return o; }
+struct Out { float4 position:SV_POSITION; float4 color:COLOR; float4 shape:TEXCOORD0; float3 world:TEXCOORD1; };
+Out vs(In i) {
+    Out o; o.position=mul(vp,float4(i.position,1)); o.color=i.color; o.shape=i.shape; o.world=i.position; return o;
+}
+float gameMetres(float d) { return lens.y > 0 ? lens.x * lens.y / (lens.x + d * (lens.y - lens.x)) : lens.x / d; }
+float mineMetres(float z) { return lens.z * lens.w / max(lens.w - z * (lens.w - lens.z), 1e-6); }
+float blocked(float3 p) {
+    const int steps = (int)march.y;
+    [loop] for (int k = 0; k < steps; ++k) {
+        const float s = (k + 1.0) / steps, t = march.z + march.x * s * s;
+        const float4 c = mul(vp, float4(p + sun.xyz * t, 1));
+        if (c.w <= 1e-4) return 0;
+        const float3 ndc = c.xyz / c.w;
+        if (abs(ndc.x) > 1 || abs(ndc.y) > 1) return 0; // out of this eye's picture: not known, lit
+        const int2 at = int2(clamp(float2(ndc.x * .5 + .5, .5 - .5 * ndc.y) * size.zw, float2(0, 0), size.zw - 1));
+        const float d = scene.Load(int3(at, 0));
+        if (d <= 1e-7 || d > 1) continue; // the sky there
+        const float mine = mineMetres(saturate(ndc.z)), gap = mine - gameMetres(d);
+        if (gap > .04 + .01 * mine && gap < march.w + .3 * t) return 1;
+    }
+    return 0;
+}
 float4 ps(Out i):SV_TARGET {
     float2 uv = i.position.xy / size.xy;
     int2 at = int2(clamp(uv * size.zw, float2(0, 0), size.zw - 1));
     float d = scene.Load(int3(at, 0));
-    if (d > 1e-7 && d <= 1) {
-        float game = lens.y > 0 ? lens.x * lens.y / (lens.x + d * (lens.y - lens.x)) : lens.x / d;
+    if (bias.z > 0 && d > 1e-7 && d <= 1) {
+        float game = gameMetres(d);
         float z = saturate(i.position.z);
-        float mine = lens.z * lens.w / max(lens.w - z * (lens.w - lens.z), 1e-6);
+        float mine = mineMetres(z);
         if (mine > game * bias.x + bias.y)
             discard;
     }
@@ -964,7 +996,10 @@ float4 ps(Out i):SV_TARGET {
         t = skins.Sample(fine, float3(i.shape.xy, floor(i.shape.z + .5)));
         clip(t.a - .5);
     }
-    return float4(i.color.rgb * t.rgb, 1);
+    float3 rgb = i.color.rgb * t.rgb;
+    if (sun.w > 0 && i.color.a < .999)
+        rgb *= 1 - sun.w * (1 - saturate(i.color.a)) * blocked(i.world);
+    return float4(rgb, 1);
 }
 )";
     ComPtr<ID3DBlob> vs, ps, error;
@@ -1081,7 +1116,7 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
     SceneDepth scene = std::move(scene_);
     scene_ = {};
     bool occlude = false;
-    if (!textured.empty() && scene.count && sceneFault_.empty()) {
+    if (!textured.empty() && (scene.count || scene.sunShadow > 0) && sceneFault_.empty()) {
         try {
             occlude = sceneFits(scene, views, textured.size());
             if (occlude) {
@@ -1209,30 +1244,47 @@ void D3D12Renderer::renderViews(std::span<const ViewTarget> views, std::span<con
                 list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
                 list_->SetPipelineState(modelPipeline_.Get());
                 const auto base = static_cast<UINT>(vertices.size() + art.size() + translucent.size());
+                // HERO VR 0.0.78 WORLD SHADOW: with the sun's shadow, the ranges outside the see-through one drawn
+                // by the occluded pipeline too (never hidden: bias.z 0), for the sun's march; else as before.
+                const bool sunShadow = occlude && scene.sunShadow > 0;
+                const auto first = static_cast<UINT>(scene.first), count = static_cast<UINT>(scene.count);
+                const auto rest = occlude ? static_cast<UINT>(textured.size()) - first - count : 0u;
                 if (!occlude) {
                     list_->DrawInstanced(static_cast<UINT>(textured.size()), 1, base, 0);
                 } else { // 0.0.74 test 10 SEE-THROUGH: the world-placed range hidden behind the scene
-                    const auto first = static_cast<UINT>(scene.first), count = static_cast<UINT>(scene.count);
-                    const auto rest = static_cast<UINT>(textured.size()) - first - count;
-                    if (first)
-                        list_->DrawInstanced(first, 1, base, 0);
-                    if (rest)
-                        list_->DrawInstanced(rest, 1, base + first + count, 0);
+                    if (!sunShadow) {
+                        if (first)
+                            list_->DrawInstanced(first, 1, base, 0);
+                        if (rest)
+                            list_->DrawInstanced(rest, 1, base + first + count, 0);
+                    }
                     const auto stride =
                         device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                     auto depthAt = modelHeap_->GetGPUDescriptorHandleForHeapStart();
                     depthAt.ptr += (1 + eye) * stride;
-                    const float constants[12] = {static_cast<float>(width), static_cast<float>(height),
-                                                 static_cast<float>(scene.width), static_cast<float>(scene.height),
-                                                 scene.gameNear, scene.gameFar, scene.overlayNear, scene.overlayFar,
-                                                 scene.scale, scene.bias, 0, 0};
+                    float constants[20] = {static_cast<float>(width), static_cast<float>(height),
+                                           static_cast<float>(scene.width), static_cast<float>(scene.height),
+                                           scene.gameNear, scene.gameFar, scene.overlayNear, scene.overlayFar,
+                                           scene.scale, scene.bias, 0, 0,
+                                           scene.toSun[0], scene.toSun[1], scene.toSun[2], sunShadow ? scene.sunShadow : 0.f,
+                                           scene.marchMetres, std::floor(scene.marchSteps), .12f, .5f};
                     list_->SetGraphicsRootSignature(occludedRoot_.Get());
                     list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);
                     list_->SetGraphicsRootDescriptorTable(1, modelHeap_->GetGPUDescriptorHandleForHeapStart());
                     list_->SetGraphicsRootDescriptorTable(2, depthAt);
-                    list_->SetGraphicsRoot32BitConstants(3, 12, constants, 0);
                     list_->SetPipelineState(occludedPipeline_.Get());
-                    list_->DrawInstanced(count, 1, base + first, 0);
+                    if (sunShadow) { // the rest: lit and shadowed, never hidden
+                        list_->SetGraphicsRoot32BitConstants(3, 20, constants, 0);
+                        if (first)
+                            list_->DrawInstanced(first, 1, base, 0);
+                        if (rest)
+                            list_->DrawInstanced(rest, 1, base + first + count, 0);
+                    }
+                    if (count) { // the see-through range: hidden behind the scene
+                        constants[10] = 1;
+                        list_->SetGraphicsRoot32BitConstants(3, 20, constants, 0);
+                        list_->DrawInstanced(count, 1, base + first, 0);
+                    }
                 }
                 list_->SetGraphicsRootSignature(root_.Get());
                 list_->SetGraphicsRoot32BitConstants(0, 16, views[eye].viewProjection.data(), 0);

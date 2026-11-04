@@ -98,6 +98,12 @@ class D3D12Renderer {
         unsigned width{}, height{};
         float gameNear{}, gameFar{}, overlayNear{}, overlayFar{}, scale = 1.02f, bias = .05f;
         std::size_t first{}, count{};
+        // HERO VR 0.0.78 WORLD SHADOW (world_light.hpp): toward the game's sun (world space, unit) and how much of
+        // a world-lit model's sun light (its vertex alpha) is taken where the game's scene depth blocks the sun;
+        // 0: no sun shadow (count may then not be 0). The march: its reach and steps (metres; 1..12).
+        std::array<float, 3> toSun{};
+        float sunShadow = 0;
+        float marchMetres = 24.f, marchSteps = 12.f;
     };
     void setSceneDepth(SceneDepth depth) noexcept;
     // Empty, or why the occluded models' pass is off for the session.

@@ -12,6 +12,7 @@
 #include "spidy/cabin_look074.hpp"
 #include "spidy/punisher078.hpp"
 #include "spidy/blood_splatter.hpp"
+#include "spidy/world_light.hpp"
 
 #include <algorithm>
 #include <array>
@@ -248,7 +249,9 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
     // prepared path (its model-space normals kept once): the same vertices, about a fifth of the time.
     if (vanfps::drawPrepared(sink, model, o, ex, ey, ez, &viewer))
         return true;
-    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
+    // HERO VR 0.0.78 WORLD LIGHT (world_light.hpp): the game's frame light (STUDIO: the 0.0.77 fixed light).
+    const world_light::Light wl = world_light::current();
+    const Vec3 light = wl.toSun;
     const bool smooth = model.hasNormals(), uvs = model.hasUvs();
     sink.reserve(from + size_t{model.triangles()} * 3); // build 7: one growth, not a dozen
     // 0.0.74 test 2 CAR PAINT (car_paint.hpp): a painted model (the Batmobile bodies) here too when small or stretched.
@@ -273,6 +276,9 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
         if (!(fl > 1e-14f))
             continue;
         const Vec3 p[3]{a, b, c};
+        // World light: the face's side he sees (its middle toward the eye); corner normals turned to that side.
+        const bool eye = ok(viewer);
+        const Vec3 faceSeen = world_light::seenSide(fn * (1.f / fl), eye ? viewer - (a + b + c) * (1.f / 3) : Vec3{});
         for (uint32_t k = 0; k < 3; ++k) {
             Vec3 n = fn * (1.f / fl);
             if (smooth) {
@@ -281,18 +287,26 @@ bool drawTextured(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Plac
                 if (length(w) > 1e-12f)
                     n = normalized(w);
             }
-            const float lit = .32f + .68f * std::abs(dot(n, light)); // both sides (any winding)
             const float u = uvs ? model.uvs[t * 6 + k * 2] : 0.f, v = uvs ? model.uvs[t * 6 + k * 2 + 1] : 0.f;
-            Vec3 colour = tint * lit;
+            float share = 1.f; // the sun's share of the colour (shadowAlpha: the GPU sun shadow's vertex alpha)
+            Vec3 colour;
+            if (!wl.world) {
+                colour = tint * (.32f + .68f * std::abs(dot(n, light))); // both sides (any winding)
+            } else { // a face normal's winding is not promised: the side he sees
+                const Vec3 nw = eye && dot(n, faceSeen) < 0 ? n * -1.f : n;
+                colour = world_light::shade(wl, tint, nw, eye, &share);
+            }
             if (paint && model.paint[t * 2] != 0) { // 0.0.75: textured too (the colour multiplies the texture)
                 const Vec3 to = viewer - p[k];
-                if (length(to) > 1e-6f)
+                if (length(to) > 1e-6f) {
                     colour = car_paint::shade(tint, n, light, normalized(to), {0, 1, 0}, car_paint::unpack(model.paint[t * 2]),
-                                              car_paint::unpack(model.paint[t * 2 + 1]));
+                                              car_paint::unpack(model.paint[t * 2 + 1]), wl);
+                    share = world_light::sunShare(wl, std::max(dot(world_light::seenSide(n, to), light), 0.f), n.y);
+                }
             }
             if (glow)
                 colour = cabin_look::relit(colour, tint, n.y, role);
-            sink.push_back(Vertex{p[k], colour, 1.f, {u, v, layer, 1.f}});
+            sink.push_back(Vertex{p[k], colour, world_light::shadowAlpha(wl, share), {u, v, layer, 1.f}});
         }
     }
     for (size_t i = from; i < sink.size(); ++i) {
@@ -333,7 +347,7 @@ bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place plac
     }
     std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     Guard g(out);
-    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
+    const world_light::Light wl = world_light::current(); // HERO VR 0.0.78 WORLD LIGHT
     for (const auto& [far, t] : order) {
         (void)far;
         const Vec3 a = placed[t * 3], b = placed[t * 3 + 1], c = placed[t * 3 + 2];
@@ -343,8 +357,7 @@ bool drawMesh(std::vector<Vertex>& out, const mesh_model::Mesh& full, Place plac
             continue; // a sliver: nothing to see
         if (model.role.size() == size_t{n} && cabin_look::skipped(model.role[t]))
             continue; // 0.0.74 test 3 DASH INSIDE: the baked handle marker
-        const float lit = .32f + .68f * std::abs(dot(n3 * (1.f / len), light)); // both sides (any winding)
-        Vec3 colour = model.colors[t] * lit;
+        Vec3 colour = world_light::faceColour(wl, model.colors[t], n3 * (1.f / len), viewer - (a + b + c) * (1.f / 3));
         if (full.cabin && cabin_look::glowOn()) // 0.0.74 test 3 COCKPIT GLOW (the untextured fallback too)
             colour = cabin_look::relit(colour, model.colors[t], n3.y / len, model.role.size() == size_t{n} ? model.role[t] : uint8_t{0});
         for (const Vec3& p : {a, b, c})
@@ -472,7 +485,9 @@ bool shadeSteel(std::vector<Vertex>& out, const std::vector<Vec3>& placed, uint3
     }
     std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     Guard g(out);
-    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f}), steel{.74f, .77f, .82f};
+    // HERO VR 0.0.78 WORLD LIGHT: the game's sun and sky (STUDIO: the 0.0.77 fixed light, the same numbers).
+    const world_light::Light wl = world_light::current();
+    const Vec3 light = wl.toSun, steel{.74f, .77f, .82f};
     for (const auto& [far, t] : order) {
         (void)far;
         const Vec3 a = placed[t * 3], b = placed[t * 3 + 1], c = placed[t * 3 + 2];
@@ -485,8 +500,17 @@ bool shadeSteel(std::vector<Vertex>& out, const std::vector<Vec3>& placed, uint3
         const float diffuse = std::abs(dot(nn, light)), spec = std::pow(std::abs(dot(nn, half)), 28.f);
         const float rim = std::pow(1.f - std::abs(dot(nn, toEye)), 3.f);
         const float along = std::clamp(dot(mid - base, f) / reach, 0.f, 1.f);
-        const float lit = .28f + .5f * diffuse + .12f * along;
-        Vec3 col = steel * lit + Vec3{1, 1, 1} * (.85f * spec + .25f * rim);
+        Vec3 col;
+        if (!wl.world) {
+            const float lit = .28f + .5f * diffuse + .12f * along;
+            col = steel * lit + Vec3{1, 1, 1} * (.85f * spec + .25f * rim);
+        } else { // the side he sees, one-sided; the highlight the sun's colour, the rim the sky's
+            const Vec3 seen = world_light::seenSide(nn, toEye);
+            const float d = std::max(dot(seen, light), 0.f), up = seen.y;
+            const Vec3 sky = world_light::sky(wl, up);
+            col = world_light::mul(steel, sky * (.28f / .32f + .12f / .32f * along) + wl.sun * (.5f / .68f * d)) +
+                  wl.specular * (.85f * spec * (d > 0 ? 1.f : 0.f)) + wl.env * (.25f * .32f * rim);
+        }
         col = {std::min(col.x, 1.f), std::min(col.y, 1.f), std::min(col.z, 1.f)};
         for (const Vec3& p : {a, b, c})
             out.push_back(Vertex{p, col, 1.f, {}});
@@ -983,7 +1007,7 @@ bool drawLayered(std::vector<Vertex>& out, const mesh_model::Mesh& model, Place 
         return a.first.first != b.first.first ? a.first.first < b.first.first : a.first.second > b.first.second;
     });
     Guard g(out);
-    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
+    const world_light::Light wl = world_light::current(); // HERO VR 0.0.78 WORLD LIGHT
     for (const auto& [key, t] : order) {
         (void)key;
         const Vec3 a = placed[t * 3], b = placed[t * 3 + 1], c = placed[t * 3 + 2];
@@ -991,8 +1015,7 @@ bool drawLayered(std::vector<Vertex>& out, const mesh_model::Mesh& model, Place 
         const float len = length(n3);
         if (!(len > 1e-12f))
             continue;
-        const float lit = .32f + .68f * std::abs(dot(n3 * (1.f / len), light));
-        const Vec3 colour = model.colors[t] * lit;
+        const Vec3 colour = world_light::faceColour(wl, model.colors[t], n3 * (1.f / len), viewer - (a + b + c) * (1.f / 3));
         for (const Vec3& p : {a, b, c})
             out.push_back(Vertex{p, colour, 1.f, {}});
     }

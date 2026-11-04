@@ -2,6 +2,7 @@
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
 #include "spidy/cabin_look074.hpp"
+#include "spidy/world_light.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -25,6 +26,8 @@ struct Kept {
     // fourth triangle, so no band lags), all of them when the eye or the light moved far in model space.
     std::vector<Vec3> satin;
     Vec3 satinEye{}, satinLight{};
+    Vec3 satinSun{}, satinSky{}; // HERO VR 0.0.78 WORLD LIGHT: the light colours the kept satin was lit by
+    bool satinWorld = false;
     uint32_t satinPhase = 0;
     bool satinValid = false;
 };
@@ -104,7 +107,9 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
         ++counts.declined;
         return false;
     }
-    const Vec3 light = normalized(Vec3{.3f, 1.f, .25f});
+    // HERO VR 0.0.78 WORLD LIGHT (world_light.hpp): the game's frame light (STUDIO: the 0.0.77 fixed light).
+    const world_light::Light wl = world_light::current();
+    const Vec3 light = wl.toSun;
     // The light in model space: a world normal R n (R = the axes over s) meets it as n meets R^T light.
     const Vec3 lm = Vec3{dot(ex, light), dot(ey, light), dot(ez, light)} * (1.f / s);
     const bool uvs = model.hasUvs(), smooth = k->smooth;
@@ -115,15 +120,19 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
     const auto P = [&](Vec3 c) { return o + ex * c.x + ey * c.y + ez * c.z; };
     // 0.0.74 test 2 CAR PAINT: the eye and world up in model space (a world vector w meets the model as R^T w / s).
     const bool paint = viewer && fin(*viewer) && car_paint::enabled() && model.paint.size() == size_t{n} * 2;
-    const Vec3 rel = paint ? *viewer - o : Vec3{};
+    // World light: the faces he sees (the eye in model space) and world up there, for every model, painted or not.
+    const bool eye = viewer && fin(*viewer);
+    const Vec3 rel = eye ? *viewer - o : Vec3{};
     const Vec3 em = Vec3{dot(ex, rel), dot(ey, rel), dot(ez, rel)} * (1.f / (s * s));
     const Vec3 um = Vec3{ex.y, ey.y, ez.y} * (1.f / s);
     car_paint::Material mat;
     if (paint) {
         if (k->satin.size() != size_t{n} * 3)
             k->satin.assign(size_t{n} * 3, Vec3{}), k->satinValid = false;
-        if (!k->satinValid || spidy::length(em - k->satinEye) > satinRelightEye || spidy::length(lm - k->satinLight) > satinRelightLight)
+        if (!k->satinValid || spidy::length(em - k->satinEye) > satinRelightEye || spidy::length(lm - k->satinLight) > satinRelightLight ||
+            spidy::length(wl.sun - k->satinSun) + spidy::length(wl.skyUp - k->satinSky) > satinRelightColour || wl.world != k->satinWorld)
             k->satinValid = false;
+        k->satinSun = wl.sun, k->satinSky = wl.skyUp, k->satinWorld = wl.world;
         k->satinPhase = (k->satinPhase + 1) % satinSlices;
         k->satinEye = em, k->satinLight = lm; // the next frame's jump is from here
     } else {
@@ -156,23 +165,40 @@ bool drawPrepared(std::vector<Vertex>& sink, const mesh_model::Mesh& model, Vec3
             if (tl > 1e-6f)
                 face = car_paint::facing(mat, lm, to * (1.f / tl), um);
         }
+        // World light: a face normal's side is the one he sees (the triangle's middle toward the eye).
+        Vec3 faceSeen = k->face[t];
+        if (wl.world && eye) {
+            const Vec3 mid = (model.corners[t * 3] + model.corners[t * 3 + 1] + model.corners[t * 3 + 2]) * (1.f / 3);
+            faceSeen = world_light::seenSide(k->face[t], em - mid);
+        }
         for (uint32_t i = 0; i < 3; ++i) {
             const size_t c = size_t{t} * 3 + i;
-            float d = faceLit;
-            if (smooth && k->length[c] > flat)
-                d = std::abs(dot(k->corner[c], lm));
-            const float lit = .32f + .68f * d;
+            const bool cornerNormal = smooth && k->length[c] > flat;
             const float u = uvs ? model.uvs[t * 6 + i * 2] : 0.f, v = uvs ? model.uvs[t * 6 + i * 2 + 1] : 0.f;
-            Vec3 colour = tint * lit;
+            Vec3 colour;
+            float share = 1.f; // the sun's share (shadowAlpha: the GPU sun shadow's vertex alpha)
+            if (!wl.world) {
+                float d = faceLit;
+                if (cornerNormal)
+                    d = std::abs(dot(k->corner[c], lm));
+                colour = tint * (.32f + .68f * d);
+            } else { // model space: lm the sun, um world up (both unit)
+                // a corner normal's sign is the file's: turned to the side of the face he sees
+                const Vec3 nm = !cornerNormal ? faceSeen
+                                : eye && dot(k->corner[c], faceSeen) < 0 ? k->corner[c] * -1.f : k->corner[c];
+                const float d = cornerNormal || eye ? std::max(dot(nm, lm), 0.f) : std::abs(dot(nm, lm)), up = dot(nm, um);
+                colour = world_light::mul(tint, world_light::diffuse(wl, d, up));
+                share = world_light::sunShare(wl, d, up);
+            }
             if (relight) {
-                colour = face.ok ? car_paint::corner(mat, face, smooth && k->length[c] > flat ? k->corner[c] : k->face[t], lm, um) : colour;
+                colour = face.ok ? car_paint::corner(mat, face, cornerNormal ? k->corner[c] : k->face[t], lm, um, wl) : colour;
                 k->satin[c] = colour;
             } else if (painted) {
                 colour = k->satin[c];
             }
             if (glow)
                 colour = cabin_look::relit(colour, tint, dot(smooth && k->length[c] > flat ? k->corner[c] : k->face[t], um), role);
-            sink.push_back(Vertex{P(model.corners[c]), colour, 1.f, {u, v, layer, 1.f}});
+            sink.push_back(Vertex{P(model.corners[c]), colour, world_light::shadowAlpha(wl, share), {u, v, layer, 1.f}});
         }
     }
     if (relightAll)

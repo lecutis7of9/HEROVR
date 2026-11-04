@@ -35,6 +35,7 @@
 #include "spidy/van_screen.hpp"
 #include "spidy/seated_lock074.hpp"
 #include "spidy/car_paint.hpp"
+#include "spidy/world_light.hpp" // HERO VR 0.0.78 WORLD LIGHT
 #include "spidy/hideout074.hpp"  // 0.0.74 test 1 HIDEOUTS
 #include "spidy/batcave074.hpp"   // 0.0.74 test 2b BATCAVE
 #include "spidy/crime_gps074.hpp"  // 0.0.74 test 2b CRIME GPS
@@ -1426,6 +1427,13 @@ std::atomic<uint32_t> seeThroughDepthNow{0};
 std::atomic<uint32_t> diagLogsNow{0};
 std::atomic<uint32_t> cutNoteNow{0};
 inline uint64_t diagEveryMs() { return diagLogsNow.load() == 1 ? 10000u : 30000u; }
+// HERO VR 0.0.78 WORLD LIGHT (world_light.hpp): live.txt world_light (0 game: the mod's models lit by the game's
+// own frame light - its sun, sky and exposure; 1 game_soft: the same with lighter shadow sides; 2 studio: the
+// fixed light of 0.0.77), world_shadow (0 on: the game's scene shades their sun light; 1 vehicles: only while a
+// see-through car's depth is watched anyway; 2 off) and world_light_gain (percent, 25..400, 100).
+std::atomic<uint32_t> worldLightNow{spidy::world_light::modeGame};
+std::atomic<uint32_t> worldShadowNow{spidy::world_light::shadowOn};
+std::atomic<uint32_t> worldLightGainNow{100};
 // HERO VR 0.0.77 CUT7 LEDGE: live.txt wall_view (0 level: the horizon stays world-up while a wall or the game's crawl
 // holds him; 1 turned: the view turns onto the wall, as cut6) and ledge_jump (0 all: the leave-the-crawl RT + A also
 // on the game's floor crawl - a ledge, a roof's edge - and Spidy's own wall, and a web that holds there takes him off;
@@ -14609,6 +14617,30 @@ DWORD WINAPI run(void*) {
                         // Version 0.0.72 REAL MODELS: the textured models' own vertices (hero007::setModelSink).
                         // Build 7: kept between frames (cleared, its memory reused). THOR's 50,000-triangle hammer
                         // is 150,000 vertices (6.6 MB): a new vector each frame regrew and refaulted it every frame.
+                        // HERO VR 0.0.78 WORLD LIGHT: this frame's light for every model drawn below (heroes, suits,
+                        // props, the van, the Batmobiles, the bikes): the game's own, read by its frame-light hook
+                        // (stereo_probe.cpp), or the studio light with the reason.
+                        {
+                            namespace wl = spidy::world_light;
+                            static uint64_t lightLogMs{};
+                            const uint32_t lightMode = worldLightNow.load();
+                            wl::Sample frameLight{};
+                            const bool lightFresh = lightMode != wl::modeStudio && wl::newest(frameLight, 500);
+                            wl::Light light = lightMode == wl::modeStudio ? wl::studio(wl::studioChosen)
+                                              : lightFresh ? wl::derive(frameLight, wl::tuneFor(lightMode, worldLightGainNow.load()))
+                                                           : wl::studio(wl::stale);
+                            light.shadow = wl::shadowStrength(light, worldShadowNow.load());
+                            wl::setCurrent(light);
+                            const uint64_t lightNowMs = GetTickCount64();
+                            if (!lightLogMs || lightNowMs - lightLogMs >= diagEveryMs()) {
+                                if (!lightLogMs)
+                                    consoleLine("HERO VR 0.0.78 WORLD LIGHT: the mod's models lit by the game's frame light "
+                                                "(g_World key light, fog, probe, exposure); live.txt world_light / world_shadow");
+                                lightLogMs = lightNowMs;
+                                consoleLine("WORLD LIGHT " + wl::describe(light, frameLight) + ", shadow " +
+                                            std::to_string(light.shadow).substr(0, 4) + "; " + wl::hookLine());
+                            }
+                        }
                         static thread_local std::vector<Vertex> modelVerticesKept;
                         modelVerticesKept.clear();
                         std::vector<Vertex>& modelVertices = modelVerticesKept;
@@ -17171,8 +17203,15 @@ DWORD WINAPI run(void*) {
                                 static uint64_t seeLogMs{}, seeFrames{}, seeGiven{};
                                 const uint32_t seeDebug = native_gpu::pairEyeDebug();
                                 bool seeOn = false;
-                                native_gpu::sceneDepthInUse(seeThroughDepthNow.load() == 1 || seeThroughCount != 0);
-                                if (seeThroughCount && !saved->stereoScreen &&
+                                // HERO VR 0.0.78 WORLD SHADOW: the same depth shades the models' sun light (world_shadow
+                                // on: every frame the world light is on; vehicles: only while it is watched anyway).
+                                const auto sunLight = spidy::world_light::current();
+                                const uint32_t shadowMode = worldShadowNow.load();
+                                const bool sunShadow = sunLight.shadow > 0 && !modelVertices.empty() &&
+                                                       (shadowMode == spidy::world_light::shadowOn || seeThroughCount != 0);
+                                native_gpu::sceneDepthInUse(seeThroughDepthNow.load() == 1 || seeThroughCount != 0 ||
+                                                            spidy::world_light::wantsDepthAlways(shadowMode, sunLight));
+                                if ((seeThroughCount || sunShadow) && !saved->stereoScreen &&
                                     eye_debug::eyeDebugSource(seeDebug, 0) == 0 &&
                                     eye_debug::eyeDebugSource(seeDebug, 1) == 1) {
                                     ++seeFrames;
@@ -17186,8 +17225,12 @@ DWORD WINAPI run(void*) {
                                         scene.gameFar = 0; // the lens's far not known here: infinite, hides less
                                         scene.overlayNear = .03f; // the overlay's projection above
                                         scene.overlayFar = 200.f;
-                                        scene.first = seeThroughFirst;
+                                        scene.first = seeThroughCount ? seeThroughFirst : 0;
                                         scene.count = seeThroughCount;
+                                        if (sunShadow) {
+                                            scene.toSun = {sunLight.toSun.x, sunLight.toSun.y, sunLight.toSun.z};
+                                            scene.sunShadow = sunLight.shadow;
+                                        }
                                         overlay.setSceneDepth(std::move(scene));
                                         seeOn = true;
                                         ++seeGiven;
@@ -17795,6 +17838,11 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyWallView(void* v) { return se
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyLedgeJump(void* v) { return setLive(v, 0, 1, 5596, ledgeJumpNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunchWeb(void* v) { return setLive(v, 0, 1, 5597, punchWebNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowWatch(void* v) { return setLive(v, 0, 1, 5598, throwWatchNow, asU32); }
+// HERO VR 0.0.78 WORLD LIGHT: world_light (0 game, 1 game_soft, 2 studio), world_shadow (0 on, 1 vehicles, 2 off),
+// world_light_gain (percent, 25-400).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLight(void* v) { return setLive(v, 0, 2, 5640, worldLightNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldShadow(void* v) { return setLive(v, 0, 2, 5641, worldShadowNow, asU32); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyWorldLightGain(void* v) { return setLive(v, 25, 400, 5642, worldLightGainNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWristMapSize(void* v) {
     return setLive(v, story077h::sizeLow, story077h::sizeHigh, 5582, wristMapSizeCm, asU32);
 }

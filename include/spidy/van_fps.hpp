@@ -29,6 +29,8 @@ inline constexpr uint32_t preparedKept = 6;
 // jumped over .5 m or the light turned (the car turned) over .1 in model space (a teleport, a seat change).
 inline constexpr uint32_t satinSlices = 4;
 inline constexpr float satinRelightEye = .5f, satinRelightLight = .1f;
+// HERO VR 0.0.78 WORLD LIGHT: the kept satin relit when the game's sun + sky colour moved this much (summed lengths).
+inline constexpr float satinRelightColour = .03f;
 
 // Whether o + ex x + ey y + ez z is a turn (or mirror) with one scale, in range: then normals turn
 // with it and the prepared path is exact.

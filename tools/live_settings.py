@@ -601,6 +601,16 @@ SETTINGS = {
     'throw_watch': ((0, 1), 'SpidyThrowWatch', "THROW WATCH {} (0 on, the default: each LB + RB throw logs the boss's HP "
                     "as it starts and over the next 2 s, the left stick sent, the throw's aim and the boss's distance; "
                     "1 off: no such log) - live, no restart needed"),
+    # HERO VR 0.0.78 WORLD LIGHT (include/spidy/world_light.hpp, stereo_probe.cpp's frame-light hook)
+    'world_light': ((0, 2), 'SpidyWorldLight', "WORLD LIGHT {} (0 game, the default: the mod's heroes, suits, props "
+                    "and vehicles are lit by the game's own sun, sky and exposure of the frame; 1 game_soft: the same "
+                    "with lighter shadow sides; 2 studio: the fixed light of 0.0.77) - live, no restart needed"),
+    'world_shadow': ((0, 2), 'SpidyWorldShadow', "WORLD SHADOW {} (0 on, the default: where the game's buildings, cars "
+                     "and props block its sun, the models lose that sun light, from the eyes' scene depth watched "
+                     "every frame; 1 vehicles: only while a see-through car's depth is watched anyway, cheaper; 2 off) "
+                     "- live, no restart needed"),
+    'world_light_gain': ((25, 400), 'SpidyWorldLightGain', "WORLD LIGHT GAIN {} (how bright the game's light makes "
+                         "the models, percent 25-400, default 100) - live, no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -797,6 +807,8 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'ledge_jump': ('all', 'game'),  # HERO VR 0.0.77 CUT7
                 'punch_web': ('on', 'off'),  # HERO VR 0.0.77 CUT7
                 'throw_watch': ('on', 'off'),  # HERO VR 0.0.77 CUT8
+                'world_light': ('game', 'game_soft', 'studio'),  # HERO VR 0.0.78 WORLD LIGHT
+                'world_shadow': ('on', 'vehicles', 'off'),  # HERO VR 0.0.78 WORLD LIGHT
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -1080,6 +1092,8 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'ledge_jump': {'all': 0, 'game': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'punch_web': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'throw_watch': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT8
+           'world_light': {'game': 0, 'game_soft': 1, 'studio': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
+           'world_shadow': {'on': 0, 'vehicles': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.78
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1431,6 +1445,7 @@ START_ONLY = START_ONLY + ('wrist_map', 'wrist_map_size', 'wrist_map_at', 'wrist
 START_ONLY = START_ONLY + ('wrist_map_source', 'wrist_map_holo', 'see_through_depth', 'diag_logs',
                            'cut_note', 'wall_view', 'ledge_jump', 'punch_web')  # HERO VR 0.0.77 CUT7: kept between sessions
 START_ONLY = START_ONLY + ('throw_watch',)  # HERO VR 0.0.77 CUT8: kept between sessions
+START_ONLY = START_ONLY + ('world_light', 'world_shadow', 'world_light_gain')  # HERO VR 0.0.78 WORLD LIGHT: kept
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

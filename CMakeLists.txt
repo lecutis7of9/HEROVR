@@ -57,7 +57,7 @@ add_library(spidy_core src/swing.cpp src/web_grab.cpp src/lab_world.cpp src/lab_
             src/impact_sound.cpp src/prompt_buttons.cpp src/gadget_wheel.cpp src/spider_sense.cpp src/phone.cpp
             src/body_haptics.cpp src/tech_marks.cpp src/wrist_hud.cpp src/music_player.cpp
             src/calibration_art.cpp src/calibration_panel.cpp src/holo_calibration.cpp src/health_ring.cpp src/sfx.cpp
-            src/hero007_visual.cpp src/van_fps.cpp
+            src/hero007_visual.cpp src/van_fps.cpp src/world_light.cpp
             src/hero072_visual.cpp
             src/game_body.cpp
             src/mesh_model.cpp
@@ -239,6 +239,10 @@ add_test(NAME cut8 COMMAND spidy_cut8_tests)
 add_executable(spidy_cut9_tests tests/cut9_tests.cpp) # HERO VR 0.0.78 CUT9
 target_include_directories(spidy_cut9_tests PRIVATE include)
 add_test(NAME cut9 COMMAND spidy_cut9_tests)
+# HERO VR 0.0.78 WORLD LIGHT (include/spidy/world_light.hpp): the game's frame light, STUDIO unchanged.
+add_executable(spidy_world_light_tests tests/world_light_tests.cpp src/world_light.cpp)
+target_include_directories(spidy_world_light_tests PRIVATE include)
+add_test(NAME world_light COMMAND spidy_world_light_tests)
 # HERO VR 0.0.77 CUTFIX (include/spidy/cutscene077_gate.hpp): the scene clock without the game-time hook, refusals.
 add_executable(spidy_cutscene077_gate_tests tests/cutscene077_gate_tests.cpp)
 target_include_directories(spidy_cutscene077_gate_tests PRIVATE include)

@@ -265,6 +265,8 @@ AIM MARKERS in VR settings (or *Aim markers* in the launcher) hides them.
 | The picture breaks up | Close the game and start it from the launcher, which gives it the render memory VR needs. |
 | Low frame rate | Lower the game's own graphics settings (players get good frame rates on a GTX 1080 that way). Set *Upscaling* in the launcher to Balanced or Performance, then lower *Render resolution* or the streaming quality in Virtual Desktop. On a laptop, plug it in and choose its highest performance mode. 90 Hz paces more evenly than 120 Hz. |
 | Blurry edges | Set *Upscaling* in the launcher to High or Off, then raise *Render resolution* above 100% (try 125%); both cost frame rate and memory. |
+| Stuck in place after an immersive cutscene | Each scene's end now lets go of everything the scene held (its hold, a QTE freeze, a menu press). If gameplay is back, the stick is pushed and Spidey has not moved for 4 s within 2 minutes of a scene, every cutscene hold is released and the game gets a neutral pad for a moment; the console logs `CUTFIX3 SCENE END` and `CUTFIX3 STUCK WATCH`. |
+| The title menu over the immersive world | With cutscenes on immersive, the title screen's menu (its saves, CONTINUE, its dialogs) is the game's own frame as the VR screen shows it: whole, full opacity, centred, the VR screen's size, the world around it. The console logs `CUTFIX3 PANEL: menu`. |
 | Web balls fly when you meant to reel | The trigger (the grip with WEB BUTTON: TRIGGER) reels only while that hand's web is attached; on a hand without a web it shoots. |
 
 More fixes are in the [players' guide](docs/PLAYERS.md). When you report a

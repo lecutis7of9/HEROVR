@@ -66,10 +66,14 @@ class Wiring(unittest.TestCase):
         self.assertIn('overlay.clearInset();', body)
         self.assertIn('catch (...)', body)
         self.assertIn('!saved->stereoScreen', body)
-        self.assertEqual(g.count('overlay.setInset('), 1)  # nowhere else
+        # Elsewhere only HERO VR 0.0.77 CUTSCENES' two (the scene's words, on the screen or the scene's panel),
+        # both in the screen's own branches (showScreen), never in play.
+        self.assertEqual(g.count('overlay.setInset('), 3)
+        for at in (g.index('if (showScreen && cutImmersive'), g.index('if (strip3d && !overlayFault)')):
+            self.assertLess(at, g.index('overlay.setInset(', at))
         r = src('src/d3d12_renderer.cpp')
         self.assertIn('insetFault_ = std::string("PROMPT WINDOW off: ")', r)
-        self.assertIn('Constants.Num32BitValues = 6;', r)
+        self.assertIn('Constants.Num32BitValues = 12;', r)  # 0.0.77 CUTSCENES: the crop and the key
         self.assertIn('float2 targetOrigin', r)
 
     def test_old_prompt_window_lines(self):

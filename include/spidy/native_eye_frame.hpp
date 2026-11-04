@@ -14,7 +14,10 @@ struct EyePose {
 }; // left, right, down, up
 // enabled: 0 off; 1 the tracked eyes; 2 the flat screen, both eyes the engine's
 // own camera; 3 the game screen in stereo, the two eyes that camera set apart
-// (Stereo below, carried in the first eye's fov).
+// (Stereo below, carried in the first eye's fov); 4 HERO VR 0.0.77 CUTSCENES IMMERSIVE: the
+// tracked eyes put on the engine's own camera of the frame rendered (each eye's
+// world is its pose relative to that camera, rows as native_view's, within 3 m;
+// fov as in 1), the headset's lens; no body, no head view.
 struct Command {
     uint32_t magic = 0x53455043, version = 2, bytes = sizeof(Command), enabled{};
     uint64_t serial{};
@@ -74,7 +77,7 @@ inline bool valid(const Stereo& s) {
            s.separation <= .1f;
 }
 inline bool valid(const Command& c) {
-    if (c.magic != 0x53455043 || c.version != 2 || c.bytes != sizeof(c) || c.enabled > 3 || !c.serial ||
+    if (c.magic != 0x53455043 || c.version != 2 || c.bytes != sizeof(c) || c.enabled > 4 || !c.serial ||
         c.leaseMs > 500 || c.reserved || c.anchored > 1 || !finite(c.anchor) || std::abs(c.anchor.x) > 1e6f ||
         std::abs(c.anchor.y) > 1e6f || std::abs(c.anchor.z) > 1e6f)
         return false;
@@ -95,6 +98,10 @@ inline bool valid(const Command& c) {
         if (e.fov[0] >= -.01f || e.fov[1] <= .01f || e.fov[2] >= -.01f || e.fov[3] <= .01f)
             return false;
     }
+    if (c.enabled == 4)
+        for (const auto& e : c.eyes)
+            if (std::abs(e.world[12]) > 3 || std::abs(e.world[13]) > 3 || std::abs(e.world[14]) > 3)
+                return false;
     // Reject a malformed pair rather than rendering unrelated cameras.
     const auto& l = c.eyes[0].world;
     const auto& r = c.eyes[1].world;

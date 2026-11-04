@@ -10019,7 +10019,8 @@ int main() {
         native_eyes::Command command;
         command.serial=1;command.enabled=2;
         check(native_eyes::valid(command),"native flat camera command rejected");
-        command.enabled=4;check(!native_eyes::valid(command),"unknown camera mode accepted");
+        command.enabled=5;check(!native_eyes::valid(command),"unknown camera mode accepted");
+        command.enabled=4;check(!native_eyes::valid(command),"an immersive cutscene command without its eyes accepted");
         command.enabled=2;command.leaseMs=0;
         check(!native_eyes::valid(command),"flat camera without a lease accepted");
     });

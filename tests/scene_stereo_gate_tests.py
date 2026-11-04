@@ -22,11 +22,13 @@ class SceneStereoGate(unittest.TestCase):
         calls = re.findall(r'scenePanel\.wanted\((.*?)GetTickCount64\(\)\);', s, re.S)
         self.assertEqual(len(calls), 1, 'one scene request')
         c = re.sub(r'\s+', ' ', calls[0])
-        self.assertIn('sceneStereoAsked(', c)
+        # HERO VR 0.0.77 CUTSCENES: cutscene077::stereoAsked is sceneStereoAsked unless live.txt cutscenes = 3d
+        # (tests/cutscene077_tests.cpp), which feeds the panel signal from the subtitle strip instead of the hook.
+        self.assertRegex(c, r'(sceneStereoAsked|cutscene077::stereoAsked)\(')
         self.assertIn('native_hud::panelHooked()', c)
         self.assertIn('values.screenDepth > 0', c)
         # the stereo command is sent only inside the scene branch (!vrPlay after `if (!vrPlay && !scene) return`)
-        self.assertIn('if (!vrPlay && !scene)', s)
+        self.assertIn('if (!vrPlay && !scene && !immersiveScene)', s)  # 0.0.77 CUTSCENES: or the immersive scene
 
     def test_hook_flag_follows_the_real_hook(self):
         p = read('src/stereo_probe.cpp')

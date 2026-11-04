@@ -2,6 +2,31 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (1) - CUTSCENES: 3D and immersive scenes, opt-in, with story (9)'s heal and crawl (TEST build, not released)
+
+A separate test build on hero-0.0.77-story (9) (5ec540e: HEAL ANYWHERE and the floor crawl's left stick, both kept:
+an immersive scene never changes the pad's mapping, so SCREEN HEAL's D-pad down and the crawl's raw stick work as on
+story (9)). New live.txt `cutscenes` (SpidyCutscenes 5571; include/spidy/cutscene077.hpp):
+- **`flat` (the default)**: the game's frame on the virtual screen, exactly as before. Default because both new
+  modes depend on CANDIDATE values only a run on Spider-Man 2 can confirm; flat makes nothing worse than today.
+- **`3d` (GAME SCREEN 3D)**: the game camera's stereo pair on the virtual screen. Spider-Man 2 has no HUD panel hook,
+  so the panel signal is the game frame's subtitle strip landing on the pair: the pair waits 250 ms for its first
+  image, keeps its 200 ms panel rule, and gives up stereo for that scene after 1 s with no strip. Never asked for in
+  gameplay or VIEW: GAME SCREEN.
+- **`immersive`**: native eye mode 4. On the scene's first frame the head is levelled (yaw only); each frame each
+  tracked eye, relative to that head, is placed on the game's scene camera (main view base+0xc2ca220, CONFIRMED) with
+  the headset's own lens (0x2c75560 / 0x2c76310, CONFIRMED). No hands, webs, markers or body. The Xbox mapping stays.
+  While the game clock is frozen (a QTE) and no menu was pressed the scene holds, the whole frame's prompts keyed on
+  the see-through panel; the menu button (a pause), or a freeze over 15 s, goes to the screen. Subtitles on the
+  panel otherwise. A refused or failed eye command, or a panel fault, turns only that part off for the session
+  (never a crash, never the flatscreen fallback).
+- CANDIDATE: the subtitle strip's place in the frame (12-88% across, 78-97% down), the 15 s QTE bound, the 1 s menu
+  reach, the key's thresholds, the panel's place (about 19 degrees below eye level, 2 m out), mode 4 rendering on SM2 itself.
+- Diagnostics: every 10 s while `cutscenes` is not flat, "HERO VR 0.0.77 CUTSCENES <mode>: 3d pairs asked / shown,
+  strips set / drawn / missed; immersive frames, starts, commands, refused, faults, shown, waits, eyes placed,
+  panels set / drawn / missed, QTE frames, menus", plus any "... OFF (fault)". The run report calls the immersive
+  scene's frames `cutscene_immersive`.
+
 ## hero-0.0.77-story (9) - HEAL ANYWHERE: the right stick heals on the game's card too; the crawl's stick (TEST build, not released)
 
 From the player's story7 run at the walkthrough's 13:40 (the ceiling falls, the second spider crawls out hurt and the

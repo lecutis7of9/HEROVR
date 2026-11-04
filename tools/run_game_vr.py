@@ -734,7 +734,7 @@ def watch_stop_event(name):
 
 
 # game_screen_3d: the game screen with a scene's own two eye images on it (a cutscene in stereo).
-PRESENTATIONS = {0: 'none', 1: 'immersive', 2: 'flat', 3: 'game_screen', 4: 'game_screen_3d'}
+PRESENTATIONS = {0: 'none', 1: 'immersive', 2: 'flat', 3: 'game_screen', 4: 'game_screen_3d', 5: 'cutscene_immersive'}
 # Why a frame had no gameplay (game_xr.cpp GateReason).
 GATE_REASONS = ((1, 'no_player'), (2, 'bridge_stopped'), (4, 'no_camera_commit'), (8, 'other_camera'),
                 (16, 'tracking'))
@@ -788,7 +788,7 @@ def pad_ignored(watch, sample, quiet=5):
     if sample.get('pad_reads') != watch['reads']:
         watch.update(reads=sample.get('pad_reads'), since=sample['seconds'])
         return False
-    if sample.get('presentation') in ('game_screen', 'game_screen_3d') and \
+    if sample.get('presentation') in ('game_screen', 'game_screen_3d', 'cutscene_immersive') and \
             sample.get('pad_buttons', '0x0') != '0x0' and \
             sample['seconds']-watch['since'] >= quiet:
         watch['warned'] = True

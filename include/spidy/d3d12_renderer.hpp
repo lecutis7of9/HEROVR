@@ -127,6 +127,12 @@ class D3D12Renderer {
         DXGI_FORMAT view = DXGI_FORMAT_UNKNOWN;
         bool linear{};
         float rect[2][4]{};
+        // HERO VR 0.0.77 CUTSCENES: the part of the source drawn {u0, v0, u1, v1} (all of it by default),
+        // and keyed: a see-through panel (a glass of `backdrop` darkness, the source's bright colourless
+        // pixels on it, cutscene077.hpp keyOf) blended over the image instead of covering it.
+        float crop[4]{0, 0, 1, 1};
+        bool keyed{};
+        float backdrop{};
     };
     void setInset(Inset inset) noexcept;
     void clearInset() noexcept;
@@ -212,6 +218,7 @@ class D3D12Renderer {
     ComPtr<ID3D12DescriptorHeap> srv_;
     ComPtr<ID3D12RootSignature> blitRoot_;
     ComPtr<ID3D12PipelineState> blitPipeline_;
+    ComPtr<ID3D12PipelineState> keyPipeline_; // HERO VR 0.0.77 CUTSCENES: the see-through inset
     DXGI_FORMAT blitFormat_ = DXGI_FORMAT_UNKNOWN;
     // HERO VR 0.0.77 PROMPT WINDOW: the inset, the one it drew last (kept until the GPU is done), its
     // own shader-visible descriptor and whether it failed.

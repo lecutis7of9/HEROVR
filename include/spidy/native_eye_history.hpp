@@ -154,6 +154,10 @@ struct NativeEyeFrame {
     // The game screen in stereo (eye command 3): the pair goes on the screen,
     // the left image for the left eye and the right one for the right.
     bool stereoScreen{};
+    // HERO VR 0.0.77 CUTSCENES immersive (eye command 4): the pair is shown at the tracked eyes it was asked for,
+    // with the game frame's words on a see-through panel - the whole frame's keyed words while a QTE holds.
+    bool cutscene{};
+    bool cutscenePrompts{};
     Pose screenPose{};
     float screenAspect = 16.f / 9;
 };

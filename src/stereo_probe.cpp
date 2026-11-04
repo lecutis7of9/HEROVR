@@ -6,6 +6,7 @@
 #include "spidy/eye_bloom.hpp"
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/jitter_log.hpp" // 0.0.76 JITTER FIX
+#include "spidy/cutscene077.hpp" // HERO VR 0.0.77 CUTSCENES
 #include "spidy/eye_cover.hpp" // 0.0.74 test 10 WINDOW EDGES
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
@@ -61,6 +62,10 @@
 #endif
 using namespace spidy;
 namespace shadowCamera = spidy::shadow_camera;
+// HERO VR 0.0.77 CUTSCENES IMMERSIVE: eyes placed on the game's camera (mode 4), for its diagnostics line.
+namespace spidy::cutscene077 {
+std::atomic<uint64_t> eyesPlaced{};
+}
 using native_view::Descriptor;
 // NEAR CLIP's near plane for the head's and the eyes' lenses in immersive VR
 // (near_clip.hpp), metres: the XR worker sets it, each frame's lenses read it.
@@ -2950,7 +2955,9 @@ void placeEyes() {
     // that screen (placeScreenHud, earlier in the frame): without the panel
     // (a pause menu: the game places none) the movie stays in the game's own
     // frame, which the headset then shows.
-    if (render && enabled && controlled && (config.createViews & 4) &&
+    // HERO VR 0.0.77 CUTSCENES IMMERSIVE (mode 4): the movie stays in the game's own frame, whose
+    // subtitles and prompts the headset copies onto its see-through panel.
+    if (render && enabled && controlled && (config.createViews & 4) && desired.enabled != 4 &&
         (desired.enabled != 3 || screenHudFrame == frameIndex))
         native_hud::eyesShown(desired.enabled == 3);
     latchedHide = latchedImmersive && !native_body::drawn();
@@ -3062,7 +3069,8 @@ void placeEyes() {
         if (auto eye = slot.load(); eye && owned(eye)) {
             auto descriptor = main;
             const unsigned index = eye == eyes[0].load() ? 0 : 1;
-            if (controlled && desired.enabled >= 2) {
+            // HERO VR 0.0.77 CUTSCENES: mode 4 (immersive) takes the tracked lens path below.
+            if (controlled && (desired.enabled == 2 || desired.enabled == 3)) {
                 // The game screen in stereo: the game's camera set apart
                 // sideways, each lens shifted the other way (stereoEyes).
                 const bool stereo = desired.enabled == 3;
@@ -3101,6 +3109,14 @@ void placeEyes() {
             auto pose = controlled
                             ? desired.eyes[index].world
                             : native_view::relativePose(main.pose(), {{index == 0 ? -.032f : .032f, 0, 0}, {}});
+            // HERO VR 0.0.77 CUTSCENES IMMERSIVE (mode 4, cutscene077.hpp): the eye's pose relative to the level
+            // head put on this frame's own camera (main: base+0xc2ca220, CONFIRMED), so a cut of the scene's
+            // camera moves the eyes with it in the very frame it is rendered. Not a rotation: main's camera.
+            if (controlled && desired.enabled == 4) {
+                const auto onCamera = cutscene077::onCamera(desired.eyes[index].world, main.pose());
+                pose = native_view::validPose(onCamera) ? onCamera : main.pose();
+                cutscene077::eyesPlaced.fetch_add(1, std::memory_order_relaxed);
+            }
             pose[12] += placed.offset.x;
             pose[13] += placed.offset.y;
             pose[14] += placed.offset.z;
@@ -3133,7 +3149,7 @@ void placeEyes() {
             ReleaseSRWLockExclusive(&jobLock);
         }
     if (render && mirrorView.load())
-        mirrorPlace(main, controlled ? desired.eyes[0].world : main.pose());
+        mirrorPlace(main, controlled && desired.enabled != 4 ? desired.eyes[0].world : main.pose());
 }
 // A KeyLightContext's cascades: +d and +f count them, +150 holds one each
 // 0x3e0 bytes, with its box's half sizes at +170 and its transform at +198.

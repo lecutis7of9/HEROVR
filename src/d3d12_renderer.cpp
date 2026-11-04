@@ -1279,7 +1279,7 @@ void D3D12Renderer::prepareBlit(DXGI_FORMAT targetFormat) {
         parameters[0].DescriptorTable = {1, &range};
         parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         parameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[1].Constants.Num32BitValues = 6; // HERO VR 0.0.77: + targetOrigin (the PROMPT WINDOW inset)
+        parameters[1].Constants.Num32BitValues = 12; // HERO VR 0.0.77: + targetOrigin (the PROMPT WINDOW inset), + crop, key (CUTSCENES)
         parameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         D3D12_STATIC_SAMPLER_DESC sampler{};
         sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1305,7 +1305,8 @@ void D3D12Renderer::prepareBlit(DXGI_FORMAT targetFormat) {
         const char* shader = R"(
 Texture2D source : register(t0);
 SamplerState scaled : register(s0);
-cbuffer Mode : register(b0) { uint linearSource; uint srgbTarget; float2 targetPixel; float2 targetOrigin; };
+cbuffer Mode : register(b0) { uint linearSource; uint srgbTarget; float2 targetPixel; float2 targetOrigin;
+                              float2 uvOrigin; float2 uvScale; uint keyed; float backdrop; };
 float4 vs(uint id : SV_VertexID) : SV_POSITION {
     const float2 corner = float2((id << 1) & 2, id & 2);
     return float4(corner * float2(2, -2) + float2(-1, 1), 0, 1);
@@ -1317,11 +1318,21 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
     // screen-covering triangle drifts off the source's texel centres on
     // large targets (4608 x 4896 eyes changed copied values by 2 levels).
     // HERO VR 0.0.77: from the drawn rectangle's corner (0 for a whole-target blit).
-    float3 c = source.SampleLevel(scaled, (position.xy - targetOrigin) * targetPixel, 0).rgb;
+    // HERO VR 0.0.77 CUTSCENES: from a crop of the source (0, 1: all of it).
+    float3 c = source.SampleLevel(scaled, uvOrigin + (position.xy - targetOrigin) * targetPixel * uvScale, 0).rgb;
+    // The key (cutscene077.hpp keyOf) reads the display values: bright, colourless pixels (words, icons).
+    const float3 shown = linearSource ? encode(saturate(c)) : saturate(c);
     if (linearSource)
         c = srgbTarget ? max(c, 0) : encode(saturate(c));
     else if (srgbTarget)
         c = decode(saturate(c));
+    if (keyed) {
+        const float lum = dot(shown, float3(0.2126, 0.7152, 0.0722));
+        const float sat = max(max(shown.r, shown.g), shown.b) - min(min(shown.r, shown.g), shown.b);
+        const float k = smoothstep(0.62, 0.82, lum) * (1 - smoothstep(0.18, 0.35, sat));
+        const float a = max(k, saturate(backdrop));
+        return float4(a > 0 ? c * (k / a) : float3(0, 0, 0), a);
+    }
     return float4(c, 1);
 }
 )";
@@ -1358,6 +1369,17 @@ float4 ps(float4 position : SV_POSITION) : SV_TARGET {
         blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         blitPipeline_.Reset();
         hr(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&blitPipeline_)), "Create blit pipeline");
+        // HERO VR 0.0.77 CUTSCENES: the see-through panel's pipeline, the same shader blended over the image
+        // (the target's alpha kept).
+        blend.BlendEnable = TRUE;
+        blend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        blend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        blend.SrcBlendAlpha = D3D12_BLEND_ZERO;
+        blend.DestBlendAlpha = D3D12_BLEND_ONE;
+        // Its failure leaves only the panel out (recordInset draws no keyed inset without it), never the blit.
+        keyPipeline_.Reset();
+        if (FAILED(device_->CreateGraphicsPipelineState(&p, IID_PPV_ARGS(&keyPipeline_))))
+            keyPipeline_.Reset();
         blitFormat_ = targetFormat;
     }
 }
@@ -1381,8 +1403,9 @@ void D3D12Renderer::recordBlit(ID3D12Resource* source, DXGI_FORMAT sourceView, b
     list_->SetGraphicsRootDescriptorTable(0, srv_->GetGPUDescriptorHandleForHeapStart());
     const UINT mode[] = {linearSource ? 1u : 0u, srgb(target.format) ? 1u : 0u,
                          std::bit_cast<UINT>(1.f / static_cast<float>(target.width)),
-                         std::bit_cast<UINT>(1.f / static_cast<float>(target.height)), 0u, 0u};
-    list_->SetGraphicsRoot32BitConstants(1, 6, mode, 0);
+                         std::bit_cast<UINT>(1.f / static_cast<float>(target.height)), 0u, 0u,
+                         0u, 0u, std::bit_cast<UINT>(1.f), std::bit_cast<UINT>(1.f), 0u, 0u};
+    list_->SetGraphicsRoot32BitConstants(1, 12, mode, 0);
     list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
     D3D12_VIEWPORT viewport{0, 0, static_cast<float>(target.width), static_cast<float>(target.height), 0, 1};
     D3D12_RECT rect{0, 0, static_cast<LONG>(target.width), static_cast<LONG>(target.height)};
@@ -1436,15 +1459,24 @@ bool D3D12Renderer::recordInset(const ViewTarget& target, D3D12_CPU_DESCRIPTOR_H
     sv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     sv.Texture2D.MipLevels = 1;
     device_->CreateShaderResourceView(insetDrawn_.source.Get(), &sv, insetHeap_->GetCPUDescriptorHandleForHeapStart());
-    list_->SetPipelineState(blitPipeline_.Get());
+    // HERO VR 0.0.77 CUTSCENES: a crop of the source (whole: 0, 0, 1, 1) and the see-through key.
+    const float* crop = insetDrawn_.crop;
+    if (!(crop[2] > crop[0]) || !(crop[3] > crop[1]) || crop[0] < 0 || crop[1] < 0 || crop[2] > 1 || crop[3] > 1)
+        return false;
+    if (insetDrawn_.keyed && !keyPipeline_)
+        return false;
+    list_->SetPipelineState(insetDrawn_.keyed ? keyPipeline_.Get() : blitPipeline_.Get());
     list_->SetGraphicsRootSignature(blitRoot_.Get());
     ID3D12DescriptorHeap* heaps[] = {insetHeap_.Get()};
     list_->SetDescriptorHeaps(1, heaps);
     list_->SetGraphicsRootDescriptorTable(0, insetHeap_->GetGPUDescriptorHandleForHeapStart());
     const UINT mode[] = {insetDrawn_.linear ? 1u : 0u, srgb(target.format) ? 1u : 0u,
                          std::bit_cast<UINT>(1.f / (x1 - x0)), std::bit_cast<UINT>(1.f / (y1 - y0)),
-                         std::bit_cast<UINT>(x0), std::bit_cast<UINT>(y0)};
-    list_->SetGraphicsRoot32BitConstants(1, 6, mode, 0);
+                         std::bit_cast<UINT>(x0), std::bit_cast<UINT>(y0),
+                         std::bit_cast<UINT>(crop[0]), std::bit_cast<UINT>(crop[1]),
+                         std::bit_cast<UINT>(crop[2] - crop[0]), std::bit_cast<UINT>(crop[3] - crop[1]),
+                         insetDrawn_.keyed ? 1u : 0u, std::bit_cast<UINT>(insetDrawn_.backdrop)};
+    list_->SetGraphicsRoot32BitConstants(1, 12, mode, 0);
     list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
     D3D12_VIEWPORT viewport{x0, y0, x1 - x0, y1 - y0, 0, 1};
     D3D12_RECT rect{static_cast<LONG>(x0), static_cast<LONG>(y0), static_cast<LONG>(x1), static_cast<LONG>(y1)};

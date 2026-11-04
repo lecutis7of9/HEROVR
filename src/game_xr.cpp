@@ -172,6 +172,7 @@
 #include "spidy/wall_stick.hpp"
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
+#include "spidy/cutscene077.hpp"
 #include <algorithm>
 #include <cctype>
 #include <atomic>
@@ -204,6 +205,10 @@
 #include <thread>
 #include <wincodec.h> // Version 0.0.72 REAL MODELS: the models' PNG / JPEG textures
 using namespace spidy;
+// HERO VR 0.0.77 CUTSCENES: the immersive eyes stereo_probe.cpp put on the game's camera (the same DLL).
+namespace spidy::cutscene077 {
+extern std::atomic<uint64_t> eyesPlaced;
+}
 struct XrConfig {
     uint32_t magic = 0x53585243, version = 24, bytes = sizeof(XrConfig), pid{};
     // record and mover are no longer used: VR starts with the game, before
@@ -1376,6 +1381,10 @@ std::atomic<uint32_t> xButtonNow{story077e::xGame};
 // HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal - 0 on (the default: the right stick held
 // down is the game's heal on the game screen too, while hurt), 1 off (the game screen's right stick is its own).
 std::atomic<uint32_t> screenHealNow{story077f::screenHealOn};
+// HERO VR 0.0.77 CUTSCENES (cutscene077.hpp): live.txt cutscenes - 0 flat (the default: the game's frame on the
+// virtual screen, as before), 1 3d (GAME SCREEN 3D with the subtitle strip), 2 immersive (the tracked eyes on the
+// scene's camera, the words on a see-through panel).
+std::atomic<uint32_t> cutscenesNow{cutscene077::flat};
 std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 on (default), 1 off, 2 strong
 uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
 uint64_t bossClapBlows{};  // and the claps sent at a boss
@@ -3028,6 +3037,20 @@ DWORD WINAPI run(void*) {
         // and whether that scene's stereo eyes have the HUD's panel.
         SceneClock sceneClock;
         ScenePanel scenePanel;
+        // HERO VR 0.0.77 CUTSCENES (cutscene077.hpp): when the 3D screen's subtitle strip last landed on its pair
+        // (the panel signal SM2 has no HUD hook for), the immersive scene's hold and level head, the counts its
+        // diagnostics line gives every 10 s, and whether a fault turned a mode off for this session (the flat
+        // screen then, as before).
+        cutscene077::StripClock stripClock;
+        cutscene077::ImmersiveHold immersiveHold;
+        Pose cutLevel{};
+        struct CutsceneCounts {
+            uint64_t pairsAsked, pairsShown, stripsSet, stripsDrawn, stripMisses, immersiveFrames, starts,
+                commands, commandRefused, commandFaults, shown, waits, panelsSet, panelsDrawn, panelMisses,
+                promptFrames;
+        } cutCounts{};
+        uint64_t cutLogMs{};
+        bool cutImmersiveFault{}, cutPanelFault{}, cutStripFault{};
         bool flatScreen{};
         Pose screenPose{};
         const auto dimensions = runtime.eyeDimensions();
@@ -3559,6 +3582,8 @@ DWORD WINAPI run(void*) {
             // This frame shows the game's presented frame on the screen, or
             // (stereoScene) the scene's own two eye images once there are some.
             bool showScreen{}, stereoScene{};
+            // HERO VR 0.0.77 CUTSCENES immersive: this frame asked for (and so may show) the scene's tracked pair.
+            bool cutImmersive{};
             if (!steamGuarded && GetTickCount64() >= steamRetryMs) {
                 const uint32_t code = game_steam::install(config.base);
                 steamGuarded = !code;
@@ -5349,10 +5374,65 @@ DWORD WINAPI run(void*) {
                     const auto clock = game_time::telemetry();
                     const bool timeRuns =
                         sceneClock.running(clock.installed && clock.gameFrame > 0, GetTickCount64());
+                    // HERO VR 0.0.77 CUTSCENES (live.txt cutscenes, cutscene077.hpp): 3d asks for the pair without
+                    // the HUD hook (never in gameplay or VIEW: GAME SCREEN), its panel signal the subtitle strip
+                    // landing on the pair (or the HUD panel, where hooked): the 200 ms and 1 s rules as before.
+                    const uint32_t cutMode = cutStripFault && cutscenesNow.load() == cutscene077::screen3d
+                                                 ? cutscene077::flat
+                                                 : cutscenesNow.load();
+                    const uint64_t cutNowMs = GetTickCount64();
                     const bool scene = scenePanel.wanted(
-                        sceneStereoAsked(screen && player.hero && bridgeRunning && timeRuns, values.screenDepth > 0,
-                                         native_hud::panelHooked()),
-                        native_hud::onScreen(sceneHoldMs), GetTickCount64());
+                        cutscene077::stereoAsked(screen && player.hero && bridgeRunning && timeRuns &&
+                                                     (cutMode != cutscene077::screen3d || (!gameplay && !flatScreen)),
+                                                 values.screenDepth > 0, native_hud::panelHooked(), cutMode),
+                        native_hud::onScreen(sceneHoldMs) || stripClock.recent(cutNowMs, sceneHoldMs), cutNowMs);
+                    if (!scene)
+                        stripClock.reset();
+                    cutCounts.pairsAsked += scene && cutMode == cutscene077::screen3d;
+                    // Immersive: a scene the game plays on its own camera (the screen is up, a player, the bridge,
+                    // not gameplay, not VIEW: GAME SCREEN, a tracked head), its clock running to start; a frozen
+                    // clock (a QTE) holds it unless the menu button went with it (a pause: the screen).
+                    const bool immersiveScene = immersiveHold.update(
+                        cutMode == cutscene077::immersive && !cutImmersiveFault && screen && player.hero &&
+                            bridgeRunning && !gameplay && !flatScreen && validTrackedPose(frame.head) &&
+                            !(gpuStarted && native_gpu::eyesLost()),
+                        timeRuns, (frame.buttons & buttonMenu) != 0, cutNowMs);
+                    if (immersiveHold.started()) {
+                        cutLevel = cutscene077::levelHead(frame.head);
+                        ++cutCounts.starts;
+                    }
+                    cutCounts.immersiveFrames += immersiveScene;
+                    cutCounts.promptFrames += immersiveScene && immersiveHold.frozen();
+                    if (cutMode != cutscene077::flat && (!cutLogMs || cutNowMs - cutLogMs >= 10000)) {
+                        cutLogMs = cutNowMs;
+                        char line[640];
+                        sprintf_s(line,
+                                  "HERO VR 0.0.77 CUTSCENES %s: 3d pairs asked %llu shown %llu, strips set %llu "
+                                  "drawn %llu missed %llu; immersive frames %llu starts %llu commands %llu refused "
+                                  "%llu faults %llu shown %llu waits %llu eyes placed %llu, panels set %llu drawn "
+                                  "%llu missed %llu, QTE frames %llu, menus %llu%s%s%s",
+                                  cutscene077::modeName(cutMode), static_cast<unsigned long long>(cutCounts.pairsAsked),
+                                  static_cast<unsigned long long>(cutCounts.pairsShown),
+                                  static_cast<unsigned long long>(cutCounts.stripsSet),
+                                  static_cast<unsigned long long>(cutCounts.stripsDrawn),
+                                  static_cast<unsigned long long>(cutCounts.stripMisses),
+                                  static_cast<unsigned long long>(cutCounts.immersiveFrames),
+                                  static_cast<unsigned long long>(cutCounts.starts),
+                                  static_cast<unsigned long long>(cutCounts.commands),
+                                  static_cast<unsigned long long>(cutCounts.commandRefused),
+                                  static_cast<unsigned long long>(cutCounts.commandFaults),
+                                  static_cast<unsigned long long>(cutCounts.shown),
+                                  static_cast<unsigned long long>(cutCounts.waits),
+                                  static_cast<unsigned long long>(cutscene077::eyesPlaced.load()),
+                                  static_cast<unsigned long long>(cutCounts.panelsSet),
+                                  static_cast<unsigned long long>(cutCounts.panelsDrawn),
+                                  static_cast<unsigned long long>(cutCounts.panelMisses),
+                                  static_cast<unsigned long long>(cutCounts.promptFrames),
+                                  static_cast<unsigned long long>(immersiveHold.menus()),
+                                  cutImmersiveFault ? ", IMMERSIVE OFF (fault)" : "",
+                                  cutPanelFault ? ", PANEL OFF (fault)" : "", cutStripFault ? ", STRIP OFF (fault)" : "");
+                        message(3, 0, line);
+                    }
                     // On the screen the controllers are the game's Xbox
                     // controller; in VR it gets Start (menu), Back (X) and
                     // the native walking, jumping, dodge and interact
@@ -11768,7 +11848,7 @@ DWORD WINAPI run(void*) {
                     // Without gameplay the screen shows the game's presented
                     // frame; until it is up, the last image stays. The eye
                     // views get no command and stop rendering meanwhile.
-                    if (!vrPlay && !scene)
+                    if (!vrPlay && !scene && !immersiveScene)
                         return screen || gameScreen.holding();
                     if (!nativeStarted) {
                         struct NativeConfig {
@@ -11844,6 +11924,51 @@ DWORD WINAPI run(void*) {
                         // Initialization can exceed one predicted display
                         // interval. A scene's screen keeps the game's frame.
                         return !vrPlay;
+                    }
+                    if (!vrPlay && immersiveScene) {
+                        // HERO VR 0.0.77 CUTSCENES immersive (native mode 4): each tracked eye relative to the
+                        // level head kept at the scene's first frame, with its own lens; stereo_probe.cpp puts it
+                        // on the camera of the frame it renders. A refused or failed command leaves the screen.
+                        native_eyes::Command eyes;
+                        eyes.enabled = 4;
+                        eyes.serial = ++serial;
+                        eyes.leaseMs = 250;
+                        bool usable = validTrackedPose(frame.eyes[0].pose) && validTrackedPose(frame.eyes[1].pose);
+                        for (unsigned i = 0; i < 2 && usable; ++i) {
+                            eyes.eyes[i].world =
+                                cutscene077::relativeMatrix(cutscene077::relativeEye(cutLevel, frame.eyes[i].pose));
+                            usable = cutscene077::relativeUsable(eyes.eyes[i].world);
+                            const auto& f = frame.eyes[i].fov;
+                            eyes.eyes[i].fov[0] = f.left;
+                            eyes.eyes[i].fov[1] = f.right;
+                            eyes.eyes[i].fov[2] = f.down;
+                            eyes.eyes[i].fov[3] = f.up;
+                        }
+                        if (!usable || !native_eyes::valid(eyes)) {
+                            ++cutCounts.commandRefused;
+                            return screen || gameScreen.holding();
+                        }
+                        NativeEyeFrame saved;
+                        saved.serial = eyes.serial;
+                        saved.motion.predictedDisplayTime = frame.predictedDisplayTime;
+                        saved.trackingEyes = frame.eyes;
+                        saved.cutscene = true;
+                        saved.cutscenePrompts = immersiveHold.frozen();
+                        saved.screenPose = screenPose;
+                        saved.screenAspect = SpidyFlatAspect();
+                        history.remember(saved);
+                        const auto code = SpidySetEyes(&eyes);
+                        if (code && code != 4003 && code != 4002) {
+                            // Never the end of VR: immersive scenes off this session, the screen as before.
+                            ++cutCounts.commandFaults;
+                            cutImmersiveFault = true;
+                            const auto text = "HERO VR 0.0.77 CUTSCENES: immersive scenes off this session (eye "
+                                              "command " + std::to_string(code) + "); cutscenes stay on the screen";
+                            message(3, 0, text.c_str());
+                        }
+                        cutCounts.commands += !code;
+                        cutImmersive = !code;
+                        return !code || screen || gameScreen.holding();
                     }
                     if (!vrPlay) {
                         // The scene's two eyes: the game's own camera, set apart
@@ -12893,7 +13018,109 @@ DWORD WINAPI run(void*) {
                 },
                 [&](std::array<XrRuntime::EyeTarget, 2>& targets) {
                     const auto copyStart = std::chrono::steady_clock::now();
-                    if (showScreen && stereoScene && !native_gpu::eyesLost() && native_hud::onScreen(sceneHoldMs)) {
+                    // HERO VR 0.0.77 CUTSCENES immersive: the scene's pair at the tracked eyes it was asked for (a
+                    // normal stereo view, no hands, webs, markers or body), the game frame's subtitles - while a
+                    // QTE holds, its whole frame's words and button icons - keyed onto a see-through panel. Until
+                    // a pair is there, the game's frame on the screen below.
+                    if (showScreen && cutImmersive && !native_gpu::eyesLost()) {
+                        uint64_t pairSerial{}, pairGeneration{};
+                        const bool copied = native_gpu::copyLatest(targets[0].texture, targets[1].texture,
+                                                                   pairSerial, pairGeneration);
+                        check(native_gpu::error(), "GPU eye bridge");
+                        const auto* saved = copied ? history.find(pairSerial, displayTime) : nullptr;
+                        if (saved && saved->cutscene) {
+                            // EYE TEST SAME PICTURE as in play: the right layer gets the view its picture was made from.
+                            const bool cutSame = eye_debug::eyeDebugSource(native_gpu::pairEyeDebug(), 1) == 0;
+                            for (unsigned eye = 0; eye < 2; ++eye) {
+                                const unsigned from = cutSame ? 0u : eye;
+                                const auto& pose = saved->trackingEyes[from].pose;
+                                const auto& f = saved->trackingEyes[from].fov;
+                                targets[eye].view.pose = {{pose.orientation.x, pose.orientation.y,
+                                                           pose.orientation.z, pose.orientation.w},
+                                                          {pose.position.x, pose.position.y, pose.position.z}};
+                                targets[eye].view.fov = {f.left, f.right, f.up, f.down};
+                            }
+                            copyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                                               copyStart)
+                                         .count();
+                            runtime.presentation(false, screenPose, saved->screenAspect,
+                                                 vr_settings::screenWidth(values.screenSize), false);
+                            drawn = Presentation::cutscene;
+                            ++cutCounts.shown;
+                            if (!cutPanelFault && !overlayFault) {
+                                try {
+                                    bool set = false;
+                                    native_gpu::Screen words;
+                                    if (native_gpu::latestScreen(words, 250) && words.texture && words.width &&
+                                        words.height) {
+                                        const bool prompts = saved->cutscenePrompts;
+                                        const auto& crop = prompts ? cutscene077::wholeFrame : cutscene077::subtitleStrip;
+                                        const auto& shape = prompts ? cutscene077::promptPanel : cutscene077::subtitlePanel;
+                                        D3D12Renderer::Inset inset;
+                                        inset.source = words.texture;
+                                        inset.view = words.view;
+                                        inset.linear = words.linear;
+                                        inset.crop[0] = crop.u0;
+                                        inset.crop[1] = crop.v0;
+                                        inset.crop[2] = crop.u1;
+                                        inset.crop[3] = crop.v1;
+                                        inset.keyed = true;
+                                        inset.backdrop = shape.backdrop;
+                                        const float aspect = cutscene077::cropAspect(
+                                            crop, static_cast<float>(words.width) / static_cast<float>(words.height));
+                                        const float apart = eyeDistance(saved->trackingEyes[0].pose.position,
+                                                                        saved->trackingEyes[1].pose.position);
+                                        bool both = true;
+                                        for (unsigned side = 0; side < 2 && both; ++side) {
+                                            const auto& f = saved->trackingEyes[cutSame ? 0u : side].fov;
+                                            both = cutscene077::panelRect(
+                                                side, apart, std::tan(f.left), std::tan(f.right), std::tan(f.down),
+                                                std::tan(f.up), targets[side].width, targets[side].height, aspect, shape,
+                                                inset.rect[side]);
+                                        }
+                                        if (both) {
+                                            overlay.setInset(std::move(inset));
+                                            set = true;
+                                        }
+                                    }
+                                    if (!set)
+                                        overlay.clearInset();
+                                    cutCounts.panelsSet += set;
+                                    const std::array<D3D12Renderer::ViewTarget, 2> panelViews{
+                                        {{targets[0].texture, targets[0].format, targets[0].width, targets[0].height, {}},
+                                         {targets[1].texture, targets[1].format, targets[1].width, targets[1].height,
+                                          {}}}};
+                                    const auto before = overlay.insetsDrawn();
+                                    overlay.renderViews(panelViews, {}, true, false);
+                                    if (overlay.insetsDrawn() != before)
+                                        ++cutCounts.panelsDrawn;
+                                    else
+                                        ++cutCounts.panelMisses;
+                                } catch (const std::exception& e) {
+                                    cutPanelFault = true;
+                                    const auto text =
+                                        std::string("HERO VR 0.0.77 CUTSCENES: the words panel is off this session: ") +
+                                        e.what();
+                                    message(3, 0, text.c_str());
+                                } catch (...) {
+                                    cutPanelFault = true;
+                                    message(3, 0, "HERO VR 0.0.77 CUTSCENES: the words panel is off this session");
+                                }
+                            }
+                            std::lock_guard lock(telemetry);
+                            InterlockedIncrement64(&SpidyXrData.sequence);
+                            SpidyXrData.serial = pairSerial;
+                            SpidyXrData.generation = pairGeneration;
+                            InterlockedIncrement64(&SpidyXrData.sequence);
+                            return true;
+                        }
+                        ++cutCounts.waits;
+                    }
+                    // HERO VR 0.0.77 CUTSCENES 3d: without the HUD hook the subtitle strip below is the panel.
+                    const bool strip3d = cutscenesNow.load() == cutscene077::screen3d && !cutStripFault &&
+                                         !native_hud::panelHooked();
+                    if (showScreen && stereoScene && !native_gpu::eyesLost() &&
+                        (native_hud::onScreen(sceneHoldMs) || strip3d)) {
                         // The scene's newest pair, once the game has rendered
                         // one with the HUD's panel on its screen; until then
                         // the game's own frame below.
@@ -12909,6 +13136,61 @@ DWORD WINAPI run(void*) {
                             runtime.presentation(true, screenPose, saved->screenAspect,
                                                  vr_settings::screenWidth(values.screenSize), true);
                             drawn = Presentation::stereoScreen;
+                            // HERO VR 0.0.77 CUTSCENES 3d: the game frame's subtitle strip onto both images at the
+                            // same pixels (no disparity: the words on the screen's glass). Its landing is the
+                            // panel signal; a fault turns only the 3D pairs off (the flat screen, as before).
+                            if (strip3d && !overlayFault) {
+                                ++cutCounts.pairsShown;
+                                try {
+                                    bool set = false;
+                                    native_gpu::Screen words;
+                                    if (native_gpu::latestScreen(words, 250) && words.texture && words.width &&
+                                        words.height) {
+                                        D3D12Renderer::Inset inset;
+                                        inset.source = words.texture;
+                                        inset.view = words.view;
+                                        inset.linear = words.linear;
+                                        const auto& crop = cutscene077::subtitleStrip;
+                                        inset.crop[0] = crop.u0;
+                                        inset.crop[1] = crop.v0;
+                                        inset.crop[2] = crop.u1;
+                                        inset.crop[3] = crop.v1;
+                                        inset.keyed = true;
+                                        inset.backdrop = cutscene077::subtitlePanel.backdrop;
+                                        bool both = true;
+                                        for (unsigned eye = 0; eye < 2 && both; ++eye)
+                                            both = cutscene077::stripRect(targets[eye].width, targets[eye].height, crop,
+                                                                          inset.rect[eye]);
+                                        if (both) {
+                                            overlay.setInset(std::move(inset));
+                                            set = true;
+                                        }
+                                    }
+                                    if (!set)
+                                        overlay.clearInset();
+                                    cutCounts.stripsSet += set;
+                                    const std::array<D3D12Renderer::ViewTarget, 2> stripViews{
+                                        {{targets[0].texture, targets[0].format, targets[0].width, targets[0].height, {}},
+                                         {targets[1].texture, targets[1].format, targets[1].width, targets[1].height,
+                                          {}}}};
+                                    const auto before = overlay.insetsDrawn();
+                                    overlay.renderViews(stripViews, {}, true, false);
+                                    if (overlay.insetsDrawn() != before) {
+                                        stripClock.landed(GetTickCount64());
+                                        ++cutCounts.stripsDrawn;
+                                    } else {
+                                        ++cutCounts.stripMisses;
+                                    }
+                                } catch (const std::exception& e) {
+                                    cutStripFault = true;
+                                    const auto text =
+                                        std::string("HERO VR 0.0.77 CUTSCENES: 3D scenes off this session: ") + e.what();
+                                    message(3, 0, text.c_str());
+                                } catch (...) {
+                                    cutStripFault = true;
+                                    message(3, 0, "HERO VR 0.0.77 CUTSCENES: 3D scenes off this session");
+                                }
+                            }
                             D3D12Renderer::Captured pixels;
                             if (snapshotTicket && overlay.captured(snapshotTicket, pixels)) {
                                 publishSnapshot(pendingSnapshot, &pixels);
@@ -13244,7 +13526,8 @@ DWORD WINAPI run(void*) {
                     }
                     check(native_gpu::error(), "GPU eye bridge");
                     const auto* saved = copied ? history.find(imageSerial, displayTime) : nullptr;
-                    copied = copied && saved;
+                    // HERO VR 0.0.77 CUTSCENES: an immersive scene's last pair never goes under play's hands.
+                    copied = copied && saved && !saved->cutscene;
                     copyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
                                                                        copyStart)
                                  .count();
@@ -16055,6 +16338,10 @@ DWORD WINAPI run(void*) {
                                 ? "Game screen (menus, cards, cutscenes): the controllers work as an Xbox "
                                   "controller (A closes a card; hurt, the right stick held down heals), VR "
                                   "settings are in Settings > SPIDY VR - VR resumes with gameplay"
+                            : drawn == Presentation::cutscene
+                                ? "Cutscene, immersive (live.txt cutscenes = immersive): the scene around you, its "
+                                  "words on the glass below; the controllers work as an Xbox controller - a QTE "
+                                  "holds it, a pause goes to the screen"
                             : drawn == Presentation::stereoScreen
                                 ? "Game screen in 3D (a cutscene or another scene the game plays): the "
                                   "controllers work as an Xbox controller - Settings > SPIDY VR > GAME SCREEN 3D "
@@ -16076,7 +16363,8 @@ DWORD WINAPI run(void*) {
                 if (submitted) {
                     ++d.submitted;
                     // Game-screen frames are not eye images: neither new nor reused ones.
-                    if (drawn == Presentation::gameScreen || drawn == Presentation::stereoScreen) {
+                    if (drawn == Presentation::gameScreen || drawn == Presentation::stereoScreen ||
+                        drawn == Presentation::cutscene) {
                         ++d.screenSubmitted;
                         d.stereoSubmitted += drawn == Presentation::stereoScreen;
                     } else if (d.generation != previousPresentedGeneration) {
@@ -16395,6 +16683,8 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyPromptCards(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyXButton(void* v) { return setLive(v, 0, 1, 5569, xButtonNow, asU32); }
 // HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyScreenHeal(void* v) { return setLive(v, 0, 1, 5570, screenHealNow, asU32); }
+// HERO VR 0.0.77 CUTSCENES: live.txt cutscenes (0 flat, 1 3d, 2 immersive).
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyCutscenes(void* v) { return setLive(v, 0, 2, 5571, cutscenesNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyBossDamage(void* v) { return setLive(v, 0, 2, 5567, bossDamageNow, asU32); }
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyWebWiggle(void* percent) {
     return setLive(percent, 0, static_cast<uintptr_t>(WebTravel::maxWiggle), 5102, webWiggle, asU32);

@@ -211,18 +211,33 @@ int main() {
         check(h.frozen(), "frozen");
         h.release();
         check(!h.frozen() && !h.menu() && !h.update(true, false, false, 30), "release lets go");
-        // CUT5 MENU SCREEN, CUT6: the menu button, never the stick.
+        // CUT5 MENU SCREEN, CUT6: the menu button, never the stick. CUT7 FRONT END: the boot, the title and the way
+        // back to it are always the screen; only a new game's record after a >= 1.5 s no-record gap ends it.
         MenuScreen ms;
-        check(ms.update(true, 0, false), "session start: the title is on the screen");
-        check(ms.update(true, 0x100, false) && ms.update(true, 0x100, false), "title record adopted");
-        check(ms.update(true, 0, false), "load: still the screen");
-        check(!ms.update(true, 0x200, false), "a new game's record: immersive again");
-        check(!ms.update(true, 0x200, false) && ms.count() == 0, "no signal, no screen");
-        check(ms.update(true, 0x200, true) && ms.count() == 1, "menu button: the screen");
-        check(ms.update(true, 0x200, false), "held to the stretch's end");
-        check(!ms.update(false, 0x200, true) && !ms.update(true, 0x200, false), "gameplay ends it, menu in play too");
-        check(ms.update(true, 0, false) && !ms.update(true, 0x300, false),
-              "a load's no-record: the screen, then the next record's scene immersive");
+        check(ms.update(true, 0, false, 1000) && ms.frontEnd(), "boot: the front end on the screen");
+        check(ms.update(true, 0x100, false, 2000) && ms.update(true, 0x100, false, 2500), "the title: the screen");
+        check(ms.update(true, 0, false, 3000), "loading: the screen");
+        check(ms.update(true, 0x180, false, 3400), "a record after a 0.4 s gap: still the front end");
+        check(ms.update(true, 0, false, 3500), "loading again");
+        check(!ms.update(true, 0x200, false, 5000) && !ms.frontEnd(), "the game's record after 1.5 s: immersive");
+        check(!ms.update(true, 0x200, false, 5050), "its opening scene stays immersive (no stick, no menu)");
+        check(!ms.update(false, 0x200, false, 5100), "gameplay");
+        check(ms.update(true, 0x200, true, 6000) && ms.why() == 2, "pause: the screen");
+        check(ms.update(true, 0x200, false, 6100), "held to the stretch's end");
+        check(!ms.update(false, 0x200, false, 7000), "back to gameplay");
+        check(!ms.update(true, 0x200, false, 9600), "an in-game scene: immersive");
+        check(!ms.update(false, 0x200, false, 9700) && !ms.update(false, 0x200, true, 10000), "the menu button in gameplay");
+        check(ms.update(true, 0x200, false, 10500), "the pause menu's screen (pressed within 3 s)");
+        check(ms.update(true, 0, false, 11000) && ms.frontEnd(), "quit to the title: the front end again");
+        check(ms.update(true, 0x300, false, 12000) && ms.update(true, 0x300, false, 12100),
+              "the title's moving scene on the flat screen, never immersive (report 002416)");
+        check(ms.update(true, 0, false, 13000), "loading a save");
+        check(!ms.update(true, 0x400, false, 20700), "the loaded game's scene after 7.7 s: immersive");
+        const auto shown = ms.count();
+        check(!ms.update(false, 0x400, false, 21000) && !ms.update(true, 0x400, false, 25000) && ms.count() == shown,
+              "a later in-game scene: immersive, no new screen");
+        MenuScreen calls; // no clock: 11 ms a call
+        check(calls.update(true, 0, false) && calls.update(true, 0x10, false), "no clock: the front end");
     }
 
     if (failures) {

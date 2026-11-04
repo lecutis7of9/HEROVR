@@ -194,6 +194,14 @@ struct PanelShape {
 };
 constexpr PanelShape subtitlePanel{-.34f, .72f, 2.f, .38f};
 constexpr PanelShape promptPanel{-.12f, .86f, 2.f, .22f};
+// HERO VR 0.0.77 CUT7 (the owner on cut6: "remove the text line on immersive cam"): the immersive scene has no words
+// panel any more - no subtitle strip, ever. Only while a QTE is live (the scene's clock frozen on its prompt) a small
+// card a little below the centre holds the game's whole frame keyed (its button icons are anywhere on it), and a menu
+// over the scene keeps its whole frame. Anything else: nothing over the scene.
+constexpr PanelShape qteCard{-.26f, .5f, 2.f, .3f};
+inline bool cardWanted(bool qteLive, bool menu) {
+    return qteLive || menu;
+}
 // HERO VR 0.0.77 CUTFIX3 MENU PANEL: a menu over the immersive world (the title screen's, its save slots, CONTINUE,
 // its dialogs) is the game's whole frame as it is: not keyed, no glass, full opacity, centred, the size the VR
 // screen has (its width at its distance: vr_settings::screenWidth, screenDistance).
@@ -236,32 +244,80 @@ class MenuPanel {
 // in the stretch (the pause menu). CUT6: never the left stick (cut5 ended two immersive scenes of report 234713 as
 // "menu (VR screen)" on a stick push: MENU SCREEN #4/#5 "the left stick steering it"), and only while the game's
 // screen is up: in VR gameplay (screen false) it is off and resets. Pure; the record is only compared.
+// CUT7 FRONT END (the owner on cut6: "just keep the main menu 2d flat regular from the start because its just too
+// weird"; report 002416: after the pause at 00:25:40 ET the quit to the main menu showed the title's moving scene
+// immersive for 546 frames - the title's new record ended cut6's menu stretch). The front end - the boot, the
+// title and its menus, and the way back to it from the pause menu - is always the normal VR screen; immersive is
+// only for the game's own scenes. The front end starts with the session and again when the pause menu (the menu
+// button in the stretch or within 3 s before it) leads to no player record (a quit or a load from the pause menu).
+// It ends with VR gameplay, or when a second new player record (not the one played before the pause) follows a
+// no-record gap of at least 1.5 s (the title's record, then the loading screen, then the loaded game's record).
+// A pause menu stays on the screen to the end of its stretch. Pure; the record is only compared.
 class MenuScreen {
   public:
-    // True while the stretch stays on the VR screen.
-    bool update(bool screen, uint64_t record, bool menuPressed) {
+    // True while the stretch stays on the VR screen. nowMs: a clock in ms (0: 11 ms a call).
+    bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0) {
+        now_ = nowMs ? nowMs : now_ + 11;
+        if (menuPressed)
+            pressMs_ = now_ ? now_ : 1;
         if (!screen) {
-            on_ = initial_ = false;
+            frontEnd_ = paused_ = inStretch_ = on_ = false;
+            played_ = record;
+            seen_ = 0;
             return false;
         }
-        if (on_ && initial_ && record_ == 0 && record != 0)
-            record_ = record; // the title's own record
-        else if (on_ && record != 0 && record != record_)
-            on_ = initial_ = false;
-        if (!on_ && (record == 0 || menuPressed)) {
-            on_ = true;
-            record_ = record;
-            ++count_;
+        if (!inStretch_) {
+            inStretch_ = true;
+            paused_ = pressMs_ && now_ - pressMs_ <= 3000;
         }
+        paused_ |= menuPressed;
+        if (paused_ && record == 0 && !frontEnd_) {
+            frontEnd_ = true;
+            seen_ = 0;
+            gapFrom_ = now_;
+        }
+        if (frontEnd_) {
+            if (record == 0) {
+                if (last_ != 0 || !gapFrom_)
+                    gapFrom_ = now_;
+            } else if (record != played_ && record != first_) {
+                if (seen_ == 0) {
+                    first_ = record; // the title's record
+                    seen_ = 1;
+                } else if (last_ == 0 && now_ - gapFrom_ >= 1500) {
+                    frontEnd_ = paused_ = false; // a game loaded from the title
+                    first_ = 0;
+                    seen_ = 0;
+                }
+            }
+        }
+        last_ = record;
+        const bool on = frontEnd_ || paused_ || record == 0;
+        if (on && !on_) {
+            ++count_;
+            why_ = frontEnd_ ? 1 : paused_ ? 2 : 3;
+        }
+        on_ = on;
         return on_;
     }
     uint64_t count() const {
         return count_;
     }
+    bool frontEnd() const {
+        return frontEnd_;
+    }
+    // Why the last stretch went to the screen: 1 the front end, 2 the pause menu, 3 no player record.
+    int why() const {
+        return why_;
+    }
+    static const char* whyName(int why) {
+        return why == 1 ? "the front end (boot, title, its menus)" : why == 2 ? "the menu button (pause)" : "no player record";
+    }
 
   private:
-    uint64_t record_{}, count_{};
-    bool on_{true}, initial_{true};
+    uint64_t now_{}, pressMs_{}, gapFrom_{}, played_{}, first_{}, last_{}, count_{};
+    int seen_{}, why_{};
+    bool frontEnd_{true}, paused_{}, inStretch_{}, on_{};
 };
 // The panel's rectangle in one eye's pixels (y down) from that eye's tangents (left and down negative). eye 0 is
 // the left eye; eyeDist the two eyes' distance (metres); aspect the copied part's own width over height.

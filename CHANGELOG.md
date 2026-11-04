@@ -2,6 +2,38 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.77-cutscene (7) - the wrist minimap, off the ledge, Sandman, a flat front end, FPS (TEST build, 0.0.77 RC)
+
+From the player's report on cut6 ("left wrist doesnt show map, i can move after cutscene just not off that ledge ...
+got like one hit on him and couldnt damage him anymore ... keep the main menu 2d flat ... remove the text line on
+immersive cam ... still bad FPS"), his video and the boot intros' picture a minute behind their sound:
+- **Wrist minimap (cause CONFIRMED, fix CANDIDATE):** cut6 cropped the presented frame (WRIST MAP: "frame 1280x720,
+  crop 0.016,0.703-0.172,0.981"), but in VR play that frame is the game view with the HUD moved onto the VR panel:
+  the brick-coloured panel was the frame's corner, not the minimap. The map now comes from the game's own HUD panel
+  texture (live.txt wrist_map_source = frame: cut6's). Left hand to the right wrist + left trigger shows it there;
+  right hand to the left wrist + right trigger stays the wrist hologram's, and while the hologram is open the
+  minimap shows over that wrist too (wrist_map_holo = off: not there). "NO MINIMAP: HUD TEXTURE NOT FOUND" says so.
+- **Off the ledge (cause CONFIRMED, fix CANDIDATE):** every cut6 CRAWL FEED line read "surface 3" (the game's floor
+  crawl: a ledge, a roof's edge) and every JUMP line "grounded 0 owned 0 webs 00": the leave-the-crawl RT + A went
+  out only on the game's wall crawl (surface 2), so A on the ledge was the crawl's own hop along it and no web ever
+  held there. Now A, the web gesture (the web button going down) or a web that holds leaves the floor crawl with RT +
+  A (live.txt ledge_jump = game: cut6's). CUT7 LEDGE lines. The horizon stays world-up on walls (live.txt wall_view =
+  turned: cut6's view turned onto the wall).
+- **Sandman (cause CONFIRMED, fix CANDIDATE):** the fight sent 2 X strikes all session against 68 "hand holding or
+  carrying" rejects (and 128 throws, 158 web balls): a hand whose swing web held - the fist is the grip that webs -
+  punched nothing. With an enemy listed or the boss within 40 m that hand punches (live.txt punch_web = off: cut6's).
+  The BOSS DAMAGE line read "boss none hp -1/0" because the boss read was skipped for SPIDER-MAN (CONFIRMED in the
+  code); it is read for every hero now (his blows stay the game's own). CUT7 BUSY HANDS lines name what holds a hand.
+- **Front end flat:** the title, the front end and the pause menus are always the flat VR screen; immersive only for
+  in-game scenes (cutscene077::MenuScreen, timed sequence in tests/cutscene077_tests.cpp).
+- **No text line on the immersive view:** why a scene is flat goes to the log (live.txt cut_note = on: cut6's line);
+  the small card shows only while a QTE is live.
+- **FPS:** the mod's own paths measured under 0.3 ms a second at 90 Hz (the game GPU-bound near 37 fps). The eyes'
+  depth copy runs only while the see-through car models draw (live.txt see_through_depth = always: cut6's) and the
+  periodic diagnostics are every 30 s, the FRAME line every 10 s (diag_logs = full: cut6's).
+- **Boot intros (CANDIDATE):** CUT7 BOOT SCREEN lines (every 2 s for 90 s: game presents and screen copies a second,
+  skips, the copy's age) measure the picture's lag on the VR screen.
+
 ## hero-0.0.77-cutscene (6) - the swing starts after the title, leave the ledge, no stick menu (TEST build, 0.0.77 RC)
 
 From the player's report on cut5 ("Still stuck in that spot on that save. Still cant swing or even do a charged jump

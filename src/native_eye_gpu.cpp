@@ -1,5 +1,6 @@
 #include "spidy/native_eye_gpu.hpp"
 #include "spidy/native_address_finder.hpp"
+#include "spidy/native_hud.hpp"
 #include "spidy/copy_eye_texture.hpp"
 #include "spidy/eye_pair_state.hpp"
 #include "spidy/eye_sharpen.hpp"
@@ -438,6 +439,9 @@ std::vector<RetiredDepth> retiredDepth;
 // Why depth is off for the session (0: on): 1 standard-Z clear, 2 other clear value,
 // 3 allocation failed, 4 hooks not installed.
 std::atomic<uint32_t> depthOff{};
+// HERO VR 0.0.77 CUT7 FPS: the eyes' depth is watched for (pass tags, barrier copies) only while the see-through
+// models are drawn (game_xr: live.txt see_through_depth auto) or always; cut6's log: captured 0, skipped thousands.
+std::atomic<bool> depthInUse{};
 std::atomic<uint64_t> depthCaptured{}, depthSkipSize{}, depthSkipFormat{}, depthSkipNoPass{},
     depthSkipQueue{}, depthSkipLost{}, depthClearReversed{}, depthClearStandard{}, depthClearOther{},
     depthGiven{}, depthMissed{};
@@ -965,7 +969,7 @@ void depthReset(ID3D12GraphicsCommandList* list) {
 void depthTargets(ID3D12GraphicsCommandList* list, UINT n, const D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
     if (!depthTagCount.load(std::memory_order_relaxed) && !depthOpenMask.load(std::memory_order_relaxed))
         return;
-    if (depthOff.load(std::memory_order_relaxed))
+    if (depthOff.load(std::memory_order_relaxed) || !depthInUse.load(std::memory_order_relaxed))
         return;
     const bool gbuffer = n >= 3 && dsv;
     std::lock_guard tagLock(depthTagLock);
@@ -1077,7 +1081,8 @@ void foveaMarker(ID3D12GraphicsCommandList* list) {
     if (!foveaHooked.load(std::memory_order_relaxed) || !currentMarker.valid)
         return;
     if (!currentMarker.ended) { // 0.0.75 SEE-THROUGH: the list, whatever thread records on it
-        if (!depthOff.load(std::memory_order_relaxed) && currentMarker.eye < 2) {
+        if (!depthOff.load(std::memory_order_relaxed) && depthInUse.load(std::memory_order_relaxed) &&
+            currentMarker.eye < 2) {
             std::lock_guard tagLock(depthTagLock);
             DepthTag tag{};
             tag.eye = currentMarker.eye;
@@ -1099,10 +1104,59 @@ void foveaMarker(ID3D12GraphicsCommandList* list) {
         t = {};
     }
 }
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE (CANDIDATE): the game's minimap is drawn into the HUD panel's texture in
+// VR play (native_hud moves the second movie off the game's view), so the presented frame the cut6 wrist map
+// cropped showed the third-person view (the owner's video: brick). While hunting, each render-target transition's
+// resource is looked at once (GetDesc) and kept when it has the panel's made size; the present thread then finds
+// which of them the panel's engine objects point at (hudScan) and copies that one. Read-only on the game's side.
+std::atomic<bool> hudWanted{}, hudHunting{};
+std::atomic<ID3D12Resource*> hudTracked{};
+std::atomic<uint32_t> hudState{}, hudHuntW{}, hudHuntH{};
+std::atomic<uint64_t> hudLooked{}, hudSized{}, hudCopies{}, hudSkipState{}, hudSkipBusy{}, hudFinds{}, hudLost{};
+std::mutex hudLock; // the candidates only (never taken with another lock held but submission/recording)
+std::unordered_map<ID3D12Resource*, uint32_t> hudCandidates; // made-size render targets, their last state
+std::unordered_map<ID3D12Resource*, bool> hudLookedAt;
+void watchHud(UINT count, const D3D12_RESOURCE_BARRIER* bs) {
+    if (!bs)
+        return;
+    auto* tracked = hudTracked.load(std::memory_order_relaxed);
+    const bool hunting = hudHunting.load(std::memory_order_relaxed);
+    for (UINT i = 0; i < count; ++i) {
+        if (bs[i].Type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION || !bs[i].Transition.pResource)
+            continue;
+        auto* r = bs[i].Transition.pResource;
+        const auto after = static_cast<uint32_t>(bs[i].Transition.StateAfter);
+        if (r == tracked) {
+            hudState.store(after, std::memory_order_relaxed);
+            continue;
+        }
+        if (!hunting || !((bs[i].Transition.StateBefore | bs[i].Transition.StateAfter) &
+                          D3D12_RESOURCE_STATE_RENDER_TARGET))
+            continue;
+        std::unique_lock lock(hudLock, std::try_to_lock);
+        if (!lock.owns_lock())
+            continue; // the present thread is scanning: the next frame's barriers
+        if (const auto c = hudCandidates.find(r); c != hudCandidates.end()) {
+            c->second = after;
+            continue;
+        }
+        if (hudLookedAt.size() >= 20000 || !hudLookedAt.emplace(r, true).second)
+            continue;
+        ++hudLooked;
+        const auto d = r->GetDesc();
+        if (d.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && d.Width == hudHuntW.load() &&
+            d.Height == hudHuntH.load() && d.MipLevels == 1 && d.SampleDesc.Count == 1 && d.DepthOrArraySize == 1) {
+            hudCandidates.emplace(r, after);
+            ++hudSized;
+        }
+    }
+}
 void STDMETHODCALLTYPE barrier(ID3D12GraphicsCommandList* list, UINT count,
                                const D3D12_RESOURCE_BARRIER* bs) {
     // Update 27: ADDRESS FINDER callout before the early return (read-only).
     native_address_finder::onBarrier(list, count, bs);
+    if (hudHunting.load(std::memory_order_relaxed) || hudTracked.load(std::memory_order_relaxed))
+        watchHud(count, bs); // CUT7 WRIST MAP SOURCE: read-only
     if (depthWatchOpen.load(std::memory_order_relaxed))
         watchFlat(list, count, bs); // 0.0.76 TAA WATCH: read-only
     // 0.0.74 test 10 SEE-THROUGH: the scene depth, copied ahead of the game's own barrier.
@@ -5176,6 +5230,155 @@ ScreenSkip copyScreen(IDXGISwapChain* swapchain) {
     screenMs = now;
     return screenCopied;
 }
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE: the HUD texture found, the engine object it was found under, its copy.
+ComPtr<ID3D12Resource> hudResource;
+uintptr_t hudRoot{};
+Screen hudShot;
+uint64_t hudMs{};
+std::array<CopyCommands, 3> hudCommands;
+std::vector<Retired> retiredHud;
+std::atomic<uint32_t> hudWhy{}; // hudSource reasons
+enum HudWhy : uint32_t { hudIdle, hudNoPanel, hudHunt, hudFound, hudCopied, hudNotReadable, hudBusy, hudFormat };
+const char* hudWhyName(uint32_t w) {
+    static const char* names[] = {"idle (not wanted)", "no HUD panel (the HUD is not on the panel now)",
+                                  "hunting the panel's texture", "found", "copied", "not in a readable state",
+                                  "copies in flight", "format not readable"};
+    return w < 8 ? names[w] : "?";
+}
+// Present thread: which candidate the panel's engine objects (their first 0x200 bytes, and 0x80 bytes behind each
+// pointer there) hold. Read-only, SEH-guarded reads of the game's memory.
+ID3D12Resource* hudScan(uintptr_t root, uintptr_t colour) {
+    std::lock_guard lock(hudLock);
+    if (hudCandidates.empty())
+        return nullptr;
+    for (const auto object : {root, colour}) {
+        uint64_t q[64]{};
+        if (!object || !read(object, q, sizeof(q)))
+            continue;
+        for (const auto v : q)
+            if (hudCandidates.count(reinterpret_cast<ID3D12Resource*>(v)))
+                return reinterpret_cast<ID3D12Resource*>(v);
+        for (const auto v : q) {
+            if (v < 0x10000 || (v & 7) || v > 0x7fffffffffffull)
+                continue;
+            uint64_t inner[16]{};
+            if (!read(static_cast<uintptr_t>(v), inner, sizeof(inner)))
+                continue;
+            for (const auto w : inner)
+                if (hudCandidates.count(reinterpret_cast<ID3D12Resource*>(w)))
+                    return reinterpret_cast<ID3D12Resource*>(w);
+        }
+    }
+    return nullptr;
+}
+void captureHud() {
+    uintptr_t colour{};
+    uint32_t w{}, h{};
+    const auto root = native_hud::panelObjects(colour, w, h);
+    if (!root || !w || !h) {
+        hudHunting = false;
+        hudWhy = hudNoPanel;
+        return;
+    }
+    if (root != hudRoot || !hudResource) {
+        if (hudResource) { // a load made a new panel: the old texture is let go after its copies
+            std::lock_guard submitLock(submission);
+            retiredHud.push_back({hudResource, GetTickCount64() + 3000});
+            hudResource.Reset();
+            hudTracked = nullptr;
+            ++hudLost;
+        }
+        hudRoot = root;
+        if (!hudHunting.load() || hudHuntW.load() != w || hudHuntH.load() != h) {
+            std::lock_guard lock(hudLock);
+            hudCandidates.clear();
+            hudLookedAt.clear();
+            hudHuntW = w;
+            hudHuntH = h;
+            hudHunting = true;
+        }
+        hudWhy = hudHunt;
+        auto* found = hudScan(root, colour);
+        if (!found)
+            return;
+        uint32_t state{};
+        {
+            std::lock_guard lock(hudLock);
+            state = hudCandidates[found];
+            hudCandidates.clear();
+            hudLookedAt.clear();
+        }
+        hudResource = found; // AddRef: the panel holds it now, so it is alive
+        hudState = state;
+        hudTracked = found;
+        hudHunting = false;
+        ++hudFinds;
+        hudWhy = hudFound;
+    }
+    const auto desc = hudResource->GetDesc();
+    bool linear{};
+    const auto view = screenView(desc.Format, linear);
+    if (view == DXGI_FORMAT_UNKNOWN) {
+        hudWhy = hudFormat;
+        return;
+    }
+    const auto state = static_cast<D3D12_RESOURCE_STATES>(hudState.load());
+    // Only from a state the game leaves it in to be read (its own barrier back after the HUD's draw).
+    if (!(state & (D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)) ||
+        (state & (D3D12_RESOURCE_STATE_RENDER_TARGET | D3D12_RESOURCE_STATE_UNORDERED_ACCESS))) {
+        ++hudSkipState;
+        hudWhy = hudNotReadable;
+        return;
+    }
+    std::lock_guard submitLock(submission);
+    std::lock_guard recordLock(recording);
+    if (!enabled || fault || GetTickCount64() >= deadline)
+        return;
+    const auto now = GetTickCount64();
+    std::erase_if(retiredHud, [&](const Retired& old) { return now >= old.releaseMs; });
+    if (!hudShot.texture || hudShot.width != desc.Width || hudShot.height != desc.Height || hudShot.view != view) {
+        if (hudShot.texture)
+            retiredHud.push_back({hudShot.texture, now + 3000});
+        hudShot = {};
+        auto copy = desc;
+        copy.Format = typelessFamily(view);
+        copy.Flags = D3D12_RESOURCE_FLAG_NONE;
+        copy.Alignment = 0;
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &copy,
+                                                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                   IID_PPV_ARGS(&hudShot.texture))))
+            return;
+        hudShot.view = view;
+        hudShot.linear = linear;
+        hudShot.width = static_cast<uint32_t>(desc.Width);
+        hudShot.height = desc.Height;
+    }
+    auto* slot = readyCommands(hudCommands);
+    if (!slot) {
+        ++hudSkipBusy;
+        hudWhy = hudBusy;
+        return;
+    }
+    D3D12_RESOURCE_BARRIER b[2]{};
+    b[0].Type = b[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b[0].Transition = {hudResource.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, state,
+                       D3D12_RESOURCE_STATE_COPY_SOURCE};
+    b[1].Transition = {hudShot.texture.Get(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST};
+    originalBarrier(slot->list.Get(), 2, b);
+    slot->list->CopyResource(hudShot.texture.Get(), hudResource.Get());
+    for (auto& barrier : b)
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    originalBarrier(slot->list.Get(), 2, b);
+    if (!submitCommands(*slot))
+        return;
+    ++hudShot.frame;
+    ++hudCopies;
+    hudMs = now;
+    hudWhy = hudCopied;
+}
 // The pipeline that draws a part of one texture over a whole target of
 // `format`: a screen-covering triangle and one linear sample (submission lock).
 // 0.0.74 test 10 MONITOR: the streamer's pipeline (streamer true) is the same but for its
@@ -5474,10 +5677,17 @@ void mirrorEye(IDXGISwapChain* swapchain) {
     }
     shownWanted = true;
 }
+// HERO VR 0.0.77 CUT7 BOOT SCREEN (diagnostic): the game's presents and the screen copies made of them, for the
+// boot intros' picture against their sound (the owner: the picture about a minute behind on the VR screen).
+std::atomic<uint64_t> bootPresents{}, bootCopies{}, bootSkips{};
 void captureScreen(IDXGISwapChain* swapchain) {
     ++screenPresents;
     screenSkipped = copyScreen(swapchain);
+    ++(screenSkipped == screenCopied ? bootCopies : bootSkips);
     publishScreen(0, nullptr, 0);
+}
+void bootPresent() {
+    ++bootPresents;
 }
 // Present reaches Present1 in some DXGI builds: one of them handles a frame.
 thread_local bool presenting{};
@@ -5485,6 +5695,11 @@ void presentFrame(IDXGISwapChain* swapchain, UINT flags) {
     if (!enabled || (flags & DXGI_PRESENT_TEST))
         return;
     const bool insetOnly = screenInsetOnly.load();
+    bootPresent(); // CUT7 BOOT SCREEN diagnostic: counts only
+    if (hudWanted.load())
+        captureHud(); // CUT7 WRIST MAP SOURCE: the HUD panel's texture, the minimap's real source
+    else
+        hudHunting = false;
     if (screenWanted)
         captureScreen(swapchain); // before the mirror: the game's own frame, its prompts (0.0.77)
     if ((!screenWanted || insetOnly) && (mirrorWanted || monitorStreaming())) // 0.0.74 test 10 MONITOR
@@ -5649,6 +5864,40 @@ void screenForInset(bool only) {
 }
 bool screenRequested() {
     return screenWantedFlag();
+}
+void sceneDepthInUse(bool used) {
+    depthInUse = used;
+}
+void wantHud(bool wanted) {
+    hudWanted = wanted;
+}
+bool latestHud(Screen& out, uint64_t maxAgeMs) {
+    std::lock_guard submitLock(submission);
+    const auto now = GetTickCount64();
+    if (!hudShot.texture || !hudShot.frame || now < hudMs || now - hudMs > maxAgeMs)
+        return false;
+    out = hudShot;
+    return true;
+}
+std::string hudSourceLine() {
+    const auto n = [](uint64_t v) { return std::to_string(v); };
+    return std::string("HERO VR 0.0.77 CUT7 WRIST MAP SOURCE (CANDIDATE): the HUD panel's texture ") +
+           hudWhyName(hudWhy.load()) + "; looked at " + n(hudLooked) + " render targets, " + n(hudSized) +
+           " of the panel's size " + n(hudHuntW) + "x" + n(hudHuntH) + ", found " + n(hudFinds) + ", lost " +
+           n(hudLost) + ", copies " + n(hudCopies) + ", skipped (state 0x" + [] {
+               char b[16];
+               sprintf_s(b, "%x", hudState.load());
+               return std::string(b);
+           }() + ") " + n(hudSkipState) + ", busy " + n(hudSkipBusy);
+}
+void bootCounts(uint64_t& presentsOut, uint64_t& copies, uint64_t& skips, uint32_t& skipWhy, uint64_t& copyAgeMs) {
+    presentsOut = bootPresents.load();
+    copies = bootCopies.load();
+    skips = bootSkips.load();
+    skipWhy = static_cast<uint32_t>(screenSkipped);
+    std::lock_guard submitLock(submission);
+    const auto now = GetTickCount64();
+    copyAgeMs = screen.frame && now >= screenMs ? now - screenMs : UINT64_MAX;
 }
 bool latestScreen(Screen& out, uint64_t maxAgeMs) {
     std::lock_guard submitLock(submission);

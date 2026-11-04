@@ -31,8 +31,8 @@ class Cut6(unittest.TestCase):
     def test_menu_screen_no_stick(self):
         g = src('src/game_xr.cpp')
         self.assertNotIn('cutSteering', g)
-        self.assertIn('player.record, (frame.buttons & buttonMenu) != 0);', g)
-        self.assertIn('bool update(bool screen, uint64_t record, bool menuPressed)', src('include/spidy/cutscene077.hpp'))
+        self.assertIn('player.record, (frame.buttons & buttonMenu) != 0,', g)  # CUT7: the clock
+        self.assertIn('bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0)', src('include/spidy/cutscene077.hpp'))
 
     def test_standing_is_076(self):
         h = src('include/spidy/swing077.hpp')

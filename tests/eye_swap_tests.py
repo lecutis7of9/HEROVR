@@ -33,7 +33,7 @@ class EyeSwapTests(unittest.TestCase):
         # (CUT5 WRIST MAP) while the wrist minimap is shown.
         self.assertIn('native_gpu::wantScreen(viewing && (!vrPlay || native_gpu::eyesLost() ||\n'
                       '                                                           promptWindowNow.load() == story077d::windowDebugFull ||\n'
-                      '                                                           (wristMap.shown() && wristMapNow.load() == story077h::mapOn)));', s)
+                      '                                                           (mapWanted && wristMapSourceNow.load() == story077h::sourceFrame)));', s)
         self.assertIn('eye_swap::appendLostNotice(notice, aspect);', s)
         self.assertIn('message(3, 0, eye_swap::lostMessage);', s)
         self.assertIn('message(3, 0, eye_swap::swappedMessage);', s)

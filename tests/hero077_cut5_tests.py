@@ -46,11 +46,37 @@ class Cut5(unittest.TestCase):
         self.assertGreater(g.index('if (hudTriggers & (1u << i))', at), at)
         self.assertIn('hudTriggers |= 1u', g[at:at + 6000])
         # The screen copy only while it is shown; the crop from the game's presented frame (no readback).
-        self.assertIn('(wristMap.shown() && wristMapNow.load() == story077h::mapOn)', g)
+        # CUT7: the gesture or the open hologram (story077h::mapPlace); the HUD panel's texture, not the frame.
+        self.assertIn('story077h::mapPlace(wristMapNow.load() == story077h::mapOn, wristMap.shown()', g)
+        self.assertIn('native_gpu::wantHud(', g)
+        self.assertIn('native_gpu::latestHud(mapImage, 250)', g)
         self.assertIn('story077h::hudCrop(mapImage.width, mapImage.height', g)
         self.assertIn('HERO VR 0.0.77 WRIST MAP:', g)
         self.assertIn('L HAND R WRIST', src('src/phone.cpp'))
         self.assertIn('wrist_map_hud', src('apps/launcher/ui.cpp'))
+
+    def test_cut7_switches(self):
+        g = src('src/game_xr.cpp')
+        for name, code, key in (('SpidyWristMapSource', 5590, 'wrist_map_source'),
+                                ('SpidyWristMapHolo', 5591, 'wrist_map_holo'),
+                                ('SpidySeeThroughDepth', 5592, 'see_through_depth'),
+                                ('SpidyDiagLogs', 5593, 'diag_logs'), ('SpidyCutNote', 5594, 'cut_note'),
+                                ('SpidyWallView', 5595, 'wall_view'), ('SpidyLedgeJump', 5596, 'ledge_jump'),
+                                ('SpidyPunchWeb', 5597, 'punch_web')):
+            self.assertIn('WINAPI %s(void* v)' % name, g)
+            self.assertEqual(len(re.findall(r'\b%d\b' % code, g)), 1, code)
+            self.assertIn(key, live_settings.SETTINGS)
+            self.assertEqual(live_settings.SETTINGS[key][1], name)
+            self.assertIn('live, no restart needed', live_settings.SETTINGS[key][2])
+            self.assertIn(key, live_settings.START_ONLY)
+            self.assertIn(key, live_settings.CHOICE_NAMES)
+        self.assertIn('native_gpu::sceneDepthInUse(', g)
+        self.assertIn('CUT7 BOOT SCREEN at', g)
+        # CUT7 LEDGE / SANDMAN: the floor crawl leaves with RT + A; a webbing hand punches near a foe.
+        self.assertIn('walk.parkour = story077h::leaveCrawl(', g)
+        self.assertIn('rig.wallLevel(wallViewNow.load() == 0)', g)
+        self.assertIn('CUT7 BUSY HANDS', g)
+        self.assertIn('busyWhy77[i] == 1u', g)
 
     def test_no_forbidden_words(self):
         for p in ('src/game_xr.cpp', 'include/spidy/story077h.hpp', 'tests/story077h_tests.cpp', 'tools/live_settings.py'):

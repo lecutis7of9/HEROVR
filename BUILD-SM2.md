@@ -3082,3 +3082,13 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   eye mode 4 (native_eye_frame.hpp; stereo_probe.cpp onCamera puts levelHead-relative eyes on the main view),
   ImmersiveHold (QTE hold, menu to screen), keyed panel insets (D3D12Renderer::Inset crop/keyed/backdrop, 12 root
   constants, optional keyPipeline_), Presentation::cutscene (5).
+- cut7 (include/spidy/story077h.hpp, include/spidy/game_tracking.hpp, include/spidy/perf077.hpp, src/native_eye_gpu.cpp,
+  tests/story077h_tests.cpp, tests/cutscene077_tests.cpp, tests/hero077_cut5_tests.py): story077h::mapPlace (none, the
+  right wrist on the gesture, the hologram's wrist while it is open), sourceHud/sourceFrame (native_gpu::wantHud,
+  latestHud), leftWrist/panelCentreLeft, missing noHud; story077h::leaveCrawl (walk.parkour on surfaces 2 and 3,
+  ledge_jump), the floor crawl's web-button edge as A; GameTracking::wallLevel (no surface turn or shift while standing
+  on a wall; standOff as off a climb; the crawl's stick through arc(up, held)); busyWhy77 bits and punch_web (a hand
+  busy only by its swing web freed with cf.enemyCount or bossNear77); the boss read for every hero (bossHero gates the
+  stand-in and sm2_damage::watchBoss); native_gpu::sceneDepthInUse, diagEveryMs, Frames::tick window, bootCounts.
+  live.txt: wrist_map_source 5590, wrist_map_holo 5591, see_through_depth 5592, diag_logs 5593, cut_note 5594,
+  wall_view 5595, ledge_jump 5596, punch_web 5597.

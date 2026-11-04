@@ -2479,10 +2479,17 @@ void App::controls(ImVec2 origin, ImVec2 size) {
           {"Hold Y", "Use, grab or carry what a card over it names; held, you walk to it"},
           {"Left hand to right wrist, left trigger", "The game's own minimap on your right wrist, on or off (live.txt "
                                                      "wrist_map = off: never; wrist_map_size / wrist_map_at: its size and place; "
-                                                     "wrist_map_hud: the game's HUD scale, so it lands on the minimap). "
+                                                     "wrist_map_hud: the game's HUD scale, so it lands on the minimap; "
+                                                     "wrist_map_source = hud reads the HUD panel itself). "
                                                      "In a menu or cutscene the game hides it: the wrist says so"},
+          {"Right hand to left wrist, right trigger", "The wrist hologram; while it is open the minimap shows over "
+                                                      "that wrist too (live.txt wrist_map_holo = off: not there)"},
           {"Scan", "Hand to temple + trigger: the game's scan. The yellow objective diamond is off "
                    "(live.txt waypoints = scan to try it): its source is not found yet, scans write POI DUMP lines"},
+          {"Punch with a web held", "A hand whose swing web holds still punches near an enemy or a boss "
+                                    "(live.txt punch_web = off: it never does, as cut6)"},
+          {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "
+                                    "(live.txt ledge_jump = game: cut6's; wall_view = turned: the view onto the wall)"},
           {"Left stick all the way", "live.txt story_sprint = on: the game's run (RT) while your feet are on the ground; off by default"},
           {"Right stick down", "Heal: the game's D-pad down. Push it down and hold it a moment; on a game card too while hurt (close the card with A)"},
           {"Right stick up", "The game's LT + RT: zip to a point, enter a vent, where the game shows the "

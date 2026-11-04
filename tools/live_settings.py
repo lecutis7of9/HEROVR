@@ -533,7 +533,8 @@ SETTINGS = {
     # HERO VR 0.0.77 CUTSCENES (include/spidy/cutscene077.hpp): live; flat is today's screen, so the default.
     'cutscenes': ((0, 2), 'SpidyCutscenes', "CUTSCENES {} (how the game's scenes show in the headset - 0 flat: on "
                   "the virtual screen as before; 1 3d: on that screen in 3D, its subtitles on it; 2 immersive: the "
-                  "scene around you from your own eyes, its words on a see-through panel; a pre-rendered video "
+                  "scene around you from your own eyes, nothing over it but a small card while a QTE is live; the "
+                  "title and pause menus always on the flat screen; a pre-rendered video "
                   "has no 3D camera and stays on the flat screen) - live, no restart needed"),
     'story_throw_aim': ((0, 2), 'SpidyStoryThrowAim', "STORY THROW AIM {} (where the LB + RB web throw sends the "
                         "debris - 0 look: where your head looks; 1 point: where your right hand points; 2 off: the "
@@ -570,6 +571,30 @@ SETTINGS = {
                      "sits, cm 0-20, default 6) - live, no restart needed"),
     'wrist_map_hud': ((50, 150), 'SpidyWristMapHud', "WRIST MAP HUD {} (set it to the game's own HUD scale, percent "
                       "50-150, default 100, so the crop lands on its minimap) - live, no restart needed"),
+    # HERO VR 0.0.77 CUT7 (include/spidy/story077h.hpp, native_eye_gpu.cpp)
+    'wrist_map_source': ((0, 1), 'SpidyWristMapSource', "WRIST MAP SOURCE {} (where the wrist minimap is read: 0 hud, "
+                         "the default: the game's HUD panel texture, where the minimap really is in VR play; 1 frame: "
+                         "the game's presented frame as in cut6, which in VR play shows the scene, not the minimap) - "
+                         "live, no restart needed"),
+    'wrist_map_holo': ((0, 1), 'SpidyWristMapHolo', "WRIST MAP HOLO {} (0 on, the default: while the wrist hologram is "
+                       "open - the right hand to the left wrist and the right trigger - the minimap shows over that "
+                       "wrist too; 1 off: only the left hand to the right wrist shows it) - live, no restart needed"),
+    'see_through_depth': ((0, 1), 'SpidySeeThroughDepth', "SEE THROUGH DEPTH {} (0 auto, the default: the eyes' depth "
+                          "is watched only while see-through models are drawn, saving frame time; 1 always, as cut6) - "
+                          "live, no restart needed"),
+    'diag_logs': ((0, 1), 'SpidyDiagLogs', "DIAG LOGS {} (0 quiet, the default: the FRAME line every 10 s and the other "
+                  "periodic diagnostics every 30 s; 1 full: every second and every 10 s, as cut6) - live, no restart "
+                  "needed"),
+    'cut_note': ((0, 1), 'SpidyCutNote', "CUT NOTE {} (0 off, the default: why a scene is on the flat screen goes to "
+                 "the log only; 1 on: also a line along the VR screen's top, as cut6) - live, no restart needed"),
+    'wall_view': ((0, 1), 'SpidyWallView', "WALL VIEW {} (0 level, the default: the horizon stays world-up while you "
+                  "crawl a wall or a ledge; 1 turned: the view turns onto the wall, as cut6) - live, no restart needed"),
+    'ledge_jump': ((0, 1), 'SpidyLedgeJump', "LEDGE JUMP {} (0 all, the default: A or a web that holds takes you off a "
+                   "ledge or roof edge as off a wall, with RT + A; 1 game: only off the game's wall crawl, as cut6) - "
+                   "live, no restart needed"),
+    'punch_web': ((0, 1), 'SpidyPunchWeb', "PUNCH WEB {} (0 on, the default: a hand whose swing web holds still punches "
+                  "while an enemy is near or a boss within 40 m; 1 off: a webbing hand never punches, as cut6) - live, "
+                  "no restart needed"),
     'boss_damage': ((0, 2), 'SpidyBossDamage', "BOSS DAMAGE {} (the other heroes' own attacks - THOR's lightning, "
                     "IRON MAN's blasts and chest beam, HULK's thunder clap - hurt Sandman and the other bosses while "
                     "you face them; 0 on; 1 off; 2 strong: each hit x4) - live, no restart needed"),
@@ -757,6 +782,14 @@ CHOICE_NAMES = {'hud_hand': ('left', 'right'),
                 'prompt_cards': ('on', 'off'),  # HERO VR 0.0.77 PROMPT CARDS
                 'waypoints': ('scan', 'always', 'off'),  # HERO VR 0.0.77 WAYPOINT
                 'wrist_map': ('on', 'off'),  # HERO VR 0.0.77 WRIST MAP
+                'wrist_map_source': ('hud', 'frame'),  # HERO VR 0.0.77 CUT7
+                'wrist_map_holo': ('on', 'off'),  # HERO VR 0.0.77 CUT7
+                'see_through_depth': ('auto', 'always'),  # HERO VR 0.0.77 CUT7
+                'diag_logs': ('quiet', 'full'),  # HERO VR 0.0.77 CUT7
+                'cut_note': ('off', 'on'),  # HERO VR 0.0.77 CUT7
+                'wall_view': ('level', 'turned'),  # HERO VR 0.0.77 CUT7
+                'ledge_jump': ('all', 'game'),  # HERO VR 0.0.77 CUT7
+                'punch_web': ('on', 'off'),  # HERO VR 0.0.77 CUT7
                 'boss_damage': ('on', 'off', 'strong'),  # HERO VR 0.0.77 BOSS DAMAGE
                 'fly_look_up': ('on', 'off'),  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
                 'fly_classic': ('off', 'on'),  # HERO VR 0.0.76 FLIGHT (off: the reworked flight)
@@ -1031,6 +1064,14 @@ CHOICES = {'hud_hand': {'left': 0, 'right': 1, 'l': 0, 'r': 1, '0': 0, '1': 1},
            'prompt_cards': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 PROMPT CARDS
            'waypoints': {'scan': 0, 'always': 1, 'off': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 WAYPOINT
            'wrist_map': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 WRIST MAP
+           'wrist_map_source': {'hud': 0, 'frame': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'wrist_map_holo': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'see_through_depth': {'auto': 0, 'always': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'diag_logs': {'quiet': 0, 'full': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'cut_note': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'wall_view': {'level': 0, 'turned': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'ledge_jump': {'all': 0, 'game': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
+           'punch_web': {'on': 0, 'off': 1, '0': 0, '1': 1},  # HERO VR 0.0.77 CUT7
            'boss_damage': {'on': 0, 'off': 1, 'strong': 2, '0': 0, '1': 1, '2': 2},  # HERO VR 0.0.77 BOSS DAMAGE
            'fly_look_up': {'on': 0, 'off': 1, '0': 0, '1': 1},  # 0.0.74 test 10 FLY LOOK UP (the Y-tap view)
            'fly_classic': {'off': 0, 'on': 1, '0': 0, '1': 1},  # HERO VR 0.0.76 FLIGHT
@@ -1376,6 +1417,8 @@ START_ONLY = START_ONLY + ('screen_heal',)  # HERO VR 0.0.77 HEAL ANYWHERE: kept
 START_ONLY = START_ONLY + ('cutscenes',)  # HERO VR 0.0.77 CUTSCENES: kept between sessions
 START_ONLY = START_ONLY + ('waypoints',)  # HERO VR 0.0.77 WAYPOINT
 START_ONLY = START_ONLY + ('wrist_map', 'wrist_map_size', 'wrist_map_at', 'wrist_map_hud')  # HERO VR 0.0.77 WRIST MAP
+START_ONLY = START_ONLY + ('wrist_map_source', 'wrist_map_holo', 'see_through_depth', 'diag_logs',
+                           'cut_note', 'wall_view', 'ledge_jump', 'punch_web')  # HERO VR 0.0.77 CUT7: kept between sessions
 # The mod's wrist_hud::Control numbers (include/spidy/wrist_hud.hpp) of the settings, and the
 # SpidyHudSettings selector that reads each back.
 CONTROL_KEYS = {4: 'web_width', 5: 'web_speed', 6: 'aa', 7: 'history', 8: 'reach', 9: 'monitor',

@@ -432,6 +432,15 @@ class GameTrackingRig {
     void wallTilt(uint32_t mode) {
         tiltMode_ = mode;
     }
+    // HERO VR 0.0.77 CUT7 WALL VIEW (live.txt wall_view): true (level, game_xr's default) keeps the horizon world-up
+    // while a wall or the game's crawl holds the player - the body still crawls, the view is never turned onto the
+    // wall (the owner's cut6 video: the view rotated on the wall); false turns it onto the wall, as cut6.
+    void wallLevel(bool on) {
+        wallLevel_ = on;
+    }
+    bool wallLevelOn() const {
+        return wallLevel_;
+    }
     void diedOrRespawned() {
         levelNow_ = true;
     }
@@ -443,6 +452,7 @@ class GameTrackingRig {
   private:
     uint32_t tiltMode_{};
     bool levelNow_{};
+    bool wallLevel_ = false; // CUT7 WALL VIEW (game_xr sets it from live.txt wall_view, level by default)
     combat38::TiltGuard tiltGuard_{};
     RealisticFlipSettings autoSettings_{};
     RealisticFlight flight_{};

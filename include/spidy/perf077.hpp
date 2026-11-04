@@ -45,7 +45,8 @@ struct Frames {
     int64_t last{}, windowStart{};
     double sumMs{}, worstMs{};
     uint32_t count{};
-    bool tick(char* line, size_t size) {
+    // CUT7: `windowSeconds` 1 (live.txt diag_logs full) or 10 (quiet, the default).
+    bool tick(char* line, size_t size, unsigned windowSeconds = 1) {
         const int64_t now = qpcNow();
         if (!last) {
             last = windowStart = now;
@@ -56,7 +57,7 @@ struct Frames {
         sumMs += ms;
         worstMs = ms > worstMs ? ms : worstMs;
         ++count;
-        if (qpcUs(now - windowStart) < 1e6)
+        if (qpcUs(now - windowStart) < 1e6 * (windowSeconds ? windowSeconds : 1))
             return false;
         int n = sprintf_s(line, size, "HERO VR 0.0.77 FRAME (VR loop): %u frames, avg %.1f ms, worst %.1f ms;", count,
                           count ? sumMs / count : 0.0, worstMs);

@@ -54,6 +54,10 @@ uint32_t gameBase[2]{};
 // is back. The panel keeps the window's size all session: on the game screen
 // it maps onto the window pixel for pixel, as the second movie does.
 std::atomic<uintptr_t> vrTexture{};
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE: the panel's colour texture object (+10) and its made size, for the GPU
+// side's HUD texture finder (native_eye_gpu.cpp hudRoots): the minimap is drawn here, never in the game's view.
+std::atomic<uintptr_t> vrColour{};
+std::atomic<uint64_t> vrMade{};
 std::atomic<uint64_t> eyesTick{};
 // The eye views are the game screen in stereo, which shows the HUD though it is off.
 std::atomic<bool> screenEyes{};
@@ -164,6 +168,8 @@ void stream(void* self) {
         write(hudFollower + 0xc0, &bind, 1);
     }
     vrTexture = vr && target && made[0] == window[0] && made[1] == window[1] ? target : 0;
+    vrColour = vrTexture.load() ? texture : 0; // CUT7 WRIST MAP SOURCE
+    vrMade = (static_cast<uint64_t>(made[1]) << 32) | made[0];
     const bool back = !vr && size[0] == gameBase[0] && size[1] == gameBase[1] && !resized;
     restored = back;
     native_hud::publish([&](native_hud::Data& d) {
@@ -441,4 +447,13 @@ uint32_t native_hud::stop(uint32_t waitMs) {
     }
     ReleaseSRWLockExclusive(&lifecycle);
     return result;
+}
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE (CANDIDATE): the HUD panel's engine objects while the headset shows the
+// eye views with the HUD moved onto the panel (0 otherwise), and the size it was made at.
+uintptr_t native_hud::panelObjects(uintptr_t& colour, uint32_t& width, uint32_t& height) {
+    colour = vrColour.load();
+    const auto made = vrMade.load();
+    width = static_cast<uint32_t>(made);
+    height = static_cast<uint32_t>(made >> 32);
+    return enabled ? vrTexture.load() : 0;
 }

@@ -131,6 +131,24 @@ int main() {
     }
     check(std::string_view(missingText(hudHidden)) == "MINIMAP NOT ON SCREEN", "the note");
     check(std::string_view(missingText(haveMap)).empty(), "a map: no note");
+    // CUT7 WHERE: the gesture over the right wrist; the open hologram's wrist too (never taking its trigger).
+    check(mapPlace(true, true, false, true, 0) == placeRight, "the gesture: the right wrist");
+    check(mapPlace(true, false, true, true, 0) == placeLeft, "the hologram open (hud_hand left): the left wrist");
+    check(mapPlace(true, false, true, true, 1) == placeRight, "hud_hand right: the right wrist");
+    check(mapPlace(true, false, true, false, 0) == placeNone, "wrist_map_holo off: none");
+    check(mapPlace(false, true, true, true, 0) == placeNone, "wrist_map off: none");
+    check(mapPlace(true, false, false, true, 0) == placeNone, "neither: none");
+    check(length(leftWrist(Pose{{0, 1, 0}, {}}) - Vec3{-.045f, 1.085f, 0}) < 1e-4f, "the left wrist: mirrored");
+    check(std::abs(panelCentreLeft(Pose{{0, 1, 0}, {}}, 6).y - 1.145f) < 1e-4f, "6 cm over the left wrist");
+    check(std::string_view(missingText(noHud)) == "NO MINIMAP: HUD TEXTURE NOT FOUND", "CUT7: no HUD texture");
+    // CUT7 LEDGE: cut6's surface 3 (the floor crawl, a ledge) left with RT + A as the wall crawl does.
+    check(leaveCrawl(true, 3, true, false, ledgeAll), "CUT7: A on the ledge leaves it");
+    check(leaveCrawl(true, 3, false, true, ledgeAll), "CUT7: a web on the ledge leaves it");
+    check(!leaveCrawl(true, 3, true, false, ledgeGame), "CUT7: ledge_jump game is cut6's");
+    check(leaveCrawl(true, 2, true, false, ledgeGame) && leaveCrawl(true, 2, false, true, ledgeAll), "CUT7: wall crawl");
+    check(!leaveCrawl(true, 3, false, false, ledgeAll), "CUT7: no RT while only crawling");
+    check(!leaveCrawl(true, 1, true, true, ledgeAll) && !leaveCrawl(false, 3, true, true, ledgeAll),
+          "CUT7: Spidy's wall and no data stay the swing's");
     if (failures)
         return 1;
     std::printf("story077h: all passed\n");

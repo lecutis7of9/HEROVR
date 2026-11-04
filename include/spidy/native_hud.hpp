@@ -281,4 +281,8 @@ bool panelHooked();
 // Puts the game's own texture size back (waiting for the game's frames, up to
 // `waitMs`), then removes the hooks.
 uint32_t stop(uint32_t waitMs);
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE (CANDIDATE): the HUD panel's render target object (returned; 0 while the
+// HUD is not on the panel), its colour texture object and the size it was made at. The game's minimap is drawn
+// into this texture in VR play (the second movie moved off the game's view), never into the presented frame.
+uintptr_t panelObjects(uintptr_t& colour, uint32_t& width, uint32_t& height);
 } // namespace spidy::native_hud

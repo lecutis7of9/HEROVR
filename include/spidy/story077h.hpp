@@ -152,6 +152,35 @@ inline Vec3 panelCentre(const Pose& rightGrip, uint32_t atCm) {
     const Vec3 up = rightGrip.orientation.rotate({0, 1, 0});
     return rightWrist(rightGrip) + up * (static_cast<float>(std::min(atCm, atHigh)) * .01f);
 }
+// HERO VR 0.0.77 CUT7 LEFT WRIST: the left grip's wrist point (the right one mirrored) and a panel centre over it.
+inline Vec3 leftWrist(const Pose& leftGrip) {
+    return compose(leftGrip, Pose{{-.045f, .085f, 0}, {}}).position;
+}
+inline Vec3 panelCentreLeft(const Pose& leftGrip, uint32_t atCm) {
+    const Vec3 up = leftGrip.orientation.rotate({0, 1, 0});
+    return leftWrist(leftGrip) + up * (static_cast<float>(std::min(atCm, atHigh)) * .01f);
+}
+// HERO VR 0.0.77 CUT7 WHERE (the owner: "left wrist doesnt show map"): the right hand to the left wrist and the
+// right trigger is the hologram's (holo_open): it is never taken from it. Instead the map comes with it: while the
+// hologram is open (live.txt wrist_map_holo on, the default) the minimap shows over the hologram's wrist too - the
+// left wrist (hud_hand left, the default), the right with hud_hand right. The left hand to the right wrist and the
+// left trigger still toggles it over the right wrist. 0 none, 1 the right wrist, 2 the left wrist.
+enum Place : uint32_t { placeNone = 0, placeRight = 1, placeLeft = 2 };
+inline uint32_t mapPlace(bool mapOnSetting, bool gestureShown, bool holoOpen, bool withHolo, uint32_t hudHand) {
+    if (!mapOnSetting)
+        return placeNone;
+    if (gestureShown)
+        return placeRight;
+    if (holoOpen && withHolo)
+        return hudHand == 1 ? placeRight : placeLeft;
+    return placeNone;
+}
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE (CONFIRMED by the owner's cut6 video: the panel over the wrist showed the
+// wall - brick - not the minimap): in VR play the game's HUD, minimap included, is drawn onto Spidy's HUD panel
+// texture (native_hud moves it off the game's view), so the presented frame the cut6 crop read holds no minimap.
+// live.txt wrist_map_source: 0 hud (the default: the HUD panel's own texture), 1 frame (cut6's presented frame,
+// for comparison only).
+enum Source : uint32_t { sourceHud = 0, sourceFrame = 1 };
 // One eye's pixel rectangle {x0, y0, x1, y1} for a panel `widthMetres` wide (`aspect` width over height) facing
 // the eye at `centre`, through the eye's row-major view-projection `vp` (column vectors, as math.hpp), its fov
 // tangents and target size. A part off the target is cut off the rectangle and the crop alike (never squashed).
@@ -194,15 +223,30 @@ inline bool panelRect(const Mat4& vp, Vec3 centre, float widthMetres, float aspe
 // "NOT ON SCREEN": why there is no minimap to crop (0: there is one). The pixels are never read back (no CPU
 // readback), so an empty crop is known by the game's own state that hides its HUD: no fresh presented frame, a
 // cutscene or a menu (the VR screen shown), or no hero in play.
-enum Missing : uint32_t { haveMap = 0, noFrame = 1, hudHidden = 2, noCrop = 3 };
+enum Missing : uint32_t { haveMap = 0, noFrame = 1, hudHidden = 2, noCrop = 3, noHud = 4 };
 inline const char* missingText(uint32_t why) {
     return why == noFrame   ? "NO MINIMAP: NO GAME FRAME"
            : why == hudHidden ? "MINIMAP NOT ON SCREEN"
            : why == noCrop    ? "NO MINIMAP: FRAME TOO ODD"
+           : why == noHud     ? "NO MINIMAP: HUD TEXTURE NOT FOUND"
                               : "";
 }
 inline const char* missingName(uint32_t why) {
     return why == noFrame ? "no game frame" : why == hudHidden ? "HUD hidden (cutscene, menu, no hero)"
-                          : why == noCrop ? "frame too odd" : "drawn";
+                          : why == noCrop ? "frame too odd"
+                          : why == noHud  ? "HUD texture not found (see WRIST MAP SOURCE)"
+                                          : "drawn";
+}
+// HERO VR 0.0.77 CUT7 LEDGE (CONFIRMED cause, CANDIDATE fix): the owner could not get off a ledge after the first
+// cutscene. cut6's every CRAWL FEED line read "surface 3" - the game's crawl on a floor (game_swing::Surface::floor):
+// a ledge or a roof's edge is that crawl, not only a duct - and the leave-the-crawl RT + A (walk.parkour) went out on
+// the game's wall crawl (surface 2) alone, so his A on the ledge was the crawl's own hop along it, and a web that
+// held there never took him off (CUT5 MOVE: "LT 0 RT 0" throughout). live.txt ledge_jump: 0 all (the default), also
+// on the floor crawl; 1 game, cut6's. Spidy's own wall (surface 1) is the swing's, which leaves it itself.
+enum LedgeJump : uint32_t { ledgeAll = 0, ledgeGame = 1 };
+// surface: game_swing::Surface as a number (0 none, 1 Spidy's wall, 2 the game's crawl, 3 its floor crawl).
+constexpr bool leaveCrawl(bool status, uint32_t surface, bool jump, bool webbed, uint32_t mode) {
+    const bool crawl = status && (surface == 2u || (mode == ledgeAll && surface == 3u));
+    return crawl && (jump || webbed);
 }
 } // namespace spidy::story077h

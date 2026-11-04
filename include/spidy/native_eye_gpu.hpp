@@ -270,6 +270,17 @@ void monitorSkip();
 bool deviceRemovedSeen();
 // The newest copied frame, if one was copied within maxAgeMs.
 bool latestScreen(Screen& out, uint64_t maxAgeMs);
+// HERO VR 0.0.77 CUT7 WRIST MAP SOURCE (CANDIDATE): while wanted, each present finds (once per HUD panel) the
+// D3D12 texture the game draws its HUD panel into - where the minimap is in VR play - and copies it on the game's
+// queue. latestHud gives that copy (PIXEL_SHADER_RESOURCE, the panel's own size); hudSourceLine one log line.
+void wantHud(bool wanted);
+bool latestHud(Screen& out, uint64_t maxAgeMs);
+std::string hudSourceLine();
+// HERO VR 0.0.77 CUT7 FPS: whether the see-through models are drawn now (the eyes' depth watched only then).
+void sceneDepthInUse(bool used);
+// HERO VR 0.0.77 CUT7 BOOT SCREEN (diagnostic): presents of any swapchain, screen copies made and skipped since
+// start, the last copy's ScreenSkip and the newest copy's age (UINT64_MAX: none yet).
+void bootCounts(uint64_t& presents, uint64_t& copies, uint64_t& skips, uint32_t& skipWhy, uint64_t& copyAgeMs);
 // How the copy is read: the encoded format of the back buffer's family, or
 // UNKNOWN for a format the screen does not show.
 DXGI_FORMAT screenView(DXGI_FORMAT backBuffer, bool& linear);

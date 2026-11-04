@@ -32,7 +32,7 @@ class Cutfix2(unittest.TestCase):
     def test_note_drawn_and_caught(self):
         g = src('src/game_xr.cpp')
         self.assertIn('#include "spidy/cutscene077_note.hpp"', g)
-        at = g.index('else if (cutNoteShow && cutNoteText[0] && !overlayFault) {')
+        at = g.index('else if (cutNoteShow && cutNoteText[0] && !overlayFault && cutNoteNow.load() == 1) {')  # CUT7: live.txt cut_note
         body = g[at:g.index('copyMs =', at)]
         self.assertIn('try {', body)
         self.assertIn('catch (...)', body)

@@ -51,7 +51,10 @@ class Wiring(unittest.TestCase):
         self.assertIn('std::atomic<uint32_t> promptWindowNow{story077d::windowOff};', self.game)
         self.assertIn('std::atomic<uint32_t> promptCardsNow{story077d::cardsOn};', self.game)
         self.assertIn('std::atomic<uint32_t> bossDamageNow{0};', self.game)  # 0 = on by default
-        self.assertIn('if (bossMode != 1 && heroNow() != hero_modes::spiderMan) {', self.game)  # 1 = off
+        # CUT7: the boss is read for every hero (1 = off); the stand-in only for the others.
+        self.assertIn('const bool bossHero = heroNow() != hero_modes::spiderMan;', self.game)
+        self.assertIn('if (bossMode != 1) {', self.game)
+        self.assertIn('bossId = bossHero ? boss.id : 0;', self.game)
 
     def test_prompt_window(self):
         g = self.game

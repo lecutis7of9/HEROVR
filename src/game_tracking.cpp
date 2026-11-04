@@ -542,9 +542,11 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
              (std::isfinite(surface.speed) && surface.speed < (walks ? wallStrideSpeed : wallStandSpeed)))
         standing_ = true;
     {
-        const Quat rest = arc(surfaceTurn_.rotate({0, 1, 0}), standing_ ? held : Vec3{0, 1, 0});
+        // CUT7 WALL VIEW: level (the default), the world's up stays up on a wall: no turn, no shift onto it.
+        const bool turnOnto = standing_ && !wallLevel_;
+        const Quat rest = arc(surfaceTurn_.rotate({0, 1, 0}), turnOnto ? held : Vec3{0, 1, 0});
         const float left = 2 * std::atan2(length({rest.x, rest.y, rest.z}), rest.w);
-        const Vec3 shift = standing_ ? surface.anchor - feet : Vec3{};
+        const Vec3 shift = turnOnto ? surface.anchor - feet : Vec3{};
         if (left > 1e-4f) {
             // About the eyes, not the feet: the world turns round the player
             // where he looks from, and his eyes go straight to where they
@@ -560,26 +562,28 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
             surfaceShift_ = from + (to - from) * (take / left) - surfaceTurn_.rotate(eyes);
         } else {
             surfaceShift_ += (shift - surfaceShift_) * (1 - std::exp(-f.seconds / surfaceGlideSeconds));
-            if (!standing_ && (surfaceTurn_.x != 0 || surfaceTurn_.y != 0 || surfaceTurn_.z != 0)) {
+            if (!turnOnto && (surfaceTurn_.x != 0 || surfaceTurn_.y != 0 || surfaceTurn_.z != 0)) {
                 const float heading = 2 * std::atan2(surfaceTurn_.y, surfaceTurn_.w);
                 rig_.origin = feet + Quat::yaw(heading).rotate(rig_.origin - feet);
                 rig_.yaw += heading;
                 surfaceTurn_ = {};
             }
-            if (!standing_ && length(surfaceShift_) < 1e-3f)
+            if (!turnOnto && length(surfaceShift_) < 1e-3f)
                 surfaceShift_ = {};
         }
     }
     const Vec3 unplacedHead = rig_.toWorld(f.head).position;
+    // CUT7 WALL VIEW level: held on a wall with the horizon level, the head stands off it as off a climb.
+    const bool standsOnto = standing_ && !wallLevel_;
     Vec3 target{};
-    if (handClimb_ && !standing_ && holds && std::abs(held.y) < .5f) {
+    if (handClimb_ && !standsOnto && holds && std::abs(held.y) < .5f) {
         // Keep the horizon upright and crouch beside the facade, hands within
         // touching distance. This shifts the tracking space, never the collider.
         const Vec3 alongUp = normalized(Vec3{0, 1, 0} - held * held.y);
         const float lower = std::clamp(f.head.position.y - .9f, 0.f, .7f);
         target = held * (wallDistance_ - dot(unplacedHead - surface.anchor, held)) - alongUp * lower;
         surfaceDepth_ = 0;
-    } else if (onSurface && !standing_) {
+    } else if (onSurface && !standsOnto) {
         const float height = dot(unplacedHead - feet, away);
         surfaceSeconds_ = onSurface_ ? surfaceSeconds_ + f.seconds : 0.f;
         const float wanted =
@@ -781,7 +785,7 @@ GameMotionFrame GameTrackingRig::update(const XrFrame& f, Vec3 feet, Vec3 gameFo
         if (length(along) > 1e-3f) {
             ahead = normalized(along);
             side = cross(ahead, held);
-            const Vec3 meant = (standing_ ? surfaceTurn_ : arc({0, 1, 0}, held)).rotate(levelMove);
+            const Vec3 meant = (standsOnto ? surfaceTurn_ : arc({0, 1, 0}, held)).rotate(levelMove);
             move = meant - held * dot(meant, held);
         }
     }

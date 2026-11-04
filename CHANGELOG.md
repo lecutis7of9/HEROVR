@@ -2,6 +2,13 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## 0.0.76 in the launcher (tag v0.0.76.1) - the v0.0.76 files, version stamps only
+
+The published v0.0.76 (HV076.zip) still said VERSION 0.0.75, so no launcher could offer it. v0.0.76.1 is the same
+code with only the stamps moved: VERSION 0.0.76, PORT-VERSION Update 39.9, launcher 0.0.76.1 build 18. Every
+launcher on 0.0.75 or older (0.0.63 included) now offers 0.0.76 once; after the update the versions match, so it is
+not offered again. Still EXPERIMENTAL, 0.0.63 the most recent STABLE build; Revert unchanged.
+
 ## hero-0.0.76-bikes - a Harley for each hero, Cap's chest-draw grapple, Punisher holo guard (TEST build, not released)
 
 On top of test 27041ea (AO ON + ONE PAGE). SM2 only. **Built and unit-tested, not yet tried in the game.**

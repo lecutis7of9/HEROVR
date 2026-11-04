@@ -12,22 +12,18 @@ def src(p):
 
 class Release00751(unittest.TestCase):
     def test_versions(self):
-        self.assertEqual(src('VERSION').strip(), '0.0.75')
-        self.assertEqual(src('PORT-VERSION').strip(), 'Update 39.8.1')
+        # v0.0.76.1 moved VERSION to 0.0.76, PORT-VERSION to Update 39.9 and the launcher to build 18 (release00761_tests pins them)
+        self.assertGreaterEqual(tuple(int(x) for x in src('VERSION').strip().split('.')), (0, 0, 75))
         self.assertRegex(src('CMakeLists.txt'), r'option\(HERO_TEST_BUILD "[^"]*" OFF\)')
-        self.assertIn('build = "39.8.1";', src('include/spidy/version.hpp'))
         self.assertTrue(os.path.exists(os.path.join(ROOT, 'RELEASE-NOTES-v0.0.75.1.md')))
 
     def test_launcher_build_17(self):
         m = src('tools/launcher/src/ModVersion.cs')
-        self.assertIn('public const string Version = "0.0.75.2";', m)
-        self.assertIn('public const int Build = 17;', m)
+        self.assertGreaterEqual(int(re.search(r'public const int Build = (\d+);', m).group(1)), 17)
         self.assertIn('public const string PreviousTag = "v0.0.75";', m)
         self.assertIn('public const string HotfixOf = "v0.0.75";', m)
         self.assertIn('public const string HotfixBuild = "Update 39.8.1";', m)
         self.assertIn('PreviousTags = { "v0.0.75", "v0.0.74", "v0.0.73", "v0.0.63", "v0.0.62", "v0.0.6", "v0.0.5" };', m)
-        self.assertIn('[assembly: AssemblyInformationalVersion("0.0.75.2 (launcher build 17)")]',
-                      src('tools/launcher/src/AssemblyInfo.cs'))
 
     def test_revert_offers_the_release_it_fixes(self):
         rd = src('tools/launcher/src/RevertDialog.cs')

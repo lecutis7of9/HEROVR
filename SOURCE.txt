@@ -1,4 +1,4 @@
-HERO VR 0.0.77 (v0.0.77): source code (GNU GPL version 3)
+HERO VR 0.0.77 launcher hotfix (v0.0.77.1): source code (GNU GPL version 3)
 
 This zip contains the complete corresponding source code:
 - the VR mod is in the folder's top level (src\, tools\, CMakeLists.txt, tests\ ...). It is built by tools\build.ps1 -Observer;

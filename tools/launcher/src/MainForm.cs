@@ -245,7 +245,7 @@ namespace Sm2VrLauncher
             btnMultiplayer.Click += (s, e) => tabs.Select(tabs.Selected == SheetMultiplayer ? -1 : SheetMultiplayer);
             tip.SetToolTip(btnMultiplayer, "Play with a friend on the same network: HOST, or JOIN a game from the list - no addresses to type");
 
-            wordmark = Add(this, new Wordmark(), 444, 80, 700, 190);
+            wordmark = Add(this, new Wordmark(), 444, 80, 700, 260);   // 0.0.77.2: 260 tall (was 190) for the SPECIAL THANKS TO: lines
 
             // The sections are sheets that slide up above the bar. Status and Reports are compact; the rest are tall.
             sheetBounds = new[]

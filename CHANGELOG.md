@@ -2,6 +2,13 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## 0.0.77 launcher hotfix (tag v0.0.77.1) - special thanks on the main screen
+
+Launcher 0.0.77.2, build 20; the mod is unchanged (VERSION 0.0.77, PORT-VERSION Update 39.10). The main screen shows a
+small SPECIAL THANKS TO: block under the subtitle (immersive cutscenes; voice acting and testing); the Credits sheet's
+cutscene credit line moved there, so it is not doubled. version.json carries "launcher_build": 20, which offers it once to
+0.0.77 players (the installed build is 20 afterwards, so no loop).
+
 ## 0.0.77 (tag v0.0.77) - cutscenes, story moves, Sandman, the flat front end (EXPERIMENTAL release)
 
 The cut8 build (f686fe4) released with the stamps moved: VERSION 0.0.77, PORT-VERSION Update 39.10, launcher 0.0.77.1

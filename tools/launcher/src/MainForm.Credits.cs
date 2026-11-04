@@ -50,7 +50,6 @@ namespace Sm2VrLauncher
             head("Made by Agent Mulder");
             line().Add("Agent Mulder", Theme.UiBold(14), Theme.Text).Add("  - " + LauncherInfo.Title + " for Marvel's Spider-Man 2 and this launcher.", f, Theme.Silver);
             line().Link("TikTok @agentmulder", fb, Credits.TikTokUrl).Add(dot, f, Theme.Dim).Link("Discord server", fb, Credits.DiscordUrl);
-            line().Add("immersive cutscenes by " + "jim" + "jam094", Theme.Ui(11f), Theme.Dim); // 0.0.77: credit for the immersive cutscene code he sent
 
             // 0.0.75 SM1: the Spider-Man 1 VR mod is his work; the launcher only downloads it from his GitHub and starts it.
             head("Spider-Man 1 VR mod");

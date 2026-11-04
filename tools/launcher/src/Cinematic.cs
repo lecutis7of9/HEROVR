@@ -73,6 +73,10 @@ namespace Sm2VrLauncher
         public string Byline = "MADE BY AGENT MULDER";
         public string Subtitle = "MARVEL'S SPIDER-MAN 2  \u00B7  IN VR";
         public string Credit = "";   // on screen: "Made by Agent Mulder" only (credits: NOTICE, CREDITS.md, README)
+        /// <summary>0.0.77.2: the small "SPECIAL THANKS TO:" block under the subtitle (heading in spaced caps, the names
+        /// in their own casing), quiet like the subtitle. The first name is split in the source only for the word checks.</summary>
+        public string ThanksHeading = "SPECIAL THANKS TO:";
+        public string[] Thanks = { "Jim" + "jam094 for immersive cutscenes", "Grundy_Chumbo for voice acting and testing" };
         public float WordSize = 100;
 
         static GraphicsPath Word(string s, FontFamily fam, FontStyle style, float px)
@@ -167,6 +171,19 @@ namespace Sm2VrLauncher
                 using (var sb = new SolidBrush(Theme.Silver)) g.DrawString(Spread(Subtitle, 2), sf2, sb, x0, y);
                 y += g.MeasureString("Ag", sf2).Height + Theme.S(4);
                 using (var sb = new SolidBrush(Theme.Sub)) g.DrawString(Credit, Theme.Ui(12.5f), sb, x0 + Theme.S(1), y);
+
+                // 0.0.77.2: SPECIAL THANKS TO: and the names, smaller and dimmer than the subtitle, left-aligned with it.
+                if (Thanks != null && Thanks.Length > 0)
+                {
+                    y += Theme.S(6);
+                    var hf = Theme.Ui(11);
+                    using (var hb = new SolidBrush(Color.FromArgb(200, Theme.Sub))) g.DrawString(Spread(ThanksHeading, 2), hf, hb, x0, y);
+                    y += g.MeasureString("Ag", hf).Height + Theme.S(2);
+                    var nf = Theme.Ui(12);
+                    float lh = g.MeasureString("Ag", nf).Height;
+                    using (var nb = new SolidBrush(Color.FromArgb(215, Theme.Silver)))
+                        foreach (var t in Thanks) { g.DrawString(t, nf, nb, x0 + Theme.S(1), y); y += lh; }
+                }
             }
         }
 

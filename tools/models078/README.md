@@ -10,7 +10,8 @@ The game loads the four guns from `Models\Punisher078\` next to the mod (mesh_mo
 | `Rifle`, `Rifle/Handle`, `Rifle/Mag` | carbine body with its red dot, the charging handle, the magazine |
 
 Frame (every file): metres, real scale; the grip point at the origin; -z along the barrel, +y the top, +x right.
-A magazine or shell has its top (the end that goes in) at the origin. The moving part (forend, slide, bolt,
+A magazine is modelled seated, in the gun's frame (hero007::appendArsenal078 draws a loose one moved by -magWell, so
+its magWell point - the pistol's floor plate - is in the hand); a shell is modelled about its middle. The moving part (forend, slide, bolt,
 handle) is modelled in its forward (home) place; the game moves it back along the barrel by the rack's travel.
 Where the parts must sit is `punisher078::pointsOf()` (muzzle, port, magazine well, forend, rack, lens).
 
@@ -27,8 +28,21 @@ No holster model: the holstered pistol is drawn in the PUNISHER model's own righ
 
 ## Credits
 
-No gun model ships in this branch yet. Every model added here must be CC0 or CC-BY and gets a line below:
-name, author, source URL, license, and what was changed (scale, origin, split into parts).
+Every model added here must be CC0 or CC-BY and gets a line below: name, author, source URL, license, and what was
+changed (scale, origin, split into parts). Converted by `convert_guns_078.py` (with `dump_gun_078.py` in Blender);
+each folder ships its `license.txt`, and the glb's asset.extras carry the same attribution. The sniper, rifle and red
+dot are not in this build (their slots stay MODEL MISSING).
+
+- **Pistol** (`Punisher078/Pistol`, `/Slide`, `/Mag`): "BERETTA M9 W/ SUPRESSOR" by drcrazzie
+  (https://sketchfab.com/drcrazzie), https://sketchfab.com/3d-models/beretta-m9-w-supressor-93cda4e59523467ea20559ec4ca5b5cd, CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Real scale
+  (CONFIRMED: 215 x 143 mm without the can, an M9 is 217 x 137), grip at the origin; frame 17,258 / slide 5,437 /
+  magazine 1,570 triangles; the magazine body and its 9 mm round are built by HERO VR (the model has only the floor
+  plate); PBR maps 4096 -> 2048 px.
+- **Pump** (`Punisher078/Pump`, `/Forend`, `/Shell`): "Remington 870" by White-Horse (https://sketchfab.com/white-horse),
+  https://sketchfab.com/3d-models/remington-870-e9342d1df32645faa2e50fd33a9e1800, CC-BY-4.0. Scaled 1.12 mm a unit (CANDIDATE: the barrel and receiver widths against a real 870's; 48 cm long),
+  grip at the origin; body 14,540 / forend (with the bolt it drives) 3,940 triangles; the 12-gauge shell (768) is built
+  by HERO VR; PBR maps 4096 -> 2048 px.
+
 
 ## Candidates (not downloaded: Sketchfab downloads need the owner's signed-in account)
 

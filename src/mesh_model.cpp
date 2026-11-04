@@ -1390,7 +1390,9 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
     std::map<std::pair<uint64_t, uint64_t>, int32_t> seenOrm;     // (MR bytes, occlusion bytes) -> linear layer
     std::map<std::pair<uint64_t, bool>, int32_t> seen; // (the image's bytes, cut) -> its layer
     std::map<int32_t, Picture> thumbs;                 // each layer at 64 x 64, for the untextured colours
-    for (uint32_t slot = 1; slot < slots; ++slot) {
+    // HERO VR 0.0.78 PUNISHER ARSENAL: the HQ copies are handed out while there is room (hqMost), so the slots are read
+    // in textureOrder's order: the arsenal's guns (held at the face) and the Punisher suit before the hammers and shield.
+    for (const uint32_t slot : textureOrder(slots)) {
         if (lib.status[slot] != loaded)
             continue;
         Mesh& m = lib.meshes[slot];

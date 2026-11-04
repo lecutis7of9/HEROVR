@@ -2284,13 +2284,14 @@ DWORD WINAPI run(void*) {
             mesh_model::TextureArray textures;
             // HERO VR 0.0.78 PBR MATERIALS: the normal and ORM maps as their own (linear) array, and 2048 px copies of
             // the HQ slots' maps (mesh_model::slotHasHqTextures) - as many as the GPU's free memory keeps 1.5 GB
-            // spare for (about 22.4 MB a layer, at most 24); unknown memory: 16 from 3 GB of free commit, else none.
+            // spare for (about 22.4 MB a layer, at most 32: 0.0.78 arsenal - the guns' 8 beside the suit's 8, the hammers' and
+            // shield's 13); unknown memory: 16 from 3 GB of free commit, else none (mesh_model::textureOrder: guns and suit first).
             mesh_model::MapOptions mapOptions;
             mapOptions.maps = commitFree >= (768ull << 20);
             {
                 const uint64_t vramFree = overlay.videoMemoryFree(), spare = 1536ull << 20, perLayer = 22400ull << 10;
                 uint64_t most = vramFree ? (vramFree > spare ? (vramFree - spare) / perLayer : 0) : commitFree >= (3ull << 30) ? 16 : 0;
-                most = std::min<uint64_t>(most, 24);
+                most = std::min<uint64_t>(most, 32);
                 if (modelTexturesHqNow.load() == 0 && mapOptions.maps && most > 0) {
                     mapOptions.hqSize = mesh_model::hqTextureSize;
                     mapOptions.hqMost = static_cast<uint32_t>(most);

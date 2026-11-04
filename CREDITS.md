@@ -28,6 +28,8 @@ It is licensed under the GNU GPL version 3.
   - **Yanez Designs (Anthony Yanez)**: "Daredevil's baton" (CC BY 4.0), DAREDEVIL's batons. https://sketchfab.com/paulyanez
   - **TORI106**: "9mm Pistol" (CC BY 4.0), PUNISHER's pistols. https://sketchfab.com/TORI106
   - **LiliumLetifer**: "Sawed-off Shotgun" (CC BY 4.0), PUNISHER's sawed-off. https://sketchfab.com/LiliumLetifer
+  - **drcrazzie**: "BERETTA M9 W/ SUPRESSOR" (CC BY 4.0), PUNISHER's suppressed pistol (0.0.78, `Models/Punisher078/Pistol`; magazine body built by HERO VR). https://sketchfab.com/drcrazzie
+  - **White-Horse**: "Remington 870" (CC BY 4.0), PUNISHER's pump shotgun (0.0.78, `Models/Punisher078/Pump`; shell built by HERO VR). https://sketchfab.com/white-horse
   - **Falxx**: "Batman's Grapple Gun" (CC BY 4.0), BATMAN's grapple gun. https://sketchfab.com/Falxx
   - **Eira**: "Batarang" (CC BY 4.0), batarang EIRA. https://sketchfab.com/eirav
   - **Ludus101**: "Batarang Clooney" (CC BY 4.0), batarang CLOONEY. https://sketchfab.com/Ludus101

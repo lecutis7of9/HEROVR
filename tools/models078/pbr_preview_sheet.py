@@ -28,12 +28,15 @@ def sheet(out, view, light):
     d.text((10, 32), LIGHTS[light], font=font(13), fill=(200, 200, 200))
     d.text((10, 70), 'BEFORE: cut10 plain path (baked cavity, 1024)', font=font(15), fill=(255, 255, 255))
     d.text((w + 22, 70), 'AFTER: 0.0.78 PBR (normal + ORM + GGX + sky, HQ 2048)', font=font(15), fill=(255, 255, 255))
-    d.text((10, h + 70), 'Punisher Suit_punisher_1, 80k triangles', font=font(13), fill=(170, 170, 170))
+    d.text((10, h + 70), CAPTION, font=font(13), fill=(170, 170, 170))
     s.save(out / f'punisher_{view}_{light}_offline.png')
 
 
+CAPTION = 'Punisher Suit_punisher_1, 80k triangles'
+
 if __name__ == '__main__':
     o = pathlib.Path(sys.argv[1])
+    CAPTION = sys.argv[2] if len(sys.argv) > 2 else CAPTION  # e.g. 'Punisher078/Pistol, 17k triangles'
     for v in ('front', 'three', 'chest'):
         for li in LIGHTS:
             sheet(o, v, li)

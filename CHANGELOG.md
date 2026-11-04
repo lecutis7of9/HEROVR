@@ -2,6 +2,25 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut12 - PUNISHER ARSENAL: the suppressed pistol and the pump shotgun (TEST build, private)
+
+From the player's models ("just get the models", "not flat textures, it needs to look realistic in game"); this build
+ships ONLY these two - the sniper, rifle and red dot are not converted and their slots 68-73 stay as they were.
+- **Suppressed pistol (slots 65-67, Models/Punisher078/Pistol, /Slide, /Mag; CONFIRMED offline):** "BERETTA M9 W/
+  SUPRESSOR" by drcrazzie, CC BY 4.0. Real scale, grip at the origin, -z down the barrel; frame 17,258, slide 5,437,
+  magazine 1,570 triangles; base / normal / ORM at 2048 with tangents. The magazine body and round are built by HERO VR
+  around the model's floor plate.
+- **Pump shotgun (slots 62-64, Models/Punisher078/Pump, /Forend, /Shell; CONFIRMED offline):** "Remington 870" by
+  White-Horse, CC BY 4.0. Scaled 1.12 mm a unit (48 cm; CANDIDATE), grip at the origin; body 14,540, forend (with the
+  bolt) 3,940, shell 768 (built by HERO VR) triangles; PBR maps at 2048 with tangents.
+- **Points measured on the shipped models** (punisher078::pointsOf): muzzle, ejection port, magazine well, forend,
+  rack, sight eye and the rack travel (pistol slide 3.5 cm, pump forend 6.9 cm). Sniper and rifle points unchanged.
+- **HQ 2048 layers handed out arsenal first** (mesh_model::textureOrder: arsenal 62-73, then Suit_punisher_1, then the
+  rest) and the HQ cap 24 -> 32 layers, so the guns get their full-detail maps (CONFIRMED in tests/model_pbr_tests.cpp;
+  in game CANDIDATE: with VRAM unknown the cap is still 16 and the hammers / shield may get the 1024 copies).
+- Converter and offline renders: tools/models078/convert_guns_078.py (+ dump_gun_078.py in Blender),
+  render_guns_078.py, render_holster_gun_078.py. Credits: launcher, CREDITS.md, THIRD-PARTY-MODELS.md.
+
 ## hero-0.0.78-pbr - PBR MATERIALS: the mod's models lit per pixel with normal / ORM maps (TEST build, private)
 
 From the player's ask ("not flat textures, it needs to look realistic in game"):

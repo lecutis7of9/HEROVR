@@ -395,6 +395,21 @@ inline constexpr bool slotHasHqTextures(uint32_t slot) {
 static_assert(slotHasHqTextures(35) && slotHasHqTextures(9) && slotHasHqTextures(11) && slotHasHqTextures(15) &&
                   slotHasHqTextures(17) && slotHasHqTextures(62) && slotHasHqTextures(73) && !slotHasHqTextures(36),
               "0.0.78 PBR: the HQ slots");
+// HERO VR 0.0.78 PUNISHER ARSENAL: the order prepareTextures reads the slots 1..slots-1 in - the arsenal first, then
+// Suit_punisher_1, then the rest in slot order - so the HQ layers (first come, as long as hqMost allows) go to the
+// held guns and the suit before the hammers and the shield when the GPU's memory gives fewer than all of them.
+inline std::vector<uint32_t> textureOrder(uint32_t slots) {
+    std::vector<uint32_t> order;
+    for (uint32_t s = 1; s < slots; ++s)
+        if (slotIsArsenal078(s))
+            order.push_back(s);
+    if (slotSuitFirst + 16 < slots && !slotIsArsenal078(slotSuitFirst + 16))
+        order.push_back(slotSuitFirst + 16);
+    for (uint32_t s = 1; s < slots; ++s)
+        if (!slotIsArsenal078(s) && s != slotSuitFirst + 16)
+            order.push_back(s);
+    return order;
+}
 // The most HQ layers (both arrays): 2048 px with mips is about 22.4 MB a layer, so 16 about 358 MB of VRAM.
 inline constexpr uint32_t hqTextureSize = 2048, hqMostLayers = 16;
 // Tangents for a mesh's normal-mapped triangles where the file gave none (model_pbr::generateTangents).

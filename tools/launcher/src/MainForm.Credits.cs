@@ -92,6 +92,9 @@ namespace Sm2VrLauncher
                  // 0.0.74 test 1: BATMAN's Batmobiles.
                  "Batmobiles (Models\\Vehicle\\Batmobile) - \"Bat-Mobile (1989)\" by Dreamloft3D, \"Batmobile\" by Odami_3D, \"Batmobile\" by SorroW, " +
                  "\"Batmobile - Batman Forever\" by S.York-Designs (AI-generated with Meshy); CC BY 4.0 (converted; cockpit by Agent Mulder)\n" +
+                 // 0.0.78 PUNISHER ARSENAL: the suppressed pistol and the pump shotgun.
+                 "Punisher's suppressed pistol (Models\\Punisher078\\Pistol) - \"BERETTA M9 W/ SUPRESSOR\" by drcrazzie, CC BY 4.0 (split into frame, slide and magazine; magazine body built for HERO VR)\n" +
+                 "Punisher's pump shotgun (Models\\Punisher078\\Pump) - \"Remington 870\" by White-Horse, CC BY 4.0 (split into body and forend, rescaled; shell built for HERO VR)\n" +
                  "ROSTER pictures - thumbnails of the artists' models, each named in THIRD-PARTY-MODELS.md\n" +
                  "Links, licences and changes: THIRD-PARTY-MODELS.md in the mod folder.", f, Theme.Silver);
             line().Act("Open THIRD-PARTY-MODELS", fb, () => OpenNotice("THIRD-PARTY-MODELS.md"));

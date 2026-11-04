@@ -65,18 +65,20 @@ struct GunPoints {
 };
 inline constexpr GunPoints pointsOf(uint32_t arm) {
     switch (arm) {
-    case pumpShotgun: // the pump's forend 28-40 cm ahead of the grip; the loading port under the receiver
-        return {{.82f, .055f, 0}, {.10f, .015f, 0}, {}, {.34f, .02f, 0}, {.34f, .02f, 0}, {-.02f, .09f, 0}, {}, .09f, .09f, 0, .07f,
-                .095f, 0};
+    case pumpShotgun: // measured on the shipped Remington 870 (convert_guns_078.py, conversion-report078.json): the muzzle
+        // 46 cm ahead of the grip, the forend's middle at 35 cm with 6.9 cm to the receiver, the loading port under it
+        return {{.459f, .092f, 0}, {.147f, .052f, 0}, {}, {.346f, .067f, 0}, {.346f, .067f, 0}, {-.02f, .114f, 0}, {}, .09f, .09f, 0,
+                .07f, .069f, 0};
     case sniperRifle: // the bolt handle on the right behind the scope; a 50 mm objective, 4 cm ocular
         return {{1.02f, .06f, 0}, {.07f, .06f, .02f}, {.06f, -.03f, 0}, {.36f, .02f, 0}, {.04f, .07f, .05f}, {-.10f, .115f, 0},
                 {-.02f, .115f, 0}, .10f, .07f, .07f, 0, .09f, .019f};
     case assaultRifle: // the charging handle at the back of the upper; a 25 mm red dot window
         return {{.56f, .055f, 0}, {.06f, .06f, .02f}, {.07f, -.02f, 0}, {.25f, .03f, 0}, {-.06f, .085f, 0}, {-.18f, .12f, 0},
                 {.10f, .12f, 0}, .10f, .07f, .07f, 0, .065f, .0125f};
-    default: // the suppressed pistol: the magazine into the grip's base, the slide's serrations at the back
-        return {{.33f, .074f, 0}, {.05f, .074f, .01f}, {-.01f, -.075f, 0}, {}, {-.03f, .074f, 0}, {-.10f, .09f, 0}, {}, 0, .06f, .07f, 0,
-                .035f, 0};
+    default: // measured on the shipped Beretta M9 with its suppressor (convert_guns_078.py): the can's end 36 cm ahead of
+        // the grip, the magazine into the grip's base, the slide's serrations at the back, 35 mm of slide travel
+        return {{.360f, .074f, 0}, {.05f, .075f, .01f}, {0, -.054f, 0}, {}, {-.012f, .066f, 0}, {-.12f, .089f, 0}, {}, 0, .06f, .07f,
+                0, .035f, 0};
     }
 }
 // A point of the gun's frame in tracking space (the held gun: grip point, barrel forward, top up).

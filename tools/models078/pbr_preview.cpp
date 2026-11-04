@@ -406,9 +406,14 @@ int main(int argc, char** argv) {
     const View views[] = {{"front", {v(0, 1.0f, 3.9f), v(0, .93f, 0), 30, 560, 960}},
                           {"three", {v(2.4f, 1.35f, 2.9f), v(0, .93f, 0), 30, 560, 960}},
                           {"chest", {v(.25f, 1.5f, 1.05f), v(0, 1.35f, 0), 30, 640, 640}}};
+    // 0.0.78 PUNISHER ARSENAL: a gun (its grip point at the origin, the barrel along -z) framed close instead
+    const View gunViews[] = {{"front", {v(.95f, .05f, -.16f), v(0, .03f, -.17f), 30, 960, 560}},
+                             {"three", {v(.62f, .30f, .32f), v(0, .03f, -.15f), 30, 960, 560}},
+                             {"chest", {v(-.10f, .16f, .30f), v(0, .07f, -.10f), 30, 640, 640}}};
+    const bool gun = mm::slotIsArsenal078(slot);
     for (const auto& L : lights) {
         std::printf("%s\n  %s\n  %s\n", L.name, emit(lb, before, L.l).c_str(), emit(la, after, L.l).c_str());
-        for (const auto& V : views) {
+        for (const auto& V : gun ? gunViews : views) {
             const auto a = render(before, V.c, L.l), b = render(after, V.c, L.l);
             writePpm(out + V.name + "_" + L.name + "_before.ppm", a, V.c.width, V.c.height);
             writePpm(out + V.name + "_" + L.name + "_after.ppm", b, V.c.width, V.c.height);

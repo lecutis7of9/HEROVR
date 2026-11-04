@@ -206,6 +206,21 @@ int main() {
         const mp::Material d = mp::material(plain, 0);
         check(d.roughness == 1 && d.metallic == 0 && d.normalLayer < 0, "glue: a model without surfaces: rough dielectric");
     }
+    { // 0.0.78 PUNISHER ARSENAL: the HQ layers go first come, so the guns, then the Punisher suit, are read first
+        const uint32_t slots = mesh_model::slotArsenal078End + 2;
+        const std::vector<uint32_t> o = mesh_model::textureOrder(slots);
+        std::vector<int> seen(slots, 0);
+        for (const uint32_t s : o)
+            ++seen[s];
+        bool once = seen[0] == 0;
+        for (uint32_t s = 1; s < slots; ++s)
+            once = once && seen[s] == 1;
+        const uint32_t guns = mesh_model::slotArsenal078End - mesh_model::slotArsenal078First;
+        check(o.size() == slots - 1 && once, "texture order: every slot once");
+        check(o.front() == mesh_model::slotArsenal078First && o[guns - 1] == mesh_model::slotArsenal078End - 1 &&
+                  o[guns] == mesh_model::slotSuitFirst + 16 && o[guns + 1] == 1,
+              "texture order: the arsenal, the Punisher suit, then the rest");
+    }
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }

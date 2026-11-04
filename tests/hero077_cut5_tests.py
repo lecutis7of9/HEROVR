@@ -56,7 +56,7 @@ class Cut5(unittest.TestCase):
         for p in ('src/game_xr.cpp', 'include/spidy/story077h.hpp', 'tests/story077h_tests.cpp', 'tools/live_settings.py'):
             t = src(p).lower()
             self.assertNotIn('jim' + 'jam', t)
-        self.assertNotIn('miles', src('include/spidy/story077h.hpp').lower())
+        self.assertNotIn('mil' + 'es', src('include/spidy/story077h.hpp').lower())
 
 
 if __name__ == '__main__':

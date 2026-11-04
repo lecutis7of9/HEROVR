@@ -173,6 +173,7 @@
 #include "spidy/web_cocoon.hpp"
 #include "spidy/version.hpp"
 #include "spidy/cutscene077.hpp"
+#include "spidy/cutscene077_gate.hpp" // HERO VR 0.0.77 CUTFIX
 #include <algorithm>
 #include <cctype>
 #include <atomic>
@@ -208,6 +209,7 @@ using namespace spidy;
 // HERO VR 0.0.77 CUTSCENES: the immersive eyes stereo_probe.cpp put on the game's camera (the same DLL).
 namespace spidy::cutscene077 {
 extern std::atomic<uint64_t> eyesPlaced;
+extern std::atomic<uint64_t> cameraMoves; // HERO VR 0.0.77 CUTFIX: render frames whose game camera moved
 }
 struct XrConfig {
     uint32_t magic = 0x53585243, version = 24, bytes = sizeof(XrConfig), pid{};
@@ -3050,6 +3052,12 @@ DWORD WINAPI run(void*) {
                 promptFrames;
         } cutCounts{};
         uint64_t cutLogMs{};
+        // HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): the scene clock without the game-time hook (SM2: the game's
+        // camera moving), and why screen frames were not 3d or immersive (each 10 s, and each screen stretch).
+        cutscene077::MotionClock cutMotion;
+        cutscene077::RefusalLog cutRefusals, cutStretch;
+        uint64_t cutStretchMs{}, cutMovesSeen{};
+        bool cutWasScreen{}, cutVideoNoted{}, cutStretchShown{};
         bool cutImmersiveFault{}, cutPanelFault{}, cutStripFault{};
         bool flatScreen{};
         Pose screenPose{};
@@ -5372,8 +5380,15 @@ DWORD WINAPI run(void*) {
                     // (SM2: not hooked), so the game renders no hidden eye
                     // views at each scene start; the flat screen stays.
                     const auto clock = game_time::telemetry();
-                    const bool timeRuns =
-                        sceneClock.running(clock.installed && clock.gameFrame > 0, GetTickCount64());
+                    // HERO VR 0.0.77 CUTFIX: SM2 has no game-time hook (game_time.cpp SM2TODO), so this clock never
+                    // ran there and no scene ever went 3d or immersive (the cut1 report). Without the hook a
+                    // scene's time runs while the game's own camera moves (cutscene077_gate.hpp MotionClock); a
+                    // pause menu or a hint card freezes it and keeps the screen, as before.
+                    const uint64_t cameraMovesNow = cutscene077::cameraMoves.load(std::memory_order_relaxed);
+                    const bool timeRuns = sceneClock.running(
+                        cutMotion.advancing(clock.installed != 0, clock.gameFrame > 0, cameraMovesNow, screen,
+                                            GetTickCount64()),
+                        GetTickCount64());
                     // HERO VR 0.0.77 CUTSCENES (live.txt cutscenes, cutscene077.hpp): 3d asks for the pair without
                     // the HUD hook (never in gameplay or VIEW: GAME SCREEN), its panel signal the subtitle strip
                     // landing on the pair (or the HUD panel, where hooked): the 200 ms and 1 s rules as before.
@@ -5403,6 +5418,58 @@ DWORD WINAPI run(void*) {
                     }
                     cutCounts.immersiveFrames += immersiveScene;
                     cutCounts.promptFrames += immersiveScene && immersiveHold.frozen();
+                    // HERO VR 0.0.77 CUTFIX: each screen frame not shown 3d or immersive, and why (per gate).
+                    if (cutMode != cutscene077::flat) {
+                        const bool shownNow = cutMode == cutscene077::immersive ? immersiveScene : scene;
+                        if (screen) {
+                            if (!cutWasScreen) {
+                                cutStretch.reset();
+                                cutStretchMs = cutNowMs;
+                                cutStretchShown = false;
+                            }
+                            cutStretchShown = cutStretchShown || shownNow;
+                            cutscene077::GateInput gate;
+                            gate.mode = cutMode;
+                            gate.screen = screen;
+                            gate.hero = player.hero != 0;
+                            gate.bridge = bridgeRunning;
+                            gate.gameplay = gameplay;
+                            gate.viewScreen = flatScreen;
+                            gate.head = validTrackedPose(frame.head);
+                            gate.eyesLost = gpuStarted && native_gpu::eyesLost();
+                            gate.fault = cutMode == cutscene077::immersive && cutImmersiveFault;
+                            gate.clockRuns = timeRuns;
+                            gate.cameraClock = cutMotion.source() == cutscene077::clockCameraMotion;
+                            gate.menu = immersiveHold.menu();
+                            gate.depthOn = values.screenDepth > 0;
+                            uint32_t refused = shownNow ? 0 : cutscene077::refusals(gate);
+                            // 3d: everything else in place, the stretch had no subtitle strip for 1 s (ScenePanel).
+                            if (!shownNow && !refused && cutMode == cutscene077::screen3d)
+                                refused = cutscene077::refuseNoPanel;
+                            cutRefusals.add(refused);
+                            cutStretch.add(refused);
+                        } else if (cutWasScreen && cutNowMs - cutStretchMs >= 1000) {
+                            char reasons[400];
+                            cutStretch.reasons(reasons, sizeof(reasons));
+                            char line[640];
+                            sprintf_s(line,
+                                      "HERO VR 0.0.77 CUTFIX: a %.1f s screen stretch, %s %s; frames %llu refused "
+                                      "%llu: %s",
+                                      static_cast<double>(cutNowMs - cutStretchMs) / 1000.0,
+                                      cutscene077::modeName(cutMode), cutStretchShown ? "shown" : "NOT shown",
+                                      static_cast<unsigned long long>(cutStretch.frames()),
+                                      static_cast<unsigned long long>(cutStretch.refused()), reasons);
+                            message(3, 0, line);
+                        }
+                        if (!cutVideoNoted) {
+                            cutVideoNoted = true;
+                            const std::string text = std::string("HERO VR 0.0.77 CUTFIX: scene clock ") +
+                                                     cutscene077::clockName(cutMotion.source()) + "; " +
+                                                     cutscene077::videoNote;
+                            message(3, 0, text.c_str());
+                        }
+                    }
+                    cutWasScreen = screen && cutMode != cutscene077::flat;
                     if (cutMode != cutscene077::flat && (!cutLogMs || cutNowMs - cutLogMs >= 10000)) {
                         cutLogMs = cutNowMs;
                         char line[640];
@@ -5432,6 +5499,21 @@ DWORD WINAPI run(void*) {
                                   cutImmersiveFault ? ", IMMERSIVE OFF (fault)" : "",
                                   cutPanelFault ? ", PANEL OFF (fault)" : "", cutStripFault ? ", STRIP OFF (fault)" : "");
                         message(3, 0, line);
+                        // HERO VR 0.0.77 CUTFIX: the scene clock, and why the last 10 s of screen frames were refused.
+                        char reasons[400];
+                        cutRefusals.reasons(reasons, sizeof(reasons));
+                        char why[640];
+                        sprintf_s(why,
+                                  "HERO VR 0.0.77 CUTFIX: scene clock %s, camera moves %llu (+%llu); screen frames "
+                                  "%llu refused %llu: %s",
+                                  cutscene077::clockName(cutMotion.source()),
+                                  static_cast<unsigned long long>(cameraMovesNow),
+                                  static_cast<unsigned long long>(cameraMovesNow - cutMovesSeen),
+                                  static_cast<unsigned long long>(cutRefusals.frames()),
+                                  static_cast<unsigned long long>(cutRefusals.refused()), reasons);
+                        message(3, 0, why);
+                        cutMovesSeen = cameraMovesNow;
+                        cutRefusals.reset();
                     }
                     // On the screen the controllers are the game's Xbox
                     // controller; in VR it gets Start (menu), Back (X) and

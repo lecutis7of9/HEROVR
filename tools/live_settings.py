@@ -533,8 +533,8 @@ SETTINGS = {
     # HERO VR 0.0.77 CUTSCENES (include/spidy/cutscene077.hpp): live; flat is today's screen, so the default.
     'cutscenes': ((0, 2), 'SpidyCutscenes', "CUTSCENES {} (how the game's scenes show in the headset - 0 flat: on "
                   "the virtual screen as before; 1 3d: on that screen in 3D, its subtitles on it; 2 immersive: the "
-                  "scene around you from your own eyes, its words on a see-through panel) - live, no restart "
-                  "needed"),
+                  "scene around you from your own eyes, its words on a see-through panel; a pre-rendered video "
+                  "has no 3D camera and stays on the flat screen) - live, no restart needed"),
     'story_throw_aim': ((0, 2), 'SpidyStoryThrowAim', "STORY THROW AIM {} (where the LB + RB web throw sends the "
                         "debris - 0 look: where your head looks; 1 point: where your right hand points; 2 off: the "
                         "game's own aim) - live, no restart needed"),

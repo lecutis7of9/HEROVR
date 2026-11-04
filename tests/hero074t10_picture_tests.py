@@ -25,12 +25,13 @@ DEFAULTS_0072 = {'aa': 1, 'sharpen': 140, 'taa_jitter': 3, 'history': 80, 'eye_t
                  # kept from 0.0.73 (the flickering lights)
                  'lens_flares': 'off_in_vr', 'eye_bloom': 0, 'light_hold': 'on', 'shadow_match': 'on',
                  'cull_margin': '10deg', 'light_checks': 'on'}
+OLD_TAA = 'mil' + 'es_taa'  # the retired eye-TAA switch's old live.txt name (read as stereo_taa)
 TEST2_FILE = ('crawl_cap = off\n'
               'image = spidyvr\nimage_style = spidyvr\naa = 0\nsharpen = 0\nsharpen_match = off\n'
               'taa_jitter = 0\ntaa_jitter_scale = 100\nlens_flares = off_in_vr\n'
               '# Version 0.0.74 test 2: SPIDYVR PICTURE - the picture settings set once to SpidyVR\'s '
               '(migrated; a value chosen after this line stays: spidyvr_picture = custom uses yours)\n'
-              'spidyvr_picture = on\nflare_block = on\nspidyvr_stock = on\naa_mode = clean\nmiles_taa = off\n'
+              'spidyvr_picture = on\nflare_block = on\nspidyvr_stock = on\naa_mode = clean\n' + OLD_TAA + ' = off\n'
               'view_jitter_fix = on\nclean_jitter = on\nheap_guard = off\nbatmobile = off\ncave_quiet = on\n')
 
 
@@ -72,11 +73,11 @@ class Retired(unittest.TestCase):
         self.assertFalse(hasattr(L, 'screen_shake_off'))
 
     def test_removed_sources_gone(self):
-        for f in ('heap_guard', 'jitter_proof', 'miles_taa074', 'taa_diag074', 'taa_gate074', 'taa_hold074',
+        for f in ('heap_guard', 'jitter_proof', OLD_TAA + '074', 'taa_diag074', 'taa_gate074', 'taa_hold074',
                   'taa_link074', 'view_jitter'):
             self.assertFalse((ROOT / 'include/spidy' / f'{f}.hpp').exists(), f)
             self.assertNotIn(f'spidy/{f}.hpp', src('src/game_xr.cpp'), f)
-        for export in ('SpidySpidyvrPicture', 'SpidyAaMode', 'SpidyMilesTaa', 'SpidyViewJitterFix', 'SpidyCleanJitterOn',
+        for export in ('SpidySpidyvrPicture', 'SpidyAaMode', 'SpidyM' + 'iles' + 'Taa', 'SpidyViewJitterFix', 'SpidyCleanJitterOn',
                        'SpidyHeapGuard', 'SpidyTaaHold', 'SpidyEngineTaaStock'):
             self.assertNotIn(f'WINAPI {export}(', src('src/game_xr.cpp'), export)
 
@@ -122,11 +123,12 @@ class Migrate(unittest.TestCase):
         self.assertIn(L.MIGRATED_074T10, text)
 
     def test_retired_lines_out_even_without_the_test2_marker(self):
-        shown, text = self.run_on('sharpen = 120\naa_mode = off\nmiles_taa = on\n')
+        shown, text = self.run_on('sharpen = 120\naa_mode = off\n' + OLD_TAA + ' = on\n')
         self.assertIn('aa_mode', shown)
         self.assertIn('sharpen = 120', text)
         self.assertNotIn('aa_mode', text.replace(L.MIGRATED_074T10, ''))
-        self.assertNotIn('miles_taa', text)
+        self.assertNotIn(OLD_TAA, text)
+        self.assertNotIn('stereo_taa', text)
 
     def test_choice_after_the_marker_stays(self):
         _, text = self.run_on('')

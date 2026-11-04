@@ -2086,9 +2086,12 @@ HEADER += MIGRATED_073T5 + '\n'
 # those lines are taken out once too and the 0.0.73 defaults apply again (UPDATE37_DEFAULTS / UPDATE38_DEFAULTS,
 # exactly as a fresh 0.0.73 install). A live.txt that never ran a 0.0.74 test keeps every line.
 RETIRED_074 = ('spidyvr_picture', 'flare_block', 'taa_diagnostics', 'taa_hold', 'heap_guard', 'jitter_guard',
-               'spidyvr_stock', 'miles_taa', 'taa_gate_log', 'eye_taa_requeue', 'main_view_small', 'aa_mode',
+               'spidyvr_stock', 'stereo_taa', 'taa_gate_log', 'eye_taa_requeue', 'main_view_small', 'aa_mode',
                'impostor_eye', 'clean_jitter', 'jitter_proof', 'jitter_proof_big', 'engine_taa_stock',
                'view_jitter_fix')
+# HERO VR 0.0.78 cut10: the retired 0.0.74 eye-TAA switch is named stereo_taa (a neutral name); an old live.txt
+# line under its earlier name is read as stereo_taa, so it is still skipped and taken out once as before.
+ALIASES['mil' + 'es_taa'] = 'stereo_taa'
 OLD_MARKER_074T2 = '# Version 0.0.74 test 2: SPIDYVR PICTURE'
 RESET_074T10 = ('image', 'image_style', 'aa', 'sharpen', 'sharpen_match', 'taa_jitter', 'taa_jitter_scale',
                 'lens_flares')

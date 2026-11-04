@@ -44,7 +44,9 @@ namespace Sm2VrLauncher
             btnBuildMod = Add(card, new AccentButton("Repair mod", ButtonKind.Secondary) { Glyph = "build" }, 20, 442, 160, 40);
             btnRevert = Add(card, new AccentButton("Revert", ButtonKind.Danger) { Glyph = "revert" }, 190, 442, 160, 40);
             btnBackups = Add(card, new AccentButton("Open backups", ButtonKind.Secondary) { Glyph = "folder" }, 360, 442, 160, 40);
-            backupsNote = Add(card, new TextLabel("", Theme.Ui(11.5f), Theme.Sub), 20, 490, 500, 54);
+            // HERO VR 0.0.78 WHAT'S NEW (t1879u): what changed in each update, every version (WhatsNew.cs).
+            btnWhatsNew = Add(card, new AccentButton("What's New", ButtonKind.Secondary) { Glyph = "info" }, 20, 490, 160, 40);
+            backupsNote = Add(card, new TextLabel("", Theme.Ui(11.5f), Theme.Sub), 190, 490, 330, 54);
 
             // The build & update log shares the sheet, on the right.
             var logCard = card;
@@ -66,6 +68,7 @@ namespace Sm2VrLauncher
             btnUpdateNow.Click += (s, e) => UpdateNow();
             btnInstallZip.Click += (s, e) => InstallFromDownloads();
             btnBuildMod.Click += (s, e) => RepairMod(null);
+            btnWhatsNew.Click += (s, e) => ShowWhatsNew();
             btnRevert.Click += (s, e) => Revert();
             btnBackups.Click += (s, e) => { string b = Backups.BackupRoot(root); Directory.CreateDirectory(b); SystemInfo.OpenFolder(b, null); };
             checkOnStart.Changed += (s, e) => { settings.SetBool("CheckOnStart", checkOnStart.Checked); settings.Save(); };
@@ -87,6 +90,23 @@ namespace Sm2VrLauncher
             tip.SetToolTip(btnRevert, "Go back to an earlier version: from the backups the launcher keeps, or an older GitHub release");
             upLatest.Set(CheckState.Info, settings.RepoConfigured ? "Not checked yet." : "No GitHub repository set yet (below). Update zips in Downloads still work.");
             SetProgress("", 0);
+        }
+
+        AccentButton btnWhatsNew;
+        /// <summary>HERO VR 0.0.78: the WHAT'S NEW list - version.json's history and the install's release notes at once,
+        /// then GitHub's release notes too when a repository is set (read off the UI thread).</summary>
+        void ShowWhatsNew()
+        {
+            var m = latest; string r = root; bool online = settings.RepoConfigured && !preview; string repo = settings.UpdateRepo;
+            btnWhatsNew.Enabled = false;
+            var t = new Thread(() =>
+            {
+                List<Release> rels = null;
+                if (online) { try { rels = GitHub.All(repo); } catch (Exception ex) { Ui(() => buildLog.Line("What's New: GitHub's release notes not read (" + ex.Message + "); showing the ones here.", Theme.Dim)); } }
+                var all = WhatsNew.Collect(m, r, rels);
+                Ui(() => { btnWhatsNew.Enabled = true; WhatsNew.Show(this, all); });
+            }) { IsBackground = true };
+            t.Start();
         }
 
         void SetProgress(string text, int pct)

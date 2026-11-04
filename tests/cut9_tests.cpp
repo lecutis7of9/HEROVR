@@ -9,6 +9,10 @@
 // 2. GAME VIEW LIFT (shared_lod::gameViewLift): the beacon fix's multiplier.
 #include "spidy/cutscene077.hpp"
 #include "spidy/shared_lod.hpp"
+#include "spidy/hero007.hpp"
+#include "spidy/hero072_play.hpp"
+#include "spidy/sfx.hpp"
+#include "spidy/story077b.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -122,6 +126,32 @@ int main() {
         check(!card.update(true, 1000) && !card.update(true, 1200), "a freeze under 250 ms: no card");
         check(card.update(true, 1250), "the QTE's freeze held 250 ms: the card");
         check(!card.update(false, 1260) && !card.update(true, 1300), "the freeze gone: the card off and timed again");
+    }
+    { // 0.0.78 CLAWS: stab or slash, and the claw blood
+        check(hero007::clawIsStab({0, 0, -.05f}, {0, 0, -.28f}), "the tip driven along the blades: a stab");
+        check(!hero007::clawIsStab({.05f, 0, 0}, {0, 0, -.28f}), "the tip across the blades: a slash");
+        check(!hero007::clawIsStab({0, 0, .05f}, {0, 0, -.28f}), "pulled back: a slash, never a stab");
+        check(!hero007::clawIsStab({}, {0, 0, -.28f}), "no move read: a slash");
+        hero072::Blood b;
+        b.claw(hero072::bloodExtreme, {0, 1.2f, -1}, {0, 0, -1}, 0.f);
+        check(b.liveDrops() == hero072::clawDropsPerHit[0] && b.livePools() == hero072::clawPoolsPerHit[0],
+              "an EXTREME claw hit: 160 drops and 5 pools");
+        hero072::Blood off;
+        off.claw(hero072::bloodOff, {0, 1.2f, -1}, {0, 0, -1}, 0.f);
+        check(off.liveDrops() == 0 && off.livePools() == 0, "RAGE BLOOD off: no claw blood");
+        for (int i = 0; i < 20; ++i)
+            b.claw(hero072::bloodExtreme, {0, 1.2f, -1}, {1, 0, 0}, 0.f);
+        check(b.liveDrops() <= hero072::bloodDropsMost && b.livePools() <= hero072::bloodPoolsMost, "the claw blood is capped");
+        check(sfx::levelGain(sfx::pistolShot) < .2f && sfx::levelGain(sfx::clawStab) > 1.f && sfx::levelGain(sfx::vanStart) == 1.f,
+              "the levels: the loud pistol down, the quiet stab up, the van as it was");
+    }
+    { // 0.0.78 STORY RUN: the game's own RT prompt turns MJ's run on; a web (Spider-Man swinging) turns it off
+        story077b::StoryRun r;
+        check(!r.update(true, false, false), "no RT prompt: off (Spider-Man's controls as they are)");
+        check(r.update(true, true, false) && r.update(true, false, false), "the game asked for RT: on for the segment");
+        check(r.update(false, false, false), "a QTE / scene in between: still on");
+        check(!r.update(true, false, true) && r.ends == 1, "a web on the player: off");
+        check(!r.update(false, true, false), "a prompt off gameplay: not started");
     }
     std::printf("%s (%d failures)\n", failures ? "FAILED" : "ALL OK", failures);
     return failures ? 1 : 0;

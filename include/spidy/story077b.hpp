@@ -438,6 +438,32 @@ class StorySprint {
     bool running_{};
 };
 
+// HERO VR 0.0.78 STORY RUN (owner t1869u/t1881u: MJ's run and vault in the tunnel by default, through the game's
+// own input, Spider-Man's controls unchanged). The game asks for its run itself: a live prompt naming RT
+// ("Hold R2"; game_prompts::demand(), the prompt's own button word) while he plays. From that prompt the stick run
+// (StorySprint) is on for the segment, until the game shows a web on the player (webs attached: a swinging
+// Spider-Man, which MJ never has) - so Spider-Man's own play, which no RT prompt asks for, never gets it, and live.txt
+// story_sprint = on still turns it on everywhere.
+class StoryRun {
+  public:
+    bool update(bool gameplay, bool rtAsked, bool webbing) {
+        if (webbing) {
+            if (on_)
+                ++ends;
+            on_ = false;
+        } else if (gameplay && rtAsked && !on_) {
+            on_ = true;
+            ++starts;
+        }
+        return on_;
+    }
+    bool on() const { return on_; }
+    uint32_t starts{}, ends{};
+
+  private:
+    bool on_{};
+};
+
 // Spider-sense's NOW: a timed warning closer than `now` seconds to its blow (game seconds, CANDIDATE).
 constexpr float senseNow = .3f;
 

@@ -24063,10 +24063,11 @@ int main() {
         // are the player's own sounds, decoded unchanged (tools/sfx/user_guns.py): their own rate, stereo.
         const float expect[sounds] = {1.85f, fire, 1.7f, .62f, .5f, .34f, .12f,
                                       2.496f, 3.504f, .12f, .4f, .25f, .22f, .4f, 1.f, 1.f, // 0.0.7's nine (Version 0.0.72: heat vision and freeze breath are 1 s seamless loops)
-                                      .6f,  .7f,  .45f, 1.1f, // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang
+                                      .6f,  1.462f, .45f, 1.462f, // CAPTAIN AMERICA's shield: throw, ricochet, catch, clang (0.0.78: both the player's hit)
                                       1.752f, 4.389f, 6.699f, // 0.0.72 pistol_reload, THOR's two lightnings
-                                      3.25f, 11.519f, .26f}; // 0.0.73 the PUNISHER VAN: start-up, engine loop, door slam
-        static_assert(sounds == 26);
+                                      3.25f, 11.519f, .26f, // 0.0.73 the PUNISHER VAN: start-up, engine loop, door slam
+                                      .415f, .602f, .825f}; // 0.0.78 WOLVERINE's claws: stab, slash 1, slash 2 (the player's, trimmed)
+        static_assert(sounds == 29);
         for (uint32_t i = 0; i < sounds; ++i) {
             const Pcm& p = sound(static_cast<Id>(i));
             const bool van = i == vanStart || i == vanEngine || i == vanDoorSlam; // 0.0.73: the player's quiet recording

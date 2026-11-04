@@ -2347,6 +2347,7 @@ DWORD WINAPI run(void*) {
         story077b::AbilityButton storyAbility;
         story077b::InputWatch inputWatch;   // HERO VR 0.0.77 STORY INPUTS: every game press counted
         story077b::StorySprint storySprint; // and the ground run's RT
+        story077b::StoryRun storyRun;       // HERO VR 0.0.78: on from the game's own RT prompt (MJ's run), off at a web
         float inputNoteAt[story077b::inputs]{};
         story077b::ThrowAim storyAim;
         story077b::HeadSidestep storyStep;
@@ -11899,7 +11900,19 @@ DWORD WINAPI run(void*) {
                             const bool grounded = mapping == game_pad::Mapping::gameplay && !swingState.owned &&
                                                   swingState.wall == 0 && swingState.grounded != 0 &&
                                                   !storyAbility.sending() && hero_modes::webPaths(heroNow()).ropeGrab;
-                            const bool sprinting = storySprint.update(frame.seconds, storySprintNow.load() == 0, grounded,
+                            // HERO VR 0.0.78 STORY RUN: the game's own RT prompt turns the run on for its segment.
+                            const bool runWas = storyRun.on();
+                            const bool runOn = storyRun.update(mapping == game_pad::Mapping::gameplay,
+                                                               game_prompts::demand().rightTrigger,
+                                                               swingState.webs[0].attached != 0 ||
+                                                                   swingState.webs[1].attached != 0);
+                            if (runOn != runWas) {
+                                char line[160];
+                                sprintf_s(line, "HERO VR 0.0.78 CUT9 STORY RUN %s (the game's RT prompt / a web): starts %u, ends %u",
+                                          runOn ? "ON" : "OFF", storyRun.starts, storyRun.ends);
+                                game_prompts::note(line);
+                            }
+                            const bool sprinting = storySprint.update(frame.seconds, storySprintNow.load() == 0 || runOn, grounded,
                                                                       frame.hands[0].stickX, frame.hands[0].stickY) &&
                                                    pad.leftTrigger < 100;
                             if (sprinting)

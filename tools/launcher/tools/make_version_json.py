@@ -102,6 +102,43 @@ def zip_version(path):
     return None
 
 
+def notes_changes(text, most=14, chars=240):
+    """HERO VR 0.0.78 WHAT'S NEW: a release note's changes - each top-level "- " bullet with its indented
+    continuation lines, markdown dropped, at most `chars` long."""
+    items, cur = [], None
+    for line in text.splitlines():
+        if line.startswith("- "):
+            cur = [line[2:].strip()]
+            items.append(cur)
+        elif cur is not None and line.startswith("  ") and line.strip():
+            cur.append(line.strip())
+        else:
+            cur = None
+    out = []
+    for parts in items[:most]:
+        t = re.sub(r"[*`]", "", " ".join(parts)).strip()
+        if len(t) > chars:
+            t = t[:chars].rsplit(" ", 1)[0] + "..."
+        if t:
+            out.append(t)
+    return out
+
+
+def whats_new_history(root, most=20):
+    """Every RELEASE-NOTES-v<version>.md in the mod folder, newest first: [{version, changes}]."""
+    found = []
+    for name in os.listdir(root):
+        m = re.fullmatch(r"RELEASE-NOTES-v(\d+(?:\.\d+)+)\.md", name)
+        if not m:
+            continue
+        with open(os.path.join(root, name), encoding="utf-8") as f:
+            changes = notes_changes(f.read())
+        if changes:
+            found.append((tuple(int(x) for x in m.group(1).split(".")), m.group(1), changes))
+    found.sort(reverse=True)
+    return [{"version": v, "changes": c} for _, v, c in found[:most]]
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--repo", required=True, help="owner/name of the GitHub repository")
@@ -195,6 +232,10 @@ def main(argv=None):
         manifest["stable_version"] = sv[0]
     if a.launcher_build: manifest["launcher_build"] = a.launcher_build
     if a.whats_new: manifest["whats_new"] = a.whats_new
+    # HERO VR 0.0.78: the launcher's WHAT'S NEW lists every version's changes (from each RELEASE-NOTES-v*.md).
+    history = whats_new_history(a.port_root)
+    if history:
+        manifest["whats_new_history"] = history
     if note:
         manifest["internal_build"] = note   # informational; launchers order by version_number
     with open(a.out, "w", encoding="utf-8", newline="\n") as f:

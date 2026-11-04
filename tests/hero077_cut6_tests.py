@@ -32,7 +32,8 @@ class Cut6(unittest.TestCase):
         g = src('src/game_xr.cpp')
         self.assertNotIn('cutSteering', g)
         self.assertIn('player.record, (frame.buttons & buttonMenu) != 0,', g)  # CUT7: the clock
-        self.assertIn('bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0)', src('include/spidy/cutscene077.hpp'))
+        # 0.0.78 CUT9 TITLE FLAT adds `playing` (only VR gameplay ends the front end)
+        self.assertIn('bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0, bool playing = true)', src('include/spidy/cutscene077.hpp'))
 
     def test_standing_is_076(self):
         h = src('include/spidy/swing077.hpp')

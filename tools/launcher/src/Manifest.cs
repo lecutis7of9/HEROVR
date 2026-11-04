@@ -29,6 +29,9 @@ namespace Sm2VrLauncher
         public string ManifestUrl;
         public int LauncherBuild;   // "launcher_build": the launcher build inside the release zip (0 when not given)
         public string WhatsNew;     // "whats_new": one line shown in the update prompt
+        // HERO VR 0.0.78: "whats_new_history": [{"version", "changes": [...]}], every version's changes, newest first
+        // (make_version_json.py, from each RELEASE-NOTES-v*.md); the Updates sheet's WHAT'S NEW lists them.
+        public List<KeyValuePair<string, List<string>>> WhatsNewHistory = new List<KeyValuePair<string, List<string>>>();
         public bool Experimental = true;   // build 12: "experimental" (default true): updating asks to confirm the EXPERIMENTAL notice
         public string StableVersion;       // build 12: "stable_version": the most recent STABLE build named in that notice (default 0.0.73; 0.0.63 before 0.0.74 test 10)
         /// <summary>launcher.ini UpdateManifestUrl=...: read version.json from here instead of GitHub (testing).</summary>
@@ -66,6 +69,14 @@ namespace Sm2VrLauncher
             m.ReleaseDate = S(d, "release_date"); m.MinGameVersion = S(d, "min_game_version"); m.InstallSubfolder = S(d, "install_subfolder");
             int lb; if (int.TryParse(S(d, "launcher_build") ?? "0", out lb)) m.LauncherBuild = lb;
             m.WhatsNew = S(d, "whats_new");
+            object hist;
+            if (d.TryGetValue("whats_new_history", out hist) && hist is ArrayList)
+                foreach (var o in (ArrayList)hist)
+                {
+                    var h = o as Dictionary<string, object>;
+                    string hv = S(h, "version");
+                    if (!string.IsNullOrEmpty(hv)) m.WhatsNewHistory.Add(new KeyValuePair<string, List<string>>(hv, L(h, "changes")));
+                }
             m.Experimental = !string.Equals(S(d, "experimental"), "false", StringComparison.OrdinalIgnoreCase); m.StableVersion = S(d, "stable_version");   // build 12
             m.ChangelogUrl = S(d, "changelog_url"); m.SourceUrl = S(d, "source_url"); m.License = S(d, "license");
             object files;

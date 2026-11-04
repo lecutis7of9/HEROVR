@@ -25,6 +25,7 @@ From the player's cut8 reports ("prompts and main menu are top priority for 78")
   VR never goes black), and the QTE card shows only once a QTE's freeze has held 250 ms. CUT9 NO GHOST SCREEN line.
 - **MJ in the tunnel run (not fixed in this build):** the game's run for MJ is RT held; VR's RT is the webs and the
   stick run (story_sprint) is off by default. The cheat sheet now says how to run as MJ with live.txt story_sprint = on.
+
 ## 0.0.77 launcher hotfix (tag v0.0.77.1) - special thanks on the main screen
 
 Launcher 0.0.77.2, build 20; the mod is unchanged (VERSION 0.0.77, PORT-VERSION Update 39.10). The main screen shows a

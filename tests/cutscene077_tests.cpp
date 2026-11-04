@@ -186,6 +186,43 @@ int main() {
     check(keyOf(.3f, .3f, .3f) < .01f && keyOf(0, 0, 0) < .01f, "dark scene hidden");
     check(keyOf(1, .2f, .1f) < .01f && keyOf(.2f, .5f, 1) < .01f, "coloured scene hidden");
 
+    // HERO VR 0.0.77 CUTFIX3: the menu panel, scene-end release and the stuck watch.
+    {
+        const auto m = menuPanel(2.5f, 2.5f);
+        check(near(m.centreY, 0) && near(m.width, 1) && near(m.distance, 2.5f) && near(m.backdrop, 0), "menu shape");
+        const auto bad = menuPanel(NAN, 0);
+        check(bad.distance > .5f && bad.width > 0, "menu shape fallback");
+        const float t = std::tan(.8f);
+        float a[4];
+        check(panelRect(0, .064f, -t, t, -t, t, 2000, 2000, 16.f / 9, m, a), "menu rect");
+        check(near((a[1] + a[3]) / 2, 1000, 2) && near((a[0] + a[2]) / 2, 1000, 30), "menu centred");
+        MenuPanel mp;
+        check(mp.update(true, true, false, false) == panelMenu, "no player: menu");
+        check(mp.update(true, false, false, false) == panelSubtitles, "scene: subtitles");
+        check(mp.update(true, false, true, true) == panelPrompts, "QTE push: prompts");
+        check(mp.update(true, false, false, true) == panelMenu && mp.update(true, false, false, false) == panelMenu,
+              "steered: menu to the end");
+        check(mp.update(false, false, false, false) == panelSubtitles &&
+                  mp.update(true, false, false, false) == panelSubtitles,
+              "ends with the stretch");
+        ImmersiveHold h;
+        check(h.update(true, true, false, 10), "hold starts");
+        h.update(true, false, false, 20);
+        check(h.frozen(), "frozen");
+        h.release();
+        check(!h.frozen() && !h.menu() && !h.update(true, false, false, 30), "release lets go");
+        StuckWatch w;
+        check(!w.update(true, true, 0, 0, 0, 1000) && !w.update(true, true, 0, 0, 0, 9000), "no scene: never");
+        w.sceneEnded(10000);
+        check(!w.update(true, true, 0, 0, 0, 10001), "starts timing");
+        check(!w.update(true, true, .1f, 0, 0, 13000), "not yet");
+        check(w.update(true, true, .1f, 0, 0, 14002) && w.fired() == 1, "fires after 4 s still");
+        check(!w.update(true, true, 0, 0, 0, 14100), "restarts");
+        check(!w.update(true, true, 1, 0, 0, 19000), "moved: no");
+        check(!w.update(true, false, 1, 0, 0, 25000) && !w.update(false, true, 1, 0, 0, 30000), "idle or menus: no");
+        check(!w.update(true, true, 1, 0, 0, 10000 + afterSceneMs + 1), "long after: no");
+    }
+
     if (failures) {
         std::printf("%d failure(s)\n", failures);
         return 1;

@@ -139,6 +139,12 @@ class ImmersiveHold {
     void reset() {
         *this = {};
     }
+    // HERO VR 0.0.77 CUTFIX3: a scene's end (any path) lets go of everything it held: the stretch, its freeze
+    // (a QTE) and a menu press kept from it; the count stays.
+    void release() {
+        on_ = menu_ = started_ = menuSeen_ = false;
+        frozenMs_ = menuMs_ = 0;
+    }
 
   private:
     uint64_t frozenMs_{}, menuMs_{}, menus_{};
@@ -188,6 +194,81 @@ struct PanelShape {
 };
 constexpr PanelShape subtitlePanel{-.34f, .72f, 2.f, .38f};
 constexpr PanelShape promptPanel{-.12f, .86f, 2.f, .22f};
+// HERO VR 0.0.77 CUTFIX3 MENU PANEL: a menu over the immersive world (the title screen's, its save slots, CONTINUE,
+// its dialogs) is the game's whole frame as it is: not keyed, no glass, full opacity, centred, the size the VR
+// screen has (its width at its distance: vr_settings::screenWidth, screenDistance).
+inline PanelShape menuPanel(float screenWidth, float screenDistance) {
+    const float d = std::isfinite(screenDistance) && screenDistance > .5f ? screenDistance : 2.5f;
+    const float w = std::isfinite(screenWidth) && screenWidth > .1f ? screenWidth : 2.f;
+    return {0.f, w / d, d, 0.f};
+}
+enum PanelMode : uint32_t { panelSubtitles = 0, panelPrompts = 1, panelMenu = 2 };
+inline const char* panelModeName(uint32_t m) {
+    return m == panelMenu ? "menu" : m == panelPrompts ? "prompts" : "subtitles";
+}
+// Menu mode (CANDIDATE signals): no player record (the title screen: SUIT PROBE "no player yet" there), or the
+// player steering a menu in the stretch (D-pad, or the left stick pushed past half, as menus are) - held to the
+// stretch's end, as the menu is.
+class MenuPanel {
+  public:
+    uint32_t update(bool shown, bool noPlayer, bool frozen, bool steering) {
+        if (!shown) {
+            steered_ = false;
+            return panelSubtitles;
+        }
+        steered_ = steered_ || (steering && !frozen);
+        if (noPlayer || steered_)
+            return panelMenu;
+        return frozen ? panelPrompts : panelSubtitles;
+    }
+    void release() {
+        steered_ = false;
+    }
+
+  private:
+    bool steered_{};
+};
+// HERO VR 0.0.77 CUTFIX3 STUCK WATCH: after a scene, gameplay up and the stick pushed, yet the player has not moved
+// for stuckMs: every cutscene hold is let go (once per stuckMs). Within afterSceneMs of a scene's end only.
+constexpr uint64_t stuckMs = 4000, afterSceneMs = 120000;
+constexpr float stuckMetres = .3f;
+class StuckWatch {
+  public:
+    void sceneEnded(uint64_t nowMs) {
+        endMs_ = nowMs ? nowMs : 1;
+        sinceMs_ = 0;
+    }
+    // True when the hold must be let go now.
+    bool update(bool gameplay, bool pushed, float x, float y, float z, uint64_t nowMs) {
+        if (!endMs_ || nowMs < endMs_ || nowMs - endMs_ > afterSceneMs || !gameplay || !pushed ||
+            !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+            sinceMs_ = 0;
+            return false;
+        }
+        if (!sinceMs_) {
+            sinceMs_ = nowMs ? nowMs : 1;
+            x_ = x, y_ = y, z_ = z;
+            return false;
+        }
+        const float dx = x - x_, dy = y - y_, dz = z - z_;
+        if (std::sqrt(dx * dx + dy * dy + dz * dz) > stuckMetres) {
+            sinceMs_ = 0;
+            return false;
+        }
+        if (nowMs - sinceMs_ < stuckMs)
+            return false;
+        sinceMs_ = 0;
+        ++fired_;
+        return true;
+    }
+    uint64_t fired() const {
+        return fired_;
+    }
+
+  private:
+    uint64_t endMs_{}, sinceMs_{}, fired_{};
+    float x_{}, y_{}, z_{};
+};
 // The panel's rectangle in one eye's pixels (y down) from that eye's tangents (left and down negative). eye 0 is
 // the left eye; eyeDist the two eyes' distance (metres); aspect the copied part's own width over height.
 inline bool panelRect(unsigned eye, float eyeDist, float tanLeft, float tanRight, float tanDown, float tanUp,

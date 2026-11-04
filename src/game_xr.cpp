@@ -3073,6 +3073,12 @@ DWORD WINAPI run(void*) {
         char cutNoteText[160]{};
         uint64_t cutSamplesSeen{};
         bool cutImmersiveFault{}, cutPanelFault{}, cutStripFault{};
+        // HERO VR 0.0.77 CUTFIX3: the panel's mode (subtitles, prompts, menu) and the last one logged, the stuck
+        // watch after a scene, and the neutral pad it sends when it lets go.
+        cutscene077::MenuPanel cutMenu;
+        cutscene077::StuckWatch cutStuck;
+        uint32_t cutPanelMode{}, cutPanelLogged{99};
+        uint64_t cutNeutralUntil{}, cutSceneEnds{};
         bool flatScreen{};
         Pose screenPose{};
         const auto dimensions = runtime.eyeDimensions();
@@ -5454,6 +5460,47 @@ DWORD WINAPI run(void*) {
                         ++cutCounts.starts;
                     }
                     cutCounts.immersiveFrames += immersiveScene;
+                    // HERO VR 0.0.77 CUTFIX3: the panel's mode this frame (menu: the game's whole frame as it is).
+                    cutPanelMode = cutMenu.update(
+                        immersiveScene, player.record == 0, immersiveHold.frozen(),
+                        std::isfinite(frame.hands[0].stickX) && std::isfinite(frame.hands[0].stickY) &&
+                            std::hypot(frame.hands[0].stickX, frame.hands[0].stickY) > .5f);
+                    if (immersiveScene && cutPanelMode != cutPanelLogged) {
+                        cutPanelLogged = cutPanelMode;
+                        char line[200];
+                        sprintf_s(line, "HERO VR 0.0.77 CUTFIX3 PANEL: %s (player record %s, QTE hold %s)",
+                                  cutscene077::panelModeName(cutPanelMode), player.record ? "yes" : "none",
+                                  immersiveHold.frozen() ? "yes" : "no");
+                        message(3, 0, line);
+                    }
+                    // HERO VR 0.0.77 CUTFIX3 SCENE END: whatever ended it (gameplay back, a menu, a fault, a timeout,
+                    // the player gone, the head lost), everything the scene held is let go: its hold, freeze and
+                    // menu press, the menu panel, the strip clock (the eyes' lease lapses on its own, 250 ms).
+                    if (cutWasShown && !immersiveScene) {
+                        const char* reason = gameplay                         ? "gameplay"
+                                             : immersiveHold.menu()           ? "menu or timeout"
+                                             : cutImmersiveFault              ? "fault"
+                                             : !screen                        ? "screen gone"
+                                             : !cutHeroOk                     ? "player gone"
+                                             : !validTrackedPose(frame.head)  ? "head lost"
+                                             : flatScreen                     ? "view game screen"
+                                             : cutMode != cutscene077::immersive ? "mode changed"
+                                                                              : "other";
+                        immersiveHold.release();
+                        cutMenu.release();
+                        stripClock.reset();
+                        cutPanelLogged = 99;
+                        cutStuck.sceneEnded(cutNowMs);
+                        ++cutSceneEnds;
+                        char line[320];
+                        sprintf_s(line,
+                                  "HERO VR 0.0.77 CUTFIX3 SCENE END #%llu: %s; gameplay %d, screen %d, VR play %d, "
+                                  "motion %d, pad layer %d, swing owned %d; holds released",
+                                  static_cast<unsigned long long>(cutSceneEnds), reason, gameplay ? 1 : 0,
+                                  screen ? 1 : 0, vrPlay ? 1 : 0, motion.active ? 1 : 0, padLayer.latched() ? 1 : 0,
+                                  swingState.owned ? 1 : 0);
+                        message(3, 0, line);
+                    }
                     cutWasShown = immersiveScene;
                     cutCounts.promptFrames += immersiveScene && immersiveHold.frozen();
                     // HERO VR 0.0.77 CUTFIX: each screen frame not shown 3d or immersive, and why (per gate).
@@ -11634,6 +11681,32 @@ DWORD WINAPI run(void*) {
                             d.sequence = inputsSequence + 1;
                             SpidyStoryInputsData = d;
                         }
+                        // HERO VR 0.0.77 CUTFIX3 STUCK WATCH: gameplay after a scene, the stick pushed, the player
+                        // still: every cutscene hold is let go, and the game gets a neutral pad for 250 ms (a press
+                        // or hold it kept from the scene's menus is released).
+                        if (cutStuck.update(mapping == game_pad::Mapping::gameplay && gameplay,
+                                            std::abs(pad.thumbLX) > 16000 || std::abs(pad.thumbLY) > 16000, body[12],
+                                            body[13], body[14], GetTickCount64())) {
+                            immersiveHold.release();
+                            cutMenu.release();
+                            stripClock.reset();
+                            gameScreen.reset();
+                            cutPanelLogged = 99;
+                            cutNeutralUntil = GetTickCount64() + 250;
+                            char line[300];
+                            sprintf_s(line,
+                                      "HERO VR 0.0.77 CUTFIX3 STUCK WATCH #%llu: stick pushed %.1f s after a scene, the "
+                                      "player still; all cutscene holds released, neutral pad 250 ms (pad layer %d, "
+                                      "swing owned %d, motion %d)",
+                                      static_cast<unsigned long long>(cutStuck.fired()),
+                                      static_cast<double>(cutscene077::stuckMs) / 1000.0, padLayer.latched() ? 1 : 0,
+                                      swingState.owned ? 1 : 0, motion.active ? 1 : 0);
+                            message(3, 0, line);
+                        }
+                        if (cutNeutralUntil && GetTickCount64() < cutNeutralUntil)
+                            pad = {};
+                        else
+                            cutNeutralUntil = 0;
                         game_pad::submit(pad, 200);
                         // Update 38.5 Y IN THE AIR: read-only counts (no glide state is read; air_watch.hpp).
                         {
@@ -13352,8 +13425,15 @@ DWORD WINAPI run(void*) {
                                     if (native_gpu::latestScreen(words, 250) && words.texture && words.width &&
                                         words.height) {
                                         const bool prompts = saved->cutscenePrompts;
-                                        const auto& crop = prompts ? cutscene077::wholeFrame : cutscene077::subtitleStrip;
-                                        const auto& shape = prompts ? cutscene077::promptPanel : cutscene077::subtitlePanel;
+                                        // HERO VR 0.0.77 CUTFIX3: a menu is the whole frame as the screen shows it.
+                                        const bool menuMode = cutPanelMode == cutscene077::panelMenu;
+                                        const auto& crop = prompts || menuMode ? cutscene077::wholeFrame
+                                                                               : cutscene077::subtitleStrip;
+                                        const auto shape =
+                                            menuMode ? cutscene077::menuPanel(vr_settings::screenWidth(values.screenSize),
+                                                                              vr_settings::screenDistance)
+                                            : prompts ? cutscene077::promptPanel
+                                                      : cutscene077::subtitlePanel;
                                         D3D12Renderer::Inset inset;
                                         inset.source = words.texture;
                                         inset.view = words.view;
@@ -13362,8 +13442,8 @@ DWORD WINAPI run(void*) {
                                         inset.crop[1] = crop.v0;
                                         inset.crop[2] = crop.u1;
                                         inset.crop[3] = crop.v1;
-                                        inset.keyed = true;
-                                        inset.backdrop = shape.backdrop;
+                                        inset.keyed = !menuMode;
+                                        inset.backdrop = menuMode ? 0.f : shape.backdrop;
                                         const float aspect = cutscene077::cropAspect(
                                             crop, static_cast<float>(words.width) / static_cast<float>(words.height));
                                         const float apart = eyeDistance(saved->trackingEyes[0].pose.position,

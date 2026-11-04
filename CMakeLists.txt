@@ -152,7 +152,8 @@ foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoo
         shield_throw shield_ricochet shield_catch shield_clang pistol_reload
         thor_lightning_1 thor_lightning_2 # 0.0.72: THOR's lightning, the player's own (user_guns.py)
         van_start van_engine van_door_slam
-        claw_stab claw_slash_1 claw_slash_2) # 0.0.73: the PUNISHER VAN's slam + start-up, its engine loop, the slam (van_engine_0073.py)
+        claw_stab claw_slash_1 claw_slash_2
+        suppressed_shot rifle_shot pump_rack) # 0.0.78 PUNISHER ARSENAL (tools/sfx/arsenal_0078.py); 0.0.73: the PUNISHER VAN's slam + start-up, its engine loop, the slam (van_engine_0073.py)
   if(DEFINED SPIDY_SFX_FILE_${SPIDY_SFX_NAME})
     set(SPIDY_SFX_IN "${CMAKE_CURRENT_SOURCE_DIR}/assets/sfx/${SPIDY_SFX_FILE_${SPIDY_SFX_NAME}}.wav")
   else()
@@ -208,6 +209,13 @@ add_test(NAME story077g COMMAND spidy_story077g_tests)
 add_executable(spidy_story077h_tests tests/story077h_tests.cpp)
 target_include_directories(spidy_story077h_tests PRIVATE include)
 add_test(NAME story077h COMMAND spidy_story077h_tests)
+# HERO VR 0.0.78 PUNISHER ARSENAL (include/spidy/punisher078.hpp): the pump, the magazine guns, the leg holster, the optics.
+add_executable(spidy_punisher078_tests tests/punisher078_tests.cpp)
+target_include_directories(spidy_punisher078_tests PRIVATE include)
+add_test(NAME punisher078 COMMAND spidy_punisher078_tests)
+add_executable(spidy_punisher078_play_tests tests/punisher078_play_tests.cpp)
+target_include_directories(spidy_punisher078_play_tests PRIVATE include)
+add_test(NAME punisher078_play COMMAND spidy_punisher078_play_tests)
 # HERO VR 0.0.77 X IS THE GAME'S X (include/spidy/story077e.hpp): the X tap and the menu hold.
 add_executable(spidy_story077e_tests tests/story077e_tests.cpp)
 target_include_directories(spidy_story077e_tests PRIVATE include)

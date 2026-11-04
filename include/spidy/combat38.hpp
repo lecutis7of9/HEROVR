@@ -246,6 +246,14 @@ enum Option : uint32_t {
     // 0.0.76 MP WORLD (mp_world.hpp): WORLD (0, the default) PLAYER 2 stands at his real spot in the city when
     // his game sends it; BUDDY (1) the 0.0.74 spot 3 m ahead of you
     mpPlace,
+    // HERO VR 0.0.78 PUNISHER ARSENAL (punisher078.hpp): ON (0, the default) the PUNISHER carries the pump shotgun
+    // (mid back), the suppressed pistol (the right-leg holster), the scoped sniper (left shoulder) and the red-dot
+    // rifle (right shoulder), every one reloaded by hand; OFF (1) the 0.0.77 pistols and sawed-off
+    punisherArsenal,
+    // HERO VR 0.0.78 SCOPE ZOOM: the sniper scope's magnification, 4X (0, the default), 6X, 8X or 2.5X
+    scopeZoom,
+    // HERO VR 0.0.78 MAG EJECT: the gun hand's magazine release, B/Y (0, the default), A/X or STICK (the thumbstick click)
+    magEject,
     options
 };
 struct OptionInfo {
@@ -619,6 +627,9 @@ inline constexpr OptionInfo optionInfo[options] = {
     {"throw_swing", "THROW BY SWING", "TSWG", "ON throws fly the way your arm swung, OFF is the old aim; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"glide_tilt", "GLIDE TILT", "GTLT", "ON: tilt your controllers to set the glide dive angle, like Shadow; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
     {"mp_place", "PLAYER 2 PLACE", "P2PL", "WORLD shows your friend at his real city spot, BUDDY 3 m ahead; no restart.", 2, {"WORLD", "BUDDY", nullptr, nullptr}},
+    {"punisher_arsenal", "PUNISHER ARSENAL", "ARSN", "ON: pump shotgun, suppressed pistol, scoped sniper, red-dot rifle; no restart.", 2, {"ON", "OFF", nullptr, nullptr}},
+    {"scope_zoom", "SCOPE ZOOM", "SZOOM", "How much the PUNISHER sniper's scope magnifies; no restart.", 4, {"4X", "6X", "8X", "2.5X"}},
+    {"mag_eject", "MAG EJECT", "MEJ", "The gun hand's button that drops the pistol's or rifle's magazine; no restart.", 3, {"B/Y", "A/X", "STICK", nullptr}},
 };
 // 0.0.73 test 3 VAN PEDALS: value 0 WHEEL HAND (the default), 1 CLASSIC (0.0.72: either trigger is a pedal).
 inline bool vanWheelHandPedals(uint32_t value) { return value == 0; }
@@ -649,6 +660,11 @@ inline bool throwSwingOn(uint32_t value) { return value != 1; }
 inline bool glideTiltOn(uint32_t value) { return value != 1; }
 // 0.0.76 MP WORLD (mp_world.hpp): 0 WORLD, the default; 1 BUDDY (the 0.0.74 spot ahead of you).
 inline bool mpPlaceWorld(uint32_t value) { return value != 1; }
+// HERO VR 0.0.78 PUNISHER ARSENAL: 0 ON, the default; 1 OFF (the 0.0.77 guns).
+inline bool punisherArsenalOn(uint32_t value) { return value != 1; }
+// HERO VR 0.0.78 MAG EJECT: the button (0 B/Y - the upper face button, 1 A/X - the lower, 2 STICK - the thumbstick click).
+inline constexpr uint32_t magEjectUpper = 0, magEjectLower = 1, magEjectStick = 2;
+inline uint32_t magEjectButton(uint32_t value) { return value <= magEjectStick ? value : magEjectUpper; }
 // 0.0.74 test 10 QUICK HOOK, GRAPPLE YANK, SURE GRAPPLE: 0 ON, the default; 1 OFF.
 inline bool quickHookOn(uint32_t value) { return value != 1; }
 inline bool grappleYankOn(uint32_t value) { return value != 1; }

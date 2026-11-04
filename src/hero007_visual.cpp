@@ -10,6 +10,8 @@
 #include "spidy/van_fps.hpp"
 #include "spidy/car_paint.hpp"
 #include "spidy/cabin_look074.hpp"
+#include "spidy/punisher078.hpp"
+#include "spidy/blood_splatter.hpp"
 
 #include <algorithm>
 #include <array>
@@ -385,6 +387,51 @@ bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mes
     if (!metric(model) || !frameOf(it, k) || !ok(viewer) || !inRange(k.o, viewer, 40.f))
         return false;
     return drawMesh(out, model, [&](Vec3 c) { return k.o + k.r * c.x + k.u * c.y - k.f * c.z; }, viewer);
+}
+
+// HERO VR 0.0.78 PUNISHER ARSENAL: the gun's body at the grip, the moving part slid back along the barrel by rack x its
+// travel (punisher078::pointsOf), the magazine in its well while magIn; a loose magazine with its well point (the top of
+// the magazine) at the hand, a loose shell about its middle. The lens glass is not in the models (tools/models078
+// drops it), so the scope's magnified picture and the red dot (native_eye_gpu, under the overlay) show through.
+bool appendArsenal078(std::vector<Vertex>& out, const Item& it, const Draw& d, Vec3 viewer) {
+    namespace p78 = punisher078;
+    Frame k{};
+    if (!frameOf(it, k))
+        return false;
+    const auto moved = [&](Vec3 by) {
+        Item m = it;
+        m.at = it.at + by;
+        return m;
+    };
+    const auto part = [&](uint32_t p) { return p < parts078 ? d.arsenal078[p] : nullptr; };
+    uint32_t arm = p78::arms, body = parts078, slide = parts078, mag = parts078;
+    switch (it.look) {
+    case lookPump078: arm = p78::pumpShotgun, body = partPump, slide = partPumpForend; break;
+    case lookPistol078: arm = p78::suppressedPistol, body = partPistol, slide = partPistolSlide, mag = partPistolMag; break;
+    case lookSniper078: arm = p78::sniperRifle, body = partSniper, slide = partSniperBolt, mag = partSniperMag; break;
+    case lookRifle078: arm = p78::assaultRifle, body = partRifle, slide = partRifleHandle, mag = partRifleMag; break;
+    case lookMag078: {
+        const uint32_t a = it.side;
+        const uint32_t m = a == p78::suppressedPistol ? partPistolMag : a == p78::sniperRifle ? partSniperMag
+                           : a == p78::assaultRifle   ? partRifleMag
+                                                      : parts078;
+        if (!part(m))
+            return false;
+        const p78::Local w = p78::pointsOf(a).magWell; // the magazine's top (in the gun's frame) to the hand
+        return appendModel(out, moved((k.f * w.forward + k.u * w.up + k.r * w.right) * -1.f), *part(m), viewer);
+    }
+    case lookShell078: return part(partShell) && appendModel(out, it, *part(partShell), viewer);
+    default: return false;
+    }
+    if (!part(body) || !appendModel(out, it, *part(body), viewer))
+        return false;
+    if (part(slide)) {
+        const float travel = std::clamp(std::isfinite(it.rack) ? it.rack : 0.f, 0.f, 1.f) * p78::pointsOf(arm).rackTravel;
+        appendModel(out, moved(k.f * -travel), *part(slide), viewer);
+    }
+    if (it.magIn && part(mag))
+        appendModel(out, it, *part(mag), viewer);
+    return true;
 }
 
 bool appendClawModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer) {
@@ -1157,22 +1204,40 @@ void appendMuzzleFlash(std::vector<Vertex>& out, Vec3 at, Vec3 way, bool shotgun
     }
 }
 
-void appendImpact(std::vector<Vertex>& out, Vec3 at, Vec3 way, float age, Vec3 viewer, float pixelAngle) {
+void appendImpact(std::vector<Vertex>& out, Vec3 at, Vec3 wound, Vec3 way, float age, float floorY, uint32_t seed, bool extreme,
+                  Vec3 viewer, float pixelAngle) {
     if (!ok(at) || !ok(way) || length(way) < 1e-3f || !ok(viewer) || !std::isfinite(pixelAngle) || !std::isfinite(age) ||
         age < 0 || age >= impactLife || !inRange(at, viewer, 60.f))
         return;
     Guard g(out);
-    const float t = age / impactLife, a = 1.f - t;
-    const Vec3 back = -normalized(way);
-    Vec3 s = cross(back, Vec3{0, 1, 0});
-    s = length(s) > 1e-3f ? normalized(s) : Vec3{1, 0, 0};
-    const Vec3 u = normalized(cross(s, back));
-    glob(out, at, viewer, .04f + .06f * t, {.55f, .52f, .48f}, .6f * a); // the dust / cloth puff
-    glob(out, at, viewer, .025f, {1.f, .85f, .55f}, a * std::max(0.f, 1.f - 4.f * t)); // the hit's spark
-    for (int k = 0; k < 5; ++k) { // the spray back out of the hit
-        const float ang = 1.2566371f * static_cast<float>(k);
-        const Vec3 d = normalized(back + (s * std::cos(ang) + u * std::sin(ang)) * .7f);
-        line(out, at + d * (.02f + .12f * t), at + d * (.05f + .16f * t), viewer, pixelAngle, .003f, {.60f, .58f, .55f}, .7f * a);
+    // The spray: blood_splatter's own splash (the punch blood's BRUTAL / EXTREME look), thrown along the shot.
+    blood_splatter::Splash s;
+    s.point = at;
+    s.toward = normalized(way);
+    s.age = age;
+    s.strength = extreme ? 2.f : 1.5f;
+    s.seed = seed;
+    s.big = s.brutal = true;
+    s.extreme = extreme;
+    s.floorY = std::isfinite(floorY) && floorY < at.y ? floorY : NAN;
+    if (age <= s.lifetime())
+        blood_splatter::appendBig(out, s, viewer);
+    // The wound on him: a dark blot (opening in 0.12 s) and three drips running down, fading out at the end.
+    const Vec3 w = ok(wound) ? wound : at;
+    if (age < woundLife && inRange(w, viewer, 60.f)) {
+        const float open = std::clamp(age / .12f, 0.f, 1.f), fade = std::clamp((woundLife - age) / 1.5f, 0.f, 1.f);
+        const float r = (.035f + .025f * blood_splatter::hash01(seed + 7)) * (extreme ? 1.4f : 1.f) * (.4f + .6f * open);
+        glob(out, w, viewer, r * 1.6f, {.50f, .03f, .03f}, .55f * fade);  // the wet ring
+        glob(out, w, viewer, r, {.30f, .01f, .01f}, .95f * fade);        // the hole
+        for (int k = 0; k < 3; ++k) {
+            const float side = (blood_splatter::hash01(seed + 11 + k) - .5f) * 1.6f * r;
+            const float run = std::min(age, 2.5f) * (.05f + .05f * blood_splatter::hash01(seed + 17 + k)) * (extreme ? 1.5f : 1.f);
+            Vec3 across = cross(Vec3{0, 1, 0}, w - viewer);
+            across = length(across) > 1e-4f ? normalized(across) : Vec3{1, 0, 0};
+            const Vec3 top = w + across * side;
+            if (run > .005f)
+                line(out, top, top - Vec3{0, run, 0}, viewer, pixelAngle, .006f, {.42f, .02f, .02f}, .9f * fade);
+        }
     }
 }
 
@@ -1308,6 +1373,10 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
     };
     const auto item = [&](const Item& given) {
         bool drawn = false;
+        if (given.look >= lookPump078 && given.look <= lookShell078) { // HERO VR 0.0.78: the models or nothing
+            appendArsenal078(out, given, d, viewer);
+            return;
+        }
         if (given.look == lookGrappleGun) { // the model or nothing (no built-in grapple gun, no empty holster)
             if (d.grappleGunModel && appendModel(out, given, *d.grappleGunModel, viewer) && given.holster)
                 appendHolster(out, given, viewer, pixelAngle);
@@ -1363,7 +1432,8 @@ void appendHero007(std::vector<Vertex>& out, const Draw& d, Vec3 travel, Vec3 vi
     for (int i = 0; i < 2; ++i)
         appendMuzzleFlash(out, d.flashAt[i] + travel, d.flashWay[i], d.flashShotgun[i], d.flashAge[i], viewer, pixelAngle);
     for (uint32_t i = 0; i < drawImpacts; ++i)
-        appendImpact(out, d.impactAt[i] + travel, d.impactWay[i], d.impactAge[i], viewer, pixelAngle);
+        appendImpact(out, d.impactAt[i] + travel, d.impactWound[i] + travel, d.impactWay[i], d.impactAge[i],
+                     d.impactFloor[i] + travel.y, d.impactSeed[i], d.bloodExtreme, viewer, pixelAngle);
     for (int i = 0; i < 2; ++i)
         if (d.cable[i])
             appendBatonCable(out, d.cableFrom[i] + travel, d.cableTo[i] + travel, viewer, pixelAngle);

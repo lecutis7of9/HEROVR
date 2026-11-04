@@ -848,12 +848,25 @@ std::atomic<uint32_t> combat38Values[combat38::options]{};
 // Version 0.0.72 MODEL MISSING: one bit per mesh_model slot whose MODEL setting is on and whose model
 // could not be read (the render thread sets it; the wrist names them: "MODEL MISSING: <name>").
 std::atomic<uint32_t> modelMissingMask{0};
+// HERO VR 0.0.78 PUNISHER ARSENAL: its own bits (slot - slotArsenal078First; the slots are past the mask's 32).
+std::atomic<uint32_t> modelMissing078{0};
 std::string modelMissingNote(uint32_t mask) {
     std::string t;
     for (uint32_t s = 0; s < mesh_model::slots && s < 32; ++s) // build 9: 42 slots, the mask's 32 bits
         if (mask >> s & 1u)
             t += (t.empty() ? "MODEL MISSING: " : ", ") + std::string(mesh_model::slotFolders[s]);
+    const uint32_t arsenal = modelMissing078.load();
+    for (uint32_t s = mesh_model::slotArsenal078First; s < mesh_model::slotArsenal078End; ++s)
+        if (arsenal >> (s - mesh_model::slotArsenal078First) & 1u)
+            t += (t.empty() ? "MODEL MISSING: " : ", ") + std::string(mesh_model::slotFolders[s]);
     return t;
+}
+// The missing bit of a slot (either mask).
+void markModelMissing(uint32_t slot) {
+    if (slot < 32)
+        modelMissingMask.fetch_or(1u << slot);
+    else if (mesh_model::slotIsArsenal078(slot))
+        modelMissing078.fetch_or(1u << (slot - mesh_model::slotArsenal078First));
 }
 // Build 9 SUITS (suit_wear.hpp): the active hero's picked suit's mesh_model slot (0: none - DEFAULT, the
 // game's own or OWN SUIT; the game thread sets it each step), each suit's rig (made once at load, read by
@@ -4896,7 +4909,7 @@ DWORD WINAPI run(void*) {
                                 wristNote = wristApply.note(wristClock);
                                 if (wristNote.empty() && mirrorTooLate)
                                     wristNote = "RESTART THE GAME TO RUN MIRROR VIEW TEST";
-                                if (wristNote.empty() && modelMissingMask.load())
+                                if (wristNote.empty() && (modelMissingMask.load() || modelMissing078.load()))
                                     wristNote = modelMissingNote(modelMissingMask.load());
                                 // Test build 10 MIRROR VIEW: it turned itself OFF - the wrist says why (20 s).
                                 if (const uint64_t at = mirrorAutoOffAtMs.load();
@@ -5035,6 +5048,10 @@ DWORD WINAPI run(void*) {
                             hin.beltZones = combat38::beltZonesOn(c38(combat38::beltZones)); // 0.0.74 test 10 BELT ZONES
                             hin.throwSwing = combat38::throwSwingOn(c38(combat38::throwSwing)); // 0.0.74 test 10 THROW BY SWING
                             hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
+                            // HERO VR 0.0.78 PUNISHER ARSENAL (live.txt punisher_arsenal): the loadout the racks hold
+                            hin.arsenal078 = combat38::punisherArsenalOn(c38(combat38::punisherArsenal));
+                            hin.scopeZoom = c38(combat38::scopeZoom);
+                            hin.bloodExtreme = blood_splatter::isExtreme(bloodIntensity.load()); // HERO VR 0.0.78 GUN BLOOD's look
                             for (unsigned i = 0; i < 2; ++i) {
                                 hin.hands[i].position = grips[i].position;
                                 hin.hands[i].tracked = gripsTracked[i] && validTrackedPose(frame.head);
@@ -10385,11 +10402,22 @@ DWORD WINAPI run(void*) {
                                         hin.shieldArm = c38(combat38::shieldArm); // Version 0.0.7 CAPTAIN AMERICA
                                         hin.shieldChain = captain::chainOn(c38(combat38::shieldChain));
                                         hin.shieldDamage = c38(combat38::shieldDamage);
+                                        // HERO VR 0.0.78 PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT (punisher078.hpp)
+                                        hin.arsenal078 = combat38::punisherArsenalOn(c38(combat38::punisherArsenal));
+                                        hin.scopeZoom = c38(combat38::scopeZoom);
+                                        hin.bloodExtreme = blood_splatter::isExtreme(bloodIntensity.load()); // HERO VR 0.0.78 GUN BLOOD's look
+                                        const uint32_t ejectWith = combat38::magEjectButton(c38(combat38::magEject));
                                         for (unsigned i = 0; i < 2; ++i) {
                                             hin.hands[i].position = cf.hands[i].position;
                                             hin.hands[i].aim = cf.hands[i].aim;
                                             hin.hands[i].tracked = cf.hands[i].tracked;
                                             hin.hands[i].trigger = heroPress[i].trigger; // test 3: the real trigger
+                                            // HERO VR 0.0.78 MAG EJECT: this hand's B/Y, A/X or thumbstick click (the left hand's Y / X)
+                                            hin.hands[i].eject =
+                                                ejectWith == combat38::magEjectStick
+                                                    ? frame.hands[i].stickClick
+                                                    : (frame.buttons & (ejectWith == combat38::magEjectLower ? (i ? buttonA : buttonX)
+                                                                                                           : (i ? buttonB : buttonY))) != 0;
                                             // Version 0.0.72 WOLVERINE: the claws come out on the grip fist.
                                             hin.hands[i].squeeze = std::isfinite(frame.hands[i].squeeze) ? frame.hands[i].squeeze : 0.f;
                                             // Version 0.0.7 PUNISHER GUN GRIP: the held gun from the grip pose.
@@ -10668,6 +10696,8 @@ DWORD WINAPI run(void*) {
                                             // hologram press and is never drawn into a hand holding a gun.
                                             in72.handBusy[i] = cf.hands[i].zoned || cf.menuOpen || phone.open() || padLayer.latched() || seatedLock;
                                             in72.gunInHand[i] = hero007Play.guns.heldIn(i) >= 0;
+                                            // HERO VR 0.0.78: a hand working an arsenal gun (its rack, a shell, a magazine) never hooks
+                                            in72.gunInHand[i] = in72.gunInHand[i] || hero007Play.work078[i];
                                         }
                                         in72.eyeHeight = calibratedEye; // 0.0.73 test 3: the PUNISHER rig's scale
                                         in72.ddCastGesture = false; // Version 0.0.73 (fix 5): DAREDEVIL grapples on a held trigger
@@ -13364,6 +13394,32 @@ DWORD WINAPI run(void*) {
                                                            ((pulling && capeNow.hand == h) ||
                                                             (hero007In.hero == hero_modes::punisher && hero072HookOut[h]));
                             hero007Play.draw(saved.hero007, saved.worldFromTracking, hero007In, batonLookNow);
+                            {
+                                // HERO VR 0.0.78 PUNISHER ARSENAL: the held sniper's scope / rifle's red dot for the eye
+                                // pass, each eye's own view (its tracking pose and this frame's lens) - the scope's
+                                // magnified picture and the dot on the lens, parallax-free (punisher078::opticConstants).
+                                static bool opticsWere{};
+                                std::array<std::array<float, 12>, 2> optic{};
+                                bool any = false;
+                                if (hero007In.hero == hero_modes::punisher && hero007In.arsenal078)
+                                    for (unsigned h = 0; h < 2 && !any; ++h) {
+                                        const hero007::Optic078& op = hero007Play.optic078[h];
+                                        if (op.kind == hero007::opticNone)
+                                            continue;
+                                        for (unsigned i = 0; i < 2; ++i) {
+                                            punisher078::EyeView ev;
+                                            ev.eye = frame.eyes[i].pose;
+                                            const auto& f = motion.fovs[i];
+                                            ev.tanLeft = std::tan(f.left), ev.tanRight = std::tan(f.right);
+                                            ev.tanDown = std::tan(f.down), ev.tanUp = std::tan(f.up);
+                                            optic[i] = punisher078::opticConstants(op.kind, ev, op.lens, op.axis, op.radius, op.zoom);
+                                            any = any || optic[i][7] > .5f;
+                                        }
+                                    }
+                                if (any || opticsWere)
+                                    native_gpu::setEyeOptics(optic[0].data(), optic[1].data());
+                                opticsWere = any;
+                            }
                             saved.hero072 = hero072::worldLook(hero072Look, saved.worldFromTracking); // Version 0.0.72
                             // 0.0.73 test 3 WEAPON COLLISION (held): guns, batarangs, claws, the shield and the
                             // hammer in the hand drawn short of the surface ahead (the drawing only).
@@ -13426,11 +13482,11 @@ DWORD WINAPI run(void*) {
                                         consoleLine(line);
                                         game_prompts::note(line);
                                     }
-                                    if (status != mesh_model::loaded && slot < 32)
-                                        modelMissingMask.fetch_or(1u << slot);
+                                    if (status != mesh_model::loaded)
+                                        markModelMissing(slot);
                                 }
-                                if (models.status[slot] != mesh_model::loaded && slot < 32) // (read at start: 0.0.72)
-                                    modelMissingMask.fetch_or(1u << slot);
+                                if (models.status[slot] != mesh_model::loaded) // (read at start: 0.0.72)
+                                    markModelMissing(slot);
                                 return models.model(slot);
                             };
                             const uint32_t style = c38(combat38::batarangStyle);
@@ -13687,6 +13743,11 @@ DWORD WINAPI run(void*) {
                                 saved.hero007.sawedBarrels = slotModel(mesh_model::slotSawedOffBarrels, "GUN MODELS");
                                 saved.hero007.modelWanted |= hero007::modelBitGuns;
                             }
+                            // HERO VR 0.0.78 PUNISHER ARSENAL (live.txt punisher_arsenal ON): the four guns' models, their
+                            // moving parts and magazines (Models\Punisher078); missing: MODEL MISSING, never a stand-in.
+                            if (hero007In.arsenal078 && hero007In.hero == hero_modes::punisher)
+                                for (uint32_t p = 0; p < hero007::parts078; ++p)
+                                    saved.hero007.arsenal078[p] = slotModel(mesh_model::slotArsenal078First + p, "PUNISHER ARSENAL");
                             // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: the JACKET AND JEANS claws for every Wolverine suit
                             // (Models\Claws; 0.0.72's built-in claws when missing). The worn suit carries none (no double claws).
                             // 0.0.73 test 5 CLAW LOOK ON (the default): out between the knuckles, along the fist, steel.
@@ -18400,6 +18461,10 @@ extern "C" __declspec(dllexport) DWORD WINAPI SpidyHideoutHold(void* v) { return
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyGlideTilt(void* v) { return setHero007(v, combat38::glideTilt, 5535); }
 // 0.0.76 MP WORLD PLAYER 2 PLACE (mp_world.hpp): WORLD (0, the default) or BUDDY (1); live.
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyMpPlace(void* v) { return setHero007(v, combat38::mpPlace, 5536); }
+// HERO VR 0.0.78 PUNISHER ARSENAL, SCOPE ZOOM, MAG EJECT (punisher078.hpp)
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyPunisherArsenal(void* v) { return setHero007(v, combat38::punisherArsenal, 5537); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyScopeZoom(void* v) { return setHero007(v, combat38::scopeZoom, 5538); }
+extern "C" __declspec(dllexport) DWORD WINAPI SpidyMagEject(void* v) { return setHero007(v, combat38::magEject, 5539); }
 // 0.0.74 test 10 THROW BY SWING (throw_swing.hpp): 0 ON (the default) / 1 OFF (the old aim)
 extern "C" __declspec(dllexport) DWORD WINAPI SpidyThrowSwing(void* v) { return setHero007(v, combat38::throwSwing, 5534); }
 // 0.0.73 test 5: IRON MAN HERO HANDS, DAREDEVIL GRAPPLE AIM, WOLVERINE CLAW LOOK - ON (0) or OFF (1), live (live.txt

@@ -252,10 +252,22 @@ inline float falloff(const GunSpec& g, float metres) {
         return 1.f;
     return std::clamp(1.f - .6f * (metres - 6.f) / std::max(g.range - 6.f, 1.f), .4f, 1.f);
 }
+// HERO VR 0.0.78 GUN BLOOD: where one pellet (or the lone round) went into an enemy: his index in the
+// list, the point on his body the pellet's line passes (his front, toward the muzzle) and its way (unit).
+struct PelletHit {
+    uint32_t enemy{};
+    Vec3 at{}, way{};
+};
+inline constexpr int pelletHitsMost = 16; // pelletDirs' most
 // One shot: each enemy's hit points from it (amount[i], indices into list; 0: missed). A pellet
 // stops at the first body it passes (within gunHitRadius). The pistol's lone round snaps to a chest
 // within pistolAssistDeg when it passes nobody. Returns how many enemies were hit.
-inline int shoot(const GunSpec& g, Vec3 from, Vec3 dir, const BatonEnemy* list, uint32_t count, float* amount) {
+// HERO VR 0.0.78 GUN BLOOD: `pellets` (pelletHitsMost, optional) takes each pellet that hit, *pelletHits
+// their count; the amounts are the same with or without them (tests: punisher078_play).
+inline int shoot(const GunSpec& g, Vec3 from, Vec3 dir, const BatonEnemy* list, uint32_t count, float* amount,
+                 PelletHit* pellets = nullptr, int* pelletHits = nullptr) {
+    if (pelletHits)
+        *pelletHits = 0;
     if (!list || !amount || !finite(from))
         return 0;
     for (uint32_t i = 0; i < count; ++i)
@@ -265,6 +277,7 @@ inline int shoot(const GunSpec& g, Vec3 from, Vec3 dir, const BatonEnemy* list, 
     for (int p = 0; p < n; ++p) {
         int best = -1;
         float bestAlong = g.range;
+        bool assisted = false;
         for (uint32_t i = 0; i < count; ++i) {
             const Vec3 c = list[i].chest;
             if (!list[i].id || list[i].down || !finite(c))
@@ -291,11 +304,19 @@ inline int shoot(const GunSpec& g, Vec3 from, Vec3 dir, const BatonEnemy* list, 
                     bestCos = c;
                     best = static_cast<int>(i);
                     bestAlong = m;
+                    assisted = true;
                 }
             }
         }
         if (best >= 0)
             amount[best] += g.amount * falloff(g, bestAlong);
+        if (best >= 0 && pellets && pelletHits && *pelletHits < pelletHitsMost) {
+            const Vec3 c = list[best].chest;
+            const Vec3 way = assisted ? normalized(c - from) : dirs[p]; // the assist: at his chest
+            Vec3 at = from + way * dot(c - from, way); // on the line, level with him
+            at.y = std::clamp(at.y, c.y - 1.f, c.y + .6f);
+            pellets[(*pelletHits)++] = {static_cast<uint32_t>(best), at - way * .12f, way}; // his front
+        }
     }
     int hit = 0;
     for (uint32_t i = 0; i < count; ++i)

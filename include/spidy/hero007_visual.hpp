@@ -40,6 +40,15 @@ enum Look : uint32_t {
     lookShield,     // CAPTAIN AMERICA: the shield, `at` its hand strap (on the arm or the back), side = the arm
     lookShieldSpin, // the thrown shield, `at` the disc's middle, spinning `spin` about its face
     lookGrappleGun, // BATMAN's grapple gun: ONLY Draw::grappleGunModel (Models\GrappleGun); nothing without it
+    // HERO VR 0.0.78 PUNISHER ARSENAL (punisher078.hpp): ONLY their models (Draw::arsenal078, Models\Punisher078\...),
+    // nothing without them (MODEL MISSING on the wrist). `at` the grip point (the model's origin), rack the pump /
+    // slide / bolt / charging handle's travel (0 home, 1 back), magIn the magazine in the gun.
+    lookPump078,
+    lookPistol078,
+    lookSniper078,
+    lookRifle078,
+    lookMag078,   // a loose magazine in the off hand, side = its gun (punisher078::Arm); `at` the hand
+    lookShell078, // a loose 12 gauge shell in the off hand; `at` the hand
     looks
 };
 // One item: `at` its grip (world), `forward` along its barrel / blade / shaft, `up` its top.
@@ -50,13 +59,35 @@ struct Item {
     uint32_t holster{};  // 0 none, 1 a hip holster round it, 2 a back sheath, 3 a baton tube, 4 (0.0.72) a drop-leg thigh holster
     uint32_t side{};     // lookBatonModel: 0 the left baton, 1 the right; lookShield*: 0 the LEFT arm's, 1 the RIGHT's
     bool palm{};         // Version 0.0.7 GUN GRIP: at is the palm's grip point; the gun's own grip middle goes there
+    float rack{};        // HERO VR 0.0.78: the moving part's travel, 0 home - 1 fully back (lookPump078 ... lookRifle078)
+    bool magIn{};        // HERO VR 0.0.78: the magazine is in the gun (drawn in its well)
+};
+// HERO VR 0.0.78 PUNISHER ARSENAL: the converted parts, one mesh_model slot each (mesh_model::slotArsenal078First + part).
+// Every part is in its gun's frame (metres, the grip at the origin, -z along the barrel, y up): the moving parts and
+// the magazine at home / seated, so the gun is drawn by moving them only along the barrel; the shell about its middle.
+enum Part078 : uint32_t {
+    partPump = 0,
+    partPumpForend,
+    partShell,
+    partPistol,
+    partPistolSlide,
+    partPistolMag,
+    partSniper,
+    partSniperBolt,
+    partSniperMag,
+    partRifle,
+    partRifleHandle,
+    partRifleMag,
+    parts078
 };
 // CAPTAIN AMERICA's shield Items: forward = the face (the star side), up = along the forearm (elbow
 // -> hand), the model frame of captain.hpp (the hand strap at the origin, -z the face).
 inline constexpr uint32_t drawSmokes = 6, drawShells = 24;
 // Version 0.0.72: SUPERMAN's scorch marks, the PUNISHER's bullet impacts (each the newest overwriting the oldest).
-inline constexpr uint32_t drawScorches = 4, drawImpacts = 6;
-inline constexpr float scorchLife = 2.5f, impactLife = .35f, flashLife = .06f;
+// HERO VR 0.0.78 GUN BLOOD: an impact is a blood splatter now (one a pellet: the sawed-off's and the pump's
+// nine each bleed), 16 kept, each impactLife s (blood_splatter BRUTAL's floor life; the wound woundLife).
+inline constexpr uint32_t drawScorches = 4, drawImpacts = 16;
+inline constexpr float scorchLife = 2.5f, impactLife = 8.f, woundLife = 6.f, flashLife = .06f;
 // Version 0.0.72 THIN BEAMS: each eye's heat beam's half width (m), even along it (0.0.7: 1.2 cm widening to 3.2 cm).
 inline constexpr float heatBeamWidth = .0045f;
 // Everything 0.0.7 draws in one frame (NativeEyeFrame::hero007), world positions.
@@ -92,7 +123,13 @@ struct Draw {
     float flashAge[2]{1e9f, 1e9f};
     bool flashShotgun[2]{};
     Vec3 impactAt[drawImpacts]{}, impactWay[drawImpacts]{};
-    float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
+    float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
+    // HERO VR 0.0.78 GUN BLOOD: each hit's wound (on the enemy: it follows him), the floor under him (NaN: no
+    // spatter), its pattern's seed, and EXTREME's look (BLOOD SPLATTER at EXTREME) instead of BRUTAL's.
+    Vec3 impactWound[drawImpacts]{};
+    float impactFloor[drawImpacts]{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN};
+    uint32_t impactSeed[drawImpacts]{};
+    bool bloodExtreme{};
     Vec3 smokeAt[drawSmokes]{};
     float smokeAge[drawSmokes]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
     Vec3 shellAt[drawShells]{}, shellWay[drawShells]{};
@@ -129,6 +166,9 @@ struct Draw {
     // is drawn at all (no stand-in) and the line starts at the hand; with it, the line starts at its muzzle
     // (extras.pivot) when the gun is in the firing hand.
     const mesh_model::Mesh* grappleGunModel{};
+    // HERO VR 0.0.78 PUNISHER ARSENAL: Models\Punisher078\<part> (Part078). Library-owned; null: that part is MODEL MISSING
+    // (a gun whose body is missing is not drawn at all - no stand-in).
+    const mesh_model::Mesh* arsenal078[parts078]{};
     bool grapple[2]{};
     Vec3 grappleFrom[2]{}, grappleTo[2]{};
     // Version 0.0.72: how far each line has flown out of the muzzle (0-1, grappleOut); 1: taut to the hook.
@@ -147,6 +187,9 @@ bool appendBatarangModel(std::vector<Vertex>& out, const Item& it, const mesh_mo
 // GUN MODELS / BATON LOOK MODEL: a converted model (metres, x right, y up, -z forward, the grip at
 // the origin) at the item. False (nothing added) when it cannot be drawn: the built-in look instead.
 bool appendModel(std::vector<Vertex>& out, const Item& it, const mesh_model::Mesh& model, Vec3 viewer);
+// HERO VR 0.0.78 PUNISHER ARSENAL: a lookPump078 ... lookShell078 Item from d.arsenal078 (the body, the moving part
+// moved back by rack, the magazine while magIn). False: its body model is missing (nothing drawn).
+bool appendArsenal078(std::vector<Vertex>& out, const Item& it, const Draw& d, Vec3 viewer);
 // Version 0.0.73 (fix 10) RETRACTABLE CLAWS: a hand's claws model (the claws' base at its origin, -z along them, +y the
 // back of the hand) at the knuckles of lookClaws' frame (clawKnuckle ahead, clawRise up, as the built-in claws),
 // sliding out with it.spin (the SNIKT extension 0-1.1; 0 reads as out). False: not drawn (the built-in claws then).
@@ -249,9 +292,13 @@ void appendFreezeBreath(std::vector<Vertex>& out, Vec3 from, Vec3 to, Vec3 viewe
 void appendHeatSparks(std::vector<Vertex>& out, Vec3 from, Vec3 at, float clock, Vec3 viewer, float pixelAngle);
 void appendScorch(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer);
 // Version 0.0.72 PUNISHER: a muzzle flash (a star of short spikes ahead of the muzzle, flashLife s;
-// the sawed-off's bigger) and a hit puff on an enemy (a spray back along the shot, impactLife s).
+// the sawed-off's bigger).
+// HERO VR 0.0.78 GUN BLOOD (owner t1893u): a bullet's hit is blood only - 0.0.72's grey dust puff, hot spark and
+// grey spray are gone. blood_splatter's BRUTAL splash (EXTREME's with `extreme`) thrown out of him ALONG the shot
+// from `at`, its spatter on `floorY` (NaN: none), and a wound on him at `wound` (dark, dripping, woundLife s).
 void appendMuzzleFlash(std::vector<Vertex>& out, Vec3 at, Vec3 way, bool shotgun, float age, Vec3 viewer, float pixelAngle);
-void appendImpact(std::vector<Vertex>& out, Vec3 at, Vec3 way, float age, Vec3 viewer, float pixelAngle);
+void appendImpact(std::vector<Vertex>& out, Vec3 at, Vec3 wound, Vec3 way, float age, float floorY, uint32_t seed, bool extreme,
+                  Vec3 viewer, float pixelAngle);
 void appendSmoke(std::vector<Vertex>& out, Vec3 at, float age, Vec3 viewer);
 // BATMAN's smoke pellet: a small dark ball (about 4 cm) with a glint.
 void appendPellet(std::vector<Vertex>& out, Vec3 at, Vec3 viewer);
@@ -286,7 +333,7 @@ namespace budget {
 inline constexpr size_t pistol = 1300, sawedOff = 1500, batarang = 600, claws = 2600 /* 0.0.72: curved, 5 segments a claw */, club = 1200,
                         holster = 600 /* 0.0.72: the drop-leg holster */, shield = 2100, batarangModel = 3 * mesh_model::liteTriangles, model = 3 * mesh_model::liteTriangles,
                         cable = 600, grapple = 2400 /* 0.0.72: the cord + the hook at the tip */, pellet = 200, heatBeam = 1000, freeze = 1500, smoke = 300, shell = 240, ammo = 2500,
-                        heatSparks = 500, scorch = 200, flash = 500, impact = 500;
+                        heatSparks = 500, scorch = 200, flash = 500, impact = 1000 /* 0.0.78: blood */;
 // The whole frame's worst case: 2 held + 4 worn + 2 flying + beam + smoke + shells + 2 readouts
 // (+ 2 cables, 2 grapple lines, 2 smoke pellets; a model is at most `model`; the one shield is at most `shield` == `model`, in a held,
 // worn or flying slot).

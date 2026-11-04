@@ -21,6 +21,7 @@
 #include "spidy/grapple072.hpp"
 #include "spidy/grapple073.hpp"
 #include "spidy/holster.hpp"
+#include "spidy/punisher078.hpp"
 #include "spidy/punisher_rig.hpp"
 #include "spidy/sfx.hpp"
 #include "spidy/throw_swing.hpp"
@@ -37,6 +38,7 @@ struct PlayHand {
     bool busy{};      // a web attached, climbing, the hologram's or the phone's (holsterStep)
     bool thrown{};    // DAREDEVIL: this hand's baton is in the air (no holstering it until it is back)
     bool holo{};      // Version 0.0.73: this hand's trigger is the hologram's / phone's / a menu's (never a grapple)
+    bool eject{};     // HERO VR 0.0.78: this hand's magazine eject button (live.txt mag_eject) is down
     // Version 0.0.7 PUNISHER GUN GRIP: a held gun from the controller's grip pose (gun_grip::held);
     // gunOk false: 0.0.62's placement along the aim, upright.
     Vec3 gunAt{}, gunForward{0, 0, -1}, gunUp{0, 1, 0};
@@ -70,7 +72,23 @@ struct PlayInput {
     uint32_t shieldDamage{}; // SHIELD DAMAGE value (0: 35 HP)
     bool beltZones = true;   // 0.0.74 test 10 BELT ZONES ON: BATMAN's left hip grapple, belt front batarang, forearm smoke
     bool throwSwing = true;  // 0.0.74 test 10 THROW BY SWING ON: throws fly along the arm's swing (throw_swing.hpp)
+    // HERO VR 0.0.78 PUNISHER ARSENAL (live.txt punisher_arsenal; game_xr sets it, ON the default there): the pump,
+    // the suppressed pistol, the sniper and the assault rifle (punisher078.hpp); false the 0.0.77 pistols and sawed-off.
+    bool arsenal078{};
+    // HERO VR 0.0.78 GUN BLOOD: the bullet hits' blood in EXTREME's look (game_xr: BLOOD SPLATTER at EXTREME), else BRUTAL's.
+    bool bloodExtreme{};
+    uint32_t scopeZoom{};    // HERO VR 0.0.78 live.txt scope_zoom (0 4X, 1 6X, 2 8X, 3 2.5X)
 };
+// HERO VR 0.0.78: the rack's item numbers of the arsenal (item078 + punisher078::Arm), beside hero007::pistol / sawedOff.
+inline constexpr uint32_t item078 = 16;
+// HERO VR 0.0.78 OPTICS: a held gun's sight for native_eye_gpu (tracking space): the lens's middle, the sight's axis
+// (along the barrel), the lens's radius. kind 0 none, 1 the sniper's scope (zoom), 2 the rifle's red dot.
+struct Optic078 {
+    uint32_t kind{};
+    Vec3 lens{}, axis{0, 0, -1};
+    float radius{}, zoom{1};
+};
+inline constexpr uint32_t opticNone = 0, opticScope = 1, opticDot = 2;
 enum BlowKind : uint32_t { kindBatarang = 0, kindClaw, kindHeat, kindFreeze, kindPistol, kindSawedOff, kindShield, kindShieldBash, blowKinds };
 inline constexpr const char* blowKindNames[blowKinds] = {"BATARANG", "CLAWS",     "HEAT VISION", "COLD BREATH",
                                                          "PISTOL",   "SAWED-OFF", "SHIELD",      "SHIELD BASH"};
@@ -184,6 +202,16 @@ inline void wornPose(uint32_t zone, Vec3 head, const holster::BodyYaw& body, Vec
         head += down * backDrop;
         at = head + down * .12f + r * .14f - f * .17f;
         forward = normalized(dn + r * -.65f);
+        up = -f;
+        break;
+    case holster::rightLeg: // HERO VR 0.0.78: in the PUNISHER model's own right-leg holster (punisher078.hpp)
+        head += down * hipDrop + r * hipOutShift;
+        punisher078::legHolsterPose(head, body, at, forward, up);
+        break;
+    case holster::backMiddle: // HERO VR 0.0.78: the pump down the spine, the grip behind the neck
+        head += down * backDrop;
+        at = head + down * .12f - f * .17f;
+        forward = normalized(dn - f * .08f);
         up = -f;
         break;
     default: { // a baton over each shoulder, crossed
@@ -334,9 +362,16 @@ class Play {
     Vec3 flashAt[2]{}, flashWay[2]{};
     float flashAge[2]{1e9f, 1e9f};
     bool flashShotgun[2]{};
+    // HERO VR 0.0.78 GUN BLOOD: each is a bullet's blood now (one a pellet): the spray's start, its way, its
+    // age, and the wound on the enemy (impactFoe's chest + impactOff: it follows him), the floor under him.
     Vec3 impactAt[drawImpacts]{}, impactWay[drawImpacts]{};
-    float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
+    float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
     uint32_t impactNext{};
+    uint64_t impactFoe[drawImpacts]{};
+    Vec3 impactOff[drawImpacts]{}, impactWound[drawImpacts]{};
+    float impactFloor[drawImpacts]{};
+    uint32_t impactSeed[drawImpacts]{};
+    uint64_t bleeds{}; // HERO VR 0.0.78 GUN BLOOD: the bullet wounds made (tests, the wrist)
     hero_modes::BatonSwing claws[2];
     uint32_t clawSlashes{}, clawStabs{}, clawSlashHits{}; // HERO VR 0.0.78: which claw sound, and the counts
     bool clawsOut[2]{};
@@ -363,6 +398,55 @@ class Play {
     uint32_t gunStateWas[holster::maxSlots]{};
     uint64_t dryWas[holster::maxSlots]{};
     uint64_t blows{}, shots{}, shotHits{}, heatTicks{}, freezeTicks{}, clawHits{}, batarangHits{}, smokes{};
+    // HERO VR 0.0.78 PUNISHER ARSENAL (punisher078.hpp; live.txt punisher_arsenal): the pump shotgun on the back's
+    // middle, the suppressed pistol in the model's own right-leg holster, the sniper rifle over the left shoulder,
+    // the assault rifle over the right. Each gun's state lives with its slot (guns.slots[s].item = item078 + arm);
+    // the off hand works it (work078: carrying a shell or magazine, on the pump / slide / bolt, or holding the
+    // forend - support078, the two-handed aim); optic078: the held sniper's scope or rifle's red dot for game_xr.
+    bool arsenalOn078{};
+    punisher078::Pump pump078;
+    punisher078::MagGun mag078[holster::maxSlots];
+    bool work078[2]{}, support078[2]{}, offDown078[2]{};
+    uint32_t carry078[2]{punisher078::arms, punisher078::arms}; // the arm whose shell / magazine the hand carries
+    Optic078 optic078[2]{};
+    struct Dropped078 { // an ejected magazine falling away (a look only)
+        Vec3 at{}, velocity{}, forward{0, -1, 0}, up{0, 0, -1};
+        float age = 1e9f;
+        uint32_t arm{};
+    } dropped078[2]{};
+    uint64_t arsenalShots078{}, arsenalReloads078{}, arsenalRacks078{};
+    static bool arsenalItem(uint32_t item) { return item >= item078 && item < item078 + punisher078::arms; }
+    // The PUNISHER's guns: the 0.0.78 arsenal (ON) or the classic two pistols and the sawed-off (OFF).
+    void loadout(bool arsenal) {
+        arsenalOn078 = arsenal;
+        guns = {};
+        pump078 = {};
+        if (arsenal) {
+            guns.add(holster::rightLeg, item078 + punisher078::suppressedPistol);
+            guns.add(holster::backMiddle, item078 + punisher078::pumpShotgun); // before backLeft: the spine is the pump's
+            guns.add(holster::backLeft, item078 + punisher078::sniperRifle);
+            guns.add(holster::backRight, item078 + punisher078::assaultRifle);
+        } else {
+            guns.add(holster::leftHip, pistol);
+            guns.add(holster::rightHip, pistol);
+            guns.add(holster::back, sawedOff);
+        }
+        for (uint32_t s = 0; s < guns.count; ++s) {
+            const uint32_t it = guns.slots[s].item;
+            if (arsenalItem(it))
+                mag078[s].arm_(it - item078);
+            else
+                armory[s].arm(it);
+            gunStateWas[s] = ready;
+            dryWas[s] = 0;
+        }
+        for (unsigned i = 0; i < 2; ++i) {
+            work078[i] = support078[i] = offDown078[i] = false;
+            carry078[i] = punisher078::arms;
+            optic078[i] = {};
+            dropped078[i].age = 1e9f;
+        }
+    }
 
     // A hero change (or the first frame): everything back in its place. Returns true when it changed.
     bool setHero(uint32_t h) {
@@ -402,15 +486,7 @@ class Play {
         pellets = {};
         pelletBody = {};
         shells = {};
-        guns = {};
-        guns.add(holster::leftHip, pistol);
-        guns.add(holster::rightHip, pistol);
-        guns.add(holster::back, sawedOff);
-        for (uint32_t s = 0; s < guns.count; ++s) {
-            armory[s].arm(guns.slots[s].item);
-            gunStateWas[s] = ready;
-            dryWas[s] = 0;
-        }
+        loadout(arsenalOn078);
         batons = {};
         batons.add(holster::backLeft, 0);
         batons.add(holster::backRight, 0);
@@ -467,6 +543,8 @@ class Play {
     // The racks, at the grip arbitration. Fills out.claimed, the draw / holster ticks and sounds.
     void holsterStep(const PlayInput& in, PlayOutput& out) {
         setHero(in.hero);
+        if (in.arsenal078 != arsenalOn078) // live.txt punisher_arsenal changed: the other loadout, holstered
+            loadout(in.arsenal078);
         { // test build 12 BODY SCALE: every holster, belt and pouch height from the player's own eye height
             const float k = holster::scaleFor(in.eyeHeight);
             guns.body.scale = batons.body.scale = shieldRack.body.scale = batBody.scale = pelletBody.scale = k;
@@ -564,9 +642,39 @@ class Play {
             for (unsigned i = 0; i < 2; ++i)
                 if (guns.heldIn(i) < 0 && in.hands[i].tracked && punisher_rig::guarded(in.hands[i].position, in.head, guns.body))
                     hands[i].busy = true;
+        // HERO VR 0.0.78: the off hand working an arsenal gun (a shell or magazine, the pump / slide / bolt, the
+        // forend) or reaching for its pouch draws nothing, and its grip is the gun's (never a web's or a zip's).
+        uint32_t claim078 = 0;
+        if (rack == &guns && arsenalOn078)
+            for (unsigned i = 0; i < 2; ++i) {
+                const unsigned o = 1 - i;
+                const int s = guns.heldIn(i);
+                if (s < 0 || !arsenalItem(guns.slots[s].item) || guns.heldIn(o) >= 0)
+                    continue;
+                const bool down = in.hands[o].tracked && std::isfinite(in.hands[o].squeeze) &&
+                                  in.hands[o].squeeze >= (offDown078[o] ? holster::released : holster::pressed);
+                bool reach = work078[o];
+                if (!reach && down && guns.body.valid && finite(in.hands[o].position) && finite(in.head.position)) {
+                    const uint32_t arm = guns.slots[s].item - item078;
+                    const holster::BodyPoint bp = holster::bodyPoint(in.hands[o].position, in.head.position, guns.body);
+                    reach = arm == punisher078::pumpShotgun ? punisher078::atShellPouch(bp) : punisher078::atMagPouch(bp);
+                    const Pose078 p = onePose078(in.hands[i]);
+                    if (!reach && p.ok) {
+                        const punisher078::GunPoints g = punisher078::pointsOf(arm);
+                        const punisher078::Local l = punisher078::toLocal(p.at, p.forward, p.up, in.hands[o].position);
+                        reach = punisher078::gap(l, g.rack) <= g.rackRadius ||
+                                (g.forendRadius > 0 && punisher078::gap(l, g.forend) <= g.forendRadius);
+                    }
+                }
+                if (reach) {
+                    hands[o].busy = true;
+                    if (down)
+                        claim078 |= 1u << o;
+                }
+            }
         rack->crossDraw = in.crossDraw;
         rack->update(in.dt, in.play, in.head, hands);
-        out.claimed = rack->claimed();
+        out.claimed = rack->claimed() | claim078;
         for (unsigned i = 0; i < 2; ++i) {
             const uint32_t e = rack->events(i);
             if (e & (holster::drew | holster::holstered)) {
@@ -613,6 +721,8 @@ class Play {
 
     void step(const PlayInput& in, PlayOutput& out) {
         setHero(in.hero);
+        if (in.arsenal078 != arsenalOn078)
+            loadout(in.arsenal078);
         { // test build 12 BODY SCALE: every holster, belt and pouch height from the player's own eye height
             const float k = holster::scaleFor(in.eyeHeight);
             guns.body.scale = batons.body.scale = shieldRack.body.scale = batBody.scale = pelletBody.scale = k;
@@ -645,8 +755,12 @@ class Play {
             }
             for (int k = 0; k < 2; ++k)
                 flashAge[k] = std::min(flashAge[k] + t, 1e9f);
-            for (uint32_t k = 0; k < drawImpacts; ++k)
+            for (uint32_t k = 0; k < drawImpacts; ++k) {
                 impactAge[k] = std::min(impactAge[k] + t, 1e9f);
+                for (uint32_t e = 0; impactFoe[k] && e < in.count && in.list; ++e) // the wound follows him
+                    if (in.list[e].id == impactFoe[k] && finite(in.list[e].chest))
+                        impactWound[k] = in.list[e].chest + impactOff[k];
+            }
         }
         if (!in.play)
             return;
@@ -762,6 +876,30 @@ class Play {
         } else if (hero == hero_modes::punisher) {
             for (uint32_t s = 0; s < guns.count; ++s) {
                 const auto& slot = guns.slots[s];
+                if (arsenalItem(slot.item)) { // HERO VR 0.0.78 PUNISHER ARSENAL: the models (no holster mesh ever)
+                    const uint32_t arm = slot.item - item078;
+                    const uint32_t look = lookPump078 + arm;
+                    const bool magIn = arm == punisher078::pumpShotgun || mag078[s].magIn;
+                    Vec3 at{}, fwd{}, up{};
+                    wornPose(slot.zone, in.head.position, guns.body, at, fwd, up, hipThigh);
+                    d.worn[s] = item(slot.heldBy < 0 ? look : lookNone, at, fwd, up, 0);
+                    d.worn[s].magIn = magIn;
+                    d.worn[s].side = arm;
+                    if (slot.heldBy == 0 || slot.heldBy == 1) {
+                        const unsigned i = static_cast<unsigned>(slot.heldBy);
+                        const Pose078 p = pose078(in, i);
+                        if (p.ok) {
+                            d.held[i] = item(look, p.at, p.forward, p.up);
+                            d.held[i].side = arm;
+                            d.held[i].magIn = magIn;
+                            const punisher078::GunPoints g = punisher078::pointsOf(arm);
+                            d.held[i].rack = arm == punisher078::pumpShotgun ? pump078.pump.share(g) : mag078[s].rack.share(g);
+                            ammoText078(s, d.ammo[i], sizeof d.ammo[i]);
+                        }
+                    }
+                    any = true;
+                    continue;
+                }
                 const Gun& g = armory[s];
                 const bool open = g.weapon == sawedOff && (g.state == opened || g.state == seating || g.state == autoLoading);
                 const uint32_t look = g.weapon == sawedOff ? (open ? lookSawedOffOpen : lookSawedOff) : lookPistol;
@@ -789,6 +927,26 @@ class Play {
                     }
                 }
                 any = true;
+            }
+            // HERO VR 0.0.78: the shell or magazine in the off hand, and a dropped magazine falling away.
+            for (unsigned i = 0; i < 2 && arsenalOn078; ++i) {
+                if (carry078[i] < punisher078::arms && d.held[i].look == lookNone) {
+                    const uint32_t look = carry078[i] == punisher078::pumpShotgun ? lookShell078 : lookMag078;
+                    if (in.hands[i].gunOk && finite(in.hands[i].gunAt) && finite(in.hands[i].gunForward) && finite(in.hands[i].gunUp))
+                        d.held[i] = item(look, in.hands[i].gunAt, in.hands[i].gunForward, in.hands[i].gunUp);
+                    else if (handOk(i)) {
+                        const Vec3 a = normalized(in.hands[i].aim);
+                        d.held[i] = item(look, in.hands[i].position, a, gunUp(a));
+                    }
+                    d.held[i].side = carry078[i];
+                    any = true;
+                }
+                const Dropped078& m = dropped078[i];
+                if (m.age < 1.5f && finite(m.at)) {
+                    d.flying[i] = item(lookMag078, m.at, m.forward, m.up);
+                    d.flying[i].side = m.arm;
+                    any = true;
+                }
             }
             // Version 0.0.72 GRAPPLE: the hook launcher (the grapple-gun model) in the hand that fires it,
             // the barrel along the aim (a hand already holding a gun keeps its gun).
@@ -905,6 +1063,12 @@ class Play {
                 d.impactAt[k] = W(impactAt[k]);
                 d.impactWay[k] = R(impactWay[k]);
                 d.impactAge[k] = impactAge[k];
+                d.impactWound[k] = W(finite(impactWound[k]) ? impactWound[k] : impactAt[k]); // HERO VR 0.0.78 GUN BLOOD
+                d.impactFloor[k] = std::isfinite(impactFloor[k])
+                                       ? W(Vec3{impactAt[k].x, impactFloor[k], impactAt[k].z}).y
+                                       : NAN;
+                d.impactSeed[k] = impactSeed[k];
+                d.bloodExtreme = in.bloodExtreme;
                 any = true;
             }
         for (uint32_t k = 0; k < smokeMost && k < drawSmokes; ++k) {
@@ -1161,7 +1325,12 @@ class Play {
     }
     void stepPunisher(const PlayInput& in, float dt, PlayOutput& out) {
         const Vec3 headFwd = in.head.orientation.rotate(Vec3{0, 0, -1});
+        begin078(dt);
         for (uint32_t s = 0; s < guns.count; ++s) {
+            if (arsenalItem(guns.slots[s].item)) { // HERO VR 0.0.78 PUNISHER ARSENAL
+                step078(in, dt, s, out);
+                continue;
+            }
             Gun& g = armory[s];
             const int heldBy = guns.slots[s].heldBy;
             const bool inHand = heldBy == 0 || heldBy == 1;
@@ -1183,14 +1352,16 @@ class Play {
                 const Vec3 muzzle = gun_grip::from(gh, gun_grip::muzzleFromPalm(gw));
                 float amount[our_ball_max]{};
                 const uint32_t n = std::min(in.count, our_ball_max);
-                const int hits = shoot(g.spec(), muzzle, a, in.list, n, amount);
+                PelletHit pel[pelletHitsMost]{};
+                int pelN = 0;
+                const int hits = shoot(g.spec(), muzzle, a, in.list, n, amount, pel, &pelN);
                 for (uint32_t e = 0; e < n; ++e)
                     if (amount[e] > 0)
                         out.blow(in.list[e].id, shotReaction(g.spec(), amount[e]), in.list[e].chest,
                                  g.weapon == sawedOff ? kindSawedOff : kindPistol);
                 ++shots;
                 shotHits += static_cast<uint64_t>(hits);
-                shotLook(i, g.weapon == sawedOff, muzzle, a, in, n, amount);
+                shotLook(i, g.weapon == sawedOff, muzzle, a, in, n, pel, pelN);
                 out.sound(g.weapon == sawedOff ? sfx::shotgunBlast : sfx::pistolShot);
                 out.buzz(i, g.weapon == sawedOff ? .95f : .7f);
                 if (g.weapon == pistol)
@@ -1200,14 +1371,16 @@ class Play {
                 const Vec3 muzzle = h.position + a * (g.weapon == sawedOff ? .38f : .16f) + gunUp(a) * .06f;
                 float amount[our_ball_max]{};
                 const uint32_t n = std::min(in.count, our_ball_max);
-                const int hits = shoot(g.spec(), muzzle, a, in.list, n, amount);
+                PelletHit pel[pelletHitsMost]{};
+                int pelN = 0;
+                const int hits = shoot(g.spec(), muzzle, a, in.list, n, amount, pel, &pelN);
                 for (uint32_t e = 0; e < n; ++e)
                     if (amount[e] > 0)
                         out.blow(in.list[e].id, shotReaction(g.spec(), amount[e]), in.list[e].chest,
                                  g.weapon == sawedOff ? kindSawedOff : kindPistol);
                 ++shots;
                 shotHits += static_cast<uint64_t>(hits);
-                shotLook(i, g.weapon == sawedOff, muzzle, a, in, n, amount);
+                shotLook(i, g.weapon == sawedOff, muzzle, a, in, n, pel, pelN);
                 out.sound(g.weapon == sawedOff ? sfx::shotgunBlast : sfx::pistolShot);
                 out.buzz(i, g.weapon == sawedOff ? .95f : .7f);
                 if (g.weapon == pistol) {
@@ -1243,6 +1416,221 @@ class Play {
             gunStateWas[s] = g.state;
         }
     }
+  public:
+    // ---- HERO VR 0.0.78 PUNISHER ARSENAL --------------------------------------------------------------
+    // A held gun's pose: the grip point, the barrel forward, its top up (ok false: no pose).
+    struct Pose078 {
+        bool ok{};
+        Vec3 at{}, forward{0, 0, -1}, up{0, 1, 0};
+    };
+    // One hand: the aimed grip (0.0.72 AIMED GUNS), or the aim ray from the controller without a grip pose.
+    static Pose078 onePose078(const PlayHand& h) {
+        if (!h.tracked)
+            return {};
+        const gun_grip::Held gh = aimedGrip(h);
+        if (gh.ok && finite(gh.forward) && finite(gh.up) && length(gh.forward) > .5f && length(gh.up) > .5f)
+            return {true, gh.at, normalized(gh.forward), normalized(gh.up)};
+        if (finite(h.position) && finite(h.aim) && length(h.aim) > .5f) {
+            const Vec3 a = normalized(h.aim);
+            return {true, h.position, a, gunUp(a)};
+        }
+        return {};
+    }
+    // Two hands: the barrel from the grip toward the off hand on the forend (its top kept as near the
+    // gun hand's as the new barrel allows) - a long gun aims with both hands, as a real one does.
+    static Pose078 supported078(Pose078 p, Vec3 offHand) {
+        const Vec3 d = offHand - p.at;
+        if (!p.ok || !finite(d) || length(d) < .15f)
+            return p;
+        const Vec3 f = normalized(d), u = p.up - f * dot(p.up, f);
+        if (!finite(u) || length(u) < 1e-3f)
+            return p;
+        return {true, p.at, f, normalized(u)};
+    }
+    // The pose hand i's arsenal gun is drawn and shot from (this frame's support078, set by step078).
+    Pose078 pose078(const PlayInput& in, unsigned i) const {
+        if (i > 1)
+            return {};
+        Pose078 p = onePose078(in.hands[i]);
+        const PlayHand& o = in.hands[1 - i];
+        if (p.ok && support078[i] && o.tracked && finite(o.position))
+            p = supported078(p, o.position);
+        return p;
+    }
+    void begin078(float dt) {
+        for (unsigned i = 0; i < 2; ++i) {
+            work078[i] = support078[i] = false;
+            carry078[i] = punisher078::arms;
+            optic078[i] = {};
+            Dropped078& m = dropped078[i];
+            if (m.age < 2.f) {
+                m.age += dt;
+                m.velocity.y -= 9.81f * dt;
+                m.at = m.at + m.velocity * dt;
+            }
+        }
+    }
+    // One arsenal slot this frame: held (its hand's trigger and eject button, the other hand's grip on the
+    // gun or at its pouch) or holstered (nothing moves).
+    void step078(const PlayInput& in, float dt, uint32_t s, PlayOutput& out) {
+        namespace p78 = punisher078;
+        const uint32_t arm = guns.slots[s].item - item078;
+        const p78::GunPoints g = p78::pointsOf(arm);
+        const int heldBy = guns.slots[s].heldBy;
+        const bool inHand = heldBy == 0 || heldBy == 1;
+        const unsigned i = inHand ? static_cast<unsigned>(heldBy) : 0u, o = 1 - i;
+        const PlayHand& h = in.hands[i];
+        const PlayHand& oh = in.hands[o];
+        Pose078 p = inHand ? onePose078(h) : Pose078{};
+        const bool offFree = inHand && p.ok && oh.tracked && !oh.busy && !oh.holo && guns.heldIn(o) < 0 && finite(oh.position);
+        const float sq = std::isfinite(oh.squeeze) ? oh.squeeze : 0.f;
+        const bool offGrip = offFree && sq >= (offDown078[o] ? holster::released : holster::pressed);
+        if (inHand)
+            offDown078[o] = offGrip;
+        p78::Local local{};
+        if (offFree)
+            local = p78::toLocal(p.at, p.forward, p.up, oh.position);
+        const bool pump = arm == p78::pumpShotgun;
+        p78::MagGun& m = mag078[s];
+        const bool carrying = pump ? pump078.shell.carrying : m.mag.carrying;
+        const bool racking = pump ? pump078.pump.holding : m.rack.holding;
+        bool support = false;
+        if (offGrip && !carrying) {
+            if (pump) // the forend is the pump: holding it to rack is holding it to aim
+                support = racking || p78::gap(local, g.forend) <= g.forendRadius;
+            else if (arm != p78::suppressedPistol)
+                support = !racking && (support078[i] || p78::gap(local, g.forend) <= g.forendRadius);
+        }
+        if (support) {
+            p = supported078(p, oh.position);
+            local = p78::toLocal(p.at, p.forward, p.up, oh.position);
+        }
+        if (inHand)
+            support078[i] = support;
+        bool atPouch = false;
+        if (offFree && guns.body.valid && finite(in.head.position)) {
+            const holster::BodyPoint bp = holster::bodyPoint(oh.position, in.head.position, guns.body);
+            atPouch = pump ? p78::atShellPouch(bp) : p78::atMagPouch(bp);
+        }
+        const bool trig = inHand && p.ok && h.trigger > .5f;
+        const bool eject = inHand && h.eject;
+        const bool needWas = m.needCycle;
+        bool fired = false, dry = false, back = false, home = false, live = false, loaded = false, dropped = false;
+        uint32_t carry = 0;
+        if (pump) {
+            const uint64_t ejectedWas = pump078.ejected;
+            pump078.update(dt, trig, offGrip, local, offFree, atPouch);
+            fired = pump078.fired, dry = pump078.dry, back = pump078.rackedBack, home = pump078.rackedHome;
+            live = pump078.ejectedLive, loaded = pump078.shellIn, carry = pump078.carry;
+            if (pump078.rackedBack && pump078.ejected != ejectedWas && p.ok) // the shell out of the port
+                shells.eject(p78::toWorld(p.at, p.forward, p.up, g.port), normalized(cross(p.forward, p.up)) + p.up * .4f, true);
+        } else {
+            m.update(dt, trig, eject, offGrip, local, offFree, atPouch);
+            fired = m.fired, dry = m.dry, back = m.rackedBack, home = m.rackedHome, live = m.ejectedLive;
+            loaded = m.magSeated, carry = m.carry, dropped = m.magDropped;
+            if (back && p.ok && (live || (arm == p78::sniperRifle && needWas))) // the bolt throws its case
+                shells.eject(p78::toWorld(p.at, p.forward, p.up, g.port), normalized(cross(p.forward, p.up)), false);
+        }
+        if (!inHand)
+            return;
+        const bool carryingNow = pump ? pump078.shell.carrying : m.mag.carrying;
+        const bool rackingNow = pump ? pump078.pump.holding : m.rack.holding;
+        work078[o] = offFree && (carryingNow || rackingNow || support);
+        if (carryingNow)
+            carry078[o] = arm;
+        if (fired && p.ok) {
+            const hero007::GunSpec& spec = p78::shotOf(arm);
+            const Vec3 muzzle = p78::toWorld(p.at, p.forward, p.up, g.muzzle), a = p.forward;
+            float amount[our_ball_max]{};
+            const uint32_t n = std::min(in.count, our_ball_max);
+            PelletHit pel[pelletHitsMost]{};
+            int pelN = 0;
+            const int hits = shoot(spec, muzzle, a, in.list, n, amount, pel, &pelN);
+            for (uint32_t e = 0; e < n; ++e)
+                if (amount[e] > 0)
+                    out.blow(in.list[e].id, shotReaction(spec, amount[e]), in.list[e].chest, pump ? kindSawedOff : kindPistol);
+            ++shots;
+            ++arsenalShots078;
+            shotHits += static_cast<uint64_t>(hits);
+            shotLook(i, pump, muzzle, a, in, n, pel, pelN);
+            if (arm == p78::suppressedPistol)
+                flashAge[i] = 1e9f; // the can takes the flash
+            out.sound(pump ? sfx::shotgunBlast : arm == p78::suppressedPistol ? sfx::suppressedShot : sfx::rifleShot);
+            out.buzz(i, pump ? .95f : arm == p78::sniperRifle ? .9f : arm == p78::assaultRifle ? .45f : .5f);
+            if (support)
+                out.buzz(o, pump || arm == p78::sniperRifle ? .6f : .3f);
+            if (!pump && arm != p78::sniperRifle) // semi / auto: the action throws the case
+                shells.eject(p78::toWorld(p.at, p.forward, p.up, g.port), normalized(cross(p.forward, p.up)), false);
+        }
+        if (dry)
+            out.sound(sfx::dryClick);
+        if (back) {
+            out.sound(pump ? sfx::pumpRack : sfx::pistolReload);
+            out.buzz(o, .4f);
+            ++arsenalRacks078;
+        }
+        if (home) {
+            out.buzz(o, .3f);
+            if (pump)
+                out.sound(sfx::pumpRack);
+        }
+        if (loaded) {
+            out.sound(sfx::magSeat);
+            out.buzz(o, .35f);
+            ++arsenalReloads078;
+        }
+        if (carry & p78::carryTook) {
+            out.sound(sfx::holsterTick);
+            out.buzz(o, .25f);
+        }
+        if (carry & p78::carryDropped)
+            out.sound(sfx::magDrop);
+        if (dropped) {
+            out.sound(sfx::magDrop);
+            out.buzz(i, .3f);
+            if (p.ok) {
+                Dropped078& d = dropped078[i];
+                d.at = p78::toWorld(p.at, p.forward, p.up, g.magWell);
+                d.velocity = handVelocity[i] + p.up * -1.2f;
+                d.forward = p.forward;
+                d.up = p.up;
+                d.age = 0;
+                d.arm = arm;
+            }
+        }
+        if (p.ok && (arm == p78::sniperRifle || arm == p78::assaultRifle) && g.lensRadius > 0) {
+            Optic078& op = optic078[i];
+            op.kind = arm == p78::sniperRifle ? opticScope : opticDot;
+            op.lens = p78::toWorld(p.at, p.forward, p.up, g.lens);
+            op.axis = p.forward;
+            op.radius = g.lensRadius;
+            op.zoom = arm == p78::sniperRifle ? p78::zoomOf(in.scopeZoom) : 1.f;
+        }
+    }
+    // The held arsenal gun's count on the gun (as 0.0.72's ammoText).
+    void ammoText078(uint32_t s, char* text, size_t size) const {
+        if (!text || size == 0)
+            return;
+        const uint32_t arm = guns.slots[s].item - item078;
+        if (arm == punisher078::pumpShotgun) {
+            const uint32_t total = pump078.tube + (pump078.chamber == punisher078::chamberLive ? 1u : 0u);
+            if (pump078.chamber != punisher078::chamberLive)
+                std::snprintf(text, size, "%s", pump078.tube > 0 ? "RACK" : "LOAD");
+            else
+                std::snprintf(text, size, "%u/%u", total, punisher078::pumpShot.rounds + 1u);
+            return;
+        }
+        const punisher078::MagGun& m = mag078[s];
+        if (m.needCycle)
+            std::snprintf(text, size, "BOLT");
+        else if (!m.magIn && !m.chambered)
+            std::snprintf(text, size, "MAG OUT");
+        else if (!m.chambered)
+            std::snprintf(text, size, "%s", m.magIn && m.magRounds > 0 ? "RACK" : "EMPTY");
+        else
+            std::snprintf(text, size, "%u/%u", m.rounds(), m.capacity() + 1u);
+    }
+  private:
     static constexpr uint32_t our_ball_max = 32;
     // Version 0.0.72 AIMED GUNS: a hand's gun pose: the grip point, the barrel along the aim, its top
     // toward the thumb (not ok: no usable grip pose - the aim pose instead).
@@ -1252,23 +1640,34 @@ class Play {
         const auto g = grapple072::alongAim(h.gunAt, h.aim, h.gunUp);
         return {g.at, g.forward, g.up, g.ok};
     }
-    // Version 0.0.72 MUZZLE FLASH / HIT EFFECTS: a shot's flash at the muzzle along the barrel, and a hit
-    // puff on each enemy it hit (on his front, facing back along the shot).
-    void shotLook(unsigned hand, bool shotgun, Vec3 muzzle, Vec3 way, const PlayInput& in, uint32_t n, const float* amount) {
+    // Version 0.0.72 MUZZLE FLASH / HIT EFFECTS: a shot's flash at the muzzle along the barrel.
+    // HERO VR 0.0.78 GUN BLOOD (owner t1893u): each pellet that went into an enemy (the pistol's, the rifle's and the
+    // sniper's one round; the sawed-off's and the pump's each of nine) bleeds - the spray along the shot from where it
+    // went in and a wound on him that follows him (0.0.72's grey hit puff and spark are gone). The blows (damage)
+    // are made before this from the same shot, untouched.
+    void shotLook(unsigned hand, bool shotgun, Vec3 muzzle, Vec3 way, const PlayInput& in, uint32_t n, const PelletHit* pel,
+                  int pelN) {
         if (hand < 2 && finite(muzzle) && finite(way)) {
             flashAt[hand] = muzzle;
             flashWay[hand] = way;
             flashAge[hand] = 0;
             flashShotgun[hand] = shotgun;
         }
-        for (uint32_t e = 0; e < n && in.list; ++e)
-            if (amount[e] > 0 && finite(in.list[e].chest)) {
-                const uint32_t m = impactNext++ % drawImpacts;
-                const Vec3 c = in.list[e].chest, toward = normalized(c - muzzle);
-                impactAt[m] = finite(toward) ? c - toward * .15f : c;
-                impactWay[m] = finite(toward) ? toward : way;
-                impactAge[m] = 0;
-            }
+        for (int k = 0; k < pelN && pel && in.list; ++k) {
+            const PelletHit& ph = pel[k];
+            if (ph.enemy >= n || !finite(in.list[ph.enemy].chest) || !finite(ph.at))
+                continue;
+            const uint32_t m = impactNext++ % drawImpacts;
+            const Vec3 c = in.list[ph.enemy].chest;
+            impactAt[m] = ph.at;
+            impactWay[m] = finite(ph.way) && length(ph.way) > .5f ? ph.way : way;
+            impactAge[m] = 0;
+            impactFoe[m] = in.list[ph.enemy].id;
+            impactOff[m] = ph.at - c;
+            impactWound[m] = ph.at;
+            impactFloor[m] = c.y - 1.2f; // his feet (as CLAW BLOOD's)
+            impactSeed[m] = static_cast<uint32_t>(++bleeds * 2654435761u) ^ 0x9e3779b9u;
+        }
     }
 };
 

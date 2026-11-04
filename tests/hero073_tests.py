@@ -321,6 +321,9 @@ class Hero073Test3ExportCodes(unittest.TestCase):
         self.assertEqual(uses.get('5534'), ['SpidyThrowSwing'])  # 0.0.74 test 10 THROW BY SWING (throw_swing.hpp)
         self.assertEqual(uses.get('5535'), ['SpidyGlideTilt'])  # 0.0.74 test 10 GLIDE TILT (cape_glide.hpp)
         self.assertEqual(uses.get('5536'), ['SpidyMpPlace'])  # 0.0.76 MP WORLD PLAYER 2 PLACE (mp_world.hpp)
+        self.assertEqual(uses.get('5537'), ['SpidyPunisherArsenal'])  # HERO VR 0.0.78 PUNISHER ARSENAL (punisher078.hpp)
+        self.assertEqual(uses.get('5538'), ['SpidyScopeZoom'])  # HERO VR 0.0.78 SCOPE ZOOM
+        self.assertEqual(uses.get('5539'), ['SpidyMagEject'])  # HERO VR 0.0.78 MAG EJECT
         # 0.0.74 test 10: the tests' picture / AA codes are retired with their options (never reused)
         # 0.0.74 test 10 (72's picture): IMAGE 5449, STREAMER MODE/SMOOTH/EYE 5450-5452, GAME TAA 5460, GLOW CHECK
         # 5471, SL WATCH 5472, SHARPEN MATCH 5473 and WINDOW POP FIX 5475 are retired with their options too

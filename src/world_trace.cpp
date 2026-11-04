@@ -364,6 +364,9 @@ void run() {
     uint32_t poiCount{};
     uint32_t poiTargetLines{};
     std::unordered_map<uintptr_t, uint64_t> poiTargetSig;
+    uint32_t anchorLines{};                             // HERO VR 0.0.78 CUT9 ANCHOR
+    std::unordered_map<uintptr_t, uint64_t> anchorSig;  // per object: its slot word and offset from the boss
+    uint64_t anchorLogMs{};
     const auto poiTargets = [&](uintptr_t component, const char* kindName, bool heroOk, Vec3 heroWorld) {
         if (!poiTable || !poiCount || poiTargetLines >= 300)
             return;
@@ -960,7 +963,21 @@ void run() {
                 }
                 std::vector<story077g::Candidate> marks;
                 std::vector<uintptr_t> markRecords;
-                uint32_t reads = 0, poiNewReads = 0, poiTargetReads = 0;
+                // HERO VR 0.0.78 CUT9 ANCHOR (diagnostic, read-only, draws nothing; the owner on cut8: "it just didnt
+                // show the Y on him to zip to him"): which of the game's own placed prompt / POI objects sits on the
+                // boss. Every one within 4 m of the boss is logged with its class, its +80 slot word and its offset
+                // from him when that changes (at most 240 lines a session), and every 10 s the boss's place with the
+                // nearest such object. Proof of the Y's anchor: a line whose object follows him (offset steady while
+                // he moves) and whose slot word changes as the Y comes and goes. CANDIDATE until a report shows it.
+                Boss anchorBoss{};
+                {
+                    std::lock_guard<std::mutex> lock(enemyLock);
+                    anchorBoss = bossNow;
+                }
+                const bool anchorOn = anchorBoss.id && finite(anchorBoss.world);
+                float anchorNearest = 1e9f;
+                const char* anchorNearestCls = nullptr;
+                uint32_t anchorWithin = 0;
                 counts.poiComponents = counts.poiTyped = counts.poiUntyped = counts.poiTypeCount = 0;
                 for (auto& c : counts.objectiveCandidates)
                     c = 0;
@@ -971,6 +988,39 @@ void run() {
                     Vec3 at{};
                     if (!position(l.record, at) || !finite(at))
                         continue;
+                    if (anchorOn) { // his own record's components too (a POI component on him has his record)
+                        const Vec3 off = at - anchorBoss.world;
+                        const float d = length(off);
+                        if (std::isfinite(d) && d < anchorNearest) {
+                            anchorNearest = d;
+                            anchorNearestCls = k->cls;
+                        }
+                        if (std::isfinite(d) && d <= 4.f) {
+                            ++anchorWithin;
+                            uint32_t slot{};
+                            read(address + 0x80, &slot, 4);
+                            const uint64_t sig = (static_cast<uint64_t>(slot) << 32) ^
+                                                 static_cast<uint64_t>(static_cast<int64_t>(std::lround(off.x)) * 73856093 ^
+                                                                       std::lround(off.y) * 19349663 ^ std::lround(off.z) * 83492791) ^
+                                                 anchorBoss.id;
+                            auto& was = anchorSig[address];
+                            if (was != sig && anchorLines < 240) {
+                                was = sig;
+                                ++anchorLines;
+                                char line[236];
+                                sprintf_s(line, "CUT9 ANCHOR %u %.32s 0x%llx slot %08x on the boss %.28s%s: offset %.1f %.1f %.1f "
+                                                "(%.1f m); boss at %.1f %.1f %.1f %.0f m",
+                                          anchorLines, k->cls, static_cast<unsigned long long>(address), slot,
+                                          anchorBoss.name[0] ? anchorBoss.name : "?",
+                                          l.record == anchorBoss.id ? " (his record)" : "", off.x, off.y, off.z, d,
+                                          anchorBoss.world.x, anchorBoss.world.y, anchorBoss.world.z,
+                                          heroKnown ? length(anchorBoss.world - heroAt) : -1.f);
+                                std::lock_guard<std::mutex> lock(promptLock);
+                                if (poiDumpLines.size() < 400)
+                                    poiDumpLines.push_back(line);
+                            }
+                        }
+                    }
                     if (heroKnown) {
                         const float m = length(at - heroAt);
                         if (std::isfinite(m) && m < counts.nearest[l.kind]) {
@@ -1025,6 +1075,24 @@ void run() {
                     it = promptsLive.count(it->first) ? std::next(it) : poiTypeOf.erase(it);
                 for (auto it = poiTargetSig.begin(); it != poiTargetSig.end();) // CUT8 POI TARGET: the gone ones
                     it = promptsLive.count(it->first) ? std::next(it) : poiTargetSig.erase(it);
+                for (auto it = anchorSig.begin(); it != anchorSig.end();) // CUT9 ANCHOR: the gone ones
+                    it = promptsLive.count(it->first) ? std::next(it) : anchorSig.erase(it);
+                if (anchorOn && anchorLines < 240) { // CUT9 ANCHOR: the boss's place every 10 s
+                    const uint64_t ms = GetTickCount64();
+                    if (!anchorLogMs || ms - anchorLogMs >= 10000) {
+                        anchorLogMs = ms;
+                        ++anchorLines;
+                        char line[236];
+                        sprintf_s(line, "CUT9 ANCHOR BOSS %.28s at %.1f %.1f %.1f %.0f m: %u game prompt / POI objects within 4 m; "
+                                        "nearest %.32s %.1f m",
+                                  anchorBoss.name[0] ? anchorBoss.name : "?", anchorBoss.world.x, anchorBoss.world.y,
+                                  anchorBoss.world.z, heroKnown ? length(anchorBoss.world - heroAt) : -1.f, anchorWithin,
+                                  anchorNearestCls ? anchorNearestCls : "none", anchorNearestCls ? anchorNearest : -1.f);
+                        std::lock_guard<std::mutex> lock(promptLock);
+                        if (poiDumpLines.size() < 400)
+                            poiDumpLines.push_back(line);
+                    }
+                }
                 const story077g::Mark mark = story077g::pick(marks.data(), static_cast<uint32_t>(marks.size()), heroAt,
                                                              heroKnown, waypointMode.load(std::memory_order_relaxed));
                 uintptr_t markRecord{};

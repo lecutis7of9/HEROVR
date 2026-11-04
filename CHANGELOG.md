@@ -2,6 +2,30 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-cut9 - the title flat from the first frame, the beacon's range, the calibration look, no ghost screen (TEST build)
+
+From the player's cut8 reports ("prompts and main menu are top priority for 78"):
+- **Title and main menu flat from the very first frame (CONFIRMED by replay):** at boot the menu screen's "no screen"
+  reset ran before any play and cleared the front end, so the title's record went immersive until a pause press.
+  The reset now runs only in VR gameplay; tests/cut9_tests.cpp replays report 025037 (old behaviour reproduces the bug,
+  the new one stays flat).
+- **Mission beacon only shown close (far plane and reach ruled out, CONFIRMED; fix CANDIDATE):** the widened game view
+  was drawn at a level of detail about 2.9x lower than the eyes; it is now lifted to the eyes' scale (shared_lod HIGHER),
+  logged as GAME VIEW LOD.
+- **Y zip on Sandman / world prompts (not proven):** the cut8 log cannot show the game's anchor for that prompt. New
+  CUT9 ANCHOR lines list every object within 4 m of the boss (class, slot, offset); a log taken while the Y shows on
+  Sandman proves the anchor.
+- **Calibration screen (cause CONFIRMED by code):** the flat blue BODY CALIBRATION plate is the TECH style's panel,
+  drawn only when UI STYLE = TECH (the last item of the SPIDY VR tab). No calibration code changed between 0.0.76.1 and
+  0.0.77, so 0.0.77 shows the same. Now calib_look = holo (the default) shows the normal holo checklist in either UI
+  STYLE; B still skips. It returns each session because the test launcher never saves the calibration or the skip
+  (unchanged; its T-POSE PROMPT option stops it). CUT9 CALIBRATION START / END lines log the look and the seconds shown.
+- **Ghost 2D screen in immersive cutscenes (code path CONFIRMED):** 18-23 immersive frames a session had no stereo pair
+  and fell through to the flat screen. Such a frame is now no layer (the flat screen only after 1.5 s with no pair, so
+  VR never goes black), and the QTE card shows only once a QTE's freeze has held 250 ms. CUT9 NO GHOST SCREEN line.
+- **MJ in the tunnel run (not fixed in this build):** the game's run for MJ is RT held; VR's RT is the webs and the
+  stick run (story_sprint) is off by default. The cheat sheet now says how to run as MJ with live.txt story_sprint = on.
+
 ## hero-0.0.77-cutscene (8) - Sandman's HP read, a log for every throw, the objective marker's source (TEST build)
 
 From the player's cut7 report ("when you throw the debris at sandman if it hits him it is supposed to DAMAGE him";

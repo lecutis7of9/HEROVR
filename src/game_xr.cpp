@@ -703,6 +703,7 @@ DWORD WINAPI SpidyEyeBloom(void* mode);  // Update 36: eye_bloom::Mode, 3 the ne
 uint32_t SpidyEyeBloomNow();             // Update 36: eye_bloom::pack(mode, reason)
 DWORD WINAPI SpidySharedLod(void* mode); // Update 36: shared_lod::Mode, 3 the next
 uint32_t SpidySharedLodNow();            // Update 36: shared_lod::pack(mode, reason)
+extern "C" void SpidyGameViewLod(float out[4], uint64_t counts[4]); // HERO VR 0.0.78 CUT9 GAME VIEW LIFT
 // Update 18: the webs' look, below (live.txt web_style, web_color).
 __declspec(dllexport) DWORD WINAPI SpidyWebStyle(void*);
 __declspec(dllexport) DWORD WINAPI SpidyWebColor(void*);
@@ -3098,6 +3099,12 @@ DWORD WINAPI run(void*) {
                 commands, commandRefused, commandFaults, shown, waits, panelsSet, panelsDrawn, panelMisses,
                 promptFrames;
         } cutCounts{};
+        // HERO VR 0.0.78 CUT9 NO GHOST SCREEN: the immersive stretch's last shown pair, the wait streak, and why.
+        uint64_t cutLastPairMs{}, cutWaitFromMs{};
+        struct GhostCounts {
+            uint64_t noCopy, notFound, notScene, blank, screenFallback, cardsHeld;
+        } ghostCounts{};
+        cutscene077::QteCard qteCard;
         uint64_t cutLogMs{};
         // HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): the scene clock without the game-time hook (SM2: the game's
         // camera moving), and why screen frames were not 3d or immersive (each 10 s, and each screen stretch).
@@ -3376,7 +3383,7 @@ DWORD WINAPI run(void*) {
         roster_page::Page rosterPage;
         bool rosterFault{};
         double rosterClock{};
-        uint64_t immersiveSince{}, calibrationShownAt{};
+        uint64_t immersiveSince{}, calibrationShownAt{}, calibrationStartMs{};
         // From the calibration's start until each is let go after it, the
         // triggers, grips, A and B do nothing in the game (B skips it).
         bool calibrationInput{}, skipHeld{};
@@ -5565,7 +5572,7 @@ DWORD WINAPI run(void*) {
                     // menu are always the normal VR screen (cutscene077::MenuScreen); immersive only in-game.
                     const bool menuScreen = cutMenuScreen.update(screen && cutMode == cutscene077::immersive,
                                                                  player.record, (frame.buttons & buttonMenu) != 0,
-                                                                 cutNowMs);
+                                                                 cutNowMs, viewing && vrPlay && gameplay);
                     if (cutMenuScreen.count() != menuScreensBefore) {
                         char line[240];
                         sprintf_s(line, "HERO VR 0.0.77 CUT7 MENU SCREEN #%llu: %s (record %s); the normal VR screen "
@@ -5583,6 +5590,7 @@ DWORD WINAPI run(void*) {
                     if (immersiveHold.started()) {
                         cutLevel = cutscene077::levelHead(frame.head);
                         ++cutCounts.starts;
+                        cutWaitFromMs = 0; // CUT9 NO GHOST SCREEN: a new stretch's wait streak
                     }
                     cutCounts.immersiveFrames += immersiveScene;
                     // HERO VR 0.0.77 CUTFIX3: the panel's mode this frame (menu: the game's whole frame as it is).
@@ -5716,6 +5724,22 @@ DWORD WINAPI run(void*) {
                                   cutImmersiveFault ? ", IMMERSIVE OFF (fault)" : "",
                                   cutPanelFault ? ", PANEL OFF (fault)" : "", cutStripFault ? ", STRIP OFF (fault)" : "");
                         consoleLine(line);
+                        if (cutMode == cutscene077::immersive) {
+                            char ghost[300];
+                            sprintf_s(ghost,
+                                      "HERO VR 0.0.78 CUT9 NO GHOST SCREEN: immersive frames without a pair %llu (no copy "
+                                      "%llu, pose not kept %llu, not a scene pair %llu): no layer %llu, the screen %llu "
+                                      "(no pair for 1.5 s); frozen frames before the card %llu; the flat screen is never "
+                                      "composited in a stretch that has pairs",
+                                      static_cast<unsigned long long>(cutCounts.waits),
+                                      static_cast<unsigned long long>(ghostCounts.noCopy),
+                                      static_cast<unsigned long long>(ghostCounts.notFound),
+                                      static_cast<unsigned long long>(ghostCounts.notScene),
+                                      static_cast<unsigned long long>(ghostCounts.blank),
+                                      static_cast<unsigned long long>(ghostCounts.screenFallback),
+                                      static_cast<unsigned long long>(ghostCounts.cardsHeld));
+                            consoleLine(ghost);
+                        }
                         // HERO VR 0.0.77 CUTFIX: the scene clock, and why the last 10 s of screen frames were refused.
                         char reasons[400];
                         cutRefusals.reasons(reasons, sizeof(reasons));
@@ -5824,6 +5848,7 @@ DWORD WINAPI run(void*) {
                     skipHeld = (frame.buttons & buttonB) != 0;
                     if (calibration.phase() == CalibrationPhase::idle && (calibrationWanted || values.calibrate) &&
                         immersive && nowMs - immersiveSince >= 1500 && !swingState.owned) {
+                        const bool askedByTab = values.calibrate;
                         calibration.start();
                         holoFlow.stop();
                         holoLook = !holoFault && c38(combat38::calibLook) == 0; // HOLO (the default)
@@ -5833,6 +5858,17 @@ DWORD WINAPI run(void*) {
                         runtime.haptic(0, .3f);
                         runtime.haptic(1, .3f);
                         message(3, 0, "Body calibration: stand in a T-pose and hold both triggers (B skips)");
+                        { // HERO VR 0.0.78 CUT9 CALIBRATION diagnostic: which panel and why it started.
+                            char line[220];
+                            sprintf_s(line, "HERO VR 0.0.78 CUT9 CALIBRATION START: look %s (calib_look %u, ui_style %s, "
+                                            "pictures %s), asked by %s; saved eye height %u mm",
+                                      holoLook ? "holo" : "classic", static_cast<unsigned>(c38(combat38::calibLook)),
+                                      values.uiStyle == 1 ? "tech" : "comic", artMissing.empty() ? "decoded" : "missing",
+                                      askedByTab ? "the SPIDY VR tab" : "no saved calibration (first gameplay)",
+                                      config.eyeHeightMm);
+                            game_prompts::note(line);
+                            calibrationStartMs = nowMs;
+                        }
                     } else if (calibration.phase() == CalibrationPhase::done && holoFlow.active()) {
                         // Version 0.0.73 test 2 HOLO CALIBRATION: belt, back, hips, confirm (B skips them).
                         try {
@@ -5879,8 +5915,13 @@ DWORD WINAPI run(void*) {
                             calibrationShownAt = nowMs;
                         }
                     } else if (calibration.phase() == CalibrationPhase::done) {
-                        if (nowMs - calibrationShownAt >= 3500)
+                        if (nowMs - calibrationShownAt >= 3500) {
                             calibration.stop();
+                            char line[160];
+                            sprintf_s(line, "HERO VR 0.0.78 CUT9 CALIBRATION END: done, on screen %.1f s",
+                                      calibrationStartMs ? (nowMs - calibrationStartMs) / 1000. : 0.);
+                            game_prompts::note(line);
+                        }
                     } else if (calibration.phase() != CalibrationPhase::idle && immersive && skipPressed) {
                         calibration.stop();
                         holoFlow.stop();
@@ -5889,6 +5930,12 @@ DWORD WINAPI run(void*) {
                         calibrationWanted = calibrationPrompt = false;
                         runtime.haptic(1, .25f);
                         message(3, 0, "Body calibration skipped - Settings > SPIDY VR > CALIBRATE BODY does it later");
+                        {
+                            char line[160];
+                            sprintf_s(line, "HERO VR 0.0.78 CUT9 CALIBRATION END: B skip, on screen %.1f s",
+                                      calibrationStartMs ? (nowMs - calibrationStartMs) / 1000. : 0.);
+                            game_prompts::note(line);
+                        }
                     } else if (calibration.phase() != CalibrationPhase::idle && immersive) {
                         body_calibration::Sample sample;
                         sample.headTracked = validTrackedPose(frame.head);
@@ -8829,6 +8876,23 @@ DWORD WINAPI run(void*) {
                                               have ? "best POI type, then nearest" : "no objective POI: nothing shown",
                                               now.world.x, now.world.y, now.world.z, now.metres);
                                     consoleLine(wline);
+                                    // HERO VR 0.0.78 CUT9 GAME VIEW LOD (diagnostic beside the lift, shared_lod::gameViewLift):
+                                    // the game view's detail scale against the eyes', the multiplier given, and its counts.
+                                    {
+                                        float gl[4]{};
+                                        uint64_t gc[4]{};
+                                        SpidyGameViewLod(gl, gc);
+                                        char gline[300];
+                                        sprintf_s(gline, "HERO VR 0.0.78 CUT9 GAME VIEW LOD (CANDIDATE beacon fix) %s: game view "
+                                                         "scale %.3f x %.2f, eyes %.3f / %.3f; calls %llu writes %llu lifted %llu "
+                                                         "restored %llu",
+                                                  shared_lod::modeName(shared_lod::modeOf(SpidySharedLodNow())),
+                                                  static_cast<double>(gl[0]), static_cast<double>(gl[1]),
+                                                  static_cast<double>(gl[2]), static_cast<double>(gl[3]),
+                                                  static_cast<unsigned long long>(gc[0]), static_cast<unsigned long long>(gc[1]),
+                                                  static_cast<unsigned long long>(gc[2]), static_cast<unsigned long long>(gc[3]));
+                                        consoleLine(gline);
+                                    }
                                 }
                             }
                         } catch (...) {
@@ -13796,6 +13860,8 @@ DWORD WINAPI run(void*) {
                         check(native_gpu::error(), "GPU eye bridge");
                         const auto* saved = copied ? history.find(pairSerial, displayTime) : nullptr;
                         if (saved && saved->cutscene) {
+                            cutLastPairMs = GetTickCount64(); // CUT9 NO GHOST SCREEN
+                            cutWaitFromMs = 0;
                             // EYE TEST SAME PICTURE as in play: the right layer gets the view its picture was made from.
                             const bool cutSame = eye_debug::eyeDebugSource(native_gpu::pairEyeDebug(), 1) == 0;
                             for (unsigned eye = 0; eye < 2; ++eye) {
@@ -13821,8 +13887,11 @@ DWORD WINAPI run(void*) {
                                     // CUT7 (the owner on cut6: "remove the text line on immersive cam"): no subtitle
                                     // strip over the scene any more; the small card only while a QTE is live (the
                                     // scene's clock frozen: its keyed prompts), or a menu's whole frame.
-                                    const bool cardLive = cutscene077::cardWanted(saved->cutscenePrompts,
-                                                                                  cutPanelMode == cutscene077::panelMenu);
+                                    // CUT9 NO GHOST SCREEN: the card only for a freeze held qteSettleMs (a live
+                                    // QTE), never the whole-frame menu panel over the scene.
+                                    const bool qteLive = qteCard.update(saved->cutscenePrompts, GetTickCount64());
+                                    ghostCounts.cardsHeld += saved->cutscenePrompts && !qteLive;
+                                    const bool cardLive = cutscene077::cardWanted(qteLive, false);
                                     if (cardLive && native_gpu::latestScreen(words, 250) && words.texture &&
                                         words.width && words.height) {
                                         const bool prompts = saved->cutscenePrompts;
@@ -13893,6 +13962,19 @@ DWORD WINAPI run(void*) {
                             return true;
                         }
                         ++cutCounts.waits;
+                        // HERO VR 0.0.78 CUT9 NO GHOST SCREEN: no pair this frame - no layer, never the flat screen
+                        // (only a stretch with no pair for noPairScreenMs: the eyes never came).
+                        ghostCounts.noCopy += !copied;
+                        ghostCounts.notFound += copied && !saved;
+                        ghostCounts.notScene += copied && saved && !saved->cutscene;
+                        const uint64_t waitNow = GetTickCount64();
+                        if (!cutWaitFromMs)
+                            cutWaitFromMs = waitNow;
+                        if (!cutscene077::waitShowsScreen(waitNow, cutLastPairMs, cutWaitFromMs)) {
+                            ++ghostCounts.blank;
+                            return false;
+                        }
+                        ++ghostCounts.screenFallback;
                     }
                     // HERO VR 0.0.77 CUTSCENES 3d: without the HUD hook the subtitle strip below is the panel.
                     const bool strip3d = cutscenesNow.load() == cutscene077::screen3d && !cutStripFault &&
@@ -16463,7 +16545,11 @@ DWORD WINAPI run(void*) {
                                 grip.position += travel;
                             // Update 36: the other styles' panel is the textured title
                             // screen while the art texture can be used.
-                            if (saved->uiStyle != UiStyle::tech && overlay.artReady()) {
+                            // HERO VR 0.0.78 CUT9 CALIBRATION LOOK (CONFIRMED from the player's picture: the flat
+                            // blue BODY CALIBRATION plate with the B-in-a-ring SKIP is tech::appendCalibration, drawn
+                            // only for UI STYLE = TECH): calib_look = holo (the default) is the holo checklist in either
+                            // UI STYLE while the art can be used; calib_look = classic keeps the style's own panel.
+                            if ((saved->uiStyle != UiStyle::tech || view.holo) && overlay.artReady()) {
                                 const float clock = std::fmod(
                                     std::chrono::duration<float>(std::chrono::steady_clock::now() - artClock)
                                         .count(),

@@ -106,4 +106,21 @@ struct Data {
     uint64_t sequence{};
 };
 static_assert(sizeof(Data) == 144);
+// HERO VR 0.0.78 CUT9 GAME VIEW LIFT (the owner on cut8: the yellow main-mission beacon shows in VR only fairly
+// close while side-mission markers show from far). The report 025037 window probe (CONFIRMED by its samples): the
+// eyes' far plane is the game's (18000 m both) and their full-model reach the same 145 m, so neither cuts it; but
+// in VR play the engine's active (game) view's lens is the head's lens covering both eyes plus the cull margin,
+// 135 degrees across against the flat game's 80 (recording_fov.hpp), so its +0x1b24 detail scale (K / tangent) is
+// about 2.9 times lower and everything that view's detail and screen-size tests decide for the eyes is dropped about
+// 2.9 times nearer. CANDIDATE: that the beacon is one of them (the side markers are HUD icons, which the HUD panel
+// carries). HIGHER (the default) now also lifts the game view's +0x1b28 so its scale is no lower than the lower of the
+// two eyes' (never more than 4x, never below 1); OFF and GAME VIEW leave it at 1.0 as before.
+inline float gameViewLift(uint32_t mode, float gameScale, float eyeScale0, float eyeScale1) {
+    if (mode != higher || !sane(gameScale) || !sane(eyeScale0) || !sane(eyeScale1))
+        return 1.f;
+    const float eye = std::fmin(eyeScale0, eyeScale1);
+    if (eye <= gameScale * 1.01f)
+        return 1.f;
+    return std::fmin(eye / gameScale, maxMultiplier);
+}
 } // namespace spidy::shared_lod

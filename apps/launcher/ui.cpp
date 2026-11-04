@@ -2493,6 +2493,9 @@ void App::controls(ImVec2 origin, ImVec2 size) {
           {"A or a web on a ledge", "Off a ledge or roof edge (the game's floor crawl) as off a wall: RT + A "
                                     "(live.txt ledge_jump = game: cut6's; wall_view = turned: the view onto the wall)"},
           {"Left stick all the way", "live.txt story_sprint = on: the game's run (RT) while your feet are on the ground; off by default"},
+          {"Playing as MJ (the tunnel run from Peter)", "The game's run is RT held: live.txt story_sprint = on, then push "
+                                                        "the left stick all the way (the cut5 ground run). Climb or vault: "
+                                                        "the button the game's card names"},
           {"Right stick down", "Heal: the game's D-pad down. Push it down and hold it a moment; on a game card too while hurt (close the card with A)"},
           {"Right stick up", "The game's LT + RT: zip to a point, enter a vent, where the game shows the "
                              "two; while you swing too. No point? Keep holding (time slows as the game "

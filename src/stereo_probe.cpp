@@ -1984,6 +1984,36 @@ void sharedLodRestore(unsigned eye) {
         InterlockedIncrement64(reinterpret_cast<volatile LONG64*>(&SpidySharedLodData.restored));
     }
 }
+// HERO VR 0.0.78 CUT9 GAME VIEW LIFT (shared_lod::gameViewLift): the game view's +0x1b28 while HIGHER and both eyes
+// are known; 1.0 put back on the view it wrote otherwise. Counted for the console's GAME VIEW LOD line.
+std::atomic<uintptr_t> gameLiftWritten{};
+std::atomic<float> gameLiftEyeScale[2]{NAN, NAN}, gameLiftScale{NAN}, gameLiftMultiplier{1.f};
+std::atomic<uint64_t> gameLiftCalls{}, gameLiftWrites{}, gameLiftLifted{}, gameLiftRestores{};
+void gameViewLiftStep(uintptr_t v, uint32_t mode, bool eyesKnown) {
+    namespace sl = spidy::shared_lod;
+    if (pointer(base + sl::activeViewRva) != v)
+        return;
+    ++gameLiftCalls;
+    float gs = NAN;
+    read(v + sl::scaleOffset, &gs, 4);
+    gameLiftScale = gs;
+    const float m = eyesKnown ? sl::gameViewLift(mode, gs, gameLiftEyeScale[0].load(), gameLiftEyeScale[1].load()) : 1.f;
+    if (m <= 1.f && gameLiftWritten.load() != v)
+        return; // never ours: left as the game has it
+    uint32_t bits{};
+    std::memcpy(&bits, &m, 4);
+    if (writeBits(v + sl::multiplierOffset, bits)) {
+        ++gameLiftWrites;
+        gameLiftMultiplier = m;
+        if (m > 1.f) {
+            ++gameLiftLifted;
+            gameLiftWritten = v;
+        } else {
+            ++gameLiftRestores;
+            gameLiftWritten = 0;
+        }
+    }
+}
 uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     namespace sl = spidy::shared_lod;
     const auto result = originalViewScale(view, a, b, c);
@@ -1993,6 +2023,8 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     void* r = eyes[1].load(std::memory_order_relaxed);
     const int eye = view == l ? 0 : view == r ? 1 : -1;
     const uint32_t mode = sharedLodMode.load(std::memory_order_relaxed);
+    if (eye < 0)
+        gameViewLiftStep(reinterpret_cast<uintptr_t>(view), mode, l && r);
     if (!mode) {
         if (eye >= 0)
             sharedLodRestore(static_cast<unsigned>(eye));
@@ -2004,6 +2036,7 @@ uint64_t viewScale(void* view, uint64_t a, uint64_t b, uint64_t c) {
     uint32_t failed{};
     if (eye >= 0) {
         read(v + sl::scaleOffset, &eyeScale, 4);
+        gameLiftEyeScale[eye] = eyeScale; // CUT9 GAME VIEW LIFT: the eyes' own scale (before any multiplier)
         const auto game = pointer(base + sl::activeViewRva);
         float gs = NAN, gm = NAN;
         if (game && game != reinterpret_cast<uintptr_t>(l) && game != reinterpret_cast<uintptr_t>(r) &&
@@ -4594,6 +4627,18 @@ extern "C" uint32_t SpidyViewGatesNow() {
     return bloomFxMode.load() | lodFadeMode.load() << 4 | (lodFadeWhy.load() & 0xf) << 8 |
            (impostorsOn.load() ? 1u : 0u) << 12 | (impostors ? 1u : 0u) << 13 | (lodFadeKnown ? 1u : 0u) << 14 |
            lodReachPercent.load() << 16;
+}
+// HERO VR 0.0.78 CUT9 GAME VIEW LIFT: out[0] the game view's scale, [1] its multiplier, [2..3] the eyes' scales;
+// counts[0] game view calls, [1] writes, [2] lifted, [3] restored.
+extern "C" void SpidyGameViewLod(float out[4], uint64_t counts[4]) {
+    out[0] = gameLiftScale.load();
+    out[1] = gameLiftMultiplier.load();
+    out[2] = gameLiftEyeScale[0].load();
+    out[3] = gameLiftEyeScale[1].load();
+    counts[0] = gameLiftCalls.load();
+    counts[1] = gameLiftWrites.load();
+    counts[2] = gameLiftLifted.load();
+    counts[3] = gameLiftRestores.load();
 }
 // shared_lod::pack(mode, why it last changed on its own).
 extern "C" uint32_t SpidySharedLodNow() {

@@ -3100,3 +3100,12 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   cut8::handleParts and poiTargets (the GUI2 POI components' handle-form words resolved through the registry, a CUT8
   POI TARGET line on change, 300 a session, drained with the POI DUMP lines; nothing drawn).
   live.txt: throw_watch 5598.
+- cut9 (include/spidy/cutscene077.hpp, include/spidy/shared_lod.hpp, src/stereo_probe.cpp, src/world_trace.cpp,
+  src/game_xr.cpp, apps/launcher/ui.cpp, tests/cut9_tests.cpp): MenuScreen::update(.., nowMs, playing) - the
+  no-screen reset of the front end only in VR gameplay (the title flat from its first frame, replay of report 025037);
+  shared_lod::gameViewLift and SpidyGameViewLod (the widened game view's LOD lifted to the eyes', GAME VIEW LOD line);
+  the CUT9 ANCHOR lines (objects within 4 m of the boss, slot and offset, 240 a session, with the POI DUMP lines);
+  waitShowsScreen / QteCard and the CUT9 NO GHOST SCREEN line (an immersive frame with no pair is no layer, never the
+  flat screen, for 1.5 s; the QTE card only after the freeze has held 250 ms); calibration: calib_look = holo draws
+  the holo checklist in either UI STYLE while its art is decoded (the tech plate was drawn for ui_style = TECH), CUT9
+  CALIBRATION START / END lines; the cheat sheet's MJ run line. No new live.txt switch.

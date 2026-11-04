@@ -202,6 +202,39 @@ constexpr PanelShape qteCard{-.26f, .5f, 2.f, .3f};
 inline bool cardWanted(bool qteLive, bool menu) {
     return qteLive || menu;
 }
+// HERO VR 0.0.78 CUT9 NO GHOST SCREEN (the owner, t1866u: "a faint, see-through, barely visible 2D ghost screen"
+// during immersive scenes). Two paths composited the game's flat frame in an immersive stretch:
+// 1. a frame with no scene pair to show (report 025037: waits 18 / 20 / 23 of 479 / 551 / 1953 immersive frames) fell
+//    through to the flat VR screen layer for that one frame - single 2D frames among the immersive ones (a ghost);
+// 2. the keyed card (the game's whole frame over a 30% glass) followed any frozen scene clock, so a clock that
+//    stalls for a frame or two (not a QTE) put a glass flash of the 2D frame over the scene.
+// Now: a frame without a pair in the stretch submits no layer at all (the headset keeps the last immersive image),
+// never the screen; only a stretch that has had no pair for noPairScreenMs (the eyes never came: a fault, never a
+// look) goes back to the screen. The card needs the freeze held qteSettleMs (a QTE holds for seconds), and the
+// whole-frame menu panel is never drawn over the scene (menus go to the VR screen: MenuScreen / ImmersiveHold).
+constexpr uint64_t noPairScreenMs = 1500, qteSettleMs = 250;
+// A frame of the immersive stretch with no scene pair: true to fall back to the flat VR screen (only after
+// noPairScreenMs with no pair shown), false to submit no layer.
+inline bool waitShowsScreen(uint64_t nowMs, uint64_t lastPairMs, uint64_t waitFromMs) {
+    const uint64_t since = lastPairMs > waitFromMs ? lastPairMs : waitFromMs;
+    return since && nowMs >= since && nowMs - since >= noPairScreenMs;
+}
+class QteCard {
+  public:
+    // frozen: ImmersiveHold::frozen() for the pair shown; true once the freeze has held qteSettleMs.
+    bool update(bool frozen, uint64_t nowMs) {
+        if (!frozen) {
+            fromMs_ = 0;
+            return false;
+        }
+        if (!fromMs_ || nowMs < fromMs_)
+            fromMs_ = nowMs ? nowMs : 1;
+        return nowMs - fromMs_ >= qteSettleMs;
+    }
+
+  private:
+    uint64_t fromMs_{};
+};
 // HERO VR 0.0.77 CUTFIX3 MENU PANEL: a menu over the immersive world (the title screen's, its save slots, CONTINUE,
 // its dialogs) is the game's whole frame as it is: not keyed, no glass, full opacity, centred, the size the VR
 // screen has (its width at its distance: vr_settings::screenWidth, screenDistance).
@@ -256,14 +289,22 @@ class MenuPanel {
 class MenuScreen {
   public:
     // True while the stretch stays on the VR screen. nowMs: a clock in ms (0: 11 ms a call).
-    bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0) {
+    // playing: the screen is down for VR gameplay (a hero played in VR), not for a boot frame with no headset view
+    // or no hero yet. HERO VR 0.0.78 CUT9 TITLE FLAT (the owner on cut8: the main menu still starts immersive until
+    // the menu button; report 025037 logged MENU SCREEN #1 as "no player record", not the front end, then the title's
+    // record went immersive): a boot frame with the screen down ended the front end before the title came up. Only VR
+    // gameplay ends it now (and a game loaded from the title, as before).
+    bool update(bool screen, uint64_t record, bool menuPressed, uint64_t nowMs = 0, bool playing = true) {
         now_ = nowMs ? nowMs : now_ + 11;
         if (menuPressed)
             pressMs_ = now_ ? now_ : 1;
         if (!screen) {
-            frontEnd_ = paused_ = inStretch_ = on_ = false;
-            played_ = record;
-            seen_ = 0;
+            if (playing) {
+                frontEnd_ = paused_ = false;
+                played_ = record;
+                seen_ = 0;
+            }
+            inStretch_ = on_ = false;
             return false;
         }
         if (!inStretch_) {

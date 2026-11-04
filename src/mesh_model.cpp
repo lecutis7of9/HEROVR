@@ -5,6 +5,7 @@
 #include "spidy/cabin_look074.hpp"
 
 #include "spidy/calibration_art.hpp"
+#include "spidy/model_pbr.hpp"
 
 #include <algorithm>
 #include <array>
@@ -252,6 +253,7 @@ struct Doc {
     Mesh& out;
     std::string& error;
     size_t reads = 0;
+    std::map<int, uint16_t> surfaceOf; // 0.0.78 PBR: a material's index in out.surfaces (-1: no material)
 
     bool view(uint32_t index, size_t& offset, size_t& length, size_t& stride) {
         const Json* views = root.get("bufferViews");
@@ -393,7 +395,7 @@ struct Doc {
         const Json* off = a->get("byteOffset");
         if (!bv || !bv->isInt() || !type || !type->isInt() || !count || !count->isInt() || !kind || kind->kind != Json::string ||
             (off && !off->isInt()) || static_cast<size_t>(count->num) != want ||
-            kind->text != (comps == 2 ? "VEC2" : "VEC3"))
+            kind->text != (comps == 2 ? "VEC2" : comps == 4 ? "VEC4" : "VEC3"))
             return refuse(error, "bad TEXCOORD_0 / NORMAL accessor");
         const auto component = static_cast<uint32_t>(type->num);
         const Json* norm = a->get("normalized");
@@ -511,6 +513,55 @@ struct Doc {
             return -1;
         if (cutout)
             out.images[static_cast<size_t>(i)].cutout = true;
+        return i;
+    }
+    // HERO VR 0.0.78 PBR: a textureInfo's image (TEXCOORD_0 only), -1 none.
+    int16_t textureImage(const Json* ref) {
+        const Json* ti = ref ? ref->get("index") : nullptr;
+        if (const Json* set = ref ? ref->get("texCoord") : nullptr; set && (!set->isInt() || set->num != 0))
+            return -1;
+        const Json* textures = root.get("textures");
+        const Json* t = ti && ti->isInt() && textures ? textures->at(static_cast<size_t>(ti->num)) : nullptr;
+        const Json* src = t ? t->get("source") : nullptr;
+        if (!src || !src->isInt() || src->num < 0 || src->num >= static_cast<double>(out.images.size()))
+            return -1;
+        const auto i = static_cast<int16_t>(src->num);
+        const Mesh::Image& im = out.images[static_cast<size_t>(i)];
+        return im.bytes.empty() && im.uri.empty() ? int16_t{-1} : i;
+    }
+    // HERO VR 0.0.78 PBR: the material's maps and factors, its index in out.surfaces. metallicFactor absent: 0
+    // without a metallicRoughnessTexture (as materialPaint reads it: no model turns metal by omission), the glTF 1
+    // with one (the map then says where the metal is).
+    uint16_t materialSurface(const Json* index, bool uvs) {
+        const Json* list = root.get("materials");
+        const Json* m = index && index->isInt() && list ? list->at(static_cast<size_t>(index->num)) : nullptr;
+        const int key = m ? static_cast<int>(index->num) : -1;
+        if (const auto it = surfaceOf.find(key * 2 + (uvs ? 1 : 0)); it != surfaceOf.end())
+            return it->second;
+        Mesh::Surface s;
+        const auto number = [](const Json* j, float fallback, float lo, float hi) {
+            return j && j->kind == Json::number && std::isfinite(j->num) ? std::clamp(static_cast<float>(j->num), lo, hi) : fallback;
+        };
+        if (m) {
+            const Json* pbr = m->get("pbrMetallicRoughness");
+            const Json* nt = m->get("normalTexture");
+            const Json* ot = m->get("occlusionTexture");
+            const Json* mr = pbr ? pbr->get("metallicRoughnessTexture") : nullptr;
+            if (uvs) {
+                s.normalImage = textureImage(nt);
+                s.mrImage = textureImage(mr);
+                s.occlusionImage = textureImage(ot);
+            }
+            s.normalScale = number(nt ? nt->get("scale") : nullptr, 1.f, 0.f, 2.f);
+            s.occlusionStrength = number(ot ? ot->get("strength") : nullptr, 1.f, 0.f, 1.f);
+            s.roughness = number(pbr ? pbr->get("roughnessFactor") : nullptr, 1.f, 0.f, 1.f);
+            s.metallic = number(pbr ? pbr->get("metallicFactor") : nullptr, s.mrImage >= 0 ? 1.f : 0.f, 0.f, 1.f);
+        }
+        if (out.surfaces.size() >= 65535)
+            return 0;
+        out.surfaces.push_back(s);
+        const auto i = static_cast<uint16_t>(out.surfaces.size() - 1);
+        surfaceOf[key * 2 + (uvs ? 1 : 0)] = i;
         return i;
     }
     // Version 0.0.72: the document's images (a bufferView's bytes, or a relative file name).
@@ -642,6 +693,15 @@ struct Doc {
                 if (!nn->isInt() || !floatAccessor(static_cast<uint32_t>(nn->num), points.size(), 3, nrm))
                     return error.empty() ? refuse(error, "bad NORMAL") : false;
             }
+            std::vector<float> tan; // 0.0.78 PBR: TANGENT (xyz, w the handedness)
+            if (const Json* tt = attrs->get("TANGENT"); tt && tt->isInt() && !uv.empty()) {
+                std::string ignored;
+                std::swap(ignored, error);
+                if (!floatAccessor(static_cast<uint32_t>(tt->num), points.size(), 4, tan))
+                    tan.clear(); // a bad TANGENT: made by ensureTangents instead (the mesh still read)
+                std::swap(ignored, error);
+            }
+            const uint16_t surfaceHere = materialSurface(prim.get("material"), !uv.empty());
             std::vector<uint8_t> sj, sw; // Build 9 SUITS: the skin (both, or neither)
             if (const Json* j0 = attrs->get("JOINTS_0"), *w0 = attrs->get("WEIGHTS_0"); j0 && w0 && j0->isInt() && w0->isInt())
                 if (!skinAccessor(static_cast<uint32_t>(j0->num), points.size(), false, sj) ||
@@ -653,6 +713,7 @@ struct Doc {
             const float a = world[0], b = world[4], c = world[8], d = world[1], e = world[5], f = world[9], g = world[2], h = world[6],
                         k = world[10];
             const float cof[9]{e * k - f * h, f * g - d * k, d * h - e * g, c * h - b * k, a * k - c * g, b * g - a * h, b * f - c * e, c * d - a * f, a * e - b * d};
+            const float handed = a * cof[0] + b * cof[1] + c * cof[2] < 0 ? -1.f : 1.f; // a mirroring node flips w
             for (size_t i = 0; i < idx.size(); i += 3) {
                 for (size_t k = 0; k < 3; ++k)
                     if (idx[i + k] >= points.size())
@@ -682,6 +743,15 @@ struct Doc {
                             n = normalized(w);
                     }
                     out.normals.push_back(n);
+                    Vec3 tw{};
+                    float tsign = 1;
+                    if (!tan.empty()) { // tangents go through the node's 3 x 3 itself
+                        const Vec3 m{tan[v * 4], tan[v * 4 + 1], tan[v * 4 + 2]};
+                        const Vec3 w{a * m.x + b * m.y + c * m.z, d * m.x + e * m.y + f * m.z, g * m.x + h * m.y + k * m.z};
+                        if (finite(w) && length(w) > 1e-12f)
+                            tw = normalized(w), tsign = (tan[v * 4 + 3] < 0 ? -1.f : 1.f) * handed;
+                    }
+                    out.tangents.insert(out.tangents.end(), {tw.x, tw.y, tw.z, length(tw) > 0 ? tsign : 0.f});
                     if (!sj.empty())
                         for (size_t q = 0; q < 4; ++q)
                             out.skinJoints.push_back(sj[v * 4 + q]), out.skinWeights.push_back(sw[v * 4 + q]);
@@ -693,6 +763,7 @@ struct Doc {
                 out.paint.push_back(paintable ? paintOf.first : uint8_t{0});
                 out.paint.push_back(paintable ? paintOf.second : uint8_t{0});
                 out.role.push_back(roleHere);
+                out.surface.push_back(surfaceHere);
                 if (painted.empty()) {
                     out.colors.push_back(image >= 0 ? tint : color);
                 } else {
@@ -823,6 +894,12 @@ bool finish(Mesh& out, std::string& error) {
     if (out.role.size() != size_t{out.triangles()} ||
         std::none_of(out.role.begin(), out.role.end(), [](uint8_t b) { return b != 0; })) // 0.0.74 test 3: none has one
         out.role.clear();
+    if (!out.hasSurfaces()) { // 0.0.78 PBR: never expected (every triangle gets one)
+        out.surfaces.clear();
+        out.surface.clear();
+    }
+    if (!out.hasTangents() || !out.hasUvs() || std::none_of(out.tangents.begin(), out.tangents.end(), [](float v) { return v != 0; }))
+        out.tangents.clear(); // none given (ensureTangents makes them where a normal map wants them)
     if (!out.hasSkin()) { // Build 9 SUITS: a primitive without its skin (or a bad one): none worn
         out.skinJoints.clear();
         out.skinWeights.clear();
@@ -847,7 +924,7 @@ bool parseGltf(const std::string& json, const std::vector<uint8_t>& bin, Mesh& o
         if (!len || !len->isInt() || len->num > static_cast<double>(bin.size()))
             return refuse(error, "the buffer is shorter than the file says");
     }
-    Doc doc{root, bin, out, error};
+    Doc doc{root, bin, out, error, 0, {}};
     if (!doc.run()) {
         out = {};
         return false;
@@ -911,6 +988,43 @@ bool readFile(const std::string& path, std::vector<uint8_t>& out, size_t most) {
     return !std::ferror(f.get());
 }
 
+void ensureTangents(Mesh& m) {
+    bool wanted = m.hasUvs() && m.hasNormals() && m.hasSurfaces();
+    if (wanted) {
+        wanted = false;
+        for (uint16_t i : m.surface)
+            if (i < m.surfaces.size() && m.surfaces[i].normalImage >= 0) {
+                wanted = true;
+                break;
+            }
+    }
+    if (!wanted) {
+        m.tangents.clear();
+        return;
+    }
+    const bool given = m.hasTangents();
+    bool missing = !given;
+    for (size_t c = 0; given && c < m.corners.size() && !missing; ++c)
+        missing = m.tangents[c * 4 + 3] == 0;
+    if (!missing)
+        return;
+    std::vector<float> made;
+    model_pbr::generateTangents(m.corners, m.normals, m.uvs, made);
+    if (made.size() != m.corners.size() * 4) {
+        if (!given)
+            m.tangents.clear();
+        return;
+    }
+    if (!given) {
+        m.tangents = std::move(made);
+        return;
+    }
+    for (size_t c = 0; c < m.corners.size(); ++c)
+        if (m.tangents[c * 4 + 3] == 0)
+            std::copy(made.begin() + static_cast<std::ptrdiff_t>(c * 4), made.begin() + static_cast<std::ptrdiff_t>(c * 4 + 4),
+                      m.tangents.begin() + static_cast<std::ptrdiff_t>(c * 4));
+}
+
 bool decimate(Mesh& mesh, uint32_t most) {
     if (!mesh.ok())
         return false;
@@ -952,6 +1066,8 @@ bool decimate(Mesh& mesh, uint32_t most) {
                 next.paint.insert(next.paint.end(), {mesh.paint[t * 2], mesh.paint[t * 2 + 1]});
             if (mesh.role.size() == size_t{mesh.triangles()}) // 0.0.74 test 3 COCKPIT GLOW: kept with its triangle
                 next.role.push_back(mesh.role[t]);
+            if (mesh.hasSurfaces()) // 0.0.78 PBR: the material kept (the tangents made again: the normals are flat now)
+                next.surface.push_back(mesh.surface[t]);
             if (mesh.hasUvs()) { // Version 0.0.72: each kept triangle keeps its corners' UVs, normals, image
                 next.uvs.insert(next.uvs.end(), mesh.uvs.begin() + t * 6, mesh.uvs.begin() + t * 6 + 6);
                 next.image.push_back(mesh.image[t]);
@@ -964,6 +1080,10 @@ bool decimate(Mesh& mesh, uint32_t most) {
         if (next.ok() && next.triangles() <= most) {
             next.sourceTriangles = mesh.sourceTriangles;
             next.images = mesh.images;
+            if (next.surface.size() == next.colors.size())
+                next.surfaces = mesh.surfaces;
+            else
+                next.surface.clear();
             next.decimated = true;
             bounds(next);
             mesh = std::move(next);
@@ -1027,6 +1147,7 @@ Status loadFolder(const std::string& folder, bool mayDecimate, Mesh& out, std::s
             return invalid;
         }
     }
+    ensureTangents(out); // 0.0.78 PBR: after any decimate (its flat normals want their own)
     out.cap = cap;
     return loaded;
 }
@@ -1174,9 +1295,82 @@ uint64_t fnv(const std::vector<uint8_t>& b) {
         h = (h ^ c) * 1099511628211ull;
     return h ^ b.size();
 }
+// 0.0.78 PBR: a linear (UNORM) layer's mips, level 0 `base` (size x size): a box filter each level; a normal map's
+// texels decoded to vectors, averaged and made unit again (so a far, mipped bump does not shrink to grey).
+std::vector<uint8_t> linearLayer(const Picture& base, uint32_t levels, bool normal) {
+    std::vector<uint8_t> layer;
+    if (!base.width || base.width != base.height || base.rgba.size() != size_t{base.width} * base.height * 4)
+        return layer;
+    std::vector<float> cur(base.rgba.size());
+    for (size_t i = 0; i < cur.size(); ++i)
+        cur[i] = base.rgba[i] / 255.f;
+    const auto emit = [&](const std::vector<float>& f, uint32_t w) {
+        for (size_t p = 0; p < size_t{w} * w; ++p) {
+            float c[4]{f[p * 4], f[p * 4 + 1], f[p * 4 + 2], f[p * 4 + 3]};
+            if (normal) {
+                float x = c[0] * 2 - 1, y = c[1] * 2 - 1, z = c[2] * 2 - 1;
+                const float n = std::sqrt(x * x + y * y + z * z);
+                if (n > 1e-4f)
+                    x /= n, y /= n, z /= n;
+                else
+                    x = 0, y = 0, z = 1;
+                c[0] = x * .5f + .5f, c[1] = y * .5f + .5f, c[2] = z * .5f + .5f, c[3] = 1;
+            }
+            for (float v : c)
+                layer.push_back(static_cast<uint8_t>(std::clamp(std::lround(v * 255.f), 0l, 255l)));
+        }
+    };
+    uint32_t w = base.width;
+    emit(cur, w);
+    for (uint32_t level = 1; level < levels; ++level) {
+        const uint32_t h = std::max(w / 2, 1u);
+        std::vector<float> next(size_t{h} * h * 4);
+        for (uint32_t y = 0; y < h; ++y)
+            for (uint32_t x = 0; x < h; ++x)
+                for (int c = 0; c < 4; ++c) {
+                    float sum = 0;
+                    for (uint32_t dy = 0; dy < 2; ++dy)
+                        for (uint32_t dx = 0; dx < 2; ++dx) {
+                            const uint32_t sx = std::min(2 * x + dx, w - 1), sy = std::min(2 * y + dy, w - 1);
+                            sum += cur[(size_t{sy} * w + sx) * 4 + c];
+                        }
+                    next[(size_t{y} * h + x) * 4 + c] = sum * .25f;
+                }
+        if (normal) // unit again before the next level averages it
+            for (size_t p = 0; p < size_t{h} * h; ++p) {
+                float* v = &next[p * 4];
+                float x = v[0] * 2 - 1, yy = v[1] * 2 - 1, z = v[2] * 2 - 1;
+                const float n = std::sqrt(x * x + yy * yy + z * z);
+                if (n > 1e-4f)
+                    v[0] = x / n * .5f + .5f, v[1] = yy / n * .5f + .5f, v[2] = z / n * .5f + .5f;
+            }
+        cur.swap(next);
+        w = h;
+        emit(cur, w);
+    }
+    return layer;
+}
+std::vector<uint8_t> srgbLayer(const Picture& base, uint32_t levels) {
+    calibration_art::Image ci;
+    ci.width = ci.height = static_cast<int>(base.width);
+    ci.rgba = base.rgba;
+    const auto chain = calibration_art::mips(ci, static_cast<int>(levels));
+    std::vector<uint8_t> layer;
+    if (chain.size() != levels)
+        return layer;
+    for (const auto& lv : chain)
+        layer.insert(layer.end(), lv.rgba.begin(), lv.rgba.end());
+    return layer;
+}
+uint32_t levelsFor(uint32_t size) {
+    uint32_t levels = 1;
+    while ((size >> levels) >= 1)
+        ++levels;
+    return levels;
+}
 } // namespace
 
-TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint32_t levels) {
+TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint32_t levels, MapOptions options) {
     TextureArray out;
     out.size = size;
     out.levels = levels;
@@ -1184,6 +1378,16 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
         out.notes.push_back("bad texture array size");
         return out;
     }
+    // 0.0.78 PBR: the HQ arrays only above the standard size (a 2048 copy of a 512 image would add nothing)
+    const bool hqOn = options.hqSize > size && options.hqMost > 0 && options.hqSize <= 4096;
+    if (hqOn) {
+        out.hqSize = options.hqSize;
+        out.hqLevels = levelsFor(options.hqSize);
+    }
+    const auto hqRoom = [&] { return hqOn && out.hq.size() + out.hqLinear.size() < options.hqMost; };
+    std::map<std::pair<uint64_t, bool>, int32_t> seenHq;          // (bytes, cut) -> HQ sRGB layer
+    std::map<uint64_t, std::pair<int32_t, int32_t>> seenNormal;   // bytes -> (linear layer, HQ linear layer)
+    std::map<std::pair<uint64_t, uint64_t>, int32_t> seenOrm;     // (MR bytes, occlusion bytes) -> linear layer
     std::map<std::pair<uint64_t, bool>, int32_t> seen; // (the image's bytes, cut) -> its layer
     std::map<int32_t, Picture> thumbs;                 // each layer at 64 x 64, for the untextured colours
     for (uint32_t slot = 1; slot < slots; ++slot) {
@@ -1193,6 +1397,7 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
         for (size_t i = 0; i < m.images.size(); ++i) {
             Mesh::Image& im = m.images[i];
             im.layer = -1;
+            im.hqLayer = -1;
             bool used = false;
             for (int16_t t : m.image)
                 used = used || t == static_cast<int16_t>(i);
@@ -1206,6 +1411,8 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
             const auto key = std::make_pair(fnv(im.bytes), im.cutout);
             if (auto f = seen.find(key); f != seen.end()) {
                 im.layer = f->second;
+                if (const auto h = seenHq.find(key); h != seenHq.end() && slotHasHqTextures(slot))
+                    im.hqLayer = h->second;
                 out.notes.push_back(name + ": layer " + std::to_string(im.layer) + " (shared)");
                 continue;
             }
@@ -1220,6 +1427,20 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
             }
             const uint32_t w0 = pic.width, h0 = pic.height;
             Picture base = resample(pic, size);
+            std::string hqNote;
+            if (slotHasHqTextures(slot) && std::max(w0, h0) > size && hqRoom()) { // 0.0.78 PBR: the HQ copy
+                Picture big = resample(pic, out.hqSize);
+                if (!im.cutout)
+                    for (size_t p = 3; p < big.rgba.size(); p += 4)
+                        big.rgba[p] = 255;
+                auto layer = srgbLayer(big, out.hqLevels);
+                if (!layer.empty()) {
+                    im.hqLayer = static_cast<int32_t>(out.hq.size());
+                    out.hq.push_back(std::move(layer));
+                    seenHq[key] = im.hqLayer;
+                    hqNote = ", HQ layer " + std::to_string(im.hqLayer) + " at " + std::to_string(out.hqSize);
+                }
+            }
             pic = {};
             if (!im.cutout) // opaque materials: their alpha is not a cut
                 for (size_t p = 3; p < base.rgba.size(); p += 4)
@@ -1240,7 +1461,101 @@ TextureArray prepareTextures(Library& lib, Decoder decoder, uint32_t size, uint3
             seen[key] = im.layer;
             thumbs[im.layer] = resample(base, 64);
             out.notes.push_back(name + ": layer " + std::to_string(im.layer) + " (" + std::to_string(w0) + "x" + std::to_string(h0) + " -> " +
-                                std::to_string(size) + (im.cutout ? ", cut-out alpha)" : ")"));
+                                std::to_string(size) + hqNote + (im.cutout ? ", cut-out alpha)" : ")"));
+        }
+        // 0.0.78 PBR MATERIALS: the normal maps and the ORM layers (the linear array), the HQ normal maps
+        for (Mesh::Surface& sf : m.surfaces)
+            sf.normalLayer = sf.ormLayer = sf.hqNormalLayer = -1;
+        if (options.maps && m.hasUvs() && m.hasSurfaces()) {
+            std::vector<bool> usedSurface(m.surfaces.size(), false);
+            for (uint16_t i : m.surface)
+                if (i < usedSurface.size())
+                    usedSurface[i] = true;
+            const auto imageOk = [&](int16_t i) { return i >= 0 && static_cast<size_t>(i) < m.images.size() && !m.images[static_cast<size_t>(i)].bytes.empty(); };
+            const auto mapName = [&](int16_t i, const char* what) {
+                const Mesh::Image& im = m.images[static_cast<size_t>(i)];
+                return std::string(slotFolders[slot]) + " " + what + " image " + std::to_string(i) + (im.uri.empty() ? "" : " (" + im.uri + ")");
+            };
+            for (size_t si = 0; si < m.surfaces.size(); ++si) {
+                Mesh::Surface& sf = m.surfaces[si];
+                if (!usedSurface[si])
+                    continue;
+                if (imageOk(sf.normalImage)) {
+                    const Mesh::Image& im = m.images[static_cast<size_t>(sf.normalImage)];
+                    const uint64_t key = fnv(im.bytes);
+                    const std::string name = mapName(sf.normalImage, "normal");
+                    if (const auto f = seenNormal.find(key); f != seenNormal.end()) {
+                        sf.normalLayer = f->second.first;
+                        sf.hqNormalLayer = slotHasHqTextures(slot) ? f->second.second : -1;
+                    } else if (out.linear.size() >= mostTextureLayers) {
+                        out.notes.push_back(name + ": NOT READ (the map array is full) - drawn without it");
+                    } else {
+                        Picture pic;
+                        if (!decodeImage(im.bytes.data(), im.bytes.size(), decoder, pic)) {
+                            out.notes.push_back(name + ": NOT READ (could not decode) - drawn without it");
+                        } else {
+                            const uint32_t w0 = pic.width, h0 = pic.height;
+                            std::string hqNote;
+                            if (slotHasHqTextures(slot) && std::max(w0, h0) > size && hqRoom()) {
+                                auto layer = linearLayer(resample(pic, out.hqSize), out.hqLevels, true);
+                                if (!layer.empty()) {
+                                    sf.hqNormalLayer = static_cast<int32_t>(out.hqLinear.size());
+                                    out.hqLinear.push_back(std::move(layer));
+                                    hqNote = ", HQ layer " + std::to_string(sf.hqNormalLayer) + " at " + std::to_string(out.hqSize);
+                                }
+                            }
+                            auto layer = linearLayer(resample(pic, size), levels, true);
+                            if (!layer.empty()) {
+                                sf.normalLayer = static_cast<int32_t>(out.linear.size());
+                                out.linear.push_back(std::move(layer));
+                                out.notes.push_back(name + ": map layer " + std::to_string(sf.normalLayer) + " (" + std::to_string(w0) + "x" +
+                                                    std::to_string(h0) + " -> " + std::to_string(size) + hqNote + ")");
+                            }
+                            seenNormal[key] = {sf.normalLayer, sf.hqNormalLayer};
+                        }
+                    }
+                }
+                const bool mr = imageOk(sf.mrImage), occ = imageOk(sf.occlusionImage);
+                if (mr || occ) {
+                    const uint64_t km = mr ? fnv(m.images[static_cast<size_t>(sf.mrImage)].bytes) : 0,
+                                   ko = occ ? fnv(m.images[static_cast<size_t>(sf.occlusionImage)].bytes) : 0;
+                    const std::string name = mapName(mr ? sf.mrImage : sf.occlusionImage, mr && occ ? "ORM" : mr ? "metal-roughness" : "occlusion");
+                    if (const auto f = seenOrm.find({km, ko}); f != seenOrm.end()) {
+                        sf.ormLayer = f->second;
+                    } else if (out.linear.size() >= mostTextureLayers) {
+                        out.notes.push_back(name + ": NOT READ (the map array is full) - drawn without it");
+                    } else {
+                        Picture a, b;
+                        const bool aOk = mr && decodeImage(m.images[static_cast<size_t>(sf.mrImage)].bytes.data(),
+                                                           m.images[static_cast<size_t>(sf.mrImage)].bytes.size(), decoder, a);
+                        const bool same = occ && mr && sf.occlusionImage == sf.mrImage;
+                        const bool bOk = occ && !same && decodeImage(m.images[static_cast<size_t>(sf.occlusionImage)].bytes.data(),
+                                                                     m.images[static_cast<size_t>(sf.occlusionImage)].bytes.size(), decoder, b);
+                        if (!aOk && !bOk) {
+                            out.notes.push_back(name + ": NOT READ (could not decode) - drawn without it");
+                        } else {
+                            Picture ra = aOk ? resample(a, size) : Picture{}, rb = bOk ? resample(b, size) : same && aOk ? ra : Picture{};
+                            Picture orm;
+                            orm.width = orm.height = size;
+                            orm.rgba.assign(size_t{size} * size * 4, 255);
+                            for (size_t p = 0; p < size_t{size} * size; ++p) {
+                                if (!rb.rgba.empty())
+                                    orm.rgba[p * 4] = rb.rgba[p * 4];
+                                if (!ra.rgba.empty())
+                                    orm.rgba[p * 4 + 1] = ra.rgba[p * 4 + 1], orm.rgba[p * 4 + 2] = ra.rgba[p * 4 + 2];
+                            }
+                            auto layer = linearLayer(orm, levels, false);
+                            if (!layer.empty()) {
+                                sf.ormLayer = static_cast<int32_t>(out.linear.size());
+                                out.linear.push_back(std::move(layer));
+                                seenOrm[{km, ko}] = sf.ormLayer;
+                                out.notes.push_back(name + ": map layer " + std::to_string(sf.ormLayer) +
+                                                    (rb.rgba.empty() ? " (no occlusion)" : ra.rgba.empty() ? " (occlusion only)" : " (ORM)"));
+                            }
+                        }
+                    }
+                }
+            }
         }
         // the look without the texture array: each triangle its texture's mean (3 corners + centre) x tint
         if (m.hasUvs())

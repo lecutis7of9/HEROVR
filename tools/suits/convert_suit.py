@@ -55,10 +55,14 @@ SUITS = [
     dict(folder='Suit_wolverine_4', zip='1073e863', drop=INNER),
     # 0.0.78: the owner's own HQ Punisher (a single glb, 592,596 triangles, one 4096 px base colour with
     # normal/roughness/metallic maps; no rig) replaces build 9's VEST in the same folder (its slot and MP hash).
-    # Its base colour is split over 4 atlases (UV quadrants: about 2048 px across the body) and the normal map's
-    # cavity is baked into it (the suit shader draws the base colour only, with no normal/roughness/metallic maps).
+    # Its base colour is split over 4 atlases (UV quadrants of 2048 px: the 4096 px source at full size).
+    # 0.0.78 PBR (t1895u, "not flat textures"): pbr ships the hi->lo normal map, an ORM map (occlusion from that
+    # map's cavity, the model's own roughness and metallic maps) and TANGENT as maps beside the raw base colour
+    # (the per-pixel model shader; no cavity folded into the base colour any more).
     dict(folder='Suit_punisher_1', glb='/workspace/drive-dl/model/model.glb', drop=INNER,
          texture='/workspace/drive-dl/model/texture_0.png', cavity='/workspace/drive-dl/model/texture_0_normal.png',
+         roughness='/workspace/drive-dl/model/texture_0_roughness.png', metallic='/workspace/drive-dl/model/texture_0_metallic.png',
+         pbr=True, atlas=2048,
          quadrants=True, atlases=4, turn_deg=-24, arm_keep=.07, target=80000, bake_normal=True,  # its body modelled turned 24 degrees to its right (top view of shoulders and belt)
          # target: 80,000 triangles (owner, t1889u: 24,000 lost its silhouette; mesh_model::suitHqTriangles is its draw cap)
          # arm_keep: its rest hands touch the holsters (keep_arms takes the hands' weights off them)
@@ -199,6 +203,48 @@ def quadrant_materials(mats, uv, mat, work, folder):
             uv[here] = np.clip(np.clip(uv[here], lo, lo + .54), 0, 1)
         notes.append('%s split into 4 UV quadrants (one atlas each; seam-stretched triangles clamped)' % m['name'])
     return mats, newmat, notes, uv
+
+
+def make_orm(normal, roughness, metallic, path, strength=.45):
+    """0.0.78 PBR: the glTF ORM map in the base colour's UVs: R the occlusion (the normal map's cavity, as
+    bake_cavity's darkening, now applied by the shader to the sky light only), G the roughness, B the metallic (the
+    model's own maps, 1 and 0 without). -> path."""
+    n = np.asarray(Image.open(normal).convert('RGB'), np.float32) / 255
+    size = (n.shape[1], n.shape[0])
+    nz = np.clip(n[..., 2] * 2 - 1, 0, 1)
+    o = 1 - strength * (1 - nz ** 1.5)
+
+    def grey(f, empty):
+        if not f:
+            return np.full(o.shape, empty, np.float32)
+        return np.asarray(Image.open(f).convert('L').resize(size, Image.BICUBIC), np.float32) / 255
+    out = np.stack([o, grey(roughness, 1), grey(metallic, 0)], -1)
+    Image.fromarray((np.clip(out, 0, 1) * 255 + .5).astype(np.uint8)).save(path)
+    return path
+
+
+def corner_tangents(P, N, U):
+    """0.0.78 PBR: glTF TANGENT per corner (P, N, U (C,3/3/2), three a triangle): T = dP/du of each triangle
+    made perpendicular to the corner's normal, w +-1 with the bitangent cross(N, T) w = -dP/dv (glTF v runs down
+    the image), as model_pbr::generateTangents. -> (C,4) float32 (0 where the uvs give none)."""
+    p, n, u = P.reshape(-1, 3, 3).astype(np.float64), N.reshape(-1, 3, 3).astype(np.float64), U.reshape(-1, 3, 2).astype(np.float64)
+    e1, e2 = p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]
+    d1, d2 = u[:, 1] - u[:, 0], u[:, 2] - u[:, 0]
+    r = d1[:, 0] * d2[:, 1] - d2[:, 0] * d1[:, 1]
+    ok = np.abs(r) > 1e-12
+    r = np.where(ok, r, 1)
+    t = (e1 * d2[:, 1:2] - e2 * d1[:, 1:2]) / r[:, None]
+    b = (e2 * d1[:, 0:1] - e1 * d2[:, 0:1]) / r[:, None]
+    fn = np.cross(e1, e2)
+    w = np.where((np.cross(fn, t) * -b).sum(1) < 0, -1., 1.)
+    out = np.zeros((len(p), 3, 4))
+    for c in range(3):
+        tc = t - n[:, c] * (n[:, c] * t).sum(1, keepdims=True)
+        ln = np.linalg.norm(tc, axis=1, keepdims=True)
+        good = ok & (ln[:, 0] > 1e-12)
+        out[:, c, :3] = np.where(good[:, None], tc / np.maximum(ln, 1e-12), 0)
+        out[:, c, 3] = np.where(good, w, 0)
+    return out.reshape(-1, 4).astype(np.float32)
 
 
 def combine_normals(baked, source, path):
@@ -363,7 +409,7 @@ def merge_images(mats, mat):
     return out, np.array([remap[int(x)] for x in mat])
 
 
-def atlases(mats, uv, mat, used, work, folder, most=ATLASES):
+def atlases(mats, uv, mat, used, work, folder, most=ATLASES, size=ATLAS):
     """Textured materials -> at most ATLASES atlases (balanced by cropped texture area, each cropped to its
     UVs, one scale per atlas). -> uv, mat, mats, notes."""
     from convert_thor_van_072 import atlas  # crop + pack + remap (the 0.0.72 van's)
@@ -383,7 +429,8 @@ def atlases(mats, uv, mat, used, work, folder, most=ATLASES):
         load[k] += area[i]
     notes = []
     for k, gr in enumerate(groups):
-        uv, mat, mats, scale = atlas(mats, uv, mat, gr, os.path.join(work, '%s_atlas%d.png' % (folder, k)), size=ATLAS)
+        uv, mat, mats, scale = atlas(mats, uv, mat, gr, os.path.join(work, '%s_atlas%d.png' % (folder, k)), size=size,
+                                    maps=('normal', 'orm'))
         notes.append('atlas %d: %s (scale %.3f)' % (k, ', '.join(mats[i]['name'] for i in gr), scale))
     return uv, mat, mats, notes
 
@@ -414,27 +461,46 @@ def write_glb(path, tris, uv, nrm, mat, mats, skin, extras):
     N_all = nrm.reshape(-1, 3).astype(np.float32)
     N_all /= np.maximum(np.linalg.norm(N_all, axis=1, keepdims=True), 1e-9)
     U_all = uv.reshape(-1, 2).astype(np.float32)
+    T_all = corner_tangents(P_all, N_all, U_all) if any(mats[int(i)].get('normal') for i in set(mat.tolist())) else None
     cm = np.repeat(mat, 3)
+
+    def texture(file, quality):
+        if (file, quality) not in images:
+            b = io.BytesIO()
+            Image.open(file).convert('RGB').save(b, 'JPEG', quality=quality, subsampling=0)
+            g['images'].append({'bufferView': view(b.getvalue()), 'mimeType': 'image/jpeg', 'name': os.path.basename(file)})
+            g['textures'].append({'source': len(g['images']) - 1, 'sampler': 0})
+            images[(file, quality)] = len(g['textures']) - 1
+        return images[(file, quality)]
     for mi in sorted(set(int(m) for m in mat)):
         m = mats[mi]
         gm = {'name': m['name'][:120], 'pbrMetallicRoughness': {'baseColorFactor': list(m['factor']), 'metallicFactor': 0},
               'doubleSided': True}
-        if m['image']:
-            if m['image'] not in images:
-                im = Image.open(m['image']).convert('RGB')  # base colour only: JPEG (a third of a PNG's size)
-                b = io.BytesIO()
-                im.save(b, 'JPEG', quality=90, subsampling=0)
-                g['images'].append({'bufferView': view(b.getvalue()), 'mimeType': 'image/jpeg', 'name': os.path.basename(m['image'])})
-                g['textures'].append({'source': len(g['images']) - 1, 'sampler': 0})
-                images[m['image']] = len(g['textures']) - 1
-            gm['pbrMetallicRoughness']['baseColorTexture'] = {'index': images[m['image']]}
+        if m['image']:  # JPEG (a third of a PNG's size)
+            gm['pbrMetallicRoughness']['baseColorTexture'] = {'index': texture(m['image'], 90)}
             gm['pbrMetallicRoughness']['baseColorFactor'] = [1, 1, 1, 1]
+        mapped = T_all is not None and bool(m.get('normal'))
+        if mapped:  # 0.0.78 PBR: the normal map (q95: its highlights show blocks sooner than colour does) and ORM
+            gm['normalTexture'] = {'index': texture(m['normal'], 95)}
+        if m.get('orm'):
+            o = texture(m['orm'], 92)
+            gm['pbrMetallicRoughness'].update(metallicRoughnessTexture={'index': o}, metallicFactor=1, roughnessFactor=1)
+            gm['occlusionTexture'] = {'index': o}
         g['materials'].append(gm)
         sel = cm == mi
         P, N, U, Jm, Wm = P_all[sel], N_all[sel], U_all[sel], J[sel], Wq[sel]
         key = np.c_[np.round(P, 6), np.round(N, 4), np.round(U, 6), Jm, Wm]
+        if mapped:  # a mirrored uv island's corners kept apart (their hands differ)
+            key = np.c_[key, T_all[sel][:, 3]]
         uniq, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
         inv = inv.ravel().astype(np.uint32)
+        if mapped:  # the corners' tangents summed onto their vertex, made perpendicular to its normal again
+            T = np.zeros((len(first), 3), np.float64)
+            np.add.at(T, inv, T_all[sel][:, :3])
+            T -= N[first] * (N[first] * T).sum(1, keepdims=True)
+            ln = np.linalg.norm(T, axis=1, keepdims=True)
+            Tw = np.c_[np.where(ln > 1e-9, T / np.maximum(ln, 1e-9), 0), np.where(ln[:, 0] > 1e-9, T_all[sel][first, 3], 0)]
+            Tw = Tw.astype(np.float32)
         P, N, U, Jm, Wm = P[first], N[first], U[first], Jm[first], Wm[first]
         acc = len(g['accessors'])
         g['accessors'] += [
@@ -444,9 +510,11 @@ def write_glb(path, tris, uv, nrm, mat, mats, skin, extras):
             {'bufferView': view(Jm.tobytes()), 'componentType': 5121, 'count': len(Jm), 'type': 'VEC4'},
             {'bufferView': view(Wm.tobytes()), 'componentType': 5121, 'normalized': True, 'count': len(Wm), 'type': 'VEC4'},
             {'bufferView': view(inv.tobytes()), 'componentType': 5125, 'count': len(inv), 'type': 'SCALAR'}]
-        g['meshes'][0]['primitives'].append({'attributes': {'POSITION': acc, 'NORMAL': acc + 1, 'TEXCOORD_0': acc + 2,
-                                                            'JOINTS_0': acc + 3, 'WEIGHTS_0': acc + 4},
-                                             'indices': acc + 5, 'material': len(g['materials']) - 1})
+        attributes = {'POSITION': acc, 'NORMAL': acc + 1, 'TEXCOORD_0': acc + 2, 'JOINTS_0': acc + 3, 'WEIGHTS_0': acc + 4}
+        if mapped:
+            g['accessors'].append({'bufferView': view(Tw.tobytes()), 'componentType': 5126, 'count': len(Tw), 'type': 'VEC4'})
+            attributes['TANGENT'] = acc + 6
+        g['meshes'][0]['primitives'].append({'attributes': attributes, 'indices': acc + 5, 'material': len(g['materials']) - 1})
     for k in ('textures', 'images'):
         if not g[k]:
             del g[k]
@@ -532,7 +600,7 @@ def convert(s, downloads, out_models, work):
     tris, uv, mat, sj, sw = tris[keep], uv[keep], mat[keep], sj[keep], sw[keep]
     if s.get('texture'):  # the base colour given beside the model (its glb packs it, the extract cannot follow)
         tex = s['texture']
-        if s.get('cavity'):
+        if s.get('cavity') and not s.get('pbr'):
             tex = bake_cavity(tex, s['cavity'], os.path.join(work, folder + '_cavity.png'))
             notes.append('the normal map\'s cavity baked into the base colour (the suit shader has no normal map)')
         for m in mats:
@@ -633,12 +701,20 @@ def convert(s, downloads, out_models, work):
         if not (os.path.exists(baked) and os.path.exists(bk) and open(bk).read() == bkey):
             bpy('bpy_bake_normal.py', sin, sout, s['cavity'], baked, log=os.path.join(work, folder + '_bake.log'))
             open(bk, 'w').write(bkey)
-        tex = bake_cavity(s['texture'], combine_normals(baked, s['cavity'], os.path.join(work, folder + '_normal_combined.png')),
-                          os.path.join(work, folder + '_cavity_hi2lo.png'))
-        for m in mats:
-            m['image'] = tex
-        notes.append('a high-to-low normal bake (%d source triangles and the source normal map onto the %d shipped), its cavity '
-                     'baked into the base colour' % (src_tris, len(tris)))
+        combined = combine_normals(baked, s['cavity'], os.path.join(work, folder + '_normal_combined.png'))
+        if s.get('pbr'):  # 0.0.78 PBR: the maps shipped as maps (the model shader lights them per pixel)
+            orm = make_orm(combined, s.get('roughness'), s.get('metallic'), os.path.join(work, folder + '_orm.png'))
+            for m in mats:
+                m['image'], m['normal'], m['orm'] = s['texture'], combined, orm
+            notes.append('a high-to-low normal bake (%d source triangles and the source normal map onto the %d shipped), '
+                         'shipped as its normal map with an ORM map (occlusion from its cavity, the model\'s roughness and '
+                         'metallic) and TANGENT; the base colour raw' % (src_tris, len(tris)))
+        else:
+            tex = bake_cavity(s['texture'], combined, os.path.join(work, folder + '_cavity_hi2lo.png'))
+            for m in mats:
+                m['image'] = tex
+            notes.append('a high-to-low normal bake (%d source triangles and the source normal map onto the %d shipped), its cavity '
+                         'baked into the base colour' % (src_tris, len(tris)))
     if s.get('arm_keep'):  # 0.0.78: the hands rest on the holsters - heat spread them onto the thighs' gear
         tris, skin, an = keep_arms(tris, skin, ends, s['arm_keep'])
         notes += an
@@ -651,7 +727,7 @@ def convert(s, downloads, out_models, work):
         mats, mat, qn, uv = quadrant_materials(mats, wrap_uv(uv), mat, work, folder)
         notes += qn
         used = sorted(set(mat.tolist()))
-    uv, mat, mats, an = atlases(mats, wrap_uv(uv), mat, used, work, folder, s.get('atlases', ATLASES))
+    uv, mat, mats, an = atlases(mats, wrap_uv(uv), mat, used, work, folder, s.get('atlases', ATLASES), s.get('atlas', ATLAS))
     notes += an
     hb = [sk.hand_back(J, ends, P, 'L').round(4).tolist(), sk.hand_back(J, ends, P, 'R').round(4).tolist()]
     extras = {'suit': {'joints': J.round(5).ravel().tolist(), 'ends': ends[16:].round(5).ravel().tolist(),

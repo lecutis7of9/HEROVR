@@ -2,6 +2,26 @@
 
 HERO VR - Made by Agent Mulder. Full history (back to Spidy): [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
+## hero-0.0.78-pbr - PBR MATERIALS: the mod's models lit per pixel with normal / ORM maps (TEST build, private)
+
+From the player's ask ("not flat textures, it needs to look realistic in game"):
+- **Per-pixel PBR on the mod's own models (CONFIRMED in code and offline; in game CANDIDATE):** suits, the arsenal,
+  props and vehicles now carry a 20-byte surface in each vertex (normal and tangent oct, the map layers, the albedo
+  tint, roughness / metal / normal scale / occlusion; the vertex 44 -> 64 B). The model pixel shaders read the
+  tangent-space normal map (glTF TANGENT, else MikkTSpace-like generated, else the pixel's own uv frame) and the ORM
+  map, and light with GGX specular plus a sky reflection from cut10's world light (sun direction and colour, sky, the
+  screen-space sun shadow). include/spidy/model_pbr.hpp is the CPU copy of the same math (tests/model_pbr_tests.cpp).
+- **HQ 2048 layers** for Suit_punisher_1, arsenal 62-73, hammers 11/15/16/17 and shield 9: base and normal maps at
+  2048 when VRAM allows (the most: min(24, (free VRAM - 1.5 GB) / 22.4 MB)); else the 1024 layers.
+- **Fallback:** a model without maps is a rough dielectric lit per pixel by its vertex normal; live.txt model_pbr 1 OFF
+  gives the cut10 look. A model with maps but no tangents gets generated ones.
+- **Punisher suit maps:** tools/suits/convert_suit.py now ships the baked normals, an ORM (cavity occlusion, the
+  source roughness and metal) and TANGENT in the glb (about 20 MB, was 5 MB; not in git). The base colour is the raw
+  texture: the cavity darkening moved into the ORM's occlusion, so with model_pbr OFF the suit is a little flatter than
+  cut10 (CANDIDATE trade-off).
+- **Offline previews:** previews/punisher078_pbr_*_offline.png, from tools/models078/pbr_preview.cpp (a software render
+  of the emitted vertices through model_pbr::shade under sample lights, not an in-game capture).
+
 ## hero-0.0.78-cut10 - Punisher arsenal and world light merged, the leg holster measured, the game's own POI manager found (TEST build)
 
 - **Merged:** hero-0.0.77-cutfix9-weapons (PUNISHER ARSENAL + GUN BLOOD) and hero-0.0.77-cutfix9-light (WORLD LIGHT /

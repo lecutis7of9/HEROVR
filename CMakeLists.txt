@@ -239,6 +239,10 @@ add_test(NAME cut8 COMMAND spidy_cut8_tests)
 add_executable(spidy_cut9_tests tests/cut9_tests.cpp) # HERO VR 0.0.78 CUT9
 target_include_directories(spidy_cut9_tests PRIVATE include)
 add_test(NAME cut9 COMMAND spidy_cut9_tests)
+# HERO VR 0.0.78 CUT14: immersive cutscenes by default keep the title, its menus, the pause menu and videos flat.
+add_executable(spidy_cut14_tests tests/cut14_tests.cpp)
+target_include_directories(spidy_cut14_tests PRIVATE include)
+add_test(NAME cut14 COMMAND spidy_cut14_tests)
 add_executable(spidy_cut10_poi_tests tests/cut10_poi_tests.cpp) # HERO VR 0.0.78 CUT10
 target_include_directories(spidy_cut10_poi_tests PRIVATE include)
 add_test(NAME cut10_poi COMMAND spidy_cut10_poi_tests)

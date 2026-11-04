@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Sm2VrLauncher
 {
-    enum OptKind { Switch, Invert, Int, Choice, Webs, Live }  // Live: a live.txt on/off, never a launch argument
+    enum OptKind { Switch, Invert, Int, Choice, Webs, Live, LiveChoice }  // Live / LiveChoice: a live.txt on/off or choice, never a launch argument
 
     class Opt
     {
@@ -29,6 +29,9 @@ namespace Sm2VrLauncher
         // 0.0.74 test 3: a switch kept in the mod folder's live.txt (`p` is its name there), not passed to the script.
         public static Opt Live(string section, string p, string title, string sub)
         { return new Opt { Section = section, Param = p, Kind = OptKind.Live, Title = title, Sub = sub, Default = "1" }; }
+        // HERO VR 0.0.78 cut14: a live.txt choice (`choices` are the live.txt words, `labels` what the row shows).
+        public static Opt LivePick(string section, string p, string title, string sub, string[] choices, string[] labels, string def)
+        { return new Opt { Section = section, Param = p, Kind = OptKind.LiveChoice, Title = title, Sub = sub, Choices = choices, Labels = labels, Default = def }; }
         public static Opt Pick(string section, string p, string title, string sub, string[] choices, string def)
         { return new Opt { Section = section, Param = p, Kind = OptKind.Choice, Title = title, Sub = sub, Choices = choices, Default = def }; }
     }
@@ -77,6 +80,7 @@ namespace Sm2VrLauncher
             Opt.Num("COMFORT", "SmoothTurn", "SMOOTH TURN", "Smooth turning speed, on by default; 0 snap turns instead, no restart.", 0, 360, 10, 120, "\u00B0/s"),
             Opt.Num("COMFORT", "Haptics", "VIBRATION", "Controller vibration strength.", 0, 100, 5, 100, "%"),
             Opt.Pick("COMFORT", "ScreenSize", "GAME SCREEN SIZE", "The screen for menus, cutscenes and flat mode.", new[] { "Small", "Medium", "Large" }, "Medium"),
+            Opt.LivePick("COMFORT", "cutscenes", "CUTSCENES", "How the game's scenes show in the headset: Immersive, the default, puts you inside the scene.", new[] { "flat", "3d", "immersive" }, new[] { "Flat", "3D", "Immersive" }, "immersive"),
             Opt.Pick("COMFORT", "ScreenDepth", "CUTSCENE 3D DEPTH", "Cutscene depth. Spider-Man 2 cutscenes stay flat for now: the HUD hook is not found yet.", new[] { "Off", "Low", "Medium", "High" }, "Medium"),
             Opt.Pick("COMFORT", "Hud", "VR HUD SIZE", "Size of the VR HUD panel.", new[] { "Off", "Small", "Medium", "Large" }, "Medium"),
             // Body & combat
@@ -105,7 +109,8 @@ namespace Sm2VrLauncher
         /// <summary>Which ps1 parameter(s) an option needs to work.</summary>
         public static bool Supported(Opt o, Dictionary<string, string> scriptParams)
         {
-            if (o.Kind == OptKind.Live) return true;                              // live.txt, not the script
+            if (o.Kind == OptKind.Live) return true;  // live.txt, not the script
+            if (o.Kind == OptKind.LiveChoice) return true;  // HERO VR 0.0.78 cut14: live.txt too (CUTSCENES)
             if (scriptParams == null || scriptParams.Count == 0) return true;   // unknown script: trust it
             if (o.Kind == OptKind.Webs) return scriptParams.ContainsKey("GameWebs") || scriptParams.ContainsKey("OverlayWebs");
             return scriptParams.ContainsKey(o.Param);
@@ -141,6 +146,8 @@ namespace Sm2VrLauncher
                         break;
                     case OptKind.Live:
                         break;  // live.txt (LiveFile), never an argument
+                    case OptKind.LiveChoice:
+                        break;  // HERO VR 0.0.78 cut14: live.txt too (CUTSCENES)
                     case OptKind.Webs:
                         if (v == "1") { if (scriptParams == null || scriptParams.ContainsKey("OverlayWebs")) args.Add("-OverlayWebs"); }
                         else args.Add("-GameWebs");

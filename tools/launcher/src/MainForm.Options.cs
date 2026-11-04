@@ -18,6 +18,7 @@ namespace Sm2VrLauncher
         {
             if (o == null) return "0";
             if (o.Kind == OptKind.Live) return LiveFile.On(root, o.Param, o.Default == "1") ? "1" : "0"; // 0.0.74 test 3
+            if (o.Kind == OptKind.LiveChoice) return LiveFile.Choice(root, o.Param, o.Choices, o.Default); // 0.0.78 cut14
             return settings.Get("opt." + o.Param, o.Default);
         }
 
@@ -27,6 +28,14 @@ namespace Sm2VrLauncher
             {
                 // 0.0.74 test 3: live.txt itself (VR reads it while it runs); never the launcher's settings.
                 if (LiveFile.On(root, o.Param, o.Default == "1") != (v == "1") && !LiveFile.Set(root, o.Param, v == "1" ? "on" : "off"))
+                    sessionLog.Line("Could not write " + o.Param + " to " + LiveFile.PathIn(root) + ".", Theme.Bad);
+                return;
+            }
+            if (o.Kind == OptKind.LiveChoice)
+            {
+                // HERO VR 0.0.78 cut14: the player's pick goes to live.txt with the 0.0.78 marker, so it stays (never
+                // written unless it differs from what live.txt already plays: no cutscenes = flat nobody chose).
+                if (LiveFile.Choice(root, o.Param, o.Choices, o.Default) != v && !LiveFile.SetChosen(root, o.Param, v))
                     sessionLog.Line("Could not write " + o.Param + " to " + LiveFile.PathIn(root) + ".", Theme.Bad);
                 return;
             }
@@ -75,6 +84,12 @@ namespace Sm2VrLauncher
                 else if (o.Kind == OptKind.Choice)
                 {
                     var c = new ChoiceRow(o.Title, o.Sub, o.Choices, null, v);
+                    c.Changed += (a, e) => SetOpt(opt, c.Value);
+                    row = c;
+                }
+                else if (o.Kind == OptKind.LiveChoice)
+                {
+                    var c = new ChoiceRow(o.Title, o.Sub, o.Choices, o.Labels, v);  // HERO VR 0.0.78 cut14 CUTSCENES
                     c.Changed += (a, e) => SetOpt(opt, c.Value);
                     row = c;
                 }

@@ -22,6 +22,17 @@ From the player's cut13 report (van, black headset, holo portraits, "still look 
 - **Sniper and rifle slots off cleanly (68-73):** not loaded, not counted ("MODELS: X of 67"), never MODEL MISSING;
   the arsenal is the pistol (right leg) and the pump (back middle) only (punisher078::shipped).
 - **Retired live.txt keys:** model_pbr and model_textures_hq from cut11-13's live.txt are read and ignored.
+- **IMMERSIVE CUTSCENES ON BY DEFAULT, for everyone:** with no live.txt `cutscenes` line the game's scenes are
+  immersive from the first frame (cutscene077::defaultMode; the console says "HERO VR 0.0.78 CUTSCENES IMMERSIVE").
+  Once, on the first 0.0.78 start (run_game_vr.py before VR starts, and the launcher), an existing live.txt's
+  `cutscenes = flat` or `3d` from an older build is set to immersive and a marker line is added; a value picked after
+  that stays. New launcher setting **CUTSCENES** (COMFORT): Flat / 3D / Immersive, default Immersive, written to
+  live.txt's `cutscenes` (with the marker, so the move never resets it).
+- **The main menu stays flat:** cut9's TITLE FLAT is unchanged; game_xr.cpp's two per-frame cutscene decisions moved
+  word for word into cutscene077::menuScreenFrame / immersiveFrame, and tests/cut14_tests.cpp replays the player's
+  reports 174648 (cut13b) and 025037 (cut8) through them with immersive from frame 0: the boot, the title and its
+  menus, the pause menu, hint cards and pre-rendered videos are the flat VR screen on every frame; the game's scenes
+  are still immersive.
 - **Test marker:** HERO-VR-TEST-BUILD.txt is key=value again (version, build, commit) with `sha256 <file>=<hash>`
   lines, so the console's MIXED INSTALL check reads it.
 

@@ -3077,7 +3077,8 @@ off the eyes; no sharpening, no SMAA. Defaults otherwise unchanged (`vr_aa` ours
   while hurt), HealHint (a headset line below 30% health), the floor crawl's left stick feed; screen_heal (on
   (default), off; SpidyScreenHeal 5570).
 - HERO VR 0.0.77 CUTSCENES (include/spidy/cutscene077.hpp, tests/cutscene077_tests.cpp,
-  tests/hero077_cutscene_tests.py): cutscenes (flat (default), 3d, immersive; SpidyCutscenes 5571). 3d: stereoAsked
+  tests/hero077_cutscene_tests.py): cutscenes (flat, 3d, immersive (the default since 0.0.78 cut14:
+  cutscene077::defaultMode; tests/cut14_tests.cpp, tests/hero078_cut14_tests.py); SpidyCutscenes 5571). 3d: stereoAsked
   without the HUD hook, StripClock (the subtitle strip drawn on the pair is the ScenePanel signal). immersive: native
   eye mode 4 (native_eye_frame.hpp; stereo_probe.cpp onCamera puts levelHead-relative eyes on the main view),
   ImmersiveHold (QTE hold, menu to screen), keyed panel insets (D3D12Renderer::Inset crop/keyed/backdrop, 12 root

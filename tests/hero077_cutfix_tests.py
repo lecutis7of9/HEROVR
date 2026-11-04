@@ -53,8 +53,14 @@ class Cutfix(unittest.TestCase):
         # Every safety gate of cut1 stays: the screen, a player, the bridge, not gameplay, not VIEW: GAME SCREEN, a
         # tracked head, eyes not lost, no fault; a refused or failed command keeps the screen.
         g = self.game
-        self.assertIn('cutMode == cutscene077::immersive && !cutImmersiveFault && screen && cutHeroOk &&', g)
-        self.assertIn('bridgeRunning && !gameplay && !flatScreen && validTrackedPose(frame.head) &&', g)
+        # HERO VR 0.0.78 cut14: the gate moved, unchanged, to cutscene077::immersiveFrame (replayed by cut14_tests.cpp)
+        h = (ROOT / 'include' / 'spidy' / 'cutscene077.hpp').read_text(encoding='utf-8')
+        self.assertIn('f.mode == immersive && !f.fault && f.screen && f.heroOk && !menuScreen && f.bridge && !f.gameplay &&', h)
+        self.assertIn('!f.flatScreen && f.head && !f.eyesLost,', h)
+        for field in ('cutFrame.fault = cutImmersiveFault;', 'cutFrame.heroOk = cutHeroOk;',
+                      'cutFrame.bridge = bridgeRunning;', 'cutFrame.head = validTrackedPose(frame.head);',
+                      'cutFrame.eyesLost = gpuStarted && native_gpu::eyesLost();', 'cutFrame.flatScreen = flatScreen;'):
+            self.assertIn(field, g)
         self.assertIn('return screen || gameScreen.holding();', g)
         self.assertIn('cutImmersiveFault = true;', g)
 

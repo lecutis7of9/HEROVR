@@ -1,7 +1,7 @@
 # SM2 VR (port of SpidyVR to Marvel's Spider-Man 2). GPLv3, as SpidyVR.
 """HERO VR 0.0.77 CUTSCENES: how the game's scenes show in the headset.
 
-live.txt cutscenes (SpidyCutscenes 5571): 0 flat (default, the screen as before), 1 3d, 2 immersive.
+live.txt cutscenes (SpidyCutscenes 5571): 0 flat (the screen as before), 1 3d, 2 immersive (the default since 0.0.78 cut14).
 include/spidy/cutscene077.hpp (tests/cutscene077_tests.cpp).
 """
 import pathlib
@@ -35,10 +35,14 @@ class Settings(unittest.TestCase):
             values, notes = L.parse('cutscenes = %s\n' % junk)
             self.assertNotIn('cutscenes', values)
 
-    def test_default_flat(self):
+    def test_default_immersive(self):
+        # HERO VR 0.0.78 cut14: immersive cutscenes on by default (a live.txt cutscenes line still wins)
         g = src('src/game_xr.cpp')
-        self.assertIn('std::atomic<uint32_t> cutscenesNow{cutscene077::flat};', g)
-        self.assertIn('flat = 0', src('include/spidy/cutscene077.hpp').replace('flat{0}', 'flat = 0'))
+        self.assertIn('std::atomic<uint32_t> cutscenesNow{cutscene077::defaultMode};', g)
+        h = src('include/spidy/cutscene077.hpp')
+        self.assertIn('flat = 0', h)
+        self.assertIn('inline constexpr uint32_t defaultMode = immersive;', h)
+        self.assertEqual(L.CUTSCENES_DEFAULT, 'immersive')
 
 
 class Wiring(unittest.TestCase):
@@ -69,7 +73,8 @@ class Wiring(unittest.TestCase):
 
     def test_scene_hold_and_play(self):
         g = self.game
-        self.assertIn('immersiveHold.update(', g)
+        self.assertIn('cutscene077::immersiveFrame(immersiveHold, menuScreen, cutFrame)', g)  # cut14: cutscene077.hpp
+        self.assertIn('h.update(', src('include/spidy/cutscene077.hpp'))
         self.assertIn('(frame.buttons & buttonMenu) != 0', g)
         self.assertIn('copied = copied && saved && !saved->cutscene;', g)
         self.assertIn('Presentation::cutscene', g)

@@ -533,10 +533,11 @@ SETTINGS = {
     'screen_heal': ((0, 1), 'SpidyScreenHeal', "SCREEN HEAL {} (0 on: hurt, the right stick held down is the game's "
                     "heal on the game screen too, as on its Focus Bar card; 1 off: there the right stick stays the "
                     "game's own) - live, no restart needed"),
-    # HERO VR 0.0.77 CUTSCENES (include/spidy/cutscene077.hpp): live; flat is today's screen, so the default.
+    # HERO VR 0.0.77 CUTSCENES (include/spidy/cutscene077.hpp): live. 0.0.78 cut14: immersive is the default
+    # (CUTSCENES_DEFAULT, cutscene077::defaultMode); a live.txt cutscenes line still wins.
     'cutscenes': ((0, 2), 'SpidyCutscenes', "CUTSCENES {} (how the game's scenes show in the headset - 0 flat: on "
-                  "the virtual screen as before; 1 3d: on that screen in 3D, its subtitles on it; 2 immersive: the "
-                  "scene around you from your own eyes, nothing over it but a small card while a QTE is live; the "
+                  "the virtual screen as before; 1 3d: on that screen in 3D, its subtitles on it; 2 immersive, the "
+                  "default: the scene around you from your own eyes, nothing over it but a small card while a QTE is live; the "
                   "title and pause menus always on the flat screen; a pre-rendered video "
                   "has no 3D camera and stays on the flat screen) - live, no restart needed"),
     'story_throw_aim': ((0, 2), 'SpidyStoryThrowAim', "STORY THROW AIM {} (where the LB + RB web throw sends the "
@@ -1440,6 +1441,24 @@ START_ONLY = START_ONLY + ('prompt_window', 'boss_damage', 'prompt_cards')  # HE
 START_ONLY = START_ONLY + ('x_button',)  # HERO VR 0.0.77 X IS THE GAME'S X: kept between sessions
 START_ONLY = START_ONLY + ('screen_heal',)  # HERO VR 0.0.77 HEAL ANYWHERE: kept between sessions
 START_ONLY = START_ONLY + ('cutscenes',)  # HERO VR 0.0.77 CUTSCENES: kept between sessions
+# HERO VR 0.0.78 cut14: immersive cutscenes on by default, for everyone (the owner's ask). The DLL starts in it
+# (cutscene077::defaultMode) and run_game_vr.py sends it at the start when live.txt has no cutscenes line, so a fresh
+# live.txt plays immersive. An older build's live.txt is moved to immersive once (migrate_078_cutscenes, the
+# MIGRATED_078_CUTSCENES marker); a cutscenes value chosen after the marker (the launcher's CUTSCENES setting, which
+# writes the marker too, or VR) stays. Nothing writes cutscenes = flat unless the player picks it.
+CUTSCENES_DEFAULT = 'immersive'
+
+
+def cutscenes_start(kept):
+    """(value to send or None, console line) for the session start: `kept` is persisted()'s; a fresh live.txt (no
+    cutscenes line) gets CUTSCENES_DEFAULT sent; a line the live.txt has is kept as it is (it was already sent)."""
+    if 'cutscenes' in kept:
+        word = CHOICE_NAMES['cutscenes'][export_value('cutscenes', kept['cutscenes'])]
+        return None, (f"HERO VR 0.0.78 CUTSCENES {word.upper()} (live.txt cutscenes = {kept['cutscenes']}: your "
+                      f"setting is kept" + ('; delete that line or pick Immersive in the launcher for the new '
+                                            'default, immersive' if word != CUTSCENES_DEFAULT else '') + ')')
+    return CUTSCENES_DEFAULT, (f'HERO VR 0.0.78 CUTSCENES {CUTSCENES_DEFAULT.upper()} (the default: live.txt has no '
+                               'cutscenes line)')
 START_ONLY = START_ONLY + ('waypoints',)  # HERO VR 0.0.77 WAYPOINT
 START_ONLY = START_ONLY + ('wrist_map', 'wrist_map_size', 'wrist_map_at', 'wrist_map_hud')  # HERO VR 0.0.77 WRIST MAP
 START_ONLY = START_ONLY + ('wrist_map_source', 'wrist_map_holo', 'see_through_depth', 'diag_logs',
@@ -2031,6 +2050,45 @@ def migrate_073t3(path):
 
 
 HEADER += MIGRATED_073T3 + '\n'
+
+
+# HERO VR 0.0.78 cut14: the one-time cutscenes move (see CUTSCENES_DEFAULT). The launcher (LiveFile.cs
+# MigratedCutscenes078) writes the same line, word for word.
+MIGRATED_078_CUTSCENES = ('# HERO VR 0.0.78: cutscenes set once to immersive, the new default (migrated; a cutscenes '
+                          'value chosen after this line stays)')
+
+
+def migrate_078_cutscenes(path):
+    """HERO VR 0.0.78 cut14, once: an existing live.txt without the MIGRATED_078_CUTSCENES marker whose cutscenes
+    line is flat or 3d (an older build's, not a choice made in the 0.0.78 launcher, which writes the marker) is set
+    to immersive; the marker is added either way, so a value chosen later stays. No live.txt: nothing (the default,
+    immersive, applies; HEADER carries the marker). The line to show, or None. Never raises."""
+    path = pathlib.Path(path)
+    try:
+        if not path.exists():
+            return None
+        text = path.read_text(encoding='utf-8-sig', errors='replace')
+    except OSError:
+        return None
+    if MIGRATED_078_CUTSCENES in text:
+        return None
+    try:
+        old = parse(text)[0].get('cutscenes')
+        changed = old is not None and old != CUTSCENES_DEFAULT
+        if changed:
+            text = write_back(text, {'cutscenes': CUTSCENES_DEFAULT})
+        if text and not text.endswith('\n'):
+            text += '\n'
+        write_atomically(path, text + MIGRATED_078_CUTSCENES + '\n')
+    except (OSError, ValueError):
+        return None
+    if not changed:
+        return None
+    return (f'live.txt: cutscenes {old} set once to {CUTSCENES_DEFAULT}, the 0.0.78 default; pick Flat or 3D in '
+            "the launcher's CUTSCENES setting and it stays.")
+
+
+HEADER += MIGRATED_078_CUTSCENES + '\n'
 
 
 # 0.0.73 lights (the owner after test 4: "street lights still flicker and headlights still ghosting"; his

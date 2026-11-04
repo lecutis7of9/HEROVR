@@ -90,6 +90,8 @@ namespace Sm2VrLauncher
             }
             try { if (Environment.OSVersion.Platform == PlatformID.Win32NT) Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             root = SystemInfo.FindPortRoot(settings.Get("PortRoot", null));
+            // HERO VR 0.0.78 cut14: immersive cutscenes for everyone, once, before OPTIONS shows CUTSCENES.
+            string cutscenesMoved = LiveFile.MigrateCutscenes078(root);
             BuildHeader();
             BuildPlay();
             BuildOptions();
@@ -98,6 +100,7 @@ namespace Sm2VrLauncher
             BuildReports();
             BuildMultiplayer();
             BuildSm1();
+            if (cutscenesMoved != null && sessionLog != null) sessionLog.Line(cutscenesMoved, Theme.Sub);
             BuildFooter();
             BuildBar();
             foreach (var pg in pages)

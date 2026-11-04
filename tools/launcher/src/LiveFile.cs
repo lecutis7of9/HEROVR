@@ -54,6 +54,75 @@ namespace Sm2VrLauncher
             return def;
         }
 
+        /// <summary>HERO VR 0.0.78 cut14: a live.txt choice as one of `choices` (its words; "0".."n" count too, as
+        /// live_settings.py reads them); none or not one of them: `def`.</summary>
+        public static string Choice(string root, string key, string[] choices, string def)
+        {
+            string v = Get(root, key);
+            if (v == null) return def;
+            int n;
+            if (int.TryParse(v, out n) && n >= 0 && n < choices.Length) return choices[n];
+            return Array.IndexOf(choices, v) >= 0 ? v : def;
+        }
+
+        // HERO VR 0.0.78 cut14: the one-time cutscenes move, word for word live_settings.MIGRATED_078_CUTSCENES. A
+        // live.txt with it keeps its cutscenes value (a choice made after it); one without it had an older build's.
+        public const string MigratedCutscenes078 = "# HERO VR 0.0.78: cutscenes set once to immersive, the new default (migrated; a cutscenes value chosen after this line stays)";
+
+        static bool HasLine(string root, string text)
+        {
+            try
+            {
+                string path = PathIn(root);
+                if (!File.Exists(path)) return false;
+                foreach (var line in File.ReadAllLines(path)) if (line.Trim() == text) return true;
+            }
+            catch { }
+            return false;
+        }
+
+        static bool AddLine(string root, string text)
+        {
+            try
+            {
+                string path = PathIn(root);
+                var lines = File.Exists(path) ? new List<string>(File.ReadAllLines(path)) : new List<string>();
+                lines.Add(text);
+                string tmp = path + ".tmp";
+                File.WriteAllText(tmp, string.Join("\r\n", lines.ToArray()) + "\r\n", new UTF8Encoding(false));
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(tmp, path);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>HERO VR 0.0.78 cut14, once (as live_settings.migrate_078_cutscenes): a live.txt without the marker
+        /// whose cutscenes is flat or 3d is set to immersive, then the marker is added. The line to show, or null
+        /// (no live.txt, already migrated, nothing changed, or not written).</summary>
+        public static string MigrateCutscenes078(string root)
+        {
+            if (!File.Exists(PathIn(root)) || HasLine(root, MigratedCutscenes078)) return null;
+            string old = Get(root, "cutscenes");
+            string word = old == null ? null : Choice(root, "cutscenes", new[] { "flat", "3d", "immersive" }, old);
+            bool changed = word != null && word != "immersive" && (word == "flat" || word == "3d");
+            if (changed && !Set(root, "cutscenes", "immersive")) return null;
+            if (!AddLine(root, MigratedCutscenes078)) return null;
+            return changed ? "live.txt: cutscenes " + word + " set once to immersive, the 0.0.78 default; pick Flat or 3D in CUTSCENES (Options) and it stays." : null;
+        }
+
+        /// <summary>HERO VR 0.0.78 cut14: the player's own pick in the launcher: `key = value` and the 0.0.78 marker
+        /// (so the one-time move never resets it). False: not written.</summary>
+        public static bool SetChosen(string root, string key, string value)
+        {
+            if (!HasLine(root, MigratedCutscenes078))
+            {
+                MigrateCutscenes078(root);
+                if (!HasLine(root, MigratedCutscenes078) && !AddLine(root, MigratedCutscenes078)) return false;
+            }
+            return Set(root, key, value);
+        }
+
         /// <summary>Sets `key = value` in live.txt: the lines naming it are changed, else one is added. False: not written.</summary>
         public static bool Set(string root, string key, string value)
         {

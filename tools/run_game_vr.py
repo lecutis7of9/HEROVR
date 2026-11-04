@@ -3117,6 +3117,11 @@ def session(a, startup, session_off=()):
                   'ignored.', flush=True)
         if call_remote(process, xr['SpidyEyeSupersample'], a.supersample):
             raise RuntimeError(f'Eye supersample {a.supersample}% refused')
+        # HERO VR 0.0.78 cut14: immersive cutscenes for everyone, once (a cutscenes value chosen after it stays),
+        # before VR starts, so the session starts as an immersive live.txt did (cut8 report 025037, cut9's replay).
+        migrated_078 = live_settings.migrate_078_cutscenes(ROOT/'live.txt')
+        if migrated_078:
+            print(migrated_078, flush=True)
         # 0.0.7 MIRROR PERSIST FIX: what is made when VR starts (MIRROR VIEW TEST) is set before the start.
         for name, value in live_settings.vr_start_settings(ROOT/'live.txt').items():
             _, export, text = live_settings.SETTINGS[name]
@@ -3323,6 +3328,16 @@ def session(a, startup, session_off=()):
                 live_file.applied(name, value)
         print('Update 38 COMBAT defaults (all live, no restart): ' + ', '.join(
             f'{k} = {v}' for k, v in live_settings.UPDATE38_DEFAULTS.items()), flush=True)
+        # HERO VR 0.0.78 cut14: immersive cutscenes by default; a live.txt cutscenes line still wins (kept above).
+        value, line = live_settings.cutscenes_start(kept)
+        if value is not None:
+            if 'SpidyCutscenes' not in xr:
+                line = 'HERO VR 0.0.78 CUTSCENES: not in this DLL; the built-in default stays'
+            elif call_remote(process, xr['SpidyCutscenes'], live_settings.export_value('cutscenes', value)):
+                line = 'HERO VR 0.0.78 CUTSCENES: the immersive default was refused; the DLL default stays'
+            else:
+                live_file.applied('cutscenes', value)
+        print(line, flush=True)
         # Update 37.2: the settings that must start on, as the session now runs them.
         print(live_settings.startup_line(live_file.current), flush=True)
         # Update 24: what makes far detail shimmer that the player set (strong sharpening), and a flicker

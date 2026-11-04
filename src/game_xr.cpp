@@ -1457,10 +1457,10 @@ std::atomic<uint32_t> xButtonNow{story077e::xGame};
 // HERO VR 0.0.77 HEAL ANYWHERE (story077f.hpp): live.txt screen_heal - 0 on (the default: the right stick held
 // down is the game's heal on the game screen too, while hurt), 1 off (the game screen's right stick is its own).
 std::atomic<uint32_t> screenHealNow{story077f::screenHealOn};
-// HERO VR 0.0.77 CUTSCENES (cutscene077.hpp): live.txt cutscenes - 0 flat (the default: the game's frame on the
-// virtual screen, as before), 1 3d (GAME SCREEN 3D with the subtitle strip), 2 immersive (the tracked eyes on the
-// scene's camera, the words on a see-through panel).
-std::atomic<uint32_t> cutscenesNow{cutscene077::flat};
+// HERO VR 0.0.77 CUTSCENES (cutscene077.hpp): live.txt cutscenes - 0 flat (the game's frame on the virtual
+// screen, as before), 1 3d (GAME SCREEN 3D with the subtitle strip), 2 immersive (the default since 0.0.78 cut14:
+// the tracked eyes on the scene's camera, the words on a see-through panel). A live.txt cutscenes line still wins.
+std::atomic<uint32_t> cutscenesNow{cutscene077::defaultMode};
 std::atomic<uint32_t> bossDamageNow{0};   // HERO VR 0.0.77 boss_damage: 0 on (default), 1 off, 2 strong
 uint32_t bossClapsSeen{};  // HERO VR 0.0.77 BOSS DAMAGE: HULK's claps seen (the combat thread)
 uint64_t bossClapBlows{};  // and the claps sent at a boss
@@ -5621,9 +5621,24 @@ DWORD WINAPI run(void*) {
                     const uint64_t menuScreensBefore = cutMenuScreen.count();
                     // CUT7 FRONT END: the boot, the title and its menus, and the way back to them from the pause
                     // menu are always the normal VR screen (cutscene077::MenuScreen); immersive only in-game.
-                    const bool menuScreen = cutMenuScreen.update(screen && cutMode == cutscene077::immersive,
-                                                                 player.record, (frame.buttons & buttonMenu) != 0,
-                                                                 cutNowMs, viewing && vrPlay && gameplay);
+                    // HERO VR 0.0.78 cut14: the same decisions, from cutscene077.hpp (tests/cut14_tests.cpp replays them).
+                    cutscene077::FrameInput cutFrame;
+                    cutFrame.mode = cutMode;
+                    cutFrame.screen = screen;
+                    cutFrame.viewing = viewing;
+                    cutFrame.vrPlay = vrPlay;
+                    cutFrame.gameplay = gameplay;
+                    cutFrame.menuPressed = (frame.buttons & buttonMenu) != 0;
+                    cutFrame.heroOk = cutHeroOk;
+                    cutFrame.bridge = bridgeRunning;
+                    cutFrame.flatScreen = flatScreen;
+                    cutFrame.head = validTrackedPose(frame.head);
+                    cutFrame.eyesLost = gpuStarted && native_gpu::eyesLost();
+                    cutFrame.fault = cutImmersiveFault;
+                    cutFrame.timeRuns = timeRuns;
+                    cutFrame.record = player.record;
+                    cutFrame.nowMs = cutNowMs;
+                    const bool menuScreen = cutscene077::menuScreenFrame(cutMenuScreen, cutFrame);
                     if (cutMenuScreen.count() != menuScreensBefore) {
                         char line[240];
                         sprintf_s(line, "HERO VR 0.0.77 CUT7 MENU SCREEN #%llu: %s (record %s); the normal VR screen "
@@ -5633,11 +5648,7 @@ DWORD WINAPI run(void*) {
                                   cutMenuScreen.frontEnd() ? " or a game loaded from the title" : "");
                         consoleLine(line);
                     }
-                    const bool immersiveScene = immersiveHold.update(
-                        cutMode == cutscene077::immersive && !cutImmersiveFault && screen && cutHeroOk && !menuScreen &&
-                            bridgeRunning && !gameplay && !flatScreen && validTrackedPose(frame.head) &&
-                            !(gpuStarted && native_gpu::eyesLost()),
-                        timeRuns, (frame.buttons & buttonMenu) != 0, cutNowMs);
+                    const bool immersiveScene = cutscene077::immersiveFrame(immersiveHold, menuScreen, cutFrame);
                     if (immersiveHold.started()) {
                         cutLevel = cutscene077::levelHead(frame.head);
                         ++cutCounts.starts;

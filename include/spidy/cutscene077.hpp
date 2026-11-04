@@ -3,14 +3,14 @@
 // HERO VR 0.0.77 CUTSCENES (test build cut1). live.txt `cutscenes`: how a scene the game plays on its own camera
 // (a cutscene, a finisher, a death) is shown in the headset. Gameplay is never touched by any of this: in VR play
 // the eyes stay the tracked ones and the game's prompts stay PROMPT CARDS.
-//   0 flat (the default): the game's frame on the virtual screen, as every build before.
+//   0 flat: the game's frame on the virtual screen, as every build before 0.0.78 cut14.
 //   1 3d: GAME SCREEN 3D. The game renders its camera once per eye (native mode 3: the camera set apart by the
 //     stereo math of native_eye_frame.hpp, each lens shifted the other way) and the screen shows the pair. The
 //     SM2 port has no hook for the game's HUD panel (SM2_STEREO_HUD 0), so instead of sliding the panel onto the
 //     zero plane the subtitle strip of the game's own frame (its words, drawn where the screen's plane is) is
 //     copied onto both eyes' images at the same pixels: no disparity, the words sit on the glass. The 200 ms and
 //     1 s rules of presentation_gate.hpp stay, with "the strip landed" as the panel's signal.
-//   2 immersive: Cutscenes: Immersive. On the scene's first frame a level head (position, yaw only) is kept;
+//   2 immersive (the default since 0.0.78 cut14; a live.txt cutscenes line still wins): Cutscenes: Immersive. On the scene's first frame a level head (position, yaw only) is kept;
 //     each frame each tracked eye relative to that head is put on the camera the game uses that frame (native
 //     mode 4, composed in the render frame itself), with the headset's lens, shown as a normal stereo view at
 //     the tracked eyes. No hands, webs, markers or body; the controllers stay the game's Xbox controller. A frozen
@@ -28,6 +28,9 @@ namespace spidy::cutscene077 {
 
 // live.txt cutscenes (SpidyCutscenes 5571).
 enum Mode : uint32_t { flat = 0, screen3d = 1, immersive = 2 };
+// HERO VR 0.0.78 cut14: the mode a session starts in when live.txt has no cutscenes line (the owner's ask:
+// immersive cutscenes on by default). game_xr.cpp cutscenesNow and live_settings.CUTSCENES_DEFAULT say the same.
+inline constexpr uint32_t defaultMode = immersive;
 inline const char* modeName(uint32_t mode) {
     return mode == screen3d ? "3D" : mode == immersive ? "IMMERSIVE" : "FLAT";
 }
@@ -360,6 +363,30 @@ class MenuScreen {
     int seen_{}, why_{};
     bool frontEnd_{true}, paused_{}, inStretch_{}, on_{};
 };
+
+// HERO VR 0.0.78 cut14: game_xr.cpp's two per-frame cutscene decisions, moved here unchanged so tests/cut14_tests.cpp
+// replays the player's logs through the code the mod runs (immersive by default must keep the title, its menus, the
+// pause menu and pre-rendered videos on the normal VR screen, cut9's TITLE FLAT).
+struct FrameInput {
+    uint32_t mode{defaultMode};  // cutscenesNow this frame (after the 3d strip fault)
+    bool screen{};               // the game's screen is up (no VR gameplay view)
+    bool viewing{}, vrPlay{}, gameplay{};
+    bool menuPressed{};          // the controller's menu button this frame
+    bool heroOk{};               // cutHero.present: a player (or a scene riding a short record gap)
+    bool bridge{}, flatScreen{}, head{}, eyesLost{}, fault{};
+    bool timeRuns{};             // the scene's clock ran (a pre-rendered video or a pause: the camera is still)
+    uint64_t record{}, nowMs{};
+};
+// The frame is the normal VR screen for a menu (the front end, a pause, no player record).
+inline bool menuScreenFrame(MenuScreen& m, const FrameInput& f) {
+    return m.update(f.screen && f.mode == immersive, f.record, f.menuPressed, f.nowMs, f.viewing && f.vrPlay && f.gameplay);
+}
+// The frame is shown immersive (ImmersiveHold: a frozen clock holds a started scene, a menu press ends it).
+inline bool immersiveFrame(ImmersiveHold& h, bool menuScreen, const FrameInput& f) {
+    return h.update(f.mode == immersive && !f.fault && f.screen && f.heroOk && !menuScreen && f.bridge && !f.gameplay &&
+                        !f.flatScreen && f.head && !f.eyesLost,
+                    f.timeRuns, f.menuPressed, f.nowMs);
+}
 // The panel's rectangle in one eye's pixels (y down) from that eye's tangents (left and down negative). eye 0 is
 // the left eye; eyeDist the two eyes' distance (metres); aspect the copied part's own width over height.
 inline bool panelRect(unsigned eye, float eyeDist, float tanLeft, float tanRight, float tanDown, float tanUp,

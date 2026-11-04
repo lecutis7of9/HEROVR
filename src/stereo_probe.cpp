@@ -7,6 +7,7 @@
 #include "spidy/sm1style.hpp" // 0.0.74 test 10 SM1STYLE
 #include "spidy/jitter_log.hpp" // 0.0.76 JITTER FIX
 #include "spidy/cutscene077.hpp" // HERO VR 0.0.77 CUTSCENES
+#include "spidy/cutscene077_gate.hpp" // HERO VR 0.0.77 CUTFIX
 #include "spidy/eye_cover.hpp" // 0.0.74 test 10 WINDOW EDGES
 #include "spidy/eye_queries.hpp"
 #include "spidy/far_shadows.hpp"
@@ -65,6 +66,9 @@ namespace shadowCamera = spidy::shadow_camera;
 // HERO VR 0.0.77 CUTSCENES IMMERSIVE: eyes placed on the game's camera (mode 4), for its diagnostics line.
 namespace spidy::cutscene077 {
 std::atomic<uint64_t> eyesPlaced{};
+// HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): render frames whose game camera (pose or lens) moved, the scene
+// clock SM2 has without the game-time hook.
+std::atomic<uint64_t> cameraMoves{};
 }
 using native_view::Descriptor;
 // NEAR CLIP's near plane for the head's and the eyes' lenses in immersive VR
@@ -2928,6 +2932,20 @@ void placeEyes() {
     if (render) {
         gameJitter[0].store(main.values[0x428 / 4], std::memory_order_relaxed);
         gameJitter[1].store(main.values[0x42c / 4], std::memory_order_relaxed);
+    }
+    // HERO VR 0.0.77 CUTFIX (cutscene077_gate.hpp): whether the game's own camera moved since the last render
+    // frame. Read only; a moving camera is a scene's clock on SM2 (no game-time hook), a still one a pause.
+    if (render) {
+        static float lastPose[16]{}, lastLens[4]{};
+        static bool havePose{};
+        const auto pose = main.pose();
+        const float lens[4]{main.values[0x400 / 4], main.values[0x404 / 4], main.values[0x408 / 4],
+                            main.values[0x40c / 4]};
+        if (havePose && cutscene077::cameraMoved(lastPose, lastLens, pose.data(), lens))
+            cutscene077::cameraMoves.fetch_add(1, std::memory_order_relaxed);
+        std::memcpy(lastPose, pose.data(), sizeof(lastPose));
+        std::memcpy(lastLens, lens, sizeof(lastLens));
+        havePose = true;
     }
     native_eyes::Command desired{};
     bool controlled{};

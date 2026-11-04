@@ -338,6 +338,7 @@ class Play {
     float impactAge[drawImpacts]{1e9f, 1e9f, 1e9f, 1e9f, 1e9f, 1e9f};
     uint32_t impactNext{};
     hero_modes::BatonSwing claws[2];
+    uint32_t clawSlashes{}, clawStabs{}, clawSlashHits{}; // HERO VR 0.0.78: which claw sound, and the counts
     bool clawsOut[2]{};
     float clawsOutFor[2]{}; // Version 0.0.72 SNIKT: seconds the claws have been out (their extension)
     Healing healing;
@@ -1103,7 +1104,11 @@ class Play {
             if (hit >= 0) {
                 out.blow(in.list[hit].id, clawHit(), in.list[hit].chest, kindClaw);
                 out.buzz(i, .6f);
-                out.sound(sfx::batonHit);
+                // HERO VR 0.0.78 (owner t1873u/t1874u): the player's own claw sounds. A STAB (the tip driven along
+                // the claws) plays claw_stab (his "a": the short, sharp one); a SLASH (across) his "b" and "c" in turn.
+                const bool stab = clawIsStab(claws[i].lastMove, tip - grip);
+                out.sound(stab ? sfx::clawStab : (clawSlashes++ & 1u) ? sfx::clawSlash2 : sfx::clawSlash1);
+                ++(stab ? clawStabs : clawSlashHits);
                 ++clawHits;
             }
         }

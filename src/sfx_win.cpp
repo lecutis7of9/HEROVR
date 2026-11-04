@@ -133,7 +133,7 @@ void playOne(Player& p, Id id) {
             return;
         }
         ++SpidySfxDiagData.current.submitted; // 0.0.76 SFX DIAG
-        v->SetVolume(id == vanDoorSlam ? slamGain : 1.f); // 0.0.73: the van's recording is quiet (kept as it is)
+        v->SetVolume(id == vanDoorSlam ? slamGain : levelGain(id)); // 0.0.73: the van's recording is quiet; 0.0.78 levels
         v->Start(0);
         played.fetch_add(1, std::memory_order_relaxed);
         return;
@@ -187,6 +187,7 @@ void loopOne(Player& p, Id id, bool on) {
         return;
     }
     ++SpidySfxDiagData.current.submitted; // 0.0.76 SFX DIAG
+    pick->SetVolume(levelGain(id)); // 0.0.78 CUT9 SOUND LEVELS
     pick->Start(0);
     p.looping[id] = pick;
     played.fetch_add(1, std::memory_order_relaxed);

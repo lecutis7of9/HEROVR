@@ -891,7 +891,11 @@ inline RageTint rageTint(uint32_t hero, float level, float pulse = 0.f, float in
 // default) a LOT, NORMAL some, OFF none. Capped (bloodDropsMost, bloodPoolsMost: the oldest go first)
 // and BloodPerf turns it off for the session when the frames drop while it draws.
 enum BloodMode : uint32_t { bloodExtreme = 0, bloodNormal, bloodOff };
-inline constexpr uint32_t bloodDropsMost = 360, bloodPoolsMost = 40;
+// HERO VR 0.0.78 CLAW BLOOD (owner t1873u: "a lot more enemy blood when Wolverine stabs or slashes"): a claw hit
+// throws clawDropsPerHit drops (EXTREME; NORMAL a third), 1.5-2.5x a shot's size, and clawPoolsPerHit bigger
+// pools; the caps doubled for it (bloodDropsMost 360 -> 720, hero072_visual budget::blood 16000 -> 40000).
+inline constexpr uint32_t bloodDropsMost = 720, bloodPoolsMost = 60;
+inline constexpr uint32_t clawDropsPerHit[2] = {160, 54}, clawPoolsPerHit[2] = {5, 2};
 inline constexpr uint32_t bloodDropsPerShot[2] = {64, 16}, bloodPoolsPerShot[2] = {3, 1};
 inline constexpr float bloodDropSeconds = 2.5f, bloodPoolSeconds[2] = {14.f, 8.f}, bloodGravity = 9.8f;
 inline constexpr float bloodPoolMost = .55f;
@@ -957,6 +961,26 @@ class Blood {
         for (uint32_t i = 0; i < bloodPoolsPerShot[m]; ++i)
             pool({at.x + d.x * (.3f + rnd()), floor + .01f, at.z + d.z * (.3f + rnd())}, .2f + rnd() * .35f);
     }
+    // HERO VR 0.0.78 CLAW BLOOD: a claw stab or slash landed at `at` (the claws driven along `dir`).
+    void claw(uint32_t m, Vec3 at, Vec3 dir, float floor) {
+        if (m >= bloodOff || !ok(at) || !ok(dir) || !std::isfinite(floor))
+            return;
+        mode = m;
+        ++shots;
+        ++claws;
+        const Vec3 d = length(dir) > 1e-4f ? normalized(dir) : Vec3{0, 0, -1};
+        for (uint32_t i = 0; i < clawDropsPerHit[m]; ++i) {
+            BloodDrop& b = drops[nextDrop++ % bloodDropsMost];
+            const Vec3 spray{rnd() * 2 - 1, rnd() * 2 - .2f, rnd() * 2 - 1};
+            const float sp = 1.5f + rnd() * (m == bloodExtreme ? 6.f : 3.5f);
+            b = {at + spray * .08f, d * sp + spray * (m == bloodExtreme ? 3.f : 1.8f), 0.f, floor, .015f + rnd() * .035f, true};
+            ++spawned;
+        }
+        for (uint32_t i = 0; i < clawPoolsPerHit[m]; ++i)
+            pool({at.x + d.x * (.2f + rnd()) + (rnd() - .5f) * .6f, floor + .01f, at.z + d.z * (.2f + rnd()) + (rnd() - .5f) * .6f},
+                 .3f + rnd() * .25f);
+    }
+    uint64_t claws{};
     void step(float dt) {
         dt = clampDt(dt);
         for (auto& b : drops) {

@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 // SM2 VR (port of SpidyVR to Marvel's Spider-Man 2), GPLv3; SpidyVR by Ilya Mezerowsky.
 //
 // Version 0.0.5 (Update 38.9) SOUND EFFECTS: the mod's own original sounds (tools/sfx/make_sfx.py
@@ -22,12 +23,38 @@ namespace spidy::sfx {
 enum Id : uint32_t { sonicBoom, repulsorFire, chestBeam, beamReady, batonWhoosh, batonHit, repulsorCharge,
                      pistolShot, shotgunBlast, dryClick, magDrop, magSeat, holsterTick, clawSnikt, heatVision, freezeBreath,
                      shieldThrow, shieldRicochet, shieldCatch, shieldClang, pistolReload, thorLightning1, thorLightning2,
-                     vanStart, vanEngine, vanDoorSlam, sounds };
+                     vanStart, vanEngine, vanDoorSlam, clawStab, clawSlash1, clawSlash2, sounds };
 inline constexpr const char* names[sounds] = {"sonic_boom", "repulsor_fire", "chest_beam",
                                               "beam_ready", "baton_whoosh", "baton_hit", "repulsor_charge",
                                               "pistol_shot", "shotgun_blast", "dry_click", "mag_drop", "mag_seat", "holster", "claw_snikt", "heat_vision", "freeze_breath",
                                               "shield_throw", "shield_ricochet", "shield_catch", "shield_clang", "pistol_reload", "thor_lightning_1", "thor_lightning_2",
-                                              "van_start", "van_engine", "van_door_slam"};
+                                              "van_start", "van_engine", "van_door_slam",
+                                              "claw_stab", "claw_slash_1", "claw_slash_2"};
+// HERO VR 0.0.78 CUT9 SOUND LEVELS (the owner t1872u: "all the new heroes' weapon sounds are incredibly loud").
+// Each sound's voice volume in dB, measured with tools/sfx/level_0078.py (EBU R128 max momentary loudness of
+// the embedded WAV): every hero weapon sound brought to levelTargetLufs (-20 LUFS max momentary), none raised
+// past a -1 dBFS peak; the WAVs themselves stay the player's unchanged decodes (hero072_assets_tests). The
+// player's guns and THOR's lightning were -3.1 to +0.6 LUFS, the procedural ones about -10 to -15. CANDIDATE:
+// the game's own punches and gunfire could not be measured here (packed in the game's audio banks); SFX VOLUME
+// still scales them all. 0.0.78: the shield's hit (thrown and bash) and WOLVERINE's stab and two slashes are
+// the player's own sounds (shield_hit_user, claw_stab_user, claw_slash_user_1/2), their silence trimmed so
+// the transient is 1 ms in.
+inline constexpr float levelTargetLufs = -20.f;
+inline constexpr float levelDb[] = {
+    -9.5f,  /* sonic_boom -10.5 */      -7.0f, /* repulsor_fire (user take) -13.0 */ -9.5f, /* chest_beam -10.5 */
+    -6.5f,  /* beam_ready -13.5 */      -6.1f, /* baton_whoosh -13.9 */  -6.7f, /* baton_hit -13.3 */
+    0.f,    /* repulsor_charge -23.5 */ -16.9f, /* pistol_shot (user) -3.1 */ -18.3f, /* shotgun_blast (user) -1.7 */
+    0.f,    /* dry_click */             0.f,   /* mag_drop */            0.f,   /* mag_seat */
+    0.f,    /* holster */               -5.0f, /* claw_snikt -15.0 */    -7.7f, /* heat_vision -12.3 */
+    -6.0f,  /* freeze_breath -14.0 */   -6.5f, /* shield_throw -13.5 */  -4.1f, /* shield_ricochet = shield_hit_user -15.9 */
+    0.f,    /* shield_catch -20.3 */    -4.1f, /* shield_clang = shield_hit_user -15.9 */ -13.1f, /* pistol_reload -6.9 */
+    -20.6f, /* thor_lightning_1 +0.6 */ -18.5f, /* thor_lightning_2 -1.5 */
+    0.f,    /* van_start */             0.f,   /* van_engine */          0.f,   /* van_door_slam (slamGain) */
+    4.4f,   /* claw_stab_user -26.8, peak -5.4: capped at -1 dBFS */ 4.1f, /* claw_slash_user_1 -24.1 */
+    -0.3f,  /* claw_slash_user_2 -19.7 */
+};
+static_assert(sizeof(levelDb) / sizeof(levelDb[0]) == sounds, "a level for every sound");
+inline float levelGain(uint32_t id) { return id < sounds ? std::pow(10.f, levelDb[id] / 20.f) : 1.f; }
 // Voices playing one sound at most at once (a fast run of blasts layers up to this).
 inline constexpr uint32_t voicesPerSound = 4;
 // Version 0.0.72: the Punisher's guns fire the player's own sounds (tools/sfx/user_guns.py): the sawed-off

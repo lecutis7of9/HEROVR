@@ -74,6 +74,15 @@ inline void clawShaft(Vec3 hand, Vec3 aim, Vec3& grip, Vec3& tip) {
     grip = hand + a * .05f;
     tip = hand + a * .33f;
 }
+// HERO VR 0.0.78 STAB OR SLASH: the claw tip's move this frame mostly along the blades (within ~45 degrees,
+// forward) is a stab; anything else (across, or no move read) a slash.
+inline constexpr float clawStabCos = .7f;
+inline bool clawIsStab(Vec3 move, Vec3 blade) {
+    const float m = length(move), b = length(blade);
+    if (!(m > 1e-5f) || !(b > 1e-5f) || !std::isfinite(m) || !std::isfinite(b))
+        return false;
+    return dot(move, blade) / (m * b) >= clawStabCos;
+}
 // Version 0.0.72 CLAWS (the user's 0.0.71 test): three slim, curved, metallic claws about 30 cm
 // long, out between the knuckles (clawKnuckle ahead of the grip, clawRise over it, clawGap apart),
 // SNIKT: out in snikt seconds, overshooting a little and settling (clawExtend).

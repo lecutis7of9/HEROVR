@@ -585,6 +585,11 @@ class Play {
         if (rage.raging && ok(at) && ok(from))
             blood.shot(bloodMode, at, at - from, floorY);
     }
+    // HERO VR 0.0.78 CLAW BLOOD: WOLVERINE's claw hit at `at` (from `from`), RAGE BLOOD's look (o.rageBlood).
+    void clawBlood(Vec3 at, Vec3 from, float floorY, uint32_t bloodMode) {
+        if (ok(at) && ok(from))
+            blood.claw(bloodMode, at, at - from, floorY);
+    }
     // The PUNISHER's shots while raging hit rageShotScale harder.
     float shotScale() const { return rage.raging ? rageShotScale : 1.f; }
     bool raging() const { return rage.raging; }

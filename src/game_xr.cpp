@@ -10446,6 +10446,9 @@ DWORD WINAPI run(void*) {
                                             (sent ? hero007Sent : hero007Unsent) += 1;
                                             noteFoeClass(hb.id, sent);
                                             hitMarks.add(hb.at);
+                                            if (hb.kind == hero007::kindClaw) // HERO VR 0.0.78 CLAW BLOOD (RAGE BLOOD's look; OFF: none)
+                                                hero072Play.clawBlood(hb.at, hero007In.head.position, hb.at.y - 1.2f,
+                                                                      c38(combat38::rageBlood));
                                             if (hero007Sent + hero007Unsent <= 8 || !sent) {
                                                 char line[160];
                                                 sprintf_s(line, "VERSION 0.0.7 %s HIT 0x%llx: %.0f HP blow %s",

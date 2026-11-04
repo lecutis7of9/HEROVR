@@ -963,6 +963,7 @@ void run() {
                 }
                 std::vector<story077g::Candidate> marks;
                 std::vector<uintptr_t> markRecords;
+                uint32_t reads = 0, poiNewReads = 0, poiTargetReads = 0;
                 // HERO VR 0.0.78 CUT9 ANCHOR (diagnostic, read-only, draws nothing; the owner on cut8: "it just didnt
                 // show the Y on him to zip to him"): which of the game's own placed prompt / POI objects sits on the
                 // boss. Every one within 4 m of the boss is logged with its class, its +80 slot word and its offset

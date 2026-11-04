@@ -34,6 +34,9 @@ SPIDY_SFX(pistol_reload) // Version 0.0.72: the player's own (tools/sfx/user_gun
 SPIDY_SFX(van_start)  // Version 0.0.73: the PUNISHER VAN, the player's own (tools/sfx/van_engine_0073.py)
 SPIDY_SFX(van_engine)
 SPIDY_SFX(van_door_slam)
+SPIDY_SFX(claw_stab) // 0.0.78: WOLVERINE's stab and slashes, the player's own (claw_*_user.wav)
+SPIDY_SFX(claw_slash_1)
+SPIDY_SFX(claw_slash_2)
 #undef SPIDY_SFX
 } // namespace spidy::sfx_data
 
@@ -104,7 +107,10 @@ const Pcm& sound(Id id) {
         parseWav(sfx_data::thor_lightning_2, sfx_data::thor_lightning_2Size),
         parseWav(sfx_data::van_start, sfx_data::van_startSize),   // 0.0.73: the player's van (van_engine_0073.py)
         parseWav(sfx_data::van_engine, sfx_data::van_engineSize),
-        parseWav(sfx_data::van_door_slam, sfx_data::van_door_slamSize)};
+        parseWav(sfx_data::van_door_slam, sfx_data::van_door_slamSize),
+        parseWav(sfx_data::claw_stab, sfx_data::claw_stabSize),
+        parseWav(sfx_data::claw_slash_1, sfx_data::claw_slash_1Size),
+        parseWav(sfx_data::claw_slash_2, sfx_data::claw_slash_2Size)};
     static const Pcm none{};
     return id < sounds ? table[id] : none;
 }

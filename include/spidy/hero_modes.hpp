@@ -594,6 +594,7 @@ struct BatonSwing {
     bool haveTip{};
     uint32_t hits{}, cooled{};
     float lastSpeed{};
+    Vec3 lastMove{}; // HERO VR 0.0.78: the tip's move this frame (WOLVERINE: a stab along the claws or a slash)
     void reset() { *this = BatonSwing{}; }
     bool cooling(uint64_t id) const {
         for (int k = 0; k < remembered; ++k)
@@ -614,6 +615,7 @@ struct BatonSwing {
         const Vec3 was = haveTip ? tipWas : tip;
         tipWas = tip;
         haveTip = true;
+        lastMove = tip - was;
         lastSpeed = step > 1e-4f ? length(tip - was) / step : 0.f;
         if (!(lastSpeed >= swingSpeed) || !list)
             return -1;

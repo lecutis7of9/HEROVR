@@ -139,12 +139,20 @@ set(SPIDY_SFX_FILE_shotgun_blast "shotgun_blast_user")
 set(SPIDY_SFX_FILE_pistol_shot "pistol_shot_user")
 # Version 0.0.73: the PUNISHER VAN's engine, the player's own recording split on its waveform (tools/sfx/van_engine_0073.py).
 set(SPIDY_SFX_FILE_van_engine "van_engine_loop")
+# HERO VR 0.0.78 CUT9: the shield's hit on an enemy (thrown and bash) and WOLVERINE's stab and slashes are the
+# player's own sounds (rep-cut8 cap_shield_hit_new, wolverine_claw_a/b/c; tools/sfx/level_0078.py).
+set(SPIDY_SFX_FILE_shield_ricochet "shield_hit_user")
+set(SPIDY_SFX_FILE_shield_clang "shield_hit_user")
+set(SPIDY_SFX_FILE_claw_stab "claw_stab_user")
+set(SPIDY_SFX_FILE_claw_slash_1 "claw_slash_user_1")
+set(SPIDY_SFX_FILE_claw_slash_2 "claw_slash_user_2")
 # Version 0.0.7 HERO PROFILES: nine more (tools/sfx/make_sfx_007.py); CAPTAIN AMERICA: the four shield sounds.
 foreach(SPIDY_SFX_NAME sonic_boom repulsor_fire chest_beam beam_ready baton_whoosh baton_hit repulsor_charge
         pistol_shot shotgun_blast dry_click mag_drop mag_seat holster claw_snikt heat_vision freeze_breath
         shield_throw shield_ricochet shield_catch shield_clang pistol_reload
         thor_lightning_1 thor_lightning_2 # 0.0.72: THOR's lightning, the player's own (user_guns.py)
-        van_start van_engine van_door_slam) # 0.0.73: the PUNISHER VAN's slam + start-up, its engine loop, the slam (van_engine_0073.py)
+        van_start van_engine van_door_slam
+        claw_stab claw_slash_1 claw_slash_2) # 0.0.73: the PUNISHER VAN's slam + start-up, its engine loop, the slam (van_engine_0073.py)
   if(DEFINED SPIDY_SFX_FILE_${SPIDY_SFX_NAME})
     set(SPIDY_SFX_IN "${CMAKE_CURRENT_SOURCE_DIR}/assets/sfx/${SPIDY_SFX_FILE_${SPIDY_SFX_NAME}}.wav")
   else()

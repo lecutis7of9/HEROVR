@@ -169,7 +169,7 @@ namespace budget {
 inline constexpr size_t hammer = 1200, bolt = 8 * 54 * 2, beam = 900, bubble = 1500, chain = 1700, fist = 5400,
                         charge = 2600, ring = 200, hud = 9000;
 // RAGE BLOOD: drops are one soft bar each (54), pools a soft disc (10 segments) - drawn until full.
-inline constexpr size_t blood = 16000, spray = 2600, shock = 1200, hook = 1200, perch = 900, rope = 400;
+inline constexpr size_t blood = 40000, spray = 2600, shock = 1200, hook = 1200, perch = 900, rope = 400;
 inline constexpr size_t marker = 400; // 0.0.74 test 3 DASH INSIDE: the handle's ring
 inline constexpr size_t frame = hammer + boltsMost * bolt + beam + bubble + chain + fist + charge + 2 * ring + hud +
                                 blood + spray + shock + hook + perch + rope + marker;

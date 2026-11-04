@@ -28818,7 +28818,7 @@ int main() {
         check(v.empty(), "a NaN item draws nothing");
     });
     test("Version 0.0.7: the new sounds and defaults", [] {
-        check(spidy::sfx::sounds == 26, "twenty-six sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2, 0.0.73 the van's 3)");
+        check(spidy::sfx::sounds == 29, "twenty-nine sounds (0.0.7: + 9, CAPTAIN AMERICA + 4, 0.0.72 pistol_reload + THOR's 2, 0.0.73 the van's 3, 0.0.78 WOLVERINE's stab + 2 slashes)");
         using namespace spidy::combat38;
         for (uint32_t o = batman; o <= shieldLook; ++o) { // CAPTAIN AMERICA: through SHIELD LOOK
             const std::string help = optionInfo[o].help;

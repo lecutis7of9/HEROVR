@@ -73,7 +73,8 @@ int main() {
     in.eyeHeight = eye;
     in.arsenal078 = true;
     const Vec3 head = in.head.position;
-    const Vec3 leg = head + Vec3{.17f * k, -.70f * k, 0};          // the right leg's holster (body facing -z)
+    // the right leg's holster (body facing -z): its mouth as measured on the drawn 0.0.78 HQ suit (holster.hpp)
+    const Vec3 leg = head + Vec3{holster::legHolsterSide * k, -holster::legHolsterBelow * k, -holster::legHolsterAhead * k};
     const Vec3 backMid = head + Vec3{0, -.12f * k, .18f};            // between the shoulder blades
     const Vec3 backL = head + Vec3{-.16f, -.12f * k, .18f};          // over the left shoulder
     const Vec3 thighL = head + Vec3{-.17f * k, -.76f * k, 0};        // the left thigh's magazine pouch
